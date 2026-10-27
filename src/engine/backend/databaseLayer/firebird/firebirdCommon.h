@@ -45,9 +45,9 @@ inline uint64_t NowUnixMs() {
 // Win32: OutputDebugStringW — async, lock-free, captured by
 // debugger / DebugView.
 // POSIX: fputs to stderr — atomic per-line on most libc's.
-inline void LogThreadSafe(const wxString& msg) {
+inline void LogThreadSafe(const ibString& msg) {
 #ifdef __WXMSW__
-	const wxString line = msg + wxT("\n");
+	const ibString line = msg + ibT("\n");
 	::OutputDebugStringW(line.wc_str());
 #else
 	const auto utf8 = msg.utf8_str();

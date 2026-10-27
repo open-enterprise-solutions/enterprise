@@ -22,7 +22,7 @@
 
 namespace {
 	std::shared_mutex                          g_byteCodeRegistryMutex;
-	std::unordered_map<wxString, ibByteCode*>  g_byteCodeRegistry;
+	std::unordered_map<ibString, ibByteCode*>  g_byteCodeRegistry;
 }
 
 void ibByteCode::Register(ibByteCode* bc)
@@ -30,21 +30,21 @@ void ibByteCode::Register(ibByteCode* bc)
 	if (bc == nullptr) return;
 	if (!bc->m_id.isValid()) return;
 	std::unique_lock<std::shared_mutex> lk(g_byteCodeRegistryMutex);
-	g_byteCodeRegistry[wxString(bc->m_id)] = bc;
+	g_byteCodeRegistry[ibString(bc->m_id)] = bc;
 }
 
 void ibByteCode::Unregister(const ibGuid& descId)
 {
 	if (!descId.isValid()) return;
 	std::unique_lock<std::shared_mutex> lk(g_byteCodeRegistryMutex);
-	g_byteCodeRegistry.erase(wxString(descId));
+	g_byteCodeRegistry.erase(ibString(descId));
 }
 
 ibByteCode* ibByteCode::Find(const ibGuid& descId)
 {
 	if (!descId.isValid()) return nullptr;
 	std::shared_lock<std::shared_mutex> lk(g_byteCodeRegistryMutex);
-	auto it = g_byteCodeRegistry.find(wxString(descId));
+	auto it = g_byteCodeRegistry.find(ibString(descId));
 	return it != g_byteCodeRegistry.end() ? it->second : nullptr;
 }
 
@@ -105,11 +105,11 @@ ibByteBinder::ibByteBinder(const std::vector<ibByteCode::ibByteCodeVarInfo>& var
 {
 }
 
-void ibByteBinder::SetVar(const wxString& name, ibValue* value)
+void ibByteBinder::SetVar(const ibString& name, ibValue* value)
 {
 	for (const auto& v : m_vars) {
 		if (!v.IsBindable()) continue;
-		if (!stringUtils::CompareString(v.m_strRealName, name)) continue;
+		if (!stringUtils::IsSameAs(v.m_strRealName, name)) continue;
 		m_slots[v.m_slotIndex] = value;
 		return;
 	}
@@ -225,13 +225,13 @@ bool ibByteCode::GetParamDefValue(const long lCodeLine, const long lParamNum, ib
 
 namespace {
 
-ibByteCode::ResolvedFunc ResolveFunctionAt(const ibByteCode* bc, const wxString& name, int depth, int fullVisDepth)
+ibByteCode::ResolvedFunc ResolveFunctionAt(const ibByteCode* bc, const ibString& name, int depth, int fullVisDepth)
 {
 	if (bc == nullptr) return {};
 	auto it = std::find_if(bc->m_listFunc.begin(), bc->m_listFunc.end(),
 		[&](const auto& fn) {
 			if (depth > fullVisDepth && fn.IsLocal()) return false;
-			return stringUtils::CompareString(name, fn.m_strRealName);
+			return stringUtils::IsSameAs(name, fn.m_strRealName);
 		});
 	if (it != bc->m_listFunc.end())
 		return { &(*it), depth };
@@ -245,7 +245,7 @@ ibByteCode::ResolvedFunc ResolveFunctionAt(const ibByteCode* bc, const wxString&
 
 } // anonymous
 
-ibByteCode::ResolvedFunc ibByteCode::ResolveFunction(const wxString& funcName, int fullVisDepth) const
+ibByteCode::ResolvedFunc ibByteCode::ResolveFunction(const ibString& funcName, int fullVisDepth) const
 {
 	return ResolveFunctionAt(this, funcName, 0, fullVisDepth);
 }

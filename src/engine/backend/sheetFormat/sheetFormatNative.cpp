@@ -5,12 +5,12 @@
 
 #include <wx/mstream.h>
 
-wxString ibSheetFormatNative::GetName() const
+ibString ibSheetFormatNative::GetName() const
 {
 	return _("Spreadsheet document");
 }
 
-wxString ibSheetFormatNative::GetExtension() const
+ibString ibSheetFormatNative::GetExtension() const
 {
 	// NOT A LITERAL. What our files are called is fileKind.h's answer, and it stays
 	// the only one — that table exists because ".oxl" used to be typed in eight

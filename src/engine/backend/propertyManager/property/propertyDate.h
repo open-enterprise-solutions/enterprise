@@ -12,18 +12,18 @@ public:
 	ibDateTime GetValueAsDateTime() const { long long value = 0; m_propValue.GetString().ToLongLong(&value); return ibDateTime(value); }
 	void SetValue(const ibDateTime& val = ibDateTime()) { m_propValue = TextOf(val); }
 
-	ibPropertyDate(ibPropertyCategory* cat, const wxString& name,
-		const ibDateTime& value = ibDateTime()) : ibProperty(cat, name, TextOf(value))
+	ibPropertyDate(ibPropertyCategory* cat, const ibString& name,
+		const ibDateTime& value = ibDateTime()) : ibProperty(cat, name, TextOf(value).wc_str())
 	{
 	}
 
-	ibPropertyDate(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const ibDateTime& value = ibDateTime()) : ibProperty(cat, name, label, TextOf(value))
+	ibPropertyDate(ibPropertyCategory* cat, const ibString& name, const ibString& label,
+		const ibDateTime& value = ibDateTime()) : ibProperty(cat, name, label, TextOf(value).wc_str())
 	{
 	}
 
-	ibPropertyDate(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const ibDateTime& value = ibDateTime()) : ibProperty(cat, name, label, helpString, TextOf(value))
+	ibPropertyDate(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
+		const ibDateTime& value = ibDateTime()) : ibProperty(cat, name, label, helpString, TextOf(value).wc_str())
 	{
 	}
 
@@ -41,7 +41,7 @@ public:
 
 private:
 
-	static wxString TextOf(const ibDateTime& date) { return wxString::Format(wxT("%lld"), date.GetValue()); }
+	static ibString TextOf(const ibDateTime& date) { return ibString::Format(ibT("%lld"), date.GetValue()); }
 };
 
 #endif

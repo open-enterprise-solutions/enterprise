@@ -58,7 +58,7 @@ ibDataNode& ibInterfaceCompositionView::GroupFor(ibDataNode& root, const ibClass
 
 	// A group row is named by its place: it carries no object.
 	ibDataNode& group = root.AddChild(0, -static_cast<ibMetaID>(root.Children().size() + 1));
-	const wxString caption = ibMetaGroupCaption(clsid);
+	const ibString caption = ibMetaGroupCaption(clsid);
 	group.SetValue(ibProtocol::ibView::ibCheckTree::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
 	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid));
 	return group;

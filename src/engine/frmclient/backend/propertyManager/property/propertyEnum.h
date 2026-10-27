@@ -11,16 +11,16 @@ public:
 	long GetValueAsInteger() const;
 	void SetValue(const long& i);
 
-	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name) : ibPropertySerializable(cat, name, wxNullVariant)
+	ibPropertyEnumBase(ibPropertyCategory* cat, const ibString& name) : ibPropertySerializable(cat, name, wxNullVariant)
 	{
 	}
 
-	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyEnumBase(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibPropertySerializable(cat, name, label, wxNullVariant)
 	{
 	}
 
-	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyEnumBase(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
 	{
 	}
@@ -59,19 +59,19 @@ public:
 	void SetValue(const valueEnumType& e) { ibPropertyEnumBase::SetValue(static_cast<int>(e)); }
 	void SetValue(const int& i) { ibPropertyEnumBase::SetValue(i); }
 
-	ibPropertyEnum(ibPropertyCategory* cat, const wxString& name,
+	ibPropertyEnum(ibPropertyCategory* cat, const ibString& name,
 		const valueEnumType& value) : ibPropertyEnumBase(cat, name)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyEnum(ibPropertyCategory* cat, const wxString& name, const wxString& label,
+	ibPropertyEnum(ibPropertyCategory* cat, const ibString& name, const ibString& label,
 		const valueEnumType& value) : ibPropertyEnumBase(cat, name, label)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyEnum(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
+	ibPropertyEnum(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
 		const valueEnumType& value) : ibPropertyEnumBase(cat, name, label, helpString)
 	{
 		SetValue(value);

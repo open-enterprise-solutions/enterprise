@@ -45,7 +45,7 @@ public:
 	// class_id checked by it (ibHelpClassName). The backend's appData owns
 	// one; a thin client owns its own. Ctor publishes an initial corpus
 	// snapshot synchronously.
-	ibHelpService(const wxString& locale, const ibHelpClassName& className = ibHelpClassName());
+	ibHelpService(const ibString& locale, const ibHelpClassName& className = ibHelpClassName());
 	~ibHelpService();
 
 	ibHelpService(const ibHelpService&)            = delete;
@@ -63,12 +63,12 @@ public:
 
 	// Locale this service was constructed for. Currently immutable —
 	// changing locale mid-session would need a fresh service.
-	const wxString& GetLocale() const { return m_locale; }
+	const ibString& GetLocale() const { return m_locale; }
 
 private:
 	void Rebuild();   // body of Reload() + ctor — assumes lock held.
 
-	wxString m_locale;
+	ibString m_locale;
 	ibHelpClassName m_className;
 	mutable std::shared_ptr<const ibHelpCorpus> m_corpus;
 	mutable std::mutex m_mutex;

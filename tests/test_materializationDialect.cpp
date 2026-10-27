@@ -231,7 +231,7 @@ TEST(MaterializationDialect, FirebirdShellPutsTableBeforeTiming) {
 TEST(MaterializationDialect, FirebirdTruncatesSubDayTextually) {
     const ibDialectDictionary& m = ibDatabaseLayerFirebird::Dialect();
     for (const ibTotalsPeriod unit : { ibTotalsPeriod::Second, ibTotalsPeriod::Minute, ibTotalsPeriod::Hour }) {
-        const wxString& tpl = m.m_periodTrunc.at(unit);
+        const ibString& tpl = m.m_periodTrunc.at(unit);
         EXPECT_TRUE(tpl.Contains(wxT("SUBSTRING")));
         EXPECT_FALSE(tpl.Contains(wxT("EXTRACT(SECOND")));
         EXPECT_FALSE(tpl.Contains(wxT("EXTRACT(MILLISECOND")));
@@ -287,7 +287,7 @@ TEST(MaterializationDialect, PostgresLeavesPageSpaceForHotUpdates) {
 // for PG's own 'decade', which means ten YEARS and is a different thing entirely.
 TEST(MaterializationDialect, PostgresCapsTheTenDayOffset) {
     const ibDialectDictionary& m = ibDatabaseLayerPostgres::Dialect();
-    const wxString& tpl = m.m_periodTrunc.at(ibTotalsPeriod::TenDays);
+    const ibString& tpl = m.m_periodTrunc.at(ibTotalsPeriod::TenDays);
     EXPECT_TRUE(tpl.Contains(wxT("LEAST")));
     EXPECT_FALSE(tpl.Contains(wxT("decade")));
 }
@@ -326,7 +326,7 @@ TEST(MaterializationDialect, MysqlHasADummyRelationForGuardedDeltas) {
 // mistake). Picking the wrong function shifts every weekly bucket by a day.
 TEST(MaterializationDialect, MysqlWeekStartsMonday) {
     const ibDialectDictionary& m = ibDatabaseLayerMySQL::Dialect();
-    const wxString& tpl = m.m_periodTrunc.at(ibTotalsPeriod::Week);
+    const ibString& tpl = m.m_periodTrunc.at(ibTotalsPeriod::Week);
     EXPECT_TRUE(tpl.Contains(wxT("WEEKDAY(")));
     EXPECT_FALSE(tpl.Contains(wxT("DAYOFWEEK(")));
 }

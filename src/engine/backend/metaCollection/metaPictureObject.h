@@ -10,7 +10,7 @@ class BACKEND_API ibValueMetaObjectPicture : public ibValueMetaObject {
 	// Which picture it holds — new with each its Picture is given: what its id carries (ibBackendPicture::SendPicture).
 	ibGuid GetValueAsVersion() const { return m_propertyPicture->GetValueAsVersion(); }
 
-	ibValueMetaObjectPicture(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectPicture(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	//support icons
 	virtual ibPicture GetIcon() const;
@@ -22,7 +22,7 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
-	ibPropertyExternalPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyExternalPicture>(m_categoryContext, wxT("Picture"), _("Picture"),
+	ibPropertyExternalPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyExternalPicture>(m_categoryContext, ibT("Picture"), _("Picture"),
 		_("The image this common picture holds, stored in the configuration. Commands, sections and form controls can take it as their picture by reference, so one image is kept in one place."));
 };
 

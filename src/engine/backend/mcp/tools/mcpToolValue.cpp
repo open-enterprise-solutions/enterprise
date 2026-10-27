@@ -34,7 +34,7 @@
 #include "backend/metadataConfiguration.h"
 #include "core/description/typeDescription.h"
 #include "backend/system/value/valueType.h"
-#include "core/stringUtils.h"                // CompareString - how this tree compares text
+#include "core/stringUtils.h"                // IsSameAs - how this tree compares text
 
 #include <memory>
 
@@ -44,7 +44,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 
 const ibArg& ArgType()
 {
-	static const ibArg s_a(wxT("type"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("type"), ibArg::Kind::Text,
 		ibMcpText("What type to make it - the name as type_list gives it. The caller states this, which "
 			  "is what makes the conversion below honest rather than a guess: 'make a Date of "
 			  "this text' is an instruction, 'work out what this text might be' is not."),
@@ -54,7 +54,7 @@ const ibArg& ArgType()
 
 const ibArg& ArgValue()
 {
-	static const ibArg s_a(wxT("value"), ibArg::Kind::Any,
+	static const ibArg s_a(ibT("value"), ibArg::Kind::Any,
 		ibMcpText("What it should hold, as a plain scalar - a string, a number, a flag. Omit it and the "
 			  "answer is the EMPTY packed form of that type, which is the shape to look at, fill in "
 			  "and send back."));
@@ -63,7 +63,7 @@ const ibArg& ArgValue()
 
 const ibArg& ArgPacked()
 {
-	static const ibArg s_a(wxT("value"), ibArg::Kind::Node,
+	static const ibArg s_a(ibT("value"), ibArg::Kind::Node,
 		ibMcpText("The packed value to read - the shape report_get shows under `Value`, or anything "
 			  "value_pack answered with."), /*required*/ true);
 	return s_a;
@@ -71,17 +71,17 @@ const ibArg& ArgPacked()
 
 // The type the caller named, as a description of one. Empty when the name is not a type here, which
 // is a refusal rather than a default: making 'whatever this looks like' is the thing being avoided.
-bool TypeNamed(const ibDataNode& params, ibTypeDescription& into, wxString& refusal)
+bool TypeNamed(const ibDataNode& params, ibTypeDescription& into, ibString& refusal)
 {
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 		refusal = ibMcpText("No configuration is open, so there is no vocabulary of types to name one in.");
 		return false;
 	}
 
-	const wxString name = ArgType().Text(params);
+	const ibString name = ArgType().Text(params);
 	const ibClassID clsid = activeMetaData->GetIDObjectFromString(name);
 	if (clsid == ibClassID(0)) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("'%s' is not a type in this configuration. type_list says what there is - and the "
 				  "vocabulary is this configuration's, not a general one."), name);
 		return false;
@@ -98,14 +98,14 @@ bool TypeNamed(const ibDataNode& params, ibTypeDescription& into, wxString& refu
 class ibMcpToolValuePack : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("value_pack"); }
+	ibString GetName() const override { return ibT("value_pack"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("packing a value of type '%s'"), ArgType().Text(params));
+		return ibString::Format(ibMcpText("packing a value of type '%s'"), ArgType().Text(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("MAKE A TYPED VALUE, packed - the form every typed thing travels in here. A "
 			"schema stores its parameters this way, a saved setting stores a filter's right-hand "
@@ -137,7 +137,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibTypeDescription type;
 		if (!TypeNamed(params, type, refusal))
@@ -185,8 +185,8 @@ public:
 			// refused a padded zero re-sends it as a JSON number and loses a call, where a caller
 			// handed an empty period loses a figure and does not know it.
 			if (made.IsEmpty() && !stated.IsEmpty()
-				&& !stringUtils::CompareString(made.GetString(), stated.GetString())) {
-				refusal = wxString::Format(
+				&& !stringUtils::IsSameAs(made.GetString(), stated.GetString())) {
+				refusal = ibString::Format(
 					ibMcpText("'%s' could not be made into a %s - what came back is that type's "
 						"EMPTY value, which would have travelled on as if it were an answer. "
 						"A DATE is written with its time: '2026-12-31 00:00:00', '31.12.2026 "
@@ -202,11 +202,11 @@ public:
 		std::shared_ptr<ibDataNode> packed = std::make_shared<ibDataNode>();
 		activeMetaData->Serialize(made, *packed);
 
-		result.AddField(wxT("packed"), ibDataValue::Child(packed));
+		result.AddField(ibT("packed"), ibDataValue::Child(packed));
 		// …and what it came out as, in words, so a caller can see at once whether the type they named
 		// is the type they got.
-		result.SetValue(wxT("text"), made.GetString());
-		result.SetValue(wxT("empty"), made.IsEmpty());
+		result.SetValue(ibT("text"), made.GetString());
+		result.SetValue(ibT("empty"), made.IsEmpty());
 		return true;
 	}
 };
@@ -219,14 +219,14 @@ MCP_TOOL_REGISTER(ibMcpToolValuePack);
 class ibMcpToolValueUnpack : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("value_unpack"); }
+	ibString GetName() const override { return ibT("value_unpack"); }
 
-	wxString GetActivity(const ibDataNode& /*params*/) const override
+	ibString GetActivity(const ibDataNode& /*params*/) const override
 	{
 		return ibMcpText("reading a packed value");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("READ A PACKED VALUE - what it IS, rather than the bytes it is stored as. Hand it "
 			"anything in that form: a schema's parameter `Value`, a filter's right-hand side, "
@@ -247,7 +247,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 			refusal = ibMcpText("No configuration is open, and a packed value means nothing without one: "
@@ -264,14 +264,14 @@ public:
 
 		const ibValue read = activeMetaData->Deserialize(*packed);
 
-		result.SetValue(wxT("text"), read.GetString());
-		result.SetValue(wxT("empty"), read.IsEmpty());
+		result.SetValue(ibT("text"), read.GetString());
+		result.SetValue(ibT("empty"), read.IsEmpty());
 
 		// The type it turned out to BE - which is the question, and which a caller cannot answer by
 		// looking at the packed node without knowing this file's business.
-		const wxString named = activeMetaData->GetNameObjectFromID(read.GetClassType());
+		const ibString named = activeMetaData->GetNameObjectFromID(read.GetClassType());
 		if (!named.IsEmpty())
-			result.SetValue(wxT("type"), named);
+			result.SetValue(ibT("type"), named);
 
 		return true;
 	}

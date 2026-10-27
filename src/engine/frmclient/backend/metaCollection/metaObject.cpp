@@ -8,16 +8,16 @@
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // an edit's value — its node
 #include "frmclient/mainFrame/mainFrame.h"              // the door to the server
 
-wxString ibValueMetaObject::GetName() const
+ibString ibValueMetaObject::GetName() const
 {
-	const ibProperty* const property = GetProperty(wxT("Name"));
-	return property != nullptr ? property->GetValue().GetString() : wxString();
+	const ibProperty* const property = GetProperty(ibT("Name"));
+	return property != nullptr ? ibString(property->GetValue().GetString()) : ibString();
 }
 
-wxString ibValueMetaObject::GetSynonym() const
+ibString ibValueMetaObject::GetSynonym() const
 {
-	const ibProperty* const property = GetProperty(wxT("Synonym"));
-	return property != nullptr ? property->GetValue().GetString() : wxString();
+	const ibProperty* const property = GetProperty(ibT("Synonym"));
+	return property != nullptr ? ibString(property->GetValue().GetString()) : ibString();
 }
 
 namespace {
@@ -35,17 +35,17 @@ ibProtocolNode ObjectTextParams(ibMetaID id, const ibMetaData& metaData, ibProto
 }
 
 // …the one named, as the server has it now.
-wxString ReadObjectText(ibMetaID id, const ibMetaData& metaData, const char* name)
+ibString ReadObjectText(ibMetaID id, const ibMetaData& metaData, const char* name)
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	ibProtocolNode answer;
 	if (frame == nullptr || !frame->Call(ibProtocol::ibMethod::Schema, ObjectTextParams(id, metaData, ibProtocolNode()), answer))
-		return wxString();
+		return ibString();
 	return answer.GetString(name);
 }
 
 // …given. Refused: the person told why.
-void SaveObjectText(ibMetaID id, const ibMetaData& metaData, const char* name, const wxString& text)
+void SaveObjectText(ibMetaID id, const ibMetaData& metaData, const char* name, const ibString& text)
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
@@ -61,27 +61,27 @@ void SaveObjectText(ibMetaID id, const ibMetaData& metaData, const char* name, c
 
 } // namespace
 
-wxString ibValueMetaObject::GetHelpContent() const
+ibString ibValueMetaObject::GetHelpContent() const
 {
 	return ReadObjectText(m_metaId, m_metaData, ibProtocol::ibSchema::ibObjectText::Help);
 }
 
-void ibValueMetaObject::SetHelpContent(const wxString& strHelpContent)
+void ibValueMetaObject::SetHelpContent(const ibString& strHelpContent)
 {
 	SaveObjectText(m_metaId, m_metaData, ibProtocol::ibSchema::ibObjectText::Help, strHelpContent);
 }
 
-wxString ibValueMetaObject::GetNoteContent() const
+ibString ibValueMetaObject::GetNoteContent() const
 {
 	return ReadObjectText(m_metaId, m_metaData, ibProtocol::ibSchema::ibObjectText::Note);
 }
 
-void ibValueMetaObject::SetNoteContent(const wxString& strNoteContent)
+void ibValueMetaObject::SetNoteContent(const ibString& strNoteContent)
 {
 	SaveObjectText(m_metaId, m_metaData, ibProtocol::ibSchema::ibObjectText::Note, strNoteContent);
 }
 
-bool ibValueMetaObject::Send(const wxString& name, const ibDataValue& value) const
+bool ibValueMetaObject::Send(const ibString& name, const ibDataValue& value) const
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
@@ -103,7 +103,7 @@ bool ibValueMetaObject::Send(const wxString& name, const ibDataValue& value) con
 	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
-bool ibValueMetaObject::Send(const wxString& name, const wxVariant& value) const
+bool ibValueMetaObject::Send(const ibString& name, const wxVariant& value) const
 {
 	return Send(name, ibVariantDataSerializable::GetNodeValue(value));
 }

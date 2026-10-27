@@ -150,7 +150,7 @@ void ibValueMetaObjectCommonAttribute::OnPropertyChanged(
 	ibValueMetaObjectAttribute::OnPropertyChanged(property, oldValue, newValue);
 }
 
-bool ibValueMetaObjectCommonAttribute::OnRenameMetaObject(const wxString& sNewName)
+bool ibValueMetaObjectCommonAttribute::OnRenameMetaObject(const ibString& sNewName)
 {
 	// The copies carry the declaration's name, so a rename here is a rename everywhere —
 	// this is the propagation the stored name costs, and the only one.
@@ -276,7 +276,7 @@ bool ibValueMetaObjectCommonAttributeColumn::OnBeforeRunMetaObject(int flags)
 
 bool ibValueMetaObjectCommonAttributeColumn::ReadData(const ibDataNode& node)
 {
-	m_sourceMetaId = node.GetProp<std::int32_t>(wxT("Source"));
+	m_sourceMetaId = node.GetProp<std::int32_t>(ibT("Source"));
 	return true;
 }
 
@@ -284,7 +284,7 @@ bool ibValueMetaObjectCommonAttributeColumn::WriteData(ibDataNode& node) const
 {
 	// ONLY THE LINK. Name, type and qualifiers are the declaration's, and writing a copy
 	// of them here would be a second truth that a later edit could contradict.
-	node.SetProp<std::int32_t>(wxT("Source"), m_sourceMetaId);
+	node.SetProp<std::int32_t>(ibT("Source"), m_sourceMetaId);
 	return true;
 }
 

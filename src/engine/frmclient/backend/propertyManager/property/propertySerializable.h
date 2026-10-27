@@ -23,7 +23,7 @@ public:
 	// …unless the server says it is not (its own IsEditable — the row's ReadOnly).
 	virtual bool IsEditable() const override { return !m_readOnly && ibProperty::IsEditable(); }
 	// Its type, as the server names it — the key its presentation is registered by; the client's own, its class.
-	virtual wxString GetType() const override { return !m_type.IsEmpty() ? m_type : ibProperty::GetType(); }
+	virtual ibString GetType() const override { return !m_type.IsEmpty() ? m_type : ibProperty::GetType(); }
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
 	// The row it was made of, as the server wrote it; the client's own, as it writes one.
@@ -32,9 +32,9 @@ public:
 protected:
 
 	// The client's own — made of no row (a sheet's cell's).
-	ibPropertySerializable(ibPropertyCategory* cat, const wxString& name, const wxVariant& value) : ibProperty(cat, name, value) {}
-	ibPropertySerializable(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxVariant& value) : ibProperty(cat, name, label, value) {}
-	ibPropertySerializable(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxVariant& value) : ibProperty(cat, name, label, helpString, value) {}
+	ibPropertySerializable(ibPropertyCategory* cat, const ibString& name, const wxVariant& value) : ibProperty(cat, name, value) {}
+	ibPropertySerializable(ibPropertyCategory* cat, const ibString& name, const ibString& label, const wxVariant& value) : ibProperty(cat, name, label, value) {}
+	ibPropertySerializable(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const wxVariant& value) : ibProperty(cat, name, label, helpString, value) {}
 
 	// A node arriving (a typed setter's, the gate's), held as it comes, named by its class. A node has no words: what
 	// reads here is the old ones until the rows come back.
@@ -44,7 +44,7 @@ protected:
 private:
 
 	ibDataNode m_row;
-	wxString m_type;
+	ibString m_type;
 	ibPropertyChoiceList m_choices;
 	ibPropertyChoiceMode m_mode = ibPropertyChoiceMode::None;
 	bool m_readOnly = false;

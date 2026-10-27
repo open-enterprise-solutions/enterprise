@@ -5,15 +5,15 @@
 wxString ibVariantDataExternalPicture::MakeString() const
 {
 	if (IsEmptyPicture())
-		return wxEmptyString;
+		return ibEmptyString;
 
 	wxFileName fn(m_pictureExternalFile.m_img_name);
 	return fn.GetFullName();
 }
 
-wxString ibVariantDataExternalPicture::GetPictureFileName() const
+ibString ibVariantDataExternalPicture::GetPictureFileName() const
 {
-	return m_pictureExternalFile.m_img_name;
+	return ibString::FromUTF8(m_pictureExternalFile.m_img_name);
 }
 
 ibPicture ibVariantDataExternalPicture::GetPicture(const ibSize& size) const
@@ -30,7 +30,7 @@ wxString ibVariantDataPicture::MakeString() const
 	else if (m_pictureDesc.m_type == ibPictureType::eFromFile)
 		return _("External picture");
 
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 ibPicture ibVariantDataPicture::GetPicture(const ibSize& size) const

@@ -28,14 +28,14 @@ static int& OffsetOf(int& entry) { return entry; }
 static int& OffsetOf(ibDebuggerClient::ibBreakpoint& entry) { return entry.m_offset; }
 
 // Module maps (m_listBreakpoint / m_listOffsetBreakpoint) are keyed by module GUID, matched
-// case-insensitively via stringUtils::CompareString — so map::find can't be used. This is the
+// case-insensitively via stringUtils::IsSameAs — so map::find can't be used. This is the
 // one lookup the methods here kept inlining. Returns the inner (line -> entry) map, or null.
 template <typename Entry>
 static std::map<unsigned int, Entry>* FindModuleLines(
 	std::map<wxString, std::map<unsigned int, Entry>>& modules, const wxString& guid)
 {
 	auto it = std::find_if(modules.begin(), modules.end(),
-		[&guid](const auto& pair) { return stringUtils::CompareString(pair.first, guid); });
+		[&guid](const auto& pair) { return stringUtils::IsSameAs(pair.first, guid); });
 	return it != modules.end() ? &it->second : nullptr;
 }
 
@@ -87,7 +87,7 @@ static bool Send(ibProtocol::ibDebug::ibCommand command, ibProtocolNode params =
 	params.SetValue(ibProtocol::ibDebug::Command, static_cast<int>(command));
 	ibProtocolNode result;
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	if (!frame->Debug(params, result, refusal, error)) {
 		Message(wxString::Format(_("The debugger did not take the command: %s"), error));
 		return false;
@@ -138,7 +138,7 @@ void ibDebuggerClient::Listen()
 	// waits on. What a listener throws is said here, nobody holding it; and the debugger may be gone by then, with its
 	// frame — the news has nobody left to reach.
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	const bool listening = frame->ListenDebug([](const ibProtocolNode& news) {
 		if (wxTheApp == nullptr)
 			return;
@@ -360,7 +360,7 @@ bool ibDebuggerClient::SaveModule(const wxString& strModuleName, unsigned int li
 {
 	//initialize breakpoint
 	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
+		[&strModuleName](const auto& pair) { return stringUtils::IsSameAs(pair.first, strModuleName); });
 
 	if (breakpoint_iterator != m_listBreakpoint.end()) {
 
@@ -379,7 +379,7 @@ bool ibDebuggerClient::SaveModule(const wxString& strModuleName, unsigned int li
 	// edits, it never moved at all, so a module kept the length it was loaded with and every line past it was refused
 	// as "the running application does not have this line" (2026-10-14).
 	auto module_offset_iterator = std::find_if(m_listOffsetBreakpoint.begin(), m_listOffsetBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
+		[&strModuleName](const auto& pair) { return stringUtils::IsSameAs(pair.first, strModuleName); });
 
 	InitializeModule(module_offset_iterator != m_listOffsetBreakpoint.end() ? module_offset_iterator->first : strModuleName,
 		line_count);
@@ -389,12 +389,12 @@ bool ibDebuggerClient::SaveModule(const wxString& strModuleName, unsigned int li
 void ibDebuggerClient::RemoveModule(const wxString& strModuleName)
 {
 	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
+		[&strModuleName](const auto& pair) { return stringUtils::IsSameAs(pair.first, strModuleName); });
 	if (breakpoint_iterator != m_listBreakpoint.end())
 		m_listBreakpoint[breakpoint_iterator->first].clear();
 
 	auto module_offset_iterator = std::find_if(m_listOffsetBreakpoint.begin(), m_listOffsetBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
+		[&strModuleName](const auto& pair) { return stringUtils::IsSameAs(pair.first, strModuleName); });
 	if (module_offset_iterator != m_listOffsetBreakpoint.end())
 		m_listOffsetBreakpoint[module_offset_iterator->first].clear();
 }

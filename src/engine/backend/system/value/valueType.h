@@ -15,7 +15,7 @@ class BACKEND_API ibValueType : public ibValue {
 	ibValueType(const ibValue& cObject);
 	ibValueType(const ibValueType& typeObject);
 
-	ibValueType(const wxString& typeName);
+	ibValueType(const ibString& typeName);
 
 	virtual bool IsEmpty() const { return false; }
 

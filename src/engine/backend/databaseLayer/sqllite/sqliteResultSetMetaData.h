@@ -23,7 +23,7 @@ public:
 
   virtual int GetColumnType(int i);
   virtual int GetColumnSize(int i);
-  virtual wxString GetColumnName(int i);
+  virtual ibString GetColumnName(int i);
   virtual int GetColumnCount();
   
 private:

@@ -216,7 +216,7 @@ void ibSpreadsheetObject::PutArea(const std::shared_ptr<ibSpreadsheetObject>& do
 				// row 121 column 1 and `Cell_11` at row 2 column 11 both came out `Cell_11211`: past ten
 				// columns and a hundred rows one cell's details replaced another's (found 2026-09-12).
 				ibString detailsComputeParameter;
-				detailsComputeParameter << detailsParameter << wxT('_') << maxRowBrake + row << wxT('_') << col;
+				detailsComputeParameter << detailsParameter << ibT('_') << maxRowBrake + row << ibT('_') << col;
 
 				SetParameter(detailsComputeParameter, doc->GetParameter(detailsParameter));
 				cell->m_detailsParameter = detailsComputeParameter;
@@ -266,7 +266,7 @@ void ibSpreadsheetObject::JoinArea(const std::shared_ptr<ibSpreadsheetObject>& d
 			if (!detailsParameter.IsEmpty()) {
 
 				ibString detailsComputeParameter;   // separated, one name per cell — see PutArea
-				detailsComputeParameter << detailsParameter << wxT('_') << row << wxT('_') << maxColBrake + col;
+				detailsComputeParameter << detailsParameter << ibT('_') << row << ibT('_') << maxColBrake + col;
 
 				SetParameter(detailsComputeParameter, doc->GetParameter(detailsParameter));
 				cell->m_detailsParameter = detailsComputeParameter;
@@ -513,7 +513,7 @@ void ibSpreadsheetObject::SetCellValue(int row, int col, const ibString& s)
 bool ibSpreadsheetObject::GetParameter(const ibString& strParameter, ibAnyValuePtr<ibAnyValue>& valueParam) const
 {
 	// FOUND, NOT WALKED — the map folds case in its comparator (ibStringCaseFoldLess), the rule this lookup always
-	// had. It ran CompareString over every name instead: 90 reads from script on a composed sheet of 400
+	// had. It ran IsSameAs over every name instead: 90 reads from script on a composed sheet of 400
 	// thousand links took some 375 s (Debug, 2026-09-12), and a cell's drill-down asks here too. Two names
 	// that differ only in case are one parameter now, which is what this lookup always took them for.
 	const auto iterator = m_paramVector.find(strParameter);
@@ -554,22 +554,22 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 
 		if (!strValue.IsEmpty()) {
 
-			wxString strTemplateValue = ibLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
+			ibString strTemplateValue = ibLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
 
 			size_t start_pos = 0, end_pos = 0;
 
 			// Find the first opening or closing bracket
-			start_pos = strTemplateValue.find_first_of(wxT("[]"), start_pos);
+			start_pos = strTemplateValue.find_first_of(ibT("[]"), start_pos);
 
-			while (start_pos != wxString::npos) {
+			while (start_pos != ibString::npos) {
 
 				// Find the next bracket of any type
-				end_pos = strTemplateValue.find_first_of(wxT("[]"), start_pos + 1);
+				end_pos = strTemplateValue.find_first_of(ibT("[]"), start_pos + 1);
 
-				if (end_pos != wxString::npos) {
+				if (end_pos != ibString::npos) {
 					// Extract the substring between the brackets
 					// +1 to start after the opening bracket
-					const wxString& token =
+					const ibString& token =
 						strTemplateValue.substr(start_pos + 1, end_pos - start_pos - 1);
 					if (!token.empty()) {
 
@@ -578,9 +578,9 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 						// one thread clobbers it if GetParameter re-enters. Constructing
 						// one is cheap; the static was not a win.
 						ibAnyValuePtr<ibAnyValue> cVal;
-						const wxString replacement = (GetParameter(token, cVal) && cVal)
+						const ibString replacement = (GetParameter(token, cVal) && cVal)
 							? ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal->GetString())
-							: wxString();
+							: ibString();
 						strTemplateValue.replace(start_pos, end_pos - start_pos + 1, replacement);
 
 						// Resume right after what was ACTUALLY written, not at an index computed
@@ -592,7 +592,7 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 						start_pos += replacement.length();
 					}
 					else {
-						strTemplateValue.replace(start_pos, end_pos - start_pos, wxT(""));
+						strTemplateValue.replace(start_pos, end_pos - start_pos, ibT(""));
 						// Nothing was inserted, so the text that followed the removed character is
 						// now sitting at start_pos itself.
 					}
@@ -603,7 +603,7 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 				}
 
 				// Find the next opening bracket for the next iteration
-				start_pos = strTemplateValue.find_first_of(wxT("[]"), start_pos);
+				start_pos = strTemplateValue.find_first_of(ibT("[]"), start_pos);
 			}
 
 			return strTemplateValue;

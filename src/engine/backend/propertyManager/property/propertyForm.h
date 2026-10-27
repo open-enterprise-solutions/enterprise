@@ -8,22 +8,22 @@ class BACKEND_API ibPropertyForm : public ibProperty {
 	static wxVariantData* CreateVariantData();
 public:
 
-	wxString GetValueAsString() const;
+	ibString GetValueAsString() const;
 	ibMemoryBuffer& GetValueAsMemoryBuffer() const;
-	void SetValue(const wxString& val);
+	void SetValue(const ibString& val);
 	void SetValue(const ibMemoryBuffer& val);
 
-	ibPropertyForm(ibPropertyCategory* cat, const wxString& name)
+	ibPropertyForm(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData())
 	{
 	}
 
-	ibPropertyForm(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyForm(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData())
 	{
 	}
 
-	ibPropertyForm(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyForm(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData())
 	{
 	}

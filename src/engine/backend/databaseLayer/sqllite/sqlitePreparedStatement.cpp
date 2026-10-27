@@ -205,7 +205,7 @@ void ibPreparedStatementSQLite::SetParamDate(int nPosition, const ibDateTime& da
 		sqlite3_reset(m_Statements[nIndex]);
 		ibDateTimeParts p;
 		dateValue.ToParts(p);
-		wxCharBuffer valueBuffer = ConvertToUnicodeStream(wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"),
+		wxCharBuffer valueBuffer = ConvertToUnicodeStream(ibString::Format(ibT("%04d-%02u-%02u %02u:%02u:%02u"),
 			p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second));
 		int nReturn = sqlite3_bind_text(m_Statements[nIndex], nPosition, valueBuffer, -1, SQLITE_TRANSIENT);
 		if (nReturn != SQLITE_OK)
@@ -291,7 +291,7 @@ ibDatabaseResultSet* ibPreparedStatementSQLite::RunQueryWithResults()
 
 			if ((nReturn != SQLITE_ROW) && (nReturn != SQLITE_DONE))
 			{
-				ibJournalError(wxT("db.sqlite"),wxT("Error with RunQueryWithResults\n"));
+				ibJournalError(ibT("db.sqlite"),ibT("Error with RunQueryWithResults\n"));
 				SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn), ibDatabaseLayerSQLite::ClassifyDatabaseError(nReturn));
 				SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(m_pDatabase)));
 				ThrowDatabaseException();

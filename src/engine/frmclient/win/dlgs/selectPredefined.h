@@ -5,7 +5,7 @@
 // THE DESIGNER'S CHOICE OF A DECLARED VALUE
 ////////////////////////////////////////////////////////////////////////////
 //
-// The desktop's (frontend/win/dlgs/selectPredefined.h), its second question: WHICH DECLARED VALUE — the empty
+// The old desktop's, its second question: WHICH DECLARED VALUE — the empty
 // reference of a type, a predefined element, an enumeration member — as a tree with a branch per admitted reference
 // type. What the configuration declares, and the first question (which type, through the type list every other road
 // opens), are the server's (frmserver/win/dlgs/selectPredefined.h); the tree comes as request PredefinedSelector, each

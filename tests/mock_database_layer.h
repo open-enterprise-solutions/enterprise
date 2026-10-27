@@ -16,26 +16,26 @@ public:
     MockDatabaseLayer() = default;
     ~MockDatabaseLayer() override = default;
 
-    bool Open(const wxString&) override { m_open = true; return true; }
+    bool Open(const ibString&) override { m_open = true; return true; }
     bool Close() override                { m_open = false; return true; }
     bool IsOpen() override               { return m_open; }
     void Cancel() override               {}   // no DBMS to tell
     ibDatabaseLayer* Clone() override    { auto* c = new MockDatabaseLayer(); c->m_open = true; return c; }
 
-    bool TableExists(const wxString&) override { return false; }
-    bool ViewExists (const wxString&) override { return false; }
-    wxArrayString GetTables() override                      { return {}; }
-    wxArrayString GetViews() override                       { return {}; }
-    wxArrayString GetColumns(const wxString&) override      { return {}; }
+    bool TableExists(const ibString&) override { return false; }
+    bool ViewExists (const ibString&) override { return false; }
+    std::vector<ibString> GetTables() override                      { return {}; }
+    std::vector<ibString> GetViews() override                       { return {}; }
+    std::vector<ibString> GetColumns(const ibString&) override      { return {}; }
     int  GetDatabaseLayerType() const override              { return 0; }
     const ibDialectDictionary& GetDialect() const override {
         static const ibDialectDictionary s_dialect;   // default ctor = ANSI baseline
         return s_dialect;
     }
 
-    int                  DoRunQuery(const wxString&, bool) override            { return 0; }
-    ibDatabaseResultSet* DoRunQueryWithResults(const wxString&) override       { return nullptr; }
-    ibPreparedStatement* DoPrepareStatement(const wxString&) override          { return nullptr; }
+    int                  DoRunQuery(const ibString&, bool) override            { return 0; }
+    ibDatabaseResultSet* DoRunQueryWithResults(const ibString&) override       { return nullptr; }
+    ibPreparedStatement* DoPrepareStatement(const ibString&) override          { return nullptr; }
     void                 DoBeginTransaction(const ibTxOptions&) override       {}
     void                 DoCommit() override                                   {}
     void                 DoRollBack() override                                 {}

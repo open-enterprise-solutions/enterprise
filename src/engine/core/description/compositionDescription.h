@@ -148,12 +148,12 @@ enum ibFilterDisplayMode {
 // ONE SIDE of a condition — a FIELD (a path into the source) or a plain VALUE. Both sides are the
 // same shape, which is what lets a filter say `Price > Cost` and not only `Price > 100`.
 struct ibFilterOperandDescription {
-	wxString          m_path;                    // non-empty = a field; empty = the value below
+	ibString          m_path;                    // non-empty = a field; empty = the value below
 	ibDataNode        m_value;                   // the literal, PACKED, when this side is not a field — a blob like a
 	                                             // parameter's (below); the side restores it (ibStoredValue)
 	ibMetaID          m_leafId = wxNOT_FOUND;    // what the path resolved to, when it did
 	ibTypeDescription m_type;                    // …and its type — what makes the OTHER side editable
-	wxString          m_presentation;            // what the picker showed; empty = derive from the path
+	ibString          m_presentation;            // what the picker showed; empty = derive from the path
 
 	bool IsField() const { return !m_path.IsEmpty(); }
 	bool operator==(const ibFilterOperandDescription& o) const {
@@ -175,7 +175,7 @@ struct ibFilterNodeDescription {
 	ibFilterNodeKind    m_kind    = ibFilterNodeKind_Condition;
 	bool                m_use     = true;
 	ibFilterDisplayMode m_display = ibFilterDisplayMode_Normal;
-	wxString            m_presentation;           // the user's own label; empty = generate it
+	ibString            m_presentation;           // the user's own label; empty = generate it
 
 	// …when it is a CONDITION
 	ibFilterOperandDescription m_left;
@@ -210,7 +210,7 @@ struct ibFilterDescription {
 	// ADD A CONDITION to a group — the root's own children by default, any group by handing it its
 	// child list. One way in, so a line can never be built half-filled.
 	static ibFilterNodeDescription& Append(std::vector<ibFilterNodeDescription>& into,
-		const wxString& path, ibComparisonKind comparison, const ibDataNode& value, bool use = true) {
+		const ibString& path, ibComparisonKind comparison, const ibDataNode& value, bool use = true) {
 		ibFilterNodeDescription node;
 		node.m_use = use;
 		node.m_left.m_path = path;
@@ -219,7 +219,7 @@ struct ibFilterDescription {
 		into.push_back(node);
 		return into.back();
 	}
-	ibFilterNodeDescription& Append(const wxString& path, ibComparisonKind comparison,
+	ibFilterNodeDescription& Append(const ibString& path, ibComparisonKind comparison,
 		const ibDataNode& value, bool use = true) {
 		return Append(m_nodes, path, comparison, value, use);
 	}
@@ -245,7 +245,7 @@ struct ibFilterDescription {
 // have two modes — a dialog's buffer and a model's composer — and in the second
 // there is no line object at all, which is why nothing here needs one.)
 struct ibSortLineDescription {
-	wxString m_path;
+	ibString m_path;
 	bool     m_ascending = true;
 	bool operator==(const ibSortLineDescription& o) const { return m_path == o.m_path && m_ascending == o.m_ascending; }
 	bool operator!=(const ibSortLineDescription& o) const { return !(*this == o); }
@@ -255,7 +255,7 @@ struct ibSortDescription {
 	std::vector<ibSortLineDescription> m_lines;
 	bool IsOk() const { return !m_lines.empty(); }
 	void Clear() { m_lines.clear(); }
-	void Append(const wxString& path, bool ascending) { m_lines.push_back({ path, ascending }); }
+	void Append(const ibString& path, bool ascending) { m_lines.push_back({ path, ascending }); }
 	bool operator==(const ibSortDescription& o) const { return m_lines == o.m_lines; }
 	bool operator!=(const ibSortDescription& o) const { return !(*this == o); }
 };
@@ -276,9 +276,9 @@ struct ibSortDescription {
 // periodicity is nothing, and periodicity with no unit is impossible — so the content IS the
 // answer, the way a filter operand is a field exactly when it has a path.
 struct ibGroupPeriodsDescription {
-	wxString m_unit;   // the word — the same vocabulary ibPeriodUnits() offers, verbatim
-	wxString m_from;   // empty = the earliest period in the data
-	wxString m_to;     // empty = the latest
+	ibString m_unit;   // the word — the same vocabulary ibPeriodUnits() offers, verbatim
+	ibString m_from;   // empty = the earliest period in the data
+	ibString m_to;     // empty = the latest
 
 	bool IsOk() const { return !m_unit.IsEmpty(); }
 	void Clear() { m_unit.clear(); m_from.clear(); m_to.clear(); }
@@ -289,7 +289,7 @@ struct ibGroupPeriodsDescription {
 };
 
 struct ibGroupLineDescription {
-	wxString            m_path;
+	ibString            m_path;
 	// ⭐ THE UNFOLD, AS THE TYPE IT IS. It was a bare int "the enum value, as the plain number it
 	// is" — and a number is what every reader then had to cast back, which is the shape of a type
 	// that was never stated. Only the SERIALISER writes it as a number, which is what a file is.
@@ -307,7 +307,7 @@ struct ibGroupDescription {
 	std::vector<ibGroupLineDescription> m_lines;
 	bool IsOk() const { return !m_lines.empty(); }
 	void Clear() { m_lines.clear(); }
-	void Append(const wxString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements) {
+	void Append(const ibString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements) {
 		m_lines.push_back({ path, kind });
 	}
 	bool operator==(const ibGroupDescription& o) const { return m_lines == o.m_lines; }
@@ -430,7 +430,7 @@ enum class ibAppearanceParameter {
 
 // THE PLATFORM'S LIST, in the order a window shows it, and what each is called there.
 CORE_API const std::vector<ibAppearanceParameter>& ibAppearanceParameters();
-CORE_API wxString ibAppearanceParameterCaption(ibAppearanceParameter parameter);
+CORE_API ibString ibAppearanceParameterCaption(ibAppearanceParameter parameter);
 
 // …said the way every list of the platform's parameters is (ibParameterValuesDescription): only what somebody
 // touched is kept — an untouched one is the value showing itself its own way.
@@ -450,7 +450,7 @@ using ibAppearanceDescription      = ibParameterValuesDescription<ibAppearancePa
 struct ibConditionalAppearanceRuleDescription {
 	bool                    m_use = true;
 	ibFilterDescription     m_condition;    // empty = always
-	std::vector<wxString>   m_fields;       // the fields that wear it; empty = the whole row
+	std::vector<ibString>   m_fields;       // the fields that wear it; empty = the whole row
 	ibAppearanceDescription m_appearance;
 
 	bool operator==(const ibConditionalAppearanceRuleDescription& o) const {
@@ -492,7 +492,7 @@ enum class ibShowMode {
 	Show,
 	Hide,
 };
-CORE_API wxString ibShowModeCaption(ibShowMode mode);
+CORE_API ibString ibShowModeCaption(ibShowMode mode);
 
 // WHICH PARAMETERS TAKE ONE — asked of the list, so a window and a verb cannot disagree about it.
 inline bool ibOutputParameterShows(ibOutputParameter parameter) {
@@ -509,7 +509,7 @@ enum class ibOutputParameterScope {
 };
 // THE PLATFORM'S LIST for a storey, in the order a window shows it, and what each is called there.
 CORE_API const std::vector<ibOutputParameter>& ibOutputParameters(ibOutputParameterScope scope);
-CORE_API wxString ibOutputParameterCaption(ibOutputParameter parameter);
+CORE_API ibString ibOutputParameterCaption(ibOutputParameter parameter);
 
 using ibOutputParametersDescription = ibParameterValuesDescription<ibOutputParameter>;
 
@@ -593,8 +593,8 @@ struct ibSettingsDescription {
 // query means there is a parameter called Period), so `m_fromQuery` records which of the two put it
 // here — a re-parse may drop what the text stopped mentioning and must not touch a hand-made one.
 struct ibParameterDescription {
-	wxString         m_name;
-	wxString         m_expression;
+	ibString         m_name;
+	ibString         m_expression;
 
 	// ⭐⭐ THE VALUE IS A BLOB — the packed form, and nothing else (Max, 2026-08-29: "m_value is a
 	// blob"; "the schema is just a store of the values we serialised").
@@ -629,21 +629,21 @@ struct ibParameterDescription {
 //
 // Here, in the composition's own vocabulary, because a title IS a composition's word: the query
 // tier below knows names and aliases and has no business inventing captions.
-CORE_API wxString ibTitleFromName(const wxString& name);
+CORE_API ibString ibTitleFromName(const ibString& name);
 
 // THE NAME A PATH IMPLIES — its last segment. `Partner.Contract` is the field "Contract"; the walk
 // to it belongs to the path, not to what the field is called.
-CORE_API wxString ibNameFromPath(const wxString& path);
+CORE_API ibString ibNameFromPath(const ibString& path);
 
 // --- RESOURCE --------------------------------------------------------------
 // An aggregate the levels fold. `m_func` empty means the path IS the whole expression.
 struct ibResourceDescription {
-	wxString m_func;
-	wxString m_path;
+	ibString m_func;
+	ibString m_path;
 	// ⭐ THE NAME THE FIGURE IS READ BACK UNDER — `res["Qty"]`, the twin of a level's alias, which
 	// this language already has. It travels INTO the query (`TOTALS SUM(Amount) AS Qty`), because a
 	// name is what the query tier deals in. Empty = the engine names it after the argument.
-	wxString m_alias;
+	ibString m_alias;
 
 	// ⭐⭐ OVER WHAT IT IS COMPUTED — the name of a grouping this composition declares, or empty.
 	//
@@ -655,7 +655,7 @@ struct ibResourceDescription {
 	// Travels INTO the query as `TOTALS SUM(Amount) OVER Item`, like everything else this tier says:
 	// the text is the one seam downward, and nothing below has to be told about resources. A branch
 	// qualifies the name where two of them carry a level of the same name (`Branch.Level`).
-	wxString m_scope;
+	ibString m_scope;
 
 	// (⚠ AND NO TITLE HERE. A resource is BUILT ON A FIELD — `SUM(Amount)` is a reading of Amount —
 	//  so what it is called comes from that field, through m_path (Max, 2026-08-26: "a resource
@@ -666,7 +666,7 @@ struct ibResourceDescription {
 	// THE NAME IT ANSWERS TO — its alias where it has one, its path where it does not. What a person
 	// picks in the fields table, what the composer asks the selection about, and what makes two
 	// declarations the same resource. Asked here so the three cannot come to disagree.
-	const wxString& AnswersTo() const { return m_alias.IsEmpty() ? m_path : m_alias; }
+	const ibString& AnswersTo() const { return m_alias.IsEmpty() ? m_path : m_alias; }
 
 	bool operator==(const ibResourceDescription& o) const {
 		return m_func == o.m_func && m_path == o.m_path && m_alias == o.m_alias && m_scope == o.m_scope;
@@ -693,12 +693,12 @@ struct ibResourceDescription {
 //   * the TITLE — what a person reads. Generated from the name until somebody takes it over.
 // (The role — opening balance, closing balance — and the appearance joined them below: the same table.)
 struct ibFieldDescription {
-	wxString m_path;
+	ibString m_path;
 	// Empty = the name IS the path's last segment, which is the ordinary case and is why nothing
 	// has to be written down for nearly every field of nearly every report.
-	wxString m_name;
+	ibString m_name;
 	bool     m_useTitle = false;
-	wxString m_title;
+	ibString m_title;
 	// ⭐⭐ …AND WHAT IT IS IN A BALANCE (ibBalanceRole) — the moment, a key, an opening or a closing — which
 	// is what this table is FOR beyond captions (Max, 2026-08-26): a figure is folded by what it IS. The
 	// SOURCE says it first (a register's view publishes its moment, keys and edges) and the composition
@@ -717,11 +717,11 @@ struct ibFieldDescription {
 	// package's name plus the field's (`Sales.Qty`), and that assembly IS the path (Max, 2026-08-26).
 	// Asked rather than read off the member, because absence means something and every caller would
 	// otherwise re-state it.
-	wxString NameInForce() const { return m_name.IsEmpty() ? m_path : m_name; }
+	ibString NameInForce() const { return m_name.IsEmpty() ? m_path : m_name; }
 
 	// …AND WHAT A READER SEES. What a person took over, else what the SOURCE calls the field (`caption`,
 	// when the caller knows it — a register's "Amount Closing balance"), else its own name read out loud.
-	wxString TitleInForce(const wxString& caption = wxString()) const {
+	ibString TitleInForce(const ibString& caption = ibString()) const {
 		if (m_useTitle)
 			return m_title;
 		return !caption.IsEmpty() ? caption : ibTitleFromName(ibNameFromPath(NameInForce()));
@@ -735,7 +735,7 @@ struct ibFieldDescription {
 	//
 	// A TITLE, in every language it is written in (`en = '…'; ru = '…'`). Empty gives it back to what
 	// generates itself — the source's caption, else the name read out loud.
-	void SayTitle(const wxString& title) { m_useTitle = !title.IsEmpty(); m_title = title; }
+	void SayTitle(const ibString& title) { m_useTitle = !title.IsEmpty(); m_title = title; }
 	// A ROLE, kept as the person's word only where it is not what the source says: the source's own answer
 	// picked back lets the field follow its source again. A period's number is always a person's word — a
 	// source orders its own periods above every number a person may write (ibSourcePeriodRank).
@@ -776,22 +776,22 @@ struct ibFieldDescription {
 struct ibSelectDescription {
 	// Stable, opaque, and never shown — the thing a path actually points at. Empty on a record that
 	// predates this, which is exactly the ONE unnamed select a composition starts with.
-	wxString m_id;
+	ibString m_id;
 	// The word `ONTO` gave it. Empty = unnamed, which is legitimate while it is the only one.
-	wxString m_name;
+	ibString m_name;
 	// What its fields are called — only the ones somebody has said something about. The fields
 	// themselves are whatever the select projects, so listing them here would be a copy that goes
 	// stale the moment the text is edited.
 	std::vector<ibFieldDescription> m_fields;
 
 	// A KEY NOBODY EVER READS OUT — made in one place so "how is identity minted" has one answer.
-	static wxString NewId() { return ibGuid(ibGuid::newGuid()).str(); }
+	static ibString NewId() { return ibGuid(ibGuid::newGuid()).str(); }
 
 	// ⭐ IS THIS THE SELECT SOMETHING MEANT? Asked by IDENTITY first and by name second, which is the
 	// order the whole design rests on: the id is what a reference IS, the name is what it is written
 	// with. A caller holding an id keeps its select across a rename; one holding a name is looking at
 	// text, and text is what a rename changes.
-	bool Matches(const wxString& idOrName) const {
+	bool Matches(const ibString& idOrName) const {
 		if (!m_id.IsEmpty() && m_id.IsSameAs(idOrName, false))
 			return true;
 		return !m_name.IsEmpty() && m_name.IsSameAs(idOrName, false);
@@ -804,7 +804,7 @@ struct ibSelectDescription {
 
 	// THE FIELD AN UNQUALIFIED NAME MEANS, inside this select. Null when nobody has said anything
 	// about it — which is the ordinary case and not an error: its title is then its name.
-	const ibFieldDescription* Find(const wxString& name) const {
+	const ibFieldDescription* Find(const ibString& name) const {
 		for (const ibFieldDescription& field : m_fields)
 			if (ibNameFromPath(field.NameInForce()).IsSameAs(name, false))
 				return &field;
@@ -815,7 +815,7 @@ struct ibSelectDescription {
 // WHICH SELECT A PATH SPEAKS OF — the one it names, or the only one there is. Null when neither
 // answers, which is exactly what an unqualified path means once a second select exists.
 CORE_API const ibSelectDescription* ibSelectOfPath(const std::vector<ibSelectDescription>& selects,
-                                                      const wxString& path);
+                                                      const ibString& path);
 
 // ⭐ THE TITLE IN FORCE FOR A PATH — ONE function, so the description and the running composer
 // cannot answer differently (they hold the same selects; they must not each work out what a column
@@ -826,24 +826,24 @@ CORE_API const ibSelectDescription* ibSelectOfPath(const std::vector<ibSelectDes
 // column still prints: the schema degrades field by field, never as a whole.
 // `caption` — what the SOURCE calls the field, when the caller knows it: the generated title then, in place
 // of the name read out loud.
-CORE_API wxString ibTitleForPath(const std::vector<ibSelectDescription>& selects, const wxString& path,
-                                    const wxString& caption = wxString());
+CORE_API ibString ibTitleForPath(const std::vector<ibSelectDescription>& selects, const ibString& path,
+                                    const ibString& caption = ibString());
 
 // ⭐ …AND THE ROLE IN FORCE FOR A PATH — what a person said in its entry, else what the source says
 // (`fromSource`). One function for the composer's render and the Fields page, for the reason the title has one.
-CORE_API ibBalanceRole ibRoleForPath(const std::vector<ibSelectDescription>& selects, const wxString& path,
+CORE_API ibBalanceRole ibRoleForPath(const std::vector<ibSelectDescription>& selects, const ibString& path,
                                         ibBalanceRole fromSource);
 
 // …AND HOW IT IS SHOWN — the appearance a person gave the field, or an empty one.
 CORE_API ibAppearanceDescription ibAppearanceForPath(const std::vector<ibSelectDescription>& selects,
-                                                        const wxString& path);
+                                                        const ibString& path);
 
 // ⭐ THE ENTRY A FIELD IS DESCRIBED IN, FOR WRITING — found, or made the first time anything is said
 // about the field (the first select too, when nothing was ever said about any). Null when the path does
 // not say which select it speaks of, which each writer refuses in its own words. ONE door for every
 // writer — the settings window's Fields page and report_field — so what "the same field" means is
 // answered once.
-CORE_API ibFieldDescription* ibFieldEntryForPath(std::vector<ibSelectDescription>& selects, const wxString& path);
+CORE_API ibFieldDescription* ibFieldEntryForPath(std::vector<ibSelectDescription>& selects, const ibString& path);
 
 // ⭐⭐ AND `Auto` IS A ROW, NOT A FLAG. It stands for everything the storey above chose, and it
 // stands SOMEWHERE: a row has a position, so the inherited fields can sit before this node's own,
@@ -861,11 +861,11 @@ CORE_API ibFieldDescription* ibFieldEntryForPath(std::vector<ibSelectDescription
 // simpler for free (Max: "we get the report simplified for nothing").
 struct ibSelectedFieldDescription {
 	ibSelectedFieldKind m_kind = ibSelectedFieldKind_Field;
-	wxString            m_path;   // the field; empty for Auto, which names nothing
+	ibString            m_path;   // the field; empty for Auto, which names nothing
 
 	bool IsAuto() const { return m_kind == ibSelectedFieldKind_Auto; }
 
-	static ibSelectedFieldDescription Field(const wxString& path) {
+	static ibSelectedFieldDescription Field(const ibString& path) {
 		ibSelectedFieldDescription row;
 		row.m_path = path;
 		return row;
@@ -1028,7 +1028,7 @@ struct ibLevelDescription {
 
 // One output — what a report SHOWS: its rows, its columns, and what it reads.
 struct ibOutputDescription {
-	wxString                           m_name;
+	ibString                           m_name;
 	// WHAT THIS OUTPUT IS — decided when it was added, not read back off what has been filled in
 	// since. See ibCompositionOutputKind for why this one fact cannot be derived.
 	ibCompositionOutputKind            m_kind = ibCompositionOutputKind::Grouping;
@@ -1106,8 +1106,8 @@ inline bool ibSettingsDescription::operator==(const ibSettingsDescription& o) co
 // composition's own. What was left is what a variant is FOR: naming a setting so a person can pick
 // it by that name.
 struct ibVariantDescription {
-	wxString              m_name;
-	wxString              m_synonym;   // what the picker shows; empty = derive it from the name — the
+	ibString              m_name;
+	ibString              m_synonym;   // what the picker shows; empty = derive it from the name — the
 	                                   // translated text as stored; what a person reads is the side's (ibVariantCaption)
 	ibSettingsDescription m_settings;
 
@@ -1136,7 +1136,7 @@ struct ibCompositionDescription {
 	// THE COMPOSER HALF, shared by both. A LIST fills the query and the settings and leaves the rest
 	// empty; a REPORT uses all of it. One format, one reader, one writer — the difference is which
 	// fields happen to be filled.
-	wxString                            m_query;
+	ibString                            m_query;
 	std::vector<ibParameterDescription> m_parameters;
 	std::vector<ibResourceDescription>  m_resources;
 
@@ -1159,10 +1159,10 @@ struct ibCompositionDescription {
 	// ⚠ A PATH NOBODY HAS AN ENTRY FOR IS NOT AN ERROR — it is the ordinary case, and it is also
 	// what a field that has GONE looks like. Either way the answer is its name, so a report whose
 	// query lost a column still prints: the schema degrades field by field, never as a whole.
-	wxString TitleForPath(const wxString& path) const { return ibTitleForPath(m_selects, path); }
+	ibString TitleForPath(const ibString& path) const { return ibTitleForPath(m_selects, path); }
 
 	// THE SELECT AN ID NAMES — the door a caller uses when it holds identity rather than text.
-	ibSelectDescription* SelectById(const wxString& id) {
+	ibSelectDescription* SelectById(const ibString& id) {
 		if (id.IsEmpty())
 			return nullptr;
 		for (ibSelectDescription& select : m_selects)
@@ -1181,7 +1181,7 @@ struct ibCompositionDescription {
 	// chase this design exists to avoid. Closing that means storing the qualifier as an ID and
 	// RENDERING the name at the moment the query text is written; it is an arc of its own, and it
 	// starts here, at the one place a rename passes through.
-	bool RenameSelect(const wxString& id, const wxString& name) {
+	bool RenameSelect(const ibString& id, const ibString& name) {
 		ibSelectDescription* select = SelectById(id);
 		if (select == nullptr)
 			return false;
@@ -1254,7 +1254,7 @@ struct ibCompositionDescription {
 	// simply keeps whichever it was given — a bare id for the table, the text for the query. Neither
 	// is a mode the rest of the code has to branch on; a list says the second, a report says the
 	// first, and both end up in the same description.
-	void SetQuery(const wxString& text) { m_query = text; }
+	void SetQuery(const ibString& text) { m_query = text; }
 	void SetMainTable(const ibMetaID& id) { m_mainTable = id; }
 
 	bool HasQuery() const { return !m_query.IsEmpty(); }
@@ -1433,13 +1433,13 @@ public:
 //
 // The names exist — they are the literals the ids are made FROM, ten lines up from here. This hands
 // them back, so a reader of the tree sees `"NodeType": "CompositionOutput"`.
-CORE_API wxString ibCompositionNodeName(ibClassID clsid);
+CORE_API ibString ibCompositionNodeName(ibClassID clsid);
 
 // ⭐⭐ …AND BACK. The pair is what makes a schema READ, EDITED AND RETURNED possible at all: an answer
 // renders these types as words, and without this the reader turns an unknown word into clsid 0 — so
 // the parts a composition is made of arrive as untyped nodes and the description comes out empty,
 // with nothing failing anywhere. Empty for a name that is not one of these, which is the answer a
 // chained lookup needs. Same table as the name above, read the other way.
-CORE_API ibClassID ibCompositionNodeClsid(const wxString& name);
+CORE_API ibClassID ibCompositionNodeClsid(const ibString& name);
 
 #endif // !__COMPOSITION_DESCRIPTION_H__

@@ -28,18 +28,18 @@ namespace {
 // reason it is computed in the real thing — the metaobject behind it gets renamed.
 class ibFakeCtor {
 public:
-	ibFakeCtor(ibClassID clsid, const wxString& name)
+	ibFakeCtor(ibClassID clsid, const ibString& name)
 		: m_clsid(clsid), m_name(name) {}
 
 	ibClassID             GetClassType() const { return m_clsid; }
-	wxString              GetClassName() const { return m_name; }
+	ibString              GetClassName() const { return m_name; }
 	const std::type_info& GetTypeInfo()  const { return typeid(void); }
 
-	void Rename(const wxString& name) { m_name = name; }
+	void Rename(const ibString& name) { m_name = name; }
 
 private:
 	const ibClassID m_clsid;
-	wxString        m_name;
+	ibString        m_name;
 };
 
 // Identities as the engine builds them for metaobject types: kind in the high byte,
@@ -55,8 +55,8 @@ TEST(CtorRegistry, FindsByIdentityAndByName) {
 	registry.Register(new ibFakeCtor(kObjectOfMeta42, wxT("ConstantObject.Rate")));
 
 	EXPECT_NE(registry.Find(kObjectOfMeta42), nullptr);
-	EXPECT_NE(registry.Find(wxString(wxT("ConstantObject.Rate"))), nullptr);
-	EXPECT_EQ(registry.Find(kObjectOfMeta42), registry.Find(wxString(wxT("ConstantObject.Rate"))));
+	EXPECT_NE(registry.Find(ibString(wxT("ConstantObject.Rate"))), nullptr);
+	EXPECT_EQ(registry.Find(kObjectOfMeta42), registry.Find(ibString(wxT("ConstantObject.Rate"))));
 }
 
 // --- name lookup is case-insensitive (OES convention) --------------------------
@@ -64,8 +64,8 @@ TEST(CtorRegistry, NameLookupIgnoresCase) {
 	ibCtorRegistry<ibFakeCtor> registry;
 	registry.Register(new ibFakeCtor(kObjectOfMeta42, wxT("ConstantObject.Rate")));
 
-	EXPECT_NE(registry.Find(wxString(wxT("constantobject.rate"))), nullptr);
-	EXPECT_NE(registry.Find(wxString(wxT("CONSTANTOBJECT.RATE"))), nullptr);
+	EXPECT_NE(registry.Find(ibString(wxT("constantobject.rate"))), nullptr);
+	EXPECT_NE(registry.Find(ibString(wxT("CONSTANTOBJECT.RATE"))), nullptr);
 }
 
 // --- THE RENAME: identity holds, presentation moves ---------------------------
@@ -81,10 +81,10 @@ TEST(CtorRegistry, RenameKeepsIdentityAndRefilesTheName) {
 	EXPECT_EQ(registry.Find(kObjectOfMeta42), ctor);
 
 	// The NEW name resolves…
-	EXPECT_EQ(registry.Find(wxString(wxT("ConstantObject.Price"))), ctor);
+	EXPECT_EQ(registry.Find(ibString(wxT("ConstantObject.Price"))), ctor);
 	// …and the OLD one does not. A stale entry here is not merely untidy: it is a
 	// name resolving to a type that no longer answers to it.
-	EXPECT_EQ(registry.Find(wxString(wxT("ConstantObject.Rate"))), nullptr);
+	EXPECT_EQ(registry.Find(ibString(wxT("ConstantObject.Rate"))), nullptr);
 }
 
 // --- a rename with no lookup afterwards costs nothing, and is not lost ---------
@@ -101,8 +101,8 @@ TEST(CtorRegistry, RenameIsRecomputedLazilyOnFirstLookup) {
 	registry.InvalidateNames();
 
 	// The first lookup after them sees the LAST name, not an intermediate one.
-	EXPECT_EQ(registry.Find(wxString(wxT("ConstantObject.B"))), ctor);
-	EXPECT_EQ(registry.Find(wxString(wxT("ConstantObject.A"))), nullptr);
+	EXPECT_EQ(registry.Find(ibString(wxT("ConstantObject.B"))), ctor);
+	EXPECT_EQ(registry.Find(ibString(wxT("ConstantObject.A"))), nullptr);
 }
 
 // --- unregister drops the name entry even when the name has since changed ------
@@ -119,8 +119,8 @@ TEST(CtorRegistry, UnregisterAfterRenameLeavesNoStaleName) {
 	registry.Unregister(ctor);
 
 	EXPECT_EQ(registry.Find(kObjectOfMeta42), nullptr);
-	EXPECT_EQ(registry.Find(wxString(wxT("ConstantObject.Rate"))), nullptr);
-	EXPECT_EQ(registry.Find(wxString(wxT("ConstantObject.Price"))), nullptr);
+	EXPECT_EQ(registry.Find(ibString(wxT("ConstantObject.Rate"))), nullptr);
+	EXPECT_EQ(registry.Find(ibString(wxT("ConstantObject.Price"))), nullptr);
 	EXPECT_TRUE(registry.IsEmpty());
 }
 
@@ -135,8 +135,8 @@ TEST(CtorRegistry, RebuildKeepsEveryOtherEntry) {
 	rate->Rename(wxT("ConstantObject.Price"));
 	registry.InvalidateNames();
 
-	EXPECT_EQ(registry.Find(wxString(wxT("ConstantObject.Price"))), rate);
-	EXPECT_EQ(registry.Find(wxString(wxT("ConstantObject.Vat"))), other);
+	EXPECT_EQ(registry.Find(ibString(wxT("ConstantObject.Price"))), rate);
+	EXPECT_EQ(registry.Find(ibString(wxT("ConstantObject.Vat"))), other);
 	EXPECT_EQ(registry.Size(), 2u);
 }
 

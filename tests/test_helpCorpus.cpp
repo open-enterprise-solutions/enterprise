@@ -30,11 +30,12 @@
 #include <wx/utils.h>
 
 #include <algorithm>
+#include "core/fileSystem.h"   // ibFILE_SEP_PATH
 #include <string>
 
 namespace {
 
-ibHelpEntry MakeEntry(const wxString& id, std::vector<wxString> categoryKeys) {
+ibHelpEntry MakeEntry(const ibString& id, std::vector<ibString> categoryKeys) {
 	ibHelpEntry e;
 	e.id             = id;
 	e.nameEn         = id;
@@ -45,7 +46,7 @@ ibHelpEntry MakeEntry(const wxString& id, std::vector<wxString> categoryKeys) {
 }
 
 // Walks to a direct child of the root by key.
-const ibHelpCategory* ChildByKey(const ibHelpCategory* parent, const wxString& key) {
+const ibHelpCategory* ChildByKey(const ibHelpCategory* parent, const ibString& key) {
 	if (parent == nullptr)
 		return nullptr;
 	for (const auto& child : parent->children) {
@@ -62,7 +63,7 @@ TEST(HelpCorpus, CategoryKeysCarryTheirTranslatedName) {
 	std::vector<ibHelpEntry> entries;
 	entries.push_back(MakeEntry(wxT("fn.Round"), { wxT("global_functions") }));
 
-	std::map<wxString, wxString> names;
+	std::map<ibString, ibString> names;
 	names[wxT("global_functions")] = wxT("Глобальные функции");
 
 	ibHelpCorpus corpus(wxT("ru"), ibHelpCorpus::Source::kPlatform,
@@ -95,7 +96,7 @@ TEST(HelpCorpus, EveryLevelOfThePathIsNamed) {
 	std::vector<ibHelpEntry> entries;
 	entries.push_back(MakeEntry(wxT("kw.From"), { wxT("common_lang"), wxT("linq") }));
 
-	std::map<wxString, wxString> names;
+	std::map<ibString, ibString> names;
 	names[wxT("common_lang")] = wxT("Общее описание языка");
 	names[wxT("linq")]        = wxT("LINQ — запросы к коллекциям");
 
@@ -116,7 +117,7 @@ TEST(HelpCorpus, EveryLevelOfThePathIsNamed) {
 TEST(HelpCorpus, MergingKeepsPlatformNamesAndLetsAConfigurationOverlayThem) {
 	std::vector<ibHelpEntry> platformEntries;
 	platformEntries.push_back(MakeEntry(wxT("fn.Round"), { wxT("global_functions") }));
-	std::map<wxString, wxString> platformNames;
+	std::map<ibString, ibString> platformNames;
 	platformNames[wxT("global_functions")] = wxT("Глобальные функции");
 	platformNames[wxT("date")]             = wxT("Дата");
 
@@ -126,7 +127,7 @@ TEST(HelpCorpus, MergingKeepsPlatformNamesAndLetsAConfigurationOverlayThem) {
 
 	std::vector<ibHelpEntry> configEntries;
 	configEntries.push_back(MakeEntry(wxT("fn.OurOwn"), { wxT("date") }));
-	std::map<wxString, wxString> configNames;
+	std::map<ibString, ibString> configNames;
 	configNames[wxT("date")] = wxT("Даты и периоды");
 
 	auto perConfig = std::make_shared<const ibHelpCorpus>(
@@ -153,19 +154,19 @@ TEST(HelpCorpus, MergingKeepsPlatformNamesAndLetsAConfigurationOverlayThem) {
 namespace {
 
 // A locale directory holding one bucket, in a folder of its own under the temp directory.
-wxString WriteHelpBucket(const std::string& bucket)
+ibString WriteHelpBucket(const std::string& bucket)
 {
-	const wxString root = wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()
-		+ wxString::Format(wxT("oes_help_classid_%ld"), (long)wxGetProcessId());
-	const wxString locale = root + wxFileName::GetPathSeparator() + wxT("en");
+	const ibString root = wxStandardPaths::Get().GetTempDir() + ibFILE_SEP_PATH
+		+ ibString::Format(wxT("oes_help_classid_%ld"), (long)wxGetProcessId());
+	const ibString locale = root + ibFILE_SEP_PATH + wxT("en");
 	wxFileName::Mkdir(locale, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-	wxFile out(locale + wxFileName::GetPathSeparator() + wxT("types.json"), wxFile::write);
+	wxFile out(locale + ibFILE_SEP_PATH + wxT("types.json"), wxFile::write);
 	out.Write(bucket.data(), bucket.size());
 	out.Close();
 	return root;
 }
 
-bool SaysSomethingAbout(const std::vector<ibHelpLoadError>& errors, const wxString& id)
+bool SaysSomethingAbout(const std::vector<ibHelpLoadError>& errors, const ibString& id)
 {
 	return std::any_of(errors.begin(), errors.end(), [&id](const ibHelpLoadError& e) {
 		return e.severity == ibHelpLoadSeverity::kWarning && e.message.Contains(id);
@@ -180,7 +181,7 @@ bool SaysSomethingAbout(const std::vector<ibHelpLoadError>& errors, const wxStri
 TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
 {
 	const std::string tableId = std::to_string(value_to_clsid("VL_TABL"));
-	const wxString root = WriteHelpBucket(
+	const ibString root = WriteHelpBucket(
 		R"({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)"
 		R"({ "id": "cls.Table",    "name_local": "Table",   "name_en": "Table",   "kind": "collection", "class_id": )" + tableId + R"( },)"
 		R"({ "id": "cls.Nothing",  "name_local": "Nothing", "name_en": "Nothing", "kind": "collection", "class_id": 12345 },)"
@@ -191,7 +192,7 @@ TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
 
 	// The registry the backend's host hands in (ibApplicationHost::InitLocale) - the core keeps none.
 	const ibHelpLoadResult loaded = LoadHelpCorpus(wxT("en"), root, wxEmptyString, [](ibClassID id) {
-		return ibValue::IsRegisterCtor(id) ? ibValue::GetNameObjectFromID(id) : wxString();
+		return ibValue::IsRegisterCtor(id) ? ibValue::GetNameObjectFromID(id) : ibString();
 	});
 	wxFileName::Rmdir(root, wxPATH_RMDIR_RECURSIVE);
 	ASSERT_TRUE(loaded.ok());
@@ -231,7 +232,7 @@ TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
 // its own kind, and a word NOBODY knows is said out loud instead of passing for a keyword.
 TEST(HelpLoader, EveryKindTheCorpusWritesArrivesAsItself)
 {
-	const wxString root = WriteHelpBucket(
+	const ibString root = WriteHelpBucket(
 		R"({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)"
 		R"({ "id": "cls.Table.Columns",      "name_local": "Columns", "name_en": "Columns", "kind": "property" },)"
 		R"({ "id": "cls.Table.Find",         "name_local": "Find",    "name_en": "Find",    "kind": "method" },)"
@@ -252,7 +253,7 @@ TEST(HelpLoader, EveryKindTheCorpusWritesArrivesAsItself)
 	// kOperator stands for "no article at all" here: none of the entries above claims it, so a
 	// missing article cannot be mistaken for a kind that was read.
 	auto kindOf = [&loaded](const wxChar* id) {
-		const ibHelpEntry* e = loaded.corpus->FindById(wxString(id));
+		const ibHelpEntry* e = loaded.corpus->FindById(ibString(id));
 		return e != nullptr ? e->kind : ibHelpKind::kOperator;
 	};
 

@@ -21,7 +21,7 @@
 #include "designer-thin/docManager/templates/docViewConfigCompare.h"
 
 // Common shape for the three places that save the configuration before
-// kicking off a child process (enterprise.exe / webserver.exe
+// kicking off a child process (enterprise-thin.exe / webserver.exe
 // for debug). Returns true when the configuration is in a state safe to
 // launch — either no save was needed, the user declined to save, or the
 // save succeeded. Returns false only when a save was attempted and it
@@ -41,6 +41,8 @@ static bool SaveBeforeChildLaunch(wxWindow* parent, const ibConfigurationTree* m
 	return metaWindow->SaveDatabase();
 }
 
+// THE THIN CLIENT, with the designer's command line (a file base, or a server's connection). A file base's engine runs
+// in the thin client's own process (fileserver), and `--debug` brings its debug server up there.
 void ibFrontendMainFrameDesigner::OnStartDebug(wxCommandEvent& WXUNUSED(event))
 {
 	if (debugClient->HasConnections()) {
@@ -51,37 +53,13 @@ void ibFrontendMainFrameDesigner::OnStartDebug(wxCommandEvent& WXUNUSED(event))
 	if (!SaveBeforeChildLaunch(this, m_metaWindow))
 		return;
 
-	// …and the child's debug server looked for, as the desktop's RunApplication did with the debugger it held — once,
-	// and not waited for: the connections keep trying on their own threads while the child boots (SearchServer(true)).
-	if (appData->RunApplication(wxT("enterprise")) != 0)
-		debugClient->SearchServer(true);
-}
-
-void ibFrontendMainFrameDesigner::OnStartDebugWithoutDebug(wxCommandEvent& WXUNUSED(event))
-{
-	if (!SaveBeforeChildLaunch(this, m_metaWindow))
-		return;
-
-	appData->RunApplication(wxT("enterprise"), false);
-}
-
-// THE THIN CLIENT, the same way: the same command line (a file base, or a server's connection), the same search for its
-// debug server — a file base's engine runs in the thin client's own process (fileserver), and `--debug` brings it up there.
-void ibFrontendMainFrameDesigner::OnStartDebugThin(wxCommandEvent& WXUNUSED(event))
-{
-	if (debugClient->HasConnections()) {
-		wxMessageBox(_("Debugger is already running!"));
-		return;
-	}
-
-	if (!SaveBeforeChildLaunch(this, m_metaWindow))
-		return;
-
+	// …and the child's debug server looked for once, and not waited for: the connections keep trying on their own
+	// threads while the child boots (SearchServer(true)).
 	if (appData->RunApplication(wxT("enterprise-thin")) != 0)
 		debugClient->SearchServer(true);
 }
 
-void ibFrontendMainFrameDesigner::OnStartDebugWithoutDebugThin(wxCommandEvent& WXUNUSED(event))
+void ibFrontendMainFrameDesigner::OnStartDebugWithoutDebug(wxCommandEvent& WXUNUSED(event))
 {
 	if (!SaveBeforeChildLaunch(this, m_metaWindow))
 		return;

@@ -37,12 +37,12 @@
 struct BACKEND_API ibLockSnapshotRow {
 	ibGuid       lockGuid;
 	ibGuid       sessionGuid;
-	wxString     namespaceName;
-	wxString     keyData;          // human-readable canonical key
+	ibString     namespaceName;
+	ibString     keyData;          // human-readable canonical key
 	ibLockMode   lockMode;
 	ibDateTime   acquiredAt;
-	wxString     userName;
-	wxString     computer;
+	ibString     userName;
+	ibString     computer;
 };
 
 class BACKEND_API ibLockManager {

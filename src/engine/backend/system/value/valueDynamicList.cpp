@@ -28,9 +28,9 @@ public:
 	public:
 		explicit ColInfo(const ibBackendQueryColumn* col) : m_col(col) {}
 		virtual unsigned int GetColumnID() const override { return m_col != nullptr ? m_col->GetColumnId() : 0; }
-		virtual wxString GetColumnName() const override { return m_col != nullptr ? m_col->GetName() : wxString(); }
+		virtual ibString GetColumnName() const override { return m_col != nullptr ? m_col->GetName() : ibString(); }
 		// …and how it reads: the column's synonym, as a metaobject's column reads (commonObject.h) — the name is the designer's.
-		virtual wxString GetColumnCaption() const override { return m_col != nullptr ? m_col->GetSynonym() : wxString(); }
+		virtual ibString GetColumnCaption() const override { return m_col != nullptr ? m_col->GetSynonym() : ibString(); }
 		// Name + id + TYPE straight off the column (an attribute IS-A column → GetTypeDesc is free).
 		// Enough to render/edit a cell type-aware; for 90% of sources nothing else is needed.
 		virtual const ibTypeDescription GetColumnType() const override { return m_col != nullptr ? m_col->GetTypeDesc() : ibTypeDescription(); }
@@ -68,13 +68,13 @@ class ibQuerySchemaColumns : public ibValueModelCursor::ibValueModelColumnCollec
 public:
 	class ColInfo : public ibValueModelColumnInfo {
 	public:
-		ColInfo(wxString name, const ibBackendQueryColumn* col, bool walkAvailable = true)
+		ColInfo(ibString name, const ibBackendQueryColumn* col, bool walkAvailable = true)
 			: m_name(std::move(name)), m_col(col), m_walkAvailable(walkAvailable) {}
 		virtual unsigned int GetColumnID() const override { return m_col != nullptr ? m_col->GetColumnId() : 0; }
 		// THE QUERY'S NAME FOR IT, not the underlying column's. `Owner.Code AS Supplier` is called
 		// `Supplier` here and nowhere else — that is the whole point of writing the query.
-		virtual wxString GetColumnName() const override { return m_name; }
-		virtual wxString GetColumnCaption() const override { return m_name; }
+		virtual ibString GetColumnName() const override { return m_name; }
+		virtual ibString GetColumnCaption() const override { return m_name; }
 		virtual const ibTypeDescription GetColumnType() const override { return m_col != nullptr ? m_col->GetTypeDesc() : ibTypeDescription(); }
 		virtual const ibTypeDescription GetColumnTypeValue() const override { return m_col != nullptr ? m_col->GetTypeValueDesc() : ibTypeDescription(); }
 		// The column's own answer, asked live — AND what the query knew of the road to it: a walk read
@@ -82,7 +82,7 @@ public:
 		// (OutputColumn::m_available).
 		virtual bool IsColumnAvailable() const override { return m_walkAvailable && (m_col == nullptr || m_col->IsAvailable()); }
 	private:
-		wxString                    m_name;
+		ibString                    m_name;
 		const ibBackendQueryColumn* m_col;
 		bool                        m_walkAvailable;
 	};
@@ -166,7 +166,7 @@ ibValueDynamicList::~ibValueDynamicList() { CancelFetch(); }
 
 // --- source (the list starts empty) ----------------------------------------
 
-void ibValueDynamicList::SetSource(const wxString& ns, const wxString& name)
+void ibValueDynamicList::SetSource(const ibString& ns, const ibString& name)
 {
 	const ibBackendQueryable* before = GetSourceQueryable();
 	m_propertySource->SetSource(ns, name);   // resolves the queryable INTO the property variant
@@ -254,7 +254,7 @@ void ibValueDynamicList::RebuildSource()
 	PruneUnresolvedSettings();   // ...and a source change decides it too
 }
 
-void ibValueDynamicList::SetCustomQuery(const wxString& queryText)
+void ibValueDynamicList::SetCustomQuery(const ibString& queryText)
 {
 	m_composer.FromText(queryText);   // the dynamic list's own DB composer (FromText is DB-only)
 }
@@ -266,11 +266,11 @@ void ibValueDynamicList::SetCustomQuery(const wxString& queryText)
 //
 // Every column, spelled out rather than `SELECT *`: the point of switching this on is to CHANGE what
 // is read, and changing a list of fields you can see is an edit, while changing a star is a rewrite.
-wxString ibValueDynamicList::SeedArbitraryQuery() const
+ibString ibValueDynamicList::SeedArbitraryQuery() const
 {
 	const ibBackendQueryable* queryable = GetSourceQueryable();
 	if (queryable == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	// THE NAME THE LANGUAGE KNOWS IT BY — `Catalog.Products`, the descriptor's own namespace and name,
 	// which is exactly what the lowering resolves a FROM against. Not GetQueryName(): that is the
@@ -278,7 +278,7 @@ wxString ibValueDynamicList::SeedArbitraryQuery() const
 	// be restructured under.
 	const ibQueryableSourceDescriptor* descriptor = GetSourceDescriptor();
 	if (descriptor == nullptr || descriptor->GetName().IsEmpty())
-		return wxEmptyString;
+		return ibEmptyString;
 
 	ibQuerySelect select;
 	if (!descriptor->GetNamespace().IsEmpty())
@@ -295,7 +295,7 @@ wxString ibValueDynamicList::SeedArbitraryQuery() const
 	// This is the same rule the query constructor holds to when IT adds a table, and the seed has to
 	// hold to it too — a starting query that breaks on the first edit is worse than no starting query.
 	select.m_from.m_alias = descriptor->GetName();
-	const wxString prefix = select.m_from.m_alias + wxT(".");
+	const ibString prefix = select.m_from.m_alias + ibT(".");
 
 	for (const ibBackendQueryColumn* column : queryable->GetColumns()) {
 		if (column == nullptr || column->GetName().IsEmpty() || !column->IsAllowed())
@@ -331,10 +331,10 @@ void ibValueDynamicList::PruneUnresolvedSettings()
 	if (explorer == nullptr || explorer->GetHelperCount() == 0)
 		return;   // nothing to check against is not a verdict — leave the settings alone
 
-	m_composer.PruneUnresolvedSettings([explorer](const wxString& path) {
+	m_composer.PruneUnresolvedSettings([explorer](const ibString& path) {
 		// THE FIRST SEGMENT is what has to exist here: the rest is a reference walk, and a walk
 		// resolves through the metadata of whatever the first segment turned out to be.
-		const wxString head = path.BeforeFirst(wxT('.'));
+		const ibString head = path.BeforeFirst(ibT('.'));
 		if (head.IsEmpty())
 			return true;
 		return explorer->FindByName(head) != nullptr;
@@ -359,7 +359,7 @@ void ibValueDynamicList::RefreshComposerSettings()
 // anything saved there; a filter a script states and a filter a person types are the same fact and
 // now live in the same place (Max, 2026-08-24: "if you set a filter somewhere, it is saved into the
 // user setting").
-void ibValueDynamicList::AddFilter(const wxString& path, const wxString& op, const ibValue& value)
+void ibValueDynamicList::AddFilter(const ibString& path, const ibString& op, const ibValue& value)
 {
 	m_composer.Filter(path, op, value);
 	NotifyReset();
@@ -372,7 +372,7 @@ void ibValueDynamicList::AddFilter(const wxString& path, const wxString& op, con
 // 🛑 IT WENT TO A STORE THE RENDER PREFERRED THE SETTING OVER, so once a list had a sort setting the
 // order stated here was dropped — and with it the column-heading click, which goes through the same
 // door (2026-08-24).
-void ibValueDynamicList::AddSort(const wxString& path, bool ascending)
+void ibValueDynamicList::AddSort(const ibString& path, bool ascending)
 {
 	m_composer.Sort(path, ascending);
 	NotifyReset();
@@ -412,8 +412,8 @@ static bool ibSourceHasColumn(const ibBackendQueryable* queryable, const ibBacke
 static ibValueDynamicList* ibNewList(const ibCreateRequest& request, const ibBackendQueryable* queryable, ibDynamicListView view)
 {
 	ibValueDynamicList* list = new ibValueDynamicList(queryable, view);
-	for (const std::pair<const wxString, ibValue>& parameter : request.m_condition.m_parameters)
-		list->AddFilter(parameter.first, wxT("="), parameter.second);
+	for (const std::pair<const ibString, ibValue>& parameter : request.m_condition.m_parameters)
+		list->AddFilter(parameter.first, ibT("="), parameter.second);
 	return list;
 }
 
@@ -453,7 +453,7 @@ ibValueDynamicList* ibCreateFolderList(const ibCreateRequest& request, const ibB
 	if (ibSourceHasColumn(queryable, presentationCol))
 		list->AddSort(presentationCol->GetName());
 	if (ibSourceHasColumn(queryable, folderCol))
-		list->AddFilter(folderCol->GetName(), wxT("="), ibValue(true));   // only folders
+		list->AddFilter(folderCol->GetName(), ibT("="), ibValue(true));   // only folders
 	return list;
 }
 
@@ -570,7 +570,7 @@ ibPictureID ibValueDynamicList::GetRowPicture(const ibDataViewItem& item) const
 // m_rowKey). The stub carries only that key; the freshly-fetched batch matches it by m_rowKey (IsEqualTo). This is
 // the per-list "find by key" the deleted models did — a register row would otherwise never restore, because the
 // base's flat {value} stub carries one element and a register's key is multi-column. Custom-query source → base.
-ibDataViewItem ibValueDynamicList::FindRowValue(const ibValue& varValue, const wxString& colName) const
+ibDataViewItem ibValueDynamicList::FindRowValue(const ibValue& varValue, const ibString& colName) const
 {
 	(void)colName;
 	if (varValue.IsEmpty())
@@ -676,14 +676,14 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 	return &m_sourceExplorer;
 }
 
-wxString ibValueDynamicList::GetSourceCaption() const
+ibString ibValueDynamicList::GetSourceCaption() const
 {
 	// Caption = the metaobject's "Type: Synonym" (Catalog: Products) when the source is metadata-backed; a custom-
 	// query source has no metaobject, so fall back to the queryable's own name. GetSourceMetaObject comes THROUGH
 	// the queryable (the same path the front reads the icon), so caption + icon stay consistent.
 	if (const ibBackendQueryable* q = GetSourceQueryable())
 		return GetSourceMetaObject() ?
-			stringUtils::GenerateSynonym(GetSourceMetaObject()->GetClassName()) + wxT(": ") + GetSourceMetaObject()->GetSynonym() : q->GetQueryName();
+			stringUtils::GenerateSynonym(GetSourceMetaObject()->GetClassName()) + ibT(": ") + GetSourceMetaObject()->GetSynonym() : q->GetQueryName();
 
 	return GetClassName();
 }
@@ -739,8 +739,8 @@ enum Func {
 
 void ibValueDynamicList::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendProc(wxT("Refresh"), wxT("Refresh()"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendProc(ibT("Refresh"), ibT("Refresh()"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 }
 
 bool ibValueDynamicList::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
@@ -817,12 +817,12 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 	m_propertySource->SetTableId(GetCompositionDesc().m_mainTable);
 
 	// Default view — a hidden intrinsic field (absent on an old blob → Normal, forward-compatible).
-	m_view = (ibDynamicListView)node.GetValue<std::int32_t>(wxT("View"));
+	m_view = (ibDynamicListView)node.GetValue<std::int32_t>(ibT("View"));
 	m_sourceExplorer.Clear();   // read anew — its source and its view with it
 
 	// DynamicRead — stored INVERTED (DynamicReadOff: 1 = static/RAM-snapshot, absent/0 = the default dynamic read), so
 	// a list blob written before this field loads as dynamic. (SetValue does not fire OnPropertyChanged.)
-	m_propertyDynamicRead->SetValue(node.GetValue<std::int32_t>(wxT("DynamicReadOff")) == 0);
+	m_propertyDynamicRead->SetValue(node.GetValue<std::int32_t>(ibT("DynamicReadOff")) == 0);
 	return true;
 }
 
@@ -862,10 +862,10 @@ bool ibValueDynamicList::WriteProperty(ibDataNode& node) const
 	//  answers to the same question.)
 
 	// Default view — written implicitly as a hidden intrinsic field (see ibDynamicListView).
-	node.SetValue<std::int32_t>(wxT("View"), (std::int32_t)m_view);
+	node.SetValue<std::int32_t>(ibT("View"), (std::int32_t)m_view);
 
 	// DynamicRead — record only the DEVIATION from the default (1 = static/RAM snapshot; 0/absent = dynamic). See ReadProperty.
-	node.SetValue<std::int32_t>(wxT("DynamicReadOff"), IsDynamicRead() ? 0 : 1);
+	node.SetValue<std::int32_t>(ibT("DynamicReadOff"), IsDynamicRead() ? 0 : 1);
 	return true;
 }
 

@@ -37,9 +37,9 @@ namespace {
 // their types — that is the whole point of the check.
 class DefaultsNode : public ibPropertyObject {
 public:
-	wxString GetClassName() const override { return wxT("DefaultsNode"); }
+	ibString GetClassName() const override { return wxT("DefaultsNode"); }
 	bool     IsEditable() const override { return true; }
-	wxString GetObjectTypeName() const override { return wxT("DefaultsNode"); }
+	ibString GetObjectTypeName() const override { return wxT("DefaultsNode"); }
 
 	// true / 8 / "on" — every one of them survives only if "absent" is not read
 	// as "the type's zero".

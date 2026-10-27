@@ -1,7 +1,7 @@
 #ifndef _FRMCLIENT_CHOICE_TEMPLATE_H__
 #define _FRMCLIENT_CHOICE_TEMPLATE_H__
 
-// THE CHOICE OF A DOCUMENT'S TEMPLATE — File → New, the desktop's (frontend/win/dlgs/choiceTemplate.h): the templates
+// THE CHOICE OF A DOCUMENT'S TEMPLATE — File → New, the old desktop's:the templates
 // with their pictures, one picked. On the thin client the templates are the server's (the frame's Templates).
 
 #include <algorithm>

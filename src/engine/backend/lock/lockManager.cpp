@@ -66,16 +66,16 @@ bool HeaderWait(const ibDatabaseLayerException& err)
 // existing row is the lock. A missing row is inserted; a key violation on that
 // insert (Kind::Constraint) is the other connection having inserted it, and the
 // retry updates the row. Any other failure is the caller's, on any attempt.
-void LockKeyHeader(ibDatabaseQueryBuilder& q, const wxString& ns, const wxString& hash,
+void LockKeyHeader(ibDatabaseQueryBuilder& q, const ibString& ns, const ibString& hash,
 	bool noWait, int attempt)
 {
 	int locked = 0;
 	try {
 		locked = q.Execute(ibUpdate(lock_key_table,
-			{ { wxT("namespace"), ibConst(ibValue(ns)) } },
+			{ { ibT("namespace"), ibConst(ibValue(ns)) } },
 			ibBinOp(ibQueryBinOp::And,
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(ns))),
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(hash))))));
+				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(ns))),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(hash))))));
 	}
 	catch (const ibDatabaseLayerException& err) {
 		if (!HeaderWait(err))
@@ -89,8 +89,8 @@ void LockKeyHeader(ibDatabaseQueryBuilder& q, const wxString& ns, const wxString
 
 	try {
 		if (q.Execute(ibInsert(lock_key_table, {
-				{ wxT("namespace"), ibConst(ibValue(ns)) },
-				{ wxT("keyHash"),   ibConst(ibValue(hash)) },
+				{ ibT("namespace"), ibConst(ibValue(ns)) },
+				{ ibT("keyHash"),   ibConst(ibValue(hash)) },
 			})) < 1) {
 			ibBackendCoreException::Error(_("ibLockManager: failed to insert the lock key."));
 		}
@@ -131,8 +131,8 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 	// fall back to the active session. Either is required — no
 	// "anonymous" lock owners.
 	ibGuid    ownerGuid;
-	wxString  ownerName;
-	wxString  ownerComputer;
+	ibString  ownerName;
+	ibString  ownerComputer;
 
 	if (customHolder != nullptr) {
 		ownerGuid     = customHolder->Identity();
@@ -188,42 +188,42 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 				LockKeyHeader(q, items[index].namespaceName, items[index].KeyHash(),
 					!opts.wait, attempt);
 
-			const wxString ownerGuidStr = ownerGuid.str();
+			const ibString ownerGuidStr = ownerGuid.str();
 			const ibDateTime now = ibDateTime::Now();
 
 			for (const auto& item : items) {
-				const wxString& keyHash = item.KeyHash();
-				const wxString& keyData = item.KeyData();
+				const ibString& keyHash = item.KeyHash();
+				const ibString& keyData = item.KeyData();
 
 				bool       ownExisting = false;
 				ibGuid     ownExistingGuid;
 				ibLockMode ownExistingMode = ibLockMode::Shared;
 				bool       conflictHit = false;
-				wxString   conflictUser;
+				ibString   conflictUser;
 				{
 					ibQueryIR ir(ibProject(
 						ibFilter(ibScan(lock_table),
 							ibBinOp(ibQueryBinOp::And,
-								ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(item.namespaceName))),
-								ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(keyHash))))),
-						{ { ibCol(wxT("lockGuid")),    wxEmptyString },
-						  { ibCol(wxT("sessionGuid")), wxEmptyString },
-						  { ibCol(wxT("userName")),    wxEmptyString },
-						  { ibCol(wxT("lockMode")),    wxEmptyString } }));
+								ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(item.namespaceName))),
+								ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(keyHash))))),
+						{ { ibCol(ibT("lockGuid")),    ibEmptyString },
+						  { ibCol(ibT("sessionGuid")), ibEmptyString },
+						  { ibCol(ibT("userName")),    ibEmptyString },
+						  { ibCol(ibT("lockMode")),    ibEmptyString } }));
 
 					// The cursor must be released before the INSERT/UPDATE on the same connection.
 					ibQueryResult rs = q.ExecuteIR(ir);
 					while (rs.Next()) {
-						const wxString otherSess  = rs.GetResultString(wxT("sessionGuid"));
-						const wxString otherUser  = rs.GetResultString(wxT("userName"));
+						const ibString otherSess  = rs.GetResultString(ibT("sessionGuid"));
+						const ibString otherUser  = rs.GetResultString(ibT("userName"));
 						const ibLockMode otherMode =
-							static_cast<ibLockMode>(rs.GetResultInt(wxT("lockMode")));
+							static_cast<ibLockMode>(rs.GetResultInt(ibT("lockMode")));
 
 						if (otherSess.CmpNoCase(ownerGuidStr) == 0) {
 							// The first own row is the one an upgrade writes. Same-owner
 							// duplicates should not happen — Acquire inserts one.
 							if (!ownExisting)
-								ownExistingGuid = ibGuid(rs.GetResultString(wxT("lockGuid")));
+								ownExistingGuid = ibGuid(rs.GetResultString(ibT("lockGuid")));
 							ownExisting     = true;
 							ownExistingMode = otherMode;
 							continue;
@@ -247,8 +247,8 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 						// S → X on the row we already hold. The guid has to be the one
 						// just read — an empty guid updates nothing and leaves the lock shared.
 						const int updated = q.Execute(ibUpdate(lock_table,
-							{ { wxT("lockMode"), ibConst(ibValue(static_cast<int>(item.lockMode))) } },
-							ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("lockGuid")),
+							{ { ibT("lockMode"), ibConst(ibValue(static_cast<int>(item.lockMode))) } },
+							ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("lockGuid")),
 							        ibConst(ibValue(ownExistingGuid.str())))));
 						if (updated < 1)
 							ibBackendCoreException::Error(
@@ -259,15 +259,15 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 
 				const ibGuid newGuid = wxNewUniqueGuid;
 				if (q.Execute(ibInsert(lock_table, {
-						{ wxT("lockGuid"),    ibConst(ibValue(newGuid.str())) },
-						{ wxT("sessionGuid"), ibConst(ibValue(ownerGuidStr)) },
-						{ wxT("namespace"),   ibConst(ibValue(item.namespaceName)) },
-						{ wxT("keyHash"),     ibConst(ibValue(keyHash)) },
-						{ wxT("keyData"),     ibConst(ibValue(keyData)) },
-						{ wxT("lockMode"),    ibConst(ibValue(static_cast<int>(item.lockMode))) },
-						{ wxT("acquiredAt"),  ibConst(ibValue(now)) },
-						{ wxT("userName"),    ibConst(ibValue(ownerName)) },
-						{ wxT("computer"),    ibConst(ibValue(ownerComputer)) },
+						{ ibT("lockGuid"),    ibConst(ibValue(newGuid.str())) },
+						{ ibT("sessionGuid"), ibConst(ibValue(ownerGuidStr)) },
+						{ ibT("namespace"),   ibConst(ibValue(item.namespaceName)) },
+						{ ibT("keyHash"),     ibConst(ibValue(keyHash)) },
+						{ ibT("keyData"),     ibConst(ibValue(keyData)) },
+						{ ibT("lockMode"),    ibConst(ibValue(static_cast<int>(item.lockMode))) },
+						{ ibT("acquiredAt"),  ibConst(ibValue(now)) },
+						{ ibT("userName"),    ibConst(ibValue(ownerName)) },
+						{ ibT("computer"),    ibConst(ibValue(ownerComputer)) },
 					})) < 1) {
 					ibBackendCoreException::Error(
 						_("ibLockManager: failed to insert sys_lock row."));
@@ -331,7 +331,7 @@ void ibLockManager::ReleaseRows(const std::vector<ibGuid>& lockGuids)
 			guids.reserve(lockGuids.size());
 			for (const auto& g : lockGuids)
 				guids.push_back(ibConst(ibValue(g.str())));
-			q.Execute(ibDelete(lock_table, ibIn(ibCol(wxT("lockGuid")), std::move(guids))));
+			q.Execute(ibDelete(lock_table, ibIn(ibCol(ibT("lockGuid")), std::move(guids))));
 		}
 		catch (const ibCoreException&) {
 			if (q.IsActiveTransaction())
@@ -341,11 +341,11 @@ void ibLockManager::ReleaseRows(const std::vector<ibGuid>& lockGuids)
 		q.Commit();
 	}
 	catch (const ibCoreException& err) {
-		ibJournalInfo(wxT("lock"), wxT("release of %d row(s) did not complete: %s"),
+		ibJournalInfo(ibT("lock"), ibT("release of %d row(s) did not complete: %s"),
 			static_cast<int>(lockGuids.size()), err.GetErrorDescription());
 	}
 	catch (...) {
-		ibJournalInfo(wxT("lock"), wxT("release of %d row(s) did not complete"),
+		ibJournalInfo(ibT("lock"), ibT("release of %d row(s) did not complete"),
 			static_cast<int>(lockGuids.size()));
 	}
 }
@@ -370,7 +370,7 @@ void ibLockManager::OnSessionEnd(const ibGuid& sessionGuid)
 	q.BeginTransaction(opts);
 	try {
 		q.Execute(ibDelete(lock_table,
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("sessionGuid")), ibConst(ibValue(sessionGuid.str())))));
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("sessionGuid")), ibConst(ibValue(sessionGuid.str())))));
 	}
 	catch (const ibCoreException&) {
 		if (q.IsActiveTransaction())
@@ -390,7 +390,7 @@ void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 	if (!q.IsOpen())
 		return;
 
-	std::set<wxString> live;
+	std::set<ibString> live;
 	for (const ibGuid& g : liveSessionGuids)
 		live.insert(g.str());
 
@@ -399,16 +399,16 @@ void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 	// several locks is one DELETE, not one per row.
 	// The read is on the registry thread too. noWait so preparing it cannot sit
 	// out the driver's lock timeout while an apply holds metadata.
-	std::set<wxString> orphans;
+	std::set<ibString> orphans;
 	try {
 		ibDbTxOptions opts;
 		opts.noWait = true;
 		q.BeginTransaction(opts);
 		{
 			ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(lock_table),
-				{ { ibCol(wxT("sessionGuid")), wxEmptyString } })));
+				{ { ibCol(ibT("sessionGuid")), ibEmptyString } })));
 			while (rs.Next()) {
-				const wxString owner = rs.GetResultString(wxT("sessionGuid"));
+				const ibString owner = rs.GetResultString(ibT("sessionGuid"));
 				if (!owner.IsEmpty() && live.find(owner) == live.end())
 					orphans.insert(owner);
 			}
@@ -421,32 +421,32 @@ void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 		return;   // transient DB error, or the table is locked — the next sweep tick retries
 	}
 
-	for (const wxString& owner : orphans)
+	for (const ibString& owner : orphans)
 		OnSessionEnd(ibGuid(owner));
 
 	// A header with nobody holding the key is only a row. Re-creation is the
 	// same insert the first acquire does, and the primary key plus the retry
 	// serialise it, so dropping these cannot grant a key twice.
 	try {
-		std::vector<std::pair<wxString, wxString>> headers;
+		std::vector<std::pair<ibString, ibString>> headers;
 		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(lock_key_table),
-			{ { ibCol(wxT("namespace")), wxEmptyString },
-			  { ibCol(wxT("keyHash")),   wxEmptyString } })));
+			{ { ibCol(ibT("namespace")), ibEmptyString },
+			  { ibCol(ibT("keyHash")),   ibEmptyString } })));
 		while (rs.Next())
-			headers.emplace_back(rs.GetResultString(wxT("namespace")), rs.GetResultString(wxT("keyHash")));
+			headers.emplace_back(rs.GetResultString(ibT("namespace")), rs.GetResultString(ibT("keyHash")));
 		for (const auto& header : headers) {
 			ibQueryResult held = q.ExecuteIR(ibQueryIR(ibProject(
 				ibFilter(ibScan(lock_table),
 					ibBinOp(ibQueryBinOp::And,
-						ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(header.first))),
-						ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(header.second))))),
-				{ { ibCol(wxT("namespace")), wxT("n") } })));
+						ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(header.first))),
+						ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(header.second))))),
+				{ { ibCol(ibT("namespace")), ibT("n") } })));
 			if (held.Next())
 				continue;
 			q.Execute(ibDelete(lock_key_table,
 				ibBinOp(ibQueryBinOp::And,
-					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(header.first))),
-					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(header.second))))));
+					ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(header.first))),
+					ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(header.second))))));
 		}
 	}
 	catch (const ibCoreException&) {
@@ -469,24 +469,24 @@ std::vector<ibLockSnapshotRow> ibLockManager::GetSnapshot() const
 	// Read-only — no TX needed; default isolation gives us latest committed state from other processes.
 	try {
 		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(lock_table),
-			{ { ibCol(wxT("lockGuid")),    wxEmptyString },
-			  { ibCol(wxT("sessionGuid")), wxEmptyString },
-			  { ibCol(wxT("namespace")),   wxEmptyString },
-			  { ibCol(wxT("keyData")),     wxEmptyString },
-			  { ibCol(wxT("lockMode")),    wxEmptyString },
-			  { ibCol(wxT("acquiredAt")),  wxEmptyString },
-			  { ibCol(wxT("userName")),    wxEmptyString },
-			  { ibCol(wxT("computer")),    wxEmptyString } })));
+			{ { ibCol(ibT("lockGuid")),    ibEmptyString },
+			  { ibCol(ibT("sessionGuid")), ibEmptyString },
+			  { ibCol(ibT("namespace")),   ibEmptyString },
+			  { ibCol(ibT("keyData")),     ibEmptyString },
+			  { ibCol(ibT("lockMode")),    ibEmptyString },
+			  { ibCol(ibT("acquiredAt")),  ibEmptyString },
+			  { ibCol(ibT("userName")),    ibEmptyString },
+			  { ibCol(ibT("computer")),    ibEmptyString } })));
 		while (rs.Next()) {
 			ibLockSnapshotRow r;
-			r.lockGuid      = ibGuid(rs.GetResultString(wxT("lockGuid")));
-			r.sessionGuid   = ibGuid(rs.GetResultString(wxT("sessionGuid")));
-			r.namespaceName = rs.GetResultString(wxT("namespace"));
-			r.keyData       = rs.GetResultString(wxT("keyData"));
-			r.lockMode      = static_cast<ibLockMode>(rs.GetResultInt(wxT("lockMode")));
-			r.acquiredAt    = rs.GetResultDate(wxT("acquiredAt"));
-			r.userName      = rs.GetResultString(wxT("userName"));
-			r.computer      = rs.GetResultString(wxT("computer"));
+			r.lockGuid      = ibGuid(rs.GetResultString(ibT("lockGuid")));
+			r.sessionGuid   = ibGuid(rs.GetResultString(ibT("sessionGuid")));
+			r.namespaceName = rs.GetResultString(ibT("namespace"));
+			r.keyData       = rs.GetResultString(ibT("keyData"));
+			r.lockMode      = static_cast<ibLockMode>(rs.GetResultInt(ibT("lockMode")));
+			r.acquiredAt    = rs.GetResultDate(ibT("acquiredAt"));
+			r.userName      = rs.GetResultString(ibT("userName"));
+			r.computer      = rs.GetResultString(ibT("computer"));
 			rows.push_back(std::move(r));
 		}
 	}

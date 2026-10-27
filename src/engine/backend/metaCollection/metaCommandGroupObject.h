@@ -20,9 +20,9 @@ class ibValueEnumCommandGroupCategory : public ibValueEnumeration<ibCommandGroup
 public:
 	ibValueEnumCommandGroupCategory() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibCommandGroupCategory_Navigation,     wxT("NavigationPanel"), _("Navigation panel"));
-		AddEnumeration(ibCommandGroupCategory_Actions,        wxT("ActionsPanel"),    _("Actions panel"));
-		AddEnumeration(ibCommandGroupCategory_FormCommandBar, wxT("FormCommandBar"),  _("Form command bar"));
+		AddEnumeration(ibCommandGroupCategory_Navigation,     ibT("NavigationPanel"), _("Navigation panel"));
+		AddEnumeration(ibCommandGroupCategory_Actions,        ibT("ActionsPanel"),    _("Actions panel"));
+		AddEnumeration(ibCommandGroupCategory_FormCommandBar, ibT("FormCommandBar"),  _("Form command bar"));
 	}
 };
 
@@ -44,12 +44,12 @@ inline ibCommandGroupCategory ibCommandGroupCategoryOf(ibInterfaceCommandSection
 
 // What a person reads over a platform group — the area enumeration's own caption, the one place it is
 // written.
-BACKEND_API wxString ibCommandGroupCaption(ibInterfaceCommandSection area);
+BACKEND_API ibString ibCommandGroupCaption(ibInterfaceCommandSection area);
 // …the panel's caption, and the LABEL a group is offered under: «panel.group». It is how a person reads where a
 // command will stand, the word the Group list shows, and the word metadata_set takes back — one spelling, so the
 // tools and the inspector cannot name one group two ways.
-BACKEND_API wxString ibCommandGroupCategoryCaption(ibCommandGroupCategory category);
-BACKEND_API wxString ibCommandGroupLabel(ibInterfaceCommandSection area);
+BACKEND_API ibString ibCommandGroupCategoryCaption(ibCommandGroupCategory category);
+BACKEND_API ibString ibCommandGroupLabel(ibInterfaceCommandSection area);
 // …and a platform group's picture — the engine's, by its id (core/picturePredefined.h).
 BACKEND_API ibPictureID ibCommandGroupPicture(ibInterfaceCommandSection area);
 
@@ -68,18 +68,18 @@ BACKEND_API ibPictureID ibCommandGroupPicture(ibInterfaceCommandSection area);
 class BACKEND_API ibValueMetaObjectCommandGroup : public ibValueMetaObject {
 public:
 
-	ibValueMetaObjectCommandGroup(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectCommandGroup(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	ibCommandGroupCategory GetCategory() const { return m_propertyCategory->GetValueAsEnum(); }
 	// «panel.synonym» — see ibCommandGroupLabel.
-	wxString GetLabel() const { return ibCommandGroupCategoryCaption(GetCategory()) + wxT(".") + GetSynonym(); }
+	ibString GetLabel() const { return ibCommandGroupCategoryCaption(GetCategory()) + ibT(".") + GetSynonym(); }
 
 	bool IsEmptyPicture() const { return m_propertyPicture->IsEmptyProperty(); }
 	ibPicture GetPicture() const { return m_propertyPicture->GetValueAsPicture(); }
 	ibPictureDescription GetPictureDesc() const { return m_propertyPicture->GetValueAsPictureDesc(); }
 	// What a person reads when the pointer rests on the group — its own tooltip, the synonym when it has none.
-	wxString GetToolTip() const {
-		const wxString tooltip = m_propertyTooltip->GetValueAsTranslateString();
+	ibString GetToolTip() const {
+		const ibString tooltip = m_propertyTooltip->GetValueAsTranslateString();
 		return tooltip.IsEmpty() ? GetSynonym() : tooltip;
 	}
 
@@ -94,14 +94,14 @@ protected:
 
 private:
 
-	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(wxT("CommandGroup"), _("Command group"));
-	ibPropertyEnum<ibValueEnumCommandGroupCategory>* m_propertyCategory = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCommandGroupCategory>>(m_categoryGroup, wxT("Category"), _("Category"),
+	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(ibT("CommandGroup"), _("Command group"));
+	ibPropertyEnum<ibValueEnumCommandGroupCategory>* m_propertyCategory = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCommandGroupCategory>>(m_categoryGroup, ibT("Category"), _("Category"),
 		_("Where the group is shown: the navigation panel of a section, beside Important and Normal; its actions panel, beside Create, Reports and Service; or the command bar of a form, as one button that opens a submenu of the group's commands - the object's own, and the common commands typed for that object."),
 		ibCommandGroupCategory_Navigation);
-	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryGroup, wxT("Picture"), _("Picture"),
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryGroup, ibT("Picture"), _("Picture"),
 		_("The icon beside the group's caption: at its heading on a section page, and on its button on a form command bar. Empty: caption only."));
-	ibPropertyTString* m_propertyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryGroup, wxT("Tooltip"), _("Tooltip"),
-		_("The hint shown when the pointer rests on the group's heading or on its button, one text per language. Empty: the synonym is shown."), wxEmptyString);
+	ibPropertyTString* m_propertyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryGroup, ibT("Tooltip"), _("Tooltip"),
+		_("The hint shown when the pointer rests on the group's heading or on its button, one text per language. Empty: the synonym is shown."), ibEmptyString);
 };
 
 #endif

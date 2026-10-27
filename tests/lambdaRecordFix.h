@@ -55,7 +55,7 @@ private:
 // helper says WHY on the way, so a red line in the report carries its own
 // diagnosis — the recorder's own refusal text where there is one, and the
 // compiler's message where the body never reached the recorder at all.
-inline std::shared_ptr<ibQueryAstExpr> Refused(const wxString& source, const wxString& why)
+inline std::shared_ptr<ibQueryAstExpr> Refused(const ibString& source, const ibString& why)
 {
 	std::cerr << "    [not recorded] " << why.ToStdString()
 		<< "\n        source: " << source.ToStdString() << std::endl;
@@ -72,16 +72,16 @@ inline std::shared_ptr<ibQueryAstExpr> Refused(const wxString& source, const wxS
 // capture is not decoration here: the compiler refuses a body that reads an undeclared name
 // ("Var is not found"), so a test about capturing has to have something to capture.
 inline std::shared_ptr<ibQueryAstExpr> ibTestRecordLambda(
-	const wxString& body, const wxString& rowParam = wxT("x"),
-	const wxString& outerNames = wxEmptyString)
+	const ibString& body, const ibString& rowParam = wxT("x"),
+	const ibString& outerNames = wxEmptyString)
 {
-	wxString lambdaBody = body;
+	ibString lambdaBody = body;
 	lambdaBody.Trim(true).Trim(false);
 
-	const wxString preamble = outerNames.IsEmpty()
-		? wxString() : (wxT("var ") + outerNames + wxT(";\n"));
+	const ibString preamble = outerNames.IsEmpty()
+		? ibString() : (wxT("var ") + outerNames + wxT(";\n"));
 
-	wxString source;
+	ibString source;
 	if (ibCompileCode::GetCodeStyle() == CODE_CES) {
 		if (!lambdaBody.StartsWith(wxT("{")))
 			lambdaBody = wxT("{ ") + lambdaBody + wxT(" }");
@@ -123,20 +123,20 @@ inline std::shared_ptr<ibQueryAstExpr> ibTestRecordLambda(
 	// live compile context. A test asks AFTER the compile, when the very same
 	// table has landed in the bytecode — so the answer is read there instead,
 	// which is also how any post-compile caller would get it.
-	const auto nameOfOuter = [&compiler](long framesOut, long slot) -> wxString {
+	const auto nameOfOuter = [&compiler](long framesOut, long slot) -> ibString {
 		if (framesOut != 1)   // 1 = the module body the lambda was written in
-			return wxString();
+			return ibString();
 		for (const auto& var : compiler.m_cByteCode.m_listVar)
 			if ((long)var.m_slotIndex == slot)
 				return var.m_strRealName;
-		return wxString();
+		return ibString();
 	};
 
-	wxString refusal;
+	ibString refusal;
 	const std::shared_ptr<ibQueryAstExpr> tree =
 		ibBuildLambdaQueryAstFromCode(compiler.m_cByteCode, funcIndex, &refusal, nameOfOuter);
 	if (tree == nullptr)
-		return Refused(source, refusal.IsEmpty() ? wxString(wxT("(the recorder gave no reason)")) : refusal);
+		return Refused(source, refusal.IsEmpty() ? ibString(wxT("(the recorder gave no reason)")) : refusal);
 	return tree;
 }
 

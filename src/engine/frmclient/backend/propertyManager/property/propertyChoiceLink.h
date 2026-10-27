@@ -33,7 +33,7 @@ FRMCLIENT_API bool ibChoiceHasLists(const ibBackendProperty* property);
 // of what it refers to an attribute could fill, the likeliest first, and the one that is obvious. The server answers
 // both on the row (its Sources — ibPropertyInspector), so they are asked of the property; a row without them answers
 // none: no holder named, nothing an attribute fills.
-FRMCLIENT_API wxString ibChoiceHolderName(const ibBackendProperty* property);
+FRMCLIENT_API ibString ibChoiceHolderName(const ibBackendProperty* property);
 FRMCLIENT_API void ibChoiceParametersForSource(const ibBackendProperty* property, const ibMetaID& sourceId,
 	std::vector<ibMetaID>& out, ibMetaID* obvious = nullptr);
 

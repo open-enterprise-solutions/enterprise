@@ -41,14 +41,14 @@ TEST(Guid, ResetMakesInvalid) {
 // ---------------------------------------------------------------------------
 
 TEST(Guid, StrIsCanonical36) {
-    const wxString s = ibGuid(ibGuid::newGuid()).str();
+    const ibString s = ibGuid(ibGuid::newGuid()).str();
     EXPECT_EQ(s.length(), 36u);            // 8-4-4-4-12 + 4 hyphens
     EXPECT_EQ(s.Freq(wxT('-')), 4);
 }
 
 TEST(Guid, RoundTripViaString) {
     const ibGuid g = ibGuid::newGuid();
-    const wxString s = g.str();
+    const ibString s = g.str();
     const ibGuid parsed(s);                // wxString ctor
     EXPECT_EQ(parsed, g);
     EXPECT_EQ(parsed.str(), s);
@@ -99,7 +99,7 @@ TEST(Guid, OrderingIsAntisymmetric) {
 // GUID, which means "no object", and the script value still holds it.
 TEST(ValueGuid, NilStringIsAnEmptyGuid)
 {
-	const wxString nil = wxT("00000000-0000-0000-0000-000000000000");
+	const ibString nil = wxT("00000000-0000-0000-0000-000000000000");
 	ibValue text(nil);
 	ibValue* params[] = { &text };
 

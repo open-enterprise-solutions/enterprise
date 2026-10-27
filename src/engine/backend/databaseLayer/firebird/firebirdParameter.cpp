@@ -135,7 +135,7 @@ void ibDatabaseParameterFirebird::Set(const ibNumber& dblValue)
 	if (nType == SQL_SHORT)
 	{
 		m_numValue = scaledForStorage(dblValue);
-		m_sValue   = static_cast<short>(storedInteger(m_numValue, -32768, 32767, wxT("SMALLINT")));
+		m_sValue   = static_cast<short>(storedInteger(m_numValue, -32768, 32767, ibT("SMALLINT")));
 		m_pParameter->sqldata = (char*)&m_sValue;
 	}
 	else if (nType == SQL_FLOAT)
@@ -154,7 +154,7 @@ void ibDatabaseParameterFirebird::Set(const ibNumber& dblValue)
 	else if (nType == SQL_LONG)
 	{
 		m_numValue = scaledForStorage(dblValue);
-		m_nValue   = static_cast<int32_t>(storedInteger(m_numValue, -2147483648LL, 2147483647LL, wxT("INTEGER")));
+		m_nValue   = static_cast<int32_t>(storedInteger(m_numValue, -2147483648LL, 2147483647LL, ibT("INTEGER")));
 		m_pParameter->sqldata = (char*)&m_nValue;
 	}
 	else if (nType == SQL_INT64)
@@ -412,7 +412,7 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 		ibDatabaseLayerException::Throw(
 			ibDatabaseLayerFirebird::ClassifyDatabaseError(ibDatabaseLayerFirebird::TranslateErrorCode(status)),
 			ibDatabaseLayerFirebird::TranslateErrorCode(status),
-			/*sqlState*/ wxEmptyString,
+			/*sqlState*/ ibEmptyString,
 			ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
 	}
 
@@ -428,7 +428,7 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 			ibDatabaseLayerException::Throw(
 				ibDatabaseLayerFirebird::ClassifyDatabaseError(ibDatabaseLayerFirebird::TranslateErrorCode(status)),
 				ibDatabaseLayerFirebird::TranslateErrorCode(status),
-				/*sqlState*/ wxEmptyString,
+				/*sqlState*/ ibEmptyString,
 				ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
 		}
 
@@ -444,7 +444,7 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 		ibDatabaseLayerException::Throw(
 			ibDatabaseLayerFirebird::ClassifyDatabaseError(ibDatabaseLayerFirebird::TranslateErrorCode(status)),
 			ibDatabaseLayerFirebird::TranslateErrorCode(status),
-			/*sqlState*/ wxEmptyString,
+			/*sqlState*/ ibEmptyString,
 			ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
 	}
 

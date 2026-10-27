@@ -24,7 +24,7 @@ struct ibSettingsDescription;
 // ONE FIELD, DESCRIBED — what the window's field tree puts up: its name, how it reads, its column, its type, whether the
 // options leave it, and its picture — the column's (GetSourcePicture) where the desktop's tree walks a source's explorer;
 // none on a flat list, which the tree draws with the attribute picture.
-FRMSERVER_API void ibWriteSettingsField(ibDataNode& fields, const wxString& name, const wxString& presentation, ibMetaID id,
+FRMSERVER_API void ibWriteSettingsField(ibDataNode& fields, const ibString& name, const ibString& presentation, ibMetaID id,
 	const ibTypeDescription& type, bool available, const ibPictureDescription& picture, const ibMetaData* metaData);
 
 // WHICH OF THESE TYPES ARE REFERENCES, AND TO WHAT — the answer the desktop's field tree asks the configuration for

@@ -21,7 +21,7 @@ std::int64_t NowMs()
 
 } // namespace
 
-ibClientInstance::ibClientInstance(ibApplicationInstance* applicationInstance, const wxString& id, const ibString& address,
+ibClientInstance::ibClientInstance(ibApplicationInstance* applicationInstance, const ibString& id, const ibString& address,
 	ibProtocol::ibLogin::ibMode mode)
 	: m_applicationInstance(applicationInstance), m_id(id), m_address(address), m_mode(mode), m_lastActiveMs(NowMs())
 {
@@ -37,7 +37,7 @@ ibClientSession* ibClientInstance::Session() const
 	return m_frame != nullptr ? m_frame->Session() : nullptr;
 }
 
-bool ibClientInstance::Login(const wxString& user, const wxString& password)
+bool ibClientInstance::Login(const ibString& user, const ibString& password)
 {
 	std::lock_guard<std::recursive_mutex> lifeLock(m_lifecycleMutex);
 
@@ -72,7 +72,7 @@ bool ibClientInstance::Login(const wxString& user, const wxString& password)
 	catch (const ibCoreException& err) {
 		// A configuration that does not start refuses the login too (ibSession::CompileRoot throws). The client can
 		// be told only "refused"; the reason goes where an administrator reads it.
-		ibJournalError(wxT("client"), wxT("login of '%s' refused: %s"), user, err.GetErrorDescription());
+		ibJournalError(ibT("client"), ibT("login of '%s' refused: %s"), user, err.GetErrorDescription());
 		return false;
 	}
 	// …A REGISTRY THAT DID NOT ANSWER is a busy server, not a wrong name: thrown on as the registry's silence at Add
@@ -100,7 +100,7 @@ bool ibClientInstance::Start()
 	// request to the person, and the client reaches both through the frame.
 	m_frame = ibClientFrame::Create(m_mode, std::move(m_holder), this);
 	if (m_frame == nullptr) {
-		ibJournalWarning(wxT("client"), wxT("client %s refused: no mode %d"), m_id, static_cast<int>(m_mode));
+		ibJournalWarning(ibT("client"), ibT("client %s refused: no mode %d"), m_id, static_cast<int>(m_mode));
 		m_holder.Reset();   // nobody took it — the session ends here
 		m_session.Reset();
 		return false;

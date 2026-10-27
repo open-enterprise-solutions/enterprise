@@ -58,7 +58,7 @@ ibDataNode& ibFunctionalOptionMembersView::GroupFor(ibDataNode& root, const ibCl
 
 	// A group row is named by its place: it carries no object.
 	ibDataNode& group = root.AddChild(0, -static_cast<ibMetaID>(root.Children().size() + 1));
-	const wxString caption = ibMetaGroupCaption(clsid);
+	const ibString caption = ibMetaGroupCaption(clsid);
 	group.SetValue(ibProtocol::ibView::ibCheckTree::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
 	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid));
 	return group;
@@ -98,7 +98,7 @@ void ibFunctionalOptionMembersView::FillData(ibDataNode& root)
 	// The root wears the CONFIGURATION's icon, as the section and common attribute editors'; the desktop's kept the
 	// word "Configuration" on it.
 	root.SetMetaId(commonObject->GetMetaID());
-	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, _("Configuration"));
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, ibString(_("Configuration")));
 	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 
 	// ASKED, NOT LISTED: every object that says it may belong (IsFunctionalOptionAllowed), in the order of its group's

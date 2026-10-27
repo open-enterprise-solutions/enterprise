@@ -34,7 +34,7 @@ bool ibViewTableRow::IsEqualTo(const ibDataViewObject& other) const
 	return row != nullptr && row->m_handle == m_handle;
 }
 
-bool ibViewTableRow::GetGroupCaption(wxString& caption) const
+bool ibViewTableRow::GetGroupCaption(ibString& caption) const
 {
 	if (m_group.IsEmpty())
 		return false;

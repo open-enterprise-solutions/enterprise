@@ -98,9 +98,9 @@ class BACKEND_API ibValueMetaObjectCompositeData
 	public:
 
 	ibValueMetaObjectCompositeData(
-		const wxString& strName = wxEmptyString,
-		const wxString& synonym = wxEmptyString,
-		const wxString& comment = wxEmptyString
+		const ibString& strName = ibEmptyString,
+		const ibString& synonym = ibEmptyString,
+		const ibString& comment = ibEmptyString
 	) : ibValueMetaObject(strName, synonym, comment) {
 	}
 
@@ -163,96 +163,96 @@ class BACKEND_API ibValueMetaObjectCompositeData
 
 protected:
 
-	ibValueMetaObjectAttributePredefined* CreateBoolean(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateBoolean(const ibString& name, const ibString& synonym, const ibString& comment,
 		ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, false, ibValueTypes::TYPE_BOOLEAN, useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateBoolean(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateBoolean(const ibString& name, const ibString& synonym, const ibString& comment,
 		bool fillCheck, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, fillCheck, ibValueTypes::TYPE_BOOLEAN, useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateBoolean(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateBoolean(const ibString& name, const ibString& synonym, const ibString& comment,
 		bool fillCheck, const bool& defValue, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, fillCheck, ibValue(defValue), useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateNumber(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateNumber(const ibString& name, const ibString& synonym, const ibString& comment,
 		unsigned char precision, unsigned char scale, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, ibQualifierNumber(precision, scale), false, ibValueTypes::TYPE_NUMBER, useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateNumber(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateNumber(const ibString& name, const ibString& synonym, const ibString& comment,
 		unsigned char precision, unsigned char scale, bool fillCheck, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, ibQualifierNumber(precision, scale), fillCheck, ibValueTypes::TYPE_NUMBER, useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateNumber(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateNumber(const ibString& name, const ibString& synonym, const ibString& comment,
 		unsigned char precision, unsigned char scale, bool fillCheck, const ibNumber& defValue, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, ibQualifierNumber(precision, scale), fillCheck, ibValue(defValue), useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateDate(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateDate(const ibString& name, const ibString& synonym, const ibString& comment,
 		ibDateFractions dateTime, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, ibQualifierDate(dateTime), false, ibValueTypes::TYPE_DATE, useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateDate(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateDate(const ibString& name, const ibString& synonym, const ibString& comment,
 		ibDateFractions dateTime, bool fillCheck, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, ibQualifierDate(dateTime), fillCheck, ibValueTypes::TYPE_DATE, useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateDate(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateDate(const ibString& name, const ibString& synonym, const ibString& comment,
 		ibDateFractions dateTime, bool fillCheck, const ibDateTime& defValue, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, ibQualifierDate(dateTime), fillCheck, ibValue(defValue), useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateString(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateString(const ibString& name, const ibString& synonym, const ibString& comment,
 		unsigned short length, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, ibQualifierString(length), false, ibValueTypes::TYPE_STRING, useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateString(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateString(const ibString& name, const ibString& synonym, const ibString& comment,
 		unsigned short length, bool fillCheck, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, ibQualifierString(length), fillCheck, ibValueTypes::TYPE_STRING, useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateString(const wxString& name, const wxString& synonym, const wxString& comment,
-		unsigned short length, bool fillCheck, const wxString& defValue, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
+	ibValueMetaObjectAttributePredefined* CreateString(const ibString& name, const ibString& synonym, const ibString& comment,
+		unsigned short length, bool fillCheck, const ibString& defValue, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, ibQualifierString(length), fillCheck, ibValue(defValue), useItem, selectMode, indexingMode);
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	ibValueMetaObjectAttributePredefined* CreateEmptyType(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateEmptyType(const ibString& name, const ibString& synonym, const ibString& comment,
 		ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, false, useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateEmptyType(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateEmptyType(const ibString& name, const ibString& synonym, const ibString& comment,
 		bool fillCheck, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, fillCheck, useItem, selectMode, indexingMode);
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	ibValueMetaObjectAttributePredefined* CreateSpecialType(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateSpecialType(const ibString& name, const ibString& synonym, const ibString& comment,
 		const ibClassID& clsid, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, clsid, false, ibValue(), useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateSpecialType(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateSpecialType(const ibString& name, const ibString& synonym, const ibString& comment,
 		const ibClassID& clsid, const ibValue& defValue, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, clsid, false, defValue, useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateSpecialType(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateSpecialType(const ibString& name, const ibString& synonym, const ibString& comment,
 		const ibClassID& clsid, bool fillCheck, const ibValue& defValue, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, clsid, fillCheck, defValue, useItem, selectMode, indexingMode);
 	}
 
-	ibValueMetaObjectAttributePredefined* CreateSpecialType(const wxString& name, const wxString& synonym, const wxString& comment,
+	ibValueMetaObjectAttributePredefined* CreateSpecialType(const ibString& name, const ibString& synonym, const ibString& comment,
 		const ibClassID& clsid, const ibTypeDescription::ibTypeData& descr,
 		bool fillCheck, const ibValue& defValue, ibItemMode useItem = ibItemMode::ibItemMode_Item, ibSelectMode selectMode = ibSelectMode::ibSelectMode_Items, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex) {
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, clsid, descr, fillCheck, defValue, useItem, selectMode, indexingMode);

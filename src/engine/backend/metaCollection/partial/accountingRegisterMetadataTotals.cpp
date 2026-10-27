@@ -109,17 +109,17 @@ std::vector<ibValue> ibAcctReadKinds(const ibValue& given)
 	return kinds;
 }
 
-wxString ibValueMetaObjectAccountingRegister::AccountDimensionColumnName(const wxString& sidePrefix, unsigned int no)
+ibString ibValueMetaObjectAccountingRegister::AccountDimensionColumnName(const ibString& sidePrefix, unsigned int no)
 {
-	return wxString::Format(wxT("AccountDimension%s%u"), sidePrefix, no);
+	return ibString::Format(ibT("AccountDimension%s%u"), sidePrefix, no);
 }
 
 // The KIND half of the same pair, spelled through the same door — the slot creator used to format
 // this string itself, so "the name of slot N on side S" had two authorities that only happened to
 // agree.
-wxString ibValueMetaObjectAccountingRegister::AccountDimensionKindColumnName(const wxString& sidePrefix, unsigned int no)
+ibString ibValueMetaObjectAccountingRegister::AccountDimensionKindColumnName(const ibString& sidePrefix, unsigned int no)
 {
-	return AccountDimensionColumnName(sidePrefix, no) + wxT("Kind");
+	return AccountDimensionColumnName(sidePrefix, no) + ibT("Kind");
 }
 
 namespace {
@@ -137,23 +137,23 @@ bool PairedRow(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape
 // The side prefix a column carries — and it is decided by the READING, not by the register's mode.
 // Where a row is about one account there is no side to tell apart, so `AccountDimension1` says all
 // there is to say; where a row is a pair, `AccountDimensionDr1` / `AccountDimensionCr1` do.
-wxString SidePrefix(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape, bool creditSide)
+ibString SidePrefix(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape, bool creditSide)
 {
 	if (!PairedRow(reg, shape))
-		return wxEmptyString;
-	return creditSide ? wxT("Cr") : wxT("Dr");
+		return ibEmptyString;
+	return creditSide ? ibT("Cr") : ibT("Dr");
 }
 
 // …and the name the ACCOUNT is published under, by the same rule. A row about one account calls it
 // `Account` — the reference's Balance table has an Account, not a debit Account — even in a correspondence register,
 // whose movements call the same attribute `AccountDr`; a paired row keeps `AccountDr` beside `AccountCr`.
-wxString PublishedAccountName(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape)
+ibString PublishedAccountName(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape)
 {
 	const ibValueMetaObjectAttributeBase* account = reg != nullptr ? reg->GetRegisterAccount() : nullptr;
 	if (account == nullptr)
-		return wxString();
+		return ibString();
 	return PairedRow(reg, shape) ? account->GetName()
-	                             : ibValueMetaObjectAccountingRegister::AccountColumnName(wxEmptyString);
+	                             : ibValueMetaObjectAccountingRegister::AccountColumnName(ibEmptyString);
 }
 
 // How many breakdown columns a side reports: what was asked for, or what the register HAS — and never
@@ -204,7 +204,7 @@ const ibBackendQueryColumn* ColumnOn(const ibBackendQueryable* source, const ibB
 //                       and a single-field CASE would carry the tag and lose the value.
 struct ibAcctBreakdownColumn
 {
-	wxString                                    m_alias;             // AccountDimension[Dr|Cr]<no>
+	ibString                                    m_alias;             // AccountDimension[Dr|Cr]<no>
 
 	// ⭐⭐ THE DECLARATION AND THE COLUMN ARE TWO DIFFERENT THINGS, and this file needs both.
 	//
@@ -233,7 +233,7 @@ struct ibAcctBreakdownColumn
 	// Which is exactly what the "turnovers only" flag needs to be readable at all: it is set per (account,
 	// KIND), so a reading that has lost the kind cannot tell whether a balance is kept along that
 	// breakdown.
-	wxString                                    m_kindAlias;         // AccountDimension[Dr|Cr]<no>Kind — unrequested case
+	ibString                                    m_kindAlias;         // AccountDimension[Dr|Cr]<no>Kind — unrequested case
 	ibValue                                     m_requestedKind;     // the kind the caller asked for, if any
 };
 
@@ -255,7 +255,7 @@ bool BreakdownCarriesKind(const ibAcctBreakdownColumn& column)
 void DescribeBreakdown(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape, bool creditSide,
                        const std::vector<ibValue>& kinds, std::vector<ibAcctBreakdownColumn>& out, bool corr = false)
 {
-	const wxString prefix = SidePrefix(reg, shape, creditSide);
+	const ibString prefix = SidePrefix(reg, shape, creditSide);
 	const unsigned int width = BreakdownWidth(reg, kinds);
 
 	for (unsigned int no = 0; no < width; no++) {
@@ -271,7 +271,7 @@ void DescribeBreakdown(const ibValueMetaObjectAccountingRegister* reg, ibAcctSha
 				continue;
 			column.m_kindAttribute = reg->GetAccountDimensionKindSlot(creditSide, no);
 			if (column.m_kindAttribute != nullptr)
-				column.m_kindAlias = column.m_alias + wxT("Kind");
+				column.m_kindAlias = column.m_alias + ibT("Kind");
 		}
 		else {
 			column.m_attribute     = reg->GetAccountDimensionSlot(creditSide, 0);
@@ -286,7 +286,7 @@ void DescribeBreakdown(const ibValueMetaObjectAccountingRegister* reg, ibAcctSha
 // key — a total groups by its breakdown, a movements listing merely reports it.
 void ProjectDimensionByKind(ibDataQueryBuilder& b, const ibValueMetaObjectAccountingRegister* reg,
                             const ibBackendQueryable* source,
-                            bool creditSide, const ibValue& kind, const wxString& alias, bool group)
+                            bool creditSide, const ibValue& kind, const ibString& alias, bool group)
 {
 	const ibValueMetaObjectAttributeBase* sample = reg->GetAccountDimensionSlot(creditSide, 0);
 	if (sample == nullptr)
@@ -294,9 +294,9 @@ void ProjectDimensionByKind(ibDataQueryBuilder& b, const ibValueMetaObjectAccoun
 
 	// Every slot of a side is typed identically — that is the point of the design (they differ by the
 	// KIND standing in them, never by declaration) — so one slot's field layout describes them all.
-	const wxString sampleBase = sample->GetPhysicalName();
-	for (const wxString& field : ibRegFieldsOf(sample)) {
-		const wxString suffix = field.length() > sampleBase.length() ? field.Mid(sampleBase.length()) : wxString();
+	const ibString sampleBase = sample->GetPhysicalName();
+	for (const ibString& field : ibRegFieldsOf(sample)) {
+		const ibString suffix = field.length() > sampleBase.length() ? field.Mid(sampleBase.length()) : ibString();
 
 		std::vector<std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>> cases;
 		for (unsigned int idx = 0; idx < reg->GetAccountDimensionCount(); idx++) {
@@ -382,7 +382,7 @@ ibValue ReadBreakdownKind(ibDataQueryResult& sel, const ibAcctBreakdownColumn& c
 // THE KEY'S BREAKDOWN HALF, written in ONE order and read back in the same one — the names here and the
 // values below. Two loops that must agree, kept adjacent: a stored kind takes a position of its own,
 // a requested one does not.
-void AppendBreakdownNames(const std::vector<ibAcctBreakdownColumn>& breakdown, std::vector<wxString>& out)
+void AppendBreakdownNames(const std::vector<ibAcctBreakdownColumn>& breakdown, std::vector<ibString>& out)
 {
 	for (const ibAcctBreakdownColumn& column : breakdown) {
 		if (BreakdownCarriesKind(column))
@@ -1237,7 +1237,7 @@ std::vector<ibAcctPass> PassesOf(const ibValueMetaObjectAccountingRegister* reg)
 // which pass wrote it.
 struct ibAcctKeyLayout
 {
-	std::vector<wxString>              m_columns;     // the key's column names, in the order it is built
+	std::vector<ibString>              m_columns;     // the key's column names, in the order it is built
 	std::vector<ibAcctBreakdownColumn> m_breakdown;   // the breakdown half of that key
 };
 
@@ -1247,7 +1247,7 @@ struct ibAcctKeyLayout
 struct ibAcctRow
 {
 	std::vector<ibValue>         m_key;
-	std::map<wxString, ibValue>  m_figures;
+	std::map<ibString, ibValue>  m_figures;
 	size_t                       m_layout = 0;   // which pass's names this key is spelled in
 };
 
@@ -1257,7 +1257,7 @@ using ibAcctRowList = std::vector<std::pair<ibAcctKey, ibAcctRow>>;
 
 // The published name of a figure — the resource plus the side's suffix, spelled through ibAcctFigure
 // so the shape's column and the value written into it cannot come from two different spellings.
-wxString FigureName(const ibValueMetaObjectAttributeBase* resource, const wxString& suffix)
+ibString FigureName(const ibValueMetaObjectAttributeBase* resource, const ibString& suffix)
 {
 	return resource->GetName() + suffix;
 }
@@ -1273,7 +1273,7 @@ wxString FigureName(const ibValueMetaObjectAttributeBase* resource, const wxStri
 // the right 200 (measured 2026-09-16). The resource's field is short by construction and is the name the
 // configuration's author never chooses — so a figure column is kept, and every server projection
 // answers, under this one; FigureName stays what a query writes and what the RAM rows are poured by.
-wxString FigureField(const ibValueMetaObjectAttributeBase* resource, const wxString& suffix)
+ibString FigureField(const ibValueMetaObjectAttributeBase* resource, const ibString& suffix)
 {
 	return ibRegValueField(resource) + suffix;
 }
@@ -1284,8 +1284,8 @@ wxString FigureField(const ibValueMetaObjectAttributeBase* resource, const wxStr
 // same way — and two for the breakdown.
 struct ibAcctServerKey
 {
-	wxString                    m_stored;
-	wxString                    m_published;
+	ibString                    m_stored;
+	ibString                    m_published;
 	const ibBackendQueryColumn* m_column = nullptr;   // the stored column the field is one of
 };
 
@@ -1299,7 +1299,7 @@ void PairByRole(std::vector<ibAcctServerKey>& keys, const ibBackendQueryColumn* 
 	if (stored == nullptr)
 		return;
 	if (published == nullptr) {
-		for (const wxString& field : ColumnFieldNames(stored))
+		for (const ibString& field : ColumnFieldNames(stored))
 			keys.push_back({ field, field, stored });
 		return;
 	}
@@ -1314,8 +1314,8 @@ void PairByRole(std::vector<ibAcctServerKey>& keys, const ibBackendQueryColumn* 
 
 // The fields a key groups by, as the codec reads them — defined with the server readings below, where
 // its note says why an empty value needs it.
-std::unordered_map<wxString, ibQueryExprPtr> KeyFieldsAsRead(const ibBackendQueryColumn* column,
-                                                              const ibMetaData* metaData, const wxString& alias);
+std::unordered_map<ibString, ibQueryExprPtr> KeyFieldsAsRead(const ibBackendQueryColumn* column,
+                                                              const ibMetaData* metaData, const ibString& alias);
 
 // ⭐⭐ THE ACCOUNT'S TYPE IS A RULE FOR READING THE OTHER SIDE, not a storage shape.
 //
@@ -1622,7 +1622,7 @@ std::pair<ibQueryExprPtr, ibQueryExprPtr> FoldedPairOnServer(const ibQueryExprPt
 // own boolean the resource names, compared through the codec like any other value; a chart that never
 // declared that kind keeps it nowhere. The twin of IsAccountingKindKept, which asks the account object.
 ibQueryExprPtr KindKeptOnServer(const ibValueMetaObjectAccountingRegister* reg, const ibValueMetaObjectResource* resource,
-                            const wxString& chartAlias)
+                            const ibString& chartAlias)
 {
 	const ibMetaDescription& kind = resource->GetAccountingKind();
 	if (!kind.IsOk())
@@ -1684,7 +1684,7 @@ struct ibAcctKindsTable
 {
 	const ibValueMetaObjectAccountDimensionKindsTable* m_table = nullptr;
 	const ibBackendQueryable*   m_rows       = nullptr;
-	wxString                    m_ownerField;
+	ibString                    m_ownerField;
 	const ibBackendQueryColumn* m_kindCol    = nullptr;
 	const ibBackendQueryColumn* m_summaryCol = nullptr;
 };
@@ -1698,7 +1698,7 @@ ibAcctKindsTable KindsTableOf(const ibValueMetaObjectAccountingRegister* reg)
 	if (rows == nullptr || chart->GetDataReference() == nullptr)
 		return out;
 	const ibBackendQueryColumn* ownerCol = rows->ResolveColumnByName(chart->GetDataReference()->GetName());
-	const std::vector<wxString> ownerFields = ownerCol != nullptr ? ColumnFieldNames(ownerCol) : std::vector<wxString>();
+	const std::vector<ibString> ownerFields = ownerCol != nullptr ? ColumnFieldNames(ownerCol) : std::vector<ibString>();
 	const ibBackendQueryColumn* kindCol = ColumnOn(rows, table->GetAccountDimensionKind());
 	if (ownerFields.size() != 1 || kindCol == nullptr)
 		return out;
@@ -1723,8 +1723,8 @@ ibQueryExprPtr ibAcctIsOne(const ibQueryExprPtr& flag)
 }
 
 // EXISTS a row of the kinds table of the account `rowAlias.accountId` that meets `where` (asked under `k`).
-ibQueryExprPtr KindsRowExists(const ibAcctKindsTable& kinds, const wxString& rowAlias, const wxString& accountId,
-	const ibQueryExprPtr& where, const wxString& k, bool negated = false)
+ibQueryExprPtr KindsRowExists(const ibAcctKindsTable& kinds, const ibString& rowAlias, const ibString& accountId,
+	const ibQueryExprPtr& where, const ibString& k, bool negated = false)
 {
 	ibQueryExprPtr on = ibBinOp(ibQueryBinOp::Eq, ibCol(k, kinds.m_ownerField), ibCol(rowAlias, accountId));
 	if (where)
@@ -1737,10 +1737,10 @@ ibQueryExprPtr KindsRowExists(const ibAcctKindsTable& kinds, const wxString& row
 // no row of the account's kinds table that keeps a balance and is not among the kinds asked. Null when nothing was
 // asked: the slots as they stand are the full set.
 ibQueryExprPtr FullAnalyticsOnServer(const ibValueMetaObjectAccountingRegister* reg, const std::vector<ibValue>& kinds,
-	const wxString& rowAlias, const ibBackendQueryColumn* accountCol, const wxString& k)
+	const ibString& rowAlias, const ibBackendQueryColumn* accountCol, const ibString& k)
 {
 	const ibAcctKindsTable table = KindsTableOf(reg);
-	const wxString accountId = accountCol != nullptr ? ibRegFieldOfRole(accountCol, ibColumnRole::ReferenceId) : wxString();
+	const ibString accountId = accountCol != nullptr ? ibRegFieldOfRole(accountCol, ibColumnRole::ReferenceId) : ibString();
 	if (kinds.empty() || table.m_rows == nullptr || accountId.IsEmpty())
 		return nullptr;
 	ibQueryExprPtr anyAsked;
@@ -1781,18 +1781,18 @@ std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> SlotKindsOf(const i
 // says whether a figure is kept by it (KeptBySubcontoOnServer). One LEFT join per slot, against a table of a few
 // rows per account: the cost does not grow with the movements. `kindAliases` names the joins.
 ibQueryRelPtr JoinSubcontoKinds(const ibValueMetaObjectAccountingRegister* reg, ibQueryRelPtr rel,
-	const ibBackendQueryColumn* accountCol, const wxString& rowAlias,
+	const ibBackendQueryColumn* accountCol, const ibString& rowAlias,
 	const std::vector<std::pair<const ibBackendQueryColumn*, ibValue>>& slotKinds,
-	const wxString& prefix, std::vector<wxString>& kindAliases)
+	const ibString& prefix, std::vector<ibString>& kindAliases)
 {
 	// ⚠ THE OWNER IS ONE RAW KEY FIELD (KindsTableOf): paired by role with the account the join said nothing at all.
 	const ibAcctKindsTable table = KindsTableOf(reg);
-	const wxString accountId = accountCol != nullptr ? ibRegFieldOfRole(accountCol, ibColumnRole::ReferenceId) : wxString();
+	const ibString accountId = accountCol != nullptr ? ibRegFieldOfRole(accountCol, ibColumnRole::ReferenceId) : ibString();
 	if (table.m_rows == nullptr || accountId.IsEmpty())
 		return rel;
 
 	for (size_t i = 0; i < slotKinds.size(); ++i) {
-		const wxString k = prefix + wxString::Format(wxT("_k%u"), static_cast<unsigned>(i));
+		const ibString k = prefix + ibString::Format(ibT("_k%u"), static_cast<unsigned>(i));
 		const ibQueryExprPtr sameAccount = ibBinOp(ibQueryBinOp::Eq, ibCol(rowAlias, accountId), ibCol(k, table.m_ownerField));
 		const ibQueryExprPtr sameKind = slotKinds[i].first != nullptr
 			? ibRegSameValueIR(slotKinds[i].first, rowAlias, table.m_kindCol, k)
@@ -1809,21 +1809,21 @@ ibQueryRelPtr JoinSubcontoKinds(const ibValueMetaObjectAccountingRegister* reg, 
 // Kept by every subconto its row stands on: each joined kinds row either absent or ticked for the resource's
 // breakdown kind. Null where the resource names no such kind — nothing to judge.
 ibQueryExprPtr KeptBySubcontoOnServer(const ibValueMetaObjectAccountingRegister* reg, const ibValueMetaObjectResource* resource,
-	const std::vector<wxString>& kindAliases)
+	const std::vector<ibString>& kindAliases)
 {
 	const ibValueMetaObjectAttributeBase* flag = BreakdownKindOf(reg, resource);
 	const ibAcctKindsTable table = KindsTableOf(reg);
 	if (flag == nullptr || kindAliases.empty() || table.m_rows == nullptr)
 		return nullptr;
 	const ibBackendQueryColumn* flagCol = ColumnOn(table.m_rows, flag);
-	const std::vector<wxString> kindFields = ColumnFieldNames(table.m_kindCol);
+	const std::vector<ibString> kindFields = ColumnFieldNames(table.m_kindCol);
 	if (flagCol == nullptr || kindFields.empty())
 		return nullptr;
 	// "No such row" is asked of the kind's last field — the identity a joined row always has.
-	const wxString presentField = kindFields.back();
+	const ibString presentField = kindFields.back();
 
 	ibQueryExprPtr kept;
-	for (const wxString& k : kindAliases) {
+	for (const ibString& k : kindAliases) {
 		const ibQueryExprPtr one = ibBinOp(ibQueryBinOp::Or, ibIsNull(ibCol(k, presentField)),
 			ibRegCompositeIR(flagCol, reg->GetMetaData(), ibValue(true), ibQueryBinOp::Eq, k));
 		kept = kept ? ibBinOp(ibQueryBinOp::And, kept, one) : one;
@@ -1862,21 +1862,21 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 	// produced it, so two different kinds can no longer meet on one bucket by accident. Together they
 	// identify the argument as tightly as the old text did, without rendering a reference through
 	// wxString::Format to get there.
-	wxString key = wxString::Format(wxT("%d|%d|%d|"), static_cast<int>(shape),
+	ibString key = ibString::Format(ibT("%d|%d|%d|"), static_cast<int>(shape),
 		static_cast<int>(fold.m_kind), static_cast<int>(fold.m_unit));
 	const auto appendKind = [&key](const ibChar side, const ibValue& kind) {
-		key += wxString::Format(wxT("%c%llu:%llu|"), side,
+		key += ibString::Format(ibT("%c%llu:%llu|"), side,
 			static_cast<unsigned long long>(kind.GetValueHash()),
 			static_cast<unsigned long long>(kind.GetClassType()));
 	};
-	for (const ibValue& kind : kindsDr) appendKind(wxT('d'), kind);
-	for (const ibValue& kind : kindsCr) appendKind(wxT('c'), kind);
+	for (const ibValue& kind : kindsDr) appendKind(ibT('d'), kind);
+	for (const ibValue& kind : kindsCr) appendKind(ibT('c'), kind);
 
 	// …and WHAT IT WAS BUILT FROM is remembered beside it, so a register whose attributes changed
 	// (a resource added, a dimension re-typed) rebuilds instead of answering from a stale shape. The
 	// neighbour learned this one the hard way: a shape asked for before the metadata was read stayed
 	// empty for the life of the session.
-	wxString builtFrom;
+	ibString builtFrom;
 	ibRegSignAttribute(builtFrom, GetRegisterPeriod());
 	ibRegSignAttribute(builtFrom, GetRegisterAccount());
 	ibRegSignAttribute(builtFrom, GetRegisterAccountCr());
@@ -1890,7 +1890,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 	// ⚠ THE RELATION'S NAME IS NOT THE CACHE KEY. Several calls — different kinds, a different
 	// granularity — are different SHAPES over the same named relation, which is exactly why the key is
 	// the whole call while the name follows the shape alone.
-	const wxString shapeName = wxString::Format(wxT("%s_%d"), GetRegisterTableNameDB(), static_cast<int>(shape));
+	const ibString shapeName = ibString::Format(ibT("%s_%d"), GetRegisterTableNameDB(), static_cast<int>(shape));
 	return m_surfaces.Obtain(key, builtFrom, shapeName, GetMetaData(),
 		[&](std::vector<ibTempColumn>& columns)
 	{
@@ -1951,7 +1951,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 	if (GetRegisterAccount() != nullptr)
 		columns.push_back((bothSides || !correspondence
 			? ibRegAttributeColumn(GetRegisterAccount())
-			: ibRegAttributeColumn(GetRegisterAccount(), PublishedAccountName(this, shape), AccountColumnSynonym(wxEmptyString),
+			: ibRegAttributeColumn(GetRegisterAccount(), PublishedAccountName(this, shape), AccountColumnSynonym(ibEmptyString),
 			                       ibRegDerivedColumnId(GetRegisterAccount()->GetMetaID())))
 			.PlaysInBalance(ibBalanceRole::Dimension));
 	if (bothSides && GetRegisterAccountCr() != nullptr)
@@ -1972,14 +1972,14 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 	// types' own composition — so a column of this table admits exactly what a slot admits.
 	// `corr` names the correspondent's breakdown: the credit slots, under `CorrAccountDimension<n>`.
 	const auto addBreakdown = [&](bool creditSide, const std::vector<ibValue>& kinds, bool corr) {
-		const wxString prefix = SidePrefix(this, shape, creditSide);
+		const ibString prefix = SidePrefix(this, shape, creditSide);
 		const unsigned int width = BreakdownWidth(this, kinds);
 		for (unsigned int no = 0; no < width; no++) {
 			// The width never passes the slots (BreakdownWidth), so every column stands on a slot of its own.
 			const ibValueMetaObjectAttributeBase* slot = GetAccountDimensionSlot(creditSide, no);
 			if (slot == nullptr)
 				continue;
-			const wxString name = corr ? CorrAccountDimensionColumnName(no + 1) : AccountDimensionColumnName(prefix, no + 1);
+			const ibString name = corr ? CorrAccountDimensionColumnName(no + 1) : AccountDimensionColumnName(prefix, no + 1);
 
 			// ⭐ NUMBERED OVER THE SLOT'S REAL metaID, like the account above — a slot has an id of its own,
 			// so the column's id is the same in every shape whatever stands before it.
@@ -1998,7 +1998,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 			// column saying so would be the same answer twice.
 			const ibValueMetaObjectAttributeBase* kindSlot = GetAccountDimensionKindSlot(creditSide, no);
 			if (kinds.empty() && kindSlot != nullptr)
-				columns.push_back(ibTempColumn(name + wxT("Kind"), name + wxT("Kind"),
+				columns.push_back(ibTempColumn(name + ibT("Kind"), name + ibT("Kind"),
 				                               kindSlot->GetTypeDesc(), ibRegDerivedColumnId(kindSlot->GetMetaID())).StandsFor(kindSlot));
 
 			// What the slot HOLDS (GetTypeValueDesc), not what it declares: the declaration is the chart's
@@ -2043,7 +2043,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 		for (const auto dimension : GetDimensionArrayObject())
 			if (const ibValueMetaObjectAttributeBase* credit = GetFieldSide(/*creditSide*/ true, dimension))
 				columns.push_back(ibRegAttributeColumn(credit, CorrFieldColumnName(dimension->GetName()),
-					dimension->GetSynonym() + wxT(" ") + _("corr."), ibRegDerivedColumnId(credit->GetMetaID())));
+					dimension->GetSynonym() + ibT(" ") + _("corr."), ibRegDerivedColumnId(credit->GetMetaID())));
 
 	// --- the figures --------------------------------------------------------------------------
 	//
@@ -2067,8 +2067,8 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 	// Each numbered over its resource (ibRegDerivedColumnId, from 1); `figureNo` counts the figures of the resource
 	// in hand and starts again with the next one.
 	unsigned int figureNo = 0;
-	const auto addFigure = [&](const ibValueMetaObjectAttributeBase* resource, const wxString& figure, bool credit) {
-		const wxString suffix = ibRegSidedFigure(figure, credit);
+	const auto addFigure = [&](const ibValueMetaObjectAttributeBase* resource, const ibString& figure, bool credit) {
+		const ibString suffix = ibRegSidedFigure(figure, credit);
 		columns.push_back(ibTempColumn(FigureName(resource, suffix), FigureField(resource, suffix),
 		                               resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(resource->GetSynonym(), ibRegSidedCaption(figure, credit)),
@@ -2078,7 +2078,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 
 	// A figure with NO side — one row is a pair of accounts, so there is one number and nothing to
 	// tell apart. Same pairing of the names, minus the side.
-	const auto addSidelessFigure = [&](const ibValueMetaObjectAttributeBase* resource, const wxString& figure) {
+	const auto addSidelessFigure = [&](const ibValueMetaObjectAttributeBase* resource, const ibString& figure) {
 		columns.push_back(ibTempColumn(FigureName(resource, figure), FigureField(resource, figure),
 		                               resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(resource->GetSynonym(), ibRegFigureCaption(figure)),
@@ -2222,7 +2222,7 @@ void PourRows(ibQueryRamTable& table,
 
 		// The names of the PASS that wrote this key, never the first pass's: two passes break down two
 		// different sides by two lists the caller chose, and those lists need not be the same length.
-		const std::vector<wxString>& keyColumns =
+		const std::vector<ibString>& keyColumns =
 			layouts[entry.second.m_layout < layouts.size() ? entry.second.m_layout : 0].m_columns;
 
 		const long row = table.AppendRow();
@@ -2355,7 +2355,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 		// The two passes fill ONE result, so a pass naming its own halves would publish a second column
 		// for what the reading calls one field.
 		std::vector<const ibBackendQueryColumn*> dimensions;
-		std::vector<wxString> dimensionNames;
+		std::vector<ibString> dimensionNames;
 		for (const auto dimension : GetDimensionArrayObject())
 			if (const ibBackendQueryColumn* here = ColumnOn(source, GetRegisterDimension(pass.m_creditSide, dimension))) {
 				b.GroupBy(here);
@@ -2378,7 +2378,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 
 		// Which figures this pass produces: one side in a correspondence register (the side IS the
 		// account column it grouped by), both in a one-sided one (told apart by RecordType).
-		std::vector<std::pair<wxString, const ibValueMetaObjectAttributeBase*>> figures;
+		std::vector<std::pair<ibString, const ibValueMetaObjectAttributeBase*>> figures;
 		for (const auto resource : GetResourceArrayObject()) {
 			// EVERY figure folds up to a moment, a split one by its own halves — "how much is on hand
 			// in pieces" is the same question as "how much in money", asked of a figure that happens to
@@ -2394,7 +2394,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 				figures.push_back({ FigureName(resource, ibAcctFigure::BalanceCr), resource });
 			}
 			else {
-				const wxString name = FigureName(resource,
+				const ibString name = FigureName(resource,
 					pass.m_creditFigure ? ibAcctFigure::BalanceCr : ibAcctFigure::BalanceDr);
 				b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, figureExpr(resource, pass.m_creditFigure), name);
 				figures.push_back({ name, resource });
@@ -2402,10 +2402,10 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 		}
 
 		// THIS PASS'S NAMES, IN THE ORDER THIS PASS BUILDS ITS KEY.
-		std::vector<wxString> keyColumns;
+		std::vector<ibString> keyColumns;
 		keyColumns.push_back(PublishedAccountName(this, ibAcctShape::Balance));
 		AppendBreakdownNames(breakdown, keyColumns);
-		for (const wxString& dimensionName : dimensionNames)
+		for (const ibString& dimensionName : dimensionNames)
 			keyColumns.push_back(dimensionName);
 
 		// The driver's own words reach the caller untouched — this level has nothing truer to say, so
@@ -2510,7 +2510,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 	if (movements == nullptr || shape == nullptr)
 		return retTable;
 
-	const wxString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : wxString();
+	const ibString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : ibString();
 
 	// ⭐⭐ WHAT ONE ROW IS, WHEN THE FOLD STANDS AT A MOVEMENT'S OWN GRAIN.
 	//
@@ -2521,10 +2521,10 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 	// stated there) — a reader gets the rows the word named, or nothing is called by that word at all.
 	const bool atMovementGrain = fold.FromMovements();
 	const bool withLineNumber  = fold.HasLineNumber();
-	const wxString recorderName = atMovementGrain && GetRegisterRecorder() != nullptr
-		? GetRegisterRecorder()->GetName() : wxString();
-	const wxString lineName = withLineNumber && GetRegisterLineNumber() != nullptr
-		? GetRegisterLineNumber()->GetName() : wxString();
+	const ibString recorderName = atMovementGrain && GetRegisterRecorder() != nullptr
+		? GetRegisterRecorder()->GetName() : ibString();
+	const ibString lineName = withLineNumber && GetRegisterLineNumber() != nullptr
+		? GetRegisterLineNumber()->GetName() : ibString();
 	// A document has a date of its own, so a movement-grained row carries the period too.
 	const bool withPeriod = (fold.HasPeriod() || atMovementGrain) && !periodName.IsEmpty();
 
@@ -2642,7 +2642,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 		// dimension — see ComputeBalance. A dimension kept per side then gives its OTHER half to the
 		// correspondent (`CurrencyCorr`).
 		std::vector<const ibBackendQueryColumn*> dimensions;
-		std::vector<wxString> dimensionNames;
+		std::vector<ibString> dimensionNames;
 		for (const auto dimension : GetDimensionArrayObject())
 			if (const ibBackendQueryColumn* here = ColumnOn(source, GetRegisterDimension(pass.m_creditSide, dimension))) {
 				b.GroupBy(here);
@@ -2688,7 +2688,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 			return SideFigure(this, resource, credit);
 		};
 
-		std::vector<std::pair<wxString, const ibValueMetaObjectAttributeBase*>> figures;
+		std::vector<std::pair<ibString, const ibValueMetaObjectAttributeBase*>> figures;
 		for (const auto resource : GetResourceArrayObject()) {
 			if (resource == nullptr)
 				continue;
@@ -2701,7 +2701,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 				figures.push_back({ FigureName(resource, ibAcctFigure::TurnoverCr), resource });
 			}
 			else {
-				const wxString name = FigureName(resource,
+				const ibString name = FigureName(resource,
 					pass.m_creditFigure ? ibAcctFigure::TurnoverCr : ibAcctFigure::TurnoverDr);
 				b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, figureExpr(resource, pass.m_creditFigure), name);
 				figures.push_back({ name, resource });
@@ -2712,7 +2712,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 				// debit half into `CorrTurnoverDr`. Read on the movements only — a stored side keeps its own half.
 				if (!useTotals && !resource->IsBalanceResource() && GetFieldSide(/*creditSide*/ true, resource) != nullptr) {
 					const bool corrCredit = !pass.m_creditFigure;
-					const wxString corrName = FigureName(resource,
+					const ibString corrName = FigureName(resource,
 						corrCredit ? ibAcctFigure::CorrTurnoverCr : ibAcctFigure::CorrTurnoverDr);
 					b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, SideFigure(this, resource, corrCredit), corrName);
 					figures.push_back({ corrName, resource });
@@ -2722,14 +2722,14 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 
 		// THIS PASS'S NAMES, IN THE ORDER THIS PASS BUILDS ITS KEY — and the two passes need not agree
 		// on the breakdown, so the names go with the rows rather than with the reading.
-		std::vector<wxString> keyColumns;
+		std::vector<ibString> keyColumns;
 		keyColumns.push_back(PublishedAccountName(this, ibAcctShape::Turnovers));
 		AppendBreakdownNames(breakdown, keyColumns);
 		if (corrAccountCol != nullptr) {
 			keyColumns.push_back(CorrAccountColumnName());
 			AppendBreakdownNames(corrBreakdown, keyColumns);
 		}
-		for (const wxString& dimensionName : dimensionNames)
+		for (const ibString& dimensionName : dimensionNames)
 			keyColumns.push_back(dimensionName);
 		if (withPeriod)
 			keyColumns.push_back(periodName);
@@ -2790,8 +2790,8 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 	// The sideless readings, from the stitched pair: what moved on balance, the account's and the
 	// correspondent's. The server road projects the same difference.
 	for (auto& entry : rows) {
-		std::map<wxString, ibValue>& figures = entry.second.m_figures;
-		const auto net = [&figures](const wxString& debit, const wxString& credit, const wxString& into) {
+		std::map<ibString, ibValue>& figures = entry.second.m_figures;
+		const auto net = [&figures](const ibString& debit, const ibString& credit, const ibString& into) {
 			const auto dr = figures.find(debit);
 			const auto cr = figures.find(credit);
 			if (dr == figures.end() && cr == figures.end())
@@ -2895,18 +2895,18 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 	// ONE figure per BALANCED resource: a pair of accounts has no sides of its own — what moved from
 	// that credit to that debit is a single number, and calling it TurnoverDr would be the same value
 	// twice. A SPLIT figure is two numbers even here, because what left is not what arrived.
-	std::vector<wxString> figures;
+	std::vector<ibString> figures;
 	for (const auto resource : GetResourceArrayObject()) {
 		if (resource == nullptr)
 			continue;
 		if (resource->IsBalanceResource()) {
-			const wxString name = FigureName(resource, ibAcctFigure::Turnover);
+			const ibString name = FigureName(resource, ibAcctFigure::Turnover);
 			b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, ibQueryColumnExpr::Col(resource->GetQueryColumn()), name);
 			figures.push_back(name);
 			continue;
 		}
-		const wxString debitName  = FigureName(resource, ibAcctFigure::TurnoverDr);
-		const wxString creditName = FigureName(resource, ibAcctFigure::TurnoverCr);
+		const ibString debitName  = FigureName(resource, ibAcctFigure::TurnoverDr);
+		const ibString creditName = FigureName(resource, ibAcctFigure::TurnoverCr);
 		b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, SideFigure(this, resource, /*credit*/ false), debitName);
 		b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, SideFigure(this, resource, /*credit*/ true),  creditName);
 		figures.push_back(debitName);
@@ -2916,7 +2916,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 	// ONE PASS, so one layout — a paired row names both accounts at once and breaks both sides down in
 	// the same read.
 	std::vector<ibAcctKeyLayout> layouts(1);
-	std::vector<wxString>& keyColumns = layouts.front().m_columns;
+	std::vector<ibString>& keyColumns = layouts.front().m_columns;
 	keyColumns.push_back(GetRegisterAccount()->GetName());
 	keyColumns.push_back(GetRegisterAccountCr()->GetName());
 	AppendBreakdownNames(breakdownDr, keyColumns);
@@ -2935,7 +2935,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 		for (const auto dimension : dimensions) key.push_back(sel.GetValue(dimension));
 
 		ibAcctRow row{ key, {}, 0 };
-		for (const wxString& figure : figures)
+		for (const ibString& figure : figures)
 			row.m_figures[figure] = sel.GetColumn(figure);
 		rows.push_back({ key, row });
 	}
@@ -3037,8 +3037,8 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	// for BY KIND and every sum come out under the statement's own spelling (ibSqlAliasOf — `out_…`).
 	// Read by the published names, the sums came back as zero and a walk through the account refused
 	// the statement (measured 2026-09-16 — this road had not been read through since the names moved).
-	const wxString inner = wxT("drcr");
-	std::unordered_map<wxString, wxString> labelOf;   // published field -> what the statement wrote
+	const ibString inner = ibT("drcr");
+	std::unordered_map<ibString, ibString> labelOf;   // published field -> what the statement wrote
 	std::vector<ibAcctServerKey> slots;
 	for (const std::vector<ibAcctBreakdownColumn>* side : { &breakdownDr, &breakdownCr })
 		for (const ibAcctBreakdownColumn& column : *side) {
@@ -3057,7 +3057,7 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 		labelOf[key.m_published] = key.m_stored;
 	for (const auto resource : GetResourceArrayObject())
 		if (resource != nullptr)
-			for (const wxString& figure : { wxString(ibAcctFigure::Turnover), wxString(ibAcctFigure::TurnoverDr), wxString(ibAcctFigure::TurnoverCr) })
+			for (const ibString& figure : { ibString(ibAcctFigure::Turnover), ibString(ibAcctFigure::TurnoverDr), ibString(ibAcctFigure::TurnoverCr) })
 				labelOf[FigureField(resource, figure)] = ibSqlAliasOf(FigureField(resource, figure));
 
 	std::vector<ibQueryProjItem> projection;
@@ -3074,31 +3074,31 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	// Each figure with the resource it is of and the side that judges it: the debit turnover by the debit
 	// account, the credit one by the credit account, a pair's single turnover by either (ReportFiguresAsKept).
 	struct ibPairFigure { const ibValueMetaObjectResource* m_resource; int m_side; };   // 0 either, 1 Dr, 2 Cr
-	std::map<wxString, ibPairFigure> figureOf;
-	std::set<wxString> figureFields;
+	std::map<ibString, ibPairFigure> figureOf;
+	std::set<ibString> figureFields;
 	for (const auto resource : GetResourceArrayObject())
 		if (resource != nullptr) {
 			figureOf[FigureField(resource, ibAcctFigure::Turnover)]   = { resource, 0 };
 			figureOf[FigureField(resource, ibAcctFigure::TurnoverDr)] = { resource, 1 };
 			figureOf[FigureField(resource, ibAcctFigure::TurnoverCr)] = { resource, 2 };
-			for (const wxString& figure : { wxString(ibAcctFigure::Turnover), wxString(ibAcctFigure::TurnoverDr), wxString(ibAcctFigure::TurnoverCr) })
+			for (const ibString& figure : { ibString(ibAcctFigure::Turnover), ibString(ibAcctFigure::TurnoverDr), ibString(ibAcctFigure::TurnoverCr) })
 				figureFields.insert(FigureField(resource, figure));
 		}
 
-	const wxString named = wxT("drcr_n");
+	const ibString named = ibT("drcr_n");
 	std::vector<ibQueryProjItem> outputs;
 	std::vector<ibQueryExprPtr>  groupKeys;
 	for (const ibBackendQueryColumn* column : published->GetColumns()) {
 		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(column);
 		const bool figure = !slots.empty() && figureFields.count(slots.front().m_name) != 0;
-		std::unordered_map<wxString, ibQueryExprPtr> asRead;
+		std::unordered_map<ibString, ibQueryExprPtr> asRead;
 		if (!figure)
 			asRead = KeyFieldsAsRead(column, GetMetaData(), named);
 		for (const ibColumnSlot& slot : slots) {
 			if (figure) {
 				// A sum of nothing is zero — see ServerSideRead: a figure added after the first postings is
 				// NULL on every line before it.
-				outputs.push_back({ ibCast(ibFunc(wxT("COALESCE"), { ibFunc(wxT("SUM"), { ibCol(named, slot.m_name) }), ibRegTypedZero() }),
+				outputs.push_back({ ibCast(ibFunc(ibT("COALESCE"), { ibFunc(ibT("SUM"), { ibCol(named, slot.m_name) }), ibRegTypedZero() }),
 				                           ibTypeNumber(18, 6)), slot.m_name });
 				continue;
 			}
@@ -3118,8 +3118,8 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	if ((!byAccount && !bySubconto) || chart == nullptr || chart->GetDataReference() == nullptr || chart->GetQueryable() == nullptr)
 		return summed;
 
-	const wxString pairs = wxT("drcr_k"), debitChart = wxT("drcr_ad"), creditChart = wxT("drcr_ac");
-	const wxString chartTable = chart->GetQueryable()->GetQueryTableName();
+	const ibString pairs = ibT("drcr_k"), debitChart = ibT("drcr_ad"), creditChart = ibT("drcr_ac");
+	const ibString chartTable = chart->GetQueryable()->GetQueryTableName();
 	const ibBackendQueryColumn* chartRef = chart->GetDataReference()->GetQueryColumn();
 	ibQueryRelPtr withCharts = ibSubquery(summed, pairs);
 	if (byAccount)
@@ -3129,12 +3129,12 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 			ibScan(chartTable, creditChart),
 			ibRegSameValueIR(GetRegisterAccountCr()->GetQueryColumn(), pairs, chartRef, creditChart), ibQueryJoinType::Left);
 	// …and each side's breakdown slots to ITS account's kinds rows: the debit slots belong to the debit account.
-	std::vector<wxString> subcontosDr, subcontosCr;
+	std::vector<ibString> subcontosDr, subcontosCr;
 	if (bySubconto) {
 		withCharts = JoinSubcontoKinds(this, withCharts, GetRegisterAccount()->GetQueryColumn(), pairs,
-			SlotKindsOf(this, published, ibAcctShape::DrCrTurnovers, /*creditSide*/ false, kindsDr), wxT("drcr_sd"), subcontosDr);
+			SlotKindsOf(this, published, ibAcctShape::DrCrTurnovers, /*creditSide*/ false, kindsDr), ibT("drcr_sd"), subcontosDr);
 		withCharts = JoinSubcontoKinds(this, withCharts, GetRegisterAccountCr()->GetQueryColumn(), pairs,
-			SlotKindsOf(this, published, ibAcctShape::DrCrTurnovers, /*creditSide*/ true, kindsCr), wxT("drcr_sc"), subcontosCr);
+			SlotKindsOf(this, published, ibAcctShape::DrCrTurnovers, /*creditSide*/ true, kindsCr), ibT("drcr_sc"), subcontosCr);
 	}
 
 	std::vector<ibQueryProjItem> judged;
@@ -3208,7 +3208,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// ⚠ BOTH ARE COMPLETE BEFORE ANYTHING READS BY THEM. Appended afterwards, a period column is
 	// missing from every key already built — every period of a key then lands on one row (the last one
 	// written wins) and the column the periodicity was asked for is never filled at all.
-	std::vector<wxString> keyColumns;
+	std::vector<ibString> keyColumns;
 	if (GetRegisterAccount() != nullptr)
 		keyColumns.push_back(PublishedAccountName(this, ibAcctShape::BalanceAndTurnovers));
 
@@ -3223,10 +3223,10 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 		if (dimension != nullptr)
 			keyColumns.push_back(dimension->GetName());
 
-	const wxString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : wxString();
+	const ibString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : ibString();
 	const bool withPeriod = (fold.HasPeriod() || fold.FromMovements()) && !periodName.IsEmpty();
 
-	std::vector<wxString> rowColumns = keyColumns;
+	std::vector<ibString> rowColumns = keyColumns;
 	if (withPeriod)
 		rowColumns.push_back(periodName);
 	if (fold.FromMovements() && GetRegisterRecorder() != nullptr)
@@ -3234,7 +3234,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	if (fold.HasLineNumber() && GetRegisterLineNumber() != nullptr)
 		rowColumns.push_back(GetRegisterLineNumber()->GetName());
 
-	const auto cellByName = [](const ibQueryRamTable& table, long row, const wxString& name) {
+	const auto cellByName = [](const ibQueryRamTable& table, long row, const ibString& name) {
 		for (const ibQueryRamColumn& col : table.Columns())
 			if (col.m_name == name)
 				return table.GetCell(row, col.m_id);
@@ -3246,10 +3246,10 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// and no document) be found by the balance key while the two lists stay the same length.
 	// The key of a row as the TUPLE OF ITS VALUES — what the balance seed and the fold both index by
 	// (ibBalanceOpening / ibValueSeqHash). No text conversion: the values are compared as values.
-	const auto identityValuesOf = [&](const ibQueryRamTable& table, long row, const std::vector<wxString>& names) {
+	const auto identityValuesOf = [&](const ibQueryRamTable& table, long row, const std::vector<ibString>& names) {
 		std::vector<ibValue> values;
 		values.reserve(names.size());
-		for (const wxString& name : names)
+		for (const ibString& name : names)
 			values.push_back(cellByName(table, row, name));
 		return values;
 	};
@@ -3276,7 +3276,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 
 	const auto keyValues = [&](const ibQueryRamTable& table, long row) {
 		std::vector<ibValue> key;
-		for (const wxString& name : rowColumns)
+		for (const ibString& name : rowColumns)
 			key.push_back(cellByName(table, row, name));
 		return key;
 	};
@@ -3451,7 +3451,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// subconto left out — built here if nothing else made it — for the closing (and the roll through the periods)
 	// to count; they are taken back after the roll, and the balance row reports turnovers of its own only (Max: the
 	// report would count them twice otherwise).
-	const auto summaryFolded = [&](const ibQueryRamTable& table, long row, const std::vector<wxString>& names) {
+	const auto summaryFolded = [&](const ibQueryRamTable& table, long row, const std::vector<ibString>& names) {
 		std::vector<ibValue> values = identityValuesOf(table, row, names);
 		const ibValue account = GetRegisterAccount() != nullptr
 			? cellByName(table, row, PublishedAccountName(this, ibAcctShape::BalanceAndTurnovers)) : ibValue();
@@ -3470,7 +3470,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 		}
 		return values;
 	};
-	std::unordered_map<size_t, std::map<wxString, ibNumber>> borrowedOf;   // row -> figure -> lent turnover
+	std::unordered_map<size_t, std::map<ibString, ibNumber>> borrowedOf;   // row -> figure -> lent turnover
 	for (long row = 0; row < turnover.RowCount(); row++) {
 		if (!standsOnTurnoversOnly(turnover, row))
 			continue;
@@ -3505,14 +3505,14 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 		for (const auto resource : GetResourceArrayObject()) {
 			if (resource == nullptr)
 				continue;
-			for (const wxString& side : { wxString(ibAcctFigure::TurnoverDr), wxString(ibAcctFigure::TurnoverCr) }) {
-				const wxString name = FigureName(resource, side);
+			for (const ibString& side : { ibString(ibAcctFigure::TurnoverDr), ibString(ibAcctFigure::TurnoverCr) }) {
+				const ibString name = FigureName(resource, side);
 				const ibNumber lent = cellByName(turnover, row, name).GetNumber();
 				borrowedOf[at][name] = borrowedOf[at][name] + lent;
 				ibValue& cell = out.m_figures[name];
 				cell = ibValue(cell.GetNumber() + lent);
 				if (!withPeriod) {
-					const wxString closing = FigureName(resource, side == ibAcctFigure::TurnoverDr
+					const ibString closing = FigureName(resource, side == ibAcctFigure::TurnoverDr
 						? ibAcctFigure::ClosingBalanceDr : ibAcctFigure::ClosingBalanceCr);
 					ibValue& closeCell = out.m_figures[closing];
 					closeCell = ibValue(closeCell.GetNumber() + lent);
@@ -3561,7 +3561,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 
 	ibAcctRowList ordered;
 	std::vector<bool> orderedBalanceless;
-	std::vector<const std::map<wxString, ibNumber>*> orderedBorrowed;   // the turnovers a balance row was lent (above)
+	std::vector<const std::map<ibString, ibNumber>*> orderedBorrowed;   // the turnovers a balance row was lent (above)
 	ordered.reserve(rows.size());
 	orderedBalanceless.reserve(rows.size());
 	for (auto& group : byKey) {
@@ -3635,7 +3635,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 		}
 
 		std::vector<ibMetaID> foldKey;
-		for (const wxString& name : keyColumns)
+		for (const ibString& name : keyColumns)
 			foldKey.push_back(retTable.ColumnIdByName(name));
 
 		const ibMetaID periodId = retTable.ColumnIdByName(periodName);
@@ -3671,7 +3671,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	}
 
 	ibAcctTypeCache accountTypes;
-	const wxString accountName = PublishedAccountName(this, ibAcctShape::BalanceAndTurnovers);
+	const ibString accountName = PublishedAccountName(this, ibAcctShape::BalanceAndTurnovers);
 	// An active-passive balance folds only on a row that stands on one set of its analytics (AtFullAnalytics).
 	const ibAcctSummaryMap kindsByAccount = KindsByAccount(GetChartOfAccounts(), /*onlySummary*/ false);
 	for (long row = 0; row < retTable.RowCount(); row++) {
@@ -3688,8 +3688,8 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 			// ⭐ ONE PASS FILLS ALL THREE READINGS of a moment: the GROSS pair as the numbers stand,
 			// the folded pair, and the sideless net taken from the folded one. A row that keeps no
 			// balance here (a turnovers-only breakdown) empties them all rather than showing zeros.
-			const auto foldPair = [&](const wxString& debitSuffix, const wxString& creditSuffix,
-				const wxString& grossDebitSuffix, const wxString& grossCreditSuffix, const wxString& netFigure) {
+			const auto foldPair = [&](const ibString& debitSuffix, const ibString& creditSuffix,
+				const ibString& grossDebitSuffix, const ibString& grossCreditSuffix, const ibString& netFigure) {
 				const ibMetaID debitId  = retTable.ColumnIdByName(FigureName(resource, debitSuffix));
 				const ibMetaID creditId = retTable.ColumnIdByName(FigureName(resource, creditSuffix));
 				const ibMetaID grossDebitId  = retTable.ColumnIdByName(FigureName(resource, grossDebitSuffix));
@@ -3739,7 +3739,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	for (const auto resource : GetResourceArrayObject()) {
 		if (resource == nullptr)
 			continue;
-		for (const wxString& suffix : { ibAcctFigure::TurnoverDr, ibAcctFigure::TurnoverCr,
+		for (const ibString& suffix : { ibAcctFigure::TurnoverDr, ibAcctFigure::TurnoverCr,
 		                                ibAcctFigure::OpeningBalanceDr, ibAcctFigure::OpeningBalanceCr,
 		                                ibAcctFigure::ClosingBalanceDr, ibAcctFigure::ClosingBalanceCr })
 			if (const ibMetaID id = retTable.ColumnIdByName(FigureName(resource, suffix)))
@@ -3793,7 +3793,7 @@ void ibValueMetaObjectAccountingRegister::ReportFiguresAsKept(ibQueryRamTable& t
 		const ibMetaID kindId = kind.IsOk() ? kind.GetByIdx(0) : 0;
 		const ibValueMetaObjectAttributeBase* byBreakdown = BreakdownKindOf(this, resource);
 		const size_t thisResource = resourceNo++;
-		const auto add = [&](const wxString& suffix, ibAcctJudgedBy by, bool balance) {
+		const auto add = [&](const ibString& suffix, ibAcctJudgedBy by, bool balance) {
 			if (const ibMetaID id = table.ColumnIdByName(FigureName(resource, suffix)))
 				cells.push_back({ id, kindId, by, balance, thisResource, byBreakdown });
 		};
@@ -3803,12 +3803,12 @@ void ibValueMetaObjectAccountingRegister::ReportFiguresAsKept(ibQueryRamTable& t
 		add(ibAcctFigure::CorrTurnoverDr, ibAcctJudgedBy::CorrAccount, false);
 		add(ibAcctFigure::CorrTurnoverCr, ibAcctJudgedBy::CorrAccount, false);
 		add(ibRegFigure::CorrTurnover,    ibAcctJudgedBy::CorrAccount, false);
-		for (const wxString& suffix : { wxString(ibAcctFigure::BalanceDr), wxString(ibAcctFigure::BalanceCr), wxString(ibRegFigure::Balance),
-		                                wxString(ibAcctFigure::GrossBalanceDr), wxString(ibAcctFigure::GrossBalanceCr),
-		                                wxString(ibAcctFigure::OpeningBalanceDr), wxString(ibAcctFigure::OpeningBalanceCr), wxString(ibRegFigure::OpeningBalance),
-		                                wxString(ibAcctFigure::OpeningGrossBalanceDr), wxString(ibAcctFigure::OpeningGrossBalanceCr),
-		                                wxString(ibAcctFigure::ClosingBalanceDr), wxString(ibAcctFigure::ClosingBalanceCr), wxString(ibRegFigure::ClosingBalance),
-		                                wxString(ibAcctFigure::ClosingGrossBalanceDr), wxString(ibAcctFigure::ClosingGrossBalanceCr) })
+		for (const ibString& suffix : { ibString(ibAcctFigure::BalanceDr), ibString(ibAcctFigure::BalanceCr), ibString(ibRegFigure::Balance),
+		                                ibString(ibAcctFigure::GrossBalanceDr), ibString(ibAcctFigure::GrossBalanceCr),
+		                                ibString(ibAcctFigure::OpeningBalanceDr), ibString(ibAcctFigure::OpeningBalanceCr), ibString(ibRegFigure::OpeningBalance),
+		                                ibString(ibAcctFigure::OpeningGrossBalanceDr), ibString(ibAcctFigure::OpeningGrossBalanceCr),
+		                                ibString(ibAcctFigure::ClosingBalanceDr), ibString(ibAcctFigure::ClosingBalanceCr), ibString(ibRegFigure::ClosingBalance),
+		                                ibString(ibAcctFigure::ClosingGrossBalanceDr), ibString(ibAcctFigure::ClosingGrossBalanceCr) })
 			add(suffix, ibAcctJudgedBy::Account, true);
 	}
 	if (cells.empty())
@@ -4046,8 +4046,8 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildRecordsRelation(
 	// under their physical names and `AccountDimensionDr1` read EMPTY on every line of this road (2026-09-17).
 	// So the lines are wrapped: every field as it stands, and beside them each breakdown column spelled out —
 	// a slot and its kind under the published names, or, by kind, a CASE over the slots per field.
-	const wxString a = wxT("records");
-	std::vector<ibQueryProjItem> projection{ { ibCol(a, wxT("*")), wxString() } };
+	const ibString a = ibT("records");
+	std::vector<ibQueryProjItem> projection{ { ibCol(a, ibT("*")), ibString() } };
 	for (const bool creditSide : IsCorrespondence() ? std::vector<bool>{ false, true } : std::vector<bool>{ false }) {
 		std::vector<ibAcctBreakdownColumn> layout;
 		DescribeBreakdown(this, ibAcctShape::Records, creditSide, creditSide ? kindsCr : kindsDr, layout);
@@ -4151,13 +4151,13 @@ namespace {
 // So the key a server read groups by is the key AS READ: an untagged cell answers with the fields of the
 // column's typed empty, written by the same codec a write goes through (the capture ibRegCompositeIR
 // uses), never spelled here.
-std::unordered_map<wxString, ibQueryExprPtr> KeyFieldsAsRead(const ibBackendQueryColumn* column,
-                                                              const ibMetaData* metaData, const wxString& alias)
+std::unordered_map<ibString, ibQueryExprPtr> KeyFieldsAsRead(const ibBackendQueryColumn* column,
+                                                              const ibMetaData* metaData, const ibString& alias)
 {
-	std::unordered_map<wxString, ibQueryExprPtr> out;
+	std::unordered_map<ibString, ibQueryExprPtr> out;
 	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(column);
 
-	wxString tag;
+	ibString tag;
 	for (const ibColumnSlot& slot : slots)
 		if (slot.m_role == ibColumnRole::Discriminator) {
 			tag = slot.m_name;
@@ -4169,10 +4169,10 @@ std::unordered_map<wxString, ibQueryExprPtr> KeyFieldsAsRead(const ibBackendQuer
 		return out;   // a single raw field has no second way to be empty
 	}
 
-	std::vector<wxString> fields;
+	std::vector<ibString> fields;
 	for (const ibColumnSlot& slot : slots)
 		fields.push_back(slot.m_name);
-	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 	int pos = 1;
 	ibColumnCodec::WriteValue(column, metaData, ibValueTypeDescription::AdjustValue(column->GetTypeDesc(), metaData), &capture, pos);
 	const std::vector<ibQueryExprPtr>& empty = capture.CapturedValues();
@@ -4276,22 +4276,22 @@ bool AccountConditionFoldsHierarchy(const ibQueryPredicatePtr& condition)
 //
 // ONE SIDE IS SUMMED TOO. Its read grouped by the stored fields, and an empty value stored two ways is two
 // of its rows under one key as read (KeyFieldsAsRead) — this is where they become one.
-ibQueryRelPtr SumOfSides(const std::vector<ibQueryRelPtr>& sides, const std::vector<wxString>& keyNames,
-                         const std::vector<wxString>& figureNames, const wxString& alias)
+ibQueryRelPtr SumOfSides(const std::vector<ibQueryRelPtr>& sides, const std::vector<ibString>& keyNames,
+                         const std::vector<ibString>& figureNames, const ibString& alias)
 {
 	ibQueryRelPtr all = sides.front();
 	for (size_t i = 1; i < sides.size(); ++i)
 		all = ibUnionAll(all, sides[i]);
 
-	const wxString unionAlias = alias + wxT("_u");
+	const ibString unionAlias = alias + ibT("_u");
 	std::vector<ibQueryProjItem> projection;
 	std::vector<ibQueryExprPtr>  groupKeys;
-	for (const wxString& name : keyNames) {
+	for (const ibString& name : keyNames) {
 		projection.push_back({ ibCol(unionAlias, name), name });
 		groupKeys.push_back(ibCol(unionAlias, name));
 	}
-	for (const wxString& name : figureNames)
-		projection.push_back({ ibCast(ibFunc(wxT("SUM"), { ibCol(unionAlias, name) }), ibTypeNumber(18, 6)), name });
+	for (const ibString& name : figureNames)
+		projection.push_back({ ibCast(ibFunc(ibT("SUM"), { ibCol(unionAlias, name) }), ibTypeNumber(18, 6)), name });
 
 	return ibAggregate(ibSubquery(all, unionAlias), std::move(projection), std::move(groupKeys));
 }
@@ -4306,11 +4306,11 @@ std::vector<bool> SidesOf(const ibValueMetaObjectAccountingRegister* reg)
 // over which rows, and the stored turnover it is summed from.
 struct ibAcctServerFigure
 {
-	wxString          m_name;
+	ibString          m_name;
 	bool              m_credit;
 	ibMaterializeAgg  m_agg;
 	ibMaterializeWhen m_when;
-	wxString          m_from;    // the stored turnover's logical name, asked of the side's view
+	ibString          m_from;    // the stored turnover's logical name, asked of the side's view
 };
 
 // ⭐ ONE SIDE'S READ, ANSWERING UNDER THE PUBLISHED NAMES. The spec arrives with what does not depend on
@@ -4322,8 +4322,8 @@ ibQueryRelPtr ServerSideRead(const ibValueMetaObjectAccountingRegister* reg, con
                              ibAcctShape shape, bool creditSide, ibMaterializeReadSpec spec,
                              const ibQueryPredicatePtr& filter, const std::vector<ibValue>& kinds,
                              const ibQueryHierarchyScope& accounts,
-                             const std::vector<ibAcctServerFigure>& figures, const wxString& alias,
-                             std::vector<wxString>& keyNames)
+                             const std::vector<ibAcctServerFigure>& figures, const ibString& alias,
+                             std::vector<ibString>& keyNames)
 {
 	const ibBackendQueryable* view = reg->GetTurnoverViewQueryable(creditSide);
 	if (view == nullptr)
@@ -4347,12 +4347,12 @@ ibQueryRelPtr ServerSideRead(const ibValueMetaObjectAccountingRegister* reg, con
 	};
 	for (const ibAcctServerFigure& figure : figures)
 		if (storedHere(figure))
-			spec.m_columns.push_back({ figure.m_name, ibRegPhysicalOf(view, figure.m_from), wxString(),
+			spec.m_columns.push_back({ figure.m_name, ibRegPhysicalOf(view, figure.m_from), ibString(),
 			                           figure.m_agg, figure.m_when, true });
 
 	std::vector<ibQueryProjItem> projection;
 	keyNames.clear();
-	std::unordered_map<const ibBackendQueryColumn*, std::unordered_map<wxString, ibQueryExprPtr>> asRead;
+	std::unordered_map<const ibBackendQueryColumn*, std::unordered_map<ibString, ibQueryExprPtr>> asRead;
 	for (const ibAcctServerKey& key : keys) {
 		auto& fields = asRead[key.m_column];
 		if (fields.empty())
@@ -4373,7 +4373,7 @@ ibQueryRelPtr ServerSideRead(const ibValueMetaObjectAccountingRegister* reg, con
 	// here" where the account does keep it and nothing moved (measured 2026-09-16: the quantity of goods
 	// account 28 inside a July day). Coalesced where the side answers, so the zero is said once.
 	for (const ibAcctServerFigure& figure : figures)
-		projection.push_back({ storedHere(figure) ? ibFunc(wxT("COALESCE"), { ibCol(alias, figure.m_name), ibRegTypedZero() }) : ibRegTypedZero(),
+		projection.push_back({ storedHere(figure) ? ibFunc(ibT("COALESCE"), { ibCol(alias, figure.m_name), ibRegTypedZero() }) : ibRegTypedZero(),
 		                       figure.m_name });
 
 	return ibProject(RenderMaterializedRead(spec, alias), std::move(projection));
@@ -4386,19 +4386,19 @@ ibQueryRelPtr ServerRead(const ibValueMetaObjectAccountingRegister* reg, const i
                          ibAcctShape shape, const ibMaterializeReadSpec& spec,
                          const ibQueryPredicatePtr& filter, const std::vector<ibValue>& kinds,
                          const ibQueryHierarchyScope& accounts,
-                         const std::vector<ibAcctServerFigure>& figures, const wxString& alias,
-                         std::vector<wxString>& keyNames)
+                         const std::vector<ibAcctServerFigure>& figures, const ibString& alias,
+                         std::vector<ibString>& keyNames)
 {
 	std::vector<ibQueryRelPtr> sides;
 	for (bool creditSide : SidesOf(reg)) {
 		ibQueryRelPtr side = ServerSideRead(reg, published, shape, creditSide, spec, filter, kinds, accounts, figures,
-			alias + (creditSide ? wxT("_cr") : wxT("_dr")), keyNames);
+			alias + (creditSide ? ibT("_cr") : ibT("_dr")), keyNames);
 		if (side == nullptr)
 			return nullptr;
 		sides.push_back(side);
 	}
 
-	std::vector<wxString> figureNames;
+	std::vector<ibString> figureNames;
 	for (const ibAcctServerFigure& figure : figures)
 		figureNames.push_back(figure.m_name);
 	return SumOfSides(sides, keyNames, figureNames, alias);
@@ -4425,8 +4425,8 @@ enum class ibAcctTake
 
 struct ibAcctTakeFigure
 {
-	wxString   m_name;      // what the re-keyed read answers under
-	wxString   m_from;      // the read's figure it is taken from
+	ibString   m_name;      // what the re-keyed read answers under
+	ibString   m_from;      // the read's figure it is taken from
 	ibAcctTake m_take;
 };
 
@@ -4441,15 +4441,15 @@ struct ibAcctRegroup
 };
 
 // The name the turnovers-only flag of slot `i` is carried under between the levels.
-wxString TurnoversOnlyFlagName(size_t i)
+ibString TurnoversOnlyFlagName(size_t i)
 {
-	return wxString::Format(wxT("TurnoversOnly%u"), static_cast<unsigned>(i + 1));
+	return ibString::Format(ibT("TurnoversOnly%u"), static_cast<unsigned>(i + 1));
 }
 
 // Every figure the takes read, once — what the lower levels carry up.
-std::vector<wxString> TakenFrom(const std::vector<ibAcctTakeFigure>& figures)
+std::vector<ibString> TakenFrom(const std::vector<ibAcctTakeFigure>& figures)
 {
-	std::vector<wxString> out;
+	std::vector<ibString> out;
 	for (const ibAcctTakeFigure& figure : figures)
 		if (std::find(out.begin(), out.end(), figure.m_from) == out.end())
 			out.push_back(figure.m_from);
@@ -4457,34 +4457,34 @@ std::vector<wxString> TakenFrom(const std::vector<ibAcctTakeFigure>& figures)
 }
 
 // The column a balance-and-turnovers row says it stands on a turnovers-only subconto by (BalanceAndTurnoverArms).
-const wxString& StandsOnTurnoversOnlyName()
+const ibString& StandsOnTurnoversOnlyName()
 {
-	static const wxString s_name(wxT("StandsOnTurnoversOnly"));
+	static const ibString s_name(ibT("StandsOnTurnoversOnly"));
 	return s_name;
 }
 
 // `keyNames` in: the read's key; out: the key the re-keyed read answers under.
 ibQueryRelPtr RegroupServerRead(const ibValueMetaObjectAccountingRegister* reg, const ibQueryRelPtr& read,
-	const ibAcctRegroup& how, const std::vector<ibAcctTakeFigure>& figures, std::vector<wxString>& keyNames,
-	const wxString& alias)
+	const ibAcctRegroup& how, const std::vector<ibAcctTakeFigure>& figures, std::vector<ibString>& keyNames,
+	const ibString& alias)
 {
 	const ibMetaData* metaData = reg->GetMetaData();
-	const wxString r = alias + wxT("_r"), s = alias + wxT("_s"), g = alias + wxT("_g");
-	const std::vector<wxString> carried = TakenFrom(figures);
+	const ibString r = alias + ibT("_r"), s = alias + ibT("_s"), g = alias + ibT("_g");
+	const std::vector<ibString> carried = TakenFrom(figures);
 
 	std::vector<ibAcctBreakdownColumn> stand, asked;
 	DescribeBreakdown(reg, how.m_shape, /*creditSide*/ false, {}, stand);
 	if (!how.m_kinds.empty())
 		DescribeBreakdown(reg, how.m_shape, /*creditSide*/ false, how.m_kinds, asked);
 
-	std::set<wxString> slotFields;   // re-keyed below, never passed through
+	std::set<ibString> slotFields;   // re-keyed below, never passed through
 	std::vector<const ibBackendQueryColumn*> kindOf(stand.size(), nullptr), valueOf(stand.size(), nullptr);
 	for (size_t i = 0; i < stand.size(); ++i) {
 		kindOf[i]  = stand[i].m_kindAlias.IsEmpty() ? nullptr : how.m_asStand->ResolveColumnByName(stand[i].m_kindAlias);
 		valueOf[i] = how.m_asStand->ResolveColumnByName(stand[i].m_alias);
 		for (const ibBackendQueryColumn* column : { kindOf[i], valueOf[i] })
 			if (column != nullptr)
-				for (const wxString& field : ColumnFieldNames(column))
+				for (const ibString& field : ColumnFieldNames(column))
 					slotFields.insert(field);
 	}
 
@@ -4494,20 +4494,20 @@ ibQueryRelPtr RegroupServerRead(const ibValueMetaObjectAccountingRegister* reg, 
 		asksTurnoversOnly = asksTurnoversOnly || figure.m_take == ibAcctTake::UnlessTurnoversOnly;
 	const ibAcctKindsTable kinds = KindsTableOf(reg);
 	const ibBackendQueryColumn* accountCol = how.m_asStand->ResolveColumnByName(PublishedAccountName(reg, how.m_shape));
-	const wxString accountId = accountCol != nullptr ? ibRegFieldOfRole(accountCol, ibColumnRole::ReferenceId) : wxString();
+	const ibString accountId = accountCol != nullptr ? ibRegFieldOfRole(accountCol, ibColumnRole::ReferenceId) : ibString();
 	std::vector<bool> flagged(stand.size(), false);
 	ibQueryRelPtr source = ibSubquery(read, r);
-	wxString below = r;
+	ibString below = r;
 	if (asksTurnoversOnly && kinds.m_rows != nullptr && kinds.m_summaryCol != nullptr && !accountId.IsEmpty()) {
 		std::vector<ibQueryProjItem> level;
-		for (const wxString& name : keyNames)
+		for (const ibString& name : keyNames)
 			level.push_back({ ibCol(r, name), name });
-		for (const wxString& name : carried)
+		for (const ibString& name : carried)
 			level.push_back({ ibCol(r, name), name });
 		for (size_t i = 0; i < stand.size(); ++i) {
 			if (kindOf[i] == nullptr)
 				continue;
-			const wxString k = alias + wxString::Format(wxT("_to%u"), static_cast<unsigned>(i));
+			const ibString k = alias + ibString::Format(ibT("_to%u"), static_cast<unsigned>(i));
 			const ibQueryExprPtr summary = ibBinOp(ibQueryBinOp::And, ibRegSameValueIR(kindOf[i], r, kinds.m_kindCol, k),
 				ibRegCompositeIR(kinds.m_summaryCol, metaData, ibValue(true), ibQueryBinOp::Eq, k));
 			level.push_back({ ibAcctOneIf(KindsRowExists(kinds, r, accountId, summary, k)), TurnoversOnlyFlagName(i) });
@@ -4542,8 +4542,8 @@ ibQueryRelPtr RegroupServerRead(const ibValueMetaObjectAccountingRegister* reg, 
 
 	// --- the keys ---------------------------------------------------------------------------------------------------
 	std::vector<ibQueryProjItem> level;
-	std::vector<wxString> outKeys;
-	for (const wxString& name : keyNames)
+	std::vector<ibString> outKeys;
+	for (const ibString& name : keyNames)
 		if (slotFields.find(name) == slotFields.end()) {
 			level.push_back({ ibCol(below, name), name });
 			outKeys.push_back(name);
@@ -4554,7 +4554,7 @@ ibQueryRelPtr RegroupServerRead(const ibValueMetaObjectAccountingRegister* reg, 
 			for (const ibBackendQueryColumn* column : { kindOf[i], valueOf[i] }) {
 				if (column == nullptr)
 					continue;
-				for (const wxString& field : ColumnFieldNames(column)) {
+				for (const ibString& field : ColumnFieldNames(column)) {
 					const ibQueryExprPtr value = ibCol(below, field);
 					level.push_back({ fold && flagged[i] ? ibCase({ { turnoversOnly(i), ibConst(ibValue()) } }, value) : value, field });
 					outKeys.push_back(field);
@@ -4608,12 +4608,12 @@ ibQueryRelPtr RegroupServerRead(const ibValueMetaObjectAccountingRegister* reg, 
 	// --- the sums ---------------------------------------------------------------------------------------------------
 	std::vector<ibQueryProjItem> projection;
 	std::vector<ibQueryExprPtr> groupKeys;
-	for (const wxString& name : outKeys) {
+	for (const ibString& name : outKeys) {
 		projection.push_back({ ibCol(g, name), name });
 		groupKeys.push_back(ibCol(g, name));
 	}
 	for (const ibAcctTakeFigure& figure : figures)
-		projection.push_back({ ibCast(ibFunc(wxT("SUM"), { ibCol(g, figure.m_name) }), ibTypeNumber(18, 6)), figure.m_name });
+		projection.push_back({ ibCast(ibFunc(ibT("SUM"), { ibCol(g, figure.m_name) }), ibTypeNumber(18, 6)), figure.m_name });
 
 	keyNames = outKeys;
 	return ibAggregate(ibSubquery(ibProject(source, std::move(level)), g), std::move(projection), std::move(groupKeys));
@@ -4630,31 +4630,31 @@ ibQueryRelPtr RegroupServerRead(const ibValueMetaObjectAccountingRegister* reg, 
 // `marker` names the 0/1 column that says which arm a row came from.
 ibQueryRelPtr BalanceAndTurnoverArms(const ibValueMetaObjectAccountingRegister* reg, const ibQueryRelPtr& read,
 	ibAcctRegroup how, const std::vector<ibAcctTakeFigure>& balanceArm, const std::vector<ibAcctTakeFigure>& turnoverArm,
-	std::vector<wxString>& keyNames, const wxString& alias)
+	std::vector<ibString>& keyNames, const ibString& alias)
 {
-	const wxString& marker = StandsOnTurnoversOnlyName();
-	std::vector<wxString> balanceKeys = keyNames, turnoverKeys = keyNames;
+	const ibString& marker = StandsOnTurnoversOnlyName();
+	std::vector<ibString> balanceKeys = keyNames, turnoverKeys = keyNames;
 	how.m_foldTurnoversOnly = true;
-	const ibQueryRelPtr balances = RegroupServerRead(reg, read, how, balanceArm, balanceKeys, alias + wxT("_b"));
+	const ibQueryRelPtr balances = RegroupServerRead(reg, read, how, balanceArm, balanceKeys, alias + ibT("_b"));
 	how.m_foldTurnoversOnly = false;
 	how.m_onlyTurnoversOnly = true;
-	const ibQueryRelPtr turnovers = RegroupServerRead(reg, read, how, turnoverArm, turnoverKeys, alias + wxT("_o"));
+	const ibQueryRelPtr turnovers = RegroupServerRead(reg, read, how, turnoverArm, turnoverKeys, alias + ibT("_o"));
 	if (balances == nullptr)
 		return nullptr;
 	keyNames = balanceKeys;
 
 	// Both arms under one column order — the balance arm's — each with its marker.
-	const auto arm = [&](const ibQueryRelPtr& rel, const std::vector<ibAcctTakeFigure>& figures, int standsOn, const wxString& a) {
+	const auto arm = [&](const ibQueryRelPtr& rel, const std::vector<ibAcctTakeFigure>& figures, int standsOn, const ibString& a) {
 		std::vector<ibQueryProjItem> projection;
-		for (const wxString& name : balanceKeys)
+		for (const ibString& name : balanceKeys)
 			projection.push_back({ ibCol(a, name), name });
 		for (const ibAcctTakeFigure& figure : figures)
 			projection.push_back({ ibCol(a, figure.m_name), figure.m_name });
 		projection.push_back({ ibCast(ibConst(ibValue(standsOn)), ibTypeInteger()), marker });
 		return ibProject(ibSubquery(rel, a), std::move(projection));
 	};
-	const ibQueryRelPtr balanceRows = arm(balances, balanceArm, 0, alias + wxT("_ba"));
-	return turnovers != nullptr ? ibUnionAll(balanceRows, arm(turnovers, turnoverArm, 1, alias + wxT("_oa"))) : balanceRows;
+	const ibQueryRelPtr balanceRows = arm(balances, balanceArm, 0, alias + ibT("_ba"));
+	return turnovers != nullptr ? ibUnionAll(balanceRows, arm(turnovers, turnoverArm, 1, alias + ibT("_oa"))) : balanceRows;
 }
 
 // The accounts a server read is narrowed to. The gate has already sent a condition that reports rows
@@ -4705,7 +4705,7 @@ bool AccountArgumentsReadOnServer(const ibQueryPredicatePtr& accountDr, const ib
 ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg, const ibBackendQueryable* published,
                                  ibAcctShape shape, const ibRegBound& begin, const ibRegBound& end, const ibRegFold& fold,
                                  const ibQueryPredicatePtr& filter, const ibQueryPredicatePtr& accountDr,
-                                 const std::vector<ibValue>& kinds, bool turnoversOnly, const wxString& alias)
+                                 const std::vector<ibValue>& kinds, bool turnoversOnly, const ibString& alias)
 {
 	const ibValueMetaObjectAttributeBase*   period  = reg->GetRegisterPeriod();
 	const ibValueMetaObjectAttributeBase*   account = reg->GetRegisterAccount();
@@ -4716,7 +4716,7 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 	if (periods.empty())
 		return nullptr;
 
-	const wxString periodField = ibRegValueField(period);
+	const ibString periodField = ibRegValueField(period);
 	const ibQueryHierarchyScope accounts = ServerAccounts(reg, published, shape, accountDr);
 
 	// --- the turnovers per key per period --------------------------------------------------------------
@@ -4745,8 +4745,8 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 	for (const auto resource : reg->GetResourceArrayObject()) {
 		if (resource == nullptr)
 			continue;
-		const wxString fromDr = FigureName(resource, ibAcctFigure::TurnoverDr);
-		const wxString fromCr = FigureName(resource, ibAcctFigure::TurnoverCr);
+		const ibString fromDr = FigureName(resource, ibAcctFigure::TurnoverDr);
+		const ibString fromCr = FigureName(resource, ibAcctFigure::TurnoverCr);
 		turnovers.push_back({ FigureField(resource, ibAcctFigure::TurnoverDr), false, ibMaterializeAgg::Value, ibMaterializeWhen::InRange, fromDr });
 		turnovers.push_back({ FigureField(resource, ibAcctFigure::TurnoverCr), true,  ibMaterializeAgg::Value, ibMaterializeWhen::InRange, fromCr });
 		openings.push_back({ FigureField(resource, ibAcctFigure::OpeningBalanceDr), false, ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, fromDr });
@@ -4759,25 +4759,25 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 	const ibBackendQueryable* readShape = rekeys ? reg->GetShapeQueryable(shape, {}, {}, fold) : published;
 	if (readShape == nullptr)
 		return nullptr;
-	std::vector<wxString> turnKeys, keyNames;
-	ibQueryRelPtr turnRead = ServerRead(reg, readShape, shape, t, filter, kinds, accounts, turnovers, alias + wxT("_ptr"), turnKeys);
-	ibQueryRelPtr openRead = ServerRead(reg, readShape, shape, o, filter, kinds, accounts, openings, alias + wxT("_por"), keyNames);
+	std::vector<ibString> turnKeys, keyNames;
+	ibQueryRelPtr turnRead = ServerRead(reg, readShape, shape, t, filter, kinds, accounts, turnovers, alias + ibT("_ptr"), turnKeys);
+	ibQueryRelPtr openRead = ServerRead(reg, readShape, shape, o, filter, kinds, accounts, openings, alias + ibT("_por"), keyNames);
 	if (turnRead == nullptr || openRead == nullptr)
 		return nullptr;
 
 	// --- the grid and its running balances, one per side of each resource (registerQueryLowering.h) ----------
 	// With turnovers-only subcontos a balance runs on every turnover of its key and reports its own rows' only: the
 	// running sum reads the turnovers `…WithLent`, the period reports the plain ones.
-	std::vector<wxString> passThrough;
+	std::vector<ibString> passThrough;
 	std::vector<ibRegRunningFigure> running;
 	std::vector<ibAcctTakeFigure> turnTakes, openTakes, standingTakes;
 	for (const auto resource : reg->GetResourceArrayObject()) {
 		if (resource == nullptr)
 			continue;
 		for (const bool credit : { false, true }) {
-			const wxString turnName = FigureField(resource, credit ? ibAcctFigure::TurnoverCr : ibAcctFigure::TurnoverDr);
-			const wxString openName = FigureField(resource, credit ? ibAcctFigure::OpeningBalanceCr : ibAcctFigure::OpeningBalanceDr);
-			const wxString runName  = turnoversOnly ? turnName + wxT("WithLent") : turnName;
+			const ibString turnName = FigureField(resource, credit ? ibAcctFigure::TurnoverCr : ibAcctFigure::TurnoverDr);
+			const ibString openName = FigureField(resource, credit ? ibAcctFigure::OpeningBalanceCr : ibAcctFigure::OpeningBalanceDr);
+			const ibString runName  = turnoversOnly ? turnName + ibT("WithLent") : turnName;
 			passThrough.push_back(turnName);
 			running.push_back({ runName, openName, openName,
 				FigureField(resource, credit ? ibAcctFigure::ClosingBalanceCr : ibAcctFigure::ClosingBalanceDr) });
@@ -4798,13 +4798,13 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 		how.m_kinds             = kinds;
 		how.m_foldTurnoversOnly = turnoversOnly;
 		const ibQueryRelPtr asStand = turnRead;
-		std::vector<wxString> standingKeys = turnKeys;
-		openRead = RegroupServerRead(reg, openRead, how, openTakes, keyNames, alias + wxT("_pgo"));
-		turnRead = RegroupServerRead(reg, turnRead, how, turnTakes, turnKeys, alias + wxT("_pgt"));
+		std::vector<ibString> standingKeys = turnKeys;
+		openRead = RegroupServerRead(reg, openRead, how, openTakes, keyNames, alias + ibT("_pgo"));
+		turnRead = RegroupServerRead(reg, turnRead, how, turnTakes, turnKeys, alias + ibT("_pgt"));
 		if (turnoversOnly) {
 			how.m_foldTurnoversOnly = false;
 			how.m_onlyTurnoversOnly = true;
-			standing = RegroupServerRead(reg, asStand, how, standingTakes, standingKeys, alias + wxT("_pgs"));
+			standing = RegroupServerRead(reg, asStand, how, standingTakes, standingKeys, alias + ibT("_pgs"));
 		}
 	}
 
@@ -4815,12 +4815,12 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 	// …and the rows standing on a turnovers-only subconto under it, in its column order, marked (BalanceAndTurnoverArms).
 	const bool marked = standing != nullptr;
 	if (marked) {
-		const auto arm = [&](const ibQueryRelPtr& rel, bool standsOn, const wxString& a) {
+		const auto arm = [&](const ibQueryRelPtr& rel, bool standsOn, const ibString& a) {
 			std::vector<ibQueryProjItem> projection;
-			for (const wxString& name : keyNames)
+			for (const ibString& name : keyNames)
 				projection.push_back({ ibCol(a, name), name });
 			projection.push_back({ ibCol(a, periodField), periodField });
-			for (const wxString& name : passThrough)
+			for (const ibString& name : passThrough)
 				projection.push_back({ ibCol(a, name), name });
 			for (const ibRegRunningFigure& figure : running) {
 				projection.push_back({ standsOn ? ibRegTypedZero() : ibCol(a, figure.m_openingOut), figure.m_openingOut });
@@ -4829,25 +4829,25 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 			projection.push_back({ ibCast(ibConst(ibValue(standsOn ? 1 : 0)), ibTypeInteger()), StandsOnTurnoversOnlyName() });
 			return ibProject(ibSubquery(rel, a), std::move(projection));
 		};
-		grid = ibUnionAll(arm(grid, false, alias + wxT("_pga")), arm(standing, true, alias + wxT("_psa")));
+		grid = ibUnionAll(arm(grid, false, alias + ibT("_pga")), arm(standing, true, alias + ibT("_psa")));
 	}
-	const wxString aR = alias + wxT("_pr"), aA = alias + wxT("_pa");
+	const ibString aR = alias + ibT("_pr"), aA = alias + ibT("_pa");
 	const ibQueryRelPtr rows = ibSubquery(grid, aR);
 
 	// --- folded by the account's type, as the unperiodised reading folds --------------------------------------
 	ibQueryRelPtr joined = ibJoin(rows, ibScan(chart->GetQueryable()->GetQueryTableName(), aA),
 		ibRegSameValueIR(account->GetQueryColumn(), aR, chart->GetDataReference()->GetQueryColumn(), aA), ibQueryJoinType::Left);
-	std::vector<wxString> subcontos;   // …and the breakdown slots to their kinds rows (JoinSubcontoKinds)
+	std::vector<ibString> subcontos;   // …and the breakdown slots to their kinds rows (JoinSubcontoKinds)
 	if (AnyFigureKeptByBreakdown(reg))
 		joined = JoinSubcontoKinds(reg, joined, account->GetQueryColumn(), aR,
-			SlotKindsOf(reg, published, shape, /*creditSide*/ false, kinds), alias + wxT("_s"), subcontos);
+			SlotKindsOf(reg, published, shape, /*creditSide*/ false, kinds), alias + ibT("_s"), subcontos);
 	const ibQueryExprPtr accountType = ibCol(aA, ibRegValueField(chart->GetAccountType()));
-	const ibQueryExprPtr apFolds = FullAnalyticsOnServer(reg, kinds, aR, account->GetQueryColumn(), alias + wxT("_fa"));
+	const ibQueryExprPtr apFolds = FullAnalyticsOnServer(reg, kinds, aR, account->GetQueryColumn(), alias + ibT("_fa"));
 	const ibQueryExprPtr keepsBalance = marked
 		? ibBinOp(ibQueryBinOp::Eq, ibCol(aR, StandsOnTurnoversOnlyName()), ibCast(ibConst(ibValue(0)), ibTypeInteger())) : nullptr;
 
 	std::vector<ibQueryProjItem> projection;
-	for (const wxString& name : keyNames)
+	for (const ibString& name : keyNames)
 		projection.push_back({ ibCol(aR, name), name });
 	projection.push_back({ ibCol(aR, periodField), periodField });
 	ibQueryExprPtr anyFigure;
@@ -4867,8 +4867,8 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 		nonZero(turnDr);
 		nonZero(turnCr);
 		const ibQueryExprPtr balanceKept = BothKept(kept, keepsBalance);   // …and none on a turnovers-only row
-		const auto foldPair = [&](const wxString& debitName, const wxString& creditName,
-			const wxString& grossDebitName, const wxString& grossCreditName, const wxString& netName) {
+		const auto foldPair = [&](const ibString& debitName, const ibString& creditName,
+			const ibString& grossDebitName, const ibString& grossCreditName, const ibString& netName) {
 			const ibQueryExprPtr grossDr = ibCol(aR, debitName);
 			const ibQueryExprPtr grossCr = ibCol(aR, creditName);
 			const auto folded = FoldedPairOnServer(accountType, grossDr, grossCr, apFolds);
@@ -4936,7 +4936,7 @@ bool ibAcctTurnoverQueryable::CanReadOnServer() const
 	return true;
 }
 
-ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const wxString& alias) const
+ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const ibString& alias) const
 {
 	if (!CanReadOnServer())
 		return nullptr;
@@ -4982,8 +4982,8 @@ ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const wxString& alias) 
 		                    FigureName(resource, ibAcctFigure::TurnoverCr) });
 	}
 
-	const wxString innerAlias = alias + wxT("_t");
-	std::vector<wxString> keyNames;
+	const ibString innerAlias = alias + ibT("_t");
+	std::vector<ibString> keyNames;
 	// By kind: read as the slots stand, and re-keyed by the kinds asked (RegroupServerRead). A turnover keeps its
 	// turnovers-only subcontos — only a balance leaves them out.
 	const ibBackendQueryable* readShape = m_kindsDr.empty() ? this : m_reg->GetShapeQueryable(m_shape, {}, {}, Fold());
@@ -5000,7 +5000,7 @@ ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const wxString& alias) 
 		std::vector<ibAcctTakeFigure> takes;
 		for (const ibAcctServerFigure& figure : figures)
 			takes.push_back({ figure.m_name, figure.m_name, ibAcctTake::AsRead });
-		read = RegroupServerRead(m_reg, read, how, takes, keyNames, innerAlias + wxT("_k"));
+		read = RegroupServerRead(m_reg, read, how, takes, keyNames, innerAlias + ibT("_k"));
 	}
 	if (read == nullptr)
 		return nullptr;
@@ -5010,7 +5010,7 @@ ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const wxString& alias) 
 	// …and EMPTY where the row's account keeps no such accounting — which needs the account's row of the
 	// chart, joined exactly as the balance reading joins it, and only when some figure depends on it.
 	ibQueryRelPtr source = ibSubquery(read, innerAlias);
-	const wxString chartAlias = alias + wxT("_a");
+	const ibString chartAlias = alias + ibT("_a");
 	const ibValueMetaObjectChartOfAccounts* chart = m_reg->GetChartOfAccounts();
 	const bool judged = AnyFigureKeptByKind(m_reg) && chart != nullptr && chart->GetDataReference() != nullptr
 		&& chart->GetQueryable() != nullptr;
@@ -5019,13 +5019,13 @@ ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const wxString& alias) 
 			ibRegSameValueIR(account->GetQueryColumn(), innerAlias, chart->GetDataReference()->GetQueryColumn(), chartAlias),
 			ibQueryJoinType::Left);
 	// …and the breakdown slots to their kinds rows, for a figure kept by subconto (JoinSubcontoKinds).
-	std::vector<wxString> subcontos;
+	std::vector<ibString> subcontos;
 	if (AnyFigureKeptByBreakdown(m_reg))
 		source = JoinSubcontoKinds(m_reg, source, account->GetQueryColumn(), innerAlias,
 			SlotKindsOf(m_reg, this, m_shape, /*creditSide*/ false, m_kindsDr), alias, subcontos);
 
 	std::vector<ibQueryProjItem> projection;
-	for (const wxString& name : keyNames)
+	for (const ibString& name : keyNames)
 		projection.push_back({ ibCol(innerAlias, name), name });
 	for (const auto resource : m_reg->GetResourceArrayObject()) {
 		if (resource == nullptr)
@@ -5138,7 +5138,7 @@ bool ibAcctBalanceQueryable::CanReadOnServer() const
 	return true;
 }
 
-ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const wxString& alias) const
+ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const ibString& alias) const
 {
 	if (!CanReadOnServer())
 		return nullptr;
@@ -5181,10 +5181,10 @@ ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const wxString& alias) c
 	if (figures.empty())
 		return nullptr;   // nothing to report on this road; the RAM reading says the same, in rows
 
-	const wxString innerAlias = alias + wxT("_t");
-	const wxString chartAlias = alias + wxT("_a");
+	const ibString innerAlias = alias + ibT("_t");
+	const ibString chartAlias = alias + ibT("_a");
 
-	std::vector<wxString> keyNames;
+	std::vector<ibString> keyNames;
 	// By kind, or with a turnovers-only subconto leaving the balance key: read as the slots stand and re-keyed
 	// (RegroupServerRead).
 	const bool turnoversOnly = AnyTurnoverOnlyKind(chart);
@@ -5204,7 +5204,7 @@ ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const wxString& alias) c
 		std::vector<ibAcctTakeFigure> takes;
 		for (const ibAcctServerFigure& figure : figures)
 			takes.push_back({ figure.m_name, figure.m_name, ibAcctTake::AsRead });
-		read = RegroupServerRead(m_reg, read, how, takes, keyNames, innerAlias + wxT("_k"));
+		read = RegroupServerRead(m_reg, read, how, takes, keyNames, innerAlias + ibT("_k"));
 	}
 	if (read == nullptr)
 		return nullptr;
@@ -5229,7 +5229,7 @@ ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const wxString& alias) c
 		ibScan(chartRows->GetQueryTableName(), chartAlias), on, ibQueryJoinType::Left);
 
 	// …and each breakdown slot to its account's kinds row, for a figure kept by subconto (JoinSubcontoKinds).
-	std::vector<wxString> subcontos;
+	std::vector<ibString> subcontos;
 	if (AnyFigureKeptByBreakdown(m_reg))
 		joined = JoinSubcontoKinds(m_reg, joined, account->GetQueryColumn(), innerAlias,
 			SlotKindsOf(m_reg, this, m_shape, /*creditSide*/ false, m_kindsDr), alias, subcontos);
@@ -5245,11 +5245,11 @@ ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const wxString& alias) c
 	//                  paid 60 owes 40; a receivable and a payable of two DIFFERENT counterparties are two
 	//                  rows and are never netted
 	std::vector<ibQueryProjItem> projection;
-	for (const wxString& name : keyNames)
+	for (const ibString& name : keyNames)
 		projection.push_back({ ibCol(innerAlias, name), name });
 
 	const ibQueryExprPtr accountType = ibCol(chartAlias, ibRegValueField(chart->GetAccountType()));
-	const ibQueryExprPtr apFolds = FullAnalyticsOnServer(m_reg, m_kindsDr, innerAlias, account->GetQueryColumn(), alias + wxT("_fa"));
+	const ibQueryExprPtr apFolds = FullAnalyticsOnServer(m_reg, m_kindsDr, innerAlias, account->GetQueryColumn(), alias + ibT("_fa"));
 
 	for (const auto resource : m_reg->GetResourceArrayObject()) {
 		if (resource == nullptr)
@@ -5289,7 +5289,7 @@ bool ibAcctDrCrTurnoverQueryable::CanReadOnServer() const
 	return m_reg != nullptr && m_reg->IsCorrespondence();
 }
 
-ibQueryRelPtr ibAcctDrCrTurnoverQueryable::GetSourceRelation(const wxString& alias) const
+ibQueryRelPtr ibAcctDrCrTurnoverQueryable::GetSourceRelation(const ibString& alias) const
 {
 	if (!CanReadOnServer())
 		return nullptr;
@@ -5369,7 +5369,7 @@ bool ibAcctBalanceAndTurnoverQueryable::CanReadOnServer() const
 	return true;
 }
 
-ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& alias) const
+ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const ibString& alias) const
 {
 	if (!CanReadOnServer())
 		return nullptr;
@@ -5377,7 +5377,7 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 	// Per period: every period of the interval for every key — a calendar, see PeriodisedOnServer.
 	if (m_fold.HasPeriod()) {
 		const ibQueryRelPtr periodised = PeriodisedOnServer(m_reg, this, m_shape, m_begin, m_end, m_fold,
-			m_filter, m_accountDr, m_kindsDr, AnyTurnoverOnlyKind(m_reg->GetChartOfAccounts()), alias + wxT("_t"));
+			m_filter, m_accountDr, m_kindsDr, AnyTurnoverOnlyKind(m_reg->GetChartOfAccounts()), alias + ibT("_t"));
 		return periodised != nullptr ? ibSubquery(periodised, alias) : nullptr;
 	}
 
@@ -5419,8 +5419,8 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 	for (const auto resource : m_reg->GetResourceArrayObject()) {
 		if (resource == nullptr)
 			continue;
-		const wxString fromDr = FigureName(resource, ibAcctFigure::TurnoverDr);
-		const wxString fromCr = FigureName(resource, ibAcctFigure::TurnoverCr);
+		const ibString fromDr = FigureName(resource, ibAcctFigure::TurnoverDr);
+		const ibString fromCr = FigureName(resource, ibAcctFigure::TurnoverCr);
 
 		// The turnover half is reported for EVERY resource — what moved in the interval, periodised or
 		// not. Grouped by the period it looks redundant, and it is not: the read carries the history the
@@ -5449,13 +5449,13 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 	if (figures.empty())
 		return nullptr;
 
-	const wxString innerAlias = alias + wxT("_t");
-	const wxString chartAlias = alias + wxT("_a");
+	const ibString innerAlias = alias + ibT("_t");
+	const ibString chartAlias = alias + ibT("_a");
 
 	// Both sides of a correspondence register, summed by the key — see the balance reading. The period
 	// is among the key's names when the read is cut into periods (the read groups by it, and the answer
 	// has to say WHICH period).
-	std::vector<wxString> keyNames;
+	std::vector<ibString> keyNames;
 	// By kind, or with turnovers-only subcontos, read as the slots stand and re-keyed (RegroupServerRead) — the
 	// latter as two arms, the balances by their key and the turnovers along such a subconto by it
 	// (BalanceAndTurnoverArms).
@@ -5480,8 +5480,8 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 			turnoverArm.push_back({ figure.m_name, figure.m_name, moved ? ibAcctTake::AsRead : ibAcctTake::Zero });
 		}
 		read = turnoversOnly
-			? BalanceAndTurnoverArms(m_reg, read, how, balanceArm, turnoverArm, keyNames, innerAlias + wxT("_k"))
-			: RegroupServerRead(m_reg, read, how, balanceArm, keyNames, innerAlias + wxT("_k"));
+			? BalanceAndTurnoverArms(m_reg, read, how, balanceArm, turnoverArm, keyNames, innerAlias + ibT("_k"))
+			: RegroupServerRead(m_reg, read, how, balanceArm, keyNames, innerAlias + ibT("_k"));
 	}
 	if (read == nullptr)
 		return nullptr;
@@ -5494,13 +5494,13 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 
 	ibQueryRelPtr joined = ibJoin(ibSubquery(read, innerAlias),
 		ibScan(chartRows->GetQueryTableName(), chartAlias), on, ibQueryJoinType::Left);
-	std::vector<wxString> subcontos;   // …and the breakdown slots to their kinds rows — the balance reading's
+	std::vector<ibString> subcontos;   // …and the breakdown slots to their kinds rows — the balance reading's
 	if (AnyFigureKeptByBreakdown(m_reg))
 		joined = JoinSubcontoKinds(m_reg, joined, account->GetQueryColumn(), innerAlias,
 			SlotKindsOf(m_reg, this, m_shape, /*creditSide*/ false, m_kindsDr), alias, subcontos);
 
 	std::vector<ibQueryProjItem> projection;
-	for (const wxString& name : keyNames)
+	for (const ibString& name : keyNames)
 		projection.push_back({ ibCol(innerAlias, name), name });
 
 	// The turnovers pass through UNFOLDED — see the note above the gate — and carry their sideless
@@ -5519,12 +5519,12 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 	}
 
 	const ibQueryExprPtr accountType = ibCol(chartAlias, ibRegValueField(chart->GetAccountType()));
-	const ibQueryExprPtr apFolds = FullAnalyticsOnServer(m_reg, m_kindsDr, innerAlias, account->GetQueryColumn(), alias + wxT("_fa"));
+	const ibQueryExprPtr apFolds = FullAnalyticsOnServer(m_reg, m_kindsDr, innerAlias, account->GetQueryColumn(), alias + ibT("_fa"));
 	// ⭐ THREE READINGS OF ONE MOMENT, projected together: the GROSS pair as the inner read holds it,
 	// the folded pair, and the sideless net taken from the folded one — the same three the RAM road
 	// fills, so a reading answers the same whichever road it took.
-	const auto foldPair = [&](const ibQueryExprPtr& kept, const wxString& debitName, const wxString& creditName,
-		const wxString& grossDebitName, const wxString& grossCreditName, const wxString& netName) {
+	const auto foldPair = [&](const ibQueryExprPtr& kept, const ibString& debitName, const ibString& creditName,
+		const ibString& grossDebitName, const ibString& grossCreditName, const ibString& netName) {
 		const ibQueryExprPtr grossDr = ibCol(innerAlias, debitName);
 		const ibQueryExprPtr grossCr = ibCol(innerAlias, creditName);
 		projection.push_back({ FigureWhereKept(kept, grossDr), grossDebitName });
@@ -5560,7 +5560,7 @@ ibQueryRamTable ibAcctBalanceAndTurnoverQueryable::ComputeRows(const std::vector
 	return table;
 }
 
-ibQueryRelPtr ibAcctRecordsQueryable::GetSourceRelation(const wxString& alias) const
+ibQueryRelPtr ibAcctRecordsQueryable::GetSourceRelation(const ibString& alias) const
 {
 	if (!CanReadOnServer())
 		return nullptr;
@@ -5605,7 +5605,7 @@ public:
 		return m_reg->GetShapeQueryable(m_shape, {}, {}, fold);
 	}
 
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		const ibBackendQueryable* shape = Shape();
 		return shape != nullptr ? shape->ResolveColumnByName(name) : nullptr;
 	}
@@ -5620,9 +5620,9 @@ public:
 		const ibBackendQueryable* shape = Shape();
 		return shape != nullptr ? shape->GetProvider() : ibBackendQueryable::GetProvider();
 	}
-	wxString GetQueryTableName() const override {
+	ibString GetQueryTableName() const override {
 		const ibBackendQueryable* shape = Shape();
-		return shape != nullptr ? shape->GetQueryTableName() : wxString();
+		return shape != nullptr ? shape->GetQueryTableName() : ibString();
 	}
 	const ibMetaData* GetMetaData() const override { return m_reg->GetMetaData(); }
 
@@ -5633,7 +5633,7 @@ private:
 
 ibAcctSourceDescriptor::~ibAcctSourceDescriptor() = default;
 
-wxString ibAcctSourceDescriptor::GetNamespace() const
+ibString ibAcctSourceDescriptor::GetNamespace() const
 {
 	return ibValue::GetNameObjectFromID(m_reg->GetClassType());
 }
@@ -5643,16 +5643,16 @@ namespace {
 // The word a reading is addressed by. `RecordsWithAccountDimensions` is long on purpose: it is the
 // movements table WITH the slots widened, and a shorter name would collide with the register itself,
 // which is already addressable and means something different.
-wxString ShapeWord(ibAcctShape shape)
+ibString ShapeWord(ibAcctShape shape)
 {
 	switch (shape) {
-	case ibAcctShape::Balance:             return wxT("Balance");
-	case ibAcctShape::Turnovers:           return wxT("Turnovers");
-	case ibAcctShape::DrCrTurnovers:       return wxT("DrCrTurnovers");
-	case ibAcctShape::BalanceAndTurnovers: return wxT("BalanceAndTurnovers");
-	case ibAcctShape::Records:             return wxT("RecordsWithAccountDimensions");
+	case ibAcctShape::Balance:             return ibT("Balance");
+	case ibAcctShape::Turnovers:           return ibT("Turnovers");
+	case ibAcctShape::DrCrTurnovers:       return ibT("DrCrTurnovers");
+	case ibAcctShape::BalanceAndTurnovers: return ibT("BalanceAndTurnovers");
+	case ibAcctShape::Records:             return ibT("RecordsWithAccountDimensions");
 	}
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 // A shape's column, shown in the catalogue as the ATTRIBUTE where there is one. A column that IS the
@@ -5693,9 +5693,9 @@ void FillExplorerFromShape(const ibValueMetaObjectAccountingRegister* reg, ibAcc
 
 } // namespace
 
-wxString ibAcctSourceDescriptor::GetName() const
+ibString ibAcctSourceDescriptor::GetName() const
 {
-	return m_reg->GetName() + wxT(".") + ShapeWord(m_shape);
+	return m_reg->GetName() + ibT(".") + ShapeWord(m_shape);
 }
 
 ibAcctCallArgs ibAcctParseCall(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape,
@@ -5746,11 +5746,11 @@ ibAcctCallArgs ibAcctParseCall(const ibValueMetaObjectAccountingRegister* reg, i
 	const auto refuseBeyondSlots = [&](const std::vector<ibValue>& kinds, bool creditSide) {
 		if (kinds.size() <= slots)
 			return;
-		const wxString field = creditSide && !PairedRow(reg, shape)
+		const ibString field = creditSide && !PairedRow(reg, shape)
 			? ibValueMetaObjectAccountingRegister::CorrAccountDimensionColumnName(slots + 1)
 			: ibValueMetaObjectAccountingRegister::AccountDimensionColumnName(SidePrefix(reg, shape, creditSide), slots + 1);
 		ibBackendQueryNameException::Error(_("unknown attribute '%s' on source '%s'"),
-			field, reg->GetName() + wxT(".") + ShapeWord(shape));
+			field, reg->GetName() + ibT(".") + ShapeWord(shape));
 	};
 	refuseBeyondSlots(call.m_kindsDr, /*creditSide*/ false);
 	refuseBeyondSlots(call.m_kindsCr, /*creditSide*/ true);
@@ -5819,14 +5819,14 @@ bool ReadsCorrespondent(const ibValueMetaObjectAccountingRegister* reg, const st
 	if (read.Reads(Reg::CorrAccountColumnName()))
 		return true;
 	for (unsigned int no = 1; no <= BreakdownWidth(reg, kindsCr); no++)
-		if (read.Reads(Reg::CorrAccountDimensionColumnName(no)) || read.Reads(Reg::CorrAccountDimensionColumnName(no) + wxT("Kind")))
+		if (read.Reads(Reg::CorrAccountDimensionColumnName(no)) || read.Reads(Reg::CorrAccountDimensionColumnName(no) + ibT("Kind")))
 			return true;
 	for (const auto dimension : reg->GetDimensionArrayObject())
 		if (dimension != nullptr && read.Reads(Reg::CorrFieldColumnName(dimension->GetName())))
 			return true;
 	for (const auto resource : reg->GetResourceArrayObject())
 		if (resource != nullptr)
-			for (const wxString& suffix : { wxString(ibRegFigure::CorrTurnover), ibAcctFigure::CorrTurnoverDr, ibAcctFigure::CorrTurnoverCr })
+			for (const ibString& suffix : { ibString(ibRegFigure::CorrTurnover), ibAcctFigure::CorrTurnoverDr, ibAcctFigure::CorrTurnoverCr })
 				if (read.Reads(FigureName(resource, suffix)))
 					return true;
 	return false;
@@ -5848,7 +5848,7 @@ const ibBackendQueryable* ibAcctSourceDescriptor::CreateQueryable(ibValue** paPa
 	// chart) SELECTS among them, and joins the condition, which every pass applies before it folds.
 	const ibAcctConditionScope* scope = static_cast<const ibAcctConditionScope*>(GetConditionScope());
 	const auto takeAccounts = [&](const ibQueryPredicatePtr& written, const ibValueMetaObjectAttributeBase* account,
-	                              const wxString& publishedName, ibQueryPredicatePtr& into) {
+	                              const ibString& publishedName, ibQueryPredicatePtr& into) {
 		if (!written || account == nullptr)
 			return;
 		const ibBackendQueryColumn* published = scope != nullptr ? scope->ResolveColumnByName(publishedName) : nullptr;
@@ -5952,8 +5952,8 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 
 	// ⚠ DECLARED FROM THE SAME LAYOUT THE CALL IS READ BY. Two lists that must agree, derived from one
 	// — which is the only arrangement in which they cannot drift apart.
-	const auto push = [&out](const wxString& name, const ibTypeDescription& type,
-		const wxString& description = wxEmptyString) {
+	const auto push = [&out](const ibString& name, const ibTypeDescription& type,
+		const ibString& description = ibEmptyString) {
 		ibQuerySourceParameter parameter;
 		parameter.m_name        = name;
 		parameter.m_type        = type;
@@ -5964,7 +5964,7 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 	// A PREDICATE slot — the author writes a condition here, not a value. `consumed` marks the ones
 	// this SOURCE takes for itself instead of letting them be ANDed into the query around it: the
 	// account conditions, because a reading folds by them and a filter around it could only select.
-	const auto pushCondition = [&out](const wxString& name, bool consumed = false) {
+	const auto pushCondition = [&out](const ibString& name, bool consumed = false) {
 		ibQuerySourceParameter parameter;
 		parameter.m_name             = name;
 		parameter.m_condition        = true;
@@ -5997,7 +5997,7 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 	if (layout.m_end >= 0)
 		ibFillRegisterIntervalParameters(periodType, out);
 	else
-		push(wxT("Period"), periodType,
+		push(ibT("Period"), periodType,
 			_("AS OF WHEN the balance stands - one moment, not an interval. It may name a DOCUMENT "
 			  "rather than a date, which is how \"the balance as of this entry\" is asked."));
 
@@ -6008,13 +6008,13 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 	// …and what to do with a period nothing moved in.
 	if (layout.m_fillMethod >= 0) {
 		ibQuerySourceParameter fill;
-		fill.m_name    = wxT("FillMethod");
+		fill.m_name    = ibT("FillMethod");
 		fill.m_description = _("What to do with a period nothing moved in: report only the periods "
 		                       "that have movements, or a row on every period boundary of the "
 		                       "interval - which is what a month-by-month column needs so the "
 		                       "quiet months are not simply missing.");
-		fill.m_choices = { wxT("Movements"), wxT("MovementsAndPeriodBoundaries") };
-		fill.m_default = wxT("Movements");
+		fill.m_choices = { ibT("Movements"), ibT("MovementsAndPeriodBoundaries") };
+		fill.m_default = ibT("Movements");
 		out.push_back(fill);
 	}
 
@@ -6035,14 +6035,14 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 	// the matrix names two symmetric sides and calls them Dr and Cr.
 	const bool symmetricSides = (m_shape == ibAcctShape::DrCrTurnovers);
 	if (layout.m_accountDr >= 0)
-		pushCondition(layout.m_accountCr >= 0 && symmetricSides ? wxT("AccountConditionDr") : wxT("AccountCondition"), /*consumed*/ true);
+		pushCondition(layout.m_accountCr >= 0 && symmetricSides ? ibT("AccountConditionDr") : ibT("AccountCondition"), /*consumed*/ true);
 
 	// The breakdown. Typed by the KIND — an element of the chart of characteristic types — because
 	// that is what is passed: one kind, or an array of them in the order the columns should come out.
 	const ibValueMetaObjectAttributeBase* kindSlot = m_reg->GetRegisterAccountDimensionKind(0);
 	const ibTypeDescription kindType = kindSlot != nullptr ? kindSlot->GetTypeDesc() : ibTypeDescription();
 	if (layout.m_kindsDr >= 0)
-		push(layout.m_kindsCr >= 0 && symmetricSides ? wxT("AccountDimensionsDr") : wxT("AccountDimensions"), kindType,
+		push(layout.m_kindsCr >= 0 && symmetricSides ? ibT("AccountDimensionsDr") : ibT("AccountDimensions"), kindType,
 			_("WHICH BREAKDOWN to report, as a KIND from the chart of characteristic types - or an "
 			  "array of kinds, in the order the columns should come out. Not a filter: it says what "
 			  "the figures are split BY. Left out, the reading reports the account's own totals with "
@@ -6054,9 +6054,9 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 		ibAppendRegisterConditionParameter(out);
 
 	if (layout.m_accountCr >= 0)
-		pushCondition(symmetricSides ? wxT("AccountConditionCr") : wxT("CorrAccountCondition"), /*consumed*/ true);
+		pushCondition(symmetricSides ? ibT("AccountConditionCr") : ibT("CorrAccountCondition"), /*consumed*/ true);
 	if (layout.m_kindsCr >= 0)
-		push(wxT("AccountDimensionsCr"), kindType,
+		push(ibT("AccountDimensionsCr"), kindType,
 			_("The same, for the credit side of the matrix."));
 
 	if (layout.m_condition >= 0 && symmetricSides)
@@ -6112,7 +6112,7 @@ void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceE
 	if (scope == nullptr)
 		return;
 	const bool paired = PairedRow(m_reg, m_shape);
-	const auto offer = [&explorer, scope](const wxString& name) {
+	const auto offer = [&explorer, scope](const ibString& name) {
 		if (const ibBackendQueryColumn* column = scope->ResolveColumnByName(name))
 			explorer.AppendColumn(column, /*enabled*/ true, /*visible*/ true);
 	};
@@ -6162,12 +6162,12 @@ void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceE
 //
 // The general `Condition` is the place for everything else, and it answers with the list above.
 void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
-                                                   const wxString& slot) const
+                                                   const ibString& slot) const
 {
 	if (m_reg == nullptr)
 		return;
 
-	if (!slot.Contains(wxT("AccountCondition")) && !slot.Contains(wxT("CorrAccountCondition"))) {
+	if (!slot.Contains(ibT("AccountCondition")) && !slot.Contains(ibT("CorrAccountCondition"))) {
 		FillConditionExplorer(explorer);   // the general condition — dimensions and the analytics values
 		return;
 	}
@@ -6180,15 +6180,15 @@ void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceE
 	// ⭐ AND THE ACCOUNT IS OFFERED BY THE NAME THE TABLE IS SELECTED BY: `Account` in a balance or a
 	// turnover, `AccountDr` / `AccountCr` in the matrix. A table that is not selected by a credit account
 	// is not offered one; the corresponding-account slot of a turnover offers `CorrAccount`.
-	const bool corrSlot   = slot.Contains(wxT("CorrAccountCondition"));
-	const bool creditSide = !corrSlot && slot.Contains(wxT("Cr"));
+	const bool corrSlot   = slot.Contains(ibT("CorrAccountCondition"));
+	const bool creditSide = !corrSlot && slot.Contains(ibT("Cr"));
 	const ibAcctConditionScope* scope = static_cast<const ibAcctConditionScope*>(GetConditionScope());
 	if (scope == nullptr)
 		return;
 	const ibValueMetaObjectAttributeBase* const accountCr = m_reg->GetRegisterAccountCr();
-	const wxString name = corrSlot ? (m_shape == ibAcctShape::Turnovers ? ibValueMetaObjectAccountingRegister::CorrAccountColumnName() : wxString())
+	const ibString name = corrSlot ? (m_shape == ibAcctShape::Turnovers ? ibValueMetaObjectAccountingRegister::CorrAccountColumnName() : ibString())
 		: !creditSide ? PublishedAccountName(m_reg, m_shape)
-		: (PairedRow(m_reg, m_shape) && accountCr != nullptr ? accountCr->GetName() : wxString());
+		: (PairedRow(m_reg, m_shape) && accountCr != nullptr ? accountCr->GetName() : ibString());
 	if (const ibBackendQueryColumn* column = name.IsEmpty() ? nullptr : scope->ResolveColumnByName(name))
 		explorer.AppendColumn(column, /*enabled*/ true, /*visible*/ true);
 }

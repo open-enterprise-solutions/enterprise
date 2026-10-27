@@ -36,17 +36,17 @@ private:
 			{
 			}
 
-			ibEventOptionItem(const wxString& name, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) :
+			ibEventOptionItem(const ibString& name, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) :
 				m_isOk(true), m_strName(name), m_strLabel(name), m_picture(p), m_id(l), m_value(v)
 			{
 			}
 
-			ibEventOptionItem(const wxString& name, const wxString& label, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) :
+			ibEventOptionItem(const ibString& name, const ibString& label, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) :
 				m_isOk(true), m_strName(name), m_strLabel(label), m_picture(p), m_id(l), m_value(v)
 			{
 			}
 
-			ibEventOptionItem(const wxString& name, const wxString& label, const wxString& help, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) :
+			ibEventOptionItem(const ibString& name, const ibString& label, const ibString& help, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) :
 				m_isOk(true), m_strName(name), m_strLabel(label), m_strHelp(help), m_picture(p), m_id(l), m_value(v)
 			{
 			}
@@ -69,9 +69,9 @@ private:
 			operator const ibActionID() const { return m_id; }
 
 			bool m_isOk;
-			wxString m_strName;
-			wxString m_strLabel;
-			wxString m_strHelp;
+			ibString m_strName;
+			ibString m_strLabel;
+			ibString m_strHelp;
 			ibPictureDescription m_picture;
 			ibActionID m_id;
 			ibValue m_value;
@@ -89,13 +89,13 @@ private:
 
 		void ResetListItem() { m_listValue.clear(); }
 
-		void AppendItem(const wxString& name, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(name, l, p, v); }
-		void AppendItem(const wxString& name, const wxString& label, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(name, label, l, p, v); }
-		void AppendItem(const wxString& name, const wxString& label, const wxString& help, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(label, help, l, p, v); }
+		void AppendItem(const ibString& name, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(name, l, p, v); }
+		void AppendItem(const ibString& name, const ibString& label, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(name, label, l, p, v); }
+		void AppendItem(const ibString& name, const ibString& label, const ibString& help, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(label, help, l, p, v); }
 
-		wxString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
-		wxString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }
-		wxString GetItemHelp(const unsigned int idx) const { return GetItemAt(idx).m_strHelp; }
+		ibString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
+		ibString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }
+		ibString GetItemHelp(const unsigned int idx) const { return GetItemAt(idx).m_strHelp; }
 		ibPictureDescription GetItemPicture(const unsigned int idx) const { return GetItemAt(idx).m_picture; }
 		ibActionID GetItemId(const unsigned int idx) const { return GetItemAt(idx).m_id; }
 		ibValue GetItemValue(const unsigned int idx) const { return GetItemAt(idx).m_value; }
@@ -136,33 +136,33 @@ public:
 
 #pragma region value
 	ibActionID GetValueAsInteger() const;
-	wxString GetValueAsString() const;
+	ibString GetValueAsString() const;
 	ibStandardCommandDescription& GetValueAsActionDesc() const;
 	void SetValue(const ibStandardCommandDescription& val);
 #pragma endregion 
 
 #pragma region item
-	void AppendItem(const wxString& name, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listPropValue.AppendItem(name, l, p, v); }
-	void AppendItem(const wxString& name, const wxString& label, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listPropValue.AppendItem(name, label, l, p, v); }
-	void AppendItem(const wxString& name, const wxString& label, const wxString& help, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listPropValue.AppendItem(name, label, help, l, p, v); }
+	void AppendItem(const ibString& name, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listPropValue.AppendItem(name, l, p, v); }
+	void AppendItem(const ibString& name, const ibString& label, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listPropValue.AppendItem(name, label, l, p, v); }
+	void AppendItem(const ibString& name, const ibString& label, const ibString& help, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listPropValue.AppendItem(name, label, help, l, p, v); }
 #pragma endregion
 
 	template <typename optClass>
-	ibEventAction(ibPropertyCategory* cat, const wxString& name, const wxArrayString& args,
+	ibEventAction(ibPropertyCategory* cat, const ibString& name, const std::vector<ibString>& args,
 		bool (optClass::* funcHandler)(ibEventAction* evt), const ibActionID& value) : ibEvent(cat, name, args, CreateVariantData(cat->GetPropertyObject(), value))
 	{
 		m_functor = std::make_unique<ibEventValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
 	template <typename optClass>
-	ibEventAction(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxArrayString& args,
+	ibEventAction(ibPropertyCategory* cat, const ibString& name, const ibString& label, const std::vector<ibString>& args,
 		bool (optClass::* funcHandler)(ibEventAction* evt), const ibActionID& value) : ibEvent(cat, name, label, args, CreateVariantData(cat->GetPropertyObject(), value))
 	{
 		m_functor = std::make_unique<ibEventValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
 	template <typename optClass>
-	ibEventAction(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxArrayString& args,
+	ibEventAction(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const std::vector<ibString>& args,
 		bool (optClass::* funcHandler)(ibEventAction* evt), const ibActionID& value) : ibEvent(cat, name, label, helpString, args, CreateVariantData(cat->GetPropertyObject(), value))
 	{
 		m_functor = std::make_unique<ibEventValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());

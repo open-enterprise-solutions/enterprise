@@ -18,7 +18,7 @@
 #define THEME_COLOUR_MAIN    wxColour(0xB8, 0xC9, 0xD4)  // #B8C9D4 powder blue
 #define THEME_COLOUR_BORDER  wxColour(0xA8, 0xBA, 0xC8)  // #A8BAC8 light dusty
 
-// The text of the panel's pages — the forms' own ink (frontend/visualView/ctrl/frame.h).
+// The text of the panel's pages — the forms' own ink (frmclient/visualView/ctrl/frame.h).
 #define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
 
 #include "frmclient/win/picture.h"   // the pictures, as they travel

@@ -79,17 +79,17 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibSheetFileDocument, ibSheetDocument);
 
 // The sheet is the document's own, so it saves and loads it itself rather than through Save/LoadObject. Its file is the
 // session's temporary one (by its id), read and written in the format the name it came under says.
-bool ibSheetFileDocument::DoOpenDocument(const wxString& filename)
+bool ibSheetFileDocument::DoOpenDocument(const ibString& filename)
 {
 	return ibSheetFormatReadTempFile(filename, m_spreadSheetDocument->GetSpreadsheetDesc());
 }
 
-wxString ibSheetFileDocument::GetSaveFilter() const
+ibString ibSheetFileDocument::GetSaveFilter() const
 {
 	return ibSheetFormatSaveFilter();
 }
 
-bool ibSheetFileDocument::DoSaveDocument(const wxString& filename)
+bool ibSheetFileDocument::DoSaveDocument(const ibString& filename)
 {
 	return ibSheetFormatWriteTempFile(filename, m_spreadSheetDocument->GetSpreadsheetDesc());
 }

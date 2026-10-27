@@ -59,8 +59,8 @@ enum class ibLockMode : std::int32_t {
 // Acquire's conflict-check + INSERT and no longer composes the hash
 // itself. Adding a new resource kind = adding a new `For*` factory.
 struct BACKEND_API ibLockItem {
-	wxString                                  namespaceName;
-	std::vector<std::pair<wxString, ibValue>> keyFields;
+	ibString                                  namespaceName;
+	std::vector<std::pair<ibString, ibValue>> keyFields;
 	ibLockMode                                lockMode = ibLockMode::Exclusive;
 
 	ibLockItem() = default;
@@ -70,12 +70,12 @@ struct BACKEND_API ibLockItem {
 	// The field name "Ref" matches the row-identifier convention used
 	// across mutable-ref tables; encapsulated here so call sites stay
 	// free of the magic string.
-	static ibLockItem ForRef(const wxString& namespacePath,
+	static ibLockItem ForRef(const ibString& namespacePath,
 	                          const ibGuid&   refGuid,
 	                          ibLockMode      mode = ibLockMode::Exclusive) {
 		ibLockItem it;
 		it.namespaceName = namespacePath;
-		it.keyFields.push_back({ wxT("Ref"), ibValue(refGuid.str()) });
+		it.keyFields.push_back({ ibT("Ref"), ibValue(refGuid.str()) });
 		it.lockMode = mode;
 		return it;
 	}
@@ -83,7 +83,7 @@ struct BACKEND_API ibLockItem {
 	// Whole-namespace lock — no per-key sub-identifier. Single-row
 	// "global" resources (Constants — one row per metaobject, the
 	// namespace IS the identifier) collide on the namespace alone.
-	static ibLockItem ForNamespace(const wxString& namespacePath,
+	static ibLockItem ForNamespace(const ibString& namespacePath,
 	                                ibLockMode      mode = ibLockMode::Exclusive) {
 		ibLockItem it;
 		it.namespaceName = namespacePath;
@@ -98,12 +98,12 @@ struct BACKEND_API ibLockItem {
 	// keyFields legitimately give an empty canonical string.
 	// Implementations live in lockKeyHash.cpp alongside Hash() /
 	// Canonicalize() so the bytes-layout discipline stays in one TU.
-	const wxString& KeyHash() const;
-	const wxString& KeyData() const;
+	const ibString& KeyHash() const;
+	const ibString& KeyData() const;
 
 private:
-	mutable wxString m_keyHashCached;
-	mutable wxString m_keyDataCached;
+	mutable ibString m_keyHashCached;
+	mutable ibString m_keyDataCached;
 	mutable bool     m_keyDataValid = false;
 };
 

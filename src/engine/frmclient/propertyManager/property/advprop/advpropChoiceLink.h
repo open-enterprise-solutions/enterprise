@@ -20,7 +20,7 @@ class FRMCLIENT_API ibBackendProperty;
 // would mean (Max, 2026-09-23). Typing is refused for the same reason as next door — a row that took
 // text it cannot turn into a link would be answering a question it does not understand.
 //
-// The desktop's (frontend/propertyManager/property/advprop/advpropChoiceLink.h), over the client's row: the name is
+// The old desktop's, over the client's row: the name is
 // the server's Presentation, the candidates the row's choices.
 class ibPGChoiceLinkProperty : public wxPGProperty {
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGChoiceLinkProperty);

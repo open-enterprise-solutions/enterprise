@@ -153,7 +153,7 @@ static void CollectColumns(const ibValueFrame* parent,
 // (ibSourceExplorer::GetSourceGroup) — the columns of one family say the same thing there,
 // and the register's dimension slots are the case this exists for: twelve of them in one
 // row is a journal nobody can read, the same twelve in two stacks fit the screen.
-ibValueFrame* ibValueModelTableBox::GetColumnGroupHolder(const wxString& group, bool* created)
+ibValueFrame* ibValueModelTableBox::GetColumnGroupHolder(const ibString& group, bool* created)
 {
 	if (created != nullptr)
 		*created = false;
@@ -164,7 +164,7 @@ ibValueFrame* ibValueModelTableBox::GetColumnGroupHolder(const wxString& group, 
 	// The group's control name is the table's plus the family name, which is what makes it
 	// findable — so a second column of the family lands in the SAME group, whether or not
 	// it came right after the first.
-	const wxString groupName = GetControlName() + group;
+	const ibString groupName = GetControlName() + group;
 
 	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
 		ibValueFrame* child = GetChild(idx);
@@ -176,7 +176,7 @@ ibValueFrame* ibValueModelTableBox::GetColumnGroupHolder(const wxString& group, 
 	wxASSERT(m_formOwner);
 	ibValueModelTableBoxColumnGroup* newGroup =
 		dynamic_cast<ibValueModelTableBoxColumnGroup*>(
-			m_formOwner->CreateControl(wxT("TableboxColumnGroup"), this));
+			m_formOwner->CreateControl(ibT("TableboxColumnGroup"), this));
 	if (newGroup == nullptr)
 		return this;
 
@@ -1055,7 +1055,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		ibDataNode& row = response.AddChild(0, handle);
 		row.SetValue(ibProtocol::ibForm::ibTable::Container, item.IsContainer());
 
-		wxString groupCaption;
+		ibString groupCaption;
 		if (item.GetGroupCaption(groupCaption))
 			row.SetValue(ibProtocol::ibForm::ibTable::Group, groupCaption);
 
@@ -1210,7 +1210,7 @@ bool ibValueModelTableBox::OnCellEvent(ibProtocol::ibEvent::ibKind event, const 
 		if (const auto value = args.FindChild(ibProtocol::ibEvent::Value))
 			column->ValueProcessing(*value);
 		else
-			column->OnTextEnter(args.GetValue<wxString>(ibProtocol::ibEvent::Text));
+			column->OnTextEnter(args.GetValue<ibString>(ibProtocol::ibEvent::Text));
 		column->OnEditingDone();
 		return true;
 	case ibProtocol::ibEvent::ibKind::Select: column->OnSelectButtonPressed(); return true;
@@ -1265,14 +1265,14 @@ bool ibValueModelTableBox::OnColumnClick(const ibFormID& columnId)
 		|| !m_tableModel->GetFeatures().Has(ibValueModel::Features::Sorting))
 		return false;
 
-	const wxString field = column->GetSourceFieldName();
+	const ibString field = column->GetSourceFieldName();
 	if (field.IsEmpty())
 		return false;   // whole-attribute / foreign / unresolvable column — nothing to sort by
 
 	ibDataComposer& composer = m_tableModel->GetModelComposer();
 	// Single-column toggle read off the composer (the SSOT): already the sole sort on this field → flip; else asc.
 	bool ascending = true;
-	wxString curField; bool curAsc = true;
+	ibString curField; bool curAsc = true;
 	if (composer.SortCount() == 1 && composer.GetSortAt(0, curField, curAsc) && curField == field)
 		ascending = !curAsc;
 
@@ -1505,8 +1505,8 @@ const ibMetaData* ibValueModelTableBox::GetMetaData() const
 
 void ibValueModelTableBox::FillControlMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(wxT("Value"), eTableValue, eControl);
-	helper.AppendProp(wxT("CurrentRow"), eCurrentRow, eControl);
+	helper.AppendProp(ibT("Value"), eTableValue, eControl);
+	helper.AppendProp(ibT("CurrentRow"), eCurrentRow, eControl);
 }
 
 bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)

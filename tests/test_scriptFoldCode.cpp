@@ -15,7 +15,7 @@
 namespace {
 
 // The text read the way an editor reads it: a refusal of the translator leaves the lexems read so far.
-void Read(ibTranslateCode& tc, const wxString& text)
+void Read(ibTranslateCode& tc, const ibString& text)
 {
 	tc.Load(text);
 	try {

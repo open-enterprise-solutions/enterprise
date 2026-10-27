@@ -69,18 +69,18 @@ std::shared_ptr<ibDatabaseLayer> ibApplicationInstance::GetDatabaseLayer()
 	return ibConnectionPool::GetDatabaseLayer();
 }
 
-wxString ibApplicationInstance::ResolveLogDir() const
+ibString ibApplicationInstance::ResolveLogDir() const
 {
-	const wxString sep = wxFileName::GetPathSeparator();
+	const ibString sep(ibFILE_SEP_PATH);
 	if (m_strServer.IsEmpty() && !m_strFile.IsEmpty()) {
 		// Lives next to sys.fdb — admins see logs alongside the base.
-		return m_strFile + sep + wxT("oeslog");
+		return m_strFile + sep + ibT("oeslog");
 	}
 	if (!m_strServer.IsEmpty()) {
 		// A server keeps each base in a folder of its own — the journal lives there, beside nothing else
 		// (a file base's folder holds the database as well).
 		if (!m_strDirLocal.IsEmpty())
-			return m_strDirLocal + sep + wxT("oeslog");
+			return m_strDirLocal + sep + ibT("oeslog");
 
 		// Per-user persistent location. %TEMP% would be wiped by
 		// Windows disk cleanup; %LOCALAPPDATA% survives reboots and
@@ -89,36 +89,36 @@ wxString ibApplicationInstance::ResolveLogDir() const
 		//
 		// ⚠ KEYED BY THE SERVER AND THE BASE. The base's name alone collided: two bases called the same on
 		// two servers — which one process of several bases may hold at once — wrote one journal.
-		const auto sanitised = [](wxString tag) {
+		const auto sanitised = [](ibString tag) {
 			// Path separators in db names would break Mkdir.
-			tag.Replace(wxT("\\"), wxT("_"));
-			tag.Replace(wxT("/"),  wxT("_"));
-			tag.Replace(wxT(":"),  wxT("_"));
+			tag.Replace(ibT("\\"), ibT("_"));
+			tag.Replace(ibT("/"),  ibT("_"));
+			tag.Replace(ibT(":"),  ibT("_"));
 			return tag;
 		};
-		wxString legacy = m_strDatabase;
+		ibString legacy = m_strDatabase;
 		if (legacy.IsEmpty()) legacy = m_strServer;
-		if (legacy.IsEmpty()) legacy = wxT("default");
-		const wxString tag = (!m_strServer.IsEmpty() && !m_strDatabase.IsEmpty())
-			? sanitised(m_strServer + wxT("_") + m_strDatabase)
+		if (legacy.IsEmpty()) legacy = ibT("default");
+		const ibString tag = (!m_strServer.IsEmpty() && !m_strDatabase.IsEmpty())
+			? sanitised(m_strServer + ibT("_") + m_strDatabase)
 			: sanitised(legacy);
 
-		const wxString root = wxStandardPaths::Get().GetUserLocalDataDir() + sep + wxT("OES") + sep;
+		const ibString root = wxStandardPaths::Get().GetUserLocalDataDir() + sep + ibT("OES") + sep;
 		// …and a journal kept under the name alone is MOVED to the new key once, so its history stays
 		// readable instead of starting over beside it. A move that fails (the folder in use) costs only that.
-		const wxString old = root + sanitised(legacy);
+		const ibString old = root + sanitised(legacy);
 		if (tag != sanitised(legacy) && !ibDirExists(root + tag) && ibDirExists(old))
 			ibRenameFile(old, root + tag);
 
-		return root + tag + sep + wxT("logs");
+		return root + tag + sep + ibT("logs");
 	}
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 void ibApplicationInstance::CreateLogger()
 {
 	if (m_runMode == ibRunMode::eLAUNCHER_MODE) return;
-	const wxString dir = ResolveLogDir();
+	const ibString dir = ResolveLogDir();
 	if (dir.IsEmpty()) return;
 	try {
 		m_logger = std::make_unique<ibLogger>(dir);
@@ -147,22 +147,22 @@ namespace {
 // Short label for session.opened / session.closed audit rows. Mirrors
 // ibSessionKind values; kept local to appData.cpp because the only
 // consumer is the listener wiring below.
-wxString DescribeSessionKind(ibSessionKind k) {
+ibString DescribeSessionKind(ibSessionKind k) {
 	switch (k) {
-	case ibSessionKind::Launcher:   return wxT("Launcher");
-	case ibSessionKind::Designer:   return wxT("Designer");
-	case ibSessionKind::Enterprise: return wxT("Enterprise");
-	case ibSessionKind::Service:    return wxT("Service");
-	case ibSessionKind::WebServer:  return wxT("WebServer");
-	case ibSessionKind::WebClient:  return wxT("WebClient");
-	case ibSessionKind::BackgroundJob: return wxT("BackgroundJob");
-	case ibSessionKind::ScheduledJob:  return wxT("ScheduledJob");
-	case ibSessionKind::SystemJob:     return wxT("SystemJob");
-	case ibSessionKind::ThinClient:    return wxT("ThinClient");
-	case ibSessionKind::ThinDesigner:  return wxT("ThinDesigner");
-	case ibSessionKind::Unknown:       return wxT("Unknown");
+	case ibSessionKind::Launcher:   return ibT("Launcher");
+	case ibSessionKind::Designer:   return ibT("Designer");
+	case ibSessionKind::Enterprise: return ibT("Enterprise");
+	case ibSessionKind::Service:    return ibT("Service");
+	case ibSessionKind::WebServer:  return ibT("WebServer");
+	case ibSessionKind::WebClient:  return ibT("WebClient");
+	case ibSessionKind::BackgroundJob: return ibT("BackgroundJob");
+	case ibSessionKind::ScheduledJob:  return ibT("ScheduledJob");
+	case ibSessionKind::SystemJob:     return ibT("SystemJob");
+	case ibSessionKind::ThinClient:    return ibT("ThinClient");
+	case ibSessionKind::ThinDesigner:  return ibT("ThinDesigner");
+	case ibSessionKind::Unknown:       return ibT("Unknown");
 	}
-	return wxT("Unknown");
+	return ibT("Unknown");
 }
 
 }   // namespace
@@ -193,7 +193,7 @@ ibApplicationInstance* ibApplicationInstance::Get(bool required)
 	std::ostringstream thread;
 	thread << std::this_thread::get_id();
 	ibBackendCoreException::Error(_("Thread %s works for no base: it has no session and no base bound to it."),
-		wxString(thread.str()));
+		ibString(thread.str()));
 	return nullptr;
 }
 
@@ -203,10 +203,10 @@ ibHelpService* ibApplicationInstance::GetHelpService()
 	return host != nullptr ? host->GetHelpService() : nullptr;
 }
 
-wxString ibApplicationInstance::GetLocale() const
+ibString ibApplicationInstance::GetLocale() const
 {
 	ibApplicationHost* const host = ibApplicationHost::Get();
-	return host != nullptr ? host->GetLocale() : wxString();
+	return host != nullptr ? host->GetLocale() : ibString();
 }
 
 ibPluginManager* ibApplicationInstance::GetPluginManager() const
@@ -241,18 +241,18 @@ static std::size_t PickConnectionMinIdle(ibRunMode runMode)
 // A NEW BASE GETS ITS OWN SETTINGS FILE — infobase.conf in its folder, every key written with its default, so a
 // person finds them where the base is and changes them there. Written when the base is created; one that is there
 // is never touched. (A note above each key, not after it: an INI value runs to the end of its line.)
-static void WriteInfobaseConf(const wxString& folder)
+static void WriteInfobaseConf(const ibString& folder)
 {
-	const wxString path = folder + wxFileName::GetPathSeparator() + wxT("infobase.conf");
+	const ibString path = folder + ibFILE_SEP_PATH + ibT("infobase.conf");
 	if (folder.IsEmpty() || ibFileExists(path))
 		return;
-	wxFFile file(path, wxT("w"));
+	wxFFile file(path, ibT("w"));
 	if (!file.IsOpened() || !file.Write(
-			wxT("; This base's own settings - read when the base is opened.\n")
-			wxT("; Connections - connections to its DBMS at most; 0 - the default (backend.conf, else 32).\n")
-			wxT("Connections = 0\n"))) {
-		ibTechJournal::Print(ibJournalMark::Warning, wxT("appdata"),
-			wxT("%s cannot be written - the base runs on the defaults"), path);
+			ibT("; This base's own settings - read when the base is opened.\n")
+			ibT("; Connections - connections to its DBMS at most; 0 - the default (backend.conf, else 32).\n")
+			ibT("Connections = 0\n"))) {
+		ibTechJournal::Print(ibJournalMark::Warning, ibT("appdata"),
+			ibT("%s cannot be written - the base runs on the defaults"), path);
 	}
 }
 
@@ -260,14 +260,14 @@ static void WriteInfobaseConf(const wxString& folder)
 // (Connections), over the process's default (backend.conf). A base's connections are its own: a PostgreSQL
 // base and an MS SQL one are two worlds, so the number lives with each base. A value that cannot be used is
 // said, not quietly replaced. Two at least: the registry holds one for its writes, a session needs another.
-static std::size_t ReadInfobaseConnections(const wxString& folder, std::size_t byDefault)
+static std::size_t ReadInfobaseConnections(const ibString& folder, std::size_t byDefault)
 {
-	const wxString path = folder + wxFileName::GetPathSeparator() + wxT("infobase.conf");
+	const ibString path = folder + ibFILE_SEP_PATH + ibT("infobase.conf");
 	if (folder.IsEmpty() || !ibFileExists(path))
 		return byDefault;
 
-	const wxFileConfig conf(wxT(""), wxT(""), path, wxT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
-	return ibApplicationHost::ReadCount(conf, path, wxT("Connections"), 2, byDefault);
+	const wxFileConfig conf(ibT(""), ibT(""), path, ibT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
+	return ibApplicationHost::ReadCount(conf, path, ibT("Connections"), 2, byDefault);
 }
 
 // ⭐ ASKED OF THE SESSION DOING THE WORK. A person's session says what it works in, whatever process hosts it — a
@@ -388,7 +388,7 @@ ibMetaDataConfigurationBase* ibApplicationInstance::GetActiveMetaData(const ibAp
 
 void ibApplicationInstance::ReplaceActiveMetaData(std::shared_ptr<ibMetaDataConfigurationBase> metaData)
 {
-	const wxString digest = metaData->GetConfigMD5();
+	const ibString digest = metaData->GetConfigMD5();
 	std::shared_ptr<ibMetaDataConfigurationBase> previous;
 	{
 		std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
@@ -397,7 +397,7 @@ void ibApplicationInstance::ReplaceActiveMetaData(std::shared_ptr<ibMetaDataConf
 
 	// …and the base lets the old one go. The sessions working in it hold it, each by its own reference, and the
 	// last of them closes it (ibMetaData::MakeShared) — or the end of this call does, when nobody works in it.
-	ibJournalInfo(wxT("metadata"), wxT("the active configuration is now %s; the one before stays with %ld holder(s)"),
+	ibJournalInfo(ibT("metadata"), ibT("the active configuration is now %s; the one before stays with %ld holder(s)"),
 		digest, previous != nullptr ? previous.use_count() - 1 : 0L);
 }
 
@@ -422,8 +422,8 @@ void ibApplicationInstance::WireSessionEvents()
 		// ibSession::Current() once BindSessionToThread runs below.
 		try {
 			if (m_logger) {
-				m_logger->Audit(wxT("session"), wxT("opened"),
-				             wxString::Format(wxT("kind=%s id=%s"),
+				m_logger->Audit(ibT("session"), ibT("opened"),
+				             ibString::Format(ibT("kind=%s id=%s"),
 				                              DescribeSessionKind(s->GetKind()),
 				                              s->GetId()));
 			}
@@ -435,8 +435,8 @@ void ibApplicationInstance::WireSessionEvents()
 		// being FIRST: the job manager starts with the base, before anybody logs in, so a scheduled job due at
 		// start made its run-as user what every unbound thread answered with, and a job under a user with
 		// settings of their own re-pointed the running MCP server at that user's token (census, 2026-10-01).
-		// …and a thin client's in a FILE base: there the process IS the thin client (fileserver in its own process), as
-		// the desktop's window is enterprise.exe — on a server the same session is one visitor among many. Asked by the
+		// …and a thin client's in a FILE base: there the process IS the thin client (fileserver in its own process) —
+		// on a server the same session is one visitor among many. Asked by the
 		// debugger's Stop when nothing is parked (ibSession::Current on its thread falls back to this session).
 		const bool ownSession = IsProcessSessionKind(s->GetKind())
 			|| (m_runMode == ibRunMode::eFILE_MODE
@@ -480,8 +480,8 @@ void ibApplicationInstance::WireSessionEvents()
 		// the user identity is gone.
 		try {
 			if (m_logger) {
-				m_logger->Audit(wxT("session"), wxT("closed"),
-				             wxString::Format(wxT("kind=%s id=%s"),
+				m_logger->Audit(ibT("session"), ibT("closed"),
+				             ibString::Format(ibT("kind=%s id=%s"),
 				                              DescribeSessionKind(s->GetKind()),
 				                              s->GetId()));
 			}
@@ -629,12 +629,12 @@ bool ibApplicationInstance::ExclusiveMode() const
 	return m_sessionRegistry != nullptr && m_sessionRegistry->HasExclusiveSession();
 }
 
-const wxString& ibApplicationInstance::GetUserName() const
+const ibString& ibApplicationInstance::GetUserName() const
 {
 	return GetUserInfo().m_strUserName;
 }
 
-const wxString& ibApplicationInstance::GetUserPassword() const
+const ibString& ibApplicationInstance::GetUserPassword() const
 {
 	// Historical quirk: GetUserPassword returned fullName — kept for
 	// source compat with call sites that still use the alias.
@@ -647,12 +647,12 @@ ibApplicationInstance::GetUserRoleArray() const
 	return GetUserInfo().m_roleArray;
 }
 
-wxString ibApplicationInstance::GetUserLanguageCode() const
+ibString ibApplicationInstance::GetUserLanguageCode() const
 {
 	return GetUserInfo().m_strLanguageCode;
 }
 
-wxString ibApplicationInstance::ComputeMd5() const
+ibString ibApplicationInstance::ComputeMd5() const
 {
 	return ComputeMd5(GetUserInfo().m_strUserPassword);
 }
@@ -671,7 +671,7 @@ bool ibApplicationInstance::CreateAppDataEnv(ibRunMode runMode)
 	return SetLocaleAppDataEnv();
 }
 
-#define sys_db wxT("sys.fdb")
+#define sys_db ibT("sys.fdb")
 
 // THE REQUEST'S TYPE IS THE RUN MODE — a file base holds its base itself, a server holds it for its clients. Only a
 // file base makes a base not made yet (the designer's opening); a server never does — that is the launcher's.
@@ -686,32 +686,32 @@ ibApplicationInstance* ibApplicationInstance::CreateAppDataEnv(const ibServerIns
 {
 	ibServerConfig config(request.m_folder);
 	if (!config.HasConf())
-		ibBackendCoreException::Error(wxT("no config at %s"), config.GetConfPath());
+		ibBackendCoreException::Error(ibT("no config at %s"), config.GetConfPath());
 	ibString error;
 	if (!config.LoadKey(error))
-		ibBackendCoreException::Error(wxT("%s"), error);
+		ibBackendCoreException::Error(ibT("%s"), error);
 
 	std::vector<ibConfiguredInstance> instances = config.ReadInstances();
 	config.AssignIds(instances);   // its folder is named by its Id
 	const auto base = std::find_if(instances.begin(), instances.end(),
 		[&request](const ibConfiguredInstance& instance) { return instance.m_name == request.m_name; });
 	if (base == instances.end())
-		ibBackendCoreException::Error(wxT("the config %s has no base '%s'"), config.GetConfPath(), request.m_name);
+		ibBackendCoreException::Error(ibT("the config %s has no base '%s'"), config.GetConfPath(), request.m_name);
 
 	ibInstanceStorage storage;
 	storage.m_directory = base->m_path;
-	if (base->m_kind == wxT("postgresql")) {
+	if (base->m_kind == ibT("postgresql")) {
 		storage.m_server   = base->m_server;
 		storage.m_port     = base->m_port;
 		storage.m_user     = base->m_user;
 		storage.m_database = base->m_database;
 		ibString password;
-		if (!config.OpenSecret(base->m_name, wxT("Password"), base->m_password, password, error))
-			ibBackendCoreException::Error(wxT("%s"), error);
+		if (!config.OpenSecret(base->m_name, ibT("Password"), base->m_password, password, error))
+			ibBackendCoreException::Error(ibT("%s"), error);
 		storage.m_password = password;
 	}
-	else if (base->m_kind != wxT("firebird"))
-		ibBackendCoreException::Error(wxT("unknown Kind '%s' - expected firebird or postgresql"), base->m_kind);
+	else if (base->m_kind != ibT("firebird"))
+		ibBackendCoreException::Error(ibT("unknown Kind '%s' - expected firebird or postgresql"), base->m_kind);
 	return Open(ibRunMode::eSERVER_MODE, request, storage, false);
 }
 
@@ -744,7 +744,7 @@ ibApplicationInstance* ibApplicationInstance::Open(ibRunMode runMode, const ibIn
 		// database there (that is how a base is made), so an opening that makes nothing — a server, which only opens
 		// what its settings name — left an empty sys.fdb behind and refused it without a word, at every start
 		// (2026-10-06). Whether to create is this opening's word, said once.
-		const wxString database = storage.m_directory + wxFileName::GetPathSeparator() + sys_db;
+		const ibString database = storage.m_directory + ibFILE_SEP_PATH + sys_db;
 		if (!create && !ibFileExists(database))
 			ibBackendCoreException::Error(_("There is no base in %s (no %s), and this opening does not create one."),
 				storage.m_directory, sys_db);
@@ -755,9 +755,10 @@ ibApplicationInstance* ibApplicationInstance::Open(ibRunMode runMode, const ibIn
 
 		std::unique_ptr<ibApplicationInstance> opening(new ibApplicationInstance(host, runMode));
 		opening->m_strFile = storage.m_directory;
-		const wxArrayString dirs = wxFileName::DirName(storage.m_directory).GetDirs();
+		const std::filesystem::path folder = ibPathOf(storage.m_directory).lexically_normal();   // "base/" and "base" alike
+		const ibString last(folder.has_filename() ? folder.filename().wstring() : folder.parent_path().filename().wstring());
 		opening->m_strInstance = !request.m_name.IsEmpty() ? request.m_name
-			: dirs.IsEmpty() ? storage.m_directory : dirs.Last();
+			: last.IsEmpty() ? storage.m_directory : last;
 
 		ibApplicationInstance* const applicationInstance = Open(std::move(opening), db, storage.m_directory, request, create);
 
@@ -804,7 +805,7 @@ ibApplicationInstance* ibApplicationInstance::Open(ibRunMode runMode, const ibIn
 // the process, the opening thread working for it, then its pool, its tables, its locale, its journal and its jobs.
 // A base that does not come up — refused or thrown — is closed again, alone, and the thread gets back what it had.
 ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplicationInstance> opening,
-	std::shared_ptr<ibDatabaseLayer> db, const wxString& folder, const ibInstanceRequest& request, bool create)
+	std::shared_ptr<ibDatabaseLayer> db, const ibString& folder, const ibInstanceRequest& request, bool create)
 {
 	const ibRunMode runMode = opening->m_runMode;
 	ibApplicationInstance* const applicationInstance = ibApplicationHost::Adopt(std::move(opening));
@@ -831,7 +832,7 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		// machine — because at that moment nothing has been decided yet. WHICH base, opened HOW,
 		// under WHICH run mode is the first fact worth knowing about a session, and this is the
 		// first moment it exists.
-		ibJournalInfo(wxT("appdata"), wxT("connected: %s (run mode %d)"),
+		ibJournalInfo(ibT("appdata"), ibT("connected: %s (run mode %d)"),
 			applicationInstance->GetDatabaseDescription(), static_cast<int>(runMode));
 
 		// The pool is the single owner of every connection of the base.
@@ -848,9 +849,9 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		// ⭐ HELD BY ANOTHER PROCESS? Asked before this one writes anything into the base — its tables, its jobs,
 		// its sweep of sys_session — and refused out loud (ibServiceExclusivePolicy::CanOpen). It used to be
 		// asked only at the first session, after the bring-up below had written into a base somebody held.
-		wxString heldBy;
+		ibString heldBy;
 		if (TableAlreadyCreated() && !ibServiceExclusivePolicy::CanOpen(runMode, heldBy))
-			ibBackendCoreException::Error(wxT("%s"), heldBy);
+			ibBackendCoreException::Error(ibT("%s"), heldBy);
 
 		if (create && !TableAlreadyCreated()) {
 			CreateTableSession();
@@ -944,7 +945,7 @@ bool ibApplicationInstance::DestroyAppDataEnv(ibApplicationInstance* application
 	return true;
 }
 
-bool ibApplicationInstance::SetLocaleAppDataEnv(const wxString& strLocale)
+bool ibApplicationInstance::SetLocaleAppDataEnv(const ibString& strLocale)
 {
 	// The locale is the PROCESS's — settled by the first base, answered as settled to the rest.
 	ibApplicationHost* const host = ibApplicationHost::Get();
@@ -1007,10 +1008,10 @@ bool ibApplicationInstance::DestroyAppDataEnv()
 #include "core/startProcess.h"   // ibStartProcess — a launch is asked for from a fiber too (app_run on the server)
 
 #pragma region execute 
-long ibApplicationInstance::RunApplication(const wxString& strAppName, bool searchDebug, bool useManifest, wxString* page) const
+long ibApplicationInstance::RunApplication(const ibString& strAppName, bool searchDebug, bool useManifest, ibString* page) const
 {
 	// Hand the child process the raw password captured at login, not the stored hash.
-	// Otherwise enterprise.exe authenticates with the hash itself — which only worked
+	// Otherwise the child authenticates with the hash itself — which only worked
 	// before MD5→PBKDF2 because the verifier silently treated hash==hash as a match,
 	// and even then it let the stored hash act as a bearer token.
 	//
@@ -1019,7 +1020,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, bool sear
 	// session is scoped — codeRunner or pre-auth tools that have no
 	// business spawning interactive children — we still call through with
 	// empty strings; the child will fall back to its own login flow.
-	wxString userName, rawPassword;
+	ibString userName, rawPassword;
 	if (auto* s = ibSession::Current()) {
 		userName    = s->GetUserInfo().m_strUserName;
 		rawPassword = s->GetSessionRawPassword();
@@ -1028,22 +1029,22 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, bool sear
 	// The session keeps the password. A second launch of this same session
 	// still has it; only the copy on this stack is overwritten.
 	for (size_t i = 0; i < rawPassword.length(); ++i)
-		rawPassword[i] = wxT('x');
+		rawPassword[i] = ibT('x');
 	rawPassword.clear();
 	return started;
 }
 
-long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxString& strUserName, const wxString& strUserPassword, bool searchDebug, bool useManifest, wxString* page) const
+long ibApplicationInstance::RunApplication(const ibString& strAppName, const ibString& strUserName, const ibString& strUserPassword, bool searchDebug, bool useManifest, ibString* page) const
 {
 	// All OES binaries spawn with unified `--flag=value` syntax: one long-name
 	// set (server/dbport/db/user/file/ibuser/locale/debug). Passwords go on
-	// the child's stdin. enterprise.exe / designer.exe declare these as the
+	// the child's stdin. enterprise-thin.exe / designer-thin.exe declare these as the
 	// long name of their legacy short options, so one builder feeds every
 	// parser - webserver aside, below.
 
-	const auto add = [](wxString& cmd, const wxString& name, const wxString& value) {
+	const auto add = [](ibString& cmd, const ibString& name, const ibString& value) {
 		if (value.IsEmpty()) return;
-		cmd += wxT(" --") + name + wxT("=\"") + value + wxT("\"");
+		cmd += ibT(" --") + name + ibT("=\"") + value + ibT("\"");
 	};
 
 	// Resolve the binary next to this one. A bare "enterprise" is looked up on PATH and in the
@@ -1061,9 +1062,9 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 #ifdef __WXOSX__
 	if (!binary.FileExists()) {
 		wxFileName bundled(home);
-		bundled.AppendDir(strAppName + wxT(".app"));
-		bundled.AppendDir(wxT("Contents"));
-		bundled.AppendDir(wxT("MacOS"));
+		bundled.AppendDir(strAppName + ibT(".app"));
+		bundled.AppendDir(ibT("Contents"));
+		bundled.AppendDir(ibT("MacOS"));
 		bundled.SetFullName(strAppName);
 		if (bundled.FileExists())
 			binary = bundled;
@@ -1072,9 +1073,9 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 
 	// The bare name stays the fallback, so a layout this does not recognise behaves as before.
 	// Quoted because a resolved path can contain a space and the command is split on those.
-	wxString executeCmd = binary.FileExists()
-		? (wxT('"') + binary.GetFullPath() + wxT("\" "))
-		: (strAppName + wxT(' '));
+	ibString executeCmd = binary.FileExists()
+		? (ibT('"') + ibString(binary.GetFullPath()) + ibT("\" "))
+		: (strAppName + ibT(' '));
 
 	ibApplicationHost* const host = ibApplicationHost::Get();
 
@@ -1083,17 +1084,17 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	// where it is.
 	if (useManifest) {
 		if (m_strFile.IsEmpty()) {
-			ibJournalWarning(wxT("process"), wxT("%s publishes a file base, not one on a DBMS server"), strAppName);
+			ibJournalWarning(ibT("process"), ibT("%s publishes a file base, not one on a DBMS server"), strAppName);
 			return 0;
 		}
-		add(executeCmd, wxT("file"), m_strFile);
+		add(executeCmd, ibT("file"), m_strFile);
 		if (searchDebug)
-			executeCmd += wxT(" --debug");
-		add(executeCmd, wxT("locale"), host != nullptr ? host->GetLocaleName() : wxString());
+			executeCmd += ibT(" --debug");
+		add(executeCmd, ibT("locale"), host != nullptr ? host->GetLocaleName() : ibString());
 
 		// The wait is the core's (std::this_thread::sleep_for between its looks, up to five seconds). The page is the
 		// caller's to open — a browser is a window's, and the engine draws none.
-		wxString url;
+		ibString url;
 		const long pid = ibStartWebServer(executeCmd, url);
 		if (page != nullptr)
 			*page = url;
@@ -1126,23 +1127,23 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	}
 
 	if (m_strFile.IsEmpty()) {
-		add(executeCmd, wxT("server"), m_strServer);
-		add(executeCmd, wxT("dbport"), m_strPort);
-		add(executeCmd, wxT("db"), m_strDatabase);
-		add(executeCmd, wxT("user"), m_strUser);
+		add(executeCmd, ibT("server"), m_strServer);
+		add(executeCmd, ibT("dbport"), m_strPort);
+		add(executeCmd, ibT("db"), m_strDatabase);
+		add(executeCmd, ibT("user"), m_strUser);
 	}
 	else {
 		// QUOTED, for the same reason the binary above is: the command is split on spaces, so
 		// a base under "C:\My Bases\…" reached the child as two arguments and the second one was not a
 		// flag anything declared. The path is the one thing here a person chooses, so it is the one
 		// most likely to carry a space (2026-08-20).
-		add(executeCmd, wxT("file"), m_strFile);
+		add(executeCmd, ibT("file"), m_strFile);
 	}
 
 	if (searchDebug)
-		executeCmd += wxT(" --debug");
+		executeCmd += ibT(" --debug");
 
-	add(executeCmd, wxT("ibuser"), strUserName);
+	add(executeCmd, ibT("ibuser"), strUserName);
 
 	ibLaunchSecrets secrets;
 	secrets.m_dbUser     = m_strUser;
@@ -1150,7 +1151,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	secrets.m_ibUser     = strUserName;
 	secrets.m_ibPassword = strUserPassword;
 
-	add(executeCmd, wxT("locale"), host != nullptr ? host->GetLocaleName() : wxString());
+	add(executeCmd, ibT("locale"), host != nullptr ? host->GetLocaleName() : ibString());
 
 	const long execute = ibStartProcess(executeCmd, secrets);
 
@@ -1185,8 +1186,8 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
-                                          const wxString& strUserPassword,
+bool ibApplicationInstance::AuthenticateUser(const ibString& strUserName,
+                                          const ibString& strUserPassword,
                                           ibUserInfo& outInfo)
 {
 	// An empty name used to be accepted whenever HasAny() came back false,
@@ -1204,15 +1205,15 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 		}
 		catch (const ibCoreException& err) {
 			try {
-				if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
-				                        wxString::Format(wxT("reason=user_list_unreadable detail=%s"), err.GetErrorDescription()));
+				if (ibLog) ibLog->Audit(ibT("auth"), ibT("login_failed"),
+				                        ibString::Format(ibT("reason=user_list_unreadable detail=%s"), err.GetErrorDescription()));
 			} catch (...) {}
 			return false;
 		}
 
 		if (noUsers) {
 			try {
-				if (ibLog) ibLog->Audit(wxT("auth"), wxT("open_access"), wxT("reason=empty_user_list"));
+				if (ibLog) ibLog->Audit(ibT("auth"), ibT("open_access"), ibT("reason=empty_user_list"));
 			} catch (...) {}
 			return true;
 		}
@@ -1225,16 +1226,16 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 		// PBKDF2 that Verify runs on a stored hash; its answer is thrown away.
 		(void)ibPasswordHash::Hash(strUserPassword);
 		try {
-			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
-			                        wxString::Format(wxT("user=%s reason=unknown"), strUserName));
+			if (ibLog) ibLog->Audit(ibT("auth"), ibT("login_failed"),
+			                        ibString::Format(ibT("user=%s reason=unknown"), strUserName));
 		} catch (...) {}
 		return false;
 	}
 
 	if (!ibPasswordHash::Verify(strUserPassword, outInfo.m_strUserPassword)) {
 		try {
-			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
-			                        wxString::Format(wxT("user=%s reason=bad_password"), strUserName),
+			if (ibLog) ibLog->Audit(ibT("auth"), ibT("login_failed"),
+			                        ibString::Format(ibT("user=%s reason=bad_password"), strUserName),
 			                        outInfo.m_strUserGuid, /*refMetaId=*/0);
 		} catch (...) {}
 		return false;
@@ -1248,8 +1249,8 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 		try {
 			outInfo.m_strUserPassword = ibPasswordHash::Hash(strUserPassword);
 			(void)ibUserInfo::Save(outInfo);
-			if (ibLog) ibLog->Audit(wxT("auth"), wxT("password_rehash"),
-			                        wxString::Format(wxT("user=%s"), strUserName),
+			if (ibLog) ibLog->Audit(ibT("auth"), ibT("password_rehash"),
+			                        ibString::Format(ibT("user=%s"), strUserName),
 			                        outInfo.m_strUserGuid, /*refMetaId=*/0);
 		} catch (...) {
 			// ignore — login already succeeded
@@ -1260,7 +1261,7 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 }
 
 void ibApplicationInstance::InstallUser(const ibUserInfo& info,
-                                     const wxString& rawPassword)
+                                     const ibString& rawPassword)
 {
 	// User identity now lives only on the ibSession. The registry thread
 	// calls InstallUser under a ibSessionScope bound to the target session
@@ -1274,8 +1275,8 @@ void ibApplicationInstance::InstallUser(const ibUserInfo& info,
 	}
 }
 
-bool ibApplicationInstance::Login(const wxString& strUserName,
-                              const wxString& strUserPassword,
+bool ibApplicationInstance::Login(const ibString& strUserName,
+                              const ibString& strUserPassword,
                               ibUserInfo& outInfo)
 {
 	if (!AuthenticateUser(strUserName, strUserPassword, outInfo))
@@ -1291,8 +1292,8 @@ bool ibApplicationInstance::Login(const wxString& strUserName,
 				// ref_meta_id = 0 marks a system-table (sys_user) ref —
 				// viewer recognises 0 as "not a metadata object, drill via
 				// the User Admin form keyed by m_strUserGuid instead".
-				ibLog->Audit(wxT("auth"), wxT("login"),
-				             wxString::Format(wxT("user=%s"), strUserName),
+				ibLog->Audit(ibT("auth"), ibT("login"),
+				             ibString::Format(ibT("user=%s"), strUserName),
 				             outInfo.m_strUserGuid, /*refMetaId=*/0);
 			}
 		} catch (...) {}
@@ -1364,11 +1365,11 @@ bool BufferWalks(const ibMemoryBuffer& buffer)
 
 } // namespace
 
-bool ibApplicationInstance::LoadDatabase(const wxString& strFullPath)
+bool ibApplicationInstance::LoadDatabase(const ibString& strFullPath)
 {
 	wxFileInputStream fis(strFullPath);
 	if (!fis.IsOk()) {
-		ibJournalError(wxT("appdata"),"Couldn't open the file '%s'.", strFullPath);
+		ibJournalError(ibT("appdata"),"Couldn't open the file '%s'.", strFullPath);
 		return false;
 	}
 
@@ -1382,7 +1383,7 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 	// drop the configuration tables and every user, then return success.
 	wxZipInputStream zis(stream);
 	if (!zis.IsOk()) {
-		ibJournalError(wxT("appdata"), "The file is not a readable archive. Nothing was cleared.");
+		ibJournalError(ibT("appdata"), "The file is not a readable archive. Nothing was cleared.");
 		return false;
 	}
 
@@ -1400,16 +1401,16 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 		if (entry->IsDir())
 			continue;
 
-		const wxString name = entry->GetName();
-		const bool isConfig = name == wxT("config");
-		const bool isUser = name == wxT("user");
-		const bool isData = name == wxT("data");
+		const ibString name = entry->GetName();
+		const bool isConfig = name == ibT("config");
+		const bool isUser = name == ibT("user");
+		const bool isData = name == ibT("data");
 		if (!isConfig && !isUser && !isData)
 			continue;
 
 		ibMemoryBuffer buffer;
 		if (!ReadZipEntry(zis, *entry, buffer)) {
-			ibJournalError(wxT("appdata"), "The archive entry '%s' could not be read. Nothing was cleared.", name);
+			ibJournalError(ibT("appdata"), "The archive entry '%s' could not be read. Nothing was cleared.", name);
 			return false;
 		}
 
@@ -1433,7 +1434,7 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 	}
 
 	if (duplicate) {
-		ibJournalError(wxT("appdata"), "The archive repeats config, user or data. Nothing was cleared.");
+		ibJournalError(ibT("appdata"), "The archive repeats config, user or data. Nothing was cleared.");
 		return false;
 	}
 
@@ -1441,22 +1442,22 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 	// writer emits config before data; a file that says otherwise is refused
 	// rather than landing rows in whatever structure the database already has.
 	if (dataBeforeConfig) {
-		ibJournalError(wxT("appdata"), _("The file carries data before the configuration - it cannot be loaded"));
+		ibJournalError(ibT("appdata"), _("The file carries data before the configuration - it cannot be loaded"));
 		return false;
 	}
 
 	if (!sawConfig || !sawUser || !sawData) {
-		ibJournalError(wxT("appdata"), "The archive must contain config, user and data. Nothing was cleared.");
+		ibJournalError(ibT("appdata"), "The archive must contain config, user and data. Nothing was cleared.");
 		return false;
 	}
 
 	if (!BufferWalks(user) || !BufferWalks(data)) {
-		ibJournalError(wxT("appdata"), "The archive's user or data entry is truncated. Nothing was cleared.");
+		ibJournalError(ibT("appdata"), "The archive's user or data entry is truncated. Nothing was cleared.");
 		return false;
 	}
 
 	if (activeMetaData == nullptr) {
-		ibJournalError(wxT("appdata"), "There is no configuration to load the file into. Nothing was cleared.");
+		ibJournalError(ibT("appdata"), "There is no configuration to load the file into. Nothing was cleared.");
 		return false;
 	}
 
@@ -1465,12 +1466,12 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 	// base untouched.
 	try {
 		if (!ibMetaData::MakeShared<ibMetaDataConfigurationFile>()->LoadConfigFromBuffer(config)) {
-			ibJournalError(wxT("appdata"), "The file has no configuration this build can read. Nothing was cleared.");
+			ibJournalError(ibT("appdata"), "The file has no configuration this build can read. Nothing was cleared.");
 			return false;
 		}
 	}
 	catch (const ibCoreException& err) {
-		ibJournalError(wxT("appdata"), "%s Nothing was cleared.", err.GetErrorDescription());
+		ibJournalError(ibT("appdata"), "%s Nothing was cleared.", err.GetErrorDescription());
 		return false;
 	}
 
@@ -1492,7 +1493,7 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 	// with the column ids, that `data` is about to be written into. A failed
 	// apply stops the load.
 	if (!activeMetaData->SaveDatabase(saveConfigFlag)) {
-		ibJournalError(wxT("appdata"),_("The configuration from the file could not be applied - the data was not loaded"));
+		ibJournalError(ibT("appdata"),_("The configuration from the file could not be applied - the data was not loaded"));
 		return false;
 	}
 
@@ -1505,13 +1506,13 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 	return true;
 }
 
-bool ibApplicationInstance::SaveDatabase(const wxString& strFullPath)
+bool ibApplicationInstance::SaveDatabase(const ibString& strFullPath)
 {
 	// 1. Create the physical file output stream
 	wxFFileOutputStream out(strFullPath);
 	if (!out.IsOk())
 	{
-		ibJournalError(wxT("appdata"),"Cannot create output file %s", strFullPath);
+		ibJournalError(ibT("appdata"),"Cannot create output file %s", strFullPath);
 		return false;
 	}
 
@@ -1524,7 +1525,7 @@ bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
 	wxZipOutputStream zip(out);
 
 	// PutNextEntry sets up the new entry in the archive
-	if (zip.PutNextEntry(wxT("config"))) {
+	if (zip.PutNextEntry(ibT("config"))) {
 		//save configuration — a backup without it restores nothing, so it is not written
 		ibMemoryBuffer bufferConfig;
 		if (!activeMetaData->SaveConfigToBuffer(bufferConfig))
@@ -1534,7 +1535,7 @@ bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
 		zip.Write(contentStream); // Write the data from the content stream
 	}
 
-	if (zip.PutNextEntry(wxT("user"))) {
+	if (zip.PutNextEntry(ibT("user"))) {
 		//save users 
 		ibMemoryBuffer bufferUser;
 		if (!SaveUserInfoToBuffer(bufferUser))
@@ -1544,7 +1545,7 @@ bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
 		zip.Write(contentStream); // Write the data from the content stream
 	}
 
-	if (zip.PutNextEntry(wxT("data"))) {
+	if (zip.PutNextEntry(ibT("data"))) {
 		//save data
 		ibMemoryBuffer bufferData;
 		if (!activeMetaData->DumpDataToBuffer(bufferData))
@@ -1571,11 +1572,11 @@ bool ibApplicationInstance::ClearDatabase()
 	return true;
 }
 
-wxString ibApplicationInstance::GetDatabaseDescription() const
+ibString ibApplicationInstance::GetDatabaseDescription() const
 {
 	// Where the base lives: a PostgreSQL server's database, or a Firebird folder (none — the launcher's, no base).
 	if (!m_strServer.IsEmpty())
-		return m_strServer + wxT(":") + m_strPort + wxT("/") + m_strDatabase;
+		return m_strServer + ibT(":") + m_strPort + ibT("/") + m_strDatabase;
 	return m_strFile;
 }
 
@@ -1583,12 +1584,12 @@ wxString ibApplicationInstance::GetDatabaseDescription() const
 
 #include "core/utils/md5.hpp"
 
-wxString ibApplicationInstance::ComputeMd5(const wxString& userPassword) const
+ibString ibApplicationInstance::ComputeMd5(const ibString& userPassword) const
 {
 	if (userPassword.Length() > 0)
 		return ibMD5::ComputeMd5(userPassword);
 
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

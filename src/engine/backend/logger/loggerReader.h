@@ -16,7 +16,7 @@
 // Order: ts_ms DESC, id DESC (newest first).
 class BACKEND_API ibLoggerReader {
 public:
-    explicit ibLoggerReader(const wxString& dir);
+    explicit ibLoggerReader(const ibString& dir);
 
     std::vector<ibLogRow> Query(const ibLogFilter& filter);
     std::size_t           Count(const ibLogFilter& filter);
@@ -24,9 +24,9 @@ public:
 private:
     // Enumerate .olg files in m_dir whose (year, month) overlap with
     // the filter's [from_ms, to_ms) range. Sorted newest month first.
-    std::vector<wxString> CollectFiles(const ibLogFilter& filter) const;
+    std::vector<ibString> CollectFiles(const ibLogFilter& filter) const;
 
-    wxString m_dir;
+    ibString m_dir;
 };
 
 #endif

@@ -8,7 +8,7 @@
 class ibViewCommandBar;
 class ibGridEvent;
 
-// THE SPREADSHEET CONTROL — the desktop's (frontend/visualView/ctrl/gridBox): its command bar above the sheet, which is
+// THE SPREADSHEET CONTROL — the old desktop's:its command bar above the sheet, which is
 // a DOCUMENT and its VIEW, held as long as the box lives (ibSpreadsheetGridBoxDocument / ibSpreadsheetGridBoxView). The
 // view's editor draws the sheet as the desktop's does, and while the box is the active control the form's view hands
 // the view its menu, its toolbar and its commands (GetControlView).

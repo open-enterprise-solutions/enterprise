@@ -15,74 +15,74 @@
 // selected at runtime (the enum stays the same, so the parser is locale-blind).
 static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 {
-	{ ibQueryKeyword::Select,   wxT("SELECT")   },
-	{ ibQueryKeyword::From,     wxT("FROM")     },
-	{ ibQueryKeyword::As,       wxT("AS")       },
-	{ ibQueryKeyword::Where,    wxT("WHERE")    },
-	{ ibQueryKeyword::Order,    wxT("ORDER")    },
-	{ ibQueryKeyword::By,       wxT("BY")       },
-	{ ibQueryKeyword::Asc,      wxT("ASC")      },
-	{ ibQueryKeyword::Desc,     wxT("DESC")     },
-	{ ibQueryKeyword::Group,    wxT("GROUP")    },
-	{ ibQueryKeyword::Having,   wxT("HAVING")   },
-	{ ibQueryKeyword::Distinct, wxT("DISTINCT") },
-	{ ibQueryKeyword::Top,      wxT("TOP")      },
-	{ ibQueryKeyword::Allowed,  wxT("ALLOWED")  },
-	{ ibQueryKeyword::Into,     wxT("INTO")     },
-	{ ibQueryKeyword::Onto,     wxT("ONTO")     },
-	{ ibQueryKeyword::Link,     wxT("LINK")     },
-	{ ibQueryKeyword::Drop,     wxT("DROP")     },
-	{ ibQueryKeyword::Index,    wxT("INDEX")    },
-	{ ibQueryKeyword::For,      wxT("FOR")      },
-	{ ibQueryKeyword::Update,   wxT("UPDATE")   },
-	{ ibQueryKeyword::Totals,   wxT("TOTALS")   },
-	{ ibQueryKeyword::Hierarchy,    wxT("HIERARCHY")     },
-	{ ibQueryKeyword::HierarchyOnly,wxT("HIERARCHYONLY") },
-	{ ibQueryKeyword::Elements, wxT("ELEMENTS") },
-	{ ibQueryKeyword::Overall,  wxT("OVERALL")  },
-	{ ibQueryKeyword::Periods,  wxT("PERIODS")  },
-	{ ibQueryKeyword::Split,    wxT("SPLIT")    },
-	{ ibQueryKeyword::Join,     wxT("JOIN")     },
-	{ ibQueryKeyword::Inner,    wxT("INNER")    },
-	{ ibQueryKeyword::Left,     wxT("LEFT")     },
-	{ ibQueryKeyword::Right,    wxT("RIGHT")    },
-	{ ibQueryKeyword::Full,     wxT("FULL")     },
-	{ ibQueryKeyword::Outer,    wxT("OUTER")    },
-	{ ibQueryKeyword::On,       wxT("ON")       },
-	{ ibQueryKeyword::Union,    wxT("UNION")    },
-	{ ibQueryKeyword::All,      wxT("ALL")      },
-	{ ibQueryKeyword::And,      wxT("AND")      },
-	{ ibQueryKeyword::Or,       wxT("OR")       },
-	{ ibQueryKeyword::Not,      wxT("NOT")      },
-	{ ibQueryKeyword::In,       wxT("IN")       },
-	{ ibQueryKeyword::Is,       wxT("IS")       },
-	{ ibQueryKeyword::Null,     wxT("NULL")     },
-	{ ibQueryKeyword::Like,     wxT("LIKE")     },
-	{ ibQueryKeyword::Between,  wxT("BETWEEN")  },
-	{ ibQueryKeyword::Refs,     wxT("REFS")     },
-	{ ibQueryKeyword::True,     wxT("TRUE")     },
-	{ ibQueryKeyword::False,    wxT("FALSE")    },
-	{ ibQueryKeyword::Undefined, wxT("UNDEFINED") },
-	{ ibQueryKeyword::Case,     wxT("CASE")     },
-	{ ibQueryKeyword::When,     wxT("WHEN")     },
-	{ ibQueryKeyword::Then,     wxT("THEN")     },
-	{ ibQueryKeyword::Else,     wxT("ELSE")     },
-	{ ibQueryKeyword::End,      wxT("END")      },
-	{ ibQueryKeyword::IsNull,   wxT("ISNULL")   },
-	{ ibQueryKeyword::Sum,      wxT("SUM")      },
-	{ ibQueryKeyword::Count,    wxT("COUNT")    },
-	{ ibQueryKeyword::Min,      wxT("MIN")      },
-	{ ibQueryKeyword::Max,      wxT("MAX")      },
-	{ ibQueryKeyword::Avg,      wxT("AVG")      },
-	{ ibQueryKeyword::Value,    wxT("VALUE")    },
-	{ ibQueryKeyword::Cast,     wxT("CAST")     },
-	{ ibQueryKeyword::Over,      wxT("OVER")       },
-	{ ibQueryKeyword::Partition, wxT("PARTITION")  },
-	{ ibQueryKeyword::Rows,      wxT("ROWS")       },
-	{ ibQueryKeyword::Range,     wxT("RANGE")      },
-	{ ibQueryKeyword::RowNumber, wxT("ROW_NUMBER") },
-	{ ibQueryKeyword::Rank,      wxT("RANK")       },
-	{ ibQueryKeyword::DenseRank, wxT("DENSE_RANK") },
+	{ ibQueryKeyword::Select,   ibT("SELECT")   },
+	{ ibQueryKeyword::From,     ibT("FROM")     },
+	{ ibQueryKeyword::As,       ibT("AS")       },
+	{ ibQueryKeyword::Where,    ibT("WHERE")    },
+	{ ibQueryKeyword::Order,    ibT("ORDER")    },
+	{ ibQueryKeyword::By,       ibT("BY")       },
+	{ ibQueryKeyword::Asc,      ibT("ASC")      },
+	{ ibQueryKeyword::Desc,     ibT("DESC")     },
+	{ ibQueryKeyword::Group,    ibT("GROUP")    },
+	{ ibQueryKeyword::Having,   ibT("HAVING")   },
+	{ ibQueryKeyword::Distinct, ibT("DISTINCT") },
+	{ ibQueryKeyword::Top,      ibT("TOP")      },
+	{ ibQueryKeyword::Allowed,  ibT("ALLOWED")  },
+	{ ibQueryKeyword::Into,     ibT("INTO")     },
+	{ ibQueryKeyword::Onto,     ibT("ONTO")     },
+	{ ibQueryKeyword::Link,     ibT("LINK")     },
+	{ ibQueryKeyword::Drop,     ibT("DROP")     },
+	{ ibQueryKeyword::Index,    ibT("INDEX")    },
+	{ ibQueryKeyword::For,      ibT("FOR")      },
+	{ ibQueryKeyword::Update,   ibT("UPDATE")   },
+	{ ibQueryKeyword::Totals,   ibT("TOTALS")   },
+	{ ibQueryKeyword::Hierarchy,    ibT("HIERARCHY")     },
+	{ ibQueryKeyword::HierarchyOnly,ibT("HIERARCHYONLY") },
+	{ ibQueryKeyword::Elements, ibT("ELEMENTS") },
+	{ ibQueryKeyword::Overall,  ibT("OVERALL")  },
+	{ ibQueryKeyword::Periods,  ibT("PERIODS")  },
+	{ ibQueryKeyword::Split,    ibT("SPLIT")    },
+	{ ibQueryKeyword::Join,     ibT("JOIN")     },
+	{ ibQueryKeyword::Inner,    ibT("INNER")    },
+	{ ibQueryKeyword::Left,     ibT("LEFT")     },
+	{ ibQueryKeyword::Right,    ibT("RIGHT")    },
+	{ ibQueryKeyword::Full,     ibT("FULL")     },
+	{ ibQueryKeyword::Outer,    ibT("OUTER")    },
+	{ ibQueryKeyword::On,       ibT("ON")       },
+	{ ibQueryKeyword::Union,    ibT("UNION")    },
+	{ ibQueryKeyword::All,      ibT("ALL")      },
+	{ ibQueryKeyword::And,      ibT("AND")      },
+	{ ibQueryKeyword::Or,       ibT("OR")       },
+	{ ibQueryKeyword::Not,      ibT("NOT")      },
+	{ ibQueryKeyword::In,       ibT("IN")       },
+	{ ibQueryKeyword::Is,       ibT("IS")       },
+	{ ibQueryKeyword::Null,     ibT("NULL")     },
+	{ ibQueryKeyword::Like,     ibT("LIKE")     },
+	{ ibQueryKeyword::Between,  ibT("BETWEEN")  },
+	{ ibQueryKeyword::Refs,     ibT("REFS")     },
+	{ ibQueryKeyword::True,     ibT("TRUE")     },
+	{ ibQueryKeyword::False,    ibT("FALSE")    },
+	{ ibQueryKeyword::Undefined, ibT("UNDEFINED") },
+	{ ibQueryKeyword::Case,     ibT("CASE")     },
+	{ ibQueryKeyword::When,     ibT("WHEN")     },
+	{ ibQueryKeyword::Then,     ibT("THEN")     },
+	{ ibQueryKeyword::Else,     ibT("ELSE")     },
+	{ ibQueryKeyword::End,      ibT("END")      },
+	{ ibQueryKeyword::IsNull,   ibT("ISNULL")   },
+	{ ibQueryKeyword::Sum,      ibT("SUM")      },
+	{ ibQueryKeyword::Count,    ibT("COUNT")    },
+	{ ibQueryKeyword::Min,      ibT("MIN")      },
+	{ ibQueryKeyword::Max,      ibT("MAX")      },
+	{ ibQueryKeyword::Avg,      ibT("AVG")      },
+	{ ibQueryKeyword::Value,    ibT("VALUE")    },
+	{ ibQueryKeyword::Cast,     ibT("CAST")     },
+	{ ibQueryKeyword::Over,      ibT("OVER")       },
+	{ ibQueryKeyword::Partition, ibT("PARTITION")  },
+	{ ibQueryKeyword::Rows,      ibT("ROWS")       },
+	{ ibQueryKeyword::Range,     ibT("RANGE")      },
+	{ ibQueryKeyword::RowNumber, ibT("ROW_NUMBER") },
+	{ ibQueryKeyword::Rank,      ibT("RANK")       },
+	{ ibQueryKeyword::DenseRank, ibT("DENSE_RANK") },
 };
 
 // THE SCALAR CALLS, in the same shape and beside the keywords they are deliberately NOT part of
@@ -105,28 +105,28 @@ struct ibQueryScalarFnEntry
 
 const ibQueryScalarFnEntry s_queryScalarFnsEN[] =
 {
-	{ ibQueryScalarFn::Year,            wxT("YEAR"),            1, 1, 0 },
-	{ ibQueryScalarFn::Quarter,         wxT("QUARTER"),         1, 1, 0 },
-	{ ibQueryScalarFn::Month,           wxT("MONTH"),           1, 1, 0 },
-	{ ibQueryScalarFn::DayOfYear,       wxT("DAYOFYEAR"),       1, 1, 0 },
-	{ ibQueryScalarFn::Day,             wxT("DAY"),             1, 1, 0 },
-	{ ibQueryScalarFn::Week,            wxT("WEEK"),            1, 1, 0 },
-	{ ibQueryScalarFn::WeekDay,         wxT("WEEKDAY"),         1, 1, 0 },
-	{ ibQueryScalarFn::Hour,            wxT("HOUR"),            1, 1, 0 },
-	{ ibQueryScalarFn::Minute,          wxT("MINUTE"),          1, 1, 0 },
-	{ ibQueryScalarFn::Second,          wxT("SECOND"),          1, 1, 0 },
-	{ ibQueryScalarFn::BeginOfPeriod,   wxT("BEGINOFPERIOD"),   2, 2, 2 },
-	{ ibQueryScalarFn::EndOfPeriod,     wxT("ENDOFPERIOD"),     2, 2, 2 },
-	{ ibQueryScalarFn::DateAdd,         wxT("DATEADD"),         3, 3, 2 },
-	{ ibQueryScalarFn::DateDiff,        wxT("DATEDIFF"),        3, 3, 3 },
-	{ ibQueryScalarFn::DateTime,        wxT("DATETIME"),        3, 6, 0 },
-	{ ibQueryScalarFn::Substring,       wxT("SUBSTRING"),       3, 3, 0 },
-	{ ibQueryScalarFn::ValueType,       wxT("VALUETYPE"),       1, 1, 0 },
-	{ ibQueryScalarFn::Type,            wxT("TYPE"),            1, 1, 0 },
-	{ ibQueryScalarFn::Presentation,    wxT("PRESENTATION"),    1, 1, 0 },
-	{ ibQueryScalarFn::RefPresentation, wxT("REFPRESENTATION"), 1, 1, 0 },
-	{ ibQueryScalarFn::Grouping,        wxT("GROUPING"),        1, 1, 0 },
-	{ ibQueryScalarFn::RecordAutoNumber,wxT("RECORDAUTONUMBER"),0, 0, 0 },
+	{ ibQueryScalarFn::Year,            ibT("YEAR"),            1, 1, 0 },
+	{ ibQueryScalarFn::Quarter,         ibT("QUARTER"),         1, 1, 0 },
+	{ ibQueryScalarFn::Month,           ibT("MONTH"),           1, 1, 0 },
+	{ ibQueryScalarFn::DayOfYear,       ibT("DAYOFYEAR"),       1, 1, 0 },
+	{ ibQueryScalarFn::Day,             ibT("DAY"),             1, 1, 0 },
+	{ ibQueryScalarFn::Week,            ibT("WEEK"),            1, 1, 0 },
+	{ ibQueryScalarFn::WeekDay,         ibT("WEEKDAY"),         1, 1, 0 },
+	{ ibQueryScalarFn::Hour,            ibT("HOUR"),            1, 1, 0 },
+	{ ibQueryScalarFn::Minute,          ibT("MINUTE"),          1, 1, 0 },
+	{ ibQueryScalarFn::Second,          ibT("SECOND"),          1, 1, 0 },
+	{ ibQueryScalarFn::BeginOfPeriod,   ibT("BEGINOFPERIOD"),   2, 2, 2 },
+	{ ibQueryScalarFn::EndOfPeriod,     ibT("ENDOFPERIOD"),     2, 2, 2 },
+	{ ibQueryScalarFn::DateAdd,         ibT("DATEADD"),         3, 3, 2 },
+	{ ibQueryScalarFn::DateDiff,        ibT("DATEDIFF"),        3, 3, 3 },
+	{ ibQueryScalarFn::DateTime,        ibT("DATETIME"),        3, 6, 0 },
+	{ ibQueryScalarFn::Substring,       ibT("SUBSTRING"),       3, 3, 0 },
+	{ ibQueryScalarFn::ValueType,       ibT("VALUETYPE"),       1, 1, 0 },
+	{ ibQueryScalarFn::Type,            ibT("TYPE"),            1, 1, 0 },
+	{ ibQueryScalarFn::Presentation,    ibT("PRESENTATION"),    1, 1, 0 },
+	{ ibQueryScalarFn::RefPresentation, ibT("REFPRESENTATION"), 1, 1, 0 },
+	{ ibQueryScalarFn::Grouping,        ibT("GROUPING"),        1, 1, 0 },
+	{ ibQueryScalarFn::RecordAutoNumber,ibT("RECORDAUTONUMBER"),0, 0, 0 },
 };
 
 const ibQueryScalarFnEntry* ScalarEntry(ibQueryScalarFn fn)
@@ -139,10 +139,10 @@ const ibQueryScalarFnEntry* ScalarEntry(ibQueryScalarFn fn)
 
 } // namespace
 
-ibQueryScalarFn ibFindQueryScalarFn(const wxString& upperWord)
+ibQueryScalarFn ibFindQueryScalarFn(const ibString& upperWord)
 {
-	static const std::map<wxString, ibQueryScalarFn> s_map = [] {
-		std::map<wxString, ibQueryScalarFn> m;
+	static const std::map<ibString, ibQueryScalarFn> s_map = [] {
+		std::map<ibString, ibQueryScalarFn> m;
 		for (const ibQueryScalarFnEntry& e : s_queryScalarFnsEN)
 			m[e.m_text] = e.m_fn;
 		return m;
@@ -151,15 +151,15 @@ ibQueryScalarFn ibFindQueryScalarFn(const wxString& upperWord)
 	return it != s_map.end() ? it->second : ibQueryScalarFn::None;
 }
 
-const wxString& ibQueryScalarFnText(ibQueryScalarFn fn)
+const ibString& ibQueryScalarFnText(ibQueryScalarFn fn)
 {
-	static const std::map<ibQueryScalarFn, wxString> s_map = [] {
-		std::map<ibQueryScalarFn, wxString> m;
+	static const std::map<ibQueryScalarFn, ibString> s_map = [] {
+		std::map<ibQueryScalarFn, ibString> m;
 		for (const ibQueryScalarFnEntry& e : s_queryScalarFnsEN)
 			m[e.m_fn] = e.m_text;
 		return m;
 	}();
-	static const wxString s_empty;
+	static const ibString s_empty;
 	const auto it = s_map.find(fn);
 	return it != s_map.end() ? it->second : s_empty;
 }
@@ -190,12 +190,12 @@ bool ibQueryScalarArgIsWord(ibQueryScalarFn fn, size_t index)
 	return ibQueryScalarFnUnitArg(fn, unit) && unit == index;
 }
 
-wxString ibAllQueryScalarFns()
+ibString ibAllQueryScalarFns()
 {
-	wxString out;
+	ibString out;
 	for (const ibQueryScalarFnEntry& entry : s_queryScalarFnsEN) {
 		if (!out.IsEmpty())
-			out += wxT(" ");
+			out += ibT(" ");
 		out += entry.m_text;
 	}
 	return out;
@@ -204,10 +204,10 @@ wxString ibAllQueryScalarFns()
 namespace {
 
 // uppercase spelling -> keyword (built once); keyword -> spelling (diagnostics).
-std::map<wxString, ibQueryKeyword>& KeywordByText()
+std::map<ibString, ibQueryKeyword>& KeywordByText()
 {
-	static std::map<wxString, ibQueryKeyword> s_map = [] {
-		std::map<wxString, ibQueryKeyword> m;
+	static std::map<ibString, ibQueryKeyword> s_map = [] {
+		std::map<ibString, ibQueryKeyword> m;
 		for (const ibQueryKeyWordEntry& e : s_queryKeyWordsEN)
 			m[e.m_text] = e.m_kw;
 		return m;
@@ -215,10 +215,10 @@ std::map<wxString, ibQueryKeyword>& KeywordByText()
 	return s_map;
 }
 
-std::map<ibQueryKeyword, wxString>& TextByKeyword()
+std::map<ibQueryKeyword, ibString>& TextByKeyword()
 {
-	static std::map<ibQueryKeyword, wxString> s_map = [] {
-		std::map<ibQueryKeyword, wxString> m;
+	static std::map<ibQueryKeyword, ibString> s_map = [] {
+		std::map<ibQueryKeyword, ibString> m;
 		for (const ibQueryKeyWordEntry& e : s_queryKeyWordsEN)
 			m[e.m_kw] = e.m_text;
 		return m;
@@ -228,9 +228,9 @@ std::map<ibQueryKeyword, wxString>& TextByKeyword()
 
 } // namespace
 
-ibQueryKeyword ibFindQueryKeyword(const wxString& upperWord)
+ibQueryKeyword ibFindQueryKeyword(const ibString& upperWord)
 {
-	const std::map<wxString, ibQueryKeyword>& m = KeywordByText();
+	const std::map<ibString, ibQueryKeyword>& m = KeywordByText();
 	auto it = m.find(upperWord);
 	return it != m.end() ? it->second : ibQueryKeyword::None;
 }
@@ -273,10 +273,10 @@ bool ibDistinctMattersFor(ibQueryKeyword aggregate)
 	}
 }
 
-const wxString& ibQueryKeywordText(ibQueryKeyword kw)
+const ibString& ibQueryKeywordText(ibQueryKeyword kw)
 {
-	static const wxString s_empty;
-	const std::map<ibQueryKeyword, wxString>& m = TextByKeyword();
+	static const ibString s_empty;
+	const std::map<ibQueryKeyword, ibString>& m = TextByKeyword();
 	auto it = m.find(kw);
 	return it != m.end() ? it->second : s_empty;
 }
@@ -284,21 +284,21 @@ const wxString& ibQueryKeywordText(ibQueryKeyword kw)
 // THE WHOLE ACTIVE TABLE, for the editor's highlighting. Asked of the table rather than typed out
 // again: a keyword added to the language lights up the day it is added, and a localized table
 // lights up ITS words — a hand-written list in the editor would highlight last year's language.
-wxString ibAllQueryKeywords()
+ibString ibAllQueryKeywords()
 {
-	wxString out;
+	ibString out;
 	for (const ibQueryKeyWordEntry& entry : s_queryKeyWordsEN) {
 		if (!out.IsEmpty())
-			out += wxT(" ");
+			out += ibT(" ");
 		out += entry.m_text;
 	}
 	// …AND THE CONTEXTUAL WORDS, which the lexer does not reserve but a person reads as words of the language:
 	// `ROLE` and the words of a role (`<expr> ROLE PERIOD 1 AS …`). Painted as words, still free as names —
 	// the painter matches the case they are written in, so a field called `Period` stays a name to the eye too.
-	out += wxT(" ROLE");
+	out += ibT(" ROLE");
 	for (const ibBalanceRole role : { ibBalanceRole::None, ibBalanceRole::Moment, ibBalanceRole::Dimension,
 	                                  ibBalanceRole::Opening, ibBalanceRole::Closing }) {
-		out += wxT(" ");
+		out += ibT(" ");
 		out += ibBalanceRoleWord(role);
 	}
 	return out;

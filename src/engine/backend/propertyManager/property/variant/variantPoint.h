@@ -40,7 +40,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataPoint"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataPoint"); }
 
 private:
 	ibPoint m_point;

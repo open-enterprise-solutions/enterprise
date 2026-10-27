@@ -11,7 +11,7 @@
 // which order, with what height share, and the column template. It edits a WORKING COPY and
 // commits it to the metaobject on OK, so Cancel really cancels.
 //
-// The runtime side that renders this is frontend/docView/templates/docViewHomePage.{h,cpp}.
+// The runtime side that renders this is frmclient/docView/templates/docViewHomePage.{h,cpp}.
 
 #include <wx/dialog.h>
 #include <wx/listctrl.h>
@@ -59,9 +59,10 @@ protected:
 
 	long GetSelection(ibHomePageColumn column) const;
 
-	// The form an item points at, as the server listed it (name + icon come from it); null
-	// when it was deleted since — the row then says so instead of vanishing silently.
-	const ibDataNode* FindItemForm(const ibHomePageItem& item) const;
+	// The form an item points at, as the server listed it (name + icon come from it); none
+	// when it was deleted since — the row then says so instead of vanishing silently. A copy: the list's
+	// nodes are made as they are read, so there is no address of one to hand out.
+	std::optional<ibDataNode> FindItemForm(const ibHomePageItem& item) const;
 
 	void OnCommandMenu(wxCommandEvent& event);
 	void OnItemActivated(wxListEvent& event);

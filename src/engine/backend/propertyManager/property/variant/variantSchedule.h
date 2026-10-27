@@ -49,7 +49,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataSchedule"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataSchedule"); }
 
 protected:
 	ibJobScheduleDescription m_schedule;

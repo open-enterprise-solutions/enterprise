@@ -41,7 +41,7 @@ void ibChooseVariant(ibDataComposer& composer)
 		// cannot be clicked with any confidence.
 		item.caption = ibVariantCaption(variants[i]);
 		if (item.caption.IsEmpty())
-			item.caption = wxString::Format(_("Variant %u"), static_cast<unsigned>(i + 1));
+			item.caption = ibString::Format(_("Variant %u"), static_cast<unsigned>(i + 1));
 		// ⭐ AND THE ONE IN FORCE IS TICKED — by COMPARING the settings against what COMPOSES, because there is
 		// no stored "active variant" to read. Asked of the reader's section instead, nothing would be ticked
 		// until they had picked something, while variant zero plainly composes.
@@ -121,7 +121,7 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 		// person it reports to both belong to.
 		ibSession* const session = ibSession::Current();
 		model->SubmitFetchAsync([self, alive, keepModel, session]() {
-			wxString failure;
+			ibString failure;
 			bool cancelled = false;
 			ibSettingsDescription composedWith;
 			try {
@@ -180,10 +180,10 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 						deliver();
 					}
 					catch (const std::exception& err) {
-						ibJournalWarning(wxT("gridbox"), wxT("a composed report was not delivered: %s"), wxString::FromUTF8(err.what()));
+						ibJournalWarning(ibT("gridbox"), ibT("a composed report was not delivered: %s"), ibString::FromUTF8(err.what()));
 					}
 					catch (...) {
-						ibJournalWarning(wxT("gridbox"), wxT("a composed report was not delivered"));
+						ibJournalWarning(ibT("gridbox"), ibT("a composed report was not delivered"));
 					}
 				});
 			else

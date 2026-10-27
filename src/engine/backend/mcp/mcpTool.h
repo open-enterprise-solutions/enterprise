@@ -49,7 +49,7 @@ class ibApplicationInstance;   // the base a description is about (ibMcpDescribe
 // the designer: descriptions, argument texts and refusals are read by an assistant, in English, so
 // there was never anything to translate. What IS read by a person — the lines the server publishes
 // into the designer's window — stays `_()` in mcpServer.cpp, and stays ASCII.
-#define ibMcpText(text) wxString(wxT(text))
+#define ibMcpText(text) ibString(ibT(text))
 
 class BACKEND_API ibMcpTool {
 public:
@@ -84,25 +84,25 @@ public:
 		// pair that already writes it to a file. See the note on m_shape below.
 		typedef std::function<bool(ibDataValue&)> ibMcpShape;
 
-		ibMcpArgument(const wxString& name, Kind kind, const wxString& description,
-			bool required = false, const std::vector<wxString>& values = std::vector<wxString>(),
+		ibMcpArgument(const ibString& name, Kind kind, const ibString& description,
+			bool required = false, const std::vector<ibString>& values = std::vector<ibString>(),
 			const ibMcpShape& shape = ibMcpShape())
 			: m_name(name), m_kind(kind), m_description(description)
 			, m_required(required), m_values(values), m_shape(shape) {
 		}
 
-		const wxString& Name() const { return m_name; }
+		const ibString& Name() const { return m_name; }
 
 		// WHAT SHAPE IT WAS DECLARED AS, and the closed set of words when it has one. Read by the
 		// gate that holds the published schema to its word (ibMcpArgumentFault) — a declaration
 		// nothing enforces is not a contract, it is a claim the caller acts on.
 		Kind KindOf() const { return m_kind; }
-		const std::vector<wxString>& Values() const { return m_values; }
+		const std::vector<ibString>& Values() const { return m_values; }
 
 		// WHAT IT IS FOR, in the caller's words. Read by the finder, which searches a tool by
 		// everything it says about itself: half of what a verb does is said in its arguments and
 		// nowhere else, and a finder blind to them knows the tool less well than its own answer does.
-		const wxString& Description() const { return m_description; }
+		const ibString& Description() const { return m_description; }
 
 		bool IsRequired() const { return m_required; }
 
@@ -113,16 +113,16 @@ public:
 
 		// Out of what the caller sent, by the same name it was declared under.
 		bool     Given(const ibDataNode& params) const;
-		wxString Text(const ibDataNode& params) const;
+		ibString Text(const ibDataNode& params) const;
 		std::int64_t      Whole(const ibDataNode& params) const;
 		bool     Flag(const ibDataNode& params) const;
 
 	private:
-		wxString              m_name;
+		ibString              m_name;
 		Kind                  m_kind;
-		wxString              m_description;
+		ibString              m_description;
 		bool                  m_required;
-		std::vector<wxString> m_values;   // the closed set, when the argument has one
+		std::vector<ibString> m_values;   // the closed set, when the argument has one
 
 		// ⭐⭐ THE SHAPE OF A STRUCTURED ARGUMENT — and it is not written here either.
 		//
@@ -141,7 +141,7 @@ public:
 
 	// The name the caller invokes, in the protocol's own spelling
 	// (lower_snake_case): "script_check", "metadata_list".
-	virtual wxString GetName() const = 0;
+	virtual ibString GetName() const = 0;
 
 	// ⭐⭐ DOES THIS VERB BELONG ON THE MAIN THREAD? Almost every one does: it touches the
 	// configuration, the designer's objects, a window — all of which are the main thread's, which
@@ -160,7 +160,7 @@ public:
 
 	// One sentence, written for the CALLER — it is what a machine reads to
 	// decide whether this is the verb it wants.
-	virtual wxString GetDescription() const = 0;
+	virtual ibString GetDescription() const = 0;
 
 	// ⭐⭐ WHAT THIS VERB TAKES — declared ONCE, and read through the same declaration.
 	//
@@ -192,7 +192,7 @@ public:
 	// reason in `refusal`, in words a person could act on. A refusal is not an
 	// exception: it is an ordinary answer, and the caller is a machine that
 	// will try something else.
-	virtual bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const = 0;
+	virtual bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const = 0;
 
 	// WHAT TO SAY IN THE WINDOW A PERSON IS WATCHING. Not the protocol name —
 	// `metadata_create` is what a machine calls this, and it tells the developer
@@ -206,7 +206,7 @@ public:
 	//
 	// The default names the tool, which is better than nothing and worse than an
 	// override; every tool a person will actually watch should have one.
-	virtual wxString GetActivity(const ibDataNode& params) const { return GetName(); }
+	virtual ibString GetActivity(const ibDataNode& params) const { return GetName(); }
 
 	// ⭐ THE HEADLINE ABOVE, AND THIS IS WHAT IS UNDER IT. "Writing 40 lines into the module
 	// 'ObjectModule'" says something happened and nothing about WHAT — and the person watching is
@@ -233,7 +233,7 @@ public:
 	// with something better to show still overrides; nothing has to.
 	//
 	// Returns MARKDOWN — the transcript renders it.
-	virtual wxString GetDetail(const ibDataNode& params) const;
+	virtual ibString GetDetail(const ibDataNode& params) const;
 
 	// ⭐ IS THIS ONE HANDED OVER AT THE HANDSHAKE, or found when it is wanted?
 	//
@@ -273,7 +273,7 @@ public:
 	// ⚠ DECLARED LAST ON PURPOSE. An optional virtual added in the middle of this class moves every
 	// slot below it, and a partial build then links objects that disagree about the layout — the
 	// vtable skew whose symptom is a stack that will not unwind. Last, it only ever appends.
-	virtual wxString GetSearchText() const { return wxEmptyString; }
+	virtual ibString GetSearchText() const { return ibEmptyString; }
 
 	// ⭐⭐ WHAT IS INSIDE THIS TOOL, AS ADDRESSES — so one search answers both kinds of question.
 	//
@@ -287,7 +287,7 @@ public:
 	// only says they exist and can be handed back beside the verbs.
 	//
 	// ⚠ APPENDED AFTER GetSearchText, for the same reason that one is last (see above).
-	virtual void FindInside(const wxString& query, std::vector<ibDataValue>& places) const {}
+	virtual void FindInside(const ibString& query, std::vector<ibDataValue>& places) const {}
 
 	// ⭐ MAY THIS RUN WHILE THE HOST IS WAITING ON A MODAL DIALOG? Almost nothing may: the
 	// application is mid-question, and a command that opens a document or edits metadata underneath
@@ -309,8 +309,8 @@ public:
 //
 // Falls back to "#1723" when the id resolves to nothing: a number a person cannot
 // read is still better than a sentence with a hole where the object should be.
-BACKEND_API wxString ibMcpNameOf(const ibDataNode& params,
-	const wxString& field = wxT("id"));
+BACKEND_API ibString ibMcpNameOf(const ibDataNode& params,
+	const ibString& field = ibT("id"));
 
 // ⭐⭐ HOW MANY OF THE CALLER'S WORDS LANDED — the one rule every finder here matches by, so the
 // tool search and the corpus search cannot come to different conclusions about the same words.
@@ -325,24 +325,24 @@ BACKEND_API wxString ibMcpNameOf(const ibDataNode& params,
 // So the COUNT is returned instead of a verdict, and the caller ranks by it: everything that
 // matched every word if anything did, and otherwise whatever matched the most. A word is tried at
 // shrinking lengths down to four characters, so "distributing" meets "distribution".
-BACKEND_API size_t ibMcpWordsFound(const wxString& haystack, const wxString& query,
+BACKEND_API size_t ibMcpWordsFound(const ibString& haystack, const ibString& query,
 	size_t* asked = nullptr);
 
 // …and WHICH of them landed, one flag per word of the query in its order (one for a regular expression).
 // The same rule, asked word by word — for a finder that weighs the words instead of counting them.
-BACKEND_API void ibMcpWordsPresent(const wxString& haystack, const wxString& query, std::vector<bool>& met);
+BACKEND_API void ibMcpWordsPresent(const ibString& haystack, const ibString& query, std::vector<bool>& met);
 
 // The line of `body` a reader would have found themselves — the first one carrying any word of the
 // query, trimmed — so a place can be judged before it is opened. Found by the same rule as the words
 // (ibMcpWordsFound); every finder that quotes a line asks this, so the line quoted is the one that met.
-BACKEND_API wxString ibMcpMatchingLine(const wxString& body, const wxString& query);
+BACKEND_API ibString ibMcpMatchingLine(const ibString& body, const ibString& query);
 
 // WHAT A COMPOSITION STILL LACKS to produce a report somebody can read — a nameless variant, no
 // output, nothing selected. Written where the report verbs live (mcpToolReport.cpp) and declared
 // here because the configuration-wide audit asks the same question of every composer there is: two
 // implementations of "what is missing" would answer differently within a week.
 BACKEND_API void ibMcpComposerComplaints(const struct ibCompositionDescription& composition,
-	std::vector<wxString>& missing);
+	std::vector<ibString>& missing);
 
 // ⭐⭐ WHICH REQUIRED ARGUMENT DID NOT COME — empty when they all did. Asked OF THE ARGUMENTS, not of
 // the published schema: ibMcpArgument is where `required` is stated, and `Given()` is the same
@@ -356,7 +356,7 @@ BACKEND_API void ibMcpComposerComplaints(const struct ibCompositionDescription& 
 // costs, and the second is why it moved: the transport owned a rule about arguments, and a test
 // could not call it, so the suite's third question compared the schema with itself while its NAME
 // promised it checked the refusal.
-BACKEND_API wxString ibMcpMissingArgument(const class ibMcpTool* tool, const ibDataNode& arguments);
+BACKEND_API ibString ibMcpMissingArgument(const class ibMcpTool* tool, const ibDataNode& arguments);
 
 // ⭐ THE MODULE BEHIND AN ID, or nothing and the refusal to hand back. Four verbs asked this - two
 // in module_read / module_write, one in debug_breakpoint, one in script_complete - and each of them
@@ -367,7 +367,7 @@ BACKEND_API wxString ibMcpMissingArgument(const class ibMcpTool* tool, const ibD
 // ⚠ The CAST stays, and belongs: what is wanted here is not "what kind are you" but the module's own
 // interface, which is what a cast is for. What moved is the REPEAT.
 BACKEND_API class ibValueMetaObjectModuleBase* ibMcpModuleOf(class ibValueMetaObject* object,
-	wxString& refusal);
+	ibString& refusal);
 
 // ⭐⭐ IS WHAT ARRIVED WHAT THE SCHEMA SAID IT WOULD BE? Empty when every declared argument that came
 // matches its own declaration; otherwise the sentence to refuse with.
@@ -382,7 +382,7 @@ BACKEND_API class ibValueMetaObjectModuleBase* ibMcpModuleOf(class ibValueMetaOb
 //
 // ⚠ THE SHAPE, NOT THE MEANING. Whether a string names a real metatype stays the tool's business —
 // it knows, and this does not. What is checked is only what the schema itself declared.
-BACKEND_API wxString ibMcpArgumentFault(const class ibMcpTool* tool, const ibDataNode& arguments);
+BACKEND_API ibString ibMcpArgumentFault(const class ibMcpTool* tool, const ibDataNode& arguments);
 
 // ⭐ THE FIRST LINE THAT NAMES SOMETHING, as a WHOLE WORD — for an answer that says where a hit is
 // rather than only that there was one. A caller judges a hit by the line and fetches only what
@@ -391,12 +391,12 @@ BACKEND_API wxString ibMcpArgumentFault(const class ibMcpTool* tool, const ibDat
 // ⚠ WHOLE WORD, because a name inside a longer identifier is a different thing entirely: `Goods`
 // must not be reported as used by `GoodsReceipt`, or every answer becomes noise in a base whose
 // naming is any good. Empty when the name is nowhere in the text.
-BACKEND_API wxString ibMcpLineNaming(const wxString& text, const wxString& name);
+BACKEND_API ibString ibMcpLineNaming(const ibString& text, const ibString& name);
 
 // Is this query written as a REGULAR EXPRESSION rather than as words? Asked by everything that
 // wants to show WHERE a match landed, so the highlight and the match cannot disagree about how
 // the query was read.
-BACKEND_API bool ibMcpIsRegex(const wxString& query);
+BACKEND_API bool ibMcpIsRegex(const ibString& query);
 
 // ⭐⭐ THE ONE PLACE THAT SAYS AN OBJECT. Every tool that answers about a metaobject answers with
 // the same handful of facts, and each of them was spelling the tags out by hand: `name`, `kind`,
@@ -446,7 +446,7 @@ BACKEND_API void ibMcpSayObject(const class ibValueMetaObject* object, ibDataNod
 // comment answer with one list rather than three.
 //
 // The text is never rewritten — note_read is also how a note is read in order to be edited.
-BACKEND_API int ibMcpSayObjectLinks(const wxString& text, class ibMetaData* metaData,
+BACKEND_API int ibMcpSayObjectLinks(const ibString& text, class ibMetaData* metaData,
 	std::vector<ibDataValue>& into, std::set<long long>& seen);
 
 // ⭐⭐ EVERY PROPERTY THE OBJECT HAS — asked of the object, so a property added tomorrow is in the
@@ -465,7 +465,7 @@ BACKEND_API int ibMcpSayObjectLinks(const wxString& text, class ibMetaData* meta
 //
 // `only` narrows to one property by name (empty = all); `editableOnly` drops the read-only ones.
 BACKEND_API void ibMcpSayProperties(const class ibPropertyObject* object, ibDataNode& node,
-	const wxString& only = wxEmptyString, bool editableOnly = false);
+	const ibString& only = ibEmptyString, bool editableOnly = false);
 
 // …AND ONE PROPERTY THAT IS SAID ITS OWN WAY: a caption, as a `value` of one text PER LANGUAGE.
 // Both the walk above and the answer to a write call this, so a caller sees the same shape however
@@ -506,17 +506,17 @@ BACKEND_API void ibMcpSayChoiceParameters(const class ibPropertyObject* field,
 // owner. Exported because it stopped being one tool's private business: every verb that places a
 // value now goes through it (a choice, a type description, a caption's language cell, a register
 // record), and a second copy of a four-step sequence is four chances to drop a step.
-BACKEND_API bool ibMcpApplyByHand(class ibProperty* property, const wxVariant& newValue, wxString& refusal);
+BACKEND_API bool ibMcpApplyByHand(class ibProperty* property, const wxVariant& newValue, ibString& refusal);
 
 // ⭐ THE PATTERN CORPUS, FOR SURFACES THAT ARE NOT TOOLS. `prompts` is served by the server and is
 // the one place the platform can put words in front of a PERSON without a model relaying them — so
 // the corpus has to be readable from outside the tool that reads it (mcpToolPatterns.cpp).
 // The index is (name, summary); the text is one entry, empty when there is no such name.
-BACKEND_API std::vector<std::pair<wxString, wxString>> ibMcpPatternIndex();
-BACKEND_API wxString ibMcpPatternText(const wxString& name);
+BACKEND_API std::vector<std::pair<ibString, ibString>> ibMcpPatternIndex();
+BACKEND_API ibString ibMcpPatternText(const ibString& name);
 
 BACKEND_API bool ibMcpSetProperty(class ibProperty* property,
-	const ibDataNode& params, ibDataNode& result, wxString& refusal);
+	const ibDataNode& params, ibDataNode& result, ibString& refusal);
 
 // 🛑 "NOTHING HAS ID 0" IS THE WRONG COMPLAINT. A caller that forgot the argument gets the DEFAULT
 // zero looked up and is told, confidently, that no object has that id — so they go looking for
@@ -540,9 +540,9 @@ BACKEND_API bool ibMcpSetProperty(class ibProperty* property,
 // ibMcpArgument::Declare. This reads as the pair of ibMcpNameOf above: that one turns an id into a
 // name for a person, this one turns it into the object for a verb.
 BACKEND_API class ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params,
-	wxString& refusal, const wxString& field = wxT("id"));
+	ibString& refusal, const ibString& field = ibT("id"));
 
-BACKEND_API std::vector<wxString> ibMcpComplaints(class ibValueMetaObject* object);
+BACKEND_API std::vector<ibString> ibMcpComplaints(class ibValueMetaObject* object);
 
 // ⭐ THE FACTS THAT DECIDE HOW TO WRITE ANYTHING — dialect, languages, compatibility version,
 // build, who is logged in, what the configuration is called.
@@ -576,7 +576,7 @@ BACKEND_API void ibMcpDescribePlatform(const ibApplicationInstance* applicationI
 BACKEND_API void ibMcpPictureIdAsText(class ibDataValue& shape);
 BACKEND_API void ibMcpPictureIdAsNumber(class ibDataValue& shape);
 
-BACKEND_API wxString ibMcpFencedExcerpt(const wxString& text, const wxString& language,
+BACKEND_API ibString ibMcpFencedExcerpt(const ibString& text, const ibString& language,
 	size_t maxLines = 40);
 
 // The same, folded into an answer under a stable name. Does nothing when there
@@ -602,16 +602,16 @@ public:
 	// caller that has only the sentence uses the two-argument form.
 	class ibComplain {
 	public:
-		using Handler = std::function<void(const class ibValueMetaObject*, const wxString&, const ibDataValue&)>;
+		using Handler = std::function<void(const class ibValueMetaObject*, const ibString&, const ibDataValue&)>;
 
 		explicit ibComplain(Handler handler) : m_handler(std::move(handler)) {}
 
-		void operator()(const class ibValueMetaObject* about, const wxString& says) const
+		void operator()(const class ibValueMetaObject* about, const ibString& says) const
 		{
 			(*this)(about, says, ibDataValue());
 		}
 
-		void operator()(const class ibValueMetaObject* about, const wxString& says,
+		void operator()(const class ibValueMetaObject* about, const ibString& says,
 			const ibDataValue& extra) const
 		{
 			if (m_handler)
@@ -643,9 +643,9 @@ BACKEND_API const std::vector<const ibMcpAudit*>& ibMcpAudits();
 // caller can put in front of the person, or clear with `window_dismiss`. Empty means free.
 // Maintained by whoever owns windows (a wxModalDialogHook in the designer); an atomic count, so it
 // can be read from the thread a request arrives on.
-BACKEND_API void ibMcpBusyEnter(const wxString& what);
+BACKEND_API void ibMcpBusyEnter(const ibString& what);
 BACKEND_API void ibMcpBusyLeave();
-BACKEND_API wxString ibMcpBusyWith();
+BACKEND_API ibString ibMcpBusyWith();
 
 // ⭐⭐ "IT DID NOT ANSWER" IS TWO FACTS, AND ONLY ONE OF THEM IS PATIENCE. A request to the application
 // waits for its answer, and a wait that expires used to be reported one way whatever caused it — "it did
@@ -658,14 +658,14 @@ BACKEND_API long ibMcpStartedApplication();   // 0 when app_run has started noth
 
 // The refusal for a wait that expired: `usual` while the application's process is there (or unknown —
 // started by somebody else), and "it is gone" when the process this designer started has exited.
-BACKEND_API wxString ibMcpNoAnswer(const wxString& usual);
+BACKEND_API ibString ibMcpNoAnswer(const ibString& usual);
 
 // ⭐⭐ A CAPTION GOES IN EVERY LANGUAGE THE CONFIGURATION DECLARES. True when `text` already carries
 // its languages (`en = '...'; ru = '...';`), is empty, or the configuration has one language at most;
 // otherwise false with a refusal naming the declared languages and the form. Asked by every road that
 // writes a caption without naming a language — a synonym through the setter, a template cell's text.
-BACKEND_API bool ibMcpCaptionInEveryLanguage(const class ibMetaData* owner, const wxString& text,
-	const wxString& what, wxString& refusal);
+BACKEND_API bool ibMcpCaptionInEveryLanguage(const class ibMetaData* owner, const ibString& text,
+	const ibString& what, ibString& refusal);
 
 // ⭐⭐ WHAT MAY RUN BEFORE A CLIENT HAS SAID WHO IT IS — and the answer is: exactly what saying so
 // requires. There is a person in front of this designer, and a connection is invisible to them until
@@ -675,8 +675,8 @@ BACKEND_API bool ibMcpCaptionInEveryLanguage(const class ibMetaData* owner, cons
 //
 // The list is here rather than in the server because it is a fact about the TOOLS - which of them a
 // greeting is made of - and because the contract test reads it to check every name is real.
-BACKEND_API bool ibMcpRunsBeforeGreeting(const wxString& toolName);
-BACKEND_API const std::vector<wxString>& ibMcpGreetingVerbs();
+BACKEND_API bool ibMcpRunsBeforeGreeting(const ibString& toolName);
+BACKEND_API const std::vector<ibString>& ibMcpGreetingVerbs();
 
 
 // The registry. Registration happens during static construction, so the store
@@ -684,7 +684,7 @@ BACKEND_API const std::vector<wxString>& ibMcpGreetingVerbs();
 // would not be built yet when the first registrar runs.
 BACKEND_API void ibRegisterMcpTool(const ibMcpTool* tool);
 BACKEND_API const std::vector<const ibMcpTool*>& ibMcpTools();
-BACKEND_API const ibMcpTool* ibFindMcpTool(const wxString& name);
+BACKEND_API const ibMcpTool* ibFindMcpTool(const ibString& name);
 
 //     MCP_TOOL_REGISTER(ibMcpToolScriptCheck);
 #define MCP_TOOL_REGISTER(tool_class)                                        \

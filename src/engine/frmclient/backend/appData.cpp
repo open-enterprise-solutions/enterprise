@@ -16,15 +16,15 @@ bool ibApplicationData::DesignerMode() const
 	return frame != nullptr && frame->GetMode() == ibProtocol::ibLogin::ibMode::Designer;
 }
 
-long ibApplicationData::RunApplication(const wxString& strAppName, bool searchDebug, bool useManifest) const
+long ibApplicationData::RunApplication(const ibString& strAppName, bool searchDebug, bool useManifest) const
 {
 	// Resolve the binary next to this one, as the engine's: a bare name is looked up on PATH and in the working
 	// directory, and it is in neither. Quoted because a resolved path can contain a space and wxExecute splits on those.
 	wxFileName binary = wxFileName::DirName(ibProgramFolder());
 	binary.SetFullName(strAppName);
 
-	wxString executeCmd = binary.FileExists()
-		? (wxT('"') + binary.GetFullPath() + wxT('"'))
+	ibString executeCmd = binary.FileExists()
+		? (ibT('"') + ibString(binary.GetFullPath()) + ibT('"'))
 		: strAppName;
 
 	// THE WEB SERVER publishes this base — the application server's, or the file base with its debugger — and the
@@ -32,24 +32,24 @@ long ibApplicationData::RunApplication(const wxString& strAppName, bool searchDe
 	// publication of it (webserver/webServer.h).
 	if (useManifest) {
 		if (!m_strAddress.IsEmpty()) {
-			executeCmd += wxString::Format(wxT(" --server=\"%s\""), m_strAddress);
+			executeCmd += ibString::Format(ibT(" --server=\"%s\""), m_strAddress);
 			if (!m_strTrusted.IsEmpty())
-				executeCmd += wxString::Format(wxT(" --trusted=\"%s\""), m_strTrusted);
+				executeCmd += ibString::Format(ibT(" --trusted=\"%s\""), m_strTrusted);
 		}
 		else if (!m_strFile.IsEmpty()) {
-			executeCmd += wxString::Format(wxT(" --file=\"%s\""), m_strFile);
+			executeCmd += ibString::Format(ibT(" --file=\"%s\""), m_strFile);
 			if (searchDebug)
-				executeCmd += wxT(" --debug");
+				executeCmd += ibT(" --debug");
 		}
 		else {
-			ibJournalWarning(wxT("process"), wxT("%s publishes a file base or a base of an application server, not one on a DBMS server"),
+			ibJournalWarning(ibT("process"), ibT("%s publishes a file base or a base of an application server, not one on a DBMS server"),
 				strAppName);
 			return 0;
 		}
 		if (!m_strLocale.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --locale=%s"), m_strLocale);
+			executeCmd += ibString::Format(ibT(" --locale=%s"), m_strLocale);
 
-		wxString url;
+		ibString url;
 		const long pid = ibStartWebServer(executeCmd, url, []() { wxYieldIfNeeded(); });
 		if (!url.IsEmpty())
 			wxLaunchDefaultBrowser(url);
@@ -59,35 +59,35 @@ long ibApplicationData::RunApplication(const wxString& strAppName, bool searchDe
 	// THE BASE THIS ONE OPENED, as the engine's built it from the connection it held — the fields, not this process's
 	// command line: a base the person picked (the folder dialog) is on none. Quoted, for the same reason the binary is.
 	if (!m_strAddress.IsEmpty()) {
-		executeCmd += wxString::Format(wxT(" --address=\"%s\""), m_strAddress);
+		executeCmd += ibString::Format(ibT(" --address=\"%s\""), m_strAddress);
 		if (!m_strTrusted.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --trusted=\"%s\""), m_strTrusted);
+			executeCmd += ibString::Format(ibT(" --trusted=\"%s\""), m_strTrusted);
 	}
 	else if (m_strFile.IsEmpty()) {
 		if (!m_strServer.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --server=%s"), m_strServer);
+			executeCmd += ibString::Format(ibT(" --server=%s"), m_strServer);
 		if (!m_strPort.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --dbport=%s"), m_strPort);
+			executeCmd += ibString::Format(ibT(" --dbport=%s"), m_strPort);
 		if (!m_strDatabase.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --db=%s"), m_strDatabase);
+			executeCmd += ibString::Format(ibT(" --db=%s"), m_strDatabase);
 		if (!m_strUser.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --user=%s"), m_strUser);
+			executeCmd += ibString::Format(ibT(" --user=%s"), m_strUser);
 		if (!m_strPassword.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --password=%s"), m_strPassword);
+			executeCmd += ibString::Format(ibT(" --password=%s"), m_strPassword);
 	}
 	else {
-		executeCmd += wxString::Format(wxT(" --file=\"%s\""), m_strFile);
+		executeCmd += ibString::Format(ibT(" --file=\"%s\""), m_strFile);
 	}
 
 	if (searchDebug)
-		executeCmd += wxT(" --debug");
+		executeCmd += ibT(" --debug");
 
 	if (!m_strIBUser.IsEmpty())
-		executeCmd += wxString::Format(wxT(" --ibuser=%s"), m_strIBUser);
+		executeCmd += ibString::Format(ibT(" --ibuser=%s"), m_strIBUser);
 	if (!m_strIBPassword.IsEmpty())
-		executeCmd += wxString::Format(wxT(" --ibpwd=%s"), m_strIBPassword);
+		executeCmd += ibString::Format(ibT(" --ibpwd=%s"), m_strIBPassword);
 	if (!m_strLocale.IsEmpty())
-		executeCmd += wxString::Format(wxT(" --locale=%s"), m_strLocale);
+		executeCmd += ibString::Format(ibT(" --locale=%s"), m_strLocale);
 
 	return wxExecute(executeCmd);
 }

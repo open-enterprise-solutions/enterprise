@@ -8,7 +8,7 @@
 
 #include "frmclient/win/ctrls/dataview/dataview.h"   // ibDataViewViewMode
 
-// THE VIEW MODE WINDOW — the desktop's (frontend/win/ctrls/tableView.cpp, ibTableViewCtrl::ShowViewMode): the mode in
+// THE VIEW MODE WINDOW — the old desktop's (ibTableViewCtrl::ShowViewMode):the mode in
 // force and the window's picture are what the server sent (ibProtocol::ibRequest::ibKind::ViewMode), the mode chosen goes back.
 class wxTableViewModeDialog : public wxDialog {
 

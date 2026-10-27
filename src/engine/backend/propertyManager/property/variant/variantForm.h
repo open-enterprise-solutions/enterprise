@@ -13,7 +13,7 @@ public:
 
 	ibVariantDataForm(
 		const ibMemoryBuffer& memory = ibMemoryBuffer(),
-		const wxString& moduleData = wxEmptyString
+		const ibString& moduleData = ibEmptyString
 	) : ibVariantDataModule(moduleData), m_formData(memory) {
 	}
 
@@ -39,7 +39,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataForm"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataForm"); }
 
 private:
 	ibMemoryBuffer m_formData;

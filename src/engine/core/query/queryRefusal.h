@@ -22,7 +22,7 @@
 class CORE_API ibQueryRefusal : public ibCoreException {
 public:
 
-	ibQueryRefusal(unsigned int currPos, unsigned int currLine, const wxString& errorDesc) :
+	ibQueryRefusal(unsigned int currPos, unsigned int currLine, const ibString& errorDesc) :
 		ibCoreException(errorDesc), m_currPos(currPos), m_currLine(currLine)
 	{
 	}

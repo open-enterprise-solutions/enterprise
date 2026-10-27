@@ -91,7 +91,7 @@ void ibValueGridBox::OnCellLeftClick(int row, int col)
 	menu.push_back(detail);
 	// …and one entry per field this cell can be broken down by — the submenu answers for itself,
 	// including whether there is anything to offer (gridBoxDetail.cpp).
-	const std::vector<wxString> byPath = AppendDetailByMenu(menu, idDetailByFirst, row, col);
+	const std::vector<ibString> byPath = AppendDetailByMenu(menu, idDetailByFirst, row, col);
 
 	std::int32_t chosen = 0;
 	if (!ibRequestMenu(menu, chosen))

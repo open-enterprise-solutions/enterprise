@@ -40,7 +40,7 @@ bool ibRoleRightsView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 	ibValueMetaObject* const metaObject = metaData != nullptr
 		? metaData->FindAnyObjectByFilter(args.GetMetaId(), true) : nullptr;   // NodeId: the node's identity, not a field
 	const ibRole* const role = metaObject != nullptr
-		? metaObject->GetRole(args.GetValue<wxString>(ibProtocol::ibView::ibCheckTree::Name)) : nullptr;
+		? metaObject->GetRole(args.GetValue<ibString>(ibProtocol::ibView::ibCheckTree::Name)) : nullptr;
 	if (role == nullptr)
 		return false;
 
@@ -60,7 +60,7 @@ ibDataNode& ibRoleRightsView::GroupFor(ibDataNode& root, const ibClassID& clsid)
 
 	// A group row is named by its place: it carries no object.
 	ibDataNode& group = root.AddChild(0, -static_cast<ibMetaID>(root.Children().size() + 1));
-	const wxString caption = ibMetaGroupCaption(clsid);
+	const ibString caption = ibMetaGroupCaption(clsid);
 	group.SetValue(ibProtocol::ibView::ibCheckTree::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
 	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid));
 	return group;

@@ -16,9 +16,9 @@ public:
 	// WHICH REGISTERS A DOCUMENT POSTS TO — information, accumulation and accounting registers.
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
-	ibPropertyRecord(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyRecord(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyRecord(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyRecord(ibPropertyCategory* cat, const ibString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyRecord(ibPropertyCategory* cat, const ibString& name, const ibString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyRecord(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);

@@ -36,7 +36,7 @@ extern "C" {
 // exactly this struct — plain C, one function — and everything beyond it is
 // requested explicitly:
 //
-//   const void* diag = host->query(host, "diagnostics", 1);
+//   const void* diag = host->query(host, "diagnostics", 2);
 //
 // `query` returns NULL when the capability is unknown or the requested version
 // is not the one the host implements. A plugin that asked for something it did

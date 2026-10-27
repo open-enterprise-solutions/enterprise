@@ -35,7 +35,7 @@ ibPictureDescription ibReportEditDocument::GetIcon() const
 	return ibMetaDataDocument::GetIcon();
 }
 
-bool ibReportEditDocument::OnCreate(const wxString& path, long flags)
+bool ibReportEditDocument::OnCreate(const ibString& path, long flags)
 {
 	m_metaData = ibMetaData::MakeShared<ibMetaDataReport>();
 	if (!ibMetaDocument::OnCreate(path, flags))
@@ -57,8 +57,8 @@ bool ibReportEditDocument::OnNewDocument()
 
 	SetDocumentSaved(false);
 
-	const wxString name =
-		wxString::Format(commonObject->GetClassName() + wxT("%d"), s_defaultReportNameCounter++);
+	const ibString name =
+		ibString::Format(commonObject->GetClassName() + ibT("%d"), s_defaultReportNameCounter++);
 
 	SetTitle(name);
 	SetFilename(name, true);
@@ -84,7 +84,7 @@ bool ibReportEditDocument::OnCloseDocument()
 	return ibMetaDocument::OnCloseDocument();
 }
 
-bool ibReportEditDocument::DoOpenDocument(const wxString& filename)
+bool ibReportEditDocument::DoOpenDocument(const ibString& filename)
 {
 	if (!m_metaData->LoadFromTempFile(filename))
 		return false;
@@ -95,7 +95,7 @@ bool ibReportEditDocument::DoOpenDocument(const wxString& filename)
 	return true;
 }
 
-bool ibReportEditDocument::DoSaveDocument(const wxString& filename)
+bool ibReportEditDocument::DoSaveDocument(const ibString& filename)
 {
 	// The desktop tree's Save — the metadata written, when there was something to write; nothing to write is no
 	// failure. ⚠ The desktop landed its open composer editors first (ibCommitOpenComposers): the server has none yet.

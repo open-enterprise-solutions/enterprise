@@ -30,17 +30,17 @@ public:
 	// The member chosen, as a value — its number.
 	ibValue GetEnumVariantValue() const { return ibValue(static_cast<long>(m_value)); }
 
-	wxString GetEnumName(unsigned int idx) const {
+	ibString GetEnumName(unsigned int idx) const {
 		if (idx >= m_listEnumData.size())
-			return wxEmptyString;
+			return ibEmptyString;
 		auto it = m_listEnumData.begin();
 		std::advance(it, idx);
 		return it->second;
 	}
 
-	wxString GetEnumDesc(unsigned int idx) const {
+	ibString GetEnumDesc(unsigned int idx) const {
 		if (idx >= m_listEnumDesc.size())
-			return wxEmptyString;
+			return ibEmptyString;
 		auto it = m_listEnumDesc.begin();
 		std::advance(it, idx);
 		return it->second;
@@ -65,15 +65,15 @@ protected:
 	//create enumeration
 	virtual void CreateEnumeration() = 0;
 
-	inline void AddEnumeration(const valT& v, const wxString& name, const wxString& descr = wxEmptyString) {
+	inline void AddEnumeration(const valT& v, const ibString& name, const ibString& descr = ibEmptyString) {
 		m_listEnumData.emplace(v, name);
 		m_listEnumDesc.emplace(v, descr.IsEmpty() ? name : descr);
 	}
 
 private:
 
-	std::map<valT, wxString> m_listEnumData;
-	std::map<valT, wxString> m_listEnumDesc;
+	std::map<valT, ibString> m_listEnumData;
+	std::map<valT, ibString> m_listEnumDesc;
 	valT                     m_value = valT();
 };
 
@@ -83,13 +83,13 @@ template <typename valT>
 class ibValueEnumerationVariant : public ibValue {
 public:
 
-	using ibMembers = std::vector<std::pair<valT, wxString>>;
+	using ibMembers = std::vector<std::pair<valT, ibString>>;
 
-	ibValueEnumerationVariant(const ibClassID& enumClass, const valT& v, const wxString& word,
+	ibValueEnumerationVariant(const ibClassID& enumClass, const valT& v, const ibString& word,
 		std::shared_ptr<const ibMembers> members)
 		: ibValue(enumClass, static_cast<long>(v), word), m_members(std::move(members)) {}
 
-	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& foundedObjects) const override {
+	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& foundedObjects) const override {
 		if (m_members == nullptr)
 			return false;
 		for (const auto& [member, word] : *m_members) {
@@ -111,7 +111,7 @@ ibValue ibValueEnumeration<valT>::CreateEnumVariantValue(const valT& v) const {
 		members->emplace_back(member, word);
 	const auto found = m_listEnumDesc.find(v);
 	return ibValue(new ibValueEnumerationVariant<valT>(GetClassType(), v,
-		found != m_listEnumDesc.end() ? found->second : wxString(), members));
+		found != m_listEnumDesc.end() ? found->second : ibString(), members));
 }
 
 template <class T, typename valT>

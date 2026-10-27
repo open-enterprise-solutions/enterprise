@@ -52,7 +52,7 @@ void ibDataProcessorTree::FillData(ibDataNode& root)
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Synonym, commonMetadata->GetSynonym());
 	// …and its header, the fields above the rows — its properties' rows, as the inspector writes them.
 	ibDataNode& header = root.Child(ibProtocol::ibSchema::ibMetaData::Properties);
-	for (const ibChar* name : { wxT("Name"), wxT("Synonym"), wxT("Comment"), wxT("DefaultFormObject") }) {
+	for (const ibChar* name : { ibT("Name"), ibT("Synonym"), ibT("Comment"), ibT("DefaultFormObject") }) {
 		if (ibProperty* const property = commonMetadata->GetProperty(name))
 			ibPropertyInspector::AppendProperty(header, property);
 	}

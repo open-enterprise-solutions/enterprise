@@ -6,7 +6,7 @@
 namespace {
 
 // AN ACT ON THE SHELF — the answer to the question pending: the server does it and asks again, saying how it went.
-bool ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct act, const ibGuid& id, const wxString& name)
+bool ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct act, const ibGuid& id, const ibString& name)
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
@@ -24,7 +24,7 @@ bool ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct act, const ibGuid&
 } // namespace
 
 ibGuid ibSaveComposerSettings(ibSettingsCategory WXUNUSED(category), const ibGuid& WXUNUSED(objectKey),
-                              const ibGuid& id, const wxString& name, const ibDataComposer& WXUNUSED(composer))
+                              const ibGuid& id, const ibString& name, const ibDataComposer& WXUNUSED(composer))
 {
 	if (!ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct::Save, id, name))
 		return wxNullGuid;
@@ -38,7 +38,7 @@ ibGuid ibSaveComposerSettings(ibSettingsCategory WXUNUSED(category), const ibGui
 bool ibRestoreComposerSettings(ibSettingsCategory WXUNUSED(category), const ibGuid& WXUNUSED(objectKey),
                                const ibGuid& id, ibDataComposer& WXUNUSED(composer), const ibMetaData* WXUNUSED(metaData))
 {
-	return ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct::Restore, id, wxString());
+	return ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct::Restore, id, ibString());
 }
 
 std::vector<ibComposerSettingsEntry> ibListComposerSettings(ibSettingsCategory WXUNUSED(category),
@@ -54,7 +54,7 @@ std::vector<ibComposerSettingsEntry> ibListComposerSettings(ibSettingsCategory W
 }
 
 bool ibRenameComposerSettings(ibSettingsCategory WXUNUSED(category), const ibGuid& WXUNUSED(objectKey),
-                              const ibGuid& id, const wxString& newName)
+                              const ibGuid& id, const ibString& newName)
 {
 	return ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct::Rename, id, newName);
 }
@@ -62,12 +62,12 @@ bool ibRenameComposerSettings(ibSettingsCategory WXUNUSED(category), const ibGui
 bool ibRemoveComposerSettings(ibSettingsCategory WXUNUSED(category), const ibGuid& WXUNUSED(objectKey),
                               const ibGuid& id)
 {
-	return ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct::Remove, id, wxString());
+	return ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct::Remove, id, ibString());
 }
 
 bool ibSetDefaultComposerSettings(const ibGuid& WXUNUSED(objectKey), const ibGuid& id)
 {
-	return ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct::Default, id, wxString());
+	return ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct::Default, id, ibString());
 }
 
 ibGuid ibGetDefaultComposerSettings(const ibGuid& WXUNUSED(objectKey))

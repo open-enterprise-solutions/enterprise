@@ -304,26 +304,26 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 	// ThisForm / Controls / DataSource are BOUND in formObject (context / export).
 	// The bind is the single source; surfacing to editor + runtime is the
 	// infrastructure's job — no manual AppendProp here.
-	helper.AppendProp(wxT("Modified"), eModified, eSystem);
-	helper.AppendProp(wxT("FormOwner"), eFormOwner, eSystem);
-	helper.AppendProp(wxT("UniqueKey"), eUniqueKey, eSystem);
+	helper.AppendProp(ibT("Modified"), eModified, eSystem);
+	helper.AppendProp(ibT("FormOwner"), eFormOwner, eSystem);
+	helper.AppendProp(ibT("UniqueKey"), eUniqueKey, eSystem);
 
-	helper.AppendProp(wxT("CloseOnChoice"), eCloseOnChoice, eSystem);
-	helper.AppendProp(wxT("CloseOnOwnerClose"), eCloseOnOwnerClose, eSystem);
-	helper.AppendProp(wxT("ReadOnly"), eReadOnly, eSystem);   // runtime read/write — open a form read-only (or read the mode)
-	helper.AppendProp(wxT("CurrentItem"), eCurrentItem, eSystem);   // the control in focus (read only)
+	helper.AppendProp(ibT("CloseOnChoice"), eCloseOnChoice, eSystem);
+	helper.AppendProp(ibT("CloseOnOwnerClose"), eCloseOnOwnerClose, eSystem);
+	helper.AppendProp(ibT("ReadOnly"), eReadOnly, eSystem);   // runtime read/write — open a form read-only (or read the mode)
+	helper.AppendProp(ibT("CurrentItem"), eCurrentItem, eSystem);   // the control in focus (read only)
 
-	helper.AppendProc(wxT("Show"), wxT("Show()"));
-	helper.AppendProc(wxT("Activate"), wxT("Activate()"));
-	helper.AppendProc(wxT("Update"), wxT("Update()"));
-	helper.AppendProc(wxT("Close"), wxT("Close()"));
-	helper.AppendFunc(wxT("IsShown"), wxT("IsShown()"));
-	helper.AppendProc(wxT("AttachIdleHandler"), 3, wxT("AttachIdleHandler(procedureName : string, interval : number, single : boolean)"));
-	helper.AppendProc(wxT("DetachIdleHandler"), 1, wxT("DetachIdleHandler(procedureName : string)"));
-	helper.AppendProc(wxT("NotifyChoice"), 1, wxT("NotifyChoice(value)"));
+	helper.AppendProc(ibT("Show"), ibT("Show()"));
+	helper.AppendProc(ibT("Activate"), ibT("Activate()"));
+	helper.AppendProc(ibT("Update"), ibT("Update()"));
+	helper.AppendProc(ibT("Close"), ibT("Close()"));
+	helper.AppendFunc(ibT("IsShown"), ibT("IsShown()"));
+	helper.AppendProc(ibT("AttachIdleHandler"), 3, ibT("AttachIdleHandler(procedureName : string, interval : number, single : boolean)"));
+	helper.AppendProc(ibT("DetachIdleHandler"), 1, ibT("DetachIdleHandler(procedureName : string)"));
+	helper.AppendProc(ibT("NotifyChoice"), 1, ibT("NotifyChoice(value)"));
 	// ⭐ IS EVERY REQUIRED ATTRIBUTE FILLED — see ibValueForm::CheckFilling. A FUNCTION, because the
 	// answer is the point: it reports what is missing and lets the caller decide to stop.
-	helper.AppendFunc(wxT("CheckFilling"), wxT("CheckFilling()"));
+	helper.AppendFunc(ibT("CheckFilling"), ibT("CheckFilling()"));
 
 	// Module exports AND the context binds (ThisForm.Controls / DataSource) are
 	// surfaced as the helper's tail by the descriptor's ExportThunk (autobind under

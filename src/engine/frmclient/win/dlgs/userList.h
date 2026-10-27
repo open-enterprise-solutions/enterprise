@@ -20,7 +20,7 @@
 #include "frmclient/frmclient.h"
 #include "frmclient/win/ctrls/dataview/dataview.h"
 
-// USERS — the desktop's dialog (frontend/win/dlgs/userList) as it is: the list read from the server's schema
+// USERS — the old desktop's dialog as it was: the list read from the server's schema
 // (frmserver/schema/designer/userList.cpp) through ibUserInfo, as it read sys_user.
 class FRMCLIENT_API ibDialogUserList : public wxDialog
 {

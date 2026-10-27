@@ -13,8 +13,6 @@
 #include "core/description/typeDescription.h"   // ibTypeDescription — what the field holds
 #include "core/query/queryKeywords.h"           // ibQueryKeyword — the answer's words
 
-#include <wx/arrstr.h>   // wxbase exports std::vector<wxString> (wxArrayString's base) — seen here, a unit imports it
-#include <wx/string.h>
 
 #include <vector>
 
@@ -44,6 +42,6 @@ CORE_API std::vector<ibQueryKeyword> ibQueryAggregatesFor(const ibTypeDescriptio
 // through the keyword list at all.
 //
 // So the ENGINE composes the offers: it knows what the type admits AND what forms a call may take.
-CORE_API std::vector<wxString> ibQueryAggregateCallsFor(const ibTypeDescription& type, const wxString& field);
+CORE_API std::vector<ibString> ibQueryAggregateCallsFor(const ibTypeDescription& type, const ibString& field);
 
 #endif // __QUERY_AGGREGATES_H__

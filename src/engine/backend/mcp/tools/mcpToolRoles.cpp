@@ -39,7 +39,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgDifferingOnly()
 {
-	static const ibArg s_a(wxT("differingOnly"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("differingOnly"), ibArg::Kind::Flag,
 		ibMcpText("Report only rights the named roles DISAGREE about - one grants, another refuses. "
 		  "With several roles this is the comparison itself, and it is usually short."));
 	return s_a;
@@ -47,14 +47,14 @@ const ibArg& ArgDifferingOnly()
 
 const ibArg& ArgRole()
 {
-	static const ibArg s_a(wxT("role"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("role"), ibArg::Kind::Text,
 		ibMcpText("One role's name, as it is called in the configuration."));
 	return s_a;
 }
 
 const ibArg& ArgRoles()
 {
-	static const ibArg s_a(wxT("roles"), ibArg::Kind::Many,
+	static const ibArg s_a(ibT("roles"), ibArg::Kind::Many,
 		ibMcpText("Several role names, to compare them side by side. Omit both this and `role` to "
 			  "take every role there is - which is how you ask who can reach something."));
 	return s_a;
@@ -62,7 +62,7 @@ const ibArg& ArgRoles()
 
 const ibArg& ArgObject()
 {
-	static const ibArg s_a(wxT("object"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("object"), ibArg::Kind::Text,
 		ibMcpText("One object by name - a catalog, a document, a section, or 'Configuration' for the "
 			  "root, where the administration rights live. Omit for all of them."));
 	return s_a;
@@ -70,7 +70,7 @@ const ibArg& ArgObject()
 
 const ibArg& ArgDeniedOnly()
 {
-	static const ibArg s_a(wxT("deniedOnly"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("deniedOnly"), ibArg::Kind::Flag,
 		ibMcpText("Report only rights that SOMEBODY is refused. Usually the shorter half, and the "
 			  "half a complaint is about."));
 	return s_a;
@@ -78,7 +78,7 @@ const ibArg& ArgDeniedOnly()
 
 const ibArg& ArgValue()
 {
-	static const ibArg s_a(wxT("value"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("value"), ibArg::Kind::Flag,
 		ibMcpText("true grants, false denies. REQUIRED - there is no safe default for a rights "
 			  "change."), /*required*/ true);
 	return s_a;
@@ -86,7 +86,7 @@ const ibArg& ArgValue()
 
 const ibArg& ArgRights()
 {
-	static const ibArg s_a(wxT("rights"), ibArg::Kind::Many,
+	static const ibArg s_a(ibT("rights"), ibArg::Kind::Many,
 		ibMcpText("Which rights, by the names metadata_rights reports (Read, Write, Delete, Use, "
 			  "Administration...). Omit for all of them. A name an object does not declare is "
 			  "simply not set on it - objects declare different rights."));
@@ -101,18 +101,18 @@ const ibArg& ArgRights()
 class ibMcpToolRoleRights : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("role_rights"); }
+	ibString GetName() const override { return ibT("role_rights"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString role = ArgRole().Text(params);
+		const ibString role = ArgRole().Text(params);
 
 		return role.IsEmpty()
 			? ibMcpText("checking who has access to what")
-			: wxString::Format(ibMcpText("checking what the role '%s' permits"), role);
+			: ibString::Format(ibMcpText("checking what the role '%s' permits"), role);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("WHO HAS ACCESS, right by right. Every right an object declares is answered with "
 			"the roles that grant it and the roles that refuse it, so comparing roles IS the "
@@ -128,7 +128,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 			refusal = ibMcpText("No configuration is open.");
@@ -143,7 +143,7 @@ public:
 		// the ibRoleUserInfo, which is what the rights fold takes. Building the second from the
 		// first inside the walk would rebuild it once per object per right.
 		struct Asked {
-			wxString              name;
+			ibString              name;
 			ibRoleCompositionMode mode;
 			ibRoleUserInfo        as;
 		};
@@ -166,13 +166,13 @@ public:
 			return one;
 		};
 
-		const auto addRole = [&](const wxString& name) -> bool {
+		const auto addRole = [&](const ibString& name) -> bool {
 
 			ibValueMetaObject* roleObject =
-				ibFindMetaObject(activeMetaData, wxT("Role"), name);
+				ibFindMetaObject(activeMetaData, ibT("Role"), name);
 
 			if (roleObject == nullptr) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("This configuration has no role named '%s'."), name);
 				return false;
 			}
@@ -181,7 +181,7 @@ public:
 			return true;
 		};
 
-		const wxString roleName = ArgRole().Text(params);
+		const ibString roleName = ArgRole().Text(params);
 
 		if (!roleName.IsEmpty() && !addRole(roleName))
 			return false;
@@ -205,7 +205,7 @@ public:
 			return false;
 		}
 
-		const wxString only = ArgObject().Text(params);
+		const ibString only = ArgObject().Text(params);
 		const bool deniedOnly = ArgDeniedOnly().Flag(params);
 		const bool differingOnly = ArgDifferingOnly().Flag(params);
 
@@ -215,22 +215,22 @@ public:
 		// the top level would report a section as permitted while everything inside
 		// it stayed shut — which is exactly the complaint this tool answers, given
 		// the wrong answer. The editor recurses; so does this.
-		std::function<void(ibValueMetaObject*, const wxString&)> consider =
-			[&](ibValueMetaObject* object, const wxString& path) {
+		std::function<void(ibValueMetaObject*, const ibString&)> consider =
+			[&](ibValueMetaObject* object, const ibString& path) {
 
 			if (object == nullptr || object->IsDeleted())
 				return;
 
-			const wxString here = path.IsEmpty()
+			const ibString here = path.IsEmpty()
 				? object->GetName()
-				: path + wxT(".") + object->GetName();
+				: path + ibT(".") + object->GetName();
 
 			// No rights declared, nothing any role could be asked about. A section
 			// with none still has children that may have some.
 			if (object->GetRoleCount() > 0
 				&& (only.IsEmpty()
-					|| stringUtils::CompareString(only, object->GetName())
-					|| stringUtils::CompareString(only, here))) {
+					|| stringUtils::IsSameAs(only, object->GetName())
+					|| stringUtils::IsSameAs(only, here))) {
 
 				std::vector<ibDataValue> rights;
 				bool anyDenied = false;
@@ -269,12 +269,12 @@ public:
 						continue;
 
 					std::shared_ptr<ibDataNode> row = std::make_shared<ibDataNode>();
-					row->SetValue(wxT("right"), right->GetName());
-					row->AddField(wxT("grantedBy"), ibDataValue::Array(grantedBy));
-					row->AddField(wxT("deniedBy"), ibDataValue::Array(deniedBy));
+					row->SetValue(ibT("right"), right->GetName());
+					row->AddField(ibT("grantedBy"), ibDataValue::Array(grantedBy));
+					row->AddField(ibT("deniedBy"), ibDataValue::Array(deniedBy));
 
 					if (differs)
-						row->AddField(wxT("differs"), ibDataValue::Bool(true));
+						row->AddField(ibT("differs"), ibDataValue::Bool(true));
 
 					// ⚠ WHETHER ANYBODY ACTUALLY SET THIS is deliberately NOT answered here:
 					// ibAccessObject keeps the map private and only folds it, so the question
@@ -291,14 +291,14 @@ public:
 				if (worthReporting) {
 
 					std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-					entry->SetValue(wxT("object"), here);
-					entry->SetValue(wxT("kind"), object->GetClassName());
-					entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
+					entry->SetValue(ibT("object"), here);
+					entry->SetValue(ibT("kind"), object->GetClassName());
+					entry->AddField(ibT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 
 					if (anyDiffering)
-						entry->AddField(wxT("differs"), ibDataValue::Bool(true));
+						entry->AddField(ibT("differs"), ibDataValue::Bool(true));
 
-					entry->AddField(wxT("rights"), ibDataValue::Array(rights));
+					entry->AddField(ibT("rights"), ibDataValue::Array(rights));
 
 					objects.push_back(ibDataValue::Child(entry));
 				}
@@ -320,10 +320,10 @@ public:
 		// configuration, Active users and Exclusive mode are declared on the CONFIGURATION object,
 		// so a walk over the metaobject array alone answers "this role denies nothing" about
 		// precisely the rights an access question is usually about.
-		consider(activeMetaData->GetCommonMetaObject(), wxEmptyString);
+		consider(activeMetaData->GetCommonMetaObject(), ibEmptyString);
 
 		for (ibValueMetaObject* object : activeMetaData->GetAnyArrayObject())
-			consider(object, wxEmptyString);
+			consider(object, ibEmptyString);
 
 		// ⭐ WHO WAS ASKED, AND WHAT KIND OF ROLE EACH IS — the classification, not just the name.
 		// The two modes are not two flavours of the same thing: a PERMITTING role adds (any one
@@ -337,12 +337,12 @@ public:
 		for (const Asked& one : asked) {
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("role"), one.name);
+			entry->SetValue(ibT("role"), one.name);
 			// ⚠ wxString, not the ternary's `const wchar_t*` — ibDataCodec has no specialisation
 			// for a raw pointer, and the failure is a template error inside dataBuilder.h rather
 			// than anything pointing here.
-			entry->SetValue(wxT("mode"), wxString(one.mode == ibRoleCompositionMode_Intersection
-				? wxT("restricting") : wxT("permitting")));
+			entry->SetValue(ibT("mode"), ibString(one.mode == ibRoleCompositionMode_Intersection
+				? ibT("restricting") : ibT("permitting")));
 
 			who.push_back(ibDataValue::Child(entry));
 
@@ -350,12 +350,12 @@ public:
 				|| one.mode == ibRoleCompositionMode_Intersection;
 		}
 
-		result.AddField(wxT("roles"), ibDataValue::Array(who));
-		result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)objects.size()));
-		result.AddField(wxT("objects"), ibDataValue::Array(objects));
+		result.AddField(ibT("roles"), ibDataValue::Array(who));
+		result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)objects.size()));
+		result.AddField(ibT("objects"), ibDataValue::Array(objects));
 
 		if (anyRestricting)
-			result.SetValue(wxT("composition"),
+			result.SetValue(ibT("composition"),
 				ibMcpText("A restricting role grants nothing of its own - it SUBTRACTS from whatever the "
 				  "permitting roles allowed, and no further role can widen past it. Read it in "
 				  "`grantedBy` as 'does not object', never as 'allows'. The verdict a user "
@@ -363,7 +363,7 @@ public:
 				  "agrees), so the order roles are assigned in never changes it."));
 
 		if (objects.empty())
-			result.SetValue(wxT("note"), only.IsEmpty()
+			result.SetValue(ibT("note"), only.IsEmpty()
 				? ibMcpText("Nothing to report - either no object declares rights, or nothing matched the "
 					"filters.")
 				: ibMcpText("That object declares no rights, or does not exist under that name."));
@@ -395,18 +395,18 @@ MCP_TOOL_REGISTER(ibMcpToolRoleRights);
 class ibMcpToolMetadataRights : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("metadata_rights"); }
+	ibString GetName() const override { return ibT("metadata_rights"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString object = ArgObject().Text(params);
+		const ibString object = ArgObject().Text(params);
 
 		return object.IsEmpty()
 			? ibMcpText("reading which rights the configuration declares")
-			: wxString::Format(ibMcpText("reading which rights '%s' declares"), object);
+			: ibString::Format(ibMcpText("reading which rights '%s' declares"), object);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Which rights a metaobject declares, and what each one answers when no role ever "
 			"set it. Ask this BEFORE role_grant: every metatype declares its own rights (a catalog "
@@ -421,31 +421,31 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
-		const wxString only = ArgObject().Text(params);
+		const ibString only = ArgObject().Text(params);
 
 		std::vector<ibDataValue> objects;
 		bool foundNamed = false;
 
-		std::function<void(ibValueMetaObject*, const wxString&)> describe =
-			[&](ibValueMetaObject* object, const wxString& path) {
+		std::function<void(ibValueMetaObject*, const ibString&)> describe =
+			[&](ibValueMetaObject* object, const ibString& path) {
 
 			if (object == nullptr || object->IsDeleted())
 				return;
 
-			const wxString here = path.IsEmpty()
+			const ibString here = path.IsEmpty()
 				? object->GetName()
-				: path + wxT(".") + object->GetName();
+				: path + ibT(".") + object->GetName();
 
 			const bool thisOne = only.IsEmpty()
-				|| stringUtils::CompareString(only, object->GetName())
-				|| stringUtils::CompareString(only, here);
+				|| stringUtils::IsSameAs(only, object->GetName())
+				|| stringUtils::IsSameAs(only, here);
 
 			if (thisOne) {
 
@@ -462,22 +462,22 @@ public:
 							continue;
 
 						std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-						entry->SetValue(wxT("name"), right->GetName());
-						entry->SetValue(wxT("label"), right->GetLabel());
-						entry->AddField(wxT("whenUnset"), ibDataValue::Bool(right->GetDefValue()));
+						entry->SetValue(ibT("name"), right->GetName());
+						entry->SetValue(ibT("label"), right->GetLabel());
+						entry->AddField(ibT("whenUnset"), ibDataValue::Bool(right->GetDefValue()));
 
 						rights.push_back(ibDataValue::Child(entry));
 					}
 
 					std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-					entry->SetValue(wxT("object"), here);
-					entry->SetValue(wxT("kind"), object->GetClassName());
-					entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
+					entry->SetValue(ibT("object"), here);
+					entry->SetValue(ibT("kind"), object->GetClassName());
+					entry->AddField(ibT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 
 					// ROW OR TABLE — the object's own answer, and it changes what a right MEANS:
 					// a register controls its whole table, a catalog element controls itself.
-					entry->AddField(wxT("perRecord"), ibDataValue::Bool(object->IsAccessPerRecord()));
-					entry->AddField(wxT("rights"), ibDataValue::Array(rights));
+					entry->AddField(ibT("perRecord"), ibDataValue::Bool(object->IsAccessPerRecord()));
+					entry->AddField(ibT("rights"), ibDataValue::Array(rights));
 
 					objects.push_back(ibDataValue::Child(entry));
 				}
@@ -497,22 +497,22 @@ public:
 
 		// The root first, and it is NOT in the array — see the note on role_grant. The rights that
 		// decide whether anybody may administer anything live only here.
-		describe(activeMetaData->GetCommonMetaObject(), wxEmptyString);
+		describe(activeMetaData->GetCommonMetaObject(), ibEmptyString);
 
 		for (ibValueMetaObject* object : activeMetaData->GetAnyArrayObject())
-			describe(object, wxEmptyString);
+			describe(object, ibEmptyString);
 
 		if (!only.IsEmpty() && !foundNamed) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("This configuration has no object named '%s'."), only);
 			return false;
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)objects.size()));
-		result.AddField(wxT("objects"), ibDataValue::Array(objects));
+		result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)objects.size()));
+		result.AddField(ibT("objects"), ibDataValue::Array(objects));
 
 		if (objects.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("That object declares no rights - nothing about it is governed by roles."));
 
 		return true;
@@ -545,22 +545,22 @@ MCP_TOOL_REGISTER(ibMcpToolMetadataRights);
 class ibMcpToolRoleGrant : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("role_grant"); }
+	ibString GetName() const override { return ibT("role_grant"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString role = ArgRole().Text(params);
-		const wxString object = ArgObject().Text(params);
+		const ibString role = ArgRole().Text(params);
+		const ibString object = ArgObject().Text(params);
 
 		if (object.IsEmpty())
 			return ArgValue().Flag(params)
-				? wxString::Format(ibMcpText("granting '%s' everything"), role)
-				: wxString::Format(ibMcpText("denying '%s' everything"), role);
+				? ibString::Format(ibMcpText("granting '%s' everything"), role)
+				: ibString::Format(ibMcpText("denying '%s' everything"), role);
 
-		return wxString::Format(ibMcpText("setting what '%s' may do with '%s'"), role, object);
+		return ibString::Format(ibMcpText("setting what '%s' may do with '%s'"), role, object);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Grant or deny rights to a role - the checkboxes in the role editor. Without "
 			"`object` it applies to EVERY object that declares rights, which is how an "
@@ -576,18 +576,18 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
-		const wxString roleName = ArgRole().Text(params);
-		ibValueMetaObject* roleObject = ibFindMetaObject(activeMetaData, wxT("Role"), roleName);
+		const ibString roleName = ArgRole().Text(params);
+		ibValueMetaObject* roleObject = ibFindMetaObject(activeMetaData, ibT("Role"), roleName);
 
 		if (roleObject == nullptr) {
-			refusal = wxString::Format(ibMcpText("This configuration has no role named '%s'."), roleName);
+			refusal = ibString::Format(ibMcpText("This configuration has no role named '%s'."), roleName);
 			return false;
 		}
 
@@ -603,11 +603,11 @@ public:
 		const bool value = asked->AsBool();
 		const ibRoleID roleId = (ibRoleID)roleObject->GetMetaID();
 
-		const wxString only = ArgObject().Text(params);
+		const ibString only = ArgObject().Text(params);
 
 		// WHICH RIGHTS, held as words. Empty means "whatever this object declares", decided per
 		// object rather than once, because objects declare different ones.
-		std::vector<wxString> wantedRights;
+		std::vector<ibString> wantedRights;
 
 		if (auto named = params.FindField(ArgRights().Name()))
 			if (named->Kind() == ibDataKind::Array)
@@ -619,19 +619,19 @@ public:
 		int touchedRights = 0;
 		bool foundNamed = false;
 
-		std::function<void(ibValueMetaObject*, const wxString&)> apply =
-			[&](ibValueMetaObject* object, const wxString& path) {
+		std::function<void(ibValueMetaObject*, const ibString&)> apply =
+			[&](ibValueMetaObject* object, const ibString& path) {
 
 			if (object == nullptr || object->IsDeleted())
 				return;
 
-			const wxString here = path.IsEmpty()
+			const ibString here = path.IsEmpty()
 				? object->GetName()
-				: path + wxT(".") + object->GetName();
+				: path + ibT(".") + object->GetName();
 
 			const bool thisOne = only.IsEmpty()
-				|| stringUtils::CompareString(only, object->GetName())
-				|| stringUtils::CompareString(only, here);
+				|| stringUtils::IsSameAs(only, object->GetName())
+				|| stringUtils::IsSameAs(only, here);
 
 			if (thisOne) {
 
@@ -648,8 +648,8 @@ public:
 
 						bool named = false;
 
-						for (const wxString& wanted : wantedRights)
-							if (stringUtils::CompareString(wanted, right->GetName())) {
+						for (const ibString& wanted : wantedRights)
+							if (stringUtils::IsSameAs(wanted, right->GetName())) {
 								named = true;
 								break;
 							}
@@ -684,13 +684,13 @@ public:
 		// configuration, Active users and Exclusive mode are declared on the CONFIGURATION object
 		// - precisely the rights an administrator role exists to hold. A walk over the metaobject
 		// array alone would report success and grant none of them.
-		apply(activeMetaData->GetCommonMetaObject(), wxEmptyString);
+		apply(activeMetaData->GetCommonMetaObject(), ibEmptyString);
 
 		for (ibValueMetaObject* object : activeMetaData->GetAnyArrayObject())
-			apply(object, wxEmptyString);
+			apply(object, ibEmptyString);
 
 		if (!only.IsEmpty() && !foundNamed) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("This configuration has no object named '%s'."), only);
 			return false;
 		}
@@ -698,13 +698,13 @@ public:
 		if (touchedRights > 0)
 			activeMetaData->Modify(true);
 
-		result.SetValue(wxT("role"), roleObject->GetName());
-		result.AddField(wxT("value"), ibDataValue::Bool(value));
-		result.AddField(wxT("objects"), ibDataValue::Int((std::int64_t)touchedObjects));
-		result.AddField(wxT("rights"), ibDataValue::Int((std::int64_t)touchedRights));
+		result.SetValue(ibT("role"), roleObject->GetName());
+		result.AddField(ibT("value"), ibDataValue::Bool(value));
+		result.AddField(ibT("objects"), ibDataValue::Int((std::int64_t)touchedObjects));
+		result.AddField(ibT("rights"), ibDataValue::Int((std::int64_t)touchedRights));
 
 		if (touchedRights == 0)
-			result.SetValue(wxT("note"), only.IsEmpty()
+			result.SetValue(ibT("note"), only.IsEmpty()
 				? ibMcpText("Nothing declares rights under those names - check them against "
 					"metadata_rights.")
 				: ibMcpText("That object declares no rights under those names."));
@@ -735,7 +735,7 @@ namespace {
 
 const ibArg& ArgWhere()
 {
-	static const ibArg s_a(wxT("where"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("where"), ibArg::Kind::Text,
 		ibMcpText("The condition rows must hold, written over the aliases - `s.Company = "
 		  "SessionParameters.Company`. Omit it only when the joins alone are the restriction "
 		  "(an inner join drops what it does not match)."));
@@ -744,7 +744,7 @@ const ibArg& ArgWhere()
 
 const ibArg& ArgJoins()
 {
-	static const ibArg s_a(wxT("joins"), ibArg::Kind::Many,
+	static const ibArg s_a(ibT("joins"), ibArg::Kind::Many,
 		ibMcpText("Tables to bring in, each written as the clause tail exactly as the language takes "
 		  "it: `a in Data.From(InformationRegisters.UserWarehouses) on s.Warehouse = a.Warehouse`. "
 		  "The word `join` is added for you; everything after it is yours. May be repeated."));
@@ -753,17 +753,17 @@ const ibArg& ArgJoins()
 
 const ibArg& ArgAlias()
 {
-	static const ibArg s_a(wxT("alias"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("alias"), ibArg::Kind::Text,
 		ibMcpText("The name bound to one row of the query being narrowed. Defaults to `s`."));
 	return s_a;
 }
 
 const ibArg& ArgOperation()
 {
-	static const ibArg s_a(wxT("operation"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("operation"), ibArg::Kind::Text,
 		ibMcpText("Which handler this is for - `read` narrows what a role SEES (OnAccessRead), "
 		  "`write` what it may change (OnAccessWrite). Defaults to read."),
-		/*required*/ false, { wxT("read"), wxT("write") });
+		/*required*/ false, { ibT("read"), ibT("write") });
 	return s_a;
 }
 
@@ -772,14 +772,14 @@ const ibArg& ArgOperation()
 class ibMcpToolRoleRestrict : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("role_restrict"); }
+	ibString GetName() const override { return ibT("role_restrict"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("writing a row restriction");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("WRITE A ROW-LEVEL RESTRICTION IN THE SHAPE THIS PLATFORM EXPECTS. Give it the "
 			"clauses - a condition, and the tables to join - and it composes the whole handler, "
@@ -805,7 +805,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 			refusal = ibMcpText("No configuration is open, and a restriction is written against one.");
@@ -814,37 +814,37 @@ public:
 
 		// ⭐ THE ROLE IS OPTIONAL AND CHECKED WHEN GIVEN. Composing needs no role at all; naming one
 		// is how a caller learns, before writing anything, that it exists.
-		const wxString roleName = ArgRole().Text(params);
+		const ibString roleName = ArgRole().Text(params);
 		ibValueMetaObject* roleObject = nullptr;
 		if (!roleName.IsEmpty()) {
-			roleObject = ibFindMetaObject(activeMetaData, wxT("Role"), roleName);
+			roleObject = ibFindMetaObject(activeMetaData, ibT("Role"), roleName);
 			if (roleObject == nullptr) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("This configuration has no role named '%s'."), roleName);
 				return false;
 			}
 		}
 
-		std::vector<wxString> joins;
+		std::vector<ibString> joins;
 		if (auto several = params.FindField(ArgJoins().Name()))
 			if (several->Kind() == ibDataKind::Array)
 				for (const ibDataValue& one : several->AsArray())
 					if (one.Kind() == ibDataKind::String && !one.AsString().IsEmpty())
 						joins.push_back(one.AsString());
 
-		const wxString where = ArgWhere().Text(params);
+		const ibString where = ArgWhere().Text(params);
 		if (where.IsEmpty() && joins.empty()) {
 			refusal = ibMcpText("A restriction with neither a condition nor a join restricts nothing - "
 				"say which rows are to be kept.");
 			return false;
 		}
 
-		wxString alias = ArgAlias().Text(params);
+		ibString alias = ArgAlias().Text(params);
 		if (alias.IsEmpty())
-			alias = wxT("s");
+			alias = ibT("s");
 
-		const bool forWrite = ArgOperation().Text(params).IsSameAs(wxT("write"), false);
-		const wxString handler = forWrite ? wxT("OnAccessWrite") : wxT("OnAccessRead");
+		const bool forWrite = ArgOperation().Text(params).IsSameAs(ibT("write"), false);
+		const ibString handler = forWrite ? ibT("OnAccessWrite") : ibT("OnAccessRead");
 
 		// 🛑 THE KEYWORDS COME FROM THE PARSER'S OWN TABLE, and the BLOCK SYNTAX from the
 		// configuration that will hold this. Composing a braced body for a configuration written in
@@ -853,19 +853,19 @@ public:
 		const auto word = [](int key) { return ibTranslateCode::GetKeyWord(key); };
 		const bool inWords = ibConfigurationWritesInWords(activeMetaData);
 
-		wxString restriction = word(KEY_RESTRICT) + wxT(" ") + alias
-			+ wxT(" ") + word(KEY_IN) + wxT(" Source");
-		for (const wxString& one : joins)
-			restriction += wxT("\n\t\t") + word(KEY_JOIN) + wxT(" ") + one;
+		ibString restriction = word(KEY_RESTRICT) + ibT(" ") + alias
+			+ ibT(" ") + word(KEY_IN) + ibT(" Source");
+		for (const ibString& one : joins)
+			restriction += ibT("\n\t\t") + word(KEY_JOIN) + ibT(" ") + one;
 		if (!where.IsEmpty())
-			restriction += wxT("\n\t\t") + word(KEY_WHERE) + wxT(" ") + where;
+			restriction += ibT("\n\t\t") + word(KEY_WHERE) + ibT(" ") + where;
 
-		wxString text;
-		text << wxT("Procedure ") << handler << wxT("(Source, Operation, Allowed)")
-		     << (inWords ? wxT("\n") : wxT(" {\n"))
-		     << wxT("\t") << restriction << wxT(";\n")
-		     << wxT("\tAllowed = True;\n")
-		     << (inWords ? wxT("EndProcedure\n") : wxT("}\n"));
+		ibString text;
+		text << ibT("Procedure ") << handler << ibT("(Source, Operation, Allowed)")
+		     << (inWords ? ibT("\n") : ibT(" {\n"))
+		     << ibT("\t") << restriction << ibT(";\n")
+		     << ibT("\tAllowed = True;\n")
+		     << (inWords ? ibT("EndProcedure\n") : ibT("}\n"));
 
 		// ⭐⭐ AND THEN IT IS COMPILED, because a composed text that does not compile is a worse
 		// answer than no text: it looks finished. Two doors read the one compile — one for what it
@@ -874,13 +874,13 @@ public:
 		const std::vector<ibQueryOutline> outlines =
 			ibOutlineScriptQueries(text, handler, activeMetaData);
 
-		result.SetValue(wxT("handler"), handler);
-		result.SetValue(wxT("syntax"), wxString(inWords ? wxT("words") : wxT("braces")));
-		result.SetValue(wxT("restriction"), restriction);
-		result.SetValue(wxT("text"), text);
+		result.SetValue(ibT("handler"), handler);
+		result.SetValue(ibT("syntax"), ibString(inWords ? ibT("words") : ibT("braces")));
+		result.SetValue(ibT("restriction"), restriction);
+		result.SetValue(ibT("text"), text);
 		if (roleObject != nullptr) {
-			result.SetValue(wxT("role"), roleObject->GetName());
-			result.AddField(wxT("roleId"), ibDataValue::Int((std::int64_t)roleObject->GetMetaID()));
+			result.SetValue(ibT("role"), roleObject->GetName());
+			result.AddField(ibT("roleId"), ibDataValue::Int((std::int64_t)roleObject->GetMetaID()));
 		}
 
 		// The names the restriction binds, as the compiler read them — the half that says the
@@ -889,26 +889,26 @@ public:
 		for (const ibQueryOutline& outline : outlines)
 			for (const ibQueryOutlineBinding& binding : outline.m_bindings) {
 				std::shared_ptr<ibDataNode> one = std::make_shared<ibDataNode>();
-				one->SetValue(wxT("name"), binding.m_name);
-				one->SetValue(wxT("from"), binding.m_origin);
+				one->SetValue(ibT("name"), binding.m_name);
+				one->SetValue(ibT("from"), binding.m_origin);
 				binds.push_back(ibDataValue::Child(one));
 			}
-		result.AddField(wxT("binds"), ibDataValue::Array(binds));
+		result.AddField(ibT("binds"), ibDataValue::Array(binds));
 
-		result.AddField(wxT("compiles"), ibDataValue::Bool(found.empty()));
+		result.AddField(ibT("compiles"), ibDataValue::Bool(found.empty()));
 		if (!found.empty()) {
 			// The FIRST refusal, which is the one that ended the compile — the rest would be
 			// consequences of it. `script_check` is the door for a full report.
 			std::shared_ptr<ibDataNode> why = std::make_shared<ibDataNode>();
-			why->SetValue(wxT("message"), found.front().m_message);
-			why->AddField(wxT("line"), ibDataValue::Int((std::int64_t)found.front().m_line));
+			why->SetValue(ibT("message"), found.front().m_message);
+			why->AddField(ibT("line"), ibDataValue::Int((std::int64_t)found.front().m_line));
 			if (!found.front().m_codeLine.IsEmpty())
-				why->SetValue(wxT("at"), found.front().m_codeLine);
-			result.AddField(wxT("refused"), ibDataValue::Child(why));
+				why->SetValue(ibT("at"), found.front().m_codeLine);
+			result.AddField(ibT("refused"), ibDataValue::Child(why));
 		}
 
-		result.SetValue(wxT("next"), roleObject != nullptr
-			? wxString::Format(
+		result.SetValue(ibT("next"), roleObject != nullptr
+			? ibString::Format(
 				ibMcpText("Write this into role '%s' with module_write when it says what you meant. "
 				  "The query door runs it on every read; the debugger steps into it."),
 				roleObject->GetName())

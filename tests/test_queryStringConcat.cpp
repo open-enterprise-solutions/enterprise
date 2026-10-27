@@ -24,15 +24,15 @@ namespace {
 
 class NamedCol : public ibBackendQueryColumn {
 public:
-	NamedCol(const wxString& name, Kind kind, ibTypeDescription type)
+	NamedCol(const ibString& name, Kind kind, ibTypeDescription type)
 		: m_name(name), m_kind(kind), m_type(std::move(type)) {}
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return 1; }
 	Kind               GetColumnKind()   const override { return m_kind; }
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	Kind                      m_kind;
 	mutable ibTypeDescription m_type;
 };
@@ -45,13 +45,13 @@ public:
 	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 
-	wxString GetQueryTableName() const override { return wxT("T"); }
+	ibString GetQueryTableName() const override { return wxT("T"); }
 	ibMetaID GetQueryTableId()   const override { return 1; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	bool     IsComputedInRam()   const override { return false; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
@@ -65,7 +65,7 @@ private:
 };
 
 // `SELECT <expr> AS v`, the expression lowered against `source` and written for the dialect.
-std::string Render(const ibDialectDictionary& dialect, const Source& source, const wxString& expr)
+std::string Render(const ibDialectDictionary& dialect, const Source& source, const ibString& expr)
 {
 	ibQueryParser parser;
 	const ibQuerySelectPtr select = parser.Parse(wxT("SELECT ") + expr + wxT(" AS v FROM Catalog.T"));
@@ -91,7 +91,7 @@ TEST(QueryStringConcat, CarriedStringBesideAStringFieldRendersConcatenation)
 	Source source;
 	source.AddCol(&carried);
 	source.AddCol(&ident);
-	const wxString phone = wxT("out_q_carried0 + \" \" + fld2430");
+	const ibString phone = wxT("out_q_carried0 + \" \" + fld2430");
 
 	EXPECT_EQ(Render(ibDatabaseLayerFirebird::Dialect(), source, phone),
 		"SELECT ((out_q_carried0 || CAST(? AS VARCHAR(1))) || fld2430_S) AS v FROM T");
@@ -141,7 +141,7 @@ TEST(QueryStringConcat, ConcatOperatorRendersPipes)
 {
 	const ibQueryExprPtr expr = ibBinOp(ibQueryBinOp::Concat,
 		ibCol(wxT("a_S")),
-		ibCast(ibConst(ibValue(wxString(wxT("x")))), ibTypeString(1)));
+		ibCast(ibConst(ibValue(ibString(wxT("x")))), ibTypeString(1)));
 	const ibQueryIR ir(ibProject(ibScan(wxT("T")), { { expr, wxT("v") } }));
 
 	EXPECT_EQ(ibQueryRenderer(ibDatabaseLayerFirebird::Dialect()).Render(ir).m_sql.ToStdString(),

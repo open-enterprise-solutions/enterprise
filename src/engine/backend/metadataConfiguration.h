@@ -63,8 +63,8 @@ public:
 
 	virtual ibApplicationInstance* GetApplicationInstance() const override { return m_applicationInstance; }
 
-	virtual wxString GetConfigMD5() const = 0;
-	virtual wxString GetConfigName() const = 0;
+	virtual ibString GetConfigMD5() const = 0;
+	virtual ibString GetConfigName() const = 0;
 
 	virtual ibGuid GetConfigGuid() const = 0;
 
@@ -154,10 +154,10 @@ public:
 	// editors first, reload the navigator afterwards". The code did neither: three bodies of
 	// `m_metaData->...`, a read-only guard, and an exception turned into words. The rollback's one
 	// exception - an explicit `Load()` - is what the Loaded stage now does by itself.
-	virtual bool SaveConfiguration(wxString& refusal);
-	virtual bool ApplyConfiguration(wxString& refusal,
+	virtual bool SaveConfiguration(ibString& refusal);
+	virtual bool ApplyConfiguration(ibString& refusal,
 		const std::function<bool(const class ibRestructureInfo&)>& decide = {});
-	virtual bool RollbackConfiguration(wxString& refusal);
+	virtual bool RollbackConfiguration(ibString& refusal);
 
 	//special delete and create 
 	virtual bool ReCreateDatabase() { return false; }
@@ -173,8 +173,8 @@ public:
 	virtual bool IsDynamicUpdateAvailable() const { return false; }
 
 	//load/save form file
-	bool LoadConfigFromFile(const wxString& strFileName);
-	bool SaveConfigToFile(const wxString& strFileName);
+	bool LoadConfigFromFile(const ibString& strFileName);
+	bool SaveConfigToFile(const ibString& strFileName);
 
 public:
 
@@ -214,8 +214,8 @@ public:
 	ibMetaDataConfigurationFile();
 	virtual ~ibMetaDataConfigurationFile();
 
-	virtual wxString GetConfigMD5() const { return m_md5Hash; }
-	virtual wxString GetConfigName() const { return m_commonObject->GetName(); }
+	virtual ibString GetConfigMD5() const { return m_md5Hash; }
+	virtual ibString GetConfigName() const { return m_commonObject->GetName(); }
 
 	virtual ibGuid GetConfigGuid() const { return m_commonObject->GetDocPath(); }
 
@@ -228,7 +228,7 @@ public:
 	}
 
 	//get language code 
-	virtual wxString GetLangCode() const;
+	virtual ibString GetLangCode() const;
 
 	//Check is full access 
 	virtual bool IsFullAccess() const;
@@ -272,7 +272,7 @@ protected:
 	// ⭐ THE CONFIGURATION'S DIGEST, and it is the AOT cache's KEY rather than a mark of what has
 	// been applied — recomputed on every load and every save, so a save retires every cached row of
 	// the previous configuration by putting them out of reach (byteCodeCache.h).
-	wxString m_md5Hash;
+	ibString m_md5Hash;
 
 	//common meta object — owning handle (ibValuePtr): bind = IncrRef, rebind / dtor = DecrRef
 	ibValuePtr<ibValueMetaObjectConfiguration> m_commonObject;
@@ -302,7 +302,7 @@ public:
 	// in metadataConfiguration.cpp where debugServer.h is included.
 	virtual ~ibMetaDataConfiguration();
 
-	virtual wxString GetConfigName() const { return m_commonObject->GetName(); }
+	virtual ibString GetConfigName() const { return m_commonObject->GetName(); }
 	virtual ibGuid GetConfigGuid() const { return m_metaGuid; }
 
 	//metaData 
@@ -350,8 +350,8 @@ class BACKEND_API ibMetaDataConfigurationStorage : public ibMetaDataConfiguratio
 
 	struct CSequenceData {
 		int m_interval;
-		wxString m_strGuid;
-		wxString m_strPrefix;
+		ibString m_strGuid;
+		ibString m_strPrefix;
 		int m_number;
 	};
 

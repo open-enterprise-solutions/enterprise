@@ -31,11 +31,11 @@ TEST(ReaderWriterMemory, PrimitiveRoundTrip) {
 
 TEST(ReaderWriterMemory, StringZRoundTrip) {
     ibWriterMemory w;
-    w.w_stringZ(wxString(wxT("hello world")));
+    w.w_stringZ(ibString(wxT("hello world")));
 
     const ibMemoryBuffer buf = w.buffer();
     ibReaderMemory r(buf);
-    wxString s;
+    ibString s;
     r.r_stringZ(s);
     EXPECT_EQ(s, wxT("hello world"));
 }
@@ -102,7 +102,7 @@ TEST(ReaderWriterMemory, StringZWithoutTerminator_Refused) {
 
     std::string out;
     EXPECT_THROW(reader.r_stringZ(out), ibCoreException);
-    wxString wide;
+    ibString wide;
     EXPECT_THROW(reader.r_stringZ(wide), ibCoreException);
     EXPECT_THROW(reader.skip_stringZ(), ibCoreException);
     char dest[8] = {};

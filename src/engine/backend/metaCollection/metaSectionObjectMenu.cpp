@@ -3,7 +3,7 @@
 
 bool ibValueMetaObjectSection::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	items.emplace_back(ibMetaMenuKind::Object, wxT("Interface"), _("Open interface"), this);
+	items.emplace_back(ibMetaMenuKind::Object, ibT("Interface"), _("Open interface"), this);
 	return false;
 }
 

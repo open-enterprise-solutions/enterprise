@@ -2,9 +2,9 @@
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
 #include "core/exception.h"   // ibCoreException — what a refused compile or run throws
-#include "frontend/artProvider/artProvider.h"
-#include "frontend/mainFrame/settings/editorsettings.h"
-#include "frontend/mainFrame/settings/fontcolorsettings.h"
+#include "codeRunner/artProvider/artProvider.h"
+#include "codeRunner/mainFrame/settings/editorsettings.h"
+#include "codeRunner/mainFrame/settings/fontcolorsettings.h"
 
 #include <wx/filedlg.h>
 #include <wx/aboutdlg.h>
@@ -261,11 +261,10 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 
 	wxBoxSizer* bSizerMain = new wxBoxSizer(wxVERTICAL);
 
-	// Frontend's full code editor — sessionless / document-less for the
-	// codeRunner host. Highlighter / fold / auto-indent / format & indent
-	// commands all live in ibCodeEditor; only debugger integration is
-	// gated off (designer's ibCodeEditorDesigner subclass wires that).
-	m_codeEditor = new ibCodeEditor(/*document=*/nullptr, this, wxID_ANY,
+	// The code editor, the old desktop front's copied whole (win/editor/codeEditor), with no
+	// document behind it: highlighter / fold / auto-indent / format & indent commands all live in
+	// ibCodeEditor; the debugger's hooks stay the no-ops they are for a host without one.
+	m_codeEditor = new ibCodeEditor(this, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
 	// Apply default editor + font/color settings — codeRunner has no

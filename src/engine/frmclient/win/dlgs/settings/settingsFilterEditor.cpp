@@ -522,7 +522,7 @@ private:
 			// responding to the clicks that expand a reference.
 			wxWindow* parent = m_editor;
 			FinishSelecting();
-			const wxString held = (asField != nullptr) ? asField->GetPath() : wxString();
+			const wxString held = (asField != nullptr) ? asField->GetPath() : ibString();
 			// …and nothing has to be put back afterwards: the row is the window's, and the window is
 			// still standing (SetEditedRow). This used to save it, restore it around the write and clear
 			// it again, because the cell's own copy did not survive the picker.

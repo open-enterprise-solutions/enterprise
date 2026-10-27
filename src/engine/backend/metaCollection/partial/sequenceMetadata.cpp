@@ -12,12 +12,12 @@
 ibValueMetaObjectSequence::ibValueMetaObjectSequence() : ibValueMetaObjectRegisterData()
 {
 	// The set's module opens with the handlers a set is written through, as a register's does.
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel"), ibT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel"), ibT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
 
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("Form"), ibT("Cancel") });
 }
 
 ibValueMetaObjectSequence::~ibValueMetaObjectSequence()

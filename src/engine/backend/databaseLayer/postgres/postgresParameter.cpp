@@ -15,12 +15,12 @@ ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const ibString& strValu
 
 ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(int nValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_INT)
 {
-	m_strValue = wxString::Format(wxT("%d"), nValue);
+	m_strValue = ibString::Format(ibT("%d"), nValue);
 }
 
 ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(double dblValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_DOUBLE)
 {
-	m_strValue = wxString::Format(wxT("%f"), dblValue);
+	m_strValue = ibString::Format(ibT("%f"), dblValue);
 }
 
 ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const ibNumber &dblValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_NUMBER)
@@ -30,12 +30,12 @@ ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const ibNumber &dblValu
 
 ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(bool bValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_BOOL)
 {
-	m_strValue = wxString::Format(wxT("%d"), bValue);
+	m_strValue = ibString::Format(ibT("%d"), bValue);
 }
 
 ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const ibDateTimeParts& date) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_DATETIME)
 {
-	m_strDateValue = wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"),
+	m_strDateValue = ibString::Format(ibT("%04d-%02u-%02u %02u:%02u:%02u"),
 		date.m_year, date.m_month, date.m_day, date.m_hour, date.m_minute, date.m_second);
 	m_nBufferLength = m_strDateValue.Length();
 }

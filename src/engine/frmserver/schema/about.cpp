@@ -27,8 +27,8 @@ void ibSchemaAbout::Build(const ibSession& session, const ibDataNode& /*args*/, 
 	if (const ibPluginManager* const pluginManager = applicationInstance->GetPluginManager()) {
 		for (const ibPluginManager::LoadedPlugin& plugin : pluginManager->Loaded()) {
 			ibDataNode& row = plugins.AddChild(0, 0);
-			row.SetValue(ibProtocol::ibSchema::ibAbout::Name, wxString::FromUTF8(plugin.m_info->name != nullptr ? plugin.m_info->name : "?"));
-			row.SetValue(ibProtocol::ibSchema::ibAbout::Version, wxString::FromUTF8(plugin.m_info->version != nullptr ? plugin.m_info->version : ""));
+			row.SetValue(ibProtocol::ibSchema::ibAbout::Name, ibString::FromUTF8(plugin.m_info->name != nullptr ? plugin.m_info->name : "?"));
+			row.SetValue(ibProtocol::ibSchema::ibAbout::Version, ibString::FromUTF8(plugin.m_info->version != nullptr ? plugin.m_info->version : ""));
 		}
 	}
 }

@@ -22,7 +22,7 @@
 #include "backend/metaCollection/metaLanguageObject.h"         // …and the languages are the config's own
 #include "backend/metaCollection/metaModuleObject.h"           // ibValueMetaObjectModuleBase — the module behind an id
 
-#include <wx/tokenzr.h>   // a query is words, and the finder counts how many of them landed
+#include "core/stringTokenizer.h"   // a query is words, and the finder counts how many of them landed
 #include <wx/regex.h>     // …unless it is written as a pattern, which is also a way to ask
 #include <wx/log.h>       // a query that does not compile is not the person's error to read
 
@@ -57,36 +57,36 @@ namespace {
 
 // The schema's own vocabulary, in one place. Not domain words — the words JSON Schema is written
 // in, which every tool used to spell for itself.
-const wxString kSchemaType       = wxT("type");
-const wxString kSchemaObject     = wxT("object");
-const wxString kSchemaProperties = wxT("properties");
-const wxString kSchemaRequired   = wxT("required");
+const ibString kSchemaType       = ibT("type");
+const ibString kSchemaObject     = ibT("object");
+const ibString kSchemaProperties = ibT("properties");
+const ibString kSchemaRequired   = ibT("required");
 
-wxString SchemaWordFor(ibMcpTool::ibMcpArgument::Kind kind)
+ibString SchemaWordFor(ibMcpTool::ibMcpArgument::Kind kind)
 {
 	switch (kind) {
-		case ibMcpTool::ibMcpArgument::Kind::Whole: return wxT("integer");
-		case ibMcpTool::ibMcpArgument::Kind::Flag:  return wxT("boolean");
-		case ibMcpTool::ibMcpArgument::Kind::Many:  return wxT("array");
-		case ibMcpTool::ibMcpArgument::Kind::Node:  return wxT("object");
+		case ibMcpTool::ibMcpArgument::Kind::Whole: return ibT("integer");
+		case ibMcpTool::ibMcpArgument::Kind::Flag:  return ibT("boolean");
+		case ibMcpTool::ibMcpArgument::Kind::Many:  return ibT("array");
+		case ibMcpTool::ibMcpArgument::Kind::Node:  return ibT("object");
 		// Deliberately EMPTY, and the writer leaves `type` out when it is: JSON Schema reads a
 		// missing type as "any type", which is exactly what this argument means. Naming one here
 		// would be picking a lie to tell.
-		case ibMcpTool::ibMcpArgument::Kind::Any:   return wxString();
-		default:                                    return wxT("string");
+		case ibMcpTool::ibMcpArgument::Kind::Any:   return ibString();
+		default:                                    return ibT("string");
 	}
 }
-void ibMcpSchemaArgument(ibDataNode& properties, const wxString& name,
-	const wxString& type, const wxString& description,
-	const std::vector<wxString>& values)
+void ibMcpSchemaArgument(ibDataNode& properties, const ibString& name,
+	const ibString& type, const ibString& description,
+	const std::vector<ibString>& values)
 {
 	ibDataNode& argument = properties.Child(name);
 	// An empty type is Kind::Any — the argument whose type this schema does not decide. Left OUT
 	// rather than written blank: JSON Schema reads an absent `type` as "any", and `"type": ""` as
 	// a type nobody has.
 	if (!type.IsEmpty())
-		argument.SetValue(wxT("type"), type);
-	argument.SetValue(wxT("description"), description);
+		argument.SetValue(ibT("type"), type);
+	argument.SetValue(ibT("description"), description);
 
 	// ⭐ THE WORDS IT ACCEPTS, WHEN THERE IS A FIXED SET OF THEM. A caller that is told the type is
 	// "string" and nothing else has to guess the vocabulary and find out by being refused; told
@@ -97,10 +97,10 @@ void ibMcpSchemaArgument(ibDataNode& properties, const wxString& name,
 
 	std::vector<ibDataValue> allowed;
 
-	for (const wxString& value : values)
+	for (const ibString& value : values)
 		allowed.push_back(ibDataValue::String(value));
 
-	argument.AddField(wxT("enum"), ibDataValue::Array(allowed));
+	argument.AddField(ibT("enum"), ibDataValue::Array(allowed));
 }
 
 
@@ -139,7 +139,7 @@ void ibMcpTool::ibMcpArgument::Declare(ibDataNode& schema) const
 		// the same reason as above: Child() here would throw away the type and the description and
 		// leave an entry that is nothing but an example.
 		if (properties->FindChild(m_name) && m_shape(empty))
-			properties->Child(m_name).AddField(wxT("example"), empty);
+			properties->Child(m_name).AddField(ibT("example"), empty);
 	}
 
 	if (!m_required)
@@ -176,9 +176,9 @@ bool ibMcpTool::ibMcpArgument::Given(const ibDataNode& params) const
 	return params.Has(m_name);
 }
 
-wxString ibMcpTool::ibMcpArgument::Text(const ibDataNode& params) const
+ibString ibMcpTool::ibMcpArgument::Text(const ibDataNode& params) const
 {
-	return params.GetValue<wxString>(m_name);
+	return params.GetValue<ibString>(m_name);
 }
 
 std::int64_t ibMcpTool::ibMcpArgument::Whole(const ibDataNode& params) const
@@ -196,7 +196,7 @@ bool ibMcpTool::ibMcpArgument::Flag(const ibDataNode& params) const
 // names legitimate — see the note in mcpTool.h.
 const ibMcpTool::ibMcpArgument& ibMcpIdArgument()
 {
-	static const ibMcpTool::ibMcpArgument s_id(wxT("id"), ibMcpTool::ibMcpArgument::Kind::Whole,
+	static const ibMcpTool::ibMcpArgument s_id(ibT("id"), ibMcpTool::ibMcpArgument::Kind::Whole,
 		ibMcpText("The object, as NodeId - metadata_list and metadata_get give it. It survives a rename, "
 		  "which a name does not."), /*required*/ true);
 	return s_id;
@@ -204,7 +204,7 @@ const ibMcpTool::ibMcpArgument& ibMcpIdArgument()
 
 const ibMcpTool::ibMcpArgument& ibMcpValueArgument()
 {
-	static const ibMcpTool::ibMcpArgument s_value(wxT("value"), ibMcpTool::ibMcpArgument::Kind::Any,
+	static const ibMcpTool::ibMcpArgument s_value(ibT("value"), ibMcpTool::ibMcpArgument::Kind::Any,
 		ibMcpText("What to put there, IN ITS OWN TYPE: true/false for a switch, a number for a number, the "
 		  "word for a property with a closed set of them, the NAME or the id of the object for a "
 		  "relationship. For a composite one, send back the same shape you were given."));
@@ -213,7 +213,7 @@ const ibMcpTool::ibMcpArgument& ibMcpValueArgument()
 
 const ibMcpTool::ibMcpArgument& ibMcpLanguageArgument()
 {
-	static const ibMcpTool::ibMcpArgument s_language(wxT("language"),
+	static const ibMcpTool::ibMcpArgument s_language(ibT("language"),
 		ibMcpTool::ibMcpArgument::Kind::Text,
 		ibMcpText("WHICH LANGUAGE this caption is written in - the two-letter code of a declared Language "
 		  "(`en`, `ru`, `uk`). Fills that one and leaves the others alone.\n"
@@ -260,10 +260,10 @@ void ibRegisterMcpTool(const ibMcpTool* tool)
 	// A NAME IS CLAIMED ONCE. Two tools under one name would make which one
 	// answers depend on link order — the kind of difference that shows up as a
 	// caller getting a plausible answer from the wrong door.
-	const wxString name = tool->GetName();
+	const ibString name = tool->GetName();
 	for (const ibMcpTool* registered : Store()) {
 		if (registered->GetName() == name) {
-			wxASSERT_MSG(false, wxT("an MCP tool is registered twice under one name"));
+			wxASSERT_MSG(false, ibT("an MCP tool is registered twice under one name"));
 			return;
 		}
 	}
@@ -286,13 +286,13 @@ static std::mutex& BusyMutex()
 	return s_mutex;
 }
 
-static wxString& BusyTitle()
+static ibString& BusyTitle()
 {
-	static wxString s_title;
+	static ibString s_title;
 	return s_title;
 }
 
-void ibMcpBusyEnter(const wxString& what)
+void ibMcpBusyEnter(const ibString& what)
 {
 	{
 		std::lock_guard<std::mutex> lock(BusyMutex());
@@ -310,15 +310,15 @@ void ibMcpBusyLeave()
 	}
 }
 
-wxString ibMcpBusyWith()
+ibString ibMcpBusyWith()
 {
 	if (BusyDepth().load() <= 0)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	std::lock_guard<std::mutex> lock(BusyMutex());
 
 	// A dialog with no title is still a dialog in the way — saying so beats answering "free".
-	return BusyTitle().IsEmpty() ? wxString(wxT("a dialog")) : BusyTitle();
+	return BusyTitle().IsEmpty() ? ibString(ibT("a dialog")) : BusyTitle();
 }
 
 // The application app_run started — see the header. An atomic, because the tools that wait on the
@@ -339,12 +339,12 @@ long ibMcpStartedApplication()
 	return StartedApplication().load();
 }
 
-wxString ibMcpNoAnswer(const wxString& usual)
+ibString ibMcpNoAnswer(const ibString& usual)
 {
 	const long pid = ibMcpStartedApplication();
 	if (pid == 0 || wxProcess::Exists((int)pid))
 		return usual;
-	return wxString::Format(
+	return ibString::Format(
 		ibMcpText("The application is GONE - its process (%ld, started by app_run) is no longer running, "
 			  "so nothing is waiting to answer. If nobody closed it, it crashed while this request was "
 			  "in hand: the Windows event log (Application, 'Application Error') names the faulting "
@@ -358,18 +358,18 @@ wxString ibMcpNoAnswer(const wxString& usual)
 // to have anything true to SAY about the configuration, mcp_search to find the verb at all, and
 // chat_say to speak. Nothing else — the point is that a person learns somebody is here BEFORE
 // their base is read, not after.
-const std::vector<wxString>& ibMcpGreetingVerbs()
+const std::vector<ibString>& ibMcpGreetingVerbs()
 {
-	static const std::vector<wxString> s_verbs = {
-		wxT("chat_say"), wxT("chat_history"), wxT("chat_take"),
-		wxT("platform_state"), wxT("metadata_tree"), wxT("mcp_search") };
+	static const std::vector<ibString> s_verbs = {
+		ibT("chat_say"), ibT("chat_history"), ibT("chat_take"),
+		ibT("platform_state"), ibT("metadata_tree"), ibT("mcp_search") };
 
 	return s_verbs;
 }
 
-bool ibMcpRunsBeforeGreeting(const wxString& toolName)
+bool ibMcpRunsBeforeGreeting(const ibString& toolName)
 {
-	for (const wxString& verb : ibMcpGreetingVerbs())
+	for (const ibString& verb : ibMcpGreetingVerbs())
 		if (verb.IsSameAs(toolName, false))
 			return true;
 
@@ -401,7 +401,7 @@ const std::vector<const ibMcpTool*>& ibMcpTools()
 	return Store();
 }
 
-const ibMcpTool* ibFindMcpTool(const wxString& name)
+const ibMcpTool* ibFindMcpTool(const ibString& name)
 {
 	for (const ibMcpTool* tool : Store()) {
 		if (tool->GetName() == name)
@@ -411,18 +411,18 @@ const ibMcpTool* ibFindMcpTool(const wxString& name)
 	return nullptr;
 }
 
-wxString ibMcpNameOf(const ibDataNode& params, const wxString& field)
+ibString ibMcpNameOf(const ibDataNode& params, const ibString& field)
 {
 	const std::int32_t id = params.GetValue<std::int32_t>(field);
 	if (id <= 0)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
 		if (ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id))
 			return object->GetName();
 	}
 
-	return wxString::Format(wxT("#%i"), (int)id);
+	return ibString::Format(ibT("#%i"), (int)id);
 }
 
 namespace {
@@ -431,7 +431,7 @@ namespace {
 // every topic, every tool description — so compiling it per text is the entire cost of searching.
 // Compiled once when the query changes, and the failure is remembered too: a query that is not a
 // valid pattern must not be re-attempted three hundred times.
-const wxRegEx* CompiledQuery(const wxString& query)
+const wxRegEx* CompiledQuery(const ibString& query)
 {
 	// ⚠ PER THREAD. Tools run on the main thread or on the delivery thread depending on what they
 	// need, and a shared cache here would be two searches writing one pointer. A regular
@@ -441,7 +441,7 @@ const wxRegEx* CompiledQuery(const wxString& query)
 	// of the process is reported by the CRT as a leak, and a leak line in a test run is a false
 	// alarm that never goes away — measured the first time these ran (2026-09-02: 32 bytes,
 	// dumped after the last test passed).
-	static thread_local wxString s_source;
+	static thread_local ibString s_source;
 	static thread_local wxRegEx s_regex;
 	static thread_local bool s_tried = false;
 	static thread_local bool s_valid = false;
@@ -463,14 +463,14 @@ const wxRegEx* CompiledQuery(const wxString& query)
 
 } // namespace
 
-bool ibMcpIsRegex(const wxString& query)
+bool ibMcpIsRegex(const ibString& query)
 {
 	// ⚠ WHAT MAKES A QUERY A PATTERN is deliberately narrow. Nearly any sentence compiles as a
 	// regular expression — "cost adjustment (RAUZ)" compiles, and then matches nothing, because
 	// the brackets it happens to contain silently became grouping. Ordinary punctuation therefore
 	// does NOT switch modes; only the marks that have no business in prose do.
-	static const ibChar* s_marks[] = { wxT("|"), wxT("\\"), wxT("["), wxT("]"),
-		wxT(".*"), wxT(".+"), wxT("^"), wxT("$") };
+	static const ibChar* s_marks[] = { ibT("|"), ibT("\\"), ibT("["), ibT("]"),
+		ibT(".*"), ibT(".+"), ibT("^"), ibT("$") };
 
 	bool looks = false;
 	for (const ibChar* mark : s_marks)
@@ -479,7 +479,7 @@ bool ibMcpIsRegex(const wxString& query)
 	return looks && CompiledQuery(query) != nullptr;
 }
 
-size_t ibMcpWordsFound(const wxString& haystack, const wxString& query, size_t* asked)
+size_t ibMcpWordsFound(const ibString& haystack, const ibString& query, size_t* asked)
 {
 	std::vector<bool> present;
 	ibMcpWordsPresent(haystack, query, present);
@@ -493,7 +493,7 @@ size_t ibMcpWordsFound(const wxString& haystack, const wxString& query, size_t* 
 	return found;
 }
 
-void ibMcpWordsPresent(const wxString& haystack, const wxString& query, std::vector<bool>& met)
+void ibMcpWordsPresent(const ibString& haystack, const ibString& query, std::vector<bool>& met)
 {
 	met.clear();
 
@@ -508,13 +508,13 @@ void ibMcpWordsPresent(const wxString& haystack, const wxString& query, std::vec
 		return;
 	}
 
-	wxStringTokenizer words(query.Lower(), wxT(" \t,"), wxTOKEN_STRTOK);
+	ibStringTokenizer words(query.Lower(), ibT(" \t,"), ibTOKEN_STRTOK);
 
-	const wxString text = haystack.Lower();
+	const ibString text = haystack.Lower();
 
 	while (words.HasMoreTokens()) {
 
-		const wxString word = words.GetNextToken();
+		const ibString word = words.GetNextToken();
 
 		bool present = false;
 
@@ -544,7 +544,7 @@ void ibMcpWordsPresent(const wxString& haystack, const wxString& query, std::vec
 	}
 }
 
-wxString ibMcpMatchingLine(const wxString& body, const wxString& query)
+ibString ibMcpMatchingLine(const ibString& body, const ibString& query)
 {
 	// ⭐ THE LINE IS FOUND BY THE SAME RULE THAT FOUND THE PLACE (ibMcpWordsFound) - stems, and a
 	// regular expression when that is what was written. Anything else and the two disagree: the
@@ -554,24 +554,24 @@ wxString ibMcpMatchingLine(const wxString& body, const wxString& query)
 
 	while (at <= body.length()) {
 
-		const size_t end = body.find(wxT('\n'), at);
-		const wxString line = body.Mid(at, (end == wxString::npos ? body.length() : end) - at);
+		const size_t end = body.find(ibT('\n'), at);
+		const ibString line = body.Mid(at, (end == ibString::npos ? body.length() : end) - at);
 
 		if (ibMcpWordsFound(line, query) > 0) {
-			wxString trimmed = line;
+			ibString trimmed = line;
 			trimmed.Trim(true).Trim(false);
-			return trimmed.length() > 200 ? trimmed.Left(197) + wxT("...") : trimmed;
+			return trimmed.length() > 200 ? trimmed.Left(197) + ibT("...") : trimmed;
 		}
 
-		if (end == wxString::npos)
+		if (end == ibString::npos)
 			break;
 		at = end + 1;
 	}
 
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
-ibValueMetaObjectModuleBase* ibMcpModuleOf(ibValueMetaObject* object, wxString& refusal)
+ibValueMetaObjectModuleBase* ibMcpModuleOf(ibValueMetaObject* object, ibString& refusal)
 {
 	if (object == nullptr) {
 		refusal = ibMcpText("No such object.");
@@ -588,7 +588,7 @@ ibValueMetaObjectModuleBase* ibMcpModuleOf(ibValueMetaObject* object, wxString& 
 		// ⭐ NAMED, AND WITH THE WAY OUT. A caller lands here holding an id from the tree, and the
 		// most common reason is the one the tree itself shows: the modules are CHILDREN of an
 		// object (ObjectModule, ManagerModule), not the object.
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("'%s' is not a module. A module is a child of an object - metadata_tree on it "
 			  "lists them (ObjectModule, ManagerModule, RecordSetModule) with the id each takes."),
 			object->GetName());
@@ -598,10 +598,10 @@ ibValueMetaObjectModuleBase* ibMcpModuleOf(ibValueMetaObject* object, wxString& 
 	return module;
 }
 
-wxString ibMcpMissingArgument(const ibMcpTool* tool, const ibDataNode& arguments)
+ibString ibMcpMissingArgument(const ibMcpTool* tool, const ibDataNode& arguments)
 {
 	if (tool == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	// ⚠ ASKED OF THE ARGUMENTS THEMSELVES, not of the published schema — ibMcpTool::ibMcpArgument
 	// is where `required` is stated, and Given() is the same both-areas lookup the tool's own body
@@ -611,41 +611,41 @@ wxString ibMcpMissingArgument(const ibMcpTool* tool, const ibDataNode& arguments
 			return argument.Name();
 	}
 
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
-wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
+ibString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 {
 	if (tool == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	// What the caller was TOLD each shape is called, so the refusal speaks the schema's words
 	// rather than the enum's.
-	const auto shapeWord = [](ibMcpTool::ibMcpArgument::Kind kind) -> wxString {
+	const auto shapeWord = [](ibMcpTool::ibMcpArgument::Kind kind) -> ibString {
 		switch (kind) {
-			case ibMcpTool::ibMcpArgument::Kind::Whole: return wxT("integer");
-			case ibMcpTool::ibMcpArgument::Kind::Flag:  return wxT("boolean");
-			case ibMcpTool::ibMcpArgument::Kind::Many:  return wxT("array");
-			case ibMcpTool::ibMcpArgument::Kind::Node:  return wxT("object");
+			case ibMcpTool::ibMcpArgument::Kind::Whole: return ibT("integer");
+			case ibMcpTool::ibMcpArgument::Kind::Flag:  return ibT("boolean");
+			case ibMcpTool::ibMcpArgument::Kind::Many:  return ibT("array");
+			case ibMcpTool::ibMcpArgument::Kind::Node:  return ibT("object");
 			default: break;
 		}
-		return wxT("string");
+		return ibT("string");
 	};
 
-	const auto arrived = [](const std::optional<ibDataValue>& value, const std::optional<ibDataNode>& child) -> wxString {
+	const auto arrived = [](const std::optional<ibDataValue>& value, const std::optional<ibDataNode>& child) -> ibString {
 		if (child)
-			return wxT("an object");
+			return ibT("an object");
 		if (!value)
-			return wxT("nothing");
+			return ibT("nothing");
 		switch (value->Kind()) {
-			case ibDataKind::String: return wxT("a string");
-			case ibDataKind::Number: return wxT("a number");
-			case ibDataKind::Bool:   return wxT("a boolean");
-			case ibDataKind::Array:  return wxT("an array");
-			case ibDataKind::Child:  return wxT("an object");
+			case ibDataKind::String: return ibT("a string");
+			case ibDataKind::Number: return ibT("a number");
+			case ibDataKind::Bool:   return ibT("a boolean");
+			case ibDataKind::Array:  return ibT("an array");
+			case ibDataKind::Child:  return ibT("an object");
 			default: break;
 		}
-		return wxT("an empty value");
+		return ibT("an empty value");
 	};
 
 	for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
@@ -687,7 +687,7 @@ wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 		}
 
 		if (!fits) {
-			return wxString::Format(
+			return ibString::Format(
 				ibMcpText("'%s' takes %s for '%s', and %s came. Nothing was done."),
 				tool->GetName(), shapeWord(kind), argument.Name(), arrived(value, child));
 		}
@@ -698,46 +698,46 @@ wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 		if (argument.Values().empty() || !value || value->Kind() != ibDataKind::String)
 			continue;
 
-		const wxString said = value->AsString();
+		const ibString said = value->AsString();
 		bool known = false;
-		wxString allowed;
+		ibString allowed;
 
-		for (const wxString& word : argument.Values()) {
+		for (const ibString& word : argument.Values()) {
 			known = known || word.IsSameAs(said, false);
-			allowed += (allowed.IsEmpty() ? wxString() : wxString(wxT(", "))) + word;
+			allowed += (allowed.IsEmpty() ? ibString() : ibString(ibT(", "))) + word;
 		}
 
 		if (!known) {
-			return wxString::Format(
+			return ibString::Format(
 				ibMcpText("'%s' is not one of the words '%s' takes for '%s'. It takes: %s. Nothing was done."),
 				said, tool->GetName(), argument.Name(), allowed);
 		}
 	}
 
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
-wxString ibMcpLineNaming(const wxString& text, const wxString& name)
+ibString ibMcpLineNaming(const ibString& text, const ibString& name)
 {
 	if (text.IsEmpty() || name.IsEmpty())
-		return wxEmptyString;
+		return ibEmptyString;
 
 	// A NAME IS A WORD OF THE LANGUAGE, so what may not touch it is what may be part of an
 	// identifier. A dot on either side is fine and wanted: `Catalog.Goods.Ref` names Goods.
-	const auto partOfAWord = [](wxUniChar symbol) {
-		return ibIsAlnum(symbol) || symbol == wxT('_');
+	const auto partOfAWord = [](ibChar symbol) {
+		return ibIsAlnum(symbol) || symbol == ibT('_');
 	};
 
-	const wxString wanted = name.Lower();
+	const ibString wanted = name.Lower();
 	size_t at = 0;
 
 	while (at <= text.length()) {
 
-		const size_t end = text.find(wxT('\n'), at);
-		const wxString line = text.Mid(at, (end == wxString::npos ? text.length() : end) - at);
-		const wxString lower = line.Lower();
+		const size_t end = text.find(ibT('\n'), at);
+		const ibString line = text.Mid(at, (end == ibString::npos ? text.length() : end) - at);
+		const ibString lower = line.Lower();
 
-		for (size_t found = lower.find(wanted); found != wxString::npos;
+		for (size_t found = lower.find(wanted); found != ibString::npos;
 			 found = lower.find(wanted, found + 1)) {
 
 			const bool leftClear = found == 0 || !partOfAWord(lower[found - 1]);
@@ -745,21 +745,21 @@ wxString ibMcpLineNaming(const wxString& text, const wxString& name)
 			const bool rightClear = after >= lower.length() || !partOfAWord(lower[after]);
 
 			if (leftClear && rightClear) {
-				wxString trimmed = line;
+				ibString trimmed = line;
 				trimmed.Trim(true).Trim(false);
-				return trimmed.length() > 200 ? trimmed.Left(197) + wxT("...") : trimmed;
+				return trimmed.length() > 200 ? trimmed.Left(197) + ibT("...") : trimmed;
 			}
 		}
 
-		if (end == wxString::npos)
+		if (end == ibString::npos)
 			break;
 		at = end + 1;
 	}
 
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
-int ibMcpSayObjectLinks(const wxString& text, ibMetaData* metaData,
+int ibMcpSayObjectLinks(const ibString& text, ibMetaData* metaData,
 	std::vector<ibDataValue>& into, std::set<long long>& seen)
 {
 	if (metaData == nullptr || text.IsEmpty())
@@ -769,12 +769,12 @@ int ibMcpSayObjectLinks(const wxString& text, ibMetaData* metaData,
 
 	// `](oes:<digits>)` is the only place an id is a LINK — the target half of a markdown link.
 	// A bare number in prose is a number.
-	static const wxString s_marker = wxT("](oes:");
+	static const ibString s_marker = ibT("](oes:");
 
 	for (size_t at = 0;;) {
 
 		const size_t open = text.find(s_marker, at);
-		if (open == wxString::npos)
+		if (open == ibString::npos)
 			break;
 
 		const size_t first = open + s_marker.length();
@@ -784,7 +784,7 @@ int ibMcpSayObjectLinks(const wxString& text, ibMetaData* metaData,
 
 		at = last;
 
-		if (last == first || last >= text.length() || text[last] != wxT(')'))
+		if (last == first || last >= text.length() || text[last] != ibT(')'))
 			continue;
 
 		long id = 0;
@@ -797,30 +797,30 @@ int ibMcpSayObjectLinks(const wxString& text, ibMetaData* metaData,
 		// The label is what the WRITER believed the id names, and comparing the two is the whole
 		// check. Scanned back to the opening bracket, stopping at a newline: a `[` on an earlier
 		// line belongs to something else.
-		wxString label;
+		ibString label;
 		for (size_t back = open; back-- > 0; ) {
-			if (text[back] == wxT('\n'))
+			if (text[back] == ibT('\n'))
 				break;
-			if (text[back] == wxT('[')) {
+			if (text[back] == ibT('[')) {
 				label = text.Mid(back + 1, open - back - 1);
 				break;
 			}
 		}
 
 		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-		entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)id));
+		entry->AddField(ibT("id"), ibDataValue::Int((std::int64_t)id));
 		if (!label.IsEmpty())
-			entry->SetValue(wxT("label"), label);
+			entry->SetValue(ibT("label"), label);
 
 		ibValueMetaObject* target = ibFindMetaObjectById(metaData, (ibMetaID)id);
 
 		if (target == nullptr) {
-			entry->AddField(wxT("broken"), ibDataValue::Bool(true));
+			entry->AddField(ibT("broken"), ibDataValue::Bool(true));
 			++wrong;
 		}
 		else {
-			entry->SetValue(wxT("resolves"), target->GetName());
-			entry->SetValue(wxT("kind"), target->GetClassName());
+			entry->SetValue(ibT("resolves"), target->GetName());
+			entry->SetValue(ibT("kind"), target->GetClassName());
 
 			// 🛑 ONLY A LABEL WRITTEN AS A NAME IS COMPARED WITH THE NAME. A link's visible text is
 			// prose and is under no obligation to be an identifier — `[the balance register](oes:…)`
@@ -828,11 +828,11 @@ int ibMcpSayObjectLinks(const wxString& text, ibMetaData* metaData,
 			// well-written note as broken. A single word with no space in it, though, IS somebody
 			// writing the object's name, and then a disagreement is a disagreement.
 			const bool namedRatherThanDescribed =
-				!label.IsEmpty() && label.Find(wxT(' ')) == wxNOT_FOUND
-				&& label.Find(wxT('\t')) == wxNOT_FOUND;
+				!label.IsEmpty() && label.Find(ibT(' ')) == wxNOT_FOUND
+				&& label.Find(ibT('\t')) == wxNOT_FOUND;
 
-			if (namedRatherThanDescribed && !stringUtils::CompareString(label, target->GetName())) {
-				entry->AddField(wxT("agrees"), ibDataValue::Bool(false));
+			if (namedRatherThanDescribed && !stringUtils::IsSameAs(label, target->GetName())) {
+				entry->AddField(ibT("agrees"), ibDataValue::Bool(false));
 				++wrong;
 			}
 		}
@@ -850,15 +850,15 @@ void ibMcpSayObject(const ibValueMetaObject* object, ibDataNode& node, bool with
 
 	// Asked of the object, in the object's own words. Nothing here knows a storage key, so a
 	// metatype is free to change how it saves itself without changing what a caller reads.
-	node.AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
-	node.SetValue(wxT("name"), object->GetName());
-	node.SetValue(wxT("kind"), object->GetClassName());
+	node.AddField(ibT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
+	node.SetValue(ibT("name"), object->GetName());
+	node.SetValue(ibT("kind"), object->GetClassName());
 
 	// Only when there is one. A synonym that equals the name says nothing, and most objects
 	// never get one — an empty key per object is a line of noise in every answer.
-	const wxString synonym = object->GetSynonym();
+	const ibString synonym = object->GetSynonym();
 	if (!synonym.IsEmpty() && synonym != object->GetName())
-		node.SetValue(wxT("synonym"), synonym);
+		node.SetValue(ibT("synonym"), synonym);
 
 	// ⭐ THE THIRD SURFACE, and it was the one nothing here read. Every metaobject has carried a
 	// `Comment` all along — the short line that says WHY this thing exists at all, sitting in the
@@ -869,20 +869,20 @@ void ibMcpSayObject(const ibValueMetaObject* object, ibDataNode& node, bool with
 	//
 	// Said BEFORE the long texts and outside the `withText` gate, because it is one line: a
 	// listing that carries it stays a listing.
-	const wxString comment = object->GetComment();
+	const ibString comment = object->GetComment();
 	if (!comment.IsEmpty())
-		node.SetValue(wxT("comment"), comment);
+		node.SetValue(ibT("comment"), comment);
 
 	if (!withText)
 		return;
 
-	const wxString help = object->GetHelpContent();
+	const ibString help = object->GetHelpContent();
 	if (!help.IsEmpty())
-		node.SetValue(wxT("help"), help);
+		node.SetValue(ibT("help"), help);
 
-	const wxString note = object->GetNoteContent();
+	const ibString note = object->GetNoteContent();
 	if (!note.IsEmpty())
-		node.SetValue(wxT("note"), note);
+		node.SetValue(ibT("note"), note);
 
 	// ⭐⭐ A LINK BY NUMBER GOES STALE WITHOUT BREAKING, and that is the whole reason this is here.
 	// Notes address other objects as `[Goods](oes:1005)` — by id, because an id survives a rename.
@@ -903,9 +903,9 @@ void ibMcpSayObject(const ibValueMetaObject* object, ibDataNode& node, bool with
 		wrong += ibMcpSayObjectLinks(comment, metaData, links, seen);
 
 		if (!links.empty()) {
-			node.AddField(wxT("links"), ibDataValue::Array(links));
+			node.AddField(ibT("links"), ibDataValue::Array(links));
 			if (wrong > 0) {
-				node.SetValue(wxT("linksNote"),
+				node.SetValue(ibT("linksNote"),
 					ibMcpText("Some links here do not name what they used to. `agrees: false` means the id "
 					  "resolves, but to a DIFFERENT object than the link's own text says - following it "
 					  "reads the wrong object and looks perfectly normal; `broken: true` means nothing "
@@ -919,19 +919,19 @@ namespace {
 
 // What a value IS, in one word, taken from the KIND the value writes itself as rather than from a
 // hand-kept table of property classes: a list like that is right until the day somebody adds a class.
-wxString KindOf(const ibDataValue& value)
+ibString KindOf(const ibDataValue& value)
 {
 	switch (value.Kind()) {
-		case ibDataKind::Bool:    return wxT("boolean");
-		case ibDataKind::Number:  return wxT("number");
-		case ibDataKind::String:  return wxT("string");
-		case ibDataKind::Date:    return wxT("date");
-		case ibDataKind::Binary:  return wxT("binary");
-		case ibDataKind::Child:   return wxT("structure");
-		case ibDataKind::Array:   return wxT("list");
+		case ibDataKind::Bool:    return ibT("boolean");
+		case ibDataKind::Number:  return ibT("number");
+		case ibDataKind::String:  return ibT("string");
+		case ibDataKind::Date:    return ibT("date");
+		case ibDataKind::Binary:  return ibT("binary");
+		case ibDataKind::Child:   return ibT("structure");
+		case ibDataKind::Array:   return ibT("list");
 		default: break;
 	}
-	return wxT("empty");
+	return ibT("empty");
 }
 
 // WHICH GROUP EACH PROPERTY IS IN — and it is worth knowing exactly how little that means.
@@ -947,12 +947,12 @@ wxString KindOf(const ibDataValue& value)
 // (`CreateProperty(m_categoryCommon, …)`), categories nest, and the object holds the root. Walked
 // once here into a name → group lookup.
 void CollectCategories(const ibPropertyCategory* category,
-	std::map<wxString, wxString>& into)
+	std::map<ibString, ibString>& into)
 {
 	if (category == nullptr)
 		return;
 
-	const wxString label = category->GetLabel();
+	const ibString label = category->GetLabel();
 
 	for (unsigned int index = 0; index < category->GetPropertyCount(); ++index)
 		into[category->GetPropertyName(index)] = label;
@@ -976,7 +976,7 @@ void ibMcpSayCaption(const ibPropertyTString* caption, ibDataNode& into)
 	if (caption == nullptr)
 		return;
 
-	ibDataNode& byLanguage = into.Child(wxT("value"));
+	ibDataNode& byLanguage = into.Child(ibT("value"));
 
 	for (const ibLocalizationEntry& cell : caption->GetValueAsTranslate().GetTranslations())
 		byLanguage.SetValue(cell.m_code, cell.m_data);
@@ -988,11 +988,11 @@ void ibMcpSayCaption(const ibPropertyTString* caption, ibDataNode& into)
 // dropped it already (variantChoiceLink.cpp).
 void ibMcpSayChoiceLink(const ibPropertyObject* field, const ibChoiceTypeLinkDescription& linkDesc, ibDataNode& into)
 {
-	into.SetValue(wxT("link"), linkDesc.IsOk() ? ibChoiceHolderFieldName(field, linkDesc.m_source.GetLeaf()) : wxString());
+	into.SetValue(ibT("link"), linkDesc.IsOk() ? ibChoiceHolderFieldName(field, linkDesc.m_source.GetLeaf()) : ibString());
 
 	const ibMetaData* metaData = field != nullptr ? field->GetMetaData() : nullptr;
-	into.SetValue(wxT("governed_type"), linkDesc.m_governedType != 0 && metaData != nullptr
-		? metaData->GetNameObjectFromID(linkDesc.m_governedType) : wxString());
+	into.SetValue(ibT("governed_type"), linkDesc.m_governedType != 0 && metaData != nullptr
+		? metaData->GetNameObjectFromID(linkDesc.m_governedType) : ibString());
 }
 
 void ibMcpSayChoiceParameters(const ibPropertyObject* field, const ibChoiceParametersDescription& paramsDesc,
@@ -1000,22 +1000,22 @@ void ibMcpSayChoiceParameters(const ibPropertyObject* field, const ibChoiceParam
 {
 	for (const ibChoiceParameterRowDescription& row : paramsDesc.m_rows) {
 		auto cell = std::make_shared<ibDataNode>();
-		cell->SetValue(wxT("from"), ibChoiceHolderFieldName(field, row.m_source.GetLeaf()));
-		cell->SetValue(wxT("on_change"),
-			wxString(row.m_onChange == ibChoiceParameterOnChange::Keep ? wxT("keep") : wxT("clear")));
+		cell->SetValue(ibT("from"), ibChoiceHolderFieldName(field, row.m_source.GetLeaf()));
+		cell->SetValue(ibT("on_change"),
+			ibString(row.m_onChange == ibChoiceParameterOnChange::Keep ? ibT("keep") : ibT("clear")));
 
-		const wxString parameter = ibChoiceTargetFieldName(field, row.m_parameter);
+		const ibString parameter = ibChoiceTargetFieldName(field, row.m_parameter);
 		into.AddField(!parameter.IsEmpty() ? parameter : ibMcpText("<gone>"), ibDataValue::Child(cell));
 	}
 }
 
 void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
-	const wxString& only, bool editableOnly)
+	const ibString& only, bool editableOnly)
 {
 	if (object == nullptr)
 		return;
 
-	std::map<wxString, wxString> groups;
+	std::map<ibString, ibString> groups;
 	CollectCategories(object->GetCategory(), groups);
 
 	std::vector<ibDataValue> out;
@@ -1026,7 +1026,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 		if (property == nullptr)
 			continue;
 
-		const wxString name = property->GetName();
+		const ibString name = property->GetName();
 		if (!only.IsEmpty() && !name.IsSameAs(only, false))
 			continue;
 
@@ -1035,24 +1035,24 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			continue;
 
 		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-		entry->SetValue(wxT("name"), name);
+		entry->SetValue(ibT("name"), name);
 
 		// The label is what a person reads and the name is what a tool writes; kept apart for the
 		// same reason a query field keeps them apart.
-		const wxString label = property->GetLabel();
+		const ibString label = property->GetLabel();
 		if (!label.IsEmpty() && label != name)
-			entry->SetValue(wxT("title"), label);
+			entry->SetValue(ibT("title"), label);
 
 		if (!property->GetHelp().IsEmpty())
-			entry->SetValue(wxT("help"), property->GetHelp());
+			entry->SetValue(ibT("help"), property->GetHelp());
 
 		const auto group = groups.find(name);
 		if (group != groups.end())
-			entry->SetValue(wxT("group"), group->second);
+			entry->SetValue(ibT("group"), group->second);
 
 		// SAID EVEN WHEN TRUE IS THE DULL CASE. A property that cannot be changed is the commonest
 		// reason a write does nothing, and finding that out from a silent no-op costs a round trip.
-		entry->AddField(wxT("editable"), ibDataValue::Bool(editable));
+		entry->AddField(ibT("editable"), ibDataValue::Bool(editable));
 
 		// ⚠ WRITTEN ONCE. A node APPENDS named fields rather than replacing them, so writing "kind"
 		// for the storage and then again for the enumeration put BOTH into the answer — one key
@@ -1074,7 +1074,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// two vocabularies for one value. The ID is what the property stores, so a caller that
 			// read this back can point at an entry by number and be right whatever it is called.
 			std::vector<ibDataValue> words;
-			wxString current;
+			ibString current;
 
 			// ⚠ A WIDE READ DOES NOT INLINE THEM ALL, and this is now the heaviest thing in an
 			// answer about an object. A RELATIONSHIP's choices are every metaobject that may fill
@@ -1094,14 +1094,14 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 				if (everyChoice || words.size() < inlineLimit) {
 
 					auto item = std::make_shared<ibDataNode>();
-					item->SetValue(wxT("id"), (int)choices.GetId(choice));
-					item->SetValue(wxT("name"), choices.GetName(choice));
+					item->SetValue(ibT("id"), (int)choices.GetId(choice));
+					item->SetValue(ibT("name"), choices.GetName(choice));
 					if (!choices.GetSynonym(choice).IsEmpty())
-						item->SetValue(wxT("synonym"), choices.GetSynonym(choice));
+						item->SetValue(ibT("synonym"), choices.GetSynonym(choice));
 					// …and its kind, where its data names a class (a metaobject's): what the class is registered as.
 					if (const std::uint64_t data = choices.GetData(choice)) {
 						if (const ibCtorAbstractType* const kind = ibValue::GetAvailableCtor(data))
-							item->SetValue(wxT("kind"), kind->GetClassName());
+							item->SetValue(ibT("kind"), kind->GetClassName());
 					}
 					words.push_back(ibDataValue::Child(item));
 				}
@@ -1119,13 +1119,13 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 					current = choices.GetLabel(choice);
 			}
 
-			entry->SetValue(wxT("kind"), wxString(wxT("enumerated")));
-			entry->AddField(wxT("choices"), ibDataValue::Array(words));
+			entry->SetValue(ibT("kind"), ibString(ibT("enumerated")));
+			entry->AddField(ibT("choices"), ibDataValue::Array(words));
 
 			if (choices.GetCount() > words.size()) {
 
-				entry->AddField(wxT("choiceCount"), ibDataValue::Int((std::int64_t)choices.GetCount()));
-				entry->SetValue(wxT("choicesNote"), wxString::Format(
+				entry->AddField(ibT("choiceCount"), ibDataValue::Int((std::int64_t)choices.GetCount()));
+				entry->SetValue(ibT("choicesNote"), ibString::Format(
 					ibMcpText("The first %u of %u. Ask for this property by name - "
 					  "metadata_get {id, property: \"%s\"} - for all of them."),
 					(unsigned int)words.size(), (unsigned int)choices.GetCount(), name));
@@ -1134,8 +1134,8 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// ⭐ AND HOW MANY OF THEM AT ONCE — the caller's next decision is whether writing one
 			// REPLACES what is there or joins it. `single` and `multiple` are the property's own
 			// answer, not a guess from the shape of the value.
-			entry->SetValue(wxT("select"), wxString(
-				mode == ibPropertyChoiceMode::Mult ? wxT("multiple") : wxT("single")));
+			entry->SetValue(ibT("select"), ibString(
+				mode == ibPropertyChoiceMode::Mult ? ibT("multiple") : ibT("single")));
 
 			// 🛑⭐⭐ A SET IS NEVER EQUAL TO ONE CANDIDATE. The loop above compares the held value
 			// against each choice in turn, which answers for a property that holds ONE of them and
@@ -1150,8 +1150,8 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// the designer's property sheet shows; what it ACCEPTS, of the LIST, which is already
 			// beside it. Nothing here takes the value apart, and nothing resolves an id against the
 			// configuration: the value can say itself and the list is already the vocabulary.
-			entry->SetValue(wxT("value"),
-				mode == ibPropertyChoiceMode::Mult ? held.MakeString() : current);
+			entry->SetValue(ibT("value"),
+				mode == ibPropertyChoiceMode::Mult ? ibString(held.MakeString()) : current);
 		}
 		else if (const ibPropertyTString* caption =
 					dynamic_cast<const ibPropertyTString*>(property)) {
@@ -1163,7 +1163,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// This is what `metadata_synonym` existed for — a verb of its own, because the walk
 			// could not say this and the setter could not reach it. The setter learned `language`;
 			// this is the reading half, and with it the special verb has nothing left to do.
-			entry->SetValue(wxT("kind"), wxString(wxT("caption")));
+			entry->SetValue(ibT("kind"), ibString(ibT("caption")));
 
 			// …AND THE CELLS ARE ASKED OF THE CAPTION THE CONDITION ALREADY OBTAINED. The property
 			// HOLDS them (ibTranslateString), so there is nothing here to recognise or take apart —
@@ -1185,18 +1185,18 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// ⭐ SAID BY THE SAME ROAD THE SETTER USES — ibTypeDescriptionMemory::WriteNode — so the
 			// shape a caller reads is the shape metadata_set_type takes back, and a type can be
 			// read from one attribute and placed on another without translating anything.
-			entry->SetValue(wxT("kind"), wxString(wxT("type")));
+			entry->SetValue(ibT("kind"), ibString(ibT("type")));
 
 			// The metadata is asked of the object itself — ibPropertyObject declares GetMetaData and
 			// a metaobject answers it, so there is nothing here to recognise first. A reference
 			// type's name is resolved against it.
 			ibDataValue described;
 			if (ibTypeDescriptionMemory::WriteNode(described, typed->GetValueAsTypeDesc()))
-				entry->AddField(wxT("value"), described);
+				entry->AddField(ibT("value"), described);
 			else
 				// ⚠ AND A TYPE THAT CANNOT SAY ITSELF SAYS THAT, rather than coming back as an
 				// empty one - which is what "no type" looks like, and is a different fact.
-				entry->SetValue(wxT("value"), wxString(ibMcpText("<the type could not be read>")));
+				entry->SetValue(ibT("value"), ibString(ibMcpText("<the type could not be read>")));
 		}
 		else if (const ibPropertyPicture* picture = dynamic_cast<const ibPropertyPicture*>(property)) {
 
@@ -1209,14 +1209,14 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// and writes with — so what is read here is what `value` takes back, like a type is. And the shape is
 			// EXPLAINED beside it, the one fact a caller cannot see in it: what each Type holds, and that an image
 			// of its own travels as its PNG bytes in base64.
-			entry->SetValue(wxT("kind"), wxString(wxT("picture")));
+			entry->SetValue(ibT("kind"), ibString(ibT("picture")));
 
 			ibDataValue described;
 			if (ibPictureDescriptionMemory::WriteNode(described, picture->GetValueAsPictureDesc())) {
 				ibMcpPictureIdAsText(described);   // the id crosses this door as digits — see the header
-				entry->AddField(wxT("value"), described);
+				entry->AddField(ibT("value"), described);
 			}
-			entry->SetValue(wxT("shape"), ibMcpText(
+			entry->SetValue(ibT("shape"), ibMcpText(
 				"Send it back in this shape through `value`. Type 1: one of the engine's pictures, `ClassId` as "
 				"picture_list gives it - its DIGITS, as a string, because sixty-four bits do not survive a JSON "
 				"number; a number is read too, and a rounded one is refused rather than drawn blank. "
@@ -1232,12 +1232,12 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// Name as a FIELD, and the branch below looks for a name among the PROPERTIES - so the picture read as
 			// {"name": ""} before it was set and after (measured 2026-09-22: an image placed through `value`, then
 			// metadata_get). The configuration's own pictures could be made and never seen.
-			entry->SetValue(wxT("kind"), wxString(wxT("image")));
+			entry->SetValue(ibT("kind"), ibString(ibT("image")));
 
 			ibDataValue described;
 			if (ibExternalPictureDescriptionMemory::WriteNode(described, image->GetValueAsPictureDesc()))
-				entry->AddField(wxT("value"), described);
-			entry->SetValue(wxT("shape"), ibMcpText(
+				entry->AddField(ibT("value"), described);
+			entry->SetValue(ibT("shape"), ibMcpText(
 				"Send it back in this shape through `value`: {Name, Buffer, Width, Height}, where Buffer is the PNG "
 				"file's bytes in base64 written \"base64:<...>\" and Width and Height are its size in pixels. To work "
 				"in SVG: picture_to_svg says it as SVG, and picture_from_svg draws SVG - the `Image` of its answer is "
@@ -1249,9 +1249,9 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// {"name": ""} — set through metadata_set_choice, unseen through here, and a row naming a deleted
 			// field looked exactly like no row (2026-09-24). Said in the shape the setter takes. (The link by
 			// type does not come here: it answers GetValueList, and reads above as the neighbours it may name.)
-			entry->SetValue(wxT("kind"), wxString(wxT("choice")));
-			ibMcpSayChoiceParameters(object, rows->GetValueAsParametersDesc(), entry->Child(wxT("value")));
-			entry->SetValue(wxT("shape"), ibMcpText(
+			entry->SetValue(ibT("kind"), ibString(ibT("choice")));
+			ibMcpSayChoiceParameters(object, rows->GetValueAsParametersDesc(), entry->Child(ibT("value")));
+			entry->SetValue(ibT("shape"), ibMcpText(
 				"Set through metadata_set_choice {id, parameters}, in this shape - the rows given replace the "
 				"table. A row whose field was deleted is dropped by itself; `<gone>` is a field this one can no "
 				"longer name, and leaving it out of the rows sent removes it."));
@@ -1272,20 +1272,20 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// or the command's live name - never blank regardless of which is true. The raw wiring
 			// rides beside it in the shape form_bind's own answer already uses, so a caller comparing
 			// the two needs no second lookup.
-			entry->SetValue(wxT("kind"), wxString(wxT("structure")));
-			entry->SetValue(wxT("value"), wiring->GetValueAsString());
+			entry->SetValue(ibT("kind"), ibString(ibT("structure")));
+			entry->SetValue(ibT("value"), wiring->GetValueAsString());
 
 			ibDataValue described;
 			if (ibCommandDescriptionMemory::WriteNode(described, wiring->GetValueAsCommandDesc()))
-				entry->AddField(wxT("wiring"), described);
+				entry->AddField(ibT("wiring"), described);
 
-			entry->SetValue(wxT("shape"), ibMcpText(
+			entry->SetValue(ibT("shape"), ibMcpText(
 				"Bound through form_bind {form, control, property, path}, not through this verb - a command is "
 				"a chain of hops too, the same as a field binding, and form_bind resolves either kind by name."));
 		}
 		else {
 			const ibDataValue value = property->GetNodeValue();
-			entry->SetValue(wxT("kind"), KindOf(value));
+			entry->SetValue(ibT("kind"), KindOf(value));
 
 			// ⚠ A STRUCTURE IS NAMED, NOT UNFOLDED. A property whose value is a nested metaobject —
 			// a catalog's Code, Description, Ref, its two modules — writes ITSELF whole when asked
@@ -1298,7 +1298,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			if (value.Kind() == ibDataKind::Child && value.AsChild()) {
 
 				const ibDataNode held = *value.AsChild();
-				ibDataNode& shown = entry->Child(wxT("value"));
+				ibDataNode& shown = entry->Child(ibT("value"));
 
 				// ⚠ THE NAME IS A PROPERTY, THE ID IS A FIELD — the node keeps two areas and they are
 				// not interchangeable. `GetValue` reads the FIELD area, so asking it for `Name`
@@ -1306,24 +1306,24 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 				// ibValueMetaObject::SaveNode is where the split is written down: intrinsics
 				// (Guid, Id, Deleted) go to fields, editable values (Name, Synonym, Comment) go to
 				// properties.
-				shown.SetValue(wxT("name"), held.GetProp<wxString>(wxT("Name")));
-				if (auto id = held.FindField(wxT("Id")))
-					shown.AddField(wxT("id"), *id);
+				shown.SetValue(ibT("name"), held.GetProp<ibString>(ibT("Name")));
+				if (auto id = held.FindField(ibT("Id")))
+					shown.AddField(ibT("id"), *id);
 			}
 			else {
-				entry->AddField(wxT("value"), value);
+				entry->AddField(ibT("value"), value);
 			}
 		}
 
 		out.push_back(ibDataValue::Child(entry));
 	}
 
-	node.AddField(wxT("count"), ibDataValue::Int((std::int64_t)out.size()));
-	node.AddField(wxT("properties"), ibDataValue::Array(out));
+	node.AddField(ibT("count"), ibDataValue::Int((std::int64_t)out.size()));
+	node.AddField(ibT("properties"), ibDataValue::Array(out));
 }
 
-ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, wxString& refusal,
-	const wxString& field)
+ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, ibString& refusal,
+	const ibString& field)
 {
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 		refusal = ibMcpText("No configuration is open.");
@@ -1336,7 +1336,7 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, wxString& refusal,
 	auto given = params.FindField(field);
 
 	if (!given || given->Kind() != ibDataKind::Number) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("Pass the object's NodeId as `%s` - metadata_list and metadata_get give it."),
 			field);
 		return nullptr;
@@ -1345,7 +1345,7 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, wxString& refusal,
 	const std::int64_t id = given->AsInt();
 
 	if (id <= 0) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("`%s` must be a NodeId, and ids start at 1."), field);
 		return nullptr;
 	}
@@ -1353,7 +1353,7 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, wxString& refusal,
 	ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id);
 
 	if (object == nullptr) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("Nothing in this configuration has id %i."), (int)id);
 		return nullptr;
 	}
@@ -1377,20 +1377,20 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, wxString& refusal,
 // ⚠ A LONG VALUE IS CUT, not dropped. An argument that is a whole module would make one line of a
 // running log taller than the window; showing its head still says which module and what is at the
 // top of it.
-wxString ibMcpTool::GetDetail(const ibDataNode& params) const
+ibString ibMcpTool::GetDetail(const ibDataNode& params) const
 {
-	wxString out;
+	ibString out;
 
 	for (const auto& field : params.Fields()) {
 
 		const ibDataValue& value = field.second;
-		wxString           shown;
+		ibString           shown;
 
 		switch (value.Kind()) {
 			case ibDataKind::String: shown = value.AsString(); break;
-			case ibDataKind::Bool:   shown = value.AsBool() ? wxT("yes") : wxT("no"); break;
+			case ibDataKind::Bool:   shown = value.AsBool() ? ibT("yes") : ibT("no"); break;
 			case ibDataKind::Number: shown = value.AsNumber().ToString(); break;
-			case ibDataKind::Array:  shown = wxString::Format(ibMcpText("%d items"), (int)value.AsArray().size()); break;
+			case ibDataKind::Array:  shown = ibString::Format(ibMcpText("%d items"), (int)value.AsArray().size()); break;
 
 			// EMPTY / Binary / Child / Date have no short reading that is worth a line here: an
 			// argument nobody passed, an opaque block, a nested structure. Naming them without a
@@ -1404,12 +1404,12 @@ wxString ibMcpTool::GetDetail(const ibDataNode& params) const
 		// One line each, and a long one folded so the log stays a log. The head of a module still
 		// identifies it; the whole of it belongs in the editor.
 		if (shown.length() > 200)
-			shown = shown.Left(200) + wxT("...");
+			shown = shown.Left(200) + ibT("...");
 
-		shown.Replace(wxT("\n"), wxT(" "));
-		shown.Replace(wxT("\r"), wxEmptyString);
+		shown.Replace(ibT("\n"), ibT(" "));
+		shown.Replace(ibT("\r"), ibEmptyString);
 
-		out << wxT(" ") << field.first << wxT(": ") << shown << wxT("\n");
+		out << ibT(" ") << field.first << ibT(": ") << shown << ibT("\n");
 	}
 
 	return out;
@@ -1428,12 +1428,12 @@ void ibMcpPictureIdAsText(ibDataValue& shape)
 	if (!node)
 		return;
 
-	auto id = node->FindField(wxT("ClassId"));
+	auto id = node->FindField(ibT("ClassId"));
 	if (!id || id->Kind() != ibDataKind::Number)
 		return;
 
-	node->SetField(wxT("ClassId"), ibDataValue::String(
-		wxString::Format(wxT("%llu"), (unsigned long long)id->AsUInt())));
+	node->SetField(ibT("ClassId"), ibDataValue::String(
+		ibString::Format(ibT("%llu"), (unsigned long long)id->AsUInt())));
 	shape = ibDataValue::Child(std::make_shared<ibDataNode>(std::move(*node)));
 }
 
@@ -1446,7 +1446,7 @@ void ibMcpPictureIdAsNumber(ibDataValue& shape)
 	if (!node)
 		return;
 
-	auto id = node->FindField(wxT("ClassId"));
+	auto id = node->FindField(ibT("ClassId"));
 	if (!id || id->Kind() != ibDataKind::String)
 		return;
 
@@ -1458,27 +1458,27 @@ void ibMcpPictureIdAsNumber(ibDataValue& shape)
 	unsigned long long parsed = 0;
 	if (!id->AsString().ToULongLong(&parsed))
 		return;
-	node->SetField(wxT("ClassId"), ibDataValue::UInt(static_cast<std::uint64_t>(parsed)));
+	node->SetField(ibT("ClassId"), ibDataValue::UInt(static_cast<std::uint64_t>(parsed)));
 	shape = ibDataValue::Child(std::make_shared<ibDataNode>(std::move(*node)));
 }
 
-wxString ibMcpFencedExcerpt(const wxString& text, const wxString& language, size_t maxLines)
+ibString ibMcpFencedExcerpt(const ibString& text, const ibString& language, size_t maxLines)
 {
 	if (text.IsEmpty())
-		return wxEmptyString;
+		return ibEmptyString;
 
-	wxString shown;
+	ibString shown;
 	size_t   lines = 0;
 	size_t   total = 0;
 
 	// COUNTED WHILE CUTTING, so the sentence below can say how much was left out rather than
 	// "more" — a reader deciding whether to open the editor needs the size, not a hint.
-	for (const wxString& line : wxSplit(text, wxT('\n'), wxT('\0'))) {
+	for (const ibString& line : ibSplit(text, ibT('\n'), ibT('\0'))) {
 
 		total++;
 
 		if (lines < maxLines) {
-			shown << line << wxT("\n");
+			shown << line << ibT("\n");
 			lines++;
 		}
 	}
@@ -1491,24 +1491,24 @@ wxString ibMcpFencedExcerpt(const wxString& text, const wxString& language, size
 	//
 	// Indented instead, which is what actually sets a block apart in a plain view — and stays
 	// readable if the transcript ever does learn to render.
-	wxString out;
+	ibString out;
 
-	for (const wxString& line : wxSplit(shown, wxT('\n'), wxT('\0')))
-		out << wxT(" ") << line << wxT("\n");
+	for (const ibString& line : ibSplit(shown, ibT('\n'), ibT('\0')))
+		out << ibT(" ") << line << ibT("\n");
 
 	// ⚠ SAID WHEN IT IS TRUE, and only then. A reader who is shown everything must not be told
 	// anything was hidden, or they will go looking for what is already in front of them.
 	if (total > lines)
-		out << wxString::Format(
+		out << ibString::Format(
 			ibMcpText(" ... first %u of %u lines - the rest is in the editor\n"),
 			(unsigned)lines, (unsigned)total);
 
 	return out;
 }
 
-std::vector<wxString> ibMcpComplaints(ibValueMetaObject* object)
+std::vector<ibString> ibMcpComplaints(ibValueMetaObject* object)
 {
-	std::vector<wxString> found;
+	std::vector<ibString> found;
 	if (object == nullptr)
 		return found;
 
@@ -1547,19 +1547,19 @@ std::vector<wxString> ibMcpComplaints(ibValueMetaObject* object)
 
 void ibMcpReportComplaints(ibDataNode& result, ibValueMetaObject* object)
 {
-	const std::vector<wxString> complaints = ibMcpComplaints(object);
+	const std::vector<ibString> complaints = ibMcpComplaints(object);
 	if (complaints.empty())
 		return;
 
 	std::vector<ibDataValue> out;
-	for (const wxString& complaint : complaints)
+	for (const ibString& complaint : complaints)
 		out.push_back(ibDataValue::String(complaint));
 
-	result.AddField(wxT("incomplete"), ibDataValue::Array(out));
+	result.AddField(ibT("incomplete"), ibDataValue::Array(out));
 
 	// WHAT IT MEANS, once, rather than a caller inferring it from the wording:
 	// the object stands, and the configuration will not save while it says this.
-	result.SetValue(wxT("incompleteNote"),
+	result.SetValue(ibT("incompleteNote"),
 		ibMcpText("The change was made. The object still reports this, and the configuration cannot "
 		  "be saved to the database until it stops. Some objects complain through the "
 		  "message pane instead - messages_read has those."));
@@ -1574,7 +1574,7 @@ void ibMcpReportComplaints(ibDataNode& result, ibValueMetaObject* object)
 //
 // What stays here is the translation of "no object" into words a caller can read — the gate answers
 // with a sentence when asked, and this hands it the one thing it cannot know: nothing.
-bool ibMcpApplyByHand(ibProperty* property, const wxVariant& newValue, wxString& refusal)
+bool ibMcpApplyByHand(ibProperty* property, const wxVariant& newValue, ibString& refusal)
 {
 	return ibPropertyGate::SetValue(property->GetPropertyObject(), property, newValue, &refusal);
 }
@@ -1594,7 +1594,7 @@ namespace {
 // external report against the CONFIGURATION's list: a code the report declares would be refused, and
 // one it does not would be accepted and stored where nothing will ever read it. Neither shows up as
 // an error; the translation simply belongs to the wrong container.
-bool ibMcpLanguageDeclared(const ibMetaData* owner, const wxString& code, wxString& available)
+bool ibMcpLanguageDeclared(const ibMetaData* owner, const ibString& code, ibString& available)
 {
 	bool declared = false;
 	available.clear();
@@ -1604,15 +1604,15 @@ bool ibMcpLanguageDeclared(const ibMetaData* owner, const wxString& code, wxStri
 
 	// ⭐ THE OBJECTS, NOT THEIR NAMES — a language's CODE is what matters here and only the object
 	// carries it, so listing names and looking each one up again was a second walk for nothing.
-	for (const ibValueMetaObject* found : ibListMetaObjects(owner, wxT("Language"))) {
+	for (const ibValueMetaObject* found : ibListMetaObjects(owner, ibT("Language"))) {
 
 		const ibValueMetaObjectLanguage* lang =
 			found != nullptr ? found->ConvertToType<ibValueMetaObjectLanguage>() : nullptr;
 		if (lang == nullptr)
 			continue;
 
-		const wxString declaredCode = lang->GetLangCode();
-		available << (available.IsEmpty() ? wxT("") : wxT(", ")) << declaredCode;
+		const ibString declaredCode = lang->GetLangCode();
+		available << (available.IsEmpty() ? ibT("") : ibT(", ")) << declaredCode;
 
 		if (declaredCode.IsSameAs(code, false))
 			declared = true;
@@ -1623,16 +1623,16 @@ bool ibMcpLanguageDeclared(const ibMetaData* owner, const wxString& code, wxStri
 
 } // namespace
 
-bool ibMcpCaptionInEveryLanguage(const ibMetaData* owner, const wxString& text, const wxString& what,
-	wxString& refusal)
+bool ibMcpCaptionInEveryLanguage(const ibMetaData* owner, const ibString& text, const ibString& what,
+	ibString& refusal)
 {
 	if (text.IsEmpty() || ibLocalization::IsLocalizationString(text))
 		return true;   // nothing to write, or it already carries its languages
-	wxString declared;
-	ibMcpLanguageDeclared(owner, wxEmptyString, declared);   // asked only for the list
-	if (!declared.Contains(wxT(",")))
+	ibString declared;
+	ibMcpLanguageDeclared(owner, ibEmptyString, declared);   // asked only for the list
+	if (!declared.Contains(ibT(",")))
 		return true;   // one language or none: a plain text IS every language there is
-	refusal = wxString::Format(
+	refusal = ibString::Format(
 		ibMcpText("%s is a caption, and this configuration declares %s. A text sent without a language "
 			  "fills only the configuration's own one and leaves the others BLANK for everybody who reads "
 			  "in them - a Russian word written this way is stored as the English caption. Send every "
@@ -1644,14 +1644,14 @@ bool ibMcpCaptionInEveryLanguage(const ibMetaData* owner, const wxString& text, 
 }
 
 bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
-	ibDataNode& result, wxString& refusal)
+	ibDataNode& result, ibString& refusal)
 {
 	if (property == nullptr) {
 		refusal = ibMcpText("There is no such property.");
 		return false;
 	}
 
-	const wxString name = property->GetName();
+	const ibString name = property->GetName();
 
 	// ⚠ WHICH CONTAINER THIS PROPERTY BELONGS TO — the door is HANDED the object, and everything
 	// asked about it is asked of the metadata that owns it. See ibMcpLanguageDeclared.
@@ -1684,12 +1684,12 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 
 		for (const auto& cell : byLanguage->Fields()) {
 
-			wxString available;
+			ibString available;
 			if (!ibMcpLanguageDeclared(owner, cell.first, available)) {
 				refusal = available.IsEmpty()
 					? ibMcpText("This configuration declares no languages. Create one first: "
 					    "metadata_create kind=Language.")
-					: wxString::Format(
+					: ibString::Format(
 						ibMcpText("'%s' is not a language this configuration declares. It has: %s."),
 						cell.first, available);
 				return false;
@@ -1710,7 +1710,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		if (!ibMcpApplyByHand(property, wxVariant(new ibVariantDataTranslate(edited)), refusal))
 			return false;
 
-		result.SetValue(wxT("property"), name);
+		result.SetValue(ibT("property"), name);
 		ibMcpSayCaption(asCaption, result);
 		return true;
 	}
@@ -1739,12 +1739,12 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		const ibPropertyTString* caption = dynamic_cast<const ibPropertyTString*>(property);
 
 		if (caption == nullptr) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' is not a caption, so it has no languages."), name);
 			return false;
 		}
 
-		const wxString code = language->AsString();
+		const ibString code = language->AsString();
 
 		// ⚠ AGAINST THE CONFIGURATION'S OWN LANGUAGES. A code nobody declared stores a translation
 		// nothing will ever read — silently, which is the worst way to be wrong.
@@ -1753,13 +1753,13 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// existed because the setter could not reach a caption at all; the setter can now, so
 		// every road that writes a translation has to pass this and not just the road somebody
 		// remembered to put it on.
-		wxString available;
+		ibString available;
 
 		if (!ibMcpLanguageDeclared(owner, code, available)) {
 			refusal = available.IsEmpty()
 				? ibMcpText("This configuration declares no languages. Create one first: "
 				    "metadata_create kind=Language.")
-				: wxString::Format(
+				: ibString::Format(
 					ibMcpText("'%s' is not a language this configuration declares. It has: %s."),
 					code, available);
 			return false;
@@ -1779,8 +1779,8 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// SAID AS THE CELLS, like every other answer about a caption — and it is worth more here
 		// than an echo: the whole point of naming a language is that the OTHERS stay, and this is
 		// where a caller sees that they did.
-		result.SetValue(wxT("property"), name);
-		result.SetValue(wxT("language"), code);
+		result.SetValue(ibT("property"), name);
+		result.SetValue(ibT("language"), code);
 		ibMcpSayCaption(caption, result);
 		return true;
 	}
@@ -1817,16 +1817,16 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// same way (`expected 4, got 7`) before the set below was reached: promised in form_set's
 		// description, and never once taken (measured 2026-09-28, putting a column under an option).
 		const bool bySet = asked && asked->Kind() == ibDataKind::Array;
-		const wxString word = byNumber || bySet ? wxString() : ibMcpValueArgument().Text(params);
+		const ibString word = byNumber || bySet ? ibString() : ibMcpValueArgument().Text(params);
 
 		// TWO VOCABULARIES FOR ONE VALUE — the inspector reads "Within second",
 		// the language writes `WithinSecond`, and type_members answers with the
 		// second. Compared with the spaces removed, so both are accepted without a
 		// mapping table that would be wrong for the first value added after it.
-		auto same = [](const wxString& a, const wxString& b) {
-			wxString l(a), r(b);
-			l.Replace(wxT(" "), wxEmptyString);
-			r.Replace(wxT(" "), wxEmptyString);
+		auto same = [](const ibString& a, const ibString& b) {
+			ibString l(a), r(b);
+			l.Replace(ibT(" "), ibEmptyString);
+			r.Replace(ibT(" "), ibEmptyString);
 			return l.IsSameAs(r, false);
 		};
 
@@ -1840,7 +1840,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		if (mode == ibPropertyChoiceMode::Mult && bySet) {
 
 			if (choices.GetCount() == 0) {
-				refusal = wxString::Format(ibMcpText("'%s' is chosen from the configuration, and there is "
+				refusal = ibString::Format(ibMcpText("'%s' is chosen from the configuration, and there is "
 					"nothing of that kind in it yet."), name);
 				return false;
 			}
@@ -1851,12 +1851,12 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 
 				const bool memberByNumber = member.Kind() == ibDataKind::Number;
 				if (!memberByNumber && member.Kind() != ibDataKind::String) {
-					refusal = wxString::Format(ibMcpText("'%s' takes its members by name or by id."), name);
+					refusal = ibString::Format(ibMcpText("'%s' takes its members by name or by id."), name);
 					return false;
 				}
 
 				const long memberId = memberByNumber ? (long)member.AsNumber().ToInt() : 0;
-				const wxString memberWord = memberByNumber ? wxString() : member.AsString().ToWxString();
+				const ibString memberWord = memberByNumber ? ibString() : member.AsString();
 
 				unsigned int index = 0;
 				for (; index < choices.GetCount(); ++index) {
@@ -1866,8 +1866,8 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 				}
 
 				if (index == choices.GetCount()) {
-					refusal = wxString::Format(ibMcpText("'%s' has no choice '%s'."), name,
-						memberByNumber ? wxString::Format(wxT("%li"), memberId) : memberWord);
+					refusal = ibString::Format(ibMcpText("'%s' has no choice '%s'."), name,
+						memberByNumber ? ibString::Format(ibT("%li"), memberId) : memberWord);
 					return false;
 				}
 
@@ -1879,7 +1879,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			wxVariant placing = choices.GetValue(0);
 			ibVariantDataMetaDesc* carried = property->find_cell_variant<ibVariantDataMetaDesc>(placing);
 			if (carried == nullptr) {
-				refusal = wxString::Format(ibMcpText("'%s' holds several values, but not as a set of "
+				refusal = ibString::Format(ibMcpText("'%s' holds several values, but not as a set of "
 					"configuration objects; send one at a time."), name);
 				return false;
 			}
@@ -1889,8 +1889,8 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			if (!ibMcpApplyByHand(property, placing, refusal))
 				return false;
 
-			result.SetValue(wxT("property"), name);
-			result.SetValue(wxT("value"), property->GetValue().MakeString());
+			result.SetValue(ibT("property"), name);
+			result.SetValue(ibT("value"), ibString(property->GetValue().MakeString()));
 			return true;
 		}
 
@@ -1913,22 +1913,22 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			if (!ibMcpApplyByHand(property, choices.GetValue(index), refusal))
 				return false;
 
-			result.SetValue(wxT("property"), name);
-			result.SetValue(wxT("value"), choices.GetLabel(index));
+			result.SetValue(ibT("property"), name);
+			result.SetValue(ibT("value"), choices.GetLabel(index));
 			return true;
 		}
 
-		wxString allowed;
+		ibString allowed;
 		for (unsigned int index = 0; index < choices.GetCount(); ++index)
-			allowed << (allowed.IsEmpty() ? wxT("") : wxT(", ")) << choices.GetLabel(index);
+			allowed << (allowed.IsEmpty() ? ibT("") : ibT(", ")) << choices.GetLabel(index);
 
 		// AND WHEN THERE IS NOTHING TO OFFER, SAY THAT INSTEAD. An empty list means the
 		// configuration holds nothing of the kind yet — "takes one of: " with nothing after the
 		// colon reads like a defect in the tool rather than an empty tree.
 		refusal = allowed.IsEmpty()
-			? wxString::Format(ibMcpText("'%s' is chosen from the configuration, and there is nothing of "
+			? ibString::Format(ibMcpText("'%s' is chosen from the configuration, and there is nothing of "
 			                     "that kind in it yet."), name)
-			: wxString::Format(ibMcpText("'%s' takes one of: %s."), name, allowed);
+			: ibString::Format(ibMcpText("'%s' takes one of: %s."), name, allowed);
 		return false;
 	}
 
@@ -1952,7 +1952,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// language, landed in the English cells of a configuration whose own language is English, and the
 	// Russian cells stayed empty — "you broke the translation".
 	if (dynamic_cast<const ibPropertyTString*>(property) != nullptr && value.Kind() == ibDataKind::String
-	    && !ibMcpCaptionInEveryLanguage(owner, value.AsString(), wxString::Format(wxT("'%s'"), name), refusal))
+	    && !ibMcpCaptionInEveryLanguage(owner, value.AsString(), ibString::Format(ibT("'%s'"), name), refusal))
 		return false;
 
 	// ⭐ THE PROPERTY JUDGES, AND THE REFUSAL CARRIES THE SHAPE. Nothing here decides whether a
@@ -1961,7 +1961,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// inspector comes by it too). But "would not take that value" on its own leaves a caller guessing
 	// at the difference, and the answer was in reach the whole time: the property can be asked what
 	// it holds NOW, and its kind is the shape a value has to arrive in.
-	wxString refused;
+	ibString refused;
 	if (!ibPropertyGate::SetValue(nullptr, property, value, &refused)) {
 
 		// ⭐⭐ WHERE THERE IS A VERB FOR IT, THE REFUSAL NAMES THE VERB. "It holds a structure - send
@@ -1990,15 +1990,15 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			const auto named = ibMetaTypeResolver(property->GetPropertyObject() != nullptr
 				? property->GetPropertyObject()->GetMetaData() : nullptr);
 
-			wxString holds;
+			ibString holds;
 			for (const ibClassID& clsid : asType->GetValueAsTypeDesc().m_listTypeClass) {
-				const wxString word = named(clsid);
+				const ibString word = named(clsid);
 				if (word.IsEmpty())
 					continue;
-				holds << (holds.IsEmpty() ? wxT("") : wxT(", ")) << word;
+				holds << (holds.IsEmpty() ? ibT("") : ibT(", ")) << word;
 			}
 
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' is a TYPE, and it is not set as a value: use metadata_set_type - it takes "
 				  "the type in words (String with a length, Number with precision and scale, "
 				  "CatalogRef.Goods), and `description` for a composite one. It holds %s now."),
@@ -2009,7 +2009,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// …and only the OTHER road needs to know what shape it holds.
 		const ibDataValue held = property->GetNodeValue();
 
-		refusal = refused + wxT(' ') + wxString::Format(
+		refusal = refused + ibT(' ') + ibString::Format(
 			ibMcpText("It holds a %s - send one of that shape, or read metadata_properties for what it "
 			  "has now."), KindOf(held));
 		return false;
@@ -2021,7 +2021,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	//
 	// ⚠ AND A CAPTION IS SAID AS ITS CELLS, not as its node — the node is the stored template, and
 	// answering with it hands the caller the format they were spared everywhere else.
-	result.SetValue(wxT("property"), name);
+	result.SetValue(ibT("property"), name);
 
 	if (const ibPropertyTString* caption = dynamic_cast<const ibPropertyTString*>(property)) {
 		ibMcpSayCaption(caption, result);
@@ -2031,7 +2031,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// just sent as text came back in the one shape they cannot send back (2026-09-22).
 		ibDataValue held = property->GetNodeValue();
 		ibMcpPictureIdAsText(held);
-		result.AddField(wxT("value"), held);
+		result.AddField(ibT("value"), held);
 	}
 	return true;
 }

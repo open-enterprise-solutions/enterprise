@@ -43,12 +43,12 @@ void ibFormDesignView::OnDraw(ibDataNode& frame)
 	// else the form's. The object is the form's main attribute's (GetMetaObject — in the designer, by its type).
 	if (m_valueForm == nullptr)
 		return;
-	wxString caption = m_valueForm->GetCaption();
+	ibString caption = m_valueForm->GetCaption();
 	if (caption.IsEmpty()) {
 		const ibValueMetaObjectFormBase* const metaFormObject = m_valueForm->GetFormMetaObject();
 		const ibValueMetaObjectGenericData* const genericObject = m_valueForm->GetMetaObject();
 		if (genericObject != nullptr && metaFormObject != nullptr)
-			caption = genericObject->GetSynonym() + wxT(": ") + metaFormObject->GetSynonym();
+			caption = genericObject->GetSynonym() + ibT(": ") + metaFormObject->GetSynonym();
 		else if (metaFormObject != nullptr)
 			caption = metaFormObject->GetSynonym();
 	}
@@ -99,7 +99,7 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 		if (!written(LoadForm(*form)))
 			return false;
 		loading.Pause();
-		ibJournalInfo(wxT("client"), wxT("      the form handed back loaded %lld ms"), loading.Ms());
+		ibJournalInfo(ibT("client"), ibT("      the form handed back loaded %lld ms"), loading.Ms());
 	}
 
 	const std::int32_t kind = request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Kind);
@@ -194,13 +194,13 @@ bool ibFormDesignView::FetchEditor(const ibDataNode& request, ibDataNode& respon
 	// the reader (GetProtocolValue); the row carries what the cell shows.
 	ibValueFrame* const control = m_valueForm->FindControlByID(request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Control));
 	ibProperty* const property = control != nullptr
-		? control->GetProperty(request.GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Name)) : nullptr;
+		? control->GetProperty(request.GetValue<ibString>(ibProtocol::ibView::ibFormDesigner::Name)) : nullptr;
 	return property != nullptr && property->GetProtocolValue(response, ibProperty::ibReader::Editor);
 }
 
 bool ibFormDesignView::SetProperty(ibPropertyObject* object, const ibDataNode& request)
 {
-	const wxString name = request.GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Name);
+	const ibString name = request.GetValue<ibString>(ibProtocol::ibView::ibFormDesigner::Name);
 	auto value = request.FindProperty(ibProtocol::ibView::ibFormDesigner::Value);
 	if (!value)
 		value = request.FindField(ibProtocol::ibView::ibFormDesigner::Value);
@@ -265,14 +265,14 @@ bool ibFormDesignView::LoadForm()
 		}
 		else if (!creator->LoadFormData(m_valueForm)) {
 			m_valueForm = nullptr;
-			ibJournalWarning(wxT("designer"), _("Form editor: the form \"%s\" could not be loaded (its stored data is unreadable)."),
+			ibJournalWarning(ibT("designer"), _("Form editor: the form \"%s\" could not be loaded (its stored data is unreadable)."),
 				creator->GetName().c_str());
 			return false;
 		}
 	}
 
 	if (m_valueForm == nullptr) {
-		ibJournalWarning(wxT("designer"), _("Form editor: the form \"%s\" could not be opened."), creator->GetName().c_str());
+		ibJournalWarning(ibT("designer"), _("Form editor: the form \"%s\" could not be opened."), creator->GetName().c_str());
 		return false;
 	}
 
@@ -299,8 +299,8 @@ bool ibFormDesignView::LoadForm(const ibDataNode& node)
 	CreateVisualHost();
 	if (!loaded) {
 		const ibValueMetaObjectFormBase* const creator = m_valueForm->GetFormMetaObject();
-		const wxString formName = creator != nullptr ? creator->GetName() : wxString();
-		ibJournalWarning(wxT("designer"), _("Form editor: the form \"%s\" handed back could not be read whole."),
+		const ibString formName = creator != nullptr ? creator->GetName() : ibString();
+		ibJournalWarning(ibT("designer"), _("Form editor: the form \"%s\" handed back could not be read whole."),
 			formName.c_str());
 	}
 	return loaded;
@@ -336,14 +336,14 @@ void ibFormDesignView::WriteForm(ibDataNode& response)
 	commands.Resume();
 	FillCommandTree(response.Child(ibProtocol::ibView::ibFormDesigner::CommandTree));
 	commands.Pause();
-	ibJournalInfo(wxT("client"), wxT("      the form's attribute tree written %lld ms, its command tree %lld ms"),
+	ibJournalInfo(ibT("client"), ibT("      the form's attribute tree written %lld ms, its command tree %lld ms"),
 		attributes.Ms(), commands.Ms());
 }
 
 namespace {
 
-// The classes a control adds in itself from its menu — the desktop's PrepareDefaultMenu (frontend/visualView/ctrl/
-// notebookMenu.cpp, tableBoxMenu.cpp, tableBoxColumnGroup.cpp), its items' titles as they were.
+// The classes a control adds in itself from its menu — the old desktop's PrepareDefaultMenu (notebook, table box,
+// column group), its items' titles as they were.
 struct ibControlMenuItem {
 	const char* control;
 	const char* added;
@@ -367,7 +367,7 @@ void ibFormDesignView::WriteClasses(ibDataNode& response)
 	// server (Control — its palette, its paste), so nothing of one is written but what is shown.
 	ibDataNode& classes = response.Child(ibProtocol::ibView::ibFormDesigner::Classes);
 	for (const ibCtorAbstractType* ctor : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_control)) {
-		const wxString className = ctor->GetClassName();
+		const ibString className = ctor->GetClassName();
 		ibDataNode& described = classes.AddChild(0, 0);
 		described.SetValue(ibProtocol::ibView::ibFormDesigner::Name, className);
 		described.SetValue(ibProtocol::ibView::ibFormDesigner::Picture, ibBackendPicture::SendPicture(ctor->GetClassType()));
@@ -384,8 +384,8 @@ void ibFormDesignView::WriteClasses(ibDataNode& response)
 			if (menu == nullptr)
 				menu = &described.Child(ibProtocol::ibView::ibFormDesigner::Menu);
 			ibDataNode& entry = menu->AddChild(0, 0);
-			entry.SetValue(ibProtocol::ibView::ibFormDesigner::Name, wxString(item.added));
-			entry.SetValue(ibProtocol::ibView::ibFormDesigner::Title, wxGetTranslation(item.title));
+			entry.SetValue(ibProtocol::ibView::ibFormDesigner::Name, ibString(item.added));
+			entry.SetValue(ibProtocol::ibView::ibFormDesigner::Title, ibString(wxGetTranslation(item.title)));
 		}
 
 		if (controlCtor->IsControlSystem())

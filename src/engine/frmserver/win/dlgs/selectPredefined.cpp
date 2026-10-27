@@ -33,12 +33,12 @@ using ibPredefinedValue = ibValueMetaObjectRecordDataHierarchyMutableRef::ibPred
 struct ibDesignerRefItem {
 	const ibValueMetaObjectRecordDataRef* m_ref;
 	ibGuid m_guid;
-	wxString m_name;
+	ibString m_name;
 };
 
 // One value under `at`, numbered; what it holds goes under it.
 ibDataNode& ibAppendValue(ibDataNode& at, std::vector<ibDesignerRefItem>& values,
-	const ibValueMetaObjectRecordDataRef* recordRef, const ibGuid& guid, const wxString& name)
+	const ibValueMetaObjectRecordDataRef* recordRef, const ibGuid& guid, const ibString& name)
 {
 	ibDataNode& value = at.AddChild(0, 0);
 	value.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Name, name);
@@ -57,7 +57,7 @@ void ibFillOneTypeBranch(ibDataNode& branch, std::vector<ibDesignerRefItem>& val
 	// ⭐ EVERY REFERENCE TYPE HAS THIS ONE, not only the kinds that declare predefined values: a
 	// DOCUMENT declares none and its empty reference is still a legitimate thing to say (Max,
 	// 2026-08-28: "documents open too — a document just has only the reference").
-	ibAppendValue(branch, values, recordRef, wxNullGuid, wxT("EmptyRef"));
+	ibAppendValue(branch, values, recordRef, wxNullGuid, ibT("EmptyRef"));
 
 	// ⭐ AN ENUMERATION IS A REFERENCE LIKE ANY OTHER — "all references — enumerations, documents,
 	// catalogs — go through this form" (Max, 2026-08-28). Its members are DECLARED, which is exactly
@@ -200,7 +200,7 @@ bool ibShowPredefinedSelector(ibControlFrame* ownerValue, const ibTypeDescriptio
 	// choice is stored as what it is: this metaobject, this declared value, and the name it reads by.
 	// The runtime reference is made from it at execution, by the running composer
 	// (ibMaterializeCompositionValue).
-	const wxString written = ibDeclaredTypeName(chosen.m_ref) + wxT(".") + chosen.m_name;
+	const ibString written = ibDeclaredTypeName(chosen.m_ref) + ibT(".") + chosen.m_name;
 	ibValue value(new ibValueCompositionPredefined(chosen.m_ref->GetMetaID(), chosen.m_guid, written));
 	ownerValue->ChoiceProcessing(value);
 	return true;

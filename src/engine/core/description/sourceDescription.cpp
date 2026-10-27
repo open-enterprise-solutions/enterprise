@@ -77,9 +77,9 @@ bool ibSourceDescriptionMemory::SaveData(ibWriterMemory& writer, const ibSourceD
 
 namespace {
 
-const ibChar* const kHopsField = wxT("hops");
-const ibChar* const kHopId     = wxT("id");
-const ibChar* const kHopType   = wxT("type");
+const ibChar* const kHopsField = ibT("hops");
+const ibChar* const kHopId     = ibT("id");
+const ibChar* const kHopType   = ibT("type");
 
 } // namespace
 

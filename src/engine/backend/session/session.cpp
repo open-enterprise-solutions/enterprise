@@ -109,20 +109,20 @@ public:
 	// right — creating IS writing — and stays its own method because its restriction checks the row
 	// being made rather than filtering rows that already exist.
 	bool CheckSelect(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
-	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Show, wxT("Read"), stage, affected); }
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Show, ibT("Read"), stage, affected); }
 
 	bool CheckCreate(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
-	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Modify, wxT("Create"), stage, affected); }
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Modify, ibT("Create"), stage, affected); }
 
 	bool CheckUpdate(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
-	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Modify, wxT("Write"), stage, affected); }
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Modify, ibT("Write"), stage, affected); }
 
 	bool CheckDelete(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
-	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Erase, wxT("Delete"), stage, affected); }
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Erase, ibT("Delete"), stage, affected); }
 
 private:
 	// What the four share: the stage decides which question, the action decides which right answers.
-	bool Check(ibDataQueryBuilder& query, RightPredicate right, const wxString& operation,
+	bool Check(ibDataQueryBuilder& query, RightPredicate right, const ibString& operation,
 	           const ibAccessStage& stage, long affected) const
 	{
 		return stage == ibAccessStage::Table
@@ -222,7 +222,7 @@ private:
 	//
 	// It is asked even with no RLS module anywhere: a role can restrict nothing per-row and still
 	// have a flag cleared on a table.
-	bool Gate(ibDataQueryBuilder& query, RightPredicate right, const wxString& operation) const
+	bool Gate(ibDataQueryBuilder& query, RightPredicate right, const ibString& operation) const
 	{
 		if (!TablesAllowed(query, right))
 			return false;                                 // refused on a table — the filter never runs
@@ -287,14 +287,14 @@ private:
 	// the intersections, and the shape between the groups is fixed) — unlike an ACL with DENY.
 	// TODO(perf): the module is a per-query template — JIT-compile it (hot path); do NOT cache its RESULT.
 	void ApplyToSource(ibDataQueryBuilder& query, const ibBackendQueryable* source,
-	                   const wxString& operation) const
+	                   const ibString& operation) const
 	{
 		// The module identifies the source by its canonical FULL NAME ("Document.X" / "Catalog.X"),
 		// so pass GetFullName() (not the short GetQueryName()); fall back to the short name if the
 		// metaobject cannot be resolved.
 		const ibValueMetaObjectGenericData* srcMeta = FindSourceMetaObject(source);
-		const wxString sourceName = srcMeta != nullptr ? srcMeta->GetFullName() : source->GetQueryName();
-		const wxString handler = (operation == wxT("Read")) ? wxT("OnAccessRead") : wxT("OnAccessWrite");
+		const ibString sourceName = srcMeta != nullptr ? srcMeta->GetFullName() : source->GetQueryName();
+		const ibString handler = (operation == ibT("Read")) ? ibT("OnAccessRead") : ibT("OnAccessWrite");
 
 		// The restricting roles' module procUnits were resolved ONCE in the ctor (post-compile, pre-run)
 		// and cached for the session's life; Apply already returned when the list is empty, so at least one
@@ -341,7 +341,7 @@ private:
 			// intersection role is a plain AND, which is what folding into the query already means.
 			switch (runRole(procs.front().m_proc, query)) {
 			case RoleOutcome::Failed:    // loud fail-closed deny — say which source and which operation
-				ibBackendAccessException::Error(wxString::Format(_("%s on '%s' was refused by the role's access policy"),
+				ibBackendAccessException::Error(ibString::Format(_("%s on '%s' was refused by the role's access policy"),
 					operation, sourceName));
 			case RoleOutcome::NoHandler:                                     // no restriction -> allow
 			case RoleOutcome::Succeeded: return;                            // fold (if any) already applied
@@ -383,16 +383,16 @@ private:
 			// the query language's `key IN (subquery)` lowering). No key to reduce onto -> fail closed.
 			const std::vector<const ibBackendQueryColumn*> keyCols = source->GetPrimaryKeyColumns();
 			if (keyCols.empty() || keyCols.front() == nullptr)
-				ibBackendAccessException::Error(wxString::Format(
+				ibBackendAccessException::Error(ibString::Format(
 					_("%s on '%s': the role restricts it through a join, but the source has no key to reduce onto"),
 					operation, sourceName));
 			const ibBackendQueryColumn* keyCol = keyCols.front();
-			scratch.Select(keyCol, wxT("v"));
+			scratch.Select(keyCol, ibT("v"));
 			ibDataQueryResult r = scratch.Execute(ibReadPageRequest{});
 			ibQueryPredicatePtr admitted;
 			while (r.Next()) {
 				ibQueryCondition c;
-				c.m_col = keyCol; c.m_value = r.GetColumn(wxT("v")); c.m_op = ibQueryFilterOp::Equal;
+				c.m_col = keyCol; c.m_value = r.GetColumn(ibT("v")); c.m_op = ibQueryFilterOp::Equal;
 				ibQueryPredicatePtr eq = ibQueryPredicate::Leaf(c);
 				admitted = admitted ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, admitted, eq) : eq;
 			}
@@ -423,7 +423,7 @@ private:
 				// or never granted must not RELAX the separator it stands for, so — unlike a failed union
 				// role, which merely contributes nothing — a failed intersection role denies outright.
 				if (outcome == RoleOutcome::Failed)
-					ibBackendAccessException::Error(wxString::Format(
+					ibBackendAccessException::Error(ibString::Format(
 						_("%s on '%s' was refused by a restricting role's access policy"), operation, sourceName));
 				if (pred)
 					intersectionPredicates.push_back(pred);
@@ -463,7 +463,7 @@ private:
 		// "every role that spoke refused"; only this frame knows which operation and which source to
 		// say it about.
 		if (verdict.m_failClosed)
-			ibBackendAccessException::Error(wxString::Format(
+			ibBackendAccessException::Error(ibString::Format(
 				_("%s on '%s' was refused by every role's access policy"), operation, sourceName));
 
 		if (verdict.m_union)
@@ -592,7 +592,7 @@ ibSession* ibSession::CurrentCached() noexcept
 	return cached.m_session;
 }
 
-ibSession::ibSession(wxString id, ibSessionKind kind)
+ibSession::ibSession(ibString id, ibSessionKind kind)
 	: m_id(std::move(id))
 	, m_kind(kind)
 	, m_workDate(ibDateTime::Now())
@@ -812,7 +812,7 @@ void ibSession::Detach(std::chrono::milliseconds timeout)
 	WaitForAuth(Auth(), timeout);
 }
 
-void ibSession::SetActivity(const wxString& activity)
+void ibSession::SetActivity(const ibString& activity)
 {
 	ibSessionRegistry* const regPtr = RegistryOf(*this);
 	if (regPtr == nullptr) return;
@@ -826,7 +826,7 @@ void ibSession::SetActivity(const wxString& activity)
 	reg.Submit(std::move(req), ibPriority::Low);
 }
 
-bool ibSession::SetTokenHash(const wxString& tokenHash)
+bool ibSession::SetTokenHash(const ibString& tokenHash)
 {
 	ibSessionRegistry* const regPtr = RegistryOf(*this);
 	if (regPtr == nullptr || regPtr->IsFatal())
@@ -970,7 +970,7 @@ bool ibSession::CompileRoot()
 	return true;
 }
 
-bool ibSession::EvaluateInRoot(const wxString& expression, ibValue& produced)
+bool ibSession::EvaluateInRoot(const ibString& expression, ibValue& produced)
 {
 	produced = ibValue();
 	if (expression.IsEmpty())
@@ -980,7 +980,7 @@ bool ibSession::EvaluateInRoot(const wxString& expression, ibValue& produced)
 	const std::shared_ptr<ibProcUnit> rootUnit = root != nullptr ? root->GetProcUnit() : nullptr;
 
 	if (!rootUnit) {
-		produced = ibValue(_("this session has no root to evaluate against"));
+		produced = ibValue(ibString(_("this session has no root to evaluate against")));
 		return false;
 	}
 
@@ -1121,7 +1121,7 @@ void ibSession::Cancel()
 	ibJobManager* const jobs = ibApplicationInstance::GetJobManager(GetApplicationInstance());
 	const std::vector<std::shared_ptr<ibSession>> tenants =
 		jobs != nullptr ? jobs->TenantsOf(this) : std::vector<std::shared_ptr<ibSession>>();
-	ibJournalInfo(wxT("cancel"), wxT("session %s: cancel - its connection, its runtime, %u tenant(s)"),
+	ibJournalInfo(ibT("cancel"), ibT("session %s: cancel - its connection, its runtime, %u tenant(s)"),
 		GetId(), static_cast<unsigned>(tenants.size()));
 	// The database first, then the runtime: the statement running now answers with the interruption, and
 	// the runtime, told next, throws it again at every level until the run is out — and lowers it itself.
@@ -1398,9 +1398,8 @@ void ibSession::WakeDebugLoop()
 	// Step 1 — set m_forceExit so ibProcUnit::Execute's opcode loop
 	// unwinds on the next iteration (after returning from DoDebugLoop)
 	// instead of resuming user script. We bypass RequestForceExit
-	// because its OnForceExit side effect (web → wfrontendCallProcessExitHook
-	// when wes was started in --debug mode) would kill the entire
-	// process; here we want to cancel only THIS session's interpreter.
+	// because its OnForceExit side effect (a host's exit hook) may kill
+	// the entire process; here we want to cancel only THIS session's interpreter.
 	// Direct atomic store; deduplication against a later RequestForceExit
 	// is fine since the destroy path doesn't follow up with one.
 	m_forceExit.store(true, std::memory_order_release);
@@ -1433,10 +1432,10 @@ bool ibSession::OnClose(bool /*force*/)
 			self->Teardown();
 		}
 		catch (const std::exception& err) {
-			ibJournalWarning(wxT("session"), wxT("a session's teardown ended with an exception: %s"), wxString::FromUTF8(err.what()));
+			ibJournalWarning(ibT("session"), ibT("a session's teardown ended with an exception: %s"), ibString::FromUTF8(err.what()));
 		}
 		catch (...) {
-			ibJournalWarning(wxT("session"), wxT("a session's teardown ended with an exception"));
+			ibJournalWarning(ibT("session"), ibT("a session's teardown ended with an exception"));
 		}
 	});
 	if (queued.valid() && queued.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
@@ -1499,19 +1498,19 @@ std::future<void> ibSession::Submit(std::function<void()> task)
 	return p.get_future();
 }
 
-wxString ibSession::Reason() const
+ibString ibSession::Reason() const
 {
 	std::lock_guard<std::mutex> lk(m_mtx);
 	return m_reason;
 }
 
-void ibSession::SetReason(const wxString& reason)
+void ibSession::SetReason(const ibString& reason)
 {
 	std::lock_guard<std::mutex> lk(m_mtx);
 	m_reason = reason;
 }
 
-void ibSession::Transition(ibSessionState next, const wxString& reason)
+void ibSession::Transition(ibSessionState next, const ibString& reason)
 {
 	{
 		std::lock_guard<std::mutex> lk(m_mtx);
@@ -1524,7 +1523,7 @@ void ibSession::Transition(ibSessionState next, const wxString& reason)
 	m_cv.notify_all();
 }
 
-void ibSession::TransitionAuth(ibAuthState next, const wxString& reason)
+void ibSession::TransitionAuth(ibAuthState next, const ibString& reason)
 {
 	{
 		std::lock_guard<std::mutex> lk(m_mtx);
@@ -1552,7 +1551,7 @@ ibAuthState ibSession::WaitForAuth(ibAuthState from, std::chrono::milliseconds t
 	return m_auth.load(std::memory_order_acquire);
 }
 
-ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& password)
+ibSession::OpenResult ibSession::Open(const ibString& user, const ibString& password)
 {
 	// Must be Added (registry accepted the session); Anonymous or AuthFailed
 	// on the auth axis — either is a valid retry point.
@@ -1565,7 +1564,7 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 
 	constexpr auto timeout = std::chrono::seconds(20);
 
-	auto submitAttach = [&](const wxString& u, const wxString& p) {
+	auto submitAttach = [&](const ibString& u, const ibString& p) {
 		// Reset auth axis so WaitForAuth below has a known "from" value —
 		// otherwise a prior AuthFailed state would trigger the wait
 		// immediately without the new Attach having been processed.

@@ -71,7 +71,7 @@ TEST(JsonProvider, Scalars_SurviveRoundTrip) {
 
 	const ibDataNode back = Parse(Emit(n));
 
-	EXPECT_EQ(back.GetValue<wxString>(wxT("name")), wxT("RootName"));
+	EXPECT_EQ(back.GetValue<ibString>(wxT("name")), wxT("RootName"));
 	EXPECT_TRUE (back.GetValue<bool>(wxT("flag")));
 	EXPECT_FALSE(back.GetValue<bool>(wxT("off")));
 	EXPECT_EQ(back.GetValue<std::int32_t>(wxT("id")), -42);
@@ -87,11 +87,11 @@ TEST(JsonProvider, Scalars_SurviveRoundTrip) {
 
 // Strings carrying JSON's own metacharacters must come back byte-identical.
 TEST(JsonProvider, String_EscapesSurviveRoundTrip) {
-	const wxString tricky = wxT("quote:\" back\\slash tab:\t nl:\n unicode:é中");
+	const ibString tricky = wxT("quote:\" back\\slash tab:\t nl:\n unicode:é中");
 	ibDataNode n;
 	n.AddField(wxT("s"), ibDataValue::String(tricky));
 
-	EXPECT_EQ(Parse(Emit(n)).GetValue<wxString>(wxT("s")), tricky);
+	EXPECT_EQ(Parse(Emit(n)).GetValue<ibString>(wxT("s")), tricky);
 }
 
 // Binary rides as "base64:…" — the one string shape that reads back as Binary.
@@ -176,13 +176,13 @@ TEST(JsonProvider, ChildValue_ReturnsToPropertyArea) {
 	const ibDataNode back = Parse(Emit(n));
 	auto sub = back.FindChild(wxT("Type"));
 	ASSERT_TRUE(sub);
-	EXPECT_EQ(sub->GetValue<wxString>(wxT("typeName")), wxT("String"));
+	EXPECT_EQ(sub->GetValue<ibString>(wxT("typeName")), wxT("String"));
 }
 
 // A name-form NodeType resolves only through the injected inverse lookup.
 TEST(JsonProvider, NodeType_NameFormNeedsLookup) {
 	ibJsonProvider provider;
-	provider.SetTypeResolver([](ibClassID) { return wxString(wxT("Catalog")); });
+	provider.SetTypeResolver([](ibClassID) { return ibString(wxT("Catalog")); });
 	ibWriterMemory w;
 	ibDataNode n(1001, 1);
 	provider.Write(n, w);
@@ -200,7 +200,7 @@ TEST(JsonProvider, NodeType_NameFormNeedsLookup) {
 // read before its caller is known, and not read again. All the way down; the word gone once it is answered.
 TEST(JsonProvider, NodeType_KeptWordLookedUpAfter) {
 	ibJsonProvider provider;
-	provider.SetTypeResolver([](ibClassID) { return wxString(wxT("Catalog")); });
+	provider.SetTypeResolver([](ibClassID) { return ibString(wxT("Catalog")); });
 	ibWriterMemory w;
 	ibDataNode n(1001, 1);
 	ibDataNode& inner = n.Child(wxT("Inner"));
@@ -210,7 +210,7 @@ TEST(JsonProvider, NodeType_KeptWordLookedUpAfter) {
 
 	ibDataNode back = Parse(w.buffer());
 	EXPECT_EQ(back.GetClsid(), (ibClassID)0);
-	EXPECT_EQ(back.GetValue<wxString>(wxT("NodeType")), wxT("Catalog"));
+	EXPECT_EQ(back.GetValue<ibString>(wxT("NodeType")), wxT("Catalog"));
 
 	ibJsonProvider lookup;
 	lookup.SetTypeLookup([](const ibString& name) -> ibClassID { return name == wxT("Catalog") ? 1001 : 0; });
@@ -238,7 +238,7 @@ TEST(JsonProvider, ReadEntry_PlacesKeysAsTheTextReaderDoes) {
 	EXPECT_EQ(node.GetClsid(), (ibClassID)1001);
 	EXPECT_EQ(node.GetMetaId(), (ibMetaID)7);
 	EXPECT_FALSE(node.Has(wxT("TypeDesc")));
-	EXPECT_EQ(node.GetValue<wxString>(wxT("Name")), wxT("Nomenclature"));
+	EXPECT_EQ(node.GetValue<ibString>(wxT("Name")), wxT("Nomenclature"));
 	EXPECT_TRUE(node.FindChild(wxT("Type")));
 
 	// …and a string's: a binary only where Write wrote one.
@@ -268,7 +268,7 @@ TEST(JsonProvider, Date_DegradesToString_ByDesign) {
 // drops it rather than inventing a key the writer never had.
 TEST(JsonProvider, TypeDesc_IsDroppedNotMaterialised) {
 	ibJsonProvider provider;
-	provider.SetTypeResolver([](ibClassID) { return wxString(wxT("String")); });
+	provider.SetTypeResolver([](ibClassID) { return ibString(wxT("String")); });
 	ibDataNode n;
 	n.AddField(wxT("typeId"), ibDataValue::UInt(777));
 	ibWriterMemory w;

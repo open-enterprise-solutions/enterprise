@@ -34,9 +34,9 @@ namespace {
 constexpr std::uint16_t kVersionOfThisFingerprint = 36;
 constexpr std::uint64_t kOpcodeFingerprintAtThatVersion = 9806823567777943829ULL;
 
-wxString CodeDefPath()
+ibString CodeDefPath()
 {
-	wxFileName codeDef(wxString::FromUTF8(__FILE__));
+	wxFileName codeDef(ibString::FromUTF8(__FILE__));
 	codeDef.RemoveLastDir();   // tests/ -> the repository root
 	codeDef.AppendDir(wxT("src"));
 	codeDef.AppendDir(wxT("engine"));
@@ -48,7 +48,7 @@ wxString CodeDefPath()
 }
 
 // One line of the opcode list, or empty when the line is a comment or prose.
-wxString OpcodeLine(wxString line)
+ibString OpcodeLine(ibString line)
 {
 	const int comment = line.Find(wxT("//"));
 	if (comment != wxNOT_FOUND)
@@ -56,12 +56,12 @@ wxString OpcodeLine(wxString line)
 	line.Trim(true).Trim(false);
 	if (line.StartsWith(wxT("OPER_")) || line.StartsWith(wxT("#define TYPE_DELTA")))
 		return line;
-	return wxString();
+	return ibString();
 }
 
-std::uint64_t Fingerprint(const wxString& text)
+std::uint64_t Fingerprint(const ibString& text)
 {
-	const wxScopedCharBuffer utf8 = text.utf8_str();
+	const std::string utf8 = text.utf8_str();
 	std::uint64_t h = 1469598103934665603ULL;
 	for (size_t i = 0; i < utf8.length(); ++i) {
 		h ^= (std::uint64_t)(unsigned char)utf8.data()[i];
@@ -70,9 +70,9 @@ std::uint64_t Fingerprint(const wxString& text)
 	return h;
 }
 
-std::uint64_t OpcodeFingerprint(wxString* pathOut)
+std::uint64_t OpcodeFingerprint(ibString* pathOut)
 {
-	const wxString path = CodeDefPath();
+	const ibString path = CodeDefPath();
 	if (pathOut)
 		*pathOut = path;
 
@@ -80,9 +80,9 @@ std::uint64_t OpcodeFingerprint(wxString* pathOut)
 	if (!file.Open(path, wxConvUTF8))
 		return 0;
 
-	wxString text;
+	ibString text;
 	for (size_t i = 0; i < file.GetLineCount(); ++i) {
-		const wxString line = OpcodeLine(file.GetLine(i));
+		const ibString line = OpcodeLine(file.GetLine(i));
 		if (!line.empty())
 			text << line << wxT("\n");
 	}
@@ -94,7 +94,7 @@ std::uint64_t OpcodeFingerprint(wxString* pathOut)
 } // namespace
 
 TEST(ByteCodeFormat, AnOpcodeChangeBumpsTheVersion) {
-	wxString path;
+	ibString path;
 	const std::uint64_t now = OpcodeFingerprint(&path);
 	ASSERT_NE(now, 0ULL) << "could not read the opcode list from " << path.ToStdString();
 
@@ -112,9 +112,9 @@ TEST(ByteCodeFormat, AnOpcodeChangeBumpsTheVersion) {
 
 }
 
-wxString RepoRoot()
+ibString RepoRoot()
 {
-	wxFileName here(wxString::FromUTF8(__FILE__));
+	wxFileName here(ibString::FromUTF8(__FILE__));
 	here.RemoveLastDir();   // tests/ -> the repository root
 	here.SetFullName(wxEmptyString);
 	here.Normalize(wxPATH_NORM_DOTS | wxPATH_NORM_ABSOLUTE);
@@ -124,19 +124,19 @@ wxString RepoRoot()
 // The hash the build script writes for these two directories. `substituteRel`
 // empty hashes the tree as it is; otherwise that path, relative to backend/,
 // is read from `substituteFile` instead.
-wxString ScriptFingerprint(const wxString& substituteRel, const wxString& substituteFile)
+ibString ScriptFingerprint(const ibString& substituteRel, const ibString& substituteFile)
 {
-	const wxString root = RepoRoot();
-	const wxString backend = root + wxFILE_SEP_PATH + wxT("src") + wxFILE_SEP_PATH
+	const ibString root = RepoRoot();
+	const ibString backend = root + wxFILE_SEP_PATH + wxT("src") + wxFILE_SEP_PATH
 		+ wxT("engine") + wxFILE_SEP_PATH + wxT("backend");
-	const wxString script = backend + wxFILE_SEP_PATH + wxT("compiler")
+	const ibString script = backend + wxFILE_SEP_PATH + wxT("compiler")
 		+ wxFILE_SEP_PATH + wxT("engineFingerprint.cmake");
-	const wxString out = wxFileName(wxStandardPaths::Get().GetTempDir(),
+	const ibString out = wxFileName(wxStandardPaths::Get().GetTempDir(),
 		substituteRel.empty() ? wxT("oes-engine-fp.h") : wxT("oes-engine-fp-sub.h")).GetFullPath();
 	// The cmake that configured the build (tests/CMakeLists.txt), not whichever is on PATH.
-	wxString cmd = wxString::Format(
+	ibString cmd = ibString::Format(
 		wxT("\"%s\" -DOES_COMPILER_DIR=\"%s\" -DOES_SYSTEM_DIR=\"%s\" -DOES_CORE_COMPILER_DIR=\"%s\" -DOES_BACKEND_DIR=\"%s\" -DOES_FINGERPRINT_OUT=\"%s\""),
-		wxString::FromUTF8(OES_CMAKE_COMMAND),
+		ibString::FromUTF8(OES_CMAKE_COMMAND),
 		backend + wxFILE_SEP_PATH + wxT("compiler"),
 		backend + wxFILE_SEP_PATH + wxT("system"),
 		root + wxFILE_SEP_PATH + wxT("src") + wxFILE_SEP_PATH + wxT("engine") + wxFILE_SEP_PATH
@@ -144,7 +144,7 @@ wxString ScriptFingerprint(const wxString& substituteRel, const wxString& substi
 		backend,
 		out);
 	if (!substituteRel.empty())
-		cmd += wxString::Format(wxT(" -DOES_SUBSTITUTE_REL=\"%s\" -DOES_SUBSTITUTE_FILE=\"%s\""),
+		cmd += ibString::Format(wxT(" -DOES_SUBSTITUTE_REL=\"%s\" -DOES_SUBSTITUTE_FILE=\"%s\""),
 			substituteRel, substituteFile);
 	cmd += wxT(" -P \"") + script + wxT("\"");
 
@@ -153,14 +153,14 @@ wxString ScriptFingerprint(const wxString& substituteRel, const wxString& substi
 
 	wxTextFile file;
 	EXPECT_TRUE(file.Open(out, wxConvUTF8)) << out.ToStdString();
-	wxString hash;
-	const wxString marker = wxT("kEngineFingerprint[] = \"");
+	ibString hash;
+	const ibString marker = wxT("kEngineFingerprint[] = \"");
 	for (size_t i = 0; i < file.GetLineCount(); ++i) {
-		const wxString line = file.GetLine(i);
+		const ibString line = file.GetLine(i);
 		const int at = line.Find(marker);
 		if (at == wxNOT_FOUND)
 			continue;
-		const wxString rest = line.Mid(at + marker.length());
+		const ibString rest = line.Mid(at + marker.length());
 		const int end = rest.Find(wxUniChar('"'));
 		if (end == wxNOT_FOUND)
 			continue;
@@ -174,19 +174,19 @@ wxString ScriptFingerprint(const wxString& substituteRel, const wxString& substi
 // which is what fits in config_md5. The old key was the build stamp, which
 // does not move when the compiler does.
 TEST(ByteCodeCacheKey, CarriesTheFormatVersionAndTheEngineHash) {
-	const wxString digest = wxT("0123456789abcdef0123456789abcdef");
-	const wxString fingerprint = ibByteCodeCache::EngineFingerprint();
+	const ibString digest = wxT("0123456789abcdef0123456789abcdef");
+	const ibString fingerprint = ibByteCodeCache::EngineFingerprint();
 	ASSERT_EQ(fingerprint.length(), 64u);
 
-	const wxString spelled = wxString::Format(wxT("%u.%s.%s"),
+	const ibString spelled = ibString::Format(wxT("%u.%s.%s"),
 		(unsigned)kAOTFormatVersion, fingerprint, digest);
 	EXPECT_EQ(ibByteCodeCache::CacheKey(digest), ibMD5::ComputeMd5(spelled));
 
-	const wxString otherVersion = wxString::Format(wxT("%u.%s.%s"),
+	const ibString otherVersion = ibString::Format(wxT("%u.%s.%s"),
 		(unsigned)kAOTFormatVersion + 1u, fingerprint, digest);
 	EXPECT_NE(ibMD5::ComputeMd5(spelled), ibMD5::ComputeMd5(otherVersion));
 
-	const wxString otherEngine = wxString::Format(wxT("%u.%s.%s"),
+	const ibString otherEngine = ibString::Format(wxT("%u.%s.%s"),
 		(unsigned)kAOTFormatVersion, fingerprint + wxT("x"), digest);
 	EXPECT_NE(ibMD5::ComputeMd5(spelled), ibMD5::ComputeMd5(otherEngine))
 		<< "two engine hashes produced one cache key";
@@ -195,15 +195,15 @@ TEST(ByteCodeCacheKey, CarriesTheFormatVersionAndTheEngineHash) {
 // A built-in lives under system/. Changing one is a different hash from the
 // script the build runs, and that hash is what the key is made of.
 TEST(ByteCodeCacheKey, ABuiltInChangeAltersTheKey) {
-	const wxString real = ScriptFingerprint(wxString(), wxString());
+	const ibString real = ScriptFingerprint(ibString(), ibString());
 	ASSERT_FALSE(real.empty());
 	EXPECT_EQ(real, ibByteCodeCache::EngineFingerprint())
 		<< "the header the backend was built with is not the script's hash of this tree";
 
-	const wxString source = RepoRoot() + wxFILE_SEP_PATH + wxT("src") + wxFILE_SEP_PATH
+	const ibString source = RepoRoot() + wxFILE_SEP_PATH + wxT("src") + wxFILE_SEP_PATH
 		+ wxT("engine") + wxFILE_SEP_PATH + wxT("backend") + wxFILE_SEP_PATH
 		+ wxT("system") + wxFILE_SEP_PATH + wxT("systemManager.cpp");
-	const wxString changed = wxFileName(wxStandardPaths::Get().GetTempDir(),
+	const ibString changed = wxFileName(wxStandardPaths::Get().GetTempDir(),
 		wxT("oes-systemManager-changed.cpp")).GetFullPath();
 	{
 		wxTextFile in;
@@ -216,15 +216,15 @@ TEST(ByteCodeCacheKey, ABuiltInChangeAltersTheKey) {
 		ASSERT_TRUE(out.Write());
 	}
 
-	const wxString altered = ScriptFingerprint(wxT("system/systemManager.cpp"), changed);
+	const ibString altered = ScriptFingerprint(wxT("system/systemManager.cpp"), changed);
 	wxRemoveFile(changed);
 	ASSERT_FALSE(altered.empty());
 	EXPECT_NE(altered, real);
 
-	const wxString digest = wxT("0123456789abcdef0123456789abcdef");
-	const wxString was = wxString::Format(wxT("%u.%s.%s"),
+	const ibString digest = wxT("0123456789abcdef0123456789abcdef");
+	const ibString was = ibString::Format(wxT("%u.%s.%s"),
 		(unsigned)kAOTFormatVersion, real, digest);
-	const wxString now = wxString::Format(wxT("%u.%s.%s"),
+	const ibString now = ibString::Format(wxT("%u.%s.%s"),
 		(unsigned)kAOTFormatVersion, altered, digest);
 	EXPECT_NE(ibMD5::ComputeMd5(was), ibMD5::ComputeMd5(now));
 	EXPECT_EQ(ibByteCodeCache::CacheKey(digest), ibMD5::ComputeMd5(was));

@@ -32,7 +32,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataNumber"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataNumber"); }
 
 private:
 	ibNumber m_number;

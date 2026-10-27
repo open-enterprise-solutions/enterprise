@@ -26,7 +26,7 @@
 #include "backend/metaCollection/metaModuleObject.h"       // ibValueMetaObjectManagerModule
 #include "backend/moduleManager/moduleManager.h"
 
-ibValue ibSession::GetSessionParameter(const wxString& name) const
+ibValue ibSession::GetSessionParameter(const ibString& name) const
 {
 	const auto found = m_sessionParameters.find(name);
 	// UNSET READS AS UNDEFINED here, and the caller decides what that means. The
@@ -36,7 +36,7 @@ ibValue ibSession::GetSessionParameter(const wxString& name) const
 	return found != m_sessionParameters.end() ? found->second : ibValue();
 }
 
-void ibSession::SetSessionParameter(const wxString& name, const ibValue& value)
+void ibSession::SetSessionParameter(const ibString& name, const ibValue& value)
 {
 	if (!m_sessionParametersOpen) {
 		ibBackendCoreException::Error(
@@ -88,15 +88,15 @@ void ibSession::SetSessionParameters()
 	ibSessionParameterWriteWindow window(this);
 
 	try {
-		unit->ExecAsProc(wxT("SetSessionParameters"));
+		unit->ExecAsProc(ibT("SetSessionParameters"));
 	}
 	catch (const ibCoreException& err) {
-		ibJournalWarning(wxT("session.params"),_("SetSessionParameters: %s"), err.GetErrorDescription());
+		ibJournalWarning(ibT("session.params"),_("SetSessionParameters: %s"), err.GetErrorDescription());
 	}
 	catch (const std::exception& err) {
-		ibJournalWarning(wxT("session.params"),wxT("SetSessionParameters: %s"), err.what());
+		ibJournalWarning(ibT("session.params"),ibT("SetSessionParameters: %s"), err.what());
 	}
 	catch (...) {
-		ibJournalWarning(wxT("session.params"),wxT("SetSessionParameters: unknown exception"));
+		ibJournalWarning(ibT("session.params"),ibT("SetSessionParameters: unknown exception"));
 	}
 }

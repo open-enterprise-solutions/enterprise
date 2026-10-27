@@ -14,7 +14,7 @@ bool ibBackendDatabaseException::IsRetryable() const
 	    || m_kind == Kind::ConnectionLost;
 }
 
-void ibBackendDatabaseException::Throw(Kind kind, const wxString& msg)
+void ibBackendDatabaseException::Throw(Kind kind, const ibString& msg)
 {
 	throw ibBackendDatabaseException(kind, msg);
 }
@@ -24,14 +24,14 @@ int ibDatabaseLayerException::GetDriverErrorCode() const
 	return m_nativeCode;
 }
 
-const wxString& ibDatabaseLayerException::GetSqlState() const
+const ibString& ibDatabaseLayerException::GetSqlState() const
 {
 	return m_sqlState;
 }
 
 void ibDatabaseLayerException::Throw(Kind kind, int nativeCode,
-                                      const wxString& sqlState,
-                                      const wxString& msg)
+                                      const ibString& sqlState,
+                                      const ibString& msg)
 {
 	throw ibDatabaseLayerException(kind, nativeCode, sqlState, msg);
 }

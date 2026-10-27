@@ -93,7 +93,7 @@ public:
 	ibBackendDocFrame* GetFrame() const override { return m_frame; }
 };
 
-bool SetModuleText(const ibValueMetaObjectManagerModule* module, const wxString& text)
+bool SetModuleText(const ibValueMetaObjectManagerModule* module, const ibString& text)
 {
 	if (module == nullptr)
 		return false;
@@ -101,7 +101,7 @@ bool SetModuleText(const ibValueMetaObjectManagerModule* module, const wxString&
 	return true;
 }
 
-bool Compile(ibSession& session, ibMetaDataConfigurationFile& cfg, wxString& error)
+bool Compile(ibSession& session, ibMetaDataConfigurationFile& cfg, ibString& error)
 {
 	if (session.CreateRoot(&cfg) == nullptr) {
 		error = wxT("CreateRoot returned null");
@@ -135,8 +135,8 @@ public:
 		if (m_role != nullptr)
 			m_role->m_frame = nullptr;
 	}
-	void SetTitle(const wxString&) override {}
-	void SetStatusText(const wxString&, int) override {}
+	void SetTitle(const ibString&) override {}
+	void SetStatusText(const ibString&, int) override {}
 	void RefreshFrame() override {}
 	void RaiseFrame() override {}
 private:
@@ -165,13 +165,13 @@ public:
 		if (m_role != nullptr)
 			m_role->m_frame = nullptr;
 	}
-	void SetTitle(const wxString&) override {}
-	void SetStatusText(const wxString&, int) override {}
+	void SetTitle(const ibString&) override {}
+	void SetStatusText(const ibString&, int) override {}
 	void RefreshFrame() override {}
 	void RaiseFrame() override {}
 
 protected:
-	int DoShowModalMessage(const wxString&, const wxString&, int) override
+	int DoShowModalMessage(const ibString&, const ibString&, int) override
 	{
 		m_asked->Signal();
 		m_pool->Await(m_role, [this] { return m_answered->load(); });
@@ -191,13 +191,13 @@ private:
 	std::atomic<bool>*     m_windowAfter;
 };
 
-const wxString kRoleAsks =
+const ibString kRoleAsks =
 	wxT("Procedure OnAccessRead(Source, Operation, Allowed) {\n")
 	wxT("\tQuestion(\"allow this row?\", QuestionMode.YesNo);\n")
 	wxT("\tAllowed = true;\n")
 	wxT("}\n");
 
-const wxString kSessionAsks =
+const ibString kSessionAsks =
 	wxT("Procedure SetSessionParameters() {\n")
 	wxT("\tQuestion(\"which organisation?\", QuestionMode.YesNo);\n")
 	wxT("}\n");
@@ -281,7 +281,7 @@ TEST(FiberTrust, ARoleHandlerThatAsksThroughTheGateDoesNotHang)
 
 	{
 		ibSessionScope bound(session.get());
-		wxString error;
+		ibString error;
 		ASSERT_TRUE(Compile(*session, cfg, error)) << error.ToStdString();
 	}
 
@@ -305,14 +305,14 @@ TEST(FiberTrust, ARoleHandlerThatAsksThroughTheGateDoesNotHang)
 			if (m_role != nullptr)
 				m_role->m_frame = nullptr;
 		}
-		void SetTitle(const wxString&) override {}
-		void SetStatusText(const wxString&, int) override {}
+		void SetTitle(const ibString&) override {}
+		void SetStatusText(const ibString&, int) override {}
 		void RefreshFrame() override {}
 		void RaiseFrame() override {}
 	protected:
 		// Returns at once. A question that reaches here is the failure; parking
 		// the thread would turn that failure into a stuck test.
-		int DoShowModalMessage(const wxString&, const wxString&, int) override
+		int DoShowModalMessage(const ibString&, const ibString&, int) override
 		{
 			m_asked->store(true);
 			return wxYES;
@@ -361,7 +361,7 @@ TEST(FiberTrust, SetSessionParametersPausesTrustWhileItAsks)
 	auto session = std::make_shared<ibRoleSession>(wxT("session-params"), ibSessionKind::Enterprise);
 	{
 		ibSessionScope bound(session.get());
-		wxString error;
+		ibString error;
 		ASSERT_TRUE(Compile(*session, cfg, error)) << error.ToStdString();
 	}
 

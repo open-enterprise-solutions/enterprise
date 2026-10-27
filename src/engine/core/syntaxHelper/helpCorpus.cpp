@@ -23,7 +23,7 @@ namespace {
 // Unicode folding goes in once the corpus content reaches non-ASCII bulk
 // (Phase 2 LLM fill); for now wxString::Lower covers the common case and
 // is stable enough across platforms for hand-written fixture entries.
-wxString NormaliseKey(const wxString& s) {
+ibString NormaliseKey(const ibString& s) {
 	return s.Lower();
 }
 
@@ -31,12 +31,11 @@ wxString NormaliseKey(const wxString& s) {
 // token index and to tokenise search queries. Cyrillic identifiers are
 // preserved as single tokens (locale-aware ibIsAlnum); ASCII punctuation
 // is dropped.
-std::vector<wxString> Tokenise(const wxString& s) {
-	std::vector<wxString> out;
-	wxString cur;
-	for (wxString::const_iterator it = s.begin(); it != s.end(); ++it) {
-		wxUniChar c = *it;
-		if (ibIsAlnum(c) || c == wxT('_')) {
+std::vector<ibString> Tokenise(const ibString& s) {
+	std::vector<ibString> out;
+	ibString cur;
+	for (const ibChar c : s) {
+		if (ibIsAlnum(c) || c == ibT('_')) {
 			cur += c;
 		} else if (!cur.empty()) {
 			out.push_back(NormaliseKey(cur));
@@ -52,9 +51,9 @@ std::vector<wxString> Tokenise(const wxString& s) {
 // over source-file content once the loader is wired (design §6.1
 // requires content-hash, not entry-hash, for ETag correctness across
 // formatting changes).
-std::uint64_t Fnv1a(const wxString& s) {
+std::uint64_t Fnv1a(const ibString& s) {
 	std::uint64_t   h     = 1469598103934665603ull;
-	const wxScopedCharBuffer utf = s.utf8_str();
+	const std::string utf = s.ToUtf8();
 	for (size_t i = 0; i < utf.length(); ++i) {
 		h ^= static_cast<unsigned char>(utf.data()[i]);
 		h *= 1099511628211ull;
@@ -62,8 +61,8 @@ std::uint64_t Fnv1a(const wxString& s) {
 	return h;
 }
 
-wxString HashEntries(const std::vector<ibHelpEntry>& entries,
-                     const wxString&                 locale) {
+ibString HashEntries(const std::vector<ibHelpEntry>& entries,
+                     const ibString&                 locale) {
 	// Sort by id so the fingerprint is order-independent. Snapshot the
 	// hashable fields; layout-only changes (which we have none of yet)
 	// would not bust the fingerprint.
@@ -83,7 +82,7 @@ wxString HashEntries(const std::vector<ibHelpEntry>& entries,
 		h ^= Fnv1a(e->signature);          h *= 1099511628211ull;
 		h ^= Fnv1a(e->description);        h *= 1099511628211ull;
 	}
-	return wxString::Format(wxT("%016llx"),
+	return ibString::Format(ibT("%016llx"),
 	                        static_cast<unsigned long long>(h));
 }
 
@@ -101,17 +100,17 @@ bool ibHelpLoadResult::ok() const {
 
 // === Constructors ============================================================
 
-ibHelpCorpus::ibHelpCorpus(const wxString& locale)
+ibHelpCorpus::ibHelpCorpus(const ibString& locale)
     : m_locale(locale) {
 	m_root            = std::make_unique<ibHelpCategory>();
 	m_fingerprint     = HashEntries(m_entries, m_locale);
 }
 
-ibHelpCorpus::ibHelpCorpus(const wxString&              locale,
+ibHelpCorpus::ibHelpCorpus(const ibString&              locale,
                            Source                       source,
                            std::vector<ibHelpEntry>     entries,
                            std::vector<ibHelpLoadError> loadErrors,
-                           std::map<wxString, wxString> categoryNames)
+                           std::map<ibString, ibString> categoryNames)
     : m_entries(std::move(entries)),
       m_categoryNames(std::move(categoryNames)),
       m_locale(locale),
@@ -131,7 +130,7 @@ ibHelpCorpus::ibHelpCorpus(const wxString&              locale,
 
 ibHelpCorpus::ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
                            std::shared_ptr<const ibHelpCorpus> perConfig,
-                           const wxString&                     locale)
+                           const ibString&                     locale)
     : m_locale(locale) {
 	// Carry forward source errors so callers see one combined diagnostics
 	// stream from the merged snapshot. Source corpora's shared_ptr's stay
@@ -148,7 +147,7 @@ ibHelpCorpus::ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
 	// (§3.6). Use a side index (id → slot in m_entries) for O(1) overlay
 	// lookups; the entry storage itself stays a std::vector so iteration
 	// order is deterministic across compilers / libstdc++ versions.
-	std::unordered_map<wxString, size_t> slotById;
+	std::unordered_map<ibString, size_t> slotById;
 	if (platform) {
 		m_entries.reserve(platform->m_entries.size());
 		for (const auto& e : platform->m_entries) {
@@ -163,8 +162,8 @@ ibHelpCorpus::ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
 				// Overlay — record warning, replace platform entry.
 				ibHelpLoadError w;
 				w.severity = ibHelpLoadSeverity::kWarning;
-				w.message  = wxString::Format(
-				    wxT("Per-configuration entry '%s' overlays platform entry."),
+				w.message  = ibString::Format(
+				    ibT("Per-configuration entry '%s' overlays platform entry."),
 				    e.id);
 				m_loadErrors.push_back(std::move(w));
 				m_entries[it->second] = e;
@@ -207,8 +206,8 @@ void ibHelpCorpus::BuildIndexes() {
 		if (!ins.second) {
 			ibHelpLoadError w;
 			w.severity = ibHelpLoadSeverity::kFatal;
-			w.message  = wxString::Format(
-			    wxT("Internal: duplicate id '%s' reached BuildIndexes - entry dropped from index."),
+			w.message  = ibString::Format(
+			    ibT("Internal: duplicate id '%s' reached BuildIndexes - entry dropped from index."),
 			    e.id);
 			m_loadErrors.push_back(std::move(w));
 			continue;
@@ -250,12 +249,12 @@ void ibHelpCorpus::BuildIndexes() {
 		// signatures rarely repeat a word and the flaw stayed hidden; a description repeats them
 		// constantly, and adding it without this would have turned "all words must hit" into "any
 		// word, often enough".
-		std::set<wxString> unique;
-		for (const wxString& text : { e.nameLocal, e.nameEn, e.signature, e.description })
-			for (const wxString& t : Tokenise(text))
+		std::set<ibString> unique;
+		for (const ibString& text : { e.nameLocal, e.nameEn, e.signature, e.description })
+			for (const ibString& t : Tokenise(text))
 				unique.insert(t);
 
-		for (const wxString& t : unique)
+		for (const ibString& t : unique)
 			m_tokenIndex[t].push_back(i);
 	}
 }
@@ -265,13 +264,13 @@ void ibHelpCorpus::BuildIndexes() {
 void ibHelpCorpus::BuildCategoryTree() {
 	for (const ibHelpEntry& e : m_entries) {
 		ibHelpCategory* cur = m_root.get();
-		for (const wxString& key : e.categoryKeys) {
+		for (const ibString& key : e.categoryKeys) {
 			// Find or create the child node for this key. Keep children
 			// sorted by key so the tree view shows a deterministic order.
 			auto it = std::lower_bound(
 			    cur->children.begin(), cur->children.end(), key,
 			    [](const std::unique_ptr<ibHelpCategory>& node,
-			       const wxString&                       k) {
+			       const ibString&                       k) {
 				    return node->key < k;
 			    });
 			if (it == cur->children.end() || (*it)->key != key) {
@@ -297,7 +296,7 @@ const ibHelpCategory* ibHelpCorpus::GetRoot() const {
 	return m_root.get();
 }
 
-const ibHelpEntry* ibHelpCorpus::FindById(const wxString& id) const {
+const ibHelpEntry* ibHelpCorpus::FindById(const ibString& id) const {
 	auto it = m_byId.find(id);
 	if (it == m_byId.end()) return nullptr;
 	return &m_entries[it->second];
@@ -315,8 +314,8 @@ std::vector<const ibHelpEntry*> ibHelpCorpus::AllEntries() const {
 }
 
 std::vector<const ibHelpEntry*>
-ibHelpCorpus::SearchPrefix(const wxString& prefix) const {
-	const wxString key = NormaliseKey(prefix);
+ibHelpCorpus::SearchPrefix(const ibString& prefix) const {
+	const ibString key = NormaliseKey(prefix);
 	std::vector<const ibHelpEntry*> out;
 	auto it = m_prefixIndex.lower_bound(key);
 	for (; it != m_prefixIndex.end(); ++it) {
@@ -328,15 +327,15 @@ ibHelpCorpus::SearchPrefix(const wxString& prefix) const {
 }
 
 std::vector<const ibHelpEntry*>
-ibHelpCorpus::SearchText(const wxString& query) const {
-	const std::vector<wxString> tokens = Tokenise(query);
+ibHelpCorpus::SearchText(const ibString& query) const {
+	const std::vector<ibString> tokens = Tokenise(query);
 	if (tokens.empty()) return {};
 
 	// Intersect token postings — entry must contain ALL query tokens.
 	// For Phase 1 we score by (hit count, name-exact-bonus) — BM25 is a
 	// Phase 6 enhancement once HTTP search hits real load (§3.5).
 	std::unordered_map<ibHelpEntryIndex, int> score;
-	for (const wxString& t : tokens) {
+	for (const ibString& t : tokens) {
 		auto it = m_tokenIndex.find(t);
 		if (it == m_tokenIndex.end()) continue;
 		for (ibHelpEntryIndex idx : it->second) score[idx] += 1;
@@ -366,7 +365,7 @@ ibHelpCorpus::SearchText(const wxString& query) const {
 	return out;
 }
 
-wxString ibHelpCorpus::Fingerprint() const {
+ibString ibHelpCorpus::Fingerprint() const {
 	return m_fingerprint;
 }
 
@@ -374,7 +373,7 @@ int ibHelpCorpus::EntryCount() const {
 	return static_cast<int>(m_entries.size());
 }
 
-const wxString& ibHelpCorpus::Locale() const {
+const ibString& ibHelpCorpus::Locale() const {
 	return m_locale;
 }
 

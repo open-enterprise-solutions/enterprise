@@ -13,7 +13,7 @@
 #include <new>
 #include <stdexcept>
 
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 #  ifndef WIN32_LEAN_AND_MEAN
 #    define WIN32_LEAN_AND_MEAN
 #  endif
@@ -61,7 +61,7 @@ void __sanitizer_finish_switch_fiber(void* fake_stack_save, const void** bottom_
 #  include <sanitizer/tsan_interface.h>
 #endif
 
-#if !defined(_WIN32)
+#if !defined(__IBMSW__)
 extern "C" void ibFiberSwitch(void** fromSp, void** toSp);
 extern "C" void ibFiberTrampoline();
 #endif
@@ -94,7 +94,7 @@ bool ThreadStackSpan(ibStackSpan& out)
 	}
 	if (tl_spanState == ibStackSpanState::Failed)
 		return false;
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	char here;
 	MEMORY_BASIC_INFORMATION hereInfo;
 	if (::VirtualQuery(&here, &hereInfo, sizeof(hereInfo)) == 0 || hereInfo.AllocationBase == nullptr) {
@@ -121,7 +121,7 @@ bool ThreadStackSpan(ibStackSpan& out)
 	}
 	out.low = base;
 	out.high = end;
-#elif defined(__APPLE__)
+#elif defined(__IBOSX__)
 	void* const top = pthread_get_stackaddr_np(pthread_self());
 	const std::size_t size = pthread_get_stacksize_np(pthread_self());
 	if (top == nullptr || size == 0) {
@@ -155,7 +155,7 @@ bool ThreadStackSpan(ibStackSpan& out)
 
 } // namespace
 
-#if !defined(_WIN32)
+#if !defined(__IBMSW__)
 
 // Reachable from the asm trampoline. `used` keeps it alive if this
 // translation unit is linked with LTO — the reference lives in the .S.
@@ -186,7 +186,7 @@ void ibFiber::RunEntry()
 	m_finished = true;
 }
 
-#if !defined(_WIN32)
+#if !defined(__IBMSW__)
 
 void ibFiber::InitPosixStack()
 {
@@ -225,7 +225,7 @@ void ibFiber::ConvertThread()
 	// Before the first switch. A fiber's guard page faults on this thread,
 	// and the crash log runs on the alternate stack installed here.
 	ibCrashGuard::ArmCurrentThread();
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	// Room for the overflow filter to start the dump thread. The dump
 	// itself runs on that thread, not on the stack that ran out.
 	ULONG guarantee = 64u * 1024u;
@@ -236,7 +236,7 @@ void ibFiber::ConvertThread()
 	ibFiber* self = new ibFiber();
 	self->m_scheduler = true;
 	self->m_locals = ibFiberLocals::ForScheduler();
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	void* handle = ConvertThreadToFiberEx(self, FIBER_FLAG_FLOAT_SWITCH);
 	if (handle == nullptr) {
 		if (GetLastError() == ERROR_ALREADY_FIBER)
@@ -265,7 +265,7 @@ void ibFiber::ReleaseThread()
 		return;
 	tl_schedulerFiber = nullptr;
 	tl_currentFiber = nullptr;
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	ConvertFiberToThread();
 	self->m_osFiber = nullptr;
 #endif
@@ -343,7 +343,7 @@ ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 	fiber->m_arg = arg;
 	try {
 		fiber->m_locals = ibFiberLocals::ForFiber();
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 		fiber->m_stackSize = reserveBytes;
 		// The commit stays below the reserve: at or above it, Windows rounds the reserve up to a whole
 		// megabyte, and a fiber asked for 64 KB got one.
@@ -365,7 +365,7 @@ ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 		// that fault as a bus error — including from a thread that is
 		// still leaving. Darwin does not define the macro; do not pass
 		// it if an SDK grows it.
-#  if defined(MAP_STACK) && !defined(__APPLE__)
+#  if defined(MAP_STACK) && !defined(__IBOSX__)
 		flags |= MAP_STACK;
 #  endif
 		void* mem = ::mmap(nullptr, total, PROT_NONE, flags, -1, 0);
@@ -384,7 +384,7 @@ ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 #endif
 	}
 	catch (...) {
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 		if (fiber->m_osFiber != nullptr)
 			DeleteFiber(fiber->m_osFiber);
 #else
@@ -420,7 +420,7 @@ void ibFiber::Destroy(ibFiber* fiber)
 		fiber->m_tsanFiber = nullptr;
 	}
 #endif
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	if (fiber->m_osFiber != nullptr)
 		DeleteFiber(fiber->m_osFiber);
 	fiber->m_osFiber = nullptr;
@@ -460,7 +460,7 @@ void ibFiber::SwitchTo(ibFiber* target)
 	__tsan_switch_to_fiber(target->m_tsanFiber, 0);
 #endif
 
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	SwitchToFiber(target->m_osFiber);
 #else
 	ibFiberSwitch(&m_sp, &target->m_sp);
@@ -471,7 +471,7 @@ void ibFiber::SwitchTo(ibFiber* target)
 #endif
 }
 
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 
 void __stdcall ibFiber::FiberProc(void* arg)
 {

@@ -17,7 +17,6 @@
 
 #include "core/core.h"
 
-#include <wx/string.h>
 
 #include <memory>
 #include <vector>
@@ -33,11 +32,11 @@ struct ibHelpEntry;
 struct ibHelpCategory {
 	// Locale-stable identifier — matches one segment of an entry's
 	// categoryKeys. The root has an empty key.
-	wxString key;
+	ibString key;
 
 	// Localised display name, looked up from _categories.json at load
 	// time. Empty until the loader resolves it.
-	wxString displayName;
+	ibString displayName;
 
 	// Direct children, ordered by `key` ascending (loader sorts). Owned.
 	std::vector<std::unique_ptr<ibHelpCategory>> children;

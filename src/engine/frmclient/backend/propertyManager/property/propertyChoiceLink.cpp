@@ -22,9 +22,9 @@ ibDataNode RowOf(const ibBackendProperty* property)
 
 void AddItem(ibPropertyChoiceList& list, const ibDataNode& item)
 {
-	const wxString title = item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title);
+	const ibString title = item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title);
 	const std::int32_t id = item.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id);
-	list.Add(id, title, wxEmptyString, wxVariant((long)id),
+	list.Add(id, title, ibEmptyString, wxVariant((long)id),
 		ibProtocolPicture(item, ibProtocol::ibSchema::ibProperties::Picture));
 }
 
@@ -58,7 +58,7 @@ ibClassID ibFieldReferenceClass(const ibBackendProperty* property, const ibMetaI
 	if (!target)
 		return 0;
 	unsigned long long clsid = 0;
-	target->GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Type).ToULongLong(&clsid);
+	target->GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Type).ToULongLong(&clsid);
 	return static_cast<ibClassID>(clsid);
 }
 
@@ -87,11 +87,11 @@ bool ibChoiceHasLists(const ibBackendProperty* property)
 		&& row.FindChild(ibProtocol::ibSchema::ibProperties::Sources);
 }
 
-wxString ibChoiceHolderName(const ibBackendProperty* property)
+ibString ibChoiceHolderName(const ibBackendProperty* property)
 {
 	const ibDataNode row = RowOf(property);
 	const auto sources = row.FindChild(ibProtocol::ibSchema::ibProperties::Sources);
-	return sources ? sources->GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title) : wxString();
+	return sources ? sources->GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title) : ibString();
 }
 
 void ibChoiceParametersForSource(const ibBackendProperty* property, const ibMetaID& sourceId,

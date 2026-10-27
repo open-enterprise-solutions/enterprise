@@ -27,7 +27,7 @@
 
 namespace {
 
-ibQuerySelectPtr Parse(const wxString& text)
+ibQuerySelectPtr Parse(const ibString& text)
 {
 	ibQueryParser parser;
 	return parser.Parse(text);
@@ -35,7 +35,7 @@ ibQuerySelectPtr Parse(const wxString& text)
 
 // The projection a constructor would ADD: a column path, no alias — the state every naming rule is
 // about, because a projection that already carries an alias is not the engine's business.
-ibQueryProjection Column(const wxString& dottedPath)
+ibQueryProjection Column(const ibString& dottedPath)
 {
 	ibQueryProjection projection;
 	projection.m_expr = ibQueryColumnFromPath(dottedPath);
@@ -157,7 +157,7 @@ TEST(QueryComposerAuthorText, SettingsWrapItRatherThanEditingIt)
 	composer.FromText(wxT("SELECT Code, Name FROM Catalog.Products"));
 	composer.Sort(wxT("Code"));
 
-	const wxString text = composer.RenderText();
+	const ibString text = composer.RenderText();
 	EXPECT_TRUE(text.Contains(wxT("(SELECT Code, Name FROM Catalog.Products)")))
 		<< "the author's query must appear whole, as a nested source: " << text;
 	EXPECT_TRUE(text.Contains(ibDataDBComposer::AuthorQuerySourceName()));
@@ -245,8 +245,8 @@ public:
 		: m_rows(TableWith({ wxT("Item"), wxT("QuantityBalance"), wxT("Warehouse") }))
 		, m_scope(TableWith({ wxT("Warehouse") })) {}
 
-	wxString GetNamespace() const override { return wxT("AccumulationRegister"); }
-	wxString GetName() const override { return wxT("Stock.Balance"); }
+	ibString GetNamespace() const override { return wxT("AccumulationRegister"); }
+	ibString GetName() const override { return wxT("Stock.Balance"); }
 	const ibBackendQueryable* CreateQueryable(ibValue**, long) override { return &m_rows; }
 	const ibBackendQueryable* GetConditionScope() const override { return &m_scope; }
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override {
@@ -270,8 +270,8 @@ class WindowSales : public ibQueryableSourceDescriptor
 public:
 	WindowSales() : m_rows(TableWith({ wxT("Region"), wxT("Period"), wxT("Amount") })) {}
 
-	wxString GetNamespace() const override { return wxT("Document"); }
-	wxString GetName() const override { return wxT("Sales"); }
+	ibString GetNamespace() const override { return wxT("Document"); }
+	ibString GetName() const override { return wxT("Sales"); }
 	const ibBackendQueryable* CreateQueryable(ibValue**, long) override { return &m_rows; }
 
 private:
@@ -399,7 +399,7 @@ TEST(QueryComposerPrune, ASettingWhoseFieldIsGoneIsDropped)
 	composer.Sort(wxT("Code"));
 	composer.TotalBy(wxT("QueryOnlyField"));
 
-	const int dropped = composer.PruneUnresolvedSettings([](const wxString& path) {
+	const int dropped = composer.PruneUnresolvedSettings([](const ibString& path) {
 		return path == wxT("Code");
 	});
 
@@ -425,7 +425,7 @@ TEST(QueryComposerPrune, AWalkIsJudgedByWhatItSTARTSFrom)
 	composer.FromSource(wxT("Catalog"), wxT("Products"));
 	composer.Sort(wxT("Owner.Region.Name"));
 
-	const int dropped = composer.PruneUnresolvedSettings([](const wxString& path) {
+	const int dropped = composer.PruneUnresolvedSettings([](const ibString& path) {
 		return path.BeforeFirst(wxT('.')) == wxT("Owner");
 	});
 
@@ -524,7 +524,7 @@ TEST(QueryGrouping, ARunQueryIsRefusedAsTheCheckRefusesIt)
 	EXPECT_THROW(ibQueryLowering::CheckNames(incomplete, {}), ibBackendException);
 
 	std::vector<ibQueryLowering::OutputColumn> schema;
-	wxString refusal;
+	ibString refusal;
 	try { ibQueryLowering::DescribeOutput(*incomplete.SingleSelect(), {}, schema); }
 	catch (const ibBackendException& error) { refusal = error.GetErrorDescription(); }
 	EXPECT_NE(wxNOT_FOUND, refusal.Find(wxT("neither grouped nor aggregated"))) << refusal.ToStdString();
@@ -553,7 +553,7 @@ TEST(QueryParameterTable, ItIsMARKED_InTheTextAndSurvivesTheRoundTrip)
 	EXPECT_EQ(wxT("GoodsTable"), select->m_from.m_name[0]);
 
 	// AND WHAT IT WRITES, THE PARSER READS — the mark has to come back on.
-	const wxString text = ibRenderQuery(*select);
+	const ibString text = ibRenderQuery(*select);
 	EXPECT_TRUE(text.Contains(wxT("&GoodsTable"))) << text;
 	const ibQuerySelectPtr again = Parse(text);
 	ASSERT_NE(nullptr, again);
@@ -693,7 +693,7 @@ TEST(QueryCast, AWalkAfterACastWritesItsRootBack)
 {
 	// WHAT IT WRITES, THE PARSER READS — the contract every other clause holds to. A round trip that
 	// dropped the cast would leave a walk through a composite the engine then refuses.
-	const wxString text = wxT("CAST(Recorder AS Document.Order).Partner.Code");
+	const ibString text = wxT("CAST(Recorder AS Document.Order).Partner.Code");
 	ibQueryParser parser;
 	const ibQueryAstExprPtr expr = parser.ParseExpression(text);
 	ASSERT_NE(nullptr, expr);
@@ -706,11 +706,11 @@ TEST(QueryCast, AWalkAfterACastWritesItsRootBack)
 
 TEST(QueryCast, ItReadsInsideAWholeQueryAndComesBackOut)
 {
-	const wxString text =
+	const ibString text =
 		wxT("SELECT\n\tCAST(Recorder AS Document.Order).Number AS OrderNumber\nFROM\n\tAccumulationRegister.Goods");
 	const ibQuerySelectPtr select = Parse(text);
 	ASSERT_NE(nullptr, select);
-	const wxString written = ibRenderQuery(*select);
+	const ibString written = ibRenderQuery(*select);
 	EXPECT_TRUE(written.Contains(wxT("CAST(Recorder AS Document.Order).Number"))) << written;
 
 	const ibQuerySelectPtr again = Parse(written);
@@ -819,7 +819,7 @@ TEST(QueryTotalsOverall, ItIsReadWhereItIsWrittenAndWrittenBackFirst)
 	EXPECT_TRUE(select->m_totalsOverall);
 	ASSERT_EQ(1u, select->m_totalsBy.size());   // OVERALL is NOT a dimension in the list
 
-	const wxString written = ibRenderQuery(*select);
+	const ibString written = ibRenderQuery(*select);
 	EXPECT_TRUE(written.Contains(wxT("OVERALL")));
 
 	const ibQuerySelectPtr again = Parse(written);
@@ -1030,7 +1030,7 @@ TEST(QueryAggregateCondition, HavingIsItsOwnClauseAndNeedsNoGroupBy)
 	ASSERT_NE(nullptr, select->m_having);
 
 	// …and it survives the round trip, which is what the window depends on.
-	const wxString written = ibRenderQuery(*select);
+	const ibString written = ibRenderQuery(*select);
 	const ibQuerySelectPtr again = Parse(written);
 	ASSERT_NE(nullptr, again);
 	ASSERT_NE(nullptr, again->m_having);
@@ -1055,7 +1055,7 @@ TEST(QueryDistinctAggregate, ItIsReadAndWrittenInsideTheCall)
 	EXPECT_TRUE(call->m_distinctArg);
 	EXPECT_FALSE(select->m_distinct);   // the statement's own DISTINCT is untouched
 
-	const wxString written = ibRenderQuery(*select);
+	const ibString written = ibRenderQuery(*select);
 	EXPECT_TRUE(written.Contains(wxT("COUNT(DISTINCT ")));
 	const ibQuerySelectPtr again = Parse(written);
 	ASSERT_NE(nullptr, again);
@@ -1105,7 +1105,7 @@ TEST(QueryDistinctAggregate, ItWorksInTotalsToo)
 	ASSERT_EQ(1u, select->m_totalsAggregates.size());
 	EXPECT_TRUE(select->m_totalsAggregates[0].m_expr->m_distinctArg);
 
-	const wxString written = ibRenderQuery(*select);
+	const ibString written = ibRenderQuery(*select);
 	EXPECT_EQ(written, ibRenderQuery(*Parse(written)));
 }
 
@@ -1128,7 +1128,7 @@ TEST(QueryComposerDetails, ADetailLevelWritesNothingIntoTheQuery)
 	// A field no heading prints — without one a record would have nothing to show (see the next pin).
 	composer.Select(wxT("Number"));
 
-	const wxString grouped = composer.RenderText();
+	const ibString grouped = composer.RenderText();
 	EXPECT_TRUE(grouped.Contains(wxT("TOTALS")));
 	EXPECT_TRUE(grouped.Contains(wxT("BY Partner")));
 
@@ -1216,7 +1216,7 @@ TEST(QueryComposerCross, BothAxesFoldInOneTotalsRowsFirst)
 	// makes an output a table. Whoever declares one says so; here that is the test.
 	composer.Root().m_kind = ibCompositionOutputKind::Table;
 
-	const wxString text = composer.RenderText();
+	const ibString text = composer.RenderText();
 	EXPECT_TRUE(text.Contains(wxT("TOTALS"))) << text;
 	// One BY, both keys, rows before columns — a table transposed would be the same numbers in the
 	// wrong place, with nothing in the answer to say which was meant.
@@ -1238,7 +1238,7 @@ TEST(QueryComposerCross, AGroupingOnTheColumnAxisAloneStillWritesTotals)
 	composer.Root().m_columnGroups.push_back(columns);
 
 	EXPECT_TRUE(ibDataComposer::HasGroupingFields(composer.Root()));
-	const wxString text = composer.RenderText();
+	const ibString text = composer.RenderText();
 	EXPECT_TRUE(text.Contains(wxT("BY Warehouse"))) << text;
 	EXPECT_FALSE(text.Contains(wxT("BY OVERALL"))) << text;
 }
@@ -1320,7 +1320,7 @@ TEST(QueryComposerCross, ALevelsPeriodicityIsWrittenIntoTheText)
 	level.m_settings.m_group.m_lines[0].m_periods.m_unit = wxT("Month");
 	composer.Root().m_rowGroups.push_back(level);
 
-	const wxString text = composer.RenderText();
+	const ibString text = composer.RenderText();
 	EXPECT_TRUE(text.Contains(wxT("BY Date PERIODS(Month)"))) << text;
 }
 
@@ -1338,7 +1338,7 @@ TEST(QueryComposerCross, AnUnstatedLowerBoundKeepsItsPlace)
 	level.m_settings.m_group.m_lines[0].m_periods.m_to   = wxT("&To");
 	composer.Root().m_rowGroups.push_back(level);
 
-	const wxString text = composer.RenderText();
+	const ibString text = composer.RenderText();
 	EXPECT_TRUE(text.Contains(wxT("PERIODS(Month, , &To)"))) << text;
 }
 
@@ -1367,7 +1367,7 @@ TEST(QueryComposerPackage, SettingsStandOverTheLinkedSelections)
 	composer.Resource(wxT("SUM"), wxT("Sales.Amount"));
 	composer.TotalBy(wxT("Sales.Item"));
 
-	const wxString text = composer.RenderText();
+	const ibString text = composer.RenderText();
 
 	// The preparing statements stand in front, as statements…
 	EXPECT_TRUE(text.Contains(wxT("ONTO Sales"))) << text;
@@ -1397,7 +1397,7 @@ TEST(QueryComposerPackage, SettingsStandOverTheLinkedSelections)
 //  composer still has to stand its own select on top rather than hand the text back.)
 TEST(QueryComposerPackage, ALinkedPackageIsStoodOnEvenWithNoSettings)
 {
-	const wxString source =
+	const ibString source =
 		wxT("SELECT Item ONTO Sales FROM Document.Sales\n")
 		wxT(";\n")
 		wxT("SELECT Item ONTO Plan FROM Document.Plan\n")
@@ -1407,7 +1407,7 @@ TEST(QueryComposerPackage, ALinkedPackageIsStoodOnEvenWithNoSettings)
 	ibDataDBComposer composer;
 	composer.FromText(source);
 
-	const wxString text = composer.RenderText();
+	const ibString text = composer.RenderText();
 	EXPECT_NE(text, source)                       << text;
 	EXPECT_TRUE(text.Contains(wxT("JOIN Plan")))  << text;
 }
@@ -1423,7 +1423,7 @@ TEST(QueryComposerPackage, WithoutLinksTheLastStatementIsWhatIsRead)
 		wxT("SELECT Item, Amount FROM Sales WHERE Amount > 0"));
 	composer.Resource(wxT("SUM"), wxT("Amount"));
 
-	const wxString text = composer.RenderText();
+	const ibString text = composer.RenderText();
 	EXPECT_TRUE(text.Contains(wxT("ONTO Sales")))    << text;   // the preparing statement, in front
 	EXPECT_TRUE(text.Contains(wxT("AS AuthorQuery"))) << text;  // the result, read as a nested source
 	EXPECT_TRUE(text.Contains(wxT("TOTALS")))         << text;
@@ -1448,7 +1448,7 @@ TEST(QueryComposerPackage, ATemporaryTableStaysAStatementThatPrepares)
 		wxT("LINK Sales JOIN Plan ON Sales.Item = Plan.Item"));
 	composer.Resource(wxT("SUM"), wxT("Sales.Amount"));
 
-	const wxString text = composer.RenderText();
+	const ibString text = composer.RenderText();
 
 	// ⚠ READ BACK, NOT SPELLED OUT. The renderer puts a source on a line of its own — `FROM\n\tTmp`
 	// — so `Contains("FROM Tmp")` pinned the LAYOUT and broke on it, while the behaviour it was

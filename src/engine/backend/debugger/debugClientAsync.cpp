@@ -117,10 +117,10 @@ void ibDebuggerClient::ibDebuggerClientAdapter::Defer(std::function<void()> call
 				call();
 			}
 			catch (const std::exception& err) {
-				ibJournalWarning(wxT("debugger"), wxT("a debugger's reply ended with an exception: %s"), wxString::FromUTF8(err.what()));
+				ibJournalWarning(ibT("debugger"), ibT("a debugger's reply ended with an exception: %s"), ibString::FromUTF8(err.what()));
 			}
 			catch (...) {
-				ibJournalWarning(wxT("debugger"), wxT("a debugger's reply ended with an exception"));
+				ibJournalWarning(ibT("debugger"), ibT("a debugger's reply ended with an exception"));
 			}
 		});
 }
@@ -162,12 +162,12 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnAutoComplete(const ibDebugAuto
 	IB_DEBUG_FANOUT(OnAutoComplete(data));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnMessageFromServer(const ibDebugLineData& data, const wxString& message)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnMessageFromServer(const ibDebugLineData& data, const ibString& message)
 {
 	IB_DEBUG_FANOUT(OnMessageFromServer(data, message));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSetToolTip(const ibDebugExpressionData& data, const wxString& strResult)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSetToolTip(const ibDebugExpressionData& data, const ibString& strResult)
 {
 	IB_DEBUG_FANOUT(OnSetToolTip(data, strResult));
 }
@@ -177,18 +177,18 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnSetStack(const ibStackData& da
 	IB_DEBUG_FANOUT(OnSetStack(data));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnScreenshot(const ibMemoryBuffer& png, const wxString& focus)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnScreenshot(const ibMemoryBuffer& png, const ibString& focus)
 {
 	IB_DEBUG_FANOUT(OnScreenshot(png, focus));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage(const wxString& message, MessageType type)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage(const ibString& message, MessageType type)
 {
 	IB_DEBUG_FANOUT(OnEvalMessage(message, type));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult(bool ran, const wxString& answer,
-	const wxString& json, long long microseconds)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult(bool ran, const ibString& answer,
+	const ibString& json, long long microseconds)
 {
 	IB_DEBUG_FANOUT(OnSandboxResult(ran, answer, json, microseconds));
 }
@@ -199,7 +199,7 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnJobState(unsigned int which,
 	IB_DEBUG_FANOUT(OnJobState(which, state));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnComposed(bool answered, const wxString& refusal,
+void ibDebuggerClient::ibDebuggerClientAdapter::OnComposed(bool answered, const ibString& refusal,
 	const ibMemoryBuffer& result)
 {
 	IB_DEBUG_FANOUT(OnComposed(answered, refusal, result));

@@ -151,7 +151,7 @@ bool ibSpreadsheetDescriptionMemory::LoadData(ibReaderMemory& reader, ibSpreadsh
 		const size_t capacity = areaReader.r_u64();
 		for (std::uint64_t c = 0; c < capacity; c++) {
 
-			wxString areaLabel = areaReader.r_stringZ();
+			ibString areaLabel = areaReader.r_stringZ();
 
 			int start = areaReader.r_s32(),
 				end = areaReader.r_s32();
@@ -163,7 +163,7 @@ bool ibSpreadsheetDescriptionMemory::LoadData(ibReaderMemory& reader, ibSpreadsh
 		const size_t capacity = areaReader.r_u64();
 		for (std::uint64_t c = 0; c < capacity; c++) {
 
-			wxString areaLabel = areaReader.r_stringZ();
+			ibString areaLabel = areaReader.r_stringZ();
 
 			int start = areaReader.r_s32(),
 				end = areaReader.r_s32();
@@ -313,10 +313,10 @@ bool ibSpreadsheetDescriptionMemory::SaveData(ibWriterMemory& writer, const ibSp
 
 namespace {
 
-const ibChar* const kSheetCells   = wxT("cells");
-const ibChar* const kSheetRows    = wxT("rows");
-const ibChar* const kSheetCols    = wxT("cols");
-const ibChar* const kSheetFreeze  = wxT("freeze");
+const ibChar* const kSheetCells   = ibT("cells");
+const ibChar* const kSheetRows    = ibT("rows");
+const ibChar* const kSheetCols    = ibT("cols");
+const ibChar* const kSheetFreeze  = ibT("freeze");
 
 // One border, and only when it is drawn at all. A transparent border is the
 // absence of a border, so it says nothing rather than saying "transparent".
@@ -327,9 +327,9 @@ void WriteBorder(ibDataNode& into, const ibChar* name,
 		return;
 
 	ibDataNode& node = into.Child(name);
-	node.AddField(wxT("style"), ibDataValue::Int((std::int64_t)border.m_style));
-	node.AddField(wxT("width"), ibDataValue::Int((std::int64_t)border.m_width));
-	node.SetValue(wxT("colour"), border.m_colour.ToString());
+	node.AddField(ibT("style"), ibDataValue::Int((std::int64_t)border.m_style));
+	node.AddField(ibT("width"), ibDataValue::Int((std::int64_t)border.m_width));
+	node.SetValue(ibT("colour"), border.m_colour.ToString());
 }
 
 void ReadBorder(const ibDataNode& from, const ibChar* name,
@@ -339,9 +339,9 @@ void ReadBorder(const ibDataNode& from, const ibChar* name,
 	if (!node)
 		return;
 
-	border.m_style = (ibSpreadsheetPenStyle)node->GetValue<std::int32_t>(wxT("style"));
-	border.m_width = node->GetValue<std::int32_t>(wxT("width"));
-	border.m_colour.FromString(node->GetValue<ibString>(wxT("colour")));
+	border.m_style = (ibSpreadsheetPenStyle)node->GetValue<std::int32_t>(ibT("style"));
+	border.m_width = node->GetValue<std::int32_t>(ibT("width"));
+	border.m_colour.FromString(node->GetValue<ibString>(ibT("colour")));
 }
 
 } // namespace
@@ -356,37 +356,37 @@ bool ibSpreadsheetCellDescriptionMemory::ReadNode(const ibDataValue& value, ibSp
 	if (!node)
 		return false;
 
-	cell.m_value = node->GetValue<ibString>(wxT("value"));
-	cell.m_detailsParameter = node->GetValue<ibString>(wxT("parameter"));
+	cell.m_value = node->GetValue<ibString>(ibT("value"));
+	cell.m_detailsParameter = node->GetValue<ibString>(ibT("parameter"));
 
-	if (node->Has(wxT("alignHorz")))
-		cell.m_alignHorz = node->GetValue<std::int32_t>(wxT("alignHorz"));
-	if (node->Has(wxT("alignVert")))
-		cell.m_alignVert = node->GetValue<std::int32_t>(wxT("alignVert"));
-	if (node->Has(wxT("orient")))
-		cell.m_textOrient = node->GetValue<std::int32_t>(wxT("orient"));
+	if (node->Has(ibT("alignHorz")))
+		cell.m_alignHorz = node->GetValue<std::int32_t>(ibT("alignHorz"));
+	if (node->Has(ibT("alignVert")))
+		cell.m_alignVert = node->GetValue<std::int32_t>(ibT("alignVert"));
+	if (node->Has(ibT("orient")))
+		cell.m_textOrient = node->GetValue<std::int32_t>(ibT("orient"));
 
-	cell.m_font.FromString(node->GetValue<ibString>(wxT("font")));
-	cell.m_backgroundColour.FromString(node->GetValue<ibString>(wxT("background")));
-	cell.m_textColour.FromString(node->GetValue<ibString>(wxT("textColour")));
+	cell.m_font.FromString(node->GetValue<ibString>(ibT("font")));
+	cell.m_backgroundColour.FromString(node->GetValue<ibString>(ibT("background")));
+	cell.m_textColour.FromString(node->GetValue<ibString>(ibT("textColour")));
 
-	ReadBorder(*node, wxT("left"),   cell.m_borderAt[0]);
-	ReadBorder(*node, wxT("right"),  cell.m_borderAt[1]);
-	ReadBorder(*node, wxT("top"),    cell.m_borderAt[2]);
-	ReadBorder(*node, wxT("bottom"), cell.m_borderAt[3]);
+	ReadBorder(*node, ibT("left"),   cell.m_borderAt[0]);
+	ReadBorder(*node, ibT("right"),  cell.m_borderAt[1]);
+	ReadBorder(*node, ibT("top"),    cell.m_borderAt[2]);
+	ReadBorder(*node, ibT("bottom"), cell.m_borderAt[3]);
 
-	if (node->Has(wxT("rowSpan")))
-		cell.m_row_size = node->GetValue<std::int32_t>(wxT("rowSpan"));
-	if (node->Has(wxT("colSpan")))
-		cell.m_col_size = node->GetValue<std::int32_t>(wxT("colSpan"));
+	if (node->Has(ibT("rowSpan")))
+		cell.m_row_size = node->GetValue<std::int32_t>(ibT("rowSpan"));
+	if (node->Has(ibT("colSpan")))
+		cell.m_col_size = node->GetValue<std::int32_t>(ibT("colSpan"));
 
-	if (node->Has(wxT("fit")))
+	if (node->Has(ibT("fit")))
 		cell.m_fitMode =
-			(ibSpreadsheetCellDescription::ibFitMode)node->GetValue<std::int32_t>(wxT("fit"));
-	if (node->Has(wxT("readOnly")))
-		cell.m_isReadOnly = node->GetValue<bool>(wxT("readOnly"));
-	if (node->Has(wxT("fill")))
-		cell.m_fillSetType = (ibSpreadsheetFillType)node->GetValue<std::int32_t>(wxT("fill"));
+			(ibSpreadsheetCellDescription::ibFitMode)node->GetValue<std::int32_t>(ibT("fit"));
+	if (node->Has(ibT("readOnly")))
+		cell.m_isReadOnly = node->GetValue<bool>(ibT("readOnly"));
+	if (node->Has(ibT("fill")))
+		cell.m_fillSetType = (ibSpreadsheetFillType)node->GetValue<std::int32_t>(ibT("fill"));
 
 	return true;
 }
@@ -401,45 +401,45 @@ bool ibSpreadsheetCellDescriptionMemory::WriteNode(ibDataValue& value, const ibS
 	// WHAT IS IN IT, first: the text a person sees and the parameter a report
 	// substitutes. Everything below is appearance.
 	if (!cell.m_value.IsEmpty())
-		node->SetValue(wxT("value"), cell.m_value);
+		node->SetValue(ibT("value"), cell.m_value);
 	if (!cell.m_detailsParameter.IsEmpty())
-		node->SetValue(wxT("parameter"), cell.m_detailsParameter);
+		node->SetValue(ibT("parameter"), cell.m_detailsParameter);
 
 	if (cell.m_alignHorz != ibAlignmentHorz_Left)
-		node->AddField(wxT("alignHorz"), ibDataValue::Int((std::int64_t)cell.m_alignHorz));
+		node->AddField(ibT("alignHorz"), ibDataValue::Int((std::int64_t)cell.m_alignHorz));
 	if (cell.m_alignVert != ibAlignmentVert_Top)
-		node->AddField(wxT("alignVert"), ibDataValue::Int((std::int64_t)cell.m_alignVert));
+		node->AddField(ibT("alignVert"), ibDataValue::Int((std::int64_t)cell.m_alignVert));
 	if (cell.m_textOrient != ibOrient_Horizontal)
-		node->AddField(wxT("orient"), ibDataValue::Int((std::int64_t)cell.m_textOrient));
+		node->AddField(ibT("orient"), ibDataValue::Int((std::int64_t)cell.m_textOrient));
 
 	// An UNSET font is unset — the same rule as the colours below, and it replaced a comparison
 	// with the default that MEASURED both fonts through a wxScreenDC (see the member's note).
 	if (cell.m_font.IsOk())
-		node->SetValue(wxT("font"), cell.m_font.ToString());
+		node->SetValue(ibT("font"), cell.m_font.ToString());
 
 	// An UNSET colour is unset — see the note on the members. Writing the resolved
 	// one would freeze today's desktop theme into the file.
 	if (cell.m_backgroundColour.IsOk())
-		node->SetValue(wxT("background"), cell.m_backgroundColour.ToString());
+		node->SetValue(ibT("background"), cell.m_backgroundColour.ToString());
 	if (cell.m_textColour.IsOk())
-		node->SetValue(wxT("textColour"), cell.m_textColour.ToString());
+		node->SetValue(ibT("textColour"), cell.m_textColour.ToString());
 
-	WriteBorder(*node, wxT("left"),   cell.m_borderAt[0]);
-	WriteBorder(*node, wxT("right"),  cell.m_borderAt[1]);
-	WriteBorder(*node, wxT("top"),    cell.m_borderAt[2]);
-	WriteBorder(*node, wxT("bottom"), cell.m_borderAt[3]);
+	WriteBorder(*node, ibT("left"),   cell.m_borderAt[0]);
+	WriteBorder(*node, ibT("right"),  cell.m_borderAt[1]);
+	WriteBorder(*node, ibT("top"),    cell.m_borderAt[2]);
+	WriteBorder(*node, ibT("bottom"), cell.m_borderAt[3]);
 
 	if (cell.m_row_size != 1)
-		node->AddField(wxT("rowSpan"), ibDataValue::Int((std::int64_t)cell.m_row_size));
+		node->AddField(ibT("rowSpan"), ibDataValue::Int((std::int64_t)cell.m_row_size));
 	if (cell.m_col_size != 1)
-		node->AddField(wxT("colSpan"), ibDataValue::Int((std::int64_t)cell.m_col_size));
+		node->AddField(ibT("colSpan"), ibDataValue::Int((std::int64_t)cell.m_col_size));
 
 	if (cell.m_fitMode != ibSpreadsheetCellDescription::Mode_Overflow)
-		node->AddField(wxT("fit"), ibDataValue::Int((std::int64_t)cell.m_fitMode));
+		node->AddField(ibT("fit"), ibDataValue::Int((std::int64_t)cell.m_fitMode));
 	if (cell.m_isReadOnly)
-		node->AddField(wxT("readOnly"), ibDataValue::Bool(true));
+		node->AddField(ibT("readOnly"), ibDataValue::Bool(true));
 	if (cell.m_fillSetType != ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)
-		node->AddField(wxT("fill"), ibDataValue::Int((std::int64_t)cell.m_fillSetType));
+		node->AddField(ibT("fill"), ibDataValue::Int((std::int64_t)cell.m_fillSetType));
 
 	value = ibDataValue::Child(node);
 	return true;
@@ -463,8 +463,8 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 			if (!node)
 				continue;
 
-			const int row = node->GetValue<std::int32_t>(wxT("row"));
-			const int col = node->GetValue<std::int32_t>(wxT("col"));
+			const int row = node->GetValue<std::int32_t>(ibT("row"));
+			const int col = node->GetValue<std::int32_t>(ibT("col"));
 
 			// The cell fills itself in; the sheet places it.
 			ibSpreadsheetCellDescription read(row, col);
@@ -482,36 +482,36 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 		if (!band)
 			return;
 
-		if (auto areas = band->FindField(wxT("areas"))) {
+		if (auto areas = band->FindField(ibT("areas"))) {
 			for (const ibDataValue& entry : areas->AsArray()) {
 				const auto node = entry.AsChild();
 				if (!node)
 					continue;
 
-				const wxString label = node->GetValue<wxString>(wxT("name"));
-				const int start = node->GetValue<std::int32_t>(wxT("start"));
-				const int end   = node->GetValue<std::int32_t>(wxT("end"));
+				const ibString label = node->GetValue<ibString>(ibT("name"));
+				const int start = node->GetValue<std::int32_t>(ibT("start"));
+				const int end   = node->GetValue<std::int32_t>(ibT("end"));
 
 				if (rows) spreadsheetDesc.AddRowArea(label, start, end);
 				else      spreadsheetDesc.AddColArea(label, start, end);
 			}
 		}
 
-		if (auto breaks = band->FindField(wxT("breaks"))) {
+		if (auto breaks = band->FindField(ibT("breaks"))) {
 			for (const ibDataValue& entry : breaks->AsArray()) {
 				if (rows) spreadsheetDesc.AddRowBrake((int)entry.AsInt());
 				else      spreadsheetDesc.AddColBrake((int)entry.AsInt());
 			}
 		}
 
-		if (auto sizes = band->FindField(wxT("sizes"))) {
+		if (auto sizes = band->FindField(ibT("sizes"))) {
 			for (const ibDataValue& entry : sizes->AsArray()) {
 				const auto node = entry.AsChild();
 				if (!node)
 					continue;
 
-				const int at = node->GetValue<std::int32_t>(wxT("at"));
-				const int size = node->GetValue<std::int32_t>(wxT("size"));
+				const int at = node->GetValue<std::int32_t>(ibT("at"));
+				const int size = node->GetValue<std::int32_t>(ibT("size"));
 
 				if (rows) spreadsheetDesc.SetRowSize(at, size);
 				else      spreadsheetDesc.SetColSize(at, size);
@@ -526,16 +526,16 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 		//
 		// Written now because the node form is where a description says what it
 		// is, and a fold is part of what a sheet is.
-		if (auto groups = band->FindField(wxT("groups"))) {
+		if (auto groups = band->FindField(ibT("groups"))) {
 			for (const ibDataValue& entry : groups->AsArray()) {
 				const auto node = entry.AsChild();
 				if (!node)
 					continue;
 
-				const unsigned int start = (unsigned int)node->GetValue<std::int32_t>(wxT("start"));
-				const unsigned int end = (unsigned int)node->GetValue<std::int32_t>(wxT("end"));
-				const unsigned int level = (unsigned int)node->GetValue<std::int32_t>(wxT("level"));
-				const bool collapsed = node->GetValue<bool>(wxT("collapsed"));
+				const unsigned int start = (unsigned int)node->GetValue<std::int32_t>(ibT("start"));
+				const unsigned int end = (unsigned int)node->GetValue<std::int32_t>(ibT("end"));
+				const unsigned int level = (unsigned int)node->GetValue<std::int32_t>(ibT("level"));
+				const bool collapsed = node->GetValue<bool>(ibT("collapsed"));
 
 				if (rows) spreadsheetDesc.AddRowGroup(start, end, level, collapsed);
 				else      spreadsheetDesc.AddColGroup(start, end, level, collapsed);
@@ -547,8 +547,8 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 	readBand(kSheetCols, false);
 
 	if (auto freeze = sheet->FindChild(kSheetFreeze)) {
-		spreadsheetDesc.SetRowFreeze(freeze->GetValue<std::int32_t>(wxT("row")));
-		spreadsheetDesc.SetColFreeze(freeze->GetValue<std::int32_t>(wxT("col")));
+		spreadsheetDesc.SetRowFreeze(freeze->GetValue<std::int32_t>(ibT("row")));
+		spreadsheetDesc.SetColFreeze(freeze->GetValue<std::int32_t>(ibT("col")));
 	}
 
 	return true;
@@ -572,8 +572,8 @@ bool ibSpreadsheetDescriptionMemory::WriteNode(ibDataValue& value, const ibSprea
 
 		// A value is its bytes: the cell's node with its place added is the entry written again.
 		if (auto node = entry.AsChild()) {
-			node->AddField(wxT("row"), ibDataValue::Int((std::int64_t)cell->m_row));
-			node->AddField(wxT("col"), ibDataValue::Int((std::int64_t)cell->m_col));
+			node->AddField(ibT("row"), ibDataValue::Int((std::int64_t)cell->m_row));
+			node->AddField(ibT("col"), ibDataValue::Int((std::int64_t)cell->m_col));
 			entry = ibDataValue::Child(std::make_shared<ibDataNode>(std::move(*node)));
 		}
 
@@ -598,13 +598,13 @@ bool ibSpreadsheetDescriptionMemory::WriteNode(ibDataValue& value, const ibSprea
 				continue;
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->SetValue(wxT("name"), area->m_label);
-			node->AddField(wxT("start"), ibDataValue::Int((std::int64_t)area->m_start));
-			node->AddField(wxT("end"), ibDataValue::Int((std::int64_t)area->m_end));
+			node->SetValue(ibT("name"), area->m_label);
+			node->AddField(ibT("start"), ibDataValue::Int((std::int64_t)area->m_start));
+			node->AddField(ibT("end"), ibDataValue::Int((std::int64_t)area->m_end));
 
 			areas.push_back(ibDataValue::Child(node));
 		}
-		band.AddField(wxT("areas"), ibDataValue::Array(areas));
+		band.AddField(ibT("areas"), ibDataValue::Array(areas));
 
 		std::vector<ibDataValue> breaks;
 		const int breakCount = rows
@@ -615,7 +615,7 @@ bool ibSpreadsheetDescriptionMemory::WriteNode(ibDataValue& value, const ibSprea
 				? spreadsheetDesc.GetRowBrakeByIdx(idx)
 				: spreadsheetDesc.GetColBrakeByIdx(idx))));
 		}
-		band.AddField(wxT("breaks"), ibDataValue::Array(breaks));
+		band.AddField(ibT("breaks"), ibDataValue::Array(breaks));
 
 		std::vector<ibDataValue> sizes;
 		const int sizeCount = rows
@@ -629,20 +629,20 @@ bool ibSpreadsheetDescriptionMemory::WriteNode(ibDataValue& value, const ibSprea
 				const ibSpreadsheetRowSizeDescription* size = spreadsheetDesc.GetRowSizeByIdx(idx);
 				if (size == nullptr)
 					continue;
-				node->AddField(wxT("at"), ibDataValue::Int((std::int64_t)size->m_row));
-				node->AddField(wxT("size"), ibDataValue::Int((std::int64_t)size->m_height));
+				node->AddField(ibT("at"), ibDataValue::Int((std::int64_t)size->m_row));
+				node->AddField(ibT("size"), ibDataValue::Int((std::int64_t)size->m_height));
 			}
 			else {
 				const ibSpreadsheetColSizeDescription* size = spreadsheetDesc.GetColSizeByIdx(idx);
 				if (size == nullptr)
 					continue;
-				node->AddField(wxT("at"), ibDataValue::Int((std::int64_t)size->m_col));
-				node->AddField(wxT("size"), ibDataValue::Int((std::int64_t)size->m_width));
+				node->AddField(ibT("at"), ibDataValue::Int((std::int64_t)size->m_col));
+				node->AddField(ibT("size"), ibDataValue::Int((std::int64_t)size->m_width));
 			}
 
 			sizes.push_back(ibDataValue::Child(node));
 		}
-		band.AddField(wxT("sizes"), ibDataValue::Array(sizes));
+		band.AddField(ibT("sizes"), ibDataValue::Array(sizes));
 
 		// …and the OUTLINE, which nothing has ever stored — see the note on the
 		// reading side.
@@ -658,27 +658,27 @@ bool ibSpreadsheetDescriptionMemory::WriteNode(ibDataValue& value, const ibSprea
 				continue;
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->AddField(wxT("start"), ibDataValue::Int((std::int64_t)group->m_start));
-			node->AddField(wxT("end"), ibDataValue::Int((std::int64_t)group->m_end));
-			node->AddField(wxT("level"), ibDataValue::Int((std::int64_t)group->m_level));
+			node->AddField(ibT("start"), ibDataValue::Int((std::int64_t)group->m_start));
+			node->AddField(ibT("end"), ibDataValue::Int((std::int64_t)group->m_end));
+			node->AddField(ibT("level"), ibDataValue::Int((std::int64_t)group->m_level));
 
 			// FOLDED IS A STATE OF THE DOCUMENT, not of the person looking at it —
 			// a template that opens folded is how a long form stays readable.
 			if (group->m_collapsed)
-				node->AddField(wxT("collapsed"), ibDataValue::Bool(true));
+				node->AddField(ibT("collapsed"), ibDataValue::Bool(true));
 
 			groups.push_back(ibDataValue::Child(node));
 		}
 
-		band.AddField(wxT("groups"), ibDataValue::Array(groups));
+		band.AddField(ibT("groups"), ibDataValue::Array(groups));
 	};
 
 	writeBand(kSheetRows, true);
 	writeBand(kSheetCols, false);
 
 	ibDataNode& freeze = sheet->Child(kSheetFreeze);
-	freeze.AddField(wxT("row"), ibDataValue::Int((std::int64_t)spreadsheetDesc.GetRowFreeze()));
-	freeze.AddField(wxT("col"), ibDataValue::Int((std::int64_t)spreadsheetDesc.GetColFreeze()));
+	freeze.AddField(ibT("row"), ibDataValue::Int((std::int64_t)spreadsheetDesc.GetRowFreeze()));
+	freeze.AddField(ibT("col"), ibDataValue::Int((std::int64_t)spreadsheetDesc.GetColFreeze()));
 
 	value = ibDataValue::Child(sheet);
 	return true;

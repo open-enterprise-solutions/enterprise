@@ -29,8 +29,8 @@ public:
 	void Modify(bool) override {}
 
 protected:
-	bool DoSaveDocument(const wxString&) override { return true; }
-	bool DoOpenDocument(const wxString&) override { return true; }
+	bool DoSaveDocument(const ibString&) override { return true; }
+	bool DoOpenDocument(const ibString&) override { return true; }
 
 private:
 	std::unique_ptr<ibLoggerReader> m_reader;

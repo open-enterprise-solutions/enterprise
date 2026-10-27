@@ -181,7 +181,7 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 			std::function<void(const wxTreeItemId&, const ibDataNode&)> fill =
 				[&](const wxTreeItemId& parent, const ibDataNode& node) {
 				for (const ibDataNode& row : node.Children()) {
-					const wxString name = row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name);
+					const wxString name = row.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Name);
 					if (!IsCommandRow(row)) {
 						const wxTreeItemId group = tc->AppendItem(parent, name, 0, 0);
 						fill(group, row);

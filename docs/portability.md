@@ -84,6 +84,13 @@ from `<sys/socket.h>` / `<netinet/in.h>` / `<netinet/tcp.h>` on POSIX. A `#if de
 block whose `#else` branch is thinner than its `#if` branch is a bug waiting for the first person
 to build the other platform.
 
+The core asks the platform by its own names — `__IBMSW__` (Windows), `__IBOSX__` (macOS), `__IBGTK__`
+(the rest) — from `core/coreApi.h` (2026-10-27). wx's `__WXMSW__` / `__WXOSX__` / `__WXGTK__` belong
+to the code that is a wx program; the core does not ask wx where it runs. ⚠ The names exist only
+after `core/coreApi.h` is included: a `#if defined(__IBMSW__)` above the first include is false on
+every platform and drops its branch without a word. Before any include, the compiler's own
+`_WIN32` / `__APPLE__` — `fiber.cpp`'s `_GNU_SOURCE`, the Mbed TLS configuration headers.
+
 The platform's LIBRARY is linked by the target that compiles the call. `core/guid.cpp` picks its
 generator three ways — Windows `CoCreateGuid`, macOS CFUUID, else libuuid's `uuid_generate` — so
 libuuid (non-Apple UNIX) and `-framework CoreFoundation` (Apple) are linked in
@@ -222,13 +229,13 @@ toolchains" is the shape this rule exists to catch.
 
 The suite already knew: `test_spreadsheetDocument.cpp` stubs `SetCellFont` out entirely rather than
 build one. So — **a backend test constructs no toolkit object.** What cannot be asserted without a
-toolkit belongs to the GUI suite CI runs in a job of its own; say so in the test rather than leaving
-the gap silent.
+toolkit is not asserted in CI (the GUI suite went with the desktop front, 2026-10-27); say so in the
+test rather than leaving the gap silent.
 
 The description types hold fonts and colours as data — `ibFont` and `ibColour`
 (`core/graphics/`), in `core/description/spreadsheetDescription.h` and in every property cell. The
 backend has no `typeconv`: converting to `wxFont` / `wxColour` is the GUI side's
-(`frontend/win/typeconv.h`, 2026-10-13).
+(`frmclient/win/typeconv.h`, 2026-10-13).
 
 ### 1.8 An initialiser list that disagrees with the declaration order is a lie
 
@@ -262,6 +269,17 @@ Ask both toolchains for the same thing, and mean it:
 `Common.props` and the CMake MSVC branch disable the same set (`4100` = unused parameter,
 `4018/4389/4245` = sign compare, `4127` = constant condition in wx macros), so a warning visible
 on one compiler is visible on the other.
+
+**A reference to a temporary is an ERROR, on every compiler (2026-10-27).** `/we4172` (MSVC,
+both builds: `Common.props` `TreatSpecificWarningsAsErrors`, CMake), `-Werror=return-local-addr`
+(GCC), `-Werror=return-stack-address` (Clang). Only on our code: CMake sets them just before the
+engine's `add_subdirectory` calls, so the third-party trees keep their own. What it cost the second
+time: 40 getters went from `ibString GetX() const` to `const ibString& GetX() const` by a regex
+that saw `return m_x;` and not the member's type. One member was a `std::wstring`
+(`ibTranslateCode::m_strBuffer`), so the getter built an `ibString`, returned a reference to it
+and destroyed it. A caller's copy then wrote a reference count into a block already back in the
+string pool, and 147 tests crashed at exit, in the pool's drain, far from the cause. The one C4172
+line had been in the log all along.
 
 Cleared out on 2026-08-02, from 3,513 GCC warnings down to a couple of hundred:
 
@@ -297,7 +315,7 @@ passes on Windows and on macOS (UTF-8 by default), which is what kept it invisib
 - Write ASCII in a msgid: `-` for `—`, `...` for `…`, `"` for `«»`. A msgid is a **key**;
   typography belongs in the translation. The catalogue already agreed — `lang/ru/open_es.po` holds
   736 msgids and not one em dash.
-- Sweep with `LC_ALL=C grep -rn '_("[^"]*[^ -~]' --include=*.cpp --include=*.h backend frontend`
+- Sweep with `LC_ALL=C grep -rn '_("[^"]*[^ -~]' --include=*.cpp --include=*.h backend frmserver frmclient`
   (the `LC_ALL` matters: without it `grep -P` refuses the byte class outright).
 - ⚠ **Comments are not affected and must not be swept.** One file carried 119 em dashes in prose
   against 16 in literals, so a file-wide replace is churn with a defect hidden inside it.
@@ -359,7 +377,7 @@ Measured from the CI job logs of 2026-08-03, not from recollection.
 | **Windows x64** (MSVC, Ninja) | green, **applications linked** | **919/919** (132 s) | Matches the local `.sln` build exactly. Job ~37 min |
 | **Windows x86** (MSVC, `.sln`) | green | — | The shipping build |
 | **Linux x64** (GCC 11, libstdc++, wxGTK) | green, **applications linked** | **919/919** (96.6 s) | Identical count to Windows — same tests, same result. Job ~33 min |
-| **GUI (Linux, Xvfb)** | green | **26/26** (1.9 s) | `libfrontend.so` links; the runtime-form suite passes under Xvfb |
+| **GUI (Linux, Xvfb)** | green | **26/26** (1.9 s) | `libfrontend.so` linked; the runtime-form suite passed under Xvfb. The job and the library were removed with the desktop front (2026-10-27) |
 | **macOS 14 arm64** (Apple Clang, libc++, wxOSX) | green, **applications linked** | **919/919** (163 s) | Same count as the other two — a third toolchain, a third standard library and a second CPU agreeing on every test. **Fastest job of the three: ~22 min against Linux 33 and Windows 37**, on a three-core M1 at `"jobs": 3` — half the parallelism the Windows preset uses. Six defects found on its first runs, listed in § 3 |
 
 **The counts moved, and what they are for did not.** On 2026-08-07 the three general jobs ran
@@ -374,9 +392,8 @@ designer and the enterprise runtime run there, forms render, the app bundles car
 That is why the port cost six small defects and not a rewrite — the ground had been walked before
 CI ever saw it. What the macOS job adds is not discovery but **retention**: it turns "builds on
 one machine, when someone remembers to try" into "builds on every commit, for everyone". The
-still-missing half is a GUI job there (the harness needs a window server, and the headless story
-on macOS is not Xvfb), so on that platform CI covers the build and the backend suite, and a human
-covers the screen.
+still-missing half is a GUI job — on any platform since the desktop front's harness went with it
+(2026-10-27) — so CI covers the build and the backend suite, and a human covers the screen.
 
 The engine — backend, compiler, interpreter, query engine, all four drivers — is cross-platform
 as of 2026-08-02, and as of 2026-08-03 so are the **applications**: `enterprise`, `designer`,
@@ -437,9 +454,10 @@ on Windows.
 
 ### GUI — what it took
 
-All **372** frontend translation units compile under wxGTK, `libfrontend.so` links, and the
-runtime-form suite passes 26/26 under Xvfb. (Sixteen more sources are excluded on purpose:
-`web/` + `wfrontend.cpp` belong to `wfrontend.dll`, and six `uikit` units are unfinished.)
+All **372** frontend translation units compiled under wxGTK, `libfrontend.so` linked, and the
+runtime-form suite passed 26/26 under Xvfb. (Sixteen more sources were excluded on purpose:
+`web/` + `wfrontend.cpp` belonged to `wfrontend.dll`, and six `uikit` units were unfinished.) The
+desktop front was removed on 2026-10-27; it is kept on the branch `oes/thick_client`.
 
 Not one failure was about drawing a widget. `uikit` is a wxUniversal fork that paints its own
 controls, so it carries no native-toolkit assumptions — it went through untouched. Everything
@@ -500,15 +518,17 @@ Two lessons about *silencing* itself, both learned the hard way here:
   headers, and one of them was re-reading `collection.GetID(i)` twice per loop iteration while
   leaving the first read unused.
 
-Still open, in order of weight: **the web is not built in CI** — CMake has its targets since
-2a3843f82 (`-DOES_BUILD_WEB=ON`, default OFF), but no job sets the option, so breaking the web keeps
-all the jobs green; `designer` compiles `mainFrameDesignerCmd.cpp`, a dead legacy main-frame the
-`.vcxproj` excludes, which means the two build systems produce different binaries; and 936
+Still open, in order of weight: ~~**the web is not built in CI**~~ and ~~`designer` compiles
+`mainFrameDesignerCmd.cpp`, a dead legacy main-frame the `.vcxproj` excludes~~ — **both closed
+2026-10-27**, the old web and the desktop designer removed with the desktop front; and 936
 `-Woverloaded-virtual` plus ~100 unmarked `override` declarations across 27 property headers.
 
 ---
 
 ## 4. The GUI job — a hang that is not a portability fault, and a watchdog that watched the wrong process
+
+The job, its target and `tests/frontendFix.h` were removed with the desktop front (2026-10-27); the
+account stays for the rules it left.
 
 **The hang.** `oes_frontend_runtime_test` passes every assertion in about three seconds, prints
 `Global test environment tear-down`, and then does not exit. Linux/GTK only — the same binary
@@ -534,12 +554,12 @@ Deterministic, not unlucky: the same thing would happen on the tenth run as on t
 **The rules this leaves.**
 
 - A watchdog must hold the pid of the process it is watching, not search for it by a pattern
-  that its own launcher also matches. The wrapper is now gone — the step starts `Xvfb :99`
-  itself, so `$!` **is** the process under test.
+  that its own launcher also matches. The wrapper went — the step started `Xvfb :99`
+  itself, so `$!` **was** the process under test.
 - Wait for the display **socket** (`/tmp/.X11-unix/X99`), not for a guess at how long Xvfb takes.
   The harness `GTEST_SKIP`s every test when the toolkit cannot come up, so starting early turns
-  the job green while asserting nothing. The step now greps its own output for that skip and
-  fails on it.
+  the job green while asserting nothing. The step grepped its own output for that skip and
+  failed on it.
 - When a hang appears after a batch, the cheapest instrument is the same binary with the new
   test sets removed. Reading the code first produced two confident theories that both died on
   inspection — the job manager's tick thread (`DestroyAppDataEnv` stops it, and it predates the
@@ -564,17 +584,17 @@ the batch merely loaded more icons. All 21 messages were the same one — libpng
 
 Three things came out of it, in the order they matter:
 
-- **The harness suppresses the log target too**, not just asserts and CRT reports:
+- **The harness suppressed the log target too**, not just asserts and CRT reports:
   `delete wxLog::SetActiveTarget(new wxLogStderr())` right after `wxEntryStart`. stderr has no OK
-  button, and wx still deletes the target itself in `CleanUp`. The general rule the harness now
-  follows: headless, *any deferred flush in a GUI build is a modal window*.
+  button, and wx still deletes the target itself in `CleanUp`. The general rule: headless, *any
+  deferred flush in a GUI build is a modal window*.
 - **The step's shell is `bash -e`** (the Actions default; `set -uo pipefail` in the body does not
   undo it), so `wait "$runner"; status=$?` aborted the script at the `wait` — which is why the run
   that produced the stack printed no `gui.log`, ran no control run, and never reached the
-  skipped-suite check. It is `wait "$runner" || status=$?` now. A diagnostic that only runs on
+  skipped-suite check. It became `wait "$runner" || status=$?`. A diagnostic that only runs on
   failure has to survive the failure.
 - **The warnings had a source worth removing**: six wxInclude-generated PNGs in
-  `frontend/win/editor/codeEditor/res/bitmaps_res.h` carried a Photoshop `iCCP` chunk libpng
+  `win/editor/codeEditor/res/bitmaps_res.h` (then frontend's; frmclient's and codeRunner's now) carried a Photoshop `iCCP` chunk libpng
   rejects. The chunk is ancillary and carries its own CRC, so dropping it needs no re-encode —
   verified pixel-identical on all six, and the header went from 128 KB to 29 KB. A sweep over the
   other embedded images (71 base64 PNGs, 5 `.png`, 23 `.ico`) found no second carrier.

@@ -42,9 +42,9 @@
 namespace {
 
 // tests/certs, beside this file's directory - as test_valueHttpSecure.cpp finds them.
-wxString CertPath(const wxChar* name)
+ibString CertPath(const wxChar* name)
 {
-	wxFileName here(wxString::FromUTF8(__FILE__));
+	wxFileName here(ibString::FromUTF8(__FILE__));
 	here.SetFullName(wxEmptyString);
 	here.AppendDir(wxT("certs"));
 	here.SetFullName(name);
@@ -60,7 +60,7 @@ ibTlsFiles TestIdentity()
 }
 
 // The door's refusal for `address` over `files` - empty when it gave the options.
-wxString Refusal(const wxString& address, const ibTlsFiles& files)
+ibString Refusal(const ibString& address, const ibTlsFiles& files)
 {
 	try {
 		ibListenerOptions(address, 0, files);
@@ -68,7 +68,7 @@ wxString Refusal(const wxString& address, const ibTlsFiles& files)
 	catch (const ibCoreException& err) {
 		return err.GetErrorDescription();
 	}
-	return wxString();
+	return ibString();
 }
 
 // A WebSocket that answers each message with itself.
@@ -185,7 +185,7 @@ TEST(Listener, AWebSocketClientSpeaksTlsToTheListener)
 
 	const auto readPem = [](const wxChar* name) {
 		wxFFile in(CertPath(name), wxT("rb"));
-		wxString text;
+		wxString text;   // wxFFile's own: it reads into a wx string
 		in.ReadAll(&text, wxConvUTF8);
 		return std::string(text.utf8_str());
 	};
@@ -223,11 +223,11 @@ TEST(Listener, NoFilesMakeAPlainListenerOnLoopback)
 TEST(Listener, ThePlainListenerStaysOnLoopback)
 {
 	wxInitializer init;
-	const wxString why = Refusal(wxT("0.0.0.0"), ibTlsFiles());
+	const ibString why = Refusal(wxT("0.0.0.0"), ibTlsFiles());
 	EXPECT_TRUE(why.Contains(wxT("backend.conf"))) << why.ToStdString();
 	EXPECT_TRUE(why.Contains(wxT("0.0.0.0"))) << why.ToStdString();
 	EXPECT_FALSE(Refusal(wxT("192.168.1.10"), ibTlsFiles()).IsEmpty());
-	const wxString named = Refusal(wxT("0.0.0.0"), TestIdentity());
+	const ibString named = Refusal(wxT("0.0.0.0"), TestIdentity());
 	EXPECT_TRUE(named.IsEmpty()) << named.ToStdString();
 	EXPECT_TRUE(Refusal(wxT("localhost"), ibTlsFiles()).IsEmpty());
 	EXPECT_TRUE(Refusal(wxT("::1"), ibTlsFiles()).IsEmpty());
@@ -240,7 +240,7 @@ TEST(Listener, MislaidFilesAreARefusalNotAFallback)
 	wxInitializer init;
 	ibTlsFiles files = TestIdentity();
 	files.m_certificate = CertPath(wxT("nobody-wrote-this.pem"));
-	wxString why = Refusal(wxT("127.0.0.1"), files);
+	ibString why = Refusal(wxT("127.0.0.1"), files);
 	EXPECT_TRUE(why.Contains(wxT("nobody-wrote-this.pem"))) << why.ToStdString();
 	EXPECT_TRUE(why.Contains(wxT("is not there"))) << why.ToStdString();   // said before any reader is asked
 
@@ -270,7 +270,7 @@ TEST(Listener, MislaidFilesAreARefusalNotAFallback)
 
 	// A file longer than any certificate is - not read into memory, refused by name.
 	struct ibTempFile {
-		wxString m_path;
+		ibString m_path;
 		~ibTempFile() { if (!m_path.IsEmpty()) wxRemoveFile(m_path); }
 	} huge;
 	huge.m_path = wxFileName::CreateTempFileName(wxT("oes-listener-"));
@@ -297,7 +297,7 @@ TEST(Listener, LoopbackIsKnownByItsNames)
 	// [::1] among them: the server takes the brackets off and binds ::1 (ibHttpServer::Start) — one test of this machine
 	// for the door and the server (ibIsLoopback, core/net/httpServer.h).
 	for (const wxChar* own : { wxT("127.0.0.1"), wxT("127.5.5.5"), wxT("127.255.255.255"), wxT(" 127.0.0.1 "), wxT("localhost"), wxT("LocalHost"), wxT("::1"), wxT("[::1]") }) {
-		const wxString why = Refusal(own, ibTlsFiles());
+		const ibString why = Refusal(own, ibTlsFiles());
 		EXPECT_TRUE(why.IsEmpty()) << own << ": " << why.ToStdString();
 	}
 	// By number, not by the look of a name: what begins with "127." and is not an address resolves wherever
@@ -311,11 +311,11 @@ TEST(Listener, LoopbackIsKnownByItsNames)
 TEST(Listener, TheConfNamesTheFilesRelativeToItsFolder)
 {
 	wxInitializer init;
-	const wxString folder = wxFileName(CertPath(wxT("server.pem"))).GetPath();
+	const ibString folder = wxFileName(CertPath(wxT("server.pem"))).GetPath();
 	// A wxFileConfig fed from a stream unescapes while it parses, before a style can be set on it, so the
 	// absolute name is spelled with forward slashes here (a Windows path comes back native from the door);
 	// the file the process reads, backslashes and all, is the next test.
-	wxString absolute = CertPath(wxT("server.key"));
+	ibString absolute = CertPath(wxT("server.key"));
 	absolute.Replace(wxT("\\"), wxT("/"));
 	// Blanks after a value stay in what wxFileConfig hands back; the door takes them off.
 	wxStringInputStream text(wxT("Certificate = server.pem   \nPrivateKey = ") + absolute + wxT("\n"));
@@ -337,7 +337,7 @@ TEST(Listener, TheConfFileIsReadAsWritten)
 	wxInitializer init;
 	// The file gone on every way out - a fatal assertion's too.
 	struct ibTempFile {
-		wxString m_path;
+		ibString m_path;
 		~ibTempFile() { if (!m_path.IsEmpty()) wxRemoveFile(m_path); }
 	} conf;
 	conf.m_path = wxFileName::CreateTempFileName(wxT("oes-listener-"));
@@ -354,7 +354,7 @@ TEST(Listener, TheConfFileIsReadAsWritten)
 	EXPECT_EQ(CertPath(wxT("server.key")), files.m_privateKey);
 
 	// And the listener started over what the file names is the TLS one.
-	const wxString why = Refusal(wxT("0.0.0.0"), files);
+	const ibString why = Refusal(wxT("0.0.0.0"), files);
 	EXPECT_TRUE(why.IsEmpty()) << why.ToStdString();
 	EXPECT_TRUE(ibListenerOptions(wxT("0.0.0.0"), 0, files).m_httpsPort.has_value());
 }

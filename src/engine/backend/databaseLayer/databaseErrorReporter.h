@@ -24,7 +24,7 @@ public:
 	// dtor
 	virtual ~ibDatabaseErrorReporter();
 
-	const wxString& GetErrorMessage();
+	const ibString& GetErrorMessage();
 	int GetErrorCode();
 	// The portable Kind recorded with the code, so a catch can pick retry / no-retry without parsing
 	// the message. It travels with the code when one reporter hands its error to another.
@@ -36,11 +36,11 @@ public:
 	// ODBC exposes SQLSTATE; Firebird and SQLite don't, so the
 	// default empty string is correct for them. Populated by per-driver
 	// override at the moment the error is set.
-	virtual wxString GetSqlState() const { return wxEmptyString; }
+	virtual ibString GetSqlState() const { return ibEmptyString; }
 
 protected:
 
-	void SetErrorMessage(const wxString& strErrorMessage);
+	void SetErrorMessage(const ibString& strErrorMessage);
 	// A code of the platform's own (a library that did not load, no rows) — its Kind is Unknown.
 	void SetErrorCode(int nErrorCode);
 	// …AN ERROR OF THE ENGINE — the driver says what it is where it reads it, through its own
@@ -53,7 +53,7 @@ protected:
 
 private:
 
-	wxString m_strErrorMessage;
+	ibString m_strErrorMessage;
 	int m_nErrorCode;
 	ibBackendDatabaseException::Kind m_errorKind = ibBackendDatabaseException::Kind::Unknown;
 };

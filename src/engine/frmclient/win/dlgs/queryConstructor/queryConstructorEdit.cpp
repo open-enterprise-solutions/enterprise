@@ -346,7 +346,7 @@ wxString ibDialogQueryConstructor::SuggestResultName() const
 	auto leafOf = [](const ibQuerySource& source) -> wxString {
 		if (!source.m_alias.IsEmpty())
 			return source.m_alias;                       // what the author already calls it
-		return source.m_name.empty() ? wxString() : source.m_name.back();
+		return source.m_name.empty() ? ibString() : source.m_name.back();
 	};
 
 	wxString name = leafOf(select->m_from);
@@ -495,7 +495,7 @@ public:
 				parameter.m_condition ? wxALIGN_TOP | wxTOP : wxALIGN_CENTER_VERTICAL, FromDIP(4));
 
 			const wxString written =
-				i < current.size() && current[i] ? ibRenderQueryExpr(*current[i]) : wxString();
+				i < current.size() && current[i] ? ibRenderQueryExpr(*current[i]) : ibString();
 
 			Row row;
 			if (parameter.m_condition) {
@@ -1041,7 +1041,7 @@ bool ibDialogQueryConstructor::PickTotalsScope(wxString& text)
 			return level.m_alias;
 		const ibQueryTotalField* head = level.Head();
 		return head != nullptr && head->m_expr != nullptr && !head->m_expr->m_path.empty()
-			? head->m_expr->m_path.back() : wxString();
+			? head->m_expr->m_path.back() : ibString();
 	};
 
 	std::vector<ibScopeRow> rows;
@@ -1057,7 +1057,7 @@ bool ibDialogQueryConstructor::PickTotalsScope(wxString& text)
 	}
 	for (const ibQueryTotalSplit& node : select->m_totalsSplits) {     // …and each separator, as a node
 		ibScopeRow parent;
-		parent.caption = node.m_name.IsEmpty() ? wxString(_("<separator>")) : node.m_name;
+		parent.caption = node.m_name.IsEmpty() ? ibString(_("<separator>")) : node.m_name;
 		parent.node    = true;                                        // a separator is not an area
 		for (const ibQueryTotalDim& level : node.m_levels) {
 			const wxString name = nameOf(level);
@@ -1067,7 +1067,7 @@ bool ibDialogQueryConstructor::PickTotalsScope(wxString& text)
 			row.caption = name;
 			// Qualified by the separator, so two of them may carry a level of the same name and the
 			// query still says which is meant. The window spells it; the person never has to.
-			row.name    = node.m_name.IsEmpty() ? name : node.m_name + wxT(".") + name;
+			row.name    = node.m_name.IsEmpty() ? ibString(name) : node.m_name + wxT(".") + name;
 			row.icon    = level.Head() != nullptr ? IconOfExpr(level.Head()->m_expr) : wxNullIcon;
 			parent.children.push_back(std::move(row));
 		}
@@ -1098,7 +1098,7 @@ wxArrayString ibDialogQueryConstructor::TotalsScopeChoices() const
 			return level.m_alias;
 		const ibQueryTotalField* head = level.Head();
 		return head != nullptr && head->m_expr != nullptr && !head->m_expr->m_path.empty()
-			? head->m_expr->m_path.back() : wxString();
+			? head->m_expr->m_path.back() : ibString();
 	};
 
 	for (const ibQueryTotalDim& level : select->m_totalsBy) {          // the common ladder
@@ -1111,7 +1111,7 @@ wxArrayString ibDialogQueryConstructor::TotalsScopeChoices() const
 			const wxString name = nameOf(level);
 			if (name.IsEmpty())
 				continue;
-			out.Add(node.m_name.IsEmpty() ? name : node.m_name + wxT(".") + name);
+			out.Add(node.m_name.IsEmpty() ? ibString(name) : node.m_name + wxT(".") + name);
 		}
 	}
 	return out;
@@ -1130,7 +1130,7 @@ wxArrayString ibDialogQueryConstructor::LinkTableChoices(bool leftSide) const
 	const wxString other = join < select->m_joins.size()
 		? (leftSide ? ibQuerySourceName(select->m_joins[join].m_source)
 		            : ibQuerySourceName(select->m_from))
-		: wxString();
+		: ibString();
 
 	for (const ibQuerySource* source : CurrentSources()) {
 		if (source == nullptr)
@@ -1512,7 +1512,7 @@ void ibDialogQueryConstructor::RenameTable(ibQuerySource& source, wxString alias
 	// TYPED BACK TO THE TABLE'S OWN NAME MEANS "no alias". The label shows `Catalog.Products (p)`
 	// when there is one, so a person clearing it types the plain name — and an alias equal to the
 	// table's own last segment is what having none already renders as.
-	const wxString ownName = !source.m_name.empty() ? source.m_name.back() : wxString();
+	const wxString ownName = !source.m_name.empty() ? source.m_name.back() : ibString();
 	if (alias.IsSameAs(ownName, false))
 		alias.clear();   // typed back to the table's own name = no alias
 
@@ -1540,7 +1540,7 @@ void ibDialogQueryConstructor::RenameTable(ibQuerySource& source, wxString alias
 
 // THE CATALOGUE, AS THE LEFT PANE SHOWS IT — the same tree, kinds and pictures (FillCatalogue), stopping at
 // the table. A table row chosen (OK, a double-click) is the answer; a kind is a heading, not a table.
-bool ibDialogQueryConstructor::PickTable(const wxString& title, std::vector<wxString>& path)
+bool ibDialogQueryConstructor::PickTable(const wxString& title, std::vector<ibString>& path)
 {
 	wxDialog dialog(this, wxID_ANY, title, wxDefaultPosition, FromDIP(wxSize(360, 480)),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
@@ -1584,7 +1584,7 @@ void ibDialogQueryConstructor::OnAddPickedTable(wxCommandEvent&)
 {
 	if (!CanEdit() || Current() == nullptr)
 		return;
-	std::vector<wxString> path;
+	std::vector<ibString> path;
 	if (!PickTable(_("Add table"), path))
 		return;
 	AddTableSources({ path });
@@ -1598,7 +1598,7 @@ void ibDialogQueryConstructor::OnReplaceTable(wxCommandEvent&)
 	ibQuerySource* source = CanEdit() ? SelectedSource() : nullptr;
 	if (source == nullptr || source->m_subquery)
 		return;
-	std::vector<wxString> path;
+	std::vector<ibString> path;
 	if (!PickTable(_("Replace table"), path) || path == source->m_name)
 		return;
 
@@ -1761,7 +1761,7 @@ void ibDialogQueryConstructor::OnAddTable(wxCommandEvent&)
 		return;
 	}
 
-	std::vector<std::vector<wxString>> paths;
+	std::vector<std::vector<ibString>> paths;
 	if (node != nullptr && !node->m_path.empty()) {
 		paths.push_back(node->m_path);
 	}
@@ -1786,13 +1786,13 @@ void ibDialogQueryConstructor::OnAddTable(wxCommandEvent&)
 // verb ("standing on a field means the field") — mutual recursion with no bottom, which arrives as a
 // stack overflow rather than as anything readable. A handler reads the window and decides WHAT;
 // this does it. Two verbs can share the second half; neither can call the other's first half.
-void ibDialogQueryConstructor::AddTableSources(const std::vector<std::vector<wxString>>& paths)
+void ibDialogQueryConstructor::AddTableSources(const std::vector<std::vector<ibString>>& paths)
 {
 	ibQuerySelect* select = Current();
 	if (select == nullptr)
 		return;
 
-	for (const std::vector<wxString>& path : paths) {
+	for (const std::vector<ibString>& path : paths) {
 		ibQuerySource source;
 		source.m_name = path;
 		// A TABLE IS NAMED AS IT IS ADDED: `FROM Catalog.Nomenclature AS Nomenclature`. The dotted
@@ -1806,7 +1806,7 @@ void ibDialogQueryConstructor::AddTableSources(const std::vector<std::vector<wxS
 		// `AccumulationRegister1Turnovers`, `InformationRegister1SliceLast`.
 		//
 		// A plain table is untouched — `Catalog.Catalog1` is two segments and its name IS the last one.
-		wxString name = path.empty() ? wxString() : path.back();
+		wxString name = path.empty() ? ibString() : path.back();
 		if (path.size() >= 3)
 			name = path[path.size() - 2] + path.back();
 		source.m_alias = ibQueryUniqueSourceAlias(*select, name, nullptr);
@@ -1942,7 +1942,7 @@ void ibDialogQueryConstructor::OnRemoveTable(wxCommandEvent&)
 	const std::vector<ibQuerySource*> sources = CurrentSources();
 	const wxString departing = static_cast<size_t>(node->m_sourceIndex) < sources.size()
 		&& sources[static_cast<size_t>(node->m_sourceIndex)] != nullptr
-		? ibQuerySourceName(*sources[static_cast<size_t>(node->m_sourceIndex)]) : wxString();
+		? ibQuerySourceName(*sources[static_cast<size_t>(node->m_sourceIndex)]) : ibString();
 
 	if (node->m_sourceIndex == 0) {
 		// Removing the FROM promotes the first join into its place — a query with joins but no

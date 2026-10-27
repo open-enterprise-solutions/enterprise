@@ -30,14 +30,14 @@ std::vector<ibQueryKeyword> ibQueryAggregatesFor(const ibTypeDescription& type)
 	return out;
 }
 
-std::vector<wxString> ibQueryAggregateCallsFor(const ibTypeDescription& type, const wxString& field)
+std::vector<ibString> ibQueryAggregateCallsFor(const ibTypeDescription& type, const ibString& field)
 {
-	std::vector<wxString> calls;
+	std::vector<ibString> calls;
 	if (field.IsEmpty())
 		return calls;
 
 	for (const ibQueryKeyword keyword : ibQueryAggregatesFor(type)) {
-		calls.push_back(ibQueryKeywordText(keyword) + wxT("(") + field + wxT(")"));
+		calls.push_back(ibQueryKeywordText(keyword) + ibT("(") + field + ibT(")"));
 
 		// …AND ITS DISTINCT FORM where that asks a DIFFERENT question — `COUNT(DISTINCT x)` counts how
 		// many different values there are, `COUNT(x)` how many rows have one. WHICH functions get the
@@ -45,8 +45,8 @@ std::vector<wxString> ibQueryAggregateCallsFor(const ibTypeDescription& type, co
 		// result is the same value however often it occurs, and a padded list is one people stop
 		// reading. The same rule the expression editor already follows.
 		if (ibDistinctMattersFor(keyword))
-			calls.push_back(ibQueryKeywordText(keyword) + wxT("(")
-				+ ibQueryKeywordText(ibQueryKeyword::Distinct) + wxT(" ") + field + wxT(")"));
+			calls.push_back(ibQueryKeywordText(keyword) + ibT("(")
+				+ ibQueryKeywordText(ibQueryKeyword::Distinct) + ibT(" ") + field + ibT(")"));
 	}
 	return calls;
 }

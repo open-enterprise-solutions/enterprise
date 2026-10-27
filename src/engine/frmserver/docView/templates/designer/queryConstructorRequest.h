@@ -13,7 +13,7 @@ class ibDataNode;
 class ibMetaData;
 
 // A kind's class picture, by its id; none: empty. Both constructors' Kinds.
-FRMSERVER_API wxString ibKindPicture(const wxString& kind, const ibMetaData* metaData);
+FRMSERVER_API ibString ibKindPicture(const ibString& kind, const ibMetaData* metaData);
 
 // True: the request was one of ibQueryConstructor's, answered in `response`. False: not one of them.
 FRMSERVER_API bool ibFetchQueryConstructorRequest(const ibDataNode& request, ibDataNode& response, const ibMetaData* metaData);

@@ -192,7 +192,7 @@ public:
 	// column, so ONE resolver returns either. The class IS an attribute, so the accessors carry no
 	// "Attribute" noise: GetName / GetId / IsMain. GetName IS the attribute's name (the abstract
 	// column's); GetSynonym / GetComment are overridden by the concrete holder from its properties.
-	virtual wxString GetName() const override = 0;
+	virtual ibString GetName() const override = 0;
 	virtual ibMetaID GetId() const = 0;
 
 	virtual bool IsMain() const = 0;
@@ -239,7 +239,7 @@ public:
 	// path (a hop no longer resolves). `valid`/`outText` (optional) report resolvability and the dotted
 	// display "Attr.Field.Sub". Takes the wrapper (not a bare vector) — resolution is source-explorer-driven.
 	const ibBackendSourceColumn* WalkSource(const ibSourceDescription& desc,
-		bool* valid = nullptr, wxString* outText = nullptr) const;
+		bool* valid = nullptr, ibString* outText = nullptr) const;
 
 	// The source HOLDER whose attribute id matches — the ONE lookup shared by the dot-walk and the
 	// path / type resolvers (instead of re-scanning GetSourceList at every site). Null = no such

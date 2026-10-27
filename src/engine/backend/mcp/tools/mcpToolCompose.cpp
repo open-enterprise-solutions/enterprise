@@ -70,10 +70,10 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // from this list, so getting it wrong here means advertising a lie.
 const ibArg& ArgId(bool required)
 {
-	static const ibArg s_optional(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_optional(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The composer's NodeId - a report declares one, metadata_get on the report lists it "
 			  "among its children. Give this OR `schema`, not both."), /*required*/ false);
-	static const ibArg s_required(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_required(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The composer's NodeId - a report declares one, metadata_get on the report lists it "
 			  "among its children."), /*required*/ true);
 	return required ? s_required : s_optional;
@@ -81,7 +81,7 @@ const ibArg& ArgId(bool required)
 
 const ibArg& ArgVariant()
 {
-	static const ibArg s_a(wxT("variant"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("variant"), ibArg::Kind::Whole,
 		ibMcpText("Which of the AUTHOR's variants to run, counting from 0. Default 0 - what the report "
 			  "does when nobody has chosen. report_variant lists them."));
 	return s_a;
@@ -89,7 +89,7 @@ const ibArg& ArgVariant()
 
 const ibArg& ArgSettings()
 {
-	static const ibArg s_a(wxT("settings"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("settings"), ibArg::Kind::Text,
 		ibMcpText("The id of a setting somebody SAVED for themselves, to run under theirs instead of the "
 			  "author's. This is what turns 'my numbers do not add up' into a question with an answer: "
 			  "the person's own choices, reproduced. compose_settings lists what there is."));
@@ -98,7 +98,7 @@ const ibArg& ArgSettings()
 
 const ibArg& ArgUser()
 {
-	static const ibArg s_a(wxT("user"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("user"), ibArg::Kind::Text,
 		ibMcpText("WHOSE saved setting. Omitted means the session's own. A setting belongs to a person as "
 			  "much as to a report - the two together are its address."));
 	return s_a;
@@ -106,7 +106,7 @@ const ibArg& ArgUser()
 
 const ibArg& ArgParameters()
 {
-	static const ibArg s_a(wxT("parameters"), ibArg::Kind::Node,
+	static const ibArg s_a(ibT("parameters"), ibArg::Kind::Node,
 		ibMcpText("Values for the schema's parameters, by name - the PERIOD above all, since most reports "
 			  "ask for one and answer nothing useful without it. Applied last, over whatever a saved "
 			  "setting carried, so one of them can be varied and the rest left alone.\n"
@@ -144,7 +144,7 @@ const ibArg& ArgParameters()
 // the two apart — which is the test of whether a road was added or merely used.
 const ibArg& ArgSchema()
 {
-	static const ibArg s_a(wxT("schema"), ibArg::Kind::Node,
+	static const ibArg s_a(ibT("schema"), ibArg::Kind::Node,
 		ibMcpText("A composition to run, given WHOLE, instead of naming a report with `id`. The shape is "
 			  "the one report_get answers with - a query, selected fields, an output with its "
 			  "groupings, resources, parameters. This is how you ask a question the configuration "
@@ -158,7 +158,7 @@ const ibArg& ArgSchema()
 			  "\n"
 			  "A dynamic LIST's schema lives on a form; schema_read answers it, and what it gives "
 			  "back goes straight in here."),
-		/*required*/ false, std::vector<wxString>(),
+		/*required*/ false, std::vector<ibString>(),
 		[](ibDataValue& shape) {
 			return ibCompositionDescriptionMemory::WriteNode(shape, ibCompositionDescription());
 		});
@@ -183,7 +183,7 @@ const ibArg& ArgSchema()
 // is `schema`, and this refuses to grow into it.
 const ibArg& ArgQuery()
 {
-	static const ibArg s_a(wxT("query"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("query"), ibArg::Kind::Text,
 		ibMcpText("ASK THE DATA A QUESTION DIRECTLY - the query text, and nothing else to write. Use "
 			  "this whenever you want to KNOW something about the base rather than run a report: "
 			  "how many documents are unposted, what a register holds for one counterparty, what "
@@ -201,14 +201,14 @@ const ibArg& ArgQuery()
 // report means and should not have to say. A name that resolves to nobody is a REFUSAL rather than a
 // silent fall back to the caller's own settings: "show me Ivanov's" answered with mine is a wrong
 // answer wearing the shape of a right one.
-bool UserNamed(const ibDataNode& params, const ibArg& arg, ibUserInfo& into, wxString& refusal)
+bool UserNamed(const ibDataNode& params, const ibArg& arg, ibUserInfo& into, ibString& refusal)
 {
-	const wxString name = arg.Text(params);
+	const ibString name = arg.Text(params);
 	if (name.IsEmpty())
 		return true;                       // the session's own - `into` stays unset
 	into = ibUserInfo::Read(name);
 	if (!into.IsOk()) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("no account '%s'. user_list says who there is."), name);
 		return false;
 	}
@@ -219,7 +219,7 @@ bool UserNamed(const ibDataNode& params, const ibArg& arg, ibUserInfo& into, wxS
 // data — a rule about rights rather than about where a runtime sits. A fallback that read locally
 // when nothing was attached would be precisely the thing being refused, so this returns null and
 // says what to do instead.
-ibMcpDebugBridge* ComposeBridge(wxString& refusal)
+ibMcpDebugBridge* ComposeBridge(ibString& refusal)
 {
 	if (debugClient == nullptr) {
 		refusal = ibMcpText("This process has no debugger client, so there is no application to read the "
@@ -257,7 +257,7 @@ ibMcpDebugBridge* ComposeBridge(wxString& refusal)
 class ibMcpToolComposeRun : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("compose_run"); }
+	ibString GetName() const override { return ibT("compose_run"); }
 
 	// 🛑 NOT ON THE MAIN THREAD — see ibMcpTool::NeedsMainThread, which says this in as many words.
 	// The schema goes down the socket and the tables come back through the session's worker, which on
@@ -270,20 +270,20 @@ public:
 	// they are called from. It is the WAITING that decides, not what is being waited for.
 	bool NeedsMainThread() const override { return false; }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		// ⚠ A COMPOSITION PASSED WHOLE HAS NO NAME, AND EMPTY QUOTES ARE NOT A NAME. This read
 		// `running the composer ''` on the person's own screen whenever a schema was handed over
 		// instead of a report id - which is the ordinary case for every question the configuration
 		// has no report for. What they need to know is not a name that does not exist, but WHERE the
 		// thing came from: it was built here, it is not one of their reports, and nothing was stored.
-		const wxString name = ibMcpNameOf(params);
+		const ibString name = ibMcpNameOf(params);
 		return name.IsEmpty()
 			? ibMcpText("running a composition built here - not a stored report, nothing is kept")
-			: wxString::Format(ibMcpText("running the composer '%s'"), name);
+			: ibString::Format(ibMcpText("running the composer '%s'"), name);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("ASK THE DATA SOMETHING AND READ THE ANSWER - with a report, with a composition "
 			"you hand over, or with A QUERY AND NOTHING ELSE. This is the READING verb of the "
@@ -464,7 +464,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		// ⭐⭐ THE SCHEMA COMES FROM A REPORT, OR IS GIVEN WHOLE, and that second road is the reason
 		// this tool is worth more than it looks (Max, 2026-09-06: *"you can take an existing schema,
@@ -473,14 +473,14 @@ public:
 		// than the name of one, a composition that exists nowhere runs exactly like a report that
 		// does. Nothing new was built for it: it is a second source for one field.
 		ibCompositionDescription description;
-		wxString                 subject;
+		ibString                 subject;
 		// The report this came from, when it came from one — kept because a SAVED SETTING is stored
 		// against its key and would otherwise have to be looked up a second time further down.
 		ibValueMetaObject*       object = nullptr;
 
 		auto givenSchema = params.FindChild(ArgSchema().Name());
 		const bool        namedReport = params.Has(ArgId(false).Name());
-		const wxString    bareQuery   = ArgQuery().Text(params);
+		const ibString    bareQuery   = ArgQuery().Text(params);
 
 		// ⚠ THREE SOURCES FOR ONE FIELD, AND EXACTLY ONE MAY SPEAK. Two of them is two answers to
 		// "what is being run", and picking a winner silently is how a caller comes to believe they
@@ -513,7 +513,7 @@ public:
 				lexer.Tokenize(bareQuery);
 			}
 			catch (const ibCoreException& error) {
-				refusal = wxString::Format(ibMcpText("The query does not read as a query: %s"), error.GetErrorDescription());
+				refusal = ibString::Format(ibMcpText("The query does not read as a query: %s"), error.GetErrorDescription());
 				return false;
 			}
 
@@ -548,7 +548,7 @@ public:
 
 			ibValueMetaObjectComposer* composerObject = object->ConvertToType<ibValueMetaObjectComposer>();
 			if (composerObject == nullptr) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("'%s' is not a composer. metadata_get on the report lists the composer among "
 						  "its children."), object->GetName());
 				return false;
@@ -560,7 +560,7 @@ public:
 		// ⚠ A COMPOSITION WITH NO SOURCE ANSWERS NOTHING, and saying so beats running an empty walk
 		// and reporting no rows: those read identically and mean opposite things.
 		if (!description.IsOk()) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' has no source to read - neither a query nor a main table. report_query is "
 					  "where one is put."), subject);
 			return false;
@@ -587,7 +587,7 @@ public:
 
 		if (!description.m_variants.empty()) {
 			if (variant < 0 || static_cast<size_t>(variant) >= description.m_variants.size()) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("'%s' declares %d variant(s); there is no number %d. report_variant lists them."),
 					subject, (int)description.m_variants.size(), (int)variant);
 				return false;
@@ -595,7 +595,7 @@ public:
 			folding.SetUserSettingsDesc(description.m_variants[static_cast<size_t>(variant)].m_settings);
 		}
 		else if (askedVariant) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' declares no variants, so there is no number %d to run. It composes as it "
 					  "stands."), subject, (int)variant);
 			return false;
@@ -607,7 +607,7 @@ public:
 		if (!UserNamed(params, ArgUser(), owner, refusal))
 			return false;
 
-		const wxString settingsId = ArgSettings().Text(params);
+		const ibString settingsId = ArgSettings().Text(params);
 		if (!settingsId.IsEmpty()) {
 			if (object == nullptr) {
 				refusal = ibMcpText("A saved setting belongs to a REPORT - it is stored against that "
@@ -618,7 +618,7 @@ public:
 			if (!ibRestoreComposerSettings(ibSettingsCategory::Composer, object->GetGuid(),
 			                               ibGuid(settingsId), folding, object->GetMetaData(),
 			                               owner.IsOk() ? &owner : nullptr)) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("no saved setting '%s' for '%s'. compose_settings lists what there is, and "
 						  "whose."), settingsId, subject);
 				return false;
@@ -663,7 +663,7 @@ public:
 		}
 		if (!accepted) {
 			if (refusal.IsEmpty())
-				refusal = wxString::Format(ibMcpText("'%s' did not compose, and no reason came back."), subject);
+				refusal = ibString::Format(ibMcpText("'%s' did not compose, and no reason came back."), subject);
 			return false;
 		}
 
@@ -687,14 +687,14 @@ MCP_TOOL_REGISTER(ibMcpToolComposeRun);
 class ibMcpToolComposeSettings : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("compose_settings"); }
+	ibString GetName() const override { return ibT("compose_settings"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("listing saved settings of '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("listing saved settings of '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("EVERY WAY THIS REPORT GETS RUN, both sides of it, because a complaint names one or "
 			"the other and the person cannot tell which:\n"
@@ -726,7 +726,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
 		if (object == nullptr)
@@ -734,7 +734,7 @@ public:
 
 		ibValueMetaObjectComposer* composerObject = object->ConvertToType<ibValueMetaObjectComposer>();
 		if (composerObject == nullptr) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' is not a composer. metadata_get on the report lists the composer among "
 					  "its children."), object->GetName());
 			return false;
@@ -767,15 +767,15 @@ public:
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 			// The id is the ADDRESS - it is what compose_run takes. The name is what the person called
 			// it, and two people may well use the same word for different things.
-			node->SetValue(wxT("id"), wxString(entry.m_id));
-			node->SetValue(wxT("name"), entry.m_name);
+			node->SetValue(ibT("id"), ibString(entry.m_id));
+			node->SetValue(ibT("name"), entry.m_name);
 			if (!entry.m_changed.IsEmpty())
-				node->SetValue(wxT("changed"), entry.m_changed);
+				node->SetValue(ibT("changed"), entry.m_changed);
 			if (preferred.isValid() && entry.m_id == preferred)
-				node->SetValue(wxT("default"), true);   // …and this is the one running right now
+				node->SetValue(ibT("default"), true);   // …and this is the one running right now
 			entries.push_back(ibDataValue::Child(node));
 		}
-		result.AddField(wxT("settings"), ibDataValue::Array(entries));
+		result.AddField(ibT("settings"), ibDataValue::Array(entries));
 
 		// ⭐⭐ AND THE AUTHOR'S VARIANTS BESIDE THEM, because a person's words name one or the other and
 		// they cannot tell which. "Sales at cost do not add up" is almost never a broken report - it is
@@ -790,25 +790,25 @@ public:
 		for (size_t i = 0; i < description.m_variants.size(); ++i) {
 			const ibVariantDescription& v = description.m_variants[i];
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->SetValue(wxT("index"), (std::int32_t)i);   // what compose_run takes
-			node->SetValue(wxT("name"), v.m_name);
+			node->SetValue(ibT("index"), (std::int32_t)i);   // what compose_run takes
+			node->SetValue(ibT("name"), v.m_name);
 			// What a PICKER shows, when the author gave it different words from the name. That is the
 			// wording a person will quote back, so it is the one to match their complaint against.
 			if (!v.m_synonym.IsEmpty() && v.m_synonym != v.m_name)
-				node->SetValue(wxT("title"), v.m_synonym);
+				node->SetValue(ibT("title"), v.m_synonym);
 			variants.push_back(ibDataValue::Child(node));
 		}
-		result.AddField(wxT("variants"), ibDataValue::Array(variants));
+		result.AddField(ibT("variants"), ibDataValue::Array(variants));
 
 		// ⚠ NOTHING SAVED IS AN ANSWER, not an empty result to be puzzled over. It says the person runs
 		// the report as the author wrote it, which is itself the answer to "why do we see different
 		// numbers" more often than a setting is.
 		if (entries.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("Nothing saved here - this report runs as its author wrote it, on the variant "
 					  "chosen. compose_run with no settings reproduces exactly that."));
 		else if (!preferred.isValid())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("Saved settings exist but none is the default, so the report opens on the "
 					  "author's variant and one of these is applied only when it is picked."));
 		return true;

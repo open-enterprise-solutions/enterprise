@@ -20,16 +20,16 @@ namespace {
 // LoadNode, and nothing but attention was keeping the two spellings equal — a name changed on one
 // side reads back empty on the other, silently, for every configuration already saved. Named here
 // they are one thing, and a rename is one edit the compiler checks.
-const wxString kTagGuid        = wxT("Guid");
-const wxString kTagId          = wxT("Id");
-const wxString kTagDeleted     = wxT("Deleted");
-const wxString kTagHelp        = wxT("Help");
-const wxString kTagNote        = wxT("Note");
-const wxString kTagPredefined  = wxT("NodePredefined");
-const wxString kTagInterface   = wxT("Interface");
-const wxString kTagRoles       = wxT("Roles");
-const wxString kTagComposition = wxT("Composition");
-const wxString kTagFunctionalOptions = wxT("FunctionalOptions");
+const ibString kTagGuid        = ibT("Guid");
+const ibString kTagId          = ibT("Id");
+const ibString kTagDeleted     = ibT("Deleted");
+const ibString kTagHelp        = ibT("Help");
+const ibString kTagNote        = ibT("Note");
+const ibString kTagPredefined  = ibT("NodePredefined");
+const ibString kTagInterface   = ibT("Interface");
+const ibString kTagRoles       = ibT("Roles");
+const ibString kTagComposition = ibT("Composition");
+const ibString kTagFunctionalOptions = ibT("FunctionalOptions");
 
 } // namespace
 
@@ -90,8 +90,8 @@ bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 	m_metaId = (ibMetaID)node.GetValue<std::int32_t>(kTagId);
 	if (node.GetValue<bool>(kTagDeleted))
 		MarkAsDeleted();
-	m_strHelpContent = node.GetValue<wxString>(kTagHelp);
-	m_strNoteContent = node.GetValue<wxString>(kTagNote);
+	m_strHelpContent = node.GetValue<ibString>(kTagHelp);
+	m_strNoteContent = node.GetValue<ibString>(kTagNote);
 
 	// editable property values ← props (owner names them inline; the property takes the value)
 	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));

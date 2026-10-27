@@ -33,7 +33,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataSpreadsheet"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataSpreadsheet"); }
 
 private:
 	ibSpreadsheetDescription m_spreadsheetDesc;

@@ -34,7 +34,7 @@ void ReleaseProcess()
 
 } // namespace
 
-ibFileBase* ibFileBaseOpen(const ibString& request, wxString& error)
+ibFileBase* ibFileBaseOpen(const ibString& request, ibString& error)
 {
 	// THE PROCESS'S JOURNAL, AND ITS CRASH GUARD — the engine runs in this process now, and every application of the
 	// tree installs both as its first act; a client that loads a file base is one too. Named by the process, as theirs.
@@ -49,20 +49,20 @@ ibFileBase* ibFileBaseOpen(const ibString& request, wxString& error)
 	catch (const ibCoreException&) {
 	}
 	if (!read) {
-		error = wxT("the request to open a file base is not a JSON object");
+		error = ibT("the request to open a file base is not a JSON object");
 		return nullptr;
 	}
 	ibFileInstanceRequest opening;
-	opening.m_name      = where.GetValue<wxString>(ibProtocol::ibFileBase::Name);
-	opening.m_locale    = where.GetValue<wxString>(ibProtocol::ibFileBase::Locale);
-	opening.m_directory = where.GetValue<wxString>(ibProtocol::ibFileBase::Directory);
-	opening.m_server    = where.GetValue<wxString>(ibProtocol::ibFileBase::Server);
-	opening.m_port      = where.GetValue<wxString>(ibProtocol::ibFileBase::Port);
-	opening.m_user      = where.GetValue<wxString>(ibProtocol::ibFileBase::User);
-	opening.m_password  = where.GetValue<wxString>(ibProtocol::ibFileBase::Password);
-	opening.m_database  = where.GetValue<wxString>(ibProtocol::ibFileBase::Database);
+	opening.m_name      = where.GetValue<ibString>(ibProtocol::ibFileBase::Name);
+	opening.m_locale    = where.GetValue<ibString>(ibProtocol::ibFileBase::Locale);
+	opening.m_directory = where.GetValue<ibString>(ibProtocol::ibFileBase::Directory);
+	opening.m_server    = where.GetValue<ibString>(ibProtocol::ibFileBase::Server);
+	opening.m_port      = where.GetValue<ibString>(ibProtocol::ibFileBase::Port);
+	opening.m_user      = where.GetValue<ibString>(ibProtocol::ibFileBase::User);
+	opening.m_password  = where.GetValue<ibString>(ibProtocol::ibFileBase::Password);
+	opening.m_database  = where.GetValue<ibString>(ibProtocol::ibFileBase::Database);
 	opening.m_create    = where.GetValue<bool>(ibProtocol::ibFileBase::Create);
-	// THE DEBUG SERVER — as enterprise.exe's `--debug`: it comes up with the base's configuration
+	// THE DEBUG SERVER — as enterprise-thin.exe's `--debug`: it comes up with the base's configuration
 	// (ibMetaDataConfiguration::OnInitialize) and listens from the start. Without it the client turns it on
 	// later; a session stops for it either way (ibSession::Debug — made with the session).
 	if (where.GetValue<bool>(ibProtocol::ibFileBase::Debug))
@@ -81,9 +81,9 @@ ibFileBase* ibFileBaseOpen(const ibString& request, wxString& error)
 	}
 	if (applicationInstance == nullptr) {
 		// Why, as the backend said it — the chain the opening recorded, else what was thrown.
-		wxString chain;
-		for (const wxString& said : ibBackendException::DrainLastErrors())
-			chain += (chain.IsEmpty() ? wxString() : wxString(wxT("\n"))) + said;
+		ibString chain;
+		for (const ibString& said : ibBackendException::DrainLastErrors())
+			chain += (chain.IsEmpty() ? ibString() : ibString(ibT("\n"))) + said;
 		if (!chain.IsEmpty())
 			error = chain;
 		if (error.IsEmpty())
@@ -99,10 +99,10 @@ ibFileBase* ibFileBaseOpen(const ibString& request, wxString& error)
 }
 
 bool ibFileBaseCall(ibFileBase* base, const ibMemoryBuffer& request, const void* connection,
-	const ibString& address, ibMemoryBuffer& answer, wxString& error)
+	const ibString& address, ibMemoryBuffer& answer, ibString& error)
 {
 	if (base == nullptr || !base->host) {
-		error = wxT("no base is open");
+		error = ibT("no base is open");
 		return false;
 	}
 	// The port's door: the envelope read, the call made, the answer written — as a server's client is answered.

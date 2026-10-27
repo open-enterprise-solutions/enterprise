@@ -101,9 +101,9 @@ int ibDatabaseResultSetMetaDataODBC::GetColumnSize(int i)
 	return returnSize;
 }
 
-wxString ibDatabaseResultSetMetaDataODBC::GetColumnName(int i)
+ibString ibDatabaseResultSetMetaDataODBC::GetColumnName(int i)
 {
-	wxString columnName;
+	ibString columnName;
 
 	SQLTCHAR      col_name[8192];
 	SQLSMALLINT   col_name_length;

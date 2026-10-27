@@ -15,7 +15,7 @@
 #include <cstddef>
 #include <exception>
 
-#if !defined(_WIN32)
+#if !defined(__IBMSW__)
 // The asm trampoline calls this. It has to reach RunEntry, which stays
 // private so a caller cannot run a fiber's body out from under the switch.
 extern "C" void ibFiberEnter();
@@ -85,7 +85,7 @@ private:
 	std::size_t m_stackAllocSize = 0;
 	void* m_stackBottom = nullptr;
 	std::size_t m_stackSize = 0;
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	void* m_osFiber = nullptr;
 #endif
 	bool m_scheduler = false;
@@ -99,13 +99,13 @@ private:
 	ibFiberLocals::Snapshot m_locals;
 
 	void RunEntry();
-#if !defined(_WIN32)
+#if !defined(__IBMSW__)
 	friend void ibFiberEnter();
 #endif
-#if !defined(_WIN32)
+#if !defined(__IBMSW__)
 	void InitPosixStack();
 #endif
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	// A Win32 fiber procedure (`VOID CALLBACK (LPVOID)`). CALLBACK is __stdcall; spelled out so this header needs
 	// no <windows.h>.
 	static void __stdcall FiberProc(void* arg);

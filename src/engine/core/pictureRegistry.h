@@ -18,7 +18,7 @@
 
 // A PICTURE BY ITS NUMBER — its name, its number, the picture.
 struct ibPictureEntry {
-	wxString m_name;
+	ibString m_name;
 	ibPictureID m_id;
 	ibPicture m_picture;
 };
@@ -29,7 +29,7 @@ public:
 
 	// A picture under its number. One already there stays, and false says so: the sides of one process register the
 	// same ones (the thin designer opening a file base loads the backend beside the client).
-	static bool RegisterPicture(const wxString& name, ibPictureID id, const ibPicture& picture);
+	static bool RegisterPicture(const ibString& name, ibPictureID id, const ibPicture& picture);
 	static bool IsRegisterPicture(ibPictureID id);
 
 	// The picture of that number — none: none registered.
@@ -39,6 +39,6 @@ public:
 
 // Initialize with Base-64 + PNG data — a master, its text in the source read into its bytes once, here, and kept as it
 // is: a reader scales it to the size it shows.
-extern CORE_API bool RegisterPicture(const wxString name, const ibPictureID& id, const wxString& base64);
+extern CORE_API bool RegisterPicture(const ibString name, const ibPictureID& id, const ibString& base64);
 
 #endif

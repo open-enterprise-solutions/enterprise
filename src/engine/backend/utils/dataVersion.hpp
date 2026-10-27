@@ -28,12 +28,12 @@
 namespace ibDataVersion {
 
 // Mint a fresh stamp. Thread-safe. Always returns a 12-char string.
-BACKEND_API wxString NewStamp();
+BACKEND_API ibString NewStamp();
 
 // True if str matches the stamp shape (12 chars, all base-62).
 // Used by tests and by Write paths that want to validate that the
 // loaded value isn't garbage from a corrupted row.
-BACKEND_API bool IsValidStamp(const wxString& str);
+BACKEND_API bool IsValidStamp(const ibString& str);
 
 } // namespace ibDataVersion
 

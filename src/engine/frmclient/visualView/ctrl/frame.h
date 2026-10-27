@@ -31,7 +31,7 @@ class ibViewCommandBar;
 
 class ibTabDocument;
 
-// A CONTROL THAT HOLDS A VALUE — the desktop's ibControlFrame (frontend/visualView/ctrl/frame.h): what the shared value
+// A CONTROL THAT HOLDS A VALUE — the old desktop's ibControlFrame:what the shared value
 // choice (ibTypeControlFactory::ChooseValue) reads the current value through and puts the chosen one back through. A
 // settings window's value cell is one.
 class FRMCLIENT_API ibControlFrame : public ibBackendControlFrame {
@@ -65,8 +65,8 @@ struct ibViewEdit {
 // refused. It speaks to the communicator alone, so it may be called from a thread of the control's own.
 using ibViewFetcher = std::function<bool(const ibProtocolNode& request, ibProtocolNode& answer)>;
 
-// A CONTROL OF A VIEW — one node of the tab's form as this client draws it: the desktop's ibValueFrame
-// (frontend/visualView/ctrl) cut down to its drawing half, Create and Update. What it shows comes from the node — what
+// A CONTROL OF A VIEW — one node of the tab's form as this client draws it: the old desktop's ibValueFrame
+// cut down to its drawing half, Create and Update. What it shows comes from the node — what
 // the form saved it with, and its State, what the server reads it as now; what the person does with it goes back to
 // the server as an event, by the control's id. It keeps no value of its own: the next frame says what it shows.
 //
@@ -89,8 +89,8 @@ public:
 	// (Max, 2026-10-14). The form's editor is asked with them, a control's rows each (ibProtocol::ibRequest::ibKind::FormEditor),
 	// and receives them (ibPropertyObject::Receive).
 
-	virtual wxString GetClassName() const override { return m_className; }
-	virtual wxString GetObjectTypeName() const override { return m_className; }
+	virtual ibString GetClassName() const override { return m_className; }
+	virtual ibString GetObjectTypeName() const override { return m_className; }
 	virtual bool IsEditable() const override { return true; }
 
 	// Its properties fetched as the inspector shows it, through its host (ibVisualHostClient::Fetch).

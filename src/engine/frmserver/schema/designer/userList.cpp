@@ -19,7 +19,7 @@ bool ibSchemaUserList::AccessRight(const ibSession& session) const
 
 void ibSchemaUserList::Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const
 {
-	const wxString guid = args.GetValue<wxString>(ibProtocol::ibSchema::ibUserList::Guid);
+	const ibString guid = args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Guid);
 
 	// The list — the rows ibUserListModel::PrepareData read, a Brief each — and what a user's record is chosen from:
 	// the roles ibDialogUserItem listed off the configuration, which the client does not hold (its languages are
@@ -70,12 +70,12 @@ void ibSchemaUserList::Build(const ibSession& session, const ibDataNode& args, i
 }
 
 std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr) {
 		refusal = ibProtocol::ibRefusal::NoSession;
-		error = wxT("the session has no configuration");
+		error = ibT("the session has no configuration");
 		return nullptr;
 	}
 
@@ -84,10 +84,10 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 
 	switch (static_cast<ibProtocol::ibSchema::ibCommand>(command)) {
 	case ibProtocol::ibSchema::ibCommand::Save: {
-		const ibGuid userGuid(args.GetValue<wxString>(ibProtocol::ibSchema::ibUserList::Guid));
+		const ibGuid userGuid(args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Guid));
 		if (!userGuid.isValid()) {
 			refusal = ibProtocol::ibRefusal::NotFound;
-			error = wxT("no user guid");
+			error = ibT("no user guid");
 			return nullptr;
 		}
 
@@ -95,20 +95,20 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 			ibUserInfo userInfo;
 
 			userInfo.m_strUserGuid = userGuid.str();
-			userInfo.m_strUserName = args.GetValue<wxString>(ibProtocol::ibSchema::ibUserList::Name);
-			userInfo.m_strUserFullName = args.GetValue<wxString>(ibProtocol::ibSchema::ibUserList::FullName);
+			userInfo.m_strUserName = args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Name);
+			userInfo.m_strUserFullName = args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::FullName);
 
 			// The hash the item kept untouched is the stored one — read here, where it stays. A copy is a new guid: it
 			// has none stored, and starts without a password, as the desktop's copy did.
 			const auto password = args.FindField(ibProtocol::ibSchema::ibUserList::Password);
 			userInfo.m_strUserPassword = ibPasswordHash::PasswordToStore(ibUserInfo::Read(userGuid).m_strUserPassword,
-				password.has_value(), password.has_value() ? password->AsString().ToWxString() : wxString());
+				password.has_value(), password.has_value() ? password->AsString() : ibString());
 
 			const ibValueMetaObjectConfiguration* commonObject = metaData->GetCommonMetaObject();
 			wxASSERT(commonObject);
 
 			// The language and the roles the item offered — the configuration's, found by the guids it sent.
-			const wxString languageGuid = args.GetValue<wxString>(ibProtocol::ibSchema::ibUserList::Language);
+			const ibString languageGuid = args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Language);
 			for (const auto object : metaData->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID)) {
 				if (object->GetDocPath() != languageGuid)
 					continue;
@@ -117,7 +117,7 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 				break;
 			}
 
-			std::vector<wxString> checked;
+			std::vector<ibString> checked;
 			if (const auto roles = args.FindField(ibProtocol::ibSchema::ibUserList::Roles)) {
 				for (const ibDataValue& role : roles->AsArray())
 					checked.push_back(role.AsString());
@@ -173,7 +173,7 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 		return nullptr;
 	}
 	case ibProtocol::ibSchema::ibCommand::Remove: {
-		if (ibUserInfo::Delete(ibGuid(args.GetValue<wxString>(ibProtocol::ibSchema::ibUserList::Guid))))
+		if (ibUserInfo::Delete(ibGuid(args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Guid))))
 			return done;
 		refusal = ibProtocol::ibRefusal::Failed;
 		error = BackendErrorChain();
@@ -184,6 +184,6 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 	}
 
 	refusal = ibProtocol::ibRefusal::NotFound;
-	error = wxString::Format(wxT("the users take no command %d"), command);
+	error = ibString::Format(ibT("the users take no command %d"), command);
 	return nullptr;
 }

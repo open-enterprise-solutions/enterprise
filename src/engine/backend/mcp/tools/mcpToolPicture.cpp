@@ -28,7 +28,7 @@
 #include "backend/metaCollection/metaPictureObject.h"       // ibValueMetaObjectPicture — a configuration's own picture
 
 // The metatype's own name, resolved through ibResolveMetaKind like every other kind.
-static const ibChar* const kPictureKind = wxT("Picture");
+static const ibChar* const kPictureKind = ibT("Picture");
 
 #include <vector>
 
@@ -59,7 +59,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgName()
 {
-	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("name"), ibArg::Kind::Text,
 		ibMcpText("What to call the image handed over in `data` or drawn from `svg` - it is kept with it as "
 			  "its Name."));
 	return s_a;
@@ -67,35 +67,35 @@ const ibArg& ArgName()
 
 const ibArg& ArgId()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The object to give a picture to."));
 	return s_a;
 }
 
 const ibArg& ArgEngine()
 {
-	static const ibArg s_a(wxT("engine"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("engine"), ibArg::Kind::Text,
 		ibMcpText("Name of one of the engine's pictures (picture_list -> engine)."));
 	return s_a;
 }
 
 const ibArg& ArgConfiguration()
 {
-	static const ibArg s_a(wxT("configuration"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("configuration"), ibArg::Kind::Text,
 		ibMcpText("Name of a picture declared in this configuration (picture_list -> configuration)."));
 	return s_a;
 }
 
 const ibArg& ArgData()
 {
-	static const ibArg s_a(wxT("data"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("data"), ibArg::Kind::Text,
 		ibMcpText("Base64 PNG bytes, for an image that is not in either list."));
 	return s_a;
 }
 
 const ibArg& ArgSvg()
 {
-	static const ibArg s_a(wxT("svg"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("svg"), ibArg::Kind::Text,
 		ibMcpText("SVG source, for an image that is DRAWN: turned into a PNG here - 64 x 64 unless `width` / "
 			  "`height` say otherwise, its viewBox scaled to fit. Shapes, paths, fills and strokes are read - "
 			  "text and filters are not."));
@@ -104,7 +104,7 @@ const ibArg& ArgSvg()
 
 const ibArg& ArgWidth()
 {
-	static const ibArg s_a(wxT("width"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("width"), ibArg::Kind::Whole,
 		ibMcpText("Width of the PNG drawn from `svg`, in pixels. Omit for 64 - the size the platform's own "
 			  "pictures are drawn at and scaled down from."));
 	return s_a;
@@ -112,7 +112,7 @@ const ibArg& ArgWidth()
 
 const ibArg& ArgHeight()
 {
-	static const ibArg s_a(wxT("height"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("height"), ibArg::Kind::Whole,
 		ibMcpText("Height of the PNG drawn from `svg`, in pixels. Omit for 64."));
 	return s_a;
 }
@@ -126,13 +126,13 @@ constexpr int kDrawnSide = 64;
 constexpr int kLargestSide = 1024;
 
 // THE SIZE ASKED FOR, 64 on whichever side was not said.
-bool AskedSide(const ibDataNode& params, ibSize& side, wxString& refusal)
+bool AskedSide(const ibDataNode& params, ibSize& side, ibString& refusal)
 {
 	const std::int64_t width  = ArgWidth().Given(params)  ? ArgWidth().Whole(params)  : kDrawnSide;
 	const std::int64_t height = ArgHeight().Given(params) ? ArgHeight().Whole(params) : kDrawnSide;
 
 	if (width < 1 || height < 1 || width > kLargestSide || height > kLargestSide) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("A drawing is 1 to %d pixels on a side, and %lld x %lld was asked for. Nothing was drawn."),
 			kLargestSide, (long long)width, (long long)height);
 		return false;
@@ -145,8 +145,8 @@ bool AskedSide(const ibDataNode& params, ibSize& side, wxString& refusal)
 // ⭐ AN IMAGE DRAWN AS TEXT, turned into an image of its own. A caller that has nothing but this server has
 // no rasterizer, and a PNG is not written by hand; SVG is text, and the core reads it (ibPicture::FromSvg).
 // What comes out is an ordinary PNG with its measured size - the same external picture `data` makes.
-bool DrawSvg(const wxString& svg, const ibSize& side, const wxString& name,
-	ibExternalPictureDescription& drawn, wxString& refusal)
+bool DrawSvg(const ibString& svg, const ibSize& side, const ibString& name,
+	ibExternalPictureDescription& drawn, ibString& refusal)
 {
 	const ibPicture picture = ibPicture::FromSvg(svg, side);
 
@@ -175,12 +175,12 @@ constexpr size_t kMostRects = 4096;
 // ⭐ AND BACK THE OTHER WAY: an image said as SVG (ibPicture::ToSvg), so a caller that works in SVG can read a
 // picture - one it did not draw, or one it drew and has to change - and draw it again through picture_from_svg.
 // Every colour is ONE path, which also makes the commonest edit, a recolouring, one attribute.
-bool SvgFromImage(const ibPicture& image, wxString& svg, wxString& refusal)
+bool SvgFromImage(const ibPicture& image, ibString& svg, ibString& refusal)
 {
 	const int width = image.GetSize().m_width, height = image.GetSize().m_height;
 
 	if (width < 1 || height < 1 || width > kLargestSide || height > kLargestSide) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("The picture is %d x %d pixels, and one is said as SVG only up to %d on a side."),
 			width, height, kLargestSide);
 		return false;
@@ -188,7 +188,7 @@ bool SvgFromImage(const ibPicture& image, wxString& svg, wxString& refusal)
 
 	svg = image.ToSvg(kMostRects);
 	if (svg.IsEmpty()) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("The picture is too detailed to be said as SVG - more than %u rectangles. It is a "
 				"photograph rather than a drawing."), (unsigned int)kMostRects);
 		return false;
@@ -198,7 +198,7 @@ bool SvgFromImage(const ibPicture& image, wxString& svg, wxString& refusal)
 
 const ibArg& ArgPicture()
 {
-	static const ibArg s_a(wxT("picture"), ibArg::Kind::Node,
+	static const ibArg s_a(ibT("picture"), ibArg::Kind::Node,
 		ibMcpText("The picture in its own shape, as metadata_properties, form_control or picture_set give it: "
 			  "{Type: 1, ClassId}, {Type: 2, Guid} or {Type: 3, Image: {Name, Buffer, Width, Height}} - or the "
 			  "image a configuration's Picture object holds, {Name, Buffer, Width, Height}, as it reads."),
@@ -237,14 +237,14 @@ const ibPropertyExternalPicture* HeldImage(const ibPropertyObject* object)
 class ibMcpToolPictureList : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("picture_list"); }
+	ibString GetName() const override { return ibT("picture_list"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("listing the pictures");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Every picture that can be used without supplying one: the engine's own set, "
 			"which is always there, and the pictures this configuration declares. Names from "
@@ -264,7 +264,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		// THE ENGINE'S SET. Always present - it does not depend on a configuration being open,
 		// which is why it is listed first and unconditionally.
@@ -272,16 +272,16 @@ public:
 
 		for (const ibPictureEntry& entry : ibBackendPicture::GetArrayPicture()) {
 			std::shared_ptr<ibDataNode> line = std::make_shared<ibDataNode>();
-			line->SetValue(wxT("name"), entry.m_name);
+			line->SetValue(ibT("name"), entry.m_name);
 			// ⚠ THE DIGITS, AS TEXT. An engine picture's id fills sixty-four bits, and a JSON number on the
 			// far side is a double: read back, it comes rounded and names no picture (2026-09-22, a `Print`
 			// id that arrived as ...600 for ...564). Sent as a string it survives both ways, and the shape
 			// takes it back in either form (pictureDescription.cpp).
-			line->SetValue(wxT("id"), wxString::Format(wxT("%llu"), (unsigned long long)entry.m_id));
+			line->SetValue(ibT("id"), ibString::Format(ibT("%llu"), (unsigned long long)entry.m_id));
 			engine.push_back(ibDataValue::Child(line));
 		}
 
-		result.AddField(wxT("engine"), ibDataValue::Array(engine));
+		result.AddField(ibT("engine"), ibDataValue::Array(engine));
 
 		// THE CONFIGURATION'S OWN. Absent rather than empty when nothing is open - the two are
 		// different answers, and a caller that cannot tell them apart will read "no pictures
@@ -290,29 +290,29 @@ public:
 
 			std::vector<ibDataValue> declared;
 
-			for (const wxString& name : ibListMetaObjectNames(activeMetaData, kPictureKind)) {
+			for (const ibString& name : ibListMetaObjectNames(activeMetaData, kPictureKind)) {
 
 				std::shared_ptr<ibDataNode> line = std::make_shared<ibDataNode>();
-				line->SetValue(wxT("name"), name);
+				line->SetValue(ibT("name"), name);
 
 				// ⭐ AND ITS GUID, which is what a picture description holds for one of these (Type 2) - the
 				// shape a picture property reads back in, and takes back through `value`, names it by that.
 				if (ibValueMetaObject* object =
 					ibFindMetaObject(activeMetaData, kPictureKind, name)) {
-					line->AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
-					line->SetValue(wxT("guid"), ibGuid(object->GetGuid()));
+					line->AddField(ibT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
+					line->SetValue(ibT("guid"), ibGuid(object->GetGuid()));
 
 					// ⭐ AND WHAT IT MEANS. A PNG cannot be read, and a common picture is chosen by the next thing
 					// that needs one - its Comment is where it says what it depicts and what it stands for.
-					const wxString meaning = object->GetComment();
+					const ibString meaning = object->GetComment();
 					if (!meaning.IsEmpty())
-						line->SetValue(wxT("comment"), meaning);
+						line->SetValue(ibT("comment"), meaning);
 				}
 
 				declared.push_back(ibDataValue::Child(line));
 			}
 
-			result.AddField(wxT("configuration"), ibDataValue::Array(declared));
+			result.AddField(ibT("configuration"), ibDataValue::Array(declared));
 		}
 
 		return true;
@@ -328,14 +328,14 @@ MCP_TOOL_REGISTER(ibMcpToolPictureList);
 class ibMcpToolPictureSet : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("picture_set"); }
+	ibString GetName() const override { return ibT("picture_set"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("setting the picture of '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("setting the picture of '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Give an object its picture. Say WHERE it comes from: `engine` with a name from "
 			"picture_list, `configuration` with the name of a picture this configuration "
@@ -362,7 +362,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
 		if (object == nullptr)
@@ -373,16 +373,16 @@ public:
 		// ⚠ NO PICTURE OF ITS OWN IS A REFUSAL. Setting nothing and answering true is how a caller
 		// comes to believe an icon was assigned to something that cannot show one.
 		if (property == nullptr) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' has no picture of its own - commands, command groups and sections do. Nothing was set."),
 				object->GetName());
 			return false;
 		}
 
-		const wxString fromEngine = ArgEngine().Text(params);
-		const wxString fromConfig = ArgConfiguration().Text(params);
-		const wxString fromData   = ArgData().Text(params);
-		const wxString fromSvg    = ArgSvg().Text(params);
+		const ibString fromEngine = ArgEngine().Text(params);
+		const ibString fromConfig = ArgConfiguration().Text(params);
+		const ibString fromData   = ArgData().Text(params);
+		const ibString fromSvg    = ArgSvg().Text(params);
 
 		const int said = (fromEngine.IsEmpty() ? 0 : 1)
 			+ (fromConfig.IsEmpty() ? 0 : 1)
@@ -414,7 +414,7 @@ public:
 			}
 
 			if (!found) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("The engine has no picture called '%s' - picture_list says what it has."),
 					fromEngine);
 				return false;
@@ -428,7 +428,7 @@ public:
 				ibFindMetaObject(activeMetaData, kPictureKind, fromConfig);
 
 			if (declared == nullptr) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("This configuration declares no picture called '%s'."), fromConfig);
 				return false;
 			}
@@ -438,7 +438,7 @@ public:
 			description = ibPictureDescription(declared->GetGuid());
 		}
 		else {
-			const wxString name = ArgName().Text(params);
+			const ibString name = ArgName().Text(params);
 
 			if (name.IsEmpty()) {
 				refusal = ibMcpText("An image handed over in `data` or drawn in `svg` needs a `name` to be "
@@ -486,8 +486,8 @@ public:
 		property->SetValue(description);
 		activeMetaData->Modify(true);
 
-		result.SetValue(wxT("object"), object->GetName());
-		result.AddField(wxT("set"), ibDataValue::Bool(true));
+		result.SetValue(ibT("object"), object->GetName());
+		result.AddField(ibT("set"), ibDataValue::Bool(true));
 
 		// WHAT IT ENDED UP BEING, read back off the property rather than repeated from the
 		// argument: the same read a form does, so a value that did not take says so here.
@@ -503,8 +503,8 @@ public:
 			return false;
 		}
 		ibMcpPictureIdAsText(described);   // the id crosses this door as digits — see mcpTool.h
-		result.AddField(wxT("picture"), described);
-		result.AddField(wxT("empty"), ibDataValue::Bool(stored.IsEmptyPicture()));
+		result.AddField(ibT("picture"), described);
+		result.AddField(ibT("empty"), ibDataValue::Bool(stored.IsEmptyPicture()));
 
 		return true;
 	}
@@ -523,14 +523,14 @@ MCP_TOOL_REGISTER(ibMcpToolPictureSet);
 class ibMcpToolPictureFromSvg : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("picture_from_svg"); }
+	ibString GetName() const override { return ibT("picture_from_svg"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("drawing a picture from SVG");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Draw a picture from SVG text: the platform turns it into a PNG (64 x 64 unless `width` / "
 			"`height` say otherwise) and answers with the picture IN ITS OWN SHAPE - an image of its own, "
@@ -548,15 +548,15 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const wxString svg = ArgSvg().Text(params);
+		const ibString svg = ArgSvg().Text(params);
 		if (svg.IsEmpty()) {
 			refusal = ibMcpText("Send the drawing in `svg`.");
 			return false;
 		}
 
-		const wxString name = ArgName().Text(params);
+		const ibString name = ArgName().Text(params);
 		if (name.IsEmpty()) {
 			refusal = ibMcpText("A drawing needs a `name` to be known by - it is kept with it as its Name.");
 			return false;
@@ -576,8 +576,8 @@ public:
 		}
 
 		ibMcpPictureIdAsText(shaped);   // …and here too — see mcpTool.h
-		result.AddField(wxT("value"), shaped);
-		result.SetValue(wxT("use"), ibMcpText("Send `value` as it is to metadata_set or form_set, property Picture."));
+		result.AddField(ibT("value"), shaped);
+		result.SetValue(ibT("use"), ibMcpText("Send `value` as it is to metadata_set or form_set, property Picture."));
 		return true;
 	}
 };
@@ -594,14 +594,14 @@ MCP_TOOL_REGISTER(ibMcpToolPictureFromSvg);
 class ibMcpToolPictureToSvg : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("picture_to_svg"); }
+	ibString GetName() const override { return ibT("picture_to_svg"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("saying a picture as SVG");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("The way back from picture_from_svg: a picture, in its own shape as metadata_properties, "
 			"form_control or picture_set give it, said as SVG - to read it, or to change it and draw it again "
@@ -617,7 +617,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		// A node may arrive either way — as a child, or as a value carrying one.
 		ibDataValue given;
@@ -631,7 +631,7 @@ public:
 		ibPictureDescription description;
 		bool read = given.Kind() == ibDataKind::Child;
 
-		if (read && !given.AsChild()->FindField(wxT("Type"))) {
+		if (read && !given.AsChild()->FindField(ibT("Type"))) {
 			ibExternalPictureDescription held;
 			read = ibExternalPictureDescriptionMemory::ReadNode(given, held);
 			description = ibPictureDescription(held);
@@ -687,13 +687,13 @@ public:
 			return false;
 		}
 
-		wxString svg;
+		ibString svg;
 		if (!SvgFromImage(image, svg, refusal))
 			return false;
 
-		result.SetValue(wxT("svg"), svg);
-		result.AddField(wxT("width"), ibDataValue::Int(size.m_width));
-		result.AddField(wxT("height"), ibDataValue::Int(size.m_height));
+		result.SetValue(ibT("svg"), svg);
+		result.AddField(ibT("width"), ibDataValue::Int(size.m_width));
+		result.AddField(ibT("height"), ibDataValue::Int(size.m_height));
 		return true;
 	}
 };

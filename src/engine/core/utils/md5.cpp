@@ -35,19 +35,6 @@
 	order. 
 */
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-// includes
-#ifndef WX_PRECOMP
-   // here goes the #include <wx/abc.h> directives for those
-   // files which are not included by wxprec.h
-#endif
-
 #include "md5.hpp"
 
 #define HIGHFIRST
@@ -313,7 +300,7 @@ void MD5Transform(uint32 buf[4], uint32 in[16])
 }
 
 
-static void AppendSubHex(unsigned char val, wxString& result)
+static void AppendSubHex(unsigned char val, ibString& result)
 {
 	if (val > 9)
 	{
@@ -325,7 +312,7 @@ static void AppendSubHex(unsigned char val, wxString& result)
 	}
 }
 
-static void AppendHex(unsigned char val, wxString& result)
+static void AppendHex(unsigned char val, ibString& result)
 {
 	AppendSubHex((val >> 4) & 0xF, result);
 	AppendSubHex(val & 0xF, result);
@@ -391,13 +378,13 @@ void hmac_md5(
 	MD5Final(digest, &context);          /* finish up 2nd pass */
 }
 
-wxString ibMD5::ComputeMd5(const wxString& content)
+ibString ibMD5::ComputeMd5(const ibString& content)
 {
-	const wxScopedCharBuffer utf8 = content.utf8_str();
+	const std::string utf8 = content.ToUtf8();
 	return ComputeMd5(utf8.data(), utf8.length());
 }
 
-wxString ibMD5::ComputeMd5(const void* data, size_t size)
+ibString ibMD5::ComputeMd5(const void* data, size_t size)
 {
 	struct MD5Context md5c;
 	unsigned char signature[16];
@@ -406,7 +393,7 @@ wxString ibMD5::ComputeMd5(const void* data, size_t size)
 	MD5Update(&md5c, static_cast<const unsigned char*>(data), static_cast<unsigned>(size));
 	MD5Final(signature, &md5c);
 
-	wxString result;
+	ibString result;
 	for (int j = 0; j < (int)sizeof signature; j++) {
 		AppendHex(signature[j], result);
 	}
@@ -414,17 +401,17 @@ wxString ibMD5::ComputeMd5(const void* data, size_t size)
 	return result;
 }
 
-wxString ibMD5::ComputeKeyedMd5(const wxString& content, const wxString& key)
+ibString ibMD5::ComputeKeyedMd5(const ibString& content, const ibString& key)
 {
 	unsigned char  digest[16];
-	const wxScopedCharBuffer contentUtf8 = content.utf8_str();
-	const wxScopedCharBuffer keyUtf8 = key.utf8_str();
+	const std::string contentUtf8 = content.ToUtf8();
+	const std::string keyUtf8 = key.ToUtf8();
 	hmac_md5((const unsigned char*)contentUtf8.data(),
 		contentUtf8.length(),
 		(const unsigned char*)keyUtf8.data(),
 		keyUtf8.length(),
 		digest);
-	wxString result;
+	ibString result;
 	for (int j = 0; j < (int)sizeof digest; j++) {
 		AppendHex(digest[j], result);
 	}

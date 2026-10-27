@@ -9,17 +9,17 @@
 
 namespace {
 
-wxString SqlStateOf(ibInterfacePostgres* iface, PGresult* result)
+ibString SqlStateOf(ibInterfacePostgres* iface, PGresult* result)
 {
 	if (iface == nullptr || result == nullptr)
-		return wxString();
+		return ibString();
 	const char* state = iface->GetPQresultErrorField()(result, PG_DIAG_SQLSTATE);
-	return state != nullptr ? wxString::FromAscii(state) : wxString();
+	return state != nullptr ? ibString::FromUTF8(state) : ibString();
 }
 
 }
 
-ibPreparedStatementPostgresWrapper::ibPreparedStatementPostgresWrapper(ibInterfacePostgres* pInterface, PGconn* pDatabase, const wxString& strSQL, const wxString& strStatementName)
+ibPreparedStatementPostgresWrapper::ibPreparedStatementPostgresWrapper(ibInterfacePostgres* pInterface, PGconn* pDatabase, const ibString& strSQL, const ibString& strStatementName)
 	: ibDatabaseErrorReporter(), m_strSQL(strSQL), m_strStatementName(strStatementName)
 {
 	m_pInterface = pInterface;
@@ -96,14 +96,14 @@ int ibPreparedStatementPostgresWrapper::GetParameterCount()
 		const auto& c = m_strSQL.at(i);
 #endif
 
-		if (wxT('\'') == c) {
+		if (ibT('\'') == c) {
 			// Signify that we are inside a string literal inside the SQL
 			bInStringLiteral = !bInStringLiteral;
 		}
-		else if ((wxT('?') == c) && !bInStringLiteral) {
+		else if ((ibT('?') == c) && !bInStringLiteral) {
 			nParameterCount++;
 		}
-		else if ((wxT('$') == c) && !bInStringLiteral) {
+		else if ((ibT('$') == c) && !bInStringLiteral) {
 			int nNumber = 0;
 			unsigned int j = i + 1;
 			for (; j < len; j++) {
@@ -112,9 +112,9 @@ int ibPreparedStatementPostgresWrapper::GetParameterCount()
 #else
 				const auto& d = m_strSQL.at(j);
 #endif
-				if (d < wxT('0') || d > wxT('9'))
+				if (d < ibT('0') || d > ibT('9'))
 					break;
-				nNumber = nNumber * 10 + static_cast<int>(d - wxT('0'));
+				nNumber = nNumber * 10 + static_cast<int>(d - ibT('0'));
 			}
 			if (j > i + 1) {          // `$` followed by digits — a placeholder, not a `$` of some other use
 				nHighestDollar = std::max(nHighestDollar, nNumber);
@@ -130,7 +130,7 @@ void ibPreparedStatementPostgresWrapper::Deallocate()
 {
 	if (m_pDatabase == nullptr || m_strStatementName.IsEmpty())
 		return;
-	const wxCharBuffer sql = ConvertToUnicodeStream(wxT("DEALLOCATE \"") + m_strStatementName + wxT("\""));
+	const wxCharBuffer sql = ConvertToUnicodeStream(ibT("DEALLOCATE \"") + m_strStatementName + ibT("\""));
 	PGresult* const pResult = m_pInterface->GetPQexec()(m_pDatabase, sql);
 	// A refusal is not reported: the statement then lives until its connection closes, as every one did before.
 	// (Inside an aborted transaction the server takes nothing but its end — a statement closed there stays.)

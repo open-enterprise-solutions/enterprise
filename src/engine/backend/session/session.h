@@ -182,9 +182,9 @@ enum class ibPriority : int {
 // ------------------------------------------------------------------
 struct BACKEND_API ibSessionIdentity {
 	ibGuid       m_guid;              // PK in sys_session.session
-	wxString     m_userName;          // empty = anonymous phase / technical
-	wxString     m_userGuid;           // sys_user row, empty before Attach
-	wxString     m_computer;          // hostname
+	ibString     m_userName;          // empty = anonymous phase / technical
+	ibString     m_userGuid;           // sys_user row, empty before Attach
+	ibString     m_computer;          // hostname
 	ibString     m_address;            // "host:port" for web; "" for desktop
 	ibRunMode    m_appMode;            // how its process holds the base: a file base, a server, …
 	ibDateTime   m_started;
@@ -216,7 +216,7 @@ public:
 	// kind = what this session does in the running process. The process-
 	// level run mode (how the exe was launched) lives on appData and is
 	// the same for every session inside a process — not duplicated here.
-	ibSession(wxString id, ibSessionKind kind);
+	ibSession(ibString id, ibSessionKind kind);
 
 	// Virtual — ibGUISession (desktop) and ibWebClientSession (per web
 	// tab) hang off this. The holder is the only strong reference (the
@@ -257,18 +257,18 @@ public:
 		Cancelled,       // user cancelled the interactive dialog — silent exit
 		Timeout,         // the registry did not answer in time — a busy server, not the creds (ibConnectResult::Timeout)
 	};
-	OpenResult Open(const wxString& user, const wxString& password);
+	OpenResult Open(const ibString& user, const ibString& password);
 
 	// Interactive prompt event — fires only when silent Attach fails.
 	// Overridden by ibGUISession (shared for designer + enterprise; shows
 	// the wx login dialog) and future ibWebClientSession (HTTP login
 	// form). Base no-op returns false so non-GUI sessions fail hard on
 	// wrong creds without hanging on a non-existent prompt.
-	virtual bool OnShowAuthenticate(const wxString& /*user*/, const wxString& /*password*/) { return false; }
+	virtual bool OnShowAuthenticate(const ibString& /*user*/, const ibString& /*password*/) { return false; }
 
 	// Legacy id (string representation of m_guid or external cookie).
 	// New code should prefer m_identity.m_guid directly.
-	const wxString&    GetId()   const { return m_id; }
+	const ibString&    GetId()   const { return m_id; }
 	ibSessionKind      GetKind() const { return m_kind; }
 
 	// Session-wide lambda executor — pure accessor; the runtime itself
@@ -296,7 +296,7 @@ public:
 	// False means it could NOT be evaluated, with the reason in `produced` — a caller must refuse
 	// rather than carry on: an expression that failed and one that legitimately came out empty are
 	// the same emptiness afterwards.
-	bool EvaluateInRoot(const wxString& expression, class ibValue& produced);
+	bool EvaluateInRoot(const ibString& expression, class ibValue& produced);
 
 	// ⭐⭐ STATE THAT LIVES ONCE PER SESSION — ASKED FOR BY ITS TYPE.
 	//
@@ -394,11 +394,11 @@ public:
 	// Fire-and-forget activity label update — submits SetActivity@Low so
 	// it never preempts real Add / Remove work. Registry handler UPDATEs
 	// `sys_session.currentActivity`; admin UI sees it on the next snapshot.
-	void SetActivity(const wxString& activity);
+	void SetActivity(const ibString& activity);
 
 	// A thin client's resume token, its digest, into `sys_session.tokenHash` — written by the registry, the row's one
 	// writer (ProcessSetTokenHash). Waits for its verdict: false — refused, or not answered in time.
-	bool SetTokenHash(const wxString& tokenHash);
+	bool SetTokenHash(const ibString& tokenHash);
 
 	// Server session — back-link from a server-spawned client to the
 	// session that hosts it. Set by the holder right after the client is
@@ -494,13 +494,13 @@ public:
 	// because the writer (SetSessionRawPassword in registry-driven
 	// InstallUser) is single-threaded; readers observe Auth() ==
 	// Authenticated before relying on the value.
-	const wxString& GetSessionRawPassword() const { return m_sessionRawPassword; }
+	const ibString& GetSessionRawPassword() const { return m_sessionRawPassword; }
 
 	// The child has the password in its ticket. Drop the copy this session
 	// was keeping for the next Designer launch, overwriting it first.
 	void ClearSessionRawPassword() {
 		for (size_t i = 0; i < m_sessionRawPassword.length(); ++i)
-			m_sessionRawPassword[i] = wxT('x');
+			m_sessionRawPassword[i] = ibT('x');
 		m_sessionRawPassword.clear();
 	}
 
@@ -589,8 +589,8 @@ public:
 	// of times during a single form open. m_resolvedLanguageCode is the
 	// pre-computed answer — refreshed only when one of the three changes.
 	// Inline + by-const-ref keeps the read at one field load with no logic.
-	const wxString& GetLanguageCode() const { return m_translateState.m_resolvedLanguageCode; }
-	void            SetLanguageCode(const wxString& code) {
+	const ibString& GetLanguageCode() const { return m_translateState.m_resolvedLanguageCode; }
+	void            SetLanguageCode(const ibString& code) {
 		m_translateState.m_languageCode = code;
 		m_translateState.Resolve();
 	}
@@ -736,14 +736,14 @@ public:
 	// Diagnostic string set by the registry thread on Rejected / AuthFailed
 	// transitions. Read after State() / Auth() changes to report the
 	// reason to producers. Returned by value to avoid exposing the mutex.
-	wxString Reason() const;
+	ibString Reason() const;
 
 	// Same string, set WITHOUT a state change — for a close that owes the
 	// user an explanation. An admin kick writes it here before Close(true);
 	// the frontend's force-exit listener shows it and stays silent when it
 	// is empty (an ordinary process shutdown force-closes too, and that one
 	// explains itself by the user having asked for it).
-	void SetReason(const wxString& reason);
+	void SetReason(const ibString& reason);
 
 	// Canonical "session this code is currently working on": the calling
 	// thread's own binding, else its base's fallback — the process's own
@@ -866,7 +866,7 @@ private:
 	friend class ibSessionParameterWriteWindow; // toggles m_sessionParametersOpen
 	friend class ibSessionTrustPause;  // Await clears both for the tasks it runs
 
-	wxString       m_id;
+	ibString       m_id;
 	ibSessionKind  m_kind;
 
 	// Registry-only API. Takes m_mtx, mutates the state machine, and
@@ -874,8 +874,8 @@ private:
 	// Call sites outside ibSessionRegistry's single-consumer thread are
 	// bugs by construction — that's why the friend declaration above is
 	// the only access path.
-	void Transition(ibSessionState next, const wxString& reason = wxEmptyString);
-	void TransitionAuth(ibAuthState   next, const wxString& reason = wxEmptyString);
+	void Transition(ibSessionState next, const ibString& reason = ibEmptyString);
+	void TransitionAuth(ibAuthState   next, const ibString& reason = ibEmptyString);
 
 	// Block the calling thread until the lifecycle state changes away
 	// from `from` (or timeout). Returns the new state on success, `from`
@@ -918,7 +918,7 @@ private:
 		m_translateState.m_userLanguageCode = info.m_strLanguageCode;
 		m_translateState.Resolve();
 	}
-	void SetSessionRawPassword(const wxString& pwd) { m_sessionRawPassword = pwd; }
+	void SetSessionRawPassword(const ibString& pwd) { m_sessionRawPassword = pwd; }
 
 public:
 	// Per-session debug state — where a stop of this session parks. MADE WITH THE SESSION: a designer
@@ -948,7 +948,7 @@ public:
 		// Per-session watch expressions (id -> source). Breakpoints
 		// stay process-level on ibDebuggerServer because module bytecode
 		// is shared across sessions.
-		std::map<unsigned long long, wxString> m_expressions;
+		std::map<unsigned long long, ibString> m_expressions;
 	};
 
 	// Read by debug-server connection threads, web HTTP handlers and ibProcUnit on script threads: it is
@@ -1031,7 +1031,7 @@ private:
 
 	// Set only by ibRoleHandlerScope, and only around OnAccessRead / OnAccessWrite.
 	// Null the rest of the time, including inside SetSessionParameters, which may ask.
-	const wxString* m_roleHandler = nullptr;
+	const ibString* m_roleHandler = nullptr;
 
 	// SESSION PARAMETERS — declared in metadata, filled once by the session module,
 	// read everywhere. Keyed by the parameter's NAME, which is what a script writes.
@@ -1040,7 +1040,7 @@ private:
 	// moment work under different organisations, and a process-wide store would let
 	// one of them answer for the other. Isolation here is structural, not a rule
 	// anybody has to keep.
-	std::map<wxString, ibValue> m_sessionParameters;
+	std::map<ibString, ibValue> m_sessionParameters;
 
 	// WRITABLE ONLY WHILE THE SESSION MODULE RUNS. Not "frozen afterwards" — closed
 	// by default, opened for the length of that one call and closed again:
@@ -1065,10 +1065,10 @@ public:
 	// Read one, by the name a script used. Answers an empty value for a name that
 	// was never declared — the caller sees Undefined, which is what an unset
 	// parameter is.
-	ibValue GetSessionParameter(const wxString& name) const;
+	ibValue GetSessionParameter(const ibString& name) const;
 	// Write one. Refused (raises) once the session module has returned — see the
 	// freeze note above.
-	void SetSessionParameter(const wxString& name, const ibValue& value);
+	void SetSessionParameter(const ibString& name, const ibValue& value);
 
 private:
 
@@ -1105,8 +1105,8 @@ private:
 	mutable std::mutex              m_mtx;
 	mutable std::condition_variable m_cv;
 
-	wxString m_activity;   // guarded by m_mtx; last-reported activity string
-	wxString m_reason;     // guarded by m_mtx; reject / auth-fail diagnostic
+	ibString m_activity;   // guarded by m_mtx; last-reported activity string
+	ibString m_reason;     // guarded by m_mtx; reject / auth-fail diagnostic
 
 	// Authoritative user identity for this session. Populated by InstallUser
 	// (registry's ProcessAttach for headless paths, the GUI login dialog
@@ -1116,7 +1116,7 @@ private:
 	// checks. m_sessionRawPassword caches the plain-text for Designer
 	// "Start debugging" — handed to spawned child processes so they can
 	// re-authenticate without prompting.
-	wxString                  m_sessionRawPassword;
+	ibString                  m_sessionRawPassword;
 	ibUserInfo 				  m_userInfo;
 
 	// Script-visible "working date" — see GetWorkDate/SetWorkDate.
@@ -1245,7 +1245,7 @@ private:
 // and may still ask. The name is copied so a temporary at the call survives the scope.
 class BACKEND_API ibRoleHandlerScope {
 public:
-	ibRoleHandlerScope(ibSession* session, const wxString& handler)
+	ibRoleHandlerScope(ibSession* session, const ibString& handler)
 		: m_session(session)
 		, m_name(handler)
 		, m_prev(session != nullptr ? session->m_roleHandler : nullptr)
@@ -1264,8 +1264,8 @@ public:
 
 private:
 	ibSession*       m_session;
-	wxString         m_name;
-	const wxString*  m_prev;
+	ibString         m_name;
+	const ibString*  m_prev;
 };
 
 // The write window SetSessionParameters opens around the one call that may

@@ -21,11 +21,11 @@ namespace {
 class FirebirdZoneRules : public ::testing::Test {
 protected:
 	std::shared_ptr<ibDatabaseLayerFirebird> layer;
-	wxString dbPath;
+	ibString dbPath;
 
 	void SetUp() override {
 		const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-		dbPath = wxFileName(wxStandardPaths::Get().GetTempDir(), wxString::Format(wxT("oes_fb_zones_%s_%lld.fdb"),
+		dbPath = wxFileName(wxStandardPaths::Get().GetTempDir(), ibString::Format(wxT("oes_fb_zones_%s_%lld.fdb"),
 			::testing::UnitTest::GetInstance()->current_test_info()->name(), (long long)now)).GetFullPath();
 		try {
 			layer = std::make_shared<ibDatabaseLayerFirebird>();
@@ -45,7 +45,7 @@ protected:
 	}
 
 	// The zone's offset from UTC, in hours, at a moment named in that zone.
-	int HoursAt(const wxString& moment) {
+	int HoursAt(const ibString& moment) {
 		return layer->GetSingleResultInt(wxT("SELECT EXTRACT(TIMEZONE_HOUR FROM TIMESTAMP '") + moment +
 			wxT("') FROM RDB$DATABASE"), 1);
 	}

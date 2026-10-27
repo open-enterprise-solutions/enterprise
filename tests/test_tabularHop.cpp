@@ -50,7 +50,7 @@ public:
 // A single row-relative hop returns the cell straight back (from == last hop).
 TEST(TabularHop, SingleHopReturnsCell) {
     MockTable t;
-    t.SetCell(21, ibValue(wxString(wxT("Widget"))));
+    t.SetCell(21, ibValue(ibString(wxT("Widget"))));
     ibDataViewItem row;    // the mock ignores the row handle
     ibValue out;
     EXPECT_TRUE(t.GetValueByPath(row, std::vector<ibSourceHop>{ {21} }, 0, out));
@@ -71,7 +71,7 @@ TEST(TabularHop, MissingColumnFails) {
 // proves the switch table -> ibSourceDataObject::ResolvePath (which refuses a non-source value mid-path).
 TEST(TabularHop, CannotDotIntoPrimitiveCell) {
     MockTable t;
-    t.SetCell(21, ibValue(wxString(wxT("Widget"))));   // a string cell — not a source
+    t.SetCell(21, ibValue(ibString(wxT("Widget"))));   // a string cell — not a source
     ibDataViewItem row;
     ibValue out;
     EXPECT_FALSE(t.GetValueByPath(row, std::vector<ibSourceHop>{ {21}, {22} }, 0, out));
@@ -90,8 +90,8 @@ TEST(TabularHop, OutOfRangeGuards) {
 // The walk can START at a non-zero index — the tablebox passes its own `prefix` so the tail is row-relative.
 TEST(TabularHop, StartsAtFromIndex) {
     MockTable t;
-    t.SetCell(21, ibValue(wxString(wxT("A"))));
-    t.SetCell(22, ibValue(wxString(wxT("B"))));
+    t.SetCell(21, ibValue(ibString(wxT("A"))));
+    t.SetCell(22, ibValue(ibString(wxT("B"))));
     ibDataViewItem row;
     ibValue out;
     // path = [prefix-hop, 22]; from = 1 -> reads column 22, ignores the prefix hop

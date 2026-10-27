@@ -18,11 +18,11 @@ class BACKEND_API ibVariantDataCommandSource : public wxVariantData {
 	// Only with no owner wired (a detached temp) does it fall back to the picker-set display.
 	wxString MakeString() const {
 		if (!m_commandDesc.IsOk())
-			return wxT("<not selected>");                        // nothing bound
-		wxString text;
+			return ibT("<not selected>");                        // nothing bound
+		ibString text;
 		if (m_owner != nullptr)
-			return m_owner->WalkCommand(m_commandDesc, &text) ? text : wxString(wxT("<not found>"));
-		return m_display.IsEmpty() ? wxString(wxT("<not selected>")) : m_display;   // no owner to walk -> cached picker name
+			return m_owner->WalkCommand(m_commandDesc, &text) ? text : ibString(ibT("<not found>"));
+		return m_display.IsEmpty() ? ibString(ibT("<not selected>")) : m_display;   // no owner to walk -> cached picker name
 	}
 
 public:
@@ -39,11 +39,11 @@ public:
 	void SetCommandDesc(const ibCommandDescription& desc) { m_commandDesc = desc; }
 
 	// The display name (set by the picker when a command is chosen) — kept so the inspector cell reads it back.
-	const wxString& GetDisplay() const { return m_display; }
-	void SetDisplay(const wxString& display) { m_display = display; }
+	const ibString& GetDisplay() const { return m_display; }
+	void SetDisplay(const ibString& display) { m_display = display; }
 
 	ibVariantDataCommandSource() : wxVariantData() {}
-	ibVariantDataCommandSource(const ibBackendCommandReceiver* owner, const ibCommandDescription& desc, const wxString& display = wxEmptyString)
+	ibVariantDataCommandSource(const ibBackendCommandReceiver* owner, const ibCommandDescription& desc, const ibString& display = ibEmptyString)
 		: wxVariantData(), m_owner(owner), m_commandDesc(desc), m_display(display) {}
 	ibVariantDataCommandSource(const ibVariantDataCommandSource& src)
 		: wxVariantData(), m_owner(src.m_owner), m_commandDesc(src.m_commandDesc), m_display(src.m_display) {}
@@ -60,13 +60,13 @@ public:
 #endif
 	virtual bool Write(wxString& str) const { str = MakeString(); return true; }
 
-	virtual wxString GetType() const { return wxT("ibVariantDataCommandSource"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataCommandSource"); }
 
 protected:
 
 	const ibBackendCommandReceiver* m_owner = nullptr;   // the button / bar item — WALKED to validate the binding (existence + name)
 	ibCommandDescription m_commandDesc;   // binding address: the command-hop path
-	wxString             m_display;       // picker-set display name (fallback only when no owner is wired)
+	ibString             m_display;       // picker-set display name (fallback only when no owner is wired)
 };
 
 #endif // !__COMMAND_SOURCE_DATA_VARIANT_H__

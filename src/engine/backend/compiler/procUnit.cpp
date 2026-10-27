@@ -444,7 +444,7 @@ inline void ResetByteCode() { auto* st = ibSession::GetPUState(); while (EndByte
 // below it gave every script call a 384-byte frame, seven saved registers and a stack-cookie check (the
 // disassembly, 2026-09-28) — for a message a correct script never reaches. Same shape as the raise
 // helpers above. Two reasons share it, each through its own name below.
-IB_NOINLINE void RaiseWithCallStack(ibProcUnitState* state, const wxString& reason)
+IB_NOINLINE void RaiseWithCallStack(ibProcUnitState* state, const ibString& reason)
 {
 	// ⚠ THE REPEAT IS THE WHOLE POINT, SO IT IS COUNTED AND NOT REPRINTED. A runaway is
 	// recursion, so the frame that ran away is BY DEFINITION on the stack hundreds of
@@ -467,9 +467,9 @@ IB_NOINLINE void RaiseWithCallStack(ibProcUnitState* state, const wxString& reas
 	const auto flush = [&strError, &previous, &repeats]() {
 		if (previous.IsEmpty())
 			return;
-		strError += wxT("\n") + previous;
+		strError += ibT("\n") + previous;
 		if (repeats > 1)
-			strError += ibString::Format(wxT(" x %ld"), repeats);
+			strError += ibString::Format(ibT(" x %ld"), repeats);
 	};
 
 	for (unsigned int i = 0; i < state->GetCountRunContext(); i++) {
@@ -481,7 +481,7 @@ IB_NOINLINE void RaiseWithCallStack(ibProcUnitState* state, const wxString& reas
 		// Same rule as the diagnostic's stack walk: a position outside its own bytecode prints as
 		// line 0 — the message about a runaway must not itself read past the array.
 		const long curLine = stackContext->m_lCurLine;
-		const ibString frame = ibString::Format(wxT("%s (#line %d)"),
+		const ibString frame = ibString::Format(ibT("%s (#line %d)"),
 			stackByteCode->m_strModuleName,
 			(curLine >= 0 && (size_t)curLine < stackByteCode->m_listCode.size())
 				? (int)stackByteCode->m_listCode[curLine].m_numLine + 1 : 0
@@ -502,7 +502,7 @@ IB_NOINLINE void RaiseWithCallStack(ibProcUnitState* state, const wxString& reas
 	// argument, and a frame carries names the author wrote — a per cent sign in one of them
 	// is a conversion specifier `FormatV` then reads a missing argument for. Same shape as
 	// the compile-error site in backend_exception.cpp; passed as an argument here too.
-	ibBackendCoreException::Error(wxT("%s"), reason + strError);
+	ibBackendCoreException::Error(ibT("%s"), reason + strError);
 }
 
 // The count a script sees (MAX_REC_COUNT).
@@ -1170,7 +1170,7 @@ IB_NOINLINE void ibProcUnit::ExecuteBody(ibRunContext* pContext, ibValue* pvarRe
 	// returned: a throw inside the handler is another frame on MSVC, and a chain of them overflows the slack.
 	std::exception_ptr propagate;
 	// Present when the core refused. Its text may be empty, so the text is not the sign.
-	std::optional<wxString> coreRefusal;
+	std::optional<ibString> coreRefusal;
 	const auto catchError = [&](const ibBackendException& err) -> bool {
 
 		const long trySize = tryList.size() - 1;
@@ -2007,7 +2007,7 @@ start_label:
 			//
 			// Read like every other operand in this switch — through ResolveRead, which knows the
 			// difference between a frame slot and a constant because the operand says which it is.
-			case OPER_RAISE_T: ibBackendCoreException::Error(wxT("%s"), cvariable1.GetString()); break;   // the script's text is DATA, not a format
+			case OPER_RAISE_T: ibBackendCoreException::Error(ibT("%s"), cvariable1.GetString()); break;   // the script's text is DATA, not a format
 			case OPER_RET:
 				if (index1 != DEF_VAR_NORET) {
 					if (pvarRetValue == nullptr)
@@ -2548,7 +2548,7 @@ start_label:
 
 	if (coreRefusal) {
 		try {
-			ibBackendCoreException::Error(wxT("%s"), *coreRefusal);
+			ibBackendCoreException::Error(ibT("%s"), *coreRefusal);
 		}
 		catch (const ibBackendException& err) {
 			if (catchError(err))
@@ -2617,10 +2617,10 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 		// bytecode (a background session does not run the main module), so this branch fired,
 		// dereferenced `GetParent()->m_pByteCode` and took the whole application down — with no
 		// error reported anywhere, because the reporting is what died.
-		const wxString parentOfCode = cByteCode.m_parent != nullptr
-			? cByteCode.m_parent->m_strModuleName : wxString(wxT("(none)"));
-		const wxString parentOfUnit = GetParent()->m_pByteCode != nullptr
-			? GetParent()->m_pByteCode->m_strModuleName : wxString(wxT("(nothing executed yet)"));
+		const ibString parentOfCode = cByteCode.m_parent != nullptr
+			? cByteCode.m_parent->m_strModuleName : ibString(ibT("(none)"));
+		const ibString parentOfUnit = GetParent()->m_pByteCode != nullptr
+			? GetParent()->m_pByteCode->m_strModuleName : ibString(ibT("(nothing executed yet)"));
 		m_pByteCode = nullptr;
 		ibBackendCoreException::Error(_("System error - compilation failed (#1)\nModule:%s\nParent1:%s\nParent2:%s"),
 			cByteCode.m_strModuleName, parentOfCode, parentOfUnit
@@ -3062,7 +3062,7 @@ bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunConte
 	// the result via ibValue::ToString; a string-typed ibValue with
 	// "<error: msg>" reads naturally.
 	auto reportFailure = [&pvarRetValue](const ibString& msg) {
-		pvarRetValue = ibValue(ibString(wxT("<error: ")) + msg + wxT(">"));
+		pvarRetValue = ibValue(ibString(ibT("<error: ")) + msg + ibT(">"));
 	};
 
 	// A SANDBOX IS NOT AN EXPRESSION, so it is neither looked up here nor kept below: the text is a
@@ -3075,7 +3075,7 @@ bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunConte
 
 	auto iterator = reusable
 		? std::find_if(pRunContext->m_listEval.begin(), pRunContext->m_listEval.end(),
-			[strExpression](const auto pair) {return stringUtils::CompareString(strExpression, pair.first); })
+			[strExpression](const auto pair) {return stringUtils::IsSameAs(strExpression, pair.first); })
 		: pRunContext->m_listEval.end();
 
 	std::shared_ptr<ibProcUnitEvaluate> runEvaluate = nullptr;

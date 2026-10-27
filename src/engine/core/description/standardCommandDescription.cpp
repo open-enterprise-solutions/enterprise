@@ -12,16 +12,16 @@ bool ibActionDescriptionMemory::ReadNode(const ibDataValue& value, ibStandardCom
 	const auto root = value.AsChild();
 	if (!root)
 		return false;
-	actionDesc.m_lAction = root->GetValue<std::int32_t>(wxT("Action"));
-	actionDesc.m_strAction = root->GetValue<wxString>(wxT("Name"));
+	actionDesc.m_lAction = root->GetValue<std::int32_t>(ibT("Action"));
+	actionDesc.m_strAction = root->GetValue<ibString>(ibT("Name"));
 	return true;
 }
 
 bool ibActionDescriptionMemory::WriteNode(ibDataValue& value, const ibStandardCommandDescription& actionDesc)
 {
 	auto root = std::make_shared<ibDataNode>();
-	root->SetValue(wxT("Action"), (std::int32_t)actionDesc.m_lAction);
-	root->SetValue(wxT("Name"),   actionDesc.m_strAction);
+	root->SetValue(ibT("Action"), (std::int32_t)actionDesc.m_lAction);
+	root->SetValue(ibT("Name"),   actionDesc.m_strAction);
 	value = ibDataValue::Child(root);
 	return true;
 }

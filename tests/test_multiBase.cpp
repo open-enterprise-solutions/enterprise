@@ -45,7 +45,7 @@ namespace {
 // connection has to be the same database — a clone of :memory: is empty.
 ibApplicationInstance* OpenBase(ibRunMode mode = ibRunMode::eFILE_MODE,
                                 std::size_t poolSize = 1,
-                                const wxString& database = wxT(":memory:"))
+                                const ibString& database = wxT(":memory:"))
 {
 	if (!ibApplicationInstance::CreateAppDataEnv(mode))
 		return nullptr;
@@ -61,7 +61,7 @@ ibApplicationInstance* OpenBase(ibRunMode mode = ibRunMode::eFILE_MODE,
 }
 
 // Does the table exist in the base this thread works for?
-bool HasTable(const wxString& table)
+bool HasTable(const ibString& table)
 {
 	return db_query != nullptr && db_query->TableExists(table);
 }
@@ -230,7 +230,7 @@ TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
 
 	// ListAll reads guid, name and fullName. A table of only name is not an
 	// empty list: that read fails, and a failed read is the refusal below.
-	const wxString emptyUserList = wxT(
+	const ibString emptyUserList = wxT(
 		"CREATE TABLE sys_user (guid TEXT, name TEXT, fullName TEXT)");
 
 	{
@@ -261,7 +261,7 @@ TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
 	// for sys_session. On the one-connection :memory: base above, the login's
 	// read then waits until the pool says it is exhausted and the door
 	// refuses. A file and a wider pool let that read see the empty list.
-	const wxString path = wxFileName::CreateTempFileName(wxT("oes-users"));
+	const ibString path = wxFileName::CreateTempFileName(wxT("oes-users"));
 	ASSERT_FALSE(path.IsEmpty());
 	ibApplicationInstance* const webBase = OpenBase(ibRunMode::eFILE_MODE, /*poolSize=*/4, path);
 	ASSERT_NE(webBase, nullptr);

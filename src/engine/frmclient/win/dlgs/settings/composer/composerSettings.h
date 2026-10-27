@@ -420,7 +420,7 @@ private:
 	// WHAT THE PARSER SAID about the query text as it stands, taken at the same moment the fields
 	// were. Half-typed text offers no fields YET and is not an error to shout about; this is what
 	// the Query tab's line shows when there IS something to say.
-	wxString m_queryFault;
+	ibString m_queryFault;
 	// ⭐⭐ WHOSE ROAD THIS IS — decided by the host at construction and never again: a window cannot
 	// become somebody else's halfway through. It records ONE fact — was a setting handed in — and it
 	// is asked for the things that differ between a reader and a designer: the variants pane, the

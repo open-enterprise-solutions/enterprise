@@ -20,7 +20,7 @@
 
 #include "frmclient/frmclient.h"
 
-// THE DESKTOP'S (frontend/win/dlgs/connectionDB.h) WHOLE. Testing the connection is a driver's, and the drivers are the
+// THE OLD DESKTOP'S, WHOLE. Testing the connection is a driver's, and the drivers are the
 // server's: ⚠ NOT HERE YET — no request carries it; the button says so.
 class FRMCLIENT_API ibDialogConnection : public wxDialog {
 	wxStaticText* m_staticTextServer;

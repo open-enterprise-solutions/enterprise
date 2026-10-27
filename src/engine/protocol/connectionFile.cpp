@@ -13,13 +13,13 @@ namespace {
 // (frmserver's forms and controls) must outlive every base, and an unloading at the process's end would run after the
 // statics it unregisters from (the 2026-10-07 exit crash, codeRunner). Null when it could not be loaded; `path` — where
 // it was looked for.
-wxDllType Library(wxString& path)
+wxDllType Library(ibString& path)
 {
 	// Beside the program. Inside enterprise-thin.app that is next to the bundle, where
 	// libfileserver.dylib is shipped — not Contents/MacOS/, which is only the binary.
-	path = ibProgramFolder() + wxFileName::GetPathSeparator()
-		+ wxDynamicLibrary::CanonicalizeName(wxT("fileserver"));
-	static const wxDllType s_library = [](const wxString& from) {
+	path = ibProgramFolder() + ibFILE_SEP_PATH
+		+ wxDynamicLibrary::CanonicalizeName(ibT("fileserver"));
+	static const wxDllType s_library = [](const ibString& from) {
 		wxLogNull quiet;   // a library not found is said by the caller, not by a dialog of wx's
 		wxDynamicLibrary library;
 		return library.Load(from) ? library.Detach() : wxDllType(nullptr);
@@ -29,28 +29,28 @@ wxDllType Library(wxString& path)
 
 } // namespace
 
-bool ibProtocolFileBase::Open(const ibString& request, wxString& error)
+bool ibProtocolFileBase::Open(const ibString& request, ibString& error)
 {
 	Close();
 
-	wxString path;
+	ibString path;
 	const wxDllType library = Library(path);
 	if (library == nullptr) {
-		error = wxString::Format(_("The file base library could not be loaded: %s"), path);
+		error = ibString::Format(_("The file base library could not be loaded: %s"), path);
 		return false;
 	}
 	const auto open = reinterpret_cast<decltype(&ibFileBaseOpen)>(
-		wxDynamicLibrary::RawGetSymbol(library, wxT("ibFileBaseOpen")));
+		wxDynamicLibrary::RawGetSymbol(library, ibT("ibFileBaseOpen")));
 	const auto call = reinterpret_cast<decltype(&ibFileBaseCall)>(
-		wxDynamicLibrary::RawGetSymbol(library, wxT("ibFileBaseCall")));
+		wxDynamicLibrary::RawGetSymbol(library, ibT("ibFileBaseCall")));
 	const auto listen = reinterpret_cast<decltype(&ibFileBaseListen)>(
-		wxDynamicLibrary::RawGetSymbol(library, wxT("ibFileBaseListen")));
+		wxDynamicLibrary::RawGetSymbol(library, ibT("ibFileBaseListen")));
 	const auto disconnect = reinterpret_cast<decltype(&ibFileBaseDisconnect)>(
-		wxDynamicLibrary::RawGetSymbol(library, wxT("ibFileBaseDisconnect")));
+		wxDynamicLibrary::RawGetSymbol(library, ibT("ibFileBaseDisconnect")));
 	const auto close = reinterpret_cast<decltype(&ibFileBaseClose)>(
-		wxDynamicLibrary::RawGetSymbol(library, wxT("ibFileBaseClose")));
+		wxDynamicLibrary::RawGetSymbol(library, ibT("ibFileBaseClose")));
 	if (open == nullptr || call == nullptr || listen == nullptr || disconnect == nullptr || close == nullptr) {
-		error = wxString::Format(_("%s is not the file base library this program was built with."), path);
+		error = ibString::Format(_("%s is not the file base library this program was built with."), path);
 		return false;
 	}
 
@@ -81,10 +81,10 @@ ibProtocolFileBase::~ibProtocolFileBase()
 }
 
 bool ibProtocolFileBase::Call(const ibMemoryBuffer& request, const void* connection, const ibString& address,
-	ibMemoryBuffer& answer, wxString& error) const
+	ibMemoryBuffer& answer, ibString& error) const
 {
 	if (m_base == nullptr || m_call == nullptr) {
-		error = wxT("no base is open");
+		error = ibT("no base is open");
 		return false;
 	}
 	return m_call(m_base, request, connection, address, answer, error);
@@ -107,18 +107,18 @@ namespace {
 // A request to the base, by this connection — the one door both connections send through; the packet the base gave
 // checked once, here.
 bool ExchangeWith(const ibProtocolFileBase& base, const void* connection, const ibMemoryBuffer& request,
-	ibProtocolNode& answer, ibProtocol::ibRefusal& refusal, wxString& error)
+	ibProtocolNode& answer, ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	ibMemoryBuffer packet;
 	if (!base.Call(request, connection, ibString(), packet, error)) {
 		refusal = ibProtocol::ibRefusal::Failed;
 		if (error.IsEmpty())
-			error = wxT("no base is open");
+			error = ibT("no base is open");
 		return false;
 	}
 	if (!ibProtocolNode::Read(packet, answer)) {
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the base's answer is not a packet");
+		error = ibT("the base's answer is not a packet");
 		return false;
 	}
 	return true;
@@ -148,7 +148,7 @@ public:
 	virtual ~ibProtocolConnectionFileChannel() { m_base->Disconnect(this); }
 
 	virtual bool Exchange(const ibMemoryBuffer& request, ibProtocolNode& answer,
-		ibProtocol::ibRefusal& refusal, wxString& error) override
+		ibProtocol::ibRefusal& refusal, ibString& error) override
 	{
 		return ExchangeWith(*m_base, this, request, answer, refusal, error);
 	}
@@ -163,7 +163,7 @@ private:
 
 } // namespace
 
-bool ibProtocolConnectionFile::Open(const ibString& request, wxString& error)
+bool ibProtocolConnectionFile::Open(const ibString& request, ibString& error)
 {
 	return m_base->Open(request, error);
 }
@@ -179,7 +179,7 @@ ibProtocolConnectionFile::~ibProtocolConnectionFile()
 }
 
 bool ibProtocolConnectionFile::Exchange(const ibMemoryBuffer& request, ibProtocolNode& answer,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	return ExchangeWith(*m_base, this, request, answer, refusal, error);
 }
@@ -189,7 +189,7 @@ void ibProtocolConnectionFile::Listen(std::function<void(const ibProtocolNode& s
 	ListenWith(*m_base, this, std::move(notified));
 }
 
-std::unique_ptr<ibProtocolConnection> ibProtocolConnectionFile::OpenChannel(wxString& /*error*/)
+std::unique_ptr<ibProtocolConnection> ibProtocolConnectionFile::OpenChannel(ibString& /*error*/)
 {
 	return std::make_unique<ibProtocolConnectionFileChannel>(m_base);
 }

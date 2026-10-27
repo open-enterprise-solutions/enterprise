@@ -6,7 +6,7 @@
 
 // Base property for "colour" — kept as the colour's text (`r,g,b`, ibColour's), as a font is kept as its own.
 class BACKEND_API ibPropertyColour : public ibProperty {
-	static wxVariant CreateVariantData(const ibColour& val) { return wxVariant(wxString(val.ToString())); }
+	static wxVariant CreateVariantData(const ibColour& val) { return wxVariant(val.ToString().wc_str()); }
 public:
 
 	ibColour GetValueAsColour() const {
@@ -15,22 +15,22 @@ public:
 		return colour;
 	}
 
-	wxString GetValueAsString() const { return m_propValue.GetString(); }
+	ibString GetValueAsString() const { return m_propValue.GetString(); }
 
 	void SetValue(const ibColour& val) { ibProperty::SetValue(CreateVariantData(val)); }
-	void SetValue(const wxString& val) { ibColour colour; colour.FromString(val); SetValue(colour); }
+	void SetValue(const ibString& val) { ibColour colour; colour.FromString(val); SetValue(colour); }
 
-	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const ibColour& c = ibColour())
+	ibPropertyColour(ibPropertyCategory* cat, const ibString& name, const ibColour& c = ibColour())
 		: ibProperty(cat, name, CreateVariantData(c))
 	{
 	}
 
-	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibColour& c = ibColour())
+	ibPropertyColour(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibColour& c = ibColour())
 		: ibProperty(cat, name, label, CreateVariantData(c))
 	{
 	}
 
-	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibColour& c = ibColour())
+	ibPropertyColour(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibColour& c = ibColour())
 		: ibProperty(cat, name, label, helpString, CreateVariantData(c))
 	{
 	}

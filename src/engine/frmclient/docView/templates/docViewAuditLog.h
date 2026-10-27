@@ -1,7 +1,7 @@
 #ifndef _FRMCLIENT_DOCVIEW_AUDIT_LOG_H__
 #define _FRMCLIENT_DOCVIEW_AUDIT_LOG_H__
 
-// Registration journal — the desktop's doc/view tab (frontend/docView/templates/docViewAuditLog.h), in a tab the
+// Registration journal — the old desktop's doc/view tab, in a tab the
 // server opened (the tab's Kind AuditLog). The journal is the server's: the reader fetches it by the tab, a row's
 // object is opened there.
 //

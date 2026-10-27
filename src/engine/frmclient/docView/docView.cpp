@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////////
-// Name:        frontend/docView/ibDocView.cpp
+// Name:        frmclient/docView/docView.cpp
 // Purpose:     OES Doc/View fork — copied from wx/src/common/docview.cpp,
 //              renamed wx*→ib*. Originally:
 //                Author:      Julian Smart
@@ -85,8 +85,8 @@
 // Used by the 5 OES overrides of inherited wx handlers that remain in this
 // file (OnFileSave / OnUpdateFileSave / OnUpdateFileSaveAs / SelectDocumentPath
 // / SelectDocumentType); all are cross-platform-safe. The metadata-aware
-// "wiring" (Find/Replace, OpenForm, meta-template registry) lives in the
-// desktop-only frontend/docView/docManager.cpp.
+// "wiring" (Find/Replace, OpenForm, meta-template registry) lives in
+// docManager.cpp.
 #include "frmclient/docView/docManager.h"   // ibFrontendDocTemplate
 #include "frmclient/win/dlgs/choiceTemplate.h"
 
@@ -913,7 +913,7 @@ wxPrintout *ibFrontendView::OnCreatePrintout()
 }
 #endif // wxUSE_PRINTING_ARCHITECTURE
 
-// ibFrontendDocTemplate implementation moved to frontend/docView/docManager.cpp
+// ibFrontendDocTemplate implementation moved to frmclient/docView/docManager.cpp
 // alongside its class declaration in docManager.h.
 
 // ----------------------------------------------------------------------------

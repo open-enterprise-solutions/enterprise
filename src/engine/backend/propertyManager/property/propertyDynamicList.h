@@ -30,17 +30,17 @@ public:
 	// degenerately: a main table, a query and the same filter / sort / grouping. So the settings are
 	// no longer "persisted by the owner": they are this property's cell, read and written by the one
 	// pair that reads and writes a composition anywhere.
-	ibPropertyDynamicList(ibPropertyCategory* cat, const wxString& name)
+	ibPropertyDynamicList(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyDynamicList(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyDynamicList(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyDynamicList(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyDynamicList(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}

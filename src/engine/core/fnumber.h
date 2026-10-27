@@ -6,7 +6,6 @@
 #include <iosfwd>
 #include <string>
 #include <vector>
-#include <wx/string.h>
 #include "core/memory/memoryBuffer.h"
 
 #include "core/core.h"  // CORE_API
@@ -81,7 +80,7 @@ public:
 	ibNumber(long long v) noexcept;
 	ibNumber(unsigned long long v) noexcept;
 	ibNumber(double v);
-	explicit ibNumber(const wxString& s);
+	explicit ibNumber(const ibString& s);
 	ibNumber(const ibNumber& o) noexcept;   // a heap-tier number is shared, not copied
 	ibNumber(ibNumber&& o) noexcept;
 	~ibNumber();
@@ -228,7 +227,7 @@ public:
 	// declining to invent more of it.
 	static constexpr int32_t kMaxDivFracDigits = 100;
 
-	wxString     ToString()  const;
+	ibString     ToString()  const;
 	std::wstring ToWString() const;
 	// …the same text, written into the engine's string — no wxString on the way.
 	void ToString(ibString& out) const;
@@ -236,13 +235,13 @@ public:
 	// Formatted decimal output. Pass field-by-field; defaults give the same
 	// result as the bare ToString() above. Defined below the class.
 	struct Format;
-	wxString ToString(const Format& fmt) const;
+	ibString ToString(const Format& fmt) const;
 
 	// …THE SAME TEXT, WRITTEN INTO `out` — the form a caller showing many values uses: one string reused
 	// row after row grows once, and an immediate-tier figure (every ordinary amount) is laid out on the
 	// stack, with no BigImpl, no vector and no temporary string. A report of a hundred thousand rows with a
 	// format on a column goes through here once per cell (docs/private/format-property.md).
-	void ToString(const Format& fmt, wxString& out) const;
+	void ToString(const Format& fmt, ibString& out) const;
 
 	// Rounding (round-half-away-from-zero).
 	ibNumber Round() const;          // to nearest integer
@@ -460,7 +459,7 @@ struct ibNumber::Format
 {
 	int    fracDigits   = -1;        // round to N decimal places (-1 = no rounding)
 	int    precision    = -1;        // cap total significant digits, trim trailing zeros (-1 = off)
-	ibChar decimalSep   = wxT('.');  // decimal separator
+	ibChar decimalSep   = ibT('.');  // decimal separator
 	ibChar groupSep     = 0;         // thousand-group separator (0 = no grouping)
 	int    groupSize    = 0;         // digits per group (0 = no grouping)
 	int    minIntDigits = 0;         // pad integer part with leading '0' to this width (0 = off)

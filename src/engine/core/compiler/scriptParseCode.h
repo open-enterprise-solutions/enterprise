@@ -47,15 +47,15 @@ enum ibContentType
 // the argument may be left out at all.
 struct ibModuleParam
 {
-	wxString m_name;
+	ibString m_name;
 	bool     m_byValue  = false;   // declared `Val` — copied in, so the caller sees no change
 	bool     m_optional = false;   // has a default, so it may be omitted
 };
 
 struct ibModuleElement
 {
-	wxString      m_name;            // element identifier (function / procedure / variable name)
-	wxString      m_shortDescription;  // object kind label (one-line tooltip)
+	ibString      m_name;            // element identifier (function / procedure / variable name)
+	ibString      m_shortDescription;  // object kind label (one-line tooltip)
 
 	int           m_imageIndex = 0;    // icon index in the autocomplete image list
 	int           m_lineStart  = -1;   // first source line where the element appears
@@ -71,7 +71,7 @@ struct ibModuleElement
 
 	int ParamCount() const { return (int)m_params.size(); }
 
-	wxString      m_moduleName;        // owning module name
+	ibString      m_moduleName;        // owning module name
 	ibContentType m_eType      = eEmpty;
 };
 
@@ -84,29 +84,29 @@ struct ibModuleElement
 // Optional parameters go in SQUARE BRACKETS because that is what this platform's own syntax
 // helper already does (`WriteJournalEvent(<String>, [<Marker>], [<Category>])`), and `Val` is
 // written where the declaration writes it. No types: the text does not state them.
-inline wxString ibModuleCallForm(const ibModuleElement& element)
+inline ibString ibModuleCallForm(const ibModuleElement& element)
 {
-	wxString form = element.m_name + wxT("(");
+	ibString form = element.m_name + ibT("(");
 
 	for (size_t index = 0; index < element.m_params.size(); ++index) {
 
 		const ibModuleParam& param = element.m_params[index];
 
 		if (index > 0)
-			form += wxT(", ");
+			form += ibT(", ");
 
 		if (param.m_optional)
-			form += wxT("[");
+			form += ibT("[");
 		if (param.m_byValue)
-			form += wxT("Val ");
+			form += ibT("Val ");
 
 		form += param.m_name;
 
 		if (param.m_optional)
-			form += wxT("]");
+			form += ibT("]");
 	}
 
-	return form + wxT(")");
+	return form + ibT(")");
 }
 
 class CORE_API ibParseCode : public ibTranslateCode
@@ -119,18 +119,18 @@ protected:
 	const ibLexem& PreviewGetLexem();
 	const ibLexem& GetLexem();
 	const ibLexem& ExpectLexem();
-	void           ExpectDelimiter(const wxUniChar& c);
+	void           ExpectDelimiter(const ibChar& c);
 
-	bool           IsNextDelimiter(const wxUniChar& c);
+	bool           IsNextDelimiter(const ibChar& c);
 	bool           IsNextKeyword(int keyword);
 	void           ExpectKeyword(int keyword);
-	wxString       ExpectIdentifier(bool strRealName = false);
+	ibString       ExpectIdentifier(bool strRealName = false);
 	ibLiteral      ExpectConstant();
 
 public:
 
 	explicit ibParseCode(short codeStyle);
-	bool ParseModule(const wxString& sModule);
+	bool ParseModule(const ibString& sModule);
 
 	// Module elements collected by ParseModule — list of every
 	// procedure / function / variable declaration found in the source.

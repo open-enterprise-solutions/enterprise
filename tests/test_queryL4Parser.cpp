@@ -19,7 +19,7 @@
 
 namespace {
 
-ibQuerySelectPtr Parse(const wxString& text)
+ibQuerySelectPtr Parse(const ibString& text)
 {
 	ibQueryParser parser;
 	return parser.Parse(text);
@@ -97,7 +97,7 @@ TEST(QueryL4Parser, OrderByTakesAnExpression)
 	EXPECT_FALSE(sel->m_orderBy[1].m_ascending);
 
 	// …and it survives the round trip, which is what the constructor reads back.
-	const wxString written = ibRenderQuery(*sel);
+	const ibString written = ibRenderQuery(*sel);
 	auto again = Parse(written);
 	ASSERT_TRUE(again != nullptr);
 	ASSERT_EQ(again->m_orderBy.size(), 2u);
@@ -371,7 +371,7 @@ TEST(QueryL4Parser, OntoNamesTheResult)
 	EXPECT_TRUE(sel->m_intoTemp.IsEmpty());
 
 	// Written where INTO is written, and rendered back to the same place.
-	const wxString text = ibRenderQuery(*sel);
+	const ibString text = ibRenderQuery(*sel);
 	EXPECT_TRUE(text.Contains(wxT("ONTO Sales")));
 	EXPECT_EQ(Parse(text)->m_ontoName, wxT("Sales"));
 }
@@ -579,17 +579,17 @@ TEST(QueryL4Parser, UnionAll_FlagPerBranch)
 namespace {
 
 // text -> AST -> text -> AST -> text; the last two must agree.
-void ExpectRoundTrip(const wxString& source)
+void ExpectRoundTrip(const ibString& source)
 {
 	ibQuerySelectPtr first = Parse(source);
 	ASSERT_NE(nullptr, first) << "source did not parse: " << source.ToStdString();
 
-	const wxString once = ibRenderQuery(*first);
+	const ibString once = ibRenderQuery(*first);
 
 	ibQuerySelectPtr second = Parse(once);
 	ASSERT_NE(nullptr, second) << "rendered text did not parse back:\n" << once.ToStdString();
 
-	const wxString twice = ibRenderQuery(*second);
+	const ibString twice = ibRenderQuery(*second);
 	EXPECT_EQ(once, twice)
 		<< "round trip is not stable\nfirst:\n" << once.ToStdString()
 		<< "\nsecond:\n" << twice.ToStdString();
@@ -744,20 +744,20 @@ TEST(QueryRender, ExpressionAloneRenders) {
 
 namespace {
 
-ibQueryPackage ParsePkg(const wxString& text)
+ibQueryPackage ParsePkg(const ibString& text)
 {
 	ibQueryParser parser;
 	return parser.ParsePackage(text);
 }
 
 // text -> package -> text -> package -> text; the last two must agree.
-void ExpectPackageRoundTrip(const wxString& source)
+void ExpectPackageRoundTrip(const ibString& source)
 {
 	const ibQueryPackage first = ParsePkg(source);
-	const wxString once = ibRenderQueryPackage(first);
+	const ibString once = ibRenderQueryPackage(first);
 
 	const ibQueryPackage second = ParsePkg(once);
-	const wxString twice = ibRenderQueryPackage(second);
+	const ibString twice = ibRenderQueryPackage(second);
 
 	EXPECT_EQ(once, twice)
 		<< "package round trip is not stable\nfirst:\n" << once.ToStdString()
@@ -920,16 +920,16 @@ TEST(QueryRender, IntoRoundTrips) {
 // grow a semicolon it was never written with. A trailing one typed by hand is still READ.
 TEST(QueryRender, PackageStatementsAreSemicolonSeparated)
 {
-	const wxString one = ibRenderQueryPackage(ParsePkg(wxT("SELECT Ref FROM Catalog.Products")));
+	const ibString one = ibRenderQueryPackage(ParsePkg(wxT("SELECT Ref FROM Catalog.Products")));
 	EXPECT_EQ(wxNOT_FOUND, one.Find(wxT(';')));
 
-	const wxString many = ibRenderQueryPackage(ParsePkg(
+	const ibString many = ibRenderQueryPackage(ParsePkg(
 		wxT("SELECT Ref INTO Tmp FROM Catalog.Products; SELECT Ref FROM Tmp")));
 	EXPECT_EQ(1u, many.Freq(wxT(';')));
 	EXPECT_FALSE(many.EndsWith(wxT(";")));
 
 	// A trailing ';' on the way IN is accepted and simply not written back out.
-	const wxString trailing = ibRenderQueryPackage(ParsePkg(wxT("SELECT Ref FROM Catalog.Products;")));
+	const ibString trailing = ibRenderQueryPackage(ParsePkg(wxT("SELECT Ref FROM Catalog.Products;")));
 	EXPECT_EQ(wxNOT_FOUND, trailing.Find(wxT(';')));
 
 	ExpectPackageRoundTrip(wxT("SELECT Ref INTO Tmp FROM Catalog.Products; SELECT Ref FROM Tmp"));
@@ -1256,7 +1256,7 @@ TEST(QueryL4Parser, PackageLinkRelatesTwoNamedSelections)
 	ASSERT_NE(link.m_on, nullptr);
 
 	// AND IT COMES BACK OUT THE WAY IT WENT IN — the same contract as everything else in this language.
-	const wxString written = ibRenderQueryPackage(package);
+	const ibString written = ibRenderQueryPackage(package);
 	// The layout is the renderer's (the head once, a line per relation); what this test pins is that
 	// the link is THERE and reads back as the same link.
 	EXPECT_TRUE(written.Contains(wxT("LINK Sales"))) << written.ToStdString();
@@ -1279,7 +1279,7 @@ TEST(QueryL4Parser, PackageLinkCarriesItsJoinKind)
 	EXPECT_EQ(package.m_links.front().m_kind, ibQueryJoinKindAst::Left);
 
 	// Rendered back with the same word, and read back as the same kind.
-	const wxString written = ibRenderQueryPackage(package);
+	const ibString written = ibRenderQueryPackage(package);
 	EXPECT_TRUE(written.Contains(wxT("LEFT JOIN Plan"))) << written.ToStdString();
 	EXPECT_EQ(ibQueryParser().ParsePackage(written).m_links.front().m_kind, ibQueryJoinKindAst::Left);
 }
@@ -1294,7 +1294,7 @@ TEST(QueryL4Parser, PackageLinkCarriesItsJoinKind)
 // third relates to the SECOND, and the package still joins as one.
 TEST(QueryL4Parser, PackageLinkChainsOffOneHead)
 {
-	const wxString text =
+	const ibString text =
 		wxT("SELECT Item ONTO Sales FROM Document.Sales;")
 		wxT("SELECT Item ONTO Plan FROM Document.Plan;")
 		wxT("SELECT Item ONTO Stock FROM AccumulationRegister.Stock;")
@@ -1322,7 +1322,7 @@ TEST(QueryL4Parser, PackageLinkChainsOffOneHead)
 	EXPECT_EQ(package.m_links[1].m_kind,  ibQueryJoinKindAst::Inner);
 
 	// ONE SECTION COMES BACK OUT — a chain is written as a chain, not as two LINKs off the same name.
-	const wxString written = ibRenderQueryPackage(package);
+	const ibString written = ibRenderQueryPackage(package);
 	EXPECT_TRUE(written.Contains(wxT("LINK Sales")))     << written.ToStdString();
 	EXPECT_TRUE(written.Contains(wxT("LEFT JOIN Plan"))) << written.ToStdString();
 	EXPECT_TRUE(written.Contains(wxT("JOIN Stock")))     << written.ToStdString();
@@ -1423,11 +1423,11 @@ TEST(QueryL4Parser, OverallFollowedBySplitRoundTrips)
 // into the language: a cell that shows less than it edits loses the rest on the first edit.
 TEST(QueryL4Parser, TotalsSplitRoundTrips)
 {
-	const wxString text = wxT("SELECT Item, Amount FROM Document.Sales "
+	const ibString text = wxT("SELECT Item, Amount FROM Document.Sales "
 	                          "TOTALS SUM(Amount) BY Item "
 	                          "SPLIT ByCharacteristic BY Characteristic "
 	                          "SPLIT BySeries BY Series");
-	const wxString written = ibRenderQuery(*Parse(text));
+	const ibString written = ibRenderQuery(*Parse(text));
 	EXPECT_TRUE(written.Contains(wxT("SPLIT"))) << written.ToStdString();
 	EXPECT_TRUE(written.Contains(wxT("SPLIT ByCharacteristic BY"))) << written.ToStdString();
 
@@ -1453,7 +1453,7 @@ TEST(QueryL4Parser, TotalsSplitWithoutAName)
 	EXPECT_EQ(sel->m_totalsSplits[0].m_levels[0].Head()->m_expr->m_path[0], wxT("Characteristic"));
 
 	// …and it round-trips as it was written, name absent and all.
-	const wxString written = ibRenderQuery(*sel);
+	const ibString written = ibRenderQuery(*sel);
 	EXPECT_TRUE(written.Contains(wxT("SPLIT BY"))) << written.ToStdString();
 	EXPECT_EQ(ibRenderQuery(*Parse(written)), written);
 }
@@ -1501,10 +1501,10 @@ TEST(QueryL4Parser, TotalsAggregateOverAQualifiedLevel)
 // answers a different question.
 TEST(QueryL4Parser, TotalsAggregateOverRoundTrips)
 {
-	const wxString source = wxT("SELECT Item, Warehouse, Amount FROM Document.Sales "
+	const ibString source = wxT("SELECT Item, Warehouse, Amount FROM Document.Sales "
 	                            "TOTALS SUM(Amount), SUM(Amount) OVER Item AS InItem "
 	                            "BY Item, Warehouse");
-	const wxString written = ibRenderQuery(*Parse(source));
+	const ibString written = ibRenderQuery(*Parse(source));
 	EXPECT_TRUE(written.Contains(wxT("OVER Item"))) << written.ToStdString();
 
 	auto again = Parse(written);
@@ -1588,7 +1588,7 @@ TEST(QueryRender, ATypeMadeIntoACastComesBackFromTheText)
 		ibQueryParser parser;
 		const ibQueryAstExprPtr cast = ibQueryMakeCast(parser.ParseExpression(wxT("T.Field")), type);
 		ASSERT_NE(cast, nullptr);
-		const wxString written = ibRenderQueryExpr(*cast);
+		const ibString written = ibRenderQueryExpr(*cast);
 		ibTypeDescription back;
 		ASSERT_TRUE(ibQueryCastType(*parser.ParseExpression(written), back)) << written.ToStdString();
 		EXPECT_TRUE(back.EqualType(type.GetFirstClsid(), type)) << written.ToStdString();
@@ -1618,7 +1618,7 @@ TEST(QueryL4Parser, RoleSaysWhatAFieldIsInABalance)
 	EXPECT_FALSE(p[7].m_roleSaid); EXPECT_EQ(p[7].m_alias, wxT("Role"));             // …aliased without AS too
 
 	// THE ROUND TRIP — written back and read again, every word and number where it was.
-	const wxString written = ibRenderQuery(*sel);
+	const ibString written = ibRenderQuery(*sel);
 	auto back = Parse(written);
 	ASSERT_EQ(back->m_projections.size(), p.size()) << written.ToStdString();
 	for (size_t i = 0; i < p.size(); ++i) {

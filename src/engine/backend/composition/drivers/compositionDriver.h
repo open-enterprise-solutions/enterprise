@@ -61,7 +61,7 @@ struct ibCompositionOutputInfo
 {
 	ibCompositionOutputKind                    m_kind = ibCompositionOutputKind::Grouping;
 	std::vector<ibQueryLowering::OutputColumn> m_schema;
-	wxString                                   m_name;   // what the output is called, when it is
+	ibString                                   m_name;   // what the output is called, when it is
 	// …and HOW MANY OUTPUTS THE RUN DRAWS, this one among them. A caption tells one block from the others,
 	// and a run of one has nothing to tell apart (ibSpreadsheetComposeDriver::WriteOutputCaption).
 	size_t                                     m_outputCount = 1;
@@ -78,14 +78,14 @@ struct ibCompositionOutputInfo
 	// FIELD a column stands for (ibCompositionDescription::TitleForPath), and a resource reaches its
 	// field through the path it aggregates — `COUNT(Number)` is titled by `Number`, function and all
 	// qualification left out of it (Max, 2026-08-26).
-	std::vector<wxString>                      m_titles;
+	std::vector<ibString>                      m_titles;
 
 	// …AND IT IS ASKED, not indexed into — a schema and a list beside it can always disagree about
 	// length, and the answer where they do is the column's own name.
-	wxString TitleOf(size_t column) const {
+	ibString TitleOf(size_t column) const {
 		if (column < m_titles.size() && !m_titles[column].IsEmpty())
 			return m_titles[column];
-		return column < m_schema.size() ? m_schema[column].m_name : wxString();
+		return column < m_schema.size() ? m_schema[column].m_name : ibString();
 	}
 
 	// ⭐⭐ AND THE FIELD ITSELF — the path each column is a reading of, one entry per schema column.
@@ -100,11 +100,11 @@ struct ibCompositionOutputInfo
 	// Empty where a column stands for no field of the composition — a projected column, or one whose
 	// level a user's own grouping replaced. Empty means "cannot say", and a reader treats it as a
 	// cell with nothing to follow rather than guessing a path out of the name.
-	std::vector<wxString>                      m_paths;
+	std::vector<ibString>                      m_paths;
 
 	// …ASKED, like the title, and for the same reason.
-	wxString PathOf(size_t column) const {
-		return column < m_paths.size() ? m_paths[column] : wxString();
+	ibString PathOf(size_t column) const {
+		return column < m_paths.size() ? m_paths[column] : ibString();
 	}
 
 	// ⭐ AND HOW IT IS SHOWN — the appearance of the field the column reads (ibAppearanceDescription), one
@@ -195,7 +195,7 @@ struct ibCompositionFont {
 	int         m_pointSize = 0;                   // 0 = not said
 	int         m_weight = 0;                      // numeric, 700 = bold; 0 = not said
 	int         m_style = 0;                       // an ibFontStyle; 0 = not said
-	wxString    m_face;                            // empty = not said
+	ibString    m_face;                            // empty = not said
 	bool        m_underlined = false;
 	bool        m_strikethrough = false;
 
@@ -210,7 +210,7 @@ struct ibCompositionFont {
 			said.m_weight = font.m_weight;
 		if (font.m_style != ordinary.m_style)
 			said.m_style = font.m_style;
-		if (!wxString(font.m_faceName).IsSameAs(ordinary.m_faceName, false))
+		if (!ibString(font.m_faceName).IsSameAs(ordinary.m_faceName, false))
 			said.m_face = font.m_faceName;
 		said.m_underlined = font.m_underlined && !ordinary.m_underlined;
 		said.m_strikethrough = font.m_strikethrough && !ordinary.m_strikethrough;
@@ -256,7 +256,7 @@ struct BACKEND_API ibCompositionAttr {
 	ibColour m_textColour;
 	ibCompositionFont m_font;                          // said part by part, over the cell's own (Over)
 	int      m_horizontalAlignment = wxALIGN_INVALID;   // wxALIGN_LEFT / wxALIGN_CENTER_HORIZONTAL / wxALIGN_RIGHT
-	std::optional<wxString> m_text;                    // what the cell says in place of its value — an empty one too
+	std::optional<ibString> m_text;                    // what the cell says in place of its value — an empty one too
 	// …else the Format its value is written in, instead of its column's — parsed once, when the rule was made ready
 	// (ibCompositionRulesOf), and shared by every cell it is laid on; the text a driver writes with it anyway.
 	std::shared_ptr<const ibFormatString> m_format;
@@ -284,7 +284,7 @@ struct BACKEND_API ibCompositionAttr {
 
 	// …AND WHAT A CELL SAYS UNDER IT — its Text where one is in force, else `value` in its Format. False where neither
 	// is: the cell says its value as its own column writes it (the driver's own format).
-	bool TextOf(const ibValue& value, wxString& text) const;
+	bool TextOf(const ibValue& value, ibString& text) const;
 };
 
 // …AS A DRIVER KEEPS A ROW OF THEM — the row's own and each column's under the id the reader files the column's value

@@ -60,7 +60,7 @@ void ibModuleTextView::OnDraw(ibDataNode& frame)
 }
 
 // ----------------------------------------------------------------------------
-// WHAT THE DESKTOP'S CODE EDITOR ASKED THE CONFIGURATION (frontend/win/editor/codeEditor/codeEditorLoader.cpp) — its
+// WHAT THE OLD DESKTOP'S CODE EDITOR ASKED THE CONFIGURATION (its codeEditorLoader.cpp) — its
 // loader's bodies, where the compiler and the configuration are: each a row {Kind, Name, Help} of the answer where the
 // desktop's appended a word to its dropdown. The text and the caret are the editor's as they are now (the request's).
 // ----------------------------------------------------------------------------
@@ -68,7 +68,7 @@ void ibModuleTextView::OnDraw(ibDataNode& frame)
 namespace {
 
 // One word of the dropdown — the desktop's m_ac.Append.
-void AppendName(ibDataNode& response, ibContentType kind, const wxString& name, const wxString& help)
+void AppendName(ibDataNode& response, ibContentType kind, const ibString& name, const ibString& help)
 {
 	ibDataNode& row = response.AddChild(0, 0);
 	row.SetValue(ibProtocol::ibView::ibModule::Kind, static_cast<std::int32_t>(kind));
@@ -92,7 +92,7 @@ void AddKeywordFromObject(ibDataNode& response, const ibValue& vObject)
 			// surface in autocomplete after a chain walk reaches a
 			// foreign object (`Catalogs.Catalog1.CreateElement().` …).
 			if (vObject.IsPropScoped(i)) continue;
-			AppendName(response, ibContentType::eVariable, vObject.GetPropName(i), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, vObject.GetPropName(i), ibEmptyString);
 		}
 		// ⭐ THE VALUE'S OWN SURFACE IS THE WHOLE ANSWER. A module's exports are already the tail of its
 		// member table (ExportThunk, bound in the descriptor's ctor) and a manager adds its manager
@@ -105,7 +105,7 @@ void AddKeywordFromObject(ibDataNode& response, const ibValue& vObject)
 
 // ⭐⭐ WHAT MAY BE WRITTEN HERE — the keywords, which are the language's own, and then every name in
 // scope, which is the COMPILER's answer (ibNamesAtCaret answers the keywords WITH the names).
-void LoadSysKeyword(ibDataNode& response, const wxString& text, unsigned int caret,
+void LoadSysKeyword(ibDataNode& response, const ibString& text, unsigned int caret,
 	const ibValueMetaObjectModuleBase* moduleObject)
 {
 	// The mode covers the whole answer, not just the value door: building the list compiles the
@@ -132,7 +132,7 @@ void LoadSysKeyword(ibDataNode& response, const wxString& text, unsigned int car
 
 // ⭐⭐ THE MEMBERS OF WHAT THE CARET STANDS AFTER. The value is COMPUTED — by the compiler, over the
 // instructions it emitted for this very text — and this side only asks the value what it offers.
-void LoadIntelliList(ibDataNode& response, const wxString& text, unsigned int caret,
+void LoadIntelliList(ibDataNode& response, const ibString& text, unsigned int caret,
 	const ibValueMetaObjectModuleBase* moduleObject)
 {
 	// Constructors run and methods on values already in hand are called, and every one of those
@@ -151,49 +151,49 @@ void LoadIntelliList(ibDataNode& response, const wxString& text, unsigned int ca
 // ⭐ WHICH CALLS HAVE NAMES TO OFFER — and the answer lives HERE, with the metadata that holds
 // them, not in the lexer. A `false` back means this one has nothing, and the caret is then in open
 // code like any other.
-bool LoadFromKeyWord(ibDataNode& response, const wxString& keyword, const ibValueMetaObjectModuleBase* moduleObject)
+bool LoadFromKeyWord(ibDataNode& response, const ibString& keyword, const ibValueMetaObjectModuleBase* moduleObject)
 {
-	if (stringUtils::CompareString(keyword, wxT("new"))) {
+	if (stringUtils::IsSameAs(keyword, ibT("new"))) {
 		for (auto class_obj : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_value))
-			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 	}
-	else if (stringUtils::CompareString(keyword, wxT("type")))
+	else if (stringUtils::IsSameAs(keyword, ibT("type")))
 	{
 		for (auto class_obj : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_primitive))
-			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 
 		for (auto class_obj : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_value))
-			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 
 		for (auto class_obj : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_control))
-			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 
 		for (auto class_obj : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_system))
-			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 
 		for (auto class_obj : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_enum))
-			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 
 		const ibMetaData* metaData = moduleObject->GetMetaData();
 		wxASSERT(metaData);
 
 		for (auto class_obj : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Object))
-			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 		for (auto class_obj : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
-			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 		for (auto class_obj : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Manager))
-			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 		for (auto class_obj : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Selection))
-			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 	}
-	else if (stringUtils::CompareString(keyword, wxT("showCommonForm"))
-		|| stringUtils::CompareString(keyword, wxT("getCommonForm")))
+	else if (stringUtils::IsSameAs(keyword, ibT("showCommonForm"))
+		|| stringUtils::IsSameAs(keyword, ibT("getCommonForm")))
 	{
 		const ibMetaData* metaData = moduleObject->GetMetaData();
 		wxASSERT(metaData);
 
 		for (const auto object : metaData->GetAnyArrayObject(g_metaCommonFormCLSID))
-			AppendName(response, ibContentType::eVariable, object->GetName(), wxEmptyString);
+			AppendName(response, ibContentType::eVariable, object->GetName(), ibEmptyString);
 	}
 	else {
 		return false;
@@ -204,7 +204,7 @@ bool LoadFromKeyWord(ibDataNode& response, const wxString& keyword, const ibValu
 
 // The desktop's LoadAutoComplete, its question by the place the caret stands in — read by a stream of the text in the
 // session's syntax, as the desktop's editor kept one (m_tc).
-void LoadAutoComplete(ibDataNode& response, const wxString& text, unsigned int caret,
+void LoadAutoComplete(ibDataNode& response, const ibString& text, unsigned int caret,
 	const ibValueMetaObjectModuleBase* moduleObject)
 {
 	ibTranslateCode stream(ibCompileCode::GetCodeStyle());
@@ -240,7 +240,7 @@ void LoadAutoComplete(ibDataNode& response, const wxString& text, unsigned int c
 // ⭐ THE CALL FORM OF WHAT IS BEING WRITTEN — the same two doors as the dropdown, asked for one
 // name instead of all of them. A member's help comes from the value that holds it; a written
 // function's from its declared parameters, which ibNamesAtCaret already builds as `m_signature`.
-wxString LoadCallTip(const wxString& text, unsigned int caret, const ibValueMetaObjectModuleBase* moduleObject)
+ibString LoadCallTip(const ibString& text, unsigned int caret, const ibValueMetaObjectModuleBase* moduleObject)
 {
 	ibTranslateCode stream(ibCompileCode::GetCodeStyle());
 	stream.SetLexemMode(ibLexemMode::Editing);
@@ -253,18 +253,18 @@ wxString LoadCallTip(const wxString& text, unsigned int caret, const ibValueMeta
 
 	const ibTranslateCode::ibCaretText at = stream.CaretAt(caret);
 	if (at.m_word.IsEmpty())
-		return wxEmptyString;
+		return ibEmptyString;
 
 	const ibBackendException::ibEvalModeScope answering(eval_complete);
 
-	wxString description;
+	ibString description;
 
 	switch (at.m_place) {
 
 	// `New <Class>` — the constructor's own help, which only the class can give.
 	case ibTranslateCode::ibCaretPlace::InKeyword: {
 
-		if (!stringUtils::CompareString(at.m_keyword, wxT("new")) || !ibValue::IsRegisterCtor(at.m_expression))
+		if (!stringUtils::IsSameAs(at.m_keyword, ibT("new")) || !ibValue::IsRegisterCtor(at.m_expression))
 			break;
 
 		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(at.m_expression);
@@ -299,7 +299,7 @@ wxString LoadCallTip(const wxString& text, unsigned int caret, const ibValueMeta
 			break;
 
 		for (const ibCaretName& name : names) {
-			if (name.m_callable && stringUtils::CompareString(name.m_name, at.m_word)) {
+			if (name.m_callable && stringUtils::IsSameAs(name.m_name, at.m_word)) {
 				description = name.m_signature;
 				break;
 			}
@@ -313,8 +313,8 @@ wxString LoadCallTip(const wxString& text, unsigned int caret, const ibValueMeta
 
 
 // ----------------------------------------------------------------------------
-// THE LINQ CONSTRUCTOR'S QUESTIONS (ibProtocol::ibView::ibModule::ibLinq) — the desktop's window asked them of the
-// compiler itself (frontend/win/dlgs/linqConstructor/linqConstructor.cpp); here they are its code, run where the
+// THE LINQ CONSTRUCTOR'S QUESTIONS (ibProtocol::ibView::ibModule::ibLinq) — the old desktop's window asked them of the
+// compiler itself; here they are its code, run where the
 // compiler is, and answered in one exchange per action of the person's.
 // ----------------------------------------------------------------------------
 
@@ -323,24 +323,24 @@ namespace linq = ibProtocol::ibView::ibModule::ibLinq;
 // The text a probe is appended to (the desktop's m_probeHead): the module up to the START of the anchor's line — the
 // statements above are finished, the one the block stands in may not be (`q = |`), and a probe glued onto half a
 // statement asks the walk about a sentence nobody wrote. Built here, so a probe crosses the wire without it.
-wxString LinqProbeHead(const wxString& text, unsigned int anchor)
+ibString LinqProbeHead(const ibString& text, unsigned int anchor)
 {
-	const int lineStart = text.Left(anchor).Find(wxT('\n'), /*fromEnd*/ true);
-	return lineStart == wxNOT_FOUND ? wxString() : text.Left(lineStart + 1);
+	const int lineStart = text.Left(anchor).Find(ibT('\n'), /*fromEnd*/ true);
+	return lineStart == wxNOT_FOUND ? ibString() : text.Left(lineStart + 1);
 }
 
 // The desktop's ibDialogLinqConstructor::Ask — AS A COMPLETION, like the dropdown: answering compiles the text and walks
 // it, values are made on the way, and a name not written yet is ordinary here rather than an error. One Values row,
 // named by the probe as asked, without the head.
-std::vector<wxString> WriteLinqProbe(ibDataNode& values, const wxString& probeHead, const wxString& probe,
+std::vector<ibString> WriteLinqProbe(ibDataNode& values, const ibString& probeHead, const ibString& probe,
 	const ibValueMetaObjectModuleBase* moduleObject)
 {
 	bool resolved = false;
-	wxString type;
-	std::vector<wxString> names;
+	ibString type;
+	std::vector<ibString> names;
 	{
 		const ibBackendException::ibEvalModeScope answering(eval_complete);
-		const wxString asked = probeHead + probe;
+		const ibString asked = probeHead + probe;
 		std::vector<ibCaretValue> found;
 		try {
 			if (ibValueAtCaret(asked, (unsigned int)asked.length(), moduleObject, found)) {
@@ -358,7 +358,7 @@ std::vector<wxString> WriteLinqProbe(ibDataNode& values, const wxString& probeHe
 						// The same filter the editor applies: a scope-local name belongs to its frame.
 						if (value.IsPropScoped(i))
 							continue;
-						const wxString name = value.GetPropName(i);
+						const ibString name = value.GetPropName(i);
 						if (std::find(names.begin(), names.end(), name) == names.end())
 							names.push_back(name);
 					}
@@ -378,32 +378,32 @@ std::vector<wxString> WriteLinqProbe(ibDataNode& values, const wxString& probeHe
 	if (!type.IsEmpty())
 		row.SetValue(linq::Type, type);
 	ibDataNode& written = row.Child(linq::Names);
-	for (const wxString& name : names)
+	for (const ibString& name : names)
 		written.AddChild(0, 0).SetValue(linq::Name, name);
 	return names;
 }
 
 // The probe the desktop's MembersOf builds — what follows `<expression>.` at the anchor's line.
-wxString LinqMembersProbe(const wxString& expression)
+ibString LinqMembersProbe(const ibString& expression)
 {
-	return wxT("linqProbe = ") + expression + wxT(".");
+	return ibT("linqProbe = ") + expression + ibT(".");
 }
 
 // The desktop's KindIcon rule: `Data.Catalogs` holds catalogs, and a catalog is what the type registry calls "Catalog"
 // (`ChartsOf...` into `ChartOf...`, a plural into its singular) — the picture of that class, by its id; none: empty.
-wxString LinqKindPicture(const wxString& section, const ibMetaData* metaData)
+ibString LinqKindPicture(const ibString& section, const ibMetaData* metaData)
 {
-	wxString kind = section;
-	if (kind.StartsWith(wxT("ChartsOf")))
-		kind = wxT("ChartOf") + kind.Mid(8);
-	else if (kind.EndsWith(wxT("s")))
+	ibString kind = section;
+	if (kind.StartsWith(ibT("ChartsOf")))
+		kind = ibT("ChartOf") + kind.Mid(8);
+	else if (kind.EndsWith(ibT("s")))
 		kind.RemoveLast();
 	return ibKindPicture(kind, metaData);
 }
 
 // Open — the desktop's constructor before its window is drawn: the query the caret stands in, where the block will
 // stand, what is visible there, and what each of those and `Data` hold. Returns where the block will stand.
-unsigned int WriteLinqOpen(ibDataNode& response, const wxString& text, unsigned int caret,
+unsigned int WriteLinqOpen(ibDataNode& response, const ibString& text, unsigned int caret,
 	const ibValueMetaObjectModuleBase* moduleObject)
 {
 	const ibMetaData* const metaData = moduleObject->GetMetaData();
@@ -429,25 +429,25 @@ unsigned int WriteLinqOpen(ibDataNode& response, const wxString& text, unsigned 
 		if (here != nullptr) {
 			// Where the query ends is the lexer's to say (the window reads it from here as the desktop's did); where it
 			// starts, without the whitespace before it, is where the names are asked.
-			const wxString rest = text.Mid(here->m_textFrom);
+			const ibString rest = text.Mid(here->m_textFrom);
 			ibLinqBlock opened(ibCompileCode::GetCodeStyle());
-			wxString refusal;
+			ibString refusal;
 			size_t consumed = 0;
 			response.Child(linq::Query).SetValue(linq::From, static_cast<std::int32_t>(here->m_textFrom));
 			if (ibLinqBlock::Parse(rest, opened, refusal, &consumed)) {
-				const wxString read = rest.Left(consumed);
-				const wxString trimmedLeft = wxString(read).Trim(false);
+				const ibString read = rest.Left(consumed);
+				const ibString trimmedLeft = ibString(read).Trim(false);
 				anchor = here->m_textFrom + (unsigned int)(read.length() - trimmedLeft.length());
 			}
 		}
 	}
 	response.SetValue(linq::Anchor, static_cast<std::int32_t>(anchor));
 
-	const wxString probeHead = LinqProbeHead(text, anchor);
+	const ibString probeHead = LinqProbeHead(text, anchor);
 
 	// WHAT IS VISIBLE WHERE THE BLOCK STANDS — the module's variables, the procedure's locals and parameters, the
 	// object's own attributes and tabular sections.
-	std::vector<wxString> variables;
+	std::vector<ibString> variables;
 	{
 		const ibBackendException::ibEvalModeScope answering(eval_complete);
 		std::vector<ibCaretName> names;
@@ -466,20 +466,20 @@ unsigned int WriteLinqOpen(ibDataNode& response, const wxString& text, unsigned 
 		}
 	}
 	ibDataNode& names = response.Child(linq::Names);
-	for (const wxString& name : variables)
+	for (const ibString& name : variables)
 		names.AddChild(0, 0).SetValue(linq::Name, name);
 
 	// …and what each holds, and `Data`'s sections — asked once for every tree, as the desktop's did.
 	ibDataNode& values = response.Child(linq::Values);
-	for (const wxString& name : variables)
+	for (const ibString& name : variables)
 		WriteLinqProbe(values, probeHead, LinqMembersProbe(name), moduleObject);
-	const std::vector<wxString> sections = WriteLinqProbe(values, probeHead, LinqMembersProbe(wxT("Data")), moduleObject);
+	const std::vector<ibString> sections = WriteLinqProbe(values, probeHead, LinqMembersProbe(ibT("Data")), moduleObject);
 
 	ibDataNode& kinds = response.Child(linq::Kinds);
-	for (const wxString& section : sections) {
+	for (const ibString& section : sections) {
 		ibDataNode& kind = kinds.AddChild(0, 0);
 		kind.SetValue(linq::Name, section);
-		const wxString picture = LinqKindPicture(section, metaData);
+		const ibString picture = LinqKindPicture(section, metaData);
 		if (!picture.IsEmpty())
 			kind.SetValue(linq::Picture, picture);
 	}
@@ -488,11 +488,11 @@ unsigned int WriteLinqOpen(ibDataNode& response, const wxString& text, unsigned 
 
 // Probes — each asked at its end, after `probeHead`; a Deep one's names asked too, its text with `<name>.` after it
 // (the desktop's MembersOf of `<expression>.<name>`, which AddPlace asked one by one).
-void WriteLinqProbes(ibDataNode& response, const ibDataNode& request, const wxString& probeHead,
+void WriteLinqProbes(ibDataNode& response, const ibDataNode& request, const ibString& probeHead,
 	const ibValueMetaObjectModuleBase* moduleObject)
 {
 	const auto texts = [&request](const char* key) {
-		std::vector<wxString> out;
+		std::vector<ibString> out;
 		if (const auto listed = request.FindField(key)) {
 			if (listed->Kind() == ibDataKind::Array)
 				for (const ibDataValue& one : listed->AsArray())
@@ -500,23 +500,23 @@ void WriteLinqProbes(ibDataNode& response, const ibDataNode& request, const wxSt
 		}
 		return out;
 	};
-	const std::vector<wxString> probes = texts(linq::Probes);
-	const std::vector<wxString> deep = texts(linq::Deep);
+	const std::vector<ibString> probes = texts(linq::Probes);
+	const std::vector<ibString> deep = texts(linq::Deep);
 	if (probes.empty())
 		return;
 
 	ibDataNode& values = response.Child(linq::Values);
-	for (const wxString& probe : probes) {
-		const std::vector<wxString> names = WriteLinqProbe(values, probeHead, probe, moduleObject);
+	for (const ibString& probe : probes) {
+		const std::vector<ibString> names = WriteLinqProbe(values, probeHead, probe, moduleObject);
 		if (std::find(deep.begin(), deep.end(), probe) == deep.end())
 			continue;
-		for (const wxString& name : names)
-			WriteLinqProbe(values, probeHead, probe + name + wxT("."), moduleObject);
+		for (const ibString& name : names)
+			WriteLinqProbe(values, probeHead, probe + name + ibT("."), moduleObject);
 	}
 }
 
 // Verdict — the desktop's ShowResult: the compiler reads the block where it will stand and says what it understood.
-void WriteLinqVerdict(ibDataNode& response, const wxString& text, unsigned int anchor,
+void WriteLinqVerdict(ibDataNode& response, const ibString& text, unsigned int anchor,
 	const ibValueMetaObjectModuleBase* moduleObject)
 {
 	std::vector<ibQueryOutline> outlines;
@@ -554,7 +554,7 @@ void WriteLinqVerdict(ibDataNode& response, const wxString& text, unsigned int a
 		}
 	}
 	ibDataNode& columns = written.Child(linq::Columns);
-	for (const wxString& column : read->m_columns)
+	for (const ibString& column : read->m_columns)
 		columns.AddChild(0, 0).SetValue(linq::Name, column);
 }
 
@@ -575,7 +575,7 @@ bool ibModuleTextView::Fetch(const ibDataNode& request, ibDataNode& response)
 	    == ibProtocol::ibView::ibComposer::ibRequest::Expand)
 		return ibFetchComposerRequest(request, response, creator->GetMetaData());
 
-	const wxString text = request.GetValue<wxString>(ibProtocol::ibView::ibModule::Text);
+	const ibString text = request.GetValue<ibString>(ibProtocol::ibView::ibModule::Text);
 	const unsigned int caret = static_cast<unsigned int>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibModule::Position));
 
 	switch (static_cast<ibProtocol::ibView::ibModule::ibRequest>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibModule::Kind))) {
@@ -600,10 +600,10 @@ bool ibModuleTextView::Fetch(const ibDataNode& request, ibDataNode& response)
 		// The handlers the module may have (the desktop's procedures dialog offered those not written yet) — their
 		// parameters as a template writes them.
 		for (unsigned int idx = 0; idx < creator->GetDefaultProcedureCount(); idx++) {
-			wxString procArgs;
-			for (const wxString& arg : creator->GetDefaultProcedureArgs(idx)) {
+			ibString procArgs;
+			for (const ibString& arg : creator->GetDefaultProcedureArgs(idx)) {
 				if (!procArgs.IsEmpty())
-					procArgs += wxT(", ");
+					procArgs += ibT(", ");
 				procArgs += arg;
 			}
 			ibDataNode& row = response.AddChild(0, 0);
@@ -644,7 +644,7 @@ bool ibModuleTextView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 	case ibProtocol::ibEvent::ibKind::Change:
 		// Where the desktop's editor wrote on save (ibCodeEditorDesigner::SaveModule) — the metaobject's text — and the
 		// configuration modified (ibMetaDocument::Modify).
-		creator->SetModuleText(args.GetValue<wxString>(ibProtocol::ibView::ibModule::Text));
+		creator->SetModuleText(args.GetValue<ibString>(ibProtocol::ibView::ibModule::Text));
 		document->Modify(true);
 		return true;
 	default:

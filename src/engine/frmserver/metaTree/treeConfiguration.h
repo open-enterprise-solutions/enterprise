@@ -46,7 +46,7 @@ public:
 protected:
 
 	// A clsid as a row carries it — a decimal: sixty-four bits are past what a JSON number keeps on the far side.
-	static wxString ClsidText(const ibClassID& clsid);
+	static ibString ClsidText(const ibClassID& clsid);
 
 	// Drawn for `frame`, whose client it shows to.
 	explicit ibMetaTreeBase(ibClientFrame* frame);
@@ -67,7 +67,7 @@ protected:
 
 	// THE THREE WAYS A ROW IS MADE — a group row for a metatype, a group row that IS a metaobject (a table shows its
 	// columns under itself), and a plain object row; and a command, with its sub-commands under it.
-	ibDataNode& AppendGroupItem(ibDataNode& parent, const ibClassID& clsid, const wxString& name);
+	ibDataNode& AppendGroupItem(ibDataNode& parent, const ibClassID& clsid, const ibString& name);
 	ibDataNode& AppendGroupItem(ibDataNode& parent, const ibClassID& clsid, ibValueMetaObject* metaObject);
 	ibDataNode& AppendItem(ibDataNode& parent, ibValueMetaObject* metaObject);
 	void AppendCommandNode(ibDataNode& parent, ibValueMetaObject* command);
@@ -128,11 +128,11 @@ private:
 
 	// One group of an object, its rows; tables, each a group of its columns; commands, nesting.
 	template <typename TArray>
-	void AppendObjectGroup(ibDataNode& parent, const ibClassID& groupClsid, const wxString& label, const TArray& objects);
+	void AppendObjectGroup(ibDataNode& parent, const ibClassID& groupClsid, const ibString& label, const TArray& objects);
 	template <typename TArray>
-	void AppendTableGroup(ibDataNode& parent, const ibClassID& tableClsid, const wxString& label, const TArray& tables);
+	void AppendTableGroup(ibDataNode& parent, const ibClassID& tableClsid, const ibString& label, const TArray& tables);
 	template <typename TArray>
-	void AppendCommandGroup(ibDataNode& parent, const wxString& label, const TArray& commands);
+	void AppendCommandGroup(ibDataNode& parent, const ibString& label, const TArray& commands);
 
 	// IS THIS A TABLE, and what are its columns.
 	bool TableColumns(ibValueMetaObject* table, ibClassID& columnClsid, std::vector<ibValueMetaObject*>& columns) const;

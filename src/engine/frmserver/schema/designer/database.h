@@ -22,7 +22,7 @@ public:
 	// file of the session's, taken down where the person chooses; Clear — asked first. Each the desktop handler's work,
 	// said to the person as it said it.
 	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
-		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const override;
 };
 
 #endif

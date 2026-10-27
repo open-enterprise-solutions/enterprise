@@ -59,12 +59,12 @@ if(APPLE)
     target_link_libraries(core PRIVATE "-framework Security")
 endif()
 
-# CORE_API resolves to dllexport only when CORE_EXPORTS is defined (core.h) — frontend's rule.
+# CORE_API resolves to dllexport only when CORE_EXPORTS is defined (coreApi.h).
 if(WIN32)
     target_compile_definitions(core PRIVATE CORE_EXPORTS)
 endif()
 
-# wx::base PUBLIC: the core's headers hand wxString across (ibString's boundary, a guid's text).
+# wx::base PUBLIC: the core's headers hand wx types across - ibString's boundary (fstring.h), the tabular model's wxVariant.
 target_link_libraries(core
     PUBLIC
         wx::base
@@ -74,7 +74,7 @@ target_link_libraries(core
 find_package(Threads REQUIRED)
 target_link_libraries(core PRIVATE Threads::Threads)
 
-# guid.cpp picks its generator by toolkit: Windows -> CoCreateGuid, macOS -> CFUUID
+# guid.cpp picks its generator by system: Windows -> CoCreateGuid, macOS -> CFUUID
 # (CoreFoundation), everything else -> libuuid's uuid_generate. Only the last one is a
 # separate library, and only on non-Apple UNIX; Apple's CFUUID rides in CoreFoundation.
 if(UNIX)

@@ -32,9 +32,9 @@ bool ibBackendPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibPic
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibBackendPicture::LoadFromFile(const wxString& strFileName, ibExternalPictureDescription& pictureDesc)
+bool ibBackendPicture::LoadFromFile(const ibString& strFileName, ibExternalPictureDescription& pictureDesc)
 {
-	const wxFileName filename = strFileName;
+	const wxFileName filename(strFileName);
 	if (!filename.FileExists())
 		return false;
 
@@ -57,7 +57,7 @@ bool ibBackendPicture::LoadFromFile(const wxString& strFileName, ibExternalPictu
 	return true;
 }
 
-bool ibBackendPicture::LoadFromFile(const wxString& strFileName, ibPictureDescription& pictureDesc)
+bool ibBackendPicture::LoadFromFile(const ibString& strFileName, ibPictureDescription& pictureDesc)
 {
 	if (ibBackendPicture::LoadFromFile(strFileName, pictureDesc.m_img_data)) {
 		pictureDesc.m_type = ibPictureType::eFromFile;
@@ -152,12 +152,12 @@ ibDataValue ibBackendPicture::SendPicture(const ibPictureDescription& pictureDes
 		metaData != nullptr ? FindConfigurationPicture(*metaData, pictureDesc.m_meta_guid) : nullptr;
 	if (picture == nullptr)
 		return ibDataValue();
-	return ibDataValue::String(pictureDesc.m_meta_guid.str() + wxT('#') + picture->GetValueAsVersion().str());
+	return ibDataValue::String(pictureDesc.m_meta_guid.str() + ibT('#') + picture->GetValueAsVersion().str());
 }
 
 ibString ibBackendPicture::SendPicture(const ibPictureID& id)
 {
-	return id != 0 ? ibString::Format(wxT("%llu"), static_cast<unsigned long long>(id)) : ibString();
+	return id != 0 ? ibString::Format(ibT("%llu"), static_cast<unsigned long long>(id)) : ibString();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////

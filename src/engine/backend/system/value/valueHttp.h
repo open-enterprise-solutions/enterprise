@@ -77,18 +77,18 @@ public:
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 	// The same for a caller in C++ (and for the tests).
-	const wxString& ResourceAddress() const { return m_resource; }
-	void SetResourceAddress(const wxString& resource);      // "" is "/"; raises on what cannot stand in a request line
+	const ibString& ResourceAddress() const { return m_resource; }
+	void SetResourceAddress(const ibString& resource);      // "" is "/"; raises on what cannot stand in a request line
 	const ibValueStructure& Headers() const { return *m_headers; }
 	void SetHeaders(const ibValue& headers);                 // a Structure, or raises
 	// Two names, not one overloaded: a string literal converts to `const void*` as readily as to a wxString, and
 	// an overload pair would leave that to the compiler to guess (portability.md, section 1).
-	void SetBodyText(const wxString& text, ibTextEncoding encoding);
+	void SetBodyText(const ibString& text, ibTextEncoding encoding);
 	void SetBodyBytes(const void* bytes, size_t length);
 	const std::string& Body() const { return m_body; }
 
 private:
-	wxString                     m_resource;
+	ibString                     m_resource;
 	ibValuePtr<ibValueStructure> m_headers;
 	std::string                  m_body;                    // bytes, as they go out
 };
@@ -119,7 +119,7 @@ public:
 	int StatusCode() const { return m_status; }
 	const ibValueStructure& Headers() const { return *m_headers; }
 	const std::string& Body() const { return m_body; }
-	wxString BodyAsString(ibTextEncoding encoding) const;    // raises when the bytes are not text in it
+	ibString BodyAsString(ibTextEncoding encoding) const;    // raises when the bytes are not text in it
 
 private:
 	int                          m_status = 0;
@@ -161,7 +161,7 @@ public:
 
 	// The same door for a caller in C++ (and for the tests). Send raises when there is no answer. A port that
 	// was not given (portGiven = false) is 80, or 443 once a secure connection is set.
-	void Open(const wxString& host, int port, const wxString& user, const wxString& password, int timeoutSeconds, bool portGiven = true);
+	void Open(const ibString& host, int port, const ibString& user, const ibString& password, int timeoutSeconds, bool portGiven = true);
 	void SetTimeout(int seconds);
 	void SetSecureConnection(const ibValue& value);          // a SecureConnection, or Undefined for plain http://; or raises
 	const ibValueSecureConnection* Secure() const { return m_secure; }
@@ -173,7 +173,7 @@ private:
 	std::unique_ptr<ibTransport> m_transport;                // made on the first request, dropped on any failure
 	                                                         // and whenever a setting it was built from changes
 
-	wxString m_host, m_user, m_password;
+	ibString m_host, m_user, m_password;
 	int      m_port = 80;
 	bool     m_portGiven = true;
 	int      m_timeout = 30;

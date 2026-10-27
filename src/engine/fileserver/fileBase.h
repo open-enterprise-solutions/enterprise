@@ -32,15 +32,15 @@ extern "C" {
 
 // `request` — a JSON object saying where the base lives, as ibFileInstanceRequest does: Directory (a Firebird base's
 // folder), or Server, Port, User, Password, Database (PostgreSQL); Name, Locale; Create (true — made there when there
-// is none yet, as designer.exe made it); Debug (true — the engine's debug server comes up, as enterprise.exe's
+// is none yet, as the designer makes it); Debug (true — the engine's debug server comes up, as enterprise-thin.exe's
 // `--debug`). Null when it did not open, and why in `error`.
-FILESERVER_API ibFileBase* ibFileBaseOpen(const ibString& request, wxString& error);
+FILESERVER_API ibFileBase* ibFileBaseOpen(const ibString& request, ibString& error);
 
 // One request to the base's clients, and its answer — packets (empty: a notification, answered with none).
 // `connection` and `address` — as ibClientHost::Call takes them: the connection it came by (null — none, a request on
 // its own: an HTTP POST) and the computer it comes from (empty — this one).
 FILESERVER_API bool ibFileBaseCall(ibFileBase* base, const ibMemoryBuffer& request, const void* connection,
-	const ibString& address, ibMemoryBuffer& answer, wxString& error);
+	const ibString& address, ibMemoryBuffer& answer, ibString& error);
 
 // How a connection is told something — a notification of the base's (`changed {Client}`: a client's frame changed by
 // itself), a packet handed to `notified` on whichever thread of the base's said it; empty — told nothing.

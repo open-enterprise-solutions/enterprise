@@ -20,7 +20,7 @@ class CORE_API ibLiteral : public ibAnyValue {
 public:
 
 	ibLiteral() = default;
-	ibLiteral(const wxString& text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
+	ibLiteral(const ibString& text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
 	ibLiteral(const ibChar* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
 	// A narrow literal is a text too — without this one `ibLiteral("x")` is the flag TRUE (pointer-to-bool
 	// beats the conversion to wxString).
@@ -46,10 +46,10 @@ public:
 	virtual ibString GetString() const override;
 
 	// READ FROM THE TEXT THAT SPELLS IT — the engine's: false when the text is not one.
-	bool SetBoolean(const wxString& text);
-	bool SetNumber(const wxString& text);
-	bool SetDate(const wxString& text);
-	bool SetString(const wxString& text);
+	bool SetBoolean(const ibString& text);
+	bool SetNumber(const ibString& text);
+	bool SetDate(const ibString& text);
+	bool SetString(const ibString& text);
 
 	virtual void IncrRef() override { m_refCount++; }
 	virtual void DecrRef() override { if (--m_refCount == 0) delete this; }
@@ -57,7 +57,7 @@ public:
 protected:
 
 	ibValueTypes m_typeClass = ibValueTypes::TYPE_EMPTY;
-	wxString     m_text;            // the text, or how the value reads
+	ibString     m_text;            // the text, or how the value reads
 	long         m_number = 0;
 	ibNumber     m_numeric;
 	ibDateTime   m_date;

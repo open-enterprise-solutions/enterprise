@@ -179,7 +179,7 @@ void RowOes(const char* name, double oes, const char* unit, double oesWallNs = 0
 // NAMES ITS FAILURE. A benchmark that will not compile printed "Actual: false"
 // and nothing else — which is how DISABLED_LinqJoin sat red in CI while the
 // numbers around it were read as fine. The compiler knows why; keep the message.
-::testing::AssertionResult Build(ibCompileCode& cc, const wxString& src) {
+::testing::AssertionResult Build(ibCompileCode& cc, const ibString& src) {
     try {
         if (cc.Compile(src))
             return ::testing::AssertionSuccess();
@@ -277,7 +277,7 @@ TEST(RuntimeBench, DISABLED_Recursion) {
 // `ibSession::Current()` is timed directly — a frame asks for it.
 namespace {
 
-wxString CallCostModule() {
+ibString CallCostModule() {
     return
         wxT("Procedure Empty() Public\n")
         wxT("EndProcedure\n")
@@ -326,7 +326,7 @@ TEST(RuntimeBench, DISABLED_CallCost) {
     ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
 
     // The same module behind a hundred procedures declared first.
-    wxString padded;
+    ibString padded;
     for (int k = 0; k < 100; ++k)
         padded << wxT("Procedure Pad") << k << wxT("() Public\nEndProcedure\n");
     padded << CallCostModule();
@@ -378,7 +378,7 @@ struct SessionBench : ::testing::Test {
         }
         if (ibApplicationInstance::GetSessionRegistry() == nullptr)
             GTEST_SKIP() << "no session registry after CreateAppDataEnv";
-        m_session = std::make_shared<ibSession>(wxString(wxT("bench")), ibSessionKind::Enterprise);
+        m_session = std::make_shared<ibSession>(ibString(wxT("bench")), ibSessionKind::Enterprise);
         m_bound   = std::make_unique<ibSessionScope>(m_session.get());
     }
 
@@ -414,7 +414,7 @@ TEST_F(SessionBench, DISABLED_CallCost) {
         std::vector<std::thread> pool;
         for (int t = 0; t < threads; ++t) {
             pool.emplace_back([&, t] {
-                const auto session = std::make_shared<ibSession>(wxString::Format(wxT("bench-%d"), t), ibSessionKind::Enterprise);
+                const auto session = std::make_shared<ibSession>(ibString::Format(wxT("bench-%d"), t), ibSessionKind::Enterprise);
                 const ibSessionScope bound(session.get());
                 ++ready;
                 while (!go) std::this_thread::yield();
@@ -495,7 +495,7 @@ TEST(RuntimeBench, DISABLED_StringConcat) {
 TEST(RuntimeBench, DISABLED_DateLoop) {
     const long n = 1000000;
     ibCompileCode cc(wxT("test"), wxT("memory"), false);
-    ASSERT_TRUE(Build(cc, wxString::Format(
+    ASSERT_TRUE(Build(cc, ibString::Format(
         wxT("Function Shift(d) Public\n")
         wxT("  var t; var i; t = d; i = 0;\n")
         wxT("  While i < %ld Do\n")
@@ -565,7 +565,7 @@ TEST(RuntimeBench, DISABLED_DumpNestedLambda) {
     for (size_t i = 0; i < bc.m_listFunc.size(); ++i) {
         const auto& fn = bc.m_listFunc[i];
         std::cout << std::right << std::setw(3) << i
-                  << "  name='" << (const char*)fn.m_strRealName.ToUTF8() << "'"
+                  << "  name='" << fn.m_strRealName.ToUTF8().c_str() << "'"
                   << "  params=" << fn.m_listParam.size()
                   << "  vars=" << fn.m_lVarCount
                   << "  line=" << fn.m_lCodeLine
@@ -626,7 +626,7 @@ TEST(RuntimeBench, DISABLED_DumpThinLambda) {
     for (size_t i = 0; i < bc.m_listFunc.size(); ++i) {
         const auto& fn = bc.m_listFunc[i];
         std::cout << std::right << std::setw(3) << i
-                  << "  name='" << (const char*)fn.m_strRealName.ToUTF8() << "'"
+                  << "  name='" << fn.m_strRealName.ToUTF8().c_str() << "'"
                   << "  params=" << fn.m_listParam.size()
                   << "  vars=" << fn.m_lVarCount
                   << "  heapFrame=" << (fn.m_needsHeapFrame ? "YES" : "no")
@@ -1578,7 +1578,7 @@ TEST(RuntimeBench, DISABLED_LinqNoLambda) {
         // while the row divided by `n` — equal today, and silently wrong for
         // everyone the moment somebody edits one of the two. Same shape as the
         // row that was called "call frame" and measured no frame.
-        + wxString::Format(wxT("  Return arr.Take(%ld).Count();\n"), n) +
+        + ibString::Format(wxT("  Return arr.Take(%ld).Count();\n"), n) +
         wxT("EndFunction\n")));
     ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
 
@@ -1732,7 +1732,7 @@ TEST(RuntimeBench, DISABLED_StructBuildWidth) {
     for (const Shape& shape : shapes) {
         const long n = 100000;
         ibCompileCode cc(wxT("test"), wxT("memory"), false);
-        wxString body;
+        ibString body;
         body << wxT("Function Make(n) Public\n")
              << wxT("  var i; var s; i = 0;\n")
              << wxT("  While i < n Do s = New Structure(\"") << shape.names << wxT("\"); i = i + 1; EndDo;\n")
@@ -2008,22 +2008,22 @@ TEST(NumberBench, DISABLED_Arithmetic) {
 
     // --- heap / big-decimal tier (no native equivalent) -------------------
     {
-        const ibNumber a(wxString(wxT("123456789012345678901234567890")));
-        const ibNumber b(wxString(wxT("987654321098765432109876543210")));
+        const ibNumber a(ibString(wxT("123456789012345678901234567890")));
+        const ibNumber b(ibString(wxT("987654321098765432109876543210")));
         const double oes = TimeNsPerOp(N / 10, [&](long){ ibNumber c = a; c *= b; g_sink += (uint64_t)c.IsHeap(); });
         RowOes("mul 30x30 digits (heap)", oes, "ns");
     }
     {
         // 200 fractional digits — the high-precision tier accounting work needs.
-        wxString big(wxT("0.")); for (int i = 0; i < 200; ++i) big += wxChar(wxT('0') + (i % 9) + 1);
-        const ibNumber a(big), b(wxString(wxT("3")));
+        ibString big(wxT("0.")); for (int i = 0; i < 200; ++i) big += wxChar(wxT('0') + (i % 9) + 1);
+        const ibNumber a(big), b(ibString(wxT("3")));
         const double oes = TimeNsPerOp(N / 20, [&](long){ ibNumber c = a; c *= b; g_sink += (uint64_t)c.IsHeap(); });
         RowOes("mul 200-frac-digit", oes, "ns");
     }
 
     // --- ToString / FromString round-trip ---------------------------------
     {
-        const ibNumber a(wxString(wxT("1234567.89")));
+        const ibNumber a(ibString(wxT("1234567.89")));
         const double oes = TimeNsPerOp(N / 5, [&](long){ g_sink += (uint64_t)a.ToString().length(); });
         volatile double x = 1234567.89;
         const double base = TimeNsPerOp(N / 5, [&](long){ g_sink += std::to_string((double)x).length(); });
@@ -2179,7 +2179,7 @@ TEST(JsonBench, DISABLED_ReadAndWrite) {
 TEST(ParserBench, DISABLED_CompileThroughput) {
     std::cout << "\n[ ParserBench | ibCompileCode::Compile ]\n";
 
-    auto benchModule = [](const char* label, const wxString& src) {
+    auto benchModule = [](const char* label, const ibString& src) {
         long lines = 1; for (size_t i = 0; i < src.length(); ++i) if (src[i] == wxT('\n')) ++lines;
         const double bytes = double(src.length());
         const double nsPer = BestTotalNs(20, [&]{
@@ -2207,9 +2207,9 @@ TEST(ParserBench, DISABLED_CompileThroughput) {
 
     // large — a synthetic module of repeated functions (parser/codegen scaling).
     {
-        wxString big;
+        ibString big;
         for (int k = 0; k < 200; ++k) {
-            big += wxString::Format(
+            big += ibString::Format(
                 wxT("Function F%d(a, b, c) Public\n")
                 wxT("  var r; r = a + b * c;\n")
                 wxT("  If r > 100 Then r = r - 100; Else r = r + 1; EndIf;\n")
@@ -2425,7 +2425,7 @@ TEST(SampledProfile, DISABLED_Linq) {
     for (const wxChar* scenario : { wxT("WhereLambda"), wxT("SelectBlock"), wxT("JoinBlock") }) {
         SampledStacks profile;
         profile.Run([&]{ pu.CallAsFunc(scenario, ret); g_sink += (uint64_t)ret.GetInteger(); }, 2.0);
-        profile.Print(wxString(scenario).ToStdString().c_str(), 22);
+        profile.Print(ibString(scenario).ToStdString().c_str(), 22);
     }
     SUCCEED();
 }

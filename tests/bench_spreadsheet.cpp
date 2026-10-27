@@ -6,6 +6,7 @@
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
 #include <wx/log.h>
+#include "core/fileSystem.h"   // ibFILE_SEP_PATH
 
 // ⚠ MEASUREMENT, not a check — DISABLED by default. Run with:
 //   oes_tests --gtest_also_run_disabled_tests --gtest_filter=*Spreadsheet*Bench*
@@ -54,7 +55,7 @@ TEST(SheetFormatBench, DISABLED_ReadWrite)
 	// costs a font), not in the middle of a timing run.
 	wxLogNull noLog;
 
-	const wxString dir = wxFileName::GetTempDir();
+	const ibString dir = wxFileName::GetTempDir();
 
 	printf("%-22s %8s %10s %10s %12s\n", "format", "rows", "write ms", "read ms", "bytes");
 
@@ -63,20 +64,20 @@ TEST(SheetFormatBench, DISABLED_ReadWrite)
 		// The sheet a report produces: a heading row and ten columns of values.
 		ibSpreadsheetDescription sheet;
 		for (int col = 0; col < 10; col++)
-			sheet.SetCellValue(0, col, wxString::Format(wxT("Column %d"), col + 1));
+			sheet.SetCellValue(0, col, ibString::Format(wxT("Column %d"), col + 1));
 		for (int row = 1; row < rows; row++) {
 			for (int col = 0; col < 10; col++) {
 				if (col == 0)
-					sheet.SetCellValue(row, col, wxString::Format(wxT("Row %d"), row));
+					sheet.SetCellValue(row, col, ibString::Format(wxT("Row %d"), row));
 				else
-					sheet.SetCellValue(row, col, wxString::Format(wxT("%d"), row * col));
+					sheet.SetCellValue(row, col, ibString::Format(wxT("%d"), row * col));
 			}
 		}
 
 		for (const ibSheetFormat* format : ibSheetFormats()) {
 
-			const wxString file = dir + wxFileName::GetPathSeparator()
-				+ wxString::Format(wxT("oes_bench_%d.%s"), rows, format->GetExtension());
+			const ibString file = dir + ibFILE_SEP_PATH
+				+ ibString::Format(wxT("oes_bench_%d.%s"), rows, format->GetExtension());
 
 			const auto t0 = std::chrono::steady_clock::now();
 			const bool written = format->WriteFile(file, sheet);
@@ -94,7 +95,7 @@ TEST(SheetFormatBench, DISABLED_ReadWrite)
 			const wxULongLong size = written ? wxFileName::GetSize(file) : wxULongLong(0);
 
 			printf("%-22s %8d %10lld %10lld %12s\n",
-				(const char*)format->GetName().ToUTF8(), rows,
+				format->GetName().ToUTF8().c_str(), rows,
 				(long long)std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count(),
 				readMs,
 				(const char*)size.ToString().ToUTF8());

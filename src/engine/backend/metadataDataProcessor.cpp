@@ -125,7 +125,7 @@ bool ibMetaDataDataProcessor::ClearDatabase()
 
 ////////////////////////////////////////////////////////////////////
 
-wxString ibMetaDataDataProcessor::GetLangCode() const
+ibString ibMetaDataDataProcessor::GetLangCode() const
 {
 	return activeMetaData->GetLangCode();
 }
@@ -273,7 +273,7 @@ ibValueMetaObjectDataProcessor* ibMetaDataDataProcessor::BuildFreshRoot()
 	return root;
 }
 
-bool ibMetaDataDataProcessor::LoadFromFile(const wxString& strFileName)
+bool ibMetaDataDataProcessor::LoadFromFile(const ibString& strFileName)
 {
 	// Read the whole file up front — no tree is touched until the bytes are in
 	// hand, so a read failure leaves the current data processor intact.
@@ -291,7 +291,7 @@ bool ibMetaDataDataProcessor::LoadFromFile(const wxString& strFileName)
 	return LoadFromBuffer(tempBuffer, strFileName);
 }
 
-bool ibMetaDataDataProcessor::LoadFromTempFile(const wxString& id)
+bool ibMetaDataDataProcessor::LoadFromTempFile(const ibString& id)
 {
 	// The parts read in order, whole — as the disk's file is read up front.
 	const ibTempFile file(id);
@@ -306,7 +306,7 @@ bool ibMetaDataDataProcessor::LoadFromTempFile(const wxString& id)
 	return LoadFromBuffer(tempBuffer, file.GetName());
 }
 
-bool ibMetaDataDataProcessor::LoadFromBuffer(const ibMemoryBuffer& buffer, const wxString& fullPath)
+bool ibMetaDataDataProcessor::LoadFromBuffer(const ibMemoryBuffer& buffer, const ibString& fullPath)
 {
 	ibReaderMemory readerData(buffer.GetData(), buffer.GetDataLen());
 	if (readerData.eof())
@@ -358,7 +358,7 @@ bool ibMetaDataDataProcessor::LoadFromBuffer(const ibMemoryBuffer& buffer, const
 	return LoadDatabase();
 }
 
-bool ibMetaDataDataProcessor::SaveToFile(const wxString& strFileName)
+bool ibMetaDataDataProcessor::SaveToFile(const ibString& strFileName)
 {
 	//common data
 	ibWriterMemory writerData;
@@ -401,7 +401,7 @@ bool ibMetaDataDataProcessor::SaveToFile(const wxString& strFileName)
 	return true;
 }
 
-bool ibMetaDataDataProcessor::SaveToTempFile(const wxString& id)
+bool ibMetaDataDataProcessor::SaveToTempFile(const ibString& id)
 {
 	// The file, made anew of the name it was given — written as the disk's file is, whole.
 	ibTempFile file;
@@ -415,7 +415,7 @@ bool ibMetaDataDataProcessor::SaveToTempFile(const wxString& id)
 	return file.Write(writerData.pointer(), writerData.size());
 }
 
-bool ibMetaDataDataProcessor::SaveToBuffer(ibWriterMemory& writerData, const wxString& fullPath)
+bool ibMetaDataDataProcessor::SaveToBuffer(ibWriterMemory& writerData, const ibString& fullPath)
 {
 	m_fullPath = fullPath;
 
@@ -442,7 +442,7 @@ bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* roo
 		if (headerReader->r_u64() != sign_dataProcessor)
 			return false;
 		m_version = headerReader->r_u32();
-		wxString metaGuid;
+		ibString metaGuid;
 		headerReader->r_stringZ(metaGuid);
 		headerReader->close();
 	}
@@ -492,7 +492,7 @@ bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* roo
 		// has to say the same thing: `ApplyDataNode` refuses for reasons the user can act on, and
 		// answering `false` in silence makes a file that will not open indistinguishable from one
 		// that opened and failed later. A refusal is data, never a format string.
-		ibJournalError(wxT("metadata.dp"),wxT("%s"), err.GetErrorDescription());
+		ibJournalError(ibT("metadata.dp"),ibT("%s"), err.GetErrorDescription());
 		return false;
 	}
 }

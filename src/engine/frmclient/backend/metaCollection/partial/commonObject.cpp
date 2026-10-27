@@ -39,7 +39,7 @@ bool Command(const ibValueMetaObject* object, ibProtocol::ibSchema::ibCommand co
 typedef ibValueMetaObjectRecordDataHierarchyMutableRef::ibPredefinedValueObject ibPredefinedItem;
 
 // What an item is given, as Create and Set take it.
-ibProtocolNode ItemArgs(const wxString& strPredefinedName, const wxString& strCode, const wxString& strDescription,
+ibProtocolNode ItemArgs(const ibString& strPredefinedName, const ibString& strCode, const ibString& strDescription,
 	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedItem>& valueParent)
 {
 	ibProtocolNode args;
@@ -54,8 +54,8 @@ ibProtocolNode ItemArgs(const wxString& strPredefinedName, const wxString& strCo
 
 } // namespace
 
-void ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(const wxString& strPredefinedName,
-	const wxString& strCode, const wxString& strDescription,
+void ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(const ibString& strPredefinedName,
+	const ibString& strCode, const ibString& strDescription,
 	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent)
 {
 	Command(this, ibProtocol::ibSchema::ibCommand::Create,
@@ -64,8 +64,8 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(const
 }
 
 void ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedValue(const ibGuid& predefinedGuid,
-	const wxString& strPredefinedName,
-	const wxString& strCode, const wxString& strDescription,
+	const ibString& strPredefinedName,
+	const ibString& strCode, const ibString& strDescription,
 	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent)
 {
 	ibProtocolNode args = ItemArgs(strPredefinedName, strCode, strDescription, valueIsFolder, valueParent);
@@ -92,7 +92,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ReadPredefinedValues()
 		return;
 
 	// The parent is linked once every item is read, as the engine's ReadData links it.
-	std::vector<std::pair<wxObjectDataPtr<ibPredefinedValueObject>, wxString>> parents;
+	std::vector<std::pair<wxObjectDataPtr<ibPredefinedValueObject>, ibString>> parents;
 	for (const ibProtocolNode& row : shown.FindChild(ibProtocol::ibSchema::ibPredefined::Items).Children()) {
 		m_predefinedObjectVector.emplace_back(
 			new ibPredefinedValueObject(ibGuid(row.GetString(ibProtocol::ibSchema::ibPredefined::Guid)),

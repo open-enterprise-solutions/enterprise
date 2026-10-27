@@ -55,9 +55,9 @@ public:
 	ibValueEnumSpreadsheetFieldKind() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibQueryLowering::ibColumnRole::Detail, wxT("Field"), _("Field"));
-		AddEnumeration(ibQueryLowering::ibColumnRole::Dimension, wxT("Dimension"), _("Dimension"));
-		AddEnumeration(ibQueryLowering::ibColumnRole::Measure, wxT("Resource"), _("Resource"));
+		AddEnumeration(ibQueryLowering::ibColumnRole::Detail, ibT("Field"), _("Field"));
+		AddEnumeration(ibQueryLowering::ibColumnRole::Dimension, ibT("Dimension"), _("Dimension"));
+		AddEnumeration(ibQueryLowering::ibColumnRole::Measure, ibT("Resource"), _("Resource"));
 	}
 };
 
@@ -69,19 +69,19 @@ public:
 	// One (field, value) of the context, in the composition's own vocabulary — the path is what a
 	// grouping and a filter line are written with (ibGroupDescription::Append, ibFilterDescription::Append).
 	struct ibSpreadsheetDetailsField {
-		wxString m_path;
+		ibString m_path;
 		ibValue  m_value;
 	};
 
 	ibValueSpreadsheetDetails() {}
-	ibValueSpreadsheetDetails(const wxString& path, ibQueryLowering::ibColumnRole role, const ibValue& value)
+	ibValueSpreadsheetDetails(const ibString& path, ibQueryLowering::ibColumnRole role, const ibValue& value)
 		: m_path(path), m_role(role), m_value(value) {
 		m_parents.reserve(2);   // a table's cell links to its row AND its column — room for both at once
 	}
 
 	// ⭐ THE PATH, NOT THE TITLE. A title is written for a person and may repeat; a path is what the
 	// composition groups and filters by, and the detail is going to do both with it.
-	const wxString& GetPath() const { return m_path; }
+	const ibString& GetPath() const { return m_path; }
 	// ⭐ AND THE ROLE, because the driver already knows it. A DIMENSION link is part of the context —
 	// it is filtered by and can be grouped by; a MEASURE is the figure itself, and "Sum = 1234" is
 	// not a filter anybody meant. Left out, this reader would re-derive it by hunting the path
@@ -151,7 +151,7 @@ public:
 
 private:
 
-	wxString                      m_path;
+	ibString                      m_path;
 	ibQueryLowering::ibColumnRole m_role = ibQueryLowering::ibColumnRole::Detail;
 	ibValue                       m_value;
 	// ⚠ ibValue, NOT ibValueSpreadsheetDetails* — the links have to survive `PutArea`, which RE-KEYS every

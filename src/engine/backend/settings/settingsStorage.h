@@ -136,7 +136,7 @@ private:
 	// column carries a compound address. (The DDL renderer spells PRIMARY KEY per
 	// column, and sys_lock already solved this the same way: keyHash beside the
 	// readable columns.)
-	static wxString HashKey(const ibSettingsKey& key);
+	static ibString HashKey(const ibSettingsKey& key);
 };
 
 #endif // !__SETTINGS_STORAGE_H__

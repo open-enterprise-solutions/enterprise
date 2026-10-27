@@ -15,17 +15,17 @@ public:
 	void SetValue(const ibPictureDescription& val);
 #pragma endregion 
 
-	ibPropertyPicture(ibPropertyCategory* cat, const wxString& name, const ibPictureDescription& id = ibPictureDescription())
+	ibPropertyPicture(ibPropertyCategory* cat, const ibString& name, const ibPictureDescription& id = ibPictureDescription())
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), id))
 	{
 	}
 
-	ibPropertyPicture(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibPictureDescription& id = ibPictureDescription())
+	ibPropertyPicture(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibPictureDescription& id = ibPictureDescription())
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), id))
 	{
 	}
 
-	ibPropertyPicture(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibPictureDescription& id = ibPictureDescription())
+	ibPropertyPicture(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibPictureDescription& id = ibPictureDescription())
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), id))
 	{
 	}
@@ -61,17 +61,17 @@ public:
 	void SetValue(const ibExternalPictureDescription& val);
 #pragma endregion 
 
-	ibPropertyExternalPicture(ibPropertyCategory* cat, const wxString& name, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
+	ibPropertyExternalPicture(ibPropertyCategory* cat, const ibString& name, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
 		: ibProperty(cat, name, CreateVariantData(pictureDesc))
 	{
 	}
 
-	ibPropertyExternalPicture(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
+	ibPropertyExternalPicture(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
 		: ibProperty(cat, name, label, CreateVariantData(pictureDesc))
 	{
 	}
 
-	ibPropertyExternalPicture(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
+	ibPropertyExternalPicture(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
 		: ibProperty(cat, name, label, helpString, CreateVariantData(pictureDesc))
 	{
 	}

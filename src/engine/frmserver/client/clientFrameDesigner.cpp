@@ -50,7 +50,7 @@ void ibClientFrameDesigner::CreateStartupPage()
 	if (server == nullptr || !server->GetSettings().m_enabled || server->IsRunning())
 		return;
 
-	wxString refusal;
+	ibString refusal;
 	if (!server->Start(GetSession(), refusal) && !refusal.IsEmpty())
 		Message(refusal, ibStatusMessage::ibStatusMessage_Warning);
 }
@@ -60,9 +60,9 @@ void ibClientFrameDesigner::OnDraw(ibDataNode& state)
 	m_metaTree.OnDraw(state.Child(ibProtocol::ibFrame::MetaData));
 }
 
-void ibClientFrameDesigner::BackendError(const wxString& /*strFileName*/,
-	const wxString& /*strDocPath*/, const long /*line*/,
-	const wxString& strErrorMessage)
+void ibClientFrameDesigner::BackendError(const ibString& /*strFileName*/,
+	const ibString& /*strDocPath*/, const long /*line*/,
+	const ibString& strErrorMessage)
 {
 	// ⚠ Without its place yet: the desktop's line opened the module at the error (ibOutputWindow), a message here is its
 	// text alone.

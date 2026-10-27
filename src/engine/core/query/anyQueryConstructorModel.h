@@ -27,8 +27,8 @@ struct ibQueryConstructorSource
 	// The dotted path a query names it by: {"Catalog","Products"} or {"AccumulationRegister","Goods","Balance"}
 	// for a virtual table, and a SINGLE segment for a temp table the package made (it has no metaclass —
 	// it is what a previous statement left).
-	std::vector<wxString> m_path;
-	wxString              m_presentation;   // what a person reads (the synonym where there is one)
+	std::vector<ibString> m_path;
+	ibString              m_presentation;   // what a person reads (the synonym where there is one)
 	bool                  m_temp = false;   // declared by the package being edited, not by the metadata
 	// ⭐ …AND WHICH OF THE TWO IT IS. A package declares two kinds of source of its own: a TEMPORARY
 	// TABLE (`INTO`, rows put away for later statements) and a NAMED RESULT (`ONTO`, a result a
@@ -39,10 +39,10 @@ struct ibQueryConstructorSource
 	// INLINE, not exported: the struct itself carries no CORE_API (it is a plain value each side
 	// copies), so a definition in the .cpp would be invisible across the DLL — which is exactly what
 	// the test link found.
-	wxString Text() const {                 // the path joined with dots — what goes into the AST
-		wxString out;
+	ibString Text() const {                 // the path joined with dots — what goes into the AST
+		ibString out;
 		for (size_t i = 0; i < m_path.size(); ++i) {
-			if (i > 0) out += wxT(".");
+			if (i > 0) out += ibT(".");
 			out += m_path[i];
 		}
 		return out;
@@ -110,14 +110,14 @@ public:
 	// knows it (it is walking a node of that table), so it hands it in rather than being asked to
 	// re-derive it from a dotted path, which is exactly what a dot-walk makes ambiguous.
 	std::vector<ibQueryConstructorField> GetReferenceFields(ibClassID clsid,
-	                                                        const wxString& sourceLabel = wxEmptyString) const;
+	                                                        const ibString& sourceLabel = ibEmptyString) const;
 
 	// The same walk asked of a whole TYPE rather than of one target: every reference alternative is
 	// unfolded and their fields merged by name, so a composite answers with what all of it offers.
 	// A field carried by several alternatives keeps the union of their types, which is what lets the
 	// next hop through it stay walkable.
 	std::vector<ibQueryConstructorField> GetReferenceFields(const ibTypeDescription& typeDesc,
-	                                                        const wxString& sourceLabel = wxEmptyString) const;
+	                                                        const ibString& sourceLabel = ibEmptyString) const;
 
 	// ⭐ WHAT A FIELD'S TYPE REFERS TO — its m_reference and m_referenceClsid, from its m_type, asked of the side
 	// (ConvertToMetaIds) and never read off the clsid here: only the side knows what a type is. A type with ANY table
@@ -157,7 +157,7 @@ public:
 	// the references. Done ONCE, and both questions below read its answer.
 	//
 	// An unresolvable path yields an EMPTY field: silence, never a guess.
-	ibQueryConstructorField FieldOfPath(const ibQuerySelect& select, const std::vector<wxString>& path,
+	ibQueryConstructorField FieldOfPath(const ibQuerySelect& select, const std::vector<ibString>& path,
 	                                    const ibQueryPackage& package, size_t beforeStatement) const;
 	// …AND THE HOPS OF IT, from a field already in hand — each segment found among the fields of the one
 	// before, a reference walked by its TYPE (GetReferenceFields: the target's table, no value made).
@@ -165,20 +165,20 @@ public:
 	// FieldOfPath runs it once it has found where a path starts; a host that holds the start itself (a
 	// setting over a known source) runs it directly. A hop nothing answers yields an EMPTY field that keeps
 	// only what the walk knew up to there — silence, never a guess.
-	ibQueryConstructorField WalkFrom(const ibQueryConstructorField& from, const std::vector<wxString>& hops) const;
+	ibQueryConstructorField WalkFrom(const ibQueryConstructorField& from, const std::vector<ibString>& hops) const;
 	// …AND WHERE A WRITTEN PATH STARTS among the fields a holder already has: the LONGEST prefix one of them is
 	// named — a linked package names its fields with the selection in front (`Sales.Qty`), so the first
 	// segment alone is not always one — and the rest walked from it (WalkFrom). One rule for every holder of
 	// fields: the query's own sources (FieldOfPath), a composer's source, a settings window's list. A path
 	// none of them starts yields an EMPTY field — silence, and no verdict on it.
 	ibQueryConstructorField WalkPath(const std::vector<ibQueryConstructorField>& fields,
-	                                 const std::vector<wxString>& path) const;
+	                                 const std::vector<ibString>& path) const;
 	// WHAT IT REFERS TO — 0 when the leaf is not a single-target reference.
-	ibClassID ReferenceOfPath(const ibQuerySelect& select, const std::vector<wxString>& path,
+	ibClassID ReferenceOfPath(const ibQuerySelect& select, const std::vector<ibString>& path,
 	                          const ibQueryPackage& package, size_t beforeStatement) const;
 	// WHAT IT HOLDS — empty when the path does not resolve, which is "unknown", never "no type".
 	// A host reads it to ask the engine which aggregates fit (ibQueryAggregatesFor).
-	ibTypeDescription TypeOfPath(const ibQuerySelect& select, const std::vector<wxString>& path,
+	ibTypeDescription TypeOfPath(const ibQuerySelect& select, const std::vector<ibString>& path,
 	                             const ibQueryPackage& package, size_t beforeStatement) const;
 
 	// WHAT A SELECT PRODUCES, as fields — how a NESTED table and a TEMP table both answer, and
@@ -205,10 +205,10 @@ public:
 	// ⭐ A TABLE'S OWN REFERENCE TYPE — what a CAST to it brings a value to (`CAST(x AS Catalog.Goods)`); 0 for a table
 	// no reference points at (a register, a virtual table). The configuration's answer, the side's — and asked outright:
 	// the server writes it into the catalogue it sends (request Sources).
-	virtual ibClassID ReferenceOfTable(const std::vector<wxString>& path) const = 0;
+	virtual ibClassID ReferenceOfTable(const std::vector<ibString>& path) const = 0;
 	// …AND THE OTHER WAY: the table a reference type names, as a query names it (`Catalog.Goods`); empty for a type
 	// no table stands behind (a report, a data processor).
-	virtual wxString TableOfReference(ibClassID reference) const = 0;
+	virtual ibString TableOfReference(ibClassID reference) const = 0;
 
 protected:
 
@@ -229,7 +229,7 @@ protected:
 // roles only, and the composer stands on this text (ibDataDBComposer::FromText). Every select the text holds
 // forgets them, the ones it reads FROM included, since a role travels up with its column. A text that says no
 // role — or does not parse yet — comes back as it was, byte for byte.
-CORE_API wxString ibQueryTextWithoutRoles(const wxString& text);
+CORE_API ibString ibQueryTextWithoutRoles(const ibString& text);
 // …the same over a parsed package (the query constructor's, opened by a host that keeps roles itself —
 // ibQueryExclude_Roles). True when one was said.
 CORE_API bool ibQueryDropRoles(ibQueryPackage& package);

@@ -21,7 +21,7 @@ ibValueCertificateFile* ibSecureCertificateOrNone(const ibValue& value, const ib
 		return nullptr;
 	ibValueCertificateFile* const file = ibSecureHeld<ibValueCertificateFile>(value);
 	if (file == nullptr)
-		ibBackendCoreException::Error(_("SecureConnection: %s is a CertificateFile, or Undefined"), wxString(what));
+		ibBackendCoreException::Error(_("SecureConnection: %s is a CertificateFile, or Undefined"), ibString(what));
 	return file;
 }
 
@@ -33,10 +33,10 @@ ibValueCertificateFile* ibSecureCertificateOrNone(const ibValue& value, const ib
 
 void ibValueCertificateFile_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(1, wxT("CertificateFile(path : string)"));
-	helper.AppendConstructor(2, wxT("CertificateFile(path : string, password : string)"));
+	helper.AppendConstructor(1, ibT("CertificateFile(path : string)"));
+	helper.AppendConstructor(2, ibT("CertificateFile(path : string, password : string)"));
 
-	helper.AppendProp(wxT("Path"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("Path"), true, false, wxNOT_FOUND);
 }
 
 ibValueCertificateFile::ibValueCertificateFile()
@@ -54,7 +54,7 @@ bool ibValueCertificateFile::Init(ibValue** paParams, const long lSizeArray)
 	return true;
 }
 
-void ibValueCertificateFile::Open(const wxString& path, const wxString& password)
+void ibValueCertificateFile::Open(const ibString& path, const ibString& password)
 {
 	// The file has to be there NOW - a wrong path is found at the desk, not at the bank's door. What is in it
 	// is read by the library, when a connection is made, and refused there by this name.
@@ -78,13 +78,13 @@ bool ibValueCertificateFile::GetPropVal(const long lPropNum, ibValue& pvarPropVa
 
 void ibValueSecureConnection_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(0, wxT("SecureConnection()"));
-	helper.AppendConstructor(1, wxT("SecureConnection(clientCertificate : CertificateFile)"));
-	helper.AppendConstructor(2, wxT("SecureConnection(clientCertificate : CertificateFile, trustedCertificates : CertificateFile)"));
+	helper.AppendConstructor(0, ibT("SecureConnection()"));
+	helper.AppendConstructor(1, ibT("SecureConnection(clientCertificate : CertificateFile)"));
+	helper.AppendConstructor(2, ibT("SecureConnection(clientCertificate : CertificateFile, trustedCertificates : CertificateFile)"));
 
-	helper.AppendProp(wxT("ClientCertificate"), true, true, wxNOT_FOUND);
-	helper.AppendProp(wxT("TrustedCertificates"), true, true, wxNOT_FOUND);
-	helper.AppendProp(wxT("VerifyServerCertificate"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("ClientCertificate"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("TrustedCertificates"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("VerifyServerCertificate"), true, true, wxNOT_FOUND);
 }
 
 ibValueSecureConnection::ibValueSecureConnection()
@@ -105,12 +105,12 @@ bool ibValueSecureConnection::Init(ibValue** paParams, const long lSizeArray)
 
 void ibValueSecureConnection::SetClientCertificate(const ibValue& value)
 {
-	m_client = ibSecureCertificateOrNone(value, wxT("ClientCertificate"));
+	m_client = ibSecureCertificateOrNone(value, ibT("ClientCertificate"));
 }
 
 void ibValueSecureConnection::SetTrustedCertificates(const ibValue& value)
 {
-	m_trusted = ibSecureCertificateOrNone(value, wxT("TrustedCertificates"));
+	m_trusted = ibSecureCertificateOrNone(value, ibT("TrustedCertificates"));
 }
 
 bool ibValueSecureConnection::GetPropVal(const long lPropNum, ibValue& pvarPropVal)

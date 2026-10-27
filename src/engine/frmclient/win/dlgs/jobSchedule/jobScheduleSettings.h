@@ -6,7 +6,7 @@
 //
 // It edits a BUFFER, not the property: the description is copied in when the dialog opens and
 // written back only on OK, so Cancel really cancels. Same transactional shape as the list-settings
-// dialog it is modelled on (frontend/win/dlgs/settings/list/listSettings.h).
+// dialog it is modelled on (frmclient/win/dlgs/settings/list/listSettings.h).
 //
 // Every control here maps to exactly one field of the description, which is the whole reason the
 // schedule was NOT designed as a cron string: an expression has to be parsed to be shown, and
@@ -24,7 +24,7 @@
 #include "frmclient/frmclient.h"   // FRMCLIENT_API
 #include "core/job/jobSchedule.h"
 
-// The desktop's (frontend/win/dlgs/jobSchedule), asked by the server (ibProtocol::ibRequest::ibKind::Schedule): the schedule
+// The old desktop's, asked by the server (ibProtocol::ibRequest::ibKind::Schedule): the schedule
 // comes in the question, the edited one is the answer.
 class FRMCLIENT_API ibDialogJobSchedule : public wxDialog {
 public:

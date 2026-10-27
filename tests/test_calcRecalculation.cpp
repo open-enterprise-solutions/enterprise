@@ -137,7 +137,7 @@ TEST(CalcRecalculation, AnUnnamedTypeTakesNoPart) {
 namespace {
 
 // Day n of the calendar these tests use, as a stored date.
-wxString DateOf(int day)
+ibString DateOf(int day)
 {
 	wxDateTime d(1, wxDateTime::Jan, 2026);
 	d += wxDateSpan::Days(day);
@@ -170,10 +170,10 @@ int MonthOfDay(int day)
 }
 
 struct Rec {
-	wxString table = wxT("Acc");
-	wxString recorder;
+	ibString table = wxT("Acc");
+	ibString recorder;
 	int      line = 0;
-	wxString emp = wxT("E"), kind;
+	ibString emp = wxT("E"), kind;
 	int      reg = 0;                  // the registration period, as a day — a month's first
 	int      month = 0;                // the month-for, as a day
 	int      first = 0, last = 0;      // the action period
@@ -182,15 +182,15 @@ struct Rec {
 	bool     active = true;
 };
 
-using Row = std::tuple<wxString, wxString, wxString, int>;   // recorder, type, employee, month
+using Row = std::tuple<ibString, ibString, ibString, int>;   // recorder, type, employee, month
 using Rows = std::set<Row>;
 
 // The rule, asked directly of the records, for the records of `recorder`.
-Rows RuleRows(const std::vector<Rec>& records, const std::vector<std::pair<wxString, wxString>>& leading,
-	const wxString& ledTable, bool acts, bool baseByRegistration, const wxString& recorder)
+Rows RuleRows(const std::vector<Rec>& records, const std::vector<std::pair<ibString, ibString>>& leading,
+	const ibString& ledTable, bool acts, bool baseByRegistration, const ibString& recorder)
 {
-	std::map<wxString, int> typeIndex;
-	const auto ordinal = [&typeIndex](const wxString& t) {
+	std::map<ibString, int> typeIndex;
+	const auto ordinal = [&typeIndex](const ibString& t) {
 		const auto it = typeIndex.find(t);
 		if (it != typeIndex.end()) return it->second;
 		const int next = static_cast<int>(typeIndex.size());
@@ -200,7 +200,7 @@ Rows RuleRows(const std::vector<Rec>& records, const std::vector<std::pair<wxStr
 	std::vector<std::pair<int, int>> leads;
 	for (const auto& edge : leading)
 		leads.push_back({ ordinal(edge.first), ordinal(edge.second) });
-	std::map<wxString, int> keyIndex;
+	std::map<ibString, int> keyIndex;
 	const auto factOf = [&](const Rec& r) {
 		const int key = keyIndex.emplace(r.emp, static_cast<int>(keyIndex.size())).first->second;
 		const bool ownActs = r.table == ledTable ? acts : true;
@@ -258,20 +258,20 @@ struct CalcRecalculationFix : ::testing::Test {
 			ibApplicationInstance::DestroyAppDataEnv();
 	}
 
-	void Leads(const wxString& owner, const wxString& named) {
+	void Leads(const ibString& owner, const ibString& named) {
 		db->RunQuery(wxT("INSERT INTO Lead (owner, named) VALUES ('%s', '%s')"), owner, named);
 	}
 	void Add(const Rec& r) {
 		if (r.table == wxT("Ev"))
-			db->RunStatement(wxString::Format(
+			db->RunStatement(ibString::Format(
 				wxT("INSERT INTO Ev (recorder_, line_, emp, kind, reg_, aps, ape, active_) VALUES ('%s', %d, '%s', '%s', '%s', '%s', '%s', %d)"),
 				r.recorder, r.line, r.emp, r.kind, DateOf(r.reg), DateOf(r.first), DateOf(r.last), r.active ? 1 : 0));
 		else if (r.table == wxT("Tax"))
-			db->RunStatement(wxString::Format(
+			db->RunStatement(ibString::Format(
 				wxT("INSERT INTO Tax (recorder_, line_, emp, kind, reg_, bps, bpe, storno, active_) VALUES ('%s', %d, '%s', '%s', '%s', '%s', '%s', %d, %d)"),
 				r.recorder, r.line, r.emp, r.kind, DateOf(r.reg), DateOf(r.baseFirst), DateOf(r.baseLast), r.storno ? 1 : 0, r.active ? 1 : 0));
 		else
-			db->RunStatement(wxString::Format(
+			db->RunStatement(ibString::Format(
 				wxT("INSERT INTO Acc (recorder_, line_, emp, kind, reg_, ap_, aps, ape, bps, bpe, storno, active_) ")
 				wxT("VALUES ('%s', %d, '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, %d)"),
 				r.recorder, r.line, r.emp, r.kind, DateOf(r.reg), DateOf(r.month), DateOf(r.first), DateOf(r.last),
@@ -334,9 +334,9 @@ struct CalcRecalculationFix : ::testing::Test {
 
 	// The marks the records of `recorder` leave, as the write's statement computes them: its records lead, and no
 	// record of its own is led. `emp` narrows both sides to one employee.
-	Rows Marks(const ibRecalculationSpec& spec, const wxString& recorder, const wxString& emp = wxString()) {
+	Rows Marks(const ibRecalculationSpec& spec, const ibString& recorder, const ibString& emp = ibString()) {
 		Rows out;
-		const ibRecalculationNarrowing narrowing = [recorder, emp](const wxString& alias, int source) {
+		const ibRecalculationNarrowing narrowing = [recorder, emp](const ibString& alias, int source) {
 			const ibQueryExprPtr own = ibBinOp(ibQueryBinOp::Eq, ibCol(alias, wxT("recorder_")), ibConst(ibValue(recorder)));
 			ibQueryExprPtr all = source < 0 ? ibNot(own) : own;
 			if (!emp.IsEmpty())
@@ -349,13 +349,13 @@ struct CalcRecalculationFix : ::testing::Test {
 		ibDatabaseQueryBuilder q(ibConnectionPool::ThreadHolder());
 		q.From(ibSubquery(relation, wxT("m")));
 		std::vector<ibQueryProjItem> proj;
-		for (const wxString& field : spec.m_mark)
+		for (const ibString& field : spec.m_mark)
 			proj.push_back(ibQueryProjItem{ ibCol(wxT("m"), field), field });
 		q.Project(proj);
 		ibQueryResult rs = q.Execute();
 		const bool month = spec.m_mark.size() > 3;
 		while (rs.Next()) {
-			const wxString stored = month ? rs.GetResultString(wxT("ap_")).ToWxString() : wxString();
+			const ibString stored = month ? rs.GetResultString(wxT("ap_")) : ibString();
 			int day = 0;
 			if (month) {
 				wxDateTime d;
@@ -370,7 +370,7 @@ struct CalcRecalculationFix : ::testing::Test {
 	}
 
 	// A month's salary or bonus as a payroll run writes it: for the month, over the month, based on the month.
-	static Rec PayRun(const wxString& recorder, int line, const wxString& emp, const wxString& kind, int m) {
+	static Rec PayRun(const ibString& recorder, int line, const ibString& emp, const ibString& kind, int m) {
 		Rec r;
 		r.recorder = recorder; r.line = line; r.emp = emp; r.kind = kind;
 		r.reg = MonthStart(m); r.month = MonthStart(m);
@@ -378,14 +378,14 @@ struct CalcRecalculationFix : ::testing::Test {
 		r.baseFirst = MonthStart(m); r.baseLast = MonthEnd(m);
 		return r;
 	}
-	static Rec Event(const wxString& recorder, const wxString& emp, const wxString& kind, int first, int last, int registeredIn) {
+	static Rec Event(const ibString& recorder, const ibString& emp, const ibString& kind, int first, int last, int registeredIn) {
 		Rec r;
 		r.table = wxT("Ev"); r.recorder = recorder; r.line = 1; r.emp = emp; r.kind = kind;
 		r.reg = MonthStart(registeredIn); r.first = first; r.last = last;
 		return r;
 	}
 	// The storno and the correction a later run writes for a paid record: its position, registered in month m.
-	static std::pair<Rec, Rec> Correction(const Rec& paid, const wxString& recorder, int m) {
+	static std::pair<Rec, Rec> Correction(const Rec& paid, const ibString& recorder, int m) {
 		Rec storno = paid, again = paid;
 		storno.recorder = again.recorder = recorder;
 		storno.line = 100 + paid.line; again.line = 200 + paid.line;
@@ -530,9 +530,9 @@ TEST_F(CalcRecalculationFix, RandomRegistersAgreeWithTheRule)
 		t = (t + ((t ^ (t >> 7)) * (61u | t))) ^ t;
 		return static_cast<int>(((t ^ (t >> 14)) % 1000000u) * static_cast<uint64_t>(n) / 1000000u);
 	};
-	const std::vector<std::pair<wxString, wxString>> leading = {
+	const std::vector<std::pair<ibString, ibString>> leading = {
 		{ wxT("Salary"), wxT("SickLeave") }, { wxT("Salary"), wxT("Vacation") }, { wxT("Bonus"), wxT("Salary") } };
-	const wxString employees[] = { wxT("E0"), wxT("E1"), wxT("E2"), wxT("E3") };
+	const ibString employees[] = { wxT("E0"), wxT("E1"), wxT("E2"), wxT("E3") };
 
 	for (int round = 0; round < 4; ++round) {
 		db->RunQuery(wxT("DELETE FROM Acc"));
@@ -544,13 +544,13 @@ TEST_F(CalcRecalculationFix, RandomRegistersAgreeWithTheRule)
 		std::vector<Rec> records;
 		for (int m = 0; m < 8; ++m) {
 			int line = 0;
-			for (const wxString& emp : employees) {
-				Rec salary = PayRun(wxString::Format(wxT("P%d"), m), ++line, emp, wxT("Salary"), m);
+			for (const ibString& emp : employees) {
+				Rec salary = PayRun(ibString::Format(wxT("P%d"), m), ++line, emp, wxT("Salary"), m);
 				if (rnd(6) == 0)
 					salary.last = MonthStart(m + 1) + rnd(20);   // in force past its month
 				salary.active = rnd(12) != 0;
 				records.push_back(salary);
-				Rec bonus = PayRun(wxString::Format(wxT("P%d"), m), ++line, emp, wxT("Bonus"), m);
+				Rec bonus = PayRun(ibString::Format(wxT("P%d"), m), ++line, emp, wxT("Bonus"), m);
 				if (rnd(8) == 0)
 					bonus.baseLast = MonthEnd(m + 1);   // a base past its month
 				records.push_back(bonus);
@@ -558,7 +558,7 @@ TEST_F(CalcRecalculationFix, RandomRegistersAgreeWithTheRule)
 		}
 		for (int k = 0; k < 24; ++k) {
 			const int first = rnd(MonthStart(8));
-			Rec event = Event(wxString::Format(wxT("S%d"), k), employees[rnd(4)], rnd(2) == 0 ? wxT("SickLeave") : wxT("Vacation"),
+			Rec event = Event(ibString::Format(wxT("S%d"), k), employees[rnd(4)], rnd(2) == 0 ? wxT("SickLeave") : wxT("Vacation"),
 				first, first + rnd(12), MonthOfDay(first) + rnd(3));
 			event.active = rnd(10) != 0;
 			records.push_back(event);
@@ -569,17 +569,17 @@ TEST_F(CalcRecalculationFix, RandomRegistersAgreeWithTheRule)
 			const Rec& target = records[rnd(static_cast<int>(paid))];
 			if (target.table != wxT("Acc"))
 				continue;
-			const auto fixed = Correction(target, wxString::Format(wxT("C%d"), k), MonthOfDay(target.reg) + 1 + rnd(3));
+			const auto fixed = Correction(target, ibString::Format(wxT("C%d"), k), MonthOfDay(target.reg) + 1 + rnd(3));
 			records.push_back(fixed.first);
 			records.push_back(fixed.second);
 		}
 		for (const Rec& r : records)
 			Add(r);
 
-		std::set<wxString> recorders;
+		std::set<ibString> recorders;
 		for (const Rec& r : records)
 			recorders.insert(r.recorder);
-		for (const wxString& recorder : recorders) {
+		for (const ibString& recorder : recorders) {
 			const Rows rule = RuleRows(records, leading, wxT("Acc"), /*acts*/ true, /*baseByRegistration*/ false, recorder);
 			EXPECT_EQ(Marks(AccSpec(), recorder), rule) << "round " << round << ", recorder " << recorder;
 			Rows one;

@@ -69,28 +69,28 @@ const ibColourName s_colourNames[] = {
 
 int HexDigit(ibChar c)
 {
-	if (c >= wxT('0') && c <= wxT('9'))
-		return int(c - wxT('0'));
-	if (c >= wxT('a') && c <= wxT('f'))
-		return int(c - wxT('a')) + 10;
-	if (c >= wxT('A') && c <= wxT('F'))
-		return int(c - wxT('A')) + 10;
+	if (c >= ibT('0') && c <= ibT('9'))
+		return int(c - ibT('0'));
+	if (c >= ibT('a') && c <= ibT('f'))
+		return int(c - ibT('a')) + 10;
+	if (c >= ibT('A') && c <= ibT('F'))
+		return int(c - ibT('A')) + 10;
 	return -1;
 }
 
 bool IsLatinLetter(ibChar c)
 {
-	return (c >= wxT('a') && c <= wxT('z')) || (c >= wxT('A') && c <= wxT('Z'));
+	return (c >= ibT('a') && c <= ibT('z')) || (c >= ibT('A') && c <= ibT('Z'));
 }
 
 }
 
 bool ibColour::FromString(const ibString& text)
 {
-	if (text.IsEmpty() || text.StartsWith(wxT("wx")))
+	if (text.IsEmpty() || text.StartsWith(ibT("wx")))
 		return false;
 
-	if (text[0] == wxT('#')) {
+	if (text[0] == ibT('#')) {
 		if (text.length() != 7)
 			return false;
 		unsigned char channel[3];
@@ -107,7 +107,7 @@ bool ibColour::FromString(const ibString& text)
 	if (IsLatinLetter(text[0])) {
 		std::string name;
 		for (const ibChar c : text) {
-			if (c == wxT(' '))
+			if (c == ibT(' '))
 				continue;
 			if (!IsLatinLetter(c))
 				return false;
@@ -126,7 +126,7 @@ bool ibColour::FromString(const ibString& text)
 	ibString rest = text;
 	for (size_t i = 0; i < 3 && !rest.IsEmpty(); ++i) {
 		long number = 0;
-		if (rest.BeforeFirst(wxT(','), &rest).ToLong(&number) && number >= 0 && number <= 255)
+		if (rest.BeforeFirst(ibT(','), &rest).ToLong(&number) && number >= 0 && number <= 255)
 			channel[i] = static_cast<unsigned char>(number);
 	}
 
@@ -138,5 +138,5 @@ ibString ibColour::ToString() const
 {
 	if (!IsOk())
 		return ibString();
-	return ibString::Format(wxT("%d,%d,%d"), m_red, m_green, m_blue);
+	return ibString::Format(ibT("%d,%d,%d"), m_red, m_green, m_blue);
 }

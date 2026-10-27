@@ -162,7 +162,7 @@ TEST_F(SessionParameterRead, AWriteOutsideTheSessionModuleIsRefused) {
 		FAIL() << "a write outside the session module was accepted";
 	}
 	catch (const ibBackendException& err) {
-		EXPECT_NE(wxNOT_FOUND, wxString(err.GetErrorDescription()).Find(wxT("session module")));
+		EXPECT_NE(wxNOT_FOUND, ibString(err.GetErrorDescription()).Find(wxT("session module")));
 	}
 }
 
@@ -175,14 +175,14 @@ TEST(SessionRegistry, ALockedHeartbeatAndSweepComeBackAtOnce)
 	wxInitializer wxInit;
 	ASSERT_TRUE(wxInit.IsOk());
 
-	const wxString path = wxFileName::GetTempDir()
+	const ibString path = wxFileName::GetTempDir()
 		+ wxFileName::GetPathSeparator()
-		+ wxString::Format(wxT("oes-session-nowait-%ld.sqlite"), wxGetProcessId());
+		+ ibString::Format(wxT("oes-session-nowait-%ld.sqlite"), wxGetProcessId());
 	struct Gone {
-		wxString path;
+		ibString path;
 		std::shared_ptr<ibDatabaseLayerSQLite> holder;
 		std::shared_ptr<ibDatabaseLayerSQLite> other;
-		static void Drop(const wxString& file) {
+		static void Drop(const ibString& file) {
 			if (wxFileExists(file))
 				wxRemoveFile(file);
 		}
@@ -210,7 +210,7 @@ TEST(SessionRegistry, ALockedHeartbeatAndSweepComeBackAtOnce)
 	gone.holder->BeginTransaction();
 	gone.holder->RunStatement(wxT("UPDATE sys_session SET n = 2 WHERE session = 'live'"));
 
-	const auto refuse = [&](const wxString& sql) {
+	const auto refuse = [&](const ibString& sql) {
 		const auto started = std::chrono::steady_clock::now();
 		bool refused = false;
 		try {

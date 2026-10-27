@@ -251,7 +251,7 @@ void ibPanelMcpSettings::OnRun(wxCommandEvent& WXUNUSED(event))
 
 	// IN THE NAME OF THIS SESSION. Everything the assistant then does, it does as the person who
 	// pressed this - same rights, same configuration - and it stops when they close the designer.
-	wxString refusal;
+	ibString refusal;
 
 	if (!server->Start(ibSession::Current(), refusal)) {
 		// ⚠ ON THE PAGE, NOT IN A BOX. The refusal names the reason - switched off, port taken -

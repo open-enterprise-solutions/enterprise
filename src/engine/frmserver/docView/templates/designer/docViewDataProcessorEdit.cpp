@@ -35,7 +35,7 @@ ibPictureDescription ibDataProcessorEditDocument::GetIcon() const
 	return ibMetaDataDocument::GetIcon();
 }
 
-bool ibDataProcessorEditDocument::OnCreate(const wxString& path, long flags)
+bool ibDataProcessorEditDocument::OnCreate(const ibString& path, long flags)
 {
 	m_metaData = ibMetaData::MakeShared<ibMetaDataDataProcessor>();
 	if (!ibMetaDocument::OnCreate(path, flags))
@@ -57,8 +57,8 @@ bool ibDataProcessorEditDocument::OnNewDocument()
 
 	SetDocumentSaved(false);
 
-	const wxString name =
-		wxString::Format(commonObject->GetClassName() + wxT("%d"), s_defaultDataProcessorNameCounter++);
+	const ibString name =
+		ibString::Format(commonObject->GetClassName() + ibT("%d"), s_defaultDataProcessorNameCounter++);
 
 	SetTitle(name);
 	SetFilename(name, true);
@@ -84,7 +84,7 @@ bool ibDataProcessorEditDocument::OnCloseDocument()
 	return ibMetaDocument::OnCloseDocument();
 }
 
-bool ibDataProcessorEditDocument::DoOpenDocument(const wxString& filename)
+bool ibDataProcessorEditDocument::DoOpenDocument(const ibString& filename)
 {
 	if (!m_metaData->LoadFromTempFile(filename))
 		return false;
@@ -95,7 +95,7 @@ bool ibDataProcessorEditDocument::DoOpenDocument(const wxString& filename)
 	return true;
 }
 
-bool ibDataProcessorEditDocument::DoSaveDocument(const wxString& filename)
+bool ibDataProcessorEditDocument::DoSaveDocument(const ibString& filename)
 {
 	// The desktop tree's Save — the metadata written, when there was something to write; nothing to write is no
 	// failure.

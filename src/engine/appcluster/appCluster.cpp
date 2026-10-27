@@ -73,27 +73,28 @@ ibAppCluster::~ibAppCluster() = default;
 
 void ibAppCluster::OnInitCmdLine(wxCmdLineParser& parser)
 {
-	parser.AddOption(wxT("d"),  wxT("dir"),       "Server folder: server.conf, server.key and a folder per base (default: server beside the executable)",
+	parser.AddOption(ibT("d"),  ibT("dir"),       "Server folder: server.conf, server.key and a folder per base (default: server beside the executable)",
 		wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
-	parser.AddOption(wxT("lc"), wxT("locale"),    "The platform's locale every server is started with",
+	parser.AddOption(ibT("lc"), ibT("locale"),    "The platform's locale every server is started with",
 		wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
-	parser.AddSwitch(wxT("s"),  wxT("service"),   "Run under the system's service manager (Windows: installed by --install; elsewhere: a systemd unit's ExecStart)");
-	parser.AddSwitch(wxT("i"),  wxT("install"),   "Install the cluster of the server folder as a service, started with the system (an administrator's)");
-	parser.AddSwitch(wxT("u"),  wxT("uninstall"), "Remove the cluster's service, stopped first (an administrator's)");
+	parser.AddSwitch(ibT("s"),  ibT("service"),   "Run under the system's service manager (Windows: installed by --install; elsewhere: a systemd unit's ExecStart)");
+	parser.AddSwitch(ibT("i"),  ibT("install"),   "Install the cluster of the server folder as a service, started with the system (an administrator's)");
+	parser.AddSwitch(ibT("u"),  ibT("uninstall"), "Remove the cluster's service, stopped first (an administrator's)");
 
 	wxAppConsole::OnInitCmdLine(parser);
 }
 
 bool ibAppCluster::OnCmdLineParsed(wxCmdLineParser& parser)
 {
+	// wxCmdLineParser's own: it writes what it found into wx strings.
 	wxString folder = ibServerConfig::DefaultFolder(), locale;
-	parser.Found(wxT("dir"), &folder);
-	parser.Found(wxT("locale"), &locale);
+	parser.Found(ibT("dir"), &folder);
+	parser.Found(ibT("locale"), &locale);
 	m_folder = folder;
 	m_locale = locale;
-	m_mode = parser.Found(wxT("install")) ? ibMode::Install
-		: parser.Found(wxT("uninstall")) ? ibMode::Uninstall
-		: parser.Found(wxT("service")) ? ibMode::Service
+	m_mode = parser.Found(ibT("install")) ? ibMode::Install
+		: parser.Found(ibT("uninstall")) ? ibMode::Uninstall
+		: parser.Found(ibT("service")) ? ibMode::Service
 		: ibMode::Console;
 
 	return wxAppConsole::OnCmdLineParsed(parser);
@@ -104,7 +105,7 @@ bool ibAppCluster::OnCmdLineParsed(wxCmdLineParser& parser)
 bool ibAppCluster::OnInit()
 {
 	// THE JOURNAL AND THE DUMPS — the first act, as every application of the platform does.
-	ibCrashGuard::Install(wxT("appcluster"));
+	ibCrashGuard::Install(ibT("appcluster"));
 
 	if (!wxAppConsole::OnInit())
 		return false;
@@ -119,12 +120,12 @@ bool ibAppCluster::OnInit()
 			? ibClusterService::Install(m_folder, error)
 			: ibClusterService::Uninstall(error);
 		if (!done)
-			ibAppClusterSay(ibJournalMark::Error, wxT("%s"), error);
+			ibAppClusterSay(ibJournalMark::Error, ibT("%s"), error);
 		else if (m_mode == ibMode::Install)
-			ibAppClusterSay(ibJournalMark::Info, wxT("installed as the service '%s', for %s"),
+			ibAppClusterSay(ibJournalMark::Info, ibT("installed as the service '%s', for %s"),
 				ibClusterControl::ServiceName, m_folder);
 		else
-			ibAppClusterSay(ibJournalMark::Info, wxT("the service '%s' removed"), ibClusterControl::ServiceName);
+			ibAppClusterSay(ibJournalMark::Info, ibT("the service '%s' removed"), ibClusterControl::ServiceName);
 		SetErrorExitCode(done ? 0 : 1);
 		return false;
 	}
@@ -140,7 +141,7 @@ bool ibAppCluster::OnInit()
 
 	m_config = std::make_unique<ibServerConfig>(m_folder);
 	if (!m_config->HasConf())
-		return Refuse(ibString::Format(wxT("no config at %s"), m_config->GetConfPath()));
+		return Refuse(ibString::Format(ibT("no config at %s"), m_config->GetConfPath()));
 
 	// The installation's key made here at the first start, once — each server would otherwise make one of its own.
 	if (!m_config->LoadKey(error))
@@ -152,7 +153,7 @@ bool ibAppCluster::OnInit()
 	m_config->AssignIds(instances);
 	m_config->AssignMcpPorts(instances);
 	if (instances.empty())
-		return Refuse(ibString::Format(wxT("the config %s names no base"), m_config->GetConfPath()));
+		return Refuse(ibString::Format(ibT("the config %s names no base"), m_config->GetConfPath()));
 
 	// EACH BASE'S SERVERS, as many as its Processes, and its clients — every socket carried on to one of them as they are
 	// when it opens (ibClusterRoute), on this machine, as it was asked for (the path and its query), in the clear: TLS
@@ -177,7 +178,7 @@ bool ibAppCluster::OnInit()
 		const ibHttpRequest& request = socket->GetRequest();
 		const std::string token = request.GetParameter(ibClusterControl::Token);
 		if (!ibIsLoopback(request.m_address) || ibString::FromUTF8(token.data(), token.size()) != m_token) {
-			ibAppClusterSay(ibJournalMark::Warning, wxT("a control socket from %s refused: not this machine, or not its token"),
+			ibAppClusterSay(ibJournalMark::Warning, ibT("a control socket from %s refused: not this machine, or not its token"),
 				request.m_address);
 			return nullptr;
 		}
@@ -212,7 +213,7 @@ bool ibAppCluster::OnInit()
 	}
 	std::string refused;
 	if (!m_http.Start(options, 1, refused)) {
-		return Refuse(ibString::Format(wxT("port %u did not open - another cluster is probably holding it; write another "
+		return Refuse(ibString::Format(ibT("port %u did not open - another cluster is probably holding it; write another "
 			"Port in %s (%s)"), static_cast<unsigned>(port), m_config->GetConfPath(),
 			ibString::FromUTF8(refused.data(), refused.size())));
 	}
@@ -232,9 +233,9 @@ bool ibAppCluster::OnInit()
 	m_timer.Bind(wxEVT_TIMER, &ibAppCluster::OnTimer, this);
 	m_timer.Start(kTimerMs);
 
-	ibAppClusterSay(ibJournalMark::Info, wxT("serving %s on port %u (%s): %u base(s), %u server(s)"),
+	ibAppClusterSay(ibJournalMark::Info, ibT("serving %s on port %u (%s): %u base(s), %u server(s)"),
 		m_config->GetFolder(), static_cast<unsigned>(m_port),
-		options.m_httpsPort ? wxT("oess://, TLS") : wxT("oes://, this machine only"),
+		options.m_httpsPort ? ibT("oess://, TLS") : ibT("oes://, this machine only"),
 		static_cast<unsigned>(instances.size()), static_cast<unsigned>(m_workers.size()));
 	return true;
 }
@@ -251,8 +252,8 @@ int ibAppCluster::OnExit()
 	// The token goes with the cluster: the next one writes its own, and a tray finds none in between.
 	ibString error;
 	if (!m_config->RemoveClusterToken(error))
-		ibAppClusterSay(ibJournalMark::Warning, wxT("%s"), error);
-	ibAppClusterSay(ibJournalMark::Info, wxT("stopped"));
+		ibAppClusterSay(ibJournalMark::Warning, ibT("%s"), error);
+	ibAppClusterSay(ibJournalMark::Info, ibT("stopped"));
 
 	const int code = wxAppConsole::OnExit();
 	ibClusterService::Disconnect(code);
@@ -264,7 +265,7 @@ void ibAppCluster::Stop()
 	if (m_stopping)
 		return;
 	m_stopping = true;
-	ibAppClusterSay(ibJournalMark::Info, wxT("stopping"));
+	ibAppClusterSay(ibJournalMark::Info, ibT("stopping"));
 	for (const std::unique_ptr<ibClusterWorker>& worker : m_workers)
 		worker->Stop();
 	OnWorkerChanged();
@@ -319,18 +320,18 @@ void ibAppCluster::Receive(const ibString& message)
 	ibString verb;
 	ibClusterServer named;
 	if (!ibClusterControl::ReadVerb(message, verb, named)) {
-		ibAppClusterSay(ibJournalMark::Warning, wxT("a tray's message is not a verb: %s"), message);
+		ibAppClusterSay(ibJournalMark::Warning, ibT("a tray's message is not a verb: %s"), message);
 		return;
 	}
 	if (m_stopping)
 		return;   // the servers are going, whatever is asked
 	if (verb == ibClusterControl::StopCluster) {
-		ibAppClusterSay(ibJournalMark::Info, wxT("told to stop by a tray"));
+		ibAppClusterSay(ibJournalMark::Info, ibT("told to stop by a tray"));
 		Stop();
 		return;
 	}
 	if (verb != ibClusterControl::Start && verb != ibClusterControl::Stop && verb != ibClusterControl::Restart) {
-		ibAppClusterSay(ibJournalMark::Warning, wxT("a tray's verb is not one: %s"), verb);
+		ibAppClusterSay(ibJournalMark::Warning, ibT("a tray's verb is not one: %s"), verb);
 		return;
 	}
 	// Started or restarted, its base's servers are counted again first: server.conf may say another Processes now.
@@ -343,7 +344,7 @@ void ibAppCluster::Receive(const ibString& message)
 			return worker->GetServer().m_base == named.m_base && worker->GetServer().m_route == named.m_route;
 		});
 	if (found == m_workers.end()) {
-		ibAppClusterSay(ibJournalMark::Warning, wxT("a tray named no server of the cluster: '%s' #%u"), named.m_base,
+		ibAppClusterSay(ibJournalMark::Warning, ibT("a tray named no server of the cluster: '%s' #%u"), named.m_base,
 			named.m_route);
 		return;
 	}
@@ -372,7 +373,7 @@ void ibAppCluster::ApplyProcesses(const ibString& base)
 	const unsigned count = static_cast<unsigned>(std::count_if(m_workers.begin(), m_workers.end(), ofBase));
 	if (count == 0 || processes == count)
 		return;
-	ibAppClusterSay(ibJournalMark::Info, wxT("base '%s': %u server(s), %u before (Processes in %s)"), base, processes,
+	ibAppClusterSay(ibJournalMark::Info, ibT("base '%s': %u server(s), %u before (Processes in %s)"), base, processes,
 		count, m_config->GetConfPath());
 
 	if (processes > count) {
@@ -421,7 +422,7 @@ std::vector<ibClusterWorker*> ibAppCluster::WorkersOf(const ibString& base)
 
 bool ibAppCluster::Refuse(const ibString& reason)
 {
-	ibAppClusterSay(ibJournalMark::Error, wxT("%s - nothing is served"), reason);
+	ibAppClusterSay(ibJournalMark::Error, ibT("%s - nothing is served"), reason);
 	SetErrorExitCode(1);
 	ibClusterService::Disconnect(1);
 	return false;

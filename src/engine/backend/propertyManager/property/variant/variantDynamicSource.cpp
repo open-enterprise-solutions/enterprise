@@ -52,5 +52,5 @@ void ibVariantDataDynamicSource::SetQueryable(const ibBackendQueryable* queryabl
 wxString ibVariantDataDynamicSource::MakeString() const
 {
 	const ibBackendQueryable* q = GetQueryable();
-	return q != nullptr ? q->GetQueryName() : wxString();
+	return q != nullptr ? q->GetQueryName() : ibString();
 }

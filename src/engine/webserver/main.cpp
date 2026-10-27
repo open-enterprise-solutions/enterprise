@@ -19,7 +19,7 @@
 #include <cstdio>
 
 #include "webServer.h"
-#include "frontend/diagnostics/oesConsole.h"
+#include "core/diagnostics/oesConsole.h"
 #include "protocol/connectionServer.h"   // the base an address names — the publication's name left out
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
@@ -45,21 +45,21 @@ IB_LEAK_TRACKER_ARM();
 namespace {
 
 // Where a web server started without --dir keeps its web.conf and its site — `web` in the program folder.
-wxString DefaultWebDir()
+ibString DefaultWebDir()
 {
 	wxFileName fn = wxFileName::DirName(ibProgramFolder());
-	fn.AppendDir(wxT("web"));
+	fn.AppendDir(ibT("web"));
 	return fn.GetPath();
 }
 
 // A port from the command line — false, said, when it is not one.
-bool ReadPort(const wxCmdLineParser& parser, const wxString& option, std::optional<std::uint16_t>& port)
+bool ReadPort(const wxCmdLineParser& parser, const ibString& option, std::optional<std::uint16_t>& port)
 {
 	long number = 0;
 	if (!parser.Found(option, &number))
 		return true;
 	if (number < 0 || number > 65535) {
-		ibWebServerSay(ibJournalMark::Error, wxT("--%s=%ld is not a port"), option, number);
+		ibWebServerSay(ibJournalMark::Error, ibT("--%s=%ld is not a port"), option, number);
 		return false;
 	}
 	port = static_cast<std::uint16_t>(number);
@@ -70,11 +70,12 @@ bool ReadPort(const wxCmdLineParser& parser, const wxString& option, std::option
 bool ReadPublication(const wxCmdLineParser& parser, ibWebConfig& config)
 {
 	ibWebPublication publication;
-	wxString file, server;
-	const bool isFile = parser.Found(wxT("file"), &file);
-	const bool isServer = parser.Found(wxT("server"), &server);
+	// wxCmdLineParser's own: it writes what it found into wx strings.
+	wxString file, server, value;
+	const bool isFile = parser.Found(ibT("file"), &file);
+	const bool isServer = parser.Found(ibT("server"), &server);
 	if (isFile && isServer) {
-		ibWebServerSay(ibJournalMark::Error, wxT("--file and --server name a publication each - web.conf holds more than one"));
+		ibWebServerSay(ibJournalMark::Error, ibT("--file and --server name a publication each - web.conf holds more than one"));
 		return false;
 	}
 	if (!isFile && !isServer)
@@ -83,28 +84,29 @@ bool ReadPublication(const wxCmdLineParser& parser, ibWebConfig& config)
 	if (isFile) {
 		wxFileName folder = wxFileName::DirName(file);
 		folder.MakeAbsolute();
-		publication.m_kind = wxT("firebird");
+		publication.m_kind = ibT("firebird");
 		publication.m_directory = folder.GetPath();
-		publication.m_name = folder.GetDirCount() > 0 ? folder.GetDirs().Last() : wxString();
-		parser.Found(wxT("locale"), &publication.m_locale);
-		publication.m_debug = parser.Found(wxT("debug"));
+		publication.m_name = folder.GetDirCount() > 0 ? ibString(folder.GetDirs().Last()) : ibString();
+		if (parser.Found(ibT("locale"), &value))
+			publication.m_locale = value;
+		publication.m_debug = parser.Found(ibT("debug"));
 	}
 	else {
-		wxString host, base;
+		ibString host, base;
 		int port = 0;
 		bool secure = false;
-		publication.m_kind = wxT("server");
+		publication.m_kind = ibT("server");
 		publication.m_address = server;
 		if (ibProtocolConnectionServer::ParseAddress(server, host, port, base, secure))
 			publication.m_name = base;
-		wxString trusted;
-		if (parser.Found(wxT("trusted"), &trusted)) {
-			wxFileName file(trusted);
+		if (parser.Found(ibT("trusted"), &value)) {
+			wxFileName file(value);
 			file.MakeAbsolute();
 			publication.m_trusted = file.GetFullPath();
 		}
 	}
-	parser.Found(wxT("name"), &publication.m_name);
+	if (parser.Found(ibT("name"), &value))
+		publication.m_name = value;
 	config.m_publications.push_back(publication);
 	return true;
 }
@@ -116,7 +118,7 @@ int main(int argc, char** argv)
 	wxApp::CheckBuildOptions(WX_BUILD_OPTIONS_SIGNATURE, "webserver");
 
 	// wxInitializer + ibCrashGuard::Install, in one line — a file base's engine runs in this process.
-	ibOesConsoleBoot boot(wxT("webserver"), argc, argv);
+	ibOesConsoleBoot boot(ibT("webserver"), argc, argv);
 	if (!boot.IsOk()) {
 		std::fprintf(stderr, "Failed to initialize the wxWidgets library, aborting.");
 		return -1;
@@ -130,17 +132,20 @@ int main(int argc, char** argv)
 	if (parser.Parse() != 0)
 		return 1;
 
-	wxString folder = DefaultWebDir();
-	parser.Found(wxT("dir"), &folder);
+	// wxCmdLineParser's own: it writes what it found into wx strings.
+	wxString folder = DefaultWebDir(), value;
+	parser.Found(ibT("dir"), &folder);
 	ibWebConfig config;
-	wxString error;
+	ibString error;
 	if (!config.Read(folder, error)) {
-		ibWebServerSay(ibJournalMark::Error, wxT("%s"), error);
+		ibWebServerSay(ibJournalMark::Error, ibT("%s"), error);
 		return 1;
 	}
-	parser.Found(wxT("host"), &config.m_host);
-	parser.Found(wxT("manifest"), &config.m_manifest);
-	if (!ReadPort(parser, wxT("port"), config.m_httpPort) || !ReadPort(parser, wxT("https-port"), config.m_httpsPort)
+	if (parser.Found(ibT("host"), &value))
+		config.m_host = value;
+	if (parser.Found(ibT("manifest"), &value))
+		config.m_manifest = value;
+	if (!ReadPort(parser, ibT("port"), config.m_httpPort) || !ReadPort(parser, ibT("https-port"), config.m_httpsPort)
 		|| !ReadPublication(parser, config))
 		return 1;
 

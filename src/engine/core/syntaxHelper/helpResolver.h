@@ -18,7 +18,6 @@
 
 #include "core/core.h"
 
-#include <wx/string.h>
 
 #include <vector>
 
@@ -38,11 +37,11 @@ struct CORE_API ibHelpResolveHint {
 	};
 
 	// Left of '.' when role == kMemberAccess. Empty otherwise.
-	wxString parentIdentifier;
+	ibString parentIdentifier;
 
 	// Closest enclosing metadata object id (e.g. "mo.Document.Invoice").
 	// Empty when the lookup is outside an object module.
-	wxString containingMetaObjectId;
+	ibString containingMetaObjectId;
 
 	Role expectedRole = Role::kUnknown;
 
@@ -71,7 +70,7 @@ struct CORE_API ibHelpResolveHint {
 // uses these pointers (§3.4 lifetime contract).
 CORE_API std::vector<const ibHelpEntry*>
 ResolveByName(const ibHelpCorpus&      corpus,
-              const wxString&          identifier,
+              const ibString&          identifier,
               const ibHelpResolveHint& hint = {});
 
 #endif // _IB_HELP_RESOLVER_H_

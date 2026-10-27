@@ -26,7 +26,6 @@
 
 #include "core/core.h"
 
-#include <wx/string.h>
 
 #include <memory>
 #include <vector>
@@ -40,10 +39,10 @@ enum class ibHelpLoadSeverity {
 };
 
 struct CORE_API ibHelpLoadError {
-	wxString           bucketPath; // absolute path of the offending file
+	ibString           bucketPath; // absolute path of the offending file
 	int                line = 0;   // 1-based; 0 if not localizable to a line
 	ibHelpLoadSeverity severity = ibHelpLoadSeverity::kEntrySkipped;
-	wxString           message;    // human-readable, localised at the call site
+	ibString           message;    // human-readable, localised at the call site
 };
 
 // Outcome of LoadHelpCorpus(). `corpus` is never null — on total failure

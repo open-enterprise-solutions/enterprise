@@ -72,7 +72,7 @@ struct ibChoiceCondition {
 	// door a folder-select list is born with its `IsFolder = true` through.
 	//
 	// Empty: nothing narrows the rows.
-	std::map<wxString, ibValue> m_parameters;
+	std::map<ibString, ibValue> m_parameters;
 };
 
 // ⭐ EVERYTHING ONE CHOICE IS ASKED WITH, IN ONE ARGUMENT. `ProcessChoice` used to take the form name
@@ -117,7 +117,7 @@ struct ibCreateRequest {
 struct ibFormRequest {
 
 	// WHICH form. The one the author picked; empty = the metaobject's own.
-	wxString m_formName;
+	ibString m_formName;
 
 	// …AND WHICH WINDOW OF IT — the key the form is opened under. A second opening under the same key
 	// brings the window already open to the front instead of making another; empty = the key follows the
@@ -131,7 +131,7 @@ struct ibFormRequest {
 
 	// …and the parameters of whatever custom thing is being opened, by name: a report's own key, a
 	// period to open in, a row to stand on. A script writes these as a Structure.
-	std::map<wxString, ibValue> m_values;
+	std::map<ibString, ibValue> m_values;
 
 	ibFormRequest() = default;
 
@@ -146,22 +146,22 @@ struct ibFormRequest {
 	// A conversion is the wrong shape for this: a name is PART of a request, not another way of
 	// spelling one, and the compiler is the only reader that checks every site. Spelling
 	// `ibFormRequest(name)` where a name really is all there is costs one word and says so.
-	explicit ibFormRequest(const wxString& formName) : m_formName(formName) {}
-	ibFormRequest(const wxString& formName, const ibUniqueKey& formGuid)
+	explicit ibFormRequest(const ibString& formName) : m_formName(formName) {}
+	ibFormRequest(const ibString& formName, const ibUniqueKey& formGuid)
 		: m_formName(formName), m_formGuid(formGuid) {}
-	ibFormRequest(const wxString& formName, const ibCreateRequest& create)
+	ibFormRequest(const ibString& formName, const ibCreateRequest& create)
 		: m_formName(formName), m_create(create) {}
 
 	// A named value, or an empty one — a form asks for what it knows about and is not broken by a
 	// caller that did not send it.
-	ibValue Get(const wxString& name) const {
-		const std::map<wxString, ibValue>::const_iterator found = m_values.find(name);
+	ibValue Get(const ibString& name) const {
+		const std::map<ibString, ibValue>::const_iterator found = m_values.find(name);
 		return found != m_values.end() ? found->second : ibValue();
 	}
 
-	bool Has(const wxString& name) const { return m_values.find(name) != m_values.end(); }
+	bool Has(const ibString& name) const { return m_values.find(name) != m_values.end(); }
 
-	void Set(const wxString& name, const ibValue& value) { m_values[name] = value; }
+	void Set(const ibString& name, const ibValue& value) { m_values[name] = value; }
 };
 
 #endif // !__CREATE_REQUEST_H__

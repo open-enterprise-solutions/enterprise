@@ -34,7 +34,7 @@ std::function<void()>   s_stop;
 
 ibString Refusal(const ibChar* what, DWORD code)
 {
-	return ibString::Format(wxT("%s: %s"), what, wxSysErrorMsgStr(code));
+	return ibString::Format(ibT("%s: %s"), what, wxSysErrorMsgStr(code));
 }
 
 void Report(DWORD state, DWORD code = 0)
@@ -83,23 +83,23 @@ bool ibClusterService::Install(const ibString& folder, ibString& error)
 {
 	wxFileName absolute = wxFileName::DirName(folder);
 	absolute.MakeAbsolute();
-	const ibString command = ibString::Format(wxT("\"%s\" --service --dir=\"%s\""),
+	const ibString command = ibString::Format(ibT("\"%s\" --service --dir=\"%s\""),
 		wxStandardPaths::Get().GetExecutablePath(), absolute.GetPath());
 
 	const SC_HANDLE manager = ::OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CREATE_SERVICE);
 	if (manager == nullptr) {
-		error = Refusal(wxT("the service manager is not opened - an administrator installs a service"), ::GetLastError());
+		error = Refusal(ibT("the service manager is not opened - an administrator installs a service"), ::GetLastError());
 		return false;
 	}
 	const SC_HANDLE service = ::CreateServiceW(manager, ibClusterControl::ServiceName, ibClusterControl::ServiceTitle,
 		SERVICE_CHANGE_CONFIG, SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, command.wc_str(),
 		nullptr, nullptr, nullptr, nullptr, nullptr);
 	if (service == nullptr) {
-		error = Refusal(wxT("the service is not installed"), ::GetLastError());
+		error = Refusal(ibT("the service is not installed"), ::GetLastError());
 		::CloseServiceHandle(manager);
 		return false;
 	}
-	const ibString description = ibString::Format(wxT("Runs the application servers of %s, a process for each base."),
+	const ibString description = ibString::Format(ibT("Runs the application servers of %s, a process for each base."),
 		absolute.GetPath());
 	SERVICE_DESCRIPTIONW said{ const_cast<wchar_t*>(description.wc_str()) };
 	::ChangeServiceConfig2W(service, SERVICE_CONFIG_DESCRIPTION, &said);
@@ -112,12 +112,12 @@ bool ibClusterService::Uninstall(ibString& error)
 {
 	const SC_HANDLE manager = ::OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
 	if (manager == nullptr) {
-		error = Refusal(wxT("the service manager is not opened"), ::GetLastError());
+		error = Refusal(ibT("the service manager is not opened"), ::GetLastError());
 		return false;
 	}
 	const SC_HANDLE service = ::OpenServiceW(manager, ibClusterControl::ServiceName, SERVICE_STOP | DELETE);
 	if (service == nullptr) {
-		error = Refusal(wxT("the service is not opened - an administrator removes a service"), ::GetLastError());
+		error = Refusal(ibT("the service is not opened - an administrator removes a service"), ::GetLastError());
 		::CloseServiceHandle(manager);
 		return false;
 	}
@@ -126,7 +126,7 @@ bool ibClusterService::Uninstall(ibString& error)
 	::ControlService(service, SERVICE_CONTROL_STOP, &status);
 	const bool removed = ::DeleteService(service) != FALSE;
 	if (!removed)
-		error = Refusal(wxT("the service is not removed"), ::GetLastError());
+		error = Refusal(ibT("the service is not removed"), ::GetLastError());
 	::CloseServiceHandle(service);
 	::CloseServiceHandle(manager);
 	return removed;
@@ -157,7 +157,7 @@ bool ibClusterService::Connect(std::function<void()> stop, ibString& error)
 		return true;
 	lock.unlock();
 	s_dispatcher.join();
-	error = Refusal(wxT("the service manager is not reached - --service is the manager's to start"), s_refusal);
+	error = Refusal(ibT("the service manager is not reached - --service is the manager's to start"), s_refusal);
 	return false;
 }
 
@@ -173,13 +173,13 @@ void ibClusterService::Disconnect(int code)
 
 bool ibClusterService::Install(const ibString&, ibString& error)
 {
-	error = wxT("a service is installed here by a systemd unit: ExecStart=<this program> --service --dir=<server folder>");
+	error = ibT("a service is installed here by a systemd unit: ExecStart=<this program> --service --dir=<server folder>");
 	return false;
 }
 
 bool ibClusterService::Uninstall(ibString& error)
 {
-	error = wxT("a service is removed here with its systemd unit");
+	error = ibT("a service is removed here with its systemd unit");
 	return false;
 }
 

@@ -22,7 +22,7 @@ public:
 	// port of ibPort::Workers, said on stdout (ibWorkerPipe). Empty — refused: nothing else starts a server.
 	// `route` — which of the base's servers this one is (server.conf's Processes): its clients' tokens end in it, and
 	// the base's assistant access is the first one's. 0 — the base's only one.
-	ibAppServer(ibServerConfig& config, const wxString& locale, const ibString& workerBase, unsigned route);
+	ibAppServer(ibServerConfig& config, const ibString& locale, const ibString& workerBase, unsigned route);
 	~ibAppServer();
 
 	// The whole life: open, serve until Ctrl+C / SIGTERM / the console closing, stop. The process's exit code.
@@ -37,14 +37,14 @@ private:
 	void Stop();
 
 	ibServerConfig&              m_config;
-	wxString                     m_locale;
+	ibString                     m_locale;
 	ibString                     m_workerBase;
 	unsigned                     m_route;
 	std::vector<ibSessionHolder> m_sessions;   // one per base served — the base is reached through its session
 
 	// The clients of each base, working through the protocol (frmserver) — one host per base served, by the
 	// base's name — and the one port they all come in by.
-	std::map<wxString, std::unique_ptr<ibClientHost>> m_clientHosts;
+	std::map<ibString, std::unique_ptr<ibClientHost>> m_clientHosts;
 	ibClientListener                                  m_clientListener;
 };
 

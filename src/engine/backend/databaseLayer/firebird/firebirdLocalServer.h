@@ -65,7 +65,7 @@ public:
 	// Construct a connection URL for the locally-spawned server,
 	// e.g. `inet://localhost:3055/<dbpath>`. Empty string if
 	// `EnsureStarted` hasn't been called or failed.
-	static wxString MakeConnectUrl(const wxString& dbPath);
+	static ibString MakeConnectUrl(const ibString& dbPath);
 };
 
 #endif // __FIREBIRD_LOCAL_SERVER_H__

@@ -46,9 +46,9 @@ public:
 	ibTextDocument() : ibDocument() {}
 
 	// The text — the document's own: it is what the desktop's editor held.
-	const wxString& GetText() const { return m_text; }
+	const ibString& GetText() const { return m_text; }
 	// …changed: modified, when it is another text.
-	void SetText(const wxString& text) {
+	void SetText(const ibString& text) {
 		if (text == m_text)
 			return;
 		m_text = text;
@@ -57,7 +57,7 @@ public:
 
 protected:
 
-	wxString m_text;
+	ibString m_text;
 
 	ibTextDocument(const ibTextDocument&) = delete;
 	ibTextDocument& operator=(const ibTextDocument&) = delete;
@@ -75,10 +75,10 @@ public:
 	ibTextFileDocument() : ibTextDocument() {}
 
 	// THE TEXT FORMAT, said once: the text template is registered with it (the ibDocManager ctor).
-	static wxString FileMask() { return wxT("*.txt;*.text"); }
-	static wxString FileExtensions() { return wxT("txt;text"); }
+	static ibString FileMask() { return ibT("*.txt;*.text"); }
+	static ibString FileExtensions() { return ibT("txt;text"); }
 
-	virtual bool OnCreate(const wxString& path, long flags) override;
+	virtual bool OnCreate(const ibString& path, long flags) override;
 	virtual bool OnNewDocument() override {
 
 		// notice that there is no need to either reset nor even check the
@@ -90,7 +90,7 @@ public:
 
 		SetDocumentSaved(false);
 
-		const wxString name = GetDocumentManager()->MakeNewDocumentName();
+		const ibString name = GetDocumentManager()->MakeNewDocumentName();
 
 		SetTitle(name);
 		SetFilename(name, true);
@@ -101,8 +101,8 @@ public:
 
 protected:
 
-	virtual bool DoSaveDocument(const wxString& filename) override;
-	virtual bool DoOpenDocument(const wxString& filename) override;
+	virtual bool DoSaveDocument(const ibString& filename) override;
+	virtual bool DoOpenDocument(const ibString& filename) override;
 
 	ibTextFileDocument(const ibTextFileDocument&) = delete;
 	ibTextFileDocument& operator=(const ibTextFileDocument&) = delete;

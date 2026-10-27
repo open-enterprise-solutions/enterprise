@@ -6,7 +6,7 @@
 #include "backend/session/session.h"
 
 //////////////////////////////////////////////////////////////////////////////////
-#define thisObject wxT("ThisObject")
+#define thisObject ibT("ThisObject")
 //////////////////////////////////////////////////////////////////////////////////
 //  ibValueModuleRuntimeManagerExternalDataProcessor
 //////////////////////////////////////////////////////////////////////////////////
@@ -28,7 +28,7 @@ std::shared_ptr<ibProcUnit> ibValueModuleRuntimeManagerExternalDataProcessor::Ge
 	return moduleManager ? moduleManager->GetProcUnit() : nullptr;
 }
 
-std::map<wxString, ibContextVar>& ibValueModuleRuntimeManagerExternalDataProcessor::GetContextVariables()
+std::map<ibString, ibContextVar>& ibValueModuleRuntimeManagerExternalDataProcessor::GetContextVariables()
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
@@ -36,13 +36,13 @@ std::map<wxString, ibContextVar>& ibValueModuleRuntimeManagerExternalDataProcess
 	// with a process-static empty map rather than dereferencing null in release
 	// (the sibling GetCompileModule/GetProcUnit return pointers and null-fold).
 	if (moduleManager == nullptr) {
-		static std::map<wxString, ibContextVar> s_empty;
+		static std::map<ibString, ibContextVar> s_empty;
 		return s_empty;
 	}
 	return moduleManager->GetContextVariables();
 }
 
-std::map<wxString, ibValue*>& ibValueModuleRuntimeManagerExternalDataProcessor::GetGlobalVariables()
+std::map<ibString, ibValue*>& ibValueModuleRuntimeManagerExternalDataProcessor::GetGlobalVariables()
 {
 	// Same delegation as GetContextVariables: an external data processor's editor
 	// must see the configuration root's globals (Metadata + common modules
@@ -50,7 +50,7 @@ std::map<wxString, ibValue*>& ibValueModuleRuntimeManagerExternalDataProcessor::
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
 	if (moduleManager == nullptr) {
-		static std::map<wxString, ibValue*> s_empty;
+		static std::map<ibString, ibValue*> s_empty;
 		return s_empty;
 	}
 	return moduleManager->GetGlobalVariables();
@@ -154,8 +154,8 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 			// person recognises anyway.
 			const ibValueMetaObjectRecordData* metaObject =
 				m_objectValue != nullptr ? m_objectValue->GetMetaObject() : nullptr;
-			ibJournalWarning(wxT("module"),_("External module '%s' init failed: %s"),
-				metaObject != nullptr ? metaObject->GetName() : wxString(wxEmptyString),
+			ibJournalWarning(ibT("module"),_("External module '%s' init failed: %s"),
+				metaObject != nullptr ? metaObject->GetName() : ibString(ibEmptyString),
 				err.GetErrorDescription());
 			return false;
 		};
@@ -290,7 +290,7 @@ std::shared_ptr<ibProcUnit> ibValueModuleRuntimeManagerExternalReport::GetProcUn
 	return moduleManager ? moduleManager->GetProcUnit() : nullptr;
 }
 
-std::map<wxString, ibContextVar>& ibValueModuleRuntimeManagerExternalReport::GetContextVariables()
+std::map<ibString, ibContextVar>& ibValueModuleRuntimeManagerExternalReport::GetContextVariables()
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
@@ -298,19 +298,19 @@ std::map<wxString, ibContextVar>& ibValueModuleRuntimeManagerExternalReport::Get
 	// with a process-static empty map rather than dereferencing null in release
 	// (the sibling GetCompileModule/GetProcUnit return pointers and null-fold).
 	if (moduleManager == nullptr) {
-		static std::map<wxString, ibContextVar> s_empty;
+		static std::map<ibString, ibContextVar> s_empty;
 		return s_empty;
 	}
 	return moduleManager->GetContextVariables();
 }
 
-std::map<wxString, ibValue*>& ibValueModuleRuntimeManagerExternalReport::GetGlobalVariables()
+std::map<ibString, ibValue*>& ibValueModuleRuntimeManagerExternalReport::GetGlobalVariables()
 {
 	// Delegate to the configuration root — see DataProcessor::GetGlobalVariables.
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
 	if (moduleManager == nullptr) {
-		static std::map<wxString, ibValue*> s_empty;
+		static std::map<ibString, ibValue*> s_empty;
 		return s_empty;
 	}
 	return moduleManager->GetGlobalVariables();
@@ -394,8 +394,8 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 			// with a complaint about itself.
 			const ibValueMetaObjectRecordData* metaObject =
 				m_objectValue != nullptr ? m_objectValue->GetMetaObject() : nullptr;
-			ibJournalWarning(wxT("module"),_("External module '%s' re-init failed: %s"),
-				metaObject != nullptr ? metaObject->GetName() : wxString(wxEmptyString),
+			ibJournalWarning(ibT("module"),_("External module '%s' re-init failed: %s"),
+				metaObject != nullptr ? metaObject->GetName() : ibString(ibEmptyString),
 				err.GetErrorDescription());
 			return false;
 		};

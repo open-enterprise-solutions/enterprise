@@ -34,8 +34,8 @@ public:
 	// `Ref.` make `CatalogRef`, `Document` and `Object.` make `DocumentObject`. The name a MEMBER is
 	// written with is exactly this and `.Item`: the dot is what separates a type from the metaobject
 	// it belongs to, and a family belongs to none.
-	static wxString NameOf(const wxString& metaClassName, ibCtorObjectMetaType memberKind) {
-		return metaClassName + wxString(PrefixOf(memberKind)).BeforeLast(wxT('.'));
+	static ibString NameOf(const ibString& metaClassName, ibCtorObjectMetaType memberKind) {
+		return metaClassName + ibString(PrefixOf(memberKind)).BeforeLast(ibT('.'));
 	}
 
 	// The kinds a family is kept for, and the prefix each is written with (objCtorDefs.h).
@@ -45,7 +45,7 @@ public:
 		case ibCtorObjectMetaType::ibCtorObjectMetaType_Object:    return prefixObject;
 		case ibCtorObjectMetaType::ibCtorObjectMetaType_Manager:   return prefixManager;
 		case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet: return prefixRecordSet;
-		default:                                                   return wxT("");
+		default:                                                   return ibT("");
 		}
 	}
 
@@ -53,7 +53,7 @@ public:
 	// catalog. Whatever reads the kind off a declared type takes it for what it holds: a field declared
 	// `CatalogRef` is stored as a reference (the `_RTRef` / `_RRRef` pair, columnSpread), with no second
 	// question asked anywhere. WHICH ones it admits is still its gate's answer, below.
-	ibCtorMetaAnyKind(const wxString& className, ibCtorObjectMetaType memberKind, ibClassMetaclass metaclass, const ibCtorAbstractType* metaClassCtor)
+	ibCtorMetaAnyKind(const ibString& className, ibCtorObjectMetaType memberKind, ibClassMetaclass metaclass, const ibCtorAbstractType* metaClassCtor)
 		: ibCtorValueTypeBase(className, typeid(void), make_clsid_dynamic(kIbClsidAnyMetaID, metatype_to_kind(memberKind), metaclass)),
 		m_metaClassCtor(metaClassCtor) {
 	}
@@ -80,7 +80,7 @@ private:
 // reference -> `CatalogRef`. Null when the metaclass has none (it has no types of that kind, or nothing
 // has registered yet), which callers treat as "nothing to tell". Asked where only the metaclass's name is
 // in hand; a member's family is its own id with the metaID left ANY (clsid_any_of, clsid.h).
-inline ibCtorMetaAnyKind* ib_find_meta_any_kind(const wxString& metaClassName, ibCtorObjectMetaType memberKind) {
+inline ibCtorMetaAnyKind* ib_find_meta_any_kind(const ibString& metaClassName, ibCtorObjectMetaType memberKind) {
 	// A kind none is kept for (a selection, a tabular section) is not looked up: its name would be the
 	// metaclass's own.
 	if (wxIsEmpty(ibCtorMetaAnyKind::PrefixOf(memberKind)))
@@ -94,7 +94,7 @@ template <class T>
 class ibCtorMetaClass : public ibCtorValueTypeBase {
 public:
 
-	ibCtorMetaClass(const wxString& className, const ibClassID& clsid) :ibCtorValueTypeBase(className, typeid(T), clsid) {}
+	ibCtorMetaClass(const ibString& className, const ibClassID& clsid) :ibCtorValueTypeBase(className, typeid(T), clsid) {}
 
 	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_metadata; }
@@ -144,7 +144,7 @@ private:
 
 // 3-arg (legacy): explicit clsid.
 #define METADATA_TYPE_REGISTER_3(class_info, class_name, clsid)\
-GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_m_), new ibCtorMetaClass<class_info>(wxT(class_name), clsid))
+GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_m_), new ibCtorMetaClass<class_info>(ibT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define METADATA_TYPE_REGISTER_2(class_info, class_name)\
 METADATA_TYPE_REGISTER_3(class_info, class_name, metadata_to_clsid(class_name))

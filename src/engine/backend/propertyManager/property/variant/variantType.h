@@ -79,7 +79,7 @@ public:
 	}
 
 	virtual wxString GetType() const {
-		return wxT("ibVariantDataAttribute");
+		return ibT("ibVariantDataAttribute");
 	}
 
 protected:

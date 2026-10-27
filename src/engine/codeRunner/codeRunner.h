@@ -17,14 +17,14 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include "backend/backend_mainFrame.h"
-#include "frontend/win/editor/codeEditor/codeEditor.h"
+#include "codeRunner/win/editor/codeEditor/codeEditor.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Class ibFrameCodeRunner
 ///////////////////////////////////////////////////////////////////////////////
 
-// Sessionless / metadata-less script runner — uses frontend's
-// ibCodeEditor for syntax-highlight + fold + auto-indent + format/indent
+// Sessionless / metadata-less script runner — uses its own copy of the
+// old front's ibCodeEditor for syntax-highlight + fold + auto-indent + format/indent
 // commands without any document or debug client. Only the Run /
 // SyntaxCheck / Clear buttons live here; everything editor-related is
 // inherited.
@@ -64,29 +64,26 @@ protected:
 
 public:
 
-	virtual wxFrame* GetFrameHandler() const { return const_cast<ibFrameCodeRunner*>(this); }
-	virtual class ibMetaData* FindMetadataByPath(const wxString& strFileName) const { return nullptr; }
-
-	virtual void SetTitle(const wxString& title) {
+	virtual void SetTitle(const ibString& title) override {
 		wxFrame::SetTitle(title);
 	}
 
-	virtual void SetStatusText(const wxString& text, int number = 0) {
+	virtual void SetStatusText(const ibString& text, int number = 0) override {
 		wxFrame::SetStatusText(text, number);
 	};
 
-	virtual void Message(const wxString& strMessage, ibStatusMessage status) {
+	virtual void Message(const ibString& strMessage, ibStatusMessage status) override {
 		AppendOutput(strMessage);
 	};
 
-	virtual void ClearMessage() {
+	virtual void ClearMessage() override {
 		m_output->SetReadOnly(false);
 		m_output->ClearAll();
 		m_output->SetReadOnly(true);
 	};
 
-	virtual void RaiseFrame() { wxFrame::Raise(); }
-	virtual void RefreshFrame() { wxFrame::Refresh(); }
+	virtual void RaiseFrame() override { wxFrame::Raise(); }
+	virtual void RefreshFrame() override { wxFrame::Refresh(); }
 
 	void AppendOutput(const wxString& str) const {
 		m_output->SetReadOnly(false);

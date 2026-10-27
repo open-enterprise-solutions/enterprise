@@ -23,7 +23,9 @@ THE SOFTWARE.
 
 #include <array>
 #include <cstdint>
-#include <wx/wx.h>
+#include <string_view>
+
+#include "core/coreApi.h"   // __IBMSW__ / __IBOSX__ — which system makes the guid
 
 struct ibGuidImpl { // UUID = GUID = CLSID = LIBID = IID
 	uint32_t        m_data1;   // fixed-width, NOT `unsigned long`: that is 64-bit on LP64 (Linux/macOS),
@@ -33,15 +35,16 @@ struct ibGuidImpl { // UUID = GUID = CLSID = LIBID = IID
 };                             // identity (a reference key carries no type; the type is the _RTRef column).
 static_assert(sizeof(ibGuidImpl) == 16, "ibGuidImpl must stay a portable 16-byte POD (guid storage dupe / _RRRef key)");
 
-#if defined(__WXMSW__)
+#if defined(__IBMSW__)
 #define GUID_WINDOWS
-#elif defined(__WXGTK__)
-#define GUID_LIBUUID
-#elif defined(__WXOSX__)
+#elif defined(__IBOSX__)
 #define GUID_CFUUID
+#else
+#define GUID_LIBUUID
 #endif
 
 #include "core/core.h"
+#include "core/fstring.h"
 
 #define GUID_TIME_BASED 1
 #define GUID_DCE_SECURITY 2
@@ -67,9 +70,7 @@ public:
 	ibGuid();
 	ibGuid(const ibGuidImpl& bytes);   // IMPLICIT on purpose: the storage dupe flows into an ibGuid freely
 	                                   // (the metaclass patches Data1 on an ibGuidImpl, then returns it as a guid)
-#if __WXWINDOWS__
-	ibGuid(const wxString& fromString);
-#endif
+	ibGuid(const ibString& fromString);
 
 	ibGuid(const ibGuid& other) = default;
 	ibGuid& operator=(const ibGuid& other) = default;
@@ -81,11 +82,9 @@ public:
 	// (the type is the _RTRef column); ibGuid stays a primitive that mints guids, it does not know metaIDs.
 	static ibGuidImpl newGuid(short version = GUID_RANDOM);
 
-#if __WXWINDOWS__
 	// Read a guid from its text: 32 hex digits, hyphens anywhere. False, and `guid` untouched, when the text
 	// is not a guid; the nil guid's text is one. The constructor from text answers the nil guid for both.
-	static bool parse(const wxString& text, ibGuid& guid);
-#endif
+	static bool parse(const ibString& text, ibGuid& guid);
 
 	bool operator > (const ibGuid& other) const;
 	bool operator >= (const ibGuid& other) const;
@@ -99,10 +98,10 @@ public:
 	operator ibGuidImpl() const;
 
 	// convert to string using std::snprintf() and wxString
-	wxString str() const;
+	ibString str() const;
 
 	// conversion operator for string
-	operator wxString() const { return str(); }
+	operator ibString() const { return str(); }
 
 	const std::array<unsigned char, 16>& bytes() const;
 	void swap(ibGuid& other);

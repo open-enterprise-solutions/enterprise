@@ -60,13 +60,13 @@ namespace {
 // A number / string column with a REAL type descriptor (Materialise creates the temp column by role).
 class TypedCol : public ibBackendQueryColumn {
 public:
-	TypedCol(const wxString& name, ibMetaID id, ibTypeDescription type) : m_name(name), m_id(id), m_type(std::move(type)) {}
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	TypedCol(const ibString& name, ibMetaID id, ibTypeDescription type) : m_name(name), m_id(id), m_type(std::move(type)) {}
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
@@ -74,7 +74,7 @@ private:
 // A computed (RAM) queryable, rows built by a builder each call (ibQueryRamTable is move-only).
 class ComputedQ : public ibBackendQueryable {
 public:
-	ComputedQ(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {
+	ComputedQ(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {
 		ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(id); m_key = ibGuid(i);
 	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
@@ -86,7 +86,7 @@ public:
 		return m_build ? m_build() : ibQueryRamTable();
 	}
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
@@ -94,12 +94,12 @@ public:
 		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
 		return false;
 	}
-	wxString GetQueryTableName() const override { return m_name; }
+	ibString GetQueryTableName() const override { return m_name; }
 	ibMetaID GetQueryTableId()   const override { return m_id; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 private:
-	wxString m_name;
+	ibString m_name;
 	ibMetaID m_id;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<const ibBackendQueryColumn*> m_cols;
@@ -113,13 +113,13 @@ const ibMetaID S_ITEM = 20, S_QTY = 21;
 // the DBMS (ibDbTableProvider::ExecuteRead), not a RAM fold.
 class PhysicalQ : public ibBackendQueryable {
 public:
-	PhysicalQ(const wxString& table, ibMetaID id) : m_table(table), m_id(id) {
+	PhysicalQ(const ibString& table, ibMetaID id) : m_table(table), m_id(id) {
 		ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(id); m_key = ibGuid(i);
 	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 	bool     IsComputedInRam()   const override { return false; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
@@ -127,19 +127,19 @@ public:
 		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
 		return false;
 	}
-	wxString GetQueryTableName() const override { return m_table; }
+	ibString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()   const override { return m_id; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 private:
-	wxString m_table;
+	ibString m_table;
 	ibMetaID m_id;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<const ibBackendQueryColumn*> m_cols;
 };
 
 // Record a lambda BODY into the L4-2 query AST (compile -> recorder), as test_queryLINQExec does.
-std::shared_ptr<ibQueryAstExpr> RecordLambda(const wxString& body, const wxString& rowParam = wxT("x")) {
+std::shared_ptr<ibQueryAstExpr> RecordLambda(const ibString& body, const ibString& rowParam = wxT("x")) {
 	return ibTestRecordLambda(body, rowParam);
 }
 
@@ -187,7 +187,7 @@ TEST_F(ComputedServerFix, Aggregate_PromotesToServer)
 		t.AddColumn(S_QTY,  wxT("qty"),  ibTypeDescription(g_valueNumberCLSID));
 		for (long i = 0; i < 1500; ++i) {
 			const long r = t.AppendRow();
-			t.SetCell(r, S_ITEM, ibValue(wxString::Format(wxT("K%ld"), i % 3)));
+			t.SetCell(r, S_ITEM, ibValue(ibString::Format(wxT("K%ld"), i % 3)));
 			t.SetCell(r, S_QTY,  ibValue(ibNumber(1)));
 		}
 		return t;
@@ -280,7 +280,7 @@ TEST_F(ComputedServerFix, In_RawColumnRendersNativeIn)
 	ibDataQueryBuilder q(holder);
 	q.From(&src);
 	q.Select(&qty, wxT("qty"));
-	q.WhereIn(&region, { ibValue(wxString(wxT("North"))), ibValue(wxString(wxT("East"))) });
+	q.WhereIn(&region, { ibValue(ibString(wxT("North"))), ibValue(ibString(wxT("East"))) });
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -310,7 +310,7 @@ TEST_F(ComputedServerFix, In_NullProbeDropped)
 	ibDataQueryBuilder q(holder);
 	q.From(&src);
 	q.Select(&qty, wxT("qty"));
-	q.WhereIn(&region, { ibValue(wxString(wxT("North"))), ibValue(wxString(wxT("East"))) });
+	q.WhereIn(&region, { ibValue(ibString(wxT("North"))), ibValue(ibString(wxT("East"))) });
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -396,14 +396,14 @@ TEST_F(ComputedServerFix, In_AllNullKeysStripToEmpty)
 namespace {
 
 struct MetaColFixture {
-	std::vector<wxString> fields;   // [0] = _TYPE, [1] = _S (bind order)
-	wxString              typeField;
-	wxString              strField;
+	std::vector<ibString> fields;   // [0] = _TYPE, [1] = _S (bind order)
+	ibString              typeField;
+	ibString              strField;
 };
 
-MetaColFixture MakeMetaColTable(ibDatabaseLayerSQLite& db, const wxString& table,
+MetaColFixture MakeMetaColTable(ibDatabaseLayerSQLite& db, const ibString& table,
                                 const ibBackendQueryColumn* col,
-                                const std::vector<std::pair<wxString, long>>& rows)
+                                const std::vector<std::pair<ibString, long>>& rows)
 {
 	MetaColFixture f;
 	f.fields = ColumnFieldNames(col);
@@ -412,13 +412,13 @@ MetaColFixture MakeMetaColTable(ibDatabaseLayerSQLite& db, const wxString& table
 	f.typeField = f.fields[0];
 	f.strField  = f.fields[1];
 
-	const wxString ddl = wxT("CREATE TABLE ") + table + wxT(" (") + f.typeField + wxT(" INTEGER, ")
+	const ibString ddl = wxT("CREATE TABLE ") + table + wxT(" (") + f.typeField + wxT(" INTEGER, ")
 	                   + f.strField + wxT(" TEXT, qty INTEGER)");
 	db.RunQuery(wxT("%s"), ddl);   // as a %s ARGUMENT — the statement is assembled, not a format string
 
 	const int strTag = ibPersistedTypeTag(ibColumnRole::String);
 	for (const auto& r : rows) {
-		const wxString ins = wxString::Format(
+		const ibString ins = ibString::Format(
 			wxT("INSERT INTO %s (%s, %s, qty) VALUES (%d, '%s', %ld)"),
 			table, f.typeField, f.strField, strTag, r.first, r.second);
 		db.RunQuery(wxT("%s"), ins);
@@ -485,7 +485,7 @@ TEST_F(ComputedServerFix, In_MetadataColumnFoldsCompositeEquality)
 	ibDataQueryBuilder q(holder);
 	q.From(&src);
 	q.Select(&qty, wxT("qty"));
-	q.WhereIn(&region, { ibValue(wxString(wxT("North"))), ibValue(wxString(wxT("East"))) });
+	q.WhereIn(&region, { ibValue(ibString(wxT("North"))), ibValue(ibString(wxT("East"))) });
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -512,7 +512,7 @@ TEST_F(ComputedServerFix, In_MetadataColumnValuesOfTwoKindsFoldPairByPair)
 	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
 	q.From(&src);
 	q.Select(&qty, wxT("qty"));
-	q.WhereIn(&region, { ibValue(wxString(wxT("North"))), ibValue(ibNumber(10)) });
+	q.WhereIn(&region, { ibValue(ibString(wxT("North"))), ibValue(ibNumber(10)) });
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -566,7 +566,7 @@ namespace {
 
 class MetaPhysicalQ : public PhysicalQ {
 public:
-	MetaPhysicalQ(const wxString& table, ibMetaID id, const ibMetaData* metaData) : PhysicalQ(table, id), m_metaData(metaData) {}
+	MetaPhysicalQ(const ibString& table, ibMetaID id, const ibMetaData* metaData) : PhysicalQ(table, id), m_metaData(metaData) {}
 	const ibMetaData* GetMetaData() const override { return m_metaData; }
 private:
 	const ibMetaData* m_metaData;
@@ -589,7 +589,7 @@ struct ReferenceSetFix {
 		return ibValue(ibValueReferenceDataObject::Create(&cfg, catalog->GetMetaID(), ibGuid(ibGuid::newGuid())));
 	}
 	// `column IN (values)` over a table of this configuration, as the SQL the door writes for it.
-	wxString SqlOfSet(const ibBackendQueryColumn* column, ibMetaID tableId, const std::vector<ibValue>& values) const {
+	ibString SqlOfSet(const ibBackendQueryColumn* column, ibMetaID tableId, const std::vector<ibValue>& values) const {
 		MetaPhysicalQ table(wxT("T"), tableId, &cfg);
 		table.AddCol(column);
 		ibQueryCondition set;
@@ -597,14 +597,14 @@ struct ReferenceSetFix {
 		set.m_op     = ibQueryFilterOp::In;
 		set.m_values = values;
 		const ibQueryExprPtr predicate = ibDbTableProvider::BuildPredicateIR(&table, ibQueryPredicate::Leaf(set));
-		if (!predicate) return wxString();
+		if (!predicate) return ibString();
 		ibDatabaseQueryBuilder q;
 		q.From(wxT("T")).Where(predicate);
 		return ibQueryRenderer(ibDatabaseLayerSQLite::Dialect()).Render(q.Build()).m_sql;
 	}
-	static int CountOf(const wxString& haystack, const wxString& needle) {
+	static int CountOf(const ibString& haystack, const ibString& needle) {
 		int n = 0;
-		for (size_t at = 0; (at = haystack.find(needle, at)) != wxString::npos; at += needle.length()) ++n;
+		for (size_t at = 0; (at = haystack.find(needle, at)) != ibString::npos; at += needle.length()) ++n;
 		return n;
 	}
 };
@@ -618,14 +618,14 @@ TEST_F(ComputedServerFix, In_ReferencesOfOneTableSayTheTableOnce)
 	ASSERT_TRUE(f.Ready());
 
 	TypedCol item(wxT("item"), 340, ibTypeDescription(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType()))));
-	const std::vector<wxString> fields = ColumnFieldNames(&item);
+	const std::vector<ibString> fields = ColumnFieldNames(&item);
 	ASSERT_EQ(fields.size(), 3u) << "a single-target reference is expected to spread as _TYPE + _RTRef + _RRRef";
 
 	std::vector<ibValue> values;
 	for (int i = 0; i < 100; ++i)
 		values.push_back(f.RefTo(f.items));
 
-	const wxString sql = f.SqlOfSet(&item, 343, values);
+	const ibString sql = f.SqlOfSet(&item, 343, values);
 	ASSERT_FALSE(sql.IsEmpty());
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 1) << sql;
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 0) << sql;
@@ -651,7 +651,7 @@ TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesSayEachTableOnce)
 	for (int i = 0; i < 1000; ++i)
 		values.push_back(f.RefTo(i % 2 ? f.items : f.units));
 
-	const wxString sql = f.SqlOfSet(&subject, 344, values);
+	const ibString sql = f.SqlOfSet(&subject, 344, values);
 	ASSERT_FALSE(sql.IsEmpty());
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 2) << "one IN per table: " << sql.Left(400);
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 1) << "the two tables, ORed";
@@ -669,7 +669,7 @@ TEST_F(ComputedServerFix, In_AnEmptyReferenceAmongTheValuesGoesPairByPair)
 	TypedCol item(wxT("item"), 342, ibTypeDescription(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType()))));
 	const std::vector<ibValue> values{ f.RefTo(f.items), f.RefTo(f.items), ibValue(), f.RefTo(f.items) };
 
-	const wxString sql = f.SqlOfSet(&item, 345, values);
+	const ibString sql = f.SqlOfSet(&item, 345, values);
 	ASSERT_FALSE(sql.IsEmpty());
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 0) << sql;
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IS NULL")), 1) << sql;

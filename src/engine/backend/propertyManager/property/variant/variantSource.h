@@ -34,7 +34,7 @@ public:
 	}
 
 	virtual wxString GetType() const {
-		return wxT("ibVariantDataAttributeSource");
+		return ibT("ibVariantDataAttributeSource");
 	}
 
 	friend class ibVariantDataSource;
@@ -209,7 +209,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataSource"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataSource"); }
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -63,40 +63,40 @@ class ibProtocolFileBase;
 // What the web server says goes through Print, not the journal macros: those compile to nothing in a release build,
 // and this is what a person watching the console must always see.
 template <typename... Args>
-void ibWebServerSay(ibJournalMark mark, const wxFormatString& format, const Args&... args)
+void ibWebServerSay(ibJournalMark mark, const ibString& format, const Args&... args)
 {
-	ibTechJournal::Print(mark, wxT("webserver"), format, args...);
+	ibTechJournal::Print(mark, ibT("webserver"), format, args...);
 }
 
 // ONE PUBLICATION — a base under a name in the address.
 struct ibWebPublication {
-	wxString m_name;        // the path's first segment — the group of web.conf
-	wxString m_kind;        // lower-cased: firebird, server
-	wxString m_directory;   // firebird: the base's folder
-	wxString m_locale;
+	ibString m_name;        // the path's first segment — the group of web.conf
+	ibString m_kind;        // lower-cased: firebird, server
+	ibString m_directory;   // firebird: the base's folder
+	ibString m_locale;
 	bool     m_debug = false;
-	wxString m_address;     // server: oes://server[:port]/<base>, or oess://
-	wxString m_trusted;     // server, oess://: a PEM file of the authorities trusted; empty — the system's store
+	ibString m_address;     // server: oes://server[:port]/<base>, or oess://
+	ibString m_trusted;     // server, oess://: a PEM file of the authorities trusted; empty — the system's store
 };
 
 // WHAT IS SERVED — web.conf, with the command line over it.
 struct ibWebConfig {
-	wxString                      m_folder;
-	wxString                      m_host = wxT("127.0.0.1");
+	ibString                      m_folder;
+	ibString                      m_host = ibT("127.0.0.1");
 	std::optional<std::uint16_t>  m_httpPort = ibPort::Web.m_first;
 	std::optional<std::uint16_t>  m_httpsPort;
-	wxString                      m_certificate;   // paths
-	wxString                      m_privateKey;
-	wxString                      m_root;
-	std::vector<wxString>         m_origins;
+	ibString                      m_certificate;   // paths
+	ibString                      m_privateKey;
+	ibString                      m_root;
+	std::vector<ibString>         m_origins;
 	long                          m_workers = 0;
 	std::vector<ibWebPublication> m_publications;
-	wxString                      m_manifest;   // a file the page's address is written to once the port is open: the
+	ibString                      m_manifest;   // a file the page's address is written to once the port is open: the
 	                                            // last publication's - the command line's goes last (--manifest)
 
 	// web.conf in `folder`, when there is one; false with why in `error` — a port that is not one, a publication of
 	// no kind this server knows. No file is no error: nothing is published but what the command line says.
-	bool Read(const wxString& folder, wxString& error);
+	bool Read(const ibString& folder, ibString& error);
 };
 
 class ibWebServer {
@@ -122,7 +122,7 @@ private:
 
 	// Every publication served, by name: the file base opened here for it, each the server of its browsers — none for
 	// an application server's.
-	std::map<wxString, std::unique_ptr<ibProtocolFileBase>> m_bases;
+	std::map<ibString, std::unique_ptr<ibProtocolFileBase>> m_bases;
 };
 
 #endif

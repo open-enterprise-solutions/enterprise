@@ -559,7 +559,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 	ibCodeEditor::StartStyling(fromPos); //from here
 	ibCodeEditor::SetStyling(toPos - fromPos, wxSTC_C_COMMENT); //with that length and style -> cleared
 
-	wxString word;
+	ibString word;
 	unsigned int currPos = fromPos;
 	bool prevWasDot = false;   // last significant token was a member-access '.' (kept across whitespace)
 
@@ -603,7 +603,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 			prevWasDot = false;
 		}
 		else {
-			wxUniChar b;
+			ibChar b = 0;
 			(void)m_tc.GetByte(b);
 			appendStyle(wxSTC_C_IDENTIFIER);
 			// keep "after dot" across intervening whitespace, so `obj . Select` is handled too
@@ -911,7 +911,7 @@ ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
 			const int open = from + static_cast<int>(reader.GetCurrentUtf8Pos());
 			if (GetCharAt(open) != '"')
 				return false;   // a stray `|` the lexer also reads as a string - not a literal to open
-			wxString value;
+			ibString value;
 			if (!reader.GetString(value))
 				return false;
 			const int close = from + static_cast<int>(reader.GetCurrentUtf8Pos());
@@ -1071,7 +1071,7 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	wxMenuItem* miTranslate = menu.Append(wxID_ANY, _("Translation constructor"));
 	miTranslate->SetBitmap(wxArtProvider::GetBitmap(wxART_TRANSLATION_CONSTRUCTOR, wxART_FRONTEND, FromDIP(wxSize(16, 16))));
 	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
-		const ibTranslateString before(literal.m_text);
+		const ibTranslateString before(ibString(literal.m_text));
 		const ibMetaData metaData = m_document != nullptr ? m_document->GetMetaData() : ibMetaData();
 		ibDialogTranslateConstructor dialog(this, _("Translation constructor"), before, &metaData, !IsEditable());
 		if (dialog.ShowModal() != wxID_OK)
@@ -1114,7 +1114,7 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		ibDialogLinqConstructor dialog(this, text, (unsigned int)caretChars, m_document, GetCodeStyle(), !IsEditable());
 		if (dialog.ShowModal() != wxID_OK || !IsEditable())
 			return;
-		wxString refusal;
+		ibString refusal;
 		const wxString block = dialog.GetBlock(refusal);
 		if (block.IsEmpty())
 			return;

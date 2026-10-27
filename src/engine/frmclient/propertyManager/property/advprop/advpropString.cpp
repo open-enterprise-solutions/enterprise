@@ -125,7 +125,7 @@ namespace {
 // The languages a value holds — its text, raw…
 ibTranslateString ReadTranslate(const wxVariant& value)
 {
-	return ibTranslateString(ReadText(value));
+	return ibTranslateString(ibString(ReadText(value)));
 }
 
 // …and the value of others: the same property's, read as the language in force.

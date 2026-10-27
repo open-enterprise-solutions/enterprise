@@ -23,7 +23,7 @@ target_compile_definitions(fileserver
         NOPCH
 )
 
-# FILESERVER_API resolves to dllexport only when FILESERVER_EXPORTS is defined (fileserver.h) — frontend's rule.
+# FILESERVER_API resolves to dllexport only when FILESERVER_EXPORTS is defined (fileserver.h).
 if(WIN32)
     target_compile_definitions(fileserver PRIVATE FILESERVER_EXPORTS)
 endif()

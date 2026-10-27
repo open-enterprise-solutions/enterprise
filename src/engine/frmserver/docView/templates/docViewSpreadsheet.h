@@ -72,7 +72,7 @@ public:
 
 		SetDocumentSaved(false);
 
-		const wxString name = GetDocumentManager()->MakeNewDocumentName();
+		const ibString name = GetDocumentManager()->MakeNewDocumentName();
 
 		SetTitle(name);
 		SetFilename(name, true);
@@ -88,12 +88,12 @@ public:
 	}
 
 	// Every table format it writes — ours, a workbook, a Word document (core/spreadsheet/sheetFormat.h).
-	virtual wxString GetSaveFilter() const override;
+	virtual ibString GetSaveFilter() const override;
 
 protected:
 
-	virtual bool DoSaveDocument(const wxString& filename) override;
-	virtual bool DoOpenDocument(const wxString& filename) override;
+	virtual bool DoSaveDocument(const ibString& filename) override;
+	virtual bool DoOpenDocument(const ibString& filename) override;
 
 	std::shared_ptr<ibSpreadsheetObject> m_spreadSheetDocument;
 

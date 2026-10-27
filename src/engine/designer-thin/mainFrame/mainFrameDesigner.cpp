@@ -141,13 +141,13 @@ void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
 }
 
 bool ibFrontendMainFrameDesigner::ListenDebug(std::function<void(const ibProtocolNode& news)> told,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	return GetCommunicator().ListenDebug(std::move(told), refusal, error);
 }
 
 bool ibFrontendMainFrameDesigner::Debug(const ibProtocolNode& params, ibProtocolNode& result,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	return GetCommunicator().Debug(params, result, refusal, error);
 }

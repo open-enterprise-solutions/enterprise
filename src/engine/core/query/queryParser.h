@@ -49,7 +49,6 @@
 #include "queryLexer.h"
 #include "queryAST.h"
 
-#include <wx/arrstr.h>
 
 class CORE_API ibQueryParser
 {
@@ -59,23 +58,23 @@ public:
 	// Lex + parse the text into a SELECT statement AST. Throws on a lex / syntax error.
 	// ONE statement — text holding a package (or a bare DROP) is a syntax error here, so an
 	// existing single-query caller cannot silently swallow the rest of a package.
-	ibQuerySelectPtr Parse(const wxString& queryText);
+	ibQuerySelectPtr Parse(const ibString& queryText);
 
 	// Lex + parse a PACKAGE — one or more statements separated by ';'. A single select parses
 	// to a package of one, so this is the general door: the constructor validates through it,
 	// which is what keeps the check the ENGINE's rather than a second, softer opinion.
-	ibQueryPackage ParsePackage(const wxString& queryText);
+	ibQueryPackage ParsePackage(const ibString& queryText);
 
 	// ONE expression on its own — the inverse of ibRenderQueryExpr, for a constructor's
 	// "arbitrary condition" cell and anywhere else a fragment is authored by hand. Same
 	// parser, same errors: a free-typed predicate is read by the engine, never by a
 	// hand-rolled mini-checker beside it.
-	ibQueryAstExprPtr ParseExpression(const wxString& exprText);
+	ibQueryAstExprPtr ParseExpression(const ibString& exprText);
 	// ONE FIELD OF A TOTALS LEVEL from text — `Date`, `Store HIERARCHY`, `Period PERIODS(Month, &A, &B)`.
 	// For the query constructor, which edits a level's fields as text: it reads them back through the
 	// LANGUAGE instead of picking out the part it recognises, so nothing a query may say is lost by
 	// passing through the form.
-	ibQueryTotalField ParseTotalsField(const wxString& fieldText);
+	ibQueryTotalField ParseTotalsField(const ibString& fieldText);
 
 private:
 	std::vector<ibQueryToken> m_toks;
@@ -95,7 +94,7 @@ private:
 	// a variety of its own for a text that reads and names what is not there. Always throws, so
 	// any code after a call is logically unreachable, mirroring the codebase's "Error(); return false;"
 	// idiom. Named for what it DOES: "Fail" reads like a status the caller might inspect.
-	void   ThrowQueryException(const ibQueryToken& at, const wxString& msg) const;
+	void   ThrowQueryException(const ibQueryToken& at, const ibString& msg) const;
 
 	// --- productions -----------------------------------------------------
 	ibQueryAstStatement           ParseStatement();         // one package statement: a DROP or a full SELECT
@@ -116,7 +115,7 @@ private:
 	ibQueryTotalField          ParseTotalField();   // one field + how it is read (unfold / PERIODS)
 	// `firstMayBeKeyword` — the caller has ALREADY consumed a dot, so this path is a CONTINUATION and
 	// its first segment obeys the after-a-dot rule like every later one (CAST(x AS T).Order).
-	std::vector<wxString>      ParseDottedName(bool firstMayBeKeyword = false);
+	std::vector<ibString>      ParseDottedName(bool firstMayBeKeyword = false);
 
 	ibQueryAstExprPtr             ParsePredicate();   // OR level
 	ibQueryAstExprPtr             ParseAnd();
@@ -172,6 +171,6 @@ CORE_API bool              ibQueryCastType(const ibQueryAstExpr& cast, ibTypeDes
 CORE_API ibQueryAstExprPtr ibQueryMakeCast(ibQueryAstExprPtr value, const ibTypeDescription& type);
 // …and the words those primitives are written as, in the order a list offers them — for a palette, a cell's
 // drop-down: whatever offers a CAST's type asks here rather than keeping its own four words.
-CORE_API wxArrayString     ibQueryCastPrimitiveWords();
+CORE_API std::vector<ibString>     ibQueryCastPrimitiveWords();
 
 #endif

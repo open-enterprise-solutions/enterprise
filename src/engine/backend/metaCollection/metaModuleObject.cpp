@@ -41,9 +41,9 @@ bool ibValueMetaObjectModuleBase::OnSaveMetaObject(int flags)
 	//
 	//save debugger client offset
 	if ((flags & saveConfigFlag) != 0 && appData->DesignerMode()) {
-		const wxString& strBuffer = GetModuleText();
+		const ibString& strBuffer = GetModuleText();
 		debugClient->SaveModule(GetDocPath(),
-			1 + std::count(strBuffer.begin(), strBuffer.end(), wxT('\n')));
+			1 + std::count(strBuffer.begin(), strBuffer.end(), ibT('\n')));
 		// AOT cache row for this descriptor is now stale — Designer
 		// just persisted new source text. Drop the row so the next
 		// runtime session that compiles this module refreshes the
@@ -70,9 +70,9 @@ bool ibValueMetaObjectModuleBase::OnBeforeRunMetaObject(int flags)
 {
 	//initialize debugger client
 	if ((flags & loadConfigFlag) == 0 && (flags & newObjectFlag) == 0 && appData->DesignerMode()) {
-		const wxString& strBuffer = GetModuleText();
+		const ibString& strBuffer = GetModuleText();
 		debugClient->InitializeModule(GetDocPath(),
-			1 + std::count(strBuffer.begin(), strBuffer.end(), wxT('\n')));
+			1 + std::count(strBuffer.begin(), strBuffer.end(), ibT('\n')));
 	}
 
 	return ibValueMetaObject::OnBeforeRunMetaObject(flags);
@@ -106,12 +106,12 @@ void ibValueMetaObjectModuleBase::InvalidateBuiltFromText()
 //*                          default procedures						    *
 //***********************************************************************
 
-void ibValueMetaObjectModuleBase::SetDefaultProcedure(const wxString& procname, const ibContentHelper& contentHelper, std::vector<wxString> args)
+void ibValueMetaObjectModuleBase::SetDefaultProcedure(const ibString& procname, const ibContentHelper& contentHelper, std::vector<ibString> args)
 {
 	m_contentHelper.insert_or_assign(procname, CContentData{ contentHelper , args });
 }
 
-void ibValueMetaObjectModuleBase::SetDefaultFunction(const wxString& funcname, std::vector<wxString> args)
+void ibValueMetaObjectModuleBase::SetDefaultFunction(const ibString& funcname, std::vector<ibString> args)
 {
 	m_contentHelper.insert_or_assign(funcname, CContentData{ eFunctionHelper, args });
 }
@@ -136,7 +136,7 @@ bool ibValueMetaObjectModule::WriteData(ibDataNode& node) const
 //*                           Metamodule                                *
 //***********************************************************************
 
-ibValueMetaObjectCommonModule::ibValueMetaObjectCommonModule(const wxString& name, const wxString& synonym, const wxString& comment) :
+ibValueMetaObjectCommonModule::ibValueMetaObjectCommonModule(const ibString& name, const ibString& synonym, const ibString& comment) :
 	ibValueMetaObjectModuleBase(name, synonym, comment)
 {
 }
@@ -181,7 +181,7 @@ bool ibValueMetaObjectCommonModule::OnDeleteMetaObject()
 	return ibValueMetaObjectModuleBase::OnDeleteMetaObject();
 }
 
-bool ibValueMetaObjectCommonModule::OnRenameMetaObject(const wxString& newName)
+bool ibValueMetaObjectCommonModule::OnRenameMetaObject(const ibString& newName)
 {
 	// Runtime registry (metadata storage) — read by per-session managers.
 	if (auto* storage = m_metaData->GetModuleStorage()) {

@@ -214,7 +214,7 @@ TEST(DbTaxonomy_Integration_SQLite, DuplicatePkRaisesConstraint) {
 		// the message rather than time out — log + fail.
 		FAIL() << "Expected ibBackendDatabaseException, got plain "
 		          "ibBackendException: "
-		       << std::string(e.GetErrorDescription().mb_str());
+		       << e.GetErrorDescription().ToUTF8();
 	}
 
 	db.Close();
@@ -243,7 +243,7 @@ TEST(DbTaxonomy_Integration_SQLite, DuplicatePkThroughAStatementRaisesConstraint
 	const auto insert = []() {
 		return ibDatabaseQueryBuilder().Execute(ibInsert(wxT("t"), {
 			{ wxT("id"),   ibConst(ibValue(1)) },
-			{ wxT("name"), ibConst(ibValue(wxString(wxT("first")))) },
+			{ wxT("name"), ibConst(ibValue(ibString(wxT("first")))) },
 		}));
 	};
 	ASSERT_EQ(insert(), 1);

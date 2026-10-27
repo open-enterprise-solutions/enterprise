@@ -20,8 +20,8 @@
 class ibFrontendMainFrame;
 class ibViewCommandBar;
 
-// THE VIEW OF A TAB — the tab's form as the server writes it (the frame's View), drawn: the desktop's ibVisualHost
-// (frontend/visualView/visualHost.h) over the wire's node instead of the form — a frame around the window the controls
+// THE VIEW OF A TAB — the tab's form as the server writes it (the frame's View), drawn: the old desktop's ibVisualHost
+// over the wire's node instead of the form — a frame around the window the controls
 // scroll in, the command bar above that window, still while they scroll. The same walk builds it (GenerateControl): a
 // sizer item is no control, it carries how its one child sits in the sizer above; a window goes into the sizer it sits
 // in, and so does a sizer.
@@ -132,8 +132,8 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-// The form's document and view — the desktop's ibFormVisualDocument / ibFormVisualEditView
-// (frontend/visualView/visualHostClient.h). The runtime that raised, closed and redrew the form there is the server's
+// The form's document and view — the old desktop's ibFormVisualDocument / ibFormVisualEditView.
+// The runtime that raised, closed and redrew the form there is the server's
 // here: a tab the frame brings is a form raised, under the tab that owns it (Parent); a tab the frame no longer has is
 // a form closed; the active tab's View is the form redrawn (ibFrontendMainFrame::DrawTabs).
 // ----------------------------------------------------------------------------

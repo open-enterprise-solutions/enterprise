@@ -15,7 +15,7 @@
 //
 // It edits a BUFFER and writes back only on OK, like every editor of a description here.
 //
-// The desktop's (frontend/win/dlgs/choiceLink), over the client's row: the candidates are the row's choices — what
+// The old desktop's, over the client's row: the candidates are the row's choices — what
 // the server's ibPropertyChoiceLink::GetValueList offered, pictures drawn — and the reference types of the field,
 // with the class each is registered under, are the row's Targets (ibFieldReferenceTypes).
 

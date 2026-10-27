@@ -9,8 +9,8 @@
 // their frame through the session pointer that's already in scope.
 // Default ctor/dtor live in the header.
 
-int ibBackendDocFrame::ShowModalMessage(const wxString& message,
-                                           const wxString& caption,
+int ibBackendDocFrame::ShowModalMessage(const ibString& message,
+                                           const ibString& caption,
                                            int style)
 {
 	if (ibSession* const session = GetSession())

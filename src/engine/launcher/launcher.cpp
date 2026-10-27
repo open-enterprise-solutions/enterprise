@@ -298,15 +298,15 @@ void ibFrameLauncher::StartApplication(const wxString& appName) {
 }
 
 void ibFrameLauncher::OnSelectedDClickList(wxCommandEvent& event) {
-	StartApplication(wxT("enterprise"));
+	StartApplication(wxT("enterprise-thin"));
 }
 
 void ibFrameLauncher::OnButtonEnterprise(wxCommandEvent& event) {
-	StartApplication(wxT("enterprise"));
+	StartApplication(wxT("enterprise-thin"));
 }
 
 void ibFrameLauncher::OnButtonDesigner(wxCommandEvent& event) {
-	StartApplication(wxT("designer"));
+	StartApplication(wxT("designer-thin"));
 }
 
 void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
@@ -330,7 +330,7 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 	}
 
 	// The window keeps painting while the base opens, and the browser is launched before the launcher closes.
-	wxString url;
+	ibString url;
 	if (ibStartWebServer(cmd, url, []() { wxYieldIfNeeded(); }) == 0) {
 		wxMessageBox(wxString::Format(_("Could not start %s.\n\n%s"), wxT("webserver"), cmd),
 			_("Launch OES"), wxOK | wxICON_ERROR, this);

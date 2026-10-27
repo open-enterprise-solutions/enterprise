@@ -19,11 +19,11 @@ public:
 	// given the base this one opened (the fields below; `--debug` when `searchDebug`). Its pid; 0 — not started.
 	// `useManifest` — the web server (ibStartWebServer) publishing this base, its page opened in the browser. ⚠ The
 	// debugger's search for it is the caller's.
-	long RunApplication(const wxString& strAppName, bool searchDebug = true, bool useManifest = false) const;
+	long RunApplication(const ibString& strAppName, bool searchDebug = true, bool useManifest = false) const;
 
 	// The file base's folder this client opened (the engine's: a Firebird base's — the VCS working copy root); empty: a
 	// base on a server, or on a DBMS.
-	const wxString& GetFile() const { return m_strFile; }
+	const ibString& GetFile() const { return m_strFile; }
 
 private:
 
@@ -33,25 +33,25 @@ private:
 
 	// APPLICATION SERVER ENTRY — oes://server[:port]/<base>, or oess:// over TLS; the authorities it trusts, a PEM file
 	// (empty — the platform's store)
-	wxString m_strAddress;
-	wxString m_strTrusted;
+	ibString m_strAddress;
+	ibString m_strTrusted;
 
 	// FILE ENTRY
-	wxString m_strFile;
+	ibString m_strFile;
 
 	// SERVER ENTRY — a file base on a DBMS server (PostgreSQL)
-	wxString m_strServer;
-	wxString m_strPort;
-	wxString m_strDatabase;
-	wxString m_strUser;
-	wxString m_strPassword;
+	ibString m_strServer;
+	ibString m_strPort;
+	ibString m_strDatabase;
+	ibString m_strUser;
+	ibString m_strPassword;
 
 	// IB ENTRY
-	wxString m_strIBUser;
-	wxString m_strIBPassword;
+	ibString m_strIBUser;
+	ibString m_strIBPassword;
 
 	//LOCALE
-	wxString m_strLocale;
+	ibString m_strLocale;
 };
 
 // THE APPLICATION INSTANCE as the copied windows reach the base's parts through it — the server's: asked of their

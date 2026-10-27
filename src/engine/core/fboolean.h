@@ -11,15 +11,14 @@
 // No members named True / False: X11 defines both as macros.
 // =============================================================================
 
-#include <wx/chartype.h>   // wxChar / wxT — the words are the engine string's width
 
 #include "core/core.h"   // CORE_API
 
 class ibString;          // core/fstring.h - the flag's text; the family meets in backend_core.h
 
 // THE FLAG AS THE LANGUAGE WRITES IT — what ibBoolean writes and reads, and the translator's keywords.
-inline constexpr const ibChar* g_booleanTrue  = wxT("True");
-inline constexpr const ibChar* g_booleanFalse = wxT("False");
+inline constexpr const ibChar* g_booleanTrue  = ibT("True");
+inline constexpr const ibChar* g_booleanFalse = ibT("False");
 
 class CORE_API ibBoolean
 {

@@ -28,6 +28,7 @@
 #include "backend/userInfo.h"           // users — the names the login window offers
 #include "core/crypto/sessionToken.h"
 #include "core/crypto/sha256.hpp"
+#include "core/stringTokenizer.h"
 
 #include "frmserver/docView/docManager.h"   // ibDocTemplate — what opens a file
 #include "frmserver/visualView/visualHost.h"
@@ -90,11 +91,11 @@ bool MayCall(bool connectionless, const void* bound, std::int64_t deadline, cons
 }
 
 // "detached until 15:04:07" — what Active users shows for the window, fitted to currentActivity.
-wxString DetachedUntil(std::int64_t deadlineMs)
+ibString DetachedUntil(std::int64_t deadlineMs)
 {
 	// time_t is UTC. Active users reads a local clock.
 	const wxDateTime local = wxDateTime(static_cast<time_t>(deadlineMs / 1000)).ToTimezone(wxDateTime::Local);
-	return wxString::Format(_("detached until %s"), local.Format(wxT("%H:%M:%S")));
+	return ibString::Format(_("detached until %s"), local.Format(ibT("%H:%M:%S")));
 }
 
 bool AskedResume(const ibDataNode& params)
@@ -102,7 +103,7 @@ bool AskedResume(const ibDataNode& params)
 	auto features = params.FindField(ibProtocol::ibLogin::Features);
 	if (!features || features->Kind() != ibDataKind::Array)
 		return false;
-	const wxString resume = ibProtocol::ibLogin::FeatureResume;
+	const ibString resume = ibProtocol::ibLogin::FeatureResume;
 	for (const ibDataValue& item : features->AsArray()) {
 		if (item.Kind() == ibDataKind::String && item.AsString() == resume)
 			return true;
@@ -119,7 +120,7 @@ ibDataNode Answer(const ibDataValue& id)
 	return answer;
 }
 
-ibDataNode Refused(const ibDataValue& id, std::int64_t code, const wxString& message)
+ibDataNode Refused(const ibDataValue& id, std::int64_t code, const ibString& message)
 {
 	ibDataNode answer = Answer(id);
 	ibDataNode& error = answer.Child(ibProtocol::ibRpc::Error);
@@ -129,7 +130,7 @@ ibDataNode Refused(const ibDataValue& id, std::int64_t code, const wxString& mes
 }
 
 // …and what the server says unasked: the method where an answer's id stands, the client it is of named in its params.
-ibMemoryBuffer Notification(const char* method, const ibDataNode& params, const wxString& client)
+ibMemoryBuffer Notification(const char* method, const ibDataNode& params, const ibString& client)
 {
 	ibDataNode note;
 	note.SetValue(ibProtocol::ibRpc::Method, ibString(method));
@@ -207,7 +208,7 @@ bool IdLess(const ibDataValue& left, const ibDataValue& right)
 	return false;
 }
 
-void OfferResume(ibDataNode& result, const wxString& id, int protocol, const wxString& token)
+void OfferResume(ibDataNode& result, const ibString& id, int protocol, const ibString& token)
 {
 	result.SetValue(ibProtocol::ibLogin::Client, id);
 	result.SetValue(ibProtocol::ibLogin::Protocol, protocol);
@@ -232,13 +233,13 @@ const ibBackendCommandItem* FindCommand(const ibSession& session, ibMetaID metaI
 // to it, the person gets an error, not the schema; what it could not read is the person's refusal, in the base's words —
 // an unreadable list is not an empty one (the users' ListAll throws it). The method Schema's, and a login's Read.
 bool BuildSchema(const ibClientSchema& schema, const std::shared_ptr<ibSession>& session, const ibDataNode& args,
-	ibDataNode& result, ibProtocol::ibRefusal& refusal, wxString& error)
+	ibDataNode& result, ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	bool done = false;
 	session->Submit([&schema, &session, &args, &result, &done, &refusal, &error]() {
 		if (!schema.AccessRight(*session)) {
 			refusal = ibProtocol::ibRefusal::NoRight;
-			error = wxT("no right to this schema");
+			error = ibT("no right to this schema");
 			return;
 		}
 		try {
@@ -272,7 +273,7 @@ void BuildSchema(ibClientInstance& instance, const ibDataNode& params, ibDataNod
 			continue;
 		ibDataNode built;
 		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-		wxString error;
+		ibString error;
 		if (!BuildSchema(*schema, session, ibDataNode(), built, refusal, error))
 			continue;
 		built.SetValue(ibProtocol::ibLogin::Schema, kind);
@@ -326,7 +327,7 @@ void DrawMenu(ibClientFrame* frame, const std::vector<ibClientMenu::Item>& items
 }
 
 // The form a call is for: the one it names by its key (a cell of the start page), the active tab's otherwise.
-ibValueForm* FormOfCall(const ibClientFrame* frame, const wxString& key)
+ibValueForm* FormOfCall(const ibClientFrame* frame, const ibString& key)
 {
 	return key.IsEmpty() ? frame->ActiveForm() : ibFormVisualDocument::FindFormByGuid(ibGuid(key));
 }
@@ -348,7 +349,7 @@ void DispatchEvent(ibClientFrame* frame, const ibDataNode& call)
 				view->OnClientEvent(event, args);
 		}
 	}
-	else if (ibValueForm* const form = FormOfCall(frame, call.GetValue<wxString>(ibProtocol::ibEvent::Form)))
+	else if (ibValueForm* const form = FormOfCall(frame, call.GetValue<ibString>(ibProtocol::ibEvent::Form)))
 		form->DispatchEvent(call.GetValue<std::int32_t>(ibProtocol::ibEvent::Control), event, args);
 }
 
@@ -429,31 +430,31 @@ std::shared_ptr<ibClientHost::Client> ibClientHost::FindByDigest(const unsigned 
 	return found;
 }
 
-bool ibClientHost::ResumeByToken(const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal, wxString& error,
+bool ibClientHost::ResumeByToken(const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal, ibString& error,
 	const void* connection)
 {
 	unsigned char raw[ibSessionToken::kBytes];
 	unsigned char digest[ibSessionToken::kDigest];
 	// The route it ends in was the cluster's to read; the bearer is the hex.
-	wxString token;
+	ibString token;
 	unsigned route = 0;
-	ibSessionToken::SplitRoute(params.GetValue<wxString>(ibProtocol::ibLogin::Token), token, route);
-	const auto refuse = [&refusal, &error](const wxString& text) {
+	ibSessionToken::SplitRoute(params.GetValue<ibString>(ibProtocol::ibLogin::Token), token, route);
+	const auto refuse = [&refusal, &error](const ibString& text) {
 		refusal = ibProtocol::ibRefusal::LoginRefused;
 		error = text;
 	};
 	if (!ibSessionToken::ParseHex(token, raw) || !ibSessionToken::Hash(raw, ibSessionToken::kBytes, digest)) {
-		refuse(wxT("the login was refused"));
+		refuse(ibT("the login was refused"));
 		return false;
 	}
 
 	const std::shared_ptr<Client> client = FindByDigest(digest);
 	if (!client) {
-		refuse(wxT("the login was refused"));
+		refuse(ibT("the login was refused"));
 		return false;
 	}
 
-	wxString id;
+	ibString id;
 	bool expired = false;
 	bool rebound = false;
 	{
@@ -463,14 +464,14 @@ bool ibClientHost::ResumeByToken(const ibDataNode& params, ibDataNode& result, i
 				id = entry.first;
 		}
 		if (id.IsEmpty()) {
-			refuse(wxT("the login was refused"));
+			refuse(ibT("the login was refused"));
 			return false;
 		}
 		const std::int64_t deadline = client->resumeDeadlineMs.load(std::memory_order_acquire);
 		// Attached: the token must not move the session onto another socket. Only the window (deadline set,
 		// and not yet passed) rebinds. An expired window closes the client below.
 		if (deadline == 0) {
-			refuse(wxT("the login was refused"));
+			refuse(ibT("the login was refused"));
 			return false;
 		}
 		if (NowMs() >= deadline)
@@ -484,40 +485,40 @@ bool ibClientHost::ResumeByToken(const ibDataNode& params, ibDataNode& result, i
 	}
 	if (rebound) {
 		if (std::shared_ptr<ibSession> session = client->instance->ShareSession())
-			session->SetActivity(wxT("idle"));
+			session->SetActivity(ibT("idle"));
 	}
 	if (expired) {
 		RemoveClient(id);
-		refuse(wxT("the login was refused"));
+		refuse(ibT("the login was refused"));
 		return false;
 	}
 
 	// The previous client. Not a frame: Client::frame is left where the last answer put it.
-	OfferResume(result, id, client->protocol, wxString());
+	OfferResume(result, id, client->protocol, ibString());
 	return true;
 }
 
-bool ibClientHost::RememberToken(Client& client, ibDataNode& result, ibProtocol::ibRefusal& refusal, wxString& error)
+bool ibClientHost::RememberToken(Client& client, ibDataNode& result, ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	const std::vector<unsigned char> raw = ibSessionToken::Generate();
 	if (raw.size() != ibSessionToken::kBytes) {
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the token could not be drawn");
+		error = ibT("the token could not be drawn");
 		return false;
 	}
 	unsigned char digest[ibSessionToken::kDigest];
 	if (!ibSessionToken::Hash(raw.data(), raw.size(), digest)) {
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the token could not be drawn");
+		error = ibT("the token could not be drawn");
 		return false;
 	}
-	const wxString hash = ibSessionToken::Hex(digest, ibSessionToken::kDigest);
+	const ibString hash = ibSessionToken::Hex(digest, ibSessionToken::kDigest);
 	// Into the session's row by the registry, which writes the row's every other column too. A row held, or a
 	// registry busy past its wait, is a login to repeat, not a server that failed.
 	const std::shared_ptr<ibSession> session = client.instance->ShareSession();
 	if (!session || !session->SetTokenHash(hash)) {
 		refusal = ibProtocol::ibRefusal::NotNow;
-		error = wxT("the token could not be stored");
+		error = ibT("the token could not be stored");
 		return false;
 	}
 
@@ -569,7 +570,7 @@ void ibClientHost::Disconnect(const void* connection)
 		for (const Held& one : held) {
 			if (one.client->connection.load(std::memory_order_acquire) != connection)
 				continue;   // returned already, on some other call
-			wxString id;
+			ibString id;
 			for (const auto& entry : m_clients) {
 				if (entry.second == one.client)
 					id = entry.first;
@@ -632,7 +633,7 @@ void ibClientHost::SetNotifier(const void* connection, std::function<void(const 
 void ibClientHost::NotifyChanged(const ibClientInstance* instance)
 {
 	// The client's id and how its connection is told — sent outside the lock: a transport's send may wait on its socket.
-	wxString id;
+	ibString id;
 	std::function<void(const ibMemoryBuffer& packet)> notify;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -660,7 +661,7 @@ void ibClientHost::NotifyDebug(const ibClientInstance* instance, const ibDataNod
 {
 	// As NotifyChanged — the id and the notifier taken under the lock, sent outside it; the debugger's connection's, and
 	// told whatever call is being answered: the news is no part of a frame.
-	wxString id;
+	ibString id;
 	std::function<void(const ibMemoryBuffer& packet)> notify;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -693,7 +694,7 @@ ibMemoryBuffer ibClientHost::Call(const ibMemoryBuffer& packet, const void* conn
 	// into, handed back as they are.
 	const std::int64_t reading = NowMs();
 	ibRpcRequest request;
-	wxString error;
+	ibString error;
 	const std::optional<ibDataNode> answer = ibRpcParseRequest(packet, request, error)
 		? Call(request, connection, address, NowMs() - reading, packet.GetDataLen())
 		: Refused(ibDataValue(), static_cast<std::int64_t>(ibRpcError::Parse), error);
@@ -707,14 +708,14 @@ ibString ibClientHost::Call(const ibString& text, const void* connection, const 
 {
 	const std::int64_t reading = NowMs();
 	ibRpcRequest request;
-	wxString error;
+	ibString error;
 	bool unknownType = false;
 	std::optional<ibDataNode> answer = ibRpcParseRequest(text, request, error, unknownType)
 		? Call(request, connection, address, NowMs() - reading, text.length())
 		: Refused(ibDataValue(), static_cast<std::int64_t>(ibRpcError::Parse), error);
 	if (!answer)
 		return ibString();
-	answer->SetValue(ibProtocol::ibRpc::Version, ibString(wxT("2.0")));
+	answer->SetValue(ibProtocol::ibRpc::Version, ibString(ibT("2.0")));
 	return ibRpcRenderNode(*answer);
 }
 
@@ -737,7 +738,7 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 		if (!request.WantsAnswer())
 			return std::nullopt;
 		return Refused(request.m_id, static_cast<std::int64_t>(ibRpcError::MethodNotFound),
-			wxString::Format(wxT("no method named '%s'"), request.m_method));
+			ibString::Format(ibT("no method named '%s'"), request.m_method));
 	}
 
 	// THE LAST ANSWER OF A CLIENT THAT OPTED IN. The same id with the same method and params is the saved text,
@@ -769,7 +770,7 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 				slot.client->resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
 				lock.unlock();
 				slot.client.reset();
-				return Refused(request.m_id, static_cast<std::int64_t>(ibProtocol::ibRefusal::NoSession), wxT("the client is not connected"));
+				return Refused(request.m_id, static_cast<std::int64_t>(ibProtocol::ibRefusal::NoSession), ibT("the client is not connected"));
 			}
 			if (slot.client->dedupe) {
 				CallDigest(request.m_method, request.m_params, callDigest);
@@ -782,7 +783,7 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 						lock.unlock();
 						slot.client.reset();
 						return Refused(request.m_id, static_cast<std::int64_t>(ibProtocol::ibRefusal::BadParameter),
-							wxT("the call id is older than the last one answered"));
+							ibT("the call id is older than the last one answered"));
 					}
 					if (slot.client->hasReply && slot.client->replyId == request.m_id) {
 						const bool same = slot.client->hasReply == true
@@ -794,7 +795,7 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 						lock.unlock();
 						slot.client.reset();
 						return Refused(request.m_id, static_cast<std::int64_t>(ibProtocol::ibRefusal::BadParameter),
-							wxT("the call id was already answered for another call"));
+							ibT("the call id was already answered for another call"));
 					}
 					slot.client->replyPending = true;
 					slot.client->pendingId = request.m_id;
@@ -811,7 +812,7 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 	ibDataNode answer = Answer(request.m_id);
 	ibDataNode& result = answer.Child(ibProtocol::ibRpc::Result);
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	ibJournalStopwatch took;
 	took.Resume();
 	const bool done = Call(method, request.m_params, result, refusal, error, connection, address);
@@ -820,12 +821,12 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 	// EACH CALL, A LINE — what a client asked, how long it took, why it was refused: the client's side of the work, in
 	// order beside the engine's own, for a file base in the client's process as for the application server.
 	if (done)
-		ibJournalInfo(wxT("client"), wxT("%s: %lld ms"), request.m_method, took.Ms());
+		ibJournalInfo(ibT("client"), ibT("%s: %lld ms"), request.m_method, took.Ms());
 	else
-		ibJournalWarning(wxT("client"), wxT("%s refused (%d) after %lld ms: %s"), request.m_method,
+		ibJournalWarning(ibT("client"), ibT("%s refused (%d) after %lld ms: %s"), request.m_method,
 			static_cast<int>(refusal), took.Ms(), error);
 	// …and before it, the request: read, and how long it was.
-	ibJournalInfo(wxT("client"), wxT("  request read %lld ms, %zu long"), read, size);
+	ibJournalInfo(ibT("client"), ibT("  request read %lld ms, %zu long"), read, size);
 
 	if (!request.WantsAnswer())
 		return std::nullopt;
@@ -841,7 +842,7 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 		refused.AddField(ibProtocol::ibRpc::Code, ibDataValue::Int(static_cast<std::int64_t>(refusal)));
 		refused.SetValue(ibProtocol::ibRpc::Message, error);
 	}
-	ibJournalInfo(wxT("client"), wxT("  answer written %lld ms, %zu bytes"), NowMs() - writing, answer.Weight());
+	ibJournalInfo(ibT("client"), ibT("  answer written %lld ms, %zu bytes"), NowMs() - writing, answer.Weight());
 	// A detached NoSession was not accepted, so it is not the call's answer. Anything else, including a refusal, is.
 	// Only the call that owns the slot writes it: a lookup that returned the saved answer never did.
 	if (slot.owner && slot.client && (done || refusal != ibProtocol::ibRefusal::NoSession)) {
@@ -855,16 +856,16 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 }
 
 bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
-	wxString& error, const void* connection, const ibString& address)
+	ibString& error, const void* connection, const ibString& address)
 {
 	bool done = false;
 	refusal = ibProtocol::ibRefusal::None;
 	error.clear();
 	// Why, and its text — said together by every refusal below.
-	const auto refuse = [&refusal, &error](ibProtocol::ibRefusal why, const wxString& text) { refusal = why; error = text; };
+	const auto refuse = [&refusal, &error](ibProtocol::ibRefusal why, const ibString& text) { refusal = why; error = text; };
 
 	if (method == ibProtocol::ibMethod::Unknown) {
-		refuse(ibProtocol::ibRefusal::NotFound, wxT("no such method"));
+		refuse(ibProtocol::ibRefusal::NotFound, ibT("no such method"));
 	}
 	else if (method == ibProtocol::ibMethod::Login) {
 		const bool byToken = !params.Has(ibProtocol::ibLogin::User)
@@ -879,7 +880,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 		std::int32_t protocol = 1;
 		params.GetValue(ibProtocol::ibLogin::Protocol, protocol);
 		auto client = std::make_shared<Client>();
-		const wxString id = ibGuid(ibGuid::newGuid()).str();
+		const ibString id = ibGuid(ibGuid::newGuid()).str();
 		std::int32_t mode = static_cast<std::int32_t>(ibProtocol::ibLogin::ibMode::Runtime);
 		params.GetValue(ibProtocol::ibLogin::Mode, mode);
 		client->instance = std::make_shared<ibClientInstance>(m_applicationInstance, id, address, static_cast<ibProtocol::ibLogin::ibMode>(mode));
@@ -890,9 +891,9 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 		// it is. Read as a wrong password, it opened the client's login window on a question nobody asked (2026-10-20).
 		const auto logIn = [&]() {
 			try {
-				if (client->instance->Login(params.GetValue<wxString>(ibProtocol::ibLogin::User), params.GetValue<wxString>(ibProtocol::ibLogin::Password)))
+				if (client->instance->Login(params.GetValue<ibString>(ibProtocol::ibLogin::User), params.GetValue<ibString>(ibProtocol::ibLogin::Password)))
 					return true;
-				refuse(ibProtocol::ibRefusal::LoginRefused, wxT("the login was refused"));
+				refuse(ibProtocol::ibRefusal::LoginRefused, ibT("the login was refused"));
 			}
 			catch (const ibCoreException& err) {
 				refuse(ibProtocol::ibRefusal::NotNow, err.GetErrorDescription());
@@ -900,7 +901,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			return false;
 		};
 		if (protocol < 1) {
-			refuse(ibProtocol::ibRefusal::BadParameter, wxString::Format(wxT("no protocol version %d"), protocol));
+			refuse(ibProtocol::ibRefusal::BadParameter, ibString::Format(ibT("no protocol version %d"), protocol));
 		}
 		else if (logIn()) {
 			{
@@ -914,7 +915,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				// The start refused the client — whatever the drawing after it met: a refused start ends the session,
 				// and the frame's drawing then races its teardown.
 				done = false;
-				refuse(ibProtocol::ibRefusal::StartRefused, wxT("the start was refused"));
+				refuse(ibProtocol::ibRefusal::StartRefused, ibT("the start was refused"));
 			}
 			if (!done)
 				RemoveClient(id);
@@ -933,7 +934,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				// the slot. RememberToken has put Token on the answer, once.
 				if (AskedResume(params))
 					client->dedupe = true;
-				OfferResume(result, id, client->protocol, result.GetValue<wxString>(ibProtocol::ibLogin::Token));
+				OfferResume(result, id, client->protocol, result.GetValue<ibString>(ibProtocol::ibLogin::Token));
 			}
 			// WHAT THE CLIENT READS RIGHT AFTER ITS START, read in it (Read) — each schema it names, built as `schema`
 			// would build it, beside the frame: the designer's debugger store was a call of its own at every start, for
@@ -972,7 +973,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 					client->resumeDeadlineMs.load(std::memory_order_acquire), connection);
 			}
 			if (!allowed)
-				refuse(ibProtocol::ibRefusal::NoSession, wxT("the client is not connected"));
+				refuse(ibProtocol::ibRefusal::NoSession, ibT("the client is not connected"));
 			else {
 				RemoveClient(params.GetValue<ibString>(ibProtocol::ibLogin::Client));
 				done = true;
@@ -984,21 +985,21 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 		// is not queued behind a call waiting on the very stop it would let go.
 		const std::shared_ptr<Client> client = FindClient(params.GetValue<ibString>(ibProtocol::ibLogin::Client));
 		if (client == nullptr)
-			refuse(ibProtocol::ibRefusal::NoSession, wxT("no such client"));
+			refuse(ibProtocol::ibRefusal::NoSession, ibT("no such client"));
 		else
 			done = Debug(*client, params, result, refusal, error, connection);
 	}
 	else {
 		const std::shared_ptr<Client> client = FindClient(params.GetValue<ibString>(ibProtocol::ibLogin::Client));
 		if (client == nullptr) {
-			refuse(ibProtocol::ibRefusal::NoSession, wxT("no such client"));
+			refuse(ibProtocol::ibRefusal::NoSession, ibT("no such client"));
 		}
 		else {
 			std::lock_guard<std::mutex> clientLock(client->lock);
 			// Detached, or a socket that is not this client's: the public Client id is not the bearer.
 			if (!MayCall(client->connectionless, client->connection.load(std::memory_order_acquire),
 				client->resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
-				refuse(ibProtocol::ibRefusal::NoSession, wxT("the client is not connected"));
+				refuse(ibProtocol::ibRefusal::NoSession, ibT("the client is not connected"));
 			}
 			else {
 			client->instance->Touch();
@@ -1017,11 +1018,11 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 								DispatchEvent(frame, *held.AsChild());
 							}
 							catch (const std::exception& err) {
-								ibJournalWarning(wxT("client"), wxT("a held event ended with an exception: %s"),
-									wxString::FromUTF8(err.what()));
+								ibJournalWarning(ibT("client"), ibT("a held event ended with an exception: %s"),
+									ibString::FromUTF8(err.what()));
 							}
 							catch (...) {
-								ibJournalWarning(wxT("client"), wxT("a held event ended with an exception"));
+								ibJournalWarning(ibT("client"), ibT("a held event ended with an exception"));
 							}
 						}
 					}).get();
@@ -1043,10 +1044,10 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				auto found = params.FindChild(ibProtocol::ibSchema::Args);
 				const ibDataNode args = found ? *found : ibDataNode();
 				if (frame == nullptr || session == nullptr) {
-					refuse(ibProtocol::ibRefusal::NoSession, wxT("the client has no session"));
+					refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
 				}
 				else if (schema == nullptr) {
-					refuse(ibProtocol::ibRefusal::NotFound, wxT("no such schema"));
+					refuse(ibProtocol::ibRefusal::NotFound, ibT("no such schema"));
 				}
 				else if (!params.FindField(ibProtocol::ibSchema::Command)) {
 					done = BuildSchema(*schema, session, args, result, refusal, error);
@@ -1058,7 +1059,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 					std::function<void()> work;
 					session->Submit([schema, &session, command, &args, &work, &refuse, &refusal, &error]() {
 						if (!schema->AccessRight(*session))
-							refuse(ibProtocol::ibRefusal::NoRight, wxT("no right to this schema"));
+							refuse(ibProtocol::ibRefusal::NoRight, ibT("no right to this schema"));
 						else
 							work = schema->Command(*session, command, args, refusal, error);
 					}).get();
@@ -1075,10 +1076,10 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				const std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				const ibBackendCommandItem* const command = session != nullptr ? FindCommand(*session, metaId) : nullptr;
 				if (session == nullptr) {
-					refuse(ibProtocol::ibRefusal::NoSession, wxT("the client has no session"));
+					refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
 				}
 				else if (command == nullptr) {
-					refuse(ibProtocol::ibRefusal::NotFound, wxString::Format(wxT("no command with id %d"), metaId));
+					refuse(ibProtocol::ibRefusal::NotFound, ibString::Format(ibT("no command with id %d"), metaId));
 				}
 				else {
 					const ibInterfaceCommandType commandType = static_cast<ibInterfaceCommandType>(type);
@@ -1101,9 +1102,9 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				if (frame != nullptr && session != nullptr)
 					session->Submit([frame, tabId, &found]() { found = frame->FindTab(tabId) < frame->TabCount(); }).get();
 				if (frame == nullptr || session == nullptr)
-					refuse(ibProtocol::ibRefusal::NoSession, wxT("the client has no session"));
+					refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
 				else if (!found)
-					refuse(ibProtocol::ibRefusal::NotFound, wxString::Format(wxT("no tab %d"), tabId));
+					refuse(ibProtocol::ibRefusal::NotFound, ibString::Format(ibT("no tab %d"), tabId));
 				else {
 					done = Run(*client, [tabId, activate](ibClientFrame* frame) {
 						const std::size_t tab = frame->FindTab(tabId);
@@ -1119,14 +1120,14 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				// tasks while it waits — and the call then settles on that work: it goes on from where it asked.
 				ibClientFrame* const frame = client->instance->GetFrame();
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
-				const std::string requestId = std::string(params.GetValue<wxString>(ibProtocol::ibRequest::Id).utf8_str());
+				const std::string requestId = std::string(params.GetValue<ibString>(ibProtocol::ibRequest::Id).utf8_str());
 				auto found = params.FindChild(ibProtocol::ibRequest::Response);
 				const ibDataNode response = found ? *found : ibDataNode();
 				bool responded = false;
 				if (frame != nullptr && session != nullptr)
 					session->Submit([frame, &requestId, &response, &responded]() { responded = frame->Respond(requestId, response); }).get();
 				if (!responded)
-					refuse(ibProtocol::ibRefusal::NotFound, wxT("no such request is waiting"));
+					refuse(ibProtocol::ibRefusal::NotFound, ibT("no such request is waiting"));
 				else
 					done = Run(*client, nullptr, since, result, refusal, error);
 			}
@@ -1136,7 +1137,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				const ibFormID controlId = params.GetValue<std::int32_t>(ibProtocol::ibFetch::Control);
 				auto found = params.FindChild(ibProtocol::ibFetch::Request);
 				const ibDataNode fetchRequest = found ? *found : ibDataNode();
-				const wxString formKey = params.GetValue<wxString>(ibProtocol::ibFetch::Form);
+				const ibString formKey = params.GetValue<ibString>(ibProtocol::ibFetch::Form);
 				// A TAB'S OWN VIEW, named by the tab — a spreadsheet document's cells, not a control's of a form.
 				const std::int32_t tabId = params.GetValue<std::int32_t>(ibProtocol::ibFetch::Tab);
 				if (frame != nullptr && session != nullptr) {
@@ -1154,7 +1155,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 					}).get();
 				}
 				if (!done)
-					refuse(ibProtocol::ibRefusal::NotFound, wxT("nothing to fetch there"));
+					refuse(ibProtocol::ibRefusal::NotFound, ibT("nothing to fetch there"));
 			}
 			else if (method == ibProtocol::ibMethod::Presentation) {
 				// A VALUE AS A PERSON READS IT — formatted here, where the configuration is (a reference's name is
@@ -1162,16 +1163,16 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				// answer carried) is shown the way the server shows any other.
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				const auto value = params.FindChild(ibProtocol::ibPresentation::Value);
-				const wxString format = params.GetValue<wxString>(ibProtocol::ibPresentation::Format);
+				const ibString format = params.GetValue<ibString>(ibProtocol::ibPresentation::Format);
 				const ibMetaData* const metaData = session != nullptr ? session->GetMetaData() : nullptr;
 				if (session == nullptr)
-					refuse(ibProtocol::ibRefusal::NoSession, wxT("the client has no session"));
+					refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
 				else if (!value)
-					refuse(ibProtocol::ibRefusal::BadParameter, wxT("a presentation needs a Value"));
+					refuse(ibProtocol::ibRefusal::BadParameter, ibT("a presentation needs a Value"));
 				else if (metaData == nullptr)
-					refuse(ibProtocol::ibRefusal::Failed, wxT("the session has no configuration"));
+					refuse(ibProtocol::ibRefusal::Failed, ibT("the session has no configuration"));
 				else {
-					wxString text;
+					ibString text;
 					session->Submit([metaData, value, &format, &text, &done, &refuse]() {
 						try {
 							const ibValue presented = metaData->Deserialize(*value);
@@ -1199,18 +1200,18 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				const auto asked = params.FindField(ibProtocol::ibPicture::Pictures);
 				if (session == nullptr)
-					refuse(ibProtocol::ibRefusal::NoSession, wxT("the client has no session"));
+					refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
 				else if (!asked || asked->Kind() != ibDataKind::Array)
-					refuse(ibProtocol::ibRefusal::BadParameter, wxT("pictures are asked for by a list of their ids"));
+					refuse(ibProtocol::ibRefusal::BadParameter, ibT("pictures are asked for by a list of their ids"));
 				else {
 					session->Submit([&session, asked, &result]() {
 						const ibMetaData* const metaData = session->GetMetaData();
 						ibDataNode& pictures = result.Child(ibProtocol::ibPicture::Pictures);
 						for (const ibDataValue& id : asked->AsArray()) {
-							const wxString text = id.AsString();
+							const ibString text = id.AsString();
 							unsigned long long number = 0;
 							const ibPictureDescription picture = text.ToULongLong(&number)
-								? ibPictureDescription(static_cast<ibPictureID>(number)) : ibPictureDescription(ibGuid(text.BeforeFirst(wxT('#'))));
+								? ibPictureDescription(static_cast<ibPictureID>(number)) : ibPictureDescription(ibGuid(text.BeforeFirst(ibT('#'))));
 							ibDataNode& sent = pictures.AddChild(0, 0);
 							sent.AddField(ibProtocol::ibPicture::Id, id);
 							sent.SetValue(ibProtocol::ibPicture::Picture, ibBackendPicture::GetServerPicture(picture, metaData).GetData());
@@ -1228,33 +1229,33 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				const ibDataValue sent = params.GetProperty(ibProtocol::ibFile::Data);
 				const bool binary = sent.Kind() == ibDataKind::Empty || sent.Kind() == ibDataKind::Binary;
 				const ibMemoryBuffer data = sent.Kind() == ibDataKind::Binary ? sent.AsBinary() : ibMemoryBuffer();
-				wxString id = params.GetValue<wxString>(ibProtocol::ibFile::File);
+				ibString id = params.GetValue<ibString>(ibProtocol::ibFile::File);
 				if (session == nullptr || storage == nullptr) {
-					refuse(ibProtocol::ibRefusal::NoSession, wxT("the client has no session"));
+					refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
 				}
 				else if (!binary) {
-					refuse(ibProtocol::ibRefusal::BadParameter, wxT("Data is not bytes"));
+					refuse(ibProtocol::ibRefusal::BadParameter, ibT("Data is not bytes"));
 				}
 				else if (data.GetDataLen() > ibTempStorage::kPartSize) {
 					refuse(ibProtocol::ibRefusal::BadParameter,
-						wxString::Format(wxT("a part is at most %u bytes"), static_cast<unsigned int>(ibTempStorage::kPartSize)));
+						ibString::Format(ibT("a part is at most %u bytes"), static_cast<unsigned int>(ibTempStorage::kPartSize)));
 				}
 				else {
 					const ibGuid& owner = session->Identity().m_guid;
-					const wxString name = params.GetValue<wxString>(ibProtocol::ibFile::Name);
+					const ibString name = params.GetValue<ibString>(ibProtocol::ibFile::Name);
 					const bool made = id.IsEmpty();
 					if (made)
 						id = storage->Create(owner, name);
 					else if (storage->GetName(owner, id).IsEmpty())
 						id.clear();
 					if (id.IsEmpty() && !made)
-						refuse(ibProtocol::ibRefusal::NotFound, wxT("no such file"));
+						refuse(ibProtocol::ibRefusal::NotFound, ibT("no such file"));
 					else if (id.IsEmpty() && name.IsEmpty())
-						refuse(ibProtocol::ibRefusal::BadParameter, wxT("a new file needs a Name"));
+						refuse(ibProtocol::ibRefusal::BadParameter, ibT("a new file needs a Name"));
 					else if (id.IsEmpty())
-						refuse(ibProtocol::ibRefusal::Failed, wxT("the file was not made"));
+						refuse(ibProtocol::ibRefusal::Failed, ibT("the file was not made"));
 					else if (data.GetDataLen() != 0 && !storage->WritePart(owner, id, storage->PartCount(owner, id), data.GetData(), data.GetDataLen()))
-						refuse(ibProtocol::ibRefusal::Failed, wxT("the part was not written"));
+						refuse(ibProtocol::ibRefusal::Failed, ibT("the part was not written"));
 					else {
 						result.SetValue(ibProtocol::ibFile::File, id);
 						done = true;
@@ -1264,21 +1265,21 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			else if (method == ibProtocol::ibMethod::Download) {
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				const ibTempStorage* const storage = ibApplicationInstance::GetTempStorage(m_applicationInstance);
-				const wxString id = params.GetValue<wxString>(ibProtocol::ibFile::File);
+				const ibString id = params.GetValue<ibString>(ibProtocol::ibFile::File);
 				const std::int32_t part = params.GetValue<std::int32_t>(ibProtocol::ibFile::Part);
 				ibMemoryBuffer data;
 				if (session == nullptr || storage == nullptr) {
-					refuse(ibProtocol::ibRefusal::NoSession, wxT("the client has no session"));
+					refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
 				}
 				else {
 					const ibGuid& owner = session->Identity().m_guid;
-					const wxString name = storage->GetName(owner, id);
+					const ibString name = storage->GetName(owner, id);
 					const int parts = storage->PartCount(owner, id);
 					// An empty file has no parts, and its part 0 is nothing — it is answered, empty.
 					if (name.IsEmpty())
-						refuse(ibProtocol::ibRefusal::NotFound, wxT("no such file"));
+						refuse(ibProtocol::ibRefusal::NotFound, ibT("no such file"));
 					else if ((part != 0 || parts != 0) && !storage->ReadPart(owner, id, part, data))
-						refuse(ibProtocol::ibRefusal::NotFound, wxT("no such part"));
+						refuse(ibProtocol::ibRefusal::NotFound, ibT("no such part"));
 					else {
 						result.SetValue(ibProtocol::ibFile::Name, name);
 						result.SetValue(ibProtocol::ibFile::Part, part);
@@ -1293,32 +1294,32 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				// of it reading the file by its id (ibDocument::DoOpenDocument). Refused before anything is done when
 				// the client has no such file, or nothing its application has reads it — asked on the session, whose
 				// temporary storage the file is in.
-				const wxString id = params.GetValue<wxString>(ibProtocol::ibFile::File);
+				const ibString id = params.GetValue<ibString>(ibProtocol::ibFile::File);
 				ibClientFrame* const frame = client->instance->GetFrame();
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				if (frame == nullptr || session == nullptr) {
-					refuse(ibProtocol::ibRefusal::NoSession, wxT("the client has no session"));
+					refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
 				}
 				else if (!params.FindField(ibProtocol::ibFile::File)) {
 					// No file: a NEW document, as the desktop's File → New with a template picked — the template that
 					// opens the Extension.
-					const wxString extension = params.GetValue<wxString>(ibProtocol::ibFile::Extension);
+					const ibString extension = params.GetValue<ibString>(ibProtocol::ibFile::Extension);
 					ibDocTemplate* temp = nullptr;
 					session->Submit([frame, &extension, &temp, &refuse]() {
 						// Asked of the templates by the extension itself — FindTemplateForPath reads a path as a temporary
 						// file's id.
 						for (ibDocTemplate* const candidate : frame->GetDocumentManager()->GetTemplatesVector()) {
-							if (!extension.IsEmpty() && candidate->IsVisible() && candidate->FileMatchesTemplate(wxT("*.") + extension)) {
+							if (!extension.IsEmpty() && candidate->IsVisible() && candidate->FileMatchesTemplate(ibT("*.") + extension)) {
 								temp = candidate;
 								break;
 							}
 						}
 						if (temp == nullptr)
-							refuse(ibProtocol::ibRefusal::NotFound, wxString::Format(wxT("nothing here makes '%s'"), extension));
+							refuse(ibProtocol::ibRefusal::NotFound, ibString::Format(ibT("nothing here makes '%s'"), extension));
 					}).get();
 					if (refusal == ibProtocol::ibRefusal::None)
 						done = Run(*client, [temp](ibClientFrame*) {
-							if (ibDocument* const document = temp->CreateDocument(wxEmptyString, ibDOC_NEW)) {
+							if (ibDocument* const document = temp->CreateDocument(ibEmptyString, ibDOC_NEW)) {
 								document->SetDocumentName(temp->GetDocumentName());
 								if (!document->OnNewDocument())
 									document->DeleteAllViews();
@@ -1330,9 +1331,9 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 						const ibTempFile file(id);
 						const ibDocTemplate* const temp = file.IsOpened() ? frame->GetDocumentManager()->FindTemplateForPath(id) : nullptr;
 						if (!file.IsOpened())
-							refuse(ibProtocol::ibRefusal::NotFound, wxT("no such file"));
+							refuse(ibProtocol::ibRefusal::NotFound, ibT("no such file"));
 						else if (temp == nullptr || !temp->IsVisible())
-							refuse(ibProtocol::ibRefusal::NotFound, wxString::Format(wxT("nothing here opens '%s'"), file.GetName()));
+							refuse(ibProtocol::ibRefusal::NotFound, ibString::Format(ibT("nothing here opens '%s'"), file.GetName()));
 					}).get();
 					if (refusal == ibProtocol::ibRefusal::None)
 						done = Run(*client, [id](ibClientFrame* frame) { frame->GetDocumentManager()->CreateDocument(id); }, since,
@@ -1344,20 +1345,20 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				// anything is done when it offers no such command, or the document does not take it now (asked on
 				// the session, where the document is).
 				const ibDocCommand command = static_cast<ibDocCommand>(params.GetValue<std::int32_t>(ibProtocol::ibFrame::Command));
-				const wxString name = params.GetValue<wxString>(ibProtocol::ibFrame::Name);   // Save as's: the file's
+				const ibString name = params.GetValue<ibString>(ibProtocol::ibFrame::Name);   // Save as's: the file's
 				ibClientFrame* const frame = client->instance->GetFrame();
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				bool enabled = false;
 				if (frame == nullptr || session == nullptr)
-					refuse(ibProtocol::ibRefusal::NoSession, wxT("the client has no session"));
+					refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
 				else if (frame->GetDocumentManager()->GetCommands().count(command) == 0)
-					refuse(ibProtocol::ibRefusal::NotFound, wxT("no such command"));
+					refuse(ibProtocol::ibRefusal::NotFound, ibT("no such command"));
 				else {
 					session->Submit([frame, command, &enabled]() { enabled = frame->IsCommandEnabled(command); }).get();
 					if (!enabled)
-						refuse(ibProtocol::ibRefusal::NotNow, wxT("the active document does not take this command now"));
+						refuse(ibProtocol::ibRefusal::NotNow, ibT("the active document does not take this command now"));
 					else if (command == ibDocCommand::SaveAs && name.IsEmpty())
-						refuse(ibProtocol::ibRefusal::BadParameter, wxT("Save as needs a Name"));
+						refuse(ibProtocol::ibRefusal::BadParameter, ibT("Save as needs a Name"));
 					else
 						done = Run(*client, [command, name](ibClientFrame* frame) { frame->DoCommand(command, name); }, since, result,
 							refusal, error);
@@ -1369,21 +1370,21 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 
 	// A refusal always says why — one that slipped through unnamed is the server's failure, never «nothing».
 	if (!done && refusal == ibProtocol::ibRefusal::None)
-		refuse(ibProtocol::ibRefusal::Failed, error.IsEmpty() ? wxString(wxT("the call was not done")) : error);
+		refuse(ibProtocol::ibRefusal::Failed, error.IsEmpty() ? ibString(ibT("the call was not done")) : error);
 	return done;
 }
 
 bool ibClientHost::Debug(Client& client, const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
-	wxString& error, const void* connection)
+	ibString& error, const void* connection)
 {
-	const auto refuse = [&refusal, &error](ibProtocol::ibRefusal why, const wxString& text) { refusal = why; error = text; };
+	const auto refuse = [&refusal, &error](ibProtocol::ibRefusal why, const ibString& text) { refusal = why; error = text; };
 	const ibProtocol::ibDebug::ibCommand command = static_cast<ibProtocol::ibDebug::ibCommand>(params.GetValue<std::int32_t>(ibProtocol::ibDebug::Command));
 
 	// The frame's debugger, the designer's — a client of another mode has none, and nothing of this is its.
 	ibClientFrame* const frame = client.instance->GetFrame();
 	ibClientDebugger* const debugger = frame != nullptr ? frame->GetDebugger() : nullptr;
 	if (debugger == nullptr) {
-		refuse(ibProtocol::ibRefusal::NotFound, wxT("the client has no debugger"));
+		refuse(ibProtocol::ibRefusal::NotFound, ibT("the client has no debugger"));
 		return false;
 	}
 
@@ -1395,13 +1396,13 @@ bool ibClientHost::Debug(Client& client, const ibDataNode& params, ibDataNode& r
 		// THE KEY, drawn for the one who holds the client — what binds a connection to it is never given to whoever names it.
 		// Its SHA-256 is kept until Listen takes it; the key itself goes on this answer, once.
 		if (!holder) {
-			refuse(ibProtocol::ibRefusal::NoSession, wxT("the client is not connected"));
+			refuse(ibProtocol::ibRefusal::NoSession, ibT("the client is not connected"));
 			return false;
 		}
 		const std::vector<unsigned char> raw = ibSessionToken::Generate();
 		unsigned char digest[ibSessionToken::kDigest];
 		if (raw.size() != ibSessionToken::kBytes || !ibSessionToken::Hash(raw.data(), raw.size(), digest)) {
-			refuse(ibProtocol::ibRefusal::Failed, wxT("the key could not be drawn"));
+			refuse(ibProtocol::ibRefusal::Failed, ibT("the key could not be drawn"));
 			return false;
 		}
 		{
@@ -1420,9 +1421,9 @@ bool ibClientHost::Debug(Client& client, const ibDataNode& params, ibDataNode& r
 		// once. A connection without a notifier is bound all the same, and is told nothing.
 		unsigned char raw[ibSessionToken::kBytes];
 		unsigned char digest[ibSessionToken::kDigest];
-		wxString key;
+		ibString key;
 		unsigned route = 0;
-		ibSessionToken::SplitRoute(params.GetValue<wxString>(ibProtocol::ibDebug::Channel), key, route);
+		ibSessionToken::SplitRoute(params.GetValue<ibString>(ibProtocol::ibDebug::Channel), key, route);
 		const bool read = connection != nullptr
 			&& ibSessionToken::ParseHex(key, raw)
 			&& ibSessionToken::Hash(raw, ibSessionToken::kBytes, digest);
@@ -1436,13 +1437,13 @@ bool ibClientHost::Debug(Client& client, const ibDataNode& params, ibDataNode& r
 			}
 		}
 		if (!bound)
-			refuse(ibProtocol::ibRefusal::LoginRefused, wxT("the channel was refused"));
+			refuse(ibProtocol::ibRefusal::LoginRefused, ibT("the channel was refused"));
 		return bound;
 	}
 
 	// …the rest by the connection the debugger listens on, or by the client's own.
 	if (!holder && (connection == nullptr || client.debugConnection.load(std::memory_order_acquire) != connection)) {
-		refuse(ibProtocol::ibRefusal::NoSession, wxT("the client is not connected"));
+		refuse(ibProtocol::ibRefusal::NoSession, ibT("the client is not connected"));
 		return false;
 	}
 	client.instance->Touch();
@@ -1454,12 +1455,12 @@ bool ibClientHost::Debug(Client& client, const ibDataNode& params, ibDataNode& r
 //*******************************************************************************************
 
 bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work, std::int32_t since, ibDataNode& result,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	std::shared_ptr<ibSession> session = client.instance->ShareSession();
 	if (session == nullptr) {
 		refusal = ibProtocol::ibRefusal::NoSession;
-		error = wxT("the client has no session");
+		error = ibT("the client has no session");
 		return false;
 	}
 
@@ -1499,7 +1500,7 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 	catch (...) {
 		client.answering.store(false, std::memory_order_release);
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the frame could not be drawn");
+		error = ibT("the frame could not be drawn");
 		return false;
 	}
 	if (!drew)
@@ -1530,8 +1531,8 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 	}
 	ibDataNode patch;
 	const bool patched = fromLast && ibClientFramePatch(client.protocol >= 2 ? base : client.sent, drawn, patch);
-	ibJournalInfo(wxT("client"), wxT("  work %lld ms, frame drawn %lld ms, %s %lld ms"), settled - began, framed - settled,
-		patched ? wxT("patched") : wxT("sent whole"), NowMs() - framed);
+	ibJournalInfo(ibT("client"), ibT("  work %lld ms, frame drawn %lld ms, %s %lld ms"), settled - began, framed - settled,
+		patched ? ibT("patched") : ibT("sent whole"), NowMs() - framed);
 	if (patched) {
 		result.SetValue(ibProtocol::ibLogin::Since, since);
 		result.Child(ibProtocol::ibFrame::Patch) = patch;
@@ -1575,12 +1576,12 @@ void ibClientHost::Settle(Client& client)
 				client.unsettled.get();
 			}
 			catch (const std::exception& err) {
-				ibJournalInfo(wxT("client"), wxT("the client's work ended with an exception: %s"), wxString::FromUTF8(err.what()));
+				ibJournalInfo(ibT("client"), ibT("the client's work ended with an exception: %s"), ibString::FromUTF8(err.what()));
 			}
 			catch (...) {
 				// A failure of the work reported itself where it happened — to the frame's messages, which the
 				// client receives with the frame.
-				ibJournalInfo(wxT("client"), wxT("the client's work ended with an exception"));
+				ibJournalInfo(ibT("client"), ibT("the client's work ended with an exception"));
 			}
 			client.unsettled = std::shared_future<void>();
 			return;
@@ -1603,7 +1604,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	const ibMetaData* const metaData = frame->GetSession()->GetMetaData();
 	const ibMcpServer* const assistant = applicationInstance != nullptr
 		? ibApplicationInstance::GetMcpServer(applicationInstance) : nullptr;
-	state.SetValue(ibProtocol::ibFrame::Endpoint, assistant != nullptr ? assistant->GetEndpoint() : wxString());
+	state.SetValue(ibProtocol::ibFrame::Endpoint, assistant != nullptr ? assistant->GetEndpoint() : ibString());
 	// The language the session reads text in — drawn on its worker, so its own: a caption sent whole (an inspector's
 	// Synonym) is read by the client in it, as the desktop's grid read it in the configuration's.
 	state.SetValue(ibProtocol::ibFrame::Language, ibBackendLocalization::GetUserLanguage());
@@ -1673,7 +1674,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		// file, once it has one: a file of the session's temporary storage the client takes down to where the person keeps
 		// it (Save, Save as). Its document as Save as takes it: a form's active grid box's sheet, while it is that.
 		if (const ibDocument* const document = frame->GetSaveAsDocument(i)) {
-			const wxArrayString lines = wxSplit(document->GetSaveFilter(), wxT('|'));
+			const std::vector<ibString> lines = ibSplit(document->GetSaveFilter(), ibT('|'));
 			if (lines.size() >= 2) {
 				ibDataNode& formats = node.Child(ibProtocol::ibFrame::ibTab::Formats);
 				for (std::size_t line = 0; line + 1 < lines.size(); line += 2) {
@@ -1731,10 +1732,10 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		const ibClientFrame::PendingRequest pending = frame->PeekPendingRequest();
 		ibDataNode& request = state.Child(ibProtocol::ibFrame::Request);
 		request = pending.request;
-		request.SetValue(ibProtocol::ibRequest::Id, wxString::FromUTF8(pending.id.c_str()));
+		request.SetValue(ibProtocol::ibRequest::Id, ibString::FromUTF8(pending.id.c_str()));
 	}
 
-	ibJournalInfo(wxT("client"), wxT("    the frame: menus %lld ms, its own %lld ms, tabs %lld ms, the view %lld ms"),
+	ibJournalInfo(ibT("client"), ibT("    the frame: menus %lld ms, its own %lld ms, tabs %lld ms, the view %lld ms"),
 		menus - began, frameDrawn - menus, tabsDrawn - viewDrawn, viewDrawn - frameDrawn);
 }
 
@@ -1751,7 +1752,7 @@ void ibClientHost::RoundBody()
 				return;
 		}
 
-		std::vector<std::pair<wxString, std::shared_ptr<Client>>> clients;
+		std::vector<std::pair<ibString, std::shared_ptr<Client>>> clients;
 		{
 			std::lock_guard<std::mutex> lock(m_mutex);
 			for (auto& entry : m_clients)
@@ -1785,10 +1786,10 @@ void ibClientHost::RoundBody()
 							ibFormVisualDocument::RunIdleHandlers();
 						}
 						catch (const std::exception& err) {
-							ibJournalWarning(wxT("client"), wxT("an idle handler ended with an exception: %s"), wxString::FromUTF8(err.what()));
+							ibJournalWarning(ibT("client"), ibT("an idle handler ended with an exception: %s"), ibString::FromUTF8(err.what()));
 						}
 						catch (...) {
-							ibJournalWarning(wxT("client"), wxT("an idle handler ended with an exception"));
+							ibJournalWarning(ibT("client"), ibT("an idle handler ended with an exception"));
 						}
 					});
 				}

@@ -121,7 +121,7 @@ ibDateTime ibDateTime::Now()
 	const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
 	const long long milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
 	std::tm local{};
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	localtime_s(&local, &seconds);
 #else
 	localtime_r(&seconds, &local);
@@ -356,7 +356,7 @@ bool ibDateTime::FromString(const ibString& text)
 	case DigitForm::NotAForm: break;
 	}
 	// Not one of the digit forms: wx's free-form reader, by the local parts of what it read.
-	const wxString freeForm = text.ToWxString();
+	const ibString freeForm = text.ToWxString();
 	wxDateTime parsed;
 	if (parsed.ParseDateTime(freeForm)) {
 		*this = OfWxDateTime(parsed);
@@ -470,4 +470,29 @@ ibString ibDateTime::ToString() const
 	at = PutTwo(at, minute);       *at++ = L':';
 	at = PutTwo(at, second);
 	return ibString(text, static_cast<size_t>(at - text));
+}
+
+ibString ibDateTime::Format(const ibString& format) const
+{
+	// The parts in a calendar record, and the record through wcsftime. `%l` is wx's and not C's: the milliseconds
+	// are put in before.
+	const CivilDay day = CivilOf(*this);
+	unsigned hour, minute, second, millisecond;
+	TimeOf(*this, hour, minute, second, millisecond);
+	std::tm parts{};
+	parts.tm_year = day.m_year - 1900;
+	parts.tm_mon = static_cast<int>(day.m_month) - 1;
+	parts.tm_mday = static_cast<int>(day.m_day);
+	parts.tm_hour = static_cast<int>(hour);
+	parts.tm_min = static_cast<int>(minute);
+	parts.tm_sec = static_cast<int>(second);
+	parts.tm_wday = static_cast<int>(GetPart(ibDatePart::WeekDay) % 7);   // Monday 1 … Sunday 7, and C's Sunday is 0
+	parts.tm_yday = static_cast<int>(GetPart(ibDatePart::DayOfYear)) - 1;
+	parts.tm_isdst = -1;
+
+	ibString spec = format;
+	spec.Replace(ibT("%l"), ibString::Format(ibT("%03u"), millisecond));
+	wchar_t text[256];
+	const size_t length = std::wcsftime(text, sizeof(text) / sizeof(text[0]), spec.wc_str(), &parts);
+	return ibString(text, length);
 }

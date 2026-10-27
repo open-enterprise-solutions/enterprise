@@ -72,10 +72,10 @@ struct Rpc {
 	bool           ok = false;
 	ibProtocolNode result;
 	long long      code = 0;
-	wxString       message;
+	ibString       message;
 };
 
-Rpc ReadRpc(const wxString& text)
+Rpc ReadRpc(const ibString& text)
 {
 	Rpc rpc;
 	ibProtocolNode root;
@@ -96,7 +96,7 @@ Rpc ReadRpc(const wxString& text)
 	return rpc;
 }
 
-wxString Request(long long id, const char* method, const ibProtocolNode& params)
+ibString Request(long long id, const char* method, const ibProtocolNode& params)
 {
 	ibProtocolNode request;
 	request.SetValue(ibProtocol::ibRpc::Version, "2.0")
@@ -106,30 +106,30 @@ wxString Request(long long id, const char* method, const ibProtocolNode& params)
 	return request.Write();
 }
 
-wxString TokenHashOf(const wxString& token)
+ibString TokenHashOf(const ibString& token)
 {
 	unsigned char raw[ibSessionToken::kBytes];
 	if (!ibSessionToken::ParseHex(token, raw))
-		return wxString();
+		return ibString();
 	return ibSessionToken::HashHex(raw, ibSessionToken::kBytes);
 }
 
-wxString StoredHash(const wxString& sessionId)
+ibString StoredHash(const ibString& sessionId)
 {
 	ibConnectionScope scope = ibConnectionPool::GetFreeConnection();
 	if (!scope)
-		return wxString();
+		return ibString();
 	ibStatementGuard statement(scope.shared(), scope->PrepareStatement(wxT("SELECT tokenHash FROM sys_session WHERE session = ?")));
 	if (!statement)
-		return wxString();
+		return ibString();
 	statement->SetParamString(1, sessionId);
 	ibResultSetGuard rows(scope.shared(), statement->RunQueryWithResults());
 	if (!rows.get() || !rows->Next())
-		return wxString();
+		return ibString();
 	return rows->GetResultString(1);
 }
 
-bool SessionRowExists(const wxString& sessionId)
+bool SessionRowExists(const ibString& sessionId)
 {
 	ibConnectionScope scope = ibConnectionPool::GetFreeConnection();
 	if (!scope)
@@ -144,8 +144,8 @@ bool SessionRowExists(const wxString& sessionId)
 
 struct Base {
 	wxInitializer                          wx;
-	wxString                               dir;
-	wxString                               reason;
+	ibString                               dir;
+	ibString                               reason;
 	bool                                   failed = false;   // the client is here and the base still did not open
 	ibApplicationInstance*                 app = nullptr;
 	std::unique_ptr<ibClientHost>          host;
@@ -211,7 +211,7 @@ struct Base {
 			std::filesystem::remove_all(std::string(dir.utf8_str()));
 	}
 
-	Rpc Call(const wxString& text, const void* connection)
+	Rpc Call(const ibString& text, const void* connection)
 	{
 		return ReadRpc(host->Call(text, connection, wxT("test")));
 	}
@@ -222,8 +222,8 @@ Base* g_base = nullptr;
 ibProtocolNode PasswordLogin(bool resume = true)
 {
 	ibProtocolNode params;
-	params.SetValue(ibProtocol::ibLogin::User, wxString())
-		.SetValue(ibProtocol::ibLogin::Password, wxString())
+	params.SetValue(ibProtocol::ibLogin::User, ibString())
+		.SetValue(ibProtocol::ibLogin::Password, ibString())
 		.SetValue(ibProtocol::ibLogin::Protocol, ibProtocol::Version);
 	if (resume)
 		params.AddItem(ibProtocol::ibLogin::Features, ibProtocol::ibLogin::FeatureResume);
@@ -272,15 +272,15 @@ TEST_F(SessionFailover, DropAndReturnByToken)
 	int connection = 0;
 	const Rpc login = g_base->Call(Request(1, "login", PasswordLogin()), &connection);
 	ASSERT_TRUE(login.ok) << login.message;
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
-	const wxString token = login.result.GetString(ibProtocol::ibLogin::Token);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString token = login.result.GetString(ibProtocol::ibLogin::Token);
 	const long long frame = login.result.GetInt(ibProtocol::ibFrame::Frame);
 	ASSERT_FALSE(client.IsEmpty());
 	ASSERT_FALSE(token.IsEmpty());
 	ASSERT_NE(frame, 0);
 	ASSERT_TRUE(login.result.Has(ibProtocol::ibFrame::Frame));
 
-	const wxString hash = TokenHashOf(token);
+	const ibString hash = TokenHashOf(token);
 	ASSERT_FALSE(hash.IsEmpty());
 	EXPECT_NE(hash, token);
 	EXPECT_EQ(StoredHash(client), hash);
@@ -318,17 +318,17 @@ TEST_F(SessionFailover, LostCallIsNotExecutedTwice)
 	int connection = 0;
 	const Rpc login = g_base->Call(Request(10, "login", PasswordLogin()), &connection);
 	ASSERT_TRUE(login.ok) << login.message;
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
 	const long long frame = login.result.GetInt(ibProtocol::ibFrame::Frame);
 
 	ibProtocolNode params;
 	params.SetValue(ibProtocol::ibLogin::Client, client).SetValue(ibProtocol::ibLogin::Since, frame);
-	const wxString firstText = g_base->host->Call(Request(11, "frame", params), &connection, wxT("test"));
+	const ibString firstText = g_base->host->Call(Request(11, "frame", params), &connection, wxT("test"));
 	const Rpc first = ReadRpc(firstText);
 	ASSERT_TRUE(first.ok) << first.message;
 	const long long drawn = first.result.GetInt(ibProtocol::ibFrame::Frame);
 
-	const wxString againText = g_base->host->Call(Request(11, "frame", params), &connection, wxT("test"));
+	const ibString againText = g_base->host->Call(Request(11, "frame", params), &connection, wxT("test"));
 	EXPECT_EQ(againText, firstText);
 
 	const Rpc third = g_base->Call(Request(12, "frame", params), &connection);
@@ -342,8 +342,8 @@ TEST_F(SessionFailover, ExpiredWindowClosesTheSession)
 	int connection = 0;
 	const Rpc login = g_base->Call(Request(20, "login", PasswordLogin()), &connection);
 	ASSERT_TRUE(login.ok) << login.message;
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
-	const wxString token = login.result.GetString(ibProtocol::ibLogin::Token);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString token = login.result.GetString(ibProtocol::ibLogin::Token);
 	ASSERT_TRUE(SessionRowExists(client));
 
 	g_base->host->Disconnect(&connection);
@@ -365,18 +365,18 @@ TEST_F(SessionFailover, WrongTokenIsRefusedAndTheSessionStays)
 	int connection = 0;
 	const Rpc login = g_base->Call(Request(30, "login", PasswordLogin()), &connection);
 	ASSERT_TRUE(login.ok) << login.message;
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
 	ASSERT_TRUE(SessionRowExists(client));
 
 	int other = 0;
 	ibProtocolNode bad;
-	bad.SetValue(ibProtocol::ibLogin::Token, wxString(wxT("not-a-token")));
+	bad.SetValue(ibProtocol::ibLogin::Token, ibString(wxT("not-a-token")));
 	const Rpc malformed = g_base->Call(Request(31, "login", bad), &other);
 	EXPECT_FALSE(malformed.ok);
 	EXPECT_EQ(malformed.code, 401);
 
 	ibProtocolNode unknown;
-	unknown.SetValue(ibProtocol::ibLogin::Token, wxString(wxT("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")));
+	unknown.SetValue(ibProtocol::ibLogin::Token, ibString(wxT("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")));
 	const Rpc refused = g_base->Call(Request(32, "login", unknown), &other);
 	EXPECT_FALSE(refused.ok);
 	EXPECT_EQ(refused.code, 401);
@@ -393,8 +393,8 @@ TEST_F(SessionFailover, LiveSessionIsNotTakenByToken)
 	int connection = 0;
 	const Rpc login = g_base->Call(Request(40, "login", PasswordLogin()), &connection);
 	ASSERT_TRUE(login.ok) << login.message;
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
-	const wxString token = login.result.GetString(ibProtocol::ibLogin::Token);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString token = login.result.GetString(ibProtocol::ibLogin::Token);
 	ASSERT_FALSE(token.IsEmpty());
 
 	int intruder = 0;
@@ -422,7 +422,7 @@ TEST_F(SessionFailover, DesignerGetsNoToken)
 	ASSERT_TRUE(login.ok) << login.message;
 	EXPECT_TRUE(login.result.GetString(ibProtocol::ibLogin::Token).IsEmpty());
 	EXPECT_FALSE(ListsResume(login.result));
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
 	g_base->host->Disconnect(&connection);
 	EXPECT_FALSE(SessionRowExists(client));
 }
@@ -442,7 +442,7 @@ TEST_F(SessionFailover, RepeatedIdWithoutOptInRunsAgain)
 	const Rpc login = g_base->Call(Request(60, "login", PasswordLogin(false)), &connection);
 	ASSERT_TRUE(login.ok) << login.message;
 	EXPECT_FALSE(login.result.GetString(ibProtocol::ibLogin::Token).IsEmpty());
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
 	const long long frame = login.result.GetInt(ibProtocol::ibFrame::Frame);
 
 	ibProtocolNode params;
@@ -459,7 +459,7 @@ TEST_F(SessionFailover, OlderIdAndADifferentCallAreRefused)
 	int connection = 0;
 	const Rpc login = g_base->Call(Request(70, "login", PasswordLogin()), &connection);
 	ASSERT_TRUE(login.ok) << login.message;
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
 	const long long frame = login.result.GetInt(ibProtocol::ibFrame::Frame);
 
 	ibProtocolNode params;
@@ -492,14 +492,14 @@ TEST_F(SessionFailover, DuplicateIdRunsOnce)
 	int connection = 0;
 	const Rpc login = g_base->Call(Request(80, "login", PasswordLogin()), &connection);
 	ASSERT_TRUE(login.ok) << login.message;
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
 	const long long frame = login.result.GetInt(ibProtocol::ibFrame::Frame);
 
 	ibProtocolNode params;
 	params.SetValue(ibProtocol::ibLogin::Client, client).SetValue(ibProtocol::ibLogin::Since, frame);
-	const wxString text = Request(81, "frame", params);
-	wxString first;
-	wxString second;
+	const ibString text = Request(81, "frame", params);
+	ibString first;
+	ibString second;
 	std::thread one([&]() { first = g_base->host->Call(text, &connection, wxT("test")); });
 	std::thread two([&]() { second = g_base->host->Call(text, &connection, wxT("test")); });
 	one.join();
@@ -525,21 +525,21 @@ TEST_F(SessionFailover, AnotherConnectionDoesNotReadTheCachedAnswer)
 	int connection = 0;
 	const Rpc login = g_base->Call(Request(90, "login", PasswordLogin()), &connection);
 	ASSERT_TRUE(login.ok) << login.message;
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
 
 	ibProtocolNode params;
 	params.SetValue(ibProtocol::ibLogin::Client, client);
-	const wxString text = Request(91, "frame", params);
+	const ibString text = Request(91, "frame", params);
 	const Rpc first = g_base->Call(text, &connection);
 	ASSERT_TRUE(first.ok) << first.message;
 
 	int other = 0;
-	const wxString stolenText = g_base->host->Call(text, &other, wxT("test"));
+	const ibString stolenText = g_base->host->Call(text, &other, wxT("test"));
 	const Rpc stolen = ReadRpc(stolenText);
 	EXPECT_FALSE(stolen.ok);
 	EXPECT_EQ(stolen.code, 401);
 
-	const wxString cachedText = g_base->host->Call(text, &connection, wxT("test"));
+	const ibString cachedText = g_base->host->Call(text, &connection, wxT("test"));
 	const Rpc cached = ReadRpc(cachedText);
 	EXPECT_TRUE(cached.ok) << cached.message;
 	EXPECT_NE(stolenText, cachedText);
@@ -560,7 +560,7 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 	// whenever the text changes, the same way an apply retires it.
 	struct Restore {
 		ibValueMetaObjectModule* module;
-		wxString                 text;
+		ibString                 text;
 		~Restore()
 		{
 			module->SetModuleText(text);
@@ -591,7 +591,7 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 		<< login.result.Write().ToUtf8();
 	EXPECT_EQ(request.GetString("Text"), wxT("stay"));
 
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
 	ibProtocolNode response;
 	response.SetValue("Button", static_cast<long long>(wxOK));
 	ibProtocolNode answer;
@@ -607,12 +607,12 @@ TEST_F(SessionFailover, DetachedSessionSaysUntilWhen)
 	int watcher = 0;
 	const Rpc admin = g_base->Call(Request(130, "login", PasswordLogin(false)), &watcher);
 	ASSERT_TRUE(admin.ok) << admin.message;
-	const wxString adminId = admin.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString adminId = admin.result.GetString(ibProtocol::ibLogin::Client);
 
 	int connection = 0;
 	const Rpc login = g_base->Call(Request(131, "login", PasswordLogin()), &connection);
 	ASSERT_TRUE(login.ok) << login.message;
-	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
 	g_base->host->Disconnect(&connection);
 
 	ibProtocolNode params;
@@ -620,10 +620,10 @@ TEST_F(SessionFailover, DetachedSessionSaysUntilWhen)
 	params.SetValue("Schema", static_cast<int>(ibProtocol::ibSchema::ibKind::ActiveUser));
 
 	bool found = false;
-	wxString last;
+	ibString last;
 	for (int attempt = 0; attempt < 15 && !found; ++attempt) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(200));
-		const wxString text = g_base->host->Call(Request(140 + attempt, "schema", params), &watcher, wxT("test"));
+		const ibString text = g_base->host->Call(Request(140 + attempt, "schema", params), &watcher, wxT("test"));
 		last = text;
 		const Rpc list = ReadRpc(text);
 		if (!list.ok)
@@ -648,7 +648,7 @@ public:
 	int                         reconnects = 0;
 
 	bool Exchange(const ibMemoryBuffer& request, ibProtocolNode& answer, ibProtocol::ibRefusal& refusal,
-		wxString& error) override
+		ibString& error) override
 	{
 		sent.push_back(request);
 		if (fail.empty()) {
@@ -673,7 +673,7 @@ public:
 		}
 		return true;
 	}
-	bool Reconnect(wxString&) override
+	bool Reconnect(ibString&) override
 	{
 		++reconnects;
 		return true;
@@ -727,18 +727,18 @@ TEST(SessionFailoverClient, IdsStayMonotonicAcrossReconnect)
 			"\"Features\":[\"resume\"],\"Frame\":1,\"Title\":\"Home\"}}"),
 		Answer(3, [&]() {
 			ibProtocolNode resumed;
-			resumed.SetValue(ibProtocol::ibLogin::Client, wxString(wxT("client-1")))
+			resumed.SetValue(ibProtocol::ibLogin::Client, ibString(wxT("client-1")))
 				.SetValue(ibProtocol::ibLogin::Protocol, 2);
 			return resumed;
 		}()),
 		Answer(2, [&]() {
 			ibProtocolNode frame;
-			frame.SetValue(ibProtocol::ibFrame::Frame, 2).SetValue(ibProtocol::ibFrame::Title, wxString(wxT("Home")));
+			frame.SetValue(ibProtocol::ibFrame::Frame, 2).SetValue(ibProtocol::ibFrame::Title, ibString(wxT("Home")));
 			return frame;
 		}()),
 		Answer(4, [&]() {
 			ibProtocolNode frame;
-			frame.SetValue(ibProtocol::ibFrame::Frame, 3).SetValue(ibProtocol::ibFrame::Title, wxString(wxT("Home")));
+			frame.SetValue(ibProtocol::ibFrame::Frame, 3).SetValue(ibProtocol::ibFrame::Title, ibString(wxT("Home")));
 			return frame;
 		}()),
 	};
@@ -746,7 +746,7 @@ TEST(SessionFailoverClient, IdsStayMonotonicAcrossReconnect)
 	ibCommunicator communicator(std::move(script));
 	ibProtocolNode result;
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 
 	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocol::ibLogin::ibMode::Runtime, result, refusal, error)) << error;
 
@@ -796,7 +796,7 @@ ibMemoryBuffer LoginAnswer(int protocol)
 ibMemoryBuffer FrameAnswer(long long id, int number)
 {
 	ibProtocolNode frame;
-	frame.SetValue(ibProtocol::ibFrame::Frame, number).SetValue(ibProtocol::ibFrame::Title, wxString(wxT("Home")));
+	frame.SetValue(ibProtocol::ibFrame::Frame, number).SetValue(ibProtocol::ibFrame::Title, ibString(wxT("Home")));
 	return Answer(id, frame);
 }
 
@@ -814,7 +814,7 @@ TEST(SubscribedEventsClient, HeldEventsGoWithTheNextCall)
 	ibCommunicator communicator(std::move(script));
 	ibProtocolNode result;
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocol::ibLogin::ibMode::Runtime, result, refusal, error)) << error;
 
 	for (int row = 1; row <= 100; ++row)
@@ -842,7 +842,7 @@ TEST(SubscribedEventsClient, HeldEventsGoWithTheNextCall)
 
 	// …and the server reads it as the client wrote it: a list of events, each with its Args.
 	ibRpcRequest request;
-	wxString parseError;
+	ibString parseError;
 	ASSERT_TRUE(ibRpcParseRequest(raw->sent[1], request, parseError)) << parseError;
 	const auto read = request.m_params.FindField(ibProtocol::ibLogin::Pending);
 	ASSERT_TRUE(read);
@@ -873,7 +873,7 @@ TEST(SubscribedEventsClient, NothingHeldBelowProtocol3)
 	ibCommunicator communicator(std::move(script));
 	ibProtocolNode result;
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	EXPECT_FALSE(communicator.Hold(StateEvent(7, ibProtocol::ibEvent::ibKind::Row, ibProtocol::ibEvent::Row, 1)));
 	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocol::ibLogin::ibMode::Runtime, result, refusal, error)) << error;
 	EXPECT_FALSE(communicator.Hold(StateEvent(7, ibProtocol::ibEvent::ibKind::Row, ibProtocol::ibEvent::Row, 1)));

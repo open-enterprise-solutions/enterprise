@@ -46,7 +46,7 @@ public:
 
 	ibPropertyAccountingKind(ibPropertyCategory* cat, Level level,
 		std::function<const ibValueMetaObjectChartOfAccounts* ()> chartOfAccounts,
-		const wxString& name, const wxString& label, const wxString& helpString)
+		const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject()))
 		, m_level(level), m_chartOfAccounts(std::move(chartOfAccounts)) {}
 

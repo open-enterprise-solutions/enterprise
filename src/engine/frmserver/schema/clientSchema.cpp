@@ -3,28 +3,28 @@
 #include "backend/backend_exception.h"   // ibBackendException::DrainLastErrors — the reasons the base gave
 
 std::function<void()> ibClientSchema::Command(const ibSession& /*session*/,
-	std::int32_t /*command*/, const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, wxString& error) const
+	std::int32_t /*command*/, const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	// A schema that only shows something takes no commands.
 	refusal = ibProtocol::ibRefusal::NotFound;
-	error = wxT("this schema takes no commands");
+	error = ibT("this schema takes no commands");
 	return nullptr;
 }
 
-wxString ibClientSchema::BackendErrorChain(const wxString& detail)
+ibString ibClientSchema::BackendErrorChain(const ibString& detail)
 {
-	wxString body = detail;
+	ibString body = detail;
 	const auto chain = ibBackendException::DrainLastErrors();
-	wxString previous;
+	ibString previous;
 	size_t repeats = 0;
 	const auto flush = [&body, &previous, &repeats]() {
 		if (previous.IsEmpty())
 			return;
 		if (!body.IsEmpty())
-			body += wxT("\n");
+			body += ibT("\n");
 		body += previous;
 		if (repeats > 1)
-			body += wxString::Format(wxT("  (x%u)"), (unsigned int)repeats);
+			body += ibString::Format(ibT("  (x%u)"), (unsigned int)repeats);
 		previous.clear();
 		repeats = 0;
 	};
@@ -42,6 +42,6 @@ wxString ibClientSchema::BackendErrorChain(const wxString& detail)
 	}
 	flush();
 	if (dropped > 0)
-		body += wxString::Format(wxT("\n... and %u more"), (unsigned int)dropped);
+		body += ibString::Format(ibT("\n... and %u more"), (unsigned int)dropped);
 	return body;
 }

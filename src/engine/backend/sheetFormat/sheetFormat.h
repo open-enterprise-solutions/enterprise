@@ -13,7 +13,7 @@
 // ⭐ THE SAME FORMATS OVER THE SESSION'S TEMPORARY STORAGE, BY ID — a file a thin client handed over, read by the
 // format the name it came under says; a sheet written into a file of it, by the format the name it was made under says.
 // The parts stream straight through: no file on disk.
-BACKEND_API bool ibSheetFormatReadTempFile(const wxString& id, ibSpreadsheetDescription& sheet);
-BACKEND_API bool ibSheetFormatWriteTempFile(const wxString& id, const ibSpreadsheetDescription& sheet);
+BACKEND_API bool ibSheetFormatReadTempFile(const ibString& id, ibSpreadsheetDescription& sheet);
+BACKEND_API bool ibSheetFormatWriteTempFile(const ibString& id, const ibSpreadsheetDescription& sheet);
 
 #endif // !__SHEET_FORMAT_H__

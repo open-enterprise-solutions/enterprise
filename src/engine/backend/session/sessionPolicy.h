@@ -35,7 +35,7 @@ public:
 	// Return true to allow the Add; false to veto. On false, fill
 	// `reason` with a user-facing diagnostic — becomes the ibSession's
 	// m_reason and propagates to the producer via ibConnectResult.
-	virtual bool CanAdd(const ibSession& session, wxString& reason) = 0;
+	virtual bool CanAdd(const ibSession& session, ibString& reason) = 0;
 };
 
 #endif

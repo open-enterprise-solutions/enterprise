@@ -36,13 +36,14 @@
 #include <cstdint>
 #include <cwchar>        // std::swprintf — ibString::Format
 #include <cwctype>       // std::iswdigit, std::towlower… — a character's class and case
+#include <iosfwd>        // std::ostream — operator<<
 #include <string>
 #include <string_view>   // std::hash<ibString> hashes a view of the buffer
 #include <tuple>         // std::apply — ibString::Format holds its arguments for the call
 #include <type_traits>
 #include <wx/string.h>   // ONLY for the boundary conversion (operator wxString / ctor)
 
-#include "core/core.h"   // CORE_API
+#include "core/coreApi.h"   // CORE_API, ibChar, ibT
 
 // --- a character: its class and its case ------------------------------------
 // The C library's wide answers — what wxIsdigit, wxTolower and the rest gave, without wx.
@@ -51,6 +52,8 @@ inline bool ibIsDigit(ibChar c) { return std::iswdigit(c) != 0; }
 inline bool ibIsSpace(ibChar c) { return std::iswspace(c) != 0; }
 inline bool ibIsAlpha(ibChar c) { return std::iswalpha(c) != 0; }
 inline bool ibIsAlnum(ibChar c) { return std::iswalnum(c) != 0; }
+inline bool ibIsUpper(ibChar c) { return std::iswupper(c) != 0; }
+inline bool ibIsLower(ibChar c) { return std::iswlower(c) != 0; }
 
 inline ibChar ibToLower(ibChar c) { return static_cast<ibChar>(std::towlower(c)); }
 inline ibChar ibToUpper(ibChar c) { return static_cast<ibChar>(std::towupper(c)); }
@@ -125,6 +128,8 @@ public:
 	wchar_t GetChar(size_t i) const { return wc_str()[i]; }
 	void    SetChar(size_t i, wchar_t c);
 	wchar_t Last() const { return View().back(); }
+	using const_iterator = const wchar_t*;
+	using iterator       = wchar_t*;
 	const wchar_t* begin() const noexcept { return wc_str(); }
 	const wchar_t* end()   const noexcept { return wc_str() + Len(); }
 	wchar_t*       begin();   // ⚠ as operator[] above
@@ -141,16 +146,22 @@ public:
 	size_t rfind(const ibString& sub, size_t start = npos) const { return View().rfind(sub.View(), start); }
 	size_t rfind(wchar_t c, size_t start = npos) const          { return View().rfind(c, start); }
 	size_t find_first_of(const ibString& set, size_t start = 0) const;
+	size_t find_first_of(wchar_t c, size_t start = 0) const            { return View().find(c, start); }
 	size_t find_last_of(const ibString& set, size_t start = npos) const;
 	size_t find_first_not_of(const ibString& set, size_t start = 0) const;
+	size_t find_first_not_of(wchar_t c, size_t start = 0) const        { return View().find_first_not_of(c, start); }
+	size_t find_last_not_of(wchar_t c, size_t start = npos) const      { return View().find_last_not_of(c, start); }
 	ibString substr(size_t pos = 0, size_t count = npos) const;
 	ibString& erase(size_t pos = 0, size_t count = npos);
 	ibString& insert(size_t pos, const ibString& s);
+	ibString& insert(size_t pos, size_t count, wchar_t c) { return insert(pos, ibString(c, count)); }
+	ibString& replace(size_t pos, size_t count, const ibString& s) { erase(pos, count); return insert(pos, s); }
 	ibString& append(const ibString& s) { return *this += s; }
 	ibString& append(const wchar_t* s, size_t n);
+	ibString& append(size_t count, wchar_t c) { return Append(c, count); }
 	void push_back(wchar_t c);
 	void reserve(size_t n);
-	void resize(size_t n, wchar_t c = wxT('\0'));
+	void resize(size_t n, wchar_t c = ibT('\0'));
 	void swap(ibString& o) noexcept { Shared* const held = m_impl; m_impl = o.m_impl; o.m_impl = held; }
 
 	// --- slicing / search (wxChar-indexed — exact wxString parity) ---
@@ -189,7 +200,7 @@ public:
 	ibString TrimAll() const;
 	enum stripType { leading = 0x1, trailing = 0x2, both = 0x3 };
 	ibString Strip(int how = trailing) const;
-	ibString& Pad(size_t count, wchar_t c = wxT(' '), bool fromRight = true);
+	ibString& Pad(size_t count, wchar_t c = ibT(' '), bool fromRight = true);
 	ibString& Truncate(size_t len);
 	ibString& RemoveLast(size_t n = 1);
 	ibString& Remove(size_t pos, size_t len = npos) { return erase(pos, len); }
@@ -201,6 +212,7 @@ public:
 	bool ToLongLong(long long* val, int base = 10) const;
 	bool ToULongLong(unsigned long long* val, int base = 10) const;
 	bool ToInt(int* val, int base = 10) const;
+	bool ToUInt(unsigned int* val, int base = 10) const;
 	bool ToDouble(double* val) const;    // the current locale's decimal point, as wx
 	bool ToCDouble(double* val) const;   // always '.', whatever the locale
 
@@ -231,13 +243,13 @@ public:
 	ibString& operator<<(const wchar_t* s)  { return *this += s; }
 	ibString& operator<<(const wxString& s) { return *this += s; }
 	ibString& operator<<(wchar_t c)         { return *this += c; }
-	ibString& operator<<(int n)                { return *this += Format(wxT("%d"), n); }
-	ibString& operator<<(unsigned int n)       { return *this += Format(wxT("%u"), n); }
-	ibString& operator<<(long n)               { return *this += Format(wxT("%ld"), n); }
-	ibString& operator<<(unsigned long n)      { return *this += Format(wxT("%lu"), n); }
-	ibString& operator<<(long long n)          { return *this += Format(wxT("%lld"), n); }
-	ibString& operator<<(unsigned long long n) { return *this += Format(wxT("%llu"), n); }
-	ibString& operator<<(double d)             { return *this += Format(wxT("%g"), d); }
+	ibString& operator<<(int n)                { return *this += Format(ibT("%d"), n); }
+	ibString& operator<<(unsigned int n)       { return *this += Format(ibT("%u"), n); }
+	ibString& operator<<(long n)               { return *this += Format(ibT("%ld"), n); }
+	ibString& operator<<(unsigned long n)      { return *this += Format(ibT("%lu"), n); }
+	ibString& operator<<(long long n)          { return *this += Format(ibT("%lld"), n); }
+	ibString& operator<<(unsigned long long n) { return *this += Format(ibT("%llu"), n); }
+	ibString& operator<<(double d)             { return *this += Format(ibT("%g"), d); }
 
 	// Replace `from` with `to`, in place over the buffer — every occurrence, or the first only
 	// (wxString::Replace semantics). Returns the count. Empty `from` is a no-op (as wxString — it
@@ -248,6 +260,9 @@ public:
 	bool operator==(const ibString& o) const noexcept { return m_impl == o.m_impl || View() == o.View(); }
 	bool operator!=(const ibString& o) const noexcept { return !(*this == o); }
 	bool operator<(const ibString& o)  const noexcept { return View() < o.View(); }
+	bool operator>(const ibString& o)  const noexcept { return o < *this; }
+	bool operator<=(const ibString& o) const noexcept { return !(o < *this); }
+	bool operator>=(const ibString& o) const noexcept { return !(*this < o); }
 	// …and against a literal, exact — see operator+ above for why.
 	bool operator==(const wchar_t* s) const noexcept { return View().compare(s != nullptr ? s : L"") == 0; }
 	bool operator!=(const wchar_t* s) const noexcept { return !(*this == s); }
@@ -283,6 +298,7 @@ public:
 	std::string  ToUTF8()       const { return ToUtf8(); }
 	std::string  utf8_str()     const { return ToUtf8(); }
 	static ibString FromUTF8(const char* s, size_t n = npos);
+	static ibString FromUTF8(const std::string& s) { return FromUTF8(s.data(), s.size()); }
 	template <class... Args>
 	int Printf(const ibString& format, const Args&... args) { *this = Format(format, args...); return static_cast<int>(Len()); }
 
@@ -338,6 +354,12 @@ private:
 // One pointer: a string is a handle on its text, copied as a pointer and a count.
 static_assert(sizeof(ibString) == sizeof(void*),
               "ibString must stay a single handle on its shared text");
+
+// The empty string, named — what wx calls wxEmptyString. It holds no text, so it costs nothing to copy or to keep.
+inline const ibString ibEmptyString;
+
+// Written to a std stream (a test's message among them) as wxString writes itself: in UTF-8.
+CORE_API std::ostream& operator<<(std::ostream& out, const ibString& s);
 
 // A key of an unordered container, as wxString is one — by its characters.
 namespace std {
@@ -398,8 +420,8 @@ enum class Kind : unsigned char { Text, Int, Int64, Real, Pointer };
 // this call owns. A number is widened to int or to 64 bits by its own size, a real to double, an enum
 // to its number, a character to int.
 inline const wchar_t* Hold(const ibString& s) noexcept { return s.wc_str(); }
-inline const wchar_t* Hold(const wchar_t* s) noexcept { return s != nullptr ? s : wxT(""); }
-inline const wchar_t* Hold(wchar_t* s) noexcept { return s != nullptr ? s : wxT(""); }
+inline const wchar_t* Hold(const wchar_t* s) noexcept { return s != nullptr ? s : ibT(""); }
+inline const wchar_t* Hold(wchar_t* s) noexcept { return s != nullptr ? s : ibT(""); }
 inline const wchar_t* Hold(const std::wstring& s) noexcept { return s.c_str(); }
 inline const wchar_t* Hold(const wxString& s) noexcept { return s.wc_str(); }
 inline const wchar_t* Hold(const wxCStrData& s) noexcept { return s.AsWChar(); }
@@ -471,7 +493,7 @@ inline ibString ibString::Format(const ibString& format, const Args&... args)
 			ibFStringFormat::KindOf<decltype(ibFStringFormat::Pass(ibFStringFormat::Hold(args)))>()... };
 		std::wstring spec;
 		if (!ibFStringFormat::Prepare(format, given, sizeof...(Args), spec)) {
-			wxFAIL_MSG(wxT("ibString::Format: the arguments do not answer the format"));
+			wxFAIL_MSG(ibT("ibString::Format: the arguments do not answer the format"));
 			return format;
 		}
 		std::wstring out;
@@ -480,7 +502,7 @@ inline ibString ibString::Format(const ibString& format, const Args&... args)
 		}, held);
 		if (fits)
 			return ibString(out.c_str(), out.size());
-		wxFAIL_MSG(wxT("ibString::Format: the result does not fit"));
+		wxFAIL_MSG(ibT("ibString::Format: the result does not fit"));
 		return format;
 	}
 }

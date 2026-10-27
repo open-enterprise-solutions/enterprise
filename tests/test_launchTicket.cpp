@@ -21,24 +21,24 @@
 
 namespace {
 
-wxString OutPath(const wxString& name)
+ibString OutPath(const ibString& name)
 {
 	return wxFileName::GetTempDir() + wxFileName::GetPathSeparator() + name;
 }
 
-wxString ReadFile(const wxString& path)
+ibString ReadFile(const ibString& path)
 {
 	wxFile file;
 	if (!file.Open(path, wxFile::read))
-		return wxString();
+		return ibString();
 	const wxFileOffset length = file.Length();
 	if (length <= 0)
-		return wxString();
+		return ibString();
 	wxCharBuffer buf(static_cast<size_t>(length));
 	const ssize_t got = file.Read(buf.data(), static_cast<size_t>(length));
 	if (got <= 0)
-		return wxString();
-	return wxString::FromUTF8(buf.data(), static_cast<size_t>(got));
+		return ibString();
+	return ibString::FromUTF8(buf.data(), static_cast<size_t>(got));
 }
 
 } // namespace
@@ -58,8 +58,8 @@ TEST(LaunchSecrets, ChildWritesWhatItRead)
 	const char* out = std::getenv("OES_LAUNCH_OUT");
 	ASSERT_NE(out, nullptr);
 	wxFile file;
-	ASSERT_TRUE(file.Create(wxString::FromUTF8(out), true));
-	const wxScopedCharBuffer utf8 = got.m_ibPassword.utf8_str();
+	ASSERT_TRUE(file.Create(ibString::FromUTF8(out), true));
+	const std::string utf8 = got.m_ibPassword.utf8_str();
 	ASSERT_EQ(file.Write(utf8.data(), utf8.length()), static_cast<wxFileOffset>(utf8.length()));
 }
 
@@ -67,20 +67,20 @@ TEST(LaunchSecrets, ChildWritesWhatItRead)
 
 TEST(LaunchSecrets, AChildReadsThePasswordTwiceAndTheCommandLineDoesNotCarryIt)
 {
-	const wxString password = wxT("p@ss\nword\"oes");
+	const ibString password = wxT("p@ss\nword\"oes");
 	ibLaunchSecrets secrets;
 	secrets.m_ibPassword = password;
 	secrets.m_dbPassword = wxT("db-secret-oes-9f3a");
 
-	const wxString exe = wxStandardPaths::Get().GetExecutablePath();
-	const wxString cmd = wxT("\"") + exe + wxT("\" --gtest_filter=LaunchSecrets.ChildWritesWhatItRead");
+	const ibString exe = wxStandardPaths::Get().GetExecutablePath();
+	const ibString cmd = wxT("\"") + exe + wxT("\" --gtest_filter=LaunchSecrets.ChildWritesWhatItRead");
 
-	const wxString first = OutPath(wxT("oes-launch-1"));
-	const wxString second = OutPath(wxT("oes-launch-2"));
+	const ibString first = OutPath(wxT("oes-launch-1"));
+	const ibString second = OutPath(wxT("oes-launch-2"));
 	wxRemoveFile(first);
 	wxRemoveFile(second);
 
-	auto once = [&](const wxString& out) {
+	auto once = [&](const ibString& out) {
 		ASSERT_EQ(setenv("OES_LAUNCH_CHILD", "1", 1), 0);
 		ASSERT_EQ(setenv("OES_LAUNCH_OUT", out.utf8_str(), 1), 0);
 		const long pid = ibStartProcess(cmd, secrets);
@@ -101,8 +101,8 @@ TEST(LaunchSecrets, AChildReadsThePasswordTwiceAndTheCommandLineDoesNotCarryIt)
 
 	const long sleeper = ibStartProcess(wxT("sleep 30"), secrets);
 	ASSERT_GT(sleeper, 0);
-	const wxString cmdlinePath = wxString::Format(wxT("/proc/%ld/cmdline"), sleeper);
-	const wxString cmdline = ReadFile(cmdlinePath);
+	const ibString cmdlinePath = ibString::Format(wxT("/proc/%ld/cmdline"), sleeper);
+	const ibString cmdline = ReadFile(cmdlinePath);
 	EXPECT_FALSE(cmdline.Contains(password));
 	EXPECT_FALSE(cmdline.Contains(wxT("db-secret-oes-9f3a")));
 	EXPECT_FALSE(cmdline.Contains(wxT("--password=")));

@@ -18,13 +18,13 @@ namespace {
 using ibMode = ibProtocol::ibSchema::ibConfigCompare::ibMode;
 using ibOp   = ibProtocol::ibSchema::ibConfigCompare::ibOp;
 
-ibMemoryBuffer ReadTempFile(const wxString& id, ibProtocol::ibRefusal& refusal, wxString& error)
+ibMemoryBuffer ReadTempFile(const ibString& id, ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	ibMemoryBuffer bytes;
 	const ibTempFile file(id);
 	if (!file.IsOpened()) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = wxT("no such file");
+		error = ibT("no such file");
 		return bytes;
 	}
 	ibMemoryBuffer part;
@@ -33,25 +33,25 @@ ibMemoryBuffer ReadTempFile(const wxString& id, ibProtocol::ibRefusal& refusal, 
 	return bytes;
 }
 
-bool WriteTempFile(const wxString& id, const ibMemoryBuffer& bytes, ibProtocol::ibRefusal& refusal, wxString& error)
+bool WriteTempFile(const ibString& id, const ibMemoryBuffer& bytes, ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	ibTempFile file;
 	if (!file.Create(id, true)) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = wxT("no such file");
+		error = ibT("no such file");
 		return false;
 	}
 	if (!file.Write(bytes.GetData(), bytes.GetDataLen())) {
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the configuration was not written");
+		error = ibT("the configuration was not written");
 		return false;
 	}
 	return true;
 }
 
 // Load an uploaded .oap into a transient file configuration. Caller owns the shared_ptr for the walk/merge lifetime.
-std::shared_ptr<ibMetaDataConfigurationFile> LoadFileConfig(const wxString& fileId,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+std::shared_ptr<ibMetaDataConfigurationFile> LoadFileConfig(const ibString& fileId,
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	const ibMemoryBuffer bytes = ReadTempFile(fileId, refusal, error);
 	if (refusal != ibProtocol::ibRefusal::None)
@@ -59,7 +59,7 @@ std::shared_ptr<ibMetaDataConfigurationFile> LoadFileConfig(const wxString& file
 	auto holder = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
 	if (!holder->LoadConfigFromBuffer(bytes)) {
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the configuration could not be read from the file");
+		error = ibT("the configuration could not be read from the file");
 		return nullptr;
 	}
 	return holder;
@@ -74,20 +74,20 @@ struct ibCompareSides {
 };
 
 bool ResolveSides(const ibSession& session, const ibDataNode& args, ibCompareSides& sides,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	const ibMode mode = static_cast<ibMode>(args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibConfigCompare::Mode));
 	ibMetaDataConfigurationBase* const active = session.GetMetaData();
 	if (active == nullptr) {
 		refusal = ibProtocol::ibRefusal::NoSession;
-		error = wxT("the session has no configuration");
+		error = ibT("the session has no configuration");
 		return false;
 	}
 
 	switch (mode) {
 	case ibMode::File: {
 		sides.rightFile = LoadFileConfig(
-			args.GetValue<wxString>(ibProtocol::ibSchema::ibConfigCompare::File), refusal, error);
+			args.GetValue<ibString>(ibProtocol::ibSchema::ibConfigCompare::File), refusal, error);
 		if (sides.rightFile == nullptr)
 			return false;
 		sides.left = active;
@@ -99,7 +99,7 @@ bool ResolveSides(const ibSession& session, const ibDataNode& args, ibCompareSid
 			dynamic_cast<ibMetaDataConfigurationStorage*>(active);
 		if (storage == nullptr || storage->GetConfiguration() == nullptr) {
 			refusal = ibProtocol::ibRefusal::BadParameter;
-			error = wxT("database configuration is not available");
+			error = ibT("database configuration is not available");
 			return false;
 		}
 		sides.left = storage;
@@ -108,11 +108,11 @@ bool ResolveSides(const ibSession& session, const ibDataNode& args, ibCompareSid
 	}
 	case ibMode::TwoFiles: {
 		sides.leftFile = LoadFileConfig(
-			args.GetValue<wxString>(ibProtocol::ibSchema::ibConfigCompare::File), refusal, error);
+			args.GetValue<ibString>(ibProtocol::ibSchema::ibConfigCompare::File), refusal, error);
 		if (sides.leftFile == nullptr)
 			return false;
 		sides.rightFile = LoadFileConfig(
-			args.GetValue<wxString>(ibProtocol::ibSchema::ibConfigCompare::File2), refusal, error);
+			args.GetValue<ibString>(ibProtocol::ibSchema::ibConfigCompare::File2), refusal, error);
 		if (sides.rightFile == nullptr)
 			return false;
 		sides.left = sides.leftFile.get();
@@ -121,7 +121,7 @@ bool ResolveSides(const ibSession& session, const ibDataNode& args, ibCompareSid
 	}
 	default:
 		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = wxT("unknown compare mode");
+		error = ibT("unknown compare mode");
 		return false;
 	}
 }
@@ -136,7 +136,7 @@ void WriteRecords(const std::vector<ibMetaDiffRecord>& records, ibDataNode& resu
 		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Depth, rec.m_depth);
 		if (rec.IsGroup()) {
 			row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Group,
-				wxString::Format(wxT("%llu"), static_cast<unsigned long long>(rec.m_groupClsid)));
+				ibString::Format(ibT("%llu"), static_cast<unsigned long long>(rec.m_groupClsid)));
 			row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Name,
 				ibMetaDiffWalker::GroupLabelFor(rec.m_groupClsid));
 		}
@@ -150,7 +150,7 @@ void WriteRecords(const std::vector<ibMetaDiffRecord>& records, ibDataNode& resu
 			if (any != nullptr) {
 				row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Name, any->GetName());
 				row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Picture,
-					wxString::Format(wxT("%llu"),
+					ibString::Format(ibT("%llu"),
 						static_cast<unsigned long long>(any->GetClassType())));
 			}
 			if (rec.m_left != nullptr)
@@ -234,10 +234,10 @@ void ibSchemaConfigCompare::Build(const ibSession& session, const ibDataNode& ar
 {
 	// A side that cannot be read is the person's refusal, not an empty walk — "no differences" would be a lie.
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	ibCompareSides sides;
 	if (!ResolveSides(session, args, sides, refusal, error))
-		ibCoreException::Error(wxT("%s"), error);
+		ibCoreException::Error(ibT("%s"), error);
 	const std::vector<ibMetaDiffRecord> records = ibMetaDiffWalker::Walk(
 		sides.left != nullptr ? sides.left->GetCommonMetaObject() : nullptr,
 		sides.right != nullptr ? sides.right->GetCommonMetaObject() : nullptr);
@@ -245,11 +245,11 @@ void ibSchemaConfigCompare::Build(const ibSession& session, const ibDataNode& ar
 }
 
 std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	if (static_cast<ibProtocol::ibSchema::ibCommand>(command) != ibProtocol::ibSchema::ibCommand::Merge) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = wxString::Format(wxT("config compare has no command %d"), command);
+		error = ibString::Format(ibT("config compare has no command %d"), command);
 		return nullptr;
 	}
 
@@ -263,7 +263,7 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 	// Database compare has no Push target (matches the desktop: no right-save callback).
 	if (!pull && mode == ibMode::Database) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = wxT("push into the database baseline is not supported; update the database configuration separately");
+		error = ibT("push into the database baseline is not supported; update the database configuration separately");
 		return nullptr;
 	}
 
@@ -292,18 +292,18 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 	auto rightFile = sides.rightFile;
 	ibMetaData* left = sides.left;
 	ibMetaData* right = sides.right;
-	const wxString fileId = args.GetValue<wxString>(ibProtocol::ibSchema::ibConfigCompare::File);
-	const wxString file2Id = args.GetValue<wxString>(ibProtocol::ibSchema::ibConfigCompare::File2);
+	const ibString fileId = args.GetValue<ibString>(ibProtocol::ibSchema::ibConfigCompare::File);
+	const ibString file2Id = args.GetValue<ibString>(ibProtocol::ibSchema::ibConfigCompare::File2);
 
 	return [pull, mode, specs, left, right, leftFile, rightFile, fileId, file2Id]() {
 		ibMetaData* const targetMeta = pull ? left : right;
 		ibMetaData* const sourceMeta = pull ? right : left;
 		int applied = 0;
-		wxString failures;
+		ibString failures;
 		for (const ibOpSpec& spec : specs) {
 			ibValueMetaObject* const source = FindById(sourceMeta, pull ? spec.rightId : spec.leftId);
 			ibValueMetaObject* const target = FindById(targetMeta, pull ? spec.leftId : spec.rightId);
-			const wxString name = source != nullptr ? source->GetName() : target != nullptr ? target->GetName() : wxString();
+			const ibString name = source != nullptr ? source->GetName() : target != nullptr ? target->GetName() : ibString();
 			// One op's failure does not stop the rest — the desktop's per-row try; each one said, in the journal as there,
 			// and to the person below.
 			try {
@@ -326,15 +326,15 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 				if (done)
 					++applied;
 				else
-					failures += wxT("\n") + name;
+					failures += ibT("\n") + name;
 			}
 			catch (const ibCoreException& err) {
-				ibJournalInfo(wxT("designer"), wxT("[merge] %s: %s"), name, err.GetErrorDescription());
-				failures += wxT("\n") + name + wxT(": ") + err.GetErrorDescription();
+				ibJournalInfo(ibT("designer"), ibT("[merge] %s: %s"), name, err.GetErrorDescription());
+				failures += ibT("\n") + name + ibT(": ") + err.GetErrorDescription();
 			}
 			catch (...) {
-				ibJournalInfo(wxT("designer"), wxT("[merge] unknown error on %s"), name);
-				failures += wxT("\n") + name;
+				ibJournalInfo(ibT("designer"), ibT("[merge] unknown error on %s"), name);
+				failures += ibT("\n") + name;
 			}
 		}
 
@@ -342,7 +342,7 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 		bool savedRight = true;
 		if (!pull) {
 			ibProtocol::ibRefusal refuse = ibProtocol::ibRefusal::None;
-			wxString err;
+			ibString err;
 			ibMemoryBuffer bytes;
 			ibMetaDataConfigurationBase* rightBase = dynamic_cast<ibMetaDataConfigurationBase*>(right);
 			savedRight = rightBase != nullptr && rightBase->SaveConfigToBuffer(bytes)
@@ -350,13 +350,13 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 		}
 
 		// HOW IT WENT, said by the one who did it: what was applied, what was not and why.
-		wxString message = wxString::Format(_("Merge applied to %d item(s)."), applied);
+		ibString message = ibString::Format(_("Merge applied to %d item(s)."), applied);
 		if (!failures.IsEmpty())
-			message += wxT("\n\n") + _("Not applied:") + failures;
+			message += ibT("\n\n") + _("Not applied:") + failures;
 		if (!savedRight)
-			message += wxT("\n\n") + _("Warning: failed to save the other-side file.");
+			message += ibT("\n\n") + _("Warning: failed to save the other-side file.");
 		else if (pull)
-			message += wxT("\n\n") + _("Use Configuration > Save configuration to persist the changes.");
+			message += ibT("\n\n") + _("Use Configuration > Save configuration to persist the changes.");
 		if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
 			frame->ShowModalMessage(message, _("Merge"),
 				wxOK | wxCENTRE | (failures.IsEmpty() && savedRight ? wxICON_INFORMATION : wxICON_WARNING));

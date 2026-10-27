@@ -10,17 +10,17 @@ public:
 	bool GetValueAsBoolean() const { return m_propValue; }
 	void SetValue(const bool boolean) { m_propValue = boolean; }
 
-	ibPropertyBoolean(ibPropertyCategory* cat, const wxString& name,
+	ibPropertyBoolean(ibPropertyCategory* cat, const ibString& name,
 		const bool& value = false) : ibProperty(cat, name, value)
 	{
 	}
 
-	ibPropertyBoolean(ibPropertyCategory* cat, const wxString& name, const wxString& label,
+	ibPropertyBoolean(ibPropertyCategory* cat, const ibString& name, const ibString& label,
 		const bool& value = false) : ibProperty(cat, name, label, value)
 	{
 	}
 
-	ibPropertyBoolean(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
+	ibPropertyBoolean(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
 		const bool& value = false) : ibProperty(cat, name, label, helpString, value)
 	{
 	}

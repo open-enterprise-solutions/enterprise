@@ -26,26 +26,26 @@ public:
 	T* ConvertToType() const { return nullptr; }
 
 	ibMetaID GetMetaID() const { return m_metaId; }
-	wxString GetName() const;
-	wxString GetSynonym() const;
+	ibString GetName() const;
+	ibString GetSynonym() const;
 	wxBitmap GetIcon() const { return wxNullBitmap; }
 
 	// ITS TWO TEXTS, the engine's — help, what its user is told, and the note, what its designers are: the server's (schema
 	// ObjectText), read when asked and given back at once.
-	wxString GetHelpContent() const;
-	void SetHelpContent(const wxString& strHelpContent);
+	ibString GetHelpContent() const;
+	void SetHelpContent(const ibString& strHelpContent);
 
-	wxString GetNoteContent() const;
-	void SetNoteContent(const wxString& strNoteContent);
+	ibString GetNoteContent() const;
+	void SetNoteContent(const ibString& strNoteContent);
 
 	// ⭐ AN EDIT GOES TO THE SERVER — its property of that name given that value (as the property's node holds it), on the
 	// object of this id in the configuration it was opened from: schema Properties, Save. False: refused.
-	bool Send(const wxString& name, const ibDataValue& value) const;
+	bool Send(const ibString& name, const ibDataValue& value) const;
 	// …the value an edit in the inspector gives, the node its variant holds.
-	bool Send(const wxString& name, const wxVariant& value) const;
+	bool Send(const ibString& name, const wxVariant& value) const;
 
-	virtual wxString GetClassName() const override { return wxT("metaObject"); }
-	virtual wxString GetObjectTypeName() const override { return wxT("metaObject"); }
+	virtual ibString GetClassName() const override { return ibT("metaObject"); }
+	virtual ibString GetObjectTypeName() const override { return ibT("metaObject"); }
 	virtual bool IsEditable() const override { return true; }
 
 	virtual const ibMetaData* GetMetaData() const override { return &m_metaData; }

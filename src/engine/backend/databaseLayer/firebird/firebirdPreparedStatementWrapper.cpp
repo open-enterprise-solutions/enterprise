@@ -4,7 +4,7 @@
 #include "backend/databaseLayer/databaseLayerException.h"
 #include "firebirdResultSet.h"
 
-ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL)
+ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const ibString& strSQL)
 	: ibDatabaseErrorReporter(), m_strSQL(strSQL)
 {
 	m_pInterface = pInterface;
@@ -36,12 +36,12 @@ ibPreparedStatementFirebirdWrapper::~ibPreparedStatementFirebirdWrapper()
 			// the reason reach the caller. Freeing a server-side handle is cleanup and follows the
 			// project's cleanup rule: report, never throw.
 			InterpretErrorCodes();
-			ibJournalError(wxT("db.firebird"),wxT("Firebird: isc_dsql_free_statement failed (%s)"), GetErrorMessage());
+			ibJournalError(ibT("db.firebird"),ibT("Firebird: isc_dsql_free_statement failed (%s)"), GetErrorMessage());
 		}
 	}
 }
 
-bool ibPreparedStatementFirebirdWrapper::Prepare(const wxString& strSQL)
+bool ibPreparedStatementFirebirdWrapper::Prepare(const ibString& strSQL)
 {
 	m_strSQL = strSQL;
 	return Prepare();
@@ -99,7 +99,7 @@ bool ibPreparedStatementFirebirdWrapper::Prepare()
 		if (m_pParameters == NULL)
 		{
 			SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-			SetErrorMessage(wxT("Out of memory allocating the parameter descriptor"));
+			SetErrorMessage(ibT("Out of memory allocating the parameter descriptor"));
 			ThrowDatabaseException();
 			return false;
 		}
@@ -229,7 +229,7 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 	if (pOutputSqlda == NULL)
 	{
 		SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-		SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+		SetErrorMessage(ibT("Out of memory allocating the result descriptor"));
 		ThrowDatabaseException();
 		return NULL;
 	}
@@ -253,7 +253,7 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 		if (pOutputSqlda == NULL)
 		{
 			SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-			SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+			SetErrorMessage(ibT("Out of memory allocating the result descriptor"));
 			ThrowDatabaseException();
 			return NULL;
 		}
@@ -332,7 +332,7 @@ bool ibPreparedStatementFirebirdWrapper::IsSelectQuery()
 
 void ibPreparedStatementFirebirdWrapper::InterpretErrorCodes()
 {
-	ibJournalInfo(wxT("db.firebird"),wxT("FirebirdPreparesStatementWrapper::InterpretErrorCodes()\n"));
+	ibJournalInfo(ibT("db.firebird"),ibT("FirebirdPreparesStatementWrapper::InterpretErrorCodes()\n"));
 
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
 	// The primary gds code, as the layer records one (an interrupted statement is isc_cancelled).

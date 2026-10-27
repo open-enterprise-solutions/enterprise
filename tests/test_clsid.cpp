@@ -96,6 +96,6 @@ TEST(ClsidTest, NoneKindLeavesTopByteZero) {
 TEST(ClsidTest, ClsidToStringIsHex) {
     const ibClassID id = value_to_clsid("VL_NUMB");
     EXPECT_EQ(clsid_to_string(id),
-              wxString::Format(wxT("0x%016llX"), static_cast<uint64_t>(id)));
+              ibString::Format(wxT("0x%016llX"), static_cast<uint64_t>(id)));
     EXPECT_EQ(clsid_to_string(0), wxEmptyString);
 }

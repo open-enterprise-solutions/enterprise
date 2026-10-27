@@ -55,7 +55,7 @@ void ibValueModelTableBox::RefillFromSource()
 				if (colInfo == nullptr)
 					continue;
 				ibValueModelTableBoxColumn* tableBoxColumn =
-					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), this));
+					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(ibT("TableboxColumn"), this));
 				wxASSERT(tableBoxColumn);
 				const ibTypeDescription columnType = colInfo->GetColumnType();
 				if (columnType.IsOk())
@@ -82,7 +82,7 @@ void ibValueModelTableBox::RefillFromSource()
 			// source, whose GetSourceExplorer()->Reset() CLEARS the helper vector this loop reads through
 			// (GetHelper returns &m_arraySource[idx]) -> the live nodes dangle mid-loop (freed, 0xDD fill), so
 			// only the FIRST column reads real data. Read the explorer ONCE while stable, then build from the copy.
-			struct ColumnSnap { ibSourceId id; wxString name; wxString synonym; wxString group; bool visible; };
+			struct ColumnSnap { ibSourceId id; ibString name; ibString synonym; ibString group; bool visible; };
 			std::vector<ColumnSnap> snaps;
 			for (unsigned int idx = 0; idx < explorer->GetHelperCount(); idx++) {
 				const ibSourceExplorer* columnPtr = explorer->GetHelper(idx);
@@ -99,7 +99,7 @@ void ibValueModelTableBox::RefillFromSource()
 				ibValueFrame* holderControl = GetColumnGroupHolder(snap.group);
 
 				ibValueModelTableBoxColumn* tableBoxColumn =
-					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), holderControl));
+					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(ibT("TableboxColumn"), holderControl));
 				wxASSERT(tableBoxColumn);
 				tableBoxColumn->SetControlName(GetControlName() + snap.name);
 				tableBoxColumn->SetCaption(snap.synonym);

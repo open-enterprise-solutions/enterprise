@@ -20,7 +20,7 @@ class FRMCLIENT_API ibValueCompositionPredefined : public ibValue {
 public:
 
 	ibValueCompositionPredefined() : ibValue(ibValueTypes::TYPE_VALUE, true) {}
-	ibValueCompositionPredefined(const ibMetaID& metaId, const ibGuid& guid, const wxString& written)
+	ibValueCompositionPredefined(const ibMetaID& metaId, const ibGuid& guid, const ibString& written)
 		: ibValue(ibValueTypes::TYPE_VALUE, true), m_metaId(metaId), m_guid(guid), m_written(written) {
 	}
 
@@ -40,7 +40,7 @@ private:
 
 	ibMetaID m_metaId = wxNOT_FOUND;   // the metaobject the value belongs to
 	ibGuid   m_guid;                   // which of its declared values — empty = the empty reference
-	wxString m_written;                // how it reads: `CatalogRef.Goods.Chair`
+	ibString m_written;                // how it reads: `CatalogRef.Goods.Chair`
 };
 
 // THE RUNTIME IS MADE HERE — the engine's: a declaration becomes a live reference against the configuration, which is
@@ -54,8 +54,8 @@ class FRMCLIENT_API ibValueCompositionField : public ibValue {
 public:
 
 	ibValueCompositionField();
-	explicit ibValueCompositionField(const wxString& path,
-		const wxString& presentation = wxEmptyString);
+	explicit ibValueCompositionField(const ibString& path,
+		const ibString& presentation = ibEmptyString);
 	virtual ~ibValueCompositionField() {}
 
 	virtual ibClassID GetClassType() const override { return g_compositionFieldCLSID; }
@@ -66,11 +66,11 @@ public:
 	virtual bool CompareValueEQ(const ibValue& cParam) const override;
 	virtual bool CompareValueNE(const ibValue& cParam) const override;
 
-	const wxString& GetPath() const { return m_path; }
-	void SetPath(const wxString& path) { m_path = path; }
+	const ibString& GetPath() const { return m_path; }
+	void SetPath(const ibString& path) { m_path = path; }
 
-	const wxString& GetPresentation() const { return m_presentation; }
-	void SetPresentation(const wxString& presentation) { m_presentation = presentation; }
+	const ibString& GetPresentation() const { return m_presentation; }
+	void SetPresentation(const ibString& presentation) { m_presentation = presentation; }
 
 	ibMetaID GetLeafId() const { return m_leafId; }
 	const ibTypeDescription& GetTypeDescription() const { return m_typeDescription; }
@@ -86,8 +86,8 @@ protected:
 
 private:
 
-	wxString          m_path;            // dot-path in the source's technical names
-	wxString          m_presentation;    // what a user sees
+	ibString          m_path;            // dot-path in the source's technical names
+	ibString          m_presentation;    // what a user sees
 	ibMetaID          m_leafId = wxNOT_FOUND;   // the queryable column id, against ONE source
 	ibTypeDescription m_typeDescription;        // the field's type — for AdjustValue / choice
 };

@@ -156,7 +156,7 @@ void ibQuerySelectionLinkModel::GetValueByRow(wxVariant& variant, unsigned row, 
 	case kLinkColCondition:
 		// An empty condition shows as EMPTY: it is a link declared and not written yet, which is an
 		// ordinary state — the row exists so the two selections can be picked in it.
-		variant = link->m_on ? ibRenderQueryExpr(*link->m_on) : wxString();
+		variant = link->m_on ? ibRenderQueryExpr(*link->m_on) : ibString();
 		break;
 	// ⚠ NO "ARBITRARY" CELL — the grid has no such column here (see BuildSelectionLinksPage). Every
 	// link between two selections is written by hand, so the flag would be true on every row and

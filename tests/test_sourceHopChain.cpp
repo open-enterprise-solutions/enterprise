@@ -57,7 +57,7 @@ public:
 	const ibSourceExplorer* GetSourceExplorer() const override { return nullptr; }
 	const ibMetaData* GetSourceMetaData() const override { return nullptr; }
 	ibClassID GetSourceClassType() const override { return 0; }
-	wxString GetSourceCaption() const override { return wxEmptyString; }
+	ibString GetSourceCaption() const override { return wxEmptyString; }
 };
 
 // One row of cells by column id — same shape as test_tabularHop's mock, reused here
@@ -96,7 +96,7 @@ ibValue Cell(const MockSource& src) {
 // resolves hop 0 off the row, then TRANSFERS the tail to the source object.
 TEST(SourceHopChain, TableToReferenceToField) {
 	MockSource ref;
-	ref.SetField(31, ibValue(wxString(wxT("Kyiv"))));
+	ref.SetField(31, ibValue(ibString(wxT("Kyiv"))));
 
 	MockRow row;
 	row.SetCell(21, Cell(ref));            // the cell IS a source, not a primitive
@@ -110,7 +110,7 @@ TEST(SourceHopChain, TableToReferenceToField) {
 // Depth is not special-cased: reference -> reference -> field walks the same loop.
 TEST(SourceHopChain, TableToReferenceToReferenceToField) {
 	MockSource city;
-	city.SetField(41, ibValue(wxString(wxT("UA"))));
+	city.SetField(41, ibValue(ibString(wxT("UA"))));
 
 	MockSource partner;
 	partner.SetField(31, Cell(city));
@@ -142,7 +142,7 @@ TEST(SourceHopChain, MissAtDeepHopFails) {
 // lands on a string, the third has nothing to step into.
 TEST(SourceHopChain, CannotDotPastAPrimitiveLeaf) {
 	MockSource ref;
-	ref.SetField(31, ibValue(wxString(wxT("leaf"))));
+	ref.SetField(31, ibValue(ibString(wxT("leaf"))));
 
 	MockRow row;
 	row.SetCell(21, Cell(ref));
@@ -156,7 +156,7 @@ TEST(SourceHopChain, CannotDotPastAPrimitiveLeaf) {
 // row's reference cell directly, without going through a table at all.
 TEST(SourceHopChain, ResolvePathWalksFromABareValue) {
 	MockSource city;
-	city.SetField(41, ibValue(wxString(wxT("UA"))));
+	city.SetField(41, ibValue(ibString(wxT("UA"))));
 	MockSource partner;
 	partner.SetField(31, Cell(city));
 
@@ -178,7 +178,7 @@ TEST(SourceHopChain, ResolvePathWalksFromABareValue) {
 // itself, then delegates the tail to ResolvePath.
 TEST(SourceHopChain, SourceWalksItsOwnFirstHop) {
 	MockSource city;
-	city.SetField(41, ibValue(wxString(wxT("UA"))));
+	city.SetField(41, ibValue(ibString(wxT("UA"))));
 	MockSource partner;
 	partner.SetField(31, Cell(city));
 
@@ -193,7 +193,7 @@ TEST(SourceHopChain, SourceWalksItsOwnFirstHop) {
 // a stack object on release.
 TEST(SourceHopChain, CellReffersAreNonOwning) {
 	MockSource src;
-	src.SetField(31, ibValue(wxString(wxT("alive"))));
+	src.SetField(31, ibValue(ibString(wxT("alive"))));
 
 	{
 		ibValue cell = Cell(src);

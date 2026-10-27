@@ -45,7 +45,7 @@ public:
 	virtual bool IsDesignerHost() const override { return true; }
 	// The card's title (the desktop's ibDesignerWindow) — the client draws the card, its title the View's State.Caption,
 	// composed with every frame (OnDraw); nothing is kept here.
-	virtual void SetCaption(const wxString& /*strCaption*/) override {}
+	virtual void SetCaption(const ibString& /*strCaption*/) override {}
 
 	// THE DESKTOP EDITOR'S LOAD AND SAVE (ibVisualEditor::LoadForm / SaveForm): the form from the compile cache, else
 	// from its data, else built from its kind (a new form); written back into the metaobject (SaveFormData).
@@ -101,7 +101,7 @@ private:
 	ibValueFrame* CreateBoundControl(ibValueFrame* parentHint, const ibSourceDescription& desc);
 	ibValueFrame* CreateCommandButton(ibValueFrame* target, const ibCommandDescription& desc,
 		class ibValueCommandBar* dropBar = nullptr);
-	ibValueFrame* CreateControlOfClass(ibValueFrame* parentHint, const wxString& className,
+	ibValueFrame* CreateControlOfClass(ibValueFrame* parentHint, const ibString& className,
 		const std::function<void(ibValueFrame*)>& bind);
 	// THE DESKTOP EDITOR'S PASTE over the node the client copied (a control as the form draws it, in its sizer item; a
 	// page, a column bare): put in the control pasted on, else in the first of its parents that can hold it, right after

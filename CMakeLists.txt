@@ -69,12 +69,6 @@ endforeach()
 
 option(BUILD_TESTING       "Build unit tests (Google Test)"     OFF)
 
-# The old web frontend — wfrontend (the OES_USE_WEB frontend); no program loads it.
-# Off by default: until the three CI toolchains have all built it, the desktop
-# suite is what `cmake -B build` is expected to produce, and a web source that
-# stops compiling somewhere must not be able to take that down with it.
-option(OES_BUILD_WEB       "Build the old web frontend (wfrontend)" OFF)
-
 option(OES_USE_FIREBIRD    "Enable Firebird database driver"    OFF)
 option(OES_USE_POSTGRESQL  "Enable PostgreSQL database driver"  OFF)
 option(OES_USE_ODBC        "Enable ODBC database driver"        OFF)
@@ -620,7 +614,6 @@ endif()
 # The expected target names and types are:
 #
 #   backend       — SHARED library  (defines BACKEND_EXPORTS)
-#   frontend      — SHARED library  (defines FRONTEND_EXPORTS, links wx GUI)
 #   frmserver     — SHARED library  (defines FRMSERVER_EXPORTS; the server's frontend and the client protocol)
 #   frmclient      — SHARED library  (defines FRMCLIENT_EXPORTS; the thin client's core — the protocol's client half)
 #   fileserver     — SHARED library  (defines FILESERVER_EXPORTS; a file base for the thin client, loaded by frmclient)
@@ -628,19 +621,26 @@ endif()
 #   appcluster    — executable      (console subsystem, or a service; a server per base of the folder — links core alone)
 #   appcluster-tray — executable    (GUI subsystem; the cluster's tray — links core alone)
 #   webserver     — executable      (console subsystem; the bases' transport for browsers — links protocol alone)
-#   enterprise    — executable      (GUI subsystem)
 #   enterprise-thin   — executable      (GUI subsystem; the thin runtime — links frmclient alone)
-#   designer      — executable      (GUI subsystem)
 #   designer-thin — executable      (GUI subsystem; the thin designer — links frmclient alone)
 #   launcher      — executable      (GUI subsystem)
 #   codeRunner    — executable      (GUI subsystem)
 #   simplePlugin  — SHARED library  (plugin example)
-#   wfrontend     — SHARED library  (the old web frontend, OES_BUILD_WEB)
 # ---------------------------------------------------------------------------
+
+# A REFERENCE TO A TEMPORARY IS AN ERROR, not a warning, in our code (here, so the third-party trees above keep
+# their own): `const ibString& GetBuffer() const` over a std::wstring member returned a string that died in the
+# getter, and 147 tests crashed at exit in the pool's drain (2026-10-27).
+if(MSVC)
+    add_compile_options(/we4172)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_compile_options(-Werror=return-stack-address)
+else()
+    add_compile_options(-Werror=return-local-addr)
+endif()
 
 add_subdirectory("${OES_ENGINE_DIR}/core")
 add_subdirectory("${OES_ENGINE_DIR}/backend")
-add_subdirectory("${OES_ENGINE_DIR}/frontend")
 add_subdirectory("${OES_ENGINE_DIR}/protocol")
 add_subdirectory("${OES_ENGINE_DIR}/frmserver")
 add_subdirectory("${OES_ENGINE_DIR}/fileserver")
@@ -649,9 +649,7 @@ add_subdirectory("${OES_ENGINE_DIR}/appserver")
 add_subdirectory("${OES_ENGINE_DIR}/appcluster")
 add_subdirectory("${OES_ENGINE_DIR}/appcluster-tray")
 add_subdirectory("${OES_ENGINE_DIR}/webserver")
-add_subdirectory("${OES_ENGINE_DIR}/enterprise")
 add_subdirectory("${OES_ENGINE_DIR}/enterprise-thin")
-add_subdirectory("${OES_ENGINE_DIR}/designer")
 add_subdirectory("${OES_ENGINE_DIR}/designer-thin")
 add_subdirectory("${OES_ENGINE_DIR}/launcher")
 add_subdirectory("${OES_ENGINE_DIR}/codeRunner")

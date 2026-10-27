@@ -23,30 +23,30 @@ public:
 
 	// `oes://server[:port]/<base>` or `oess://…` — the address the cluster prints for every base it serves — read;
 	// false when it is not one. The port left out is the cluster's own (ibPort::Clients); `secure` — oess://, TLS.
-	static bool ParseAddress(const wxString& address, wxString& host, int& port, wxString& base, bool& secure);
+	static bool ParseAddress(const ibString& address, ibString& host, int& port, ibString& base, bool& secure);
 	// Where a base's clients come in on its server — /<base>/client, the name escaped.
-	static std::string ClientPath(const wxString& base);
+	static std::string ClientPath(const ibString& base);
 	// …and whom they trust there, over oess:// — `trusted`, a PEM file of the authorities, else the platform's store;
 	// the server's chain checked, and its name against the address's host. Made once for every socket opened with it
 	// (the web server's: one for all its browsers'). False, with why in `error`.
-	static bool ClientTls(const wxString& trusted, std::shared_ptr<const ibTlsContext>& tls, wxString& error);
+	static bool ClientTls(const ibString& trusted, std::shared_ptr<const ibTlsContext>& tls, ibString& error);
 
 	// Made where the socket's type is whole (the .cpp) — so is its destruction.
 	ibProtocolConnectionServer();
 
 	// `address` — `oes://server[:port]/<base>` or `oess://…`; `trusted` — for oess://, a PEM file of the authorities
 	// the server's certificate must end in, empty — the platform's store. False with why it was not reached in `error`.
-	bool Open(const wxString& address, const wxString& trusted, wxString& error);
+	bool Open(const ibString& address, const ibString& trusted, ibString& error);
 	void Close();
 
 	virtual ~ibProtocolConnectionServer();
 
 	virtual bool Exchange(const ibMemoryBuffer& request, ibProtocolNode& answer,
-		ibProtocol::ibRefusal& refusal, wxString& error) override;
+		ibProtocol::ibRefusal& refusal, ibString& error) override;
 	// The same address, opened again. False when Open has never succeeded.
-	virtual bool Reconnect(wxString& error) override;
+	virtual bool Reconnect(ibString& error) override;
 	// …and a second socket to it, the debugger's (protocol 6).
-	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(wxString& error) override;
+	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(ibString& error) override;
 	// What the server says unasked — on the thread that reads the socket.
 	virtual void Listen(std::function<void(const ibProtocolNode& said)> notified) override;
 
@@ -77,8 +77,8 @@ private:
 	std::function<void(const ibProtocolNode&)> m_notified;
 
 	// The address Open succeeded with, and whom it trusted — what Reconnect opens again.
-	wxString                                   m_address;
-	wxString                                   m_trusted;
+	ibString                                   m_address;
+	ibString                                   m_trusted;
 };
 
 #endif

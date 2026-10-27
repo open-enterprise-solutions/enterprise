@@ -4,7 +4,7 @@
 #include <wx/panel.h>
 #include <wx/sizer.h>
 
-// A NOTEBOOK'S PAGE — the desktop's window (frontend/visualView/pageWindow.h): a panel laying out what is placed on it.
+// A NOTEBOOK'S PAGE — the old desktop's window:a panel laying out what is placed on it.
 class ibPanelPage : public wxPanel
 {
 	wxDECLARE_DYNAMIC_CLASS(ibPanelPage);

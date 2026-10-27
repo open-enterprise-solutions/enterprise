@@ -40,10 +40,10 @@ void ibFirebirdMaintenanceJob::Register(ibApplicationInstance* const application
 	// not about anybody's data.
 	{
 		ibJobDescription sweep;
-		sweep.m_name     = wxT("firebird.sweep");
+		sweep.m_name     = ibT("firebird.sweep");
 		// A fixed guid, minted once — a platform job has no metaobject to take one from, and the
 		// key must survive the name being improved. See platformJobs.cpp for the same rule.
-		sweep.m_key      = ibGuid(wxT("6d1a8f30-0000-4a00-9e00-000000000002"));
+		sweep.m_key      = ibGuid(ibT("6d1a8f30-0000-4a00-9e00-000000000002"));
 		sweep.m_origin   = ibJobOrigin::Platform;
 		sweep.m_body     = &ibFirebirdMaintenanceJob::RunSweep;
 		sweep.m_schedule = ibJobScheduleDescription::EverySeconds(kSweepEverySeconds);
@@ -55,8 +55,8 @@ void ibFirebirdMaintenanceJob::Register(ibApplicationInstance* const application
 		// inside the body: the schedule is what the manager consults before it starts anything, so
 		// an out-of-window tick costs nothing at all — no session, no claim, no clock write.
 		ibJobDescription backup;
-		backup.m_name     = wxT("firebird.backup");
-		backup.m_key      = ibGuid(wxT("6d1a8f30-0000-4a00-9e00-000000000003"));
+		backup.m_name     = ibT("firebird.backup");
+		backup.m_key      = ibGuid(ibT("6d1a8f30-0000-4a00-9e00-000000000003"));
 		backup.m_origin   = ibJobOrigin::Platform;
 		backup.m_body     = &ibFirebirdMaintenanceJob::RunBackupRestore;
 		backup.m_schedule = ibJobScheduleDescription::Nightly(kBackupWindowStart, kBackupWindowEnd);
@@ -98,13 +98,13 @@ bool ibFirebirdMaintenanceJob::RunSweep(ibSession* session)
 
 	long long backlog = 0;
 	if (!fb->GetSweepBacklog(backlog)) {
-		ibJournalWarning(wxT("firebird.sweep"), wxT("the sweep backlog could not be read (MON$DATABASE) - no sweep this time"));
+		ibJournalWarning(ibT("firebird.sweep"), ibT("the sweep backlog could not be read (MON$DATABASE) - no sweep this time"));
 		return false;
 	}
 	if (backlog <= kSweepBacklog)
 		return false;   // nothing worth a pass — and nothing said, every quarter of an hour
 
-	ibJournalInfo(wxT("firebird.sweep"), wxT("sweeping: %lld transactions of garbage (threshold %lld)"), backlog, kSweepBacklog);
+	ibJournalInfo(ibT("firebird.sweep"), ibT("sweeping: %lld transactions of garbage (threshold %lld)"), backlog, kSweepBacklog);
 	const auto started = std::chrono::steady_clock::now();
 	const bool ok = fb->RunSweepNow([run = session->RunState()] { return ibRunCancelled(run); });
 	const long long seconds = static_cast<long long>(
@@ -112,8 +112,8 @@ bool ibFirebirdMaintenanceJob::RunSweep(ibSession* session)
 
 	long long left = -1;
 	fb->GetSweepBacklog(left);
-	ibJournalInfo(wxT("firebird.sweep"), wxT("sweep %s in %lld s, %lld transactions of garbage left"),
-		ok ? wxString(wxT("done")) : wxString(wxT("did not finish")), seconds, left);
+	ibJournalInfo(ibT("firebird.sweep"), ibT("sweep %s in %lld s, %lld transactions of garbage left"),
+		ok ? ibString(ibT("done")) : ibString(ibT("did not finish")), seconds, left);
 	return false;   // one pass does the whole thing — nothing to continue next tick
 }
 

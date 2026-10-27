@@ -57,20 +57,20 @@ void ibSchemaActiveUser::Build(const ibSession& session, const ibDataNode& /*arg
 		ibDataNode& row = locks.AddChild(0, static_cast<ibMetaID>(idx));
 		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Namespace, lock.namespaceName);
 		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Key, lock.keyData);
-		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Mode, lock.lockMode == ibLockMode::Shared ? wxString(_("Shared")) : wxString(_("Exclusive")));
+		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Mode, lock.lockMode == ibLockMode::Shared ? ibString(_("Shared")) : ibString(_("Exclusive")));
 		row.SetValue(ibProtocol::ibSchema::ibActiveUser::User, lock.userName);
-		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Acquired, !lock.acquiredAt.IsEmpty() ? lock.acquiredAt.ToWxDateTime().FormatISOCombined() : wxString());
+		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Acquired, !lock.acquiredAt.IsEmpty() ? ibString(lock.acquiredAt.ToWxDateTime().FormatISOCombined()) : ibString());
 		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Lock, lock.lockGuid.str());
 	}
 }
 
 std::function<void()> ibSchemaActiveUser::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	// The designer's actions — the desktop's dialog offered them in the designer alone (DesignerMode there).
 	if (!IsDesignerSessionKind(session.GetKind())) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = wxString::Format(wxT("active users take no command %d here"), command);
+		error = ibString::Format(ibT("active users take no command %d here"), command);
 		return nullptr;
 	}
 
@@ -81,7 +81,7 @@ std::function<void()> ibSchemaActiveUser::Command(const ibSession& session, std:
 
 	switch (static_cast<ibProtocol::ibSchema::ibCommand>(command)) {
 	case ibProtocol::ibSchema::ibCommand::Kick: {
-		const wxString guid = args.GetValue<wxString>(ibProtocol::ibSchema::ibActiveUser::Session);
+		const ibString guid = args.GetValue<ibString>(ibProtocol::ibSchema::ibActiveUser::Session);
 
 		// Self-kick guard: kicking the asking session only closes the designer that asked, not a peer.
 		if (guid == session.GetId()) {
@@ -92,11 +92,11 @@ std::function<void()> ibSchemaActiveUser::Command(const ibSession& session, std:
 
 		ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry(applicationInstance);
 		if (registry == nullptr || !registry->Kick(guid))
-			ibJournalWarning(wxT("ui"), _("Failed to queue kick for session %s"), guid);
+			ibJournalWarning(ibT("ui"), _("Failed to queue kick for session %s"), guid);
 		return done;
 	}
 	case ibProtocol::ibSchema::ibCommand::Reload: {
-		const wxString guid = args.GetValue<wxString>(ibProtocol::ibSchema::ibActiveUser::Session);
+		const ibString guid = args.GetValue<ibString>(ibProtocol::ibSchema::ibActiveUser::Session);
 
 		// Same self-guard as kick: reloading the asking session would just close the designer that asked.
 		if (guid == session.GetId()) {
@@ -107,29 +107,29 @@ std::function<void()> ibSchemaActiveUser::Command(const ibSession& session, std:
 
 		ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry(applicationInstance);
 		if (registry == nullptr || !registry->Reload(guid))
-			ibJournalWarning(wxT("ui"), _("Failed to queue reload for session %s"), guid);
+			ibJournalWarning(ibT("ui"), _("Failed to queue reload for session %s"), guid);
 		return done;
 	}
 	case ibProtocol::ibSchema::ibCommand::Release: {
-		const wxString lockGuid = args.GetValue<wxString>(ibProtocol::ibSchema::ibActiveUser::Lock);
+		const ibString lockGuid = args.GetValue<ibString>(ibProtocol::ibSchema::ibActiveUser::Lock);
 		try {
 			const ibGuid guid(lockGuid);
 			if (!guid.isValid()) {
-				ibJournalWarning(wxT("ui"), _("Invalid lock guid: %s"), lockGuid);
+				ibJournalWarning(ibT("ui"), _("Invalid lock guid: %s"), lockGuid);
 				return done;
 			}
 			ibLockManager* const lockManager = ibApplicationInstance::GetLockManager(applicationInstance);
 			if (lockManager == nullptr) {
-				ibJournalWarning(wxT("ui"), _("Lock manager not available"));
+				ibJournalWarning(ibT("ui"), _("Lock manager not available"));
 				return done;
 			}
 			lockManager->ReleaseRows(std::vector<ibGuid>{ guid });
 		}
 		catch (const ibCoreException& err) {
-			ibJournalWarning(wxT("ui"), _("Failed to release lock %s: %s"), lockGuid, err.GetErrorDescription());
+			ibJournalWarning(ibT("ui"), _("Failed to release lock %s: %s"), lockGuid, err.GetErrorDescription());
 		}
 		catch (...) {
-			ibJournalWarning(wxT("ui"), _("Failed to release lock %s"), lockGuid);
+			ibJournalWarning(ibT("ui"), _("Failed to release lock %s"), lockGuid);
 		}
 		return done;
 	}
@@ -138,6 +138,6 @@ std::function<void()> ibSchemaActiveUser::Command(const ibSession& session, std:
 	}
 
 	refusal = ibProtocol::ibRefusal::NotFound;
-	error = wxString::Format(wxT("active users have no command %d"), command);
+	error = ibString::Format(ibT("active users have no command %d"), command);
 	return nullptr;
 }

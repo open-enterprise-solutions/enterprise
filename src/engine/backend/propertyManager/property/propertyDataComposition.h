@@ -32,17 +32,17 @@ public:
 	// the composition serialised itself, so "what a report's settings are" was answered in two
 	// places. It is this property's cell now, read and written by the one pair that reads and
 	// writes a composition anywhere — the very same lines the dynamic list runs.
-	ibPropertyDataComposition(ibPropertyCategory* cat, const wxString& name)
+	ibPropertyDataComposition(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyDataComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyDataComposition(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyDataComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyDataComposition(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}

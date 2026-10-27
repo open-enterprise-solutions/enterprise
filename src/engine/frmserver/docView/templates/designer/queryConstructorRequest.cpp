@@ -24,7 +24,7 @@ namespace {
 // by the parser, as the desktop window holds it. The package keeps the source alive.
 const ibQuerySource* ReadSource(const ibString& text, ibQueryPackage& package)
 {
-	package = ibQueryParser().ParsePackage(wxT("SELECT * FROM ") + text);
+	package = ibQueryParser().ParsePackage(ibT("SELECT * FROM ") + text);
 	if (package.m_statements.empty() || !package.m_statements.front().m_select)
 		return nullptr;
 	return &package.m_statements.front().m_select->m_from;
@@ -36,25 +36,25 @@ void WriteSources(ibDataNode& response, const ibQueryConstructorModel& model, co
 	// ⭐ EACH KIND'S PICTURE, ONCE — on the kind's row, never on its tables': a table wears its kind's (the desktop's
 	// KindIcon, GetAvailableCtor(kind)->GetClassIcon), the way the LINQ constructor's Kinds carry it.
 	ibDataNode& kinds = response.Child(qc::Kinds);
-	std::set<wxString> kindsWritten;
+	std::set<ibString> kindsWritten;
 	for (const ibQueryConstructorSource& source : model.GetSources()) {
 		if (!source.m_temp && !source.m_path.empty() && kindsWritten.insert(source.m_path.front()).second) {
 			ibDataNode& kind = kinds.AddChild(0, 0);
 			kind.SetValue(qc::Name, source.m_path.front());
-			const wxString picture = ibKindPicture(source.m_path.front(), metaData);
+			const ibString picture = ibKindPicture(source.m_path.front(), metaData);
 			if (!picture.IsEmpty())
 				kind.SetValue(qc::Picture, picture);
 		}
 		ibDataNode& row = sources.AddChild(0, 0);
 		std::vector<ibDataValue> path;
-		for (const wxString& segment : source.m_path)
+		for (const ibString& segment : source.m_path)
 			path.push_back(ibDataValue::String(segment));
 		row.AddField(qc::Path, ibDataValue::Array(std::move(path)));
 		row.SetValue(qc::Presentation, source.m_presentation);
 		// ⭐ ITS OWN REFERENCE TYPE — what a CAST to the table brings a value to and what a reference's branch is named
 		// by; the client's model answers both from this list (ReferenceOfTable, TableOfReference).
 		if (const ibClassID reference = model.ReferenceOfTable(source.m_path))
-			row.SetValue(qc::Reference, ibString::Format(wxT("%llu"), static_cast<unsigned long long>(reference)));
+			row.SetValue(qc::Reference, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(reference)));
 	}
 }
 
@@ -82,7 +82,7 @@ void WriteParameters(ibDataNode& response, const std::vector<ibQuerySourceParame
 		row.SetProperty(qc::Type, type);
 		row.SetValue(qc::Required, parameter.m_required);
 		std::vector<ibDataValue> choices;
-		for (const wxString& choice : parameter.m_choices)
+		for (const ibString& choice : parameter.m_choices)
 			choices.push_back(ibDataValue::String(choice));
 		row.AddField(qc::Choices, ibDataValue::Array(std::move(choices)));
 		row.SetValue(qc::Description, parameter.m_description);
@@ -112,7 +112,7 @@ void WriteCheck(ibDataNode& response, const ibDataNode& request)
 	try {
 		package = ibQueryParser().ParsePackage(request.GetValue<ibString>(qc::Text));
 		if (!request.FindField(qc::Statement)) {
-			ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
+			ibQueryLowering::CheckNames(package, std::map<ibString, ibValue>());
 			return;
 		}
 	}
@@ -125,7 +125,7 @@ void WriteCheck(ibDataNode& response, const ibDataNode& request)
 	const ibQuerySelect* const select =
 		SelectAt(package, request.GetValue<std::int32_t>(qc::Statement), request.GetValue<std::int32_t>(qc::UnionBranch));
 	if (select != nullptr)
-		for (const ibQueryAstExprPtr& missing : ibQueryLowering::UngroupedProjections(*select, std::map<wxString, ibValue>()))
+		for (const ibQueryAstExprPtr& missing : ibQueryLowering::UngroupedProjections(*select, std::map<ibString, ibValue>()))
 			if (missing)
 				projections.push_back(ibDataValue::String(ibRenderQueryExpr(*missing)));
 	response.AddField(qc::UngroupedProjections, ibDataValue::Array(std::move(projections)));
@@ -133,12 +133,12 @@ void WriteCheck(ibDataNode& response, const ibDataNode& request)
 
 } // namespace
 
-wxString ibKindPicture(const wxString& kind, const ibMetaData* metaData)
+ibString ibKindPicture(const ibString& kind, const ibMetaData* metaData)
 {
 	if (metaData == nullptr || kind.IsEmpty())
-		return wxString();
+		return ibString();
 	const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(kind);
-	return ctor != nullptr ? wxString(ibBackendPicture::SendPicture(ctor->GetClassType())) : wxString();
+	return ctor != nullptr ? ibString(ibBackendPicture::SendPicture(ctor->GetClassType())) : ibString();
 }
 
 bool ibFetchQueryConstructorRequest(const ibDataNode& request, ibDataNode& response, const ibMetaData* metaData)

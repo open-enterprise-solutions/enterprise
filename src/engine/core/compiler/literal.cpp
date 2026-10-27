@@ -72,10 +72,10 @@ ibNumber ibLiteral::GetNumber() const
 {
 	if (m_typeClass == ibValueTypes::TYPE_STRING) {
 		// A decimal comma reads as the point — what a person types in the locale's way.
-		wxString text = m_text;
+		ibString text = m_text;
 		text.Trim().Trim(false);
-		text.Replace(wxT(","), wxT("."));
-		text.Replace(wxT(" "), wxEmptyString);
+		text.Replace(ibT(","), ibT("."));
+		text.Replace(ibT(" "), ibEmptyString);
 		ibNumber number;
 		return number.FromString(text) ? number : ibNumber();
 	}
@@ -99,7 +99,7 @@ ibString ibLiteral::GetString() const
 	return m_text;
 }
 
-bool ibLiteral::SetBoolean(const wxString& text)
+bool ibLiteral::SetBoolean(const ibString& text)
 {
 	ibBoolean flag;
 	flag.FromString(text);
@@ -108,7 +108,7 @@ bool ibLiteral::SetBoolean(const wxString& text)
 }
 
 // A text that is not one leaves the value empty — the engine's way (ibValue::SetNumber resets first).
-bool ibLiteral::SetNumber(const wxString& text)
+bool ibLiteral::SetNumber(const ibString& text)
 {
 	ibNumber number;
 	if (!number.FromString(text)) {
@@ -119,7 +119,7 @@ bool ibLiteral::SetNumber(const wxString& text)
 	return true;
 }
 
-bool ibLiteral::SetDate(const wxString& text)
+bool ibLiteral::SetDate(const ibString& text)
 {
 	ibDateTime date;
 	if (!text.IsEmpty() && !date.FromString(text)) {
@@ -130,7 +130,7 @@ bool ibLiteral::SetDate(const wxString& text)
 	return true;
 }
 
-bool ibLiteral::SetString(const wxString& text)
+bool ibLiteral::SetString(const ibString& text)
 {
 	*this = ibLiteral(text);
 	return true;

@@ -53,10 +53,10 @@ struct LockSchemaAccess {
 
 namespace {
 
-wxString EnvOr(const char* name, const wxString& fallback)
+ibString EnvOr(const char* name, const ibString& fallback)
 {
 	const char* value = std::getenv(name);
-	return (value != nullptr && *value != '\0') ? wxString::FromUTF8(value) : fallback;
+	return (value != nullptr && *value != '\0') ? ibString::FromUTF8(value) : fallback;
 }
 
 bool EnsureWx()
@@ -65,12 +65,12 @@ bool EnsureWx()
 	return wx.IsOk();
 }
 
-ibLockItem Item(const wxString& key, ibLockMode mode)
+ibLockItem Item(const ibString& key, ibLockMode mode)
 {
 	return ibLockItem::ForRef(wxT("LockRace.Key"), ibGuid(key), mode);
 }
 
-int CountRows(const wxString& table, const wxString& ns, const wxString& hash)
+int CountRows(const ibString& table, const ibString& ns, const ibString& hash)
 {
 	ibDatabaseQueryBuilder q;
 	// A real column, not a constant: Firebird refuses a parameter whose type
@@ -90,11 +90,11 @@ int CountRows(const wxString& table, const wxString& ns, const wxString& hash)
 
 struct HolderRow {
 	int      count = 0;
-	wxString guid;
+	ibString guid;
 	int      mode  = -1;
 };
 
-HolderRow ReadHolder(const wxString& ns, const wxString& hash)
+HolderRow ReadHolder(const ibString& ns, const ibString& hash)
 {
 	ibDatabaseQueryBuilder q;
 	ibQueryIR ir(ibProject(
@@ -118,7 +118,7 @@ enum class OutcomeKind { Granted, Conflict, Other };
 
 struct Outcome {
 	OutcomeKind  kind = OutcomeKind::Other;
-	wxString     error;
+	ibString     error;
 	ibLockHandle handle;
 };
 
@@ -255,7 +255,7 @@ protected:
 	void ExpectOneExclusive(int round)
 	{
 		const ibLockItem item = Item(
-			wxString::Format(wxT("eeeeeeee-eeee-eeee-eeee-%012d"), round), ibLockMode::Exclusive);
+			ibString::Format(wxT("eeeeeeee-eeee-eeee-eeee-%012d"), round), ibLockMode::Exclusive);
 		ibSingleLockHolder left(wxT("left"));
 		ibSingleLockHolder right(wxT("right"));
 		const PairResult race = Race(App(), Mine(), &left, item, {}, Peer(), &right, item, {});
@@ -442,7 +442,7 @@ std::unique_ptr<ibLockManager> LockRace<Driver>::s_peer;
 		ibSingleLockHolder right(wxT("right"));                                                        \
 		ibLockHandle held = Mine()->Acquire({ shared }, {}, &left);                                    \
 		ASSERT_TRUE(held.IsValid());                                                                   \
-		const wxString guid = held.LockGuids().front().str();                                          \
+		const ibString guid = held.LockGuids().front().str();                                          \
 		const Outcome upgrade = TryAcquire(App(), Mine(), &left, exclusive, {});                       \
 		EXPECT_EQ(upgrade.kind, OutcomeKind::Granted) << upgrade.error;                                \
 		const HolderRow row = ReadHolder(shared.namespaceName, shared.KeyHash());                      \
@@ -568,13 +568,13 @@ OES_LOCK_SERVER_TESTS(PostgresLockRace)
 #ifdef OES_USE_FIREBIRD
 
 struct FirebirdDriver {
-	static wxString s_path;
+	static ibString s_path;
 
 	static bool Open(std::shared_ptr<ibDatabaseLayer>& db)
 	{
 		const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
 		s_path = wxFileName(wxStandardPaths::Get().GetTempDir(),
-			wxString::Format(wxT("oes_lock_race_%lld.fdb"), (long long)now)).GetFullPath();
+			ibString::Format(wxT("oes_lock_race_%lld.fdb"), (long long)now)).GetFullPath();
 		std::shared_ptr<ibDatabaseLayerFirebird> layer;
 		try {
 			layer = std::make_shared<ibDatabaseLayerFirebird>();
@@ -613,7 +613,7 @@ struct FirebirdDriver {
 	}
 };
 
-wxString FirebirdDriver::s_path;
+ibString FirebirdDriver::s_path;
 
 class FirebirdLockRace : public LockRace<FirebirdDriver> {};
 
@@ -622,13 +622,13 @@ OES_LOCK_SERVER_TESTS(FirebirdLockRace)
 #endif
 
 struct SqliteDriver {
-	static wxString s_path;
+	static ibString s_path;
 
 	static bool Open(std::shared_ptr<ibDatabaseLayer>& db)
 	{
 		const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
 		s_path = wxFileName(wxStandardPaths::Get().GetTempDir(),
-			wxString::Format(wxT("oes_lock_race_%lld.db"), (long long)now)).GetFullPath();
+			ibString::Format(wxT("oes_lock_race_%lld.db"), (long long)now)).GetFullPath();
 		auto layer = std::make_shared<ibDatabaseLayerSQLite>();
 		if (!layer->Open(s_path))
 			return false;
@@ -644,7 +644,7 @@ struct SqliteDriver {
 	}
 };
 
-wxString SqliteDriver::s_path;
+ibString SqliteDriver::s_path;
 
 class SqliteLockRace : public LockRace<SqliteDriver> {
 protected:
@@ -695,7 +695,7 @@ TEST_F(SqliteLockRace, Acquire_UpgradeOfOwnShared_KeepsGuid)
 	ibSingleLockHolder left(wxT("left"));
 	ibLockHandle held = Mine()->Acquire({ shared }, {}, &left);
 	ASSERT_TRUE(held.IsValid());
-	const wxString guid = held.LockGuids().front().str();
+	const ibString guid = held.LockGuids().front().str();
 	const Outcome upgrade = TryAcquire(App(), Mine(), &left, exclusive, {});
 	EXPECT_EQ(upgrade.kind, OutcomeKind::Granted) << upgrade.error;
 	const HolderRow row = ReadHolder(shared.namespaceName, shared.KeyHash());

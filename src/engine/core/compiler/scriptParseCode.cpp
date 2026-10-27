@@ -13,7 +13,7 @@ ibParseCode::ibParseCode(short codeStyle) : ibTranslateCode(codeStyle)
 {
 }
 
-bool ibParseCode::ParseModule(const wxString& sModule)
+bool ibParseCode::ParseModule(const ibString& sModule)
 {
 	m_content.clear();
 
@@ -69,7 +69,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 		// Variable declaration: collect names + optional array size + export flag.
 		if (lex.m_lexType == KEYWORD && lex.m_numData == KEY_VAR) {
 			while (m_cursor + 1 < m_listLexem.size()) {
-				wxString name = ExpectIdentifier(true);
+				ibString name = ExpectIdentifier(true);
 				int nArrayCount = -1;
 				if (IsNextDelimiter('[')) { // this is an array declaration
 					nArrayCount = 0;
@@ -177,7 +177,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 
 			// pull out the text of the function declaration
 			lex = PreviewGetLexem();
-			wxString shortDescription;
+			ibString shortDescription;
 			int nRes = m_strBuffer.find('\n', lex.m_numString);
 			if (nRes >= 0) {
 				shortDescription = m_strBuffer.substr(lex.m_numString, nRes - lex.m_numString - 1);
@@ -195,7 +195,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 				}
 			}
 
-			wxString strFuncName = ExpectIdentifier(true);
+			ibString strFuncName = ExpectIdentifier(true);
 
 			// compile the list of formal parameters + register them as local
 			//
@@ -396,7 +396,7 @@ const ibLexem& ibParseCode::ExpectLexem()
  *   Consume lexems until the matching delimiter is found, or the lexem
  *   list is exhausted.
  */
-void ibParseCode::ExpectDelimiter(const wxUniChar& c)
+void ibParseCode::ExpectDelimiter(const ibChar& c)
 {
 	while (m_cursor + 1 < m_listLexem.size()) {
 		const ibLexem& lex = ExpectLexem();
@@ -408,7 +408,7 @@ void ibParseCode::ExpectDelimiter(const wxUniChar& c)
  * IsNextDelimiter
  *   Predicate: is the next lexem the given delimiter? Does not advance.
  */
-bool ibParseCode::IsNextDelimiter(const wxUniChar& c)
+bool ibParseCode::IsNextDelimiter(const ibChar& c)
 {
 	if (m_cursor + 1 < m_listLexem.size()) {
 		const ibLexem& lex = m_listLexem[m_cursor + 1];
@@ -453,14 +453,14 @@ void ibParseCode::ExpectKeyword(int nKey)
  *   string (real-cased version when strRealName=true), or empty
  *   string if the next lexem is not an identifier.
  */
-wxString ibParseCode::ExpectIdentifier(bool strRealName)
+ibString ibParseCode::ExpectIdentifier(bool strRealName)
 {
 	const ibLexem& lex = ExpectLexem();
 
 	if (lex.m_lexType != IDENTIFIER) {
 		if (strRealName && lex.m_lexType == KEYWORD)
 			return lex.m_strData;
-		return wxEmptyString;
+		return ibEmptyString;
 	}
 
 	if (strRealName)

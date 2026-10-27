@@ -3,7 +3,7 @@
 
 #include "clientFrame.h"
 
-// THE RUNTIME'S MAIN WINDOW — the application, as enterprise.exe ran it (ibFrontendMainFrameEnterprise): its doc
+// THE RUNTIME'S MAIN WINDOW — the application, as the old desktop runtime ran it (ibFrontendMainFrameEnterprise): its doc
 // manager is the runtime's (ibDocManagerRuntime), its start is the configuration's, and its tabs open with
 // the start page.
 class FRMSERVER_API ibClientFrameRuntime : public ibClientFrame {

@@ -51,12 +51,12 @@ enum
 
 void ibValueFont_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(wxT("Size"));
-	helper.AppendProp(wxT("Family"));
-	helper.AppendProp(wxT("Style"));
-	helper.AppendProp(wxT("Weight"));
-	helper.AppendProp(wxT("Underlined"));
-	helper.AppendProp(wxT("Face"));
+	helper.AppendProp(ibT("Size"));
+	helper.AppendProp(ibT("Family"));
+	helper.AppendProp(ibT("Style"));
+	helper.AppendProp(ibT("Weight"));
+	helper.AppendProp(ibT("Underlined"));
+	helper.AppendProp(ibT("Face"));
 }
 
 bool ibValueFont::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -113,7 +113,7 @@ bool ibValueFont::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 }
 
 namespace {
-const wxString kFontText = wxT("v");
+const ibString kFontText = ibT("v");
 }
 
 bool ibValueFont::DoSerialize(ibDataNode& node) const
@@ -124,7 +124,7 @@ bool ibValueFont::DoSerialize(ibDataNode& node) const
 
 bool ibValueFont::DoDeserialize(const ibDataNode& node)
 {
-	m_font.FromString(node.GetValue<wxString>(kFontText));
+	m_font.FromString(node.GetValue<ibString>(kFontText));
 	return true;
 }
 

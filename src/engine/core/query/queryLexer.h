@@ -21,7 +21,6 @@
 #include "core/compiler/literal.h"   // ibLiteral — a constant as the text wrote it
 #include "core/query/queryKeywords.h"
 
-#include <wx/arrstr.h>   // wxbase exports std::vector<wxString> (wxArrayString's base) — seen here, a unit imports it
 #include <vector>
 
 // What a token IS. (Op = a comparison / arithmetic operator carrying its text;
@@ -38,7 +37,7 @@ struct ibQueryToken
 {
 	ibQueryTokenKind m_kind    = ibQueryTokenKind::End;
 	ibQueryKeyword   m_keyword = ibQueryKeyword::None;   // kind == Keyword
-	wxString         m_text;        // Ident / Param name (original case); Op / Punct text
+	ibString         m_text;        // Ident / Param name (original case); Op / Punct text
 	ibLiteral        m_literal;     // Number / String / Date constant
 	unsigned int     m_line    = 0; // 1-based source line (diagnostics)
 	unsigned int     m_col     = 0; // character offset of the token start (diagnostics)
@@ -64,7 +63,7 @@ public:
 
 	// Tokenize the whole query text into a token vector terminated by one
 	// End token. Throws ibBackendCoreException (line / position) on a lex error.
-	std::vector<ibQueryToken> Tokenize(const wxString& queryText);
+	std::vector<ibQueryToken> Tokenize(const ibString& queryText);
 
 	// IS THIS A NAME THE LANGUAGE CAN CARRY? Asked of the LEXER, because what an identifier is is
 	// the lexer's definition and nobody else's — a second set of rules written in a dialog would
@@ -74,7 +73,7 @@ public:
 	// True only for text that lexes as EXACTLY ONE identifier: no spaces, no punctuation, not a
 	// keyword, not empty. This is what every place that accepts a NAME asks — a projection alias, a
 	// table alias, a totals level's name, a temporary table's name.
-	static bool IsIdentifier(const wxString& text);
+	static bool IsIdentifier(const ibString& text);
 
 	// WHICH &PARAMETERS THIS TEXT MENTIONS, in first-appearance order and without repeats.
 	//
@@ -86,7 +85,7 @@ public:
 	//
 	// Text that does not lex (half-typed, being edited) yields an EMPTY list rather than throwing:
 	// a window asking "what would I need here" is not the place a syntax error is reported.
-	static std::vector<wxString> ParamNames(const wxString& queryText);
+	static std::vector<ibString> ParamNames(const ibString& queryText);
 
 private:
 	// The first refusal the primitives noted, raised — so a malformed numeric / string / date

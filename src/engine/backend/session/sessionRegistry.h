@@ -84,10 +84,10 @@ struct BACKEND_API ibRegistryRequest {
 	ibUserInfo info;
 
 	// SetActivity payload.
-	wxString activity;
+	ibString activity;
 
 	// SetTokenHash payload — the digest, and the caller's wait for the verdict: true — written, or no row to write.
-	wxString                            tokenHash;
+	ibString                            tokenHash;
 	std::shared_ptr<std::promise<bool>> written;
 
 	// SetExclusive payload — true acquires, false releases.
@@ -103,7 +103,7 @@ struct BACKEND_API ibRegistryRequest {
 // returns Ok only if Auth succeeded.
 // -------------------------------------------------------------------
 struct BACKEND_API ibConnectRequest {
-	wxString  m_computer;
+	ibString  m_computer;
 	ibString  m_address;           // "host:port" for web; "" for desktop
 	// Process-level run mode — how the process holds the base, the same
 	// for every session in it.
@@ -117,10 +117,10 @@ struct BACKEND_API ibConnectRequest {
 	// (tabSid) serve as sys_session.session, cookie value, SessionManager
 	// map key, and sys_session row PK all at once. Empty / invalid →
 	// fall back to wxNewUniqueGuid.
-	wxString  m_presetGuid;
+	ibString  m_presetGuid;
 
-	wxString  m_userName;          // empty = anonymous (technical / pre-auth)
-	wxString  m_password;          // plain-text transient — not stored
+	ibString  m_userName;          // empty = anonymous (technical / pre-auth)
+	ibString  m_password;          // plain-text transient — not stored
 
 	// Expected anonymous-phase vs one-shot. If m_userName is empty
 	// Connect always goes through anonymous phase (INSERT at Add,
@@ -137,7 +137,7 @@ struct BACKEND_API ibConnectRequest {
 	// pipeline keeps working through the base ibSession interface.
 	// Default-constructed (empty std::function) → default behaviour.
 	using SessionFactory =
-		std::function<std::shared_ptr<ibSession>(wxString id, ibSessionKind kind)>;
+		std::function<std::shared_ptr<ibSession>(ibString id, ibSessionKind kind)>;
 	SessionFactory m_sessionFactory;
 };
 
@@ -150,7 +150,7 @@ struct BACKEND_API ibConnectResult {
 		RegistryDown,    // registry fatal / not started
 	};
 	Code            m_code = Timeout;
-	wxString        m_reason;
+	ibString        m_reason;
 
 	// A granted connection comes out as OWNERSHIP, never as a bare
 	// pointer: the registry hands over the thread of life and the caller
@@ -182,7 +182,7 @@ public:
 	// By session id (GetId()) in m_own. Resolves debugger per-session
 	// routing (Continue / Step / Pause sid) and the web "session paused?"
 	// query. Shared lock on m_ownMutex.
-	ibSessionWatch Find(const wxString& id);
+	ibSessionWatch Find(const ibString& id);
 
 	// Reverse lookup — the session in m_own whose root module-manager
 	// equals `mm`. Used by mm::CreateMainModule to recover its owning
@@ -229,13 +229,13 @@ public:
 	// session; anything it does not move out dies with the temporary,
 	// which is the correct behaviour for every early-return path.
 	ibSessionHolder CreateSessionOfKind(ibRunMode runMode,
-	                                    const wxString& computer,
+	                                    const ibString& computer,
 	                                    ibSessionKind kind,
 	                                    ibConnectRequest::SessionFactory factory);
 	ibSessionHolder CreateSessionWithFactory(ibRunMode runMode,
-	                                         const wxString& computer,
+	                                         const ibString& computer,
 	                                         ibSessionKind kind,
-	                                         const wxString& presetGuid,
+	                                         const ibString& presetGuid,
 	                                         const ibString& address,
 	                                         ibConnectRequest::SessionFactory factory);
 
@@ -301,7 +301,7 @@ public:
 	// is slow on purpose, and on the registry thread a queue of logins held up its heartbeat until the peers
 	// settled this process's rows as silent. The registry thread is handed the verdict and only writes it
 	// (ProcessAttach). The answer is the session's auth state — wait for it with WaitForAuth.
-	void Attach(const std::shared_ptr<ibSession>& session, const wxString& user, const wxString& password);
+	void Attach(const std::shared_ptr<ibSession>& session, const ibString& user, const ibString& password);
 
 	// ---- Unified entry-point ----
 	// Submit Add (+ optional Attach if req.m_userName is non-empty),
@@ -321,8 +321,8 @@ public:
 	//            guid argument just names WHICH process to poke.
 	// Both return true on successful UPDATE, false on DB error. Safe to
 	// call from any thread.
-	bool Kick(const wxString& sessionGuid);
-	bool Reload(const wxString& sessionGuid);
+	bool Kick(const ibString& sessionGuid);
+	bool Reload(const ibString& sessionGuid);
 
 	// ---- Cluster snapshot ----
 	// Returns a copy of the last-refreshed snapshot of sys_session,
@@ -350,7 +350,7 @@ public:
 	// and one that stands still until its last beat is as old as the sweep's own cutoff has none — it is
 	// removed then (the sweep's own DELETE), not at the sweep's next tick, and the snapshot refreshed. Returns
 	// how many went. REGISTRY THREAD ONLY — a policy (ProcessAdd) or ProcessSetExclusive asks it.
-	size_t SettleSilentPeers(const std::vector<wxString>& peers);
+	size_t SettleSilentPeers(const std::vector<ibString>& peers);
 
 	// THE ONE SILENCE, in seconds of lastActive: a row whose last beat is this old has no owner. The sweep and
 	// the question above go by it, and so does a base asked at open whether another process holds it
@@ -456,7 +456,7 @@ public:
 	// ProcessAttach, or the GUI login dialog on the main thread).
 	void InstallUser(ibSession* s,
 	                 const ibUserInfo& info,
-	                 const wxString& rawPassword);
+	                 const ibString& rawPassword);
 
 	// ---- Fallback session ----
 	// Returned by Current() when the calling thread is unbound. The
@@ -567,8 +567,8 @@ private:
 	// an admin directive:
 	//   "kick"   — submits Remove@Urgent for that session.
 	//   "reload" — flips m_reloadRequested so the embedding runtime
-	//              (wfrontend's SweepLoop) can evict its web-clients and
-	//              force a reconnect against the freshly-loaded metadata.
+	//              can evict its clients and force a reconnect
+	//              against the freshly-loaded metadata.
 	// Signal column is cleared (UPDATE ... SET signal=NULL) immediately
 	// after dispatch so it fires once per write. Runs at the sweep
 	// interval — admin operations are not latency-sensitive.
@@ -578,7 +578,7 @@ public:
 	// One-shot consume: returns true exactly once after a "reload"
 	// signal was processed, resetting the flag so the next caller sees
 	// false until another directive lands. Embedders poll this on their
-	// own tick (e.g. wfrontend's SweepLoop every 15s).
+	// own tick (⚠ none does since the old web front went).
 	bool ConsumeReloadRequest() {
 		return m_reloadRequested.exchange(false, std::memory_order_acq_rel);
 	}
@@ -611,7 +611,7 @@ private:
 	// startup — producer sees IsFatal()) and only terminates after the
 	// first successful drain. Attribute removed accordingly; callers
 	// must not assume the call never returns.
-	void Die(const wxString& why);
+	void Die(const ibString& why);
 
 	// --- index, NOT ownership (populated by ProcessAdd) ---
 	// weak_ptr on purpose. The registry tracks which sessions this
@@ -629,7 +629,7 @@ private:
 	// from compile threads). Writers — ProcessAdd / ProcessRemove on the
 	// registry thread — take a unique lock; readers take a shared lock.
 	mutable std::shared_mutex                                    m_ownMutex;
-	std::unordered_map<wxString, ibSessionWatch>                 m_own;
+	std::unordered_map<ibString, ibSessionWatch>                 m_own;
 
 	// The base this registry belongs to — stamped onto every session it creates.
 	ibApplicationInstance* const                                     m_applicationInstance;
@@ -724,7 +724,7 @@ private:
 	std::atomic<bool>                            m_stop         { false };
 	std::atomic<bool>                            m_threadAlive  { false };
 	std::atomic<bool>                            m_fatal        { false };
-	wxString                                     m_fatalReason;  // set before m_fatal = true
+	ibString                                     m_fatalReason;  // set before m_fatal = true
 
 	// True after ThreadBody completed its first full main-loop iteration
 	// (drain + housekeeping ticks). Before that, Die() takes a soft-fail
@@ -837,8 +837,8 @@ private:
 // (not in session.h) because they delegate through
 // ibSessionRegistry::CreateSessionWithFactory and need the registry's
 // full type at instantiation. Each callsite that uses the typed
-// overload (enterprise/mainApp.cpp, designer/mainApp.cpp,
-// frontend/web/webSession.cpp) already includes this header.
+// overload (frmserver/client/clientInstance.cpp) already includes
+// this header.
 //
 // Both overloads coexist with the non-template ibSession*
 // CreateSession() declared in appData.h — overload resolution picks
@@ -848,7 +848,7 @@ private:
 namespace ib_detail {
 
 template<class SessionT>
-inline std::shared_ptr<ibSession> MakeSessionFactory(wxString id, ibSessionKind kind)
+inline std::shared_ptr<ibSession> MakeSessionFactory(ibString id, ibSessionKind kind)
 {
 	return std::make_shared<SessionT>(std::move(id), kind);
 }
@@ -871,7 +871,7 @@ ibSessionHolder ibApplicationInstance::CreateSession(ibSessionKind kind)
 
 template<class SessionT>
 ibSessionHolder ibApplicationInstance::CreateSession(ibSessionKind kind,
-                                                 const wxString& presetGuid,
+                                                 const ibString& presetGuid,
                                                  const ibString& address)
 {
 	static_assert(std::is_base_of<ibSession, SessionT>::value,

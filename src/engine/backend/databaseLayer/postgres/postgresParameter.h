@@ -57,9 +57,9 @@ private:
 	int m_nParameterType;
 
 	// A union would probably be better here
-	wxString m_strValue;
+	ibString m_strValue;
 	
-	wxString m_strDateValue;
+	ibString m_strDateValue;
 	ibMemoryBuffer m_BufferValue;
 	wxCharBuffer m_CharBufferValue;
 	

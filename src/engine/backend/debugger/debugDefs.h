@@ -51,7 +51,7 @@ enum CommandId
 	CommandId_RemoveBreakpoint = 8,    // Remove a breakpoint on a line on and off.
 	CommandId_Pause = 9,    // Instructs the debugger to break on the next line of script code.
 	CommandId_Detach = 10,    // Soft stop: disconnect debug client + reset debug state, listener stays so the debugger can reattach.
-	CommandId_Destroy = 11,    // Hard stop: same as Detach plus ForceExit on desktop (kill enterprise.exe). Web mode skips the ForceExit (wes serves other tabs) — effectively degrades to Detach.
+	CommandId_Destroy = 11,    // Hard stop: same as Detach plus a forced close of the stopped session (a thin client is told to go). The process's other sessions stay.
 
 	// 12–14 — the editor's patches (insert, delete, complete), which no runtime read: the edits are the editor's to count.
 
@@ -186,9 +186,9 @@ struct ibDebugData {
 	// came from / should be routed to. Empty on protocol-level packets
 	// (verify, set-connection-type) — only event/command packets that
 	// touch a specific runtime carry it.
-	wxString m_sessionGuid;
-	wxString m_fileName;
-	wxString m_moduleName;
+	ibString m_sessionGuid;
+	ibString m_fileName;
+	ibString m_moduleName;
 };
 
 struct ibDebugLineData : public ibDebugData {
@@ -196,20 +196,20 @@ struct ibDebugLineData : public ibDebugData {
 };
 
 struct ibDebugExpressionData : public ibDebugData {
-	wxString m_expression;
+	ibString m_expression;
 };
 
 struct ibDebugAutoCompleteData : public ibDebugExpressionData {
 
 	struct ibDebugVariableData {
-		wxString m_variableName;
+		ibString m_variableName;
 	};
 
 	std::vector<ibDebugVariableData> m_arrVar;
 
 	struct ibDebugMethodData {
-		wxString m_methodName;
-		wxString m_methodHelper;
+		ibString m_methodName;
+		ibString m_methodHelper;
 		bool m_methodRet;
 	};
 
@@ -217,7 +217,7 @@ struct ibDebugAutoCompleteData : public ibDebugExpressionData {
 
 public:
 
-	wxString m_keyword;
+	ibString m_keyword;
 	int      m_currentPos;
 };
 
@@ -226,11 +226,11 @@ public:
 struct ibStackData {
 
 	struct ibStackRow {
-		wxString m_moduleName;      // the module's address, as ibDebugData's — what its line is counted in
-		wxString m_fullName;        // the call as the runtime names it: the module, the procedure, its parameters
+		ibString m_moduleName;      // the module's address, as ibDebugData's — what its line is counted in
+		ibString m_fullName;        // the call as the runtime names it: the module, the procedure, its parameters
 		unsigned int m_moduleLine;
 	public:
-		ibStackRow(const wxString& strModuleName, const wxString& strFullName, unsigned int moduleLine) :
+		ibStackRow(const ibString& strModuleName, const ibString& strFullName, unsigned int moduleLine) :
 			m_moduleName(strModuleName), m_fullName(strFullName), m_moduleLine(moduleLine) {
 		}
 	};
@@ -239,7 +239,7 @@ struct ibStackData {
 
 public:
 
-	void AppendStack(const wxString& strModuleName, const wxString& strFullName, unsigned int moduleLine) {
+	void AppendStack(const ibString& strModuleName, const ibString& strFullName, unsigned int moduleLine) {
 		m_stackData.emplace_back(
 			strModuleName, strFullName, moduleLine
 		);
@@ -249,14 +249,14 @@ public:
 		return m_stackData.size();
 	}
 
-	wxString GetFullName(unsigned int idx) const {
-		if (idx >= m_stackData.size()) return wxEmptyString;
+	ibString GetFullName(unsigned int idx) const {
+		if (idx >= m_stackData.size()) return ibEmptyString;
 		return m_stackData[idx].m_fullName;
 	}
 
-	wxString GetModuleLine(unsigned int idx) const {
-		if (idx >= m_stackData.size()) return wxEmptyString;
-		return std::to_string(m_stackData[idx].m_moduleLine);
+	ibString GetModuleLine(unsigned int idx) const {
+		if (idx >= m_stackData.size()) return ibEmptyString;
+		return ibString(std::to_wstring(m_stackData[idx].m_moduleLine));
 	}
 };
 
@@ -268,12 +268,12 @@ struct ibLocalWindowData {
 
 	struct ibLocalWindowItem {
 
-		wxString	 m_name;
-		wxString	 m_value;
-		wxString	 m_type;
+		ibString	 m_name;
+		ibString	 m_value;
+		ibString	 m_type;
 		bool		 m_hasAttributes;
 
-		ibLocalWindowItem(const wxString& n, const wxString& v, const wxString& t, bool a) :
+		ibLocalWindowItem(const ibString& n, const ibString& v, const ibString& t, bool a) :
 			m_name(n), m_value(v), m_type(t), m_hasAttributes(a) {
 		}
 	};
@@ -284,18 +284,18 @@ public:
 
 	ibLocalWindowData() {}
 
-	void AddLocalVar(const wxString& name, const wxString& value, const wxString& type, bool hasAttributes) {
+	void AddLocalVar(const ibString& name, const ibString& value, const ibString& type, bool hasAttributes) {
 		m_listExpression.emplace_back(name, value, type, hasAttributes);
 	}
 
-	wxString GetName(unsigned int idx) const {
+	ibString GetName(unsigned int idx) const {
 		return m_listExpression[idx].m_name;
 	}
 
-	wxString GetValue(unsigned int idx) const {
+	ibString GetValue(unsigned int idx) const {
 		return m_listExpression[idx].m_value;
 	}
-	wxString GetType(unsigned int idx) const {
+	ibString GetType(unsigned int idx) const {
 		return m_listExpression[idx].m_type;
 	}
 
@@ -317,12 +317,12 @@ struct ibWatchWindowData {
 	struct ibWatchWindowItem {
 
 		std::uint64_t m_item;
-		wxString	 m_name;
-		wxString	 m_value;
-		wxString	 m_type;
+		ibString	 m_name;
+		ibString	 m_value;
+		ibString	 m_type;
 		bool		 m_hasAttributes;
 
-		ibWatchWindowItem(const wxString& n, const wxString& v, const wxString& t, bool a, std::uint64_t i) :
+		ibWatchWindowItem(const ibString& n, const ibString& v, const ibString& t, bool a, std::uint64_t i) :
 			m_item(i), m_name(n), m_value(v), m_type(t), m_hasAttributes(a) {
 		}
 	};
@@ -337,24 +337,24 @@ struct ibWatchWindowData {
 	// everywhere the debugger is; it carries what goes over the wire, and over the wire this is
 	// text. Naming the type here would drag the guid header behind it into every one of them for a
 	// value nothing on this side takes apart.
-	wxString m_bridgeId;
+	ibString m_bridgeId;
 
 public:
 
 	ibWatchWindowData(std::uint64_t item = 0) : m_item(item) {}
 
-	const wxString& GetBridgeId() const { return m_bridgeId; }
-	void SetBridgeId(const wxString& id) { m_bridgeId = id; }
+	const ibString& GetBridgeId() const { return m_bridgeId; }
+	void SetBridgeId(const ibString& id) { m_bridgeId = id; }
 
 	std::uint64_t GetItem() const {
 		return m_item;
 	}
 
-	void AddWatch(const wxString& name, const wxString& value, const wxString& type, bool hasAttributes) {
+	void AddWatch(const ibString& name, const ibString& value, const ibString& type, bool hasAttributes) {
 		m_listExpression.emplace_back(name, value, type, hasAttributes, m_item);
 	}
 
-	void AddWatch(const wxString& name, const wxString& value, const wxString& type, bool hasAttributes, std::uint64_t item) {
+	void AddWatch(const ibString& name, const ibString& value, const ibString& type, bool hasAttributes, std::uint64_t item) {
 		m_listExpression.emplace_back(name, value, type, hasAttributes, item);
 	}
 
@@ -362,14 +362,14 @@ public:
 		return m_listExpression[idx].m_item;
 	}
 
-	wxString GetName(unsigned int idx) const {
+	ibString GetName(unsigned int idx) const {
 		return m_listExpression[idx].m_name;
 	}
 
-	wxString GetValue(unsigned int idx) const {
+	ibString GetValue(unsigned int idx) const {
 		return m_listExpression[idx].m_value;
 	}
-	wxString GetType(unsigned int idx) const {
+	ibString GetType(unsigned int idx) const {
 		return m_listExpression[idx].m_type;
 	}
 
@@ -395,15 +395,15 @@ public:
 // rather than parse rubbish — "the debugger detaches by itself", deterministically, on the first step
 // with anything in the watch window (2026-09-25).
 struct ibWatchedExpression {
-	wxString m_asker;        // the bridge that asked — empty means nobody is listening for it
-	wxString m_expression;
+	ibString m_asker;        // the bridge that asked — empty means nobody is listening for it
+	ibString m_expression;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 // The ports — ibPort::Debugger: a debug server listens on the first free one, the designer looks in all of them.
 #include "core/net/ports.h"
-#define defaultHost wxT("localhost")
+#define defaultHost ibT("localhost")
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 #define numberOfConnectionAttempts 1

@@ -79,13 +79,13 @@ std::vector<ibValueMetaObjectAttributeBase*> HolderAttributes(const ibPropertyOb
 //
 // The id is what is stored; this is only how it is said — and every list and every summary here says
 // it through this one function, so the designer, the inspector's row and MCP cannot spell it apart.
-wxString NeighbourName(const ibPropertyObject* owner, const ibValueMetaObjectAttributeBase* field)
+ibString NeighbourName(const ibPropertyObject* owner, const ibValueMetaObjectAttributeBase* field)
 {
 	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
 	const ibValueMetaObject* holder = field->GetParent();
 	if (self == nullptr || holder == nullptr || holder == self->GetParent())
 		return field->GetName();
-	return holder->GetName() + wxT(".") + field->GetName();
+	return holder->GetName() + ibT(".") + field->GetName();
 }
 
 // ⭐⭐ WHAT A REFERENCE TYPE NAMES — the metaobject of the kind asked, or none. One look-up, so "what counts
@@ -133,13 +133,13 @@ bool AcceptsAnyOf(const ibValueMetaObjectAttributeBase* field, const ibValueMeta
 }
 
 // The two name lookups the header declares — each asked of the place such a field actually lives.
-wxString ibChoiceHolderFieldName(const ibPropertyObject* owner, const ibMetaID& id)
+ibString ibChoiceHolderFieldName(const ibPropertyObject* owner, const ibMetaID& id)
 {
 	for (const ibValueMetaObjectAttributeBase* field : HolderAttributes(owner)) {
 		if (field->GetMetaID() == id)
 			return NeighbourName(owner, field);
 	}
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 void ibChoiceParametersForSource(const ibPropertyObject* owner, const ibMetaID& sourceId,
@@ -181,14 +181,14 @@ void ibChoiceParametersForSource(const ibPropertyObject* owner, const ibMetaID& 
 		*obvious = byName != 0 ? byName : (out.size() == 1 ? out.front() : 0);
 }
 
-wxString ibChoiceHolderName(const ibPropertyObject* owner)
+ibString ibChoiceHolderName(const ibPropertyObject* owner)
 {
 	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
 	const ibValueMetaObject* holder = self != nullptr ? self->GetParent() : nullptr;
-	return holder != nullptr ? holder->GetName() : wxString();
+	return holder != nullptr ? holder->GetName() : ibString();
 }
 
-wxString ibChoiceTargetFieldName(const ibPropertyObject* owner, const ibMetaID& id)
+ibString ibChoiceTargetFieldName(const ibPropertyObject* owner, const ibMetaID& id)
 {
 	// A composite field refers to more than one thing; the parameter belongs to one of them, and which
 	// one is answered by finding it rather than by asking the author to say again.
@@ -199,7 +199,7 @@ wxString ibChoiceTargetFieldName(const ibPropertyObject* owner, const ibMetaID& 
 		}
 	}
 
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 // The types this field refers to, as a list to pick from — ReferencedObjects, said as rows.
@@ -284,10 +284,10 @@ wxString ibVariantDataChoiceLink::MakeString() const
 {
 	const ibChoiceTypeLinkDescription& linkDesc = GetLinkDesc();
 	if (!linkDesc.IsOk())
-		return wxEmptyString;
+		return ibEmptyString;
 
-	const wxString name = ibChoiceHolderFieldName(m_ownerProperty, linkDesc.m_source.GetLeaf());
-	return !name.IsEmpty() ? name : _("<the field it named is gone>");
+	const ibString name = ibChoiceHolderFieldName(m_ownerProperty, linkDesc.m_source.GetLeaf());
+	return !name.IsEmpty() ? name : ibString(_("<the field it named is gone>"));
 }
 
 // ⚠ THE METADATA COMES FROM THE PROPERTY'S OWNER, never from the active configuration: several are open
@@ -361,20 +361,20 @@ wxString ibVariantDataChoiceParameters::MakeString() const
 {
 	const ibChoiceParametersDescription& paramsDesc = GetParametersDesc();
 	if (!paramsDesc.IsOk())
-		return wxEmptyString;
+		return ibEmptyString;
 
-	wxString shown;
+	ibString shown;
 	unsigned int named = 0;
 	for (const ibChoiceParameterRowDescription& row : paramsDesc.m_rows) {
 		if (named == 3) {
-			shown += wxT(", …");
+			shown += ibT(", …");
 			break;
 		}
 		if (named > 0)
-			shown += wxT(", ");
+			shown += ibT(", ");
 
-		const wxString name = ibChoiceTargetFieldName(m_ownerProperty, row.m_parameter);
-		shown += !name.IsEmpty() ? name : _("<gone>");
+		const ibString name = ibChoiceTargetFieldName(m_ownerProperty, row.m_parameter);
+		shown += !name.IsEmpty() ? name : ibString(_("<gone>"));
 		named++;
 	}
 

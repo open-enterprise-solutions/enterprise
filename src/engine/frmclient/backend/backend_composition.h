@@ -19,7 +19,7 @@ FRMCLIENT_API ibDataNode ibStoreValue(const ibValue& value);   // …the node it
 // ⭐ WHAT A PERSON READS OF A VARIANT — the synonym IN THE CONFIGURATION'S LANGUAGE, else the name. The synonym
 // is written down as a translated text (`en = '…'; ru = '…'; uk = '…';`), which is a FORM of storage and not a
 // caption: handed straight to a menu it put that whole line in front of the reader (2026-09-16).
-FRMCLIENT_API wxString ibVariantCaption(const ibVariantDescription& variant);
+FRMCLIENT_API ibString ibVariantCaption(const ibVariantDescription& variant);
 
 // ⭐ SETTINGS THAT CANNOT BE APPLIED ARE REFUSED, not silently dropped — RAISED (ibBackendCoreException), so a
 // settings window catches it and shows the message as a warning instead of closing.

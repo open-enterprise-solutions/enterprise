@@ -18,13 +18,13 @@ constexpr ibClassID g_controlButtonCLSID = control_to_clsid("CT_BUTN");
 class ibValueButton : public ibValueWindow, public ibFrontendCommandReceiver {
 	public:
 
-	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
-	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
+	void SetCaption(const ibString& caption) { return m_propertyTitle->SetValue(caption); }
+	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
 	ibValueButton();
 
 	//get title
-	virtual wxString GetControlTitle() const { return GetCaption(); }
+	virtual ibString GetControlTitle() const { return GetCaption(); }
 
 	// The caption, the picture and the representation as they come out once the bound command has filled
 	// in what the button leaves unset; hidden when that command no longer resolves, disabled when it
@@ -56,18 +56,18 @@ private:
 	void WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCommandSubItem>& subs,
 		std::vector<ibCommandDescription>& leaves, ibDataNode* node) const;
 
-	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(wxT("Button"), _("Button"));
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryButton, wxT("Title"), _("Title"),
-		_("The text on the button. Can be written per language and changed from code while the form is open."), wxT("Button"));
-	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryButton, wxT("Representation"), _("Representation"),
+	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(ibT("Button"), _("Button"));
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryButton, ibT("Title"), _("Title"),
+		_("The text on the button. Can be written per language and changed from code while the form is open."), ibT("Button"));
+	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryButton, ibT("Representation"), _("Representation"),
 		_("What the button shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text); picture and text when no command is bound."),
 		ibRepresentation::ibRepresentation_Auto);
-	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryButton, wxT("Picture"), _("Picture"),
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryButton, ibT("Picture"), _("Picture"),
 		_("The button's icon, beside or instead of the text (see Representation)."));
 	// A button has NO event — it carries ONLY a bound COMMAND (command-source picker, the command-door twin of a
 	// control's data source). A press RUNS the command through ibFrontendCommandReceiver::ExecuteValueByPath. Internal
 	// name MUST differ from any category name (wxPropertyGrid keys both in one map); lives in the Button category.
-	ibPropertyCommandSource* m_propertyCommand = ibPropertyObject::CreateProperty<ibPropertyCommandSource>(m_categoryButton, wxT("Command"), _("Command"),
+	ibPropertyCommandSource* m_propertyCommand = ibPropertyObject::CreateProperty<ibPropertyCommandSource>(m_categoryButton, ibT("Command"), _("Command"),
 		_("The command a press runs: a form command, a standard command of the form or of one of its tables, or a command of the configuration. A button has no click event of its own - the code goes into the command's handler."));
 
 public:
@@ -77,7 +77,7 @@ public:
 	// the button's bound command-hop path (empty = none) — the click handler runs it.
 	const ibCommandDescription& GetCommandDesc() const { return m_propertyCommand->GetValueAsCommandDesc(); }
 	// Bind a command to this button (a command drop / the picker): desc = the hop path, display = its caption.
-	void SetCommandDesc(const ibCommandDescription& desc, const wxString& display) { m_propertyCommand->SetValue(desc, display); }
+	void SetCommandDesc(const ibCommandDescription& desc, const ibString& display) { m_propertyCommand->SetValue(desc, display); }
 };
 
 // STATIC TEXT — a caption, and OPTIONALLY a value read from a source.
@@ -95,8 +95,8 @@ class ibValueStaticText : public ibValueWindow,
 	public ibTypeControlFactory {
 	public:
 
-	void SetCaption(const wxString& caption) { m_propertyTitle->SetValue(caption); }
-	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
+	void SetCaption(const ibString& caption) { m_propertyTitle->SetValue(caption); }
+	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); }
@@ -140,7 +140,7 @@ class ibValueStaticText : public ibValueWindow,
 	// THE CAPTION — the same rule the text box and the checkbox follow: the Title property when it
 	// is filled, otherwise the bound field's synonym. So a bound static text is captioned by the
 	// metadata and nobody has to type "Counterparty" next to a field already called that.
-	virtual wxString GetControlTitle() const;
+	virtual ibString GetControlTitle() const;
 
 	ibValueStaticText();
 
@@ -166,31 +166,31 @@ private:
 
 protected:
 
-	ibPropertyCategory* m_categoryStaticText = ibPropertyObject::CreatePropertyCategory(wxT("StaticText"), _("Static text"));
-	ibPropertyBoolean* m_propertyMarkup = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStaticText, wxT("Markup"), _("Markup"),
+	ibPropertyCategory* m_categoryStaticText = ibPropertyObject::CreatePropertyCategory(ibT("StaticText"), _("Static text"));
+	ibPropertyBoolean* m_propertyMarkup = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStaticText, ibT("Markup"), _("Markup"),
 		_("Kept for older forms and saved with the form; it has no effect - the caption is shown as plain text."), true);
-	ibPropertyUInteger* m_propertyWrap = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryStaticText, wxT("Wrap"), _("Wrap"),
+	ibPropertyUInteger* m_propertyWrap = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryStaticText, ibT("Wrap"), _("Wrap"),
 		_("Kept for older forms and saved with the form; it has no effect. For several lines, put line breaks into the title."), 0);
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryStaticText, wxT("Title"), _("Title"),
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryStaticText, ibT("Title"), _("Title"),
 		_("The caption text. Empty on a bound static text: the bound field's synonym. Can be written per language and changed from code while the form is open."),
-		wxT("Static text"));
+		ibT("Static text"));
 	// Where the caption sits relative to the value — the checkbox's property, same enum and same
 	// default, because a form mixing the two must not have to explain why they differ.
-	ibPropertyEnum<ibValueEnumTitleLocation>* m_propertyTitleLocation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTitleLocation>>(m_categoryStaticText, wxT("TitleLocation"), _("Title location"),
+	ibPropertyEnum<ibValueEnumTitleLocation>* m_propertyTitleLocation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTitleLocation>>(m_categoryStaticText, ibT("TitleLocation"), _("Title location"),
 		_("Which side of the value the caption sits on when the static text is bound: left (the default) or right."),
 		ibTitleLocation::eLeft);
 
 	// ANY type — a static text shows whatever it is pointed at, so nothing is filtered out here.
-	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"),
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
+	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, ibT("Source"), _("Source"),
 		_("Optional: a value to show beside the caption - a form attribute or any field reachable from it by a dotted path. A non-empty value is drawn as a link that opens its own form. Unbound, the static text is a plain caption."),
 		ibValueTypes::TYPE_EMPTY);
 
 	// The SAME event the text box raises before it opens a value, with the same standard-processing
 	// switch: a configuration that wants to open something else — or nothing — says so here, and
 	// does not have to learn a second name because this control is a label rather than an editor.
-	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
-	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Opening"), _("Opening"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
+	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
+	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("Opening"), _("Opening"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
 };
 
 constexpr ibClassID g_controlTextCtrlCLSID = control_to_clsid("CT_TXTC");
@@ -210,8 +210,8 @@ class ibValueTextCtrl : public ibValueWindow,
 	// Available sources = the owning form's attributes of THIS control's kind.
 	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const override;
 
-	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
-	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
+	void SetCaption(const ibString& caption) { return m_propertyTitle->SetValue(caption); }
+	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
 	void SetSelectButton(bool caption) { return m_propertySelectButton->SetValue(caption); }
 	bool GetSelectButton() const { return m_propertySelectButton->GetValueAsBoolean(); }
@@ -263,7 +263,7 @@ class ibValueTextCtrl : public ibValueWindow,
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 
 	//get title
-	virtual wxString GetControlTitle() const;
+	virtual ibString GetControlTitle() const;
 
 	// Just made by the designer, with no source — bound to a fresh attribute (the desktop's).
 	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
@@ -314,7 +314,7 @@ private:
 
 	// What the user did in the field. Typed text arrives as it stands and is parsed by the value's type;
 	// a read-only field takes none of it.
-	void OnTextEnter(const wxString& text);
+	void OnTextEnter(const ibString& text);
 	void OnTextUpdated();
 
 	void OnSelectButtonPressed();
@@ -323,7 +323,7 @@ private:
 
 protected:
 
-	bool TextProcessing(const wxString& strData);
+	bool TextProcessing(const ibString& strData);
 	// …and a value the client sent with its type (ibValue::Serialize — a date from its calendar): the same commit.
 	bool ValueProcessing(const class ibDataNode& node);
 
@@ -337,38 +337,38 @@ private:
 
 	ibValue m_selValue;
 
-	ibPropertyCategory* m_categoryText = ibPropertyObject::CreatePropertyCategory(wxT("Textbox"), _("Textbox"));
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryText, wxT("Title"), _("Title"),
-		_("The field's caption, shown beside it. Empty: the bound field's synonym. Can be written per language."), wxT(""));
-	ibPropertyBoolean* m_propertyPasswordMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryText, wxT("PasswordMode"), _("Password mode"), _("Whether the field hides what is typed behind placeholder characters, for secrets such as passwords. Off by default."), false);
-	ibPropertyBoolean* m_propertyMultilineMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryText, wxT("MultilineMode"), _("Multiline mode"), _("Whether the field accepts several lines of text (Enter starts a new line) - for comments and addresses. Off by default: Enter finishes the input."), false);
-	ibPropertyBoolean* m_propertyTexteditMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryText, wxT("TexteditMode"), _("Textedit mode"), _("Whether the value can be typed into the field. Off: it can only be picked with the Select button or cleared. On by default; a field bound through a reference path is read-only whatever this says."), true);
-	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryText, wxT("Format"), _("Format"),
-		_("How the field shows its value, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."), wxT(""));
+	ibPropertyCategory* m_categoryText = ibPropertyObject::CreatePropertyCategory(ibT("Textbox"), _("Textbox"));
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryText, ibT("Title"), _("Title"),
+		_("The field's caption, shown beside it. Empty: the bound field's synonym. Can be written per language."), ibT(""));
+	ibPropertyBoolean* m_propertyPasswordMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryText, ibT("PasswordMode"), _("Password mode"), _("Whether the field hides what is typed behind placeholder characters, for secrets such as passwords. Off by default."), false);
+	ibPropertyBoolean* m_propertyMultilineMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryText, ibT("MultilineMode"), _("Multiline mode"), _("Whether the field accepts several lines of text (Enter starts a new line) - for comments and addresses. Off by default: Enter finishes the input."), false);
+	ibPropertyBoolean* m_propertyTexteditMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryText, ibT("TexteditMode"), _("Textedit mode"), _("Whether the value can be typed into the field. Off: it can only be picked with the Select button or cleared. On by default; a field bound through a reference path is read-only whatever this says."), true);
+	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryText, ibT("Format"), _("Format"),
+		_("How the field shows its value, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."), ibT(""));
 
-	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"),
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
+	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, ibT("Source"), _("Source"),
 		_("The value the field shows and edits: a form attribute, a field of the form's object, or a field reachable from them by a dotted path (read-only). The value's type decides how input is parsed and which choice form Select opens."),
 		ibValueTypes::TYPE_STRING);
-	ibPropertyList* m_propertyChoiceForm = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryData, wxT("ChoiceForm"), _("Choice form"),
+	ibPropertyList* m_propertyChoiceForm = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryData, ibT("ChoiceForm"), _("Choice form"),
 		_("Which form opens when the user presses Select: one of the forms of the value's type. Empty: the type's default choice form."),
 		&ibValueTextCtrl::GetChoiceForm, wxNOT_FOUND);
 
-	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(wxT("Button"), _("Button"));
-	ibPropertyBoolean* m_propertySelectButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, wxT("ButtonSelect"), _("Select button"),
+	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(ibT("Button"), _("Button"));
+	ibPropertyBoolean* m_propertySelectButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonSelect"), _("Select button"),
 		_("Whether the field shows the Select button (...), which opens a choice form or list to pick the value from. On by default."), true);
-	ibPropertyBoolean* m_propertyClearButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, wxT("ButtonClear"), _("Clear button"),
+	ibPropertyBoolean* m_propertyClearButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonClear"), _("Clear button"),
 		_("Whether the field shows the Clear button (X), which empties the value. On by default."), true);
-	ibPropertyBoolean* m_propertyOpenButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, wxT("ButtonOpen"), _("Open button"),
+	ibPropertyBoolean* m_propertyOpenButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonOpen"), _("Open button"),
 		_("Whether the field shows the Open button, which opens the referenced object's form. Off by default."), false);
 
-	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
-	ibEventControl* m_eventOnChange = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("OnChange"), _("Change"), wxArrayString{ wxT("Control") });
-	ibEventControl* m_eventStartChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartChoice"), _("Start choice"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
-	ibEventControl* m_eventStartListChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartListChoice"), _("Start list choice"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
-	ibEventControl* m_eventClearing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Clearing"), _("Clearing"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
-	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Opening"), _("Opening"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
-	ibEventControl* m_eventChoiceProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("ChoiceProcessing"), _("Choice processing"), wxArrayString{ wxT("Control"), wxT("ValueSelected"), wxT("StandardProcessing") });
+	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
+	ibEventControl* m_eventOnChange = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("OnChange"), _("Change"), std::vector<ibString>{ ibT("Control") });
+	ibEventControl* m_eventStartChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("StartChoice"), _("Start choice"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventStartListChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("StartListChoice"), _("Start list choice"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventClearing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("Clearing"), _("Clearing"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("Opening"), _("Opening"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventChoiceProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("ChoiceProcessing"), _("Choice processing"), std::vector<ibString>{ ibT("Control"), ibT("ValueSelected"), ibT("StandardProcessing") });
 
 	friend class ibValueForm;
 };
@@ -389,8 +389,8 @@ class ibValueCheckbox : public ibValueWindow,
 	// Available sources = the owning form's attributes of THIS control's kind.
 	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const override;
 
-	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
-	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
+	void SetCaption(const ibString& caption) { return m_propertyTitle->SetValue(caption); }
+	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
 	ibValueCheckbox();
 
@@ -436,7 +436,7 @@ class ibValueCheckbox : public ibValueWindow,
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 
 	//get title
-	virtual wxString GetControlTitle() const;
+	virtual ibString GetControlTitle() const;
 
 	// Just made by the designer, with no source — bound to a fresh attribute (the desktop's).
 	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
@@ -477,20 +477,20 @@ private:
 
 	ibValue m_selValue = false;
 
-	ibPropertyCategory* m_categoryCheckBox = ibPropertyObject::CreatePropertyCategory(wxT("Checkbox"), _("Checkbox"));
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCheckBox, wxT("Title"), _("Title"),
-		_("The checkbox's caption. Empty: the bound field's synonym. Can be written per language."), wxT(""));
-	ibPropertyEnum<ibValueEnumTitleLocation>* m_propertyTitleLocation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTitleLocation>>(m_categoryCheckBox, wxT("TitleLocation"), _("Title location"),
+	ibPropertyCategory* m_categoryCheckBox = ibPropertyObject::CreatePropertyCategory(ibT("Checkbox"), _("Checkbox"));
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCheckBox, ibT("Title"), _("Title"),
+		_("The checkbox's caption. Empty: the bound field's synonym. Can be written per language."), ibT(""));
+	ibPropertyEnum<ibValueEnumTitleLocation>* m_propertyTitleLocation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTitleLocation>>(m_categoryCheckBox, ibT("TitleLocation"), _("Title location"),
 		_("Which side of the box the caption sits on: left (the default) or right."),
 		ibTitleLocation::eLeft);
 
-	ibPropertyCategory* m_categorySource = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categorySource, wxT("Source"), _("Source"),
+	ibPropertyCategory* m_categorySource = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
+	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categorySource, ibT("Source"), _("Source"),
 		_("The boolean value the checkbox shows and toggles: a form attribute or a field of the form's object. Bound through a reference path, or on a view-only form, it shows the value but cannot be toggled. Unbound, the checkbox is not shown at run time."),
 		ibValueTypes::TYPE_BOOLEAN);
 
-	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
-	ibEventControl* m_onCheckboxClicked = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("OnCheckboxClicked"), _("Checkbox clicked"), wxArrayString{ wxT("Control") });
+	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
+	ibEventControl* m_onCheckboxClicked = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("OnCheckboxClicked"), _("Checkbox clicked"), std::vector<ibString>{ ibT("Control") });
 
 	friend class ibValueForm;
 };
@@ -498,13 +498,13 @@ private:
 class ibValueRadioButton : public ibValueWindow {
 	public:
 
-	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
-	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
+	void SetCaption(const ibString& caption) { return m_propertyTitle->SetValue(caption); }
+	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
 	ibValueRadioButton();
 
 	//get title
-	virtual wxString GetControlTitle() const { return GetCaption(); }
+	virtual ibString GetControlTitle() const { return GetCaption(); }
 
 	// The caption in the session's language, and whether it is shown selected.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
@@ -518,10 +518,10 @@ class ibValueRadioButton : public ibValueWindow {
 	virtual bool WriteData(ibDataNode& node) const;
 
 private:
-	ibPropertyCategory* m_categoryRadioButton = ibPropertyObject::CreatePropertyCategory(wxT("RadioButton"), _("Radio button"));
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryRadioButton, wxT("Title"), _("Title"),
-		_("The radio button's caption. Can be written per language."), wxT("Radio button"));
-	ibPropertyBoolean* m_propertySelected = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryRadioButton, wxT("Selected"), _("Selected"),
+	ibPropertyCategory* m_categoryRadioButton = ibPropertyObject::CreatePropertyCategory(ibT("RadioButton"), _("Radio button"));
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryRadioButton, ibT("Title"), _("Title"),
+		_("The radio button's caption. Can be written per language."), ibT("Radio button"));
+	ibPropertyBoolean* m_propertySelected = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryRadioButton, ibT("Selected"), _("Selected"),
 		_("Whether the radio button is shown selected. A radio button has no data source of its own."));
 };
 
@@ -539,8 +539,8 @@ class ibValueStaticLine : public ibValueWindow {
 	virtual bool WriteData(ibDataNode& node) const;
 
 private:
-	ibPropertyCategory* m_categoryStaticLine = ibPropertyObject::CreatePropertyCategory(wxT("StaticLine"), _("Static line"));
-	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categoryStaticLine, wxT("Orient"), _("Orient"),
+	ibPropertyCategory* m_categoryStaticLine = ibPropertyObject::CreatePropertyCategory(ibT("StaticLine"), _("Static line"));
+	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categoryStaticLine, ibT("Orient"), _("Orient"),
 		_("The line's direction: horizontal (the default), separating stacked parts of a form, or vertical, separating side-by-side ones. Set Stretch to Expand for the line to run the full width or height."),
 		wxHORIZONTAL);
 };
@@ -559,14 +559,14 @@ class ibValueSlider : public ibValueWindow {
 	virtual bool WriteData(ibDataNode& node) const;
 
 private:
-	ibPropertyCategory* m_categorySlider = ibPropertyObject::CreatePropertyCategory(wxT("Slider"), _("Slider"));
-	ibPropertyInteger* m_propertyMinValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categorySlider, wxT("MinValue"), _("Min value"),
+	ibPropertyCategory* m_categorySlider = ibPropertyObject::CreatePropertyCategory(ibT("Slider"), _("Slider"));
+	ibPropertyInteger* m_propertyMinValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categorySlider, ibT("MinValue"), _("Min value"),
 		_("The slider's smallest value, at its start. Default 0."), 0);
-	ibPropertyInteger* m_propertyMaxValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categorySlider, wxT("MaxValue"), _("Max value"),
+	ibPropertyInteger* m_propertyMaxValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categorySlider, ibT("MaxValue"), _("Max value"),
 		_("The slider's largest value, at its end. Default 100."), 100);
-	ibPropertyInteger* m_propertyValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categorySlider, wxT("Value"), _("Value"),
+	ibPropertyInteger* m_propertyValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categorySlider, ibT("Value"), _("Value"),
 		_("Where the slider's thumb starts, between the min and max values. Default 50."), 50);
-	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySlider, wxT("Orient"), _("Orient"),
+	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySlider, ibT("Orient"), _("Orient"),
 		_("The slider's direction: horizontal (the default) or vertical."), wxHORIZONTAL);
 };
 
@@ -584,12 +584,12 @@ class ibValueGauge : public ibValueWindow {
 	virtual bool WriteData(ibDataNode& node) const;
 
 private:
-	ibPropertyCategory* m_categoryGauge = ibPropertyObject::CreatePropertyCategory(wxT("Gauge"), _("Gauge"));
-	ibPropertyInteger* m_propertyRange = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryGauge, wxT("Range"), _("Range"),
+	ibPropertyCategory* m_categoryGauge = ibPropertyObject::CreatePropertyCategory(ibT("Gauge"), _("Gauge"));
+	ibPropertyInteger* m_propertyRange = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryGauge, ibT("Range"), _("Range"),
 		_("The value at which the progress bar is full. Default 100, so the value reads as a percentage."), 100);
-	ibPropertyInteger* m_propertyValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryGauge, wxT("Value"), _("Value"),
+	ibPropertyInteger* m_propertyValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryGauge, ibT("Value"), _("Value"),
 		_("How far the progress bar is filled, from 0 to the range. Default 30."), 30);
-	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categoryGauge, wxT("Orient"), _("Orient"),
+	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categoryGauge, ibT("Orient"), _("Orient"),
 		_("The progress bar's direction: horizontal (the default, filling left to right) or vertical."), wxHORIZONTAL);
 };
 

@@ -22,20 +22,20 @@ class ibMetaData;
 // type, whether the options leave it). A configuration that is a tab's (a composer's panel, ibMetaData::GetTabId) asks
 // that tab for `text` — the server parses it; `error` is why it offers none. Otherwise `text` is not read: the fields
 // are the question's.
-FRMCLIENT_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
-	const ibMetaData* metaData, wxString* error = nullptr);
+FRMCLIENT_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
+	const ibMetaData* metaData, ibString* error = nullptr);
 
 // …AND WHAT A TAB'S VIEW ALREADY SAID OF A TEXT — a composer's tab draws its query's Fields and References with the view
 // (and Error): kept here by the tab, so the panel's read of that same text asks nothing; forgotten with the tab.
 class ibProtocolNode;
-FRMCLIENT_API void ibQueryFieldsKnown(long long tabId, const wxString& text, const ibProtocolNode& answer);
+FRMCLIENT_API void ibQueryFieldsKnown(long long tabId, const ibString& text, const ibProtocolNode& answer);
 FRMCLIENT_API void ibQueryFieldsForget(long long tabId);
 
 // A DYNAMIC LIST'S FIELDS on a tab — those of its main table (wxNOT_FOUND: none) and what its query adds, as the desktop's
 // list settings window reads them; asked of the tab (fetch {Tab, Request: {Kind: Source, Id, Text}}) once per main table
 // and text. Off a tab: none.
-FRMCLIENT_API std::vector<struct ibSettingsPlainField> ibListSourceFields(ibMetaID mainTable, const wxString& text,
-	const ibMetaData* metaData, wxString* error = nullptr);
+FRMCLIENT_API std::vector<struct ibSettingsPlainField> ibListSourceFields(ibMetaID mainTable, const ibString& text,
+	const ibMetaData* metaData, ibString* error = nullptr);
 
 // ⭐⭐ THE DESKTOP'S MODEL, UNDER ITS OWN NAME — the windows of win/dlgs/queryConstructor are the desktop's, ported whole,
 // and they ask this class what they ask there. What only the configuration answers is asked of the tab the window was
@@ -57,7 +57,7 @@ public:
 	std::vector<ibQueryConstructorSource> GetSources() const;
 
 	// A kind's class picture, as the server named it (the Sources answer's Kinds); empty: none.
-	wxString KindPicture(const wxString& kind) const;
+	ibString KindPicture(const ibString& kind) const;
 
 	// The desktop's ibQueryLowering::CheckNames and UngroupedProjections, answered by the server (request Check).
 	void CheckNames(const ibQueryPackage& package) const;
@@ -78,12 +78,12 @@ public:
 	// narrow it (an accounting register's account conditions admit ACCOUNTS only — the source consumes
 	// them and folds by them, so a leaf about anything else cannot be applied at all).
 	std::vector<ibQueryConstructorField> GetConditionFields(const ibQuerySource& source,
-	                                                       const wxString& slot = wxEmptyString) const;
+	                                                       const ibString& slot = ibEmptyString) const;
 
 	// A TABLE'S OWN REFERENCE TYPE and the table a reference names — the server's, written with the catalogue
 	// (request Sources: a table's Reference); 0 / empty: not one there.
-	virtual ibClassID ReferenceOfTable(const std::vector<wxString>& path) const override;
-	virtual wxString TableOfReference(ibClassID reference) const override;
+	virtual ibClassID ReferenceOfTable(const std::vector<ibString>& path) const override;
+	virtual ibString TableOfReference(ibClassID reference) const override;
 
 protected:
 

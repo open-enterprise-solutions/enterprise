@@ -3,12 +3,12 @@
 
 
 //base property for "string" — held as its node (ibPropertySerializable::ReadNodeValue)
-wxString ibPropertyStringBase::GetValueAsString() const
+ibString ibPropertyStringBase::GetValueAsString() const
 {
 	return GetNodeValue().AsString();
 }
 
-void ibPropertyStringBase::SetValue(const wxString& strValue)
+void ibPropertyStringBase::SetValue(const ibString& strValue)
 {
 	ibPropertySerializable::ReadNodeValue(ibDataValue::String(strValue));
 }

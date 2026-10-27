@@ -9,7 +9,7 @@
 #include <wx/file.h>
 #include <wx/fileconf.h>
 #include <wx/filename.h>
-#include <wx/tokenzr.h>
+#include "core/stringTokenizer.h"
 #include <wx/utils.h>   // wxGetFullHostName — the server named in an address
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>
@@ -55,13 +55,13 @@ BOOL WINAPI OnConsoleClose(DWORD type)
 // How long a POST to an application server may wait for its answer — the call's work, until it settles.
 constexpr std::chrono::seconds kPostWait(300);
 
-std::string Utf8(const wxString& text)
+std::string Utf8(const ibString& text)
 {
 	return std::string(text.utf8_str());
 }
 
 // A path of web.conf, made absolute against the web folder.
-wxString Beside(const wxString& folder, const wxString& path)
+ibString Beside(const ibString& folder, const ibString& path)
 {
 	if (path.IsEmpty())
 		return path;
@@ -72,17 +72,17 @@ wxString Beside(const wxString& folder, const wxString& path)
 }
 
 // A PEM file, whole; false with why.
-bool ReadPem(const wxString& path, std::string& text, wxString& error)
+bool ReadPem(const ibString& path, std::string& text, ibString& error)
 {
 	wxFile file;
 	if (!ibFileExists(path) || !file.Open(path)) {
-		error = wxString::Format(wxT("%s is not there or not readable"), path);
+		error = ibString::Format(ibT("%s is not there or not readable"), path);
 		return false;
 	}
 	const wxFileOffset length = file.Length();
 	text.assign(static_cast<std::size_t>(length > 0 ? length : 0), '\0');
 	if (length > 0 && file.Read(&text[0], static_cast<size_t>(length)) != length) {
-		error = wxString::Format(wxT("%s could not be read"), path);
+		error = ibString::Format(ibT("%s could not be read"), path);
 		return false;
 	}
 	return true;
@@ -90,12 +90,12 @@ bool ReadPem(const wxString& path, std::string& text, wxString& error)
 
 // THE SITE PACKED — www.wpk, a zip of the site's folder (the build packs src/engine/webserver/www into it): each file
 // by its path in the site, as an address names it; false with why.
-bool ReadPack(const wxString& path, std::map<std::string, std::string>& files, wxString& error)
+bool ReadPack(const ibString& path, std::map<std::string, std::string>& files, ibString& error)
 {
 	wxFileInputStream input(path);
 	wxZipInputStream zip(input, wxConvUTF8);
 	if (!input.IsOk() || !zip.IsOk()) {
-		error = wxString::Format(wxT("%s could not be read"), path);
+		error = ibString::Format(ibT("%s could not be read"), path);
 		return false;
 	}
 	for (std::unique_ptr<wxZipEntry> entry(zip.GetNextEntry()); entry; entry.reset(zip.GetNextEntry())) {
@@ -117,7 +117,7 @@ bool ReadPack(const wxString& path, std::map<std::string, std::string>& files, w
 		files[name] = std::move(data);
 	}
 	if (files.empty()) {
-		error = wxString::Format(wxT("%s holds no file"), path);
+		error = ibString::Format(ibT("%s holds no file"), path);
 		return false;
 	}
 	return true;
@@ -155,9 +155,9 @@ public:
 	{
 		const ibMemoryBuffer packet(data.data(), data.size());
 		ibMemoryBuffer answer;
-		wxString error;
+		ibString error;
 		if (!m_base.Call(packet, this, m_socket->GetRequest().m_address, answer, error)) {
-			ibWebServerSay(ibJournalMark::Error, wxT("a browser's call did not reach its base: %s"), error);
+			ibWebServerSay(ibJournalMark::Error, ibT("a browser's call did not reach its base: %s"), error);
 			m_socket->Close(ibWebSocketClose::ServerError, "the base is not open");
 			return;
 		}
@@ -181,74 +181,74 @@ private:
 //*                                      The config                                         *
 //*******************************************************************************************
 
-bool ibWebConfig::Read(const wxString& folder, wxString& error)
+bool ibWebConfig::Read(const ibString& folder, ibString& error)
 {
 	m_folder = folder;
-	m_root = Beside(folder, wxT("www"));
-	const wxString path = folder + wxFileName::GetPathSeparator() + wxT("web.conf");
+	m_root = Beside(folder, ibT("www"));
+	const ibString path = folder + ibFILE_SEP_PATH + ibT("web.conf");
 	if (!ibFileExists(path))
 		return true;
 
 	// Read as written: a Windows path keeps its backslashes.
-	wxFileConfig conf(wxEmptyString, wxEmptyString, path, wxEmptyString,
+	wxFileConfig conf(ibEmptyString, ibEmptyString, path, ibEmptyString,
 		wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
 
-	const auto port = [&conf, &path, &error](const wxString& key, std::optional<std::uint16_t>& value) {
+	const auto port = [&conf, &path, &error](const ibString& key, std::optional<std::uint16_t>& value) {
 		if (!conf.HasEntry(key))
 			return true;   // left as it was: HTTP on its default, HTTPS as the certificate says (below)
-		const wxString written = conf.Read(key, wxEmptyString).Strip(wxString::both);
+		const ibString written = ibString(conf.Read(key, ibEmptyString)).Strip(ibString::both);
 		if (written.IsEmpty()) {
 			value.reset();
 			return true;
 		}
 		unsigned long number = 0;
 		if (!written.ToULong(&number) || number > 65535) {
-			error = wxString::Format(wxT("%s: %s=%s is not a port"), path, key, written);
+			error = ibString::Format(ibT("%s: %s=%s is not a port"), path, key, written);
 			return false;
 		}
 		value = static_cast<std::uint16_t>(number);
 		return true;
 	};
 
-	m_host = conf.Read(wxT("Host"), m_host).Strip(wxString::both);
-	if (!port(wxT("HttpPort"), m_httpPort) || !port(wxT("HttpsPort"), m_httpsPort))
+	m_host = ibString(conf.Read(ibT("Host"), m_host)).Strip(ibString::both);
+	if (!port(ibT("HttpPort"), m_httpPort) || !port(ibT("HttpsPort"), m_httpsPort))
 		return false;
-	m_certificate = Beside(folder, conf.Read(wxT("Certificate"), wxEmptyString).Strip(wxString::both));
-	m_privateKey = Beside(folder, conf.Read(wxT("PrivateKey"), wxEmptyString).Strip(wxString::both));
+	m_certificate = Beside(folder, ibString(conf.Read(ibT("Certificate"), ibEmptyString)).Strip(ibString::both));
+	m_privateKey = Beside(folder, ibString(conf.Read(ibT("PrivateKey"), ibEmptyString)).Strip(ibString::both));
 	// A certificate named and no HTTPS port said: HTTPS on the web's own (ibPort::WebSecure). Written empty — none.
-	if (!conf.HasEntry(wxT("HttpsPort")) && !m_certificate.IsEmpty())
+	if (!conf.HasEntry(ibT("HttpsPort")) && !m_certificate.IsEmpty())
 		m_httpsPort = ibPort::WebSecure.m_first;
-	const wxString root = conf.Read(wxT("Root"), wxEmptyString).Strip(wxString::both);
+	const ibString root = ibString(conf.Read(ibT("Root"), ibEmptyString)).Strip(ibString::both);
 	if (!root.IsEmpty())
 		m_root = Beside(folder, root);
-	wxStringTokenizer origins(conf.Read(wxT("Origins"), wxEmptyString), wxT(","));
+	ibStringTokenizer origins(conf.Read(ibT("Origins"), ibEmptyString), ibT(","));
 	while (origins.HasMoreTokens()) {
-		const wxString origin = origins.GetNextToken().Strip(wxString::both);
+		const ibString origin = origins.GetNextToken().Strip(ibString::both);
 		if (!origin.IsEmpty())
 			m_origins.push_back(origin);
 	}
-	conf.Read(wxT("Workers"), &m_workers, 0L);
+	conf.Read(ibT("Workers"), &m_workers, 0L);
 
-	wxString group;
+	wxString group;   // wxFileConfig's own: it writes the group's name into it
 	long cookie = 0;
-	std::vector<wxString> groups;
+	std::vector<ibString> groups;
 	for (bool more = conf.GetFirstGroup(group, cookie); more; more = conf.GetNextGroup(group, cookie))
 		groups.push_back(group);
-	for (const wxString& name : groups) {
-		conf.SetPath(wxT("/") + name);
+	for (const ibString& name : groups) {
+		conf.SetPath(ibT("/") + name);
 		ibWebPublication publication;
 		publication.m_name = name;
-		publication.m_kind = conf.Read(wxT("Kind"), wxEmptyString).Strip(wxString::both).Lower();
-		publication.m_directory = Beside(folder, conf.Read(wxT("Directory"), wxEmptyString).Strip(wxString::both));
-		publication.m_locale = conf.Read(wxT("Locale"), wxEmptyString).Strip(wxString::both);
-		conf.Read(wxT("Debug"), &publication.m_debug, false);
-		publication.m_address = conf.Read(wxT("Address"), wxEmptyString).Strip(wxString::both);
-		const wxString trusted = conf.Read(wxT("Trusted"), wxEmptyString).Strip(wxString::both);
+		publication.m_kind = ibString(conf.Read(ibT("Kind"), ibEmptyString)).Strip(ibString::both).Lower();
+		publication.m_directory = Beside(folder, ibString(conf.Read(ibT("Directory"), ibEmptyString)).Strip(ibString::both));
+		publication.m_locale = ibString(conf.Read(ibT("Locale"), ibEmptyString)).Strip(ibString::both);
+		conf.Read(ibT("Debug"), &publication.m_debug, false);
+		publication.m_address = ibString(conf.Read(ibT("Address"), ibEmptyString)).Strip(ibString::both);
+		const ibString trusted = ibString(conf.Read(ibT("Trusted"), ibEmptyString)).Strip(ibString::both);
 		if (!trusted.IsEmpty())
 			publication.m_trusted = Beside(folder, trusted);
-		conf.SetPath(wxT("/"));
-		if (publication.m_kind != wxT("firebird") && publication.m_kind != wxT("server")) {
-			error = wxString::Format(wxT("%s: [%s] Kind=%s - a publication is firebird (a file base) or server"),
+		conf.SetPath(ibT("/"));
+		if (publication.m_kind != ibT("firebird") && publication.m_kind != ibT("server")) {
+			error = ibString::Format(ibT("%s: [%s] Kind=%s - a publication is firebird (a file base) or server"),
 				path, name, publication.m_kind);
 			return false;
 		}
@@ -274,18 +274,18 @@ ibWebServer::~ibWebServer()
 
 bool ibWebServer::Publish(const ibWebPublication& publication)
 {
-	const wxString& name = publication.m_name;
-	if (name.IsEmpty() || name.Find(wxT('/')) != wxNOT_FOUND) {
-		ibWebServerSay(ibJournalMark::Error, wxT("'%s' is not a publication's name - it is a segment of the path"), name);
+	const ibString& name = publication.m_name;
+	if (name.IsEmpty() || name.Find(ibT('/')) != wxNOT_FOUND) {
+		ibWebServerSay(ibJournalMark::Error, ibT("'%s' is not a publication's name - it is a segment of the path"), name);
 		return false;
 	}
 	if (m_bases.count(name) != 0) {
-		ibWebServerSay(ibJournalMark::Error, wxT("publication '%s' is named twice"), name);
+		ibWebServerSay(ibJournalMark::Error, ibT("publication '%s' is named twice"), name);
 		return false;
 	}
 	const std::string path = "/" + Utf8(name) + "/client";
 
-	if (publication.m_kind == wxT("firebird")) {
+	if (publication.m_kind == ibT("firebird")) {
 		// THE FILE BASE, OPENED HERE — the request ibFileBaseOpen reads.
 		ibProtocolNode request;
 		request.SetValue(ibProtocol::ibFileBase::Directory, ibString(publication.m_directory))
@@ -295,9 +295,9 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 		if (publication.m_debug)
 			request.SetValue(ibProtocol::ibFileBase::Debug, true);
 		auto base = std::make_unique<ibProtocolFileBase>();
-		wxString error;
+		ibString error;
 		if (!base->Open(request.Write(), error)) {
-			ibWebServerSay(ibJournalMark::Error, wxT("publication '%s': the file base at %s did not open: %s"), name,
+			ibWebServerSay(ibJournalMark::Error, ibT("publication '%s': the file base at %s did not open: %s"), name,
 				publication.m_directory, error);
 			return false;
 		}
@@ -318,7 +318,7 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 				return;
 			}
 			ibMemoryBuffer packet, answer;
-			wxString error;
+			ibString error;
 			asked.Write(packet);
 			if (!held->Call(packet, nullptr, request.m_address, answer, error))
 				response.m_status = 503;
@@ -329,7 +329,7 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 			else {
 				// The types named where they stand, as the JSON view names them — not a list of them beside.
 				answered.Remove(ibProtocol::ibRpc::Types);
-				answered.SetValue(ibProtocol::ibRpc::Version, ibString(wxT("2.0")));
+				answered.SetValue(ibProtocol::ibRpc::Version, ibString(ibT("2.0")));
 				response.SetText(answered.Write(), "application/json");
 			}
 			respond(std::move(response));
@@ -338,19 +338,19 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 	}
 
 	// AN APPLICATION SERVER'S BASE — reached over its port, for each browser.
-	wxString host, base;
+	ibString host, base;
 	int port = 0;
 	bool secure = false;
 	if (!ibProtocolConnectionServer::ParseAddress(publication.m_address, host, port, base, secure)) {
-		ibWebServerSay(ibJournalMark::Error, wxT("publication '%s': '%s' is not the address of a base: oes://server[:port]/<base> or oess://…"),
+		ibWebServerSay(ibJournalMark::Error, ibT("publication '%s': '%s' is not the address of a base: oes://server[:port]/<base> or oess://…"),
 			name, publication.m_address);
 		return false;
 	}
 	// OVER TLS — whom the web server trusts there (ClientTls), made once for every browser's socket to that server.
 	std::shared_ptr<const ibTlsContext> tls;
-	wxString refused;
+	ibString refused;
 	if (secure && !ibProtocolConnectionServer::ClientTls(publication.m_trusted, tls, refused)) {
-		ibWebServerSay(ibJournalMark::Error, wxT("publication '%s': %s"), name, refused);
+		ibWebServerSay(ibJournalMark::Error, ibT("publication '%s': %s"), name, refused);
 		return false;
 	}
 	const std::string server = Utf8(host);
@@ -362,7 +362,7 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 		const std::string asked = WantsDeflate(socket->GetRequest()) ? target + "?compress=deflate" : target;
 		return std::make_shared<ibWebSocketRelay>(io, server, serverPort, tls, asked, socket,
 			[name](const ibString& reason) {
-				ibWebServerSay(ibJournalMark::Warning, wxT("publication '%s': %s"), name, reason);
+				ibWebServerSay(ibJournalMark::Warning, ibT("publication '%s': %s"), name, reason);
 			});
 	});
 	m_http.Post(path, [&io, server, serverPort, tls, target, name](const ibHttpRequest& request, ibHttpResponder respond) {
@@ -370,7 +370,7 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 			[respond, name](int status, std::string body, const std::string& error) {
 				ibHttpResponse response;
 				if (status == 0) {
-					ibWebServerSay(ibJournalMark::Warning, wxT("publication '%s': %s"), name, wxString::FromUTF8(error));
+					ibWebServerSay(ibJournalMark::Warning, ibT("publication '%s': %s"), name, ibString::FromUTF8(error));
 					response.m_status = 502;
 				}
 				else {
@@ -412,18 +412,18 @@ int ibWebServer::Run()
 	// THE SITE — its folder when there is one (an edit is served at the next request), else its pack beside web.conf,
 	// what a release ships. The same files at / and at each publication's address: a publication's page is the site's
 	// index.html, its socket beside it.
-	const wxString pack = m_config.m_folder + wxFileName::GetPathSeparator() + wxT("www.wpk");
+	const ibString pack = m_config.m_folder + ibFILE_SEP_PATH + ibT("www.wpk");
 	std::map<std::string, std::string> packed;
-	wxString site;
+	ibString site;
 	if (!m_config.m_root.IsEmpty() && ibDirExists(m_config.m_root)) {
 		site = m_config.m_root;
 	}
 	else if (ibFileExists(pack)) {
-		wxString packError;
+		ibString packError;
 		if (ReadPack(pack, packed, packError))
 			site = pack;
 		else
-			ibWebServerSay(ibJournalMark::Error, wxT("%s - the site is not served"), packError);
+			ibWebServerSay(ibJournalMark::Error, ibT("%s - the site is not served"), packError);
 	}
 	if (!site.IsEmpty()) {
 		std::vector<std::string> prefixes = { "/" };
@@ -447,7 +447,7 @@ int ibWebServer::Run()
 		}
 	}
 	if (published == 0 && site.IsEmpty()) {
-		ibWebServerSay(ibJournalMark::Error, wxT("nothing to serve: no publication opened, and no site at %s or %s"),
+		ibWebServerSay(ibJournalMark::Error, ibT("nothing to serve: no publication opened, and no site at %s or %s"),
 			m_config.m_root, pack);
 		Stop();
 		return 1;
@@ -457,45 +457,45 @@ int ibWebServer::Run()
 	options.m_host = Utf8(m_config.m_host);
 	options.m_httpPort = m_config.m_httpPort;
 	options.m_httpsPort = m_config.m_httpsPort;
-	wxString pemError;
+	ibString pemError;
 	if ((!m_config.m_certificate.IsEmpty() && !ReadPem(m_config.m_certificate, options.m_certificate, pemError))
 		|| (!m_config.m_privateKey.IsEmpty() && !ReadPem(m_config.m_privateKey, options.m_privateKey, pemError))) {
-		ibWebServerSay(ibJournalMark::Error, wxT("%s - nothing is served"), pemError);
+		ibWebServerSay(ibJournalMark::Error, ibT("%s - nothing is served"), pemError);
 		Stop();
 		return 1;
 	}
-	for (const wxString& origin : m_config.m_origins)
+	for (const ibString& origin : m_config.m_origins)
 		options.m_origins.push_back(Utf8(origin));
 	options.m_workers = m_config.m_workers > 0 ? static_cast<std::size_t>(m_config.m_workers) : 0;
 
 	std::string refusal;
 	if (!m_http.Start(options, refusal)) {
-		ibWebServerSay(ibJournalMark::Error, wxT("the port did not open: %s - nothing is served"), wxString::FromUTF8(refusal));
+		ibWebServerSay(ibJournalMark::Error, ibT("the port did not open: %s - nothing is served"), ibString::FromUTF8(refusal));
 		Stop();
 		return 1;
 	}
 
 	// WHERE A BROWSER GOES — each port, and each publication on it.
-	const wxString host = m_config.m_host.IsEmpty() ? wxGetFullHostName() : m_config.m_host;
-	std::vector<wxString> origins;
+	const ibString host = m_config.m_host.IsEmpty() ? ibString(wxGetFullHostName()) : m_config.m_host;
+	std::vector<ibString> origins;
 	if (m_http.GetHttpsPort() != 0)
-		origins.push_back(wxString::Format(wxT("https://%s:%u"), host, static_cast<unsigned>(m_http.GetHttpsPort())));
+		origins.push_back(ibString::Format(ibT("https://%s:%u"), host, static_cast<unsigned>(m_http.GetHttpsPort())));
 	if (m_http.GetHttpPort() != 0)
-		origins.push_back(wxString::Format(wxT("http://%s:%u"), host, static_cast<unsigned>(m_http.GetHttpPort())));
-	for (const wxString& origin : origins) {
+		origins.push_back(ibString::Format(ibT("http://%s:%u"), host, static_cast<unsigned>(m_http.GetHttpPort())));
+	for (const ibString& origin : origins) {
 		if (!site.IsEmpty())
-			ibWebServerSay(ibJournalMark::Info, wxT("site %s: %s/"), site, origin);
+			ibWebServerSay(ibJournalMark::Info, ibT("site %s: %s/"), site, origin);
 		for (const auto& entry : m_bases) {
-			wxString socket = origin;
-			socket.Replace(wxT("http"), wxT("ws"), false);
+			ibString socket = origin;
+			socket.Replace(ibT("http"), ibT("ws"), false);
 			if (!site.IsEmpty())
-				ibWebServerSay(ibJournalMark::Info, wxT("publication '%s': %s/%s/, its socket %s/%s/client"), entry.first,
+				ibWebServerSay(ibJournalMark::Info, ibT("publication '%s': %s/%s/, its socket %s/%s/client"), entry.first,
 					origin, entry.first, socket, entry.first);
 			else
-				ibWebServerSay(ibJournalMark::Info, wxT("publication '%s': %s/%s/client"), entry.first, socket, entry.first);
+				ibWebServerSay(ibJournalMark::Info, ibT("publication '%s': %s/%s/client"), entry.first, socket, entry.first);
 		}
 	}
-	ibWebServerSay(ibJournalMark::Info, wxT("serving %u of %u publication(s) - Ctrl+C to stop"),
+	ibWebServerSay(ibJournalMark::Info, ibT("serving %u of %u publication(s) - Ctrl+C to stop"),
 		static_cast<unsigned>(published), static_cast<unsigned>(m_config.m_publications.size()));
 
 	// THE PAGE FOR WHOEVER STARTED IT (ibStartWebServer): the reader takes the line once its end is there. No page —
@@ -503,17 +503,17 @@ int ibWebServer::Run()
 	if (!m_config.m_manifest.IsEmpty() && !site.IsEmpty() && !origins.empty() && !m_config.m_publications.empty()
 		&& m_bases.count(m_config.m_publications.back().m_name) != 0) {
 		wxFile file;
-		if (!file.Create(m_config.m_manifest, true) || !file.Write(wxString::Format(wxT("url=%s/%s/\n"), origins.front(),
+		if (!file.Create(m_config.m_manifest, true) || !file.Write(ibString::Format(ibT("url=%s/%s/\n"), origins.front(),
 			m_config.m_publications.back().m_name), wxConvUTF8))
-			ibWebServerSay(ibJournalMark::Error, wxT("the manifest %s was not written"), m_config.m_manifest);
+			ibWebServerSay(ibJournalMark::Error, ibT("the manifest %s was not written"), m_config.m_manifest);
 	}
 
 	while (s_state.load() == ibServeState::Serving)
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
-	ibWebServerSay(ibJournalMark::Info, wxT("stopping"));
+	ibWebServerSay(ibJournalMark::Info, ibT("stopping"));
 	Stop();
-	ibWebServerSay(ibJournalMark::Info, wxT("stopped"));
+	ibWebServerSay(ibJournalMark::Info, ibT("stopped"));
 	return 0;
 }
 

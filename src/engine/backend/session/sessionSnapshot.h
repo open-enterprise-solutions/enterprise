@@ -31,7 +31,7 @@ class BACKEND_API ibSessionSnapshot {
 	struct Entry {
 
 		Entry(ibRunMode runMode, int kind, const ibDateTime& startedDateTime,
-			const wxString& strUserName, const wxString& strComputerName, const wxString& strSession)
+			const ibString& strUserName, const ibString& strComputerName, const ibString& strSession)
 			: m_runMode(runMode), m_kind(kind), m_startedDate(startedDateTime),
 			  m_strUserName(strUserName), m_strComputerName(strComputerName), m_strSession(strSession)
 		{
@@ -43,12 +43,12 @@ class BACKEND_API ibSessionSnapshot {
 		// frontend code that doesn't otherwise need the registry types).
 		int        m_kind;
 		ibDateTime m_startedDate;
-		wxString   m_strUserName;
-		wxString   m_strComputerName;
-		wxString   m_strSession;
+		ibString   m_strUserName;
+		ibString   m_strComputerName;
+		ibString   m_strSession;
 		// sys_session.currentActivity. Empty when the column is absent. A dropped thin client
 		// says "detached until HH:MM:SS" for the resume window.
-		wxString   m_activity;
+		ibString   m_activity;
 		// Process-wide exclusive (monopoly) flag — true when this row
 		// holds it. Filled in by JobRefreshSnapshot from sys_session.exclusive.
 		bool       m_exclusive = false;
@@ -59,19 +59,19 @@ public:
 	ibSessionSnapshot() : m_sessionArrayHash(wxNewUniqueGuid) {}
 
 	void AppendSession(ibRunMode runMode, int kind, const ibDateTime& startedTime,
-		const wxString& strUserName, const wxString& strComputerName, const wxString& strSession) {
+		const ibString& strUserName, const ibString& strComputerName, const ibString& strSession) {
 		m_listSession.emplace_back(runMode, kind, startedTime, strUserName, strComputerName, strSession);
 	}
 
 	const ibGuid& GetSessionArrayHash() const { return m_sessionArrayHash; }
 
-	wxString GetUserName    (unsigned int idx) const;
-	wxString GetComputerName(unsigned int idx) const;
-	wxString GetSession     (unsigned int idx) const;
-	wxString GetStartedDate (unsigned int idx) const;
-	wxString GetApplication (unsigned int idx) const;
+	ibString GetUserName    (unsigned int idx) const;
+	ibString GetComputerName(unsigned int idx) const;
+	ibString GetSession     (unsigned int idx) const;
+	ibString GetStartedDate (unsigned int idx) const;
+	ibString GetApplication (unsigned int idx) const;
 	// sys_session.currentActivity, or empty. A detached thin client reads "detached until …".
-	wxString GetActivity    (unsigned int idx) const;
+	ibString GetActivity    (unsigned int idx) const;
 
 	void ClearSession() {
 		m_sessionArrayHash = wxNewUniqueGuid;
@@ -86,26 +86,26 @@ public:
 	//   a job → "Job"
 	//   anything else, legacy 0 included → "Client"
 	// Used by designer's Active Users dialog.
-	wxString  GetSessionKindDescr  (unsigned int idx) const;
+	ibString  GetSessionKindDescr  (unsigned int idx) const;
 	unsigned int GetSessionCount() const { return static_cast<unsigned int>(m_listSession.size()); }
 
 	// Back-fill kinds after rows were appended — used by the registry
 	// snapshot builder to tolerate legacy schemas where the `kind`
 	// column lives in a second optional SELECT.
-	void SetKindsFromMap    (const std::unordered_map<wxString, int>&  kindBySession);
+	void SetKindsFromMap    (const std::unordered_map<ibString, int>&  kindBySession);
 	// Back-fill exclusive flags from a second optional SELECT — same
 	// pattern as kinds, tolerant of pre-migration schemas where the
 	// column doesn't exist yet.
-	void SetExclusiveFromMap(const std::unordered_map<wxString, bool>& exclusiveBySession);
-	void SetActivityFromMap (const std::unordered_map<wxString, wxString>& activityBySession);
+	void SetExclusiveFromMap(const std::unordered_map<ibString, bool>& exclusiveBySession);
+	void SetActivityFromMap (const std::unordered_map<ibString, ibString>& activityBySession);
 
 	// Per-row exclusive flag accessor — returns the holder session (the
 	// only one with m_exclusive==true), if any. Used by ProcessAdd's
 	// cross-process exclusive gate and by ProcessSetExclusive's
 	// sole-live check.
 	bool     IsExclusive(unsigned int idx) const;
-	wxString ExclusiveHolderSession() const;
-	wxString ExclusiveHolderUser   () const;
+	ibString ExclusiveHolderSession() const;
+	ibString ExclusiveHolderUser   () const;
 
 	// Cluster-wide aggregate queries. Predicate-style helpers built on
 	// top of the snapshot for callers that don't want to iterate
@@ -122,7 +122,7 @@ public:
 	//   (Designer / WebClient / Enterprise / ...). Useful for admin
 	//   gauges and for predicates like "any designer attached?".
 	bool         HasActiveUsers() const;
-	bool         IsUserActive(const wxString& userName) const;
+	bool         IsUserActive(const ibString& userName) const;
 	unsigned int CountByKind(ibSessionKind kind) const;
 
 private:

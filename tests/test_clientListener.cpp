@@ -75,7 +75,7 @@ const std::string& PingPacket()
 	static const std::string packet = [] {
 		ibDataNode request;
 		request.SetValue(wxT("id"), 1);
-		request.SetValue(wxT("method"), wxString(wxT("ping")));
+		request.SetValue(wxT("method"), ibString(wxT("ping")));
 		ibMemoryBuffer bytes;
 		ibBinaryProvider().Write(request, bytes);
 		return std::string(static_cast<const char*>(bytes.GetData()), bytes.GetDataLen());
@@ -178,9 +178,9 @@ bool Hold(std::unique_ptr<httplib::ws::WebSocketClient>& client, const std::stri
 
 bool Bind(ibClientListener& listener, ibClientHost& host, unsigned short& port, std::string& url)
 {
-	std::map<wxString, ibClientHost*> hosts;
+	std::map<ibString, ibClientHost*> hosts;
 	hosts[wxT("demo")] = &host;
-	wxString refusal;
+	ibString refusal;
 	if (!listener.Start(ibPortRange{ port, 100 }, port, std::move(hosts), refusal))
 		return false;
 	url = "ws://127.0.0.1:" + std::to_string(port) + "/demo/client";
@@ -203,7 +203,7 @@ void StopWithin(ibClientListener& listener)
 }
 
 struct RestoreCwd {
-	wxString saved;
+	ibString saved;
 	RestoreCwd() : saved(wxGetCwd()) {}
 	~RestoreCwd() { wxSetWorkingDirectory(saved); }
 };
@@ -224,12 +224,12 @@ TEST(ClientConnections, AbsentOrZeroMeansOneThousand) {
 	EXPECT_EQ(ibApplicationHost::ReadCount(empty, wxT("backend.conf"), wxT("ClientConnections"), 1, 1000),
 		static_cast<std::size_t>(1000));
 
-	const wxString path = wxFileName(wxStandardPaths::Get().GetTempDir(),
+	const ibString path = wxFileName(wxStandardPaths::Get().GetTempDir(),
 		wxT("oes-client-connections.conf")).GetFullPath();
 	{
 		wxFile file;
 		ASSERT_TRUE(file.Create(path, true));
-		ASSERT_TRUE(file.Write(wxString(wxT("ClientConnections=40\n"))));
+		ASSERT_TRUE(file.Write(ibString(wxT("ClientConnections=40\n"))));
 	}
 	wxFileConfig forty(wxT(""), wxT(""), wxT(""), path);
 	EXPECT_EQ(ibApplicationHost::ReadCount(forty, wxT("backend.conf"), wxT("ClientConnections"), 1, 1000),
@@ -239,7 +239,7 @@ TEST(ClientConnections, AbsentOrZeroMeansOneThousand) {
 	{
 		wxFile file;
 		ASSERT_TRUE(file.Create(path, true));
-		ASSERT_TRUE(file.Write(wxString(wxT("ClientConnections=0\n"))));
+		ASSERT_TRUE(file.Write(ibString(wxT("ClientConnections=0\n"))));
 	}
 	wxFileConfig zero(wxT(""), wxT(""), wxT(""), path);
 	EXPECT_EQ(ibApplicationHost::ReadCount(zero, wxT("backend.conf"), wxT("ClientConnections"), 1, 1000),
@@ -260,9 +260,9 @@ TEST(ClientListener, MoreConnectionsThanTheOldPoolAllGetAReply) {
 	ibClientHost host(nullptr);
 	ibClientListener listener;
 	unsigned short port = 28173;
-	std::map<wxString, ibClientHost*> hosts;
+	std::map<ibString, ibClientHost*> hosts;
 	hosts[wxT("demo")] = &host;
-	wxString refusal;
+	ibString refusal;
 	ASSERT_TRUE(listener.Start(ibPortRange{ port, 100 }, port, std::move(hosts), refusal))
 		<< refusal.ToStdString();
 
@@ -320,13 +320,13 @@ TEST(ClientConnections, ReadFromTheFileTheServerReads) {
 	WxReady();
 	RestoreCwd cwd;
 	RestoreHost host;
-	const wxString dir = wxFileName(wxStandardPaths::Get().GetTempDir(),
-		wxString::Format(wxT("oes-cc-%ld"), static_cast<long>(wxGetProcessId()))).GetFullPath();
+	const ibString dir = wxFileName(wxStandardPaths::Get().GetTempDir(),
+		ibString::Format(wxT("oes-cc-%ld"), static_cast<long>(wxGetProcessId()))).GetFullPath();
 	wxMkdir(dir);
 	ASSERT_TRUE(wxSetWorkingDirectory(dir));
 
 	// A fresh process each time: the file is read once, when the host is made.
-	const auto expect = [&](const wxString& body, std::size_t want) {
+	const auto expect = [&](const ibString& body, std::size_t want) {
 		struct Guard {
 			~Guard()
 			{
@@ -360,14 +360,14 @@ TEST(ClientListener, RefusesTheConnectionOnceTheCeilingIsBusy) {
 	WxReady();
 	RestoreCwd cwd;
 	RestoreHost process;
-	const wxString dir = wxFileName(wxStandardPaths::Get().GetTempDir(),
-		wxString::Format(wxT("oes-cc-ceiling-%ld"), static_cast<long>(wxGetProcessId()))).GetFullPath();
+	const ibString dir = wxFileName(wxStandardPaths::Get().GetTempDir(),
+		ibString::Format(wxT("oes-cc-ceiling-%ld"), static_cast<long>(wxGetProcessId()))).GetFullPath();
 	wxMkdir(dir);
 	ASSERT_TRUE(wxSetWorkingDirectory(dir));
 	{
 		wxFile file;
 		ASSERT_TRUE(file.Create(dir + wxFILE_SEP_PATH + wxT("backend.conf"), true));
-		ASSERT_TRUE(file.Write(wxString(wxT("ClientConnections=2\n"))));
+		ASSERT_TRUE(file.Write(ibString(wxT("ClientConnections=2\n"))));
 	}
 	ASSERT_TRUE(ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE));
 	ASSERT_EQ(ibApplicationHost::Get()->GetClientConnections(), static_cast<std::size_t>(2));

@@ -369,7 +369,7 @@ public:
 		// Lazy name->index acceleration for FindProp / FindMethod (the runtime
 		// hot path — every Obj.Attr / obj.Method() resolves a name). Keyed on
 		// the name as declared, ordered by ibStringCaseFoldLess — the folding of
-		// CompareString, so a lookup is case-insensitive and reads the two buffers
+		// IsSameAs, so a lookup is case-insensitive and reads the two buffers
 		// in place: no upper-cased copy of the asked name on every call (a posting
 		// that resolves a few million names spent a minute there, stack samples
 		// 2026-09-14, Debug). value = the FIRST matching vector index, so the result
@@ -520,7 +520,7 @@ public:
 			static_assert(std::is_base_of<M, C>::value || std::is_same<M, C>::value,
 				"Bind: the filler's class must be the object's class or a base of it");
 			wxASSERT_MSG(static_cast<const void*>(static_cast<const ibValue*>(obj)) == static_cast<const void*>(obj),
-				wxT("ibValue must be the FIRST base (offset 0) of a member-binding class - see PROJECT INVARIANT above; make the ibValue-holding base first"));
+				ibT("ibValue must be the FIRST base (offset 0) of a member-binding class - see PROJECT INVARIANT above; make the ibValue-holding base first"));
 			AddBinder(ibBoundNames{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) });
 		}
 		template<class C, class M>
@@ -693,7 +693,7 @@ public:
 
 		// 3-bool variant — same as legacy plus explicit `scoped`.
 		// Out-of-line so the symbol is properly exported from
-		// backend.dll for wfrontend / other consumers (otherwise MSVC
+		// backend.dll for frmserver / other consumers (otherwise MSVC
 		// in Debug emits __imp_ stubs that the inline body can't
 		// satisfy across the DLL boundary).
 		long AppendProp(const ibString& strPropName, bool readable, bool writable, bool scoped, const long lPropNum, const long lPropAlias);
@@ -703,7 +703,7 @@ public:
 		inline long AppendProp(const ibString& strPropName, unsigned int flags, const long lPropNum, const long lPropAlias) {
 
 			//auto iterator = std::find_if(m_props.begin(), m_props.end(),
-			//	[strPropName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strPropName); });
+			//	[strPropName](const auto& f) { return stringUtils::IsSameAs(f.m_fieldName, strPropName); });
 			//if (iterator != m_props.end())
 			//	return std::distance(m_props.begin(), iterator);
 
@@ -722,7 +722,7 @@ public:
 		void RemoveProp(const ibString& strPropName) {
 			m_props.erase(
 				std::remove_if(m_props.begin(), m_props.end(), [&strPropName](const auto& f) {
-					return stringUtils::CompareString(f.m_fieldName, strPropName); }), m_props.end());
+					return stringUtils::IsSameAs(f.m_fieldName, strPropName); }), m_props.end());
 			MarkPropDirty();
 		}
 
@@ -734,7 +734,7 @@ public:
 				return it != idx.end() ? it->second : wxNOT_FOUND;
 			}
 			auto iterator = std::find_if(m_props.begin(), m_props.end(),
-				[&strPropName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strPropName); }
+				[&strPropName](const auto& f) { return stringUtils::IsSameAs(f.m_fieldName, strPropName); }
 			);
 			if (iterator != m_props.end())
 				return (long)std::distance(m_props.begin(), iterator);
@@ -786,7 +786,7 @@ public:
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		inline long AppendProc(const ibString& strMethodName) { return AppendMethod(strMethodName, wxEmptyString, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName) { return AppendMethod(strMethodName, ibEmptyString, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
 		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
 		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, false, lMethodNum, lMethodAlias); }
 		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
@@ -794,7 +794,7 @@ public:
 		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, wxNOT_FOUND); }
 		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
 
-		inline long AppendFunc(const ibString& strMethodName) { return AppendMethod(strMethodName, wxEmptyString, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName) { return AppendMethod(strMethodName, ibEmptyString, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
 		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
 		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, wxNOT_FOUND); }
 		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, true, lMethodNum, lMethodAlias); }
@@ -802,12 +802,12 @@ public:
 		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, lMethodAlias); }
 		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
 
-		inline long AppendMethod(const ibString& strMethodName, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, wxEmptyString, paramCount, hasRet, lMethodNum, lMethodAlias); }
+		inline long AppendMethod(const ibString& strMethodName, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, ibEmptyString, paramCount, hasRet, lMethodNum, lMethodAlias); }
 
 		inline long AppendMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) {
 
 			//auto iterator = std::find_if(m_methods.begin(), m_methods.end(),
-			//	[strMethodName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strMethodName); });
+			//	[strMethodName](const auto& f) { return stringUtils::IsSameAs(f.m_fieldName, strMethodName); });
 			//if (iterator != m_methods.end())
 			//	return std::distance(m_methods.begin(), iterator);
 
@@ -826,7 +826,7 @@ public:
 		void RemoveMethod(const ibString& strMethodName) {
 			m_methods.erase(
 				std::remove_if(m_methods.begin(), m_methods.end(), [&strMethodName](const auto& f) {
-					return stringUtils::CompareString(f.m_fieldName, strMethodName); }), m_methods.end());
+					return stringUtils::IsSameAs(f.m_fieldName, strMethodName); }), m_methods.end());
 			MarkMethodDirty();
 		}
 
@@ -838,7 +838,7 @@ public:
 				return it != idx.end() ? it->second : wxNOT_FOUND;
 			}
 			auto iterator = std::find_if(m_methods.begin(), m_methods.end(), [&strMethodName](const auto& f) {
-				return stringUtils::CompareString(f.m_fieldName, strMethodName); });
+				return stringUtils::IsSameAs(f.m_fieldName, strMethodName); });
 
 			if (iterator != m_methods.end())
 				return (long)std::distance(m_methods.begin(), iterator);
@@ -922,8 +922,8 @@ public:
 	// became Boolean TRUE. Same trap, same shape, as the const ibValue* overload below.
 	ibValue(const char* sParam); //string
 	ibValue(const wchar_t* sParam); //string
-	ibValue(const wxStringImpl& sParam); //string
-	ibValue(const wxString& sParam); //string
+	ibValue(const std::wstring& sParam); //string
+	ibValue(const ibString& sParam); //string
 	ibValue(ibString&& sParam); //string — native move (runtime string functions)
 
 	// A CONSTANT AS THE TRANSLATOR READ IT (ibLexem::m_valData) — the door through which the compiler
@@ -1011,7 +1011,7 @@ public:
 	void operator = (double cParam);
 	void operator = (const ibNumber& cParam);
 	void operator = (const ibDateTime& cParam);
-	void operator = (const wxString& cParam);
+	void operator = (const ibString& cParam);
 	// Character pointers — see the ctor note above. A string literal or wxEmptyString
 	// on the right-hand side has no wxString overload to bind to without these, and
 	// pointer-to-bool wins the resolution.
@@ -1127,7 +1127,7 @@ public:
 		const ibClassID& clsid = GetTypeIDByRef(typeInfo);
 		return CreateObject(clsid, paParams, lSizeArray);
 	}
-	static ibValue CreateObject(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) {
+	static ibValue CreateObject(const ibString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) {
 		const ibClassID& clsid = GetIDObjectFromString(className);
 		return CreateObject(clsid, paParams, lSizeArray);
 	}
@@ -1145,31 +1145,31 @@ public:
 
 	static void RegisterCtor(ibCtorAbstractType* typeCtor);
 	static void UnRegisterCtor(ibCtorAbstractType*& typeCtor);
-	static void UnRegisterCtor(const wxString& className);
+	static void UnRegisterCtor(const ibString& className);
 
 	// (No unregister-by-clsid and no name invalidation here on purpose: THIS registry holds the
 	//  STATIC types, whose names are compile-time constants and cannot drift. The metaobject types
 	//  — the ones whose name is computed from a renameable object — live in the metadata's own
 	//  registry, which is where both live: ibMetaData::UnRegisterCtor / InvalidateCtorNames.)
 
-	static bool IsRegisterCtor(const wxString& className);
-	static bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType);
+	static bool IsRegisterCtor(const ibString& className);
+	static bool IsRegisterCtor(const ibString& className, ibCtorObjectType objectType);
 	static bool IsRegisterCtor(const ibClassID& clsid);
 
 	static ibClassID GetTypeIDByRef(const std::type_info& typeInfo);
 	static ibClassID GetTypeIDByRef(const ibValue* objectRef);
 
-	static ibClassID GetIDObjectFromString(const wxString& className);
-	static bool CompareObjectName(const wxString& className, ibValueTypes valueType) {
-		return stringUtils::CompareString(className, GetNameObjectFromVT(valueType));
+	static ibClassID GetIDObjectFromString(const ibString& className);
+	static bool CompareObjectName(const ibString& className, ibValueTypes valueType) {
+		return stringUtils::IsSameAs(className, GetNameObjectFromVT(valueType));
 	}
 
-	static wxString GetNameObjectFromID(const ibClassID& clsid, bool upper = false);
-	static wxString GetNameObjectFromVT(ibValueTypes valueType, bool upper = false);
+	static ibString GetNameObjectFromID(const ibClassID& clsid, bool upper = false);
+	static ibString GetNameObjectFromVT(ibValueTypes valueType, bool upper = false);
 	static ibValueTypes GetVTByID(const ibClassID& clsid);
 	static ibClassID GetIDByVT(const ibValueTypes& valueType);
 
-	static ibCtorAbstractType* GetAvailableCtor(const wxString& className);
+	static ibCtorAbstractType* GetAvailableCtor(const ibString& className);
 	static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
 	static ibCtorAbstractType* GetAvailableCtor(const std::type_info& typeInfo);
 
@@ -1186,8 +1186,8 @@ public:
 	static std::vector<ibCtorAbstractType*> GetListCtorsByType(ibCtorObjectType objectType = ibCtorObjectType::ibCtorObjectType_object_value);
 
 	//static event 
-	static void OnRegisterObject(const wxString& className, ibCtorAbstractType* typeCtor) {}
-	static void OnUnRegisterObject(const wxString& className) {}
+	static void OnRegisterObject(const ibString& className, ibCtorAbstractType* typeCtor) {}
+	static void OnUnRegisterObject(const ibString& className) {}
 
 	//factory version 
 	static unsigned int GetFactoryCountChanges();
@@ -1248,7 +1248,7 @@ public:
 	// an empty reference (type chosen, no guid) and Undefined are NOT it.
 	bool IsNull() const { return GetType() == ibValueTypes::TYPE_NULL; }
 
-	virtual wxString GetClassName() const;
+	virtual ibString GetClassName() const;
 	virtual ibClassID GetClassType() const;
 
 	// May this value cross into ANOTHER session?
@@ -1302,10 +1302,10 @@ public:
 
 	virtual void SetValue(const ibValue& varValue);
 
-	virtual bool SetBoolean(const wxString& strValue);
-	virtual bool SetNumber(const wxString& strValue);
-	virtual bool SetDate(const wxString& strValue);
-	virtual bool SetString(const wxString& strValue);
+	virtual bool SetBoolean(const ibString& strValue);
+	virtual bool SetNumber(const ibString& strValue);
+	virtual bool SetDate(const ibString& strValue);
+	virtual bool SetString(const ibString& strValue);
 	virtual bool SetString(ibString&& strValue);   // native — steals the buffer, no wxString round-trip
 	// Character pointers — the same trap the ctor note above describes, one door further along.
 	// With only the two overloads above visible, a string literal reaches EITHER of them through
@@ -1314,10 +1314,10 @@ public:
 	// and operator= closed this by declaring the pointer forms; the setter had not.
 	// Non-virtual on purpose: they forward to the virtual wxString overload, so a derived type
 	// still decides what a string assignment means.
-	bool SetString(const char* sParam) { return SetString(wxString(sParam)); }
-	bool SetString(const wchar_t* sParam) { return SetString(wxString(sParam)); }
+	bool SetString(const char* sParam) { return SetString(ibString(sParam)); }
+	bool SetString(const wchar_t* sParam) { return SetString(ibString(sParam)); }
 
-	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const;
+	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const;
 
 	void SetData(const ibValue& varValue); //setting the value without changing the type
 

@@ -1,6 +1,7 @@
 #include "core/spreadsheet/sheetFormat.h"
 
-#include <wx/filename.h>
+#include "core/fileSystem.h"   // ibPathOf — std::filesystem reads the extension
+
 #include <wx/wfstream.h>
 
 // ⭐⭐ THE REGISTRY — filled by the formats themselves, never edited here.
@@ -34,11 +35,11 @@ const std::vector<const ibSheetFormat*>& ibSheetFormats()
 	return Registry();
 }
 
-const ibSheetFormat* ibSheetFormatFor(const wxString& fileName)
+const ibSheetFormat* ibSheetFormatFor(const ibString& fileName)
 {
 	// BY EXTENSION, and case-blind: a file arrives as .XLSX from one mail client and
 	// .xlsx from the next, and they are the same file.
-	const wxString extension = wxFileName(fileName).GetExt();
+	const ibString extension = ibString(ibPathOf(fileName).extension().wstring()).Mid(1);
 	if (extension.IsEmpty())
 		return nullptr;
 
@@ -51,27 +52,27 @@ const ibSheetFormat* ibSheetFormatFor(const wxString& fileName)
 
 // ⚠ WHAT CAN BE OPENED, not what exists. A write-only format (Word today, PDF
 // next) must not appear under Open — see ibSheetFormat::CanRead.
-wxString ibSheetFormatMask()
+ibString ibSheetFormatMask()
 {
-	wxString mask;
+	ibString mask;
 	for (const ibSheetFormat* format : ibSheetFormats()) {
 		if (!format->CanRead())
 			continue;
 		if (!mask.IsEmpty())
-			mask += wxT(";");
-		mask += wxT("*.") + format->GetExtension();
+			mask += ibT(";");
+		mask += ibT("*.") + format->GetExtension();
 	}
 	return mask;
 }
 
-wxString ibSheetFormatExtensions()
+ibString ibSheetFormatExtensions()
 {
-	wxString extensions;
+	ibString extensions;
 	for (const ibSheetFormat* format : ibSheetFormats()) {
 		if (!format->CanRead())
 			continue;
 		if (!extensions.IsEmpty())
-			extensions += wxT(";");
+			extensions += ibT(";");
 		extensions += format->GetExtension();
 	}
 	return extensions;
@@ -79,27 +80,27 @@ wxString ibSheetFormatExtensions()
 
 // …and the other direction, as the NAMED LINES a save dialog offers. Our own
 // format first, because that is the one a person means when they just press Save.
-wxString ibSheetFormatSaveFilter()
+ibString ibSheetFormatSaveFilter()
 {
-	wxString filter;
+	ibString filter;
 	for (const ibSheetFormat* format : ibSheetFormats()) {
 		if (!format->CanWrite())
 			continue;
 		if (!filter.IsEmpty())
-			filter += wxT("|");
-		filter += wxString::Format(wxT("%s (*.%s)|*.%s"),
+			filter += ibT("|");
+		filter += ibString::Format(ibT("%s (*.%s)|*.%s"),
 			format->GetName(), format->GetExtension(), format->GetExtension());
 	}
 	return filter;
 }
 
-bool ibSheetFormat::ReadFile(const wxString& fileName, ibSpreadsheetDescription& sheet) const
+bool ibSheetFormat::ReadFile(const ibString& fileName, ibSpreadsheetDescription& sheet) const
 {
 	wxFileInputStream file(fileName);
 	return file.IsOk() && Read(file, sheet);
 }
 
-bool ibSheetFormat::WriteFile(const wxString& fileName, const ibSpreadsheetDescription& sheet) const
+bool ibSheetFormat::WriteFile(const ibString& fileName, const ibSpreadsheetDescription& sheet) const
 {
 	wxFileOutputStream file(fileName);
 	if (!file.IsOk() || !Write(file, sheet))

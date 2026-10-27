@@ -320,7 +320,7 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 
 			const ibSpreadsheetFillType type = GetTypeString(row, col);
 			if (type == ibSpreadsheetFillType_StrText || type == ibSpreadsheetFillType_StrTemplate)
-				ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), m_data[row][col], s);
+				s = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), m_data[row][col]);
 			else if (type == ibSpreadsheetFillType_StrParameter)
 				s = m_data[row][col];
 		}
@@ -371,7 +371,7 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 		// For user defined types
 		virtual void SetValueAsCustom(int row, int col, const wxString& typeName, void* value) {
 
-			if (value && stringUtils::CompareString(typeName, s_strTypeTextOrString)) {
+			if (value && stringUtils::IsSameAs(typeName, s_strTypeTextOrString)) {
 				const wxString* s = static_cast<wxString*>(value);
 				auto iterator = std::find_if(m_setColRowType.begin(), m_setColRowType.end(),
 					[row, col](const auto& value) { return value.m_row == row && value.m_col == col; });
@@ -379,7 +379,7 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 					m_setColRowType.erase(iterator);
 				ibGridEditorStringTable::SetValue(row, col, *s);
 			}
-			else if (value && stringUtils::CompareString(typeName, s_strTypeTemplate)) {
+			else if (value && stringUtils::IsSameAs(typeName, s_strTypeTemplate)) {
 				const wxString* s = static_cast<wxString*>(value);
 				auto iterator = std::find_if(m_setColRowType.begin(), m_setColRowType.end(),
 					[row, col](const auto& value) { return value.m_row == row && value.m_col == col; });
@@ -389,7 +389,7 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 					iterator->m_fillType = ibSpreadsheetFillType_StrTemplate;
 				ibGridEditorStringTable::SetValue(row, col, *s);
 			}
-			else if (value && stringUtils::CompareString(typeName, s_strTypeParameter)) {
+			else if (value && stringUtils::IsSameAs(typeName, s_strTypeParameter)) {
 				const wxString* s = static_cast<wxString*>(value);
 				auto iterator = std::find_if(m_setColRowType.begin(), m_setColRowType.end(),
 					[row, col](const auto& value) { return value.m_row == row && value.m_col == col; });
@@ -417,15 +417,13 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 			// them. The stored form of a plain text is the language in force (CreateLocalizationRawLocText),
 			// which the text fills used to take apart by hand and lost: a cell holding plain text came back empty.
 			const ibSpreadsheetFillType typeFill = GetTypeString(row, col);
-			if (stringUtils::CompareString(typeName, s_strTypeTextOrString)
-				|| stringUtils::CompareString(typeName, s_strTypeTemplate)) {
+			if (stringUtils::IsSameAs(typeName, s_strTypeTextOrString)
+				|| stringUtils::IsSameAs(typeName, s_strTypeTemplate)) {
 				return new wxString(ibLocalization::CreateLocalizationRawLocText(ibBackendLocalization::GetUserLanguage(), m_data[row][col]));
 			}
-			else if (stringUtils::CompareString(typeName, s_strTypeParameter)) {
+			else if (stringUtils::IsSameAs(typeName, s_strTypeParameter)) {
 				if (typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText || typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate) {
-					wxString* s = new wxString;
-					ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), m_data[row][col], *s);
-					return s;
+					return new wxString(ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), m_data[row][col]));
 				}
 				return new wxString(m_data[row][col]);
 			}
@@ -564,8 +562,8 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 		virtual bool IsEditable() const { return m_view->IsEditable(); }
 
 		//system override 
-		virtual wxString GetObjectTypeName() const override { return s_strPropertyClass; }
-		virtual wxString GetClassName() const { return s_strPropertyClass; }
+		virtual ibString GetObjectTypeName() const override { return s_strPropertyClass; }
+		virtual ibString GetClassName() const override { return s_strPropertyClass; }
 
 		/// Gets the metadata object
 		virtual ibMetaData* GetMetaData() const;
@@ -629,7 +627,7 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 
 		ibPropertyCategory* m_categoryAppearance = ibPropertyObject::CreatePropertyCategory(wxT("Appearance"), _("Appearance"));
 		ibPropertyFont* m_propertyFont = ibPropertyObject::CreateProperty<ibPropertyFont>(m_categoryAppearance, wxT("Font"), _("Font"),
-			_("The font of the cell's text. Unset: the document's default font."));
+			_("The font of the cell's text. Unset: the document's default font."), wxNullFont);
 		ibPropertyColour* m_propertyBackgroundColour = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryAppearance, wxT("Background_colour"), _("Background colour"),
 			_("The cell's fill colour, on screen and in print. Unset: no fill."), wxNullColour);
 		ibPropertyColour* m_propertyTextColour = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryAppearance, wxT("Text_colour"), _("Text colour"),

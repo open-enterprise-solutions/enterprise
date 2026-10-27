@@ -224,8 +224,8 @@ private:
 	// (OK in the settings window, a variant, the shelf, a script's Sort) and the report waits for Compose, as a report does.
 	std::optional<ibSettingsDescription> m_composedSettings;
 
-	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertySource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"),
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
+	ibPropertySource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, ibT("Source"), _("Source"),
 		_("The form attribute the grid shows: a spreadsheet document, or a composition (a report) whose result the grid displays. Empty: the grid keeps a spreadsheet document of its own."));
 
 	// ⭐⭐ COMPOSE ON OPEN — the report builds itself as the control is first shown, with no press of
@@ -242,7 +242,7 @@ private:
 	// sent passes through there, and a report that re-read itself on each of them would be reading the
 	// database because a form was drawn again.
 	ibPropertyBoolean*  m_propertyComposeOnOpen = ibPropertyObject::CreateProperty<ibPropertyBoolean>(
-		m_categoryData, wxT("ComposeOnOpen"), _("Compose on open"),
+		m_categoryData, ibT("ComposeOnOpen"), _("Compose on open"),
 		_("Whether a report bound to the grid builds itself once when the control is created, without the user pressing Compose. Off (the default) suits a report whose parameters are set first; on suits one with nothing left to ask, such as a report on a desktop."),
 		false);
 
@@ -263,10 +263,10 @@ private:
 	//
 	// ⚠ `StandardProcessing` cleared takes the default away entirely: no choice, no value opened. The
 	// row and the column travel because a handler doing its own thing must know WHICH cell was hit.
-	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
+	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
 	ibEventControl*     m_eventOnDetailProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent,
-		wxT("OnDetailProcessing"), _("On detail processing"), _("When a cell is clicked - before its value is opened or detailed"),
-		wxArrayString{ wxT("Control"), wxT("Row"), wxT("Column"), wxT("StandardProcessing") });
+		ibT("OnDetailProcessing"), _("On detail processing"), _("When a cell is clicked - before its value is opened or detailed"),
+		std::vector<ibString>{ ibT("Control"), ibT("Row"), ibT("Column"), ibT("StandardProcessing") });
 
 	// A click on a cell, forwarded to the event above — the client's Cell event (OnClientEvent). Row and
 	// column count from 0 here, as the sheet counts them and as the handler has always been given them.
@@ -280,12 +280,12 @@ private:
 	// field of their own — it becomes the single grouping, and the context stays the filter.
 	//
 	// Both live in gridBoxDetail.cpp — the click is one thing, the composition it opens is another.
-	void ShowCellDetail(int row, int col, const wxString& byPath = wxEmptyString);
+	void ShowCellDetail(int row, int col, const ibString& byPath = ibEmptyString);
 
 	// …and WHICH fields this cell can be broken down by: appends a "Detail by" submenu, one item per
 	// field, ids running from `firstId`, and returns the paths index-aligned with them. Empty = nothing
 	// worth offering, and then nothing is appended.
-	std::vector<wxString> AppendDetailByMenu(std::vector<ibMenuItem>& menu, std::int32_t firstId, int row, int col) const;
+	std::vector<ibString> AppendDetailByMenu(std::vector<ibMenuItem>& menu, std::int32_t firstId, int row, int col) const;
 };
 
 // A SHEET AS A CLIENT DRAWS IT — the box's, and a spreadsheet document's in a tab of its own (ibSheetView):

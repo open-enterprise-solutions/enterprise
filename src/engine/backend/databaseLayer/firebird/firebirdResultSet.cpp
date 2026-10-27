@@ -58,7 +58,7 @@ bool ibDatabaseResultSetFirebird::Next()
 		// throws it as one); written first as an error, it put an error window in front of the person who had
 		// just closed the report (a debug build shows its error lines) and a crash dump beside it (2026-09-11).
 		if (GetErrorCode() != DATABASE_LAYER_QUERY_CANCELLED)
-			ibJournalError(wxT("db.firebird"),wxT("Error retrieving Next record\n"));
+			ibJournalError(ibT("db.firebird"),ibT("Error retrieving Next record\n"));
 		ThrowDatabaseException();
 		return false;
 	}
@@ -149,7 +149,7 @@ ibString ibDatabaseResultSetFirebird::GetResultString(int nField)
 
 	// Incompatible field type
 	// Set error codes and throw an exception here
-	SetErrorMessage(wxT("Invalid field type"));
+	SetErrorMessage(ibT("Invalid field type"));
 	SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
 
 	ThrowDatabaseException();
@@ -207,7 +207,7 @@ long long ibDatabaseResultSetFirebird::GetResultLong(int nField)
 			// We should really set error codes and throw an exception here
 			nReturn = 0;
 
-			SetErrorMessage(wxT("Invalid field type"));
+			SetErrorMessage(ibT("Invalid field type"));
 			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
 
 			ThrowDatabaseException();
@@ -292,7 +292,7 @@ ibDateTime ibDatabaseResultSetFirebird::GetResultDate(int nField)
 			// Set error codes and throw an exception here
 			dateReturn = ibDateTime();
 
-			SetErrorMessage(wxT("Invalid field type"));
+			SetErrorMessage(ibT("Invalid field type"));
 			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
 
 			ThrowDatabaseException();
@@ -354,7 +354,7 @@ double ibDatabaseResultSetFirebird::GetResultDouble(int nField)
 			// Set error codes and throw an exception here
 			dblReturn = 0.00;
 
-			SetErrorMessage(wxT("Invalid field type"));
+			SetErrorMessage(ibT("Invalid field type"));
 			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
 
 			ThrowDatabaseException();
@@ -428,7 +428,7 @@ ibNumber ibDatabaseResultSetFirebird::GetResultNumber(int nField)
 			// Set error codes and throw an exception here
 			dblReturn = ibNumber();
 
-			SetErrorMessage(wxT("Invalid field type"));
+			SetErrorMessage(ibT("Invalid field type"));
 			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
 
 			ThrowDatabaseException();
@@ -538,7 +538,7 @@ void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, ibMemoryBuffer& buf
 			tempBuffer.SetDataLen(0);
 			buffer = tempBuffer;
 
-			SetErrorMessage(wxT("Invalid field type"));
+			SetErrorMessage(ibT("Invalid field type"));
 			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
 
 			ThrowDatabaseException();
@@ -686,7 +686,7 @@ void ibDatabaseResultSetFirebird::PopulateFieldLookupMap()
 // field: 17 % of a forty-thousand-employee payroll's posting sat here (MEASURED 2026-09-11, Release, stack
 // samples). One lookup instead — and of the name AS ASKED: an upper-cased copy per lookup was the next
 // cost down the same path, so the map ignores case itself (StringToIntMap, databaseResultSet.h).
-int ibDatabaseResultSetFirebird::LookupField(const wxString& strField)
+int ibDatabaseResultSetFirebird::LookupField(const ibString& strField)
 {
 	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
 
@@ -698,8 +698,8 @@ int ibDatabaseResultSetFirebird::LookupField(const wxString& strField)
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
-			/*sqlState*/ wxEmptyString,
-			wxT("Field '") + strField + wxT("' not found in the resultset"));
+			/*sqlState*/ ibEmptyString,
+			ibT("Field '") + strField + ibT("' not found in the resultset"));
 	}
 	else
 	{

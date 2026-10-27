@@ -17,17 +17,17 @@ public:
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
 
-	ibPropertyGeneration(ibPropertyCategory* cat, const wxString& name)
+	ibPropertyGeneration(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyGeneration(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyGeneration(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyGeneration(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyGeneration(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}

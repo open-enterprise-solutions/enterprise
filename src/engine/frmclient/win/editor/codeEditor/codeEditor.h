@@ -1,7 +1,7 @@
 #ifndef __IB_CODE_EDITOR_H__
 #define __IB_CODE_EDITOR_H__
 
-// THE DESKTOP'S SCRIPT EDITOR (frontend/win/editor/codeEditor/codeEditor.h), copied whole: the lexer, the colouring,
+// THE OLD DESKTOP'S SCRIPT EDITOR, copied whole: the lexer, the colouring,
 // the folds, the indent, the braces, the literals and their constructors are the client's. What the desktop asked the
 // configuration — the module's text, the names at the caret, a call's form, the syntax — is asked of the server's tab
 // (the designer's module tab, frmserver ibModuleTextView): its document is that tab's.

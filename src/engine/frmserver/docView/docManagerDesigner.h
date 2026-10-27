@@ -3,7 +3,7 @@
 
 #include "frmserver/docView/docView.h"
 
-// THE DESIGNER'S DOC MANAGER — the configuration, as designer.exe edited it (ibDocManagerDesigner on the desktop).
+// THE DESIGNER'S DOC MANAGER — the configuration, as the designer edits it (ibDocManagerDesigner on the old desktop).
 // The base set is the base's (ibDocManager's ctor); this ctor adds what only the designer has. It loads no runtime,
 // so nothing that opens what the runtime runs is here. The designer client's frame makes it (ibClientFrameDesigner).
 class FRMSERVER_API ibDocManagerDesigner : public ibDocManager {

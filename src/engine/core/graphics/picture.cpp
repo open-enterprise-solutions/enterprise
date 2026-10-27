@@ -219,23 +219,23 @@ ibString ibPicture::ToSvg(size_t mostRects) const
 			order.push_back(rect.colour);
 			found = paths.emplace(rect.colour, ibString()).first;
 		}
-		found->second << ibString::Format(wxT("M%d %dh%dv%dh-%dz"), rect.x, rect.y, rect.w, rect.h, rect.w);
+		found->second << ibString::Format(ibT("M%d %dh%dv%dh-%dz"), rect.x, rect.y, rect.w, rect.h, rect.w);
 	}
 
-	ibString svg = ibString::Format(wxT("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" "
+	ibString svg = ibString::Format(ibT("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" "
 		"viewBox=\"0 0 %d %d\">\n"), width, height, width, height);
 
 	for (const std::uint32_t colour : order) {
-		svg << ibString::Format(wxT("<path fill=\"#%06x\""), (unsigned int)(colour & 0xFFFFFF));
+		svg << ibString::Format(ibT("<path fill=\"#%06x\""), (unsigned int)(colour & 0xFFFFFF));
 
 		// In thousandths, so the point is a point whatever the locale says.
 		const unsigned int opacity = colour >> 24;
 		if (opacity != 255)
-			svg << ibString::Format(wxT(" fill-opacity=\"0.%03u\""), (opacity * 1000 + 127) / 255);
+			svg << ibString::Format(ibT(" fill-opacity=\"0.%03u\""), (opacity * 1000 + 127) / 255);
 
-		svg << wxT(" d=\"") << paths[colour] << wxT("\"/>\n");
+		svg << ibT(" d=\"") << paths[colour] << ibT("\"/>\n");
 	}
 
-	svg << wxT("</svg>");
+	svg << ibT("</svg>");
 	return svg;
 }

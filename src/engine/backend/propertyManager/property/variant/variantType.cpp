@@ -4,7 +4,7 @@
 
 wxString ibVariantDataAttribute::MakeString() const
 {
-	wxString strDescr;
+	ibString strDescr;
 	if (m_ownerProperty != nullptr) {
 		// The same owner as DoRefreshTypeDesc, and the same answer when it has no configuration: the value
 		// registry names what it holds itself.
@@ -14,7 +14,7 @@ wxString ibVariantDataAttribute::MakeString() const
 			const ibCtorAbstractType* typeCtor = metaData != nullptr ? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
 			if (typeCtor == nullptr)
 				continue;
-			strDescr = strDescr.IsEmpty() ? typeCtor->GetClassName() : strDescr + wxT(", ") + typeCtor->GetClassName();
+			strDescr = strDescr.IsEmpty() ? typeCtor->GetClassName() : strDescr + ibT(", ") + typeCtor->GetClassName();
 		}
 	}
 	return strDescr;

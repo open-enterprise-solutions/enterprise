@@ -5,7 +5,7 @@
 
 ///////////////////////////////////////////////////////////////////////////
 
-ibDialogAuthentication::ibDialogAuthentication(const std::vector<wxString>& users, wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxDialog(parent, id, title, pos, size, style)
+ibDialogAuthentication::ibDialogAuthentication(const std::vector<ibString>& users, wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxDialog(parent, id, title, pos, size, style)
 {
 	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue dialog
@@ -23,7 +23,7 @@ ibDialogAuthentication::ibDialogAuthentication(const std::vector<wxString>& user
 
 	m_staticTextLogin = new wxStaticText(this, wxID_ANY, _("Login:"));
 	m_comboBoxLogin   = new wxBitmapComboBox(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize);
-	for (const wxString& user : users)
+	for (const ibString& user : users)
 		m_comboBoxLogin->Append(user, ibBackendPicture::GetPicture(g_picUserCLSID));
 
 	m_staticTextPassword = new wxStaticText(this, wxID_ANY, _("Password:"));

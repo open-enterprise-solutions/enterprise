@@ -84,7 +84,7 @@ const ibMetaData* ibFormVisualDocument::GetMetaData() const
 	return m_valueForm != nullptr ? m_valueForm->GetMetaData() : nullptr;
 }
 
-bool ibFormVisualDocument::OnCreate(const wxString& path, long flags)
+bool ibFormVisualDocument::OnCreate(const ibString& path, long flags)
 {
 	const ibSourceDataObject* sourceObject = m_valueForm->GetSourceObject();
 
@@ -303,7 +303,7 @@ void ibFormVisualEditView::OnDraw(ibDataNode& frame)
 	UpdateVisualHost(frame);
 }
 
-void ibFormVisualEditView::SetCaption(const wxString& strCaption)
+void ibFormVisualEditView::SetCaption(const ibString& strCaption)
 {
 	const ibValueForm* handler = m_document->GetValueForm();
 
@@ -314,7 +314,7 @@ void ibFormVisualEditView::SetCaption(const wxString& strCaption)
 				const ibValueMetaObjectFormBase* creator = handler->GetFormMetaObject();
 				const ibValueMetaObjectGenericData* genericObject = srcObject->GetSourceMetaObject();
 				if (genericObject != nullptr) {
-					m_document->SetTitle(genericObject->GetSynonym() + wxT(": ") + creator->GetSynonym());
+					m_document->SetTitle(genericObject->GetSynonym() + ibT(": ") + creator->GetSynonym());
 					m_document->SetFilename(genericObject->GetFileName(), true);
 				}
 				else if (creator != nullptr) {
@@ -332,7 +332,7 @@ void ibFormVisualEditView::SetCaption(const wxString& strCaption)
 		}
 		else {
 			m_document->SetTitle(strCaption);
-			m_document->SetFilename(wxEmptyString, true);
+			m_document->SetFilename(ibEmptyString, true);
 		}
 	}
 	else if (strCaption.IsEmpty()) {
@@ -357,7 +357,7 @@ void ibFormVisualEditView::SetCaption(const wxString& strCaption)
 	}
 	else if (m_document != nullptr && !m_document->IsVisualDemonstrationDoc()) {
 		m_document->SetTitle(strCaption);
-		m_document->SetFilename(wxEmptyString, true);
+		m_document->SetFilename(ibEmptyString, true);
 	}
 }
 

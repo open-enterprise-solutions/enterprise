@@ -22,7 +22,7 @@ void AppendControl(ibDataNode& controls, ibValueFrame* control)
 {
 	ibDataNode& described = controls.AddChild(0, 0);
 	described.SetValue(ibProtocol::ibRequest::ibFormEditor::Control, control->GetControlID());
-	for (const wxString& name : ibValueFrame::GetAllowedUserProperty()) {
+	for (const ibString& name : ibValueFrame::GetAllowedUserProperty()) {
 		if (ibProperty* const property = control->GetProperty(name))
 			ibPropertyInspector::AppendProperty(described, property);
 	}

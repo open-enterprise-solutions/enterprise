@@ -18,7 +18,7 @@ ibDatabaseResultSet::~ibDatabaseResultSet()
 		m_owner->ForgetResultSet(this);
 }
 
-int ibDatabaseResultSet::GetResultInt(const wxString& strField)
+int ibDatabaseResultSet::GetResultInt(const ibString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
@@ -28,7 +28,7 @@ int ibDatabaseResultSet::GetResultInt(const wxString& strField)
 	return -1;
 }
 
-ibString ibDatabaseResultSet::GetResultString(const wxString& strField)
+ibString ibDatabaseResultSet::GetResultString(const ibString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
@@ -38,7 +38,7 @@ ibString ibDatabaseResultSet::GetResultString(const wxString& strField)
 	return ibString();
 }
 
-long long ibDatabaseResultSet::GetResultLong(const wxString& strField)
+long long ibDatabaseResultSet::GetResultLong(const ibString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
@@ -48,7 +48,7 @@ long long ibDatabaseResultSet::GetResultLong(const wxString& strField)
 	return -1;
 }
 
-bool ibDatabaseResultSet::GetResultBool(const wxString& strField)
+bool ibDatabaseResultSet::GetResultBool(const ibString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
@@ -58,7 +58,7 @@ bool ibDatabaseResultSet::GetResultBool(const wxString& strField)
 	return false;
 }
 
-ibDateTime ibDatabaseResultSet::GetResultDate(const wxString& strField)
+ibDateTime ibDatabaseResultSet::GetResultDate(const ibString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
@@ -69,7 +69,7 @@ ibDateTime ibDatabaseResultSet::GetResultDate(const wxString& strField)
 	return ibDateTime();
 }
 
-void* ibDatabaseResultSet::GetResultBlob(const wxString& strField, ibMemoryBuffer& buffer)
+void* ibDatabaseResultSet::GetResultBlob(const ibString& strField, ibMemoryBuffer& buffer)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
@@ -79,7 +79,7 @@ void* ibDatabaseResultSet::GetResultBlob(const wxString& strField, ibMemoryBuffe
 	return nullptr;
 }
 
-double ibDatabaseResultSet::GetResultDouble(const wxString& strField)
+double ibDatabaseResultSet::GetResultDouble(const ibString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
@@ -89,7 +89,7 @@ double ibDatabaseResultSet::GetResultDouble(const wxString& strField)
 	return -1;
 }
 
-ibNumber ibDatabaseResultSet::GetResultNumber(const wxString& strField)
+ibNumber ibDatabaseResultSet::GetResultNumber(const ibString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
@@ -99,7 +99,7 @@ ibNumber ibDatabaseResultSet::GetResultNumber(const wxString& strField)
 	return -1;
 }
 
-bool ibDatabaseResultSet::IsFieldNull(const wxString& strField)
+bool ibDatabaseResultSet::IsFieldNull(const ibString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)

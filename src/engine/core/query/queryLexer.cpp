@@ -7,6 +7,8 @@
 #include "core/exception.h"       // ibCoreException — a lexer refusal is still one
 #include "core/query/queryRefusal.h"   // ibQueryRefusal — the text does not read: where and why, as data
 
+#include <wx/translation.h>   // _() — the refusals' words
+
 // The keyword and scalar-call tables the lexer matches against are the core's (core/query/queryKeywords.cpp):
 // the thin client's editor reads the same words.
 
@@ -22,16 +24,16 @@ void ibQueryLexer::RaiseRefusal() const
 	const ibTranslateRefusal& refusal = GetRefusalAt(0);
 	const unsigned int currPos = refusal.m_currPos;
 	const unsigned int currLine = refusal.m_currLine;
-	const wxString& errorDesc = refusal.m_errorDesc;
+	const ibString& errorDesc = refusal.m_errorDesc;
 
 	// L4 refuses in its OWN variety, carrying the position as data — the text is what is wrong here,
 	// not the machinery, and the caller that shows this is the one editing the query.
 	if (errorDesc.empty())
 		throw ibQueryRefusal(currPos, currLine,
-			wxString::Format(_("Query lexical error at line %u (position %u)"), currLine, currPos));
+			ibString::Format(_("Query lexical error at line %u (position %u)"), currLine, currPos));
 	else
 		throw ibQueryRefusal(currPos, currLine,
-			wxString::Format(_("Query lexical error at line %u (position %u): %s"), currLine, currPos, errorDesc));
+			ibString::Format(_("Query lexical error at line %u (position %u): %s"), currLine, currPos, errorDesc));
 }
 
 ibChar ibQueryLexer::PeekRawByte() const
@@ -46,7 +48,7 @@ ibChar ibQueryLexer::PeekRawByte() const
 // nothing else is a name the language can carry; everything else — a space, a dot, a bracket, a
 // keyword, an empty string — is not. A lex error is simply "no": the caller asked whether this can
 // be a name, and being unlexable is the loudest possible no.
-bool ibQueryLexer::IsIdentifier(const wxString& text)
+bool ibQueryLexer::IsIdentifier(const ibString& text)
 {
 	if (text.IsEmpty())
 		return false;
@@ -66,9 +68,9 @@ bool ibQueryLexer::IsIdentifier(const wxString& text)
 // IN FIRST-APPEARANCE ORDER, because that is the order a person reads them in the query — a
 // parameters page sorted by anything else makes them hunt. Repeats collapse: `&Period` written
 // three times is ONE thing to fill in.
-std::vector<wxString> ibQueryLexer::ParamNames(const wxString& queryText)
+std::vector<ibString> ibQueryLexer::ParamNames(const ibString& queryText)
 {
-	std::vector<wxString> names;
+	std::vector<ibString> names;
 	if (queryText.IsEmpty())
 		return names;
 
@@ -79,7 +81,7 @@ std::vector<wxString> ibQueryLexer::ParamNames(const wxString& queryText)
 				continue;
 			// Case-insensitively, like every other name in this layer.
 			const auto seen = std::find_if(names.begin(), names.end(),
-				[&token](const wxString& name) { return name.IsSameAs(token.m_text, false); });
+				[&token](const ibString& name) { return name.IsSameAs(token.m_text, false); });
 			if (seen == names.end())
 				names.push_back(token.m_text);
 		}
@@ -91,12 +93,12 @@ std::vector<wxString> ibQueryLexer::ParamNames(const wxString& queryText)
 	return names;
 }
 
-std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
+std::vector<ibQueryToken> ibQueryLexer::Tokenize(const ibString& queryText)
 {
 	Load(queryText);            // resets buffer + position counters
 
 	std::vector<ibQueryToken> out;
-	wxString sUpper, sOrig;
+	ibString sUpper, sOrig;
 
 	while (!IsEnd()) {          // IsEnd() skips spaces/comments first
 
@@ -130,7 +132,7 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 			t.m_kind = ibQueryTokenKind::Number;
 			if (!t.m_literal.SetNumber(sUpper))
 				throw ibQueryRefusal(GetCurrentPos(), GetCurrentLine() + 1,
-					wxString::Format(_("Query: '%s' is not a valid number at line %u (position %u)"),
+					ibString::Format(_("Query: '%s' is not a valid number at line %u (position %u)"),
 					sUpper, GetCurrentLine() + 1, GetCurrentPos()));
 			t.m_text = sUpper;
 		}
@@ -139,7 +141,7 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 			t.m_kind = ibQueryTokenKind::String;
 			if (!t.m_literal.SetString(sUpper))
 				throw ibQueryRefusal(GetCurrentPos(), GetCurrentLine() + 1,
-					wxString::Format(_("Query: a string literal could not be read at line %u (position %u)"),
+					ibString::Format(_("Query: a string literal could not be read at line %u (position %u)"),
 					GetCurrentLine() + 1, GetCurrentPos()));
 			t.m_text = sUpper;
 		}
@@ -148,15 +150,15 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 			t.m_kind = ibQueryTokenKind::Date;
 			if (!t.m_literal.SetDate(sUpper))
 				throw ibQueryRefusal(GetCurrentPos(), GetCurrentLine() + 1,
-					wxString::Format(_("Query: '%s' is not a valid date at line %u (position %u)"),
+					ibString::Format(_("Query: '%s' is not a valid date at line %u (position %u)"),
 					sUpper, GetCurrentLine() + 1, GetCurrentPos()));
 			t.m_text = sUpper;
 		}
-		else if (IsByte(wxT('&'))) {           // &Name — a query parameter
+		else if (IsByte(ibT('&'))) {           // &Name — a query parameter
 			GetByte();                         // consume '&'
 			if (!IsWord())
 				throw ibQueryRefusal(GetCurrentPos(), GetCurrentLine() + 1,
-					wxString::Format(_("Query: expected a parameter name after '&' at line %u (position %u)"),
+					ibString::Format(_("Query: expected a parameter name after '&' at line %u (position %u)"),
 					GetCurrentLine() + 1, GetCurrentPos()));
 			sUpper.clear(); sOrig.clear();
 			GetWord(&sUpper, &sOrig, /*realName*/false, /*get_point*/false);
@@ -165,32 +167,32 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 		}
 		else {
 			// single delimiter / operator (multi-char operators glued when contiguous)
-			wxUniChar c; GetByte(&c);
-			switch (c.GetValue()) {
+			ibChar c; GetByte(&c);
+			switch (c) {
 			case '<': {
 				const ibChar n = PeekRawByte();
-				if (n == wxT('=')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT("<="); }
-				else if (n == wxT('>')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT("<>"); }
-				else { t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT("<"); }
+				if (n == ibT('=')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = ibT("<="); }
+				else if (n == ibT('>')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = ibT("<>"); }
+				else { t.m_kind = ibQueryTokenKind::Op; t.m_text = ibT("<"); }
 				break;
 			}
 			case '>': {
 				const ibChar n = PeekRawByte();
-				if (n == wxT('=')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT(">="); }
-				else { t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT(">"); }
+				if (n == ibT('=')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = ibT(">="); }
+				else { t.m_kind = ibQueryTokenKind::Op; t.m_text = ibT(">"); }
 				break;
 			}
 			case '!': {
 				const ibChar n = PeekRawByte();
-				if (n == wxT('=')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT("<>"); }
-				else { t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT("!"); }
+				if (n == ibT('=')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = ibT("<>"); }
+				else { t.m_kind = ibQueryTokenKind::Op; t.m_text = ibT("!"); }
 				break;
 			}
-			case '=': t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT("="); break;
+			case '=': t.m_kind = ibQueryTokenKind::Op; t.m_text = ibT("="); break;
 			case '+': case '-': case '*': case '/': case '%':
-				t.m_kind = ibQueryTokenKind::Op; t.m_text = wxString(c); break;
+				t.m_kind = ibQueryTokenKind::Op; t.m_text = ibString(c); break;
 			default:
-				t.m_kind = ibQueryTokenKind::Punct; t.m_text = wxString(c); break;   // , ( ) .
+				t.m_kind = ibQueryTokenKind::Punct; t.m_text = ibString(c); break;   // , ( ) .
 			}
 		}
 

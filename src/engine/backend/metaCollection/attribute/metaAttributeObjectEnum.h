@@ -31,9 +31,9 @@ class ibValueEnumItemMode : public ibValueEnumeration<ibItemMode> {
 	//ibValueEnumItemMode(const ibItemMode &mode) : ibValueEnumeration(mode) {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibItemMode_Item, wxT("Items"), _("Items"));
-		AddEnumeration(ibItemMode_Folder, wxT("Folders"), _("Folders"));
-		AddEnumeration(ibItemMode_Folder_Item, wxT("FoldersAndItems"), _("Folders and items"));
+		AddEnumeration(ibItemMode_Item, ibT("Items"), _("Items"));
+		AddEnumeration(ibItemMode_Folder, ibT("Folders"), _("Folders"));
+		AddEnumeration(ibItemMode_Folder_Item, ibT("FoldersAndItems"), _("Folders and items"));
 	}
 };
 
@@ -42,9 +42,9 @@ class ibValueEnumIndexingMode : public ibValueEnumeration<ibIndexingMode> {
 	ibValueEnumIndexingMode() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibIndexingMode_DontIndex, wxT("DontIndex"), _("Don't index"));
-		AddEnumeration(ibIndexingMode_Index, wxT("Index"), _("Index"));
-		AddEnumeration(ibIndexingMode_IndexWithAdditionalOrder, wxT("IndexWithAdditionalOrder"), _("Index with additional ordering"));
+		AddEnumeration(ibIndexingMode_DontIndex, ibT("DontIndex"), _("Don't index"));
+		AddEnumeration(ibIndexingMode_Index, ibT("Index"), _("Index"));
+		AddEnumeration(ibIndexingMode_IndexWithAdditionalOrder, ibT("IndexWithAdditionalOrder"), _("Index with additional ordering"));
 	}
 };
 #pragma endregion

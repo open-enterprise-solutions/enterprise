@@ -25,7 +25,7 @@ bool ibValueMetaObjectStoredValue::CreateConstantSQLTable()
 
 		// A real failure THROWS; the DDL affected-row count (0) is not an error.
 		q.Execute(ibCreateTable(ibValueMetaObjectStoredValue::GetPhysicalTableName(), {
-				{ wxT("RECORD_KEY"), ibTypeChar(1), /*notNull*/false, /*pk*/true, wxT("'6'") },
+				{ ibT("RECORD_KEY"), ibTypeChar(1), /*notNull*/false, /*pk*/true, ibT("'6'") },
 			}));
 		// The single '6' key row is created on demand by the data restore's UPSERT (the L3-3 mover keys
 		// sys_const on its RECORD_KEY primary key) — no up-front seed row needed.

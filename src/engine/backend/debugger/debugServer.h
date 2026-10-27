@@ -43,7 +43,7 @@ class BACKEND_API ibDebuggerServer {
 
 		ConnectionType GetConnectionType() const { return m_connectionType; }
 
-		ibDebuggerServerConnection(const wxString& hostName, unsigned short startPort);
+		ibDebuggerServerConnection(const ibString& hostName, unsigned short startPort);
 		~ibDebuggerServerConnection();
 
 	protected:
@@ -73,7 +73,7 @@ class BACKEND_API ibDebuggerServer {
 
 		ConnectionType m_connectionType;
 
-		wxString m_strHostName;
+		ibString m_strHostName;
 		unsigned short m_numHostPort;
 
 		// The port's thread sets true in Accept; main thread polls this
@@ -131,7 +131,7 @@ public:
 			!m_socketConnectionThread->m_waitConnection : true;
 	}
 
-	bool CreateServer(const wxString& hostName = defaultHost, unsigned short startPort = ibPort::Debugger.m_first, bool wait = false);
+	bool CreateServer(const ibString& hostName = defaultHost, unsigned short startPort = ibPort::Debugger.m_first, bool wait = false);
 	void ShutdownServer();
 
 	// Session is read out of runContext → GetProcUnit() → GetSession()
@@ -146,7 +146,7 @@ public:
 	// run, by the channel below (Max, 2026-09-04: *"this is an error that reaches me in the designer,
 	// and I can see it really is an error; and there are messages that should reach you, not me — I
 	// do not need them"*).
-	void SendErrorToClient(const wxString& strFileName, const wxString& strDocPath, unsigned int numLine, const wxString& strErrorMessage);
+	void SendErrorToClient(const ibString& strFileName, const ibString& strDocPath, unsigned int numLine, const ibString& strErrorMessage);
 
 	// ⭐ WHAT EVALUATED CODE PRINTED — up the eval channel, to whoever asked for the evaluation.
 	//
@@ -164,7 +164,7 @@ public:
 	// person's pane with somebody else's narration (Max, 2026-09-04).
 	//
 	// The level rides along, so a reader can tell "the document did not post" from "posted 12".
-	void SendEvalMessage(const wxString& strMessage, MessageType type = MessageType_Normal);
+	void SendEvalMessage(const ibString& strMessage, MessageType type = MessageType_Normal);
 
 	// "Is the debug-thread-current session parked in DoDebugLoop?" Resolves
 	// the per-session m_debugLoop via ibSession::Current() (body in .cpp —
@@ -197,12 +197,12 @@ protected:
 	}
 
 	void WakeAllDebugSessions();
-	void WakeDebugSession(const wxString& sessionGuid);
+	void WakeDebugSession(const ibString& sessionGuid);
 
 	void ClearCollectionBreakpoint();
 
 	//main loop
-	inline void DoDebugLoop(const wxString& strDocPath, const wxString& strModuleName, int numLine, ibRunContext* runContext);
+	inline void DoDebugLoop(const ibString& strDocPath, const ibString& strModuleName, int numLine, ibRunContext* runContext);
 
 	//special functions:
 	// Both take the parked frame explicitly — sourced from the per-session
@@ -233,7 +233,7 @@ private:
 	// 🛑 UNDER ITS LOCK, every touch: read shared by each script thread on every line it runs while debugged
 	// (EnterDebugger), changed exclusively by the debug thread's commands and by a reset, which a script's thread
 	// reaches too (ResetDebugger).
-	std::map<wxString, std::map<unsigned int, wxString>> m_listBreakpoint;
+	std::map<ibString, std::map<unsigned int, ibString>> m_listBreakpoint;
 	std::shared_mutex m_breakpointsMutex;
 
 	// WHAT IS WATCHED HERE, AND FOR WHOM — refreshed at every stop by SendExpressions, which answers each

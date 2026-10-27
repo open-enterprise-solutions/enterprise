@@ -266,7 +266,7 @@ class BACKEND_API ibValueStructure : public ibValueContainer {
 	virtual ibClassID GetClassType() const override { return g_valueStructureCLSID; }
 
 	ibValueStructure() : ibValueContainer(false, ibKeyKind::Name) {}
-	ibValueStructure(const std::map<wxString, ibValue>& structureValues) : ibValueContainer(true, ibKeyKind::Name) {
+	ibValueStructure(const std::map<ibString, ibValue>& structureValues) : ibValueContainer(true, ibKeyKind::Name) {
 		for (auto& strBVal : structureValues) ibValueContainer::SetAt(strBVal.first, strBVal.second);
 	}
 

@@ -31,19 +31,19 @@ void ibMetaData::Dispose(ibMetaData* metaData)
 	// A release never throws — it runs where the last reference drops, a destructor among them. A close that refused
 	// is said, and the metadata goes regardless.
 	const ibValueMetaObject* const root = metaData->GetCommonMetaObject();
-	const wxString name = root != nullptr ? root->GetName() : wxString();
+	const ibString name = root != nullptr ? root->GetName() : ibString();
 	try {
 		if (metaData->IsConfigOpen()) {
-			ibJournalInfo(wxT("metadata"), wxT("'%s' %s closed: its last holder let it go"), name,
+			ibJournalInfo(ibT("metadata"), ibT("'%s' %s closed: its last holder let it go"), name,
 				metaData->GetConfigMD5());
 			metaData->CloseDatabase(forceCloseFlag);
 		}
 	}
 	catch (const ibCoreException& err) {
-		ibJournalWarning(wxT("metadata"), wxT("'%s' did not close: %s"), name, err.GetErrorDescription());
+		ibJournalWarning(ibT("metadata"), ibT("'%s' did not close: %s"), name, err.GetErrorDescription());
 	}
 	catch (...) {
-		ibJournalWarning(wxT("metadata"), wxT("'%s' did not close"), name);
+		ibJournalWarning(ibT("metadata"), ibT("'%s' did not close"), name);
 	}
 	delete metaData;
 }
@@ -106,7 +106,7 @@ bool ibModuleStorage::AddCommonModule(ibValueMetaObjectCommonModule* commonModul
 	return true;
 }
 
-bool ibModuleStorage::RenameCommonModule(ibValueMetaObjectCommonModule* /*commonModule*/, const wxString& /*newName*/)
+bool ibModuleStorage::RenameCommonModule(ibValueMetaObjectCommonModule* /*commonModule*/, const ibString& /*newName*/)
 {
 	// Descriptor name is owned by the descriptor itself; storage indexes
 	// by raw pointer, so rename is a no-op. Kept on the API as a single
@@ -396,14 +396,14 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 	return newMetaObject;
 }
 
-wxString ibMetaData::GetNewName(ibValueMetaObject* parent, const ibNameRequest& request)
+ibString ibMetaData::GetNewName(ibValueMetaObject* parent, const ibNameRequest& request)
 {
-	const wxString currPrefix = request.m_prefix.Length() > 0 ?
-		request.m_prefix : wxString(wxT("newItem"));
+	const ibString currPrefix = request.m_prefix.Length() > 0 ?
+		request.m_prefix : ibString(ibT("newItem"));
 
-	// Normalise to upper case, matching stringUtils::CompareString's
+	// Normalise to upper case, matching stringUtils::IsSameAs's
 	// case-insensitive semantics, so set lookups are exact comparisons.
-	const auto toKey = [](const wxString& name) {
+	const auto toKey = [](const ibString& name) {
 		std::wstring key = name.ToStdWstring();
 		std::transform(key.begin(), key.end(), key.begin(), ::towupper);
 		return key;
@@ -435,11 +435,11 @@ wxString ibMetaData::GetNewName(ibValueMetaObject* parent, const ibNameRequest& 
 	// forConstructor allows the bare prefix as the first candidate;
 	// otherwise numbering starts at 1.
 	unsigned int countRec = request.m_forConstructor ? 0 : 1;
-	wxString newName = request.m_forConstructor ?
-		currPrefix : wxString::Format(wxT("%s%d"), currPrefix, countRec);
+	ibString newName = request.m_forConstructor ?
+		currPrefix : ibString::Format(ibT("%s%d"), currPrefix, countRec);
 
 	while (takenNames.count(toKey(newName)) > 0)
-		newName = wxString::Format(wxT("%s%d"), currPrefix, ++countRec);
+		newName = ibString::Format(ibT("%s%d"), currPrefix, ++countRec);
 
 	return newName;
 }
@@ -643,7 +643,7 @@ ibValueMetaObject* ibMetaData::PasteMetaObject(const ibClassID& clsid,
 						// id to 32 bits — throwing away the KIND byte, which is the half that
 						// says WHAT it is — so the number identified nothing and matched nothing.
 						// The metadata knows the name; ask it.
-						ibJournalInfo(wxT("metadata"), wxT("PasteObject: '%s' is not hosted by '%s' - skipped"),
+						ibJournalInfo(ibT("metadata"), ibT("PasteObject: '%s' is not hosted by '%s' - skipped"),
 							metaData->GetNameObjectFromID(clsid).c_str(), pasteObject->GetClassName().c_str());
 					}
 				}
@@ -746,7 +746,7 @@ ibValueMetaObject* ibMetaData::PasteMetaObject(const ibClassID& clsid,
 	return pasted;
 }
 
-bool ibMetaData::RenameMetaObject(ibValueMetaObject* metaObject, const wxString& newName)
+bool ibMetaData::RenameMetaObject(ibValueMetaObject* metaObject, const ibString& newName)
 {
 	if (!IsEditable())   // see CreateMetaObject — the rule lives in the door
 		return false;

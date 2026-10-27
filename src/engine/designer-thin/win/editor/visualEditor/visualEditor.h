@@ -974,8 +974,8 @@ public:
 	// of its own.
 	ibFormAttributeValue(ibVisualEditorNotebook::ibVisualEditor* formHandler, long long id, long long column = 0);
 
-	virtual wxString GetClassName() const override { return wxT("FormAttributeValue"); }
-	virtual wxString GetObjectTypeName() const override { return m_name; }
+	virtual ibString GetClassName() const override { return wxT("FormAttributeValue"); }
+	virtual ibString GetObjectTypeName() const override { return m_name; }
 	virtual bool IsEditable() const override;
 
 	// ITS CONFIGURATION IS ITS FORM'S TAB — what a window its rows open asks the configuration (a composition's fields:
@@ -1023,8 +1023,8 @@ public:
 
 	ibFormCommandValue(ibVisualEditorNotebook::ibVisualEditor* formHandler, long long id);
 
-	virtual wxString GetClassName() const override { return wxT("FormCommandValue"); }
-	virtual wxString GetObjectTypeName() const override { return m_name; }
+	virtual ibString GetClassName() const override { return wxT("FormCommandValue"); }
+	virtual ibString GetObjectTypeName() const override { return m_name; }
 	virtual bool IsEditable() const override;
 
 	// What the server says of it, asked as it is shown — as an attribute's is.
@@ -1106,8 +1106,8 @@ public:
 		ibValueLayerObject(formHandler, controlId) {
 	}
 
-	virtual wxString GetClassName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBar; }
-	virtual wxString GetObjectTypeName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBar; }
+	virtual ibString GetClassName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBar; }
+	virtual ibString GetObjectTypeName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBar; }
 
 	virtual ibProtocolNode FindNode(const ibProtocolNode& control) const override;
 	virtual ibProtocolNode FindRows(const ibProtocolNode& control) const override;
@@ -1131,8 +1131,8 @@ public:
 		ibValueLayerObject(formHandler, controlId), m_index(index) {
 	}
 
-	virtual wxString GetClassName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBarItem; }
-	virtual wxString GetObjectTypeName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBarItem; }
+	virtual ibString GetClassName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBarItem; }
+	virtual ibString GetObjectTypeName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBarItem; }
 
 	// Its name stays unique among the bar's commands (the desktop's).
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;

@@ -36,7 +36,7 @@ public:
 // caption: handed straight to a menu it put that whole line in front of the reader (2026-09-16). Every reader of
 // a variant's caption asks here, so the language is decided in one place - and the two localizations stay apart:
 // the buttons around it are the PLATFORM's, this text is the CONFIGURATION's and comes from the configuration.
-BACKEND_API wxString ibVariantCaption(const ibVariantDescription& variant);
+BACKEND_API ibString ibVariantCaption(const ibVariantDescription& variant);
 
 // ⭐ SETTINGS THAT CANNOT BE APPLIED ARE REFUSED, not silently dropped. A condition with no field,
 // or a value whose type the field cannot hold, would either narrow the list by nothing or make the

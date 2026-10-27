@@ -1627,8 +1627,10 @@ bool ibHttpServerState::Listen(const asio::ip::address& address, std::uint16_t& 
 	std::string& error)
 {
 	auto listener = std::make_unique<ibListener>();
-	listener->m_acceptor = std::make_unique<asio::ip::tcp::acceptor>(m_io);
-	listener->m_pause = std::make_unique<asio::steady_timer>(m_io);
+	// The port on a strand of its own: its accepts, its pause and its closing (Stop) never run at once.
+	const auto strand = asio::make_strand(m_io);
+	listener->m_acceptor = std::make_unique<asio::ip::tcp::acceptor>(strand);
+	listener->m_pause = std::make_unique<asio::steady_timer>(strand);
 	listener->m_secure = secure;
 	listener->m_redirect = redirect;
 
@@ -1637,7 +1639,7 @@ bool ibHttpServerState::Listen(const asio::ip::address& address, std::uint16_t& 
 	std::error_code code;
 	acceptor.open(endpoint.protocol(), code);
 	if (!code) {
-#ifdef _WIN32
+#ifdef __IBMSW__
 		// 🛑 ONE LISTENER PER PORT, said to the system — without it a second process binds the port this one listens on
 		// and which of them a connection reaches is undefined (appserver/clientListener.cpp says the same).
 		const BOOL yes = TRUE;
@@ -1931,13 +1933,14 @@ void ibHttpServer::Stop()
 				open.push_back(connection);
 		}
 	}
-	asio::post(state.m_io, [&state]() {
-		for (const std::unique_ptr<ibHttpServerState::ibListener>& listener : state.m_listeners) {
+	for (const std::unique_ptr<ibHttpServerState::ibListener>& listener : state.m_listeners) {
+		ibHttpServerState::ibListener& closing = *listener;
+		asio::post(closing.m_acceptor->get_executor(), [&closing]() {
 			std::error_code ignored;
-			listener->m_acceptor->close(ignored);
-			listener->m_pause->cancel();
-		}
-	});
+			closing.m_acceptor->close(ignored);
+			closing.m_pause->cancel();
+		});
+	}
 
 	// …everyone there is let go, and each WebSocket's handler told: a connection is gone when the last task that
 	// holds it — its handler's OnClose among them — has run.

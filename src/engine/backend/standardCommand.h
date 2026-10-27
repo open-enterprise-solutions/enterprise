@@ -6,8 +6,8 @@
 
 struct ibCommandItem {
 	ibActionID           m_actionId = wxNOT_FOUND;   // the action's id (wxNOT_FOUND = a separator)
-	wxString             m_name;
-	wxString             m_caption;
+	ibString             m_name;
+	ibString             m_caption;
 	ibPictureDescription m_pictureDescription;
 	bool                 m_pictureAndText = false;   // show picture AND caption (else picture-only when it has one)
 	bool                 m_createInForm   = false;   // put this command on the form by default (vs available-only)
@@ -18,7 +18,7 @@ struct ibCommandItem {
 	bool                 m_modifiesData   = true;
 
 	ibCommandItem() {}
-	ibCommandItem(const ibActionID& actionId, const wxString& name, const wxString& caption,
+	ibCommandItem(const ibActionID& actionId, const ibString& name, const ibString& caption,
 		const ibPictureDescription& pictureDescription, bool pictureAndText = false, bool createInForm = false, ibValue* srcData = nullptr)
 		: m_actionId(actionId), m_name(name), m_caption(caption), m_pictureDescription(pictureDescription),
 		  m_pictureAndText(pictureAndText), m_createInForm(createInForm), m_srcData(srcData) {}
@@ -51,7 +51,7 @@ protected:
 		// The single construction/placement primitive — index < 0 appends at the end, otherwise inserts at
 		// index. All AddAction / InsertAction wrappers funnel through here (field order defined in ONE place),
 		// and it returns the placed item BY REF so a caller can chain a fluent setter right after.
-		ibCommandItem& EmplaceAction(int index, const ibActionID& lNumAction, const wxString& name, const wxString& caption,
+		ibCommandItem& EmplaceAction(int index, const ibActionID& lNumAction, const ibString& name, const ibString& caption,
 			const ibPictureDescription& pictureDescription, bool pictureAndText, bool createInForm, ibValue* srcData) {
 			wxASSERT(!ExistsAction(lNumAction));
 			ibValue* src = srcData ? srcData : m_srcData;
@@ -69,19 +69,19 @@ protected:
 
 		// ---- append at the end (returns the item BY REF — chain .SetModify(...) etc right after) -------------
 
-		ibCommandItem& AddAction(const wxString& name, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
-			return EmplaceAction(-1, lNumAction, name, wxEmptyString, ibPictureDescription(), false, createInForm, srcData);
+		ibCommandItem& AddAction(const ibString& name, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+			return EmplaceAction(-1, lNumAction, name, ibEmptyString, ibPictureDescription(), false, createInForm, srcData);
 		}
 
-		ibCommandItem& AddAction(const wxString& name, const wxString& caption, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+		ibCommandItem& AddAction(const ibString& name, const ibString& caption, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
 			return EmplaceAction(-1, lNumAction, name, caption, ibPictureDescription(), false, createInForm, srcData);
 		}
 
-		ibCommandItem& AddAction(const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+		ibCommandItem& AddAction(const ibString& name, const ibString& caption, const ibPictureDescription& pictureDescription, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
 			return EmplaceAction(-1, lNumAction, name, caption, pictureDescription, false, createInForm, srcData);
 		}
 
-		ibCommandItem& AddAction(const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+		ibCommandItem& AddAction(const ibString& name, const ibString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
 			return EmplaceAction(-1, lNumAction, name, caption, pictureDescription, pictureAndText, createInForm, srcData);
 		}
 
@@ -89,19 +89,19 @@ protected:
 
 		// ---- insert at index (also returns the item BY REF) -------------------
 
-		ibCommandItem& InsertAction(unsigned int index, const wxString& name, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
-			return EmplaceAction((int)index, lNumAction, name, wxEmptyString, ibPictureDescription(), false, createInForm, srcData);
+		ibCommandItem& InsertAction(unsigned int index, const ibString& name, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+			return EmplaceAction((int)index, lNumAction, name, ibEmptyString, ibPictureDescription(), false, createInForm, srcData);
 		}
 
-		ibCommandItem& InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+		ibCommandItem& InsertAction(unsigned int index, const ibString& name, const ibString& caption, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
 			return EmplaceAction((int)index, lNumAction, name, caption, ibPictureDescription(), false, createInForm, srcData);
 		}
 
-		ibCommandItem& InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+		ibCommandItem& InsertAction(unsigned int index, const ibString& name, const ibString& caption, const ibPictureDescription& pictureDescription, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
 			return EmplaceAction((int)index, lNumAction, name, caption, pictureDescription, false, createInForm, srcData);
 		}
 
-		ibCommandItem& InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+		ibCommandItem& InsertAction(unsigned int index, const ibString& name, const ibString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
 			return EmplaceAction((int)index, lNumAction, name, caption, pictureDescription, pictureAndText, createInForm, srcData);
 		}
 
@@ -122,17 +122,17 @@ protected:
 
 		// ---- id-keyed accessors ----------------------------------------------
 
-		wxString GetNameByID(const ibActionID& lNumAction) const {
+		ibString GetNameByID(const ibActionID& lNumAction) const {
 			const ibCommandItem* act = FindByID(lNumAction);
 			// wxString() rather than wxEmptyString: the two arms of ?: must agree, and
 			// wxEmptyString is a const wxChar* — MSVC converts, GCC calls it ambiguous.
-			return act != nullptr ? act->m_name : wxString();
+			return act != nullptr ? act->m_name : ibString();
 		}
 
-		wxString GetCaptionByID(const ibActionID& lNumAction) const {
+		ibString GetCaptionByID(const ibActionID& lNumAction) const {
 			const ibCommandItem* act = FindByID(lNumAction);
 			if (act == nullptr)
-				return wxEmptyString;
+				return ibEmptyString;
 			return act->m_caption.Length() > 0 ? act->m_caption : act->m_name;
 		}
 

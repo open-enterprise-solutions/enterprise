@@ -91,13 +91,13 @@ struct ibCompileContext {
 	struct ibVariable
 	{
 		ibVariable() : m_kind(ibVarKind::Local), m_bTempVar(false), m_numVariable(0), m_clsid(0) {}
-		ibVariable(const wxString& strVariableName) : m_kind(ibVarKind::Local), m_bTempVar(false), m_numVariable(0), m_clsid(0), m_strRealName(strVariableName) {}
+		ibVariable(const ibString& strVariableName) : m_kind(ibVarKind::Local), m_bTempVar(false), m_numVariable(0), m_clsid(0), m_strRealName(strVariableName) {}
 
 		// Construct from bytecode-side info — used by FindVariable's
 		// bytecode fallback so eval scopes (no parent compile-context
 		// chain) still produce a transient ibVariable for the caller's
 		// emission path.
-		ibVariable(const wxString& strVariableName, const ibByteCode::ibByteCodeVarInfo& info)
+		ibVariable(const ibString& strVariableName, const ibByteCode::ibByteCodeVarInfo& info)
 			// Kind copied straight from the bc entry (same ibVarKind enum).
 			// Plain kind=Local entries are private — never reach this ctor
 			// (FindVariable filters them). m_access stays Private (default):
@@ -145,8 +145,8 @@ struct ibCompileContext {
 		// PrepareModuleData from the live value's GetClassType(), read by the
 		// runtime pre-flight). Both answer "what is this slot".
 		ibClassID m_clsid = 0;
-		wxString m_strRealName; // Real variable name (canonical identifier)
-		wxString m_strContext; //name of the context variable
+		ibString m_strRealName; // Real variable name (canonical identifier)
+		ibString m_strContext; //name of the context variable
 
 		// Kind predicates — mirror the bc-side ibByteCodeVarInfo helpers.
 		// A declared private local — the family's missing member, and the one the
@@ -188,7 +188,7 @@ struct ibCompileContext {
 			// Construct from bytecode-side ibByteParam + the param's
 			// real-cased name (now carried on ibByteParam::m_strName,
 			// passed in by the caller).
-			ibParamVariable(const wxString& strParamName, const ibByteCode::ibByteParam& bp)
+			ibParamVariable(const ibString& strParamName, const ibByteCode::ibByteParam& bp)
 				: m_bByValue(bp.m_bByValue),
 				  m_strName(strParamName)
 			{
@@ -200,12 +200,12 @@ struct ibCompileContext {
 			}
 
 			bool m_bByValue;
-			wxString m_strName; // Variable name
+			ibString m_strName; // Variable name
 			ibClassID m_clsid = 0;   // declared type; 0 = untyped
 			ibParamUnit m_puValue; // Default value
 		};
 
-		ibFunction(const wxString& strFuncName, ibCompileContext* compileContext = nullptr) :
+		ibFunction(const ibString& strFuncName, ibCompileContext* compileContext = nullptr) :
 			m_kind(ibFnKind::Local),
 			m_strRealName(strFuncName),
 			m_lVarCount(0), m_nStart(0), m_nFinish(0), m_numLine(0)
@@ -222,7 +222,7 @@ struct ibCompileContext {
 		// Construct from bytecode-side ibByteFunction — used by
 		// FindFunction's bytecode fallback. No compile-context to
 		// wire (eval / synthesized path); back-pointer stays null.
-		ibFunction(const wxString& strFuncName, const ibByteCode::ibByteFunction& fn)
+		ibFunction(const ibString& strFuncName, const ibByteCode::ibByteFunction& fn)
 			// Listed in declaration order — that is the order they are actually
 			// constructed in, whatever this list says.
 			: m_kind(fn.m_kind),
@@ -312,9 +312,9 @@ struct ibCompileContext {
 		// loop inside Max survived (systemManagerFunc.cpp).
 		bool m_valueVariadic = false;
 
-		wxString m_strRealName; //Function name (canonical)
+		ibString m_strRealName; //Function name (canonical)
 		ibClassID m_clsid = 0;   // declared return type; 0 = untyped
-		wxString m_strContext; //name of the context variable
+		ibString m_strContext; //name of the context variable
 
 		unsigned int m_lVarCount;// number of local variables
 		unsigned int m_nStart;// starting position in bytecode array
@@ -323,8 +323,8 @@ struct ibCompileContext {
 		//for IntelliSense
 		unsigned int m_numLine; //source line number (for breakpoints)
 
-		wxString m_strShortDescription;//includes the entire line after the Function (Procedure) keyword
-		wxString m_strLongDescription;//includes the entire merged (i.e. without empty lines) comment block before the function (procedure) definition
+		ibString m_strShortDescription;//includes the entire line after the Function (Procedure) keyword
+		ibString m_strLongDescription;//includes the entire merged (i.e. without empty lines) comment block before the function (procedure) definition
 
 		std::vector<ibParamVariable> m_listParam;
 
@@ -349,7 +349,7 @@ struct ibCompileContext {
 	{
 		int		 m_numLine = 0;
 		int		 m_numError = 0;
-		wxString m_strName;
+		ibString m_strName;
 	};
 
 #pragma endregion
@@ -392,8 +392,8 @@ struct ibCompileContext {
 		const std::unique_ptr<std::vector<int>>& pListB = m_listBreak[m_numDoNumber];
 		if (!pListC || !pListB) {
 #ifdef DEBUG 
-			ibJournalInfo(wxT("compiler"), wxT("Error (FinishLoopList) gotoContinue=%d, gotoBreak=%d\n"), gotoContinue, gotoBreak);
-			ibJournalInfo(wxT("compiler"), wxT("m_numDoNumber=%d\n"), m_numDoNumber);
+			ibJournalInfo(ibT("compiler"), ibT("Error (FinishLoopList) gotoContinue=%d, gotoBreak=%d\n"), gotoContinue, gotoBreak);
+			ibJournalInfo(ibT("compiler"), ibT("m_numDoNumber=%d\n"), m_numDoNumber);
 #endif 
 			m_numDoNumber--;
 			return;
@@ -436,17 +436,17 @@ struct ibCompileContext {
 
 	void CreateLabels();
 
-	ibParamUnit CreateVariable(const wxString& strPrefix = wxT("@temp_"));
-	ibParamUnit AddVariable(const wxString& strVarName, const ibClassID& typeClsid = 0, bool bExport = false, bool bContext = false, bool bTempVar = false);
-	ibParamUnit GetVariable(const wxString& strVarName, bool bFindInParent = true, bool bCheckError = false, bool bContext = false, bool bTempVar = false);
+	ibParamUnit CreateVariable(const ibString& strPrefix = ibT("@temp_"));
+	ibParamUnit AddVariable(const ibString& strVarName, const ibClassID& typeClsid = 0, bool bExport = false, bool bContext = false, bool bTempVar = false);
+	ibParamUnit GetVariable(const ibString& strVarName, bool bFindInParent = true, bool bCheckError = false, bool bContext = false, bool bTempVar = false);
 
-	void PushVariable(const wxString& strVarName, const wxString& strContextVar, unsigned int numVariable,
+	void PushVariable(const ibString& strVarName, const ibString& strContextVar, unsigned int numVariable,
 		const ibClassID& typeClsid = 0, bool exportVar = true, bool contextVar = true, bool tempVar = false);
-	void PushFunction(const wxString& strFuncName, const wxString& strContextVar, const wxString& strShortDescription, unsigned int numFunction,
+	void PushFunction(const ibString& strFuncName, const ibString& strContextVar, const ibString& strShortDescription, unsigned int numFunction,
 		bool hasRetVal = true, int argCount = 0);
 
-	bool FindVariable(const wxString& strVarName, std::shared_ptr<ibVariable>& foundedVar, bool context = false);
-	bool FindFunction(const wxString& strFuncName, std::shared_ptr<ibFunction>& foundedFunc, bool context = false);
+	bool FindVariable(const ibString& strVarName, std::shared_ptr<ibVariable>& foundedVar, bool context = false);
+	bool FindFunction(const ibString& strFuncName, std::shared_ptr<ibFunction>& foundedFunc, bool context = false);
 
 	//Reset compile context
 	void Reset() {
@@ -541,7 +541,7 @@ struct ibCompileContext {
 	std::map<unsigned short, std::unique_ptr<std::vector<int>>> m_listBreak;//addresses of Break operators
 
 	//LABELS
-	std::map<wxString, unsigned int> m_listLabelDef; //declarations
+	std::map<ibString, unsigned int> m_listLabelDef; //declarations
 	std::vector<std::shared_ptr<ibLabel>> m_listLabel; //list of encountered transitions to labels
 };
 

@@ -34,16 +34,16 @@ public:
 		ibDocCommand         command{};   // a command's
 		ibProtocol::ibSchema::ibKind   schema{};    // a schema's
 		ibProtocol::ibSchema::ibCommand schemaCommand{};   // …and the schema's command it does (none: the schema shown)
-		wxString             title;       // a schema's and a menu's — a command's is its own
+		ibString             title;       // a schema's and a menu's — a command's is its own
 		ibPictureID          picture = 0; // …the same, wx's SetBitmap on the item: an engine's, by its id — the client
 		                                  // keeps it (core/picturePredefined); 0: drawn without one
 		std::vector<Item>    items;       // a menu's
 	};
 
 	Item& Append(ibDocCommand command);
-	Item& Append(ibProtocol::ibSchema::ibKind schema, const wxString& title);
-	Item& Append(ibProtocol::ibSchema::ibKind schema, ibProtocol::ibSchema::ibCommand command, const wxString& title);
-	Item& AppendSubMenu(const ibClientMenu& menu, const wxString& title);
+	Item& Append(ibProtocol::ibSchema::ibKind schema, const ibString& title);
+	Item& Append(ibProtocol::ibSchema::ibKind schema, ibProtocol::ibSchema::ibCommand command, const ibString& title);
+	Item& AppendSubMenu(const ibClientMenu& menu, const ibString& title);
 	void  AppendSeparator();
 
 	const std::vector<Item>& GetItems() const { return m_items; }

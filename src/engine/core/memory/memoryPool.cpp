@@ -35,7 +35,7 @@ namespace detail {
 			}
 		}
 
-#ifndef _WIN32
+#ifndef __IBMSW__
 		// POSIX has no DLL_THREAD_DETACH, so the drain that covers worker threads on Windows has
 		// no place to live here — and without it every thread that ends keeps its cache forever,
 		// which on a long-running server (its workers come and go with the sessions) accumulates

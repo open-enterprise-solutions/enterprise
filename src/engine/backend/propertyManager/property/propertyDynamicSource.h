@@ -19,11 +19,11 @@ class ibQueryableSourceDescriptor;
 class BACKEND_API ibPropertyDynamicSource : public ibProperty {
 public:
 
-	ibPropertyDynamicSource(ibPropertyCategory* cat, const wxString& name)
+	ibPropertyDynamicSource(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, new ibVariantDataDynamicSource()) {}
-	ibPropertyDynamicSource(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyDynamicSource(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, new ibVariantDataDynamicSource()) {}
-	ibPropertyDynamicSource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyDynamicSource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, new ibVariantDataDynamicSource()) {}
 
 	// The selected source queryable — data lives in the variant; the dynamic list reads it
@@ -59,7 +59,7 @@ public:
 	}
 
 	// Choose the source by its registered identity — resolves the queryable into the variant.
-	void SetSource(const wxString& ns, const wxString& name);
+	void SetSource(const ibString& ns, const ibString& name);
 
 	// get property for grid — hand the owner to the frontend chooser slot.
 	// Runtime data exchange — the source's table id as the value.

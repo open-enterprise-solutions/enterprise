@@ -14,7 +14,7 @@ namespace {
 // One group of the tree — the objects of one kind.
 struct ibFunctionGroup {
 	ibClassID clsid;
-	wxString  title;
+	ibString  title;
 };
 
 // The dialog's groups, in its order: the functional options FIRST — they decide which parts of the system are there
@@ -85,18 +85,18 @@ void ibSchemaAllFunctions::Build(const ibSession& session, const ibDataNode& /*a
 }
 
 std::function<void()> ibSchemaAllFunctions::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	if (static_cast<ibSchemaAllFunctionsCommand>(command) != ibSchemaAllFunctionsCommand::Open) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = wxString::Format(wxT("All functions has no command %d"), command);
+		error = ibString::Format(ibT("All functions has no command %d"), command);
 		return nullptr;
 	}
 
 	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr) {
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the session has no configuration");
+		error = ibT("the session has no configuration");
 		return nullptr;
 	}
 
@@ -115,6 +115,6 @@ std::function<void()> ibSchemaAllFunctions::Command(const ibSession& session, st
 	}
 
 	refusal = ibProtocol::ibRefusal::NotFound;
-	error = wxString::Format(wxT("All functions offers no item %d"), itemId);
+	error = ibString::Format(ibT("All functions offers no item %d"), itemId);
 	return nullptr;
 }

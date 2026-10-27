@@ -8,49 +8,52 @@
 #include "core/compiler/codeDef.h"         // KEY_FROM ... KEY_RESTRICT, CODE_CES
 
 #include "core/stringUtils.h"
+#include "core/stringTokenizer.h"   // ibSplit — the names a clause lists
+
+#include <wx/translation.h>   // _() — the refusals' words
 
 #include <algorithm>
 #include <functional>
 
-wxString ibLinqTotalName(ibLinqTotal total)
+ibString ibLinqTotalName(ibLinqTotal total)
 {
 	switch (total) {
-	case ibLinqTotal::Count:   return wxT("Count");
-	case ibLinqTotal::Min:     return wxT("Min");
-	case ibLinqTotal::Max:     return wxT("Max");
-	case ibLinqTotal::Average: return wxT("Average");
-	default:                   return wxT("Sum");
+	case ibLinqTotal::Count:   return ibT("Count");
+	case ibLinqTotal::Min:     return ibT("Min");
+	case ibLinqTotal::Max:     return ibT("Max");
+	case ibLinqTotal::Average: return ibT("Average");
+	default:                   return ibT("Sum");
 	}
 }
 
 namespace {
 
-wxString Word(int key)
+ibString Word(int key)
 {
 	return ibTranslateCode::GetKeyWord(key);
 }
 
 // Whether `expression` names `name` as a word of its own - `o` in `Round(o.Price, 2)`, not in `total`,
 // not after a dot (`x.o`), not inside a string. How a grouped block finds a column still reading a ROW.
-bool Mentions(const wxString& expression, const wxString& name)
+bool Mentions(const ibString& expression, const ibString& name)
 {
 	if (name.IsEmpty())
 		return false;
-	const auto wordChar = [](wxUniChar c) { return ibIsAlnum(c) || c == wxT('_'); };
+	const auto wordChar = [](ibChar c) { return ibIsAlnum(c) || c == ibT('_'); };
 	bool quoted = false;
 	for (size_t i = 0; i < expression.length(); ++i) {
-		const wxUniChar c = expression[i];
-		if (c == wxT('"')) {
+		const ibChar c = expression[i];
+		if (c == ibT('"')) {
 			quoted = !quoted;
 			continue;
 		}
-		if (quoted || (i > 0 && (wordChar(expression[i - 1]) || expression[i - 1] == wxT('.'))))
+		if (quoted || (i > 0 && (wordChar(expression[i - 1]) || expression[i - 1] == ibT('.'))))
 			continue;
 		if (expression.length() - i < name.length())
 			break;
 		const size_t after = i + name.length();
 		if ((after == expression.length() || !wordChar(expression[after]))
-			&& stringUtils::CompareString(expression.Mid(i, name.length()), name))
+			&& stringUtils::IsSameAs(expression.Mid(i, name.length()), name))
 			return true;
 	}
 	return false;
@@ -58,22 +61,22 @@ bool Mentions(const wxString& expression, const wxString& name)
 
 // Several values made into ONE, which a group compares by its contents (ibValueContainer::CompareValueLS)
 // - `New Structure("Customer, Warehouse", o.Customer, o.Warehouse)`; its fields are read back by name.
-wxString MadeOne(const std::vector<std::pair<wxString, wxString>>& parts)
+ibString MadeOne(const std::vector<std::pair<ibString, ibString>>& parts)
 {
-	wxString names, values;
-	for (const std::pair<wxString, wxString>& part : parts) {
-		names += (names.IsEmpty() ? wxString() : wxString(wxT(", "))) + part.first;
-		values += wxT(", ") + part.second;
+	ibString names, values;
+	for (const std::pair<ibString, ibString>& part : parts) {
+		names += (names.IsEmpty() ? ibString() : ibString(ibT(", "))) + part.first;
+		values += ibT(", ") + part.second;
 	}
-	return Word(KEY_NEW) + wxT(" Structure(\"") + names + wxT("\"") + values + wxT(")");
+	return Word(KEY_NEW) + ibT(" Structure(\"") + names + ibT("\"") + values + ibT(")");
 }
 
-bool IsName(const wxString& text)
+bool IsName(const ibString& text)
 {
 	if (text.IsEmpty() || ibIsDigit(text[0]))
 		return false;
-	for (const wxUniChar c : text)
-		if (!ibIsAlnum(c) && c != wxT('_'))
+	for (const ibChar c : text)
+		if (!ibIsAlnum(c) && c != ibT('_'))
 			return false;
 	return true;
 }
@@ -81,29 +84,29 @@ bool IsName(const wxString& text)
 // What a grouped block writes, worked out once and read by Render and Parse alike: the key, what each
 // group keeps of its rows, and the words that reach a key and a total from the group.
 struct ibGroupWords {
-	wxString                                     m_key;       // `By …`
-	wxString                                     m_kept;      // `Group … By` - what `Values` holds
-	std::vector<std::pair<wxString, wxString>>   m_inputs;    // the fields a total reads: name, expression
-	std::vector<wxString>                        m_keyAccess;
-	std::vector<wxString>                        m_totalText;
+	ibString                                     m_key;       // `By …`
+	ibString                                     m_kept;      // `Group … By` - what `Values` holds
+	std::vector<std::pair<ibString, ibString>>   m_inputs;    // the fields a total reads: name, expression
+	std::vector<ibString>                        m_keyAccess;
+	std::vector<ibString>                        m_totalText;
 };
 
 ibGroupWords GroupWordsOf(const ibLinqBlock& block)
 {
 	ibGroupWords words;
-	const wxString group = block.m_groupInto;
+	const ibString group = block.m_groupInto;
 
 	// ONE KEY IS WRITTEN AS IT IS, several are made into one.
 	if (block.m_groupKeys.size() == 1)
 		words.m_key = block.m_groupKeys.front().m_expression;
 	else {
-		std::vector<std::pair<wxString, wxString>> keys;
+		std::vector<std::pair<ibString, ibString>> keys;
 		for (const ibLinqBlockField& key : block.m_groupKeys)
 			keys.emplace_back(key.m_name, key.m_expression);
 		words.m_key = MadeOne(keys);
 	}
 	for (const ibLinqBlockField& key : block.m_groupKeys)
-		words.m_keyAccess.push_back(group + wxT(".Key") + (block.m_groupKeys.size() == 1 ? wxString() : wxT(".") + key.m_name));
+		words.m_keyAccess.push_back(group + ibT(".Key") + (block.m_groupKeys.size() == 1 ? ibString() : ibT(".") + key.m_name));
 
 	// ⭐ WHAT A GROUP KEEPS OF ITS ROWS IS WHAT ITS TOTALS READ - nothing else is read after grouping. One
 	// field is kept as it is, and a total over it is the aggregate itself (`grp.Values.Sum()`); several
@@ -113,12 +116,12 @@ ibGroupWords GroupWordsOf(const ibLinqBlock& block)
 		if (total.m_function == ibLinqTotal::Count)
 			continue;
 		const bool known = std::any_of(words.m_inputs.begin(), words.m_inputs.end(),
-			[&](const std::pair<wxString, wxString>& input) { return stringUtils::CompareString(input.second, total.m_expression); });
+			[&](const std::pair<ibString, ibString>& input) { return stringUtils::IsSameAs(input.second, total.m_expression); });
 		if (!known)
 			words.m_inputs.emplace_back(total.m_name, total.m_expression);
 	}
 	if (words.m_inputs.empty())
-		words.m_kept = block.m_sources.empty() ? wxString() : block.m_sources.front().m_alias;
+		words.m_kept = block.m_sources.empty() ? ibString() : block.m_sources.front().m_alias;
 	else if (words.m_inputs.size() == 1)
 		words.m_kept = words.m_inputs.front().second;
 	else
@@ -126,32 +129,32 @@ ibGroupWords GroupWordsOf(const ibLinqBlock& block)
 
 	// A total over one of several kept fields takes it with a function - spelled in the module's syntax,
 	// the one place a block has to know which it is.
-	const wxString row = group + wxT("Row");
+	const ibString row = group + ibT("Row");
 	const bool braces = block.GetCodeStyle() == CODE_CES;
 	for (const ibLinqBlockTotal& total : block.m_totals) {
-		wxString argument;
+		ibString argument;
 		if (total.m_function != ibLinqTotal::Count && words.m_inputs.size() > 1) {
-			wxString field;
-			for (const std::pair<wxString, wxString>& input : words.m_inputs)
-				if (stringUtils::CompareString(input.second, total.m_expression))
+			ibString field;
+			for (const std::pair<ibString, ibString>& input : words.m_inputs)
+				if (stringUtils::IsSameAs(input.second, total.m_expression))
 					field = input.first;
-			argument = Word(KEY_FUNCTION) + wxT("(") + row + wxT(") ")
+			argument = Word(KEY_FUNCTION) + ibT("(") + row + ibT(") ")
 				+ (braces
-					? wxT("{ ") + Word(KEY_RETURN) + wxT(" ") + row + wxT(".") + field + wxT("; }")
-					: Word(KEY_RETURN) + wxT(" ") + row + wxT(".") + field + wxT(" ") + Word(KEY_ENDFUNCTION));
+					? ibT("{ ") + Word(KEY_RETURN) + ibT(" ") + row + ibT(".") + field + ibT("; }")
+					: Word(KEY_RETURN) + ibT(" ") + row + ibT(".") + field + ibT(" ") + Word(KEY_ENDFUNCTION));
 		}
-		words.m_totalText.push_back(group + wxT(".Values.") + ibLinqTotalName(total.m_function) + wxT("(") + argument + wxT(")"));
+		words.m_totalText.push_back(group + ibT(".Values.") + ibLinqTotalName(total.m_function) + ibT("(") + argument + ibT(")"));
 	}
 	return words;
 }
 
 // Two spellings of one expression - `grp.Key.Customer` and `grp . Key.Customer` - are one.
-bool SameWords(const wxString& a, const wxString& b)
+bool SameWords(const ibString& a, const ibString& b)
 {
-	wxString x(a), y(b);
-	x.Replace(wxT(" "), wxEmptyString);
-	y.Replace(wxT(" "), wxEmptyString);
-	return stringUtils::CompareString(x, y);
+	ibString x(a), y(b);
+	x.Replace(ibT(" "), ibEmptyString);
+	y.Replace(ibT(" "), ibEmptyString);
+	return stringUtils::IsSameAs(x, y);
 }
 
 } // namespace
@@ -179,148 +182,148 @@ std::vector<int> ibLinqClausesAfter(int lastKeyword)
 	}
 }
 
-wxString ibLinqBlock::Render(const wxString& indent, wxString& refusal) const
+ibString ibLinqBlock::Render(const ibString& indent, ibString& refusal) const
 {
 	return Write(indent, refusal, /*draft*/ false);
 }
 
-wxString ibLinqBlock::RenderDraft(const wxString& indent, wxString& refusal) const
+ibString ibLinqBlock::RenderDraft(const ibString& indent, ibString& refusal) const
 {
 	return Write(indent, refusal, /*draft*/ true);
 }
 
-wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draft) const
+ibString ibLinqBlock::Write(const ibString& indent, ibString& refusal, bool draft) const
 {
 	refusal.clear();
 
 	if (m_sources.empty()) {
 		refusal = _("A query needs a source: add a table or a variable to read.");
-		return wxString();
+		return ibString();
 	}
 
 	// ⭐ A REFUSAL IS SAID, AND THE WRITING GOES ON: the first thing wrong is what the refusal names, and
 	// the text is still written the way the parts stand - a preview that went blank at the first wrong
 	// cell showed nothing of the rest (Max: "it clears everything"). Only Render withholds it.
-	const auto refuse = [&refusal](const wxString& why) {
+	const auto refuse = [&refusal](const ibString& why) {
 		if (refusal.IsEmpty())
 			refusal = why;
 	};
 	// ⭐ A DOT WITH NOTHING AFTER IT IS A FIELD NOT WRITTEN YET - the join keys start as `g.` for exactly
 	// that. Written into a module it is worse than missing: the lexer reads the next word as the field,
 	// `g. Equals c.` as `g.Equals`, the compiler stops there, and the query it brackets ends mid-way.
-	const auto finished = [&refuse](const wxString& expression) {
-		if (wxString(expression).Trim(true).EndsWith(wxT(".")))
-			refuse(wxString::Format(_("'%s' is not finished: write the field after the dot."), wxString(expression).Trim(true).Trim(false)));
+	const auto finished = [&refuse](const ibString& expression) {
+		if (ibString(expression).Trim(true).EndsWith(ibT(".")))
+			refuse(ibString::Format(_("'%s' is not finished: write the field after the dot."), ibString(expression).Trim(true).Trim(false)));
 	};
 
 	const auto word = [](int key) { return Word(key); };
 
 	// ⭐ A NUMBER OF ROWS IS A NUMBER - written as one, or a variable that holds one (the compiler checks a
 	// variable whose type it knows, compileCodeLINQ.cpp). A string or a fraction is not a count.
-	for (const std::pair<int, const wxString*>& cut : { std::make_pair((int)KEY_SKIP, &m_skip), std::make_pair((int)KEY_TAKE, &m_take) }) {
-		const wxString& text = *cut.second;
+	for (const std::pair<int, const ibString*>& cut : { std::make_pair((int)KEY_SKIP, &m_skip), std::make_pair((int)KEY_TAKE, &m_take) }) {
+		const ibString& text = *cut.second;
 		if (text.IsEmpty())
 			continue;
-		bool count = text[0] != wxT('"') && text[0] != wxT('\'');
+		bool count = text[0] != ibT('"') && text[0] != ibT('\'');
 		if (count && ibIsDigit(text[0]))
-			count = std::all_of(text.begin(), text.end(), [](wxUniChar c) { return ibIsDigit(c); });
+			count = std::all_of(text.begin(), text.end(), [](ibChar c) { return ibIsDigit(c); });
 		if (!count)
-			refuse(wxString::Format(_("'%s' takes a number of rows: a whole number, or a variable that holds one."),
+			refuse(ibString::Format(_("'%s' takes a number of rows: a whole number, or a variable that holds one."),
 				word(cut.first)));
 	}
 
-	std::vector<wxString> lines;
+	std::vector<ibString> lines;
 	// Every query word written, in order, and whether it OPENS a clause - the openers are what the
 	// order is checked by; the modifiers only move "the last word" along, as they do in the text.
 	std::vector<std::pair<int, bool>> spoken;
 	const auto say = [&spoken](int key, bool opens) { spoken.emplace_back(key, opens); };
 
-	const wxString firstAlias = m_sources.front().m_alias;
+	const ibString firstAlias = m_sources.front().m_alias;
 
 	for (size_t i = 0; i < m_sources.size(); ++i) {
 		const ibLinqBlockSource& source = m_sources[i];
 		if (source.m_alias.IsEmpty() || source.m_expression.IsEmpty())
 			refuse(_("A source is missing its name in the query or what it reads."));
 		else if (!IsName(source.m_alias))
-			refuse(wxString::Format(_("'%s' cannot name a source: a name is letters, digits and '_', not starting with a digit."),
+			refuse(ibString::Format(_("'%s' cannot name a source: a name is letters, digits and '_', not starting with a digit."),
 				source.m_alias));
 		finished(source.m_expression);
 		// The first source is always a `From` - a join needs something to join to.
 		if (source.m_join && i > 0) {
 			if (source.m_leftKey.IsEmpty() || source.m_rightKey.IsEmpty())
-				refuse(wxString::Format(_("The join of '%s' needs both keys: what it is joined on, and what that equals."),
+				refuse(ibString::Format(_("The join of '%s' needs both keys: what it is joined on, and what that equals."),
 					source.m_alias));
 			finished(source.m_leftKey);
 			finished(source.m_rightKey);
-			lines.push_back(word(KEY_JOIN) + wxT(" ") + source.m_alias + wxT(" ") + word(KEY_IN) + wxT(" ")
-				+ source.m_expression + wxT(" ") + word(KEY_ON) + wxT(" ") + source.m_leftKey + wxT(" ")
-				+ word(KEY_EQUALS) + wxT(" ") + source.m_rightKey);
+			lines.push_back(word(KEY_JOIN) + ibT(" ") + source.m_alias + ibT(" ") + word(KEY_IN) + ibT(" ")
+				+ source.m_expression + ibT(" ") + word(KEY_ON) + ibT(" ") + source.m_leftKey + ibT(" ")
+				+ word(KEY_EQUALS) + ibT(" ") + source.m_rightKey);
 			say(KEY_JOIN, true); say(KEY_IN, false); say(KEY_ON, false); say(KEY_EQUALS, false);
 		}
 		else {
-			lines.push_back(word(KEY_FROM) + wxT(" ") + source.m_alias + wxT(" ") + word(KEY_IN) + wxT(" ")
+			lines.push_back(word(KEY_FROM) + ibT(" ") + source.m_alias + ibT(" ") + word(KEY_IN) + ibT(" ")
 				+ source.m_expression);
 			say(KEY_FROM, true); say(KEY_IN, false);
 		}
 	}
 
-	const auto writeConditions = [&](const std::vector<wxString>& conditions) {
-		for (const wxString& condition : conditions) {
-			const wxString text = wxString(condition).Trim(true).Trim(false);
+	const auto writeConditions = [&](const std::vector<ibString>& conditions) {
+		for (const ibString& condition : conditions) {
+			const ibString text = ibString(condition).Trim(true).Trim(false);
 			if (text.IsEmpty())
 				continue;
 			finished(text);
-			lines.push_back(word(KEY_WHERE) + wxT(" ") + text);
+			lines.push_back(word(KEY_WHERE) + ibT(" ") + text);
 			say(KEY_WHERE, true);
 		}
 	};
 
 	// The order, then the cut. ONE clause, each key followed by its own way when it runs descending
 	// (`OrderBy g.Group, g.Price Descending, g.Name`). `spell` is how an order key is written where it stands.
-	const auto writeOrderAndCut = [&](const std::function<wxString(const wxString&)>& spell) {
-		wxString keys;
+	const auto writeOrderAndCut = [&](const std::function<ibString(const ibString&)>& spell) {
+		ibString keys;
 		size_t descendingKeys = 0;
 		for (const ibLinqBlockOrder& order : m_order) {
-			const wxString key = wxString(order.m_expression).Trim(true).Trim(false);
+			const ibString key = ibString(order.m_expression).Trim(true).Trim(false);
 			if (key.IsEmpty())
 				continue;
 			finished(key);
-			keys += (keys.IsEmpty() ? wxString() : wxString(wxT(", "))) + spell(key)
-				+ (order.m_descending ? wxString(wxT(" ")) + word(KEY_DESCENDING) : wxString());
+			keys += (keys.IsEmpty() ? ibString() : ibString(ibT(", "))) + spell(key)
+				+ (order.m_descending ? ibString(ibT(" ")) + word(KEY_DESCENDING) : ibString());
 			if (order.m_descending)
 				++descendingKeys;
 		}
 		if (!keys.IsEmpty()) {
-			lines.push_back(word(KEY_ORDERBY) + wxT(" ") + keys);
+			lines.push_back(word(KEY_ORDERBY) + ibT(" ") + keys);
 			say(KEY_ORDERBY, true);
 			for (size_t d = 0; d < descendingKeys; ++d)
 				say(KEY_DESCENDING, false);
 		}
 		if (!m_skip.IsEmpty()) {
-			lines.push_back(word(KEY_SKIP) + wxT(" ") + m_skip);
+			lines.push_back(word(KEY_SKIP) + ibT(" ") + m_skip);
 			say(KEY_SKIP, true);
 		}
 		if (!m_take.IsEmpty()) {
-			lines.push_back(word(KEY_TAKE) + wxT(" ") + m_take);
+			lines.push_back(word(KEY_TAKE) + ibT(" ") + m_take);
 			say(KEY_TAKE, true);
 		}
 	};
-	const auto asWritten = [](const wxString& key) { return key; };
+	const auto asWritten = [](const ibString& key) { return key; };
 
 	// The columns inside the braces, `name = expression` each.
-	const auto braced = [](const std::vector<std::pair<wxString, wxString>>& columns) {
-		wxString text;
-		for (const std::pair<wxString, wxString>& column : columns)
-			text += (text.IsEmpty() ? wxString() : wxString(wxT(", "))) + column.first + wxT(" = ") + column.second;
-		return wxT("{ ") + text + wxT(" }");
+	const auto braced = [](const std::vector<std::pair<ibString, ibString>>& columns) {
+		ibString text;
+		for (const std::pair<ibString, ibString>& column : columns)
+			text += (text.IsEmpty() ? ibString() : ibString(ibT(", "))) + column.first + ibT(" = ") + column.second;
+		return ibT("{ ") + text + ibT(" }");
 	};
 
 	// The source a text still reads row by row - an alias of the block, named in it.
-	const auto readsRow = [this](const wxString& text) {
+	const auto readsRow = [this](const ibString& text) {
 		for (const ibLinqBlockSource& source : m_sources)
 			if (Mentions(text, source.m_alias))
 				return source.m_alias;
-		return wxString();
+		return ibString();
 	};
 
 	writeConditions(m_conditions);
@@ -331,15 +334,15 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 
 	// ⭐ A NAME IS A NAME, grouped or not: letters, digits and '_' - `Column1 ak` is two words, and the
 	// compiler reads the first as the column and stops at the second. Every column once.
-	std::vector<wxString> names;
-	const auto claim = [&](const wxString& name) {
+	std::vector<ibString> names;
+	const auto claim = [&](const ibString& name) {
 		if (!IsName(name)) {
-			refuse(wxString::Format(_("'%s' cannot name a column: a name is letters, digits and '_', not starting with a digit."), name));
+			refuse(ibString::Format(_("'%s' cannot name a column: a name is letters, digits and '_', not starting with a digit."), name));
 			return;
 		}
-		for (const wxString& taken : names)
-			if (stringUtils::CompareString(taken, name)) {
-				refuse(wxString::Format(_("Two columns of the answer are named '%s'."), name));
+		for (const ibString& taken : names)
+			if (stringUtils::IsSameAs(taken, name)) {
+				refuse(ibString::Format(_("Two columns of the answer are named '%s'."), name));
 				return;
 			}
 		names.push_back(name);
@@ -351,8 +354,8 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 
 		// THE ANSWER'S COLUMNS, or the row itself when none are named. One column with no name of its
 		// own is written bare, the way the language writes it.
-		wxString select = word(KEY_SELECT) + wxT(" ");
-		std::vector<std::pair<wxString, wxString>> columns;
+		ibString select = word(KEY_SELECT) + ibT(" ");
+		std::vector<std::pair<ibString, ibString>> columns;
 		bool unnamed = false;
 		for (const ibLinqBlockField& field : m_fields)
 			if (!field.m_expression.IsEmpty()) {
@@ -376,13 +379,13 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 		// for several keys or several fields read, a field of the value they are made into.
 		for (const ibLinqBlockField& key : m_groupKeys) {
 			if (key.m_expression.IsEmpty())
-				refuse(wxString::Format(_("The key '%s' of the grouping does not say what it groups by."), key.m_name));
+				refuse(ibString::Format(_("The key '%s' of the grouping does not say what it groups by."), key.m_name));
 			finished(key.m_expression);
 			claim(key.m_name);
 		}
 		for (const ibLinqBlockTotal& total : m_totals) {
 			if (total.m_function != ibLinqTotal::Count && total.m_expression.IsEmpty())
-				refuse(wxString::Format(_("The total '%s' does not say which field it reads."), total.m_name));
+				refuse(ibString::Format(_("The total '%s' does not say which field it reads."), total.m_name));
 			finished(total.m_expression);
 			claim(total.m_name);
 		}
@@ -397,33 +400,33 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 					"Name the group to choose its columns, totals or conditions on groups."));
 			writeOrderAndCut(asWritten);
 			const ibGroupWords group = GroupWordsOf(*this);
-			lines.push_back(word(KEY_GROUP) + wxT(" ") + group.m_kept + wxT(" ") + word(KEY_BY) + wxT(" ") + group.m_key);
+			lines.push_back(word(KEY_GROUP) + ibT(" ") + group.m_kept + ibT(" ") + word(KEY_BY) + ibT(" ") + group.m_key);
 			say(KEY_GROUP, true); say(KEY_BY, false);
 		}
 		else {
 			if (!IsName(m_groupInto))
-				refuse(wxString::Format(_("'%s' cannot name the group: a name is letters, digits and '_', not starting with a digit."),
+				refuse(ibString::Format(_("'%s' cannot name the group: a name is letters, digits and '_', not starting with a digit."),
 					m_groupInto));
 			const ibGroupWords group = GroupWordsOf(*this);
-			lines.push_back(word(KEY_GROUP) + wxT(" ") + group.m_kept + wxT(" ") + word(KEY_BY) + wxT(" ") + group.m_key
-				+ wxT(" ") + word(KEY_INTO) + wxT(" ") + m_groupInto);
+			lines.push_back(word(KEY_GROUP) + ibT(" ") + group.m_kept + ibT(" ") + word(KEY_BY) + ibT(" ") + group.m_key
+				+ ibT(" ") + word(KEY_INTO) + ibT(" ") + m_groupInto);
 			say(KEY_GROUP, true); say(KEY_BY, false); say(KEY_INTO, false);
 
 			// ⭐ AFTER `Into` THE ROWS ARE GONE - what follows reads the groups. A condition on groups, an
 			// order or a column that still reads a source by its alias reads nothing the compiler can
 			// reach, and is said with the way out rather than written.
-			for (const wxString& condition : m_groupConditions) {
-				const wxString alias = readsRow(condition);
+			for (const ibString& condition : m_groupConditions) {
+				const ibString alias = readsRow(condition);
 				if (!alias.IsEmpty())
-					refuse(wxString::Format(_("A condition on groups reads '%s' row by row; after grouping it reads the group '%s'."),
+					refuse(ibString::Format(_("A condition on groups reads '%s' row by row; after grouping it reads the group '%s'."),
 						alias, m_groupInto));
 			}
 			writeConditions(m_groupConditions);
 
 			// An order written by a key's expression or name, or by a total's name, is that key or that
 			// total as the group reaches it.
-			wxString rowOrder;
-			writeOrderAndCut([&](const wxString& key) -> wxString {
+			ibString rowOrder;
+			writeOrderAndCut([&](const ibString& key) -> ibString {
 				for (size_t k = 0; k < m_groupKeys.size(); ++k)
 					if (SameWords(key, m_groupKeys[k].m_expression) || SameWords(key, m_groupKeys[k].m_name))
 						return group.m_keyAccess[k];
@@ -435,10 +438,10 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 				return key;
 			});
 			if (!rowOrder.IsEmpty())
-				refuse(wxString::Format(_("The order by '%s' reads a row, but the answer is groups: order by a key or a total."), rowOrder));
+				refuse(ibString::Format(_("The order by '%s' reads a row, but the answer is groups: order by a key or a total."), rowOrder));
 
 			// THE COLUMNS: the keys, the totals, then whatever else is written over the group.
-			std::vector<std::pair<wxString, wxString>> columns;
+			std::vector<std::pair<ibString, ibString>> columns;
 			for (size_t k = 0; k < m_groupKeys.size(); ++k)
 				columns.emplace_back(m_groupKeys[k].m_name, group.m_keyAccess[k]);
 			for (size_t t = 0; t < m_totals.size(); ++t)
@@ -446,16 +449,16 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 			for (const ibLinqBlockField& field : m_fields) {
 				if (field.m_expression.IsEmpty())
 					continue;
-				const wxString name = field.m_name.IsEmpty() ? field.m_expression : field.m_name;
-				const wxString alias = readsRow(field.m_expression);
+				const ibString name = field.m_name.IsEmpty() ? field.m_expression : field.m_name;
+				const ibString alias = readsRow(field.m_expression);
 				if (!alias.IsEmpty())
-					refuse(wxString::Format(_("The column '%s' reads '%s' row by row, but the query groups its rows: "
+					refuse(ibString::Format(_("The column '%s' reads '%s' row by row, but the query groups its rows: "
 						"make it a key or a total on the Grouping tab, or write it over the group '%s'."), name, alias, m_groupInto));
 				finished(field.m_expression);
 				claim(name);
 				columns.emplace_back(name, field.m_expression);
 			}
-			lines.push_back(word(KEY_SELECT) + wxT(" ") + braced(columns));
+			lines.push_back(word(KEY_SELECT) + ibT(" ") + braced(columns));
 			say(KEY_SELECT, true);
 		}
 	}
@@ -472,17 +475,17 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 		if (entry.second && last != -1) {
 			const std::vector<int> allowed = ibLinqClausesAfter(last);
 			if (std::find(allowed.begin(), allowed.end(), entry.first) == allowed.end())
-				refuse(wxString::Format(_("'%s' cannot follow '%s' in a query."), word(entry.first), word(last)));
+				refuse(ibString::Format(_("'%s' cannot follow '%s' in a query."), word(entry.first), word(last)));
 		}
 		last = entry.first;
 	}
 
 	if (!refusal.IsEmpty() && !draft)
-		return wxString();
+		return ibString();
 
-	wxString text;
+	ibString text;
 	for (size_t i = 0; i < lines.size(); ++i)
-		text += (i == 0 ? wxString() : wxString(wxT("\n")) + indent) + lines[i];
+		text += (i == 0 ? ibString() : ibString(ibT("\n")) + indent) + lines[i];
 	return text;
 }
 
@@ -490,7 +493,7 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 //  Reading a block back
 // ---------------------------------------------------------------------------
 
-bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refusal, size_t* consumed)
+bool ibLinqBlock::Parse(const ibString& text, ibLinqBlock& block, ibString& refusal, size_t* consumed)
 {
 	block = ibLinqBlock(block.GetCodeStyle());   // emptied, read in the syntax it was made for
 	refusal.clear();
@@ -504,7 +507,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 	// the comment after it, and a dot followed by a space looked like a dot followed by a name. CI on
 	// 991d4d53, Linux and macOS alike - so the end is read here (tokenEnd). A `;` is added so the last
 	// clause has a token after it too.
-	const wxString source = text + wxT("\n;");
+	const ibString source = text + ibT("\n;");
 	ibTranslateCode lexer(block.GetCodeStyle());
 	lexer.SetLexemMode(ibLexemMode::Editing);
 	lexer.Load(source);
@@ -528,12 +531,12 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		const unsigned int limit = i + 1 < lexer.GetLexCount() ? lexer.GetLexAt(i + 1).m_numString : (unsigned int)source.length();
 		if (from >= source.length())
 			return from;
-		const wxUniChar open = source[from];
-		if (lexer.GetLexAt(i).m_lexType == CONSTANT && (open == wxT('"') || open == wxT('\''))) {
+		const ibChar open = source[from];
+		if (lexer.GetLexAt(i).m_lexType == CONSTANT && (open == ibT('"') || open == ibT('\''))) {
 			for (unsigned int at = from + 1; at < source.length(); ++at) {
 				if (source[at] != open)
 					continue;
-				if (open == wxT('"') && at + 1 < source.length() && source[at + 1] == wxT('"')) {
+				if (open == ibT('"') && at + 1 < source.length() && source[at + 1] == ibT('"')) {
 					++at;       // a doubled quote is a quote inside the string
 					continue;
 				}
@@ -543,7 +546,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		}
 		unsigned int at = from;
 		while (at < limit && !ibIsSpace(source[at])
-			&& !(source[at] == wxT('/') && at + 1 < limit && source[at + 1] == wxT('/')))
+			&& !(source[at] == ibT('/') && at + 1 < limit && source[at + 1] == ibT('/')))
 			++at;
 		return at > from ? at : std::min(from + 1, limit);
 	};
@@ -552,11 +555,11 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 	// and no comment on either side.
 	const auto skipGap = [&source](unsigned int at) {
 		while (at < source.length()) {
-			const wxUniChar c = source[at];
-			if (c == wxT(' ') || c == wxT('\t') || c == wxT('\r') || c == wxT('\n'))
+			const ibChar c = source[at];
+			if (c == ibT(' ') || c == ibT('\t') || c == ibT('\r') || c == ibT('\n'))
 				++at;
-			else if (c == wxT('/') && at + 1 < source.length() && source[at + 1] == wxT('/'))
-				while (at < source.length() && source[at] != wxT('\n'))
+			else if (c == ibT('/') && at + 1 < source.length() && source[at + 1] == ibT('/'))
+				while (at < source.length() && source[at] != ibT('\n'))
 					++at;
 			else
 				break;
@@ -565,12 +568,12 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 	};
 	const auto span = [&](size_t a, size_t b) {
 		if (b <= a || b > end + 1)
-			return wxString();
+			return ibString();
 		const unsigned int from = skipGap(lexer.GetLexAt(a).m_numString);
 		const unsigned int to = tokenEnd(std::min(b, end) - 1);
-		return wxString(source.Mid(from, to > from ? to - from : 0)).Trim(true).Trim(false);
+		return ibString(source.Mid(from, to > from ? to - from : 0)).Trim(true).Trim(false);
 	};
-	const auto isDelimiter = [&](size_t i, wxUniChar c) {
+	const auto isDelimiter = [&](size_t i, ibChar c) {
 		return i < end && lexer.GetLexAt(i).m_lexType == DELIMITER && lexer.GetLexAt(i).m_numData == (int)c;
 	};
 	// ⭐ THE QUERY WORD AT A TOKEN - including one the lexer took for a NAME because a dot stood before
@@ -582,7 +585,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			return -1;
 		if (lexer.GetLexAt(i).m_lexType == KEYWORD)
 			return lexer.GetLexAt(i).m_numData;
-		if (lexer.GetLexAt(i).m_lexType != IDENTIFIER || i == 0 || !isDelimiter(i - 1, wxT('.')))
+		if (lexer.GetLexAt(i).m_lexType != IDENTIFIER || i == 0 || !isDelimiter(i - 1, ibT('.')))
 			return -1;
 		if (lexer.GetLexAt(i).m_numString <= tokenEnd(i - 1))
 			return -1;   // the name touches its dot: `o.Select` is a name, as the lexer says
@@ -625,7 +628,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			if (l.m_numData == '(' || l.m_numData == '[' || l.m_numData == '{') ++depth;
 			else if (l.m_numData == ')' || l.m_numData == ']' || l.m_numData == '}') {
 				--depth;
-				if (depth == 0 && l.m_numData == '}' && selectAt + 1 < end && isDelimiter(selectAt + 1, wxT('{'))) {
+				if (depth == 0 && l.m_numData == '}' && selectAt + 1 < end && isDelimiter(selectAt + 1, ibT('{'))) {
 					stop = isKey(i + 1, KEY_DISTINCT) ? i + 2 : i + 1;
 					if (stop == i + 2)
 						starts.push_back(i + 1);
@@ -635,7 +638,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			else if (l.m_numData == ';' && depth == 0) { stop = i; break; }
 			continue;
 		}
-		if (depth == 0 && selectAt < end && !isDelimiter(selectAt + 1, wxT('{')) && l.GetLine() != lexer.GetLexAt(selectAt).GetLine()
+		if (depth == 0 && selectAt < end && !isDelimiter(selectAt + 1, ibT('{')) && l.GetLine() != lexer.GetLexAt(selectAt).GetLine()
 			&& !isKey(i, KEY_DISTINCT)) {
 			stop = i;   // a bare `Select` ends with its line
 			break;
@@ -644,7 +647,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		if (depth != 0 || key < 0)
 			continue;
 		if (key == KEY_VAR) {
-			refusal = wxString::Format(_("The query has a '%s' clause, which the constructor does not build yet."),
+			refusal = ibString::Format(_("The query has a '%s' clause, which the constructor does not build yet."),
 				ibTranslateCode::GetKeyWord(KEY_VAR));
 			return false;
 		}
@@ -674,7 +677,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		}
 		return to;
 	};
-	const auto splitAtTop = [&](size_t from, size_t to, wxUniChar comma) {
+	const auto splitAtTop = [&](size_t from, size_t to, ibChar comma) {
 		std::vector<std::pair<size_t, size_t>> parts;
 		size_t at = from;
 		while (at < to) {
@@ -687,47 +690,47 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 
 	// `New Structure("A, B", a, b)` standing exactly on [from, to): its names, and the text of each
 	// value - how several keys, or the several fields a group keeps, are written (GroupWordsOf).
-	const auto madeOne = [&](size_t from, size_t to, std::vector<std::pair<wxString, wxString>>& parts) {
+	const auto madeOne = [&](size_t from, size_t to, std::vector<std::pair<ibString, ibString>>& parts) {
 		parts.clear();
-		if (to <= from + 5 || !isKey(from, KEY_NEW) || !stringUtils::CompareString(name(from + 1), wxT("Structure"))
-			|| !isDelimiter(from + 2, wxT('(')) || lexer.GetLexAt(from + 3).m_lexType != CONSTANT || !isDelimiter(from + 4, wxT(',')))
+		if (to <= from + 5 || !isKey(from, KEY_NEW) || !stringUtils::IsSameAs(name(from + 1), ibT("Structure"))
+			|| !isDelimiter(from + 2, ibT('(')) || lexer.GetLexAt(from + 3).m_lexType != CONSTANT || !isDelimiter(from + 4, ibT(',')))
 			return false;
 		// The bracket that closes the one after `Structure` has to be the last token.
 		size_t close = from + 2;
 		for (int level = 0; close < to; ++close) {
-			if (isDelimiter(close, wxT('(')) || isDelimiter(close, wxT('[')) || isDelimiter(close, wxT('{'))) ++level;
-			else if ((isDelimiter(close, wxT(')')) || isDelimiter(close, wxT(']')) || isDelimiter(close, wxT('}'))) && --level == 0) break;
+			if (isDelimiter(close, ibT('(')) || isDelimiter(close, ibT('[')) || isDelimiter(close, ibT('{'))) ++level;
+			else if ((isDelimiter(close, ibT(')')) || isDelimiter(close, ibT(']')) || isDelimiter(close, ibT('}'))) && --level == 0) break;
 		}
 		if (close != to - 1)
 			return false;
-		const wxArrayString names = wxSplit(lexer.GetLexAt(from + 3).m_valData.GetString(), wxT(','), wxT('\0'));
-		const auto values = splitAtTop(from + 5, to - 1, wxT(','));
+		const std::vector<ibString> names = ibSplit(lexer.GetLexAt(from + 3).m_valData.GetString(), ibT(','), ibT('\0'));
+		const auto values = splitAtTop(from + 5, to - 1, ibT(','));
 		if (names.size() != values.size())
 			return false;
 		for (size_t i = 0; i < values.size(); ++i)
-			parts.emplace_back(wxString(names[i]).Trim(true).Trim(false), span(values[i].first, values[i].second));
+			parts.emplace_back(ibString(names[i]).Trim(true).Trim(false), span(values[i].first, values[i].second));
 		return true;
 	};
 
 	bool grouped = false;
 	bool rowsCut = false;                                   // ordered, skipped or taken before a group
-	std::vector<std::pair<wxString, wxString>> keptParts;   // what a group keeps, when it keeps several fields…
-	wxString keptOne;                                       // …or the one it keeps
+	std::vector<std::pair<ibString, ibString>> keptParts;   // what a group keeps, when it keeps several fields…
+	ibString keptOne;                                       // …or the one it keeps
 
 	// ⭐ A COLUMN OF A GROUPED ANSWER, READ BACK AS WHAT IT WAS BUILT FROM: `<group>.Key` or
 	// `<group>.Key.<name>` is a key, `<group>.Values.Sum(…)` a total over a field the group keeps. False
 	// for anything else, which stays a column written over the group, as it is.
-	const auto groupColumn = [&](const wxString& column, size_t a, size_t b) {
-		const wxString& group = block.m_groupInto;
-		if (b <= a + 2 || !name(a).IsSameAs(group, false) || !isDelimiter(a + 1, wxT('.')))
+	const auto groupColumn = [&](const ibString& column, size_t a, size_t b) {
+		const ibString& group = block.m_groupInto;
+		if (b <= a + 2 || !name(a).IsSameAs(group, false) || !isDelimiter(a + 1, ibT('.')))
 			return false;
-		const wxString member = name(a + 2);
-		if (stringUtils::CompareString(member, wxT("Key"))) {
+		const ibString member = name(a + 2);
+		if (stringUtils::IsSameAs(member, ibT("Key"))) {
 			if (b == a + 3 && block.m_groupKeys.size() == 1) {
 				block.m_groupKeys.front().m_name = column;
 				return true;
 			}
-			if (b == a + 5 && isDelimiter(a + 3, wxT('.')))
+			if (b == a + 5 && isDelimiter(a + 3, ibT('.')))
 				for (ibLinqBlockField& key : block.m_groupKeys)
 					if (name(a + 4).IsSameAs(key.m_name, false)) {
 						key.m_name = column;   // the key's field and its column are one name
@@ -735,8 +738,8 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 					}
 			return false;
 		}
-		if (!stringUtils::CompareString(member, wxT("Values")) || !isDelimiter(a + 3, wxT('.'))
-			|| !isDelimiter(a + 5, wxT('(')) || !isDelimiter(b - 1, wxT(')')))
+		if (!stringUtils::IsSameAs(member, ibT("Values")) || !isDelimiter(a + 3, ibT('.'))
+			|| !isDelimiter(a + 5, ibT('(')) || !isDelimiter(b - 1, ibT(')')))
 			return false;
 
 		ibLinqBlockTotal total;
@@ -756,7 +759,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		else if (b == a + 7) {
 			// No argument: the group keeps one field - unless what it keeps is a row itself.
 			if (keptOne.IsEmpty() || std::any_of(block.m_sources.begin(), block.m_sources.end(),
-					[&](const ibLinqBlockSource& from) { return stringUtils::CompareString(from.m_alias, keptOne); }))
+					[&](const ibLinqBlockSource& from) { return stringUtils::IsSameAs(from.m_alias, keptOne); }))
 				return false;
 			total.m_expression = keptOne;
 		}
@@ -765,11 +768,11 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			size_t at = a + 6;
 			while (at < b && !isKey(at, KEY_RETURN))
 				++at;
-			if (at + 3 >= b || !isDelimiter(at + 2, wxT('.')))
+			if (at + 3 >= b || !isDelimiter(at + 2, ibT('.')))
 				return false;
-			const wxString field = name(at + 3);
-			for (const std::pair<wxString, wxString>& part : keptParts)
-				if (stringUtils::CompareString(part.first, field))
+			const ibString field = name(at + 3);
+			for (const std::pair<ibString, ibString>& part : keptParts)
+				if (stringUtils::IsSameAs(part.first, field))
 					total.m_expression = part.second;
 			if (total.m_expression.IsEmpty())
 				return false;
@@ -820,12 +823,12 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			const size_t into = findAtTop(by, e, [&](size_t i) { return isKey(i, KEY_INTO); });
 
 			// The keys: several made into one, or one as it is - named later, by its column.
-			std::vector<std::pair<wxString, wxString>> keys;
+			std::vector<std::pair<ibString, ibString>> keys;
 			if (madeOne(by + 1, into, keys))
-				for (const std::pair<wxString, wxString>& part : keys)
+				for (const std::pair<ibString, ibString>& part : keys)
 					block.m_groupKeys.push_back({ part.first, part.second });
 			else
-				block.m_groupKeys.push_back({ wxString(), span(by + 1, into) });
+				block.m_groupKeys.push_back({ ibString(), span(by + 1, into) });
 
 			// What each group keeps of its rows - what its totals read.
 			if (!madeOne(s + 1, by, keptParts))
@@ -845,7 +848,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		case KEY_ORDERBY: {
 			rowsCut = rowsCut || !grouped;
 			// Each key may close with its own way: `OrderBy a, b Descending, c`.
-			for (const auto& part : splitAtTop(s + 1, e, wxT(','))) {
+			for (const auto& part : splitAtTop(s + 1, e, ibT(','))) {
 				size_t keyEnd = part.second;
 				bool descending = false;
 				if (part.second > part.first + 1
@@ -866,19 +869,19 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			block.m_take = span(s + 1, e);
 			break;
 		case KEY_SELECT: {
-			if (isDelimiter(s + 1, wxT('{'))) {
+			if (isDelimiter(s + 1, ibT('{'))) {
 				// The columns inside the braces, a comma between each, `name = expression` each. The
 				// closing brace is the one that brings the depth back to where the opening one left it.
 				const size_t inner = s + 2;
 				size_t closing = inner;
 				for (int level = 0; closing < e; ++closing) {
-					if (isDelimiter(closing, wxT('{')) || isDelimiter(closing, wxT('(')) || isDelimiter(closing, wxT('['))) ++level;
-					else if (isDelimiter(closing, wxT(')')) || isDelimiter(closing, wxT(']'))) --level;
-					else if (isDelimiter(closing, wxT('}'))) { if (level == 0) break; --level; }
+					if (isDelimiter(closing, ibT('{')) || isDelimiter(closing, ibT('(')) || isDelimiter(closing, ibT('['))) ++level;
+					else if (isDelimiter(closing, ibT(')')) || isDelimiter(closing, ibT(']'))) --level;
+					else if (isDelimiter(closing, ibT('}'))) { if (level == 0) break; --level; }
 				}
 				const bool overGroups = grouped && !block.m_groupInto.IsEmpty();
-				for (const auto& part : splitAtTop(inner, closing, wxT(','))) {
-					const size_t assign = findAtTop(part.first, part.second, [&](size_t i) { return isDelimiter(i, wxT('=')); });
+				for (const auto& part : splitAtTop(inner, closing, ibT(','))) {
+					const size_t assign = findAtTop(part.first, part.second, [&](size_t i) { return isDelimiter(i, ibT('=')); });
 					ibLinqBlockField field;
 					size_t valueFrom = part.first;
 					if (assign < part.second) {
@@ -895,12 +898,12 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			}
 			else {
 				// `Select <row>` is the row itself; anything else is one column the language names.
-				const wxString selected = span(s + 1, e);
-				const wxString row = block.m_groupInto.IsEmpty()
-					? (block.m_sources.empty() ? wxString() : block.m_sources.front().m_alias) : block.m_groupInto;
-				if (!stringUtils::CompareString(selected, row)
-					&& !(grouped && !block.m_groupInto.IsEmpty() && groupColumn(wxString(), s + 1, e)))
-					block.m_fields.push_back({ wxString(), selected });
+				const ibString selected = span(s + 1, e);
+				const ibString row = block.m_groupInto.IsEmpty()
+					? (block.m_sources.empty() ? ibString() : block.m_sources.front().m_alias) : block.m_groupInto;
+				if (!stringUtils::IsSameAs(selected, row)
+					&& !(grouped && !block.m_groupInto.IsEmpty() && groupColumn(ibString(), s + 1, e)))
+					block.m_fields.push_back({ ibString(), selected });
 			}
 			break;
 		}
@@ -917,8 +920,8 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		for (ibLinqBlockField& key : block.m_groupKeys) {
 			if (!key.m_name.IsEmpty())
 				continue;
-			const wxString last = key.m_expression.AfterLast(wxT('.'));
-			key.m_name = IsName(last) ? last : wxString(wxT("Key"));
+			const ibString last = key.m_expression.AfterLast(ibT('.'));
+			key.m_name = IsName(last) ? last : ibString(ibT("Key"));
 		}
 		// An order over the groups written in the group's words is read as what Render writes it from:
 		// a key by its expression, a total by its name.

@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "core/clsid.h"               // ibClassID
-#include "core/stringUtils.h"         // stringUtils::CompareString (name lookup)
+#include "core/stringUtils.h"         // stringUtils::IsSameAs (name lookup)
 #include "backend/compiler/typeCtor.h"   // ibCtorAbstractType — the key accessors
 
 // =============================================================================
@@ -31,7 +31,7 @@
 // "not very hot: compile-time resolution of CreateObject(Name)". That was wrong,
 // and measurably so: OPER_NEW resolves the class name AT RUNTIME, on every
 // object a script creates (procUnit.cpp, `CreateObject(className, ...)`). With
-// ~180 registered types and stringUtils::CompareString taking ToStdWstring() of
+// ~180 registered types and stringUtils::IsSameAs taking ToStdWstring() of
 // BOTH sides per comparison, a single `New Structure` was paying ~360 heap
 // allocations — measured at 18.5 us per New (tests/bench_runtime.cpp,
 // DISABLED_RecordParts). See docs/private/runtime-perf.md §5.9.
@@ -66,7 +66,7 @@ class ibCtorRegistry {
 	// Names are matched case-insensitively, so the index is keyed on the folded
 	// form and both sides fold the same way. One conversion per lookup, against
 	// the ~180 comparisons (each allocating twice) the linear scan performed.
-	static std::wstring NameKey(const wxString& name) { return name.Upper().ToStdWstring(); }
+	static std::wstring NameKey(const ibString& name) { return name.Upper().ToStdWstring(); }
 
 	// Drop the name entry that points AT this identity, whatever string it is filed under. Linear,
 	// and deliberately so: it runs on unregister and on rename — never on a lookup — while the
@@ -163,7 +163,7 @@ public:
 	// THE RECOMPUTE HAPPENS HERE, and only when a rename said it was needed: the cache is a view of
 	// what the ctors compute from their metaobjects, so the moment somebody asks by name after a
 	// rename, the view is brought up to date first. Costs nothing on the ordinary path — one bool.
-	T* Find(const wxString& className) const {
+	T* Find(const ibString& className) const {
 		if (m_namesStale)
 			RebuildNames();
 		const auto it = m_byName.find(NameKey(className));

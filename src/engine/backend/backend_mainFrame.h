@@ -47,8 +47,8 @@ public:
 
 
 
-	virtual class ibMetaData* FindMetadataByPath(const wxString& strFileName) const { return nullptr; }
-	virtual void BackendError(const wxString& strFileName, const wxString& strDocPath, const long line, const wxString& strErrorMessage) {}
+	virtual class ibMetaData* FindMetadataByPath(const ibString& strFileName) const { return nullptr; }
+	virtual void BackendError(const ibString& strFileName, const ibString& strDocPath, const long line, const ibString& strErrorMessage) {}
 
 #pragma region _frontend_call_h__
 
@@ -76,7 +76,7 @@ public:
 	virtual bool UpdateFormUniqueKey(const ibUniqueKeyPair& guid) { return false; }
 
 	// Grid support
-	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& doc) { return false; }
+	virtual bool ShowSpreadsheetDocument(const ibString& strTitle, std::shared_ptr<ibSpreadsheetObject>& doc) { return false; }
 	virtual bool PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool showPrintDlg = true) { return false; }
 
 	// Open the SCHEDULE editor on `schedule`, editing it IN PLACE; true when the user accepted and
@@ -105,8 +105,8 @@ public:
 	// pointing, in a sentence they could not finish (Max, 2026-09-04: *"he clicked and the focus
 	// landed — then you know exactly which area he wants to show you"*). It comes back as text: the
 	// control, the form the platform has open (ActiveWindow), and where the pointer is.
-	virtual bool CaptureWindow(const wxString& reason, const wxString& area, const wxString& format,
-		ibMemoryBuffer& bytes, wxString& focus) { return false; }
+	virtual bool CaptureWindow(const ibString& reason, const ibString& area, const ibString& format,
+		ibMemoryBuffer& bytes, ibString& focus) { return false; }
 
 #pragma endregion
 
@@ -115,10 +115,10 @@ public:
 	virtual bool SetProperty(class BACKEND_API ibPropertyObject* prop) { return false; }
 #pragma endregion 
 
-	virtual void SetTitle(const wxString& strTitle) = 0;
-	virtual void SetStatusText(const wxString& strTitle, int number = 0) = 0;
+	virtual void SetTitle(const ibString& strTitle) = 0;
+	virtual void SetStatusText(const ibString& strTitle, int number = 0) = 0;
 
-	virtual void Message(const wxString& strMessage, ibStatusMessage status) {}
+	virtual void Message(const ibString& strMessage, ibStatusMessage status) {}
 	virtual void ClearMessage() {}
 
 	virtual void RefreshFrame() = 0;
@@ -133,15 +133,15 @@ public:
 
 	// Frontend-facing modal-message primitive. Backend code routes every
 	// wxMessageBox call through here so the GUI-only dependency stays on
-	// the frontend side — desktop frame calls wxMessageBox with itself
-	// as parent; web frame emits an HTTP notification / toast.
+	// the frontend side — the client's frame (frmserver/client/clientFrame.h)
+	// asks its client to show it.
 	// `style` is the wx bitmask (wxOK / wxYES_NO / wxICON_WARNING …); the
 	// returned int is the wx pressed-button code.
 	//
 	// Not named `MessageBox` — the Win32 header defines that as a macro
 	// mapping to MessageBoxW, which renames the function and breaks the
-	// backend/frontend link across the wfrontend DLL boundary.
-	int ShowModalMessage(const wxString& message, const wxString& caption, int style);
+	// backend/frmserver link across the DLL boundary.
+	int ShowModalMessage(const ibString& message, const ibString& caption, int style);
 
 	// ⭐ A REQUEST TO THE CLIENT, and its response — the server's half of the request/response pair, as a
 	// protocol carries it: `request` names its kind (Kind — the protocol's, not this frame's) and holds what the
@@ -154,7 +154,7 @@ public:
 protected:
 	// What each host does once a door let the question through. The defaults are a host with
 	// nobody to ask: 0 (Cancel-equivalent) and no response.
-	virtual int DoShowModalMessage(const wxString& message, const wxString& caption, int style) { return 0; }
+	virtual int DoShowModalMessage(const ibString& message, const ibString& caption, int style) { return 0; }
 	virtual bool DoRequest(const class ibDataNode& request, class ibDataNode& response) { return false; }
 
 private:

@@ -244,6 +244,7 @@
     <ClCompile Include="spreadsheet\sheetFormat.cpp" />
     <ClCompile Include="spreadsheet\spreadsheetObject.cpp" />
     <ClCompile Include="startProcess.cpp" />
+    <ClCompile Include="stringTokenizer.cpp" />
     <ClCompile Include="syntaxHelper\helpCorpus.cpp" />
     <ClCompile Include="syntaxHelper\helpLoader.cpp" />
     <ClCompile Include="syntaxHelper\helpResolver.cpp" />
@@ -265,6 +266,7 @@
     <ClInclude Include="compiler\translateCode.h" />
     <ClInclude Include="composition\compositionTheme.h" />
     <ClInclude Include="core.h" />
+    <ClInclude Include="coreApi.h" />
     <ClInclude Include="crypto\fieldCipher.h" />
     <ClInclude Include="crypto\sessionToken.h" />
     <ClInclude Include="crypto\sha256.hpp" />
@@ -282,6 +284,8 @@
     <ClInclude Include="diagnostics\crashGuard.h" />
     <ClInclude Include="diagnostics\debugTrace.h" />
     <ClInclude Include="diagnostics\journal.h" />
+    <ClInclude Include="diagnostics\oesConsole.h" />
+    <ClInclude Include="diagnostics\oesApp.h" />
     <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="exception.h" />
     <ClInclude Include="fboolean.h" />
@@ -345,6 +349,7 @@
     <ClInclude Include="spreadsheet\sheetFormat.h" />
     <ClInclude Include="spreadsheet\spreadsheetObject.h" />
     <ClInclude Include="startProcess.h" />
+    <ClInclude Include="stringTokenizer.h" />
     <ClInclude Include="stringUtils.h" />
     <ClInclude Include="syntaxHelper\helpCategory.h" />
     <ClInclude Include="syntaxHelper\helpCorpus.h" />

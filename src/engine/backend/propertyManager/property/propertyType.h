@@ -15,13 +15,13 @@ public:
 	ibTypeDescription& GetValueAsTypeValueDesc() const;
 	void SetValue(const ibTypeDescription& val);
 
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const ibValueTypes type) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), type)) {}
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const ibClassID& clsid) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibValueTypes type) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), type)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibValueTypes type) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), type)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibClassID& clsid) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibValueTypes type) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), type)) {}
 
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibClassID& clsid) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibValueTypes type) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), type)) {}
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibClassID& clsid) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibClassID& clsid) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibValueTypes type) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), type)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibClassID& clsid) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
 
 	virtual bool IsEmptyProperty() const { return !GetValueAsTypeDesc().IsOk(); }
 

@@ -108,7 +108,7 @@ bool ibValueMetaObjectComposer::OnSaveMetaObject(int flags)
 		//
 		// The FIRST one is the report as it opens, so it is worth saying which is meant when a
 		// composer has several - counted the way a person would, from one.
-		RestructureError(wxString::Format(
+		RestructureError(ibString::Format(
 			_("%s: variant %i has no name - a variant IS a named setting, and one without a "
 			  "name cannot be picked by anybody running the report"),
 			GetName(), (int)index + 1));

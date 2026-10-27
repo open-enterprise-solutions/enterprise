@@ -68,9 +68,9 @@ public:
 	// The list starts EMPTY; SetSource/SetSourceQueryable install the queryable,
 	// SetCustomQuery an arbitrary query. The source variable itself lives in the
 	// Source property (read via the GetSourceQueryable facade), not on the list.
-	void SetSource(const wxString& ns, const wxString& name);
+	void SetSource(const ibString& ns, const ibString& name);
 	void SetSourceQueryable(const ibBackendQueryable* queryable);
-	void SetCustomQuery(const wxString& queryText);
+	void SetCustomQuery(const ibString& queryText);
 	const ibBackendQueryable* GetSourceQueryable() const { return m_propertySource->GetQueryable(); }
 
 	// --- the arbitrary query, ON TOP of the main table -------------------------
@@ -140,12 +140,12 @@ public:
 	// never read back. Three verbs around the flag — `SetArbitraryQuery`, `SeedArbitraryQuery`,
 	// `SetArbitraryQueryText` — had no callers at all, and `m_queryError` was write-only.
 	bool     IsArbitraryQuery() const { return GetCompositionDesc().HasQuery(); }
-	wxString GetArbitraryQueryText() const { return GetCompositionDesc().m_query; }
+	ibString GetArbitraryQueryText() const { return GetCompositionDesc().m_query; }
 
 	// THE QUERY THE MAIN TABLE WOULD WRITE FOR ITSELF — `SELECT <fields> FROM <the main table>`, a
 	// real query over the real source rather than a template with a hole in it. Kept for whoever
 	// offers "start me a query"; empty when there is no main table to write it over.
-	wxString SeedArbitraryQuery() const;
+	ibString SeedArbitraryQuery() const;
 	// Re-apply the source (metaobject OR arbitrary query) onto the composer — the settings dialog's "Query" tab
 	// calls this after editing the flag / text (SetValue does not fire OnPropertyChanged).
 	void     ApplySource() { RebuildSource(); }
@@ -164,11 +164,11 @@ public:
 	// Add a FILTER to the list — a predicate `path op value` fed to the composer underneath (the SINGLE
 	// settings store; it persists and feeds the fetch). The backend injects a FIXED predicate here when it
 	// GENERATES a select form (folder-select: IsFolder "=" true); the general / user filter path lands here too.
-	void AddFilter(const wxString& path, const wxString& op, const ibValue& value);
+	void AddFilter(const ibString& path, const ibString& op, const ibValue& value);
 
 	// Add a SORT — a sort line (path, ascending) onto the composer. The metaobject sets the DEFAULT sort here at
 	// LIST CREATION (an ordinary serialised sort a user can remove), NOT a runtime method re-applied every fetch.
-	void AddSort(const wxString& path, bool ascending = true);
+	void AddSort(const ibString& path, bool ascending = true);
 
 	// The FOLDER-flag column of a hierarchical list — set at creation (ibCreateHierarchyList) so folder rows render
 	// as drillable containers even when EMPTY (the DB level-fetch reports hasChildren=false for every row). The
@@ -239,7 +239,7 @@ public:
 	// a stub carrying the ROW-KEY, matched against the fetched batch by m_rowKey. The row-key is built by the
 	// SOURCE DESCRIPTOR (GetRowKeyByValue) — a record keys by its reference, a register decomposes its COMPOSITE
 	// key — so a register row restores (the base's flat {value} stub never matched a register's multi-column key).
-	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const override;
+	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const ibString& colName = ibEmptyString) const override;
 
 	virtual const ibSourceExplorer* GetSourceExplorer() const override;
 
@@ -251,7 +251,7 @@ public:
 	}
 	using ibValueModel::GetValueBySourceHop;   // the ROW form (item, hop, out), hidden by the declaration above
 
-	virtual wxString GetSourceCaption() const override;
+	virtual ibString GetSourceCaption() const override;
 	// READ — the metadata OF THE CHOSEN SOURCE, taken straight from the VALUE (the picked queryable's metaobject).
 	// TERMINAL (no owner-walk), so a form's metadata may fall back to this list without recursing.
 	virtual const ibMetaData* GetSourceMetaData() const override;
@@ -273,8 +273,8 @@ public:
 	// ibPropertyObject declares GetClassName PURE on a base UNRELATED to ibValue — so it MUST be
 	// overridden here (this both closes that pure slot and disambiguates the two same-name bases;
 	// dropping it gives C2385 at the GetClassName() call in GetSourceCaption). Same as ibValueMetaObject.
-	virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
-	virtual wxString GetObjectTypeName() const override { return GetClassName(); }
+	virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
+	virtual ibString GetObjectTypeName() const override { return GetClassName(); }
 	virtual bool IsEditable() const override { return true; }
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
 	virtual void OnChildChanged() override;   // a source / settings change rebuilds the columns, then tells the holder
@@ -343,14 +343,14 @@ private:
 	//  inspector while still being serialised — the second store this class was cured of.)
 
 	// "Source" = the registered queryables; "Settings" = an "Open" action button. ---
-	ibPropertyCategory*        m_categoryList   = ibPropertyObject::CreatePropertyCategory(wxT("DynamicList"), _("Dynamic list"));
+	ibPropertyCategory*        m_categoryList   = ibPropertyObject::CreatePropertyCategory(ibT("DynamicList"), _("Dynamic list"));
 	// Source = a dynamic-source property holding the chosen queryable variable; the list
 	// reads it via GetSourceQueryable() facade (the variable does NOT live on the list).
-	ibPropertyDynamicSource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertyDynamicSource>(m_categoryList, wxT("Source"), _("Source"),
+	ibPropertyDynamicSource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertyDynamicSource>(m_categoryList, ibT("Source"), _("Source"),
 		_("The table the list shows: a catalog, document, register or other registered source. The list reads its rows page by page and follows its records as they change. Ignored when the list runs an arbitrary query (set on the Settings window's Query tab)."));
 	// "Settings..." — an action property; m_owner = THIS dynamic list, and the frontend
 	// ibPGDynamicListProperty casts owner → dynamic list and opens the settings form.
-	ibPropertyDynamicList* m_propertySettings = ibPropertyObject::CreateProperty<ibPropertyDynamicList>(m_categoryList, wxT("Settings"), _("Settings"),
+	ibPropertyDynamicList* m_propertySettings = ibPropertyObject::CreateProperty<ibPropertyDynamicList>(m_categoryList, ibT("Settings"), _("Settings"),
 		_("Opens the list's settings window: the arbitrary query (Query tab), and the default filter, order and appearance the user starts from."));
 	// Arbitrary-query mode: the flag switches the source from a picked metaobject to a QUERY TEXT (both serialised
 	// by ReadProperty/WriteProperty). The text is edited on the settings dialog's first "Query" tab.
@@ -361,7 +361,7 @@ private:
 	// batch by batch. FALSE: the whole result set is materialised into a RAM snapshot ONCE and paged in memory (the base
 	// ibValueModelCursor::EnsureSnapshot / RunStoragePage) — the fallback for when cursor paging misbehaves, or a
 	// small / stable list where liveness does not matter. Read by IsDynamicRead() above; serialised by Read/WriteProperty.
-	ibPropertyBoolean* m_propertyDynamicRead = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryList, wxT("DynamicRead"), _("Dynamic data read"),
+	ibPropertyBoolean* m_propertyDynamicRead = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryList, ibT("DynamicRead"), _("Dynamic data read"),
 		_("On (the default): the list pages its rows from the database as they are scrolled to, so a table of any size opens at once and shows current data. Off: the whole result is read into memory once and paged there - for a small or stable list, or when paging from the database misbehaves."),
 		true);
 };

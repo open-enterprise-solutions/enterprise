@@ -161,99 +161,99 @@ bool ibJobScheduleRules::IsAllowed(const ibJobScheduleDescription& self, const i
 namespace {
 
 // "10:00" from minutes-from-midnight.
-wxString FormatMinute(int minute)
+ibString FormatMinute(int minute)
 {
-	return wxString::Format(wxT("%02d:%02d"), minute / 60, minute % 60);
+	return ibString::Format(ibT("%02d:%02d"), minute / 60, minute % 60);
 }
 
 // "Every 10 minutes" / "Every 6 hours" / "Daily" — the coarsest wording the
 // number allows, because "Every 86400 seconds" is a number, not a schedule.
-wxString FormatInterval(int seconds)
+ibString FormatInterval(int seconds)
 {
 	if (seconds % (24 * 3600) == 0) {
 		const int days = seconds / (24 * 3600);
-		return days == 1 ? wxString(_("Daily"))
-		                 : wxString::Format(_("Every %d days"), days);
+		return days == 1 ? ibString(_("Daily"))
+		                 : ibString::Format(_("Every %d days"), days);
 	}
 	if (seconds % 3600 == 0) {
 		const int hours = seconds / 3600;
-		return hours == 1 ? wxString(_("Hourly"))
-		                  : wxString::Format(_("Every %d hours"), hours);
+		return hours == 1 ? ibString(_("Hourly"))
+		                  : ibString::Format(_("Every %d hours"), hours);
 	}
 	if (seconds % 60 == 0) {
 		const int minutes = seconds / 60;
-		return minutes == 1 ? wxString(_("Every minute"))
-		                    : wxString::Format(_("Every %d minutes"), minutes);
+		return minutes == 1 ? ibString(_("Every minute"))
+		                    : ibString::Format(_("Every %d minutes"), minutes);
 	}
-	return wxString::Format(_("Every %d seconds"), seconds);
+	return ibString::Format(_("Every %d seconds"), seconds);
 }
 
 // Weekday names in Monday-first order, matching the mask's bit order.
-wxString FormatWeekDays(std::uint8_t mask)
+ibString FormatWeekDays(std::uint8_t mask)
 {
 	static const wxDateTime::WeekDay order[7] = {
 		wxDateTime::Mon, wxDateTime::Tue, wxDateTime::Wed,
 		wxDateTime::Thu, wxDateTime::Fri, wxDateTime::Sat, wxDateTime::Sun
 	};
 
-	wxString out;
+	ibString out;
 	for (int i = 0; i < 7; ++i) {
 		if ((mask & (1u << i)) == 0) continue;
-		if (!out.IsEmpty()) out += wxT(", ");
+		if (!out.IsEmpty()) out += ibT(", ");
 		out += wxDateTime::GetWeekDayName(order[i], wxDateTime::Name_Abbr);
 	}
 	return out;
 }
 
-wxString FormatMonths(std::uint16_t mask)
+ibString FormatMonths(std::uint16_t mask)
 {
-	wxString out;
+	ibString out;
 	for (int i = 0; i < 12; ++i) {
 		if ((mask & (1u << i)) == 0) continue;
-		if (!out.IsEmpty()) out += wxT(", ");
+		if (!out.IsEmpty()) out += ibT(", ");
 		out += wxDateTime::GetMonthName(static_cast<wxDateTime::Month>(i),
 		                                 wxDateTime::Name_Abbr);
 	}
 	return out;
 }
 
-wxString FormatMonthDays(std::uint32_t mask)
+ibString FormatMonthDays(std::uint32_t mask)
 {
-	wxString out;
+	ibString out;
 	for (int i = 0; i < 31; ++i) {
 		if ((mask & (1u << i)) == 0) continue;
-		if (!out.IsEmpty()) out += wxT(", ");
-		out += wxString::Format(wxT("%d"), i + 1);
+		if (!out.IsEmpty()) out += ibT(", ");
+		out += ibString::Format(ibT("%d"), i + 1);
 	}
 	return out;
 }
 
 } // namespace
 
-wxString ibJobScheduleRules::Describe(const ibJobScheduleDescription& self)
+ibString ibJobScheduleRules::Describe(const ibJobScheduleDescription& self)
 {
 	// A validity bound is a day: printed the way a script's Format(date, "DF=dd.mm.yyyy") prints one.
 	ibFormatString asDay;
-	asDay.m_date.m_pattern = wxT("dd.mm.yyyy");
+	asDay.m_date.m_pattern = ibT("dd.mm.yyyy");
 
-	wxString out = FormatInterval(self.m_intervalSeconds);
+	ibString out = FormatInterval(self.m_intervalSeconds);
 
 	// Everything below is skipped when left at "any" — a description that
 	// restates the defaults is one nobody finishes reading.
 	if (self.m_startMinute >= 0 && self.m_endMinute >= 0) {
-		out += wxString::Format(wxT(", %s-%s"),
+		out += ibString::Format(ibT(", %s-%s"),
 			FormatMinute(self.m_startMinute), FormatMinute(self.m_endMinute));
 	}
 	if (self.m_daysOfWeek != 0 && self.m_daysOfWeek != ibJobWeekDay_Any)
-		out += wxT(", ") + FormatWeekDays(self.m_daysOfWeek);
+		out += ibT(", ") + FormatWeekDays(self.m_daysOfWeek);
 	if (self.m_daysOfMonth != 0)
-		out += wxString::Format(_(", on day %s"), FormatMonthDays(self.m_daysOfMonth));
+		out += ibString::Format(_(", on day %s"), FormatMonthDays(self.m_daysOfMonth));
 	if (self.m_months != 0)
-		out += wxT(", ") + FormatMonths(self.m_months);
+		out += ibT(", ") + FormatMonths(self.m_months);
 	if (!self.m_activeFrom.IsEmpty())
-		out += wxString::Format(_(", from %s"), asDay.Apply(ibLiteral(self.m_activeFrom)));
+		out += ibString::Format(_(", from %s"), asDay.Apply(ibLiteral(self.m_activeFrom)));
 	if (!self.m_activeTo.IsEmpty())
-		out += wxString::Format(_(", until %s"), asDay.Apply(ibLiteral(self.m_activeTo)));
+		out += ibString::Format(_(", until %s"), asDay.Apply(ibLiteral(self.m_activeTo)));
 
 	return out;
 }

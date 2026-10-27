@@ -38,12 +38,12 @@ std::vector<unsigned char> Generate()
 	return out;
 }
 
-wxString Hex(const unsigned char* bytes, std::size_t length)
+ibString Hex(const unsigned char* bytes, std::size_t length)
 {
 	static const char kDigits[] = "0123456789abcdef";
 	if (bytes == nullptr)
-		return wxString();
-	wxString hex;
+		return ibString();
+	ibString hex;
 	hex.reserve(length * 2);
 	for (std::size_t i = 0; i < length; ++i) {
 		hex += ibChar(kDigits[bytes[i] >> 4]);
@@ -60,25 +60,25 @@ bool Hash(const unsigned char* bytes, std::size_t length, unsigned char out[kDig
 	return true;
 }
 
-wxString HashHex(const unsigned char* bytes, std::size_t length)
+ibString HashHex(const unsigned char* bytes, std::size_t length)
 {
 	unsigned char digest[kDigest];
 	if (!Hash(bytes, length, digest))
-		return wxString();
+		return ibString();
 	return Hex(digest, kDigest);
 }
 
-bool ParseHex(const wxString& hex, unsigned char out[kBytes])
+bool ParseHex(const ibString& hex, unsigned char out[kBytes])
 {
 	if (out == nullptr || hex.length() != kBytes * 2)
 		return false;
 	auto nibble = [](ibChar c) -> int {
-		if (c >= wxT('0') && c <= wxT('9'))
-			return c - wxT('0');
-		if (c >= wxT('a') && c <= wxT('f'))
-			return c - wxT('a') + 10;
-		if (c >= wxT('A') && c <= wxT('F'))
-			return c - wxT('A') + 10;
+		if (c >= ibT('0') && c <= ibT('9'))
+			return c - ibT('0');
+		if (c >= ibT('a') && c <= ibT('f'))
+			return c - ibT('a') + 10;
+		if (c >= ibT('A') && c <= ibT('F'))
+			return c - ibT('A') + 10;
 		return -1;
 	};
 	for (std::size_t i = 0; i < kBytes; ++i) {
@@ -91,17 +91,17 @@ bool ParseHex(const wxString& hex, unsigned char out[kBytes])
 	return true;
 }
 
-wxString WithRoute(const wxString& hex, unsigned route)
+ibString WithRoute(const ibString& hex, unsigned route)
 {
 	if (route == 0)
 		return hex;
-	return hex + wxString::Format(wxT(".%u"), route);
+	return hex + ibString::Format(ibT(".%u"), route);
 }
 
-void SplitRoute(const wxString& token, wxString& hex, unsigned& route)
+void SplitRoute(const ibString& token, ibString& hex, unsigned& route)
 {
 	route = 0;
-	const int dot = token.Find(wxT('.'), true);
+	const int dot = token.Find(ibT('.'), true);
 	unsigned long number = 0;
 	if (dot == wxNOT_FOUND || !token.Mid(dot + 1).ToULong(&number) || number == 0 || number > 0xFFFF) {
 		hex = token;

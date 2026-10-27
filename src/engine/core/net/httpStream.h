@@ -12,9 +12,7 @@
 
 #include <asio/ip/tcp.hpp>
 
-// WHY A SOCKET FAILED, as a refusal here says it — UTF-8, as every one of them is read (wxString::FromUTF8). Not
-// error_code::message(): on Windows that is the system's text in the ANSI code page.
-std::string ibErrorText(const std::error_code& code);
+#include "core/exception.h"   // ibErrorText — why a socket failed, as a refusal here says it
 
 class ibHttpStream {
 public:

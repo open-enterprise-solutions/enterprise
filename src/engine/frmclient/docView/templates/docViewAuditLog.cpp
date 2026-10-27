@@ -200,7 +200,7 @@ void ibAuditLogModel::GetValue(wxVariant& val,
 	case kColEvent:   val = r->event_type; break;
 	case kColMessage: val = r->message;   break;
 	case kColRef:     val = r->ref_guid.IsEmpty()
-	                       ? wxString()
+	                       ? ibString()
 	                       : r->ref_guid.Left(8) + wxT("...");
 	                  break;
 	}

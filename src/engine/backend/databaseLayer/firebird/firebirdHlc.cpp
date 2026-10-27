@@ -110,7 +110,7 @@ uint8_t ibHlcClock::ExtractNodeId(uint64_t hlc) {
 	return static_cast<uint8_t>(hlc & kNodeIdMask);
 }
 
-wxString ibHlcClock::Format(uint64_t hlc) {
+ibString ibHlcClock::Format(uint64_t hlc) {
 	const uint64_t ms = ExtractMillis(hlc);
 	const uint16_t c  = ExtractCounter(hlc);
 	const uint8_t  n  = ExtractNodeId(hlc);
@@ -120,9 +120,9 @@ wxString ibHlcClock::Format(uint64_t hlc) {
 	// literal — wxDateTime's own millisecond field isn't shown by
 	// the `%H:%M:%S` format spec.
 	const wxDateTime dt = wxDateTime((time_t)(ms / 1000)).ToUTC();
-	return wxString::Format(
-		wxT("%s.%03lluZ#%u/%u"),
-		dt.Format(wxT("%Y-%m-%dT%H:%M:%S")),
+	return ibString::Format(
+		ibT("%s.%03lluZ#%u/%u"),
+		dt.Format(ibT("%Y-%m-%dT%H:%M:%S")),
 		(unsigned long long)(ms % 1000),
 		(unsigned)c,
 		(unsigned)n);

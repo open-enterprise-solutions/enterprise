@@ -15,7 +15,7 @@
 // all there is.
 static wxString LanguageLabel(const wxString& code, const wxString& name)
 {
-	if (name.IsEmpty() || stringUtils::CompareString(name, code))
+	if (name.IsEmpty() || stringUtils::IsSameAs(name, code))
 		return code;
 	return wxString::Format(wxT("%s (%s)"), name, code);
 }
@@ -36,7 +36,7 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 
 	const auto isLanguage = [&languages](const wxString& code) {
 		for (const auto& language : languages)
-			if (stringUtils::CompareString(language.first, code))
+			if (stringUtils::IsSameAs(language.first, code))
 				return true;
 		return false;
 	};
@@ -122,7 +122,7 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 			if (box.second->IsEmpty()) { focus = box.second; break; }
 		}
 		for (const auto& box : m_boxes) {
-			if (focus == nullptr && stringUtils::CompareString(box.first, ibBackendLocalization::GetUserLanguage()))
+			if (focus == nullptr && stringUtils::IsSameAs(box.first, ibBackendLocalization::GetUserLanguage()))
 				focus = box.second;
 		}
 		if (focus == nullptr && !m_boxes.empty())

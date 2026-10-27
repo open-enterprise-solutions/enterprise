@@ -92,8 +92,8 @@ class BACKEND_API ibDebuggerClient {
 		void OnLeaveLoop(const ibDebugLineData& data);
 
 		void OnAutoComplete(const ibDebugAutoCompleteData& data);
-		void OnMessageFromServer(const ibDebugLineData& data, const wxString& message);
-		void OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr);
+		void OnMessageFromServer(const ibDebugLineData& data, const ibString& message);
+		void OnSetToolTip(const ibDebugExpressionData& data, const ibString& resultStr);
 		void OnSetStack(const ibStackData& data);
 
 		void OnSetLocalVariable(const ibLocalWindowData& data);
@@ -103,16 +103,16 @@ class BACKEND_API ibDebuggerClient {
 
 		// A line printed by EVALUATED code — a sandbox, a watch expression. Its own road, read by
 		// whoever asked for the evaluation and shown to nobody else.
-		void OnEvalMessage(const wxString& message, MessageType type);
+		void OnEvalMessage(const ibString& message, MessageType type);
 
 		// The picture the running application was asked for. Empty when its user declined, which is
 		// an answer and not a failure.
-		void OnScreenshot(const ibMemoryBuffer& png, const wxString& focus);
+		void OnScreenshot(const ibMemoryBuffer& png, const ibString& focus);
 
 		// What the sandbox did — ran or failed, what it answered with, and the RESULT VALUE as
 		// text when it could be written (empty when the value cannot travel, which is not a
 		// failure of the run).
-		void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, long long microseconds);
+		void OnSandboxResult(bool ran, const ibString& answer, const ibString& json, long long microseconds);
 
 		// The state of a filling run — one shape for all three requests, because starting one,
 		// asking after one and stopping one are the same question about the same thing. `which`
@@ -122,7 +122,7 @@ class BACKEND_API ibDebuggerClient {
 
 		// What a composition answered, still serialised — the tables, or a refusal saying why there
 		// are none. Left as bytes because only the asker knows what to do with them.
-		void OnComposed(bool answered, const wxString& refusal, const ibMemoryBuffer& result);
+		void OnComposed(bool answered, const ibString& refusal, const ibMemoryBuffer& result);
 
 	private:
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
@@ -153,10 +153,10 @@ class BACKEND_API ibDebuggerClient {
 		// A socket in the slot, and not gone.
 		bool IsConnected() const;
 
-		wxString GetHostName() const { return m_hostName; }
+		const ibString& GetHostName() const { return m_hostName; }
 		unsigned short GetPort() const { return m_port; }
-		wxString GetComputerName() const { return m_compName; }
-		wxString GetUserName() const { return m_userName; }
+		const ibString& GetComputerName() const { return m_compName; }
+		const ibString& GetUserName() const { return m_userName; }
 
 		// ⭐⭐ WHICH REVISION THE PROCESS OVER THERE IS RUNNING. The handshake has always carried
 		// both halves — the configuration's GUID and its digest — and only the GUID was ever asked:
@@ -169,14 +169,14 @@ class BACKEND_API ibDebuggerClient {
 		// That is the one failure this surface cannot show as a failure: the code runs, nothing
 		// raises, and the change simply does not appear. The digest was on the wire all along
 		// (debugClient.cpp, CommandId_VerifyConnection); it only needed asking.
-		wxString GetConfigMD5() const { return m_md5Hash; }
+		const ibString& GetConfigMD5() const { return m_md5Hash; }
 
 		ConnectionType GetConnectionType() const { return m_connectionType; }
 
 		void AttachConnection();
 		void DetachConnection(bool kill = false);
 
-		ibDebuggerClientConnection(ibDebuggerClient* client, const wxString& hostName, unsigned short port) :
+		ibDebuggerClientConnection(ibDebuggerClient* client, const ibString& hostName, unsigned short port) :
 			m_verifiedConnection(false),
 			m_hostName(hostName),
 			m_port(port),
@@ -216,7 +216,7 @@ class BACKEND_API ibDebuggerClient {
 
 		bool			m_verifiedConnection;
 
-		wxString		m_hostName;
+		ibString		m_hostName;
 		unsigned short	m_port;
 
 		// ⭐ A MESSAGE IS WHOLE, so the socket needs no lock of its own: the reads that came back short while a
@@ -226,10 +226,10 @@ class BACKEND_API ibDebuggerClient {
 		std::shared_ptr<ibWebSocketClient>   m_socketClient;
 		std::shared_ptr<ibDebugCommandQueue> m_commandQueue;
 
-		wxString		m_confGuid;
-		wxString		m_md5Hash;
-		wxString		m_userName;
-		wxString		m_compName;
+		ibString		m_confGuid;
+		ibString		m_md5Hash;
+		ibString		m_userName;
+		ibString		m_compName;
 
 		std::atomic<short> m_number_connection_attempts;
 
@@ -253,9 +253,9 @@ public:
 
 	// The identity a listener stamps on the questions it asks, so its answers come back to it and
 	// to nobody else. Empty when nothing is bridged, which is also when nothing can be asked.
-	wxString BridgeId() const {
+	ibString BridgeId() const {
 		const ibDebuggerClientBridge* bridge = m_adapter != nullptr ? m_adapter->GetBridge() : nullptr;
-		return bridge != nullptr ? bridge->GetBridgeId() : wxString();
+		return bridge != nullptr ? bridge->GetBridgeId() : ibString();
 	}
 
 	// Ride along on a session somebody else is driving — see the note on the
@@ -273,7 +273,7 @@ public:
 public:
 
 	void SearchServer(bool run_debug_server = false,
-		const wxString& hostName = defaultHost,
+		const ibString& hostName = defaultHost,
 		unsigned short startPort = ibPort::Debugger.m_first, unsigned short endPort = ibPort::Debugger.Last() + 1)
 	{
 		if (run_debug_server) {
@@ -301,13 +301,13 @@ public:
 				(void)createdConnection.release();
 			}
 			catch (const std::system_error& err) {
-				ibJournalWarning(wxT("debugger"), wxT("debug client: no thread to scan port %u: %s"),
-					static_cast<unsigned>(port), wxString::FromUTF8(err.what()));
+				ibJournalWarning(ibT("debugger"), ibT("debug client: no thread to scan port %u: %s"),
+					static_cast<unsigned>(port), ibString::FromUTF8(err.what()));
 			}
 		}
 	}
 
-	void AttachConnection(const wxString& hostName, unsigned short port) const {
+	void AttachConnection(const ibString& hostName, unsigned short port) const {
 
 		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		auto iterator = std::find_if(m_listConnection.begin(), m_listConnection.end(),
@@ -331,7 +331,7 @@ public:
 		}
 	}
 
-	void DetachConnection(const wxString& hostName, unsigned short port, bool kill = false) {
+	void DetachConnection(const ibString& hostName, unsigned short port, bool kill = false) {
 
 		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		auto iterator = std::find_if(m_listConnection.begin(), m_listConnection.end(),
@@ -361,28 +361,28 @@ public:
 	// The runtime does not read it. It echoes it back exactly as it echoes the id.
 	//special public function:
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-	void AddExpression(const wxString& strExpression, unsigned long long id, const wxString& asker);
-	void ExpandExpression(const wxString& strExpression, unsigned long long id, const wxString& asker);
+	void AddExpression(const ibString& strExpression, unsigned long long id, const ibString& asker);
+	void ExpandExpression(const ibString& strExpression, unsigned long long id, const ibString& asker);
 	void RemoveExpression(unsigned long long id);
 #else
-	void AddExpression(wxString strExpression, unsigned int id, const wxString& asker);
-	void ExpandExpression(wxString strExpression, unsigned int id, const wxString& asker);
+	void AddExpression(ibString strExpression, unsigned int id, const ibString& asker);
+	void ExpandExpression(ibString strExpression, unsigned int id, const ibString& asker);
 	void RemoveExpression(unsigned int id);
 #endif 
 
 	void SetLevelStack(unsigned int level);
 
 	//evaluate for tooltip
-	void EvaluateToolTip(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression);
+	void EvaluateToolTip(const ibString& strFileName, const ibString& strModuleName, const ibString& strExpression);
 
 	// Arbitrary code, run in the stopped runtime inside a transaction the far end always rolls
 	// back. The answer arrives as OnSandboxResult.
-	void RunSandbox(const wxString& code);
+	void RunSandbox(const ibString& code);
 
 	// ⭐ ASK THE RUNNING APPLICATION FOR A PICTURE OF ITS WINDOW. `reason` is shown to the person on
 	// the other end, who decides — the answer arrives as OnScreenshot, empty when they declined.
 	// Unlike everything above it, this does not need the runtime to be stopped.
-	void RequestScreenshot(const wxString& reason, const wxString& area, const wxString& format);
+	void RequestScreenshot(const ibString& reason, const ibString& area, const ibString& format);
 
 	// ⭐⭐ PUTTING DATA IN — start a configuration procedure over there as a background job, then
 	// watch it and stop it by the token that comes back. All three answer as OnFillState.
@@ -394,8 +394,8 @@ public:
 	// ⚠ THE CODE GOES OVER AS TEXT and is compiled at the far end, against the configuration that
 	// will run it. This side compiles it too, but only to CHECK it — see jobRunByteCode.h.
 	void StartJob(const struct ibJobRunRequest& request);
-	void AskJobStatus(const wxString& token);
-	void CancelJob(const wxString& token);
+	void AskJobStatus(const ibString& token);
+	void CancelJob(const ibString& token);
 
 	// ⭐⭐ RUN A COMPOSITION over there and bring back what it answered. `request` is the whole schema
 	// — resolved from a report, or assembled by the caller out of nothing — with its settings and
@@ -407,10 +407,10 @@ public:
 	void RequestCompose(const ibMemoryBuffer& request);
 
 	//support calc strExpression in debugloop
-	void EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline);
+	void EvaluateAutocomplete(const ibString& strFileName, const ibString& strModuleName, const ibString& strExpression, const ibString& keyWord, int currline);
 
 	// The module's breakpoints as the editor draws them: editor line (from 0) -> condition (empty stops always).
-	std::map<unsigned int, wxString> GetDebugList(const wxString& strModuleName);
+	std::map<unsigned int, ibString> GetDebugList(const ibString& strModuleName);
 
 	//special functions:
 	void Continue();
@@ -421,12 +421,12 @@ public:
 	void Stop(bool kill);
 
 	//for breakpoints and offsets
-	void InitializeModule(const wxString& strModuleName, unsigned int line_count);
+	void InitializeModule(const ibString& strModuleName, unsigned int line_count);
 	// atLineStart: the edit was at column 0 of `line` (whole line moved), so an
 	// entry sitting ON `line` shifts too — fixes "Enter at line start" not moving a breakpoint.
-	void PatchModule(const wxString& strModuleName, unsigned int line, int line_offset, bool atLineStart);
-	bool SaveModule(const wxString& strModuleName, unsigned int line_count);
-	void RemoveModule(const wxString& strModuleName);
+	void PatchModule(const ibString& strModuleName, unsigned int line, int line_offset, bool atLineStart);
+	bool SaveModule(const ibString& strModuleName, unsigned int line_count);
+	void RemoveModule(const ibString& strModuleName);
 
 	bool SaveAllBreakpoints();
 
@@ -436,18 +436,18 @@ public:
 	// reaches the line, and the run stops only when it is true.
 	struct ibBreakpoint {
 		int      m_offset = 0;
-		wxString m_condition;
+		ibString m_condition;
 	};
 
 	// `refusal`, when given, comes back carrying WHY it was refused — the engine states the reason
 	// and the caller decides whether that is a dialog, a log line or an answer over a socket.
 	// Sets the breakpoint, or gives one already there the condition passed (an empty one stops always).
-	bool ToggleBreakpoint(const wxString& strModuleName, unsigned int line,
-		wxString* refusal = nullptr, const wxString& condition = wxEmptyString);
-	bool RemoveBreakpoint(const wxString& strModuleName, unsigned int line);
+	bool ToggleBreakpoint(const ibString& strModuleName, unsigned int line,
+		ibString* refusal = nullptr, const ibString& condition = ibEmptyString);
+	bool RemoveBreakpoint(const ibString& strModuleName, unsigned int line);
 	// Same shape as ToggleBreakpoint: the reason travels to whoever asked, or is said through the
 	// platform's own Message when nobody did.
-	bool RemoveAllBreakpoint(wxString* refusal = nullptr);
+	bool RemoveAllBreakpoint(ibString* refusal = nullptr);
 
 	bool HasConnections() const {
 
@@ -475,7 +475,7 @@ public:
 	// channel. The state was knowable the whole time and nothing offered it.
 	//
 	// (module guid -> (editor line -> condition)); the lines count from 0, as the editor's do.
-	std::map<wxString, std::map<unsigned int, wxString>> GetBreakpoints() const;
+	std::map<ibString, std::map<unsigned int, ibString>> GetBreakpoints() const;
 
 public:
 
@@ -531,11 +531,11 @@ protected:
 		std::map<unsigned int, int>& list_module_offset, unsigned int line) const;
 
 	//db support
-	void LoadBreakpointCollection(const wxString& strModuleName);
+	void LoadBreakpointCollection(const ibString& strModuleName);
 
-	bool ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line, const wxString& condition);
-	bool RemoveBreakpointInDB(const wxString& strModuleName, unsigned int line);
-	bool OffsetBreakpointInDB(const wxString& strModuleName, unsigned int line, int offset, const wxString& condition);
+	bool ToggleBreakpointInDB(const ibString& strModuleName, unsigned int line, const ibString& condition);
+	bool RemoveBreakpointInDB(const ibString& strModuleName, unsigned int line);
+	bool OffsetBreakpointInDB(const ibString& strModuleName, unsigned int line, int offset, const ibString& condition);
 	bool RemoveAllBreakpointInDB();
 
 	//commands:
@@ -569,7 +569,7 @@ protected:
 
 private:
 
-	int GetLineOffset(const wxString& strModuleName, const int current_line) const {
+	int GetLineOffset(const ibString& strModuleName, const int current_line) const {
 
 		std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 
@@ -577,7 +577,7 @@ private:
 			m_listOffsetBreakpoint.begin(),
 			m_listOffsetBreakpoint.end(),
 			[strModuleName](const auto pair) {
-				return stringUtils::CompareString(pair.first, strModuleName);
+				return stringUtils::IsSameAs(pair.first, strModuleName);
 			}
 		);
 
@@ -615,13 +615,13 @@ private:
 	// Updated on each CommandId_EnterLoop receive; tagged onto every
 	// outgoing Continue/Step/Pause/Detach so the server can route the
 	// command to the right ibSession in a multi-tab wes process.
-	wxString                                 m_currentSessionGuid;
+	ibString                                 m_currentSessionGuid;
 
 	// 🛑 THE BREAKPOINTS, THE LINES THE EDITS MOVED, WHAT IS WATCHED — set on the designer's thread, read on a
 	// connection's (a stop's line, everything told again on a reconnect). Recursive: a module saved is initialised under it.
 	mutable std::recursive_mutex m_breakpointsMutex;
-	std::map <wxString, std::map<unsigned int, ibBreakpoint>> m_listBreakpoint; //list of points: committed line -> offset + condition
-	std::map <wxString, std::map<unsigned int, int>> m_listOffsetBreakpoint; //list of changed transitions
+	std::map <ibString, std::map<unsigned int, ibBreakpoint>> m_listBreakpoint; //list of points: committed line -> offset + condition
+	std::map <ibString, std::map<unsigned int, int>> m_listOffsetBreakpoint; //list of changed transitions
 
 	// WHAT IS WATCHED, AND WHO ASKED FOR EACH — re-registered with the runtime after every reconnect
 	// (CommandId_GetArrayBreakpoint), which is the moment the name has to be said again and cannot be

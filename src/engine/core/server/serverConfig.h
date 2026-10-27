@@ -44,9 +44,9 @@
 // What the application server says goes through Print, not the journal macros: those compile to nothing in a
 // release build, and this is what a person watching the console must always see.
 template <typename... Args>
-void ibAppServerSay(ibJournalMark mark, const wxFormatString& format, const Args&... args)
+void ibAppServerSay(ibJournalMark mark, const ibString& format, const Args&... args)
 {
-	ibTechJournal::Print(mark, wxT("appserver"), format, args...);
+	ibTechJournal::Print(mark, ibT("appserver"), format, args...);
 }
 
 // One base as server.conf names it.

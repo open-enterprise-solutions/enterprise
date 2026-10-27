@@ -10,7 +10,7 @@
 // ibPGNumberProperty
 // -----------------------------------------------------------------------
 
-// THE DESKTOP'S DECIMAL CELL (frontend/propertyManager/property/advprop/advpropNumber.h) — the exact decimal the server
+// THE DECIMAL CELL —the exact decimal the server
 // stores (ibNumber, core), read from the property's node and edited as one, never through a double.
 class ibPGNumberProperty : public wxNumericProperty {
 public:

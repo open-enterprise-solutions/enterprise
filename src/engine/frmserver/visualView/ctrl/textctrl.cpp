@@ -83,7 +83,7 @@ const ibMetaData* ibValueTextCtrl::GetMetaData() const
 
 void ibValueTextCtrl::FillControlMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(wxT("Value"), eControlValue, eControl);
+	helper.AppendProp(ibT("Value"), eControlValue, eControl);
 }
 
 bool ibValueTextCtrl::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -111,7 +111,7 @@ bool ibValueTextCtrl::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
 }
 
-wxString ibValueTextCtrl::GetControlTitle() const
+ibString ibValueTextCtrl::GetControlTitle() const
 {
 	if (!m_propertyTitle->IsEmptyProperty()) {
 		return m_propertyTitle->GetValueAsTranslateString();
@@ -121,7 +121,7 @@ wxString ibValueTextCtrl::GetControlTitle() const
 		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
 			return column->GetSynonym();
 	}
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 bool ibValueTextCtrl::IsReadOnly() const
@@ -166,7 +166,7 @@ void ibValueTextCtrl::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		ibValue value;
 		GetControlValue(value);
 
-		wxString text;
+		ibString text;
 		const ibTranslateString& format = m_propertyFormat->GetValueAsFormatString();
 		GetFormatFromColumn(!format.IsEmpty() ? format : GetSourceFormat(), GetTypeDesc()).Apply(value, text);
 		state.SetValue(ibProtocol::ibForm::ibState::Text, text);

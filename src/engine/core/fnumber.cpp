@@ -648,15 +648,15 @@ ibNumber::ibNumber(double v)
 	// Sqrt(16) returned 0 on a Russian desktop and 4 in the test suite. The
 	// suite never created application data, so it never left the C locale, and
 	// no arithmetic test could see it.
-	wxString strDigits(buf, static_cast<size_t>(n));
-	strDigits.Replace(wxT(","), wxT("."));
+	ibString strDigits(buf, static_cast<size_t>(n));
+	strDigits.Replace(ibT(","), ibT("."));
 
 	BigImpl big;
 	if (TryParseString(strDigits.wc_str(), big))
 		StoreBig(std::move(big));
 }
 
-ibNumber::ibNumber(const wxString& s)
+ibNumber::ibNumber(const ibString& s)
 	: m_payload(PackImmediate(0, 0))
 {
 	BigImpl big;
@@ -1460,8 +1460,8 @@ ibNumber ibNumber::Ln() const
 	// magnitude ≈ (intDigits - 1) * ln 10 so Newton still starts near the root.
 	double seed = std::log(ToDouble());
 	if (!std::isfinite(seed)) {
-		const wxString s = Abs().ToString();
-		const int dot = s.Find(wxT('.'));
+		const ibString s = Abs().ToString();
+		const int dot = s.Find(ibT('.'));
 		const int intDigits = (dot == wxNOT_FOUND) ? static_cast<int>(s.length()) : dot;
 		seed = (intDigits - 1) * 2.302585092994046;   // (digits - 1) * ln(10)
 	}
@@ -1686,9 +1686,9 @@ void ibNumber::AppendText(Text& out) const
 	AppendDecimal(out, p, static_cast<size_t>(end - p), b.negative, b.exp);
 }
 
-wxString ibNumber::ToString() const
+ibString ibNumber::ToString() const
 {
-	wxString out;
+	ibString out;
 	AppendText(out);
 	return out;
 }
@@ -1699,14 +1699,14 @@ void ibNumber::ToString(ibString& out) const
 	AppendText(out);
 }
 
-wxString ibNumber::ToString(const Format& fmt) const
+ibString ibNumber::ToString(const Format& fmt) const
 {
-	wxString out;
+	ibString out;
 	ToString(fmt, out);
 	return out;
 }
 
-void ibNumber::ToString(const Format& fmt, wxString& out) const
+void ibNumber::ToString(const Format& fmt, ibString& out) const
 {
 	// ⭐ THE IMMEDIATE TIER WITHOUT THE HEAP. An ordinary amount is a 47-bit mantissa and a small exponent,
 	// so its digits fit a stack buffer and its rounding fits an int64: the text is laid out straight into
@@ -1772,25 +1772,25 @@ void ibNumber::ToString(const Format& fmt, wxString& out) const
 		out.reserve((withSign ? 1u : 0u) + emitIntLen + (useGroups ? (emitIntLen - 1) / static_cast<size_t>(fmt.groupSize) : 0u)
 			+ (hasFraction ? 1u + fracLeading + fracDigitsAtP + fracPad : 0u));
 
-		if (withSign) out += wxT('-');
+		if (withSign) out += ibT('-');
 		if (useGroups) {
 			for (size_t i = 0; i < emitIntLen; ++i) {
 				if (i > 0 && (emitIntLen - i) % static_cast<size_t>(fmt.groupSize) == 0)
 					out += fmt.groupSep;
-				out += intLen == 0 ? wxT('0') : (i < intDigitsAtP ? p[i] : wxT('0'));
+				out += intLen == 0 ? ibT('0') : (i < intDigitsAtP ? p[i] : ibT('0'));
 			}
 		}
 		else if (intLen == 0)
-			out += wxT('0');
+			out += ibT('0');
 		else {
 			out.append(p, intDigitsAtP);
-			if (intTrailingZeros > 0) out.append(intTrailingZeros, wxT('0'));
+			if (intTrailingZeros > 0) out.append(intTrailingZeros, ibT('0'));
 		}
 		if (hasFraction) {
 			out += fmt.decimalSep;
-			if (fracLeading > 0)   out.append(fracLeading, wxT('0'));
+			if (fracLeading > 0)   out.append(fracLeading, ibT('0'));
 			if (fracDigitsAtP > 0) out.append(fracStart, fracDigitsAtP);
-			if (fracPad > 0)       out.append(fracPad, wxT('0'));
+			if (fracPad > 0)       out.append(fracPad, ibT('0'));
 		}
 		return;
 	}
@@ -1934,37 +1934,37 @@ void ibNumber::ToString(const Format& fmt, wxString& out) const
 	out.clear();
 	out.reserve(totalSize);
 
-	if (b.negative && !b.IsZero()) out += wxT('-');
+	if (b.negative && !b.IsZero()) out += ibT('-');
 
 	// Integer part — leading-zero pad, then digits, with optional group separator.
 	if (useGroups) {
 		for (size_t i = 0; i < emitIntLen; ++i) {
 			if (i > 0 && (emitIntLen - i) % static_cast<size_t>(fmt.groupSize) == 0)
 				out += fmt.groupSep;
-			if (i < padCount)                       out += wxT('0');
-			else if (intLen == 0)                   out += wxT('0');     // base placeholder
+			if (i < padCount)                       out += ibT('0');
+			else if (intLen == 0)                   out += ibT('0');     // base placeholder
 			else {
 				const size_t j = i - padCount;
-				out += (j < intDigitsAtP) ? p[j] : wxT('0');             // trailing zeros for exp>0
+				out += (j < intDigitsAtP) ? p[j] : ibT('0');             // trailing zeros for exp>0
 			}
 		}
 	} else {
 		// Fast path — append leading pad, slice, trailing zeros without per-char condition.
 		// append(ptr, n) writes straight into reserved storage; wxString(ptr, n)
 		// would allocate a temporary first.
-		if (padCount > 0)         out.append(padCount, wxT('0'));
-		if (intLen == 0)          out += wxT('0');
+		if (padCount > 0)         out.append(padCount, ibT('0'));
+		if (intLen == 0)          out += ibT('0');
 		else {
 			if (intDigitsAtP > 0)     out.append(p, intDigitsAtP);
-			if (intTrailingZeros > 0) out.append(intTrailingZeros, wxT('0'));
+			if (intTrailingZeros > 0) out.append(intTrailingZeros, ibT('0'));
 		}
 	}
 
 	if (hasFraction) {
 		out += fmt.decimalSep;
-		if (fracLeadingEmit > 0) out.append(fracLeadingEmit, wxT('0'));
+		if (fracLeadingEmit > 0) out.append(fracLeadingEmit, ibT('0'));
 		if (fracDigitsEmit > 0)  out.append(fracStart, fracDigitsEmit);
-		if (fracTrailingPad > 0) out.append(fracTrailingPad, wxT('0'));
+		if (fracTrailingPad > 0) out.append(fracTrailingPad, ibT('0'));
 	}
 }
 
@@ -2054,7 +2054,7 @@ bool ibNumber::SetBuffer(const void* data, size_t len)
 	// kMaxDecodedExp10. Out of range, this is not a number and never was; saying so HERE keeps the
 	// fault at the cell that produced it instead of at whoever later asks for its text.
 	if (b.exp > kMaxDecodedExp10 || b.exp < -kMaxDecodedExp10) {
-		wxASSERT_MSG(false, wxT("ibNumber::SetBuffer - exponent out of range (corrupt blob)"));
+		wxASSERT_MSG(false, ibT("ibNumber::SetBuffer - exponent out of range (corrupt blob)"));
 		return false;
 	}
 
@@ -2225,8 +2225,8 @@ void ibNumber::ShiftDecimal(int32_t exp10)
 
 std::ostream& operator<<(std::ostream& os, const ibNumber& n)
 {
-	const wxString s = n.ToString();
-	const wxScopedCharBuffer utf = s.utf8_str();
+	const ibString s = n.ToString();
+	const std::string utf = s.ToUtf8();
 	return os << utf.data();
 }
 

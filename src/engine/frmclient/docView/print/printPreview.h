@@ -2,7 +2,7 @@
 #define __PRINT_PREVIEW_H__
 
 /////////////////////////////////////////////////////////////////////////////
-// Name:        frontend/docView/print/printPreview.h
+// Name:        frmclient/docView/print/printPreview.h
 // Purpose:     the print preview window, forked from wxPreviewFrame for the
 //              one setting wx has no place for - fitting the page's width.
 /////////////////////////////////////////////////////////////////////////////

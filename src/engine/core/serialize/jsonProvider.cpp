@@ -3,6 +3,8 @@
 #include "core/utils/base64.h"        // ibBase64 — a binary's text, into the output and read in place
 #include "core/exception.h"           // ibCoreException — malformed-JSON throw
 #include "core/fiber/fiber.h"         // StackLow — the depth count's backstop when the reserve runs out first
+
+#include <wx/translation.h>   // _() — the refusals' words
 #include <algorithm>                   // std::all_of — a whole number's digits
 #include <charconv>                    // std::to_chars — a whole number's digits, on the stack
 #include <cstdio>                      // std::snprintf — a date's digits
@@ -209,7 +211,7 @@ void ibJsonProvider::EmitNode(const ibDataNode& node, Text& out, int depth) cons
 		// (ibTypeDescriptionMemory::WriteNode: sixty-four bits do not survive a JSON number on the
 		// far side), and this branch, testing for Number, stopped injecting the readable name the
 		// moment that changed. The clsid branch above already reads either; this one did not.
-		else if (k.IsSameAs(wxT("typeId"), false)
+		else if (k.IsSameAs(ibT("typeId"), false)
 			&& (v.Kind() == ibDataKind::Number || v.Kind() == ibDataKind::String)) {
 
 			unsigned long long clsid = 0;
@@ -484,7 +486,7 @@ bool ibJsonReader<Char>::ParseNode(ibDataNode& node)
 		if (!Expect(':')) return false;
 
 		// The children are the reader's to descend into; every other key is the provider's rule (ReadEntry).
-		static const ibString kNodeChildren = wxT("NodeChildren");
+		static const ibString kNodeChildren = ibT("NodeChildren");
 		if (key == kNodeChildren) {
 			if (!Expect('[')) return false;
 			if (!Accept(']')) {
@@ -552,8 +554,8 @@ bool ibJsonProvider::ReadEntry(ibDataNode& node, const ibString& key, ibDataValu
 {
 	// The keys as the engine's strings: a key is told from one by its length first — against a literal each was measured
 	// and walked, every key of every node (ibString::operator==, 2026-10-22).
-	static const ibString kNodeType = wxT("NodeType"), kNodeId = wxT("NodeId"), kNodeRaw = wxT("NodeRaw"),
-		kTypeDesc = wxT("TypeDesc");
+	static const ibString kNodeType = ibT("NodeType"), kNodeId = ibT("NodeId"), kNodeRaw = ibT("NodeRaw"),
+		kTypeDesc = ibT("TypeDesc");
 
 	// --- the structural keys EmitNode writes (see the emitter for each) ------------
 	if (key == kNodeType) {
@@ -595,7 +597,7 @@ ibDataValue ibJsonProvider::ReadString(const ibString& text)
 	// NOT a String. Everything else stays a String, INCLUDING an emitted Date (see
 	// the header): an ISO string and a string that looks like one are the same text —
 	// and so does one after the prefix that is not base64: EmitValue did not write it.
-	static const ibString kB64 = wxT("base64:");
+	static const ibString kB64 = ibT("base64:");
 	if (text.StartsWith(kB64)) {
 		ibMemoryBuffer bytes;
 		if (ibBase64::Read(text.wc_str() + kB64.length(), text.length() - kB64.length(), bytes))
@@ -672,7 +674,7 @@ ibDataNode LookupKept(const ibDataNode& node, const ibTypeLookup& lookupType)
 	ibDataNode looked(clsid, node.GetMetaId());
 	if (node.HasRawData())
 		looked.SetRawData(node.RawData());
-	static const ibString kNodeType = wxT("NodeType");
+	static const ibString kNodeType = ibT("NodeType");
 	for (const auto& field : node.Fields()) {
 		if (!(known && field.first == kNodeType))
 			looked.AddField(field.first, LookupKept(field.second, lookupType));

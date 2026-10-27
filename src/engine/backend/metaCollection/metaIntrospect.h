@@ -50,7 +50,7 @@ class ibValueMetaObject;
 // name is unknown, or the name belongs to something that is not a metatype (a
 // value class, a control) — asking for "Array" must not return every array in
 // the tree.
-BACKEND_API ibClassID ibResolveMetaKind(const ibMetaData* metaData, const wxString& kind);
+BACKEND_API ibClassID ibResolveMetaKind(const ibMetaData* metaData, const ibString& kind);
 
 // Every metaobject of a kind, in tree order. Empty when the kind does not resolve.
 //
@@ -59,16 +59,16 @@ BACKEND_API ibClassID ibResolveMetaKind(const ibMetaData* metaData, const wxStri
 // predefined_* — is addressed by NodeId. This used to answer names only, and the id had to be
 // fetched back one FindAnyObjectByFilter at a time from names this walk had just thrown away.
 BACKEND_API std::vector<const ibValueMetaObject*> ibListMetaObjects(const ibMetaData* metaData,
-	const wxString& kind);
+	const ibString& kind);
 
 // The same walk, projected to names — which is all four of its other callers want.
-BACKEND_API std::vector<wxString> ibListMetaObjectNames(const ibMetaData* metaData, const wxString& kind);
+BACKEND_API std::vector<ibString> ibListMetaObjectNames(const ibMetaData* metaData, const ibString& kind);
 
 // FINDING. Null when the kind does not resolve or nothing carries that
 // name / id. The id form searches the whole tree, so it finds an attribute or a
 // tabular section as readily as the object that owns it.
 BACKEND_API ibValueMetaObject* ibFindMetaObject(ibMetaData* metaData,
-	const wxString& kind, const wxString& name);
+	const ibString& kind, const ibString& name);
 BACKEND_API ibValueMetaObject* ibFindMetaObjectById(ibMetaData* metaData, const ibMetaID& id);
 
 // THE OBJECT AS A NODE — its properties, its attributes with their types, its
@@ -96,7 +96,7 @@ BACKEND_API std::function<ibString(ibClassID)> ibMetaTypeResolver(const ibMetaDa
 // serialize/jsonProvider.h) — it is a readable rendering, not a way back in.
 // Writing goes property by property, through the gate that knows what may be
 // written; it never goes by handing a whole document back.
-BACKEND_API wxString ibDescribeMetaObject(ibMetaData* metaData,
-	const wxString& kind, const wxString& name);
+BACKEND_API ibString ibDescribeMetaObject(ibMetaData* metaData,
+	const ibString& kind, const ibString& name);
 
 #endif // _IB_META_INTROSPECT_H_

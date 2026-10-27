@@ -29,10 +29,10 @@ public:
 	// configuration no longer has (functionalOptionGate.h).
 	bool IsAvailable() const;
 
-	ibPropertyFunctionalOptions(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyFunctionalOptions(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 	// …or ONE option — what an option itself requires (metaFunctionalOptionObject.h).
-	ibPropertyFunctionalOptions(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, ibPropertyChoiceMode mode)
+	ibPropertyFunctionalOptions(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, ibPropertyChoiceMode mode)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())), m_choiceMode(mode) {}
 
 	virtual bool IsEmptyProperty() const override { return GetValueAsMetaDesc().GetTypeCount() == 0; }

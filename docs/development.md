@@ -65,7 +65,7 @@ them, and CI refuses a header that brings `#pragma once`.
 
 **A picture is a PNG in Base64, in the source file that reads it; never XPM.** It is a string
 (`static const wxString s_<name>_png = "..."`) beside the code that uses it — the art provider's in
-`frontend/artProvider/private/picturePredefined.h`, the engine's own in `core/picturePredefined.cpp`, a control's in its `_res.cpp`, a metatype's in its
+`frmclient/artProvider/private/picturePredefined.h` (codeRunner keeps a copy of its own), the engine's own in `core/picturePredefined.cpp`, a control's in its `_res.cpp`, a metatype's in its
 `_res.cpp` — kept as a MASTER four times the size it is drawn at, and scaled down by whoever reads it to
 the size it shows it at. Its source is an SVG in `tools/pictures/render.js`, which draws the PNG and
 writes the string: to change a picture, change its SVG there and run the script; to add one, add the SVG,
@@ -242,10 +242,18 @@ into one question before the join, not after.
 **Hot paths carry `ibString`.** The engine's own string (`core/fstring.h`) is a shared handle:
 copying it copies a reference, not the characters. A name that reaches the runtime is taken as
 `const ibString&` — `ibProcUnit::CallAsProc` / `CallAsFunc`, `ibRuntimeModuleDataObject::ExecAsProc` /
-`ExecAsFunc` / `ExecAsEvent` / `ExecAsManagerEvent`. `wxString` stays where speed is not the question
-(the interface, serialisation, metadata edits). Both conversions are implicit, and each one makes a new
+`ExecAsFunc` / `ExecAsEvent` / `ExecAsManagerEvent`. `wxString` stays only at the boundary with wx (a
+control, a wx out-parameter, `wxConfigBase`). Both conversions are implicit, and each one makes a new
 text, so convert at the boundary, once. `ib_clsid_hash(const wxString&)` converts to UTF-8 and allocates
 on every call, so hash once per event, not once per handler.
+
+- **A getter of an `ibString` member returns `const ibString&`** — not even the reference count is
+  touched. Only when the member IS an `ibString`: over any other type the reference is to a temporary
+  (`ibTranslateCode::GetBuffer` over a `std::wstring`, 147 crashing tests, 2026-10-27), which the build
+  now refuses (C4172 is an error, see [portability.md](portability.md) §1.9).
+- **A `wxString`'s `mb_str()` is not a buffer of its own** — it points into the string it came from. Over
+  a temporary (`wxString(text).mb_str(conv)`) it is gone before it is read. Text into bytes goes
+  through the converter itself: `conv.cWC2MB(text.wc_str(), text.Len(), &length)`.
 
 ---
 

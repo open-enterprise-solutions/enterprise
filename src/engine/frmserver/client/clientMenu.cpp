@@ -9,7 +9,7 @@ ibClientMenu::Item& ibClientMenu::Append(ibDocCommand command)
 	return m_items.back();
 }
 
-ibClientMenu::Item& ibClientMenu::Append(ibProtocol::ibSchema::ibKind schema, const wxString& title)
+ibClientMenu::Item& ibClientMenu::Append(ibProtocol::ibSchema::ibKind schema, const ibString& title)
 {
 	Item item;
 	item.kind = ibClientMenuItemKind::Schema;
@@ -19,14 +19,14 @@ ibClientMenu::Item& ibClientMenu::Append(ibProtocol::ibSchema::ibKind schema, co
 	return m_items.back();
 }
 
-ibClientMenu::Item& ibClientMenu::Append(ibProtocol::ibSchema::ibKind schema, ibProtocol::ibSchema::ibCommand command, const wxString& title)
+ibClientMenu::Item& ibClientMenu::Append(ibProtocol::ibSchema::ibKind schema, ibProtocol::ibSchema::ibCommand command, const ibString& title)
 {
 	Item& item = Append(schema, title);
 	item.schemaCommand = command;
 	return item;
 }
 
-ibClientMenu::Item& ibClientMenu::AppendSubMenu(const ibClientMenu& menu, const wxString& title)
+ibClientMenu::Item& ibClientMenu::AppendSubMenu(const ibClientMenu& menu, const ibString& title)
 {
 	Item item;
 	item.kind = ibClientMenuItemKind::Menu;

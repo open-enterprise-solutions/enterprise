@@ -37,7 +37,7 @@ void ibValue::Release()
 	}
 }
 
-bool ibValue::FindValue(const wxString& findData, std::vector<ibValue>& foundedObjects) const
+bool ibValue::FindValue(const ibString& findData, std::vector<ibValue>& foundedObjects) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->FindValue(findData, foundedObjects);
@@ -46,7 +46,7 @@ bool ibValue::FindValue(const wxString& findData, std::vector<ibValue>& foundedO
 	if (m_typeClass == ibValueTypes::TYPE_BOOLEAN) {
 		for (const bool flag : { true, false }) {
 			const ibValue one(flag);
-			if (findData.IsEmpty() || wxString(one.GetString()).Lower().StartsWith(findData.Lower()))
+			if (findData.IsEmpty() || ibString(one.GetString()).Lower().StartsWith(findData.Lower()))
 				foundedObjects.push_back(one);
 		}
 		return true;
@@ -141,7 +141,7 @@ bool ibValue::Serialize(ibDataNode& node) const
 		return true;
 	}
 
-	node.SetValue(kValueFieldClsid, wxString::Format(wxT("%llu"), (unsigned long long)GetClassType()));
+	node.SetValue(kValueFieldClsid, ibString::Format(ibT("%llu"), (unsigned long long)GetClassType()));
 	return DoSerialize(node);
 }
 
@@ -162,7 +162,7 @@ bool ibValue::DoSerialize(ibDataNode& node) const
 ibValue ibValue::FromNode(const ibDataNode& node)
 {
 	unsigned long long parsed = 0;
-	const ibClassID clsid = node.GetValue<wxString>(kValueFieldClsid).ToULongLong(&parsed) && parsed != 0
+	const ibClassID clsid = node.GetValue<ibString>(kValueFieldClsid).ToULongLong(&parsed) && parsed != 0
 		? static_cast<ibClassID>(parsed) : g_valueUndefinedCLSID;
 	const auto data = node.FindField(kValueFieldData);
 
@@ -188,7 +188,7 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 		}
 		return ibValue(data ? data->AsDate() : ibDateTime());
 	}
-	case ibValueTypes::TYPE_STRING:  return ibValue(data ? data->AsString().ToWxString() : wxString());
+	case ibValueTypes::TYPE_STRING:  return ibValue(data ? data->AsString() : ibString());
 	default:
 		break;
 	}
@@ -217,7 +217,7 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 	ibValue made;
 	made.m_typeClass = ibValueTypes::TYPE_VALUE;
 	made.m_classType = clsid;
-	made.m_text = node.GetValue<wxString>(ibProtocol::ibRequest::ibListSettings::Presentation);
+	made.m_text = node.GetValue<ibString>(ibProtocol::ibRequest::ibListSettings::Presentation);
 	made.m_stored = std::make_shared<const ibDataNode>(node);
 	return made;
 }
@@ -236,7 +236,7 @@ ibCtorAbstractType* ibValue::GetAvailableCtor(const ibClassID& clsid)
 	return found != NamedTypes().end() ? found->second.get() : nullptr;
 }
 
-void ibValue::RegisterCtor(const ibClassID& clsid, const wxString& className, const wxIcon& classIcon)
+void ibValue::RegisterCtor(const ibClassID& clsid, const ibString& className, const wxIcon& classIcon)
 {
 	if (clsid == 0 || className.IsEmpty())
 		return;

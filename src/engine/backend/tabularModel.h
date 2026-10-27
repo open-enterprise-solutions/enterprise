@@ -38,8 +38,8 @@ class ibFormatString;
 // ordering by it would order by the reference instead of by what the column shows (Max, 2026-08-29).
 // Empty name = the control has no current column, and a by-column verb has nothing to mean.
 struct ibDataViewColumnItem {
-	wxString            m_name;      // the column as a composer FIELD — its dotted name, hops included
-	wxString            m_synonym;   // …what a person reads on its header
+	ibString            m_name;      // the column as a composer FIELD — its dotted name, hops included
+	ibString            m_synonym;   // …what a person reads on its header
 	ibSourceDescription m_source;    // …and WHERE it reads from: the id path, with each hop's pinned type
 
 	bool IsOk() const { return !m_name.IsEmpty(); }
@@ -162,7 +162,7 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 		// A name per value type ("bool", "string") is wxWidgets' own, and a reader that trusts it casts to wx's
 		// data class (wxVariant::GetBool does).
 		virtual wxString GetType() const {
-			return wxT("value");
+			return ibT("value");
 		}
 
 	private:
@@ -361,11 +361,11 @@ public:
 			virtual unsigned int GetColumnID() const = 0;
 			virtual void SetColumnID(unsigned int col) {}
 
-			virtual wxString GetColumnName() const = 0;
-			virtual void SetColumnName(const wxString& name) {}
+			virtual ibString GetColumnName() const = 0;
+			virtual void SetColumnName(const ibString& name) {}
 
-			virtual wxString GetColumnCaption() const = 0;
-			virtual void SetColumnCaption(const wxString& caption) {}
+			virtual ibString GetColumnCaption() const = 0;
+			virtual void SetColumnCaption(const ibString& caption) {}
 
 			virtual const ibTypeDescription GetColumnType() const = 0;
 			virtual void SetColumnType(const ibTypeDescription& typeData) {}
@@ -406,9 +406,9 @@ public:
 		};
 	public:
 
-		virtual ibValueModelColumnInfo* AddColumn(const wxString& colName,
+		virtual ibValueModelColumnInfo* AddColumn(const ibString& colName,
 			const ibTypeDescription& typeData,
-			const wxString& caption,
+			const ibString& caption,
 			int width = wxDVC_DEFAULT_WIDTH) {
 			return nullptr;
 		};
@@ -419,7 +419,7 @@ public:
 		}
 
 		virtual ibValueModelColumnInfo* GetColumnByID(unsigned int col) const;
-		virtual ibValueModelColumnInfo* GetColumnByName(const wxString& colName) const;
+		virtual ibValueModelColumnInfo* GetColumnByName(const ibString& colName) const;
 
 		// THE COLUMN'S TYPE BY ID — one body over GetColumnByID, and NOT virtual, because a column's type
 		// is a property of the column and not of the collection holding it. It used to be written three
@@ -785,7 +785,7 @@ public:
 	// and no sort-anchor — the restore matches within the fetched batch by KEY, never by a cursor tuple, so the
 	// old catalog/register anchor-reading was dead weight. In-memory tables (script `Find(value, col)`) override
 	// this with a real column search.
-	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const {
+	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const ibString& colName = ibEmptyString) const {
 		(void)colName;
 		if (varValue.IsEmpty()) return ibDataViewItem();
 		auto* stub = new ibComposerNode(std::vector<ibValue>{ varValue });
@@ -867,7 +867,7 @@ public:
 	}
 
 	//set meta/get meta
-	virtual ibMetaID GetColumnIDByName(const wxString colName) const {
+	virtual ibMetaID GetColumnIDByName(const ibString colName) const {
 		ibValueModelColumnCollection* colCollection = GetColumnCollection();
 		if (colCollection == nullptr)
 			return wxNOT_FOUND;
@@ -881,13 +881,13 @@ public:
 	// collection. Returns an empty string if no column carries that id (or there is
 	// no collection). Used to key the list-settings Filter (which is name-based) from
 	// a command that only knows the column id.
-	virtual wxString GetColumnNameByID(unsigned int colId) const {
+	virtual ibString GetColumnNameByID(unsigned int colId) const {
 		ibValueModelColumnCollection* colCollection = GetColumnCollection();
 		if (colCollection == nullptr)
-			return wxEmptyString;
+			return ibEmptyString;
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colCollection->GetColumnByID(colId);
 		if (colInfo == nullptr)
-			return wxEmptyString;
+			return ibEmptyString;
 		return colInfo->GetColumnName();
 	};
 
@@ -1109,7 +1109,7 @@ public:
 		// PRESENTATION so the front paints it as the spanning group caption. The node's OWN (deepest) dimension
 		// value is m_groupPath.back(); a detail / key-only node has no group path → false (base default), so the
 		// front keeps per-column rendering.
-		virtual bool GetGroupCaption(wxString& caption) const override {
+		virtual bool GetGroupCaption(ibString& caption) const override {
 			if (!m_heading)
 				return false;
 			// ⭐ THE CAPTION IS THIS NODE'S OWN VALUE, and it lives in whichever of the two facts holds
@@ -1678,14 +1678,14 @@ public:
 	// Column resolution for the composer (name → id) via the model's column collection (re-pointed each fetch).
 	void     SetColumns(ibValueModel::ibValueModelColumnCollection* cols) const { m_columns = cols; }
 	ibValueModel::ibValueModelColumnCollection* Columns() const { return m_columns; }
-	ibMetaID ColumnIdByName(const wxString& name) const;   // out-of-line (needs the column-collection type)
+	ibMetaID ColumnIdByName(const ibString& name) const;   // out-of-line (needs the column-collection type)
 
 	// Field-path resolution over the stored rows (shared by the RAM composer's ComputeOrder AND the model's
 	// grouping): SplitField cuts a path on '.' → HEAD storage column + dotted TAIL; ResolveField reads ONE row's
 	// value, walking references down the tail (a reference cell IS-A source → GetSourceExplorer name→id →
 	// GetValueByMetaID). Out-of-line (ResolveField needs the source-object type). See tabularModelRam.cpp.
-	bool    SplitField(const wxString& path, ibMetaID& headCol, std::vector<wxString>& tail) const;
-	ibValue ResolveField(long row, ibMetaID headCol, const std::vector<wxString>& tail) const;
+	bool    SplitField(const ibString& path, ibMetaID& headCol, std::vector<ibString>& tail) const;
+	ibValue ResolveField(long row, ibMetaID headCol, const std::vector<ibString>& tail) const;
 
 	// --- mutation (the RAM model's ops; take the model for the view notify) — target the root's children ---
 	// The model is CONST: notify=false just bumps the mutable view generation (BumpViewGeneration is const), so a
@@ -1928,7 +1928,7 @@ public:
 	// ⭐ THE TOTAL OF A COLUMN (Total(column)): its numbers added exactly (ibNumber, not a double), an empty cell adding
 	// nothing. A column that is not there raises - a wrong total that looks right is the worst answer a sum can give -
 	// and so does a cell holding something that is not a number, naming the row. No rows total zero.
-	ibValue TotalOf(const wxString& column) const;
+	ibValue TotalOf(const ibString& column) const;
 
 	// (NO GetSourceQueryable override — a RAM model has no queryable; the composer reads m_storage directly.
 	//  The base default returns null.)
@@ -2022,7 +2022,7 @@ public:
 
 	// The name door — what the script's Sort("Column") says. A plain column of this table, no hop: it must
 	// be one of ours, and then it resolves to the one road above.
-	bool SortRows(const wxString& colName, bool ascending) {
+	bool SortRows(const ibString& colName, bool ascending) {
 		if (GetColumnIDByName(colName) == wxNOT_FOUND)
 			return false;
 		ibDataViewColumnItem column;

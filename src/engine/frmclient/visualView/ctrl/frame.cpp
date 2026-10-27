@@ -12,7 +12,7 @@
 #include "tableBox.h"
 #include "widgets.h"
 
-#include "core/stringUtils.h"   // stringUtils::CompareString — a name found as the desktop's finds it
+#include "core/stringUtils.h"   // stringUtils::IsSameAs — a name found as the desktop's finds it
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
 #include "frmclient/win/typeconv.h"
 
@@ -110,7 +110,7 @@ ibValueFrame* ibValueFrame::DoFindControlByName(const wxString& controlName, ibV
 		}
 	}
 
-	if (stringUtils::CompareString(controlName, top->GetControlName())) {
+	if (stringUtils::IsSameAs(controlName, top->GetControlName())) {
 		return top;
 	}
 

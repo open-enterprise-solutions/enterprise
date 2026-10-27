@@ -185,8 +185,8 @@ namespace ibProtocol {
 		// THE MODE a client works in — login's Mode: which application's frame it gets. The desktop had a program per
 		// mode; the server has one door, and a client's frame is made for one mode.
 		enum class ibMode : int {
-			Runtime  = 1,   // the application, as enterprise.exe ran it
-			Designer = 2,   // the configuration, as designer.exe edited it
+			Runtime  = 1,   // the application, as the runtime runs it
+			Designer = 2,   // the configuration, as the designer edits it
 		};
 
 	}

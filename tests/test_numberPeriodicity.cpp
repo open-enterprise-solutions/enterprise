@@ -122,7 +122,7 @@ public:
 	void SetWhen(const ibDateTime& when) {
 		SetValueByMetaID(GetMetaObject()->GetDocumentDate()->GetMetaID(), ibValue(when));
 	}
-	wxString TakeNumber() {
+	ibString TakeNumber() {
 		EXPECT_TRUE(GenerateUniqueIdentifier(wxEmptyString));
 		ibValue number;
 		EXPECT_TRUE(GetValueByMetaID(GetMetaObject()->GetDocumentNumber()->GetMetaID(), number));
@@ -135,9 +135,9 @@ struct NumberSeries : ::testing::Test {
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
 	ibValueMetaObjectDocument* doc = nullptr;
-	wxString numberField;
-	wxString dateField;
-	wxString table;
+	ibString numberField;
+	ibString dateField;
+	ibString table;
 
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
@@ -165,7 +165,7 @@ struct NumberSeries : ::testing::Test {
 		ASSERT_FALSE(dateField.IsEmpty());
 		table = doc->GetPhysicalTableName();
 
-		db->RunQuery(wxT("%s"), wxString::Format(
+		db->RunQuery(wxT("%s"), ibString::Format(
 			wxT("CREATE TABLE %s (%s TEXT, %s TEXT)"), table, numberField, dateField));
 		db->RunQuery(wxT("%s"),
 			wxT("CREATE TABLE sys_sequence (interval INTEGER, meta_guid TEXT, prefix TEXT, number INTEGER)"));
@@ -181,9 +181,9 @@ struct NumberSeries : ::testing::Test {
 
 	void Use(ibNumberPeriodicity period) { SetPeriod(doc, period); }
 
-	wxString Padded(int n) const {
+	ibString Padded(int n) const {
 		const int width = doc->GetDocumentNumber()->GetTypeDesc().GetLength();
-		return wxString::Format(wxT("%0*d"), width, n);
+		return ibString::Format(wxT("%0*d"), width, n);
 	}
 	void Plant(const ibDateTime& when, int n) {
 		ibDatabaseQueryBuilder insert;
@@ -192,7 +192,7 @@ struct NumberSeries : ::testing::Test {
 			{ dateField,   ibConst(ibValue(when)) },
 		})), 1);
 	}
-	wxString Next(const ibDateTime& when) {
+	ibString Next(const ibDateTime& when) {
 		NumberProbe probe(doc);
 		probe.Prepare();
 		probe.SetWhen(when);

@@ -24,7 +24,7 @@ FRMCLIENT_API void ibSetSourcePicker(const ibSourcePicker& picker);
 // ibPGDataSourceProperty
 // -----------------------------------------------------------------------
 
-// THE DESKTOP'S SOURCE CELL (frontend/propertyManager/property/advprop/advpropSource.h) — a control's binding to a value
+// THE SOURCE CELL —a control's binding to a value
 // of its form's data: the path as text, the "…" opening the tree of the form's attributes and their columns, and the
 // type the binding holds in a Type row beneath, read only and shown while bound — one property, both halves in its value
 // as the server wrote them (the path, and SourceType beside it).

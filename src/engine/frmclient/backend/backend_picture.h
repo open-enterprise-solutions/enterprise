@@ -12,7 +12,7 @@
 #include "frmclient/win/picture.h"   // a picture by its id, as the client has it
 
 struct ibBackendPictureEntry {
-	wxString m_name;
+	ibString m_name;
 	wxBitmap m_data;
 	ibPictureID m_id;
 };
@@ -23,7 +23,7 @@ struct ibBackendPictureEntry {
 // client's: the file is on its machine, read here and sent whole in the value.
 class FRMCLIENT_API ibBackendPicture {
 public:
-	static bool LoadFromFile(const wxString& strFileName, ibExternalPictureDescription& pictureDesc);
+	static bool LoadFromFile(const ibString& strFileName, ibExternalPictureDescription& pictureDesc);
 	static wxBitmap CreatePicture(const ibExternalPictureDescription& pictureDesc, const wxSize& size = wxSize(16, 16));
 
 	// The pictures a picture property offers — the engine's, registered in the core.
@@ -57,7 +57,7 @@ public:
 
 	// A MASTER IN THE SOURCE — a PNG written as Base-64 text (the art provider's, the splash's), read at the size it is
 	// shown — none asked: as it is.
-	static wxImage GetImageFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
+	static wxImage GetImageFromBase64(const ibString& src, const wxSize& size = wxDefaultSize);
 };
 
 #endif

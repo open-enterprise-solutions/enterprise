@@ -10,18 +10,18 @@ class ibEventDispatcher;   // backend/eventDispatcher.h — the facet GetDispatc
 class BACKEND_API ibEventControl : public ibEvent {
 public:
 
-	ibEventControl(ibPropertyCategory* cat, const wxString& name, const wxArrayString& args)
-		: ibEvent(cat, name, args, wxEmptyString)
+	ibEventControl(ibPropertyCategory* cat, const ibString& name, const std::vector<ibString>& args)
+		: ibEvent(cat, name, args, ibT(""))
 	{
 	}
 
-	ibEventControl(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxArrayString& args)
-		: ibEvent(cat, name, label, args, wxEmptyString)
+	ibEventControl(ibPropertyCategory* cat, const ibString& name, const ibString& label, const std::vector<ibString>& args)
+		: ibEvent(cat, name, label, args, ibT(""))
 	{
 	}
 
-	ibEventControl(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxArrayString& args)
-		: ibEvent(cat, name, label, helpString, args, wxEmptyString)
+	ibEventControl(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const std::vector<ibString>& args)
+		: ibEvent(cat, name, label, helpString, args, ibT(""))
 	{
 	}
 

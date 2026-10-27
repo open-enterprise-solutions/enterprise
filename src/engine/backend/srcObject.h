@@ -32,7 +32,7 @@ public:
 	virtual ibClassID GetSourceClassType() const = 0;
 
 	//Get presentation 
-	virtual wxString GetSourceCaption() const = 0;
+	virtual ibString GetSourceCaption() const = 0;
 };
 
 //********************************************************************************************

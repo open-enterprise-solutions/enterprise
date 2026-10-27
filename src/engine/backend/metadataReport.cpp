@@ -123,7 +123,7 @@ bool ibMetaDataReport::ClearDatabase()
 
 ////////////////////////////////////////////////////////////////////
 
-wxString ibMetaDataReport::GetLangCode() const
+ibString ibMetaDataReport::GetLangCode() const
 {
 	return activeMetaData->GetLangCode();
 }
@@ -278,7 +278,7 @@ ibValueMetaObjectReport* ibMetaDataReport::BuildFreshRoot()
 	return root;
 }
 
-bool ibMetaDataReport::LoadFromFile(const wxString& strFileName)
+bool ibMetaDataReport::LoadFromFile(const ibString& strFileName)
 {
 	// Read the whole file up front — no tree is touched until the bytes are in
 	// hand, so a read failure leaves the current report intact.
@@ -296,7 +296,7 @@ bool ibMetaDataReport::LoadFromFile(const wxString& strFileName)
 	return LoadFromBuffer(tempBuffer, strFileName);
 }
 
-bool ibMetaDataReport::LoadFromTempFile(const wxString& id)
+bool ibMetaDataReport::LoadFromTempFile(const ibString& id)
 {
 	// The parts read in order, whole — as the disk's file is read up front.
 	const ibTempFile file(id);
@@ -311,7 +311,7 @@ bool ibMetaDataReport::LoadFromTempFile(const wxString& id)
 	return LoadFromBuffer(tempBuffer, file.GetName());
 }
 
-bool ibMetaDataReport::LoadFromBuffer(const ibMemoryBuffer& buffer, const wxString& fullPath)
+bool ibMetaDataReport::LoadFromBuffer(const ibMemoryBuffer& buffer, const ibString& fullPath)
 {
 	ibReaderMemory readerData(buffer.GetData(), buffer.GetDataLen());
 	if (readerData.eof())
@@ -362,7 +362,7 @@ bool ibMetaDataReport::LoadFromBuffer(const ibMemoryBuffer& buffer, const wxStri
 	return LoadDatabase();
 }
 
-bool ibMetaDataReport::SaveToFile(const wxString& strFileName)
+bool ibMetaDataReport::SaveToFile(const ibString& strFileName)
 {
 	//common data
 	ibWriterMemory writerData;
@@ -405,7 +405,7 @@ bool ibMetaDataReport::SaveToFile(const wxString& strFileName)
 	return true;
 }
 
-bool ibMetaDataReport::SaveToTempFile(const wxString& id)
+bool ibMetaDataReport::SaveToTempFile(const ibString& id)
 {
 	// The file, made anew of the name it was given — written as the disk's file is, whole.
 	ibTempFile file;
@@ -419,7 +419,7 @@ bool ibMetaDataReport::SaveToTempFile(const wxString& id)
 	return file.Write(writerData.pointer(), writerData.size());
 }
 
-bool ibMetaDataReport::SaveToBuffer(ibWriterMemory& writerData, const wxString& fullPath)
+bool ibMetaDataReport::SaveToBuffer(ibWriterMemory& writerData, const ibString& fullPath)
 {
 	m_fullPath = fullPath;
 
@@ -446,7 +446,7 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 		if (headerReader->r_u64() != sign_dataReport)
 			return false;
 		m_version = headerReader->r_u32();
-		wxString metaGuid;
+		ibString metaGuid;
 		headerReader->r_stringZ(metaGuid);
 		headerReader->close();
 	}
@@ -492,7 +492,7 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 		// report that would not open looked exactly like one that opened and failed later — and the
 		// failure that found this (a composer's variant nodes read as metatypes, 2026-08-20) was
 		// invisible until a probe was put here. A refusal is data, never a format string.
-		ibJournalError(wxT("metadata.report"),wxT("%s"), err.GetErrorDescription());
+		ibJournalError(ibT("metadata.report"),ibT("%s"), err.GetErrorDescription());
 		return false;
 	}
 }

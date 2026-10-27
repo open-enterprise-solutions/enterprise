@@ -105,7 +105,7 @@ bool ibValue::Serialize(ibDataNode& node) const
 	// wxDateTime / guid / blob — and none for a 64-bit id. Text costs a few bytes
 	// in the binary provider and makes the JSON dump readable, which is half the
 	// reason the JSON provider exists.
-	node.SetValue(kFieldClsid, wxString::Format(wxT("%llu"), (unsigned long long)GetClassType()));
+	node.SetValue(kFieldClsid, ibString::Format(ibT("%llu"), (unsigned long long)GetClassType()));
 	return DoSerialize(node);
 }
 
@@ -169,7 +169,7 @@ bool ibValue::DoDeserialize(const ibDataNode& node)
 		m_fData = node.GetValue<ibNumber>(kFieldData);
 		return true;
 	case ibValueTypes::TYPE_STRING:
-		SetString(node.GetValue<wxString>(kFieldData));
+		SetString(node.GetValue<ibString>(kFieldData));
 		return true;
 	case ibValueTypes::TYPE_DATE: {
 		// Straight into the scalar where the format kept one: SetDate takes a STRING (the
@@ -229,7 +229,7 @@ ibClassID ibReadNodeType(const ibDataNode& node)
 	// saying so here means every caller downstream asks one question ("is this a
 	// type I have?") instead of two.
 	unsigned long long parsed = 0;
-	if (!node.GetValue<wxString>(kFieldClsid).ToULongLong(&parsed) || parsed == 0)
+	if (!node.GetValue<ibString>(kFieldClsid).ToULongLong(&parsed) || parsed == 0)
 		return g_valueUndefinedCLSID;
 	return static_cast<ibClassID>(parsed);
 }

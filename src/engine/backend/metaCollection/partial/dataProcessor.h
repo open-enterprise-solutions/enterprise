@@ -22,7 +22,7 @@ class ibValueMetaObjectDataProcessor : public ibValueMetaObjectRecordDataExt {
 
 	virtual ibFormTypeList GetFormType() const override {
 		ibFormTypeList formList;
-		formList.AppendItem(wxT("FormDataProcessor"), _("Form data processor"), eFormDataProcessor);
+		formList.AppendItem(ibT("FormDataProcessor"), _("Form data processor"), eFormDataProcessor);
 		return formList;
 	}
 
@@ -110,11 +110,11 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"), _("Code of one data processor object: the procedures that do its work over its attributes and tabular sections, called from its form or from other code."));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the data processor kind as a whole: its exported procedures and functions are called on the manager, as DataProcessors.<Name>.<Function>()."));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, ibT("ObjectModule"), _("Object module"), _("Code of one data processor object: the procedures that do its work over its attributes and tabular sections, called from its form or from other code."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, ibT("ManagerModule"), _("Manager module"), _("Code of the data processor kind as a whole: its exported procedures and functions are called on the manager, as DataProcessors.<Name>.<Function>()."));
 
-	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
-	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), _("The form the data processor opens with. Empty: a form generated from its attributes."), &ibValueMetaObjectDataProcessor::FillFormObject);
+	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(ibT("PresetValues"), _("Preset values"));
+	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormObject"), _("Default Object Form"), _("The form the data processor opens with. Empty: a form generated from its attributes."), &ibValueMetaObjectDataProcessor::FillFormObject);
 
 	friend class ibValueRecordDataObjectDataProcessor;
 	friend class ibMetaData;

@@ -24,13 +24,13 @@
 // to a scroll of the same level (ibValueModelCursor::m_foldedLevel, RunComposerPage).
 struct ibValueModelCursor::FoldedLevel {
 	uint32_t                            m_generation = 0;   // the view generation it was folded at
-	std::vector<wxString>               m_dims;
+	std::vector<ibString>               m_dims;
 	std::vector<ibQueryDimUnfold>       m_kinds;
 	std::vector<ibValue>                m_path;
 	std::vector<ibValue>                m_sub;
 	std::vector<ibListFetchDriver::Row> m_rows;
 
-	bool Serves(uint32_t generation, const std::vector<wxString>& dims, const std::vector<ibQueryDimUnfold>& kinds,
+	bool Serves(uint32_t generation, const std::vector<ibString>& dims, const std::vector<ibQueryDimUnfold>& kinds,
 	            const std::vector<ibValue>& path, const std::vector<ibValue>& sub) const {
 		return m_generation == generation && m_dims == dims && m_kinds == kinds && m_path == path && m_sub == sub;
 	}
@@ -61,7 +61,7 @@ void ibValueModelCursor::EnsureSnapshot() const
 		ibDataDBComposer& composer = m_composer;
 		const ibDataComposer::SettingsScope scope = composer.MarkScope();
 		const ibDataComposer::TakenGroups savedGroups = composer.TakeGroups();   // detail read
-		ibListFetchDriver driver(page, [this](const wxString& name) { return GetColumnIDByName(name); });
+		ibListFetchDriver driver(page, [this](const ibString& name) { return GetColumnIDByName(name); });
 		try {
 			composer.Run(driver);
 		}
@@ -158,7 +158,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// ⚠ ONLY THE TREE BRANCH IS ASKED FOR HERE. Its flat branch CLEARS the reader's grouping, which is
 	// right for a copy printed once and destructive on the live composer a list reads through — so a
 	// flat view simply takes no rungs, exactly as it did before.
-	std::vector<wxString>         dims;
+	std::vector<ibString>         dims;
 	std::vector<ibQueryDimUnfold> dimKinds;
 	if (!flatView) {
 		// DERIVED, SO DERIVED AFRESH. The ladder is a reading of the setting, and the setting changes under a
@@ -221,7 +221,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// ⚠ AND OVER THE IDENTITY, not over any reference a person happened to pick: the parent-scope
 	// reader below walks the SOURCE's own hierarchy column, so a `Hierarchy` rung over some other
 	// reference is not something it can serve — it stays an ordinary grouping rung.
-	wxString identity;
+	ibString identity;
 	{
 		const std::vector<const ibBackendQueryColumn*> key = q->GetPrimaryKeyColumns();
 		if (key.size() == 1 && key.front() != nullptr)
@@ -264,7 +264,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	bool dotWalkSort = false;
 	if (!groupLevel) {
 		for (size_t i = 0; i < m_composer.SortCount(); ++i) {
-			wxString f; bool a;
+			ibString f; bool a;
 			if (!m_composer.GetSortAt(i, f, a)) continue;
 			if (GetColumnIDByName(f) == wxNOT_FOUND
 			 || q->GetProvider().ResolveReferenceSortColumn(q, q->ResolveColumnByName(f)) != nullptr) {
@@ -338,7 +338,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		};
 		// USER sort values — resolve each sort field NAME → col-id (sort is L5, by name), read off the node.
 		for (size_t i = 0; i < m_composer.SortCount(); ++i) {
-			wxString field; bool asc;
+			ibString field; bool asc;
 			if (!m_composer.GetSortAt(i, field, asc)) continue;
 			const ibMetaID col = GetColumnIDByName(field);
 			if (col == wxNOT_FOUND) continue;
@@ -353,7 +353,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			if (pk == nullptr) continue;
 			bool dup = false;
 			for (size_t j = 0; j < m_composer.SortCount(); ++j) {
-				wxString f; bool a2;
+				ibString f; bool a2;
 				if (m_composer.GetSortAt(j, f, a2) && GetColumnIDByName(f) == pk->GetColumnId()) { dup = true; break; }
 			}
 			if (dup) continue;
@@ -385,7 +385,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		// THE MODEL SAYS WHERE THE READER STANDS — this rung, this value. (What that means for the read
 		// is the engine's question; the operator is not chosen here.)
 		for (size_t k = 0; k < depth && k < dims.size(); ++k)
-			composer.ScopeTo(dims[k], wxT("="), parentPath[k]);
+			composer.ScopeTo(dims[k], ibT("="), parentPath[k]);
 		if (groupLevel)
 			composer.TotalBy(dims[depth], dimKinds[depth]);   // VID drives Elements / Hierarchy / HierarchyOnly
 	}
@@ -402,7 +402,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 
 	// Run the composer onto the generic list-fetch sink — the driver carries the page
 	// envelope in and accumulates rows out, keyed by this model's own columns (asked by name).
-	ibListFetchDriver driver(page, [this](const wxString& name) { return GetColumnIDByName(name); });
+	ibListFetchDriver driver(page, [this](const ibString& name) { return GetColumnIDByName(name); });
 	try {
 		if (reuseLevel)
 			driver.Rows() = m_foldedLevel->m_rows;   // a copy — every node below takes its row's appearance
@@ -454,13 +454,13 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// to be drawn under, and the heading still carries its key and its caption.
 	// Resolve a possibly-dotted dimension field NAME to its leaf column id by walking the queryable's references;
 	// wxNOT_FOUND when it is not a resolvable dot-walk path. (A plain field is resolved by GetColumnIDByName.)
-	auto resolveDotWalkLeaf = [&](const wxString& field) -> ibMetaID {
+	auto resolveDotWalkLeaf = [&](const ibString& field) -> ibMetaID {
 		const ibBackendQueryable* walk = q;
-		wxString rest = field;
+		ibString rest = field;
 		const ibBackendQueryColumn* leaf = nullptr;
 		while (walk != nullptr && !rest.IsEmpty()) {
-			leaf = walk->ResolveColumnByName(rest.BeforeFirst(wxT('.')));
-			rest = rest.AfterFirst(wxT('.'));
+			leaf = walk->ResolveColumnByName(rest.BeforeFirst(ibT('.')));
+			rest = rest.AfterFirst(ibT('.'));
 			if (leaf == nullptr) break;
 			if (!rest.IsEmpty()) walk = walk->GetProvider().ResolveReferenceTarget(walk, leaf);   // hop into the reference target
 		}
@@ -562,11 +562,11 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			// WHAT A HEADING ARRIVED WITH — once a fetch: the field it groups by, whether the output gave it a key,
 			// the column the list draws that key under, and which columns the heading carries.
 			if (groupNodes.empty()) {
-				wxString carried;
+				ibString carried;
 				for (const auto& kv : r.m_values)
-					carried += wxString::Format(wxT("%d%s "), kv.first, kv.second.IsEmpty() ? wxT("(empty)") : wxT(""));
-				ibJournalInfo(wxT("list.group"), wxT("heading of '%s': key %s, drawn under column %d; carries %s"),
-					dims[depth], !r.m_keyed ? wxT("NONE") : dimValue.IsEmpty() ? wxT("empty") : wxT("set"),
+					carried += ibString::Format(ibT("%d%s "), kv.first, kv.second.IsEmpty() ? ibT("(empty)") : ibT(""));
+				ibJournalInfo(ibT("list.group"), ibT("heading of '%s': key %s, drawn under column %d; carries %s"),
+					dims[depth], !r.m_keyed ? ibT("NONE") : dimValue.IsEmpty() ? ibT("empty") : ibT("set"),
 					static_cast<int>(groupDimCol), carried);
 			}
 			// …and the key stands under the column that draws it, so a cell showing that field on the heading
@@ -714,13 +714,13 @@ std::map<ibMetaID, ibValue> ibValueModel::ResolveAnchorByKey(const std::vector<i
 	const ibDataComposer::TakenGroups savedGroups = composer.TakeGroups();
 	for (size_t i = 0; i < pk.size(); ++i)
 		if (pk[i] != nullptr)
-			composer.ScopeTo(pk[i]->GetName(), wxT("="), rowKey[i]);
+			composer.ScopeTo(pk[i]->GetName(), ibT("="), rowKey[i]);
 
 	ibReadPageRequest page;
 	page.m_count      = 2;        // 1 row + the probe row RunComposerPage's envelope keeps
 	page.m_flatScan   = true;
 	page.m_isTopLevel = true;
-	ibListFetchDriver driver(page, [this](const wxString& name) { return GetColumnIDByName(name); });
+	ibListFetchDriver driver(page, [this](const ibString& name) { return GetColumnIDByName(name); });
 	composer.Run(driver);
 
 	composer.PutGroups(savedGroups);
@@ -785,7 +785,7 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 		std::vector<ibValue> groupPath;
 		std::vector<ibComposerNode*> crumbs;
 		for (size_t i = 0; i < m_composer.GroupCount(); ++i) {
-			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
+			ibString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 			if (!m_composer.GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
 			const ibMetaID dimCol = GetColumnIDByName(field);
 			if (dimCol == wxNOT_FOUND) continue;

@@ -10,7 +10,7 @@ namespace {
 bool ReadPair(const ibString& text, int& first, int& second)
 {
 	ibString rest;
-	const ibString head = text.BeforeFirst(wxT(','), &rest);
+	const ibString head = text.BeforeFirst(ibT(','), &rest);
 	long a = 0, b = 0;
 	if (!head.TrimAll().ToLong(&a) || !rest.TrimAll().ToLong(&b))
 		return false;
@@ -32,7 +32,7 @@ bool ibPoint::FromString(const ibString& text)
 
 ibString ibPoint::ToString() const
 {
-	return ibString::Format(wxT("%d,%d"), m_x, m_y);
+	return ibString::Format(ibT("%d,%d"), m_x, m_y);
 }
 
 bool ibSize::FromString(const ibString& text)
@@ -46,5 +46,5 @@ bool ibSize::FromString(const ibString& text)
 
 ibString ibSize::ToString() const
 {
-	return ibString::Format(wxT("%d,%d"), m_width, m_height);
+	return ibString::Format(ibT("%d,%d"), m_width, m_height);
 }

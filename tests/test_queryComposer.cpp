@@ -34,13 +34,13 @@ namespace {
 // Minimal RAM-core column — name + model id (the row read key). No metaobject. (As in test_queryTotals.)
 class TestCol : public ibBackendQueryColumn {
 public:
-	TestCol(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	TestCol(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()      const override { return m_id; }
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
@@ -53,7 +53,7 @@ const ibTypeDescription kNoType;
 // "computed leaf falls back to RAM" cases.
 class TestQueryable : public ibBackendQueryable {
 public:
-	TestQueryable(const wxString& table, ibMetaID metaId, bool computed = false)
+	TestQueryable(const ibString& table, ibMetaID metaId, bool computed = false)
 		: m_table(table), m_metaId(metaId), m_computed(computed) {
 		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(metaId); m_key = ibGuid(impl);
 	}
@@ -62,7 +62,7 @@ public:
 	// register with recorder + line number). Absent by default: a source that has none.
 	void SetKey(const ibBackendQueryColumn* c) { m_keys.push_back(c); }
 
-	wxString GetQueryTableName() const override { return m_table; }
+	ibString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()    const override { return m_metaId; }
 	// A stable, table-distinct guid from the id, so identity/colocation logic still tells the two tables
 	// apart — made once and kept, because the source hands out the key its metaobject keeps (a reference).
@@ -70,7 +70,7 @@ public:
 	bool     IsComputedInRam()   const override { return m_computed; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
@@ -80,7 +80,7 @@ public:
 	}
 	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_keys; }
 private:
-	wxString m_table;
+	ibString m_table;
 	ibMetaID m_metaId;
 	bool     m_computed;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
@@ -99,7 +99,7 @@ private:
 //     every register today) still comes back correctly filtered.
 class RecordingComputedQ : public ibBackendQueryable {
 public:
-	RecordingComputedQ(const wxString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {
+	RecordingComputedQ(const ibString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {
 		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(metaId); m_key = ibGuid(impl);
 	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
@@ -113,12 +113,12 @@ public:
 		return m_build ? m_build() : ibQueryRamTable();
 	}
 
-	wxString GetQueryTableName() const override { return m_table; }
+	ibString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()   const override { return m_metaId; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
@@ -127,7 +127,7 @@ public:
 		return false;
 	}
 private:
-	wxString m_table;
+	ibString m_table;
 	ibMetaID m_metaId;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<const ibBackendQueryColumn*> m_cols;
@@ -136,7 +136,7 @@ private:
 };
 
 // One-column key table (model id `id`) holding `keys` — the driving side of the reductions below.
-ibQueryRamTable KeyRows(ibMetaID id, const wxString& name, const std::vector<long>& keys)
+ibQueryRamTable KeyRows(ibMetaID id, const ibString& name, const std::vector<long>& keys)
 {
 	ibQueryRamTable t;
 	t.AddColumn(id, name, kNoType);
@@ -160,7 +160,7 @@ struct SpecBuf {
 	// of assignment lists and never an empty one — readers say front() without testing first.
 	std::vector<ibWriteRow> writeRows{ 1 };
 	std::vector<ibDotWalkColumn> dots;
-	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> sel;
+	std::vector<std::pair<const ibBackendQueryColumn*, ibString>> sel;
 	std::vector<std::vector<const ibBackendQueryColumn*>> groupPaths;   // parallel to groupBy (dot-walk keys)
 	std::vector<ibDotWalkColumn> dimWalks;                              // TotalByDotWalk dimensions
 	// The TOTALS door's own two lists. A door that folds hierarchical totals fills THESE and leaves
@@ -207,7 +207,7 @@ TEST(QueryComposerCore, JoinRamTables_MatchesAndCardinality)
 	ibQueryRamTable left;   // customers
 	left.AddColumn(CUST_ID, wxT("custId"), kNoType);
 	left.AddColumn(CUST_CODE, wxT("custCode"), kNoType);
-	auto cust = [&](long id, const wxString& code) {
+	auto cust = [&](long id, const ibString& code) {
 		const long r = left.AppendRow();
 		left.SetCell(r, CUST_ID, ibValue(ibNumber(id)));
 		left.SetCell(r, CUST_CODE, ibValue(code));
@@ -251,7 +251,7 @@ TEST(QueryComposerCore, AppendUnionBranch_MissingColumnIsNull)
 	ibQueryRamTable branch;   // has code, NOT name
 	branch.AddColumn(CODE, wxT("code"), kNoType);
 	const long br = branch.AppendRow();
-	branch.SetCell(br, CODE, ibValue(wxString(wxT("X"))));
+	branch.SetCell(br, CODE, ibValue(ibString(wxT("X"))));
 
 	// outCols [code, name]; this branch supplies [code, <absent>].
 	ibQueryComposer::AppendUnionBranch(out, branch, { &code, &name }, { &code, nullptr });
@@ -392,7 +392,7 @@ TEST(QueryComposerCore, DedupeRows_FirstOfEachInOrder)
 	TestCol region(wxT("region"), REGION);
 	ibQueryRamTable t; t.AddColumn(REGION, wxT("region"), kNoType);
 	for (const wxChar* v : { wxT("North"), wxT("South"), wxT("North"), wxT("North"), wxT("South") }) {
-		const long r = t.AppendRow(); t.SetCell(r, REGION, ibValue(wxString(v)));
+		const long r = t.AppendRow(); t.SetCell(r, REGION, ibValue(ibString(v)));
 	}
 	const ibQueryRamTable out = ibQueryComposer::DedupeRows(t, { &region });
 	ASSERT_EQ(out.RowCount(), 2);
@@ -407,7 +407,7 @@ TEST(QueryComposerCore, DedupeRows_FirstOfEachInOrder)
 TEST(QueryComposerCore, RamSortCompareKey_NullOrdering)
 {
 	const ibValue nul(ibValueTypes::TYPE_NULL);                   // SQL NULL
-	const ibValue a(wxString(wxT("A"))), b(wxString(wxT("B")));
+	const ibValue a(ibString(wxT("A"))), b(ibString(wxT("B")));
 
 	// non-NULL total order, both directions; equal keys fall through (0)
 	EXPECT_LT(ibQueryComposer::RamSortCompareKey(a, b, true ), 0);   // A before B (asc)
@@ -430,7 +430,7 @@ TEST(QueryComposerCore, RamSortCompareKey_NullOrdering)
 TEST(QueryComposerCore, RamSortCompareKey_StableSortPlacesNulls)
 {
 	const ibValue N(ibValueTypes::TYPE_NULL);
-	const std::vector<ibValue> v = { ibValue(wxString(wxT("B"))), N, ibValue(wxString(wxT("A"))), N };
+	const std::vector<ibValue> v = { ibValue(ibString(wxT("B"))), N, ibValue(ibString(wxT("A"))), N };
 
 	std::vector<ibValue> asc = v;
 	std::stable_sort(asc.begin(), asc.end(),
@@ -475,14 +475,14 @@ TEST(QueryComposerCore, FilterRows_OrIsNullNot)
 	ibQueryRamTable t;
 	t.AddColumn(REGION, wxT("region"), kNoType);
 	t.AddColumn(QTY,    wxT("qty"),    kNoType);
-	auto row = [&](const wxString& reg, long q, bool regNull = false) {
+	auto row = [&](const ibString& reg, long q, bool regNull = false) {
 		const long r = t.AppendRow();
 		t.SetCell(r, REGION, regNull ? ibValue(ibValueTypes::TYPE_NULL) : ibValue(reg));   // SQL NULL
 		t.SetCell(r, QTY, ibValue(ibNumber(q)));
 	};
 	row(wxT("North"), 10); row(wxT("South"), 5); row(wxT("East"), 7); row(wxT(""), 3, /*null*/ true);
 
-	auto eq = [&](const ibBackendQueryColumn* c, const wxString& v) {
+	auto eq = [&](const ibBackendQueryColumn* c, const ibString& v) {
 		ibQueryCondition cond; cond.m_col = c; cond.m_value = ibValue(v); return ibQueryPredicate::Leaf(cond);
 	};
 
@@ -529,8 +529,8 @@ TEST(QueryComposerCore, EvalColumnExpr_ArithAndCase)
 	ibQueryCondition gt; gt.m_col = &qty; gt.m_op = ibQueryFilterOp::Greater; gt.m_value = ibValue(ibNumber(3));
 	auto caseE = std::make_shared<ibQueryColumnExpr>();
 	caseE->m_kind  = ibQueryColumnExprKind::Case;
-	caseE->m_cases = { { ibQueryPredicate::Leaf(gt), ibQueryColumnExpr::Const(ibValue(wxString(wxT("bulk")))) } };
-	caseE->m_else  = ibQueryColumnExpr::Const(ibValue(wxString(wxT("unit"))));
+	caseE->m_cases = { { ibQueryPredicate::Leaf(gt), ibQueryColumnExpr::Const(ibValue(ibString(wxT("bulk")))) } };
+	caseE->m_else  = ibQueryColumnExpr::Const(ibValue(ibString(wxT("unit"))));
 	EXPECT_EQ(ibQueryComposer::EvalColumnExpr(caseE.get(), t, r).GetString().ToStdString(), "bulk");
 }
 
@@ -663,7 +663,7 @@ TEST(QueryComposerGate, Union_BooleanPredicate_Colocatable)
 
 	SpecBuf buf; buf.sel = { { &aReg, wxT("region") } };
 	ibDataQuerySpec spec = buf.Make(root.get(), &A);
-	auto leaf = [&](const wxString& v) {
+	auto leaf = [&](const ibString& v) {
 		ibQueryCondition c; c.m_col = &aReg; c.m_value = ibValue(v); return ibQueryPredicate::Leaf(c);
 	};
 	spec.m_predicate = ibQueryPredicate::Compose(ibQueryPredicateKind::Or, leaf(wxT("North")), leaf(wxT("South")));
@@ -712,7 +712,7 @@ TEST(QueryComposerGate, Union_PredicateColMissingInBranch_NotColocatable)
 
 	SpecBuf buf; buf.sel = { { &aReg, wxT("region") } };
 	ibDataQuerySpec spec = buf.Make(root.get(), &A);
-	ibQueryCondition c; c.m_col = &aExtra; c.m_value = ibValue(wxString(wxT("x")));
+	ibQueryCondition c; c.m_col = &aExtra; c.m_value = ibValue(ibString(wxT("x")));
 	spec.m_predicate = ibQueryPredicate::Leaf(c);
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateUnion(spec));   // "extra" absent in branch B -> RAM
@@ -734,7 +734,7 @@ TEST(QueryComposerGate, Union_DotWalkPredicate_NotColocatable)
 
 	SpecBuf buf; buf.sel = { { &aReg, wxT("region") } };
 	ibDataQuerySpec spec = buf.Make(root.get(), &A);
-	ibQueryCondition c; c.m_col = &aReg; c.m_value = ibValue(wxString(wxT("x")));
+	ibQueryCondition c; c.m_col = &aReg; c.m_value = ibValue(ibString(wxT("x")));
 	c.m_path = { &refc, &aReg };   // dot-walk path present -> not a plain branch column
 	spec.m_predicate = ibQueryPredicate::Leaf(c);
 
@@ -1142,7 +1142,7 @@ TEST(QueryComposerGate, RollupTotals_UnionWithPredicate_NotColocatable)
 	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &aAmt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
 	ibDataQuerySpec spec = buf.Make(root.get(), &A);
-	ibQueryCondition leaf; leaf.m_col = &aDim; leaf.m_value = ibValue(wxString(wxT("North")));
+	ibQueryCondition leaf; leaf.m_col = &aDim; leaf.m_value = ibValue(ibString(wxT("North")));
 	spec.m_predicate = ibQueryPredicate::Leaf(leaf);              // stand-in for a boolean WHERE / RLS tree
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));
@@ -1223,17 +1223,17 @@ ibQueryRamTable HierDetail()
 	d.AddColumn(KEY_ID,    wxT("key"),    kNoType);
 	d.AddColumn(HPARENT, wxT("parent"), kNoType);
 	d.AddColumn(HAMT,    wxT("amount"), kNoType);
-	auto add = [&](const wxString& key, const wxString& parent, long amt) {
+	auto add = [&](const ibString& key, const ibString& parent, long amt) {
 		const long r = d.AppendRow();
 		d.SetCell(r, KEY_ID,    ibValue(key));
 		d.SetCell(r, HPARENT, parent.IsEmpty() ? ibValue() : ibValue(parent));
 		d.SetCell(r, HAMT,    ibValue(ibNumber(amt)));
 	};
-	add(wxT("1"), wxString(), 0);   // F1 folder
+	add(wxT("1"), ibString(), 0);   // F1 folder
 	add(wxT("2"), wxT("1"), 10);    // E1
 	add(wxT("3"), wxT("1"), 0);     // F2 folder
 	add(wxT("4"), wxT("3"), 5);     // E2
-	add(wxT("5"), wxString(), 7);   // E3 top element
+	add(wxT("5"), ibString(), 7);   // E3 top element
 	return d;
 }
 
@@ -1431,7 +1431,7 @@ ibQueryRamTable GroupDetail()
 	d.AddColumn(REGION_ID,  wxT("region"),  kNoType);
 	d.AddColumn(PRODUCT_ID, wxT("product"), kNoType);
 	d.AddColumn(GAMT_ID,    wxT("amount"),  kNoType);
-	auto add = [&](const wxString& region, const wxString& product, long amt) {
+	auto add = [&](const ibString& region, const ibString& product, long amt) {
 		const long r = d.AppendRow();
 		d.SetCell(r, REGION_ID,  ibValue(region));
 		d.SetCell(r, PRODUCT_ID, ibValue(product));
@@ -1456,7 +1456,7 @@ TEST(QuerySelector, ByGroupsWithoutAGroupingReadsTheRows)
 	const auto twoRows = [&]() {
 		ibQueryRamTable rows;
 		rows.AddColumn(A, wxT("A"), ibTypeDescription());
-		const auto add = [&](const wxString& v) {
+		const auto add = [&](const ibString& v) {
 			const long r = rows.AppendRow();
 			rows.SetCell(r, A, ibValue(v));
 		};
@@ -1465,14 +1465,14 @@ TEST(QuerySelector, ByGroupsWithoutAGroupingReadsTheRows)
 		return rows;
 	};
 	const auto walked = [](ibSelector& sel) {
-		std::vector<wxString> got;
+		std::vector<ibString> got;
 		while (sel.Next())
 			got.push_back(sel.GetColumn(wxT("A")).GetString());
 		return got;
 	};
 
 	ibSelector direct(twoRows(), ibSelectKind::ibSelectKind_Direct);
-	const std::vector<wxString> asDirect = walked(direct);
+	const std::vector<ibString> asDirect = walked(direct);
 
 	ibSelector groups(twoRows(), ibSelectKind::ibSelectKind_ByGroups);
 	EXPECT_EQ(groups.NodeCount(), static_cast<long>(asDirect.size()));
@@ -1512,7 +1512,7 @@ TEST(QuerySelector, ALevelHandsItsHeadingsOutInItsOwnOrder)
 	TestCol regionCol(wxT("region"), REGION_ID), amtCol(wxT("amount"), GAMT_ID);
 	ibSelector sel(GroupDetail(), ibSelectKind::ibSelectKind_ByGroups);
 	sel.ByGroups({ &regionCol }).Aggregating({ SumOf(&amtCol) });
-	sel.OrderBy({ { &amtCol, wxString(), /*ascending*/ false } });
+	sel.OrderBy({ { &amtCol, ibString(), /*ascending*/ false } });
 
 	ASSERT_TRUE(sel.Next());
 	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("South"));   // 10 …
@@ -1532,7 +1532,7 @@ TEST(QuerySelector, AKeyNoHeadingCarriesLeavesTheOrderAlone)
 	        amtCol(wxT("amount"), GAMT_ID);
 	ibSelector sel(GroupDetail(), ibSelectKind::ibSelectKind_ByGroups);
 	sel.ByGroups({ &regionCol }).Aggregating({ SumOf(&amtCol) });
-	sel.OrderBy({ { &productCol, wxString(), /*ascending*/ false } });
+	sel.OrderBy({ { &productCol, ibString(), /*ascending*/ false } });
 
 	ASSERT_TRUE(sel.Next());
 	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("North"));   // fold order, untouched
@@ -1546,7 +1546,7 @@ TEST(QuerySelector, AnOrderIsNotInheritedByADescent)
 	        amtCol(wxT("amount"), GAMT_ID);
 	ibSelector sel(GroupDetail(), ibSelectKind::ibSelectKind_ByGroups);
 	sel.ByGroups({ &regionCol, &productCol }).Aggregating({ SumOf(&amtCol) });
-	sel.OrderBy({ { &amtCol, wxString(), /*ascending*/ false } });
+	sel.OrderBy({ { &amtCol, ibString(), /*ascending*/ false } });
 
 	ASSERT_TRUE(sel.Next());
 	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("South"));   // the stated order holds here…
@@ -1671,7 +1671,7 @@ TEST(CteQueryable, EveryMintedIdIsSyntheticAndDistinct)
 {
 	std::vector<ibCteQueryable::Field> fields(10);
 	for (size_t i = 0; i < fields.size(); ++i)
-		fields[i].m_name = wxString::Format(wxT("F%u"), static_cast<unsigned>(i));
+		fields[i].m_name = ibString::Format(wxT("F%u"), static_cast<unsigned>(i));
 
 	const ibCteQueryable cte(wxT("q_sub0"), fields, 0);
 	ASSERT_EQ(cte.GetColumns().size(), 10u);
@@ -1781,7 +1781,7 @@ TEST(QueryComposerCore, DedupeRows_KeepsFirstOccurrence_PreservesOrder)
 	ibQueryRamTable t;
 	t.AddColumn(C1, wxT("a"), kNoType);
 	t.AddColumn(C2, wxT("b"), kNoType);
-	auto row = [&](const wxString& va, long vb) {
+	auto row = [&](const ibString& va, long vb) {
 		const long r = t.AppendRow();
 		t.SetCell(r, C1, ibValue(va));
 		t.SetCell(r, C2, ibValue(ibNumber(vb)));
@@ -2170,7 +2170,7 @@ TEST(QueryComputedAggregate, TopTakesTheFirstGroupsInTheirOrder)
 // a date became its raw count, and a string spelling `;b=` read the same as two parameters.
 TEST(PageSignature, TheParametersAreComparedAsValuesNotAsTheirText)
 {
-	const auto sign = [](std::vector<wxString> names, std::vector<ibValue> values) {
+	const auto sign = [](std::vector<ibString> names, std::vector<ibValue> values) {
 		ibPageSignature s;
 		s.m_text = wxT("SELECT 1");
 		s.m_count = 50;

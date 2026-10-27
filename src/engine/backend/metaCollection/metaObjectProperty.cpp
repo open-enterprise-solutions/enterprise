@@ -36,7 +36,7 @@ void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const wxVariant&
 	if (m_propertyName == property) {
 		if (m_metaData != nullptr)
 			m_metaData->InvalidateCtorNames();
-		m_propertySynonym->SetValue(stringUtils::GenerateSynonym(newValue));
+		m_propertySynonym->SetValue(stringUtils::GenerateSynonym(newValue.GetString()));
 	}
 	wxASSERT(m_metaData);
 

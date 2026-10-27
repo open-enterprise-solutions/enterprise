@@ -122,7 +122,7 @@ struct ibSpreadsheetCellDescription {
 	void SetValue(const ibString& s) { m_value = s; }
 
 	//special set
-	ibString GetValue() const { return m_value; }
+	const ibString& GetValue() const { return m_value; }
 
 	bool IsEmptyParameter() const { return m_detailsParameter.IsEmpty(); }
 
@@ -130,7 +130,7 @@ struct ibSpreadsheetCellDescription {
 	void SetParameter(const ibString& s) { m_detailsParameter = s; }
 
 	//special set
-	ibString GetParameter() const { return m_detailsParameter; }
+	const ibString& GetParameter() const { return m_detailsParameter; }
 
 	int GetSize(int* num_rows, int* num_cols) const {
 
@@ -982,8 +982,8 @@ struct ibSpreadsheetDescription {
 
 	ibFont GetLabelFont() const { return m_labelFont; }
 
-	ibString GetRowLabelValue(int row) const { return ibString::Format(wxT("%d"), row + 1); }
-	ibString GetColLabelValue(int col) const { return ibString::Format(wxT("%d"), col + 1); }
+	ibString GetRowLabelValue(int row) const { return ibString::Format(ibT("%d"), row + 1); }
+	ibString GetColLabelValue(int col) const { return ibString::Format(ibT("%d"), col + 1); }
 
 	// ------ cell value accessors
 	//

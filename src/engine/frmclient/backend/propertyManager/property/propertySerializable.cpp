@@ -10,13 +10,13 @@ namespace {
 std::uint64_t ReceiveU64(const ibDataNode& node, const char* name)
 {
 	unsigned long long value = 0;
-	node.GetValue<wxString>(name).ToULongLong(&value);
+	node.GetValue<ibString>(name).ToULongLong(&value);
 	return value;
 }
 
 // A class as the server named and drew it (Type, Picture), registered under that name: what a picker, a cell and a
 // window read it by (ibValue::GetAvailableCtor).
-ibClassID RegisterCtor(const ibDataNode& entry, const wxString& name)
+ibClassID RegisterCtor(const ibDataNode& entry, const ibString& name)
 {
 	const ibClassID clsid = ReceiveU64(entry, ibProtocol::ibSchema::ibProperties::Type);
 	// Held already as the server names it — its picture is not made again: every property of every control drawn
@@ -38,18 +38,18 @@ ibClassID RegisterCtor(const ibDataNode& entry, const wxString& name)
 wxVariant ReceiveValue(const ibDataNode& row)
 {
 	const auto scalar = row.FindField(ibProtocol::ibSchema::ibProperties::Value);
-	return wxVariant(new ibVariantDataSerializable(row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Class),
+	return wxVariant(new ibVariantDataSerializable(row.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Class),
 		scalar ? *scalar : row.GetProperty(ibProtocol::ibSchema::ibProperties::Value),
-		row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Presentation)));
+		row.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Presentation)));
 }
 
 }
 
 ibPropertySerializable::ibPropertySerializable(ibPropertyCategory* cat, ibDataNode&& row) :
-	ibProperty(cat, row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name), row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title),
-		row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Help), ReceiveValue(row)),
+	ibProperty(cat, row.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Name), row.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title),
+		row.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Help), ReceiveValue(row)),
 	m_row(std::move(row)),
-	m_type(m_row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Class)),
+	m_type(m_row.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Class)),
 	m_readOnly(m_row.GetValue<bool>(ibProtocol::ibSchema::ibProperties::ReadOnly))
 {
 	if (m_propLabel.IsEmpty())
@@ -58,22 +58,22 @@ ibPropertySerializable::ibPropertySerializable(ibPropertyCategory* cat, ibDataNo
 	// The classes its choices' data names (Classes) — what a window groups them under.
 	if (const auto classes = m_row.FindChild(ibProtocol::ibSchema::ibProperties::Classes)) {
 		for (const ibDataNode& entry : classes->Children())
-			RegisterCtor(entry, entry.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name));
+			RegisterCtor(entry, entry.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Name));
 	}
 
 	// What it may be set to — its children with an Id, each with its data; a type's, the types it may hold (Type — the
 	// class id, named and drawn as the server offered it: what the picker and the cell read it by).
 	for (const ibDataNode& choice : m_row.Children()) {
 		if (choice.Has(ibProtocol::ibSchema::ibProperties::Type)) {
-			const wxString title = choice.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title);
+			const ibString title = choice.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title);
 			const ibClassID clsid = RegisterCtor(choice, title);
-			m_choices.Add(m_choices.GetCount(), title, wxEmptyString, wxVariant(wxULongLong(clsid)));
+			m_choices.Add(m_choices.GetCount(), title, ibEmptyString, wxVariant(wxULongLong(clsid)));
 			continue;
 		}
 		if (!choice.FindField(ibProtocol::ibSchema::ibProperties::Id))
 			continue;
 		const long id = choice.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id);
-		m_choices.Add(id, choice.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title), wxEmptyString, wxVariant(id),
+		m_choices.Add(id, choice.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title), ibEmptyString, wxVariant(id),
 			ibProtocolPicture(choice, ibProtocol::ibSchema::ibProperties::Picture), ReceiveU64(choice, ibProtocol::ibSchema::ibProperties::Data));
 	}
 	m_mode = m_row.GetValue<bool>(ibProtocol::ibSchema::ibProperties::Multiple) ? ibPropertyChoiceMode::Mult

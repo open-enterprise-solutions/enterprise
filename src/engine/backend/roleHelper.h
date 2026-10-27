@@ -17,8 +17,8 @@ class BACKEND_API ibAccessObject;
 class BACKEND_API ibRole {
 public:
 
-	wxString GetName() const { return m_roleName; }
-	wxString GetLabel() const { return m_roleLabel.IsEmpty() ? m_roleName : m_roleLabel; }
+	const ibString& GetName() const { return m_roleName; }
+	ibString GetLabel() const { return m_roleLabel.IsEmpty() ? m_roleName : m_roleLabel; }
 
 	ibAccessObject* GetRoleObject() const { return m_owner; }
 
@@ -26,7 +26,7 @@ public:
 
 protected:
 
-	ibRole(ibAccessObject* metaObject, const wxString& roleName, const wxString& roleLabel,
+	ibRole(ibAccessObject* metaObject, const ibString& roleName, const ibString& roleLabel,
 		const bool& value = true) :
 		m_roleName(roleName),
 		m_roleLabel(roleLabel),
@@ -42,8 +42,8 @@ private:
 
 	void InitRole(ibAccessObject* obj, const bool& value = true);
 
-	wxString m_roleName;
-	wxString m_roleLabel;
+	ibString m_roleName;
+	ibString m_roleLabel;
 	ibAccessObject* m_owner; // pointer to the owner object
 	bool m_defValue;  // the answer when nothing was ever set for this right
 };
@@ -90,23 +90,23 @@ public:
 	virtual ibRoleCompositionMode GetRoleCompositionMode() const { return ibRoleCompositionMode_Union; }
 
 	bool AccessRight(const ibRole* role) const { return AccessRight(role, GetUserRoleInfo()); }
-	bool AccessRight(const wxString& strRoleName) const { return AccessRight(strRoleName, GetUserRoleInfo()); }
+	bool AccessRight(const ibString& strRoleName) const { return AccessRight(strRoleName, GetUserRoleInfo()); }
 
 	bool AccessRight(const ibRole* role, const ibRoleUserInfo& roleInfo) const;
-	bool AccessRight(const wxString& strRoleName, const ibRoleUserInfo& roleInfo) const {
+	bool AccessRight(const ibString& strRoleName, const ibRoleUserInfo& roleInfo) const {
 		if (!strRoleName.IsEmpty()) {
 			auto iterator = std::find_if(m_roles.begin(), m_roles.end(),
-				[strRoleName](const auto& pair) { return stringUtils::CompareString(strRoleName, pair.first); });
+				[strRoleName](const auto& pair) { return stringUtils::IsSameAs(strRoleName, pair.first); });
 			if (iterator != m_roles.end()) return AccessRight(iterator->second, roleInfo);
 		}
 		return false;
 	}
 
 	bool SetRight(const ibRole* role, const ibRoleID& id, const bool& val);
-	bool SetRight(const wxString& strRoleName, const ibRoleID& id, const bool& val) {
+	bool SetRight(const ibString& strRoleName, const ibRoleID& id, const bool& val) {
 		if (!strRoleName.IsEmpty()) {
 			auto iterator = std::find_if(m_roles.begin(), m_roles.end(),
-				[strRoleName](const auto& pair) { return stringUtils::CompareString(strRoleName, pair.first); });
+				[strRoleName](const auto& pair) { return stringUtils::IsSameAs(strRoleName, pair.first); });
 			if (iterator != m_roles.end()) return SetRight(iterator->second, id, val);
 		}
 		return false;
@@ -118,7 +118,7 @@ public:
 	* @note Notar que no existe el método SetProperty, ya que la modificación
 	*       se hace a través de la referencia.
 	*/
-	ibRole* GetRole(const wxString& nameParam) const;
+	ibRole* GetRole(const ibString& nameParam) const;
 	ibRole* GetRole(unsigned int idx) const; // throws ...;
 
 	// Do this object's rights control a ROW, or the whole TABLE? A property of the OBJECT — one
@@ -169,10 +169,10 @@ protected:
 	}
 
 	std::map<ibRoleID,
-		std::map<wxString, bool>
+		std::map<ibString, bool>
 	> m_valRoles;
 
-	std::vector<std::pair<wxString, ibRole*>> m_roles;
+	std::vector<std::pair<ibString, ibRole*>> m_roles;
 };
 
 #endif

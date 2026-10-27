@@ -348,15 +348,15 @@ int ibDataViewModel::Compare(const ibDataViewItem& item1, const ibDataViewItem& 
 		value2 = temp;
 	}
 
-	if (value1.GetType() == wxT("string"))
+	if (value1.GetType() == ibT("string"))
 	{
-		wxString str1 = value1.GetString();
-		wxString str2 = value2.GetString();
+		ibString str1 = value1.GetString();
+		ibString str2 = value2.GetString();
 		int res = str1.Cmp(str2);
 		if (res)
 			return res;
 	}
-	else if (value1.GetType() == wxT("long"))
+	else if (value1.GetType() == ibT("long"))
 	{
 		long l1 = value1.GetLong();
 		long l2 = value2.GetLong();
@@ -365,7 +365,7 @@ int ibDataViewModel::Compare(const ibDataViewItem& item1, const ibDataViewItem& 
 		else if (l1 > l2)
 			return 1;
 	}
-	else if (value1.GetType() == wxT("double"))
+	else if (value1.GetType() == ibT("double"))
 	{
 		double d1 = value1.GetDouble();
 		double d2 = value2.GetDouble();
@@ -375,7 +375,7 @@ int ibDataViewModel::Compare(const ibDataViewItem& item1, const ibDataViewItem& 
 			return 1;
 	}
 #if wxUSE_DATETIME
-	else if (value1.GetType() == wxT("datetime"))
+	else if (value1.GetType() == ibT("datetime"))
 	{
 		wxDateTime dt1 = value1.GetDateTime();
 		wxDateTime dt2 = value2.GetDateTime();
@@ -385,7 +385,7 @@ int ibDataViewModel::Compare(const ibDataViewItem& item1, const ibDataViewItem& 
 			return 1;
 	}
 #endif // wxUSE_DATETIME
-	else if (value1.GetType() == wxT("bool"))
+	else if (value1.GetType() == ibT("bool"))
 	{
 		bool b1 = value1.GetBool();
 		bool b2 = value2.GetBool();

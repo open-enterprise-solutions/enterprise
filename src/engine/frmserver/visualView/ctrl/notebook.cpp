@@ -93,8 +93,8 @@ enum Func {
 
 void ibValueNotebook::FillControlMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Pages"), wxT("Pages()"));
-	helper.AppendFunc(wxT("ActivePage"), wxT("ActivePage()"));
+	helper.AppendFunc(ibT("Pages"), ibT("Pages()"));
+	helper.AppendFunc(ibT("ActivePage"), ibT("ActivePage()"));
 }
 
 #include "backend/system/value/valueMap.h"

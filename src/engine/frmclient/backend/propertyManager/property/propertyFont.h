@@ -9,23 +9,23 @@ public:
 
 	// …held as its node, the font's text (ibPropertySerializable::ReadNodeValue).
 	wxFont GetValueAsFont() const { return typeConv::StringToFont(GetValueAsString()); }
-	wxString GetValueAsString() const;
-	void SetValue(const wxFont& val) { SetValue(typeConv::FontToString(val)); }
-	void SetValue(const wxString& val);
+	ibString GetValueAsString() const;
+	void SetValue(const wxFont& val) { SetValue(ibString(typeConv::FontToString(val))); }
+	void SetValue(const ibString& val);
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxFont& f = wxNullFont)
+	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const wxFont& f = wxNullFont)
 		: ibPropertySerializable(cat, name, wxNullVariant)
 	{
 		SetValue(f);
 	}
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxFont& f = wxNullFont)
+	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibString& label, const wxFont& f = wxNullFont)
 		: ibPropertySerializable(cat, name, label, wxNullVariant)
 	{
 		SetValue(f);
 	}
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxFont& f = wxNullFont)
+	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const wxFont& f = wxNullFont)
 		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
 	{
 		SetValue(f);

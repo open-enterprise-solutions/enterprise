@@ -45,7 +45,7 @@ bool ibSourceDataObject::GetValueByPath(const std::vector<ibSourceHop>& path, ib
 // here, so the nested node refs stay valid across the walk; leaf = GetColumn() points into the owning
 // metaobject (stable regardless).
 bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_t from, const ibBackendSourceColumn*& leaf,
-	wxString* outText, bool* outLeafIsTable, bool* outContainerIsTable, bool* outAvailable) const
+	ibString* outText, bool* outLeafIsTable, bool* outContainerIsTable, bool* outAvailable) const
 {
 	leaf = nullptr;
 	if (outAvailable != nullptr) *outAvailable = true;
@@ -63,7 +63,7 @@ bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_
 		const ibSourceExplorer* node = explorer->FindById(path[i].m_id);
 		if (node == nullptr)
 			return false;   // not a column at this level -> broken binding
-		if (outText != nullptr) { *outText += wxT("."); *outText += node->GetSourceName(); }
+		if (outText != nullptr) { *outText += ibT("."); *outText += node->GetSourceName(); }
 		leaf = node->GetColumn();
 		if (outAvailable != nullptr && leaf != nullptr && !leaf->IsAvailable()) *outAvailable = false;
 		if (i + 1 >= path.size()) {

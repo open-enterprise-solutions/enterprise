@@ -5,8 +5,8 @@
 
 class BACKEND_API ibValueSpreadsheetModel;
 
-// ibDialogComposerSettings — A REPORT'S settings window: the desktop's (frontend/win/dlgs/settings/composer/
-// composerSettings.h), drawn by the client (frmclient/win/dlgs/settings/composer/composerSettings.h).
+// ibDialogComposerSettings — A REPORT'S settings window, drawn by the client
+// (frmclient/win/dlgs/settings/composer/composerSettings.h).
 //
 // The sequence is the desktop's ShowUserSettings, and it lives here: the composition resolves itself, a COPY of the
 // setting in force is taken, the person changes the copy — the client's window, asked (ibProtocol::ibRequest::ibKind::

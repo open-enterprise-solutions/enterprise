@@ -324,7 +324,7 @@ wxAuiMDIClientWindow* ibFrontendMainFrame::OnCreateClient()
 		wxAuiMDIClientWindowImpl() : wxAuiMDIClientWindow() {}
 		wxAuiMDIClientWindowImpl(wxAuiMDIParentFrame* parent, long style = 0) : wxAuiMDIClientWindow(parent, style) {
 #ifdef __WXOSX__
-			// The system background — respects dark/light mode (see the desktop's frontend/mainFrame/mainFrame.cpp).
+			// The system background — respects dark/light mode.
 			SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_APPWORKSPACE));
 #else
 			// Powder-blue workspace — the "walls" of the application; forms sit on it as a calm cool backdrop.
@@ -726,21 +726,21 @@ bool ibFrontendMainFrame::Show(bool show)
 
 	ibProtocolNode answer;
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error, GetStartSchemas());
 
 	// A REFUSED NAME OR PASSWORD ASKS THE PERSON — the desktop's login window, with the names the server offers, asked
 	// again until the login goes through or the person cancels it. A list the server could not read offers none: the
 	// name is typed.
 	bool cancelled = false;
-	std::vector<wxString> users;
+	std::vector<ibString> users;
 	for (bool asked = false; !loggedIn && refusal == ibProtocol::ibRefusal::LoginRefused; asked = true) {
 		if (asked) {
 			wxMessageBox(_("Wrong user or password entered!"), GetTitle(), wxOK | wxICON_ERROR);
 		}
 		else {
 			ibProtocol::ibRefusal usersRefusal = ibProtocol::ibRefusal::None;
-			wxString usersError;
+			ibString usersError;
 			m_communicator->Users(users, usersRefusal, usersError);
 		}
 		ibDialogAuthentication dlg(users);
@@ -759,7 +759,7 @@ bool ibFrontendMainFrame::Show(bool show)
 		// the person ended it, or saw what it said — the desktop's start goes as quietly (enterprise/mainApp.cpp, Cancelled).
 		// Nor is a login window the person cancelled.
 		if (!cancelled && refusal != ibProtocol::ibRefusal::StartRefused)
-			wxMessageBox(!error.IsEmpty() ? error : wxString(_("The start was refused.")), GetTitle(), wxOK | wxICON_ERROR);
+			wxMessageBox(!error.IsEmpty() ? error : ibString(_("The start was refused.")), GetTitle(), wxOK | wxICON_ERROR);
 		return false;
 	}
 
@@ -821,7 +821,7 @@ bool ibFrontendMainFrame::Call(ibProtocol::ibMethod method, const ibProtocolNode
 	// Under way until it has settled — its questions asked, its refusal said: a call posted meanwhile waits for it.
 	++m_calling;
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	const bool called = m_communicator->Call(method, params, answer, refusal, error);
 	if (called)
 		Settle(answer);
@@ -834,7 +834,7 @@ bool ibFrontendMainFrame::Call(ibProtocol::ibMethod method, const ibProtocolNode
 }
 
 bool ibFrontendMainFrame::Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	++m_calling;
 	const bool called = m_communicator->Call(method, params, answer, refusal, error);
@@ -893,7 +893,7 @@ void ibFrontendMainFrame::CloseTab(long long tabId)
 bool ibFrontendMainFrame::Fetch(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer)
 {
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	return m_communicator->Call(method, params, answer, refusal, error);
 }
 
@@ -1357,7 +1357,7 @@ bool ibFrontendMainFrame::Respond(const ibProtocolNode& response)
 	ibProtocolNode params, next;
 	params.SetValue(ibProtocol::ibRequest::Id, id).SetValue(ibProtocol::ibRequest::Response, response);
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	if (!m_communicator->Call(ibProtocol::ibMethod::Respond, params, next, refusal, error)) {
 		Refused(refusal, error);
 		return false;
@@ -1603,7 +1603,7 @@ bool ibFrontendMainFrame::UploadFile(const wxString& path, wxString& file)
 		params.SetValue(ibProtocol::ibFile::Data, part);
 
 		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-		wxString error;
+		ibString error;
 		if (!m_communicator->Call(ibProtocol::ibMethod::Upload, params, answer, refusal, error)) {
 			Refused(refusal, error);
 			return false;
@@ -1626,7 +1626,7 @@ bool ibFrontendMainFrame::DownloadFile(const wxString& file, const wxString& pat
 		params.SetValue(ibProtocol::ibFile::File, file).SetValue(ibProtocol::ibFile::Part, part);
 
 		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-		wxString error;
+		ibString error;
 		if (!m_communicator->Call(ibProtocol::ibMethod::Download, params, answer, refusal, error)) {
 			Refused(refusal, error);
 			return false;

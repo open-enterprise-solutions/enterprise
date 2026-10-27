@@ -5,7 +5,7 @@
 
 #include "frmserver/metaTree/treeConfiguration.h"
 
-// THE DESIGNER'S MAIN WINDOW — the configuration, as designer.exe edited it (ibFrontendMainFrameDesigner): its doc
+// THE DESIGNER'S MAIN WINDOW — the configuration, as the old desktop designer edited it (ibFrontendMainFrameDesigner): its doc
 // manager is the designer's (ibDocManagerDesigner), and it starts no runtime. Its configuration tree is the server's
 // half of the desktop's navigator (ibConfigurationTree): the rows, drawn into the frame.
 class FRMSERVER_API ibClientFrameDesigner : public ibClientFrame {
@@ -32,9 +32,9 @@ public:
 
 	// A script's failure — a module checked, compiled: the desktop designer's (ibFrontendMainFrameDesigner::BackendError),
 	// a line in the messages; not the runtime's window that asks what becomes of it.
-	virtual void BackendError(const wxString& strFileName,
-		const wxString& strDocPath, const long line,
-		const wxString& strErrorMessage) override;
+	virtual void BackendError(const ibString& strFileName,
+		const ibString& strDocPath, const long line,
+		const ibString& strErrorMessage) override;
 
 private:
 

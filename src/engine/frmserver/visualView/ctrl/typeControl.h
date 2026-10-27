@@ -61,7 +61,7 @@ public:
 	static bool QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid);
 	// …and the same list NARROWED BY WHAT WAS TYPED: one match is taken at once, several are put
 	// to the person; typed text that matches nothing changes nothing.
-	static void QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const wxString& strData);
+	static void QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const ibString& strData);
 
 	static ibClassID ShowSelectType(const ibMetaData* metadata, const ibTypeDescription& typeDescription);
 

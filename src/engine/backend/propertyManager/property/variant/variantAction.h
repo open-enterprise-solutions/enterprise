@@ -30,7 +30,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataAction"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataAction"); }
 
 private:
 	ibStandardCommandDescription m_actionData;

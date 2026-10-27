@@ -23,7 +23,7 @@ enum {
 
 #define objectInspector  ibObjectInspector::GetObjectInspector()
 
-// THE DESKTOP'S INSPECTOR (frontend/mainFrame/objinspect), one road: the object shown and its properties, each by the
+// THE INSPECTOR, one road: the object shown and its properties, each by the
 // widget registered for its type (ibPropertyRegistry). A metaobject's properties are the server's — the object holds
 // them, filled from its rows (ibValueMetaObject, ibPropertySerializable); the inspector knows no metadata and no server, and an
 // edit goes through the object's door (ibPropertyGate), as on the desktop.
@@ -150,7 +150,7 @@ private:
 		}
 
 		const wxString& catName = category->GetName();
-		if (!stringUtils::CompareString(catName, propertyDefName)) {
+		if (!stringUtils::IsSameAs(catName, propertyDefName)) {
 			wxPGProperty* id = pg->Append(new wxPropertyCategory(category->GetLabel(), catName));
 			AddItems(name, obj, category, itemMap);
 			std::map< wxString, bool >::iterator it = m_isExpanded.find(catName);
@@ -194,11 +194,11 @@ private:
 						// the warm focal hue (light terracotta), common get
 						// neutral cream, sizerItem gets the cool tier (light
 						// powder). Replaces XP-era yellow/light-blue/cyan.
-						if (stringUtils::CompareString(name, wxT("window")))
+						if (stringUtils::IsSameAs(name, wxT("window")))
 							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF8, 0xE3, 0xD5)); // light terracotta
-						else if (stringUtils::CompareString(name, wxT("common")))
+						else if (stringUtils::IsSameAs(name, wxT("common")))
 							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF5, 0xE8, 0xD5)); // light cream
-						else if (stringUtils::CompareString(name, wxT("sizerItem")))
+						else if (stringUtils::IsSameAs(name, wxT("sizerItem")))
 							m_pg->SetPropertyBackgroundColour(id, wxColour(0xE6, 0xEE, 0xF5)); // light powder
 					}
 
@@ -235,7 +235,7 @@ private:
 			}
 
 			const wxString& catName = category->GetName();
-			if (!stringUtils::CompareString(catName, propertyDefName)) {
+			if (!stringUtils::IsSameAs(catName, propertyDefName)) {
 				wxPGProperty* catId = m_pg->AppendIn(catName, new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));
 				AddItems(nextCat->GetName(), obj, nextCat, properties);
 				std::map< wxString, bool >::iterator it = m_isExpanded.find(nextCat->GetName());
@@ -274,11 +274,11 @@ private:
 					m_pg->SetPropertyHelpString(id, wxGetTranslation(event->GetHelp()));
 					if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
 						// Per-class tint — interior palette (see above).
-						if (stringUtils::CompareString(name, wxT("window")))
+						if (stringUtils::IsSameAs(name, wxT("window")))
 							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF8, 0xE3, 0xD5)); // light terracotta
-						else if (stringUtils::CompareString(name, wxT("common")))
+						else if (stringUtils::IsSameAs(name, wxT("common")))
 							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF5, 0xE8, 0xD5)); // light cream
-						else if (stringUtils::CompareString(name, wxT("sizerItem")))
+						else if (stringUtils::IsSameAs(name, wxT("sizerItem")))
 							m_pg->SetPropertyBackgroundColour(id, wxColour(0xE6, 0xEE, 0xF5)); // light powder
 					}
 
@@ -308,8 +308,8 @@ private:
 			}
 
 			const wxString& catName = category->GetName();
-			if (!stringUtils::CompareString(catName, propertyDefName)) {
-				wxPGProperty* catId = m_pg->AppendIn(category->GetName(), new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));
+			if (!stringUtils::IsSameAs(catName, propertyDefName)) {
+				wxPGProperty* catId = m_pg->AppendIn(wxString(category->GetName()), new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));
 				AddItems(nextCat->GetName(), obj, nextCat, events);
 				std::map< wxString, bool >::iterator it = m_isExpanded.find(nextCat->GetName());
 				if (it != m_isExpanded.end()) {

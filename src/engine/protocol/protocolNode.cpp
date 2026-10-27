@@ -39,7 +39,7 @@ ibClassID ClsidOf(const ibDataNode& types, const ibString& name)
 // A value as the JSON view writes it — the text of one that is no text: a number, a flag, a date.
 ibString JsonOf(const ibDataValue& value)
 {
-	static const ibString kName(wxT("v"));
+	static const ibString kName(ibT("v"));
 	ibDataNode holder;
 	holder.AddField(kName, value);
 	ibJsonProvider provider;
@@ -62,7 +62,7 @@ ibString StringOf(const std::optional<ibDataValue>& value, const ibString& other
 	case ibDataKind::Date: {
 		// …where text was asked for — as the wire's JSON writes it; a date is its string. Bytes are no text: GetBinary.
 		const ibString text = JsonOf(*value);
-		return text.length() >= 2 && text.GetChar(0) == wxT('"') ? text.Mid(1, text.length() - 2) : text;
+		return text.length() >= 2 && text.GetChar(0) == ibT('"') ? text.Mid(1, text.length() - 2) : text;
 	}
 	default:
 		return otherwise;
@@ -238,7 +238,7 @@ ibString ibProtocolNode::Write() const
 		return JsonOf(ibDataValue::Array(std::move(children)));
 	}
 	default:
-		return ibString(wxT("null"));
+		return ibString(ibT("null"));
 	}
 }
 

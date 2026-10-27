@@ -5,7 +5,7 @@
 
 class ibTabDocument;
 
-// THE FORM — the desktop's ibValueForm (frontend/visualView/ctrl/form.h) as its view asks it: the frame its controls
+// THE FORM — the old desktop's ibValueForm as its view asks it: the frame its controls
 // are drawn in, and the one of them active now. The form itself is the server's: the control made active is told
 // there (Focus), as the desktop's form was told in its own process.
 class FRMCLIENT_API ibValueForm : public ibValueFrame {

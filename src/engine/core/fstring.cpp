@@ -17,7 +17,7 @@
 #include <cwchar>        // vswprintf; wmemcpy / wmemmove / wmemset — the characters in their block
 #include <functional>    // std::less — is an appended piece inside this very text
 #include <locale>
-#if defined(__APPLE__)
+#if defined(__IBOSX__)
 #include <xlocale.h>     // newlocale / uselocale — Print's own UTF-8 locale
 #endif
 #include <new>
@@ -34,7 +34,7 @@
 // characters: making and freeing the block are this module's.
 struct ibString::Impl : ibString::Shared
 {
-	explicit Impl(size_t cap) noexcept : Shared(1, cap) { Chars()[0] = wxT('\0'); }
+	explicit Impl(size_t cap) noexcept : Shared(1, cap) { Chars()[0] = ibT('\0'); }
 
 	static size_t BytesFor(size_t cap) noexcept { return sizeof(Shared) + (cap + 1) * sizeof(wchar_t); }
 
@@ -53,7 +53,7 @@ struct ibString::Impl : ibString::Shared
 		impl->SetLength(len);
 		return impl;
 	}
-	void SetLength(size_t len) noexcept { m_len = len; Chars()[len] = wxT('\0'); }
+	void SetLength(size_t len) noexcept { m_len = len; Chars()[len] = ibT('\0'); }
 
 	static Impl* Of(Shared* shared) noexcept { return static_cast<Impl*>(shared); }
 	bool Alone() const noexcept { return m_refCount.load(std::memory_order_acquire) == 1; }
@@ -91,7 +91,7 @@ void ibString::SetLength(size_t length) noexcept { Impl::Of(m_impl)->SetLength(l
 namespace {
 
 bool IsSpace(wchar_t c) noexcept {
-	return c == wxT(' ') || c == wxT('\t') || c == wxT('\n') || c == wxT('\r') || c == wxT('\f') || c == wxT('\v');
+	return c == ibT(' ') || c == ibT('\t') || c == ibT('\n') || c == ibT('\r') || c == ibT('\f') || c == ibT('\v');
 }
 
 // A piece of a text, made a text of its own — one block, the characters copied once.
@@ -139,7 +139,7 @@ bool ToNumeric(const wchar_t* start, T* val, R (*convert)(const wchar_t*, wchar_
 	errno = saved;
 	if (end == start || range) return false;
 	*val = static_cast<T>(result);
-	return *end == wxT('\0');
+	return *end == ibT('\0');
 }
 
 } // namespace
@@ -148,7 +148,7 @@ bool ToNumeric(const wchar_t* start, T* val, R (*convert)(const wchar_t*, wchar_
 
 ibString::ibString(const wchar_t* ws)
 {
-	if (ws != nullptr && *ws != wxT('\0')) { const size_t n = std::wcslen(ws); m_impl = Impl::Copy(ws, n, n); }
+	if (ws != nullptr && *ws != ibT('\0')) { const size_t n = std::wcslen(ws); m_impl = Impl::Copy(ws, n, n); }
 }
 ibString::ibString(const wchar_t* ws, size_t n) { if (ws != nullptr && n != 0) m_impl = Impl::Copy(ws, n, n); }
 ibString::ibString(wchar_t c, size_t count)
@@ -187,6 +187,11 @@ std::string ibString::ToUtf8() const
 		EncodeUtf8(cp, out);
 	}
 	return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const ibString& s)
+{
+	return out << s.ToUTF8();
 }
 
 // Decoded straight into the block: a UTF-8 sequence is never fewer bytes than the characters it makes (four
@@ -419,17 +424,17 @@ bool ibString::Matches(const ibString& maskText) const
 	const wchar_t* lastStarInText = nullptr;   // where '*' last matched, to backtrack to
 	const wchar_t* lastStarInMask = nullptr;
 match:
-	for (; *mask != wxT('\0'); ++mask, ++text) {
+	for (; *mask != ibT('\0'); ++mask, ++text) {
 		switch (*mask) {
-		case wxT('?'):
-			if (*text == wxT('\0')) return false;
+		case ibT('?'):
+			if (*text == ibT('\0')) return false;
 			break;
-		case wxT('*'): {
+		case ibT('*'): {
 			lastStarInText = text;
 			lastStarInMask = mask;
-			while (*mask == wxT('*') || *mask == wxT('?')) ++mask;   // metacharacters right after it add nothing
-			if (*mask == wxT('\0')) return true;
-			const wchar_t* const nextMeta = std::wcspbrk(mask, wxT("*?"));
+			while (*mask == ibT('*') || *mask == ibT('?')) ++mask;   // metacharacters right after it add nothing
+			if (*mask == ibT('\0')) return true;
+			const wchar_t* const nextMeta = std::wcspbrk(mask, ibT("*?"));
 			const size_t run = nextMeta != nullptr ? size_t(nextMeta - mask) : std::wcslen(mask);
 			const std::wstring piece(mask, run);
 			const wchar_t* const found = std::wcsstr(text, piece.c_str());
@@ -443,7 +448,7 @@ match:
 			break;
 		}
 	}
-	if (*text == wxT('\0')) return true;
+	if (*text == ibT('\0')) return true;
 	if (lastStarInText != nullptr) {   // failed: let the last '*' swallow one more character
 		text = lastStarInText + 1;
 		mask = lastStarInMask;
@@ -523,8 +528,8 @@ ibString& ibString::RemoveLast(size_t n)     { if (n != 0 && !IsEmpty()) erase(n
 bool ibString::IsNumber() const
 {
 	const std::wstring_view text = View();
-	size_t i = (!text.empty() && (text[0] == wxT('-') || text[0] == wxT('+'))) ? 1 : 0;
-	for (; i < text.size(); ++i) if (text[i] < wxT('0') || text[i] > wxT('9')) return false;
+	size_t i = (!text.empty() && (text[0] == ibT('-') || text[0] == ibT('+'))) ? 1 : 0;
+	for (; i < text.size(); ++i) if (text[i] < ibT('0') || text[i] > ibT('9')) return false;
 	return true;
 }
 
@@ -536,6 +541,12 @@ bool ibString::ToInt(int* val, int base) const {
 	long long wide = 0;
 	if (!ToLongLong(&wide, base) || wide < INT_MIN || wide > INT_MAX) return false;
 	if (val != nullptr) *val = static_cast<int>(wide);
+	return true;
+}
+bool ibString::ToUInt(unsigned int* val, int base) const {
+	unsigned long long wide = 0;
+	if (!ToULongLong(&wide, base) || wide > UINT_MAX) return false;
+	if (val != nullptr) *val = static_cast<unsigned int>(wide);
 	return true;
 }
 bool ibString::ToDouble(double* val) const {
@@ -561,7 +572,7 @@ ibString& ibString::operator+=(const ibString& o)
 	return append(o.wc_str(), o.Len());   // `o` may be this very string — append takes it out first
 }
 
-ibString& ibString::operator+=(const wchar_t* s)  { if (s != nullptr && *s != wxT('\0')) append(s, std::wcslen(s)); return *this; }
+ibString& ibString::operator+=(const wchar_t* s)  { if (s != nullptr && *s != ibT('\0')) append(s, std::wcslen(s)); return *this; }
 ibString& ibString::operator+=(wchar_t c)         { push_back(c); return *this; }
 ibString& ibString::operator+=(const wxString& s) { if (!s.empty()) append(s.wc_str(), s.length()); return *this; }
 
@@ -646,7 +657,7 @@ bool ibString::IsSameAs(const ibString& o, bool caseSensitive) const
 
 bool ibString::IsSameAs(const wchar_t* s, bool caseSensitive) const
 {
-	if (s == nullptr) s = wxT("");
+	if (s == nullptr) s = ibT("");
 	return SameText(wc_str(), Len(), s, std::wcslen(s), caseSensitive);
 }
 
@@ -688,7 +699,7 @@ bool ibString::IsAscii() const noexcept
 namespace ibFStringFormat {
 
 namespace {
-bool IsDigit(wchar_t c) noexcept { return c >= wxT('0') && c <= wxT('9'); }
+bool IsDigit(wchar_t c) noexcept { return c >= ibT('0') && c <= ibT('9'); }
 bool IsOneOf(wchar_t c, const wchar_t* set) noexcept {
 	for (; *set != 0; ++set) if (*set == c) return true;
 	return false;
@@ -714,45 +725,45 @@ bool Prepare(const ibString& formatText, const Kind* given, size_t count, std::w
 	};
 	for (size_t i = 0; i < n; ++i) {
 		spec.push_back(format[i]);
-		if (format[i] != wxT('%'))
+		if (format[i] != ibT('%'))
 			continue;
-		if (i + 1 < n && format[i + 1] == wxT('%')) { spec.push_back(wxT('%')); ++i; continue; }
+		if (i + 1 < n && format[i + 1] == ibT('%')) { spec.push_back(ibT('%')); ++i; continue; }
 
 		size_t j = i + 1;
 		Kind kind;
-		while (j < n && IsOneOf(format[j], wxT("-+ #0"))) spec.push_back(format[j++]);
-		if (j < n && format[j] == wxT('*')) { if (!take(kind) || kind != Kind::Int) return false; spec.push_back(format[j++]); }
+		while (j < n && IsOneOf(format[j], ibT("-+ #0"))) spec.push_back(format[j++]);
+		if (j < n && format[j] == ibT('*')) { if (!take(kind) || kind != Kind::Int) return false; spec.push_back(format[j++]); }
 		else while (j < n && IsDigit(format[j])) spec.push_back(format[j++]);
-		if (j < n && format[j] == wxT('.')) {
+		if (j < n && format[j] == ibT('.')) {
 			spec.push_back(format[j++]);
-			if (j < n && format[j] == wxT('*')) { if (!take(kind) || kind != Kind::Int) return false; spec.push_back(format[j++]); }
+			if (j < n && format[j] == ibT('*')) { if (!take(kind) || kind != Kind::Int) return false; spec.push_back(format[j++]); }
 			else while (j < n && IsDigit(format[j])) spec.push_back(format[j++]);
 		}
 		// The length as WRITTEN is dropped — the argument decides it (MSVC's `I64` included).
-		while (j < n && IsOneOf(format[j], wxT("hlLqjzt"))) ++j;
-		if (j < n && format[j] == wxT('I')) { ++j; while (j < n && IsDigit(format[j])) ++j; }
+		while (j < n && IsOneOf(format[j], ibT("hlLqjzt"))) ++j;
+		if (j < n && format[j] == ibT('I')) { ++j; while (j < n && IsDigit(format[j])) ++j; }
 		if (j >= n || !take(kind))
 			return false;
 
 		switch (const wchar_t conversion = format[j]) {
-		case wxT('s'):
+		case ibT('s'):
 			if (kind != Kind::Text) return false;
-			spec += wxT("ls");
+			spec += ibT("ls");
 			break;
-		case wxT('c'):
+		case ibT('c'):
 			if (kind != Kind::Int) return false;
-			spec += wxT("lc");
+			spec += ibT("lc");
 			break;
-		case wxT('d'): case wxT('i'): case wxT('u'): case wxT('o'): case wxT('x'): case wxT('X'):
-			if (kind == Kind::Int64) spec += wxT("ll");
+		case ibT('d'): case ibT('i'): case ibT('u'): case ibT('o'): case ibT('x'): case ibT('X'):
+			if (kind == Kind::Int64) spec += ibT("ll");
 			else if (kind != Kind::Int) return false;
 			spec.push_back(conversion);
 			break;
-		case wxT('f'): case wxT('F'): case wxT('e'): case wxT('E'): case wxT('g'): case wxT('G'): case wxT('a'): case wxT('A'):
+		case ibT('f'): case ibT('F'): case ibT('e'): case ibT('E'): case ibT('g'): case ibT('G'): case ibT('a'): case ibT('A'):
 			if (kind != Kind::Real) return false;
 			spec.push_back(conversion);
 			break;
-		case wxT('p'):
+		case ibT('p'):
 			if (kind != Kind::Pointer) return false;
 			spec.push_back(conversion);
 			break;
@@ -772,7 +783,7 @@ bool Prepare(const ibString& formatText, const Kind* given, size_t count, std::w
 // its own, for this call only; the process's locale is not touched.
 bool Print(std::wstring& out, const wchar_t* spec, ...)
 {
-#if defined(__APPLE__)
+#if defined(__IBOSX__)
 	static const locale_t s_utf8 = newlocale(LC_CTYPE_MASK, "UTF-8", static_cast<locale_t>(0));
 	const locale_t previous = s_utf8 != static_cast<locale_t>(0) ? uselocale(s_utf8) : static_cast<locale_t>(0);
 #endif
@@ -791,7 +802,7 @@ bool Print(std::wstring& out, const wchar_t* spec, ...)
 		}
 	}
 
-#if defined(__APPLE__)
+#if defined(__IBOSX__)
 	if (previous != static_cast<locale_t>(0))
 		uselocale(previous);
 #endif
@@ -802,13 +813,13 @@ ibString Plain(const ibString& formatText)
 {
 	const wchar_t* const format = formatText.wc_str();
 	const size_t n = formatText.Len();
-	if (std::wcschr(format, wxT('%')) == nullptr)
+	if (std::wcschr(format, ibT('%')) == nullptr)
 		return formatText;   // nothing to read — the same text, shared
 	std::wstring text;
 	text.reserve(n);
 	for (size_t i = 0; i < n; ++i) {
 		text.push_back(format[i]);
-		if (format[i] == wxT('%') && i + 1 < n && format[i + 1] == wxT('%'))
+		if (format[i] == ibT('%') && i + 1 < n && format[i + 1] == ibT('%'))
 			++i;
 	}
 	return ibString(text);

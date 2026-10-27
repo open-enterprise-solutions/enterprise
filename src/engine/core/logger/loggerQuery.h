@@ -10,7 +10,6 @@
 // are one shape for both, so they live here.
 
 #include "core/memory/memoryBuffer.h"
-#include <wx/string.h>
 
 #include <cstddef>
 
@@ -20,13 +19,13 @@
 struct ibLogRow {
     long long ts_ms       = 0;
     int          level       = 0;
-    wxString     session_id;
-    wxString     user_name;
-    wxString     host;
-    wxString     source;
-    wxString     event_type;
-    wxString     message;
-    wxString     ref_guid;
+    ibString     session_id;
+    ibString     user_name;
+    ibString     host;
+    ibString     source;
+    ibString     event_type;
+    ibString     message;
+    ibString     ref_guid;
     int          ref_meta_id = 0;
     // …AND THE STRUCTURED PAYLOAD THE ENTRY CARRIED, as it was stored: a node written by
     // ibBinaryProvider. Empty for the rows that carried none, which is most of them.
@@ -43,17 +42,17 @@ struct ibLogFilter {
     long long from_ms   = 0;     // inclusive; 0 = no lower bound
     long long to_ms     = 0;     // exclusive; 0 = no upper bound
     int          min_level = -1;    // -1 = any; otherwise rows with level >= this
-    wxString     user_name;         // empty = any
+    ibString     user_name;         // empty = any
     // ⭐⭐ ONE RUN'S OWN ROWS. Every row already carries `session_id` — it is written on the way in —
     // and a background job returns the session it runs as, so this is the two ends of an existing
     // number meeting. Without it, watching what one run is doing meant reading everybody's rows and
     // guessing which were whose; a background job cannot send its caller a message (its session is
     // tied to nobody), so the journal filtered by session IS the channel.
-    wxString     session_id;        // empty = any
-    wxString     source;            // empty = any
-    wxString     event_type;        // empty = any
-    wxString     ref_guid;          // drill-down by object identity
-    wxString     search;            // substring in message (LIKE %...%)
+    ibString     session_id;        // empty = any
+    ibString     source;            // empty = any
+    ibString     event_type;        // empty = any
+    ibString     ref_guid;          // drill-down by object identity
+    ibString     search;            // substring in message (LIKE %...%)
     std::size_t  limit  = 1000;     // 0 = no cap
     std::size_t  offset = 0;
 };

@@ -93,25 +93,25 @@ void ibValueForm::WireAttribute(ibFormAttributeValue* entry)
 	InvalidateNames();
 }
 
-ibFormAttributeValue* ibValueForm::AddAttribute(const wxString& name, const ibClassID& type, const ibValue& value)
+ibFormAttributeValue* ibValueForm::AddAttribute(const ibString& name, const ibClassID& type, const ibValue& value)
 {
 	// Name + Type are mandatory — an attribute is never empty. Make + attach in one step.
 	return AttachAttribute(MakeAttribute(name, type, value));
 }
 
-ibMetaID ibValueForm::AddAutoAttribute(const wxString& name, const ibTypeDescription& typeDesc)
+ibMetaID ibValueForm::AddAutoAttribute(const ibString& name, const ibTypeDescription& typeDesc)
 {
 	// Attribute name = the control's name, made UNIQUE among the form's attributes (a pre-existing
 	// same-named attribute gets a numeric suffix). Type = the control's default type desc (already
 	// produced by the source-type generator — checkbox Boolean, tablebox value table, else String).
-	wxString uniqueName = name;
+	ibString uniqueName = name;
 	for (unsigned int index = 0; GetAttribute(uniqueName) != nullptr; )
-		uniqueName = wxString::Format(wxT("%s%u"), name, ++index);
+		uniqueName = ibString::Format(ibT("%s%u"), name, ++index);
 	ibFormAttributeValue* entry = AddAttribute(uniqueName, typeDesc.GetFirstClsid(), ibValue());
 	return entry != nullptr ? entry->GetId() : ibMetaID(wxNOT_FOUND);
 }
 
-ibValuePtr<ibFormAttributeValue> ibValueForm::MakeAttribute(const wxString& name, const ibClassID& type, const ibValue& value)
+ibValuePtr<ibFormAttributeValue> ibValueForm::MakeAttribute(const ibString& name, const ibClassID& type, const ibValue& value)
 {
 	// Build a holder UNOWNED by the form (no registry slot, no module bind yet) — the caller (the
 	// visual-editor InsertAttribute command) decides when to attach it. The holder builds its own
@@ -150,7 +150,7 @@ ibValuePtr<ibFormAttributeValue> ibValueForm::DetachAttribute(ibFormAttributeVal
 	return nullptr;
 }
 
-ibFormAttributeValue* ibValueForm::AddMainAttribute(const wxString& name, const ibClassID& type, ibSourceDataObject* value)
+ibFormAttributeValue* ibValueForm::AddMainAttribute(const ibString& name, const ibClassID& type, ibSourceDataObject* value)
 {
 	wxASSERT(GetMainAttribute() == nullptr);   // only ONE main per form
 
@@ -168,7 +168,7 @@ ibFormAttributeValue* ibValueForm::AddMainAttribute(const wxString& name, const 
 	return AttachAttribute(std::move(holder));     // registers + wires
 }
 
-void ibValueForm::DeleteAttribute(const wxString& name)
+void ibValueForm::DeleteAttribute(const ibString& name)
 {
 	for (auto it = m_attributes.begin(); it != m_attributes.end(); ++it)
 		if ((*it)->GetName() == name) {
@@ -192,12 +192,12 @@ void ibValueForm::BindAttributeVariable(ibFormAttributeValue* entry)
 {
 	if (entry == nullptr)
 		return;
-	const wxString name = entry->GetName();
+	const ibString name = entry->GetName();
 	if (!name.IsEmpty())
 		BindLocalVariable(name, entry->GetBindValue());   // <name> / ThisForm.<name>
 	// The MAIN attribute additionally drives the exported DataSource (the form's source).
 	if (entry->IsMain())
-		BindExportVariable(wxT("DataSource"), entry->GetBindValue());
+		BindExportVariable(ibT("DataSource"), entry->GetBindValue());
 }
 
 void ibValueForm::DropAttributeBinds(ibFormAttributeValue* entry)
@@ -211,10 +211,10 @@ void ibValueForm::DropAttributeBinds(ibFormAttributeValue* entry)
 		return;
 	UnbindVariable(entry->GetName());
 	if (entry->IsMain())
-		UnbindVariable(wxT("DataSource"));
+		UnbindVariable(ibT("DataSource"));
 }
 
-bool ibValueForm::IsAttributeNameUnique(const wxString& name, const ibFormAttributeValue* except) const
+bool ibValueForm::IsAttributeNameUnique(const ibString& name, const ibFormAttributeValue* except) const
 {
 	for (const auto& av : m_attributes)
 		if (av != except && av->GetName() == name)
@@ -222,13 +222,13 @@ bool ibValueForm::IsAttributeNameUnique(const wxString& name, const ibFormAttrib
 	return true;
 }
 
-wxString ibValueForm::MakeUniqueAttributeName(const wxString& base) const
+ibString ibValueForm::MakeUniqueAttributeName(const ibString& base) const
 {
-	const wxString stem = base.IsEmpty() ? wxString(wxT("Attribute")) : base;
+	const ibString stem = base.IsEmpty() ? ibString(ibT("Attribute")) : base;
 	if (IsAttributeNameUnique(stem))
 		return stem;
 	for (unsigned int n = 1; ; ++n) {
-		const wxString candidate = wxString::Format(wxT("%s%u"), stem, n);
+		const ibString candidate = ibString::Format(ibT("%s%u"), stem, n);
 		if (IsAttributeNameUnique(candidate))
 			return candidate;
 	}
@@ -251,7 +251,7 @@ ibMetaID ibValueForm::NextFormCommandId() const
 	return nextId;
 }
 
-bool ibValueForm::IsFormCommandNameUnique(const wxString& name, const ibFormCommandValue* except) const
+bool ibValueForm::IsFormCommandNameUnique(const ibString& name, const ibFormCommandValue* except) const
 {
 	for (const auto& fc : m_formCommands)
 		if (fc != except && fc->GetName() == name)
@@ -259,19 +259,19 @@ bool ibValueForm::IsFormCommandNameUnique(const wxString& name, const ibFormComm
 	return true;
 }
 
-wxString ibValueForm::MakeUniqueFormCommandName(const wxString& base) const
+ibString ibValueForm::MakeUniqueFormCommandName(const ibString& base) const
 {
-	const wxString stem = base.IsEmpty() ? wxString(wxT("Command")) : base;
+	const ibString stem = base.IsEmpty() ? ibString(ibT("Command")) : base;
 	if (IsFormCommandNameUnique(stem))
 		return stem;
 	for (unsigned int n = 1; ; ++n) {
-		const wxString candidate = wxString::Format(wxT("%s%u"), stem, n);
+		const ibString candidate = ibString::Format(ibT("%s%u"), stem, n);
 		if (IsFormCommandNameUnique(candidate))
 			return candidate;
 	}
 }
 
-ibFormCommandValue* ibValueForm::AddFormCommand(const wxString& name, const wxString& procedure)
+ibFormCommandValue* ibValueForm::AddFormCommand(const ibString& name, const ibString& procedure)
 {
 	ibValuePtr<ibFormCommandValue> holder(new ibFormCommandValue(this));
 	holder->SetCommandName(name);
@@ -280,7 +280,7 @@ ibFormCommandValue* ibValueForm::AddFormCommand(const wxString& name, const wxSt
 	return holder;
 }
 
-ibFormCommandValue* ibValueForm::GetFormCommand(const wxString& name) const
+ibFormCommandValue* ibValueForm::GetFormCommand(const ibString& name) const
 {
 	for (const auto& fc : m_formCommands)
 		if (fc->GetName() == name) return fc;
@@ -294,13 +294,13 @@ ibFormCommandValue* ibValueForm::FindFormCommandById(const ibMetaID& id) const
 	return nullptr;
 }
 
-void ibValueForm::DeleteFormCommand(const wxString& name)
+void ibValueForm::DeleteFormCommand(const ibString& name)
 {
 	for (auto it = m_formCommands.begin(); it != m_formCommands.end(); ++it)
 		if ((*it)->GetName() == name) { m_formCommands.erase(it); return; }
 }
 
-bool ibValueForm::RenameFormCommand(ibFormCommandValue* entry, const wxString& newName)
+bool ibValueForm::RenameFormCommand(ibFormCommandValue* entry, const ibString& newName)
 {
 	if (entry == nullptr || newName.IsEmpty() || !IsFormCommandNameUnique(newName, entry))
 		return false;
@@ -343,7 +343,7 @@ ibFormCommandValue* ibValueForm::PasteFormCommand(const ibDataNode& node)
 	return holder;
 }
 
-bool ibValueForm::RenameAttribute(ibFormAttributeValue* entry, const wxString& newName)
+bool ibValueForm::RenameAttribute(ibFormAttributeValue* entry, const ibString& newName)
 {
 	if (entry == nullptr || newName.IsEmpty() || !IsAttributeNameUnique(newName, entry))
 		return false;
@@ -367,7 +367,7 @@ ibFormAttributeValue* ibValueForm::PasteAttribute(const ibDataNode& node)
 	return AttachAttribute(std::move(holder));
 }
 
-ibFormAttributeValue* ibValueForm::GetAttribute(const wxString& name) const
+ibFormAttributeValue* ibValueForm::GetAttribute(const ibString& name) const
 {
 	for (const auto& av : m_attributes)
 		if (av->GetName() == name)
@@ -407,7 +407,7 @@ bool ibValueForm::CheckFilling() const
 		if (av->GetValue(value) && !value.IsEmpty())
 			continue;
 		ibValueSystemFunction::Message(
-			wxString::Format(_("""%s"" is a required field"), av->GetSynonym()),
+			ibString::Format(_("""%s"" is a required field"), av->GetSynonym()),
 			ibStatusMessage::ibStatusMessage_Information);
 		filled = false;
 	}
@@ -453,7 +453,7 @@ void ibValueForm::SetMainAttribute(ibFormAttributeValue* entry)
 	// the module is already live AND there is a main; toggle-off leaves the last bind harmless
 	// (its cell is now empty).
 	if (GetCompileModule() != nullptr && entry != nullptr)
-		BindExportVariable(wxT("DataSource"), entry->GetBindValue());
+		BindExportVariable(ibT("DataSource"), entry->GetBindValue());
 }
 
 ibFormAttributeValue* ibValueForm::FindAttributeById(const ibMetaID& id) const
@@ -752,8 +752,8 @@ void ibFormAttributeValue::ibFormAttribute::FillMembers(ibMemberTable& helper) c
 
 bool ibFormAttributeValue::ibFormAttribute::ReadProperty(const ibDataNode& node)
 {
-	m_attributeId = (ibMetaID)node.GetValue<std::int32_t>(wxT("AttributeId"));
-	m_isMain = node.GetValue<bool>(wxT("Main"));
+	m_attributeId = (ibMetaID)node.GetValue<std::int32_t>(ibT("AttributeId"));
+	m_isMain = node.GetValue<bool>(ibT("Main"));
 	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
 	m_propertyCaption->SetNodeValue(node.GetProperty(m_propertyCaption->GetName()));
 	m_propertyType->SetNodeValue(node.GetProperty(m_propertyType->GetName()));
@@ -765,8 +765,8 @@ bool ibFormAttributeValue::ibFormAttribute::ReadProperty(const ibDataNode& node)
 
 bool ibFormAttributeValue::ibFormAttribute::WriteProperty(ibDataNode& node) const
 {
-	node.SetValue(wxT("AttributeId"), (std::int32_t)m_attributeId);
-	node.SetValue(wxT("Main"), m_isMain);
+	node.SetValue(ibT("AttributeId"), (std::int32_t)m_attributeId);
+	node.SetValue(ibT("Main"), m_isMain);
 	node.SetProperty(m_propertyName->GetName(), m_propertyName->GetNodeValue());
 	node.SetProperty(m_propertyCaption->GetName(), m_propertyCaption->GetNodeValue());
 	node.SetProperty(m_propertyType->GetName(), m_propertyType->GetNodeValue());

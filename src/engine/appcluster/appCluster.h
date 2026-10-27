@@ -24,9 +24,9 @@ class ibClusterWorker;
 // What the cluster says goes through Print, as the application server's does (ibAppServerSay): a person watching it must
 // always see it.
 template <typename... Args>
-void ibAppClusterSay(ibJournalMark mark, const wxFormatString& format, const Args&... args)
+void ibAppClusterSay(ibJournalMark mark, const ibString& format, const Args&... args)
 {
-	ibTechJournal::Print(mark, wxT("appcluster"), format, args...);
+	ibTechJournal::Print(mark, ibT("appcluster"), format, args...);
 }
 
 class ibAppCluster : public wxAppConsole {

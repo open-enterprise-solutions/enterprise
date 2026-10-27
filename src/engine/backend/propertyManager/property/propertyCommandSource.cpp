@@ -9,7 +9,7 @@ ibBackendCommandReceiver::~ibBackendCommandReceiver() {}
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyCommandSource::CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const wxString& display)
+wxVariantData* ibPropertyCommandSource::CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const ibString& display)
 {
 	// The owning button / bar item IS-A command-source factory (WalkCommand validates the binding) — the variant keeps
 	// it and checks existence SERVER-SIDE (runtime too), exactly as ibVariantDataSource keeps its source factory.
@@ -24,14 +24,12 @@ ibCommandDescription& ibPropertyCommandSource::GetValueAsCommandDesc() const
 	return get_cell_variant<ibVariantDataCommandSource>()->GetCommandDesc();
 }
 
-wxString ibPropertyCommandSource::GetValueAsString() const
+ibString ibPropertyCommandSource::GetValueAsString() const
 {
-	wxString s;
-	get_cell_variant<ibVariantDataCommandSource>()->Write(s);
-	return s;
+	return m_propValue.MakeString();
 }
 
-void ibPropertyCommandSource::SetValue(const ibCommandDescription& desc, const wxString& display)
+void ibPropertyCommandSource::SetValue(const ibCommandDescription& desc, const ibString& display)
 {
 	m_propValue = CreateVariantData(GetPropertyObject(), desc, display);
 }

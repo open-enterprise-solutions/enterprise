@@ -20,13 +20,13 @@ class BACKEND_API ibResultSetMetaData : public ibDatabaseStringConverter
 public:
 
 	///Find column id of columns in the result set or -1
-	virtual int FindColumnByName(const wxString &colName);
+	virtual int FindColumnByName(const ibString &colName);
 	/// Retrieve a column's type
 	virtual int GetColumnType(int i) = 0;
 	/// Retrieve a column's size
 	virtual int GetColumnSize(int i) = 0;
 	/// Retrieve a column's name
-	virtual wxString GetColumnName(int i) = 0;
+	virtual ibString GetColumnName(int i) = 0;
 	/// Retrieve the number of columns in the result set
 	virtual int GetColumnCount() = 0;
 

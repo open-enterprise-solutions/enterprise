@@ -8,8 +8,8 @@
 // desktop's main window held its own. A client (a browser, the wx renderer, an assistant over MCP) draws it
 // from what the protocol answers; nothing here is a window.
 //
-// ⭐ AND IT IS THE PROTOCOL THE CLIENT SPEAKS. The desktop had a main window per program (designer.exe,
-// enterprise.exe), each with the doc manager of its application — what it may open — and a start of its own. A
+// ⭐ AND IT IS THE PROTOCOL THE CLIENT SPEAKS. The old desktop front had a main window per program (its
+// designer and its runtime), each with the doc manager of its application — what it may open — and a start of its own. A
 // client's frame is made for one mode in the same way: the mode's frame puts in its application's doc manager
 // (its templates, its schemas) and starts it its own way.
 
@@ -71,16 +71,16 @@ public:
 	//*           ibBackendDocFrame — the backend's door into this client                   *
 	//***************************************************************************************
 
-	virtual void SetTitle(const wxString& strTitle) override { m_title = strTitle; }
-	virtual void SetStatusText(const wxString& strStatus, int number = 0) override;
+	virtual void SetTitle(const ibString& strTitle) override { m_title = strTitle; }
+	virtual void SetStatusText(const ibString& strStatus, int number = 0) override;
 
 	// Messages for the client, kept until it takes them. The desktop's message pane is the same thing.
-	virtual void Message(const wxString& strMessage, ibStatusMessage status) override;
+	virtual void Message(const ibString& strMessage, ibStatusMessage status) override;
 	virtual void ClearMessage() override;
 	// A script's failure — the desktop's error window, asked of the client (ibProtocol::ibRequest::ibKind::Error).
-	virtual void BackendError(const wxString& strFileName,
-		const wxString& strDocPath, const long line,
-		const wxString& strErrorMessage) override;
+	virtual void BackendError(const ibString& strFileName,
+		const ibString& strDocPath, const long line,
+		const ibString& strErrorMessage) override;
 
 	// A REPAINT the backend asks for, the frame having changed by itself (a report delivered, a debugger stopped): the
 	// client is told so (ibClientHost::NotifyChanged) and asks for it — the next frame it is sent is the repaint.
@@ -111,7 +111,7 @@ public:
 
 	// A SHEET SHOWN — the desktop's (ibFrontendMainFrame::ShowSpreadsheetDocument): a spreadsheet document of its own
 	// over it, in a tab of its own, under that title. What a list output and a script's Show() reach.
-	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) override;
+	virtual bool ShowSpreadsheetDocument(const ibString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) override;
 	// …and a script's sheet printed, by the client's printer (ibProtocol::ibRequest::ibKind::Print) — with its print dialog,
 	// as the desktop's always was.
 	virtual bool PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool showPrintDlg = true) override;
@@ -155,12 +155,12 @@ public:
 	// same thing, the ONE place a client's session pointer is narrowed.
 	ibClientSession* Session() const;
 
-	const wxString& GetTitle()      const { return m_title; }
-	const wxString& GetStatusText() const { return m_status; }
+	const ibString& GetTitle()      const { return m_title; }
+	const ibString& GetStatusText() const { return m_status; }
 
 	struct PendingMessage {
 		ibStatusMessage level;
-		wxString        text;
+		ibString        text;
 	};
 	std::vector<PendingMessage> DrainPendingMessages();
 	bool                        TakeClearPending();
@@ -219,7 +219,7 @@ public:
 	// commands — are done here too: what of them is the client's, the frame asks of the client (a request).
 	bool IsCommandEnabled(ibDocCommand command) const;
 	// `name` — Save as's: the file's, as the client chose it.
-	bool DoCommand(ibDocCommand command, const wxString& name);
+	bool DoCommand(ibDocCommand command, const ibString& name);
 	// …and the same question of any tab's document — what the frame tells the client of each tab (its Commands), so the
 	// client's own doc manager enables its File and Edit without asking. The window's own (Open, Exit, Close All) are no
 	// tab's.
@@ -252,7 +252,7 @@ protected:
 
 	// A message box is one kind of request (ibProtocol::ibRequest::ibKind::Message: Text, Caption, Style — the wx button
 	// flags; the response's Button is the wx code of the button pressed, 0 for none).
-	virtual int DoShowModalMessage(const wxString& message, const wxString& caption, int style) override;
+	virtual int DoShowModalMessage(const ibString& message, const ibString& caption, int style) override;
 
 	ibClientMenu m_menu;
 
@@ -271,8 +271,8 @@ private:
 	bool OpenChosenFile();
 
 	ibClientInstance* m_clientInstance = nullptr;   // borrowed; the instance owns the frame
-	wxString             m_title;
-	wxString             m_status;
+	ibString             m_title;
+	ibString             m_status;
 
 	// One entry per tab. A tab goes after its document's views (DeleteAllViews takes the view and the
 	// document), never before.

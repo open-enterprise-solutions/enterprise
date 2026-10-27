@@ -96,7 +96,7 @@ protected:
 private:
 
 	ibValueFrame* DoFindControlByID(const ibFormID& id, ibValueFrame* control) const;
-	ibValueFrame* DoFindControlByName(const wxString& controlName, ibValueFrame* control) const;
+	ibValueFrame* DoFindControlByName(const ibString& controlName, ibValueFrame* control) const;
 	void DoGenerateNewID(ibFormID& id, ibValueFrame* top) const;
 
 public:
@@ -111,9 +111,9 @@ public:
 	// form is showing can be re-derived on the other side; the form itself cannot.
 	virtual bool IsTransferable() const override { return false; }
 
-	void SetControlName(const wxString& controlName) { SetControlNameAsString(controlName); }
-	wxString GetControlName() const {
-		wxString result;
+	void SetControlName(const ibString& controlName) { SetControlNameAsString(controlName); }
+	ibString GetControlName() const {
+		ibString result;
 		GetControlNameAsString(result);
 		return result;
 	}
@@ -122,8 +122,8 @@ public:
 	virtual ~ibValueFrame();
 
 	//system override 
-	virtual wxString GetClassName() const final;
-	virtual wxString GetObjectTypeName() const final;
+	virtual ibString GetClassName() const final;
+	virtual ibString GetObjectTypeName() const final;
 
 	/**
 	* Support generate id
@@ -170,17 +170,17 @@ public:
 	* Support control name
 	*/
 
-	virtual bool GetControlNameAsString(wxString& result) const {
+	virtual bool GetControlNameAsString(ibString& result) const {
 		result = GetObjectTypeName();
 		return true;
 	}
 
-	virtual bool SetControlNameAsString(const wxString& result) const {
+	virtual bool SetControlNameAsString(const ibString& result) const {
 		return false;
 	}
 
 	// get control caption
-	virtual wxString GetControlTitle() const {
+	virtual ibString GetControlTitle() const {
 		return wxGetTranslation(stringUtils::GenerateSynonym(GetClassName()));
 	}
 
@@ -189,7 +189,7 @@ public:
 	/**
 	* Find by control id
 	*/
-	virtual ibValueFrame* FindControlByName(const wxString& controlName) const;
+	virtual ibValueFrame* FindControlByName(const ibString& controlName) const;
 	virtual ibValueFrame* FindControlByID(const ibFormID& id) const;
 
 	/**
@@ -286,14 +286,14 @@ public:
 
 	//call current form
 	template <typename ...Types>
-	bool CallAsEvent(const wxString& functionName, Types&&... args) const {
+	bool CallAsEvent(const ibString& functionName, Types&&... args) const {
 		ibValue* ppParams[] = { (&args)..., nullptr };
 		return CallAsEvent(functionName, ppParams, (long)sizeof...(args));
 	}
 
 	// ⭐ A HANDLER RUN UPDATES THE FORM WHOLE (ibVisualHost::UpdateControl) — whatever it changed, the next frame draws.
 	bool CallAsEvent(const ibEvent* event, ibValue** ppParams, const long lSizeArray) const;
-	bool CallAsEvent(const wxString& functionName, ibValue** ppParams, const long lSizeArray) const;
+	bool CallAsEvent(const ibString& functionName, ibValue** ppParams, const long lSizeArray) const;
 	// …something to run: a named handler or a lambda — what CallAsEvent dispatches, and IsSubscribed asks.
 	bool HasHandler(const ibEvent* event) const;
 
@@ -431,22 +431,22 @@ public:
 
 public:
 
-	static inline wxArrayString GetAllowedUserProperty() {
+	static inline std::vector<ibString> GetAllowedUserProperty() {
 
-		wxArrayString arr;
+		std::vector<ibString> arr;
 
-		arr.Add(wxT("title"));
-		arr.Add(wxT("minimum_size"));
-		arr.Add(wxT("maximum_size"));
-		arr.Add(wxT("font"));
-		arr.Add(wxT("fg"));
-		arr.Add(wxT("bg"));
-		arr.Add(wxT("align"));
-		arr.Add(wxT("stretch"));
-		arr.Add(wxT("proportion"));
-		arr.Add(wxT("orient"));
-		arr.Add(wxT("tooltip"));
-		arr.Add(wxT("visible"));
+		arr.push_back(ibT("title"));
+		arr.push_back(ibT("minimum_size"));
+		arr.push_back(ibT("maximum_size"));
+		arr.push_back(ibT("font"));
+		arr.push_back(ibT("fg"));
+		arr.push_back(ibT("bg"));
+		arr.push_back(ibT("align"));
+		arr.push_back(ibT("stretch"));
+		arr.push_back(ibT("proportion"));
+		arr.push_back(ibT("orient"));
+		arr.push_back(ibT("tooltip"));
+		arr.push_back(ibT("visible"));
 
 		return arr;
 	}

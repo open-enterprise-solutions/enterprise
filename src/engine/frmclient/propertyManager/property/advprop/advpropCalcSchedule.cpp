@@ -61,7 +61,7 @@ wxPGChoices ibPGCalcScheduleProperty::GetChoices(const std::vector<const ibDataN
 	wxPGChoices choices;
 	choices.Add(_("<not set>"), 0);
 	for (const ibDataNode* item : items)
-		choices.Add(item->GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title), item->GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id));   // names, as the type row names its types
+		choices.Add(item->GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title), item->GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id));   // names, as the type row names its types
 	return choices;
 }
 
@@ -120,7 +120,7 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 		wxEnumProperty* row = new wxEnumProperty(rowLabel, wxString::Format(wxT("link%li"), static_cast<long>(dimension)),
 			fieldChoices, 0);
 		row->SetHelpString(wxString::Format(_("The field of the register that answers for the schedule's dimension '%s'."),
-			link.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title)));
+			link.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title)));
 		AddPrivateChild(row);
 		m_linkRows.push_back(row);
 		m_linkDimensions.push_back(dimension);

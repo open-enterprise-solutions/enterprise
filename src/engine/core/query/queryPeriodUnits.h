@@ -17,37 +17,36 @@
 
 #include "core/fdatetime.h"   // ibTotalsPeriod
 
-#include <wx/string.h>
 
 #include <utility>
 #include <vector>
 
-inline const std::vector<std::pair<ibTotalsPeriod, wxString>>& ibPeriodUnits()
+inline const std::vector<std::pair<ibTotalsPeriod, ibString>>& ibPeriodUnits()
 {
-	static const std::vector<std::pair<ibTotalsPeriod, wxString>> s_units = {
-		{ ibTotalsPeriod::Second,   wxT("Second")   }, { ibTotalsPeriod::Minute,   wxT("Minute")   },
-		{ ibTotalsPeriod::Hour,     wxT("Hour")     }, { ibTotalsPeriod::Day,      wxT("Day")      },
-		{ ibTotalsPeriod::Week,     wxT("Week")     }, { ibTotalsPeriod::TenDays,  wxT("TenDays")  },
-		{ ibTotalsPeriod::Month,    wxT("Month")    }, { ibTotalsPeriod::Quarter,  wxT("Quarter")  },
-		{ ibTotalsPeriod::HalfYear, wxT("HalfYear") }, { ibTotalsPeriod::Year,     wxT("Year")     },
+	static const std::vector<std::pair<ibTotalsPeriod, ibString>> s_units = {
+		{ ibTotalsPeriod::Second,   ibT("Second")   }, { ibTotalsPeriod::Minute,   ibT("Minute")   },
+		{ ibTotalsPeriod::Hour,     ibT("Hour")     }, { ibTotalsPeriod::Day,      ibT("Day")      },
+		{ ibTotalsPeriod::Week,     ibT("Week")     }, { ibTotalsPeriod::TenDays,  ibT("TenDays")  },
+		{ ibTotalsPeriod::Month,    ibT("Month")    }, { ibTotalsPeriod::Quarter,  ibT("Quarter")  },
+		{ ibTotalsPeriod::HalfYear, ibT("HalfYear") }, { ibTotalsPeriod::Year,     ibT("Year")     },
 	};
 	return s_units;
 }
 
 // The word a unit is written as — a lookup in that one table, never a second switch over it.
-inline wxString ibPeriodUnitWord(ibTotalsPeriod unit)
+inline ibString ibPeriodUnitWord(ibTotalsPeriod unit)
 {
-	for (const std::pair<ibTotalsPeriod, wxString>& u : ibPeriodUnits())
+	for (const std::pair<ibTotalsPeriod, ibString>& u : ibPeriodUnits())
 		if (u.first == unit)
 			return u.second;
-	return wxString();
+	return ibString();
 }
 
 // …and back: the word -> the unit. False = not one of them, and the CALLER says so in its own words
 // (a query names the level, a register names the argument) rather than this deciding how to complain.
-inline bool ibReadPeriodUnit(const wxString& word, ibTotalsPeriod& unit)
+inline bool ibReadPeriodUnit(const ibString& word, ibTotalsPeriod& unit)
 {
-	for (const std::pair<ibTotalsPeriod, wxString>& u : ibPeriodUnits())
+	for (const std::pair<ibTotalsPeriod, ibString>& u : ibPeriodUnits())
 		if (word.IsSameAs(u.second, /*caseSensitive*/ false)) { unit = u.first; return true; }
 	return false;
 }

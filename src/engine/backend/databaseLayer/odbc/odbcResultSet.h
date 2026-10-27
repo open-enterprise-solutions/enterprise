@@ -55,7 +55,7 @@ public:
 	virtual bool IsFieldNull(int nField);
 	virtual int GetFieldLength(int nField);
 
-	virtual int GetFieldLength(const wxString& strField);
+	virtual int GetFieldLength(const ibString& strField);
 
 	// get MetaData
 	virtual ibResultSetMetaData* GetMetaData();
@@ -63,7 +63,7 @@ public:
 private:
 	void RetrieveFieldData(int nField);
 	void InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr = nullptr);
-	virtual int LookupField(const wxString& strField);
+	virtual int LookupField(const ibString& strField);
 	bool IsBlob(int nField);
 
 	ibPreparedStatementODBC* m_pStatement;

@@ -94,15 +94,15 @@ public:
 	//   BindLocalVariable   — plain writable LOCAL (m_listLocalValue, kind=Local):
 	//     binder fills the frame slot at init, module reads/writes it as an ordinary
 	//     local — no required/type pre-flight, no member access. E.g. a constant's Value.
-	void BindContextVariable(const wxString& name, class ibValue* value);
-	void BindScopeVariable(const wxString& name, class ibValue* value);
-	void BindExportVariable(const wxString& name, class ibValue* value);
-	void BindLocalVariable(const wxString& name, class ibValue* value);
+	void BindContextVariable(const ibString& name, class ibValue* value);
+	void BindScopeVariable(const ibString& name, class ibValue* value);
+	void BindExportVariable(const ibString& name, class ibValue* value);
+	void BindLocalVariable(const ibString& name, class ibValue* value);
 
 	// Symmetric teardown for the Bind… family. RemoveVariable erases the name
 	// from BOTH the extern and context maps, so one Unbind undoes any flavour
 	// of bind. No-op when no compile module is wired yet.
-	void UnbindVariable(const wxString& name);
+	void UnbindVariable(const ibString& name);
 
 	// Compile this descriptor's module. Skips in Designer mode (the
 	// designer only wants AST-level compile state for intellisense and
@@ -334,12 +334,12 @@ protected:
 	// the same stable object/proxy BindExportVariable staged). Present in BOTH
 	// Designer and runtime, so it resolves ThisForm.Controls / ThisObject.
 	// RegisterRecords without a ProcUnit. Returns nullptr if not a bound name.
-	ibValue* GetBoundValue(const wxString& name) const;
+	ibValue* GetBoundValue(const ibString& name) const;
 
 	// The same binding, copied into `out`. A cell that already holds a reference
 	// hands that reference over, so a mutable one stays mutable. A read-only
 	// `out` is a failed read: true must not leave the previous value standing.
-	bool GetBoundValue(const wxString& name, ibValue& out) const;
+	bool GetBoundValue(const ibString& name, ibValue& out) const;
 
 	// Lazy-create m_compileModule from the descriptor's meta-object (shared by
 	// all Bind* entry points). Propagates the parent's compile scope chain.

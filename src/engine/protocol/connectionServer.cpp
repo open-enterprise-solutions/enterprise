@@ -1,11 +1,13 @@
 #include "connectionServer.h"
 
 #include <chrono>
+#include <fstream>
+#include <iterator>
 #include <string>
 
-#include <wx/ffile.h>
 #include <wx/intl.h>   // _() — what a refusal says to a person
-#include <wx/log.h>
+
+#include "core/fileSystem.h"           // ibPathOf — the trusted certificates' file
 
 #include "core/net/httpClient.h"       // ws:// — and wss://, the client's TLS (ibTlsClientContext)
 #include "core/net/ioThreads.h"
@@ -19,10 +21,10 @@ namespace {
 constexpr std::chrono::seconds kCloseWithin(1);
 
 // A base's name in the path — its UTF-8 bytes, every one but the unreserved escaped.
-std::string EscapeSegment(const wxString& segment)
+std::string EscapeSegment(const ibString& segment)
 {
 	static const char s_hex[] = "0123456789ABCDEF";
-	const wxScopedCharBuffer utf8 = segment.utf8_str();
+	const std::string utf8 = segment.utf8_str();
 	std::string escaped;
 	for (std::size_t i = 0; i < utf8.length(); ++i) {
 		const unsigned char c = static_cast<unsigned char>(utf8.data()[i]);
@@ -41,24 +43,24 @@ std::string EscapeSegment(const wxString& segment)
 
 } // namespace
 
-bool ibProtocolConnectionServer::ParseAddress(const wxString& address, wxString& host, int& port, wxString& base,
+bool ibProtocolConnectionServer::ParseAddress(const ibString& address, ibString& host, int& port, ibString& base,
 	bool& secure)
 {
-	wxString rest;
-	secure = address.StartsWith(wxT("oess://"), &rest);
-	if (!secure && !address.StartsWith(wxT("oes://"), &rest))
+	ibString rest;
+	secure = address.StartsWith(ibT("oess://"), &rest);
+	if (!secure && !address.StartsWith(ibT("oes://"), &rest))
 		return false;
-	const int slash = rest.Find(wxT('/'));
+	const int slash = rest.Find(ibT('/'));
 	if (slash == wxNOT_FOUND)
 		return false;
-	wxString authority = rest.Left(slash);
+	ibString authority = rest.Left(slash);
 	base = rest.Mid(slash + 1);
-	if (base.EndsWith(wxT("/")))
+	if (base.EndsWith(ibT("/")))
 		base.RemoveLast();
 
 	port = ibPort::Clients.m_first;
-	const int colon = authority.Find(wxT(':'), true);
-	if (colon != wxNOT_FOUND && !authority.EndsWith(wxT("]"))) {
+	const int colon = authority.Find(ibT(':'), true);
+	if (colon != wxNOT_FOUND && !authority.EndsWith(ibT("]"))) {
 		long number = 0;
 		if (!authority.Mid(colon + 1).ToLong(&number) || number <= 0 || number > 65535)
 			return false;
@@ -66,31 +68,33 @@ bool ibProtocolConnectionServer::ParseAddress(const wxString& address, wxString&
 		authority = authority.Left(colon);
 	}
 	host = authority;
-	return !host.IsEmpty() && !base.IsEmpty() && base.Find(wxT('/')) == wxNOT_FOUND;
+	return !host.IsEmpty() && !base.IsEmpty() && base.Find(ibT('/')) == wxNOT_FOUND;
 }
 
-std::string ibProtocolConnectionServer::ClientPath(const wxString& base)
+std::string ibProtocolConnectionServer::ClientPath(const ibString& base)
 {
 	return "/" + EscapeSegment(base) + "/client";
 }
 
-bool ibProtocolConnectionServer::ClientTls(const wxString& trusted, std::shared_ptr<const ibTlsContext>& tls,
-	wxString& error)
+bool ibProtocolConnectionServer::ClientTls(const ibString& trusted, std::shared_ptr<const ibTlsContext>& tls,
+	ibString& error)
 {
 	std::string pem, refused;
 	if (!trusted.IsEmpty()) {
-		// wxFFile reports a file it cannot open through wxLog — a box in a window's process; the refusal below says it.
-		wxLogNull quiet;
-		wxFFile in(trusted, wxT("rb"));
-		wxString text;
-		if (!in.IsOpened() || !in.ReadAll(&text, wxConvUTF8)) {
-			error = wxString::Format(_("the trusted certificates %s could not be read"), trusted);
+		// The file's bytes as they lie — a PEM is text the TLS layer reads itself; a file that cannot be read is said below.
+		std::ifstream in(ibPathOf(trusted), std::ios::binary);
+		if (!in) {
+			error = ibString::Format(_("the trusted certificates %s could not be read"), trusted);
 			return false;
 		}
-		pem = std::string(text.utf8_str());
+		pem.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		if (in.bad()) {
+			error = ibString::Format(_("the trusted certificates %s could not be read"), trusted);
+			return false;
+		}
 	}
 	if (ibTlsClientContext(pem, std::string(), std::string(), /*verify*/ true, tls, refused) != ibHttpClientError::None) {
-		error = wxString::FromUTF8(refused);
+		error = ibString::FromUTF8(refused);
 		return false;
 	}
 	return true;
@@ -98,23 +102,23 @@ bool ibProtocolConnectionServer::ClientTls(const wxString& trusted, std::shared_
 
 ibProtocolConnectionServer::ibProtocolConnectionServer() = default;
 
-bool ibProtocolConnectionServer::Open(const wxString& address, const wxString& trusted, wxString& error)
+bool ibProtocolConnectionServer::Open(const ibString& address, const ibString& trusted, ibString& error)
 {
 	Close();
 
-	wxString host, base;
+	ibString host, base;
 	int port = 0;
 	bool secure = false;
 	if (!ParseAddress(address, host, port, base, secure)) {
-		error = wxString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base> or oess://…"), address);
+		error = ibString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base> or oess://…"), address);
 		return false;
 	}
 
 	// OVER TLS — whom the client trusts (ClientTls).
 	std::shared_ptr<const ibTlsContext> tls;
-	wxString refused;
+	ibString refused;
 	if (secure && !ClientTls(trusted, tls, refused)) {
-		error = wxString::Format(_("The connection to the server at %s:%d is not prepared: %s."), host, port, refused);
+		error = ibString::Format(_("The connection to the server at %s:%d is not prepared: %s."), host, port, refused);
 		return false;
 	}
 
@@ -177,8 +181,8 @@ bool ibProtocolConnectionServer::Open(const wxString& address, const wxString& t
 		reason = m_reason;
 	}
 	Close();
-	error = wxString::Format(_("The connection to the server at %s:%d did not open: %s."), host, port,
-		wxString::FromUTF8(reason));
+	error = ibString::Format(_("The connection to the server at %s:%d did not open: %s."), host, port,
+		ibString::FromUTF8(reason));
 	return false;
 }
 
@@ -207,21 +211,21 @@ ibProtocolConnectionServer::~ibProtocolConnectionServer()
 	Close();
 }
 
-bool ibProtocolConnectionServer::Reconnect(wxString& error)
+bool ibProtocolConnectionServer::Reconnect(ibString& error)
 {
 	// Copies: Open closes the socket first, and what it parses must not be the members it may clear.
-	const wxString address = m_address, trusted = m_trusted;
+	const ibString address = m_address, trusted = m_trusted;
 	if (address.IsEmpty()) {
-		error = wxT("no server to return to");
+		error = ibT("no server to return to");
 		return false;
 	}
 	return Open(address, trusted, error);
 }
 
-std::unique_ptr<ibProtocolConnection> ibProtocolConnectionServer::OpenChannel(wxString& error)
+std::unique_ptr<ibProtocolConnection> ibProtocolConnectionServer::OpenChannel(ibString& error)
 {
 	if (m_address.IsEmpty()) {
-		error = wxT("no server to open a second connection to");
+		error = ibT("no server to open a second connection to");
 		return nullptr;
 	}
 	auto channel = std::make_unique<ibProtocolConnectionServer>();
@@ -231,7 +235,7 @@ std::unique_ptr<ibProtocolConnection> ibProtocolConnectionServer::OpenChannel(wx
 }
 
 bool ibProtocolConnectionServer::Exchange(const ibMemoryBuffer& request, ibProtocolNode& answer,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	std::lock_guard<std::mutex> exchanging(m_exchanging);
 
@@ -240,7 +244,7 @@ bool ibProtocolConnectionServer::Exchange(const ibMemoryBuffer& request, ibProto
 		std::lock_guard<std::mutex> lock(m_mutex);
 		if (!m_socketClient || m_closed) {
 			refusal = ibProtocol::ibRefusal::NoSession;
-			error = wxT("the connection to the server is closed");
+			error = ibT("the connection to the server is closed");
 			return false;
 		}
 		m_answer.reset();
@@ -253,7 +257,7 @@ bool ibProtocolConnectionServer::Exchange(const ibMemoryBuffer& request, ibProto
 	m_answered.wait(lock, [this]() { return m_answer.has_value() || m_closed; });
 	if (!m_answer.has_value()) {
 		refusal = ibProtocol::ibRefusal::NoSession;
-		error = wxT("the server closed the connection");
+		error = ibT("the server closed the connection");
 		return false;
 	}
 	answer = std::move(*m_answer);

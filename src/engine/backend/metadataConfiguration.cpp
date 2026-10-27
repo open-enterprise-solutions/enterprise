@@ -30,7 +30,7 @@
 #include "core/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/objCtor.h"                       // ibCtorMetaValueType::GetClassName — clsid -> type name
 
-bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName)
+bool ibMetaDataConfigurationBase::LoadConfigFromFile(const ibString& strFileName)
 {
 	std::ifstream in(strFileName.ToStdString(), std::ios::in | std::ios::binary);
 
@@ -55,7 +55,7 @@ bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName
 	return LoadConfigFromBuffer(buffer);
 }
 
-bool ibMetaDataConfigurationBase::SaveConfigToFile(const wxString& strFileName)
+bool ibMetaDataConfigurationBase::SaveConfigToFile(const ibString& strFileName)
 {
 	//common data
 	ibMemoryBuffer buffer;
@@ -135,7 +135,7 @@ m_commonObject(nullptr)
 				wxASSERT_MSG(false, "commonLanguage->OnLoadMetaObject() == false");
 			}
 
-			commonLanguage->SetName(wxT("English"));
+			commonLanguage->SetName(ibT("English"));
 		}
 
 		commonLanguage->InvalidateNames();
@@ -169,12 +169,12 @@ ibValueMetaObjectConfiguration* ibMetaDataConfigurationFile::GetCommonMetaObject
 	return m_commonObject;
 }
 
-wxString ibMetaDataConfigurationFile::GetLangCode() const
+ibString ibMetaDataConfigurationFile::GetLangCode() const
 {
 	if (m_commonObject != nullptr)
 		return m_commonObject->GetLangCode();
 
-	return wxT("");
+	return ibT("");
 }
 
 bool ibMetaDataConfigurationFile::IsFullAccess() const
@@ -237,7 +237,7 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 			return false;
 	}
 	catch (const ibCoreException& err) {
-		ibJournalError(wxT("metadata.config"),err.GetErrorDescription());
+		ibJournalError(ibT("metadata.config"),err.GetErrorDescription());
 		return false;
 	}
 
@@ -379,7 +379,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 		std::shared_ptr<ibReaderMemory> headerReader(readerData.open_chunk(eHeaderBlock));
 		if (!headerReader || headerReader->elapsed() < (int)sizeof(std::uint64_t) || headerReader->r_u64() != sign_metadata)
 			unreadable();
-		wxString metaGuid;
+		ibString metaGuid;
 		headerReader->r_stringZ(metaGuid);
 	}
 
@@ -418,7 +418,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	catch (const ibCoreException& err) {
 		// ⭐ THE ENGINE'S WORDS REACH THE USER — the twin of the report / data-processor catches.
 		// A configuration that refuses to load is the costliest of the three to face in silence.
-		ibJournalError(wxT("metadata.config"),wxT("%s"), err.GetErrorDescription());
+		ibJournalError(ibT("metadata.config"),ibT("%s"), err.GetErrorDescription());
 		return false; // fresh (ibValuePtr) discards the root automatically
 	}
 
@@ -756,7 +756,7 @@ bool ibMetaDataConfigurationStorage::DeleteCommonTree(const ibClassID& clsid)
 //*      the three configuration verbs — see the note in metadataConfiguration.h                   *
 //**************************************************************************************************
 
-bool ibMetaDataConfigurationBase::SaveConfiguration(wxString& refusal)
+bool ibMetaDataConfigurationBase::SaveConfiguration(ibString& refusal)
 {
 	if (!IsEditable()) {
 		refusal = _("This configuration is open for reading only.");
@@ -793,7 +793,7 @@ bool ibMetaDataConfigurationBase::SaveConfiguration(wxString& refusal)
 	return true;
 }
 
-bool ibMetaDataConfigurationBase::ApplyConfiguration(wxString& refusal,
+bool ibMetaDataConfigurationBase::ApplyConfiguration(ibString& refusal,
 	const std::function<bool(const ibRestructureInfo&)>& decide)
 {
 	if (!IsEditable()) {
@@ -884,14 +884,14 @@ bool ibMetaDataConfigurationBase::ApplyConfiguration(wxString& refusal,
 		return false;
 	}
 	catch (const std::exception& e) {
-		refusal = wxString::FromUTF8(e.what());
+		refusal = ibString::FromUTF8(e.what());
 		return false;
 	}
 
 	return true;
 }
 
-bool ibMetaDataConfigurationBase::RollbackConfiguration(wxString& refusal)
+bool ibMetaDataConfigurationBase::RollbackConfiguration(ibString& refusal)
 {
 	if (!IsEditable()) {
 		refusal = _("This configuration is open for reading only.");

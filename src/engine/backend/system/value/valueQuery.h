@@ -48,9 +48,9 @@ public:
 	ibValueEnumQuerySelectKind() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibSelectKind::ibSelectKind_Direct,            wxT("Direct"),            _("Direct"));
-		AddEnumeration(ibSelectKind::ibSelectKind_ByGroups,          wxT("ByGroups"),          _("ByGroups"));
-		AddEnumeration(ibSelectKind::ibSelectKind_ByGroupsHierarchy, wxT("ByGroupsHierarchy"), _("ByGroupsHierarchy"));
+		AddEnumeration(ibSelectKind::ibSelectKind_Direct,            ibT("Direct"),            _("Direct"));
+		AddEnumeration(ibSelectKind::ibSelectKind_ByGroups,          ibT("ByGroups"),          _("ByGroups"));
+		AddEnumeration(ibSelectKind::ibSelectKind_ByGroupsHierarchy, ibT("ByGroupsHierarchy"), _("ByGroupsHierarchy"));
 	}
 };
 
@@ -111,11 +111,11 @@ public:
 
 private:
 
-	wxString                    m_text;
+	ibString                    m_text;
 	// Parsed once in Init (AOT-cacheable). The text is ALWAYS a package — an ordinary query is a
 	// package of one — so there is one execution path and no branch about which kind of text this is.
 	ibQueryPackage              m_package;
-	std::map<wxString, ibValue> m_params;
+	std::map<ibString, ibValue> m_params;
 
 	// The manager this query's temp tables belong to, or an empty value.
 	//
@@ -133,7 +133,7 @@ private:
 	// Returns false when nothing could run (empty text, or the designer's degraded path).
 	// Run the package. `names` — when asked for, the ONTO name of each statement, in step with the
 	// results (empty where a statement gave none).
-	bool RunPackage(std::vector<ibValue>& out, std::vector<wxString>* names = nullptr);
+	bool RunPackage(std::vector<ibValue>& out, std::vector<ibString>* names = nullptr);
 
 public:
 	ibValueQueryExec() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
@@ -180,7 +180,7 @@ class BACKEND_API ibValueQueryResult : public ibValueDynamicMembers
 
 	// The selection Select() hands out, made the one way - so Unload() reads exactly the rows Select() would walk.
 	// Consumes the result's cursor.
-	std::unique_ptr<ibValueQuerySelect> MakeSelection(ibSelectKind kind, const wxString& branch);
+	std::unique_ptr<ibValueQuerySelect> MakeSelection(ibSelectKind kind, const ibString& branch);
 
 public:
 	ibValueQueryResult();                                                                            // empty

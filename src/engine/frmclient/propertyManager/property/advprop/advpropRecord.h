@@ -11,7 +11,7 @@ class FRMCLIENT_API ibPropertyObject;
 // ibPGRecordProperty
 // -----------------------------------------------------------------------
 
-// THE DESKTOP'S RECORD EDITOR (frontend/propertyManager/property/advprop/advpropRecord.h) — the registers a document
+// THE RECORD EDITOR —the registers a document
 // posts to, the sequences it is registered in. What may fill it is the row's choices, as the server's property listed
 // them (GetValueList: the registers with a recorder).
 class ibPGRecordProperty : public wxPGProperty {

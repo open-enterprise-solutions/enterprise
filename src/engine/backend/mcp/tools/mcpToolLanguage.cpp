@@ -34,24 +34,24 @@ struct KindRow {
 };
 
 const KindRow s_kinds[] = {
-	{ wxT("primitive"), ibCtorObjectType_object_primitive },
-	{ wxT("value"),     ibCtorObjectType_object_value     },
-	{ wxT("control"),   ibCtorObjectType_object_control   },
-	{ wxT("system"),    ibCtorObjectType_object_system    },
-	{ wxT("enum"),      ibCtorObjectType_object_enum      },
-	{ wxT("context"),   ibCtorObjectType_object_context   },
-	{ wxT("metadata"),  ibCtorObjectType_object_metadata  },
-	{ wxT("metaValue"), ibCtorObjectType_object_meta_value },
+	{ ibT("primitive"), ibCtorObjectType_object_primitive },
+	{ ibT("value"),     ibCtorObjectType_object_value     },
+	{ ibT("control"),   ibCtorObjectType_object_control   },
+	{ ibT("system"),    ibCtorObjectType_object_system    },
+	{ ibT("enum"),      ibCtorObjectType_object_enum      },
+	{ ibT("context"),   ibCtorObjectType_object_context   },
+	{ ibT("metadata"),  ibCtorObjectType_object_metadata  },
+	{ ibT("metaValue"), ibCtorObjectType_object_meta_value },
 };
 
 // The name filter, in one place so the engine's types and the configuration's own are narrowed by
 // the same rule. An empty query keeps everything — "no filter" is not "match nothing".
-bool NameWanted(const wxString& name, const wxString& query)
+bool NameWanted(const ibString& name, const ibString& query)
 {
 	return query.IsEmpty() || ibMcpWordsFound(name, query) > 0;
 }
 
-void AppendKind(const KindRow& row, const wxString& query, std::vector<ibDataValue>& types)
+void AppendKind(const KindRow& row, const ibString& query, std::vector<ibDataValue>& types)
 {
 	for (const ibCtorAbstractType* ctor : ibValue::GetListCtorsByType(row.m_kind)) {
 
@@ -62,9 +62,9 @@ void AppendKind(const KindRow& row, const wxString& query, std::vector<ibDataVal
 			continue;
 
 		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-		entry->SetValue(wxT("name"), ctor->GetClassName());
-		entry->SetValue(wxT("kind"), wxString(row.m_word));
-		entry->AddField(wxT("id"), ibDataValue::UInt((std::uint64_t)ctor->GetClassType()));
+		entry->SetValue(ibT("name"), ctor->GetClassName());
+		entry->SetValue(ibT("kind"), ibString(row.m_word));
+		entry->AddField(ibT("id"), ibDataValue::UInt((std::uint64_t)ctor->GetClassType()));
 
 		types.push_back(ibDataValue::Child(entry));
 	}
@@ -76,7 +76,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgName()
 {
-	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("name"), ibArg::Kind::Text,
 		ibMcpText("The type's name as type_list gives it - 'Array', 'Structure', 'ValueTable'... "
 			"Give this OR `typeId`."));
 	return s_a;
@@ -94,7 +94,7 @@ const ibArg& ArgName()
 // "what is this, whose is it, and what can it do" in a single call.
 const ibArg& ArgTypeId()
 {
-	static const ibArg s_a(wxT("typeId"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("typeId"), ibArg::Kind::Whole,
 		ibMcpText("The type's CLASS ID instead of its name - the `id` type_list gives beside each. "
 			"Steadier than the name, because a reference type's name contains the object's own name "
 			"and a rename moves it. Answers the same as `name` does, plus what the id resolves to: "
@@ -111,14 +111,14 @@ const ibArg& ArgTypeId()
 class ibMcpToolTypeList : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("type_list"); }
+	ibString GetName() const override { return ibT("type_list"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("looking through the available types");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Every type this platform knows, with what each one IS: a primitive, a value "
 			"class you can construct, a metadata kind you can create, a control, an "
@@ -132,7 +132,7 @@ public:
 	// checked against nothing. `kind` was read in Call and declared nowhere.
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const ibMcpArgument s_kind(wxT("kind"), ibMcpArgument::Kind::Text,
+		static const ibMcpArgument s_kind(ibT("kind"), ibMcpArgument::Kind::Text,
 			ibMcpText("Narrow it to one kind of type: primitive, value, control, system, enum, "
 				"context, metadata, metaValue, configuration. Omit for all of them. This is not a "
 				"search - it filters by kind, and a word that is not one of these is refused."));
@@ -143,7 +143,7 @@ public:
 		// exists returned some three hundred names). The matcher is the SAME one mcp_search uses,
 		// so `map`, `Ref\..*` and `table|array` mean here exactly what they mean there — a second
 		// spelling of "search" is a second thing for a caller to hold.
-		static const ibMcpArgument s_name(wxT("name"), ibMcpArgument::Kind::Text,
+		static const ibMcpArgument s_name(ibT("name"), ibMcpArgument::Kind::Text,
 			ibMcpText("Narrow it to types whose NAME matches - words, or a regular expression when "
 				"the query carries | \\ [ ] ^ $ or .* ('map', 'table|array', 'CatalogRef\\..*'). "
 				"Combines with `kind`. Omit for all of them; a query that matches nothing answers "
@@ -154,10 +154,10 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const wxString wanted = params.GetValue<wxString>(wxT("kind"));
-		const wxString query = params.GetValue<wxString>(wxT("name"));
+		const ibString wanted = params.GetValue<ibString>(ibT("kind"));
+		const ibString query = params.GetValue<ibString>(ibT("name"));
 
 		std::vector<ibDataValue> types;
 		bool matched = false;
@@ -173,8 +173,8 @@ public:
 		// A KIND NOBODY HAS IS A REFUSAL, not an empty answer: "there are no
 		// controls" and "control is not a word here" are different, and only one
 		// of them means try again differently.
-		if (!matched && !wanted.IsSameAs(wxT("configuration"), false)) {
-			refusal = wxString::Format(
+		if (!matched && !wanted.IsSameAs(ibT("configuration"), false)) {
+			refusal = ibString::Format(
 				ibMcpText("'%s' is not a kind of type. Try: primitive, value, control, system, enum, "
 				  "context, metadata, metaValue, configuration."), wanted);
 			return false;
@@ -189,7 +189,7 @@ public:
 		// 43 metatypes and not one type of the configuration in front of it, while
 		// `CatalogRef.Goods` resolved perfectly well by name: the vocabulary was
 		// there and the listing did not show it.
-		if (wanted.IsEmpty() || wanted.IsSameAs(wxT("configuration"), false)) {
+		if (wanted.IsEmpty() || wanted.IsSameAs(ibT("configuration"), false)) {
 
 			if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
 				for (const ibCtorMetaValueType* ctor : activeMetaData->GetListCtorsByType()) {
@@ -201,23 +201,23 @@ public:
 						continue;
 
 					std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-					entry->SetValue(wxT("name"), ctor->GetClassName());
-					entry->SetValue(wxT("kind"), wxString(wxT("configuration")));
-					entry->AddField(wxT("id"), ibDataValue::UInt((std::uint64_t)ctor->GetClassType()));
+					entry->SetValue(ibT("name"), ctor->GetClassName());
+					entry->SetValue(ibT("kind"), ibString(ibT("configuration")));
+					entry->AddField(ibT("id"), ibDataValue::UInt((std::uint64_t)ctor->GetClassType()));
 
 					types.push_back(ibDataValue::Child(entry));
 				}
 			}
 		}
 
-		result.AddField(wxT("found"), ibDataValue::Int((std::int64_t)types.size()));
-		result.AddField(wxT("types"), ibDataValue::Array(types));
+		result.AddField(ibT("found"), ibDataValue::Int((std::int64_t)types.size()));
+		result.AddField(ibT("types"), ibDataValue::Array(types));
 
 		// ⭐ "THIS PLATFORM HAS NO SUCH TYPE" IS AN ANSWER, and it is usually the one being asked
 		// for. Said in words rather than left as an empty array, because an empty array is also
 		// what a mistyped filter looks like — and the two want opposite next moves.
 		if (types.empty() && !query.IsEmpty()) {
-			result.SetValue(wxT("note"), wxString::Format(
+			result.SetValue(ibT("note"), ibString::Format(
 				ibMcpText("No type's name matches '%s'. If that was the question, the answer is that this "
 				  "platform has none - do not reach for it in script. If it was a guess at the "
 				  "spelling, ask again without `name` and read the vocabulary."), query));
@@ -248,15 +248,15 @@ MCP_TOOL_REGISTER(ibMcpToolTypeList);
 class ibMcpToolTypeMembers : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("type_members"); }
+	ibString GetName() const override { return ibT("type_members"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("looking at what %s can do"),
+		return ibString::Format(ibMcpText("looking at what %s can do"),
 			ArgName().Text(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("What a type offers: its methods with their call form and whether each returns a "
 			"value, and its properties. This is what the editor shows after a dot, asked by "
@@ -269,9 +269,9 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		wxString name = ArgName().Text(params);
+		ibString name = ArgName().Text(params);
 
 		// BY ID: turned into the name this tool already works in, so there is ONE road below and
 		// the two addresses cannot answer differently.
@@ -289,13 +289,13 @@ public:
 					name = byId->GetClassName();
 
 			if (name.IsEmpty()) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("No type carries the class id %s. type_list gives the id beside every name."),
 					asked->AsNumber().ToString());
 				return false;
 			}
 
-			result.AddField(wxT("typeId"), ibDataValue::UInt((std::uint64_t)clsid));
+			result.AddField(ibT("typeId"), ibDataValue::UInt((std::uint64_t)clsid));
 		}
 
 		if (name.IsEmpty()) {
@@ -304,7 +304,7 @@ public:
 			return false;
 		}
 
-		result.SetValue(wxT("name"), name);
+		result.SetValue(ibT("name"), name);
 
 		// ⭐⭐ ONE DOOR FOR BOTH REGISTRIES. The configuration's own types (`CatalogManager.Goods`,
 		// `DocumentObject.GoodsReceipt`) live in the metadata's registry and the platform's in the value
@@ -329,7 +329,7 @@ public:
 			? metaData->GetAvailableCtor(name) : ibValue::GetAvailableCtor(name);
 
 		if (ctor == nullptr) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' is not a type this platform knows. Use type_list to see what is."), name);
 			return false;
 		}
@@ -358,11 +358,11 @@ public:
 			// ⭐ WHY, NOT JUST THAT. This used to say "cannot be built without arguments", which reads as
 			// a limitation of this verb and sends a caller looking for the arguments. There are none.
 			refusal = ownCtor != nullptr
-				? wxString::Format(
+				? ibString::Format(
 					ibMcpText("'%s' is a type of this configuration, but one cannot be built to ask - it "
 					  "exists only against the object that declares it. Read that object with "
 					  "metadata_get, its fields with query_fields."), name)
-				: wxString::Format(
+				: ibString::Format(
 					ibMcpText("'%s' has no empty form, so there is nothing to read members off. Either it "
 					  "is a type CONSTRAINT - what a value is ALLOWED to be, like `Any` - and there was "
 					  "never a value behind it; or it exists only against the thing that owns it (a "
@@ -405,14 +405,14 @@ public:
 			};
 
 			if (const char* const role = roleWord(ownCtor->GetMetaTypeCtor()); *role != '\0')
-				result.SetValue(wxT("role"), wxString::FromAscii(role));
+				result.SetValue(ibT("role"), ibString::FromUTF8(role));
 
 			// WHOSE IT IS — said by the one function that says an object, so the id, the name and
 			// the kind read the same here as everywhere else.
 			if (const ibValueMetaObject* const owner = ownCtor->GetMetaObject()) {
 				std::shared_ptr<ibDataNode> declaredBy = std::make_shared<ibDataNode>();
 				ibMcpSayObject(owner, *declaredBy);
-				result.AddField(wxT("declaredBy"), ibDataValue::Child(declaredBy));
+				result.AddField(ibT("declaredBy"), ibDataValue::Child(declaredBy));
 			}
 		}
 
@@ -425,20 +425,20 @@ public:
 			//  it — and inventing a way round that would make this answer differ
 			//  from the one a person sees, which is the whole thing to avoid.)
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("name"), value.GetMethodName(i));
+			entry->SetValue(ibT("name"), value.GetMethodName(i));
 
 			// THE CALL FORM the platform itself would show — the one place a
 			// caller learns what the arguments MEAN, since the table keeps their
 			// count but not their names.
-			const wxString helper = value.GetMethodHelper(i);
+			const ibString helper = value.GetMethodHelper(i);
 			if (!helper.IsEmpty())
-				entry->SetValue(wxT("signature"), helper);
+				entry->SetValue(ibT("signature"), helper);
 
-			entry->AddField(wxT("parameters"), ibDataValue::Int((std::int64_t)value.GetNParams(i)));
+			entry->AddField(ibT("parameters"), ibDataValue::Int((std::int64_t)value.GetNParams(i)));
 			// Function or procedure — not cosmetic: calling a procedure where a
 			// value is expected is a compile error, and the two are told apart
 			// only here.
-			entry->AddField(wxT("returnsValue"), ibDataValue::Bool(value.HasRetVal(i)));
+			entry->AddField(ibT("returnsValue"), ibDataValue::Bool(value.HasRetVal(i)));
 
 			methods.push_back(ibDataValue::Child(entry));
 		}
@@ -450,9 +450,9 @@ public:
 			properties.push_back(ibDataValue::String(value.GetPropName(i)));
 		}
 
-		result.SetValue(wxT("name"), name);
-		result.AddField(wxT("methods"), ibDataValue::Array(methods));
-		result.AddField(wxT("properties"), ibDataValue::Array(properties));
+		result.SetValue(ibT("name"), name);
+		result.AddField(ibT("methods"), ibDataValue::Array(methods));
+		result.AddField(ibT("properties"), ibDataValue::Array(properties));
 		return true;
 	}
 };
@@ -475,9 +475,9 @@ MCP_TOOL_REGISTER(ibMcpToolTypeMembers);
 class ibMcpToolLinqMethods : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("linq_methods"); }
+	ibString GetName() const override { return ibT("linq_methods"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("looking at the collection operations");
 	}
@@ -485,18 +485,18 @@ public:
 	// The words somebody looks for this with — see ibMcpToolScriptQuery::GetSearchText, where the
 	// measurement is written down. This is the door a query is WRITTEN at, so it answers to the
 	// words for writing one, in both languages the product is used in.
-	wxString GetSearchText() const override
+	ibString GetSearchText() const override
 	{
 		// ⚠ MATCHED WHOLE, so the FORMS a caller types are listed rather than one stem — `folding`
 		// does not find `fold`. And the words are the ones a question arrives in: somebody asks
 		// about a value table or an array, not about "a collection".
-		return wxT("linq query queries lambda callback clause clauses keywords "
+		return ibT("linq query queries lambda callback clause clauses keywords "
 			"write a query how to write fold folding roll up group grouping sort sorting "
 			"filter filtering join joining array value table structure tabular section in memory "
 			"row level access restrict RLS");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("HOW A QUERY IS WRITTEN HERE, in all three of its forms. `methods` - the "
 			"pipeline operations a chain over a source may use (Where, Select, GroupBy, Join and "
@@ -575,20 +575,20 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& /*params*/, ibDataNode& result, wxString& /*refusal*/) const override
+	bool Call(const ibDataNode& /*params*/, ibDataNode& result, ibString& /*refusal*/) const override
 	{
 		std::vector<ibDataValue> methods;
 
 		for (const ibValue::ibLinqMethodInfo& info : ibValue::GetLinqMethodTable()) {
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("name"), wxString(info.name));
-			entry->SetValue(wxT("does"), wxString(info.helper));
+			entry->SetValue(ibT("name"), ibString(info.name));
+			entry->SetValue(ibT("does"), ibString(info.helper));
 
 			methods.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("methods"), ibDataValue::Array(methods));
+		result.AddField(ibT("methods"), ibDataValue::Array(methods));
 
 		// ⭐⭐ …AND THE WRITTEN FORM, WHICH THE CHAIN VOCABULARY DOES NOT DESCRIBE. A verb list says
 		// what operations exist; it does not say that a query OPENS with `from`, that a `join` owes
@@ -601,36 +601,36 @@ public:
 		// no longer parses cannot be handed out.
 		const auto word = [](int key) { return ibTranslateCode::GetKeyWord(key); };
 
-		const auto clause = [](const wxString& form, const wxString& does) {
+		const auto clause = [](const ibString& form, const ibString& does) {
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("form"), form);
-			entry->SetValue(wxT("does"), does);
+			entry->SetValue(ibT("form"), form);
+			entry->SetValue(ibT("does"), does);
 			return ibDataValue::Child(entry);
 		};
 
 		std::vector<ibDataValue> clauses;
 		clauses.push_back(clause(
-			word(KEY_FROM) + wxT(" <name> ") + word(KEY_IN) + wxT(" <source>"),
+			word(KEY_FROM) + ibT(" <name> ") + word(KEY_IN) + ibT(" <source>"),
 			ibMcpText("Opens the query and binds a name to one row of the source. Required, and it "
 				"comes first. Written again inside the query it nests: every row of the second "
 				"source is visited for every row of the first.")));
 		clauses.push_back(clause(
-			word(KEY_VAR) + wxT(" <name> = <expr>"),
+			word(KEY_VAR) + ibT(" <name> = <expr>"),
 			ibMcpText("Names a value worked out per row, so the rest of the query can read it "
 				"without repeating the expression.")));
 		clauses.push_back(clause(
-			word(KEY_JOIN) + wxT(" <name> ") + word(KEY_IN) + wxT(" <source> ")
-				+ word(KEY_ON) + wxT(" <key> ") + word(KEY_EQUALS) + wxT(" <key>"),
+			word(KEY_JOIN) + ibT(" <name> ") + word(KEY_IN) + ibT(" <source> ")
+				+ word(KEY_ON) + ibT(" <key> ") + word(KEY_EQUALS) + ibT(" <key>"),
 			ibMcpText("Matches rows of a second source by a key. The left key reads the rows bound "
 				"above it, the right key reads the row this clause is binding. A row with no match "
 				"contributes nothing; a key matching several rows contributes one result row each.")));
 		clauses.push_back(clause(
-			word(KEY_WHERE) + wxT(" <condition>"),
+			word(KEY_WHERE) + ibT(" <condition>"),
 			ibMcpText("Keeps the rows the condition holds for. Written before any projection it is "
 				"offered to the source itself, which then filters where the data is.")));
 		clauses.push_back(clause(
-			word(KEY_GROUP) + wxT(" <expr> ") + word(KEY_BY) + wxT(" <key> [")
-				+ word(KEY_INTO) + wxT(" <name>]"),
+			word(KEY_GROUP) + ibT(" <expr> ") + word(KEY_BY) + ibT(" <key> [")
+				+ word(KEY_INTO) + ibT(" <name>]"),
 			ibMcpText("Collects rows under a key. Without `into` the grouping ENDS the query and it "
 				"answers with the groups - no clause may follow, `select` included. With it, the "
 				"name is bound to one group at a time and the query goes on: the clauses after it "
@@ -641,19 +641,19 @@ public:
 				"A total over a group is its Values' aggregate: `<name>.Values.Sum()` over the one "
 				"field the group keeps (`group o.Amount by ...`), `<name>.Values.Count()`.")));
 		clauses.push_back(clause(
-			word(KEY_ORDERBY) + wxT(" <expr> [") + word(KEY_ASCENDING) + wxT("|") + word(KEY_DESCENDING)
-				+ wxT("][, <expr> [") + word(KEY_ASCENDING) + wxT("|") + word(KEY_DESCENDING) + wxT("]...]"),
+			word(KEY_ORDERBY) + ibT(" <expr> [") + word(KEY_ASCENDING) + ibT("|") + word(KEY_DESCENDING)
+				+ ibT("][, <expr> [") + word(KEY_ASCENDING) + ibT("|") + word(KEY_DESCENDING) + ibT("]...]"),
 			ibMcpText("Orders the answer by values worked out per row. SEVERAL KEYS, comma-separated, "
 				"in the order they decide: `orderby Warehouse, Item` sorts by warehouse and, within "
 				"each, by item. EACH KEY HAS ITS OWN DIRECTION, written after it; a key that names "
 				"none runs ascending: `orderby Warehouse, Date descending, Item` - by warehouse, "
 				"within each the latest date first, and within a date by item.")));
 		clauses.push_back(clause(
-			word(KEY_SKIP) + wxT(" <n> / ") + word(KEY_TAKE) + wxT(" <n>"),
+			word(KEY_SKIP) + ibT(" <n> / ") + word(KEY_TAKE) + ibT(" <n>"),
 			ibMcpText("A window over what survived.")));
 		clauses.push_back(clause(
-			word(KEY_SELECT) + wxT(" <expr>   |   ") + word(KEY_SELECT)
-				+ wxT(" { <name> = <expr>, ... }"),
+			word(KEY_SELECT) + ibT(" <expr>   |   ") + word(KEY_SELECT)
+				+ ibT(" { <name> = <expr>, ... }"),
 			ibMcpText("What each surviving row becomes, and it NAMES THE COLUMNS of the answer. The "
 				"braced form names them outright; a single expression is named after the field it "
 				"reads, or Field1, Field2 when it reads none. Omitted, the row itself is the answer.")));
@@ -662,7 +662,7 @@ public:
 			ibMcpText("Drops repeats: it compares rows by their content, so two projected rows "
 				"with the same fields are one.")));
 
-		result.AddField(wxT("clauses"), ibDataValue::Array(clauses));
+		result.AddField(ibT("clauses"), ibDataValue::Array(clauses));
 
 		// ⭐⭐ THE ORDER IS SHOWN ONCE, AS A QUERY — not asserted clause by clause. Each entry above
 		// says what its own word MEANS, which is a fact about that word; where it may stand is a
@@ -674,18 +674,18 @@ public:
 		//
 		// One line that COMPILES is the cheapest thing that cannot drift silently: it is checkable
 		// by script_check in a second, where prose about positions is not.
-		result.SetValue(wxT("order"),
-			word(KEY_FROM) + wxT(" <row> ") + word(KEY_IN) + wxT(" <source>")
-			+ wxT("  ") + word(KEY_JOIN) + wxT(" <row> ") + word(KEY_IN) + wxT(" <source> ")
-				+ word(KEY_ON) + wxT(" <key> ") + word(KEY_EQUALS) + wxT(" <key>")
-			+ wxT("  ") + word(KEY_WHERE) + wxT(" <cond>")
-			+ wxT("  ") + word(KEY_GROUP) + wxT(" <row> ") + word(KEY_BY) + wxT(" <key> ")
-				+ word(KEY_INTO) + wxT(" <group>")
-			+ wxT("  ") + word(KEY_ORDERBY) + wxT(" <key> [") + word(KEY_DESCENDING) + wxT("][, <key> [")
-				+ word(KEY_DESCENDING) + wxT("]...]")
-			+ wxT("  ") + word(KEY_SKIP) + wxT(" <n>  ") + word(KEY_TAKE) + wxT(" <n>")
-			+ wxT("  ") + word(KEY_SELECT) + wxT(" { <name> = <expr>, ... }")
-			+ wxT("  ") + word(KEY_DISTINCT));
+		result.SetValue(ibT("order"),
+			word(KEY_FROM) + ibT(" <row> ") + word(KEY_IN) + ibT(" <source>")
+			+ ibT("  ") + word(KEY_JOIN) + ibT(" <row> ") + word(KEY_IN) + ibT(" <source> ")
+				+ word(KEY_ON) + ibT(" <key> ") + word(KEY_EQUALS) + ibT(" <key>")
+			+ ibT("  ") + word(KEY_WHERE) + ibT(" <cond>")
+			+ ibT("  ") + word(KEY_GROUP) + ibT(" <row> ") + word(KEY_BY) + ibT(" <key> ")
+				+ word(KEY_INTO) + ibT(" <group>")
+			+ ibT("  ") + word(KEY_ORDERBY) + ibT(" <key> [") + word(KEY_DESCENDING) + ibT("][, <key> [")
+				+ word(KEY_DESCENDING) + ibT("]...]")
+			+ ibT("  ") + word(KEY_SKIP) + ibT(" <n>  ") + word(KEY_TAKE) + ibT(" <n>")
+			+ ibT("  ") + word(KEY_SELECT) + ibT(" { <name> = <expr>, ... }")
+			+ ibT("  ") + word(KEY_DISTINCT));
 
 		// ⭐ THE ACCESS-POLICY FORM — a query whose whole job is to narrow another one. It is stated
 		// separately because it is not something a query CONTAINS: it takes a source that is already
@@ -693,19 +693,19 @@ public:
 		// is written where a policy is written and read wherever that source is read.
 		std::vector<ibDataValue> restrictForm;
 		restrictForm.push_back(clause(
-			word(KEY_RESTRICT) + wxT(" <name> ") + word(KEY_IN) + wxT(" <source>"),
+			word(KEY_RESTRICT) + ibT(" <name> ") + word(KEY_IN) + ibT(" <source>"),
 			ibMcpText("Opens it and binds a name to one row of the query being narrowed.")));
 		restrictForm.push_back(clause(
-			word(KEY_JOIN) + wxT(" <name> ") + word(KEY_IN) + wxT(" <table> ")
-				+ word(KEY_ON) + wxT(" <condition>"),
+			word(KEY_JOIN) + ibT(" <name> ") + word(KEY_IN) + ibT(" <table> ")
+				+ word(KEY_ON) + ibT(" <condition>"),
 			ibMcpText("Brings a second table in on a condition over the two names - a rights table, "
 				"typically. May be written more than once.")));
 		restrictForm.push_back(clause(
-			word(KEY_WHERE) + wxT(" <condition>"),
+			word(KEY_WHERE) + ibT(" <condition>"),
 			ibMcpText("The condition the remaining rows must hold. Folded into the source query, "
 				"so it travels to the database with it rather than filtering afterwards.")));
 
-		result.AddField(wxT("restrict"), ibDataValue::Array(restrictForm));
+		result.AddField(ibT("restrict"), ibDataValue::Array(restrictForm));
 		return true;
 	}
 };

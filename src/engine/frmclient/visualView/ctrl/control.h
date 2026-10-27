@@ -3,7 +3,7 @@
 
 #include "frame.h"
 
-// THE CONTROL — the desktop's ibValueControl (frontend/visualView/ctrl/control.h). Its name is the frame's
+// THE CONTROL — the old desktop's ibValueControl.Its name is the frame's
 // (ibValueFrame::GetControlName); its functional options are the server's: what it offers, the frame draws.
 class ibValueControl : public ibValueFrame {
 public:

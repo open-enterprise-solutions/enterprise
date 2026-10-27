@@ -20,9 +20,9 @@
 
 namespace {
 
-wxString CommentLines(size_t count, const wxString& line)
+ibString CommentLines(size_t count, const ibString& line)
 {
-	wxString out;
+	ibString out;
 	out.reserve(count * (line.length() + 1));
 	for (size_t i = 0; i < count; ++i) {
 		out += line;
@@ -36,7 +36,7 @@ wxString CommentLines(size_t count, const wxString& line)
 // Two million comment lines, then a statement: it lexes, and the statement is still there.
 TEST(LexerComments, ALongRunOfCommentLines_DoesNotOverflowTheStack)
 {
-	const wxString source = CommentLines(2000000, wxT("// commented out")) + wxT("a = 1;");
+	const ibString source = CommentLines(2000000, wxT("// commented out")) + wxT("a = 1;");
 
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(source);
@@ -47,7 +47,7 @@ TEST(LexerComments, ALongRunOfCommentLines_DoesNotOverflowTheStack)
 // The same with Windows line ends and indented comments - the paths that reach the recursion differently.
 TEST(LexerComments, CommentLinesWithCarriageReturnsAndIndent_AlsoSurvive)
 {
-	const wxString source = CommentLines(1000000, wxT("\t  // a line\r")) + wxT("a = 1;");
+	const ibString source = CommentLines(1000000, wxT("\t  // a line\r")) + wxT("a = 1;");
 
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(source);
@@ -85,7 +85,7 @@ TEST(LexerComments, CommentsBetweenStatements_LeaveTheStatementsAlone)
 
 namespace {
 
-const ibLexem* FindIdentifier(const ibCompileCode& cc, const wxString& name)
+const ibLexem* FindIdentifier(const ibCompileCode& cc, const ibString& name)
 {
 	for (size_t i = 0; i < cc.m_translateCode.GetLexCount(); ++i) {
 		const ibLexem& lexem = cc.m_translateCode.GetLexAt(i);
@@ -111,7 +111,7 @@ TEST(LexerComments, TheLineAfterSeveralComments_IsCountedRight)
 
 TEST(LexerComments, TheOffsetsAfterAComment_PointAtTheStatement_InCharactersAndInUtf8)
 {
-	const wxString source = wxString::FromUTF8("// \xD1\x82\xD0\xB5\xD0\xBA\xD1\x81\xD1\x82\n// \xD0\xB5\xD1\x89\xD1\x91\nabc = 1;");   // two Cyrillic comment lines
+	const ibString source = ibString::FromUTF8("// \xD1\x82\xD0\xB5\xD0\xBA\xD1\x81\xD1\x82\n// \xD0\xB5\xD1\x89\xD1\x91\nabc = 1;");   // two Cyrillic comment lines
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(source);
 	ASSERT_TRUE(cc.Translate());
@@ -120,6 +120,6 @@ TEST(LexerComments, TheOffsetsAfterAComment_PointAtTheStatement_InCharactersAndI
 
 	const size_t character = source.Find(wxT("abc"));
 	EXPECT_EQ(abc->m_numString, character) << "character offset";
-	const wxString before = source.Left(character);
+	const ibString before = source.Left(character);
 	EXPECT_EQ(abc->m_numUtf8String, static_cast<unsigned int>(before.ToUTF8().length())) << "UTF-8 byte offset";
 }

@@ -34,13 +34,13 @@ public:
 	bool SaveSettings(ibSession* session) const;
 
 	// Started in the name of this session; `refusal` — why it did not start.
-	bool Start(ibSession* session, wxString& refusal);
+	bool Start(ibSession* session, ibString& refusal);
 	void Stop();
 
 	bool IsRunning() const;
 
 	// What it answers on — empty while it is not running.
-	wxString GetEndpoint() const;
+	ibString GetEndpoint() const;
 
 private:
 

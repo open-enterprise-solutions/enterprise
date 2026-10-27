@@ -39,7 +39,7 @@ const ibMetaData* ibValueCheckbox::GetMetaData() const
 
 void ibValueCheckbox::FillControlMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(wxT("Value"), eControlValue, eControl);
+	helper.AppendProp(ibT("Value"), eControlValue, eControl);
 }
 
 bool ibValueCheckbox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -67,7 +67,7 @@ bool ibValueCheckbox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
 }
 
-wxString ibValueCheckbox::GetControlTitle() const
+ibString ibValueCheckbox::GetControlTitle() const
 {
 	if (!m_propertyTitle->IsEmptyProperty()) {
 		return m_propertyTitle->GetValueAsTranslateString();
@@ -77,7 +77,7 @@ wxString ibValueCheckbox::GetControlTitle() const
 		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
 			return column->GetSynonym();
 	}
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 bool ibValueCheckbox::IsReadOnly() const

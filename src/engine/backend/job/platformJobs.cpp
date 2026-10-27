@@ -73,13 +73,13 @@ bool FoldTotals(ibSession* session)
 	// person responsible reads; the Designer's recompute rebuilds the table.
 	const ibDerivedState::ibTotalsMaintenance done = ibDerivedState::MaintainTotals(snapshot, session->Holder());
 	if (done.m_failed) {
-		ibJournalInfo(wxT("job"),wxT("totals fold failed"));
+		ibJournalInfo(ibT("job"),ibT("totals fold failed"));
 		return false;
 	}
 	if (done.m_mismatched > 0)
-		ibLog->Warn(wxT("totals"), wxT("verify"), wxString::Format(
-			wxT("%d key(s) of the last period in the register totals disagree with the movements - ")
-			wxT("recompute the totals in the Designer to rebuild them"), done.m_mismatched));
+		ibLog->Warn(ibT("totals"), ibT("verify"), ibString::Format(
+			ibT("%d key(s) of the last period in the register totals disagree with the movements - ")
+			ibT("recompute the totals in the Designer to rebuild them"), done.m_mismatched));
 
 	// MaintainTotals walks every table in one pass, so there is never a remainder to
 	// report. If it ever grows a chunked form, THIS is the line that turns into
@@ -101,11 +101,11 @@ void ibRegisterPlatformJobs(ibApplicationInstance* const applicationInstance)
 	//  thread, which would then EXECUTE a job instead of dispatching it and stall the whole schedule.)
 
 	ibJobDescription fold;
-	fold.m_name = wxT("totals.fold");
+	fold.m_name = ibT("totals.fold");
 	// The engine's own jobs have no metaobject, so their key is a guid MINTED ONCE and written
 	// here. A literal rather than a hash of the name: the key must not move when the name is
 	// improved, and a constant in the source is the only kind of stability nothing can derive away.
-	fold.m_key  = ibGuid(wxT("6d1a8f30-0000-4a00-9e00-000000000001"));
+	fold.m_key  = ibGuid(ibT("6d1a8f30-0000-4a00-9e00-000000000001"));
 	fold.m_body = &FoldTotals;
 	// Six hours, and no day window. Folding is cheap next to a rebuild (it reads
 	// the totals table, never the movements) and explicitly safe while people
@@ -118,7 +118,7 @@ void ibRegisterPlatformJobs(ibApplicationInstance* const applicationInstance)
 	if (!manager->Register(fold)) {
 		// Logged inside Register with the reason. Startup continues: housekeeping
 		// that could not register is a slightly wider read, not a broken process.
-		ibJournalInfo(wxT("job"),wxT("platform job 'totals.fold' was not registered"));
+		ibJournalInfo(ibT("job"),ibT("platform job 'totals.fold' was not registered"));
 	}
 
 	// (The Firebird housekeeping jobs — firebird.sweep / firebird.backup — are NOT declared here.

@@ -18,7 +18,7 @@
 #include <string>
 
 #include "appServer.h"
-#include "frontend/diagnostics/oesConsole.h"
+#include "core/diagnostics/oesConsole.h"
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_OPTION, "d",  "dir",          "Server folder: server.conf, server.key and a folder per base (default: server beside the executable)", wxCMD_LINE_VAL_STRING, 0 },
@@ -39,9 +39,9 @@ namespace {
 
 // Typed at the keyboard, not echoed. A console reads it in UTF-16, so a password in any alphabet arrives
 // whole; anything else (a pipe) is read as a line of UTF-8.
-wxString ReadHidden()
+ibString ReadHidden()
 {
-	wxString line;
+	ibString line;
 #ifdef __WXMSW__
 	HANDLE in = ::GetStdHandle(STD_INPUT_HANDLE);
 	DWORD mode = 0;
@@ -50,13 +50,13 @@ wxString ReadHidden()
 		wchar_t buffer[512];
 		DWORD read = 0;
 		if (::ReadConsoleW(in, buffer, 511, &read, nullptr))
-			line = wxString(buffer, read);
+			line = ibString(buffer, read);
 		::SetConsoleMode(in, mode);
 	}
 	else {
 		std::string raw;
 		std::getline(std::cin, raw);
-		line = wxString::FromUTF8(raw);
+		line = ibString::FromUTF8(raw);
 	}
 #else
 	termios old{};
@@ -70,39 +70,38 @@ wxString ReadHidden()
 	std::getline(std::cin, raw);
 	if (tty)
 		::tcsetattr(STDIN_FILENO, TCSANOW, &old);
-	line = wxString::FromUTF8(raw);
+	line = ibString::FromUTF8(raw);
 #endif
 	std::fputs("\n", stderr);
-	line.Replace(wxT("\r"), wxEmptyString);
-	line.Replace(wxT("\n"), wxEmptyString);
+	line.Replace(ibT("\r"), ibEmptyString);
+	line.Replace(ibT("\n"), ibEmptyString);
 	return line;
 }
 
 // `appserver --set-password=<base>/<Password|IbPassword>` — the secret typed at the keyboard, sealed into the
 // config: it travels neither on a command line nor through a file.
-int SetPassword(ibServerConfig& config, const wxString& target)
+int SetPassword(ibServerConfig& config, const ibString& target)
 {
-	const wxString base = target.BeforeLast(wxT('/'));
-	const wxString name = target.AfterLast(wxT('/'));
-	if (base.IsEmpty() || (name != wxT("Password") && name != wxT("IbPassword"))) {
-		ibAppServerSay(ibJournalMark::Error, wxT("--set-password wants <base>/Password or <base>/IbPassword, not '%s'"),
+	const ibString base = target.BeforeLast(ibT('/'));
+	const ibString name = target.AfterLast(ibT('/'));
+	if (base.IsEmpty() || (name != ibT("Password") && name != ibT("IbPassword"))) {
+		ibAppServerSay(ibJournalMark::Error, ibT("--set-password wants <base>/Password or <base>/IbPassword, not '%s'"),
 			target);
 		return 1;
 	}
 
 	ibString error;
 	if (!config.LoadKey(error)) {
-		ibAppServerSay(ibJournalMark::Error, wxT("%s"), error);
+		ibAppServerSay(ibJournalMark::Error, ibT("%s"), error);
 		return 1;
 	}
 
-	std::fprintf(stderr, "%s for %s: ", static_cast<const char*>(name.utf8_str()),
-		static_cast<const char*>(base.utf8_str()));
+	std::fprintf(stderr, "%s for %s: ", name.utf8_str().c_str(), base.utf8_str().c_str());
 	if (!config.SealSecret(base, name, ReadHidden(), error)) {
-		ibAppServerSay(ibJournalMark::Error, wxT("%s"), error);
+		ibAppServerSay(ibJournalMark::Error, ibT("%s"), error);
 		return 1;
 	}
-	ibAppServerSay(ibJournalMark::Info, wxT("%s/%s sealed into %s"), base, name, config.GetConfPath());
+	ibAppServerSay(ibJournalMark::Info, ibT("%s/%s sealed into %s"), base, name, config.GetConfPath());
 	return 0;
 }
 
@@ -114,7 +113,7 @@ int main(int argc, char** argv)
 
 	// wxInitializer + ibCrashGuard::Install, in one line. Headless: no wxApp, faults
 	// from worker / debug-listener threads write minidumps instead of a silent abort.
-	ibOesConsoleBoot boot(wxT("appserver"), argc, argv);
+	ibOesConsoleBoot boot(ibT("appserver"), argc, argv);
 	if (!boot.IsOk()) {
 		std::fprintf(stderr, "Failed to initialize the wxWidgets library, aborting.");
 		return -1;
@@ -127,19 +126,20 @@ int main(int argc, char** argv)
 	wxCmdLineParser parser(s_cmdLineDesc, argc, argv);
 	if (parser.Parse() != 0)
 		return 1;
-	if (parser.Found(wxT("again")))
+	if (parser.Found(ibT("again")))
 		ibTechJournal::SkipErrorDump();
 
 	// The locale left out is the platform's own: a base's, then backend.conf's Locale, then the system's (InitLocale).
+	// wxCmdLineParser's own: it writes what it found into wx strings.
 	wxString folder = ibServerConfig::DefaultFolder(), locale, sealTarget, workerBase;
-	parser.Found(wxT("dir"), &folder);
-	parser.Found(wxT("locale"), &locale);
-	parser.Found(wxT("worker"), &workerBase);
+	parser.Found(ibT("dir"), &folder);
+	parser.Found(ibT("locale"), &locale);
+	parser.Found(ibT("worker"), &workerBase);
 	long route = 0;
-	parser.Found(wxT("route"), &route);
+	parser.Found(ibT("route"), &route);
 	ibServerConfig config(folder);
 
-	if (parser.Found(wxT("set-password"), &sealTarget))
+	if (parser.Found(ibT("set-password"), &sealTarget))
 		return SetPassword(config, sealTarget);
 
 #ifdef __WXMSW__

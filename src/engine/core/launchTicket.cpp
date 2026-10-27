@@ -5,12 +5,10 @@
 #include <cstdio>
 #include <vector>
 
-#include <wx/filename.h>
-
 #include "core/diagnostics/journal.h"
 #include "core/startProcess.h"
 
-#if defined(__WXMSW__)
+#if defined(__IBMSW__)
 #  include <windows.h>
 #else
 #  include <cerrno>
@@ -27,15 +25,15 @@ bool AnyPassword(const ibLaunchSecrets& secrets)
 	return !secrets.m_dbPassword.IsEmpty() || !secrets.m_ibPassword.IsEmpty();
 }
 
-bool FieldFits(const wxString& value)
+bool FieldFits(const ibString& value)
 {
-	const wxScopedCharBuffer utf8 = value.utf8_str();
+	const std::string utf8 = value.ToUtf8();
 	return utf8.length() <= ibLaunchSecrets::kMaxFieldBytes;
 }
 
-void PutField(std::vector<unsigned char>& out, const wxString& value)
+void PutField(std::vector<unsigned char>& out, const ibString& value)
 {
-	const wxScopedCharBuffer utf8 = value.utf8_str();
+	const std::string utf8 = value.ToUtf8();
 	const std::uint32_t n = static_cast<std::uint32_t>(utf8.length());
 	out.push_back(static_cast<unsigned char>(n & 0xffu));
 	out.push_back(static_cast<unsigned char>((n >> 8) & 0xffu));
@@ -48,7 +46,7 @@ void PutField(std::vector<unsigned char>& out, const wxString& value)
 	           reinterpret_cast<const unsigned char*>(utf8.data()) + n);
 }
 
-bool TakeField(const unsigned char*& p, const unsigned char* end, wxString& value)
+bool TakeField(const unsigned char*& p, const unsigned char* end, ibString& value)
 {
 	if (end - p < 4)
 		return false;
@@ -59,7 +57,7 @@ bool TakeField(const unsigned char*& p, const unsigned char* end, wxString& valu
 	p += 4;
 	if (n > ibLaunchSecrets::kMaxFieldBytes || static_cast<std::size_t>(end - p) < n)
 		return false;
-	value = wxString::FromUTF8(reinterpret_cast<const char*>(p), n);
+	value = ibString::FromUTF8(reinterpret_cast<const char*>(p), n);
 	p += n;
 	return true;
 }
@@ -71,7 +69,7 @@ std::vector<unsigned char> Encode(const ibLaunchSecrets& secrets)
 		return bytes;
 	if (!FieldFits(secrets.m_dbUser) || !FieldFits(secrets.m_dbPassword)
 		|| !FieldFits(secrets.m_ibUser) || !FieldFits(secrets.m_ibPassword)) {
-		ibJournalError(wxT("launch"), wxT("A launch password is too long to pass."));
+		ibJournalError(ibT("launch"), ibT("A launch password is too long to pass."));
 		return bytes;
 	}
 	bytes.insert(bytes.end(), kMagic, kMagic + 4);
@@ -105,27 +103,27 @@ constexpr std::size_t kMaxBlock =
 
 } // namespace
 
-long ibStartProcess(const wxString& command, const ibLaunchSecrets& secrets)
+long ibStartProcess(const ibString& command, const ibLaunchSecrets& secrets)
 {
 	return ibStartProcess(command, Encode(secrets));
 }
 
-void ibNotePlaintextLaunchPassword(const wxString& flag)
+void ibNotePlaintextLaunchPassword(const ibString& flag)
 {
-	ibJournalWarning(wxT("launch"),
-		wxT("--%s puts a password on the command line"), flag);
+	ibJournalWarning(ibT("launch"),
+		ibT("--%s puts a password on the command line"), flag);
 	std::fprintf(stderr, "oes: --%s puts a password on the command line\n",
-		static_cast<const char*>(flag.utf8_str()));
+		flag.ToUtf8().c_str());
 }
 
 void ibApplyLaunchSecrets(ibLaunchSecrets& line, bool plaintextDb, bool plaintextIb)
 {
 	if (plaintextDb)
-		ibNotePlaintextLaunchPassword(wxT("password"));
+		ibNotePlaintextLaunchPassword(ibT("password"));
 	if (plaintextIb)
-		ibNotePlaintextLaunchPassword(wxT("ibpwd"));
+		ibNotePlaintextLaunchPassword(ibT("ibpwd"));
 
-#if defined(__WXMSW__)
+#if defined(__IBMSW__)
 	const HANDLE in = GetStdHandle(STD_INPUT_HANDLE);
 	DWORD mode = 0;
 	if (in == nullptr || in == INVALID_HANDLE_VALUE || GetConsoleMode(in, &mode))
@@ -135,7 +133,7 @@ void ibApplyLaunchSecrets(ibLaunchSecrets& line, bool plaintextDb, bool plaintex
 	unsigned char buf[4096];
 	while (bytes.size() < kMaxBlock) {
 		DWORD got = 0;
-		const DWORD want = static_cast<DWORD>(std::min(sizeof(buf), kMaxBlock - bytes.size()));
+		const DWORD want = static_cast<DWORD>((std::min)(sizeof(buf), kMaxBlock - bytes.size()));
 		if (!ReadFile(in, buf, want, &got, nullptr) || got == 0)
 			break;
 		bytes.insert(bytes.end(), buf, buf + got);

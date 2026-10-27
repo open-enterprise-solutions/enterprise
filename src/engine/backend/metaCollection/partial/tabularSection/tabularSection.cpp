@@ -31,7 +31,7 @@ static const ibValueMetaObjectAttributeBase* ibSectionColumnById(const ibValueMe
 	return nullptr;
 }
 
-ibDataViewItem ibValueTabularSectionDataObjectBase::FindRowValue(const ibValue& varValue, const wxString& colName) const
+ibDataViewItem ibValueTabularSectionDataObjectBase::FindRowValue(const ibValue& varValue, const ibString& colName) const
 {
 	ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_recordColumnCollection->GetColumnByName(colName);
 	if (colInfo != nullptr) {
@@ -72,7 +72,7 @@ ibClassID ibValueTabularSectionDataObjectBase::GetClassType() const
 	return 0;
 }
 
-wxString ibValueTabularSectionDataObjectBase::GetClassName() const
+ibString ibValueTabularSectionDataObjectBase::GetClassName() const
 {
 	const ibMetaData* metaData = m_metaTable->GetMetaData();
 	wxASSERT(metaData);
@@ -272,7 +272,7 @@ bool ibValueTabularSectionDataObjectBase::LoadDataFromTable(ibValueModel* srcTab
 	if (colData == nullptr)
 		return false;
 
-	wxArrayString columnName;
+	std::vector<ibString> columnName;
 	for (unsigned int idx = 0; idx < colData->GetColumnCount(); idx++) {
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colData->GetColumnInfo(idx);
 		wxASSERT(colInfo);
@@ -376,7 +376,7 @@ void ibValueTabularSectionDataObjectBase::DescribeReturnLine(ibMemberTable& help
 		return;
 
 	//set object name
-	wxString objectName;
+	ibString objectName;
 
 	for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())
@@ -413,7 +413,7 @@ ibClassID ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectRe
 	return clsFactory->GetClassType();
 }
 
-wxString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::GetClassName() const
+ibString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::GetClassName() const
 {
 	const ibValueMetaObject* metaTable = m_ownerTable->GetMetaObject();
 	const ibMetaData* metaData = metaTable->GetMetaData();
@@ -511,7 +511,7 @@ namespace {
 // rather than another field. `>` / `LIKE` / `IN` narrow without deciding, and an OR-group decides nothing at
 // all — so neither contributes, and an OR is not walked into. The literal is restored against `metaData`.
 void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes, const ibMetaData* metaData,
-	std::vector<std::pair<wxString, ibValue>>& out)
+	std::vector<std::pair<ibString, ibValue>>& out)
 {
 	for (const ibFilterNodeDescription& node : nodes) {
 		if (!node.m_use)
@@ -523,7 +523,7 @@ void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes, 
 		}
 		if (node.m_comparison != ibComparisonKind_Equal) continue;
 		if (!node.m_left.IsField() || node.m_right.IsField()) continue;
-		if (node.m_left.m_path.Find(wxT('.')) != wxNOT_FOUND) continue;
+		if (node.m_left.m_path.Find(ibT('.')) != wxNOT_FOUND) continue;
 		out.emplace_back(node.m_left.m_path, ibStoredValue(node.m_right.m_value, metaData));
 	}
 }
@@ -549,7 +549,7 @@ long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before, const i
 	// bumps the view generation. No context / ungrouped → no dims → no-op; a dotted dim is skipped.
 	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(contextRow)) {
 		for (size_t i = 0; i < GetModelComposer().GroupCount(); ++i) {
-			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
+			ibString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 			if (!GetModelComposer().GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
 			const ibMetaID col = GetColumnIDByName(field);
 			if (col != wxNOT_FOUND)
@@ -562,9 +562,9 @@ long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before, const i
 	// person just added is gone before they see it (Max, 2026-08-29: *"it has to supply the value already,
 	// because it falls out at once"*). So it is filled HERE, before the notify, and the first order computed
 	// after the insert already contains the row.
-	std::vector<std::pair<wxString, ibValue>> defaults;
+	std::vector<std::pair<ibString, ibValue>> defaults;
 	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, GetModelComposer().GetMetaData(), defaults);
-	for (const std::pair<wxString, ibValue>& one : defaults) {
+	for (const std::pair<ibString, ibValue>& one : defaults) {
 		const ibMetaID col = GetColumnIDByName(one.first);
 		if (col != wxNOT_FOUND)
 			rowData->AppendTableValue(col, one.second);
@@ -590,24 +590,24 @@ long ibValueTabularSectionDataObjectRef::AppendRow(unsigned int before, const ib
 void ibValueTabularSectionDataObjectBase::FillMembers(ibMemberTable& helper) const
 {
 	if (m_readOnly) {
-		helper.AppendFunc(wxT("Count"), wxT("Count()"), enCount, eTabularSection);
-		helper.AppendFunc(wxT("Find"), 2, wxT("Find(value : any, columnName : string)"), enFind, eTabularSection);
-		helper.AppendFunc(wxT("Unload"), wxT("Unload()"), enUnload, eTabularSection);
-		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"), enGetMetadata, eTabularSection);
-		helper.AppendFunc(wxT("Index"), 1, wxT("Index(row : tabularSectionRow) : number"), enIndex, eTabularSection);
-		helper.AppendFunc(wxT("Total"), 1, wxT("Total(columnName : string) : number"), enTotal, eTabularSection);
+		helper.AppendFunc(ibT("Count"), ibT("Count()"), enCount, eTabularSection);
+		helper.AppendFunc(ibT("Find"), 2, ibT("Find(value : any, columnName : string)"), enFind, eTabularSection);
+		helper.AppendFunc(ibT("Unload"), ibT("Unload()"), enUnload, eTabularSection);
+		helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"), enGetMetadata, eTabularSection);
+		helper.AppendFunc(ibT("Index"), 1, ibT("Index(row : tabularSectionRow) : number"), enIndex, eTabularSection);
+		helper.AppendFunc(ibT("Total"), 1, ibT("Total(columnName : string) : number"), enTotal, eTabularSection);
 	}
 	else {
-		helper.AppendFunc(wxT("Add"), wxT("Add()"), enAddValue, eTabularSection);
-		helper.AppendFunc(wxT("Count"), wxT("Count()"), enCount, eTabularSection);
-		helper.AppendFunc(wxT("Find"), 2, wxT("Find(value : any, columnName : string)"), enFind, eTabularSection);
-		helper.AppendFunc(wxT("Delete"), 1, wxT("delete(row : tabularSectionRow)"), enDelete, eTabularSection);
-		helper.AppendFunc(wxT("Clear"), wxT("Clear()"), enClear, eTabularSection);
-		helper.AppendFunc(wxT("Load"), 1, wxT("Load(table : any table)"), enLoad, eTabularSection);
-		helper.AppendFunc(wxT("Unload"), wxT("Unload()"), enUnload, eTabularSection);
-		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"), enGetMetadata, eTabularSection);
-		helper.AppendFunc(wxT("Index"), 1, wxT("Index(row : tabularSectionRow) : number"), enIndex, eTabularSection);
-		helper.AppendFunc(wxT("Total"), 1, wxT("Total(columnName : string) : number"), enTotal, eTabularSection);
+		helper.AppendFunc(ibT("Add"), ibT("Add()"), enAddValue, eTabularSection);
+		helper.AppendFunc(ibT("Count"), ibT("Count()"), enCount, eTabularSection);
+		helper.AppendFunc(ibT("Find"), 2, ibT("Find(value : any, columnName : string)"), enFind, eTabularSection);
+		helper.AppendFunc(ibT("Delete"), 1, ibT("delete(row : tabularSectionRow)"), enDelete, eTabularSection);
+		helper.AppendFunc(ibT("Clear"), ibT("Clear()"), enClear, eTabularSection);
+		helper.AppendFunc(ibT("Load"), 1, ibT("Load(table : any table)"), enLoad, eTabularSection);
+		helper.AppendFunc(ibT("Unload"), ibT("Unload()"), enUnload, eTabularSection);
+		helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"), enGetMetadata, eTabularSection);
+		helper.AppendFunc(ibT("Index"), 1, ibT("Index(row : tabularSectionRow) : number"), enIndex, eTabularSection);
+		helper.AppendFunc(ibT("Total"), 1, ibT("Total(columnName : string) : number"), enTotal, eTabularSection);
 	}
 }
 

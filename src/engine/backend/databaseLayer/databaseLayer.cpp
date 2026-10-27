@@ -108,82 +108,6 @@ void ibDatabaseLayer::RollBack()
 	DoRollBack();
 }
 
-#if !wxUSE_UTF8_LOCALE_ONLY
-int ibDatabaseLayer::DoRunQueryWchar(const ibChar* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	wxString strQuery;
-
-	strQuery.PrintfV(format, args);
-	va_end(args);
-
-	return DoRunQuery(strQuery, true);
-}
-
-ibDatabaseResultSet* ibDatabaseLayer::DoRunQueryWithResultsWchar(const ibChar* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	wxString strQuery;
-
-	strQuery.PrintfV(format, args);
-	va_end(args);
-
-	return DoRunQueryWithResults(strQuery);
-}
-
-ibPreparedStatement* ibDatabaseLayer::DoPrepareStatementWchar(const ibChar* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	wxString strQuery;
-
-	strQuery.PrintfV(format, args);
-	va_end(args);
-
-	return DoPrepareStatement(strQuery);
-}
-#endif
-
-#if wxUSE_UNICODE_UTF8
-int ibDatabaseLayer::DoRunQueryUtf8(const ibChar* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	wxString strQuery;
-
-	strQuery.PrintfV(format, args);
-	va_end(args);
-
-	return DoRunQuery(strQuery, true);
-}
-
-ibDatabaseResultSet* ibDatabaseLayer::DoRunQueryWithResultsUtf8(const ibChar* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	wxString strQuery;
-
-	strQuery.PrintfV(format, args);
-	va_end(args);
-
-	return DoRunQueryWithResults(strQuery);
-}
-
-ibPreparedStatement* ibDatabaseLayer::DoPrepareStatementUtf8(const ibChar* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	wxString strQuery;
-
-	strQuery.PrintfV(format, args);
-	va_end(args);
-
-	return DoPrepareStatement(strQuery);
-}
-#endif
-
 void ibDatabaseLayer::CloseResultSets()
 {
 	// Take the list first, then delete — each result set erases itself from it as it dies, so deleting
@@ -193,7 +117,7 @@ void ibDatabaseLayer::CloseResultSets()
 
 	for (ibDatabaseResultSet* pResultSet : resultSets)
 	{
-		ibJournalInfo(wxT("db"),wxT("ResultSet NOT closed and cleaned up by the ibDatabaseLayer dtor"));
+		ibJournalInfo(ibT("db"),ibT("ResultSet NOT closed and cleaned up by the ibDatabaseLayer dtor"));
 		delete pResultSet;
 	}
 }
@@ -209,7 +133,7 @@ void ibDatabaseLayer::CloseStatements()
 
 	for (ibPreparedStatement* pStatement : statements)
 	{
-		ibJournalInfo(wxT("db"),wxT("PreparedStatement NOT closed and cleaned up by the DatabaseLayer dtor"));
+		ibJournalInfo(ibT("db"),ibT("PreparedStatement NOT closed and cleaned up by the DatabaseLayer dtor"));
 		delete pStatement;
 	}
 }
@@ -244,19 +168,19 @@ bool ibDatabaseLayer::CloseStatement(ibPreparedStatement*& pStatement)
 }
 
 
-int ibDatabaseLayer::GetSingleResultInt(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult /*= true*/)
+int ibDatabaseLayer::GetSingleResultInt(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult /*= true*/)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetSingleResultInt(strSQL, &variant, bRequireUniqueResult);
 }
 
-int ibDatabaseLayer::GetSingleResultInt(const wxString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
+int ibDatabaseLayer::GetSingleResultInt(const ibString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
 	return GetSingleResultInt(strSQL, &variant, bRequireUniqueResult);
 }
 
-int ibDatabaseLayer::GetSingleResultInt(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
+int ibDatabaseLayer::GetSingleResultInt(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
 	int value = -1;
@@ -274,13 +198,13 @@ int ibDatabaseLayer::GetSingleResultInt(const wxString& strSQL, const wxVariant*
 				pResult = nullptr;
 				value = -1;
 				SetErrorCode(DATABASE_LAYER_NON_UNIQUE_RESULTSET);
-				SetErrorMessage(wxT("A non-unique result was returned."));
+				SetErrorMessage(ibT("A non-unique result was returned."));
 				ThrowDatabaseException();
 				return value;
 			}
 			else
 			{
-				if (field->IsType(wxT("string")))
+				if (field->IsType(ibT("string")))
 					value = pResult->GetResultInt(field->GetString());
 				else
 					value = pResult->GetResultInt(field->GetLong());
@@ -304,7 +228,7 @@ int ibDatabaseLayer::GetSingleResultInt(const wxString& strSQL, const wxVariant*
 		{
 			value = -1;
 			SetErrorCode(DATABASE_LAYER_NO_ROWS_FOUND);
-			SetErrorMessage(wxT("No result was returned."));
+			SetErrorMessage(ibT("No result was returned."));
 			ThrowDatabaseException();
 			return value;
 		}
@@ -322,19 +246,19 @@ int ibDatabaseLayer::GetSingleResultInt(const wxString& strSQL, const wxVariant*
 	return value;
 }
 
-ibString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
+ibString ibDatabaseLayer::GetSingleResultString(const ibString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
 	return GetSingleResultString(strSQL, &variant, bRequireUniqueResult);
 }
 
-ibString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult /*= true*/)
+ibString ibDatabaseLayer::GetSingleResultString(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult /*= true*/)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetSingleResultString(strSQL, &variant, bRequireUniqueResult);
 }
 
-ibString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
+ibString ibDatabaseLayer::GetSingleResultString(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
 	ibString value;
@@ -350,15 +274,15 @@ ibString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, const wx
 				// Close the result set, reset the value and throw an exception
 				CloseResultSet(pResult);
 				pResult = nullptr;
-				value = wxEmptyString;
+				value = ibEmptyString;
 				SetErrorCode(DATABASE_LAYER_NON_UNIQUE_RESULTSET);
-				SetErrorMessage(wxT("A non-unique result was returned."));
+				SetErrorMessage(ibT("A non-unique result was returned."));
 				ThrowDatabaseException();
 				return value;
 			}
 			else
 			{
-				if (field->IsType(wxT("string")))
+				if (field->IsType(ibT("string")))
 					value = pResult->GetResultString(field->GetString());
 				else
 					value = pResult->GetResultString(field->GetLong());
@@ -380,9 +304,9 @@ ibString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, const wx
 		// Make sure that a value was retrieved from the database
 		if (!valueRetrievedFlag)
 		{
-			value = wxEmptyString;
+			value = ibEmptyString;
 			SetErrorCode(DATABASE_LAYER_NO_ROWS_FOUND);
-			SetErrorMessage(wxT("No result was returned."));
+			SetErrorMessage(ibT("No result was returned."));
 			ThrowDatabaseException();
 			return value;
 		}
@@ -400,19 +324,19 @@ ibString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, const wx
 	return value;
 }
 
-long ibDatabaseLayer::GetSingleResultLong(const wxString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
+long ibDatabaseLayer::GetSingleResultLong(const ibString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
 	return GetSingleResultLong(strSQL, &variant, bRequireUniqueResult);
 }
 
-long ibDatabaseLayer::GetSingleResultLong(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult /*= true*/)
+long ibDatabaseLayer::GetSingleResultLong(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult /*= true*/)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetSingleResultLong(strSQL, &variant, bRequireUniqueResult);
 }
 
-long ibDatabaseLayer::GetSingleResultLong(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
+long ibDatabaseLayer::GetSingleResultLong(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
 	long value = -1;
@@ -430,13 +354,13 @@ long ibDatabaseLayer::GetSingleResultLong(const wxString& strSQL, const wxVarian
 				pResult = nullptr;
 				value = -1;
 				SetErrorCode(DATABASE_LAYER_NON_UNIQUE_RESULTSET);
-				SetErrorMessage(wxT("A non-unique result was returned."));
+				SetErrorMessage(ibT("A non-unique result was returned."));
 				ThrowDatabaseException();
 				return value;
 			}
 			else
 			{
-				if (field->IsType(wxT("string")))
+				if (field->IsType(ibT("string")))
 					value = pResult->GetResultLong(field->GetString());
 				else
 					value = pResult->GetResultLong(field->GetLong());
@@ -460,7 +384,7 @@ long ibDatabaseLayer::GetSingleResultLong(const wxString& strSQL, const wxVarian
 		{
 			value = -1;
 			SetErrorCode(DATABASE_LAYER_NO_ROWS_FOUND);
-			SetErrorMessage(wxT("No result was returned."));
+			SetErrorMessage(ibT("No result was returned."));
 			ThrowDatabaseException();
 			return value;
 		}
@@ -478,19 +402,19 @@ long ibDatabaseLayer::GetSingleResultLong(const wxString& strSQL, const wxVarian
 	return value;
 }
 
-bool ibDatabaseLayer::GetSingleResultBool(const wxString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
+bool ibDatabaseLayer::GetSingleResultBool(const ibString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
 	return GetSingleResultBool(strSQL, &variant, bRequireUniqueResult);
 }
 
-bool ibDatabaseLayer::GetSingleResultBool(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult /*= true*/)
+bool ibDatabaseLayer::GetSingleResultBool(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult /*= true*/)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetSingleResultBool(strSQL, &variant, bRequireUniqueResult);
 }
 
-bool ibDatabaseLayer::GetSingleResultBool(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
+bool ibDatabaseLayer::GetSingleResultBool(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
 	bool value = false;
@@ -508,13 +432,13 @@ bool ibDatabaseLayer::GetSingleResultBool(const wxString& strSQL, const wxVarian
 				pResult = nullptr;
 				value = false;
 				SetErrorCode(DATABASE_LAYER_NON_UNIQUE_RESULTSET);
-				SetErrorMessage(wxT("A non-unique result was returned."));
+				SetErrorMessage(ibT("A non-unique result was returned."));
 				ThrowDatabaseException();
 				return value;
 			}
 			else
 			{
-				if (field->IsType(wxT("string")))
+				if (field->IsType(ibT("string")))
 					value = pResult->GetResultBool(field->GetString());
 				else
 					value = pResult->GetResultBool(field->GetLong());
@@ -538,7 +462,7 @@ bool ibDatabaseLayer::GetSingleResultBool(const wxString& strSQL, const wxVarian
 		{
 			value = false;
 			SetErrorCode(DATABASE_LAYER_NO_ROWS_FOUND);
-			SetErrorMessage(wxT("No result was returned."));
+			SetErrorMessage(ibT("No result was returned."));
 			ThrowDatabaseException();
 			return value;
 		}
@@ -556,19 +480,19 @@ bool ibDatabaseLayer::GetSingleResultBool(const wxString& strSQL, const wxVarian
 	return value;
 }
 
-ibDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
+ibDateTime ibDatabaseLayer::GetSingleResultDate(const ibString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
 	return GetSingleResultDate(strSQL, &variant, bRequireUniqueResult);
 }
 
-ibDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult /*= true*/)
+ibDateTime ibDatabaseLayer::GetSingleResultDate(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult /*= true*/)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetSingleResultDate(strSQL, &variant, bRequireUniqueResult);
 }
 
-ibDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
+ibDateTime ibDatabaseLayer::GetSingleResultDate(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
 	ibDateTime value;
@@ -586,13 +510,13 @@ ibDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wx
 				pResult = nullptr;
 				value = ibDateTime();
 				SetErrorCode(DATABASE_LAYER_NON_UNIQUE_RESULTSET);
-				SetErrorMessage(wxT("A non-unique result was returned."));
+				SetErrorMessage(ibT("A non-unique result was returned."));
 				ThrowDatabaseException();
 				return value;
 			}
 			else
 			{
-				if (field->IsType(wxT("string")))
+				if (field->IsType(ibT("string")))
 					value = pResult->GetResultDate(field->GetString());
 				else
 					value = pResult->GetResultDate(field->GetLong());
@@ -616,7 +540,7 @@ ibDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wx
 		{
 			value = ibDateTime();
 			SetErrorCode(DATABASE_LAYER_NO_ROWS_FOUND);
-			SetErrorMessage(wxT("No result was returned."));
+			SetErrorMessage(ibT("No result was returned."));
 			ThrowDatabaseException();
 			return value;
 		}
@@ -634,19 +558,19 @@ ibDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wx
 	return value;
 }
 
-void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, int nField, ibMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
+void* ibDatabaseLayer::GetSingleResultBlob(const ibString& strSQL, int nField, ibMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
 	return GetSingleResultBlob(strSQL, &variant, buffer, bRequireUniqueResult);
 }
 
-void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxString& strField, ibMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
+void* ibDatabaseLayer::GetSingleResultBlob(const ibString& strSQL, const ibString& strField, ibMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetSingleResultBlob(strSQL, &variant, buffer, bRequireUniqueResult);
 }
 
-void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, ibMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
+void* ibDatabaseLayer::GetSingleResultBlob(const ibString& strSQL, const wxVariant* field, ibMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
 	void* value = nullptr;
@@ -664,13 +588,13 @@ void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxVaria
 				pResult = nullptr;
 				value = nullptr;
 				SetErrorCode(DATABASE_LAYER_NON_UNIQUE_RESULTSET);
-				SetErrorMessage(wxT("A non-unique result was returned."));
+				SetErrorMessage(ibT("A non-unique result was returned."));
 				ThrowDatabaseException();
 				return value;
 			}
 			else
 			{
-				if (field->IsType(wxT("string")))
+				if (field->IsType(ibT("string")))
 					value = pResult->GetResultBlob(field->GetString(), buffer);
 				else
 					value = pResult->GetResultBlob(field->GetLong(), buffer);
@@ -694,7 +618,7 @@ void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxVaria
 		{
 			value = nullptr;
 			SetErrorCode(DATABASE_LAYER_NO_ROWS_FOUND);
-			SetErrorMessage(wxT("No result was returned."));
+			SetErrorMessage(ibT("No result was returned."));
 			ThrowDatabaseException();
 			return value;
 		}
@@ -712,19 +636,19 @@ void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxVaria
 	return value;
 }
 
-double ibDatabaseLayer::GetSingleResultDouble(const wxString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
+double ibDatabaseLayer::GetSingleResultDouble(const ibString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
 	return GetSingleResultDouble(strSQL, &variant, bRequireUniqueResult);
 }
 
-double ibDatabaseLayer::GetSingleResultDouble(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult /*= true*/)
+double ibDatabaseLayer::GetSingleResultDouble(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult /*= true*/)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetSingleResultDouble(strSQL, &variant, bRequireUniqueResult);
 }
 
-double ibDatabaseLayer::GetSingleResultDouble(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
+double ibDatabaseLayer::GetSingleResultDouble(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
 	double value = -1;
@@ -742,13 +666,13 @@ double ibDatabaseLayer::GetSingleResultDouble(const wxString& strSQL, const wxVa
 				pResult = nullptr;
 				value = -1;
 				SetErrorCode(DATABASE_LAYER_NON_UNIQUE_RESULTSET);
-				SetErrorMessage(wxT("A non-unique result was returned."));
+				SetErrorMessage(ibT("A non-unique result was returned."));
 				ThrowDatabaseException();
 				return value;
 			}
 			else
 			{
-				if (field->IsType(wxT("string")))
+				if (field->IsType(ibT("string")))
 					value = pResult->GetResultDouble(field->GetString());
 				else
 					value = pResult->GetResultDouble(field->GetLong());
@@ -772,7 +696,7 @@ double ibDatabaseLayer::GetSingleResultDouble(const wxString& strSQL, const wxVa
 		{
 			value = -1;
 			SetErrorCode(DATABASE_LAYER_NO_ROWS_FOUND);
-			SetErrorMessage(wxT("No result was returned."));
+			SetErrorMessage(ibT("No result was returned."));
 			ThrowDatabaseException();
 			return value;
 		}
@@ -790,19 +714,19 @@ double ibDatabaseLayer::GetSingleResultDouble(const wxString& strSQL, const wxVa
 	return value;
 }
 
-ibNumber ibDatabaseLayer::GetSingleResultNumber(const wxString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
+ibNumber ibDatabaseLayer::GetSingleResultNumber(const ibString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
 	return GetSingleResultNumber(strSQL, &variant, bRequireUniqueResult);
 }
 
-ibNumber ibDatabaseLayer::GetSingleResultNumber(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult /*= true*/)
+ibNumber ibDatabaseLayer::GetSingleResultNumber(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult /*= true*/)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetSingleResultNumber(strSQL, &variant, bRequireUniqueResult);
 }
 
-ibNumber ibDatabaseLayer::GetSingleResultNumber(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
+ibNumber ibDatabaseLayer::GetSingleResultNumber(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
 	ibNumber value = -1;
@@ -820,13 +744,13 @@ ibNumber ibDatabaseLayer::GetSingleResultNumber(const wxString& strSQL, const wx
 				pResult = nullptr;
 				value = -1;
 				SetErrorCode(DATABASE_LAYER_NON_UNIQUE_RESULTSET);
-				SetErrorMessage(wxT("A non-unique result was returned."));
+				SetErrorMessage(ibT("A non-unique result was returned."));
 				ThrowDatabaseException();
 				return value;
 			}
 			else
 			{
-				if (field->IsType(wxT("string")))
+				if (field->IsType(ibT("string")))
 					value = pResult->GetResultNumber(field->GetString());
 				else
 					value = pResult->GetResultNumber(field->GetLong());
@@ -851,7 +775,7 @@ ibNumber ibDatabaseLayer::GetSingleResultNumber(const wxString& strSQL, const wx
 		{
 			value = -1;
 			SetErrorCode(DATABASE_LAYER_NO_ROWS_FOUND);
-			SetErrorMessage(wxT("No result was returned."));
+			SetErrorMessage(ibT("No result was returned."));
 			ThrowDatabaseException();
 			return value;
 		}
@@ -869,19 +793,19 @@ ibNumber ibDatabaseLayer::GetSingleResultNumber(const wxString& strSQL, const wx
 	return value;
 }
 
-std::vector<int> ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, int nField)
+std::vector<int> ibDatabaseLayer::GetResultsArrayInt(const ibString& strSQL, int nField)
 {
 	wxVariant variant((long)nField);
 	return GetResultsArrayInt(strSQL, &variant);
 }
 
-std::vector<int> ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, const wxString& strField)
+std::vector<int> ibDatabaseLayer::GetResultsArrayInt(const ibString& strSQL, const ibString& strField)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetResultsArrayInt(strSQL, &variant);
 }
 
-std::vector<int> ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, const wxVariant* field)
+std::vector<int> ibDatabaseLayer::GetResultsArrayInt(const ibString& strSQL, const wxVariant* field)
 {
 	std::vector<int> returnArray;
 
@@ -891,7 +815,7 @@ std::vector<int> ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, con
 
 		while (pResult->Next())
 		{
-			if (field->IsType(wxT("string")))
+			if (field->IsType(ibT("string")))
 				returnArray.push_back(pResult->GetResultInt(field->GetString()));
 			else
 				returnArray.push_back(pResult->GetResultInt(field->GetLong()));
@@ -916,21 +840,21 @@ std::vector<int> ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, con
 	return returnArray;
 }
 
-wxArrayString ibDatabaseLayer::GetResultsArrayString(const wxString& strSQL, int nField)
+std::vector<ibString> ibDatabaseLayer::GetResultsArrayString(const ibString& strSQL, int nField)
 {
 	wxVariant variant((long)nField);
 	return GetResultsArrayString(strSQL, &variant);
 }
 
-wxArrayString ibDatabaseLayer::GetResultsArrayString(const wxString& strSQL, const wxString& strField)
+std::vector<ibString> ibDatabaseLayer::GetResultsArrayString(const ibString& strSQL, const ibString& strField)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetResultsArrayString(strSQL, &variant);
 }
 
-wxArrayString ibDatabaseLayer::GetResultsArrayString(const wxString& strSQL, const wxVariant* field)
+std::vector<ibString> ibDatabaseLayer::GetResultsArrayString(const ibString& strSQL, const wxVariant* field)
 {
-	wxArrayString returnArray;
+	std::vector<ibString> returnArray;
 
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
@@ -938,10 +862,10 @@ wxArrayString ibDatabaseLayer::GetResultsArrayString(const wxString& strSQL, con
 
 		while (pResult->Next())
 		{
-			if (field->IsType(wxT("string")))
-				returnArray.Add(pResult->GetResultString(field->GetString()));
+			if (field->IsType(ibT("string")))
+				returnArray.push_back(pResult->GetResultString(field->GetString()));
 			else
-				returnArray.Add(pResult->GetResultString(field->GetLong()));
+				returnArray.push_back(pResult->GetResultString(field->GetLong()));
 		}
 
 		if (pResult != nullptr)
@@ -963,19 +887,19 @@ wxArrayString ibDatabaseLayer::GetResultsArrayString(const wxString& strSQL, con
 	return returnArray;
 }
 
-std::vector<long> ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, int nField)
+std::vector<long> ibDatabaseLayer::GetResultsArrayLong(const ibString& strSQL, int nField)
 {
 	wxVariant variant((long)nField);
 	return GetResultsArrayLong(strSQL, &variant);
 }
 
-std::vector<long> ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, const wxString& strField)
+std::vector<long> ibDatabaseLayer::GetResultsArrayLong(const ibString& strSQL, const ibString& strField)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetResultsArrayLong(strSQL, &variant);
 }
 
-std::vector<long> ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, const wxVariant* field)
+std::vector<long> ibDatabaseLayer::GetResultsArrayLong(const ibString& strSQL, const wxVariant* field)
 {
 	std::vector<long> returnArray;
 
@@ -985,7 +909,7 @@ std::vector<long> ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, c
 
 		while (pResult->Next())
 		{
-			if (field->IsType(wxT("string")))
+			if (field->IsType(ibT("string")))
 				returnArray.push_back(pResult->GetResultLong(field->GetString()));
 			else
 				returnArray.push_back(pResult->GetResultLong(field->GetLong()));
@@ -1010,19 +934,19 @@ std::vector<long> ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, c
 	return returnArray;
 }
 
-std::vector<double> ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, int nField)
+std::vector<double> ibDatabaseLayer::GetResultsArrayDouble(const ibString& strSQL, int nField)
 {
 	wxVariant variant((long)nField);
 	return GetResultsArrayDouble(strSQL, &variant);
 }
 
-std::vector<double> ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, const wxString& strField)
+std::vector<double> ibDatabaseLayer::GetResultsArrayDouble(const ibString& strSQL, const ibString& strField)
 {
-	wxVariant variant(strField);
+	wxVariant variant(strField.wc_str());
 	return GetResultsArrayDouble(strSQL, &variant);
 }
 
-std::vector<double> ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, const wxVariant* field)
+std::vector<double> ibDatabaseLayer::GetResultsArrayDouble(const ibString& strSQL, const wxVariant* field)
 {
 	std::vector<double> returnArray;
 
@@ -1032,7 +956,7 @@ std::vector<double> ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQ
 
 		while (pResult->Next())
 		{
-			if (field->IsType(wxT("string")))
+			if (field->IsType(ibT("string")))
 				returnArray.push_back(pResult->GetResultDouble(field->GetString()));
 			else
 				returnArray.push_back(pResult->GetResultDouble(field->GetLong()));

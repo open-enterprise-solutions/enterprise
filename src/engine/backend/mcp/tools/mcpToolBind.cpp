@@ -38,11 +38,11 @@ namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
 
 // The arguments, declared once and read through the same objects — see ibMcpTool::Arguments().
-const ibArg& ArgId() { static const ibArg a(wxT("id"), ibArg::Kind::Whole, ibMcpText("The object being wired, by NodeId."), true); return a; }
-const ibArg& ArgProperty() { static const ibArg a(wxT("property"), ibArg::Kind::Text, ibMcpText("Which binding. Naming one the object does not have is refused WITH the list of the ones it does, so a wrong guess costs one call."), true); return a; }
-const ibArg& ArgTarget() { static const ibArg a(wxT("target"), ibArg::Kind::Any, ibMcpText("The metaobject to bind, by its name, by Kind.Name (AccumulationRegister.Cars), or by its id as a number or a string of digits. A bare name is resolved among this binding's own candidates. When more than one candidate shares it, the call is refused and names them. Omit to read the binding instead of changing it.")); return a; }
-const ibArg& ArgRemove() { static const ibArg a(wxT("remove"), ibArg::Kind::Flag, ibMcpText("Take the target OUT of the binding instead of putting it in.")); return a; }
-const ibArg& ArgOnly() { static const ibArg a(wxT("only"), ibArg::Kind::Flag, ibMcpText("Make the target the ONLY thing bound, clearing whatever else was there. Off by default, because most bindings legitimately hold several; a binding that holds one (a register's chart) is replaced either way.")); return a; }
+const ibArg& ArgId() { static const ibArg a(ibT("id"), ibArg::Kind::Whole, ibMcpText("The object being wired, by NodeId."), true); return a; }
+const ibArg& ArgProperty() { static const ibArg a(ibT("property"), ibArg::Kind::Text, ibMcpText("Which binding. Naming one the object does not have is refused WITH the list of the ones it does, so a wrong guess costs one call."), true); return a; }
+const ibArg& ArgTarget() { static const ibArg a(ibT("target"), ibArg::Kind::Any, ibMcpText("The metaobject to bind, by its name, by Kind.Name (AccumulationRegister.Cars), or by its id as a number or a string of digits. A bare name is resolved among this binding's own candidates. When more than one candidate shares it, the call is refused and names them. Omit to read the binding instead of changing it.")); return a; }
+const ibArg& ArgRemove() { static const ibArg a(ibT("remove"), ibArg::Kind::Flag, ibMcpText("Take the target OUT of the binding instead of putting it in.")); return a; }
+const ibArg& ArgOnly() { static const ibArg a(ibT("only"), ibArg::Kind::Flag, ibMcpText("Make the target the ONLY thing bound, clearing whatever else was there. Off by default, because most bindings legitimately hold several; a binding that holds one (a register's chart) is replaced either way.")); return a; }
 
 // ONE BINDING, WHICHEVER OF THE THREE CLASSES IT IS.
 //
@@ -89,9 +89,9 @@ Binding AsBinding(ibProperty* property)
 	return found;
 }
 
-Binding BindingNamed(ibValueMetaObject* object, const wxString& name, wxString& refusal)
+Binding BindingNamed(ibValueMetaObject* object, const ibString& name, ibString& refusal)
 {
-	std::vector<wxString> bindings;
+	std::vector<ibString> bindings;
 
 	for (unsigned int index = 0; index < object->GetPropertyCount(); ++index) {
 
@@ -112,14 +112,14 @@ Binding BindingNamed(ibValueMetaObject* object, const wxString& name, wxString& 
 	// ⭐ REFUSED WITH WHAT THERE IS. Which bindings an object even has depends on its metatype — a
 	// catalog has an owner, a document has register records — and a caller cannot know that in
 	// advance. Listing them turns one refusal into the answer to the next question.
-	wxString known;
+	ibString known;
 
-	for (const wxString& one : bindings)
-		known << (known.IsEmpty() ? wxT("") : wxT(", ")) << one;
+	for (const ibString& one : bindings)
+		known << (known.IsEmpty() ? ibT("") : ibT(", ")) << one;
 
 	refusal = known.IsEmpty()
-		? wxString::Format(ibMcpText("'%s' has no bindings at all."), object->GetName())
-		: wxString::Format(ibMcpText("'%s' has no binding called '%s'. It has: %s."),
+		? ibString::Format(ibMcpText("'%s' has no bindings at all."), object->GetName())
+		: ibString::Format(ibMcpText("'%s' has no binding called '%s'. It has: %s."),
 			object->GetName(), name, known);
 
 	return Binding();
@@ -146,49 +146,49 @@ std::vector<ibDataValue> BoundNames(ibMetaData* metaData, const ibMetaDescriptio
 		// healthy while the configuration is not.
 		names.push_back(ibDataValue::String(bound != nullptr
 			? bound->GetName()
-			: wxString::Format(ibMcpText("#%i (missing)"), (int)id)));
+			: ibString::Format(ibMcpText("#%i (missing)"), (int)id)));
 	}
 
 	return names;
 }
 
 // Kind.Name when the object is still there, the choice's own name when it is not.
-wxString CandidateLabel(ibMetaData* metaData, long id, const wxString& name)
+ibString CandidateLabel(ibMetaData* metaData, long id, const ibString& name)
 {
 	ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)id);
 	if (object == nullptr)
 		return name;
-	return object->GetClassName() + wxT(".") + object->GetName();
+	return object->GetClassName() + ibT(".") + object->GetName();
 }
 
 // A name, Kind.Name, or an id. Absent is the read. Anything else is refused: a boolean is not a target.
-wxString ReadTarget(const ibDataNode& params, bool& rejected)
+ibString ReadTarget(const ibDataNode& params, bool& rejected)
 {
 	rejected = false;
 	auto given = params.FindField(ArgTarget().Name());
 	if (!given)
-		return wxString();
+		return ibString();
 	if (given->Kind() == ibDataKind::String)
 		return given->AsString();
 	if (given->Kind() == ibDataKind::Number)
-		return wxString::Format(wxT("%lld"), (long long)given->AsInt());
+		return ibString::Format(ibT("%lld"), (long long)given->AsInt());
 	rejected = true;
-	return wxString();
+	return ibString();
 }
 
 // The index of the one candidate `target` names, -1 when it names none, -2 when it names several
 // (refusal already written). Resolved HERE, among the property's own candidates: a catalog and a
 // register may share a name, and the catalog is not a candidate for a document's registers.
 int ChooseCandidate(ibMetaData* metaData, const ibPropertyChoiceList& choices,
-	const wxString& target, const wxString& binding, wxString& refusal)
+	const ibString& target, const ibString& binding, ibString& refusal)
 {
 	std::vector<unsigned int> hits;
 
 	for (unsigned int index = 0; index < choices.GetCount(); ++index) {
 		const long id = choices.GetId(index);
-		const wxString name = choices.GetName(index);
-		const wxString qualified = CandidateLabel(metaData, id, name);
-		const wxString idText = wxString::Format(wxT("%ld"), id);
+		const ibString name = choices.GetName(index);
+		const ibString qualified = CandidateLabel(metaData, id, name);
+		const ibString idText = ibString::Format(ibT("%ld"), id);
 		if (target.IsSameAs(idText, false) || target.IsSameAs(name, false) || target.IsSameAs(qualified, false))
 			hits.push_back(index);
 	}
@@ -198,13 +198,13 @@ int ChooseCandidate(ibMetaData* metaData, const ibPropertyChoiceList& choices,
 	if (hits.empty())
 		return -1;
 
-	wxString listed;
+	ibString listed;
 	for (unsigned int index : hits)
-		listed << (listed.IsEmpty() ? wxT("") : wxT(", "))
+		listed << (listed.IsEmpty() ? ibT("") : ibT(", "))
 			<< CandidateLabel(metaData, choices.GetId(index), choices.GetName(index))
-			<< wxString::Format(wxT(" (#%ld)"), choices.GetId(index));
+			<< ibString::Format(ibT(" (#%ld)"), choices.GetId(index));
 
-	refusal = wxString::Format(
+	refusal = ibString::Format(
 		ibMcpText("'%s' names more than one candidate of '%s': %s. Name the kind as well, or pass the id."),
 		target, binding, listed);
 	return -2;
@@ -219,21 +219,21 @@ int ChooseCandidate(ibMetaData* metaData, const ibPropertyChoiceList& choices,
 class ibMcpToolMetadataBind : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("metadata_bind"); }
+	ibString GetName() const override { return ibT("metadata_bind"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		bool rejected = false;
-		const wxString target = ReadTarget(params, rejected);
+		const ibString target = ReadTarget(params, rejected);
 
 		if (target.IsEmpty() && !rejected)
-			return wxString::Format(ibMcpText("reading the binding '%s' of '%s'"),
+			return ibString::Format(ibMcpText("reading the binding '%s' of '%s'"),
 				ArgProperty().Text(params), ibMcpNameOf(params));
 
-		return wxString::Format(ibMcpText("binding '%s' to '%s'"), target, ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("binding '%s' to '%s'"), target, ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Wire one metaobject to another - the bindings that carry no value but a "
 			"relationship: `ListOwner` (which catalog this one is subordinate to), "
@@ -254,32 +254,32 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
 		if (object == nullptr)
 			return false;
 
-		const wxString name = ArgProperty().Text(params);
+		const ibString name = ArgProperty().Text(params);
 
 		const Binding binding = BindingNamed(object, name, refusal);
 		if (!binding.IsOk())
 			return false;
 
 		bool rejected = false;
-		const wxString target = ReadTarget(params, rejected);
+		const ibString target = ReadTarget(params, rejected);
 		if (rejected) {
 			refusal = ibMcpText("'target' takes a name, Kind.Name, or an id.");
 			return false;
 		}
 
-		result.SetValue(wxT("object"), object->GetName());
-		result.SetValue(wxT("binding"), binding.property->GetName());
+		result.SetValue(ibT("object"), object->GetName());
+		result.SetValue(ibT("binding"), binding.property->GetName());
 
 		// READING IS A WHOLE ANSWER. Asked without a target, this is how a caller finds out what
 		// is wired to what - and it is the same reading a write is verified by.
 		if (target.IsEmpty()) {
-			result.AddField(wxT("bound"),
+			result.AddField(ibT("bound"),
 				ibDataValue::Array(BoundNames(activeMetaData, *binding.held)));
 			return true;
 		}
@@ -301,7 +301,7 @@ public:
 		const ibPropertyChoiceMode mode = binding.property->GetValueList(choices);
 
 		if (mode == ibPropertyChoiceMode::None) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' offers nothing to choose from."), binding.property->GetName());
 			return false;
 		}
@@ -317,7 +317,7 @@ public:
 			const unsigned int index = (unsigned int)chosen;
 			ibValueMetaObject* other = ibFindMetaObjectById(activeMetaData, (ibMetaID)choices.GetId(index));
 			if (other == nullptr) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("Nothing in this configuration has id %ld."), choices.GetId(index));
 				return false;
 			}
@@ -336,7 +336,7 @@ public:
 
 			ibVariantDataMetaDesc* carried = binding.property->find_cell_variant<ibVariantDataMetaDesc>(placing);
 			if (carried == nullptr) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("'%s' offered a value this tool cannot read."), binding.property->GetName());
 				return false;
 			}
@@ -372,7 +372,7 @@ public:
 
 			activeMetaData->Modify(true);
 
-			result.SetValue(wxT("target"), choices.GetName(index));
+			result.SetValue(ibT("target"), choices.GetName(index));
 
 			// ⭐ SAID FROM THE SET THAT WAS PLACED, and there is nothing left to go and read. This
 			// used to reach back into the property's cell for a fresh variant — for a good reason
@@ -381,18 +381,18 @@ public:
 			// else to be found; it is `set`, composed three lines up out of what GetValueList
 			// offered, and placed through the gate, which returned false if it did not land.
 			// Asking the property to hand it back again is one more cast for a value already held.
-			result.AddField(wxT("bound"), ibDataValue::Array(BoundNames(activeMetaData, set)));
+			result.AddField(ibT("bound"), ibDataValue::Array(BoundNames(activeMetaData, set)));
 		}
 		else {
-			wxString offered;
+			ibString offered;
 			for (unsigned int index = 0; index < choices.GetCount(); ++index)
-				offered << (offered.IsEmpty() ? wxT("") : wxT(", "))
+				offered << (offered.IsEmpty() ? ibT("") : ibT(", "))
 					<< CandidateLabel(activeMetaData, choices.GetId(index), choices.GetName(index));
 
 			refusal = offered.IsEmpty()
-				? wxString::Format(ibMcpText("'%s' has nothing of that kind to be bound to yet."),
+				? ibString::Format(ibMcpText("'%s' has nothing of that kind to be bound to yet."),
 					binding.property->GetName())
-				: wxString::Format(ibMcpText("'%s' takes one of: %s."),
+				: ibString::Format(ibMcpText("'%s' takes one of: %s."),
 					binding.property->GetName(), offered);
 			return false;
 		}
@@ -402,7 +402,7 @@ public:
 		// all — ibMcpApplyByHand returns false and the refusal is the answer — so what `bound` is
 		// worth is exactly "this is what went in". A caller who wants the other kind of assurance
 		// asks this verb again without a target, which reads the binding and nothing else.
-		result.SetValue(wxT("note"),
+		result.SetValue(ibT("note"),
 			ibMcpText("`bound` is the set as it was placed. A change the platform declined would have "
 			  "come back as a refusal instead of an answer; to read the binding on its own, ask "
 			  "again without a target."));

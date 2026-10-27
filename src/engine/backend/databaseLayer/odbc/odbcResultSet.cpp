@@ -50,9 +50,9 @@ ibDatabaseResultSetODBC::ibDatabaseResultSetODBC(ibInterfaceODBC* pInterface, ib
 		}
 
 #if wxUSE_UNICODE
-		wxString strField = ConvertFromUnicodeStream((const char*)(ibChar*)field_name);
+		ibString strField = ConvertFromUnicodeStream((const char*)(ibChar*)field_name);
 #else
-		wxString strField((ibChar*)field_name);
+		ibString strField((ibChar*)field_name);
 #endif
 		m_FieldLookupMap[strField] = i;   // as written: the map is case-blind (StringToIntMap)
 	}
@@ -180,7 +180,7 @@ int ibDatabaseResultSetODBC::GetFieldLength(int nField)
 		RetrieveFieldData(nField);
 		*/
 
-	wxString strValue = m_fieldValues[nField - 1].GetString();
+	ibString strValue = m_fieldValues[nField - 1].GetString();
 
 	strValue = strValue.Trim();
 	unsigned int real_size = strValue.Length();
@@ -266,7 +266,7 @@ void ibDatabaseResultSetODBC::RetrieveFieldData(int nField)
 		}
 		else
 		{
-			wxString strValue;
+			ibString strValue;
 			SQLPOINTER buff[8192];
 
 			memset(buff, 0, 8192 * sizeof(SQLTCHAR));
@@ -318,7 +318,7 @@ void ibDatabaseResultSetODBC::RetrieveFieldData(int nField)
 	}
 }
 
-int ibDatabaseResultSetODBC::GetFieldLength(const wxString& strField)
+int ibDatabaseResultSetODBC::GetFieldLength(const ibString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex == -1)
@@ -348,10 +348,10 @@ ibString ibDatabaseResultSetODBC::GetResultString(int nField)
 
 	// A date is kept as its reading (the one field kind held as a long long here); read as text it is
 	// the reading's parts spelled the ISO way, as the text-keeping drivers hold a TIMESTAMP.
-	if (m_fieldValues[nField - 1].GetType() == wxT("longlong")) {
+	if (m_fieldValues[nField - 1].GetType() == ibT("longlong")) {
 		ibDateTimeParts p;
 		ibDateTime(m_fieldValues[nField - 1].GetLongLong().GetValue()).ToParts(p);
-		return wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second);
+		return ibString::Format(ibT("%04d-%02u-%02u %02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second);
 	}
 	// The row is kept as wxVariants, so the text is a wxString already - it crosses once, here.
 	return ibString(m_fieldValues[nField - 1].GetString());
@@ -447,7 +447,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, ibMemoryBuffer& buffer)
 		nReturn = m_pInterface->GetSQLGetData()(m_pODBCStatement, nField, SQL_C_BINARY, &buff, iLength, &iSize);
 		if (nReturn != SQL_SUCCESS && nReturn != SQL_SUCCESS_WITH_INFO)
 		{
-			ibJournalError(wxT("db.odbc"),wxT("Error with RunQueryWithResults - 1\n"));
+			ibJournalError(ibT("db.odbc"),ibT("Error with RunQueryWithResults - 1\n"));
 			InterpretErrorCodes(nReturn, m_pODBCStatement);
 			ThrowDatabaseException();
 		}
@@ -476,7 +476,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, ibMemoryBuffer& buffer)
 			nReturn = m_pInterface->GetSQLGetData()(m_pODBCStatement, nField, SQL_C_BINARY, &buff, iLength, &iSize);
 			if (nReturn != SQL_SUCCESS && nReturn != SQL_SUCCESS_WITH_INFO)
 			{
-				ibJournalError(wxT("db.odbc"),wxT("Error with RunQueryWithResults - 2\n"));
+				ibJournalError(ibT("db.odbc"),ibT("Error with RunQueryWithResults - 2\n"));
 				InterpretErrorCodes(nReturn, m_pODBCStatement);
 				ThrowDatabaseException();
 			}
@@ -518,7 +518,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, ibMemoryBuffer& buffer)
 	}
 }
 
-int ibDatabaseResultSetODBC::LookupField(const wxString& strField)
+int ibDatabaseResultSetODBC::LookupField(const ibString& strField)
 {
 	// Found, not walked — the names are kept as written and the map ignores case; see firebirdResultSet.cpp.
 	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
@@ -531,8 +531,8 @@ int ibDatabaseResultSetODBC::LookupField(const wxString& strField)
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
-			/*sqlState*/ wxEmptyString,
-			wxT("Field '") + strField + wxT("' not found in the resultset"));
+			/*sqlState*/ ibEmptyString,
+			ibT("Field '") + strField + ibT("' not found in the resultset"));
 	}
 	else
 	{
@@ -562,11 +562,11 @@ void ibDatabaseResultSetODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr
 		m_pInterface->GetSQLGetDiagRec()(SQL_HANDLE_STMT, stmth_ptr, 1, strState, &iNativeCode,
 			strBuffer, ERR_BUFFER_LEN, &iMsgLen);
 
-		const wxString strSqlState = ConvertFromUnicodeStream((char*)strState);
+		const ibString strSqlState = ConvertFromUnicodeStream((char*)strState);
 		SetErrorCode(ibDatabaseLayerODBC::TranslateErrorCode((int)iNativeCode, strSqlState),
 			ibDatabaseLayerODBC::ClassifySqlState(strSqlState, (int)iNativeCode));
 		//SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
-		SetErrorMessage(wxString((ibChar*)strBuffer));
+		SetErrorMessage(ibString((ibChar*)strBuffer));
 	}
 }
 

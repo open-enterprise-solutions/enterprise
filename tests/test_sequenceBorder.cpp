@@ -111,18 +111,18 @@ struct SequenceBorderFix : ::testing::Test {
 	const ibBackendQueryColumn* Dimension() const {
 		return seq->GetDimensionArrayObject().front()->GetQueryColumn();
 	}
-	static wxString FieldList(const std::vector<const ibBackendQueryColumn*>& columns, bool typed = false) {
-		wxString list;
-		std::set<wxString> seen;
+	static ibString FieldList(const std::vector<const ibBackendQueryColumn*>& columns, bool typed = false) {
+		ibString list;
+		std::set<ibString> seen;
 		for (const ibBackendQueryColumn* column : columns)
-			for (const wxString& field : ColumnFieldNames(column))
+			for (const ibString& field : ColumnFieldNames(column))
 				if (seen.insert(field).second)
-					list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << (typed ? SqliteTypeOf(field) : wxString());
+					list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << (typed ? SqliteTypeOf(field) : ibString());
 		return list;
 	}
 	// Declared by what each field holds, as the platform's own DDL declares them - a table of untyped
 	// columns would be a table no configuration ever has.
-	static wxString SqliteTypeOf(const wxString& field) {
+	static ibString SqliteTypeOf(const ibString& field) {
 		if (field.EndsWith(wxT("_RRRef"))) return wxT(" BLOB");
 		if (field.EndsWith(wxT("_D")) || field.EndsWith(wxT("_S"))) return wxT(" TEXT");
 		if (field.EndsWith(wxT("_N"))) return wxT(" NUMERIC");
@@ -131,8 +131,8 @@ struct SequenceBorderFix : ::testing::Test {
 
 	// A value said as the fields that hold it - the same codec the rules write the border through.
 	void Assign(std::vector<ibDmlAssign>& out, const ibBackendQueryColumn* column, const ibValue& value) const {
-		const std::vector<wxString> fields = ColumnFieldNames(column);
-		ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+		const std::vector<ibString> fields = ColumnFieldNames(column);
+		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
 		ibColumnCodec::WriteValue(column, cfg.get(), value, &capture, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
@@ -148,7 +148,7 @@ struct SequenceBorderFix : ::testing::Test {
 	}
 
 	// What a posting does: the document's registration is written, then the border is told.
-	void Post(const ibValue& recorder, const ibDateTime& when, const wxString& warehouse) {
+	void Post(const ibValue& recorder, const ibDateTime& when, const ibString& warehouse) {
 		std::vector<ibDmlAssign> row;
 		Assign(row, seq->GetRegisterActive()->GetQueryColumn(), ibValue(true));
 		Assign(row, seq->GetRegisterPeriod()->GetQueryColumn(), ibValue(when));
@@ -173,7 +173,7 @@ struct SequenceBorderFix : ::testing::Test {
 		ASSERT_GE(drop.Execute(ibDelete(seq->GetQueryable()->GetQueryTableName(), where)), 0);
 	}
 
-	ibValue Border(const wxString& warehouse) const {
+	ibValue Border(const ibString& warehouse) const {
 		return ibSequenceBorderGet(seq, { ibValue(warehouse) });
 	}
 	static bool Same(const ibValue& a, const ibValue& b) {

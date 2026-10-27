@@ -4,10 +4,10 @@
 #include "backend/appData.h"
 
 #if defined(_USE_CONTROL_VALUECAST)
-void ThrowErrorTypeOperation(const wxString& fromType, const std::type_info& typeInfo)
+void ThrowErrorTypeOperation(const ibString& fromType, const std::type_info& typeInfo)
 {
 	if (!appData->DesignerMode()) {
-		wxString className = wxEmptyString;
+		ibString className = ibEmptyString;
 
 		const ibClassID& clsid = ibValue::GetTypeIDByRef(typeInfo);
 		if (clsid != 0) {

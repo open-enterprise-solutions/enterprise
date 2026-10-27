@@ -124,7 +124,7 @@ bool FileKindOf(const ibClassID& clsid, ibFileKind& kind)
 
 // …an item that reads or writes it — the tree's own, the command it sends by its Name (Load, Unload), the file by its
 // extension.
-void AppendFileItem(ibDataNode& menu, const wxString& name, const wxString& caption, ibFileKind kind)
+void AppendFileItem(ibDataNode& menu, const ibString& name, const ibString& caption, ibFileKind kind)
 {
 	ibDataNode& row = menu.AddChild(0, static_cast<ibMetaID>(menu.Children().size() + 1));
 	row.SetValue(ibProtocol::ibSchema::ibMetaData::Kind, static_cast<std::int32_t>(ibMetaMenuKind::Editor));
@@ -155,9 +155,9 @@ public:
 	}
 };
 
-wxString ibMetaTreeBase::ClsidText(const ibClassID& clsid)
+ibString ibMetaTreeBase::ClsidText(const ibClassID& clsid)
 {
-	return wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid));
+	return ibString::Format(ibT("%llu"), static_cast<unsigned long long>(clsid));
 }
 
 ibMetaTreeBase::ibMetaTreeBase(ibClientFrame* frame)
@@ -226,7 +226,7 @@ void ibMetaTreeBase::MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ib
 	case ibMetaDataNotifier::ibMetaStage::Renamed:
 		if (object != nullptr) {
 			if (ibMetaDocument* document = GetDocument(object)) {
-				document->SetTitle(object->GetClassName() + wxT(": ") + object->GetName());
+				document->SetTitle(object->GetClassName() + ibT(": ") + object->GetName());
 				document->OnChangeFilename(true);
 			}
 		}
@@ -358,7 +358,7 @@ ibMetaDocument* ibMetaTreeBase::GetDocument(ibValueMetaObject* metaObject) const
 //  The rows
 // ============================================================================
 
-ibDataNode& ibMetaTreeBase::AppendGroupItem(ibDataNode& parent, const ibClassID& clsid, const wxString& name)
+ibDataNode& ibMetaTreeBase::AppendGroupItem(ibDataNode& parent, const ibClassID& clsid, const ibString& name)
 {
 	// A group row is named by its place: it carries no object, and its place under its parent is fixed by the layout.
 	const ibMetaID place = -static_cast<ibMetaID>(parent.Children().size() + 1);
@@ -369,7 +369,7 @@ ibDataNode& ibMetaTreeBase::AppendGroupItem(ibDataNode& parent, const ibClassID&
 	// …and a group of what is kept in a file apart: one read in from it (the desktop's InsertItem).
 	ibFileKind kind = ibFileKind::Tool;
 	if (FileKindOf(clsid, kind))
-		AppendFileItem(item.Child(ibProtocol::ibSchema::ibMetaData::Menu), wxT("Load"), _("Insert data processor, report..."), kind);
+		AppendFileItem(item.Child(ibProtocol::ibSchema::ibMetaData::Menu), ibT("Load"), _("Insert data processor, report..."), kind);
 	return item;
 }
 
@@ -431,8 +431,8 @@ void ibMetaTreeBase::AppendMenu(ibDataNode& item, ibValueMetaObject* metaObject)
 
 	// …and the file it is kept in apart, as the desktop's tree offered it (PrepareReplaceMenu): read over it, written out.
 	if (keptInFile) {
-		AppendFileItem(menu, wxT("Load"), _("Replace data processor, report..."), kind);
-		AppendFileItem(menu, wxT("Unload"), _("Save data processor, report..."), kind);
+		AppendFileItem(menu, ibT("Load"), _("Replace data processor, report..."), kind);
+		AppendFileItem(menu, ibT("Unload"), _("Save data processor, report..."), kind);
 	}
 }
 
@@ -474,7 +474,7 @@ void ibConfigurationTree::OnDraw(ibDataNode& root)
 // FILL ONE GROUP OF AN OBJECT — what its owner hosts of it.
 template <typename TArray>
 void ibConfigurationTree::AppendObjectGroup(ibDataNode& parent, const ibClassID& groupClsid,
-	const wxString& label, const TArray& objects)
+	const ibString& label, const TArray& objects)
 {
 	ibDataNode& group = AppendGroupItem(parent, groupClsid, label);
 	for (auto object : objects) {
@@ -489,7 +489,7 @@ void ibConfigurationTree::AppendObjectGroup(ibDataNode& parent, const ibClassID&
 // TABLES — the one group whose rows are groups themselves: each table shows its own columns.
 template <typename TArray>
 void ibConfigurationTree::AppendTableGroup(ibDataNode& parent, const ibClassID& tableClsid,
-	const wxString& label, const TArray& tables)
+	const ibString& label, const TArray& tables)
 {
 	ibDataNode& group = AppendGroupItem(parent, tableClsid, label);
 	for (auto metaTable : tables) {
@@ -510,7 +510,7 @@ void ibConfigurationTree::AppendTableGroup(ibDataNode& parent, const ibClassID& 
 
 // COMMANDS — the rows nest.
 template <typename TArray>
-void ibConfigurationTree::AppendCommandGroup(ibDataNode& parent, const wxString& label, const TArray& commands)
+void ibConfigurationTree::AppendCommandGroup(ibDataNode& parent, const ibString& label, const TArray& commands)
 {
 	ibDataNode& group = AppendGroupItem(parent, g_metaCommandCLSID, label);
 	for (auto metaCommand : commands)
@@ -805,7 +805,7 @@ void ibConfigurationTree::FillData(ibDataNode& root)
 	};
 
 	ibDataNode& common = root.AddChild(0, -1);
-	common.SetValue(ibProtocol::ibSchema::ibMetaData::Title, commonName);
+	common.SetValue(ibProtocol::ibSchema::ibMetaData::Title, ibString(commonName));
 	for (const ibMetaTreeGroupDef* def : rows) {
 		if (def->m_owner == 0 && ibMetaGroupBandOf(def->m_clsid) == ibMetaGroupBand::Common)
 			fillGroup(common, def);

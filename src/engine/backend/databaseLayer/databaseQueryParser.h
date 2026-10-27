@@ -12,6 +12,8 @@
 #include <wx/wx.h>
 #endif
 
-wxArrayString ParseQueries(const wxString& strQuery);
+#include "core/fstring.h"   // ibString, ibT
+
+std::vector<ibString> ParseQueries(const ibString& strQuery);
 
 #endif // _DATABASEQUERYPARSER_H_

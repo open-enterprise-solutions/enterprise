@@ -40,16 +40,16 @@ void ibSchemaProperties::Build(const ibSession& session, const ibDataNode& args,
 	ibDataNode& properties = result.Child(ibProtocol::ibSchema::ibProperties::Properties);
 
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	ibMetaData* const metaData = ibSchemaMetaData::FindMetaData(session, args, refusal, error);
 	if (metaData == nullptr) {
 		if (refusal == ibProtocol::ibRefusal::NoSession)
 			return;
-		ibCoreException::Error(wxT("%s"), error);
+		ibCoreException::Error(ibT("%s"), error);
 	}
 	ibValueMetaObject* const object = ibSchemaMetaData::FindObject(metaData, args, ibProtocol::ibSchema::ibProperties::Id, refusal, error);
 	if (object == nullptr)
-		ibCoreException::Error(wxT("%s"), error);
+		ibCoreException::Error(ibT("%s"), error);
 
 	// …as the desktop's grid showed it: registered on it, asked what its state hides, its rows written — for this answer.
 	ibPropertyInspector inspector;
@@ -58,11 +58,11 @@ void ibSchemaProperties::Build(const ibSession& session, const ibDataNode& args,
 }
 
 std::function<void()> ibSchemaProperties::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	if (static_cast<ibProtocol::ibSchema::ibCommand>(command) != ibProtocol::ibSchema::ibCommand::Save) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = wxT("the inspector takes Save alone");
+		error = ibT("the inspector takes Save alone");
 		return nullptr;
 	}
 
@@ -73,11 +73,11 @@ std::function<void()> ibSchemaProperties::Command(const ibSession& session, std:
 	if (object == nullptr)
 		return nullptr;
 
-	const wxString name = args.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name);
+	const ibString name = args.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Name);
 	ibDataValue value;
 	if ((object->GetProperty(name) == nullptr && object->GetEvent(name) == nullptr) || !ReadValue(args, value)) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = wxString::Format(wxT("'%s' takes no such value of '%s'"), object->GetClassName(), name);
+		error = ibString::Format(ibT("'%s' takes no such value of '%s'"), object->GetClassName(), name);
 		return nullptr;
 	}
 

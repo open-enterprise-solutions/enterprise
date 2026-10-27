@@ -44,7 +44,7 @@ struct LoginNameFix : ::testing::Test {
 	}
 
 	// The base's one user, keeper, with the password given.
-	void Keep(const wxString& password)
+	void Keep(const ibString& password)
 	{
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibCreateTable(user_table, {
@@ -75,7 +75,7 @@ TEST_F(LoginNameFix, UsersAnswersTheNamesBeforeAnyLogin)
 
 	// The host of the test's base, as a server makes one per base: `users` binds the caller's thread to it for the read.
 	ibClientHost host(appData);
-	const wxString answer = host.Call(wxT(R"({"jsonrpc":"2.0","id":1,"method":"users","params":{}})"));
+	const ibString answer = host.Call(wxT(R"({"jsonrpc":"2.0","id":1,"method":"users","params":{}})"));
 	EXPECT_FALSE(answer.Contains(wxT("\"error\""))) << answer;
 	EXPECT_TRUE(answer.Contains(wxT("\"Users\""))) << answer;
 	EXPECT_TRUE(answer.Contains(wxT("\"keeper\""))) << answer;
@@ -83,7 +83,7 @@ TEST_F(LoginNameFix, UsersAnswersTheNamesBeforeAnyLogin)
 
 TEST_F(LoginNameFix, AnUnknownNameCostsTheSameAsAWrongPassword)
 {
-	const wxString password = wxT("right-secret");
+	const ibString password = wxT("right-secret");
 	Keep(password);
 
 	ibUserInfo info;

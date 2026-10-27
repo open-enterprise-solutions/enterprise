@@ -193,11 +193,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////
 template<class T> struct ibDataCodec;
 
-template<> struct ibDataCodec<wxString> {
-	static ibDataValue To(const wxString& v) { return ibDataValue::String(v); }
-	static wxString    From(const ibDataValue& v) { return v.AsString(); }
-};
-template<> struct ibDataCodec<ibString> {         // the engine's own string — the same String scalar
+template<> struct ibDataCodec<ibString> {         // the engine's own string — the String scalar
 	static ibDataValue To(const ibString& v) { return ibDataValue::String(v); }
 	static ibString    From(const ibDataValue& v) { return v.AsString(); }
 };
@@ -238,7 +234,6 @@ struct CORE_API ibDataKey {
 	ibDataKey(const char* ascii) noexcept;
 	ibDataKey(const wchar_t* text) noexcept;
 	ibDataKey(const ibString& text) noexcept : m_wide(text.wc_str()), m_length(text.length()) {}
-	ibDataKey(const wxString& text) noexcept : m_wide(text.wc_str()), m_length(text.length()) {}
 
 	const char*    m_ascii = nullptr;   // one of the two
 	const wchar_t* m_wide = nullptr;

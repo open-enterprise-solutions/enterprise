@@ -8,6 +8,8 @@
 #include "core/description/typeDescription.h"   // ibTypeDescription — what a CAST to a primitive converts to
 #include "core/fiber/fiber.h"          // StackLow — a parenthesized expression is native recursion
 
+#include <wx/translation.h>   // _() — the refusals' words
+
 #include <algorithm>
 #include <iterator>
 
@@ -27,24 +29,24 @@ const ibValueTypes s_castPrimitives[] = {
 
 // …and a date's composition, as the word that qualifies `Date(…)`.
 const std::pair<ibDateFractions, const ibChar*> s_dateFractions[] = {
-	{ ibDateFractions_Date, wxT("Date") }, { ibDateFractions_Time, wxT("Time") }, { ibDateFractions_DateTime, wxT("DateTime") } };
+	{ ibDateFractions_Date, ibT("Date") }, { ibDateFractions_Time, ibT("Time") }, { ibDateFractions_DateTime, ibT("DateTime") } };
 
 // The primitive a Cast names, with its qualifiers. False = the target is not a primitive (a narrowing CAST).
 // True with `wrong` set = a primitive qualified in a way it cannot be, said in words the parser raises.
 //
 // No qualifier limits nothing, as for a type a script names (ibValueTypeDescription::Unqualified): a Number
 // is not rounded, a String not cut, a Date keeps its time.
-bool ReadCastPrimitive(const ibQueryAstExpr& cast, ibTypeDescription& type, wxString& wrong)
+bool ReadCastPrimitive(const ibQueryAstExpr& cast, ibTypeDescription& type, ibString& wrong)
 {
 	if (cast.m_kind != ibQueryAstExprKind::Cast || cast.m_path.size() != 1)
 		return false;
 	const ibValueTypes* const vt = std::find_if(std::begin(s_castPrimitives), std::end(s_castPrimitives),
-		[&cast](ibValueTypes t) { return cast.m_path.front().IsSameAs(GetNameObjectFromVT(t), false); });
+		[&cast](ibValueTypes t) { return cast.m_path.front().IsSameAs(ibString(GetNameObjectFromVT(t)), false); });
 	if (vt == std::end(s_castPrimitives))
 		return false;
 
 	std::vector<unsigned int> numbers;
-	std::vector<wxString>     words;
+	std::vector<ibString>     words;
 	for (const ibQueryAstExprPtr& q : cast.m_args) {
 		if (!q || q->m_kind != ibQueryAstExprKind::Literal)
 			continue;
@@ -59,14 +61,14 @@ bool ReadCastPrimitive(const ibQueryAstExpr& cast, ibTypeDescription& type, wxSt
 	case ibValueTypes::TYPE_NUMBER:
 		if (!words.empty() || numbers.size() > 2 || (!numbers.empty() && (numbers[0] == 0 || numbers[0] > MAX_PRECISION_NUMBER))
 		    || (numbers.size() == 2 && numbers[1] > numbers[0]))
-			wrong = wxString::Format(_("a Number is qualified by its digits and the digits after the point: Number(15, 2), at most %d digits"),
+			wrong = ibString::Format(_("a Number is qualified by its digits and the digits after the point: Number(15, 2), at most %d digits"),
 				MAX_PRECISION_NUMBER);
 		else if (!numbers.empty())
 			number = ibQualifierNumber(static_cast<unsigned char>(numbers[0]), static_cast<unsigned char>(numbers.size() > 1 ? numbers[1] : 0));
 		break;
 	case ibValueTypes::TYPE_STRING:
 		if (!words.empty() || numbers.size() > 1 || (!numbers.empty() && numbers[0] > MAX_LENGTH_STRING))
-			wrong = wxString::Format(_("a String is qualified by its length: String(50), at most %d; none for an unlimited one"),
+			wrong = ibString::Format(_("a String is qualified by its length: String(50), at most %d; none for an unlimited one"),
 				MAX_LENGTH_STRING);
 		else if (!numbers.empty())
 			text = ibQualifierString(static_cast<unsigned short>(numbers[0]));
@@ -93,17 +95,17 @@ bool ReadCastPrimitive(const ibQueryAstExpr& cast, ibTypeDescription& type, wxSt
 
 } // namespace
 
-wxArrayString ibQueryCastPrimitiveWords()
+std::vector<ibString> ibQueryCastPrimitiveWords()
 {
-	wxArrayString words;
+	std::vector<ibString> words;
 	for (const ibValueTypes vt : s_castPrimitives)
-		words.Add(GetNameObjectFromVT(vt));
+		words.push_back(GetNameObjectFromVT(vt));
 	return words;
 }
 
 bool ibQueryCastType(const ibQueryAstExpr& cast, ibTypeDescription& type)
 {
-	wxString wrong;
+	ibString wrong;
 	return ReadCastPrimitive(cast, type, wrong) && wrong.IsEmpty();
 }
 
@@ -134,7 +136,7 @@ ibQueryAstExprPtr ibQueryMakeCast(ibQueryAstExprPtr value, const ibTypeDescripti
 		qualify(ibLiteral(ibNumber(type.GetLength())));
 	else if (vt == ibValueTypes::TYPE_DATE && type.GetDateFraction() != ibDateFractions_DateTime) {
 		for (const std::pair<ibDateFractions, const ibChar*>& f : s_dateFractions)
-			if (f.first == type.GetDateFraction()) qualify(ibLiteral(wxString(f.second)));
+			if (f.first == type.GetDateFraction()) qualify(ibLiteral(ibString(f.second)));
 	}
 	return cast;
 }
@@ -152,7 +154,7 @@ bool ibQueryParser::AcceptKw(ibQueryKeyword kw)
 void ibQueryParser::ExpectKw(ibQueryKeyword kw, const ibChar* what)
 {
 	if (!AcceptKw(kw))
-		ThrowQueryException(Cur(), wxString::Format(_("expected %s"), what));
+		ThrowQueryException(Cur(), ibString::Format(_("expected %s"), what));
 }
 
 bool ibQueryParser::AcceptPunct(ibChar c)
@@ -164,12 +166,12 @@ bool ibQueryParser::AcceptPunct(ibChar c)
 void ibQueryParser::ExpectPunct(ibChar c, const ibChar* what)
 {
 	if (!AcceptPunct(c))
-		ThrowQueryException(Cur(), wxString::Format(_("expected %s"), what));
+		ThrowQueryException(Cur(), ibString::Format(_("expected %s"), what));
 }
 
 // L4's refusal, in L4's variety. The token carries the span, so it rides out as data and a consumer
 // can put a caret on it rather than reading the number out of a translated sentence.
-void ibQueryParser::ThrowQueryException(const ibQueryToken& at, const wxString& msg) const
+void ibQueryParser::ThrowQueryException(const ibQueryToken& at, const ibString& msg) const
 {
 	// ⚠ THE NUMBER A PERSON READS IS 1-BASED; the one that travels as DATA is not. The lexer converts
 	// the line (`GetCurrentLine() + 1`) and leaves the column as the raw offset, which a caret wants —
@@ -177,14 +179,14 @@ void ibQueryParser::ThrowQueryException(const ibQueryToken& at, const wxString& 
 	// character short of the token it named, which reads as "the parser is pointing at the space before
 	// the problem" and costs whoever is reading the log an argument with their own arithmetic.
 	throw ibQueryRefusal(at.m_col, at.m_line,
-		wxString::Format(_("Query syntax error at line %u (position %u): %s"), at.m_line, at.m_col + 1, msg));
+		ibString::Format(_("Query syntax error at line %u (position %u): %s"), at.m_line, at.m_col + 1, msg));
 }
 
 //////////////////////////////////////////////////////////////////////
 // entry
 //////////////////////////////////////////////////////////////////////
 
-ibQuerySelectPtr ibQueryParser::Parse(const wxString& queryText)
+ibQuerySelectPtr ibQueryParser::Parse(const ibString& queryText)
 {
 	ibQueryLexer lexer;
 	m_toks = lexer.Tokenize(queryText);
@@ -192,7 +194,7 @@ ibQuerySelectPtr ibQueryParser::Parse(const wxString& queryText)
 
 	ibQuerySelectPtr sel = ParseSelectStatement();
 
-	AcceptPunct(wxT(';'));   // a lone trailing separator is punctuation, not a second statement
+	AcceptPunct(ibT(';'));   // a lone trailing separator is punctuation, not a second statement
 
 	if (!Cur().IsEnd())
 		ThrowQueryException(Cur(), _("unexpected text after the query"));
@@ -200,7 +202,7 @@ ibQuerySelectPtr ibQueryParser::Parse(const wxString& queryText)
 	return sel;
 }
 
-ibQueryPackage ibQueryParser::ParsePackage(const wxString& queryText)
+ibQueryPackage ibQueryParser::ParsePackage(const ibString& queryText)
 {
 	ibQueryLexer lexer;
 	m_toks = lexer.Tokenize(queryText);
@@ -260,7 +262,7 @@ ibQueryPackage ibQueryParser::ParsePackage(const wxString& queryText)
 		else {
 			package.m_statements.push_back(ParseStatement());
 		}
-		if (!AcceptPunct(wxT(';')))
+		if (!AcceptPunct(ibT(';')))
 			break;
 		if (Cur().IsEnd())
 			break;      // trailing ';' after the last statement
@@ -272,7 +274,7 @@ ibQueryPackage ibQueryParser::ParsePackage(const wxString& queryText)
 	return package;
 }
 
-ibQueryAstExprPtr ibQueryParser::ParseExpression(const wxString& exprText)
+ibQueryAstExprPtr ibQueryParser::ParseExpression(const ibString& exprText)
 {
 	ibQueryLexer lexer;
 	m_toks = lexer.Tokenize(exprText);
@@ -293,10 +295,10 @@ ibQueryAstExprPtr ibQueryParser::ParseExpression(const wxString& exprText)
 // False when the next token starts no join at all, which is how a loop over joins ends.
 bool ibQueryParser::ParseJoinKind(ibQueryJoinKindAst& kind)
 {
-	if      (AcceptKw(ibQueryKeyword::Inner)) {                                   ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Inner; }
-	else if (AcceptKw(ibQueryKeyword::Left))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Left;  }
-	else if (AcceptKw(ibQueryKeyword::Right)) { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Right; }
-	else if (AcceptKw(ibQueryKeyword::Full))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Full;  }
+	if      (AcceptKw(ibQueryKeyword::Inner)) {                                   ExpectKw(ibQueryKeyword::Join, ibT("JOIN")); kind = ibQueryJoinKindAst::Inner; }
+	else if (AcceptKw(ibQueryKeyword::Left))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, ibT("JOIN")); kind = ibQueryJoinKindAst::Left;  }
+	else if (AcceptKw(ibQueryKeyword::Right)) { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, ibT("JOIN")); kind = ibQueryJoinKindAst::Right; }
+	else if (AcceptKw(ibQueryKeyword::Full))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, ibT("JOIN")); kind = ibQueryJoinKindAst::Full;  }
 	else if (AcceptKw(ibQueryKeyword::Join))  {                                                                               kind = ibQueryJoinKindAst::Inner; }
 	else
 		return false;
@@ -321,11 +323,11 @@ std::vector<ibQueryPackageLink> ibQueryParser::ParsePackageLinks()
 {
 	std::vector<ibQueryPackageLink> links;
 
-	ExpectKw(ibQueryKeyword::Link, wxT("LINK"));
+	ExpectKw(ibQueryKeyword::Link, ibT("LINK"));
 
 	if (Cur().m_kind != ibQueryTokenKind::Ident)
 		ThrowQueryException(Cur(), _("expected the name of a selection after LINK"));
-	const wxString head = Next().m_text;
+	const ibString head = Next().m_text;
 
 	for (;;) {
 		ibQueryPackageLink link;
@@ -343,7 +345,7 @@ std::vector<ibQueryPackageLink> ibQueryParser::ParsePackageLinks()
 		// The condition is optional in the AST — a link may be declared and not written yet, which is
 		// what the constructor's empty row is — but in TEXT it has to be there: a package that says two
 		// selections are related without saying how says nothing.
-		ExpectKw(ibQueryKeyword::On, wxT("ON"));
+		ExpectKw(ibQueryKeyword::On, ibT("ON"));
 		link.m_on = ParsePredicate();
 		links.push_back(std::move(link));
 	}
@@ -373,7 +375,7 @@ ibQuerySelectPtr ibQueryParser::ParseSelectCore()
 {
 	auto sel = std::make_shared<ibQuerySelect>();
 
-	ExpectKw(ibQueryKeyword::Select, wxT("SELECT"));
+	ExpectKw(ibQueryKeyword::Select, ibT("SELECT"));
 
 	// SELECT ALLOWED — read what this user MAY read and skip the rest, instead of refusing the
 	// whole query. First, so the modifiers read in the order the renderer writes them.
@@ -429,10 +431,10 @@ ibQuerySelectPtr ibQueryParser::ParseSelectCore()
 		sel->m_where = ParsePredicate();
 
 	if (AcceptKw(ibQueryKeyword::Group)) {
-		ExpectKw(ibQueryKeyword::By, wxT("BY"));
+		ExpectKw(ibQueryKeyword::By, ibT("BY"));
 		// A KEY IS AN EXPRESSION, as a window's PARTITION BY key already is: `GROUP BY Price * Qty` is
 		// what the renderer writes for a computed key, and a primary stopped at the `*`.
-		do { sel->m_groupBy.push_back(ParseAddSub()); } while (AcceptPunct(wxT(',')));
+		do { sel->m_groupBy.push_back(ParseAddSub()); } while (AcceptPunct(ibT(',')));
 	}
 
 	// ⚠ HAVING IS ITS OWN CLAUSE, not a tail of GROUP BY. Nested inside it, `SELECT … FROM …
@@ -464,7 +466,7 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 
 	if (AcceptKw(ibQueryKeyword::Order)) {
 		const ibQueryToken& at = Cur();
-		ExpectKw(ibQueryKeyword::By, wxT("BY"));
+		ExpectKw(ibQueryKeyword::By, ibT("BY"));
 		ParseOrderBy(*sel);
 
 		// ⭐ AND A TEMPORARY TABLE HAS NO ORDER EITHER — the twin of the TOTALS refusal below, and the
@@ -493,12 +495,12 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 	// INDEX BY … — the columns the temp table this statement makes is indexed by.
 	if (AcceptKw(ibQueryKeyword::Index)) {
 		const ibQueryToken& at = Cur();
-		ExpectKw(ibQueryKeyword::By, wxT("BY after INDEX"));
+		ExpectKw(ibQueryKeyword::By, ibT("BY after INDEX"));
 		do {
 			auto column = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
 			column->m_path = ParseDottedName();
 			sel->m_indexBy.push_back(column);
-		} while (AcceptPunct(wxT(',')));
+		} while (AcceptPunct(ibT(',')));
 
 		// AN INDEX ON NOTHING IS NOTHING. Without INTO there is no table being made, so the clause
 		// could only describe a table that does not exist — a silent no-op, and the loudest kind of
@@ -517,7 +519,7 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 	// FOR UPDATE — last, because it qualifies the whole statement: the rows this select
 	// returned are HELD until the transaction ends.
 	if (AcceptKw(ibQueryKeyword::For)) {
-		ExpectKw(ibQueryKeyword::Update, wxT("UPDATE after FOR"));
+		ExpectKw(ibQueryKeyword::Update, ibT("UPDATE after FOR"));
 		sel->m_forUpdate = true;
 	}
 
@@ -530,14 +532,14 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 
 void ibQueryParser::ParseSelectList(ibQuerySelect& sel)
 {
-	if (Cur().IsOp(wxT("*"))) {
+	if (Cur().IsOp(ibT("*"))) {
 		++m_pos;
 		sel.m_selectAll = true;
 		return;
 	}
 	do {
 		sel.m_projections.push_back(ParseProjection());
-	} while (AcceptPunct(wxT(',')));
+	} while (AcceptPunct(ibT(',')));
 }
 
 ibQueryProjection ibQueryParser::ParseProjection()
@@ -565,7 +567,7 @@ ibQueryProjection ibQueryParser::ParseProjection()
 	// `field1 ROLE <word> AS Field1`). Optional: unsaid, the field is what its source says. Contextual, not
 	// reserved — `ROLE` is this only when one of the five words follows it, so a field named `Role` stays a
 	// name, with or without AS.
-	if (Cur().m_kind == ibQueryTokenKind::Ident && Cur().m_text.IsSameAs(wxT("ROLE"), false)) {
+	if (Cur().m_kind == ibQueryTokenKind::Ident && Cur().m_text.IsSameAs(ibT("ROLE"), false)) {
 		const ibQueryToken& word = Peek();
 		if (word.m_kind == ibQueryTokenKind::Ident || word.m_kind == ibQueryTokenKind::Keyword)
 			for (const ibBalanceRole role : { ibBalanceRole::None, ibBalanceRole::Moment, ibBalanceRole::Dimension,
@@ -626,11 +628,11 @@ ibQuerySource ibQueryParser::ParseSource()
 	s.m_col  = Cur().m_col;
 
 	// subquery source: FROM ( SELECT … ) [AS] alias
-	if (Cur().IsPunct(wxT('(')) && Peek().IsKeyword(ibQueryKeyword::Select)) {
+	if (Cur().IsPunct(ibT('(')) && Peek().IsKeyword(ibQueryKeyword::Select)) {
 		const ibQueryToken& at = Cur();
 		++m_pos;                                   // '('
 		s.m_subquery = ParseSelectStatement();
-		ExpectPunct(wxT(')'), wxT("')' after a subquery"));
+		ExpectPunct(ibT(')'), ibT("')' after a subquery"));
 		// A NESTED QUERY IS NOT A STATEMENT. INTO materialises a package's temp table and FOR
 		// UPDATE holds a statement's rows — inside a source both are silent no-ops, and a silent
 		// no-op in a query someone wrote deliberately is worse than a refusal.
@@ -669,21 +671,21 @@ ibQuerySource ibQueryParser::ParseSource()
 		//
 		// The comma stays the separator: it is not an operator in this language, so the expression
 		// parser stops at it on its own.
-		if (AcceptPunct(wxT('('))) {
-			if (!Cur().IsPunct(wxT(')'))) {
+		if (AcceptPunct(ibT('('))) {
+			if (!Cur().IsPunct(ibT(')'))) {
 				// AN OMITTED ARGUMENT KEEPS ITS PLACE — `Balance(, Warehouse = &W)` means "no moment,
 				// this condition", and `Turnovers(&From, &To, , Warehouse = &W)` skips only the
 				// periodicity. The arguments are positional, so a missing one has to be written as
 				// nothing between commas; reading it as absent would shift every later argument into
 				// the wrong slot.
 				do {
-					if (Cur().IsPunct(wxT(',')) || Cur().IsPunct(wxT(')')))
+					if (Cur().IsPunct(ibT(',')) || Cur().IsPunct(ibT(')')))
 						s.m_args.push_back(nullptr);
 					else
 						s.m_args.push_back(ParsePredicate());
-				} while (AcceptPunct(wxT(',')));
+				} while (AcceptPunct(ibT(',')));
 			}
-			ExpectPunct(wxT(')'), wxT("')' after the source arguments"));
+			ExpectPunct(ibT(')'), ibT("')' after the source arguments"));
 		}
 	}
 
@@ -709,7 +711,7 @@ void ibQueryParser::ParseJoins(ibQuerySelect& sel)
 		// link" and "a link somebody stopped writing" are the same text, and the reader cannot tell
 		// them apart — which is why a bare JOIN is refused below. The comma says the first out loud;
 		// JOIN then always carries its ON.
-		if (Cur().IsPunct(wxT(','))) {
+		if (Cur().IsPunct(ibT(','))) {
 			++m_pos;
 			ibQueryAstJoin product;
 			product.m_kind = ibQueryJoinKindAst::Inner;
@@ -730,7 +732,7 @@ void ibQueryParser::ParseJoins(ibQuerySelect& sel)
 		// product, which the comma above now says properly. Whoever wants every combination writes
 		// the comma, or `ON TRUE`; whoever forgot the keys is told, here, at the position of the
 		// table they forgot them on.
-		ExpectKw(ibQueryKeyword::On, wxT("ON after JOIN (use a comma for every combination of rows)"));
+		ExpectKw(ibQueryKeyword::On, ibT("ON after JOIN (use a comma for every combination of rows)"));
 		j.m_on = ParsePredicate();
 		sel.m_joins.push_back(std::move(j));
 	}
@@ -765,15 +767,15 @@ void ibQueryParser::ParseOrderBy(ibQuerySelect& sel)
 			|| tk.m_kind == ibQueryTokenKind::Param
 			// A LEADING SIGN starts an expression too — `ORDER BY -Total` is "biggest first" written
 			// the short way, and it reads as a name only until the minus is accounted for.
-			|| (tk.m_kind == ibQueryTokenKind::Op && (tk.m_text == wxT("-") || tk.m_text == wxT("+")))
-			|| (tk.m_kind == ibQueryTokenKind::Punct && tk.m_text == wxT("("))
+			|| (tk.m_kind == ibQueryTokenKind::Op && (tk.m_text == ibT("-") || tk.m_text == ibT("+")))
+			|| (tk.m_kind == ibQueryTokenKind::Punct && tk.m_text == ibT("("))
 			// ⚠ …AND A WORD WITH A BRACKET BEHIND IT IS A CALL — `ORDER BY YEAR(Date)`,
 			// `CAST(x AS Number)`, `VALUE(Enum.Kind.Retail)`. No attribute name is ever followed by `(`,
 			// so the bracket settles what the word alone could not. Read as a name, the word came back
 			// as a column and the `(` as "unexpected text after the query" — for text the renderer
 			// itself writes, so the constructor broke its own query on the way back (2026-09-28).
 			|| ((tk.m_kind == ibQueryTokenKind::Ident || tk.m_kind == ibQueryTokenKind::Keyword)
-			    && Peek().IsPunct(wxT('(')));
+			    && Peek().IsPunct(ibT('(')));
 
 		if (startsExpression) {
 			it.m_expr = ParsePredicate();
@@ -795,16 +797,16 @@ void ibQueryParser::ParseOrderBy(ibQuerySelect& sel)
 			// The name just read IS the left operand, so the arithmetic levels are re-entered with
 			// it in hand. Deciding by the FIRST TOKEN was the mistake: the first token of an
 			// expression and the first token of a name are the same token.
-			if (Cur().IsOp(wxT("*")) || Cur().IsOp(wxT("/")) || Cur().IsOp(wxT("%")))
+			if (Cur().IsOp(ibT("*")) || Cur().IsOp(ibT("/")) || Cur().IsOp(ibT("%")))
 				it.m_expr = ParseMulDivFrom(it.m_expr);
 
-			if (Cur().IsOp(wxT("+")) || Cur().IsOp(wxT("-")))
+			if (Cur().IsOp(ibT("+")) || Cur().IsOp(ibT("-")))
 				it.m_expr = ParseAddSubFrom(it.m_expr);
 		}
 		if (AcceptKw(ibQueryKeyword::Desc))      it.m_ascending = false;
 		else if (AcceptKw(ibQueryKeyword::Asc))  it.m_ascending = true;
 		sel.m_orderBy.push_back(std::move(it));
-	} while (AcceptPunct(wxT(',')));
+	} while (AcceptPunct(ibT(',')));
 }
 
 // ONE FIELD OF A TOTALS LEVEL — the field itself and how it is READ. Its own function because the
@@ -840,20 +842,20 @@ ibQueryTotalField ibQueryParser::ParseTotalField()
 	// `BY Period PERIODS(Month, &From, &To)` — the unit is a bare word (the vocabulary belongs to the
 	// lowering, which already reads it for a register's Turnovers), and the two bounds are optional.
 	else if (AcceptKw(ibQueryKeyword::Periods)) {
-		ExpectPunct(wxT('('), wxT("'(' after PERIODS"));
+		ExpectPunct(ibT('('), ibT("'(' after PERIODS"));
 		auto periods = std::make_shared<ibQueryTotalPeriods>();
 		if (Cur().m_kind != ibQueryTokenKind::Ident && Cur().m_kind != ibQueryTokenKind::Keyword)
 			ThrowQueryException(Cur(), _("expected the period unit (Day / Month / Quarter / Year ...) in PERIODS"));
 		periods->m_unit = Next().m_text;
 		// The bounds, when written. Either may be left out — an empty slot reads as "from the data",
 		// the same way an omitted argument does in a virtual-table call.
-		if (AcceptPunct(wxT(','))) {
-			if (!Cur().IsPunct(wxT(',')) && !Cur().IsPunct(wxT(')')))
+		if (AcceptPunct(ibT(','))) {
+			if (!Cur().IsPunct(ibT(',')) && !Cur().IsPunct(ibT(')')))
 				periods->m_from = ParseAddSub();
-			if (AcceptPunct(wxT(',')) && !Cur().IsPunct(wxT(')')))
+			if (AcceptPunct(ibT(',')) && !Cur().IsPunct(ibT(')')))
 				periods->m_to = ParseAddSub();
 		}
-		ExpectPunct(wxT(')'), wxT("')' after the arguments of PERIODS"));
+		ExpectPunct(ibT(')'), ibT("')' after the arguments of PERIODS"));
 		f.m_periods = std::move(periods);
 	}
 	return f;
@@ -861,7 +863,7 @@ ibQueryTotalField ibQueryParser::ParseTotalField()
 
 // The same thing from a piece of TEXT — the constructor's cell, one field per call. Same lexer, same
 // parser, same refusals; nothing about a level field is spelled twice.
-ibQueryTotalField ibQueryParser::ParseTotalsField(const wxString& fieldText)
+ibQueryTotalField ibQueryParser::ParseTotalsField(const ibString& fieldText)
 {
 	ibQueryLexer lexer;
 	m_toks = lexer.Tokenize(fieldText);
@@ -900,36 +902,36 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 			// as it is written. A single name needs no brackets, which is the common case and stays
 			// short.
 			if (AcceptKw(ibQueryKeyword::Over)) {
-				const bool bracketed = AcceptPunct(wxT('('));
+				const bool bracketed = AcceptPunct(ibT('('));
 				// ⭐ A GROUPING MAY BE NAMED AFTER A KEYWORD — the same rule, and the same reason, as
 				// a totals FIELD (see ParseTotalField): a constant's attribute is literally `Value`,
 				// and `VALUE` is a word of this language. An area names a grouping, so it inherits the
 				// rule; `OVER (Posted, Value)` died as "expected a name" without it (Max, live,
 				// 2026-08-27). The words that structure the clause here are `AS` and `BY`.
-				const auto nameHere = [this]() -> wxString {
+				const auto nameHere = [this]() -> ibString {
 					if (Cur().m_kind == ibQueryTokenKind::Ident)
 						return Next().m_text;
 					if (Cur().m_kind == ibQueryTokenKind::Keyword
 					    && Cur().m_keyword != ibQueryKeyword::As && Cur().m_keyword != ibQueryKeyword::By)
 						return Next().m_text;
-					return wxString();
+					return ibString();
 				};
 				do {
-					wxString one = nameHere();
+					ibString one = nameHere();
 					if (one.IsEmpty())
 						ThrowQueryException(Cur(), _("expected a grouping name after OVER: the level this figure is computed over"));
-					if (AcceptPunct(wxT('.'))) {      // <branch>.<level> — the branch qualifies the level
-						const wxString level = nameHere();
+					if (AcceptPunct(ibT('.'))) {      // <branch>.<level> — the branch qualifies the level
+						const ibString level = nameHere();
 						if (level.IsEmpty())
 							ThrowQueryException(Cur(), _("expected a grouping name after the branch name in OVER"));
-						one += wxT(".") + level;
+						one += ibT(".") + level;
 					}
 					if (!resource.m_scope.IsEmpty())
-						resource.m_scope += wxT(", ");
+						resource.m_scope += ibT(", ");
 					resource.m_scope += one;
-				} while (bracketed && AcceptPunct(wxT(',')));
+				} while (bracketed && AcceptPunct(ibT(',')));
 				if (bracketed)
-					ExpectPunct(wxT(')'), wxT("')' closing the OVER list"));
+					ExpectPunct(ibT(')'), ibT("')' closing the OVER list"));
 			}
 			// [AS] alias — the name the FIGURE answers to, written exactly where a level writes its
 			// own (see the BY loop below): after the thing it names, with AS optional. One rule for
@@ -943,9 +945,9 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 				resource.m_alias = Next().m_text;
 			}
 			sel.m_totalsAggregates.push_back(std::move(resource));
-		} while (AcceptPunct(wxT(',')));
+		} while (AcceptPunct(ibT(',')));
 
-		ExpectKw(ibQueryKeyword::By, wxT("BY in TOTALS"));
+		ExpectKw(ibQueryKeyword::By, ibT("BY in TOTALS"));
 	}
 
 	// OVERALL — the level above every dimension, and the only one that names no column. It is read
@@ -957,7 +959,7 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 		// says dimensions follow — and so does SPLIT, which opens a node of its own and needs no comma
 		// before it: `BY OVERALL SPLIT ByItem BY Item` is what the renderer writes for a report whose
 		// only node hangs off the grand total, and this line used to stop at OVERALL and refuse the rest.
-		if (!AcceptPunct(wxT(',')) && !Cur().IsKeyword(ibQueryKeyword::Split))
+		if (!AcceptPunct(ibT(',')) && !Cur().IsKeyword(ibQueryKeyword::Split))
 			return;
 	}
 
@@ -993,7 +995,7 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 		ibQueryTotalSplit node;
 		if (Cur().m_kind == ibQueryTokenKind::Ident)
 			node.m_name = Next().m_text;
-		ExpectKw(ibQueryKeyword::By, wxT("BY after SPLIT"));
+		ExpectKw(ibQueryKeyword::By, ibT("BY after SPLIT"));
 		sel.m_totalsSplits.push_back(std::move(node));
 		nodeAt = static_cast<int>(sel.m_totalsSplits.size()) - 1;
 	};
@@ -1009,12 +1011,12 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 		// ONE LEVEL, SEVERAL FIELDS — `BY (Partner, Contract)`. The bracket is what says "together":
 		// outside it a comma has always separated LEVELS, and that reading is untouched. A single
 		// field needs no bracket, so every query written before this parses exactly as it did.
-		const bool bracketed = AcceptPunct(wxT('('));
+		const bool bracketed = AcceptPunct(ibT('('));
 		do {
 			d.m_fields.push_back(ParseTotalField());
-		} while (bracketed && AcceptPunct(wxT(',')));
+		} while (bracketed && AcceptPunct(ibT(',')));
 		if (bracketed)
-			ExpectPunct(wxT(')'), wxT("')' after the fields of one TOTALS level"));
+			ExpectPunct(ibT(')'), ibT("')' after the fields of one TOTALS level"));
 
 		// [AS] alias — the name this LEVEL answers to. Written after the fields, because the unfold
 		// belongs to a dimension and the alias belongs to the level they produce together.
@@ -1033,7 +1035,7 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 		// A COMMA CONTINUES THIS NODE'S LADDER; `SPLIT` OPENS THE NEXT NODE. Two ways to go on, and
 		// they mean different things — which is exactly why the word exists (a bracket could not say
 		// it: the brackets are taken by a level of several fields).
-		more = AcceptPunct(wxT(','));
+		more = AcceptPunct(ibT(','));
 		if (!more && AcceptKw(ibQueryKeyword::Split)) {
 			openNode();
 			more = true;
@@ -1041,14 +1043,14 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 	} while (more);
 }
 
-std::vector<wxString> ibQueryParser::ParseDottedName(bool firstMayBeKeyword)
+std::vector<ibString> ibQueryParser::ParseDottedName(bool firstMayBeKeyword)
 {
-	std::vector<wxString> parts;
+	std::vector<ibString> parts;
 	if (Cur().m_kind != ibQueryTokenKind::Ident
 	    && !(firstMayBeKeyword && Cur().m_kind == ibQueryTokenKind::Keyword))
 		ThrowQueryException(Cur(), _("expected a name"));
 	parts.push_back(Next().m_text);
-	while (AcceptPunct(wxT('.'))) {
+	while (AcceptPunct(ibT('.'))) {
 		// ⚠ AFTER A DOT, A KEYWORD IS A NAME. The position decides: nothing but a name can follow a
 		// `.`, so there is no ambiguity to resolve and no reason to refuse one.
 		//
@@ -1108,14 +1110,14 @@ ibQueryAstExprPtr ibQueryParser::ParseComparison()
 
 	// binary comparison operator
 	if (Cur().m_kind == ibQueryTokenKind::Op) {
-		const wxString& o = Cur().m_text;
+		const ibString& o = Cur().m_text;
 		ibQueryCompareOp op;
-		if      (o == wxT("="))  op = ibQueryCompareOp::Eq;
-		else if (o == wxT("<>")) op = ibQueryCompareOp::Ne;
-		else if (o == wxT("<"))  op = ibQueryCompareOp::Lt;
-		else if (o == wxT("<=")) op = ibQueryCompareOp::Le;
-		else if (o == wxT(">"))  op = ibQueryCompareOp::Gt;
-		else if (o == wxT(">=")) op = ibQueryCompareOp::Ge;
+		if      (o == ibT("="))  op = ibQueryCompareOp::Eq;
+		else if (o == ibT("<>")) op = ibQueryCompareOp::Ne;
+		else if (o == ibT("<"))  op = ibQueryCompareOp::Lt;
+		else if (o == ibT("<=")) op = ibQueryCompareOp::Le;
+		else if (o == ibT(">"))  op = ibQueryCompareOp::Gt;
+		else if (o == ibT(">=")) op = ibQueryCompareOp::Ge;
 		else return lhs;   // a leftover arithmetic op cannot appear here (ParseAddSub consumed them)
 		++m_pos;
 		ibQueryAstExprPtr rhs = ParseAddSub();
@@ -1156,7 +1158,7 @@ ibQueryAstExprPtr ibQueryParser::ParseComparison()
 		if (AcceptKw(ibQueryKeyword::HierarchyOnly))    unfold = ibQueryDimUnfold::HierarchyOnly;
 		else if (AcceptKw(ibQueryKeyword::Hierarchy))   unfold = ibQueryDimUnfold::Hierarchy;
 
-		ExpectPunct(wxT('('), wxT("'(' after IN"));
+		ExpectPunct(ibT('('), ibT("'(' after IN"));
 		auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::In);
 		n->m_negated = negated; n->m_lhs = lhs; n->m_unfold = unfold;
 		if (unfold != ibQueryDimUnfold::Elements) {
@@ -1169,22 +1171,22 @@ ibQueryAstExprPtr ibQueryParser::ParseComparison()
 			// to name several: the operand is one expression, the values in it may be many.
 			const ibQueryToken at = Cur();
 			ibQueryAstExprPtr operand = ParseAddSub();
-			if (!operand || operand->m_kind != ibQueryAstExprKind::Param || Cur().IsPunct(wxT(',')))
+			if (!operand || operand->m_kind != ibQueryAstExprKind::Param || Cur().IsPunct(ibT(',')))
 				ThrowQueryException(at, _("IN HIERARCHY takes one &parameter: the values have to be in hand to walk down to what is subordinate to them"));
 			n->m_list.push_back(operand);
 		}
 		else if (Cur().IsKeyword(ibQueryKeyword::Select))     // lhs IN (SELECT …) — subquery form
 			n->m_subquery = ParseSelectStatement();
 		else
-			do { n->m_list.push_back(ParseAddSub()); } while (AcceptPunct(wxT(',')));
-		ExpectPunct(wxT(')'), wxT("')'"));
+			do { n->m_list.push_back(ParseAddSub()); } while (AcceptPunct(ibT(',')));
+		ExpectPunct(ibT(')'), ibT("')'"));
 		return n;
 	}
 	if (AcceptKw(ibQueryKeyword::Between)) {
 		auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::Between);
 		n->m_negated = negated; n->m_lhs = lhs;
 		n->m_low = ParseAddSub();
-		ExpectKw(ibQueryKeyword::And, wxT("AND in BETWEEN"));
+		ExpectKw(ibQueryKeyword::And, ibT("AND in BETWEEN"));
 		n->m_high = ParseAddSub();
 		return n;
 	}
@@ -1192,7 +1194,7 @@ ibQueryAstExprPtr ibQueryParser::ParseComparison()
 	// IS [NOT] NULL  (negation comes AFTER IS, so it cannot have been consumed above)
 	if (!negated && AcceptKw(ibQueryKeyword::Is)) {
 		const bool isNeg = AcceptKw(ibQueryKeyword::Not);
-		ExpectKw(ibQueryKeyword::Null, wxT("NULL after IS"));
+		ExpectKw(ibQueryKeyword::Null, ibT("NULL after IS"));
 		auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::IsNull);
 		n->m_negated = isNeg; n->m_lhs = lhs;
 		return n;
@@ -1224,8 +1226,8 @@ ibQueryAstExprPtr ibQueryParser::ParseAddSubFrom(ibQueryAstExprPtr lhs)
 {
 	for (;;) {
 		ibQueryArithOp op;
-		if      (Cur().IsOp(wxT("+"))) op = ibQueryArithOp::Add;
-		else if (Cur().IsOp(wxT("-"))) op = ibQueryArithOp::Sub;
+		if      (Cur().IsOp(ibT("+"))) op = ibQueryArithOp::Add;
+		else if (Cur().IsOp(ibT("-"))) op = ibQueryArithOp::Sub;
 		else break;
 		const ibQueryToken at = Cur(); ++m_pos;
 		auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::Arith);
@@ -1245,9 +1247,9 @@ ibQueryAstExprPtr ibQueryParser::ParseMulDivFrom(ibQueryAstExprPtr lhs)
 {
 	for (;;) {
 		ibQueryArithOp op;
-		if      (Cur().IsOp(wxT("*"))) op = ibQueryArithOp::Mul;
-		else if (Cur().IsOp(wxT("/"))) op = ibQueryArithOp::Div;
-		else if (Cur().IsOp(wxT("%"))) op = ibQueryArithOp::Mod;
+		if      (Cur().IsOp(ibT("*"))) op = ibQueryArithOp::Mul;
+		else if (Cur().IsOp(ibT("/"))) op = ibQueryArithOp::Div;
+		else if (Cur().IsOp(ibT("%"))) op = ibQueryArithOp::Mod;
 		else break;
 		const ibQueryToken at = Cur(); ++m_pos;
 		auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::Arith);
@@ -1262,21 +1264,21 @@ ibQueryAstExprPtr ibQueryParser::ParseMulDivFrom(ibQueryAstExprPtr lhs)
 ibQueryAstExprPtr ibQueryParser::ParseCase()
 {
 	const ibQueryToken kw = Cur();
-	ExpectKw(ibQueryKeyword::Case, wxT("CASE"));
+	ExpectKw(ibQueryKeyword::Case, ibT("CASE"));
 	auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::Case);
 	n->m_line = kw.m_line; n->m_col = kw.m_col;
 
 	do {
-		ExpectKw(ibQueryKeyword::When, wxT("WHEN"));
+		ExpectKw(ibQueryKeyword::When, ibT("WHEN"));
 		ibQueryAstExprPtr cond = ParsePredicate();
-		ExpectKw(ibQueryKeyword::Then, wxT("THEN"));
+		ExpectKw(ibQueryKeyword::Then, ibT("THEN"));
 		ibQueryAstExprPtr val = ParseAddSub();
 		n->m_cases.emplace_back(cond, val);
 	} while (Cur().IsKeyword(ibQueryKeyword::When));
 
 	if (AcceptKw(ibQueryKeyword::Else))
 		n->m_else = ParseAddSub();
-	ExpectKw(ibQueryKeyword::End, wxT("END"));
+	ExpectKw(ibQueryKeyword::End, ibT("END"));
 	return n;
 }
 
@@ -1303,26 +1305,26 @@ ibQueryAstExprPtr ibQueryParser::ParseScalarCall(ibQueryScalarFn fn)
 {
 	const ibQueryToken name = Cur();
 	++m_pos;                                        // the name
-	ExpectPunct(wxT('('), wxT("'(' after a function name"));
+	ExpectPunct(ibT('('), ibT("'(' after a function name"));
 
 	auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::ScalarCall);
 	e->m_scalar = fn;
 	e->m_line = name.m_line; e->m_col = name.m_col;
 
-	if (!Cur().IsPunct(wxT(')')))
-		do { e->m_args.push_back(ParsePredicate()); } while (AcceptPunct(wxT(',')));
+	if (!Cur().IsPunct(ibT(')')))
+		do { e->m_args.push_back(ParsePredicate()); } while (AcceptPunct(ibT(',')));
 
-	ExpectPunct(wxT(')'), wxT("')'"));
+	ExpectPunct(ibT(')'), ibT("')'"));
 
 	size_t least = 0, most = 0;
 	if (ibQueryScalarFnArity(fn, least, most) && (e->m_args.size() < least || e->m_args.size() > most)) {
-		const wxString word = ibQueryScalarFnText(fn);
+		const ibString word = ibQueryScalarFnText(fn);
 		if (least == most)
-			ThrowQueryException(name, wxString::Format(
+			ThrowQueryException(name, ibString::Format(
 				_("%s takes %u argument(s), %u given"), word,
 				static_cast<unsigned>(least), static_cast<unsigned>(e->m_args.size())));
 		else
-			ThrowQueryException(name, wxString::Format(
+			ThrowQueryException(name, ibString::Format(
 				_("%s takes between %u and %u arguments, %u given"), word,
 				static_cast<unsigned>(least), static_cast<unsigned>(most),
 				static_cast<unsigned>(e->m_args.size())));
@@ -1333,12 +1335,12 @@ ibQueryAstExprPtr ibQueryParser::ParseScalarCall(ibQueryScalarFn fn)
 ibQueryAstExprPtr ibQueryParser::ParseIsNullCall()
 {
 	const ibQueryToken kw = Cur();
-	ExpectKw(ibQueryKeyword::IsNull, wxT("ISNULL"));
-	ExpectPunct(wxT('('), wxT("'(' after ISNULL"));
+	ExpectKw(ibQueryKeyword::IsNull, ibT("ISNULL"));
+	ExpectPunct(ibT('('), ibT("'(' after ISNULL"));
 	ibQueryAstExprPtr value = ParsePredicate();
-	ExpectPunct(wxT(','), wxT("',' - ISNULL takes the value and what to use when it is null"));
+	ExpectPunct(ibT(','), ibT("',' - ISNULL takes the value and what to use when it is null"));
 	ibQueryAstExprPtr fallback = ParsePredicate();
-	ExpectPunct(wxT(')'), wxT("')' after ISNULL"));
+	ExpectPunct(ibT(')'), ibT("')' after ISNULL"));
 
 	auto isNull = ibQueryAstExpr::Make(ibQueryAstExprKind::IsNull);
 	isNull->m_lhs = value;
@@ -1367,8 +1369,8 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	// `0 - Quantity`, which works — and is exactly what this builds, so nothing downstream learns a
 	// new node: the AST, the renderer, the lowering and all four drivers keep the one arithmetic
 	// they already have. A leading PLUS is accepted and dropped, being a no-op said out loud.
-	if (tk.m_kind == ibQueryTokenKind::Op && (tk.m_text == wxT("-") || tk.m_text == wxT("+"))) {
-		const bool negate = tk.m_text == wxT("-");
+	if (tk.m_kind == ibQueryTokenKind::Op && (tk.m_text == ibT("-") || tk.m_text == ibT("+"))) {
+		const bool negate = tk.m_text == ibT("-");
 		const unsigned int line = tk.m_line, col = tk.m_col;
 		++m_pos;
 		ibQueryAstExprPtr operand = ParsePrimary();
@@ -1388,10 +1390,10 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 		return ParseIsNullCall();
 
 	// parenthesized sub-predicate / arithmetic
-	if (tk.IsPunct(wxT('('))) {
+	if (tk.IsPunct(ibT('('))) {
 		++m_pos;
 		ibQueryAstExprPtr e = ParsePredicate();
-		ExpectPunct(wxT(')'), wxT("')'"));
+		ExpectPunct(ibT(')'), ibT("')'"));
 		return e;
 	}
 
@@ -1412,7 +1414,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	// parser's state rather than the caller's mistake, and that reads as if the query language were
 	// broken. `SUM(g.Sum)` worked, which made it look like a rule about qualification. It was not;
 	// it was this branch taking the word before asking whether a call follows.
-	if (IsAggregateKw(tk) && PeekIsPunct(1, wxT('(')))
+	if (IsAggregateKw(tk) && PeekIsPunct(1, ibT('(')))
 		return ParseAggregate();
 
 	// ranking function — ROW_NUMBER() / RANK() / DENSE_RANK() OVER (…)
@@ -1468,7 +1470,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	// the keyword table (queryKeywords.h says why at length): a name followed by `(` is a call —
 	// nothing else can stand there, since a column is never invoked — and the very same name
 	// standing alone is still the field it always was.
-	if (tk.m_kind == ibQueryTokenKind::Ident && PeekIsPunct(1, wxT('('))) {
+	if (tk.m_kind == ibQueryTokenKind::Ident && PeekIsPunct(1, ibT('('))) {
 		const ibQueryScalarFn fn = ibFindQueryScalarFn(tk.m_text.Upper());
 		if (fn != ibQueryScalarFn::None)
 			return ParseScalarCall(fn);
@@ -1531,7 +1533,7 @@ ibQueryAstExprPtr ibQueryParser::ParseAggregate(bool allowWindow)
 	const ibQueryKeyword fn = tk.m_keyword;
 	++m_pos;
 
-	ExpectPunct(wxT('('), wxT("'(' after an aggregate function"));
+	ExpectPunct(ibT('('), ibT("'(' after an aggregate function"));
 
 	auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Func);
 	e->m_func = fn; e->m_line = tk.m_line; e->m_col = tk.m_col;
@@ -1542,7 +1544,7 @@ ibQueryAstExprPtr ibQueryParser::ParseAggregate(bool allowWindow)
 	if (AcceptKw(ibQueryKeyword::Distinct))
 		e->m_distinctArg = true;
 
-	if (Cur().IsOp(wxT("*"))) {
+	if (Cur().IsOp(ibT("*"))) {
 		++m_pos;
 		if (fn != ibQueryKeyword::Count)
 			ThrowQueryException(tk, _("'*' is only valid as COUNT(*)"));
@@ -1554,7 +1556,7 @@ ibQueryAstExprPtr ibQueryParser::ParseAggregate(bool allowWindow)
 		e->m_arg = ParseAddSub();   // a column path, or an arithmetic expression (SUM(Qty * Price))
 	}
 
-	ExpectPunct(wxT(')'), wxT("')'"));
+	ExpectPunct(ibT(')'), ibT("')'"));
 	if (allowWindow)
 		ParseWindowSuffix(*e);   // …OVER (…) — the call folds a PARTITION instead of a group
 	return e;
@@ -1570,7 +1572,7 @@ ibQueryAstExprPtr ibQueryParser::ParseRanking()
 	const ibQueryKeyword fn = tk.m_keyword;
 	++m_pos;
 
-	ExpectPunct(wxT('('), wxT("'(' after a ranking function"));
+	ExpectPunct(ibT('('), ibT("'(' after a ranking function"));
 
 	auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Func);
 	e->m_func = fn; e->m_line = tk.m_line; e->m_col = tk.m_col;
@@ -1585,7 +1587,7 @@ ibQueryAstExprPtr ibQueryParser::ParseRanking()
 	//
 	// The long form still parses — `RANK() OVER (Item ORDER BY Turnover DESC)` — and is what a
 	// hand-written query, a frame, or an order of several keys needs.
-	if (!Cur().IsPunct(wxT(')'))) {
+	if (!Cur().IsPunct(ibT(')'))) {
 		auto window = std::make_shared<ibQueryAstWindow>();
 		do {
 			ibQueryOrderItem key;
@@ -1593,10 +1595,10 @@ ibQueryAstExprPtr ibQueryParser::ParseRanking()
 			if (AcceptKw(ibQueryKeyword::Desc))     key.m_ascending = false;
 			else if (AcceptKw(ibQueryKeyword::Asc)) key.m_ascending = true;
 			window->m_orderBy.push_back(key);
-		} while (AcceptPunct(wxT(',')));
+		} while (AcceptPunct(ibT(',')));
 		e->m_over = window;   // the partition, if any, arrives from the area beside it
 	}
-	ExpectPunct(wxT(')'), wxT("')'"));
+	ExpectPunct(ibT(')'), ibT("')'"));
 
 	// …AND THE LONG FORM, where it is written. It may add the partition (and, written by hand, the
 	// order this call did not carry in its brackets).
@@ -1641,12 +1643,12 @@ void ibQueryParser::ParseWindowSuffix(ibQueryAstExpr& call)
 	// ⚠ AND THE STOREY IS SETTLED BY THE CALLER, not guessed from what follows: this suffix is only
 	// reached from the SELECTION (ParseAggregate's `allowWindow`), where `OVER` always opens a window.
 	// In TOTALS the same word names the figure's AREA and is read there.
-	if (!Peek().IsPunct(wxT('(')))
+	if (!Peek().IsPunct(ibT('(')))
 		return;                                  // `OVER <name>` is not a window — leave the word alone
 	Next();                                      // …and only now is the word ours
 
 	const ibQueryToken& open = Cur();
-	ExpectPunct(wxT('('), wxT("'(' after OVER"));
+	ExpectPunct(ibT('('), ibT("'(' after OVER"));
 
 	auto window = std::make_shared<ibQueryAstWindow>();
 
@@ -1661,23 +1663,23 @@ void ibQueryParser::ParseWindowSuffix(ibQueryAstExpr& call)
 	// the same query. This is the same economy the totals' area already makes: the words that carry
 	// no meaning of their own are the ones to drop.
 	if (AcceptKw(ibQueryKeyword::Partition)) {
-		ExpectKw(ibQueryKeyword::By, wxT("BY after PARTITION"));
-		do { window->m_partitionBy.push_back(ParseAddSub()); } while (AcceptPunct(wxT(',')));
+		ExpectKw(ibQueryKeyword::By, ibT("BY after PARTITION"));
+		do { window->m_partitionBy.push_back(ParseAddSub()); } while (AcceptPunct(ibT(',')));
 	}
-	else if (!Cur().IsKeyword(ibQueryKeyword::Order) && !Cur().IsPunct(wxT(')'))) {
+	else if (!Cur().IsKeyword(ibQueryKeyword::Order) && !Cur().IsPunct(ibT(')'))) {
 		// A bare list — the short form. `OVER ()` stays legitimate and means the whole result.
-		do { window->m_partitionBy.push_back(ParseAddSub()); } while (AcceptPunct(wxT(',')));
+		do { window->m_partitionBy.push_back(ParseAddSub()); } while (AcceptPunct(ibT(',')));
 	}
 
 	if (AcceptKw(ibQueryKeyword::Order)) {
-		ExpectKw(ibQueryKeyword::By, wxT("BY after ORDER"));
+		ExpectKw(ibQueryKeyword::By, ibT("BY after ORDER"));
 		do {
 			ibQueryOrderItem item;
 			item.m_expr = ParseAddSub();
 			if (AcceptKw(ibQueryKeyword::Desc))     item.m_ascending = false;
 			else if (AcceptKw(ibQueryKeyword::Asc)) item.m_ascending = true;
 			window->m_orderBy.push_back(item);
-		} while (AcceptPunct(wxT(',')));
+		} while (AcceptPunct(ibT(',')));
 	}
 
 	if (AcceptKw(ibQueryKeyword::Rows))       window->m_frame = ibQueryAstFrame::Rows;
@@ -1688,7 +1690,7 @@ void ibQueryParser::ParseWindowSuffix(ibQueryAstExpr& call)
 	if (window->m_frame != ibQueryAstFrame::Unstated && window->m_orderBy.empty())
 		ThrowQueryException(open, _("ROWS / RANGE needs an ORDER BY inside the OVER: a frame is a position in an order"));
 
-	ExpectPunct(wxT(')'), wxT("')' closing OVER"));
+	ExpectPunct(ibT(')'), ibT("')' closing OVER"));
 	call.m_over = window;
 }
 
@@ -1702,13 +1704,13 @@ ibQueryAstExprPtr ibQueryParser::ParseValueConstant()
 	const ibQueryToken& tk = Cur();
 	++m_pos;
 
-	ExpectPunct(wxT('('), wxT("'(' after VALUE"));
+	ExpectPunct(ibT('('), ibT("'(' after VALUE"));
 
 	auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Value);
 	e->m_line = tk.m_line; e->m_col = tk.m_col;
 	e->m_path = ParseDottedName();
 
-	ExpectPunct(wxT(')'), wxT("')'"));
+	ExpectPunct(ibT(')'), ibT("')'"));
 	return e;
 }
 
@@ -1726,20 +1728,20 @@ ibQueryAstExprPtr ibQueryParser::ParseCast()
 	const ibQueryToken& tk = Cur();
 	++m_pos;
 
-	ExpectPunct(wxT('('), wxT("'(' after CAST"));
+	ExpectPunct(ibT('('), ibT("'(' after CAST"));
 
 	auto cast = ibQueryAstExpr::Make(ibQueryAstExprKind::Cast);
 	cast->m_line = tk.m_line; cast->m_col = tk.m_col;
 	cast->m_arg = ParsePredicate();
 
-	ExpectKw(ibQueryKeyword::As, wxT("AS in CAST"));
+	ExpectKw(ibQueryKeyword::As, ibT("AS in CAST"));
 	// THE TARGET TYPE, as the language names a source: `Document.Order`. Written the same way a FROM
 	// writes it, because it IS the same thing — the table whose fields the walk continues into.
 	const ibQueryToken& typeAt = Cur();
 	cast->m_path = ParseDottedName();
 	// …OR A PRIMITIVE, WITH ITS QUALIFIERS: `Number(15, 2)`, `String(50)`, `Date(Date)`. Kept as literals in
 	// m_args in written order — a number as the number, a word as its text — and read by ibQueryCastType.
-	if (AcceptPunct(wxT('('))) {
+	if (AcceptPunct(ibT('('))) {
 		do {
 			const ibQueryToken& q = Cur();
 			if (q.m_kind != ibQueryTokenKind::Number && q.m_kind != ibQueryTokenKind::Ident
@@ -1750,21 +1752,21 @@ ibQueryAstExprPtr ibQueryParser::ParseCast()
 			qualifier->m_literal = q.m_kind == ibQueryTokenKind::Number ? q.m_literal : ibLiteral(q.m_text);
 			cast->m_args.push_back(qualifier);
 			++m_pos;
-		} while (AcceptPunct(wxT(',')));
-		ExpectPunct(wxT(')'), wxT("')' after the qualifiers of the cast type"));
+		} while (AcceptPunct(ibT(',')));
+		ExpectPunct(ibT(')'), ibT("')' after the qualifiers of the cast type"));
 	}
-	wxString wrong;
+	ibString wrong;
 	ibTypeDescription primitive;
 	if (!ReadCastPrimitive(*cast, primitive, wrong) && !cast->m_args.empty())
 		wrong = _("only a primitive type is qualified: Number(15, 2), String(50), Date(Date)");
 	if (!wrong.IsEmpty())
 		ThrowQueryException(typeAt, wrong);
-	ExpectPunct(wxT(')'), wxT("')' after the cast type"));
+	ExpectPunct(ibT(')'), ibT("')' after the cast type"));
 
 	// ⚠ THE DOT IS CONSUMED, not merely looked at. Peeking and then calling ParseDottedName left the
 	// `.` as the current token, and that reader wants a NAME first — so every `CAST(x AS T).Field`
 	// died as "expected a name", pointing at the dot it had just recognised.
-	if (!AcceptPunct(wxT('.')))
+	if (!AcceptPunct(ibT('.')))
 		return cast;
 
 	auto column = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);

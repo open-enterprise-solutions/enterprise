@@ -17,7 +17,6 @@
 // See docs/private/query-language-arc.md §14 / §23.
 
 #include "core/core.h"     // CORE_API
-#include <wx/string.h>
 
 // Every keyword of the L4-1 grammar. Two-word SQL phrases are split into single
 // keywords (ORDER + BY, GROUP + BY) — `By` is shared. Boolean / NULL literals are
@@ -190,11 +189,11 @@ enum class ibQueryScalarFn
 
 // Look a word up in the scalar-call table. The caller has already established that the word stands
 // where a call may (an identifier followed by `(`); None means it is an ordinary name after all.
-CORE_API ibQueryScalarFn ibFindQueryScalarFn(const wxString& upperWord);
+CORE_API ibQueryScalarFn ibFindQueryScalarFn(const ibString& upperWord);
 
 // The canonical spelling of a scalar call — for diagnostics and for the editor's palette. Empty for
 // ibQueryScalarFn::None.
-CORE_API const wxString& ibQueryScalarFnText(ibQueryScalarFn fn);
+CORE_API const ibString& ibQueryScalarFnText(ibQueryScalarFn fn);
 
 // HOW MANY ARGUMENTS THE CALL TAKES — asked of the table rather than re-listed at each check, for
 // the same reason ibIsAggregateKeyword is: the parser validates the count, the palette writes the
@@ -214,16 +213,16 @@ CORE_API bool ibQueryScalarArgIsWord(ibQueryScalarFn fn, size_t index);
 
 // EVERY SCALAR CALL, space-separated — the twin of ibAllQueryKeywords, and for the same reader: the
 // editor highlights what the language HAS rather than a list somebody remembered to update.
-CORE_API wxString ibAllQueryScalarFns();
+CORE_API ibString ibAllQueryScalarFns();
 
 // Look a word up in the ACTIVE keyword table. The lexer passes an UPPERCASED
 // word (matching is case-insensitive, like the script lexer). Returns
 // ibQueryKeyword::None when the word is an ordinary identifier.
-CORE_API ibQueryKeyword ibFindQueryKeyword(const wxString& upperWord);
+CORE_API ibQueryKeyword ibFindQueryKeyword(const ibString& upperWord);
 
 // The canonical (active-table) spelling of a keyword — for diagnostics / error
 // messages. Empty for ibQueryKeyword::None.
-CORE_API const wxString& ibQueryKeywordText(ibQueryKeyword kw);
+CORE_API const ibString& ibQueryKeywordText(ibQueryKeyword kw);
 
 // IS THIS KEYWORD AN AGGREGATE — one of the five calls that fold many rows into one.
 //
@@ -259,6 +258,6 @@ CORE_API bool ibIsRankingKeyword(ibQueryKeyword kw);
 // which needs the whole set at once — and asked of the TABLE rather than typed out again, so a
 // keyword added to the language lights up the day it is added, and a localized table lights up its
 // own words rather than the English ones.
-CORE_API wxString ibAllQueryKeywords();
+CORE_API ibString ibAllQueryKeywords();
 
 #endif

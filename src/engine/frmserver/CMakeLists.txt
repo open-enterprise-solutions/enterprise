@@ -24,7 +24,7 @@ target_compile_definitions(frmserver
         NOPCH
 )
 
-# FRMSERVER_API resolves to dllexport only when FRMSERVER_EXPORTS is defined (frmserver.h) — frontend's rule.
+# FRMSERVER_API resolves to dllexport only when FRMSERVER_EXPORTS is defined (frmserver.h).
 if(WIN32)
     target_compile_definitions(frmserver PRIVATE FRMSERVER_EXPORTS)
 endif()

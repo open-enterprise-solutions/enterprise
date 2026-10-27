@@ -50,12 +50,12 @@ public:
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 	// The same verbs for a caller in C++.
-	void ReadFile(const wxString& fileName);
-	void WriteFile(const wxString& fileName) const;
+	void ReadFile(const ibString& fileName);
+	void WriteFile(const ibString& fileName) const;
 
 	// A file's bytes, whole - the one place a file is read into memory (TextReader decodes what this hands
 	// over). `who` opens the refusal, so the message names the type the script was talking to.
-	static void ReadWholeFile(const wxString& fileName, const wxString& who, ibMemoryBuffer& bytes);
+	static void ReadWholeFile(const ibString& fileName, const ibString& who, ibMemoryBuffer& bytes);
 
 	// The TEXT projection: base64. Not the storage — GetBuffer is.
 	virtual ibString GetString() const;

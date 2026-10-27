@@ -39,12 +39,12 @@
 class ibQueryTreeNode : public wxTreeItemData
 {
 public:
-	ibQueryTreeNode(std::vector<wxString> path, bool temp)
+	ibQueryTreeNode(std::vector<ibString> path, bool temp)
 		: m_path(std::move(path)), m_temp(temp) {}
 	ibQueryTreeNode(int sourceIndex, wxString field)
 		: m_sourceIndex(sourceIndex), m_field(std::move(field)) {}
 
-	std::vector<wxString> m_path;              // catalogue node: the dotted source path
+	std::vector<ibString> m_path;              // catalogue node: the dotted source path
 	                                           // field node: the table it came out of
 	bool                  m_temp = false;      // catalogue node: a temp table the package made
 	int                   m_sourceIndex = -1;  // chosen-table node: 0 = FROM, 1..n = joins[i-1]
@@ -81,7 +81,7 @@ inline void ibQueryAddFieldNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
                                 const ibQueryConstructorField& field, int icon,
                                 int sourceIndex = -1,
                                 const wxString& pathPrefix = wxEmptyString,
-                                const std::vector<wxString>& tablePath = std::vector<wxString>(),
+                                const std::vector<ibString>& tablePath = std::vector<ibString>(),
                                 const wxString& sourceLabel = wxEmptyString)
 {
 	if (tree == nullptr)
@@ -94,7 +94,7 @@ inline void ibQueryAddFieldNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
 	node->m_path           = tablePath;   // the table this field came out of — carried all the way down
 	// At the TOP level the field itself says which source it came from; below it, the walk inherits
 	// what its parent carried, because the model has no way of knowing that from a clsid alone.
-	node->m_sourceLabel    = sourceLabel.IsEmpty() ? field.m_source : sourceLabel;
+	node->m_sourceLabel    = sourceLabel.IsEmpty() ? field.m_source : ibString(sourceLabel);
 	const wxTreeItemId item = tree->AppendItem(parent, field.m_presentation, icon, icon, node);
 
 	// A PLACEHOLDER, so the [+] is there to click. wxTreeCtrl shows one only for a node that has
@@ -110,7 +110,7 @@ inline void ibQueryAddFieldNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
 inline void ibQueryAddBranchNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
                                  const ibQueryConstructorField& branch, int icon,
                                  int sourceIndex, const wxString& path,
-                                 const std::vector<wxString>& tablePath, const wxString& sourceLabel)
+                                 const std::vector<ibString>& tablePath, const wxString& sourceLabel)
 {
 	if (tree == nullptr)
 		return;

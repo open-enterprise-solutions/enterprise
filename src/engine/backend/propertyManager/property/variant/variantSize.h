@@ -35,7 +35,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataSize"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataSize"); }
 
 private:
 	ibSize m_size;

@@ -62,13 +62,13 @@ constexpr ibClassID g_valueDataCompositionCLSID = value_to_clsid("VL_DCMPN");
 // FREE, because two places ask it and they hold different lists: the composition, over its own
 // description, and the settings window, over the copy of the description it is editing.
 BACKEND_API void ibSyncParametersWithQuery(std::vector<ibParameterDescription>& parameters,
-                                           const wxString& queryText);
+                                           const ibString& queryText);
 
 // …and the same rule over EVERY text the composition writes — the query body plus each resource
 // expression. A `&Rate` in a resource declares a parameter as much as one in the body does, and a
 // parameter the texts still name cannot be removed by hand (m_fromQuery).
 BACKEND_API void ibSyncParametersWithTexts(std::vector<ibParameterDescription>& parameters,
-                                           const std::vector<wxString>& texts);
+                                           const std::vector<ibString>& texts);
 
 // ⭐ THE WHOLE DESCRIPTION, ASKED ONCE. Both callers hold one — the composition its own, the window
 // the copy it is editing — so which texts count is answered HERE and not twice at the two call
@@ -103,7 +103,7 @@ public:
 	// The composer starts EMPTY. Picking a source SEEDS the query text over it
 	// (see SeedQuery) — a composer with a source and no query would read nothing,
 	// and an empty text is not a query.
-	void SetSource(const wxString& ns, const wxString& name);
+	void SetSource(const ibString& ns, const ibString& name);
 	void SetSourceQueryable(const ibBackendQueryable* queryable);
 	// Not an override any more: it was the TABLE model's hook, and a composition is not one. The
 	// question is still this type's own — its property holds the queryable.
@@ -115,15 +115,15 @@ public:
 	// through ibCompositionDescriptionMemory alone, so a query kept anywhere else was simply not
 	// SAVED (Max, 2026-08-23: "the value is not written"). It used to live in a hidden property
 	// beside the description, which is two states for one fact and the second one never travelled.
-	wxString GetQueryText() const { return GetCompositionDesc().m_query; }
-	void     SetQueryText(const wxString& text);
+	ibString GetQueryText() const { return GetCompositionDesc().m_query; }
+	void     SetQueryText(const ibString& text);
 
 	// THE QUERY THE SOURCE WOULD WRITE FOR ITSELF — `SELECT <fields> FROM <source>`.
 	// The starting point when a source is picked, empty when there is none.
-	wxString SeedQuery() const;
+	ibString SeedQuery() const;
 
 	// WHY THE QUERY PRODUCES NOTHING — the ENGINE's own words, empty when it resolved.
-	const wxString& GetQueryError() const { return m_queryError; }
+	const ibString& GetQueryError() const { return m_queryError; }
 
 	// THE FIELDS THIS COMPOSITION OFFERS, in the shape the expression editor and the query
 	// constructor already speak (`ibQueryConstructorField`: name, presentation, source, type,
@@ -217,7 +217,7 @@ public:
 	// report an unfilled `&Ref` as "parameter is not set" while the query is still being written) and
 	// RUNNING it. An unfilled parameter arrives as an EMPTY value rather than being left out: empty
 	// is an answer, and the SHAPE of the result never depends on it.
-	std::map<wxString, ibValue> ParameterValues() const;
+	std::map<ibString, ibValue> ParameterValues() const;
 
 	// ⭐⭐ WHAT THE RUN IS GIVEN — the same names, with the expressions EVALUATED and the declarations
 	// built into live references. `Evaluate` is the language's own door, so a parameter may hold a
@@ -227,7 +227,7 @@ public:
 	// evaluated parameter is runtime — a reference with a session behind it. Writing runtime into a
 	// structure that is saved with the configuration is what made a later load fail on a value it had
 	// written itself (Max, 2026-08-29: "there is no runtime in a description, at all").
-	std::map<wxString, ibValue> EvaluatedParameterValues() const;
+	std::map<ibString, ibValue> EvaluatedParameterValues() const;
 
 	// ⭐ SETTLE THE PARAMETERS AT THE MOMENT THE QUERY RUNS (Max, 2026-08-19: "at the moment you
 	// execute the query, if there is an expression there, you evaluate it through our script — quite
@@ -239,7 +239,7 @@ public:
 	// Const because a fetch is const — what changes is the parameter's cached value and the
 	// composer's parameter map, which are the state a run is entitled to settle.
 	// Returns what it handed over — the values a report's heading prints are the ones the query was given.
-	std::map<wxString, ibValue> PrepareParametersForRun();
+	std::map<ibString, ibValue> PrepareParametersForRun();
 
 	// COMPOSE INTO A DOCUMENT — the report's whole act, and the reason this type exists
 	// separately from the list. It runs the composition and writes the result into a
@@ -311,11 +311,11 @@ public:
 	// called `m_resources` — one concept in two vocabularies, crossing inside every one of these
 	// bodies. *Total* is the QUERY's word (`TOTALS agg… BY dim…`) and now lives only where the query
 	// text is rendered (audit, 2026-08-24).
-	void AddResource(const wxString& func, const wxString& path);
-	bool SetResource(size_t idx, const wxString& func, const wxString& path);
+	void AddResource(const ibString& func, const ibString& path);
+	bool SetResource(size_t idx, const ibString& func, const ibString& path);
 	bool RemoveResource(size_t idx);
 	size_t ResourceCount() const { return GetCompositionDesc().m_resources.size(); }
-	bool   GetResourceAt(size_t idx, wxString& func, wxString& path) const;
+	bool   GetResourceAt(size_t idx, ibString& func, ibString& path) const;
 
 	// --- ibValueSpreadsheetModel --------------------------------------------
 	//
@@ -363,7 +363,7 @@ public:
 	//  is a sheet, and a cell there carries its value as a document parameter. The base's "not a field
 	//  here" is the truthful answer.)
 
-	virtual wxString GetSourceCaption() const override;
+	virtual ibString GetSourceCaption() const override;
 
 	// READ — the metadata OF THE CHOSEN SOURCE, taken straight from the VALUE.
 	// TERMINAL (no owner-walk), so a form's metadata may fall back here without recursing.
@@ -372,8 +372,8 @@ public:
 	virtual const ibMetaData* GetMetaData() const override;
 
 	// --- ibPropertyObject + serialization ------------------------------------
-	virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
-	virtual wxString GetObjectTypeName() const override { return GetClassName(); }
+	virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
+	virtual ibString GetObjectTypeName() const override { return GetClassName(); }
 	virtual bool IsEditable() const override { return true; }
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
 	// ⭐ ONLY THE SETTINGS SHOW IN THE INSPECTOR (Max, 2026-08-19: "a composer has nothing but its
@@ -460,7 +460,7 @@ private:
 	// The reading side of that rule was simply never written. Asked at every entrance — Compose, the
 	// paged fetch, and ARRANGING (below) — and it does nothing when the composer is already built for
 	// this very text, which is what the marker below records.
-	wxString m_sourceBuiltFor;   // the query text RebuildSource last ran on; empty = never built
+	ibString m_sourceBuiltFor;   // the query text RebuildSource last ran on; empty = never built
 
 	// DROP the filter / sort / grouping lines whose field the composition no longer
 	// has — by RESOLUTION after every rebuild, never by chasing the change.
@@ -487,7 +487,7 @@ private:
 	// WHAT THE QUERY PRODUCES, rebuilt on every RebuildSource — which is what makes
 	// the field pickers follow the text.
 	std::vector<ibQueryLowering::OutputColumn> m_querySchema;
-	wxString                                   m_queryError;   // the ENGINE's words, verbatim
+	ibString                                   m_queryError;   // the ENGINE's words, verbatim
 
 	// The SOURCE config, STORED (what GetSourceMetaData returns) — captured from the
 	// picked queryable's metaobject in RebuildSource. Held so the READ never re-resolves
@@ -534,15 +534,15 @@ private:
 	void SyncParametersWithQuery();
 
 	// --- property surface — these SURFACE onto the form attribute ------------
-	ibPropertyCategory*      m_categoryComposer = ibPropertyObject::CreatePropertyCategory(wxT("DataComposition"), _("Data composer"));
+	ibPropertyCategory*      m_categoryComposer = ibPropertyObject::CreatePropertyCategory(ibT("DataComposition"), _("Data composer"));
 	// Source = the picked queryable; read through the GetSourceQueryable() facade.
-	ibPropertyDynamicSource* m_propertySource   = ibPropertyObject::CreateProperty<ibPropertyDynamicSource>(m_categoryComposer, wxT("Source"), _("Source"),
+	ibPropertyDynamicSource* m_propertySource   = ibPropertyObject::CreateProperty<ibPropertyDynamicSource>(m_categoryComposer, ibT("Source"), _("Source"),
 		_("The main table the composition reads when it has no query of its own: a catalog, document, register or other registered source. With a query set, the query decides the data."));
 	// "Settings..." — the action property, and a TYPE of its own rather than the dynamic list's:
 	// the frontend property is matched by this type, so opening the composition's window instead of
 	// the list's needs no branch anywhere (Max, 2026-08-20). The frontend reaches this object
 	// through the property's owner.
-	ibPropertyDataComposition* m_propertySettings = ibPropertyObject::CreateProperty<ibPropertyDataComposition>(m_categoryComposer, wxT("Settings"), _("Settings"),
+	ibPropertyDataComposition* m_propertySettings = ibPropertyObject::CreateProperty<ibPropertyDataComposition>(m_categoryComposer, ibT("Settings"), _("Settings"),
 		_("Opens the composition's settings window: query, resources, parameters, structure (groupings, table, charts) and settings variants."));
 
 	// WHICH COMPOSER'S SETTINGS THE BASE HOLDS FOR THIS ONE. Empty on a composition

@@ -80,30 +80,30 @@ bool ibGuid::isValid() const
 }
 
 template <typename I>
-inline void hex_to_string(wxString& out, I& w, size_t hex_len = sizeof(I) << 1) {
+inline void hex_to_string(ibString& out, I& w, size_t hex_len = sizeof(I) << 1) {
 	static const char* digits = "0123456789abcdef";
 	for (size_t i = 0, j = (hex_len - 1) * 4; i < hex_len; ++i, j -= 4)
-		out.append(digits[(w >> j) & 0x0f]);
+		out += static_cast<ibChar>(digits[(w >> j) & 0x0f]);
 }
 
 // convert to string using std::snprintf() and std::string
-wxString ibGuid::str() const
+ibString ibGuid::str() const
 {
-	wxString out; out.reserve(36);
+	ibString out; out.reserve(36);
 	hex_to_string(out, _bytes[0]);
 	hex_to_string(out, _bytes[1]);
 	hex_to_string(out, _bytes[2]);
 	hex_to_string(out, _bytes[3]);
-	out.append('-');
+	out += ibT('-');
 	hex_to_string(out, _bytes[4]);
 	hex_to_string(out, _bytes[5]);
-	out.append('-');
+	out += ibT('-');
 	hex_to_string(out, _bytes[6]);
 	hex_to_string(out, _bytes[7]);
-	out.append('-');
+	out += ibT('-');
 	hex_to_string(out, _bytes[8]);
 	hex_to_string(out, _bytes[9]);
-	out.append('-');
+	out += ibT('-');
 	hex_to_string(out, _bytes[10]);
 	hex_to_string(out, _bytes[11]);
 	hex_to_string(out, _bytes[12]);
@@ -230,15 +230,14 @@ ibGuid::ibGuid(const std::string_view& fromString)
 	}
 }
 
-#if __WXWINDOWS__
 // create a guid from string
-ibGuid::ibGuid(const wxString& fromString)
+ibGuid::ibGuid(const ibString& fromString)
 {
 	if (!parse(fromString, *this))
 		zeroify();
 }
 
-bool ibGuid::parse(const wxString& text, ibGuid& guid)
+bool ibGuid::parse(const ibString& text, ibGuid& guid)
 {
 	std::array<unsigned char, 16> bytes{};
 	char charOne = '\0';
@@ -246,7 +245,7 @@ bool ibGuid::parse(const wxString& text, ibGuid& guid)
 	bool lookingForFirstChar = true;
 	unsigned nextByte = 0;
 
-	for (const wxUniChar& ch : text)
+	for (const ibChar& ch : text)
 	{
 		if (ch == '-')
 			continue;
@@ -274,7 +273,6 @@ bool ibGuid::parse(const wxString& text, ibGuid& guid)
 	guid._bytes = bytes;
 	return true;
 }
-#endif
 
 ibGuid::ibGuid(const ibGuidImpl& guid)
 {

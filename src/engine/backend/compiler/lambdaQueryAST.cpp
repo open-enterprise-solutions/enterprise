@@ -44,15 +44,15 @@ struct CodeCur {
 	const ibByteCode::ibByteFunction* fn;
 	long from;          // the OPER_LFUNC itself, or the first instruction of the range
 	long to;            // the OPER_ENDLFUNC, or one past the range
-	wxString* refusal;
+	ibString* refusal;
 	// The one question the instructions cannot answer on their own — see NameOfSlot / the header.
-	const std::function<wxString(long, long)>& nameOfOuter;
+	const std::function<ibString(long, long)>& nameOfOuter;
 	// Set only for a range: the cell the row arrives in. Null = ask the function record, as before.
 	const ibParamRunUnit* rowSlot = nullptr;
 
 	ibQueryAstExprPtr Refuse(const ibChar* what, unsigned int at) const {
 		if (refusal != nullptr && refusal->IsEmpty())
-			*refusal = wxString::Format(wxT("%s (at %u)"), what, at);
+			*refusal = ibString::Format(ibT("%s (at %u)"), what, at);
 		return nullptr;
 	}
 
@@ -73,15 +73,15 @@ struct CodeCur {
 	//
 	// The outer frames are not in the bytecode yet (the enclosing function is still being compiled),
 	// so their names come from whoever passed nameOfOuter — see the header.
-	wxString NameOfSlot(const ibParamRunUnit& p) const {
+	ibString NameOfSlot(const ibParamRunUnit& p) const {
 		const long long frame = FrameOf(p);
 		if (frame != 0 || fn == nullptr)
-			return nameOfOuter ? nameOfOuter((long)frame, (long)p.m_numIndex) : wxString();
+			return nameOfOuter ? nameOfOuter((long)frame, (long)p.m_numIndex) : ibString();
 
 		for (const auto& var : fn->m_listLocals)
 			if ((long long)var.m_slotIndex == p.m_numIndex)
 				return var.m_strRealName;
-		return wxEmptyString;
+		return ibEmptyString;
 	}
 
 	// 🛑 THE ROW IS RECOGNISED BY ITS NAME, NOT BY ITS CELL NUMBER. Parameter 0 does live at cell 0,
@@ -96,7 +96,7 @@ struct CodeCur {
 			return SameSlot(p, *rowSlot);
 		if (fn == nullptr || fn->m_listParam.empty() || FrameOf(p) != 0)
 			return false;
-		const wxString name = NameOfSlot(p);
+		const ibString name = NameOfSlot(p);
 		// ⭐ EITHER PARAMETER IS A ROW when there are two — a join ON is `(s, a) => s.k <op> a.k`, and
 		// both sides name a row. Which side is which is read off the comparison by whoever consumes
 		// the tree, not out of the names.
@@ -164,7 +164,7 @@ ibQueryAstExprPtr NodeOf(const CodeCur& c, const ibByteUnit& code, int depth)
 		// Checking only the FINISHED tree let it through inside a Compare, which is the same class of
 		// mistake as checking a value and not the verb that produced it.
 		if (IsRowMarker(lhs) || IsRowMarker(rhs))
-			return c.Refuse(wxT("the row itself is used as a value; a column has to be named"),
+			return c.Refuse(ibT("the row itself is used as a value; a column has to be named"),
 				code.m_numString);
 		auto e = ibQueryAstExpr::Make(kind);
 		e->m_lhs = lhs;
@@ -210,7 +210,7 @@ ibQueryAstExprPtr NodeOf(const CodeCur& c, const ibByteUnit& code, int depth)
 		ibQueryAstExprPtr inner = ResolveSlot(c, code.m_param2, depth + 1);
 		if (!inner) return nullptr;
 		if (IsRowMarker(inner))
-			return c.Refuse(wxT("the row itself is used as a value; a column has to be named"),
+			return c.Refuse(ibT("the row itself is used as a value; a column has to be named"),
 				code.m_numString);
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Not);
 		e->m_lhs = inner;
@@ -223,12 +223,12 @@ ibQueryAstExprPtr NodeOf(const CodeCur& c, const ibByteUnit& code, int depth)
 	case OPER_GET_A: {
 		const long nameIdx = (long)code.m_param3.m_numIndex;
 		if (nameIdx < 0 || (size_t)nameIdx >= c.bc.m_listConst.size())
-			return c.Refuse(wxT("a member read with no name"), code.m_numString);
+			return c.Refuse(ibT("a member read with no name"), code.m_numString);
 
 		ibQueryAstExprPtr owner = ResolveSlot(c, code.m_param2, depth + 1);
 		if (!owner) return nullptr;
 		if (owner->m_kind != ibQueryAstExprKind::Column)
-			return c.Refuse(wxT("a field of a captured value; only a plain captured value travels"),
+			return c.Refuse(ibT("a field of a captured value; only a plain captured value travels"),
 				code.m_numString);
 
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
@@ -243,16 +243,16 @@ ibQueryAstExprPtr NodeOf(const CodeCur& c, const ibByteUnit& code, int depth)
 		return ResolveSlot(c, code.m_param2, depth + 1);
 
 	case OPER_CALL: case OPER_CALL_METHOD: case OPER_CALL_LINQ: case OPER_CALL_LAMBDA:
-		return c.Refuse(wxT("a call inside the predicate"), code.m_numString);
+		return c.Refuse(ibT("a call inside the predicate"), code.m_numString);
 
 	case OPER_GET_ARRAY:
-		return c.Refuse(wxT("an indexed element"), code.m_numString);
+		return c.Refuse(ibT("an indexed element"), code.m_numString);
 
 	default:
 		break;
 	}
 
-	return c.Refuse(wxT("a construct the query subset does not cover"), code.m_numString);
+	return c.Refuse(ibT("a construct the query subset does not cover"), code.m_numString);
 }
 
 // A POOL CONSTANT AS THE TEXT WROTE IT — the compiler puts nothing in the pool but a lexem's value
@@ -264,7 +264,7 @@ ibLiteral LiteralOf(const ibValue& constant)
 	case ibValueTypes::TYPE_BOOLEAN: return ibLiteral(constant.GetBoolean());
 	case ibValueTypes::TYPE_NUMBER:  return ibLiteral(constant.GetNumber());
 	case ibValueTypes::TYPE_DATE:    return ibLiteral(constant.GetDate());
-	case ibValueTypes::TYPE_STRING:  return ibLiteral(wxString(constant.GetString()));
+	case ibValueTypes::TYPE_STRING:  return ibLiteral(ibString(constant.GetString()));
 	default:                         return ibLiteral(constant.GetType());   // Undefined, Null
 	}
 }
@@ -273,12 +273,12 @@ ibLiteral LiteralOf(const ibValue& constant)
 ibQueryAstExprPtr ResolveSlot(const CodeCur& c, const ibParamRunUnit& slot, int depth)
 {
 	if (depth > 64)
-		return c.Refuse(wxT("an expression nested past any reasonable depth"), 0);
+		return c.Refuse(ibT("an expression nested past any reasonable depth"), 0);
 
 	// A CONSTANT IS ITS OWN ANSWER — no producer to look for.
 	if (slot.m_numArray == DEF_VAR_CONST) {
 		if (slot.m_numIndex < 0 || (size_t)slot.m_numIndex >= c.bc.m_listConst.size())
-			return c.Refuse(wxT("a constant that is not in the pool"), 0);
+			return c.Refuse(ibT("a constant that is not in the pool"), 0);
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
 		e->m_literal = LiteralOf(c.bc.m_listConst[(size_t)slot.m_numIndex]);
 		return e;
@@ -297,7 +297,7 @@ ibQueryAstExprPtr ResolveSlot(const CodeCur& c, const ibParamRunUnit& slot, int 
 	if (c.IsRowSlot(slot))
 		return MakeRowMarker();
 
-	const wxString name = c.NameOfSlot(slot);
+	const ibString name = c.NameOfSlot(slot);
 
 	// ⭐⭐ IN RANGE MODE A NAME IS NOT NEEDED AT ALL. The predicate of a loop reads locals of the very
 	// frame it runs in, and those are written OUTSIDE the range — so there is no producer to find and
@@ -311,7 +311,7 @@ ibQueryAstExprPtr ResolveSlot(const CodeCur& c, const ibParamRunUnit& slot, int 
 	// coordinates stand on their own.
 	auto p = ibQueryAstExpr::Make(ibQueryAstExprKind::Param);
 	p->m_paramName = name.IsEmpty()
-		? wxString::Format(wxT("@cell%d_%d"), (int)CodeCur::FrameOf(slot), (int)slot.m_numIndex)
+		? ibString::Format(ibT("@cell%d_%d"), (int)CodeCur::FrameOf(slot), (int)slot.m_numIndex)
 		: name;
 	// …AND WHERE IT LIVES, which the instruction just said. The fold reads the value straight out of
 	// that frame instead of searching the frames for the name (queryAST.h, m_capturedFrame).
@@ -323,8 +323,8 @@ ibQueryAstExprPtr ResolveSlot(const CodeCur& c, const ibParamRunUnit& slot, int 
 } // namespace
 
 std::shared_ptr<ibQueryAstExpr> ibBuildLambdaQueryAstFromCode(
-	const ibByteCode& byteCode, long funcIndex, wxString* outRefusal,
-	const std::function<wxString(long, long)>& nameOfOuter)
+	const ibByteCode& byteCode, long funcIndex, ibString* outRefusal,
+	const std::function<ibString(long, long)>& nameOfOuter)
 {
 	if (outRefusal != nullptr)
 		outRefusal->clear();
@@ -360,24 +360,24 @@ std::shared_ptr<ibQueryAstExpr> ibBuildLambdaQueryAstFromCode(
 		if ((code.m_numOper % TYPE_DELTA1) != OPER_RET)
 			continue;
 		if (code.m_param1.m_numArray == DEF_VAR_NORET)
-			return c.Refuse(wxT("the body returns nothing"), code.m_numString);
+			return c.Refuse(ibT("the body returns nothing"), code.m_numString);
 
 		ibQueryAstExprPtr expr = ResolveSlot(c, code.m_param1, 0);
 		if (!expr)
 			return nullptr;
 		if (IsRowMarker(expr))
-			return c.Refuse(wxT("the row itself is used as a value; a column has to be named"),
+			return c.Refuse(ibT("the row itself is used as a value; a column has to be named"),
 				code.m_numString);
 		return expr;
 	}
 
-	return c.Refuse(wxT("the body does more than return one expression"), 0);
+	return c.Refuse(ibT("the body does more than return one expression"), 0);
 }
 
 std::shared_ptr<ibQueryAstExpr> ibBuildQueryAstFromRange(
 	const ibByteCode& byteCode, long from, long to,
 	const ibParamRunUnit& rowSlot, const ibParamRunUnit& resultSlot,
-	wxString* outRefusal, const std::function<wxString(long, long)>& nameOfSlot)
+	ibString* outRefusal, const std::function<ibString(long, long)>& nameOfSlot)
 {
 	if (outRefusal != nullptr)
 		outRefusal->clear();
@@ -394,7 +394,7 @@ std::shared_ptr<ibQueryAstExpr> ibBuildQueryAstFromRange(
 	if (!expr)
 		return nullptr;
 	if (IsRowMarker(expr))
-		return c.Refuse(wxT("the row itself is used as a value; a column has to be named"), 0);
+		return c.Refuse(ibT("the row itself is used as a value; a column has to be named"), 0);
 	return expr;
 }
 
@@ -404,23 +404,23 @@ std::shared_ptr<ibQueryAstExpr> ibBuildQueryAstFromRange(
 
 namespace {
 
-wxString DescribeNode(const ibQueryAstExprPtr& e);
+ibString DescribeNode(const ibQueryAstExprPtr& e);
 
-wxString JoinPath(const std::vector<wxString>& path)
+ibString JoinPath(const std::vector<ibString>& path)
 {
-	wxString out;
-	for (const wxString& seg : path) {
-		if (!out.IsEmpty()) out << wxT('.');
+	ibString out;
+	for (const ibString& seg : path) {
+		if (!out.IsEmpty()) out << ibT('.');
 		out << seg;
 	}
 	return out;
 }
 
-wxString DescribeList(const std::vector<ibQueryAstExprPtr>& items)
+ibString DescribeList(const std::vector<ibQueryAstExprPtr>& items)
 {
-	wxString out;
+	ibString out;
 	for (const ibQueryAstExprPtr& item : items) {
-		if (!out.IsEmpty()) out << wxT(", ");
+		if (!out.IsEmpty()) out << ibT(", ");
 		out << DescribeNode(item);
 	}
 	return out;
@@ -429,136 +429,136 @@ wxString DescribeList(const std::vector<ibQueryAstExprPtr>& items)
 const ibChar* CompareWord(ibQueryCompareOp op)
 {
 	switch (op) {
-	case ibQueryCompareOp::Eq: return wxT("=");
-	case ibQueryCompareOp::Ne: return wxT("<>");
-	case ibQueryCompareOp::Lt: return wxT("<");
-	case ibQueryCompareOp::Le: return wxT("<=");
-	case ibQueryCompareOp::Gt: return wxT(">");
-	case ibQueryCompareOp::Ge: return wxT(">=");
+	case ibQueryCompareOp::Eq: return ibT("=");
+	case ibQueryCompareOp::Ne: return ibT("<>");
+	case ibQueryCompareOp::Lt: return ibT("<");
+	case ibQueryCompareOp::Le: return ibT("<=");
+	case ibQueryCompareOp::Gt: return ibT(">");
+	case ibQueryCompareOp::Ge: return ibT(">=");
 	}
-	return wxT("?");
+	return ibT("?");
 }
 
 const ibChar* ArithWord(ibQueryArithOp op)
 {
 	switch (op) {
-	case ibQueryArithOp::Add: return wxT("+");
-	case ibQueryArithOp::Sub: return wxT("-");
-	case ibQueryArithOp::Mul: return wxT("*");
-	case ibQueryArithOp::Div: return wxT("/");
-	case ibQueryArithOp::Mod: return wxT("%");
+	case ibQueryArithOp::Add: return ibT("+");
+	case ibQueryArithOp::Sub: return ibT("-");
+	case ibQueryArithOp::Mul: return ibT("*");
+	case ibQueryArithOp::Div: return ibT("/");
+	case ibQueryArithOp::Mod: return ibT("%");
 	}
-	return wxT("?");
+	return ibT("?");
 }
 
-wxString DescribeNode(const ibQueryAstExprPtr& e)
+ibString DescribeNode(const ibQueryAstExprPtr& e)
 {
 	if (!e)
-		return wxT("-");
+		return ibT("-");
 
 	switch (e->m_kind) {
 
 	case ibQueryAstExprKind::Column: {
 		// The dotted path as written. A path that starts behind a CAST says so, because two columns
 		// with the same name off different casts are not the same column.
-		const wxString path = JoinPath(e->m_path);
-		return e->m_arg ? DescribeNode(e->m_arg) + wxT(".") + path : path;
+		const ibString path = JoinPath(e->m_path);
+		return e->m_arg ? DescribeNode(e->m_arg) + ibT(".") + path : path;
 	}
 
 	// A literal is quoted when it IS a string, so `x.Code = "100"` and `x.Code = 100` do not render
 	// the same — the whole point of a canonical form is that two different trees look different.
 	case ibQueryAstExprKind::Literal:
 		return e->m_literal.GetType() == ibValueTypes::TYPE_STRING
-			? wxString(wxT("\"")) + wxString(e->m_literal.GetString()) + wxT("\"")
-			: wxString(e->m_literal.GetString());
+			? ibString(ibT("\"")) + ibString(e->m_literal.GetString()) + ibT("\"")
+			: ibString(e->m_literal.GetString());
 
 	// A capture shows its ADDRESS, because that is what the fold now reads — and a rendering that
 	// hid it would agree with a tree that still searches for the name.
 	case ibQueryAstExprKind::Param:
 		return e->m_capturedFrame > 0
-			? wxString::Format(wxT("&%s@%d:%d"), e->m_paramName,
+			? ibString::Format(ibT("&%s@%d:%d"), e->m_paramName,
 				(int)e->m_capturedFrame, (int)e->m_capturedSlot)
-			: wxT("&") + e->m_paramName;
+			: ibT("&") + e->m_paramName;
 
 	case ibQueryAstExprKind::Value:
-		return wxT("value(") + JoinPath(e->m_path) + wxT(")");
+		return ibT("value(") + JoinPath(e->m_path) + ibT(")");
 
 	case ibQueryAstExprKind::Compare:
-		return wxT("(") + DescribeNode(e->m_lhs) + wxT(" ") + CompareWord(e->m_cmp) + wxT(" ")
-		     + DescribeNode(e->m_rhs) + wxT(")");
+		return ibT("(") + DescribeNode(e->m_lhs) + ibT(" ") + CompareWord(e->m_cmp) + ibT(" ")
+		     + DescribeNode(e->m_rhs) + ibT(")");
 
 	case ibQueryAstExprKind::Arith:
-		return wxT("(") + DescribeNode(e->m_lhs) + wxT(" ") + ArithWord(e->m_arith) + wxT(" ")
-		     + DescribeNode(e->m_rhs) + wxT(")");
+		return ibT("(") + DescribeNode(e->m_lhs) + ibT(" ") + ArithWord(e->m_arith) + ibT(" ")
+		     + DescribeNode(e->m_rhs) + ibT(")");
 
 	case ibQueryAstExprKind::Logical:
-		return wxT("(") + DescribeNode(e->m_lhs) + (e->m_isOr ? wxT(" OR ") : wxT(" AND "))
-		     + DescribeNode(e->m_rhs) + wxT(")");
+		return ibT("(") + DescribeNode(e->m_lhs) + (e->m_isOr ? ibT(" OR ") : ibT(" AND "))
+		     + DescribeNode(e->m_rhs) + ibT(")");
 
 	case ibQueryAstExprKind::Not:
-		return wxT("NOT ") + DescribeNode(e->m_lhs);
+		return ibT("NOT ") + DescribeNode(e->m_lhs);
 
 	case ibQueryAstExprKind::In:
-		return wxT("(") + DescribeNode(e->m_lhs) + (e->m_negated ? wxT(" NOT IN (") : wxT(" IN ("))
-		     + (e->m_subquery ? wxString(wxT("<subquery>")) : DescribeList(e->m_list)) + wxT("))");
+		return ibT("(") + DescribeNode(e->m_lhs) + (e->m_negated ? ibT(" NOT IN (") : ibT(" IN ("))
+		     + (e->m_subquery ? ibString(ibT("<subquery>")) : DescribeList(e->m_list)) + ibT("))");
 
 	case ibQueryAstExprKind::Like:
-		return wxT("(") + DescribeNode(e->m_lhs) + (e->m_negated ? wxT(" NOT LIKE ") : wxT(" LIKE "))
-		     + DescribeNode(e->m_rhs) + wxT(")");
+		return ibT("(") + DescribeNode(e->m_lhs) + (e->m_negated ? ibT(" NOT LIKE ") : ibT(" LIKE "))
+		     + DescribeNode(e->m_rhs) + ibT(")");
 
 	case ibQueryAstExprKind::IsNull:
-		return wxT("(") + DescribeNode(e->m_lhs) + (e->m_negated ? wxT(" IS NOT NULL)") : wxT(" IS NULL)"));
+		return ibT("(") + DescribeNode(e->m_lhs) + (e->m_negated ? ibT(" IS NOT NULL)") : ibT(" IS NULL)"));
 
 	case ibQueryAstExprKind::Between:
-		return wxT("(") + DescribeNode(e->m_lhs) + (e->m_negated ? wxT(" NOT BETWEEN ") : wxT(" BETWEEN "))
-		     + DescribeNode(e->m_low) + wxT(" AND ") + DescribeNode(e->m_high) + wxT(")");
+		return ibT("(") + DescribeNode(e->m_lhs) + (e->m_negated ? ibT(" NOT BETWEEN ") : ibT(" BETWEEN "))
+		     + DescribeNode(e->m_low) + ibT(" AND ") + DescribeNode(e->m_high) + ibT(")");
 
 	case ibQueryAstExprKind::Refs:
-		return wxT("(") + DescribeNode(e->m_lhs) + (e->m_negated ? wxT(" NOT REFS ") : wxT(" REFS "))
-		     + JoinPath(e->m_path) + wxT(")");
+		return ibT("(") + DescribeNode(e->m_lhs) + (e->m_negated ? ibT(" NOT REFS ") : ibT(" REFS "))
+		     + JoinPath(e->m_path) + ibT(")");
 
 	case ibQueryAstExprKind::Cast:
-		return wxT("CAST(") + DescribeNode(e->m_arg) + wxT(" AS ") + JoinPath(e->m_path) + wxT(")");
+		return ibT("CAST(") + DescribeNode(e->m_arg) + ibT(" AS ") + JoinPath(e->m_path) + ibT(")");
 
 	case ibQueryAstExprKind::Func:
-		return wxString::Format(wxT("fold#%d(%s%s)"), (int)e->m_func,
-			e->m_distinctArg ? wxT("DISTINCT ") : wxT(""),
-			e->m_star ? wxString(wxT("*")) : DescribeNode(e->m_arg));
+		return ibString::Format(ibT("fold#%d(%s%s)"), (int)e->m_func,
+			e->m_distinctArg ? ibT("DISTINCT ") : ibT(""),
+			e->m_star ? ibString(ibT("*")) : DescribeNode(e->m_arg));
 
 	case ibQueryAstExprKind::ScalarCall:
-		return wxString::Format(wxT("call#%d(%s)"), (int)e->m_scalar, DescribeList(e->m_args));
+		return ibString::Format(ibT("call#%d(%s)"), (int)e->m_scalar, DescribeList(e->m_args));
 
 	case ibQueryAstExprKind::Case: {
-		wxString out = wxT("CASE");
+		ibString out = ibT("CASE");
 		for (const std::pair<ibQueryAstExprPtr, ibQueryAstExprPtr>& branch : e->m_cases)
-			out << wxT(" WHEN ") << DescribeNode(branch.first) << wxT(" THEN ") << DescribeNode(branch.second);
-		if (e->m_else) out << wxT(" ELSE ") << DescribeNode(e->m_else);
-		return out + wxT(" END");
+			out << ibT(" WHEN ") << DescribeNode(branch.first) << ibT(" THEN ") << DescribeNode(branch.second);
+		if (e->m_else) out << ibT(" ELSE ") << DescribeNode(e->m_else);
+		return out + ibT(" END");
 	}
 	}
 
 	// A kind added later renders as its number rather than silently as something else — the rule the
 	// AOT serialiser learned the hard way, where an unknown kind read as "not translatable".
-	return wxString::Format(wxT("<kind %d>"), (int)e->m_kind);
+	return ibString::Format(ibT("<kind %d>"), (int)e->m_kind);
 }
 
 } // namespace
 
-wxString ibDescribeQueryAst(const std::shared_ptr<ibQueryAstExpr>& expr, bool withAddresses)
+ibString ibDescribeQueryAst(const std::shared_ptr<ibQueryAstExpr>& expr, bool withAddresses)
 {
-	const wxString said = DescribeNode(expr);
+	const ibString said = DescribeNode(expr);
 	if (withAddresses)
 		return said;
 
 	// Drop `@frame:slot` after a capture. Taken off the finished line rather than threaded through
 	// twenty-three recursive calls, and safe to do here because the format is this file's own: the
 	// suffix follows `&<identifier>`, and an identifier cannot contain `@`.
-	wxString out;
+	ibString out;
 	out.reserve(said.length());
 	for (size_t i = 0; i < said.length(); ++i) {
-		if (said[i] != wxT('@')) { out << said[i]; continue; }
+		if (said[i] != ibT('@')) { out << said[i]; continue; }
 		size_t j = i + 1;
-		while (j < said.length() && (ibIsDigit(said[j]) || said[j] == wxT(':'))) ++j;
+		while (j < said.length() && (ibIsDigit(said[j]) || said[j] == ibT(':'))) ++j;
 		i = j - 1;   // skip the coordinate; the loop's ++i lands on the first char after it
 	}
 	return out;

@@ -114,7 +114,7 @@ ibClientFrame::~ibClientFrame()
 		pool->Wake(session);
 }
 
-void ibClientFrame::SetStatusText(const wxString& strStatus, int /*number*/)
+void ibClientFrame::SetStatusText(const ibString& strStatus, int /*number*/)
 {
 	m_status = strStatus;
 }
@@ -135,7 +135,7 @@ void ibClientFrame::RaiseFrame()
 	RefreshFrame();
 }
 
-void ibClientFrame::Message(const wxString& strMessage, ibStatusMessage status)
+void ibClientFrame::Message(const ibString& strMessage, ibStatusMessage status)
 {
 	std::lock_guard<std::mutex> lock(m_msgMutex);
 	m_pendingMessages.push_back({ status, strMessage });
@@ -149,9 +149,9 @@ void ibClientFrame::ClearMessage()
 	m_clearPending = true;
 }
 
-void ibClientFrame::BackendError(const wxString& strFileName,
-	const wxString& strDocPath, const long line,
-	const wxString& strErrorMessage)
+void ibClientFrame::BackendError(const ibString& strFileName,
+	const ibString& strDocPath, const long line,
+	const ibString& strErrorMessage)
 {
 	// THE DESKTOP'S ERROR WINDOW (ibFrontendMainFrameEnterprise::BackendError), asked of the client: the person chooses
 	// what becomes of the failure. Closed without a choice — as Close window.
@@ -251,7 +251,7 @@ bool ibClientFrame::DoRequest(const ibDataNode& request, ibDataNode& response)
 	}
 	catch (...) {
 		// Cancelled while waiting — the request is withdrawn and the interruption goes on up the script.
-		ibJournalInfo(wxT("client"), wxT("request %s withdrawn: the wait was interrupted"), wxString::FromUTF8(id.c_str()));
+		ibJournalInfo(ibT("client"), ibT("request %s withdrawn: the wait was interrupted"), ibString::FromUTF8(id.c_str()));
 		std::lock_guard<std::mutex> lock(m_requestMutex);
 		m_waiting.erase(std::remove_if(m_waiting.begin(), m_waiting.end(),
 			[&id](const Waiting& waiting) { return waiting.id == id; }), m_waiting.end());
@@ -263,7 +263,7 @@ bool ibClientFrame::DoRequest(const ibDataNode& request, ibDataNode& response)
 	return true;
 }
 
-int ibClientFrame::DoShowModalMessage(const wxString& message, const wxString& caption, int style)
+int ibClientFrame::DoShowModalMessage(const ibString& message, const ibString& caption, int style)
 {
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::Message));
@@ -382,13 +382,13 @@ bool ibClientFrame::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
 
 #include "frmserver/docView/templates/docViewSpreadsheet.h"
 
-bool ibClientFrame::ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument)
+bool ibClientFrame::ShowSpreadsheetDocument(const ibString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument)
 {
 	class ibSpreadsheetMemoryDocument :
 		public ibSheetFileDocument {
 	public:
 
-		ibSpreadsheetMemoryDocument(const wxString& strTitle, const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) :
+		ibSpreadsheetMemoryDocument(const ibString& strTitle, const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) :
 			ibSheetFileDocument(spreadSheetDocument)
 		{
 			ibSheetFileDocument::SetTitle(strTitle);
@@ -401,7 +401,7 @@ bool ibClientFrame::ShowSpreadsheetDocument(const wxString& strTitle, std::share
 	if (createdDoc == nullptr)
 		return false;
 
-	if (createdDoc->OnCreate(wxEmptyString, 0)) {
+	if (createdDoc->OnCreate(ibEmptyString, 0)) {
 		createdDoc->SetCommandProcessor(createdDoc->OnCreateCommandProcessor());
 		m_docManager->AddDocument(createdDoc);
 		return true;
@@ -469,7 +469,7 @@ ibClientChildFrame* ibClientFrame::CreateChildFrame(ibView* view)
 	const ibFormVisualDocument* const formDocument = dynamic_cast<const ibFormVisualDocument*>(document);
 	ibValueForm* const form = formDocument != nullptr ? formDocument->GetValueForm() : nullptr;
 
-	wxString title = document != nullptr ? document->GetTitle() : wxString();
+	ibString title = document != nullptr ? document->GetTitle() : ibString();
 	if (title.IsEmpty() && form != nullptr)
 		title = form->GetControlTitle();
 	// A file's document — its file's name (the address's own: ibTempStorage::NameOf).
@@ -663,7 +663,7 @@ ibDocument* ibClientFrame::GetSaveAsDocument(std::size_t i) const
 	return tab != nullptr ? tab->GetDocument() : nullptr;
 }
 
-bool ibClientFrame::DoCommand(ibDocCommand command, const wxString& name)
+bool ibClientFrame::DoCommand(ibDocCommand command, const ibString& name)
 {
 	if (!IsCommandEnabled(command))
 		return false;
@@ -699,7 +699,7 @@ bool ibClientFrame::DoCommand(ibDocCommand command, const wxString& name)
 		ibSession* const session = ibSession::Current();
 		ibTempStorage* const storage = session != nullptr
 			? ibApplicationInstance::GetTempStorage(session->GetApplicationInstance()) : nullptr;
-		const wxString file = storage != nullptr && !name.IsEmpty() ? storage->Create(session->Identity().m_guid, name) : wxString();
+		const ibString file = storage != nullptr && !name.IsEmpty() ? storage->Create(session->Identity().m_guid, name) : ibString();
 		ibDocument* const saved = GetSaveAsDocument(m_activeTab);
 		if (file.IsEmpty() || !saved->OnSaveDocument(file))
 			return false;
@@ -750,7 +750,7 @@ bool ibClientFrame::OpenChosenFile()
 	// list them.
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::File));
-	request.SetValue(ibProtocol::ibRequest::ibFile::Caption, _("Open"));
+	request.SetValue(ibProtocol::ibRequest::ibFile::Caption, ibString(_("Open")));
 	for (const ibDocTemplate* const temp : m_docManager->GetTemplatesVector()) {
 		if (!temp->IsVisible())
 			continue;
@@ -761,7 +761,7 @@ bool ibClientFrame::OpenChosenFile()
 
 	// Cancelled — nothing chosen, nothing opened.
 	ibDataNode response;
-	const wxString id = Request(request, response) ? response.GetValue<wxString>(ibProtocol::ibRequest::ibFile::File) : wxString();
+	const ibString id = Request(request, response) ? response.GetValue<ibString>(ibProtocol::ibRequest::ibFile::File) : ibString();
 	if (id.IsEmpty())
 		return false;
 
@@ -769,7 +769,7 @@ bool ibClientFrame::OpenChosenFile()
 	const ibTempFile file(id);
 	const ibDocTemplate* const temp = file.IsOpened() ? m_docManager->FindTemplateForPath(id) : nullptr;
 	if (temp == nullptr || !temp->IsVisible()) {
-		ShowModalMessage(wxString::Format(_("Nothing here opens '%s'."), file.GetName()), _("Open"), wxOK | wxICON_ERROR);
+		ShowModalMessage(ibString::Format(_("Nothing here opens '%s'."), file.GetName()), _("Open"), wxOK | wxICON_ERROR);
 		return false;
 	}
 	return m_docManager->CreateDocument(id) != nullptr;

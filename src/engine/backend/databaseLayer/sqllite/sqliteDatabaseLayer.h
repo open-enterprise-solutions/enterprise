@@ -26,7 +26,7 @@ class BACKEND_API ibDatabaseLayerSQLite : public ibDatabaseLayer
 public:
 	// ctor()
 	ibDatabaseLayerSQLite();
-	ibDatabaseLayerSQLite(const wxString& strDatabase, bool mustExist = false);
+	ibDatabaseLayerSQLite(const ibString& strDatabase, bool mustExist = false);
 	ibDatabaseLayerSQLite(void* pDatabase) { m_pDatabase = pDatabase; }
 	ibDatabaseLayerSQLite(const ibDatabaseLayerSQLite& src);
 
@@ -34,8 +34,8 @@ public:
 	virtual ~ibDatabaseLayerSQLite();
 
 	// open database
-	virtual bool Open(const wxString& strDatabase);
-	virtual bool Open(const wxString& strDatabase, bool mustExist);
+	virtual bool Open(const ibString& strDatabase);
+	virtual bool Open(const ibString& strDatabase, bool mustExist);
 
 	// close database  
 	virtual bool Close();
@@ -55,11 +55,11 @@ public:
 	// see below.
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
-	virtual bool TableExists(const wxString& table);
-	virtual bool ViewExists(const wxString& view);
-	virtual wxArrayString GetTables();
-	virtual wxArrayString GetViews();
-	virtual wxArrayString GetColumns(const wxString& table);
+	virtual bool TableExists(const ibString& table);
+	virtual bool ViewExists(const ibString& view);
+	virtual std::vector<ibString> GetTables();
+	virtual std::vector<ibString> GetViews();
+	virtual std::vector<ibString> GetColumns(const ibString& table);
 
 	virtual int GetDatabaseLayerType() const {
 		return DATABASELAYER_SQLLITE;
@@ -90,12 +90,12 @@ public:
 protected:
 
 	// query database
-	virtual int DoRunQuery(const wxString& strQuery, bool bParseQuery);
-	virtual ibDatabaseResultSet* DoRunQueryWithResults(const wxString& strQuery);
+	virtual int DoRunQuery(const ibString& strQuery, bool bParseQuery);
+	virtual ibDatabaseResultSet* DoRunQueryWithResults(const ibString& strQuery);
 
 	// ibPreparedStatement support
-	virtual ibPreparedStatement* DoPrepareStatement(const wxString& strQuery);
-	ibPreparedStatement* DoPrepareStatement(const wxString& strQuery, bool bLogForCleanup);
+	virtual ibPreparedStatement* DoPrepareStatement(const ibString& strQuery);
+	ibPreparedStatement* DoPrepareStatement(const ibString& strQuery, bool bLogForCleanup);
 
 	// transaction support — driver-level operations; the nesting
 	// counter lives on ibDatabaseLayer, see databaseLayer.h.
@@ -107,7 +107,7 @@ private:
 
 	//sqlite3* m_pDatabase;
 	void* m_pDatabase;
-	wxString m_strDatabasePath;
+	ibString m_strDatabasePath;
 	// ⭐ WHO MAY CLOSE WHAT THE CANCEL IS USING. sqlite3_interrupt is safe from another thread, but not on a
 	// connection that is closed or closes before it returns (SQLite's own words) — and Cancel runs on whatever
 	// thread asks while the owner may be closing. Held by Cancel for the call and wherever m_pDatabase is opened

@@ -15,13 +15,13 @@
 
 namespace {
 
-wxString Hex(const uint8_t* d, size_t n) {
-    wxString s;
-    for (size_t i = 0; i < n; ++i) s += wxString::Format(wxT("%02x"), (unsigned)d[i]);
+ibString Hex(const uint8_t* d, size_t n) {
+    ibString s;
+    for (size_t i = 0; i < n; ++i) s += ibString::Format(wxT("%02x"), (unsigned)d[i]);
     return s;
 }
 
-wxString Sha256Hex(const char* msg) {
+ibString Sha256Hex(const char* msg) {
     uint8_t out[ibSHA256::DIGEST_SIZE];
     ibSHA256::Hash(reinterpret_cast<const uint8_t*>(msg), std::strlen(msg), out);
     return Hex(out, ibSHA256::DIGEST_SIZE);

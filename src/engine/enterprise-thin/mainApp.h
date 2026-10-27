@@ -3,7 +3,7 @@
 
 #include <wx/app.h>
 
-// THE THIN RUNTIME — the desktop's enterprise.exe (enterprise/mainApp) as a thin client: it opens a connection — to an
+// THE THIN RUNTIME — the runtime as a thin client: it opens a connection — to an
 // application server by its address, or to a file base it opens in its own process (fileserver, loaded for it) — and
 // puts up the runtime's main window around it, which logs in and draws what it is answered. It holds no base of its
 // own and runs no code: that is the server's, wherever it runs.

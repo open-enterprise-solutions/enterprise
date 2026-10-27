@@ -33,11 +33,11 @@ public:
 	//  password
 	// ctor
 	ibDatabaseLayerPostgres();
-	ibDatabaseLayerPostgres(const wxString& strDatabase);
-	ibDatabaseLayerPostgres(const wxString& strServer, const wxString& strDatabase);
-	ibDatabaseLayerPostgres(const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
-	ibDatabaseLayerPostgres(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
-	ibDatabaseLayerPostgres(const wxString& strServer, const wxString& strPort, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
+	ibDatabaseLayerPostgres(const ibString& strDatabase);
+	ibDatabaseLayerPostgres(const ibString& strServer, const ibString& strDatabase);
+	ibDatabaseLayerPostgres(const ibString& strDatabase, const ibString& strUser, const ibString& strPassword);
+	ibDatabaseLayerPostgres(const ibString& strServer, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword);
+	ibDatabaseLayerPostgres(const ibString& strServer, const ibString& strPort, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword);
 	ibDatabaseLayerPostgres(void* pDatabase) { m_pDatabase = pDatabase; }
 	ibDatabaseLayerPostgres(const ibDatabaseLayerPostgres& src);
 
@@ -46,11 +46,11 @@ public:
 
 	// open database
 	virtual bool Open();
-	virtual bool Open(const wxString& strDatabase);
-	virtual bool Open(const wxString& strServer, const wxString& strDatabase);
-	virtual bool Open(const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
-	virtual bool Open(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
-	virtual bool Open(const wxString& strServer, const wxString& strPort, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
+	virtual bool Open(const ibString& strDatabase);
+	virtual bool Open(const ibString& strServer, const ibString& strDatabase);
+	virtual bool Open(const ibString& strDatabase, const ibString& strUser, const ibString& strPassword);
+	virtual bool Open(const ibString& strServer, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword);
+	virtual bool Open(const ibString& strServer, const ibString& strPort, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword);
 
 	// close database
 	virtual bool Close();
@@ -72,13 +72,13 @@ public:
 	// m_rowLockNoWaitSuffix=" NOWAIT" → raises SQLSTATE 55P03 lock_not_available instead of blocking).
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
-	virtual bool DatabaseExists(const wxString& table);
-	virtual bool TableExists(const wxString& table);
-	virtual bool ViewExists(const wxString& view);
+	virtual bool DatabaseExists(const ibString& table);
+	virtual bool TableExists(const ibString& table);
+	virtual bool ViewExists(const ibString& view);
 
-	virtual wxArrayString GetTables();
-	virtual wxArrayString GetViews();
-	virtual wxArrayString GetColumns(const wxString& table);
+	virtual std::vector<ibString> GetTables();
+	virtual std::vector<ibString> GetViews();
+	virtual std::vector<ibString> GetColumns(const ibString& table);
 
 	virtual int GetDatabaseLayerType() const {
 		return DATABASELAYER_POSTGRESQL;
@@ -114,23 +114,23 @@ public:
 	// Constraint, 40P01 → Deadlock, 40 / 55P03 → Timeout, 42 → Syntax, 08 → ConnectionLost). Every
 	// reporter of the driver records this Kind with the code, from the state it just read off the
 	// result (SetErrorCode(code, kind)).
-	static ibBackendDatabaseException::Kind ClassifySqlState(const wxString& sqlState);
+	static ibBackendDatabaseException::Kind ClassifySqlState(const ibString& sqlState);
 
-	wxString GetSqlState() const override { return m_lastSqlState; }
+	ibString GetSqlState() const override { return m_lastSqlState; }
 
 	// Internal hook for libpq error paths — called from places that
 	// already have a PGresult* in hand to stash the SQLSTATE so the
 	// next ThrowDatabaseException carries it.
-	void SetLastSqlState(const wxString& s) { m_lastSqlState = s; }
+	void SetLastSqlState(const ibString& s) { m_lastSqlState = s; }
 
 protected:
 
 	// query database
-	virtual int DoRunQuery(const wxString& strQuery, bool bParseQuery);
-	virtual ibDatabaseResultSet* DoRunQueryWithResults(const wxString& strQuery);
+	virtual int DoRunQuery(const ibString& strQuery, bool bParseQuery);
+	virtual ibDatabaseResultSet* DoRunQueryWithResults(const ibString& strQuery);
 
 	// ibPreparedStatement support
-	virtual ibPreparedStatement* DoPrepareStatement(const wxString& strQuery);
+	virtual ibPreparedStatement* DoPrepareStatement(const ibString& strQuery);
 
 	// transaction support — driver-level operations; the nesting
 	// counter lives on ibDatabaseLayer, see databaseLayer.h.
@@ -143,11 +143,11 @@ private:
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	ibInterfacePostgres* m_pInterface;
 #endif
-	wxString m_strServer;
-	wxString m_strDatabase;
-	wxString m_strUser;
-	wxString m_strPassword;
-	wxString m_strPort;
+	ibString m_strServer;
+	ibString m_strDatabase;
+	ibString m_strUser;
+	ibString m_strPassword;
+	ibString m_strPort;
 
 	void* m_pDatabase;
 	void* m_pCancel = nullptr;   // PGcancel*, made with the connection (Open) — what Cancel hands PQcancel
@@ -159,7 +159,7 @@ private:
 	// Stashed by SetLastSqlState() — the most recent SQLSTATE libpq
 	// surfaced via PQresultErrorField(PG_DIAG_SQLSTATE). Travels with
 	// the next ThrowDatabaseException so admin logs see it.
-	wxString m_lastSqlState;
+	ibString m_lastSqlState;
 };
 
 #endif // __POSTGRESQL_DATABASE_LAYER_H__

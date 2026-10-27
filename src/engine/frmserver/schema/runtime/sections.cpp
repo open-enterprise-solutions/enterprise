@@ -17,7 +17,7 @@ namespace {
 struct ibSectionBlock {
 	ibProtocol::ibSchema::ibSections::ibColumn column = ibProtocol::ibSchema::ibSections::ibColumn::Left;   // the navigation's;
 	                                                                                                       // the actions' — Right
-	wxString                            title;        // none — the section's own items at the top
+	ibString                            title;        // none — the section's own items at the top
 	const ibValueMetaObjectCommandGroup* group = nullptr;   // a declared group's: its picture and tooltip
 	ibInterfaceCommandSection           area = ibInterfaceCommandSection_Default;   // what its items open as
 	std::vector<ibValueMetaObject*>     items;
@@ -150,7 +150,7 @@ void ibSchemaSections::Build(const ibSession& session, const ibDataNode& /*args*
 			if (block.group != nullptr) {
 				if (!block.group->IsEmptyPicture())
 					blockNode.SetValue(ibProtocol::ibSchema::ibSections::Picture, ibBackendPicture::SendPicture(block.group->GetPictureDesc(), metaData));
-				const wxString tooltip = block.group->GetToolTip();
+				const ibString tooltip = block.group->GetToolTip();
 				if (!tooltip.IsEmpty())
 					blockNode.SetValue(ibProtocol::ibSchema::ibSections::Tooltip, tooltip);
 			}
@@ -166,18 +166,18 @@ void ibSchemaSections::Build(const ibSession& session, const ibDataNode& /*args*
 }
 
 std::function<void()> ibSchemaSections::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	if (static_cast<ibSchemaSectionsCommand>(command) != ibSchemaSectionsCommand::Open) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = wxString::Format(wxT("Sections has no command %d"), command);
+		error = ibString::Format(ibT("Sections has no command %d"), command);
 		return nullptr;
 	}
 
 	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr) {
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the session has no configuration");
+		error = ibT("the session has no configuration");
 		return nullptr;
 	}
 
@@ -204,6 +204,6 @@ std::function<void()> ibSchemaSections::Command(const ibSession& session, std::i
 	}
 
 	refusal = ibProtocol::ibRefusal::NotFound;
-	error = wxString::Format(wxT("Sections offer no item %d"), itemId);
+	error = ibString::Format(ibT("Sections offer no item %d"), itemId);
 	return nullptr;
 }

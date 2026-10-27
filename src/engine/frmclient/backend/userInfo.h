@@ -19,8 +19,8 @@ class ibMetaData;
 struct FRMCLIENT_API ibUserInfo {
 
 	struct ibUserRole {
-		wxString m_strRoleGuid;
-		wxString m_strRoleName;
+		ibString m_strRoleGuid;
+		ibString m_strRoleName;
 		ibRoleID m_miRoleId = wxNOT_FOUND;
 		// HOW this role combines with the user's others (ibRoleCompositionMode) — the server writes what its
 		// configuration says; the guid is what it is found by.
@@ -34,12 +34,12 @@ struct FRMCLIENT_API ibUserInfo {
 	bool IsSetLanguage() const { return !m_strLanguageGuid.IsEmpty(); }
 
 	//User info
-	wxString m_strUserGuid;
-	wxString m_strUserName;
-	wxString m_strUserFullName;
+	ibString m_strUserGuid;
+	ibString m_strUserName;
+	ibString m_strUserFullName;
 	// Saved: the password typed — sent, to be hashed by the server, only when m_bPasswordTouched; untouched, the stored
 	// one is kept. Read: empty — the stored one is never sent; m_bPasswordSet says whether there is one.
-	wxString m_strUserPassword;
+	ibString m_strUserPassword;
 	bool m_bPasswordSet = false;
 	bool m_bPasswordTouched = false;
 
@@ -47,15 +47,15 @@ struct FRMCLIENT_API ibUserInfo {
 	std::vector<ibUserRole> m_roleArray;
 
 	//Language info
-	wxString m_strLanguageGuid;
-	wxString m_strLanguageName;
-	wxString m_strLanguageCode;
+	ibString m_strLanguageGuid;
+	ibString m_strLanguageName;
+	ibString m_strLanguageCode;
 
 	// Compact projection of a sys_user row — guid + name + fullName: the list's rows.
 	struct Brief {
-		wxString m_strUserGuid;
-		wxString m_strUserName;
-		wxString m_strUserFullName;
+		ibString m_strUserGuid;
+		ibString m_strUserName;
+		ibString m_strUserFullName;
 	};
 
 	// The server's schema asked. Read returns a default-constructed (IsOk() == false) record on miss; Save writes the
@@ -68,16 +68,16 @@ struct FRMCLIENT_API ibUserInfo {
 	// What a record is chosen from — the configuration's roles and languages, which the client does not hold: listed by
 	// the server beside the users, as the desktop's item dialog listed them off the configuration.
 	struct RoleBrief {
-		wxString m_strRoleGuid;
-		wxString m_strRoleName;
-		wxString m_strRoleTitle;   // its synonym — what the list shows
+		ibString m_strRoleGuid;
+		ibString m_strRoleName;
+		ibString m_strRoleTitle;   // its synonym — what the list shows
 		ibRoleCompositionMode m_mode = ibRoleCompositionMode_Union;
 	};
 
 	struct LanguageBrief {
-		wxString m_strLanguageGuid;
-		wxString m_strLanguageTitle;
-		wxString m_strLanguageCode;
+		ibString m_strLanguageGuid;
+		ibString m_strLanguageTitle;
+		ibString m_strLanguageCode;
 		bool m_default = false;   // the configuration's own language (its DefaultLanguage)
 	};
 

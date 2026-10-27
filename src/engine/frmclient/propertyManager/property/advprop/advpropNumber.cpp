@@ -57,7 +57,7 @@ ibPGNumberProperty::~ibPGNumberProperty() {}
 wxString ibPGNumberProperty::ValueToString(wxVariant& variant,
 	wxPGPropValFormatFlags flags) const
 {
-	return variant.IsNull() ? wxString() : ReadNumber(variant).ToString();
+	return variant.IsNull() ? ibString() : ReadNumber(variant).ToString();
 }
 
 bool ibPGNumberProperty::StringToValue(wxVariant& variant, const wxString& text, wxPGPropValFormatFlags flags) const

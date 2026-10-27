@@ -43,7 +43,6 @@
 
 #include "core/core.h"
 
-#include <wx/string.h>
 
 enum class ibFileKind {
 	Application,   // .oap
@@ -55,19 +54,19 @@ enum class ibFileKind {
 };
 
 // The extension, without the dot ("oap").
-CORE_API wxString ibFileExtension(ibFileKind kind);
+CORE_API ibString ibFileExtension(ibFileKind kind);
 
 // The mask a template matches a path against: "*.oap".
-CORE_API wxString ibFileMask(ibFileKind kind);
+CORE_API ibString ibFileMask(ibFileKind kind);
 
 // A file-dialog filter for one kind, already worded:
 //   "Application files (*.oap)|*.oap"
 // The description is translated through the catalogs, so the dialog speaks the
 // user's language while the mask stays what it is.
-CORE_API wxString ibFileFilter(ibFileKind kind);
+CORE_API ibString ibFileFilter(ibFileKind kind);
 
 // Which kind a path belongs to, by extension. Answers false when nothing
 // matches, rather than guessing a kind.
-CORE_API bool ibFileKindOf(const wxString& path, ibFileKind& kind);
+CORE_API bool ibFileKindOf(const ibString& path, ibFileKind& kind);
 
 #endif // !_FILE_KIND_H__

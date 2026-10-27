@@ -49,7 +49,7 @@ namespace {
 //
 // The id is the steadier of the two — it survives a rename — so a number is read as one; anything
 // else is the name, which is what a person reads in the tree.
-ibValueMetaObjectSection* FindSection(ibMetaData* metaData, const wxString& nameOrId)
+ibValueMetaObjectSection* FindSection(ibMetaData* metaData, const ibString& nameOrId)
 {
 	// The SAME finder answers both: its filter is a template, so a name and an id are two spellings
 	// of one question rather than two searches. The class filter stands either way, so a number that
@@ -65,14 +65,14 @@ ibValueMetaObjectSection* FindSection(ibMetaData* metaData, const wxString& name
 
 // Every section in the tree, deepest last — for saying which ones exist when a name misses. A
 // refusal that lists the alternatives ends the guessing in one round trip.
-void CollectSectionNames(ibValueMetaObjectSection* where, const wxString& path,
-	std::vector<wxString>& into)
+void CollectSectionNames(ibValueMetaObjectSection* where, const ibString& path,
+	std::vector<ibString>& into)
 {
 	if (where == nullptr || where->IsDeleted())
 		return;
 
-	const wxString here = path.IsEmpty()
-		? where->GetName() : path + wxT(".") + where->GetName();
+	const ibString here = path.IsEmpty()
+		? where->GetName() : path + ibT(".") + where->GetName();
 
 	into.push_back(here);
 
@@ -80,12 +80,12 @@ void CollectSectionNames(ibValueMetaObjectSection* where, const wxString& path,
 		CollectSectionNames(child, here, into);
 }
 
-std::vector<wxString> AllSectionNames(ibMetaData* metaData)
+std::vector<ibString> AllSectionNames(ibMetaData* metaData)
 {
-	std::vector<wxString> names;
+	std::vector<ibString> names;
 
 	for (ibValueMetaObjectSection* object : metaData->GetAnyArrayObject<ibValueMetaObjectSection>(g_metaSectionCLSID))
-		CollectSectionNames(object, wxEmptyString, names);
+		CollectSectionNames(object, ibEmptyString, names);
 
 	return names;
 }
@@ -103,13 +103,13 @@ void CollectSectionIds(ibValueMetaObjectSection* where, std::set<ibMetaID>& into
 		CollectSectionIds(child, into);
 }
 
-wxString ListNames(const std::vector<wxString>& names)
+ibString ListNames(const std::vector<ibString>& names)
 {
-	wxString out;
+	ibString out;
 
-	for (const wxString& name : names) {
+	for (const ibString& name : names) {
 		if (!out.IsEmpty())
-			out += wxT(", ");
+			out += ibT(", ");
 		out += name;
 	}
 
@@ -133,7 +133,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgSection()
 {
-	static const ibArg s_a(wxT("section"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("section"), ibArg::Kind::Text,
 		ibMcpText("The section - its name, or the id the tree gives it. Sections nest: name the "
 			  "sub-section itself, not the path to it."), /*required*/ true);
 	return s_a;
@@ -141,14 +141,14 @@ const ibArg& ArgSection()
 
 const ibArg& ArgId()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The metaobject to check in, by id from metadata_list or metadata_create."));
 	return s_a;
 }
 
 const ibArg& ArgIds()
 {
-	static const ibArg s_a(wxT("ids"), ibArg::Kind::Many,
+	static const ibArg s_a(ibT("ids"), ibArg::Kind::Many,
 		ibMcpText("Several at once, instead of `id`. Each is reported on separately, and one bad id "
 			  "does not undo the rest."));
 	return s_a;
@@ -156,7 +156,7 @@ const ibArg& ArgIds()
 
 const ibArg& ArgRemove()
 {
-	static const ibArg s_a(wxT("remove"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("remove"), ibArg::Kind::Flag,
 		ibMcpText("Take them OUT of the section instead of putting them in. Off by default."));
 	return s_a;
 }
@@ -170,9 +170,9 @@ const ibArg& ArgRemove()
 class ibMcpToolSectionInclude : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("section_include"); }
+	ibString GetName() const override { return ibT("section_include"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		// 🛑 IT READ `id` AND THE CALL HAD PASSED `ids`, so the line came out as "putting '' into
 		// the section 'Warehouse'" — empty quotes where the substance should be. A person watching
@@ -181,7 +181,7 @@ public:
 		// ⭐ AND ONE NAME WOULD NOT HAVE BEEN ENOUGH EITHER. This tool takes a batch, and "putting
 		// 'Goods' into..." while five others go in beside it is a line that is true and still
 		// misleading. What a watcher needs is HOW MANY, and the names while they still fit.
-		wxString what;
+		ibString what;
 
 		if (auto many = params.FindField(ArgIds().Name())) {
 			if (many->Kind() == ibDataKind::Array) {
@@ -190,7 +190,7 @@ public:
 
 				what = count == 1
 					? ibMcpNameOf(params, ArgIds().Name())
-					: wxString::Format(ibMcpText("%u objects"), (unsigned)count);
+					: ibString::Format(ibMcpText("%u objects"), (unsigned)count);
 			}
 		}
 		else if (params.Has(ArgId().Name())) {
@@ -198,16 +198,16 @@ public:
 		}
 
 		if (what.IsEmpty())
-			what = wxT("nothing");
+			what = ibT("nothing");
 
 		return ArgRemove().Flag(params)
-			? wxString::Format(ibMcpText("taking %s out of the section '%s'"),
+			? ibString::Format(ibMcpText("taking %s out of the section '%s'"),
 				what, ArgSection().Text(params))
-			: wxString::Format(ibMcpText("putting %s into the section '%s'"),
+			: ibString::Format(ibMcpText("putting %s into the section '%s'"),
 				what, ArgSection().Text(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Check a metaobject into a section, or take it out - the tick-boxes the section's "
 			"editor shows. THIS IS THE LAST STEP OF BUILDING ANYTHING a person is meant to open: a "
@@ -222,7 +222,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaDataConfigurationBase* metaData = activeMetaData;
 
@@ -231,19 +231,19 @@ public:
 			return false;
 		}
 
-		const wxString sectionName = ArgSection().Text(params);
+		const ibString sectionName = ArgSection().Text(params);
 
 		ibValueMetaObjectSection* section = FindSection(metaData, sectionName);
 
 		if (section == nullptr) {
-			const std::vector<wxString> known = AllSectionNames(metaData);
+			const std::vector<ibString> known = AllSectionNames(metaData);
 
 			// ⭐ REFUSED WITH THE ANSWER. A caller that misspelled a section can act on this reply;
 			// one told only "not found" has to go and ask a second question.
 			refusal = known.empty()
 				? ibMcpText("This configuration declares no sections at all. Create one under "
 					"Common - Sections first (metadata_create kind=Section).")
-				: wxString::Format(ibMcpText("No section is called '%s'. There is: %s."),
+				: ibString::Format(ibMcpText("No section is called '%s'. There is: %s."),
 					sectionName, ListNames(known));
 			return false;
 		}
@@ -283,7 +283,7 @@ public:
 
 			if (object == nullptr || object->IsDeleted()) {
 				failed.push_back(ibDataValue::String(
-					wxString::Format(ibMcpText("#%d - no such object"), (int)id)));
+					ibString::Format(ibMcpText("#%d - no such object"), (int)id)));
 				continue;
 			}
 
@@ -291,7 +291,7 @@ public:
 			// interface, and the editor does not offer the box either.
 			if (object == section) {
 				failed.push_back(ibDataValue::String(
-					wxString::Format(ibMcpText("%s - a section cannot contain itself"), object->GetName())));
+					ibString::Format(ibMcpText("%s - a section cannot contain itself"), object->GetName())));
 				continue;
 			}
 
@@ -300,7 +300,7 @@ public:
 			// membership no interface ever reads — a write that succeeds and means nothing, which
 			// is worse than a refusal because there is nothing to notice.
 			if (!object->IsInterfaceAllowed()) {
-				failed.push_back(ibDataValue::String(wxString::Format(
+				failed.push_back(ibDataValue::String(ibString::Format(
 					ibMcpText("%s (%s) - this kind does not appear in a command interface"),
 					object->GetName(), object->GetClassName())));
 				continue;
@@ -322,15 +322,15 @@ public:
 		if (changed)
 			metaData->Modify(true);
 
-		result.SetValue(wxT("section"), section->GetName());
-		result.AddField(wxT("id"), ibDataValue::Int((std::int64_t)section->GetMetaID()));
-		result.AddField(remove ? wxT("removed") : wxT("included"), ibDataValue::Array(done));
+		result.SetValue(ibT("section"), section->GetName());
+		result.AddField(ibT("id"), ibDataValue::Int((std::int64_t)section->GetMetaID()));
+		result.AddField(remove ? ibT("removed") : ibT("included"), ibDataValue::Array(done));
 
 		if (!failed.empty())
-			result.AddField(wxT("refused"), ibDataValue::Array(failed));
+			result.AddField(ibT("refused"), ibDataValue::Array(failed));
 
 		if (!changed && failed.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("Everything named was already the way it was asked to be - nothing changed."));
 
 		return true;
@@ -346,18 +346,18 @@ MCP_TOOL_REGISTER(ibMcpToolSectionInclude);
 class ibMcpToolSectionContent : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("section_content"); }
+	ibString GetName() const override { return ibT("section_content"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString section = ArgSection().Text(params);
+		const ibString section = ArgSection().Text(params);
 
 		return section.IsEmpty()
 			? ibMcpText("reading the command interface")
-			: wxString::Format(ibMcpText("reading what is in the section '%s'"), section);
+			: ibString::Format(ibMcpText("reading what is in the section '%s'"), section);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("What each section holds - the checked boxes, read back. Without arguments it "
 			"answers every section, which is the whole command interface and the fastest way to "
@@ -375,7 +375,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaDataConfigurationBase* metaData = activeMetaData;
 
@@ -384,13 +384,13 @@ public:
 			return false;
 		}
 
-		const wxString only = ArgSection().Text(params);
+		const ibString only = ArgSection().Text(params);
 
 		if (!only.IsEmpty() && FindSection(metaData, only) == nullptr) {
-			const std::vector<wxString> known = AllSectionNames(metaData);
+			const std::vector<ibString> known = AllSectionNames(metaData);
 			refusal = known.empty()
 				? ibMcpText("This configuration declares no sections at all.")
-				: wxString::Format(ibMcpText("No section is called '%s'. There is: %s."),
+				: ibString::Format(ibMcpText("No section is called '%s'. There is: %s."),
 					only, ListNames(known));
 			return false;
 		}
@@ -403,17 +403,17 @@ public:
 		std::vector<ibDataValue> homeless;
 
 		// Which sections each object belongs to, accumulated in the same pass that fills them.
-		std::function<void(ibValueMetaObjectSection*, const wxString&)> describe =
-			[&](ibValueMetaObjectSection* section, const wxString& path) {
+		std::function<void(ibValueMetaObjectSection*, const ibString&)> describe =
+			[&](ibValueMetaObjectSection* section, const ibString& path) {
 
 			if (section == nullptr || section->IsDeleted())
 				return;
 
-			const wxString here = path.IsEmpty()
-				? section->GetName() : path + wxT(".") + section->GetName();
+			const ibString here = path.IsEmpty()
+				? section->GetName() : path + ibT(".") + section->GetName();
 
-			if (only.IsEmpty() || stringUtils::CompareString(only, section->GetName())
-				|| stringUtils::CompareString(only, here)) {
+			if (only.IsEmpty() || stringUtils::IsSameAs(only, section->GetName())
+				|| stringUtils::IsSameAs(only, here)) {
 
 				std::vector<ibDataValue> items;
 
@@ -422,7 +422,7 @@ public:
 				// item's kind. A catalog stands in two (its list under Normal, its create under Create); a command
 				// filed under a group of the FORM command bar stands in none of the page's.
 				std::map<const ibValueMetaObject*, std::vector<ibDataValue>> shownIn;
-				auto note = [&shownIn](const std::vector<ibValueMetaObject*>& in, const wxString& label) {
+				auto note = [&shownIn](const std::vector<ibValueMetaObject*>& in, const ibString& label) {
 					for (const ibValueMetaObject* object : in)
 						shownIn[object].push_back(ibDataValue::String(label));
 				};
@@ -445,24 +445,24 @@ public:
 						&& object->IsSetInterface(section->GetMetaID())) {
 
 						std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-						entry->SetValue(wxT("name"), object->GetName());
-						entry->SetValue(wxT("kind"), object->GetClassName());
-						entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
+						entry->SetValue(ibT("name"), object->GetName());
+						entry->SetValue(ibT("kind"), object->GetClassName());
+						entry->AddField(ibT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 
 						const auto where = shownIn.find(object);
 						if (where != shownIn.end())
-							entry->AddField(wxT("shownIn"), ibDataValue::Array(where->second));
+							entry->AddField(ibT("shownIn"), ibDataValue::Array(where->second));
 						else
-							entry->SetValue(wxT("shownIn"), ibMcpText("nowhere on the section page - its group is on a form's command bar"));
+							entry->SetValue(ibT("shownIn"), ibMcpText("nowhere on the section page - its group is on a form's command bar"));
 
 						items.push_back(ibDataValue::Child(entry));
 					}
 
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-				entry->SetValue(wxT("section"), here);
-				entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)section->GetMetaID()));
-				entry->AddField(wxT("count"), ibDataValue::Int((std::int64_t)items.size()));
-				entry->AddField(wxT("items"), ibDataValue::Array(items));
+				entry->SetValue(ibT("section"), here);
+				entry->AddField(ibT("id"), ibDataValue::Int((std::int64_t)section->GetMetaID()));
+				entry->AddField(ibT("count"), ibDataValue::Int((std::int64_t)items.size()));
+				entry->AddField(ibT("items"), ibDataValue::Array(items));
 
 				sections.push_back(ibDataValue::Child(entry));
 			}
@@ -472,7 +472,7 @@ public:
 		};
 
 		for (ibValueMetaObjectSection* object : metaData->GetAnyArrayObject<ibValueMetaObjectSection>(g_metaSectionCLSID))
-			describe(object, wxEmptyString);
+			describe(object, ibEmptyString);
 
 		// ⭐ THE ANSWER THAT MATTERS MOST, and only this walk can give it: what nobody can reach.
 		// Asked only of a whole reading — narrowed to one section, "belongs to no section" would
@@ -534,25 +534,25 @@ public:
 
 				if (!anywhere) {
 					std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-					entry->SetValue(wxT("name"), object->GetName());
-					entry->SetValue(wxT("kind"), object->GetClassName());
-					entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
+					entry->SetValue(ibT("name"), object->GetName());
+					entry->SetValue(ibT("kind"), object->GetClassName());
+					entry->AddField(ibT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 					homeless.push_back(ibDataValue::Child(entry));
 				}
 			}
 
-			result.AddField(wxT("inNoSection"), ibDataValue::Array(homeless));
+			result.AddField(ibT("inNoSection"), ibDataValue::Array(homeless));
 
 			if (!homeless.empty())
-				result.SetValue(wxT("note"),
+				result.SetValue(ibT("note"),
 					ibMcpText("Those belong to no section, so nobody can open them in the running "
 					  "application. section_include puts them somewhere."));
 		}
 
-		result.AddField(wxT("sections"), ibDataValue::Array(sections));
+		result.AddField(ibT("sections"), ibDataValue::Array(sections));
 
 		if (sections.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("This configuration declares no sections - there is no command interface yet."));
 
 		return true;

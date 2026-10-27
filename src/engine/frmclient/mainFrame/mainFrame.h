@@ -35,7 +35,7 @@ class ibTabDocument;
 #define wxAUI_PANE_BOTTOM   wxT("bottomWindow")
 #define wxAUI_PANE_PROPERTY wxT("propertyWindow")
 
-// THE MAIN WINDOW — the desktop's ibFrontendMainFrame (frontend/mainFrame) carried over to the thin client: the same
+// THE MAIN WINDOW — the old desktop's ibFrontendMainFrame carried over to the thin client: the same
 // AUI frame, the same Luna art, the same doc manager it holds (ibDocParentFrameAnyBase) with the tabs as its documents.
 // It holds no session and runs nothing: it holds a communicator and DRAWS the frame the server answered — the title, the
 // status, the tabs, the messages, the server's own menus beside the window's File and Edit. A question the server asks
@@ -126,7 +126,7 @@ public:
 	// …the same, its refusal handed back and said to nobody: the caller says it where it belongs (a settings page, beside
 	// the control that fixes it). A session gone closes the client all the same.
 	bool Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer,
-		ibProtocol::ibRefusal& refusal, wxString& error);
+		ibProtocol::ibRefusal& refusal, ibString& error);
 	// A call nobody waits on — what the person did in a view, a tab chosen or closed: made after the event that
 	// raised it, in the order posted, and never inside another call — but inside a question a call is asking, as the
 	// desktop's modal loop runs the events of the windows over it (a choice form a window opened, CreateChildFrame):
@@ -378,7 +378,7 @@ private:
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// The desktop's (frontend/mainFrame/mainFrame.h): the bar along the bottom — what the application is doing on the left,
+// The bar along the bottom — what the application is doing on the left,
 // whether an assistant can reach it on the right. Both fields are the frame's, drawn with its answer (DrawFrame): the
 // server's Status, and the base's assistant access by where it listens (Endpoint). The desktop's bar asked the server
 // once a second; here that is a call a second, and the frame's patch already says when it changed.
@@ -423,7 +423,7 @@ protected:
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// The desktop's (frontend/mainFrame/mainFrame.h): the picture shown while the base opens and the client logs in.
+// The picture shown while the base opens and the client logs in.
 class ibProcessSplashScreen : public wxSplashScreen {
 public:
 	ibProcessSplashScreen(const wxBitmap& bitmap, long splashStyle = wxSPLASH_CENTRE_ON_SCREEN, int milliseconds = -1,
@@ -445,8 +445,8 @@ public:
 	virtual int FilterEvent(wxEvent& event) wxOVERRIDE { return Event_Skip; }
 };
 
-// The desktop's (frontend/mainFrame/mainFrame.h): the host frame's command ids the editor posts upward — the syntax
-// helper, and the word under the caret looked up in it (the code editor's context menu). The values are the desktop's.
+// The host frame's command ids the editor posts upward — the syntax helper, and the word under the caret looked up in
+// it (the code editor's context menu). The values are the old desktop's.
 enum {
 	wxID_FRONTEND_SYNTAX_HELPER        = wxID_HIGHEST + 4500,
 	wxID_FRONTEND_SYNTAX_HELPER_LOOKUP = wxID_HIGHEST + 4501,

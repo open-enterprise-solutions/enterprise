@@ -25,7 +25,6 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include <wx/arrstr.h>   // wxbase exports std::vector<wxString> (wxArrayString's base) — seen here, a unit imports it
 
 #include "core/core.h"   // CORE_API
 
@@ -43,18 +42,18 @@ CORE_API std::vector<int> ibLinqClausesAfter(int lastKeyword);
 // One source of the block: `From alias In expression`, or `Join alias In expression On left Equals
 // right`. A second source that is not a join is a product — `From` again, as the language spells it.
 struct CORE_API ibLinqBlockSource {
-	wxString m_alias;
-	wxString m_expression;
+	ibString m_alias;
+	ibString m_expression;
 	bool     m_join = false;
-	wxString m_leftKey;      // a join's `On` side
-	wxString m_rightKey;     // …and its `Equals` side
+	ibString m_leftKey;      // a join's `On` side
+	ibString m_rightKey;     // …and its `Equals` side
 };
 
 // One column of the answer: `name = expression` inside `Select { … }`. Also one key of a group — its
 // name is the key's column and, with several keys, its field in the key.
 struct CORE_API ibLinqBlockField {
-	wxString m_name;
-	wxString m_expression;
+	ibString m_name;
+	ibString m_expression;
 };
 
 // WHAT A TOTAL DOES WITH THE ROWS OF ITS GROUP - the aggregates a group's `Values` answers by name
@@ -64,18 +63,18 @@ enum class ibLinqTotal { Sum, Count, Min, Max, Average };
 // One total of a grouped answer: `name = <group>.Values.Sum(…)` - the column it makes, what it does,
 // and the field of a ROW it reads, written as the rows are read before grouping (`o.Amount`).
 struct CORE_API ibLinqBlockTotal {
-	wxString    m_name;
+	ibString    m_name;
 	ibLinqTotal m_function = ibLinqTotal::Sum;
-	wxString    m_expression;
+	ibString    m_expression;
 };
 
 // The method a total calls, in the language's spelling - `Sum`, `Count`, …
-CORE_API wxString ibLinqTotalName(ibLinqTotal total);
+CORE_API ibString ibLinqTotalName(ibLinqTotal total);
 
 // One key of the order, with its own way: the language writes the direction after the key it belongs
 // to (linq.md 0.5), so all the keys share one `OrderBy` - `OrderBy a, b Descending, c`.
 struct CORE_API ibLinqBlockOrder {
-	wxString m_expression;
+	ibString m_expression;
 	bool     m_descending = false;
 };
 
@@ -86,10 +85,10 @@ public:
 	explicit ibLinqBlock(short codeStyle) : m_codeStyle(codeStyle) {}
 
 	std::vector<ibLinqBlockSource> m_sources;
-	std::vector<wxString>          m_conditions;       // one `Where` each, on the rows
+	std::vector<ibString>          m_conditions;       // one `Where` each, on the rows
 	std::vector<ibLinqBlockOrder>  m_order;
-	wxString                       m_skip;             // a number of rows, or a variable that holds one
-	wxString                       m_take;
+	ibString                       m_skip;             // a number of rows, or a variable that holds one
+	ibString                       m_take;
 	std::vector<ibLinqBlockField>  m_fields;           // none: `Select <first alias>`, the row itself
 	bool                           m_distinct = false;
 
@@ -107,8 +106,8 @@ public:
 	// no column can be chosen (linq.md: `group X by K` is mutually exclusive with SELECT).
 	std::vector<ibLinqBlockField>  m_groupKeys;
 	std::vector<ibLinqBlockTotal>  m_totals;
-	wxString                       m_groupInto;
-	std::vector<wxString>          m_groupConditions;  // `Where` after `Into`, on the groups
+	ibString                       m_groupInto;
+	std::vector<ibString>          m_groupConditions;  // `Where` after `Into`, on the groups
 
 	bool IsGrouped() const { return !m_groupKeys.empty(); }
 
@@ -117,12 +116,12 @@ public:
 	// The block, one clause a line, continuation lines opened with `indent`. Empty with `refusal` set
 	// when there is nothing to write (no source) or a part is missing its words (an alias, a source,
 	// a join key); a refusal says which. A single column with no name is written bare - `Select o.Name`.
-	wxString Render(const wxString& indent, wxString& refusal) const;
+	ibString Render(const ibString& indent, ibString& refusal) const;
 
 	// The same text written EVEN WHERE A PART IS REFUSED, the parts as they stand - for a preview, which
 	// must not go blank at the first wrong cell. `refusal` still names the first thing wrong; the text
 	// is for showing, never for writing into a module (Render is that).
-	wxString RenderDraft(const wxString& indent, wxString& refusal) const;
+	ibString RenderDraft(const ibString& indent, ibString& refusal) const;
 
 	// ⭐ AND BACK: the parts of a block already written, so a constructor can OPEN a query and not only
 	// write a new one. Where the query is and where it ends is the COMPILER's to say (ibQueryOutline's
@@ -136,11 +135,11 @@ public:
 	// query is. That is what a caller replaces: the compiler's bracket ends where the compiler STOPPED,
 	// which in a query left half-written (`On g. Equals c.`) is mid-way through it. The text is read in the
 	// block's syntax.
-	static bool Parse(const wxString& text, ibLinqBlock& block, wxString& refusal, size_t* consumed = nullptr);
+	static bool Parse(const ibString& text, ibLinqBlock& block, ibString& refusal, size_t* consumed = nullptr);
 
 private:
 
-	wxString Write(const wxString& indent, wxString& refusal, bool draft) const;
+	ibString Write(const ibString& indent, ibString& refusal, bool draft) const;
 
 	short m_codeStyle;
 };

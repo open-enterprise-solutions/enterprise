@@ -44,9 +44,9 @@ public:
 	ibHelpDocument() : ibDocument() {}
 
 	// The text — the document's own: it is what the desktop's editor held.
-	const wxString& GetText() const { return m_text; }
+	const ibString& GetText() const { return m_text; }
 	// …changed: modified, when it is another text.
-	void SetText(const wxString& text) {
+	void SetText(const ibString& text) {
 		if (text == m_text)
 			return;
 		m_text = text;
@@ -55,7 +55,7 @@ public:
 
 protected:
 
-	wxString m_text;
+	ibString m_text;
 
 	ibHelpDocument(const ibHelpDocument&) = delete;
 	ibHelpDocument& operator=(const ibHelpDocument&) = delete;
@@ -72,7 +72,7 @@ public:
 
 	ibHelpFileDocument() : ibHelpDocument() {}
 
-	virtual bool OnCreate(const wxString& path, long flags) override;
+	virtual bool OnCreate(const ibString& path, long flags) override;
 	virtual bool OnNewDocument() override {
 
 		// notice that there is no need to either reset nor even check the
@@ -84,7 +84,7 @@ public:
 
 		SetDocumentSaved(false);
 
-		const wxString name = GetDocumentManager()->MakeNewDocumentName();
+		const ibString name = GetDocumentManager()->MakeNewDocumentName();
 
 		SetTitle(name);
 		SetFilename(name, true);
@@ -95,8 +95,8 @@ public:
 
 protected:
 
-	virtual bool DoSaveDocument(const wxString& filename) override;
-	virtual bool DoOpenDocument(const wxString& filename) override;
+	virtual bool DoSaveDocument(const ibString& filename) override;
+	virtual bool DoOpenDocument(const ibString& filename) override;
 
 	ibHelpFileDocument(const ibHelpFileDocument&) = delete;
 	ibHelpFileDocument& operator=(const ibHelpFileDocument&) = delete;

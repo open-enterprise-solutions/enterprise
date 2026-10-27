@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-# The thin designer — designer.exe as a thin client (mainApp.h says what it is). It links the thin client's core
+# The thin designer — designer-thin.exe, the designer as a thin client (mainApp.h says what it is). It links the thin client's core
 # alone; a file base's server half (fileserver) is loaded by it when one is opened.
 set(DESIGNER_THIN_SOURCES
     mainApp.cpp

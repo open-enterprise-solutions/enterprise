@@ -25,8 +25,8 @@ namespace {
 // language, so it accepted operators the compiler never had; recording a predicate the program does
 // not contain is exactly why it was replaced (compileCode.cpp, at the recorder callsite), and the
 // tests kept asserting against the wider grammar until they were compiled for real.
-std::shared_ptr<ibQueryAstExpr> Record(const wxString& body, const wxString& rowParam = wxT("x"),
-	const wxString& outerNames = wxEmptyString)
+std::shared_ptr<ibQueryAstExpr> Record(const ibString& body, const ibString& rowParam = wxT("x"),
+	const ibString& outerNames = wxEmptyString)
 {
 	return ibTestRecordLambda(body, rowParam, outerNames);
 }

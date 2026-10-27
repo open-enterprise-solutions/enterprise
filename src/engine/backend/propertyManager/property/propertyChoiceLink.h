@@ -35,7 +35,7 @@ public:
 	// The fields that may govern this one, as the drop-down offers them.
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
-	ibPropertyChoiceLink(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyChoiceLink(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
 	// NOTHING GOVERNS IT — the field opens the list its own type declares.
@@ -56,8 +56,8 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
-	// …and what its window asks of the configuration, as the desktop's link-by-type window did when it opened
-	// (frontend/win/dlgs/choiceLink): Targets — the reference types of the field (ibFieldReferenceTypes), each its Id,
+	// …and what its window asks of the configuration, as the old desktop's link-by-type window did when it opened
+	// (now frmclient/win/dlgs/choiceLink): Targets — the reference types of the field (ibFieldReferenceTypes), each its Id,
 	// Title, Type (the class its reference is registered under) and Picture.
 	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 };
@@ -85,7 +85,7 @@ public:
 	// so the list is not narrowed.
 	void GetSourceList(ibPropertyChoiceList& list) const;
 
-	ibPropertyChoiceParameters(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyChoiceParameters(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
 	// NO ROWS — the list shows everything the field's type holds.
@@ -105,8 +105,8 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
-	// …and what its window asks of the configuration, as the desktop's choice-parameters window did when it opened
-	// (frontend/win/dlgs/choiceParameters): Targets as the link's, each its children the fields a row may fill
+	// …and what its window asks of the configuration, as the old desktop's choice-parameters window did when it opened
+	// (now frmclient/win/dlgs/choiceParameters): Targets as the link's, each its children the fields a row may fill
 	// (GetParameterList); Sources — the fields beside it that may supply a value (GetSourceList), Title the holder they
 	// stand in, each its children (Id) the parameters it could fill, the likeliest first, and Default the obvious one.
 	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;

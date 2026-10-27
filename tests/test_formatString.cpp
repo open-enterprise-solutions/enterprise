@@ -14,7 +14,7 @@
 
 namespace {
 
-ibValue Number(const wxString& text)
+ibValue Number(const ibString& text)
 {
 	ibValue value;
 	value.SetNumber(text);
@@ -80,13 +80,13 @@ TEST(FormatString, ALaterPairOfTheSameCodeWins)
 // careless writer would trim away.
 TEST(FormatString, WhatIsWrittenReadsBackTheSame)
 {
-	const wxString texts[] = {
+	const ibString texts[] = {
 		wxT("NFD=2; NGS= "),
 		wxT("ND=10; NDS=,; NG=4; NZ="),
 		wxT("DF=dd.mm.yyyy HH:MM:SS; DE=-"),
 		wxT("BT=Yes; BF=No"),
 	};
-	for (const wxString& text : texts) {
+	for (const ibString& text : texts) {
 		const ibFormatString format = ibFormatString::Parse(text);
 		EXPECT_EQ(text, format.Render());
 		EXPECT_TRUE(ibFormatString::Parse(format.Render()) == format) << text.ToStdString();
@@ -142,7 +142,7 @@ TEST(FormatString, EveryDateSpellingReadsAsItDid)
 // The out-argument form writes the same text over whatever the string held, and says whether there is any.
 TEST(FormatString, TheOutArgumentWritesTheSameText)
 {
-	wxString text(wxT("whatever was there"));
+	ibString text(wxT("whatever was there"));
 	EXPECT_TRUE(ibFormatString::Parse(wxT("NFD=2; NGS= ")).Apply(Number(wxT("1234567.891")), text));
 	EXPECT_EQ(wxT("1 234 567.89"), text);
 	EXPECT_FALSE(ibFormatString::Parse(wxT("NZ=")).Apply(ibValue(0), text));
@@ -152,7 +152,7 @@ TEST(FormatString, TheOutArgumentWritesTheSameText)
 // A value of any other type prints as its plain string, whatever the codes say.
 TEST(FormatString, AStringIsNotFormatted)
 {
-	EXPECT_EQ(wxT("text"), ibFormatString::Parse(wxT("NFD=2; BT=yes")).Apply(ibValue(wxString(wxT("text")))));
+	EXPECT_EQ(wxT("text"), ibFormatString::Parse(wxT("NFD=2; BT=yes")).Apply(ibValue(ibString(wxT("text")))));
 }
 
 // ------------------------------ one code at a time --------------------------

@@ -25,7 +25,7 @@ namespace {
 
 // The tabular section's OWNER-reference column — asked of the layout tier, the one place
 // it is named. See ibOwnerRefField.
-const wxString& kOwnerRef = ibOwnerRefField();
+const ibString& kOwnerRef = ibOwnerRefField();
 
 // The reference-blob wire chunk id — the _RTRef/_RRRef pair's payload tag in the dump stream. A
 // FORMAT constant (was the rt_ref_chunk macro in metaObject.h): must stay 0x800060 for dump compat.
@@ -115,7 +115,7 @@ bool RidesAsColumn(const std::vector<const ibBackendQueryColumn*>& columns, cons
 	return key != nullptr && std::find(columns.begin(), columns.end(), key) != columns.end();
 }
 
-bool RunDump(const wxString& tableName, const ibMetaData* metaData,
+bool RunDump(const ibString& tableName, const ibMetaData* metaData,
 	const std::vector<const ibBackendQueryColumn*>& columns, const ibBackendQueryColumn* keyColumn, ibWriterMemory& out)
 {
 	// L2 read (ibQueryResult, RAII cursor) — SELECT * via the door on db_query's holder.
@@ -150,7 +150,7 @@ bool RunDump(const wxString& tableName, const ibMetaData* metaData,
 	return true;
 }
 
-bool RunRestore(const wxString& tableName, const ibMetaData* metaData,
+bool RunRestore(const ibString& tableName, const ibMetaData* metaData,
 	const std::vector<const ibBackendQueryColumn*>& columns, const ibBackendQueryColumn* keyColumn, bool upsert,
 	const ibReaderMemory& rows, ibDataMover::DateForm dates)
 {
@@ -162,10 +162,10 @@ bool RunRestore(const wxString& tableName, const ibMetaData* metaData,
 	// its SPREAD, never its bare name: a reference key occupies three of them, and naming one produced a
 	// statement listing a field the table does not have.
 	const bool withKey = keyColumn != nullptr && !RidesAsColumn(columns, keyColumn);
-	const std::vector<wxString> keyFields = keyColumn != nullptr
+	const std::vector<ibString> keyFields = keyColumn != nullptr
 		? ColumnFieldNames(keyColumn)
-		: std::vector<wxString>();
-	std::vector<wxString> columnNames;
+		: std::vector<ibString>();
+	std::vector<ibString> columnNames;
 	if (withKey)
 		columnNames = keyFields;
 
@@ -173,18 +173,18 @@ bool RunRestore(const wxString& tableName, const ibMetaData* metaData,
 	std::map<ibMetaID, const ibBackendQueryColumn*> columnOf;
 	int position = withKey ? static_cast<int>(keyFields.size()) + 1 : 1;
 	for (const ibBackendQueryColumn* col : columns) {
-		const std::vector<wxString> fields = ColumnFieldNames(col);
+		const std::vector<ibString> fields = ColumnFieldNames(col);
 		positionOf.insert_or_assign(col->GetColumnId(), position);
 		columnOf.insert_or_assign(col->GetColumnId(), col);
 		position += static_cast<int>(fields.size());
-		for (const wxString& f : fields)
+		for (const ibString& f : fields)
 			columnNames.push_back(f);
 	}
 
 	// UPSERT on a unique key (the mutable main record / sys_const), else a plain INSERT.
 	ibQueryStatement statement(upsert ? ibQueryStatement::Kind::Upsert : ibQueryStatement::Kind::Insert,
 		tableName, columnNames,
-		upsert ? keyFields : std::vector<wxString>(),
+		upsert ? keyFields : std::vector<ibString>(),
 		db_query->GetHolder());
 
 	ibReaderMemory* rowReaderPrev = nullptr;
@@ -226,7 +226,7 @@ bool RunRestore(const wxString& tableName, const ibMetaData* metaData,
 			// The wire says one cell per chunk, so the reader says it too.
 			if (col > 0) {
 				if (column == nullptr) {
-					ibJournalError(wxT("query.mover"),wxT("ibDataMover: %s has no column with id %llu — its cell is skipped"),
+					ibJournalError(ibT("query.mover"),ibT("ibDataMover: %s has no column with id %llu — its cell is skipped"),
 						tableName, static_cast<unsigned long long>(col));
 				}
 				else {
@@ -302,7 +302,7 @@ static bool RawFromResult(const ibBackendQueryColumn* col, ibWriterMemory& write
 	const ibBackendColumnRawDB* const raw = col->AsRawColumn();   // asked of the column — see queryColumn.h
 	if (raw == nullptr)
 		return false;
-	const wxString f = raw->GetPhysicalName();
+	const ibString f = raw->GetPhysicalName();
 	switch (raw->GetRawType()) {
 	case ibBackendColumnRawDB::RawType::Boolean: writer.w_u8(result.GetResultBool(f) ? 1u : 0u); break;
 	case ibBackendColumnRawDB::RawType::Number: {
@@ -350,7 +350,7 @@ static bool RawToStatement(const ibBackendQueryColumn* col, const ibReaderMemory
 	case ibBackendColumnRawDB::RawType::Number: {
 		ibNumber value;
 		if (!value.SetBuffer(reader))
-			ibJournalError(wxT("query.mover"),wxT("ibDataMover: failed to read a raw number from stream"));
+			ibJournalError(ibT("query.mover"),ibT("ibDataMover: failed to read a raw number from stream"));
 		statement->SetParamNumber(position++, value);
 		break;
 	}
@@ -382,7 +382,7 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMet
 			case ibColumnRole::Number: {
 				ibNumber value;
 				if (!value.SetBuffer(reader))
-					ibJournalError(wxT("query.mover"),wxT("ibDataMover: failed to read TYPE_NUMBER from stream"));
+					ibJournalError(ibT("query.mover"),ibT("ibDataMover: failed to read TYPE_NUMBER from stream"));
 				statement->SetParamNumber(p++, value);
 				break;
 			}
@@ -440,7 +440,7 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 		return;   // one field, its own kind — see RawFromResult
 
 	const ibTypeDescription& td = col->GetTypeDesc();
-	const wxString f = col->GetPhysicalName();
+	const ibString f = col->GetPhysicalName();
 	const int tag = result.GetResultInt(f + ibFieldSuffix(ibColumnRole::Discriminator));
 
 	// COMPACT wire (the inverse of BinaryToStatement): the tag, then ONLY the active type's value —

@@ -49,7 +49,7 @@ public:
 	virtual ibMetaData* GetMetaData() const override { return m_metaData.get(); }
 	virtual ibPictureDescription GetIcon() const override;
 
-	virtual bool OnCreate(const wxString& path, long flags) override;
+	virtual bool OnCreate(const ibString& path, long flags) override;
 
 	ibConfigurationTree* GetMetaTree() const;
 
@@ -70,15 +70,15 @@ public:
 
 	ibMetadataFileDocument() : ibMetadataBrowserDocument() {}
 
-	virtual bool OnCreate(const wxString& path, long flags) override;
+	virtual bool OnCreate(const ibString& path, long flags) override;
 	// The file's configuration is its own, and goes with it (the desktop's); the database's copy is not the browser's to
 	// close.
 	virtual bool OnCloseDocument() override;
 
 protected:
 
-	virtual bool DoOpenDocument(const wxString& filename) override;
-	virtual bool DoSaveDocument(const wxString& filename) override;
+	virtual bool DoOpenDocument(const ibString& filename) override;
+	virtual bool DoSaveDocument(const ibString& filename) override;
 
 	ibMetadataFileDocument(const ibMetadataFileDocument&) = delete;
 	ibMetadataFileDocument& operator=(const ibMetadataFileDocument&) = delete;

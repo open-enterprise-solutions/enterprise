@@ -74,7 +74,7 @@ ibHomePageDocument* ibHomePageDocument::ShowHomePage(const ibValueMetaObjectConf
 	homeDoc->SetIcon(ibPictureDescription(g_picHomePageCLSID));
 	documentManager->AddDocument(homeDoc);
 
-	if (!homeDoc->OnCreate(wxEmptyString, 0)) {
+	if (!homeDoc->OnCreate(ibEmptyString, 0)) {
 		homeDoc->DeleteAllViews();
 		return nullptr;
 	}
@@ -213,8 +213,8 @@ void ibHomePageView::DrawCell(const ibHomePageCell& cell, ibDataNode& node) cons
 	}
 
 	// The form is gone or refused to open. The cell still stands and says what happened.
-	node.SetValue(ibProtocol::ibView::ibHomePage::Title, metaForm != nullptr ? metaForm->GetFullName() : wxString(_("<not found>")));
-	node.SetValue(ibProtocol::ibView::ibHomePage::Unavailable, wxString(_("Form is not available")));
+	node.SetValue(ibProtocol::ibView::ibHomePage::Title, metaForm != nullptr ? metaForm->GetFullName() : ibString(_("<not found>")));
+	node.SetValue(ibProtocol::ibView::ibHomePage::Unavailable, ibString(_("Form is not available")));
 }
 
 void ibHomePageView::OnDraw(ibDataNode& frame)

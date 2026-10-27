@@ -131,126 +131,126 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 {
 
 	//--- Basic:
-	helper.AppendFunc(wxT("Boolean"), 1, wxT("Boolean(value : any)"));
-	helper.AppendFunc(wxT("Number"), 1, wxT("Number(value: any)"));
-	helper.AppendFunc(wxT("Date"), 6, wxT("Date(value: any) | Date(year, month, day[, hour, minute, second])"));
-	helper.AppendFunc(wxT("String"), 1, wxT("String(value: any)"));
+	helper.AppendFunc(ibT("Boolean"), 1, ibT("Boolean(value : any)"));
+	helper.AppendFunc(ibT("Number"), 1, ibT("Number(value: any)"));
+	helper.AppendFunc(ibT("Date"), 6, ibT("Date(value: any) | Date(year, month, day[, hour, minute, second])"));
+	helper.AppendFunc(ibT("String"), 1, ibT("String(value: any)"));
 	//--- Math:
-	helper.AppendFunc(wxT("Round"), 3, wxT("Round(num : number, number, roundMode)"));
-	helper.AppendFunc(wxT("Int"), 1, wxT("Int(num : number)"));
-	helper.AppendFunc(wxT("Log10"), 1, wxT("Log10(num : number)"));
-	helper.AppendFunc(wxT("Ln"), 1, wxT("Ln(num : number)"));
-	helper.AppendFunc(wxT("Max"), -1, wxT("Max(num : number, ...)"));
-	helper.AppendFunc(wxT("Min"), -1, wxT("Min(num : number, ...)"));
-	helper.AppendFunc(wxT("Sqrt"), 1, wxT("Sqrt(num : number)"));
+	helper.AppendFunc(ibT("Round"), 3, ibT("Round(num : number, number, roundMode)"));
+	helper.AppendFunc(ibT("Int"), 1, ibT("Int(num : number)"));
+	helper.AppendFunc(ibT("Log10"), 1, ibT("Log10(num : number)"));
+	helper.AppendFunc(ibT("Ln"), 1, ibT("Ln(num : number)"));
+	helper.AppendFunc(ibT("Max"), -1, ibT("Max(num : number, ...)"));
+	helper.AppendFunc(ibT("Min"), -1, ibT("Min(num : number, ...)"));
+	helper.AppendFunc(ibT("Sqrt"), 1, ibT("Sqrt(num : number)"));
 	//--- Strings:
-	helper.AppendFunc(wxT("StrLen"), 1, wxT("StrLen(str : string)"));
-	helper.AppendFunc(wxT("IsBlankString"), 1, wxT("IsBlankString(str : string)"));
-	helper.AppendFunc(wxT("TrimL"), 1, wxT("TrimL(str : string)"));
-	helper.AppendFunc(wxT("TrimR"), 1, wxT("TrimR(str : string)"));
-	helper.AppendFunc(wxT("TrimAll"), 1, wxT("TrimAll(str : string)"));
-	helper.AppendFunc(wxT("Left"), 2, wxT("Left(str : string, number)"));
-	helper.AppendFunc(wxT("Right"), 2, wxT("Right(str : string, number)"));
-	helper.AppendFunc(wxT("Mid"), 3, wxT("Mid(str : string, number, number)"));
-	helper.AppendFunc(wxT("Find"), 3, wxT("Find(str : string, string, number)"));
-	helper.AppendFunc(wxT("StrReplace"), 3, wxT("StrReplace(str : string, string, string)"));
-	helper.AppendFunc(wxT("StrCountOccur"), 2, wxT("StrCountOccur(str : string, string)"));
-	helper.AppendFunc(wxT("StrLineCount"), 1, wxT("StrLineCount(str : string)"));
-	helper.AppendFunc(wxT("StrGetLine"), 2, wxT("StrGetLine(str : string, line : number)"));
-	helper.AppendFunc(wxT("Upper"), 1, wxT("Upper(str : string)"));
-	helper.AppendFunc(wxT("Lower"), 1, wxT("Lower(str : string)"));
-	helper.AppendFunc(wxT("Chr"), 1, wxT("Chr(num : number)"));
-	helper.AppendFunc(wxT("Asc"), 1, wxT("Asc(str : string)"));
-	helper.AppendFunc(wxT("Tstr"), 2, wxT("Tstr(text : string, langCode : string)"));
+	helper.AppendFunc(ibT("StrLen"), 1, ibT("StrLen(str : string)"));
+	helper.AppendFunc(ibT("IsBlankString"), 1, ibT("IsBlankString(str : string)"));
+	helper.AppendFunc(ibT("TrimL"), 1, ibT("TrimL(str : string)"));
+	helper.AppendFunc(ibT("TrimR"), 1, ibT("TrimR(str : string)"));
+	helper.AppendFunc(ibT("TrimAll"), 1, ibT("TrimAll(str : string)"));
+	helper.AppendFunc(ibT("Left"), 2, ibT("Left(str : string, number)"));
+	helper.AppendFunc(ibT("Right"), 2, ibT("Right(str : string, number)"));
+	helper.AppendFunc(ibT("Mid"), 3, ibT("Mid(str : string, number, number)"));
+	helper.AppendFunc(ibT("Find"), 3, ibT("Find(str : string, string, number)"));
+	helper.AppendFunc(ibT("StrReplace"), 3, ibT("StrReplace(str : string, string, string)"));
+	helper.AppendFunc(ibT("StrCountOccur"), 2, ibT("StrCountOccur(str : string, string)"));
+	helper.AppendFunc(ibT("StrLineCount"), 1, ibT("StrLineCount(str : string)"));
+	helper.AppendFunc(ibT("StrGetLine"), 2, ibT("StrGetLine(str : string, line : number)"));
+	helper.AppendFunc(ibT("Upper"), 1, ibT("Upper(str : string)"));
+	helper.AppendFunc(ibT("Lower"), 1, ibT("Lower(str : string)"));
+	helper.AppendFunc(ibT("Chr"), 1, ibT("Chr(num : number)"));
+	helper.AppendFunc(ibT("Asc"), 1, ibT("Asc(str : string)"));
+	helper.AppendFunc(ibT("Tstr"), 2, ibT("Tstr(text : string, langCode : string)"));
 	//--- Date and time:
-	helper.AppendFunc(wxT("CurrentDate"), wxT("CurrentDate()"));
-	helper.AppendFunc(wxT("WorkingDate"), wxT("WorkingDate()"));
-	helper.AppendFunc(wxT("AddMonth"), 2, wxT("AddMonth(d : date, num : number)"));
-	helper.AppendFunc(wxT("BegOfMonth"), 1, wxT("BegOfMonth(d : date)"));
-	helper.AppendFunc(wxT("EndOfMonth"), 1, wxT("EndOfMonth(d : date)"));
-	helper.AppendFunc(wxT("BegOfQuart"), 1, wxT("BegOfQuart(d : date)"));
-	helper.AppendFunc(wxT("EndOfQuart"), 1, wxT("EndOfQuart(d : date)"));
-	helper.AppendFunc(wxT("BegOfYear"), 1, wxT("BegOfYear(d : date)"));
-	helper.AppendFunc(wxT("EndOfYear"), 1, wxT("EndOfYear(d : date)"));
-	helper.AppendFunc(wxT("BegOfWeek"), 1, wxT("BegOfWeek(d : date)"));
-	helper.AppendFunc(wxT("EndOfWeek"), 1, wxT("EndOfWeek(d : date)"));
-	helper.AppendFunc(wxT("BegOfDay"), 1, wxT("BegOfDay(d : date)"));
-	helper.AppendFunc(wxT("EndOfDay"), 1, wxT("EndOfDay(d : date)"));
-	helper.AppendFunc(wxT("GetYear"), 1, wxT("GetYear(d : date)"));
-	helper.AppendFunc(wxT("GetMonth"), 1, wxT("GetMonth(d : date)"));
-	helper.AppendFunc(wxT("GetDay"), 1, wxT("GetDay(d : date)"));
-	helper.AppendFunc(wxT("GetHour"), 1, wxT("GetHour(d : date)"));
-	helper.AppendFunc(wxT("GetMinute"), 1, wxT("GetMinute(d : date)"));
-	helper.AppendFunc(wxT("GetSecond"), 1, wxT("GetSecond(d : date)"));
-	helper.AppendFunc(wxT("GetWeekOfYear"), 1, wxT("GetWeekOfYear(d : date)"));
-	helper.AppendFunc(wxT("GetDayOfYear"), 1, wxT("GetDayOfYear(d : date)"));
-	helper.AppendFunc(wxT("GetDayOfWeek"), 1, wxT("GetDayOfWeek(d : date)"));
-	helper.AppendFunc(wxT("GetQuartOfYear"), 1, wxT("GetQuartOfYear(d : date)"));
+	helper.AppendFunc(ibT("CurrentDate"), ibT("CurrentDate()"));
+	helper.AppendFunc(ibT("WorkingDate"), ibT("WorkingDate()"));
+	helper.AppendFunc(ibT("AddMonth"), 2, ibT("AddMonth(d : date, num : number)"));
+	helper.AppendFunc(ibT("BegOfMonth"), 1, ibT("BegOfMonth(d : date)"));
+	helper.AppendFunc(ibT("EndOfMonth"), 1, ibT("EndOfMonth(d : date)"));
+	helper.AppendFunc(ibT("BegOfQuart"), 1, ibT("BegOfQuart(d : date)"));
+	helper.AppendFunc(ibT("EndOfQuart"), 1, ibT("EndOfQuart(d : date)"));
+	helper.AppendFunc(ibT("BegOfYear"), 1, ibT("BegOfYear(d : date)"));
+	helper.AppendFunc(ibT("EndOfYear"), 1, ibT("EndOfYear(d : date)"));
+	helper.AppendFunc(ibT("BegOfWeek"), 1, ibT("BegOfWeek(d : date)"));
+	helper.AppendFunc(ibT("EndOfWeek"), 1, ibT("EndOfWeek(d : date)"));
+	helper.AppendFunc(ibT("BegOfDay"), 1, ibT("BegOfDay(d : date)"));
+	helper.AppendFunc(ibT("EndOfDay"), 1, ibT("EndOfDay(d : date)"));
+	helper.AppendFunc(ibT("GetYear"), 1, ibT("GetYear(d : date)"));
+	helper.AppendFunc(ibT("GetMonth"), 1, ibT("GetMonth(d : date)"));
+	helper.AppendFunc(ibT("GetDay"), 1, ibT("GetDay(d : date)"));
+	helper.AppendFunc(ibT("GetHour"), 1, ibT("GetHour(d : date)"));
+	helper.AppendFunc(ibT("GetMinute"), 1, ibT("GetMinute(d : date)"));
+	helper.AppendFunc(ibT("GetSecond"), 1, ibT("GetSecond(d : date)"));
+	helper.AppendFunc(ibT("GetWeekOfYear"), 1, ibT("GetWeekOfYear(d : date)"));
+	helper.AppendFunc(ibT("GetDayOfYear"), 1, ibT("GetDayOfYear(d : date)"));
+	helper.AppendFunc(ibT("GetDayOfWeek"), 1, ibT("GetDayOfWeek(d : date)"));
+	helper.AppendFunc(ibT("GetQuartOfYear"), 1, ibT("GetQuartOfYear(d : date)"));
 	//--- File operations:
 	// Order MUST match the enFileCopy..enGetTempFileName enum block above —
 	// the method number is the index into this table (ibValue::ibMemberTable::
 	// FindMethod), so a swap here calls the wrong case in CallAsFunc.
-	helper.AppendFunc(wxT("FileCopy"), 2, wxT("FileCopy(fileSrcName : string, fileDstName : string)"));
-	helper.AppendFunc(wxT("FileDelete"), 1, wxT("FileDelete(fileName : string)"));
-	helper.AppendFunc(wxT("GetTempDir"), wxT("GetTempDir()"));
-	helper.AppendFunc(wxT("GetTempFileName"), wxT("GetTempFileName()"));
+	helper.AppendFunc(ibT("FileCopy"), 2, ibT("FileCopy(fileSrcName : string, fileDstName : string)"));
+	helper.AppendFunc(ibT("FileDelete"), 1, ibT("FileDelete(fileName : string)"));
+	helper.AppendFunc(ibT("GetTempDir"), ibT("GetTempDir()"));
+	helper.AppendFunc(ibT("GetTempFileName"), ibT("GetTempFileName()"));
 	//--- JSON: the reference system's spelling of JSONReader.ReadValue() / JSONWriter.WriteValue(value).
 	// Order MUST match enReadJSON..enWriteJSON above.
-	helper.AppendFunc(wxT("ReadJSON"), 1, wxT("ReadJSON(reader : JSONReader)"));
-	helper.AppendFunc(wxT("WriteJSON"), 2, wxT("WriteJSON(writer : JSONWriter, value : any)"));
+	helper.AppendFunc(ibT("ReadJSON"), 1, ibT("ReadJSON(reader : JSONReader)"));
+	helper.AppendFunc(ibT("WriteJSON"), 2, ibT("WriteJSON(writer : JSONWriter, value : any)"));
 	//--- Window operations: 
-	helper.AppendFunc(wxT("ActiveWindow"), wxT("ActiveWindow()"));
+	helper.AppendFunc(ibT("ActiveWindow"), ibT("ActiveWindow()"));
 	//--- Special:
-	helper.AppendProc(wxT("Message"), 2, wxT("Message(message : string, statusMessage : statusMessage)"));
+	helper.AppendProc(ibT("Message"), 2, ibT("Message(message : string, statusMessage : statusMessage)"));
 	// ⭐ THE DURABLE TWIN OF `Message` — see systemManager.h. Registered beside it because that is
 	// where a reader looks for it: the two answer the same need for two different readers, one
 	// watching now and one reading tomorrow.
-	helper.AppendProc(wxT("WriteJournalEvent"), 4,
-		wxT("WriteJournalEvent(message : string, statusMessage : statusMessage, category : string, object)"));
-	helper.AppendFunc(wxT("Alert"), 1, wxT("Alert(message : string)"));
-	helper.AppendFunc(wxT("Question"), 2, wxT("Question(message : string, questionMode)"));
-	helper.AppendFunc(wxT("SetStatus"), 1, wxT("SetStatus(text : string)"));
-	helper.AppendFunc(wxT("ClearMessages"), wxT("ClearMessages()"));
-	helper.AppendFunc(wxT("SetError"), 1, wxT("SetError(string)"));
-	helper.AppendFunc(wxT("Raise"), 1, wxT("Raise(string)"));
-	helper.AppendFunc(wxT("ErrorDescription"), wxT("ErrorDescription()"));
-	helper.AppendFunc(wxT("IsEmptyValue"), 1, wxT("IsEmptyValue(value : any)"));
-	helper.AppendFunc(wxT("Evaluate"), 1, wxT("Evaluate(expr : string)"));
-	helper.AppendFunc(wxT("Execute"), 1, wxT("Execute(expr : string)"));
-	helper.AppendFunc(wxT("Format"), 2, wxT("Format(value : any, format : string)"));
-	helper.AppendFunc(wxT("Type"), 1, wxT("Type(strType : string)"));
-	helper.AppendFunc(wxT("TypeOf"), 1, wxT("TypeOf(value : any)"));
-	helper.AppendFunc(wxT("Rand"), wxT("Rand()"));
-	helper.AppendFunc(wxT("ArgCount"), wxT("ArgCount()"));
-	helper.AppendFunc(wxT("ArgValue"), 1, wxT("ArgValue(index : number)"));
-	helper.AppendFunc(wxT("ComputerName"), wxT("ComputerName()"));
-	helper.AppendFunc(wxT("RunApp"), 1, wxT("RunApp(command : string)"));
-	helper.AppendFunc(wxT("SetAppTitle"), 1, wxT("SetAppTitle(title : string)"));
-	helper.AppendFunc(wxT("UserDir"), wxT("UserDir()"));
-	helper.AppendFunc(wxT("UserName"), wxT("UserName()"));
-	helper.AppendFunc(wxT("UserPassword"), wxT("UserPassword()"));
-	helper.AppendFunc(wxT("ExclusiveMode"), wxT("ExclusiveMode()"));
-	helper.AppendProc(wxT("SetExclusive"), 1, wxT("SetExclusive(on : boolean)"));
-	helper.AppendFunc(wxT("GeneralLanguage"), wxT("GeneralLanguage()"));
-	helper.AppendFunc(wxT("EndJob"), 1, wxT("EndJob(force : boolean)"));
-	helper.AppendFunc(wxT("UserInterruptProcessing"), wxT("UserInterruptProcessing()"));
-	helper.AppendFunc(wxT("AccessRight"), 2, wxT("AccessRight(strRole : string, metadata)"));
-	helper.AppendFunc(wxT("IsInRole"), 1, wxT("IsInRole(strRole : string)"));
-	helper.AppendFunc(wxT("GetCommonForm"), 3, wxT("GetCommonForm(name : string, owner : any, id : guid)"));
-	helper.AppendProc(wxT("ShowCommonForm"), 3, wxT("ShowCommonForm(name : string, owner : any, id : guid)"));
-	helper.AppendFunc(wxT("GetCommonTemplate"), 1, wxT("GetCommonTemplate(name : string)"));
-	helper.AppendProc(wxT("BeginTransaction"), wxT("BeginTransaction()"));
-	helper.AppendProc(wxT("CommitTransaction"), wxT("CommitTransaction()"));
-	helper.AppendProc(wxT("RollBackTransaction"), wxT("RollBackTransaction()"));
-	helper.AppendFunc(wxT("IsNull"), 1, wxT("IsNull(value : any)"));
-	helper.AppendFunc(wxT("ValueIsFilled"), 1, wxT("ValueIsFilled(value : any)"));
+	helper.AppendProc(ibT("WriteJournalEvent"), 4,
+		ibT("WriteJournalEvent(message : string, statusMessage : statusMessage, category : string, object)"));
+	helper.AppendFunc(ibT("Alert"), 1, ibT("Alert(message : string)"));
+	helper.AppendFunc(ibT("Question"), 2, ibT("Question(message : string, questionMode)"));
+	helper.AppendFunc(ibT("SetStatus"), 1, ibT("SetStatus(text : string)"));
+	helper.AppendFunc(ibT("ClearMessages"), ibT("ClearMessages()"));
+	helper.AppendFunc(ibT("SetError"), 1, ibT("SetError(string)"));
+	helper.AppendFunc(ibT("Raise"), 1, ibT("Raise(string)"));
+	helper.AppendFunc(ibT("ErrorDescription"), ibT("ErrorDescription()"));
+	helper.AppendFunc(ibT("IsEmptyValue"), 1, ibT("IsEmptyValue(value : any)"));
+	helper.AppendFunc(ibT("Evaluate"), 1, ibT("Evaluate(expr : string)"));
+	helper.AppendFunc(ibT("Execute"), 1, ibT("Execute(expr : string)"));
+	helper.AppendFunc(ibT("Format"), 2, ibT("Format(value : any, format : string)"));
+	helper.AppendFunc(ibT("Type"), 1, ibT("Type(strType : string)"));
+	helper.AppendFunc(ibT("TypeOf"), 1, ibT("TypeOf(value : any)"));
+	helper.AppendFunc(ibT("Rand"), ibT("Rand()"));
+	helper.AppendFunc(ibT("ArgCount"), ibT("ArgCount()"));
+	helper.AppendFunc(ibT("ArgValue"), 1, ibT("ArgValue(index : number)"));
+	helper.AppendFunc(ibT("ComputerName"), ibT("ComputerName()"));
+	helper.AppendFunc(ibT("RunApp"), 1, ibT("RunApp(command : string)"));
+	helper.AppendFunc(ibT("SetAppTitle"), 1, ibT("SetAppTitle(title : string)"));
+	helper.AppendFunc(ibT("UserDir"), ibT("UserDir()"));
+	helper.AppendFunc(ibT("UserName"), ibT("UserName()"));
+	helper.AppendFunc(ibT("UserPassword"), ibT("UserPassword()"));
+	helper.AppendFunc(ibT("ExclusiveMode"), ibT("ExclusiveMode()"));
+	helper.AppendProc(ibT("SetExclusive"), 1, ibT("SetExclusive(on : boolean)"));
+	helper.AppendFunc(ibT("GeneralLanguage"), ibT("GeneralLanguage()"));
+	helper.AppendFunc(ibT("EndJob"), 1, ibT("EndJob(force : boolean)"));
+	helper.AppendFunc(ibT("UserInterruptProcessing"), ibT("UserInterruptProcessing()"));
+	helper.AppendFunc(ibT("AccessRight"), 2, ibT("AccessRight(strRole : string, metadata)"));
+	helper.AppendFunc(ibT("IsInRole"), 1, ibT("IsInRole(strRole : string)"));
+	helper.AppendFunc(ibT("GetCommonForm"), 3, ibT("GetCommonForm(name : string, owner : any, id : guid)"));
+	helper.AppendProc(ibT("ShowCommonForm"), 3, ibT("ShowCommonForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(ibT("GetCommonTemplate"), 1, ibT("GetCommonTemplate(name : string)"));
+	helper.AppendProc(ibT("BeginTransaction"), ibT("BeginTransaction()"));
+	helper.AppendProc(ibT("CommitTransaction"), ibT("CommitTransaction()"));
+	helper.AppendProc(ibT("RollBackTransaction"), ibT("RollBackTransaction()"));
+	helper.AppendFunc(ibT("IsNull"), 1, ibT("IsNull(value : any)"));
+	helper.AppendFunc(ibT("ValueIsFilled"), 1, ibT("ValueIsFilled(value : any)"));
 	//--- Jobs: keep last, matching the enRunScheduledJobs..enRunJob enum tail.
-	helper.AppendFunc(wxT("RunScheduledJobs"), wxT("RunScheduledJobs()"));
-	helper.AppendFunc(wxT("RunJob"), 1, wxT("RunJob(name : string)"));
-	helper.AppendFunc(wxT("RunBackground"), 2, wxT("RunBackground(procedure : string, args : array)"));
+	helper.AppendFunc(ibT("RunScheduledJobs"), ibT("RunScheduledJobs()"));
+	helper.AppendFunc(ibT("RunJob"), 1, ibT("RunJob(name : string)"));
+	helper.AppendFunc(ibT("RunBackground"), 2, ibT("RunBackground(procedure : string, args : array)"));
 	//--- …and value-as-text last, matching the enSerializeValue / enDeserializeValue tail above.
-	helper.AppendFunc(wxT("SerializeValue"), 1, wxT("SerializeValue(value : any)"));
-	helper.AppendFunc(wxT("DeserializeValue"), 1, wxT("DeserializeValue(json : string)"));
+	helper.AppendFunc(ibT("SerializeValue"), 1, ibT("SerializeValue(value : any)"));
+	helper.AppendFunc(ibT("DeserializeValue"), 1, ibT("DeserializeValue(json : string)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -318,7 +318,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enLower: pvarRetValue = Lower(*paParams[0]); return true;
 		case enChr: pvarRetValue = Chr(paParams[0]->GetInteger()); return true;
 		case enAsc: pvarRetValue = Asc(*paParams[0]); return true;
-		case enTStr: pvarRetValue = TStr(*paParams[0], lSizeArray > 1 ? paParams[1]->GetString() : wxT("")); return true;
+		case enTStr: pvarRetValue = TStr(*paParams[0], lSizeArray > 1 ? paParams[1]->GetString() : ibT("")); return true;
 			//--- Date and time:
 		case enCurrentDate: pvarRetValue = CurrentDate(); return true;
 		case enWorkingDate: pvarRetValue = WorkingDate(); return true;

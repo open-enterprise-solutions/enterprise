@@ -4,12 +4,12 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxString ibPropertySize::GetValueAsString() const
+ibString ibPropertySize::GetValueAsString() const
 {
 	return GetNodeValue().AsString();
 }
 
-void ibPropertySize::SetValue(const wxString& val)
+void ibPropertySize::SetValue(const ibString& val)
 {
 	ibPropertySerializable::ReadNodeValue(ibDataValue::String(val));
 }

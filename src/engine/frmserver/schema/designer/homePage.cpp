@@ -13,7 +13,7 @@ namespace {
 
 // The root Id names — refused, null, when there is no such, or it is no configuration's root.
 ibValueMetaObjectConfiguration* FindRoot(const ibSession& session, const ibDataNode& args, ibProtocol::ibRefusal& refusal,
-	wxString& error)
+	ibString& error)
 {
 	ibMetaData* const metaData = ibSchemaMetaData::FindMetaData(session, args, refusal, error);
 	ibValueMetaObject* const object = metaData != nullptr
@@ -24,7 +24,7 @@ ibValueMetaObjectConfiguration* FindRoot(const ibSession& session, const ibDataN
 	ibValueMetaObjectConfiguration* const root = dynamic_cast<ibValueMetaObjectConfiguration*>(object);
 	if (root == nullptr) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = wxString::Format(wxT("'%s' has no home page"), object->GetName());
+		error = ibString::Format(ibT("'%s' has no home page"), object->GetName());
 	}
 	return root;
 }
@@ -40,7 +40,7 @@ bool ibSchemaHomePage::AccessRight(const ibSession& session) const
 void ibSchemaHomePage::Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const
 {
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	const ibValueMetaObjectConfiguration* const root = FindRoot(session, args, refusal, error);
 	if (root == nullptr)
 		return;
@@ -79,11 +79,11 @@ void ibSchemaHomePage::Build(const ibSession& session, const ibDataNode& args, i
 }
 
 std::function<void()> ibSchemaHomePage::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	if (static_cast<ibProtocol::ibSchema::ibCommand>(command) != ibProtocol::ibSchema::ibCommand::Save) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = wxT("the home page takes Save alone");
+		error = ibT("the home page takes Save alone");
 		return nullptr;
 	}
 
@@ -96,12 +96,12 @@ std::function<void()> ibSchemaHomePage::Command(const ibSession& session, std::i
 	ibHomePageDescription homePage;
 	if (!node || !homePage.ReadNode(ibDataValue::Child(std::make_shared<ibDataNode>(*node)))) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = wxT("which home page: HomePage");
+		error = ibT("which home page: HomePage");
 		return nullptr;
 	}
 	if (!root->IsEditable()) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = wxString::Format(wxT("'%s' takes no edit"), root->GetName());
+		error = ibString::Format(ibT("'%s' takes no edit"), root->GetName());
 		return nullptr;
 	}
 

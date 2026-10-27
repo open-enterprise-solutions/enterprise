@@ -41,7 +41,7 @@ ibString ibValuePointInTime::GetString() const
 		return ibString();
 
 	const ibString date = m_date.ToString();   // the date's own text (fdatetime.h)
-	return m_reference.IsEmpty() ? date : date + wxT(", ") + m_reference.GetString();
+	return m_reference.IsEmpty() ? date : date + ibT(", ") + m_reference.GetString();
 }
 
 // ⭐ THE DATE FIRST, THE REFERENCE INSIDE IT.
@@ -120,10 +120,10 @@ enum
 
 void ibValuePointInTime_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(wxT("Date"));
-	helper.AppendProp(wxT("Ref"));
+	helper.AppendProp(ibT("Date"));
+	helper.AppendProp(ibT("Ref"));
 
-	helper.AppendFunc(wxT("Compare"), 1, wxT("Compare(pointInTime)"));
+	helper.AppendFunc(ibT("Compare"), 1, ibT("Compare(pointInTime)"));
 }
 
 bool ibValuePointInTime::SetPropVal(const long lPropNum, const ibValue& varPropVal)

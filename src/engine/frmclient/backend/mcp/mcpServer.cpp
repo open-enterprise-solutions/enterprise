@@ -56,7 +56,7 @@ bool ibMcpServer::SaveSettings(ibSession* WXUNUSED(session)) const
 		CommandOf(ibProtocol::ibSchema::ibCommand::Save, m_settings.value_or(GetSettings())), answer);
 }
 
-bool ibMcpServer::Start(ibSession* WXUNUSED(session), wxString& refusal)
+bool ibMcpServer::Start(ibSession* WXUNUSED(session), ibString& refusal)
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
@@ -91,7 +91,7 @@ bool ibMcpServer::IsRunning() const
 	return m_shown.GetBool(ibProtocol::ibSchema::ibMcpServer::Running);
 }
 
-wxString ibMcpServer::GetEndpoint() const
+ibString ibMcpServer::GetEndpoint() const
 {
 	return m_shown.GetString(ibProtocol::ibSchema::ibMcpServer::Endpoint);
 }

@@ -32,7 +32,7 @@ struct ibLinqBinding {
 		FromGroup,    // group ... by <key> into <id>
 		FromRestrict, // restrict <id> in <expr> — the row being narrowed
 	};
-	wxString    name;
+	ibString    name;
 	Origin      origin = FromSource;
 	ibParamUnit valueSlot;       // current iter value (`o`)
 	ibParamUnit iterInSlot;      // @in_ — OPER_LET cell for the source
@@ -212,7 +212,7 @@ struct ibLinqQuery {
 	// outer CompileLinqBlock leaves the lex cursor positioned at the
 	// continuation's first token; the post-block re-enters from
 	// there.
-	wxString    m_groupIntoName;
+	ibString    m_groupIntoName;
 	bool        m_hasGroupInto = false;
 
 	// ⭐⭐ THE COLUMNS THIS QUERY ANSWERS WITH, in the order the projection named them — the same
@@ -223,7 +223,7 @@ struct ibLinqQuery {
 	// What reads them is not the runtime — it never sees this section — but the two readers on this
 	// side: IntelliSense, and the door that hands a query's structure to whoever is writing one
 	// (scriptComplete.h, ibOutlineScriptQueries).
-	std::vector<wxString> m_columns;
+	std::vector<ibString> m_columns;
 
 	// ⭐⭐ WHERE THE QUERY IS IN THE TEXT — the two character positions that bracket it.
 	//
@@ -250,9 +250,9 @@ struct ibLinqQuery {
 	// before ignoring it. The chain road parks ONE number (`m_numLinqChainAt`, compileCode.h) and
 	// re-reads the verbs from the tokens, which is why there was nothing to park here.
 
-	const ibLinqBinding* FindByName(const wxString& name) const {
+	const ibLinqBinding* FindByName(const ibString& name) const {
 		for (const auto& b : m_bindings)
-			if (stringUtils::CompareString(b.name, name))
+			if (stringUtils::IsSameAs(b.name, name))
 				return &b;
 		return nullptr;
 	}

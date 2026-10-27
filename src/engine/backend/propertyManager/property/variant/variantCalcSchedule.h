@@ -39,7 +39,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const override { return wxT("ibVariantDataCalcSchedule"); }
+	virtual wxString GetType() const override { return ibT("ibVariantDataCalcSchedule"); }
 
 protected:
 

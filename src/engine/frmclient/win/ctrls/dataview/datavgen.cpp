@@ -7558,7 +7558,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 			// what I read as", and the row is that sentence: no per-column cells underneath it, so nothing
 			// can be painted twice in one place (Max, 2026-08-29: *"it must write across the whole row"* —
 			// and the defect this started from was the reference drawn twice, the caption over its column).
-			wxString grpCaptionProbe;
+			ibString grpCaptionProbe;
 			const bool isGroupRow = !IsVirtualList() && dataitem.GetGroupCaption(grpCaptionProbe);
 			const bool hasValue = !isGroupRow && cell->PrepareForItem(model, dataitem, col->GetModelColumn());
 
@@ -7685,7 +7685,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 		{
 			const int lh = GetLineHeight(item);
 			ibDataViewTreeNode* gnode = IsVirtualList() ? NULL : GetTreeNodeByRow(item);
-			wxString grpCaption;
+			ibString grpCaption;
 			if (gnode != NULL && gnode->GetItem().GetGroupCaption(grpCaption))
 			{
 				const ibDataViewItem gitem = gnode->GetItem();

@@ -28,7 +28,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataGeneration"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataGeneration"); }
 };
 
 #endif

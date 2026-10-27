@@ -40,8 +40,7 @@ bool ibPropertyChoiceLink::SetDataValue(const ibValue& varPropVal) { return fals
 
 bool ibPropertyChoiceLink::GetDataValue(ibValue& pvarPropVal) const
 {
-	wxString name;
-	get_cell_variant<ibVariantDataChoiceLink>()->Write(name);
+	const ibString name = m_propValue.MakeString();
 	pvarPropVal = ibValue(name);
 	return true;
 }
@@ -99,8 +98,7 @@ bool ibPropertyChoiceParameters::SetDataValue(const ibValue& varPropVal) { retur
 
 bool ibPropertyChoiceParameters::GetDataValue(ibValue& pvarPropVal) const
 {
-	wxString names;
-	get_cell_variant<ibVariantDataChoiceParameters>()->Write(names);
+	const ibString names = m_propValue.MakeString();
 	pvarPropVal = ibValue(names);
 	return true;
 }
@@ -146,7 +144,7 @@ void AppendTargets(ibDataNode& row, const ibPropertyObject* owner, const ibPrope
 		ibDataNode& target = AppendItem(*targets, types, index, metaData);
 		const ibClassID clsid = metaData != nullptr ? metaData->GetIDObjectFromMetaID(
 			static_cast<ibMetaID>(types.GetId(index)), ibCtorObjectMetaType::ibCtorObjectMetaType_Reference) : 0;
-		target.SetValue(ibProtocol::ibSchema::ibProperties::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
+		target.SetValue(ibProtocol::ibSchema::ibProperties::Type, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(clsid)));
 		if (parameters == nullptr || clsid == 0)
 			continue;
 		ibPropertyChoiceList fields;

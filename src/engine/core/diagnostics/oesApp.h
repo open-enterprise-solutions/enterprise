@@ -3,22 +3,17 @@
 
 // ibWxApp — wxApp subclass with crash plumbing pre-wired.
 //
-// Header-only. Lives under frontend/diagnostics/ because it is
-// wx-aware (wxApp / wxDebugReport / wxMessageBox / wxLog), but every
-// method body is inline — the header does NOT pull a link-time
-// dependency on frontend.dll. The only OES symbol it calls is
-// BACKEND_API ibCrashGuard::*, satisfied by backend.lib which every
-// GUI exe already links.
-//
-// Consequence: launcher.exe, which links only backend.lib (no
-// frontend.dll), can still derive from this base. Including the
-// header alone doesn't add a transitive frontend dependency — the .h
-// is consumed entirely at compile time.
+// Header-only, in the core beside the guard it wires: what it catches is
+// the core's refusal (ibCoreException — the engine's among them), so it
+// knows nothing above the core. It is wx-aware (wxApp / wxDebugReport /
+// wxMessageBox / wxLog), but every method body is inline: the core never
+// includes it, so the core does not link wx's GUI for it — the program
+// that derives from it does (launcher, codeRunner).
 //
 // What the base wires for you:
 //   OnInit              → ibCrashGuard::Install(GetExeName()) + DoOnInit()
 //   OnRun               → headless WrapStartup around DoOnRun()
-//   OnExceptionInMainLoop → ibBackendException = show + continue;
+//   OnExceptionInMainLoop → ibCoreException = show + continue;
 //                            anything else = unwind into OnUnhandled
 //   OnUnhandledException  → log + wxDebugReport
 //   OnFatalException      → wxDebugReport (main thread) /
@@ -26,16 +21,17 @@
 //   OnAssertFailure       → journal + stderr, once per site, NO dialog
 //
 // Subclass contract:
-//   - GetExeName() — pure virtual, e.g. "enterprise" / "designer".
+//   - GetExeName() — pure virtual, e.g. "launcher" / "codeRunner".
 //   - DoOnInit()   — replaces OnInit body. Default returns true.
 //   - DoOnRun()    — replaces OnRun body. Default delegates to
 //                    wxApp::OnRun() (plain main event loop).
 //
 // Anything outside the wxApp pipeline (ReportStartupError, etc.) goes
-// through ibCrashGuard directly — backend symbols, no wrapper needed.
+// through ibCrashGuard directly — core symbols, no wrapper needed.
 
 #include "core/diagnostics/crashGuard.h"
-#include "backend/backend_exception.h"
+#include "core/diagnostics/journal.h"   // ibJournalError — what the loop says of a refusal
+#include "core/exception.h"             // ibCoreException — the refusal it says and goes on
 
 #include <wx/app.h>
 #include <wx/cmdline.h>   // the usage text an unparsed command line is answered with
@@ -155,7 +151,7 @@ public:
 		}
 		catch (const ibCoreException& e) {
 			ReportStartupFault(exe,
-				wxT("ibBackendException during startup: ") + e.GetErrorDescription());
+				wxT("ibCoreException during startup: ") + e.GetErrorDescription());
 			return 1;
 		}
 		catch (const std::exception& e) {
@@ -165,7 +161,7 @@ public:
 		}
 		catch (...) {
 			ReportStartupFault(exe,
-				wxT("Unknown exception during startup (non-std, non-ibBackend)"));
+				wxT("Unknown exception during startup (non-std, non-ibCore)"));
 			return 1;
 		}
 	}
@@ -176,33 +172,17 @@ public:
 		// wx delegates here when a C++ exception escapes from an event
 		// handler back into the main loop. Returning true keeps the loop
 		// running (recoverable); false escalates to OnUnhandledException.
-		// A refusal (ibCoreException — the engine's ibBackendException among them) is the only "show and
+		// A refusal (ibCoreException — the engine's among them) is the only "show and
 		// continue" class — known business / DB error. Everything else lets the loop unwind.
+		//
+		// (A script failure the engine had already reported — ProcessError names the module and the line,
+		//  then lets it propagate — was told apart here by ibBackendException::IsErrorHandled, so its window
+		//  was not shown twice. In the core that type is not known; the two programs on this base catch
+		//  a script's refusal themselves, and none reaches the loop.)
 		try {
 			throw;
 		}
-		catch (const ibBackendException& e) {
-			// ⭐⭐ THE LAST RESORT SPEAKS ONLY WHEN NOBODY HAS. A script failure is reported where it
-			// happens — ProcessError names the module, the line, the source text and the call stack —
-			// and then keeps propagating, which is how it arrives here. Reporting it again said the
-			// same thing in the poorest of the available words: the bare sentence, no module, no line.
-			//
-			// ⚠ AND THE TWO CALLS BELOW WERE THEMSELVES A PAIR. ibJournalError at Error severity IS a
-			// dialog — the journal echoes at the severity it was given precisely so a migrated
-			// wxLogError callsite keeps its window (journal.cpp) — so the wxMessageBox beside it
-			// showed one sentence twice from one catch. Three windows, one failure.
-			if (e.IsErrorHandled()) {
-				// The record is still written; it is the WINDOW that would be the duplicate.
-				ibJournalInfo(wxT("app"), wxT("already reported, loop continues: %s"),
-					e.GetErrorDescription());
-				return true;
-			}
-
-			ibJournalError(wxT("app"), wxT("%s"), e.GetErrorDescription());
-			return true;
-		}
 		catch (const ibCoreException& e) {
-			// …and a refusal of the core (a read that could not go on) is one too: said, and the loop goes on.
 			ibJournalError(wxT("app"), wxT("%s"), e.GetErrorDescription());
 			return true;
 		}
@@ -229,7 +209,7 @@ public:
 			if (p) std::rethrow_exception(p);
 		}
 		catch (const ibCoreException& e) {
-			diag = wxT("Unhandled ibBackendException: ") + e.GetErrorDescription();
+			diag = wxT("Unhandled ibCoreException: ") + e.GetErrorDescription();
 		}
 		catch (const std::exception& e) {
 			diag = wxT("Unhandled std::exception: ") + wxString::FromUTF8(e.what());
@@ -321,7 +301,7 @@ public:
 		report.AddAll(wxDebugReport::Context_Exception);
 		wxDebugReportPreviewStd preview;
 		if (preview.Show(report)) report.Process();
-		// The persistent minidump is already on disk via the backend's
+		// The persistent minidump is already on disk via the core's
 		// SEH filter (it runs before wx's chained handler). A second
 		// fault during OnExit cleanup is OK — the dump survives.
 	}

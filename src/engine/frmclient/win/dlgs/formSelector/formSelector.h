@@ -13,7 +13,7 @@
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
 
-// THE KIND OF A FORM JUST MADE — the desktop's ibDialogSelectTypeForm (frontend/win/dlgs/formSelector). What it offers
+// THE KIND OF A FORM JUST MADE — the old desktop's ibDialogSelectTypeForm.What it offers
 // the server sent (ibProtocol::ibRequest::ibKind::FormType) — the window's Caption, the form's Name, Synonym and Comment, and a
 // kind per child: its Id, Caption and the Name the form takes with it; the desktop's read them of the configuration.
 // The server puts the answer on the form, as the desktop's OK put it there. Here, as the desktop keeps it; asked by the

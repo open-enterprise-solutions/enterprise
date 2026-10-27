@@ -17,8 +17,8 @@ class ibValueEnumAccountingRegisterRecordType : public ibValueEnumeration<ibAcco
 	ibValueEnumAccountingRegisterRecordType() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(eDebit, wxT("Debit"), _("Debit"));
-		AddEnumeration(eCredit, wxT("Credit"), _("Credit"));
+		AddEnumeration(eDebit, ibT("Debit"), _("Debit"));
+		AddEnumeration(eCredit, ibT("Credit"), _("Credit"));
 	}
 };
 constexpr ibClassID g_enumAccountingRecordTypeCLSID = enum_to_clsid("EN_ARTP");

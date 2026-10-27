@@ -258,7 +258,7 @@ void ibQueryUnionFieldModel::GetValueByRow(wxVariant& variant, unsigned row, uns
 	// for the only reason that the field had not been given a name yet.
 	if (branchIndex == 0) {
 		const ibQueryProjection& projection = m_select->m_projections[row];
-		const wxString text = projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : wxString();
+		const wxString text = projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : ibString();
 		const wxString table = ibQuerySourceName(m_select->m_from);
 		variant = (!table.IsEmpty() && projection.m_expr
 		           && projection.m_expr->m_kind == ibQueryAstExprKind::Column

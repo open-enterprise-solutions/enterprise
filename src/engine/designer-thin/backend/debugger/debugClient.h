@@ -287,7 +287,7 @@ private:
 			m_listOffsetBreakpoint.begin(),
 			m_listOffsetBreakpoint.end(),
 			[strModuleName](const auto pair) {
-				return stringUtils::CompareString(pair.first, strModuleName);
+				return stringUtils::IsSameAs(pair.first, strModuleName);
 			}
 		);
 

@@ -34,7 +34,7 @@ class ibMetaData;
 //
 // `metaData` is the configuration to fall back on when there is no runtime root — the designer's
 // edit manager compiles against it (ibSession::EditModuleManagerFor). It may be null.
-BACKEND_API bool ibEvaluateInRoot(const wxString& expression, ibValue& produced,
+BACKEND_API bool ibEvaluateInRoot(const ibString& expression, ibValue& produced,
 	const ibMetaData* metaData);
 
 #endif

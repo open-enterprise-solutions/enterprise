@@ -40,21 +40,21 @@ bool FutureReady(const std::future<void>& f)
 // long job is visibly alive without inventing a second liveness channel.
 class ibJobSessionLockHolder : public ibLockHolder {
 public:
-	explicit ibJobSessionLockHolder(const ibSession* session, const wxString& jobName)
+	explicit ibJobSessionLockHolder(const ibSession* session, const ibString& jobName)
 		: m_guid(session->Identity().m_guid)
-		, m_name(wxString::Format(wxT("job: %s"), jobName))
+		, m_name(ibString::Format(ibT("job: %s"), jobName))
 		, m_computer(session->Identity().m_computer)
 	{
 	}
 
 	ibGuid   Identity()    const override { return m_guid; }
-	wxString DisplayName() const override { return m_name; }
-	wxString Computer()    const override { return m_computer; }
+	ibString DisplayName() const override { return m_name; }
+	ibString Computer()    const override { return m_computer; }
 
 private:
 	ibGuid   m_guid;
-	wxString m_name;
-	wxString m_computer;
+	ibString m_name;
+	ibString m_computer;
 };
 
 } // namespace
@@ -206,7 +206,7 @@ void ibJobManager::HarvestFinished(ibJobEntry& e, std::vector<std::shared_ptr<ib
 		std::lock_guard<std::mutex> lk(e.m_result->m_mtx);
 		e.m_error = e.m_result->m_error;
 		if (!ok)
-			ibJournalInfo(wxT("job"),wxT("job '%s' failed: %s"), e.m_desc.m_name, e.m_error);
+			ibJournalInfo(ibT("job"),ibT("job '%s' failed: %s"), e.m_desc.m_name, e.m_error);
 	}
 
 	// Drain the future so a stray exception (one thrown by the POOL rather than by
@@ -246,16 +246,16 @@ bool ibJobManager::ApplySettings(const ibGuid& key, bool active, const ibJobSche
 	return true;
 }
 
-wxString ibJobManager::FindNameByKey(const ibGuid& key) const
+ibString ibJobManager::FindNameByKey(const ibGuid& key) const
 {
 	std::lock_guard<std::mutex> lock(m_mtx);
 	for (const auto& e : m_entries)
 		if (KeyOf(e->m_desc) == key)
 			return e->m_desc.m_name;
-	return wxString();
+	return ibString();
 }
 
-ibJobManager::ibJobEntry* ibJobManager::Find(const wxString& name)
+ibJobManager::ibJobEntry* ibJobManager::Find(const ibString& name)
 {
 	for (auto& e : m_entries)
 		if (e->m_desc.m_name == name)
@@ -331,7 +331,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		e.m_outcome   = ibJobOutcome::Failed;
 		e.m_error     = err.GetErrorDescription();
 		if (ibLogger* const log = ibApplicationInstance::GetLogger())
-			log->Error(wxT("job"), wxT("failed"), wxString::Format(_("Job '%s' failed: %s"), desc.m_name, e.m_error));
+			log->Error(ibT("job"), ibT("failed"), ibString::Format(_("Job '%s' failed: %s"), desc.m_name, e.m_error));
 		return false;
 	}
 	if (!*runSession)
@@ -355,7 +355,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 				// wchar_t array plus a class, which MSVC resolves through ibGuid's conversion and
 				// GCC refuses outright (portability.md — the compilers disagree about which
 				// implicit conversions a built-in operator may reach for).
-				items.push_back(ibLockItem::ForNamespace(wxString(wxT("Job.")) + KeyOf(desc).str(),
+				items.push_back(ibLockItem::ForNamespace(ibString(ibT("Job.")) + KeyOf(desc).str(),
 				                                          ibLockMode::Exclusive));
 				ibJobSessionLockHolder owner(session, desc.m_name);
 				claim = locks->Acquire(items, {}, &owner);
@@ -370,8 +370,8 @@ bool ibJobManager::Launch(ibJobEntry& e)
 				// Logged, because "it did not run here" is a question an
 				// administrator will otherwise ask the wrong way round.
 				if (ibLogger* const log = ibApplicationInstance::GetLogger()) {
-					log->Audit(wxT("job"), wxT("blocked"),
-					           wxString::Format(_("Job '%s' is already running elsewhere"),
+					log->Audit(ibT("job"), ibT("blocked"),
+					           ibString::Format(_("Job '%s' is already running elsewhere"),
 					                            desc.m_name));
 				}
 				result->m_skipped.store(true, std::memory_order_release);
@@ -414,7 +414,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 			WriteSharedLastRun(KeyOf(desc), desc.m_name, ibDateTime::Now());
 
 		// 4. THE BODY, wrapped. Visible in Active Users while it lasts.
-		session->SetActivity(wxString::Format(wxT("job: %s"), desc.m_name));
+		session->SetActivity(ibString::Format(ibT("job: %s"), desc.m_name));
 		try {
 			result->m_more.store(desc.m_body(session), std::memory_order_release);
 			result->m_ok.store(true, std::memory_order_release);
@@ -427,7 +427,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 			std::lock_guard<std::mutex> lk(result->m_mtx);
 			result->m_error = _("unknown exception");
 		}
-		session->SetActivity(wxEmptyString);
+		session->SetActivity(ibEmptyString);
 
 		// 5. INTO THE JOURNAL, so a run leaves a trace an administrator can read
 		//    afterwards. A scheduled job runs unattended by definition — without a
@@ -438,8 +438,8 @@ bool ibJobManager::Launch(ibJobEntry& e)
 			if (ok) {
 				// A completed run is a business event: it belongs to the trail an administrator
 				// reads, not to the list of things that are wrong.
-				log->Audit(wxT("job"), wxT("finished"),
-				           wxString::Format(_("Job '%s' completed"), desc.m_name));
+				log->Audit(ibT("job"), ibT("finished"),
+				           ibString::Format(_("Job '%s' completed"), desc.m_name));
 			}
 			else {
 				// 🛑⭐ A FAILURE IS FILED AS A FAILURE. This said `Audit`, which forces the row's
@@ -448,8 +448,8 @@ bool ibJobManager::Launch(ibJobEntry& e)
 				// to find it (`level: error`) could not. Unattended work is exactly the work whose
 				// failures nobody witnesses; if it is not legible here it is legible nowhere.
 				std::lock_guard<std::mutex> lk(result->m_mtx);
-				log->Error(wxT("job"), wxT("failed"),
-				           wxString::Format(_("Job '%s' failed: %s"), desc.m_name, result->m_error));
+				log->Error(ibT("job"), ibT("failed"),
+				           ibString::Format(_("Job '%s' failed: %s"), desc.m_name, result->m_error));
 			}
 		}
 
@@ -484,14 +484,14 @@ bool ibJobManager::Launch(ibJobEntry& e)
 bool ibJobManager::Register(ibJobDescription desc)
 {
 	if (desc.m_name.IsEmpty() || !desc.m_body) {
-		ibJournalInfo(wxT("job"),wxT("job registration rejected: incomplete description ('%s')"), desc.m_name);
+		ibJournalInfo(ibT("job"),ibT("job registration rejected: incomplete description ('%s')"), desc.m_name);
 		return false;
 	}
 	// A schedule that can never match is refused HERE rather than left to be
 	// debugged as silence — an empty window, an inverted validity range or a
 	// non-positive interval all produce a job that simply never runs.
 	if (!ibJobScheduleRules::IsValid(desc.m_schedule)) {
-		ibJournalInfo(wxT("job"),wxT("job '%s' rejected: the schedule can never match"), desc.m_name);
+		ibJournalInfo(ibT("job"),ibT("job '%s' rejected: the schedule can never match"), desc.m_name);
 		return false;
 	}
 
@@ -502,7 +502,7 @@ bool ibJobManager::Register(ibJobDescription desc)
 		if (Find(desc.m_name) != nullptr) {
 			// Refuse rather than replace: a duplicate name means a double bootstrap,
 			// and quietly keeping one copy would hide it until something runs twice.
-			ibJournalInfo(wxT("job"),wxT("job '%s' is already registered"), desc.m_name);
+			ibJournalInfo(ibT("job"),ibT("job '%s' is already registered"), desc.m_name);
 			return false;
 		}
 	}
@@ -601,7 +601,7 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 		&ib_detail::MakeSessionFactory<ibSession>);
 
 	if (!holder) {
-		ibJournalInfo(wxT("job"),wxT("job '%s': session could not be created"), desc.m_name);
+		ibJournalInfo(ibT("job"),ibT("job '%s': session could not be created"), desc.m_name);
 		return ibSessionHolder();
 	}
 
@@ -632,14 +632,14 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 			// Named a user who is not there: refuse rather than run the job
 			// anonymously. Falling back to full rights is how a scheduled job ends
 			// up seeing more than its author ever could.
-			ibJournalInfo(wxT("job"),wxT("job '%s': user %s not found - the job will not run"),
+			ibJournalInfo(ibT("job"),ibT("job '%s': user %s not found - the job will not run"),
 			           desc.m_name, desc.m_runAsUser.str());
 			return ibSessionHolder();
 		}
 		// Both before anything runs: install the identity, then let the
 		// Authenticated notification build the root module and the lambda runtime
 		// a script job needs.
-		registry->InstallUser(holder.Get(), info, wxEmptyString);
+		registry->InstallUser(holder.Get(), info, ibEmptyString);
 		registry->NotifyAuthenticated(holder.Get());
 	}
 	else if (desc.m_origin == ibJobOrigin::Configuration && registry != nullptr) {
@@ -658,7 +658,7 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 	return holder;
 }
 
-bool ibJobManager::Unregister(const wxString& name)
+bool ibJobManager::Unregister(const ibString& name)
 {
 	std::future<void> pending;
 	ibSessionHolder   holder;
@@ -704,7 +704,7 @@ bool ibJobManager::Unregister(const wxString& name)
 	return true;   // holder dies here — the session goes with it
 }
 
-std::size_t ibJobManager::UnregisterByPrefix(const wxString& prefix)
+std::size_t ibJobManager::UnregisterByPrefix(const ibString& prefix)
 {
 	if (prefix.IsEmpty())
 		return 0;   // an empty prefix matches everything, which is never what a caller means
@@ -712,7 +712,7 @@ std::size_t ibJobManager::UnregisterByPrefix(const wxString& prefix)
 	// Collect the NAMES first, then drop them one by one through the single-name path — which is
 	// the one that knows how to wait out a launch in flight. Doing the erase here as well would
 	// mean two places that must both get that waiting right.
-	std::vector<wxString> names;
+	std::vector<ibString> names;
 	{
 		std::lock_guard<std::mutex> lk(m_mtx);
 		for (const auto& slot : m_entries)
@@ -721,7 +721,7 @@ std::size_t ibJobManager::UnregisterByPrefix(const wxString& prefix)
 	}
 
 	std::size_t removed = 0;
-	for (const wxString& name : names)
+	for (const ibString& name : names)
 		if (Unregister(name))
 			++removed;
 
@@ -768,10 +768,10 @@ void ibJobManager::ThreadBody()
 			(void)Tick();
 		}
 		catch (const ibCoreException& err) {
-			ibJournalInfo(wxT("job"),wxT("job tick failed: %s"), err.GetErrorDescription());
+			ibJournalInfo(ibT("job"),ibT("job tick failed: %s"), err.GetErrorDescription());
 		}
 		catch (...) {
-			ibJournalInfo(wxT("job"),wxT("job tick failed with an unknown exception"));
+			ibJournalInfo(ibT("job"),ibT("job tick failed with an unknown exception"));
 		}
 	}
 }
@@ -881,7 +881,7 @@ int ibJobManager::Tick()
 	return started;
 }
 
-bool ibJobManager::Execute(const wxString& name)
+bool ibJobManager::Execute(const ibString& name)
 {
 	// DECIDE UNDER THE LOCK, RUN OUTSIDE IT — the same division Tick makes, and for the same
 	// reason: Launch creates a session, and creating one waits on the registry and takes a

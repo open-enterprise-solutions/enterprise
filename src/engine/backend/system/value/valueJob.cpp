@@ -38,27 +38,27 @@ bool ibValueSchedule::Init(ibValue** paParams, const long lSizeArray)
 
 void ibValueSchedule_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(1, wxT("JobSchedule(intervalSeconds : number)"));
+	helper.AppendConstructor(1, ibT("JobSchedule(intervalSeconds : number)"));
 
-	helper.AppendProp(wxT("Interval"));
-	helper.AppendProp(wxT("StartTime"));
-	helper.AppendProp(wxT("EndTime"));
-	helper.AppendProp(wxT("StopAfter"));
-	helper.AppendProp(wxT("DaysOfWeek"));
-	helper.AppendProp(wxT("DaysOfMonth"));
-	helper.AppendProp(wxT("DaysOfMonthFromEnd"));
-	helper.AppendProp(wxT("Months"));
-	helper.AppendProp(wxT("WeekdayOrdinal"));
-	helper.AppendProp(wxT("EveryNWeeks"));
-	helper.AppendProp(wxT("EveryNMonths"));
-	helper.AppendProp(wxT("PeriodAnchor"));
-	helper.AppendProp(wxT("ActiveFrom"));
-	helper.AppendProp(wxT("ActiveTo"));
+	helper.AppendProp(ibT("Interval"));
+	helper.AppendProp(ibT("StartTime"));
+	helper.AppendProp(ibT("EndTime"));
+	helper.AppendProp(ibT("StopAfter"));
+	helper.AppendProp(ibT("DaysOfWeek"));
+	helper.AppendProp(ibT("DaysOfMonth"));
+	helper.AppendProp(ibT("DaysOfMonthFromEnd"));
+	helper.AppendProp(ibT("Months"));
+	helper.AppendProp(ibT("WeekdayOrdinal"));
+	helper.AppendProp(ibT("EveryNWeeks"));
+	helper.AppendProp(ibT("EveryNMonths"));
+	helper.AppendProp(ibT("PeriodAnchor"));
+	helper.AppendProp(ibT("ActiveFrom"));
+	helper.AppendProp(ibT("ActiveTo"));
 
-	helper.AppendFunc(wxT("Allowed"), 1, wxT("Allowed(moment : date)"));
-	helper.AppendFunc(wxT("NextRun"), 1, wxT("NextRun(notBefore : date)"));
-	helper.AppendFunc(wxT("Presentation"), wxT("Presentation()"));
-	helper.AppendFunc(wxT("IsValid"), wxT("IsValid()"));
+	helper.AppendFunc(ibT("Allowed"), 1, ibT("Allowed(moment : date)"));
+	helper.AppendFunc(ibT("NextRun"), 1, ibT("NextRun(notBefore : date)"));
+	helper.AppendFunc(ibT("Presentation"), ibT("Presentation()"));
+	helper.AppendFunc(ibT("IsValid"), ibT("IsValid()"));
 }
 
 bool ibValueSchedule::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -195,7 +195,7 @@ ibValuePredefinedJobs::ibValueJobRow::ibValueJobRow()
 {
 }
 
-ibValuePredefinedJobs::ibValueJobRow::ibValueJobRow(const ibGuid& jobKey, const wxString& jobName)
+ibValuePredefinedJobs::ibValueJobRow::ibValueJobRow(const ibGuid& jobKey, const ibString& jobName)
 	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_jobKey(jobKey), m_jobName(jobName)
 {
 	ReadSettings();
@@ -221,16 +221,16 @@ bool ibValuePredefinedJobs::ibValueJobRow::ReadSettings()
 
 void ibValueJobRow_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(wxT("Name"));
-	helper.AppendProp(wxT("Active"));
-	helper.AppendProp(wxT("Schedule"));
-	helper.AppendProp(wxT("LastRun"));
-	helper.AppendProp(wxT("Computer"));
-	helper.AppendProp(wxT("NextRun"));
+	helper.AppendProp(ibT("Name"));
+	helper.AppendProp(ibT("Active"));
+	helper.AppendProp(ibT("Schedule"));
+	helper.AppendProp(ibT("LastRun"));
+	helper.AppendProp(ibT("Computer"));
+	helper.AppendProp(ibT("NextRun"));
 
-	helper.AppendFunc(wxT("Read"), wxT("Read()"));
-	helper.AppendFunc(wxT("Write"), wxT("Write()"));
-	helper.AppendFunc(wxT("Execute"), wxT("Execute()"));
+	helper.AppendFunc(ibT("Read"), ibT("Read()"));
+	helper.AppendFunc(ibT("Write"), ibT("Write()"));
+	helper.AppendFunc(ibT("Execute"), ibT("Execute()"));
 }
 
 bool ibValuePredefinedJobs::ibValueJobRow::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -287,7 +287,7 @@ bool ibValuePredefinedJobs::ibValueJobRow::CallAsFunc(const long lMethodNum, ibV
 			pvarRetValue = false;
 			return true;
 		}
-		const wxString registeredName = manager->FindNameByKey(m_jobKey);
+		const ibString registeredName = manager->FindNameByKey(m_jobKey);
 		pvarRetValue = !registeredName.IsEmpty() && manager->Execute(registeredName);
 		return true;
 	}

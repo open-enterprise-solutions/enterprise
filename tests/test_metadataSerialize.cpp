@@ -109,9 +109,9 @@ TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
 		ASSERT_NE(root, nullptr) << "fresh config has no root for " << c.clsid;
 
 		ibValueMetaObject* obj = cfg1.CreateMetaObject(
-			metadata_to_clsid(wxString::FromAscii(c.clsid)), root, /*runObject*/ false);
+			metadata_to_clsid(ibString::FromUTF8(c.clsid)), root, /*runObject*/ false);
 		ASSERT_NE(obj, nullptr) << "CreateMetaObject failed for " << c.clsid;
-		cfg1.RenameMetaObject(obj, wxString(c.name));
+		cfg1.RenameMetaObject(obj, ibString(c.name));
 
 		ibMemoryBuffer buf1;
 		ASSERT_TRUE(cfg1.SaveConfigToBuffer(buf1)) << "save failed for " << c.clsid;
@@ -227,7 +227,7 @@ TEST(MetadataSerialize, DefaultConfig_FileRoundTrip_MatchesBuffer) {
 	ibMemoryBuffer bufMem;
 	ASSERT_TRUE(cfg1.SaveConfigToBuffer(bufMem));
 
-	const wxString path = wxFileName::CreateTempFileName(wxT("oes_meta_rt_"));
+	const ibString path = wxFileName::CreateTempFileName(wxT("oes_meta_rt_"));
 	ASSERT_FALSE(path.IsEmpty());
 	ASSERT_TRUE(cfg1.SaveConfigToFile(path));
 

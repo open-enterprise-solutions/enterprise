@@ -49,7 +49,7 @@ public:
 	// same fields an editor shows, so a settings list and a log line say the same thing without
 	// either restating the rules. Omits everything left at "any", because naming defaults is how a
 	// description stops being read.
-	static wxString Describe(const ibJobScheduleDescription& schedule);
+	static ibString Describe(const ibJobScheduleDescription& schedule);
 };
 
 #endif // !__IB_JOB_SCHEDULE_H__

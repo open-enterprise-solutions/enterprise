@@ -63,7 +63,7 @@ public:
 	bool operator==(const ibGuid& other) const;
 	bool operator!=(const ibGuid& other) const;
 
-	operator wxString()      const { return m_objGuid.str(); }
+	operator ibString()      const { return m_objGuid.str(); }
 	operator ibGuid()        const { return m_objGuid; }
 	operator ibGuidImpl()    const { return m_objGuid; }
 	operator ibRowMetaValues() const { return m_keyValues; }

@@ -65,12 +65,12 @@ ibValueForm::ibStandardCommandSet ibValueForm::GetStandardCommands(const ibFormI
 		actionData.AddSeparator();
 
 	// Form chrome is navigation / view — never data-modifying — so it stays live in a view-only form.
-	actionData.AddAction(wxT("Close"), _("Close"), g_picCloseFormCLSID, false, enClose).SetModify(false);
-	actionData.AddAction(wxT("Update"), _("Update"), g_picUpdateFormCLSID, false, enUpdate).SetModify(false);
-	actionData.AddAction(wxT("Help"), _("Help"), g_picHelpFormCLSID, false, enHelp).SetModify(false);
+	actionData.AddAction(ibT("Close"), _("Close"), g_picCloseFormCLSID, false, enClose).SetModify(false);
+	actionData.AddAction(ibT("Update"), _("Update"), g_picUpdateFormCLSID, false, enUpdate).SetModify(false);
+	actionData.AddAction(ibT("Help"), _("Help"), g_picHelpFormCLSID, false, enHelp).SetModify(false);
 
 	actionData.AddSeparator();
-	actionData.AddAction(wxT("Change"), _("Change form"), g_picChangeFormCLSID, false, enChange).SetModify(false);
+	actionData.AddAction(ibT("Change"), _("Change form"), g_picChangeFormCLSID, false, enChange).SetModify(false);
 
 	return actionData;
 }

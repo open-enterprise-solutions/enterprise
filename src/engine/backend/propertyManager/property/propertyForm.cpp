@@ -15,7 +15,7 @@ wxVariantData* ibPropertyForm::CreateVariantData()
 
 ////////////////////////////////////////////////////////////////////////
 
-wxString ibPropertyForm::GetValueAsString() const
+ibString ibPropertyForm::GetValueAsString() const
 {
 	return get_cell_variant<ibVariantDataForm>()->GetModuleText();
 }
@@ -25,7 +25,7 @@ ibMemoryBuffer& ibPropertyForm::GetValueAsMemoryBuffer() const
 	return get_cell_variant<ibVariantDataForm>()->GetFormData();
 }
 
-void ibPropertyForm::SetValue(const wxString& val)
+void ibPropertyForm::SetValue(const ibString& val)
 {
 	get_cell_variant<ibVariantDataForm>()->SetModuleText(val);
 }
@@ -56,8 +56,8 @@ bool ibPropertyForm::ReadNodeValue(const ibDataValue& value)
 {
 	const auto root = value.AsChild();
 	if (root) {
-		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(wxT("Layout"))));
-		ibPropertyForm::SetValue(root->GetValue<wxString>(wxT("Module")));
+		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(ibT("Layout"))));
+		ibPropertyForm::SetValue(root->GetValue<ibString>(ibT("Module")));
 	}
 	return true;
 }
@@ -65,8 +65,8 @@ bool ibPropertyForm::ReadNodeValue(const ibDataValue& value)
 bool ibPropertyForm::WriteNodeValue(ibDataValue& value) const
 {
 	auto root = std::make_shared<ibDataNode>();
-	root->SetProperty(wxT("Layout"), ibValueMetaObjectFormBase::FormBlobToNode(GetValueAsMemoryBuffer()));
-	root->SetValue(wxT("Module"),    GetValueAsString());
+	root->SetProperty(ibT("Layout"), ibValueMetaObjectFormBase::FormBlobToNode(GetValueAsMemoryBuffer()));
+	root->SetValue(ibT("Module"),    GetValueAsString());
 	value = ibDataValue::Child(root);
 	return true;
 }
@@ -80,8 +80,8 @@ bool ibPropertyForm::CopyNodeValue(ibDataValue& value) const
 	ibValueMetaObjectFormBase* metaForm = dynamic_cast<ibValueMetaObjectFormBase*>(m_owner);
 	if (metaForm == nullptr) return false;
 	auto root = std::make_shared<ibDataNode>();
-	root->SetProperty(wxT("Layout"), metaForm->CopyFormData());
-	root->SetValue(wxT("Module"),    GetValueAsString());
+	root->SetProperty(ibT("Layout"), metaForm->CopyFormData());
+	root->SetValue(ibT("Module"),    GetValueAsString());
 	value = ibDataValue::Child(root);
 	return true;
 }
@@ -92,8 +92,8 @@ bool ibPropertyForm::PasteNodeValue(const ibDataValue& value)
 	if (metaForm == nullptr) return false;
 	const auto root = value.AsChild();
 	if (root) {
-		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(wxT("Layout"))));
-		ibPropertyForm::SetValue(root->GetValue<wxString>(wxT("Module")));
+		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(ibT("Layout"))));
+		ibPropertyForm::SetValue(root->GetValue<ibString>(ibT("Module")));
 	}
 	return metaForm->PasteFormData();
 }

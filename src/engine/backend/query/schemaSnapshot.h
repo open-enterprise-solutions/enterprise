@@ -61,7 +61,7 @@ struct ibSchemaColumn
 // An index declared by a table. Matched by name; a changed column set / uniqueness => drop + recreate.
 struct ibSchemaIndex
 {
-	wxString                                 m_name;
+	ibString                                 m_name;
 	std::vector<const ibBackendQueryColumn*> m_columns;        // logical columns it covers (expand to fields at apply)
 	bool                                     m_unique = false;
 	bool                                     m_descending = false;   // the twin a backward read walks
@@ -83,7 +83,7 @@ struct ibSchemaSeedRow
 	// was truncated to its first sixteen characters: rows that exist under a key nothing can match,
 	// and a value whose presentation is looked up BY GUID then finds nothing to show.
 	ibGuid                      m_id;      // identity (the row's guid) — the match key
-	wxString                    m_name;    // friendly name for the change ledger
+	ibString                    m_name;    // friendly name for the change ledger
 	std::map<ibMetaID, ibValue> m_values;  // cell map: column metaID -> value (empty for an enum: uuid only)
 
 	// Fluent cell binding: row.Set(qc, value) — the link between a column and its value in this row. The
@@ -124,7 +124,7 @@ struct ibSchemaSeedRow
 struct ibSchemaDelta
 {
 	const ibBackendQueryColumn* m_column = nullptr;   // the totals column being accumulated
-	wxString                    m_valueExpr;          // SQL over {row} — what this movement adds (TRIGGER)
+	ibString                    m_valueExpr;          // SQL over {row} — what this movement adds (TRIGGER)
 
 	// The same contribution as an L3 expression, for REGENERATION. Two forms of one thing, and the
 	// duplication is forced by context rather than convenience: a trigger sees ONE row through NEW /
@@ -148,19 +148,19 @@ struct ibSchemaMaterialize
 	const ibBackendQueryable* m_source = nullptr;
 
 	// The source's physical table — resolved from the queryable, for the trigger DDL.
-	BACKEND_API wxString SourceTable() const;
+	BACKEND_API ibString SourceTable() const;
 
 	// Lower this DECLARATION into the L2-2 render spec: logical columns expand into their physical
 	// fields (a reference dimension is two), the source queryable resolves to a table name. That
 	// expansion is a metadata question, so it happens HERE and never inside the renderer — which is
 	// what keeps L2-1 metadata-blind and the dependency pointing downward.
-	BACKEND_API ibMaterializeSpec ToRenderSpec(const wxString& tableName) const;
+	BACKEND_API ibMaterializeSpec ToRenderSpec(const ibString& tableName) const;
 
 	// …AND FOR A READ OF THE ROWS AS THEY STAND (RenderStoredRows / RenderMovementRows): the same spec with
 	// its IR forms filled — the guard, the movement's instant, each contribution — lowered by the source's
 	// own door from the regeneration forms declared below, so a reading counts a movement by the very
 	// expression a rebuild sums it by. Only a reading asks for this; the apply renders text and never pays.
-	BACKEND_API ibMaterializeSpec ToReadSpec(const wxString& tableName) const;
+	BACKEND_API ibMaterializeSpec ToReadSpec(const ibString& tableName) const;
 
 	// The totals KEY — the columns the delta upserts against (period + dimensions, plus the shard
 	// column when split). Also the PRIMARY KEY / unique index of the derived table.
@@ -169,12 +169,12 @@ struct ibSchemaMaterialize
 	// Set by ibDeclareDerivedKey when the key is too wide for an index on this engine: the physical
 	// column that then CARRIES the key's uniqueness, filled by the delta with a digest of the key's own
 	// values. Empty in the ordinary case, where the index holds the key itself.
-	wxString m_keyHashColumn;
+	ibString m_keyHashColumn;
 
 	// The period key: which key column holds the truncated period, and the movement expression it
 	// is truncated FROM. Empty column name = this derived table has no period dimension at all.
-	wxString       m_periodColumn;
-	wxString       m_periodSourceExpr;                       // SQL over {row} — the TRIGGER's form
+	ibString       m_periodColumn;
+	ibString       m_periodSourceExpr;                       // SQL over {row} — the TRIGGER's form
 	const ibBackendQueryColumn* m_periodSource = nullptr;     // the same column, for REGENERATION to group by
 	ibTotalsPeriod m_periodUnit = ibTotalsPeriod::Month;      // STORED grain — the floor on what can be read back
 
@@ -183,7 +183,7 @@ struct ibSchemaMaterialize
 
 	// Optional guard over {row}: apply this delta only when the movement populates this side.
 	// Empty = unconditional. The accounting register's debit / credit split is the reason it exists.
-	wxString m_guard;
+	ibString m_guard;
 
 	// ⭐⭐ THE SAME CONDITION, IN THE FORM EACH CONSUMER SPEAKS.
 	//
@@ -223,20 +223,20 @@ struct ibSchemaMaterialize
 	// ---- fluent declaration (mirrors ibSchemaTable's own builders) ----
 	ibSchemaMaterialize& Key(const ibBackendQueryColumn* qc) { m_keys.push_back(qc); return *this; }
 	// `source` is the movement's period COLUMN; `sourceExpr` is how the trigger names it over {row}.
-	ibSchemaMaterialize& Period(const wxString& column, const ibBackendQueryColumn* source,
-	                            const wxString& sourceExpr, ibTotalsPeriod unit)
+	ibSchemaMaterialize& Period(const ibString& column, const ibBackendQueryColumn* source,
+	                            const ibString& sourceExpr, ibTotalsPeriod unit)
 	{
 		m_periodColumn = column; m_periodSource = source; m_periodSourceExpr = sourceExpr; m_periodUnit = unit;
 		return *this;
 	}
 	// Both forms of one contribution — see ibSchemaDelta on why the pair is unavoidable.
-	ibSchemaMaterialize& Accumulate(const ibBackendQueryColumn* qc, const wxString& valueExpr,
+	ibSchemaMaterialize& Accumulate(const ibBackendQueryColumn* qc, const ibString& valueExpr,
 	                                const ibQueryColumnExprPtr& regenExpr = nullptr)
 	{
 		m_deltas.push_back({ qc, valueExpr, regenExpr }); return *this;
 	}
 	// Declare a read view; the returned reference takes its columns.
-	ibMaterializeView& View(const wxString& name, bool withPeriod, bool dropZeroRows = false)
+	ibMaterializeView& View(const ibString& name, bool withPeriod, bool dropZeroRows = false)
 	{
 		ibMaterializeView v;
 		v.m_name = name; v.m_withPeriod = withPeriod; v.m_dropZeroRows = dropZeroRows;
@@ -256,7 +256,7 @@ struct ibSchemaMaterialize
 	// (Exported: the body is out of line — composing the PREDICATE form needs the complete type this
 	//  header does not pull in — and a caller outside backend.dll, i.e. the test that pins the
 	//  composition rule, has to reach the same one definition rather than a second inline copy.)
-	BACKEND_API ibSchemaMaterialize& Guard(const wxString& expr, const ibQueryPredicatePtr& regenExpr = nullptr);
+	BACKEND_API ibSchemaMaterialize& Guard(const ibString& expr, const ibQueryPredicatePtr& regenExpr = nullptr);
 	ibSchemaMaterialize& Split(unsigned int shards)  { m_shards = shards > 0 ? shards : 1; return *this; }
 };
 
@@ -264,7 +264,7 @@ struct ibSchemaMaterialize
 struct ibSchemaTable
 {
 	ibMetaID                    m_id   = 0;          // the metaobject's metaID — the table match key
-	wxString                    m_name;              // physical table name
+	ibString                    m_name;              // physical table name
 	const ibBackendQueryable*   m_queryable = nullptr;  // vends the metadata for the field diff (null for a pure drop)
 
 	// EXTERNAL table — its CREATE / DROP is owned elsewhere (e.g. the shared sys_const, made by
@@ -346,12 +346,12 @@ struct ibSchemaTable
 	// Add a logical column — keyed by the column's own model id (== metaID for an attribute), so the diff
 	// matches columns across config instances by identity.
 	ibSchemaTable& Add(const ibBackendQueryColumn* qc) { m_columns.push_back({ qc->GetColumnId(), qc }); return *this; }
-	ibSchemaTable& Index(const wxString& name, std::vector<const ibBackendQueryColumn*> cols, bool unique = false) { m_indexes.push_back({ name, std::move(cols), unique }); return *this; }
+	ibSchemaTable& Index(const ibString& name, std::vector<const ibBackendQueryColumn*> cols, bool unique = false) { m_indexes.push_back({ name, std::move(cols), unique }); return *this; }
 	// The index a list reads by, BOTH ways: `name` ascending, and `name` + "D" descending for an engine that walks
 	// an index forward only (ibDialectDictionary::m_descendingIndexWord; elsewhere the twin is never made).
-	ibSchemaTable& ListIndex(const wxString& name, std::vector<const ibBackendQueryColumn*> cols) {
+	ibSchemaTable& ListIndex(const ibString& name, std::vector<const ibBackendQueryColumn*> cols) {
 		m_indexes.push_back({ name, cols, false });
-		m_indexes.push_back({ name + wxT("D"), std::move(cols), false, true });
+		m_indexes.push_back({ name + ibT("D"), std::move(cols), false, true });
 		return *this;
 	}
 
@@ -367,7 +367,7 @@ struct ibSchemaTable
 	}
 
 	// Add a DATA row (enum value / predefined value) — returns it so cells bind fluently: AddRow(uuid,name).Set(qc,val)...
-	ibSchemaSeedRow& AddRow(const ibGuid& uuid, const wxString& name = wxEmptyString)
+	ibSchemaSeedRow& AddRow(const ibGuid& uuid, const ibString& name = ibEmptyString)
 	{
 		ibSchemaSeedRow r; r.m_id = uuid; r.m_name = name;
 		m_seed.push_back(std::move(r));
@@ -393,7 +393,7 @@ struct ibSchemaTable
 // `hashColumnId` gives the hash column an IDENTITY, so the differ can ADD it to an existing table and
 // DROP it again when a key narrows — a scaffold column is created with its table and never migrated,
 // which would leave a register that gained an analytic with a table shaped for the old key.
-BACKEND_API void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
+BACKEND_API void ibDeclareDerivedKey(ibSchemaTable& table, const ibString& tableName,
                                      const std::vector<const ibBackendQueryColumn*>& keyCols,
                                      ibMetaID hashColumnId);
 
@@ -408,7 +408,7 @@ BACKEND_API void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& table
 // equalities that were kept. Cut greedily from the end it was the PERIOD that went first, and the index a
 // register with many dimensions got could narrow by them and then walk the key's whole history. With a
 // closing column the cut takes trailing `cols` instead and the closing one stays last.
-BACKEND_API void ibDeclareLookupIndex(ibSchemaTable& table, const wxString& indexName,
+BACKEND_API void ibDeclareLookupIndex(ibSchemaTable& table, const ibString& indexName,
                                       const std::vector<const ibBackendQueryColumn*>& cols,
                                       const ibBackendQueryColumn* closing = nullptr);
 
@@ -430,7 +430,7 @@ public:
 
 	// Find-or-create — for a SHARED table several metaobjects extend (sys_const: every constant is one of
 	// its columns). Returns the existing table if present, else a fresh one.
-	ibSchemaTable& Shared(ibMetaID id, const wxString& name);
+	ibSchemaTable& Shared(ibMetaID id, const ibString& name);
 
 	const std::deque<ibSchemaTable>& Tables() const { return m_tables; }
 	const ibSchemaTable*             Find(ibMetaID id) const;

@@ -31,7 +31,7 @@ namespace {
 
 // One output column, named. The driver reads the NAME only, so a schema entry
 // with no query column behind it is enough here.
-ibQueryLowering::OutputColumn Col(const wxString& name) {
+ibQueryLowering::OutputColumn Col(const ibString& name) {
 	ibQueryLowering::OutputColumn c;
 	c.m_name = name;
 	return c;
@@ -87,7 +87,7 @@ std::shared_ptr<ibSpreadsheetObject> MakeDocument() {
 // dimension columns — a level may be made of SEVERAL fields, so "the n-th dimension column" and
 // "the n-th level" stopped being the same number. A schema entry with no level (-1) is not a
 // dimension the layout can place, so every Dim() here names its own.
-ibQueryLowering::OutputColumn Dim(const wxString& name, int level) {
+ibQueryLowering::OutputColumn Dim(const ibString& name, int level) {
 	ibQueryLowering::OutputColumn c;
 	c.m_name = name;
 	c.m_role = ibQueryLowering::ibColumnRole::Dimension;
@@ -95,7 +95,7 @@ ibQueryLowering::OutputColumn Dim(const wxString& name, int level) {
 	return c;
 }
 
-ibQueryLowering::OutputColumn Measure(const wxString& name) {
+ibQueryLowering::OutputColumn Measure(const ibString& name) {
 	ibQueryLowering::OutputColumn c;
 	c.m_name = name;
 	c.m_role = ibQueryLowering::ibColumnRole::Measure;
@@ -104,7 +104,7 @@ ibQueryLowering::OutputColumn Measure(const wxString& name) {
 
 // A PROJECTED FIELD — what a DETAIL row says about itself. Not a dimension and not a figure, which
 // is exactly the role the lowering stamps on everything a query merely selects.
-ibQueryLowering::OutputColumn Detail(const wxString& name) {
+ibQueryLowering::OutputColumn Detail(const ibString& name) {
 	ibQueryLowering::OutputColumn c;
 	c.m_name = name;
 	c.m_role = ibQueryLowering::ibColumnRole::Detail;

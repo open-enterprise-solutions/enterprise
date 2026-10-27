@@ -9,7 +9,7 @@
 // because a barrier IS a registered type. The registry RAISES on a name nobody
 // has, and that raise is the point — a declared type that does not exist must
 // fail at compile time rather than become an empty value at run time.
-inline ibClassID ib_type_clsid(const wxString& typeName)
+inline ibClassID ib_type_clsid(const ibString& typeName)
 {
 	return typeName.IsEmpty() ? 0 : ibValue::GetIDObjectFromString(typeName);
 }
@@ -124,9 +124,9 @@ struct ibByteUnit {
 	ibParamRunUnit	 m_param3;
 	ibParamRunUnit	 m_param4;			 // - used for optimization
 
-	wxString	 m_strModuleName;	 // module name (since it is possible to include connections from different modules)
-	wxString	 m_strDocPath; 	 	 // unique path to the document
-	wxString	 m_strFileName; 	 // path to the file (if external processing)
+	ibString	 m_strModuleName;	 // module name (since it is possible to include connections from different modules)
+	ibString	 m_strDocPath; 	 	 // unique path to the document
+	ibString	 m_strFileName; 	 // path to the file (if external processing)
 };
 
 struct ibByteCode {
@@ -158,7 +158,7 @@ struct ibByteCode {
 		// parallel ibByteFunction::m_listParamRealName vector — the name
 		// now travels with the param's own data (debugger SendStack +
 		// lambda missing-arg diagnostics read it).
-		wxString    m_strName;
+		ibString    m_strName;
 	};
 
 	// Symbol entry in m_listVar / ibByteFunction::m_listLocals (both
@@ -206,7 +206,7 @@ struct ibByteCode {
 		// both m_listVar and m_listLocals are vectors keyed by this
 		// field via case-insensitive find_if. Debugger renders this so
 		// the variable list matches the user's source.
-		wxString  m_strRealName;
+		ibString  m_strRealName;
 
 		// Compile-time scope nesting depth at the var's declaration
 		// site. 0 = fn-frame / module-body level (always visible).
@@ -224,7 +224,7 @@ struct ibByteCode {
 		// prop index in the parent context value, and access compiles
 		// to OPER_GET_A on the parent var. Mirrored from compile-side
 		// ibVariable::m_strContext.
-		wxString  m_strContext;
+		ibString  m_strContext;
 
 		ibByteCodeVarInfo() = default;
 		ibByteCodeVarInfo(long slot) : m_slotIndex(slot) {}
@@ -329,12 +329,12 @@ struct ibByteCode {
 		// Original-cased name as written by the user. Canonical
 		// identifier on m_listFunc — vector lookup goes through
 		// case-insensitive find_if on this field.
-		wxString  m_strRealName;
+		ibString  m_strRealName;
 		// Parent-context name for context-method entries (e.g. method
 		// of "MANAGER"). Empty for regular module functions. When set,
 		// caller emits OPER_CALL_METHOD on the parent context — analogous
 		// to ibByteCodeVarInfo::m_strContext for context-props.
-		wxString  m_strContext;
+		ibString  m_strContext;
 
 		// Function-scope symbol table — all named variables visible
 		// inside this function's frame (params + locals + temps).
@@ -351,7 +351,7 @@ struct ibByteCode {
 		//
 		// Storage is a vector — symmetric with bc-level m_listVar.
 		// Entry name lives on m_strRealName; lookup via find_if +
-		// CompareString. Eval host-function path (compileContext.cpp's
+		// IsSameAs. Eval host-function path (compileContext.cpp's
 		// GetVariable bc walk) reads this to resolve the host's locals
 		// at depth=1 from an eval expression.
 		std::vector<ibByteCodeVarInfo> m_listLocals;
@@ -440,7 +440,7 @@ public:
 		int                    depth = 0;
 		explicit operator bool() const { return fn != nullptr; }
 	};
-	ResolvedFunc ResolveFunction(const wxString& funcName, int fullVisDepth = 0) const;
+	ResolvedFunc ResolveFunction(const ibString& funcName, int fullVisDepth = 0) const;
 
 	// Convenience overload returning a synthesized compile-context
 	// variable for callers that walk bc.m_parent chain in their own
@@ -461,7 +461,7 @@ public:
 	// the VALUE through IsPropScoped - NOT here, and not from a copy on the
 	// variable: that copy existed, rode into the AOT blob, and was read by no one.
 	template<typename CompileVar>
-	bool FindVariable(const wxString& strVarName, std::shared_ptr<CompileVar>& foundedVar) const {
+	bool FindVariable(const ibString& strVarName, std::shared_ptr<CompileVar>& foundedVar) const {
 		auto it = std::find_if(m_listVar.begin(), m_listVar.end(),
 			[&](const auto& v) {
 				// A CHILD SEES ITS PARENT ENTIRE EXCEPT THE PARENT'S OWN PRIVATE
@@ -476,7 +476,7 @@ public:
 				// two answers depending on which road found it, and widening either
 				// road alone moved names between depths on that road only.
 				if (v.IsLocal()) return false;
-				return stringUtils::CompareString(strVarName, v.m_strRealName);
+				return stringUtils::IsSameAs(strVarName, v.m_strRealName);
 			});
 		if (it == m_listVar.end()) {
 			foundedVar = nullptr;
@@ -491,11 +491,11 @@ public:
 	//   - Export / ContextMethod: visible cross-bc.
 	//   - Local: private; not visible cross-bc.
 	template<typename CompileFn>
-	bool FindFunction(const wxString& strFuncName, std::shared_ptr<CompileFn>& foundedFunc) const {
+	bool FindFunction(const ibString& strFuncName, std::shared_ptr<CompileFn>& foundedFunc) const {
 		auto it = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 			[&](const auto& fn) {
 				if (fn.IsLocal()) return false;
-				return stringUtils::CompareString(strFuncName, fn.m_strRealName);
+				return stringUtils::IsSameAs(strFuncName, fn.m_strRealName);
 			});
 		if (it == m_listFunc.end()) {
 			foundedFunc = nullptr;
@@ -649,7 +649,7 @@ public:
 		m_descriptorClsid = 0;
 		m_lStartModule = 0;
 		m_lVarCount = 0;
-		m_strModuleName = wxEmptyString;
+		m_strModuleName = ibEmptyString;
 		m_bCompile = false;
 		m_bExpressionOnly = false;
 		m_parent = nullptr;
@@ -823,7 +823,7 @@ public:
 
 	long m_lVarCount = 0; // number of local variables in the module
 	long m_lStartModule = 0; // beginning of the module start position
-	wxString m_strModuleName;//name of the executable module to which the bytecode belongs
+	ibString m_strModuleName;//name of the executable module to which the bytecode belongs
 
 	std::vector <ibByteUnit> m_listCode;//executable code of the module
 	std::vector <ibValue> m_listConst;//list of module constants
@@ -901,7 +901,7 @@ public:
 	// matches kind ∈ {External, Context} entries by name. Silently
 	// no-ops if the name isn't declared (extra bindings allowed; the
 	// runtime only reads what bytecode declared).
-	void SetVar(const wxString& name, ibValue* value);
+	void SetVar(const ibString& name, ibValue* value);
 
 	bool                          IsDelta()  const { return m_delta; }
 	void                          SetDelta(bool delta) { m_delta = delta; }

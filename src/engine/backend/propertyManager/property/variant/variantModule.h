@@ -8,10 +8,10 @@ class BACKEND_API ibVariantDataModule : public wxVariantData {
 public:
 
 	//set module code 
-	void SetModuleText(const wxString& moduleText) { m_moduleData = moduleText; }
-	wxString GetModuleText() const { return m_moduleData; }
+	void SetModuleText(const ibString& moduleText) { m_moduleData = moduleText; }
+	const ibString& GetModuleText() const { return m_moduleData; }
 
-	ibVariantDataModule(const wxString& moduleData = wxEmptyString) : m_moduleData(moduleData) {}
+	ibVariantDataModule(const ibString& moduleData = ibEmptyString) : m_moduleData(moduleData) {}
 
 	virtual bool Eq(wxVariantData& data) const {
 		ibVariantDataModule* srcData = dynamic_cast<ibVariantDataModule*>(&data);
@@ -33,10 +33,10 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataModule"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataModule"); }
 
 protected:
-	wxString m_moduleData;
+	ibString m_moduleData;
 };
 
 #endif

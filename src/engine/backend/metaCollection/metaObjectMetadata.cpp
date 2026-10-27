@@ -20,7 +20,7 @@
 
 #include "backend/metaCollection/metaLanguageObject.h"
 
-wxString ibValueMetaObjectConfiguration::GetLangCode() const
+ibString ibValueMetaObjectConfiguration::GetLangCode() const
 {
 	const ibValueMetaObjectLanguage* language =
 		FindAnyObjectByFilter<ibValueMetaObjectLanguage>(GetLanguage());
@@ -28,22 +28,22 @@ wxString ibValueMetaObjectConfiguration::GetLangCode() const
 	if (language != nullptr)
 		return language->GetLangCode();
 
-	return wxT("");
+	return ibT("");
 }
 
 ibValueMetaObjectConfiguration::ibValueMetaObjectConfiguration() : ibValueMetaObject(configurationDefaultName)
 {
 	//set default proc
-	(*m_propertyModuleConfiguration)->SetDefaultProcedure(wxT("BeforeStart"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyModuleConfiguration)->SetDefaultProcedure(wxT("OnStart"), ibContentHelper::eProcedureHelper);
-	(*m_propertyModuleConfiguration)->SetDefaultProcedure(wxT("BeforeExit"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyModuleConfiguration)->SetDefaultProcedure(wxT("OnExit"), ibContentHelper::eProcedureHelper);
+	(*m_propertyModuleConfiguration)->SetDefaultProcedure(ibT("BeforeStart"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyModuleConfiguration)->SetDefaultProcedure(ibT("OnStart"), ibContentHelper::eProcedureHelper);
+	(*m_propertyModuleConfiguration)->SetDefaultProcedure(ibT("BeforeExit"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyModuleConfiguration)->SetDefaultProcedure(ibT("OnExit"), ibContentHelper::eProcedureHelper);
 
 	// ONE procedure, and it is the module's whole purpose: fill the session
 	// parameters. It runs for every session — client, web and background job alike —
 	// before the first read, which is why row access can be written against what it
 	// sets.
-	(*m_propertyModuleSession)->SetDefaultProcedure(wxT("SetSessionParameters"), ibContentHelper::eProcedureHelper);
+	(*m_propertyModuleSession)->SetDefaultProcedure(ibT("SetSessionParameters"), ibContentHelper::eProcedureHelper);
 
 	//set def metaid
 	m_metaId = defaultMetaID;
@@ -63,7 +63,7 @@ bool ibValueMetaObjectConfiguration::ReadData(const ibDataNode& node)
 	m_propertyModuleSession->SetNodeValue(node.GetProperty(m_propertyModuleSession->GetName()));
 	m_propertySyntax->SetNodeValue(node.GetProperty(m_propertySyntax->GetName()));
 
-	m_homePage.ReadNode(node.GetProperty(wxT("HomePage")));
+	m_homePage.ReadNode(node.GetProperty(ibT("HomePage")));
 
 	return true;
 }
@@ -80,7 +80,7 @@ bool ibValueMetaObjectConfiguration::WriteData(ibDataNode& node) const
 
 	ibDataValue homePageValue;
 	if (m_homePage.WriteNode(homePageValue))
-		node.SetProperty(wxT("HomePage"), homePageValue);
+		node.SetProperty(ibT("HomePage"), homePageValue);
 
 	return true;
 }

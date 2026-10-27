@@ -30,8 +30,8 @@ public:
 
 protected:
 
-	virtual bool DoSaveDocument(const wxString&) override { return true; }
-	virtual bool DoOpenDocument(const wxString&) override { return true; }
+	virtual bool DoSaveDocument(const ibString&) override { return true; }
+	virtual bool DoOpenDocument(const ibString&) override { return true; }
 
 private:
 
@@ -62,7 +62,7 @@ public:
 	virtual bool OnClose(bool deleteWindow = true) override;
 
 	// ⚠ ON THE SERVER'S THREAD — the entry the desktop's notifier built, kept, and the client told its frame changed.
-	virtual void OnMcpExchange(const wxString& method, const wxString& request, const wxString& answer) override;
+	virtual void OnMcpExchange(const ibString& method, const ibString& request, const ibString& answer) override;
 
 private:
 
@@ -73,7 +73,7 @@ private:
 
 	// ⚠ WRITTEN ON THE SERVER'S THREAD, READ ON THE CLIENT'S (OnDraw) — the one place the two meet here.
 	std::mutex m_transcriptMutex;
-	std::vector<wxString> m_transcript;
+	std::vector<ibString> m_transcript;
 	// ⭐ WAITING IS A STATE — from Send until an answer lands; the answer is what ends it, never a timeout.
 	bool m_waiting = false;
 

@@ -16,9 +16,9 @@ namespace {
 
 // WHAT A QUERY TEXT OFFERS — written as the settings windows' questions write it (ComposerSettings: no Id, a field of a
 // parsed text stands behind no attribute), with the parser's complaint when it offers none.
-void WriteQueryFields(ibDataNode& into, const wxString& text, const ibMetaData* metaData)
+void WriteQueryFields(ibDataNode& into, const ibString& text, const ibMetaData* metaData)
 {
-	wxString error;
+	ibString error;
 	ibDataNode& fields = into.Child(ibProtocol::ibView::ibComposer::Fields);
 	std::vector<ibTypeDescription> types;
 	for (const ibQueryConstructorField& field : ibQueryFieldsOfText(text, metaData, &error)) {
@@ -34,11 +34,11 @@ void WriteQueryFields(ibDataNode& into, const wxString& text, const ibMetaData* 
 
 // WHAT A DYNAMIC LIST OFFERS — the desktop's list settings window's answer (ibListSettingsPanel::BindFieldSource): the
 // fields of the table the list IS, and what its query adds on top; a name the table already offers is not added twice.
-void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const wxString& text, const ibMetaData* metaData)
+void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const ibString& text, const ibMetaData* metaData)
 {
 	ibDataNode& fields = into.Child(ibProtocol::ibView::ibComposer::Fields);
 	std::vector<ibTypeDescription> types;
-	std::vector<wxString> names;
+	std::vector<ibString> names;
 
 	ibQueryableFactory* const factory = metaData != nullptr ? metaData->GetSourceFactory() : nullptr;
 	if (const ibQueryableSourceDescriptor* const descriptor = (factory != nullptr && mainTable != wxNOT_FOUND)
@@ -57,11 +57,11 @@ void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const wxString&
 		}
 	}
 
-	wxString error;
+	ibString error;
 	if (!text.IsEmpty()) {
 		for (const ibQueryConstructorField& field : ibQueryFieldsOfText(text, metaData, &error)) {
 			bool already = false;
-			for (const wxString& name : names)
+			for (const ibString& name : names)
 				already = already || name.IsSameAs(field.m_name, false);
 			if (already)
 				continue;
@@ -149,7 +149,7 @@ bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, con
 {
 	switch (static_cast<ibProtocol::ibView::ibComposer::ibRequest>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibComposer::Kind))) {
 	case ibProtocol::ibView::ibComposer::ibRequest::Fields:
-		WriteQueryFields(response, request.GetValue<wxString>(ibProtocol::ibView::ibComposer::Text), metaData);
+		WriteQueryFields(response, request.GetValue<ibString>(ibProtocol::ibView::ibComposer::Text), metaData);
 		return true;
 	case ibProtocol::ibView::ibComposer::ibRequest::Expand: {
 		std::vector<ibMetaID> targets;
@@ -165,7 +165,7 @@ bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, con
 	case ibProtocol::ibView::ibComposer::ibRequest::Source:
 		WriteListSourceFields(response, request.Has(ibProtocol::ibView::ibComposer::Id)
 			? static_cast<ibMetaID>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibComposer::Id)) : static_cast<ibMetaID>(wxNOT_FOUND),
-			request.GetValue<wxString>(ibProtocol::ibView::ibComposer::Text), metaData);
+			request.GetValue<ibString>(ibProtocol::ibView::ibComposer::Text), metaData);
 		return true;
 	default:
 		return false;

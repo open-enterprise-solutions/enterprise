@@ -13,15 +13,14 @@
 #include "core/fileSystem.h"
 #include "core/stringUtils.h"
 
-#include <wx/dir.h>
-#include <wx/file.h>
-#include <wx/filename.h>
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>
 
 #include <nlohmann/json.hpp>
 
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <utility>
@@ -57,8 +56,8 @@ bool TryParseKind(const std::string& s, ibHelpKind& kind) {
 	return false;
 }
 
-wxString Utf8(const std::string& s) {
-	return wxString::FromUTF8(s.c_str(), s.size());
+ibString Utf8(const std::string& s) {
+	return ibString::FromUTF8(s.c_str(), s.size());
 }
 
 // Safe field reader — returns default when the key is missing OR present
@@ -77,8 +76,8 @@ bool SafeBool(const json& obj, const char* key, bool def) {
 	return it->get<bool>();
 }
 
-std::vector<wxString> SafeStrArray(const json& obj, const char* key) {
-	std::vector<wxString> out;
+std::vector<ibString> SafeStrArray(const json& obj, const char* key) {
+	std::vector<ibString> out;
 	auto it = obj.find(key);
 	if (it == obj.end() || !it->is_array()) return out;
 	for (const auto& v : *it) {
@@ -87,32 +86,27 @@ std::vector<wxString> SafeStrArray(const json& obj, const char* key) {
 	return out;
 }
 
-// Read an entire file into a string. Returns empty + sets *ok = false on
-// any I/O error. wxFile is used so the loader plays nicely with platforms
-// where std::ifstream's path encoding differs (Windows non-ASCII).
-// wxInvalidOffset from Length() = I/O failure, not "empty file" — handled
-// explicitly. wxFile::Read can return short on signal interrupt / certain
-// network filesystems, so we loop until done or a zero-progress read
-// terminates the loop as a hard failure.
-std::string ReadFile(const wxString& path, bool* ok) {
-	*ok = false;
-	wxFile f(path, wxFile::read);
-	if (!f.IsOpened()) return {};
+// The path of `name` inside `folder` — what wxFileName(folder, name).GetFullPath() gave.
+ibString PathIn(const ibString& folder, const ibString& name) {
+	return ibString((ibPathOf(folder) / ibPathOf(name)).wstring());
+}
 
-	const wxFileOffset len = f.Length();
-	if (len == wxInvalidOffset) return {};   // I/O error
-	if (len == 0)               { *ok = true; return {}; }
-	if (len < 0)                return {};   // defensive — wxInvalidOffset is -1 historically
+// Read an entire file into a string. Returns empty + sets *ok = false on
+// any I/O error. The stream opens the std::filesystem path (ibPathOf), so a
+// non-ASCII name on Windows opens as it is. A size that cannot be read is an
+// I/O failure, not "empty file"; a read shorter than the size is one too.
+std::string ReadFile(const ibString& path, bool* ok) {
+	*ok = false;
+	std::ifstream f(ibPathOf(path), std::ios::binary);
+	if (!f) return {};
+
+	std::error_code error;
+	const std::uintmax_t len = std::filesystem::file_size(ibPathOf(path), error);
+	if (error)    return {};   // I/O error
+	if (len == 0) { *ok = true; return {}; }
 
 	std::string buf(static_cast<size_t>(len), '\0');
-	size_t totalRead = 0;
-	const size_t want = static_cast<size_t>(len);
-	while (totalRead < want) {
-		ssize_t got = f.Read(&buf[totalRead], want - totalRead);
-		if (got < 0)                return {};                       // hard error
-		if (got == 0)               return {};                       // unexpected EOF / no progress
-		totalRead += static_cast<size_t>(got);
-	}
+	if (!f.read(&buf[0], static_cast<std::streamsize>(len))) return {};   // short read / hard error
 	// Strip UTF-8 BOM if present (§2.3 — loader tolerates it).
 	if (buf.size() >= 3 &&
 	    static_cast<unsigned char>(buf[0]) == 0xEF &&
@@ -142,8 +136,8 @@ std::string ReadFile(const wxString& path, bool* ok) {
 // Empty / 1-char input → "en" as a defensive minimum so the loader
 // has *something* to look for (early-boot edge cases where wxLocale
 // hasn't initialised yet).
-wxString CanonicaliseLocale(const wxString& raw) {
-	if (raw.length() < 2) return wxT("en");
+ibString CanonicaliseLocale(const ibString& raw) {
+	if (raw.length() < 2) return ibT("en");
 	return raw.Left(2).Lower();
 }
 
@@ -173,10 +167,10 @@ namespace {
 //
 // Missing or malformed is a WARNING and never a failure: the tree falls back to
 // keys, which looks untranslated rather than broken.
-std::map<wxString, wxString> ParseCategories(const std::string&            raw,
-                                             const wxString&               bucketPath,
+std::map<ibString, ibString> ParseCategories(const std::string&            raw,
+                                             const ibString&               bucketPath,
                                              std::vector<ibHelpLoadError>& errors) {
-	std::map<wxString, wxString> out;
+	std::map<ibString, ibString> out;
 
 	json doc;
 	try {
@@ -185,8 +179,8 @@ std::map<wxString, wxString> ParseCategories(const std::string&            raw,
 		ibHelpLoadError e;
 		e.bucketPath = bucketPath;
 		e.severity   = ibHelpLoadSeverity::kWarning;
-		e.message    = wxString::Format(
-		    wxT("Malformed category dictionary, section names fall back to keys: %s"),
+		e.message    = ibString::Format(
+		    ibT("Malformed category dictionary, section names fall back to keys: %s"),
 		    Utf8(ex.what()));
 		errors.push_back(std::move(e));
 		return out;
@@ -204,7 +198,7 @@ std::map<wxString, wxString> ParseCategories(const std::string&            raw,
 }
 
 void ParseBucket(const std::string&            raw,
-                 const wxString&               bucketPath,
+                 const ibString&               bucketPath,
                  const ibHelpClassName&        className,
                  std::vector<ibHelpEntry>&     out,
                  std::vector<ibHelpLoadError>& errors) {
@@ -215,16 +209,16 @@ void ParseBucket(const std::string&            raw,
 		ibHelpLoadError e;
 		e.bucketPath = bucketPath;
 		e.severity   = ibHelpLoadSeverity::kFatal;
-		e.message    = wxString::Format(
-		    wxT("Malformed JSON: %s"), Utf8(ex.what()));
+		e.message    = ibString::Format(
+		    ibT("Malformed JSON: %s"), Utf8(ex.what()));
 		errors.push_back(std::move(e));
 		return;
 	} catch (const std::exception& ex) {
 		ibHelpLoadError e;
 		e.bucketPath = bucketPath;
 		e.severity   = ibHelpLoadSeverity::kFatal;
-		e.message    = wxString::Format(
-		    wxT("I/O / allocation failure: %s"), Utf8(ex.what()));
+		e.message    = ibString::Format(
+		    ibT("I/O / allocation failure: %s"), Utf8(ex.what()));
 		errors.push_back(std::move(e));
 		return;
 	}
@@ -233,13 +227,13 @@ void ParseBucket(const std::string&            raw,
 	// metadata-export convention. Missing or wrong format is fatal for
 	// the bucket.
 	const std::string fmt = SafeStr(doc, "format");
-	const wxString    expectedFmt = IB_HELP_FORMAT_NAME;
+	const ibString    expectedFmt = IB_HELP_FORMAT_NAME;
 	if (fmt.empty() || Utf8(fmt) != expectedFmt) {
 		ibHelpLoadError e;
 		e.bucketPath = bucketPath;
 		e.severity   = ibHelpLoadSeverity::kFatal;
-		e.message    = wxString::Format(
-		    wxT("Unexpected or missing format identifier (expected '%s', got '%s')."),
+		e.message    = ibString::Format(
+		    ibT("Unexpected or missing format identifier (expected '%s', got '%s')."),
 		    expectedFmt, Utf8(fmt));
 		errors.push_back(std::move(e));
 		return;
@@ -251,7 +245,7 @@ void ParseBucket(const std::string&            raw,
 		ibHelpLoadError e;
 		e.bucketPath = bucketPath;
 		e.severity   = ibHelpLoadSeverity::kFatal;
-		e.message    = wxT("Missing or invalid schema_version.");
+		e.message    = ibT("Missing or invalid schema_version.");
 		errors.push_back(std::move(e));
 		return;
 	}
@@ -259,8 +253,8 @@ void ParseBucket(const std::string&            raw,
 		ibHelpLoadError e;
 		e.bucketPath = bucketPath;
 		e.severity   = ibHelpLoadSeverity::kFatal;
-		e.message    = wxString::Format(
-		    wxT("Schema version %d is newer than loader (%d)."),
+		e.message    = ibString::Format(
+		    ibT("Schema version %d is newer than loader (%d)."),
 		    schemaVersion, kIbHelpSchemaVersion);
 		errors.push_back(std::move(e));
 		return;
@@ -271,7 +265,7 @@ void ParseBucket(const std::string&            raw,
 		ibHelpLoadError e;
 		e.bucketPath = bucketPath;
 		e.severity   = ibHelpLoadSeverity::kFatal;
-		e.message    = wxT("Missing or invalid 'entries' array.");
+		e.message    = ibT("Missing or invalid 'entries' array.");
 		errors.push_back(std::move(e));
 		return;
 	}
@@ -286,7 +280,7 @@ void ParseBucket(const std::string&            raw,
 				ibHelpLoadError err;
 				err.bucketPath = bucketPath;
 				err.severity   = ibHelpLoadSeverity::kEntrySkipped;
-				err.message    = wxT("Entry without id.");
+				err.message    = ibT("Entry without id.");
 				errors.push_back(std::move(err));
 				continue;
 			}
@@ -309,8 +303,8 @@ void ParseBucket(const std::string&            raw,
 				ibHelpLoadError warn;
 				warn.bucketPath = bucketPath;
 				warn.severity   = ibHelpLoadSeverity::kWarning;
-				warn.message    = wxString::Format(
-					wxT("%s: kind '%s' is not a word this build knows, so the article is read as 'keyword'."),
+				warn.message    = ibString::Format(
+					ibT("%s: kind '%s' is not a word this build knows, so the article is read as 'keyword'."),
 					e.id, Utf8(kindWord));
 				errors.push_back(std::move(warn));
 			}
@@ -328,17 +322,17 @@ void ParseBucket(const std::string&            raw,
 				warn.bucketPath = bucketPath;
 				warn.severity   = ibHelpLoadSeverity::kWarning;
 				const ibClassID asked = classIt->is_number_unsigned() ? classIt->get<ibClassID>() : 0;
-				const wxString registered = asked != 0 && className ? className(asked) : wxString();
+				const ibString registered = asked != 0 && className ? className(asked) : ibString();
 				if (asked == 0 || (className && registered.IsEmpty())) {
-					warn.message = wxString::Format(
-						wxT("%s: class_id %s names no registered class."), e.id, Utf8(classIt->dump()));
+					warn.message = ibString::Format(
+						ibT("%s: class_id %s names no registered class."), e.id, Utf8(classIt->dump()));
 					errors.push_back(std::move(warn));
 				}
 				else {
 					e.classId = asked;
-					if (className && !stringUtils::CompareString(registered, e.nameEn)) {
-						warn.message = wxString::Format(
-							wxT("%s: class_id %s is registered as '%s', but the article is about '%s'."),
+					if (className && !stringUtils::IsSameAs(registered, e.nameEn)) {
+						warn.message = ibString::Format(
+							ibT("%s: class_id %s is registered as '%s', but the article is about '%s'."),
 							e.id, Utf8(classIt->dump()), registered, e.nameEn);
 						errors.push_back(std::move(warn));
 					}
@@ -349,11 +343,11 @@ void ParseBucket(const std::string&            raw,
 			const auto modeArr = SafeStrArray(obj, "modes");
 			if (!modeArr.empty()) {
 				unsigned mask = 0u;
-				for (const wxString& m : modeArr) {
-					const wxString low = m.Lower();
-					if      (low == wxT("ves") || low == wxT("vbs"))
+				for (const ibString& m : modeArr) {
+					const ibString low = m.Lower();
+					if      (low == ibT("ves") || low == ibT("vbs"))
 						mask |= ibHelpEntry::kModeVes;
-					else if (low == wxT("ces"))
+					else if (low == ibT("ces"))
 						mask |= ibHelpEntry::kModeCes;
 				}
 				if (mask != 0u) e.modes = mask;
@@ -364,15 +358,15 @@ void ParseBucket(const std::string&            raw,
 			ibHelpLoadError err;
 			err.bucketPath = bucketPath;
 			err.severity   = ibHelpLoadSeverity::kEntrySkipped;
-			err.message    = wxString::Format(
-			    wxT("Entry parse error: %s"), Utf8(ex.what()));
+			err.message    = ibString::Format(
+			    ibT("Entry parse error: %s"), Utf8(ex.what()));
 			errors.push_back(std::move(err));
 		} catch (const std::exception& ex) {
 			ibHelpLoadError err;
 			err.bucketPath = bucketPath;
 			err.severity   = ibHelpLoadSeverity::kEntrySkipped;
-			err.message    = wxString::Format(
-			    wxT("Entry construction error: %s"), Utf8(ex.what()));
+			err.message    = ibString::Format(
+			    ibT("Entry construction error: %s"), Utf8(ex.what()));
 			errors.push_back(std::move(err));
 		}
 	}
@@ -401,55 +395,51 @@ public:
 	virtual bool Exists() const = 0;
 
 	// Human-readable label for error records (path to dir / zip).
-	virtual wxString DisplayRoot() const = 0;
+	virtual ibString DisplayRoot() const = 0;
 
 	// All *.json bucket names except those starting with '_'
 	// (the leading-underscore prefix is reserved for category
 	// dictionary and other meta files).
-	virtual std::vector<wxString> ListBucketNames() const = 0;
+	virtual std::vector<ibString> ListBucketNames() const = 0;
 
 	// Read a bucket's full content as a UTF-8 byte string. Returns
 	// empty + *ok = false on I/O failure.
-	virtual std::string ReadBucket(const wxString& bucketName,
+	virtual std::string ReadBucket(const ibString& bucketName,
 	                                bool* ok) const = 0;
 
 	// Display string for one bucket — passed into error records.
-	virtual wxString BucketDisplayPath(const wxString& bucketName) const = 0;
+	virtual ibString BucketDisplayPath(const ibString& bucketName) const = 0;
 };
 
 class FileSystemSource final : public HelpBucketSource {
 public:
-	explicit FileSystemSource(const wxString& localeDir)
+	explicit FileSystemSource(const ibString& localeDir)
 	    : m_dir(localeDir) {}
 
-	bool Exists() const override { return wxDir::Exists(m_dir); }
-	wxString DisplayRoot() const override { return m_dir; }
+	bool Exists() const override { return ibDirExists(m_dir); }
+	ibString DisplayRoot() const override { return m_dir; }
 
-	std::vector<wxString> ListBucketNames() const override {
-		std::vector<wxString> out;
-		if (!wxDir::Exists(m_dir)) return out;
-		wxDir dir(m_dir);
-		if (!dir.IsOpened()) return out;
-		wxString name;
-		bool cont = dir.GetFirst(&name, wxT("*.json"), wxDIR_FILES);
-		while (cont) {
-			if (!name.StartsWith(wxT("_"))) out.push_back(name);
-			cont = dir.GetNext(&name);
+	std::vector<ibString> ListBucketNames() const override {
+		std::vector<ibString> out;
+		std::error_code error;
+		for (std::filesystem::directory_iterator it(ibPathOf(m_dir), error), end; !error && it != end; it.increment(error)) {
+			if (!it->is_regular_file(error) || it->path().extension() != ".json") continue;
+			const ibString name(it->path().filename().wstring());
+			if (!name.StartsWith(ibT("_"))) out.push_back(name);
 		}
 		return out;
 	}
 
-	std::string ReadBucket(const wxString& bucketName, bool* ok) const override {
-		const wxString full = wxFileName(m_dir, bucketName).GetFullPath();
-		return ReadFile(full, ok);
+	std::string ReadBucket(const ibString& bucketName, bool* ok) const override {
+		return ReadFile(BucketDisplayPath(bucketName), ok);
 	}
 
-	wxString BucketDisplayPath(const wxString& bucketName) const override {
-		return wxFileName(m_dir, bucketName).GetFullPath();
+	ibString BucketDisplayPath(const ibString& bucketName) const override {
+		return PathIn(m_dir, bucketName);
 	}
 
 private:
-	wxString m_dir;
+	ibString m_dir;
 };
 
 // Zip source — reads `<root>/<locale>.hlk` (DEFLATE zip). Loads all
@@ -458,7 +448,7 @@ private:
 // is simpler than re-scanning per ReadBucket call.
 class ZipSource final : public HelpBucketSource {
 public:
-	explicit ZipSource(const wxString& zipPath) : m_path(zipPath) {
+	explicit ZipSource(const ibString& zipPath) : m_path(zipPath) {
 		wxFileInputStream fis(zipPath);
 		if (!fis.IsOk()) return;
 		// Pin entry-name decoding to UTF-8 explicitly — Windows tar.exe
@@ -472,11 +462,11 @@ public:
 			e.reset(zis.GetNextEntry());
 			if (!e) break;
 			if (e->IsDir()) continue;
-			wxString name = e->GetName();
+			ibString name = e->GetName();
 			// Strip "./" prefix that `tar -C dir .` adds — otherwise
 			// "./_categories.json" would not match the leading-_ filter
 			// in ListBucketNames and would be loaded as a normal bucket.
-			if (name.StartsWith(wxT("./")) || name.StartsWith(wxT(".\\")))
+			if (name.StartsWith(ibT("./")) || name.StartsWith(ibT(".\\")))
 				name = name.Mid(2);
 			// Defensive: skip zero-length names (e.g. the bare "./" dir
 			// marker after strip) — wx would assert on empty iterator.
@@ -495,32 +485,32 @@ public:
 	}
 
 	bool Exists() const override { return m_ok && !m_entries.empty(); }
-	wxString DisplayRoot() const override { return m_path; }
+	ibString DisplayRoot() const override { return m_path; }
 
-	std::vector<wxString> ListBucketNames() const override {
-		std::vector<wxString> out;
+	std::vector<ibString> ListBucketNames() const override {
+		std::vector<ibString> out;
 		for (const auto& kv : m_entries) {
-			if (kv.first.StartsWith(wxT("_"))) continue;
-			if (!kv.first.EndsWith(wxT(".json"))) continue;
+			if (kv.first.StartsWith(ibT("_"))) continue;
+			if (!kv.first.EndsWith(ibT(".json"))) continue;
 			out.push_back(kv.first);
 		}
 		return out;
 	}
 
-	std::string ReadBucket(const wxString& bucketName, bool* ok) const override {
+	std::string ReadBucket(const ibString& bucketName, bool* ok) const override {
 		auto it = m_entries.find(bucketName);
 		if (it == m_entries.end()) { *ok = false; return {}; }
 		*ok = true;
 		return it->second;
 	}
 
-	wxString BucketDisplayPath(const wxString& bucketName) const override {
-		return m_path + wxT("!") + bucketName;
+	ibString BucketDisplayPath(const ibString& bucketName) const override {
+		return m_path + ibT("!") + bucketName;
 	}
 
 private:
-	wxString m_path;
-	std::map<wxString, std::string> m_entries;
+	ibString m_path;
+	std::map<ibString, std::string> m_entries;
 	bool m_ok = false;
 };
 
@@ -529,15 +519,15 @@ private:
 //   2. <root>/<locale>/    → FileSystemSource (dev / unpacked)
 // Returns nullptr when neither exists; caller surfaces kFatal.
 std::unique_ptr<HelpBucketSource>
-ResolveSource(const wxString& sourceRoot, const wxString& localeCode) {
-	const wxString hbkPath =
-	    wxFileName(sourceRoot, localeCode + wxT(".hlk")).GetFullPath();
+ResolveSource(const ibString& sourceRoot, const ibString& localeCode) {
+	const ibString hbkPath =
+	    PathIn(sourceRoot, localeCode + ibT(".hlk"));
 	if (ibFileExists(hbkPath)) {
 		auto zip = std::make_unique<ZipSource>(hbkPath);
 		if (zip->Exists()) return zip;
 	}
-	const wxString dirPath = wxFileName(sourceRoot, localeCode).GetFullPath();
-	if (wxDir::Exists(dirPath)) {
+	const ibString dirPath = PathIn(sourceRoot, localeCode);
+	if (ibDirExists(dirPath)) {
 		return std::make_unique<FileSystemSource>(dirPath);
 	}
 	return nullptr;
@@ -551,8 +541,8 @@ ResolveSource(const wxString& sourceRoot, const wxString& localeCode) {
 // LoadHelpCorpus catches that and returns an empty fallback so the
 // non-throwing contract holds end-to-end.
 std::shared_ptr<const ibHelpCorpus>
-LoadSource(const wxString&               localeCode,
-           const wxString&               sourceRoot,
+LoadSource(const ibString&               localeCode,
+           const ibString&               sourceRoot,
            ibHelpCorpus::Source          sourceTag,
            const ibHelpClassName&        className,
            std::vector<ibHelpLoadError>& errorsOut) {
@@ -567,10 +557,10 @@ LoadSource(const wxString&               localeCode,
 	// plumbing that LoadHelpCorpus no longer consults.
 	if (!source || !source->Exists()) {
 		ibHelpLoadError err;
-		err.bucketPath = wxFileName(sourceRoot, localeCode).GetFullPath();
+		err.bucketPath = PathIn(sourceRoot, localeCode);
 		err.severity   = ibHelpLoadSeverity::kFatal;
-		err.message    = wxString::Format(
-		    wxT("Help corpus not found for locale '%s' under: %s"),
+		err.message    = ibString::Format(
+		    ibT("Help corpus not found for locale '%s' under: %s"),
 		    localeCode, sourceRoot);
 		std::vector<ibHelpLoadError> errs;
 		errs.push_back(std::move(err));
@@ -582,15 +572,15 @@ LoadSource(const wxString&               localeCode,
 	std::vector<ibHelpEntry>     entries;
 	std::vector<ibHelpLoadError> localErrors;
 	const auto bucketNames = source->ListBucketNames();
-	for (const wxString& name : bucketNames) {
+	for (const ibString& name : bucketNames) {
 		bool readOk = false;
 		std::string raw = source->ReadBucket(name, &readOk);
-		const wxString displayPath = source->BucketDisplayPath(name);
+		const ibString displayPath = source->BucketDisplayPath(name);
 		if (!readOk) {
 			ibHelpLoadError e;
 			e.bucketPath = displayPath;
 			e.severity   = ibHelpLoadSeverity::kFatal;
-			e.message    = wxT("Cannot read bucket.");
+			e.message    = ibT("Cannot read bucket.");
 			localErrors.push_back(std::move(e));
 			continue;
 		}
@@ -600,8 +590,8 @@ LoadSource(const wxString&               localeCode,
 		ibHelpLoadError err;
 		err.bucketPath = source->DisplayRoot();
 		err.severity   = ibHelpLoadSeverity::kFatal;
-		err.message    = wxString::Format(
-		    wxT("Help corpus source has no bucket files: %s"),
+		err.message    = ibString::Format(
+		    ibT("Help corpus source has no bucket files: %s"),
 		    source->DisplayRoot());
 		localErrors.push_back(std::move(err));
 	}
@@ -612,15 +602,15 @@ LoadSource(const wxString&               localeCode,
 	// bucket path so operators can locate the offending file).
 	std::vector<ibHelpEntry> deduped;
 	deduped.reserve(entries.size());
-	std::unordered_map<wxString, size_t> seenAt;
+	std::unordered_map<ibString, size_t> seenAt;
 	for (auto& e : entries) {
 		auto it = seenAt.find(e.id);
 		if (it != seenAt.end()) {
 			ibHelpLoadError err;
 			err.bucketPath = source->DisplayRoot();
 			err.severity   = ibHelpLoadSeverity::kFatal;
-			err.message    = wxString::Format(
-			    wxT("Duplicate id '%s' within source corpus - second occurrence dropped."),
+			err.message    = ibString::Format(
+			    ibT("Duplicate id '%s' within source corpus - second occurrence dropped."),
 			    e.id);
 			localErrors.push_back(std::move(err));
 			continue;
@@ -639,13 +629,13 @@ LoadSource(const wxString&               localeCode,
 	// The category dictionary, asked for by name because the bucket listing
 	// skips meta files. A source without one is normal (a per-configuration
 	// corpus need not restate the platform's section names).
-	std::map<wxString, wxString> categoryNames;
+	std::map<ibString, ibString> categoryNames;
 	{
 		bool readOk = false;
-		const std::string raw = source->ReadBucket(wxT("_categories.json"), &readOk);
+		const std::string raw = source->ReadBucket(ibT("_categories.json"), &readOk);
 		if (readOk)
 			categoryNames = ParseCategories(
-			    raw, source->BucketDisplayPath(wxT("_categories.json")), localErrors);
+			    raw, source->BucketDisplayPath(ibT("_categories.json")), localErrors);
 	}
 
 	return std::make_shared<ibHelpCorpus>(
@@ -655,27 +645,27 @@ LoadSource(const wxString&               localeCode,
 
 } // namespace
 
-ibHelpLoadResult LoadHelpCorpus(const wxString& localeCode,
-                                const wxString& platformDir,
-                                const wxString& configCacheDir,
+ibHelpLoadResult LoadHelpCorpus(const ibString& localeCode,
+                                const ibString& platformDir,
+                                const ibString& configCacheDir,
                                 const ibHelpClassName& className) {
 	ibHelpLoadResult result;
-	wxString locale = CanonicaliseLocale(localeCode);
+	ibString locale = CanonicaliseLocale(localeCode);
 
 	// Graceful language fallback: if the requested language has neither
 	// a <locale>.hlk zip nor a <locale>/ directory shipped, fall back
 	// to English instead of emitting a fatal "not found" error. The
 	// user gets English help — better than no help — and a kWarning
 	// record so operators see the substitution.
-	if (locale != wxT("en") && !ResolveSource(platformDir, locale)) {
+	if (locale != ibT("en") && !ResolveSource(platformDir, locale)) {
 		ibHelpLoadError warn;
-		warn.bucketPath = wxFileName(platformDir, locale).GetFullPath();
+		warn.bucketPath = PathIn(platformDir, locale);
 		warn.severity   = ibHelpLoadSeverity::kWarning;
-		warn.message    = wxString::Format(
-		    wxT("Help corpus for locale '%s' not shipped; falling back to 'en'."),
+		warn.message    = ibString::Format(
+		    ibT("Help corpus for locale '%s' not shipped; falling back to 'en'."),
 		    locale);
 		result.errors.push_back(std::move(warn));
-		locale = wxT("en");
+		locale = ibT("en");
 	}
 
 	// Outer net for the non-throwing contract. make_shared, BuildIndexes
@@ -705,8 +695,8 @@ ibHelpLoadResult LoadHelpCorpus(const wxString& localeCode,
 	} catch (const std::exception& ex) {
 		ibHelpLoadError e;
 		e.severity = ibHelpLoadSeverity::kFatal;
-		e.message  = wxString::Format(
-		    wxT("Help corpus construction failed: %s - falling back to empty."),
+		e.message  = ibString::Format(
+		    ibT("Help corpus construction failed: %s - falling back to empty."),
 		    Utf8(ex.what()));
 		result.errors.push_back(std::move(e));
 		result.corpus.reset();

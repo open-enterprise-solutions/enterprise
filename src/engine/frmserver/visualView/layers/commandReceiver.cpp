@@ -133,7 +133,7 @@ bool ibFrontendCommandReceiver::ExecuteValueByPath(const ibCommandDescription& d
 
 // The READ twin — start the SAME walk, then read the resolved leaf's own default look (caption + picture + modifies
 // flag). outModifiesData is optional.
-bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& desc, wxString& outCaption, ibPictureDescription& outPicture,
+bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& desc, ibString& outCaption, ibPictureDescription& outPicture,
 	bool* outModifiesData, bool* outPictureAndText) const
 {
 	ibValueForm* const gate = GetCommandGateForm();
@@ -173,7 +173,7 @@ bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& d
 	if (leaf.ConvertToValue(obj) && obj != nullptr) {
 		outCaption = obj->GetSynonym();
 		if (desc.GetCommandType() == ibInterfaceCommandType_Create)
-			outCaption += wxT(": ") + wxString(_("Create"));
+			outCaption += ibT(": ") + ibString(_("Create"));
 		outPicture = ibPictureDescription(obj->GetClassType());
 		return true;
 	}
@@ -220,8 +220,8 @@ bool ibFrontendCommandReceiver::ResolveSubCommands(const ibCommandDescription& d
 
 // THE one command resolve — see the header. EVERY projection (button Update / bar BuildCommands / the inspector
 // cell via WalkCommand) routes through here, so existence + look are decided in ONE place, not guessed per-surface.
-bool ibFrontendCommandReceiver::ResolveCommand(const ibCommandDescription& desc, wxString& outCaption,
-	ibPictureDescription& outPicture, bool* outModifies, wxString* outPath, bool* outPictureAndText) const
+bool ibFrontendCommandReceiver::ResolveCommand(const ibCommandDescription& desc, ibString& outCaption,
+	ibPictureDescription& outPicture, bool* outModifies, ibString* outPath, bool* outPictureAndText) const
 {
 	// (1) The walk on THIS door — the authoritative caption / picture / modifies / default display for a FORM or GLOBAL
 	// command. picAndText defaults true (a command shows its text); a standard action overrides (Close = picture only).
@@ -259,9 +259,9 @@ bool ibFrontendCommandReceiver::ResolveCommand(const ibCommandDescription& desc,
 
 // ibBackendCommandReceiver — the command-source variant validates a binding here. Thin wrapper over ResolveCommand;
 // the inspector cell shows the full PATH name, "<not found>" when the command is gone.
-bool ibFrontendCommandReceiver::WalkCommand(const ibCommandDescription& desc, wxString* outText) const
+bool ibFrontendCommandReceiver::WalkCommand(const ibCommandDescription& desc, ibString* outText) const
 {
-	wxString caption; ibPictureDescription picture; wxString path;
+	ibString caption; ibPictureDescription picture; ibString path;
 	if (!ResolveCommand(desc, caption, picture, nullptr, &path))
 		return false;
 	if (outText != nullptr)

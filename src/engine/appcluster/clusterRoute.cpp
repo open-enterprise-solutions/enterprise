@@ -29,7 +29,7 @@ unsigned RouteOf(const std::string& message)
 	ibString token = params->GetValue<ibString>(ibProtocol::ibLogin::Token);
 	if (token.IsEmpty())
 		token = params->GetValue<ibString>(ibProtocol::ibDebug::Channel);
-	wxString hex;
+	ibString hex;
 	unsigned route = 0;
 	ibSessionToken::SplitRoute(token, hex, route);
 	return route;
@@ -53,7 +53,7 @@ void ibClusterRoute::OnBinary(std::string data)
 	if (m_relay == nullptr) {
 		m_worker = Choose(RouteOf(data));
 		if (m_worker == nullptr) {
-			ibAppClusterSay(ibJournalMark::Warning, wxT("base '%s': none of its servers serves - a client told so"),
+			ibAppClusterSay(ibJournalMark::Warning, ibT("base '%s': none of its servers serves - a client told so"),
 				m_workers.front()->GetServer().m_base);
 			m_socket->Close(ibWebSocketClose::BadGateway, "the server is not reached");
 			return;
@@ -62,7 +62,7 @@ void ibClusterRoute::OnBinary(std::string data)
 		m_worker->AddSocket();
 		m_relay = std::make_shared<ibWebSocketRelay>(m_io, "127.0.0.1", m_worker->GetPort(), nullptr,
 			m_socket->GetRequest().GetTarget(), m_socket, [name](const ibString& reason) {
-				ibAppClusterSay(ibJournalMark::Warning, wxT("base %s: %s"), name, reason);
+				ibAppClusterSay(ibJournalMark::Warning, ibT("base %s: %s"), name, reason);
 			});
 	}
 	m_relay->OnBinary(std::move(data));

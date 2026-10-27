@@ -101,7 +101,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	// the query at the caret starts, and ibLinqBlock::Parse reads it from there as the desktop does. The same answer
 	// says what is visible there and what each of those and `Data` hold (Open) — the window's opening is one question.
 	ibLinqBlock opened(m_codeStyle);
-	wxString openRefusal;
+	ibString openRefusal;
 	ibProtocolNode opening;
 	{
 		wxBusyCursor busy;
@@ -347,7 +347,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 			wxString name = wxT("Count");
 			const auto taken = [this](const wxString& candidate) {
 				for (int at = 0; at < m_totals->GetItemCount(); ++at)
-					if (stringUtils::CompareString(m_totals->GetTextValue(at, 0), candidate))
+					if (stringUtils::IsSameAs(m_totals->GetTextValue(at, 0), candidate))
 						return true;
 				return false;
 			};
@@ -355,7 +355,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 				name = wxString::Format(wxT("Count%d"), n);
 			wxVector<wxVariant> values;
 			values.push_back(wxVariant(name));
-			values.push_back(wxVariant(ibLinqTotalName(ibLinqTotal::Count)));
+			values.push_back(wxVariant(ibLinqTotalName(ibLinqTotal::Count).ToWxString()));
 			values.push_back(wxVariant(wxString()));
 			m_totals->AppendItem(values);
 			ShowResult();
@@ -925,7 +925,7 @@ void ibDialogLinqConstructor::AddSelectedAsField()
 		wxString name = field;
 		const auto taken = [&](const wxString& candidate) {
 			for (int row = 0; row < m_fields->GetItemCount(); ++row)
-				if (stringUtils::CompareString(m_fields->GetTextValue(row, 0), candidate))
+				if (stringUtils::IsSameAs(m_fields->GetTextValue(row, 0), candidate))
 					return true;
 			return false;
 		};
@@ -1007,7 +1007,7 @@ bool ibDialogLinqConstructor::SelectedField(wxString& expression, wxString& name
 	const auto taken = [this](const wxString& candidate) {
 		for (const ibDataViewListCtrl* columns : { m_groupKeys, m_totals, m_fields })
 			for (int at = 0; at < columns->GetItemCount(); ++at)
-				if (stringUtils::CompareString(columns->GetTextValue(at, 0), candidate))
+				if (stringUtils::IsSameAs(columns->GetTextValue(at, 0), candidate))
 					return true;
 		return false;
 	};
@@ -1024,10 +1024,10 @@ void ibDialogLinqConstructor::NameTheGroup()
 	// `grp`, numbered when a variable visible here or a source already has the name.
 	const auto taken = [this](const wxString& candidate) {
 		for (const wxString& variable : m_variables)
-			if (stringUtils::CompareString(variable, candidate))
+			if (stringUtils::IsSameAs(variable, candidate))
 				return true;
 		for (int at = 0; at < m_sources->GetItemCount(); ++at)
-			if (stringUtils::CompareString(m_sources->GetTextValue(at, 0), candidate))
+			if (stringUtils::IsSameAs(m_sources->GetTextValue(at, 0), candidate))
 				return true;
 		return false;
 	};
@@ -1046,7 +1046,7 @@ void ibDialogLinqConstructor::AddSelectedAsGroupKey()
 	// ⭐ A KEY IS A COLUMN OF THE ANSWER. The same field already among the fields - picked there before the
 	// query grouped - would be written a second time, reading a row the answer no longer has: it moves.
 	for (int at = m_fields->GetItemCount() - 1; at >= 0; --at)
-		if (stringUtils::CompareString(wxString(m_fields->GetTextValue(at, 1)).Trim(true).Trim(false), expression)) {
+		if (stringUtils::IsSameAs(wxString(m_fields->GetTextValue(at, 1)).Trim(true).Trim(false), expression)) {
 			name = m_fields->GetTextValue(at, 0);
 			m_fields->DeleteItem(at);
 		}
@@ -1068,14 +1068,14 @@ void ibDialogLinqConstructor::AddSelectedAsTotal()
 
 	// A total of a field that was among the fields replaces it there, as a key does.
 	for (int at = m_fields->GetItemCount() - 1; at >= 0; --at)
-		if (stringUtils::CompareString(wxString(m_fields->GetTextValue(at, 1)).Trim(true).Trim(false), expression)) {
+		if (stringUtils::IsSameAs(wxString(m_fields->GetTextValue(at, 1)).Trim(true).Trim(false), expression)) {
 			name = m_fields->GetTextValue(at, 0);
 			m_fields->DeleteItem(at);
 		}
 
 	wxVector<wxVariant> values;
 	values.push_back(wxVariant(name));
-	values.push_back(wxVariant(ibLinqTotalName(ibLinqTotal::Sum)));
+	values.push_back(wxVariant(ibLinqTotalName(ibLinqTotal::Sum).ToWxString()));
 	values.push_back(wxVariant(expression));
 	m_totals->AppendItem(values);
 	m_totals->SelectRow(m_totals->GetItemCount() - 1);
@@ -1116,10 +1116,10 @@ wxString ibDialogLinqConstructor::NewAlias(const wxString& expression) const
 		base = wxT("r");
 	const auto taken = [&](const wxString& candidate) {
 		for (int row = 0; row < m_sources->GetItemCount(); ++row)
-			if (stringUtils::CompareString(m_sources->GetTextValue(row, 0), candidate))
+			if (stringUtils::IsSameAs(m_sources->GetTextValue(row, 0), candidate))
 				return true;
 		for (const wxString& name : m_variables)
-			if (stringUtils::CompareString(name, candidate))
+			if (stringUtils::IsSameAs(name, candidate))
 				return true;
 		return false;
 	};
@@ -1152,17 +1152,17 @@ void ibDialogLinqConstructor::Open(const ibLinqBlock& block)
 {
 	for (const ibLinqBlockSource& source : block.m_sources) {
 		wxVector<wxVariant> values;
-		values.push_back(wxVariant(source.m_alias));
-		values.push_back(wxVariant(source.m_expression));
+		values.push_back(wxVariant(source.m_alias.ToWxString()));
+		values.push_back(wxVariant(source.m_expression.ToWxString()));
 		values.push_back(wxVariant(source.m_join));
-		values.push_back(wxVariant(source.m_leftKey));
-		values.push_back(wxVariant(source.m_rightKey));
+		values.push_back(wxVariant(source.m_leftKey.ToWxString()));
+		values.push_back(wxVariant(source.m_rightKey.ToWxString()));
 		m_sources->AppendItem(values);
 	}
 	for (const ibLinqBlockField& field : block.m_fields) {
 		wxVector<wxVariant> values;
-		values.push_back(wxVariant(field.m_name));
-		values.push_back(wxVariant(field.m_expression));
+		values.push_back(wxVariant(field.m_name.ToWxString()));
+		values.push_back(wxVariant(field.m_expression.ToWxString()));
 		m_fields->AppendItem(values);
 	}
 	for (const bool onGroups : { false, true })
@@ -1174,21 +1174,21 @@ void ibDialogLinqConstructor::Open(const ibLinqBlock& block)
 		}
 	for (const ibLinqBlockOrder& order : block.m_order) {
 		wxVector<wxVariant> values;
-		values.push_back(wxVariant(order.m_expression));
+		values.push_back(wxVariant(order.m_expression.ToWxString()));
 		values.push_back(wxVariant(order.m_descending));
 		m_order->AppendItem(values);
 	}
 	for (const ibLinqBlockField& key : block.m_groupKeys) {
 		wxVector<wxVariant> values;
-		values.push_back(wxVariant(key.m_name));
-		values.push_back(wxVariant(key.m_expression));
+		values.push_back(wxVariant(key.m_name.ToWxString()));
+		values.push_back(wxVariant(key.m_expression.ToWxString()));
 		m_groupKeys->AppendItem(values);
 	}
 	for (const ibLinqBlockTotal& total : block.m_totals) {
 		wxVector<wxVariant> values;
-		values.push_back(wxVariant(total.m_name));
-		values.push_back(wxVariant(ibLinqTotalName(total.m_function)));
-		values.push_back(wxVariant(total.m_expression));
+		values.push_back(wxVariant(total.m_name.ToWxString()));
+		values.push_back(wxVariant(ibLinqTotalName(total.m_function).ToWxString()));
+		values.push_back(wxVariant(total.m_expression.ToWxString()));
 		m_totals->AppendItem(values);
 	}
 	m_groupInto->ChangeValue(block.m_groupInto);
@@ -1238,7 +1238,7 @@ ibLinqBlock ibDialogLinqConstructor::Collect() const
 		total.m_name = text(m_totals, row, 0);
 		const wxString function = text(m_totals, row, 1);
 		for (const ibLinqTotal candidate : { ibLinqTotal::Sum, ibLinqTotal::Count, ibLinqTotal::Min, ibLinqTotal::Max, ibLinqTotal::Average })
-			if (stringUtils::CompareString(ibLinqTotalName(candidate), function))
+			if (stringUtils::IsSameAs(ibLinqTotalName(candidate), function))
 				total.m_function = candidate;
 		total.m_expression = text(m_totals, row, 2);
 		block.m_totals.push_back(total);
@@ -1291,7 +1291,7 @@ wxString ibDialogLinqConstructor::IndentAt(unsigned int position) const
 	return indent;
 }
 
-wxString ibDialogLinqConstructor::GetBlock(wxString& refusal) const
+ibString ibDialogLinqConstructor::GetBlock(ibString& refusal) const
 {
 	return Collect().Render(IndentAt(m_anchor), refusal);
 }
@@ -1367,7 +1367,7 @@ wxString ibDialogLinqConstructor::ShowBlock()
 	// ⭐ THE PREVIEW SHOWS THE BLOCK AS IT STANDS, a wrong part included, and the refusal under it says what
 	// is wrong: blank at the first wrong cell, it showed nothing of the rest. OK still writes only a block
 	// with nothing refused (OnOk asks GetBlock).
-	wxString refusal;
+	ibString refusal;
 	const wxString block = Collect().RenderDraft(IndentAt(m_anchor), refusal);
 	m_block->SetReadOnly(false);
 	m_block->SetText(block);
@@ -1441,7 +1441,7 @@ void ibDialogLinqConstructor::AskVerdict(const wxString& text)
 
 void ibDialogLinqConstructor::OnOk(wxCommandEvent& event)
 {
-	wxString refusal;
+	ibString refusal;
 	if (GetBlock(refusal).IsEmpty()) {
 		wxMessageBox(refusal, GetTitle(), wxOK | wxICON_WARNING, this);
 		return;

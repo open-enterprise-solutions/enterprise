@@ -2,12 +2,12 @@
 #include "core/serialize/dataBuilder.h"
 
 
-wxString ibPropertyFont::GetValueAsString() const
+ibString ibPropertyFont::GetValueAsString() const
 {
 	return GetNodeValue().AsString();
 }
 
-void ibPropertyFont::SetValue(const wxString& val)
+void ibPropertyFont::SetValue(const ibString& val)
 {
 	ibPropertySerializable::ReadNodeValue(ibDataValue::String(val));
 }

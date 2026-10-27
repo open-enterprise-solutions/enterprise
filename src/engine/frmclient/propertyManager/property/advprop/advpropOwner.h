@@ -11,7 +11,7 @@ class FRMCLIENT_API ibPropertyObject;
 // ibPGOwnerProperty
 // -----------------------------------------------------------------------
 
-// THE DESKTOP'S OWNER EDITOR (frontend/propertyManager/property/advprop/advpropOwner.h) — the catalogs a catalog is
+// THE OWNER EDITOR —the catalogs a catalog is
 // subordinate to. What may fill it is the row's choices, as the server's property listed them (GetValueList).
 class ibPGOwnerProperty : public wxPGProperty {
 public:

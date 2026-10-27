@@ -11,7 +11,7 @@
 
 namespace {
 
-std::vector<ibQueryToken> Lex(const wxString& text)
+std::vector<ibQueryToken> Lex(const ibString& text)
 {
 	ibQueryLexer lexer;
 	return lexer.Tokenize(text);

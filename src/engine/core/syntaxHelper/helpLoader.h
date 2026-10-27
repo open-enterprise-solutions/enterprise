@@ -31,7 +31,7 @@
 // article's class_id is checked by it at load (the article names a class the build has, under the name it is about);
 // the registry is the side's — the core keeps none — so the side that has one passes it, and without it the class_id
 // is taken as written.
-using ibHelpClassName = std::function<wxString(ibClassID)>;
+using ibHelpClassName = std::function<ibString(ibClassID)>;
 
 // Current on-disk schema version the loader produces and accepts. Bump
 // rule: new optional field = no bump; rename / remove / semantics change
@@ -43,7 +43,7 @@ constexpr int kIbHelpSchemaVersion = 1;
 // JSON-on-disk artifacts share the same "format + version" header
 // shape — see metadataConfigurationJSON.cpp for the metadata side.
 // Loader rejects buckets whose format identifier does not match.
-#define IB_HELP_FORMAT_NAME wxT("OES-HELP-1.0")
+#define IB_HELP_FORMAT_NAME ibT("OES-HELP-1.0")
 
 // Load the help corpus for one locale.
 //
@@ -62,9 +62,9 @@ constexpr int kIbHelpSchemaVersion = 1;
 // `className` — the side's registry of classes, an article's class_id checked by it (ibHelpClassName); none — taken
 // as written.
 CORE_API ibHelpLoadResult
-LoadHelpCorpus(const wxString& localeCode,
-               const wxString& platformDir,
-               const wxString& configCacheDir = wxEmptyString,
+LoadHelpCorpus(const ibString& localeCode,
+               const ibString& platformDir,
+               const ibString& configCacheDir = ibEmptyString,
                const ibHelpClassName& className = ibHelpClassName());
 
 // Normalise any platform-locale string to the corpus's directory
@@ -73,6 +73,6 @@ LoadHelpCorpus(const wxString& localeCode,
 // canonicalise the locale once at startup and use the same string
 // throughout its lifetime — single source of truth for what counts
 // as "the locale" inside this subsystem.
-CORE_API wxString CanonicaliseLocale(const wxString& raw);
+CORE_API ibString CanonicaliseLocale(const ibString& raw);
 
 #endif // _IB_HELP_LOADER_H_

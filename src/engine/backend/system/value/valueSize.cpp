@@ -36,8 +36,8 @@ enum
 
 void ibValueSize_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(wxT("Width"));
-	helper.AppendProp(wxT("Height"));
+	helper.AppendProp(ibT("Width"));
+	helper.AppendProp(ibT("Height"));
 }
 
 bool ibValueSize::SetPropVal(const long lPropNum, const ibValue& varPropVal)

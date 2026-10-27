@@ -141,11 +141,11 @@ void DecodeUtf8(const char* inputBuffer, WideText& out)
 }
 
 // The converter's road — and, if that answers nothing, the default conversion — as it always was.
-wxString DecodeByConverter(const char* inputBuffer)
+ibString DecodeByConverter(const char* inputBuffer)
 {
-	wxString strReturn(wxConvUTF8.cMB2WC(inputBuffer));
-	if (strReturn == wxEmptyString)
-		strReturn << wxString(inputBuffer);
+	ibString strReturn(wxConvUTF8.cMB2WC(inputBuffer).data());
+	if (strReturn == ibEmptyString)
+		strReturn << ibString(inputBuffer);
 	return strReturn;
 }
 
@@ -153,12 +153,6 @@ wxString DecodeByConverter(const char* inputBuffer)
 
 // ⭐ THE LENGTH IS COUNTED, NOT PRODUCED. A string parameter used to be converted twice — once here only to
 // learn how long it would be, and once more by ConvertToUnicodeStream to have the bytes.
-unsigned int ibDatabaseStringConverter::GetEncodedStreamLength(const wxString& inputString)
-{
-	const wxWX2WCbuf wide = inputString.wc_str();
-	return EncodedStreamLength(wide);
-}
-
 unsigned int ibDatabaseStringConverter::GetEncodedStreamLength(const ibString& inputString)
 {
 	return EncodedStreamLength(inputString.wc_str());
@@ -167,19 +161,12 @@ unsigned int ibDatabaseStringConverter::GetEncodedStreamLength(const ibString& i
 // Text -> UTF-8, in ONE PASS into a buffer of exactly the encoded length (and its NUL). The converter it
 // replaces walked the string to size a buffer, walked it again to fill it, and was called once more by
 // GetEncodedStreamLength — for every statement's text and every string parameter bound.
-const wxCharBuffer ibDatabaseStringConverter::ConvertToUnicodeStream(const wxString& inputString)
-{
-	const wxWX2WCbuf wide = inputString.wc_str();
-	return EncodeUtf8(wide);
-}
-
-// …and a value's text, straight from its own characters - no wxString made to reach them.
 const wxCharBuffer ibDatabaseStringConverter::ConvertToUnicodeStream(const ibString& inputString)
 {
 	return EncodeUtf8(inputString.wc_str());
 }
 
-// UTF-8 -> wxString, in ONE PASS straight into the characters, handed to the string whole. Every text
+// UTF-8 -> text, in ONE PASS straight into the characters, handed to the string whole. Every text
 // field of every row read comes through here, and the converter it replaces walked the bytes twice, built
 // a wide buffer, copied it into the string and compared the string with an empty one to see whether it
 // had worked — per field, forty thousand names in one batch of references (stack samples 2026-09-12).
@@ -188,17 +175,17 @@ const wxCharBuffer ibDatabaseStringConverter::ConvertToUnicodeStream(const ibStr
 // form, a surrogate spelled in UTF-8 or a value past U+10FFFF sends the bytes down the converter's road,
 // exactly as before. So every string the converter accepted comes out the same — this is a shorter road
 // to the same answer, not a second opinion about the bytes.
-wxString ibDatabaseStringConverter::ConvertFromUnicodeStream(const char* inputBuffer)
+ibString ibDatabaseStringConverter::ConvertFromUnicodeStream(const char* inputBuffer)
 {
 	// 🛑 A NULL FIELD HAS NO BYTES, AND IT READS AS THE EMPTY STRING. SQLite answers a NULL column with a null
 	// pointer (sqlite3_column_text), and the converter this replaced turned that into "" on both of its
 	// roads; this one went straight to strlen and took the process down — the audit log, reading its own
 	// SQLite journal beside a posting, 2026-09-12 (dump enterprise_25428_t28368).
 	if (inputBuffer == nullptr)
-		return wxString();
+		return ibString();
 	WideText text;
 	DecodeUtf8(inputBuffer, text);
-	return text.m_wellFormed ? wxString(text.m_chars, text.m_units) : DecodeByConverter(inputBuffer);
+	return text.m_wellFormed ? ibString(text.m_chars, text.m_units) : DecodeByConverter(inputBuffer);
 }
 
 // …and straight into a value's text, the same one pass handed to the ibString whole: a field read into a

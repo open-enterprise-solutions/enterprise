@@ -51,9 +51,9 @@
 
 namespace {
 
-nlohmann::json LoadFixture(const wxString& fileName)
+nlohmann::json LoadFixture(const ibString& fileName)
 {
-	wxFileName here(wxString::FromUTF8(__FILE__));
+	wxFileName here(ibString::FromUTF8(__FILE__));
 	here.SetFullName(wxEmptyString);
 	here.AppendDir(wxT("fixtures"));
 	here.AppendDir(wxT("acceptance"));
@@ -63,9 +63,9 @@ nlohmann::json LoadFixture(const wxString& fileName)
 	return nlohmann::json::parse(in);
 }
 
-wxString AsWx(const nlohmann::json& node)
+ibString AsWx(const nlohmann::json& node)
 {
-	return wxString::FromUTF8(node.get<std::string>());
+	return ibString::FromUTF8(node.get<std::string>());
 }
 
 ibDateTime At(const nlohmann::json& node)
@@ -80,7 +80,7 @@ ibDateTime At(const nlohmann::json& node)
 		static_cast<unsigned>(hour), static_cast<unsigned>(minute), static_cast<unsigned>(second));
 }
 
-wxString SqliteTypeOf(const ibColumnType& type)
+ibString SqliteTypeOf(const ibColumnType& type)
 {
 	switch (type.m_kind) {
 	case ibCanonicalKind::Number: return wxT(" NUMERIC");
@@ -94,13 +94,13 @@ wxString SqliteTypeOf(const ibColumnType& type)
 }
 
 struct Movement {
-	wxString doc;
+	ibString doc;
 	int line = 0;
 	ibDateTime when;
-	wxString wh;
-	wxString item;
+	ibString wh;
+	ibString item;
 	bool receipt = false;
-	wxString qty;
+	ibString qty;
 	bool active = true;
 };
 
@@ -110,7 +110,7 @@ struct AcceptanceAccumulation : ::testing::Test {
 	// (test_compiler.cpp), so TearDown puts it back, as StyleGuard does.
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
-	wxString dbPath;
+	ibString dbPath;
 	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
 	ibValueMetaObject* document = nullptr;
 	ibValueMetaObjectAccumulationRegister* reg = nullptr;
@@ -118,15 +118,15 @@ struct AcceptanceAccumulation : ::testing::Test {
 	ibValueMetaObjectDimension* item = nullptr;
 	ibMaterializeSpec readSpec;
 	ibMaterializeView turnovers;
-	wxString movementsTable;
-	wxString receiptAlias;
-	wxString expenseAlias;
-	wxString turnoverAlias;
-	std::vector<wxString> keyColumns;
-	std::vector<wxString> warehouseFields;
-	std::vector<wxString> itemFields;
+	ibString movementsTable;
+	ibString receiptAlias;
+	ibString expenseAlias;
+	ibString turnoverAlias;
+	std::vector<ibString> keyColumns;
+	std::vector<ibString> warehouseFields;
+	std::vector<ibString> itemFields;
 	nlohmann::json fixture;
-	std::map<wxString, ibValue> recorders;
+	std::map<ibString, ibValue> recorders;
 	std::vector<Movement> posted;
 	bool ready = false;
 
@@ -212,13 +212,13 @@ struct AcceptanceAccumulation : ::testing::Test {
 		ASSERT_FALSE(turnoverAlias.IsEmpty());
 		ASSERT_FALSE(turnovers.m_movementColumns.empty());
 
-		const std::vector<wxString> periodFields = ColumnFieldNames(reg->GetRegisterPeriod()->GetQueryColumn());
-		for (const wxString& field : readSpec.m_keyColumns)
+		const std::vector<ibString> periodFields = ColumnFieldNames(reg->GetRegisterPeriod()->GetQueryColumn());
+		for (const ibString& field : readSpec.m_keyColumns)
 			if (std::find(periodFields.begin(), periodFields.end(), field) == periodFields.end())
 				keyColumns.push_back(field);
-		const auto keepKeyed = [&](const std::vector<wxString>& fields) {
-			std::vector<wxString> kept;
-			for (const wxString& field : fields)
+		const auto keepKeyed = [&](const std::vector<ibString>& fields) {
+			std::vector<ibString> kept;
+			for (const ibString& field : fields)
 				if (std::find(keyColumns.begin(), keyColumns.end(), field) != keyColumns.end())
 					kept.push_back(field);
 			return kept;
@@ -248,9 +248,9 @@ struct AcceptanceAccumulation : ::testing::Test {
 	void CreateTable(const ibSchemaTable& table) {
 		if (table.m_name.IsEmpty())
 			return;
-		wxString list;
-		std::set<wxString> seen;
-		auto addNamed = [&](const wxString& field, const wxString& sqlType) {
+		ibString list;
+		std::set<ibString> seen;
+		auto addNamed = [&](const ibString& field, const ibString& sqlType) {
 			if (field.IsEmpty() || !seen.insert(field).second)
 				return;
 			list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << sqlType;
@@ -273,7 +273,7 @@ struct AcceptanceAccumulation : ::testing::Test {
 			addNamed(table.m_materialize.m_periodColumn, wxT(" TEXT"));
 			addNamed(table.m_materialize.m_keyHashColumn, wxT(" TEXT"));
 			if (table.m_materialize.m_shards > 1)
-				addNamed(wxString(ShardColumnName()), wxT(" INTEGER"));
+				addNamed(ibString(ShardColumnName()), wxT(" INTEGER"));
 			for (const ibBackendQueryColumn* key : table.m_materialize.m_keys)
 				addColumn(key);
 			for (const ibSchemaDelta& delta : table.m_materialize.m_deltas)
@@ -286,8 +286,8 @@ struct AcceptanceAccumulation : ::testing::Test {
 			return;
 		// ON CONFLICT names this key. The trigger does not create the index; the table has to.
 		const ibMaterializeSpec render = table.m_materialize.ToRenderSpec(table.m_name);
-		wxString keys;
-		auto addKey = [&](const wxString& field) {
+		ibString keys;
+		auto addKey = [&](const ibString& field) {
 			if (field.IsEmpty())
 				return;
 			keys << (keys.IsEmpty() ? wxT("") : wxT(", ")) << field;
@@ -301,13 +301,13 @@ struct AcceptanceAccumulation : ::testing::Test {
 			addKey(render.m_keyHashColumn);
 		else {
 			addKey(render.m_periodColumn);
-			for (const wxString& field : render.m_keyColumns)
+			for (const ibString& field : render.m_keyColumns)
 				addKey(field);
 			// The declaration may ask for several shards. SQLite keeps one: the trigger's
 			// conflict target leaves the shard column out, and the index has to name the same columns.
 			if (!ibDatabaseLayerSQLite::MaterializationDialect().m_connectionIdExpr.IsEmpty()
 				&& render.m_shards > 1)
-				addKey(wxString(ShardColumnName()));
+				addKey(ibString(ShardColumnName()));
 		}
 		if (!keys.IsEmpty())
 			db->RunQuery(wxT("%s"), wxT("CREATE UNIQUE INDEX ") + table.m_name
@@ -315,8 +315,8 @@ struct AcceptanceAccumulation : ::testing::Test {
 	}
 
 	void Assign(std::vector<ibDmlAssign>& out, const ibBackendQueryColumn* column, const ibValue& value) const {
-		const std::vector<wxString> fields = ColumnFieldNames(column);
-		ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+		const std::vector<ibString> fields = ColumnFieldNames(column);
+		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
 		ibColumnCodec::WriteValue(column, cfg.get(), value, &capture, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
@@ -324,7 +324,7 @@ struct AcceptanceAccumulation : ::testing::Test {
 			out.push_back(ibDmlAssign{ fields[i], (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()) });
 	}
 
-	const ibValue& Recorder(const wxString& doc) {
+	const ibValue& Recorder(const ibString& doc) {
 		const auto found = recorders.find(doc);
 		if (found != recorders.end())
 			return found->second;
@@ -351,7 +351,7 @@ struct AcceptanceAccumulation : ::testing::Test {
 	}
 
 	// The door DeleteRecordSet stands on. Unposting deletes the document's lines.
-	void DeleteLine(const wxString& doc, int line) {
+	void DeleteLine(const ibString& doc, int line) {
 		ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
 		q.From(reg->GetQueryable());
 		q.Where(reg->GetRegisterRecorder()->GetQueryColumn(), Recorder(doc));
@@ -387,14 +387,14 @@ struct AcceptanceAccumulation : ::testing::Test {
 		return ibValue(new ibValueBoundary(ibValue(moment), kind));
 	}
 
-	const ibBackendQueryColumn* MustColumn(const ibBackendQueryable* source, const wxString& name) const {
+	const ibBackendQueryColumn* MustColumn(const ibBackendQueryable* source, const ibString& name) const {
 		const ibBackendQueryColumn* col = source != nullptr ? source->ResolveColumnByName(name) : nullptr;
 		EXPECT_NE(col, nullptr) << name;
 		return col;
 	}
 
 	ibNumber FigureOf(const ibBackendQueryable* source, const ibBackendQueryColumn* figure,
-		const wxString& wh, const wxString& itemCode) {
+		const ibString& wh, const ibString& itemCode) {
 		if (source == nullptr || figure == nullptr)
 			return ibNumber();
 		const ibBackendQueryColumn* whCol = MustColumn(source, wxT("Warehouse"));
@@ -414,7 +414,7 @@ struct AcceptanceAccumulation : ::testing::Test {
 		return ibNumber();
 	}
 
-	void ExpectNear(const ibNumber& got, const wxString& want, const wxString& where) const {
+	void ExpectNear(const ibNumber& got, const ibString& want, const ibString& where) const {
 		EXPECT_EQ(0, got.Compare(ibNumber(want))) << where << " got " << got.ToString() << " want " << want;
 	}
 
@@ -429,16 +429,16 @@ struct AcceptanceAccumulation : ::testing::Test {
 		ASSERT_EQ(question["kind"], "balance");
 		const ibNumber got = BalanceOf(question);
 		ExpectNear(got, AsWx(question["qty"]), AsWx(question["wh"]) + wxT(" ") + AsWx(question["item"])
-			+ wxT(" ") + wxString::FromUTF8(question["road"].get<std::string>()));
+			+ wxT(" ") + ibString::FromUTF8(question["road"].get<std::string>()));
 	}
 
 	void ExpectBalanceAndTurnovers(const nlohmann::json& question) {
 		const ibValue from = Position(At(question["from"]), "excluding");
 		const ibValue to = Position(At(question["to"]), "excluding");
 		ibBalanceAndTurnoverQueryable view(reg, from, to);
-		const wxString wh = AsWx(question["wh"]);
-		const wxString itemCode = AsWx(question["item"]);
-		const wxString where = wh + wxT(" ") + itemCode;
+		const ibString wh = AsWx(question["wh"]);
+		const ibString itemCode = AsWx(question["item"]);
+		const ibString where = wh + wxT(" ") + itemCode;
 		ExpectNear(FigureOf(&view, MustColumn(&view, wxT("QuantityOpeningBalance")), wh, itemCode),
 			AsWx(question["opening"]), where + wxT(" opening"));
 		ExpectNear(FigureOf(&view, MustColumn(&view, wxT("QuantityReceipt")), wh, itemCode),
@@ -505,8 +505,8 @@ TEST_F(AcceptanceAccumulation, TurnoversRunFromMidnightUpToTheNext)
 		ibTurnoverQueryable view(reg, from, to);
 		const ibBackendQueryColumn* receiptCol = MustColumn(&view, wxT("QuantityReceipt"));
 		const ibBackendQueryColumn* expenseCol = MustColumn(&view, wxT("QuantityExpense"));
-		const wxString wh = AsWx(question["wh"]);
-		const wxString itemCode = AsWx(question["item"]);
+		const ibString wh = AsWx(question["wh"]);
+		const ibString itemCode = AsWx(question["item"]);
 		ExpectNear(FigureOf(&view, receiptCol, wh, itemCode), AsWx(question["receipt"]), wh + wxT(" receipt"));
 		ExpectNear(FigureOf(&view, expenseCol, wh, itemCode), AsWx(question["expense"]), wh + wxT(" expense"));
 	}
@@ -535,8 +535,8 @@ TEST_F(AcceptanceAccumulation, DISABLED_TheOpeningLeavesOutThePointThePeriodStar
 		const ibValue from = Position(At(question["from"]), "excluding");
 		const ibValue to = Position(At(question["to"]), "excluding");
 		ibBalanceAndTurnoverQueryable view(reg, from, to);
-		const wxString wh = AsWx(question["wh"]);
-		const wxString itemCode = AsWx(question["item"]);
+		const ibString wh = AsWx(question["wh"]);
+		const ibString itemCode = AsWx(question["item"]);
 		const ibNumber opening = FigureOf(&view, MustColumn(&view, wxT("QuantityOpeningBalance")), wh, itemCode);
 		const ibNumber receipt = FigureOf(&view, MustColumn(&view, wxT("QuantityReceipt")), wh, itemCode);
 		const ibNumber wantOpening(AsWx(question["opening"]));
@@ -584,7 +584,7 @@ TEST_F(AcceptanceAccumulation, DayAndMonthReadingsSpanMarchIntoApril)
 			expense = expense + got.GetValue(expenseCol).GetNumber();
 			++rows;
 		}
-		const wxString unit = wxString::FromUTF8(question["unit"].get<std::string>());
+		const ibString unit = ibString::FromUTF8(question["unit"].get<std::string>());
 		EXPECT_EQ(question["rows"].get<int>(), rows) << unit;
 		ExpectNear(receipt, AsWx(question["receipt"]), unit + wxT(" receipt"));
 		ExpectNear(expense, AsWx(question["expense"]), unit + wxT(" expense"));

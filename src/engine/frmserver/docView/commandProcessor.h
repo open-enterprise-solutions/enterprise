@@ -20,7 +20,7 @@
 class FRMSERVER_API ibCommand {
 public:
 
-	ibCommand(bool canUndoIt = false, const wxString& name = wxEmptyString)
+	ibCommand(bool canUndoIt = false, const ibString& name = ibEmptyString)
 		: m_canUndo(canUndoIt), m_commandName(name) {}
 	virtual ~ibCommand() = default;
 
@@ -31,12 +31,12 @@ public:
 	virtual bool Undo() = 0;
 
 	virtual bool CanUndo() const { return m_canUndo; }
-	virtual wxString GetName() const { return m_commandName; }
+	virtual ibString GetName() const { return m_commandName; }
 
 protected:
 
 	bool     m_canUndo;
-	wxString m_commandName;
+	ibString m_commandName;
 };
 
 // ----------------------------------------------------------------------------
@@ -68,8 +68,8 @@ public:
 	virtual void Initialize();
 
 	// What undoing and redoing would do now — "Undo Typing", "Redo", …: the labels the desktop put on its menu.
-	wxString GetUndoLabel() const;
-	wxString GetRedoLabel() const;
+	ibString GetUndoLabel() const;
+	ibString GetRedoLabel() const;
 
 	// command list access
 	const ibCommandList& GetCommands() const { return m_commands; }

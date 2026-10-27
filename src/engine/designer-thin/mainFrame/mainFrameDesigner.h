@@ -15,7 +15,7 @@ class ibStackWindow;
 class ibWatchWindow;
 class ibLocalWindow;
 
-// The syntax helper's pane — the desktop's (frontend/mainFrame/mainFrame.h), the designer's alone here; its commands —
+// The syntax helper's pane — the designer's alone; its commands —
 // the base's (the code editor posts them).
 #define wxAUI_PANE_HELP     wxT("syntaxHelperWindow")
 // …and the configuration's tree's.
@@ -57,8 +57,6 @@ enum {
 
 	wxID_DESIGNER_ABOUT,
 
-	wxID_DESIGNER_DEBUG_START_THIN,
-	wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_THIN,
 	wxID_DESIGNER_END
 };
 
@@ -125,8 +123,8 @@ public:
 
 	// …and the debugger's own connection, the window's doors to it (ibCommunicator::ListenDebug, Debug): the server's
 	// debugger heard — `told` on that connection's thread — and asked, answered at once beside the window's call.
-	bool ListenDebug(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal, wxString& error);
-	bool Debug(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal, wxString& error);
+	bool ListenDebug(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal, ibString& error);
+	bool Debug(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal, ibString& error);
 
 protected:
 
@@ -176,8 +174,6 @@ private:
 	void OnStartDebugWithoutDebug(wxCommandEvent& event);
 	void OnStartDebugWeb(wxCommandEvent& event);
 	void OnStartDebugWithoutDebugWeb(wxCommandEvent& event);
-	void OnStartDebugThin(wxCommandEvent& event);
-	void OnStartDebugWithoutDebugThin(wxCommandEvent& event);
 	void OnAttachForDebugging(wxCommandEvent& event);
 
 	// The database's configuration, browsed in a tab of its own — the desktop's; ⚠ not in the thin yet, said so.

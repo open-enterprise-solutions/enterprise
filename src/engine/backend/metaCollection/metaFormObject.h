@@ -9,7 +9,7 @@
 #include <functional>
 
 #define defaultFormType wxNOT_FOUND
-#define formDefaultName wxT("Form")
+#define formDefaultName ibT("Form")
 
 // -----------------------------------------------------------------------
 // ibBackendCommandItem
@@ -56,7 +56,7 @@ public:
 	virtual bool AccessRight_Modify() const { return true; }
 #pragma endregion
 
-	ibValueMetaObjectFormBase(const wxString& strName = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectFormBase(const ibString& strName = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	bool LoadFormData(ibBackendValueForm* value) const;
 	bool SaveFormData(ibBackendValueForm* value);
@@ -99,7 +99,7 @@ public:
 
 	//set module code — see the two implementations below: a form's cell holds this text AND the
 	//form data, so the write names which half is meant
-	virtual wxString GetModuleText() const = 0;
+	virtual ibString GetModuleText() const = 0;
 
 	//set form data 
 	virtual void SetFormData(const ibMemoryBuffer& formData) const = 0;   // const: only mutates *m_propertyForm, not `this`
@@ -169,7 +169,7 @@ class BACKEND_API ibValueMetaObjectForm : public ibValueMetaObjectFormBase {
 
 public:
 
-	ibValueMetaObjectForm(const wxString& strName = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectForm(const ibString& strName = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	//support icons
 	virtual ibPicture GetIcon() const;
@@ -199,10 +199,10 @@ public:
 	virtual ibProperty* GetModuleProperty() const { return m_propertyForm; }
 
 	//set module code — the typed setter, because this cell also holds the form data
-	virtual void SetModuleText(const wxString& moduleText) override {
+	virtual void SetModuleText(const ibString& moduleText) override {
 		m_propertyForm->SetValue(moduleText); InvalidateBuiltFromText();
 	}
-	virtual wxString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
+	virtual ibString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
 
 	//set form data 
 	virtual void SetFormData(const ibMemoryBuffer& formData) const { m_propertyForm->SetValue(formData); }
@@ -236,10 +236,10 @@ private:
 		return FillGenericFormType(prop);
 	}
 
-	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, wxT("FormData"), _("Form"),
+	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, ibT("FormData"), _("Form"),
 		_("The form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. Edited in the form designer; the code runs on the client with the form open."));
-	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("Form"), _("Form"));
-	ibPropertyList* m_properyFormType = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("FormType"), _("Type"),
+	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(ibT("Form"), _("Form"));
+	ibPropertyList* m_properyFormType = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("FormType"), _("Type"),
 		_("Which role the form plays for its owner (object form, list form, choice form, folder form and so on). The type decides what data source the form gets when opened - a list form gets the list, an object form an object - and which default-form slot of the owner it can fill."),
 		&ibValueMetaObjectForm::FillFormType);
 };
@@ -265,7 +265,7 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 	bool AccessRight_Use() const { return IsFullAccess() || AccessRight(m_roleUse); }
 #pragma endregion
 
-	ibValueMetaObjectCommonForm(const wxString& strName = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectCommonForm(const ibString& strName = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	//support icons
 	virtual ibPicture GetIcon() const;
@@ -285,10 +285,10 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 	virtual ibProperty* GetModuleProperty() const { return m_propertyForm; }
 
 	//set module code — the typed setter, because this cell also holds the form data
-	virtual void SetModuleText(const wxString& moduleText) override {
+	virtual void SetModuleText(const ibString& moduleText) override {
 		m_propertyForm->SetValue(moduleText); InvalidateBuiltFromText();
 	}
-	virtual wxString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
+	virtual ibString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
 
 	//set form data 
 	virtual void SetFormData(const ibMemoryBuffer& formData) const { m_propertyForm->SetValue(formData); }
@@ -321,11 +321,11 @@ protected:
 
 private:
 
-	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, wxT("FormData"), _("Form"),
+	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, ibT("FormData"), _("Form"),
 		_("The common form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. A common form belongs to no object; it is opened by name or from a section of the navigation panel."));
 
 #pragma region role
-	ibRole* m_roleUse = ibValueMetaObject::CreateRole(wxT("Use"), wxGETTEXT_IN_CONTEXT("access right", "Use"));
+	ibRole* m_roleUse = ibValueMetaObject::CreateRole(ibT("Use"), wxGETTEXT_IN_CONTEXT("access right", "Use"));
 #pragma endregion
 };
 

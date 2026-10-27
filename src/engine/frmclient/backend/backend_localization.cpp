@@ -1,20 +1,20 @@
 #include "backend_localization.h"
 
 // What is answered when nothing has said a language yet.
-static const wxString ms_strUserLanguage = wxT("en");
+static const ibString ms_strUserLanguage = ibT("en");
 
 // ⚠ THE CLIENT'S — one person's, the session's language as the server says it: the client is one session's window,
 // where the server's translate state is each session's own (ibSession::GetTranslateState).
-static wxString s_userLanguage;
+static ibString s_userLanguage;
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void ibBackendLocalization::SetUserLanguage(const wxString& strUserLanguage)
+void ibBackendLocalization::SetUserLanguage(const ibString& strUserLanguage)
 {
 	s_userLanguage = strUserLanguage.IsEmpty() ? ms_strUserLanguage : strUserLanguage;
 }
 
-const wxString& ibBackendLocalization::GetUserLanguage()
+const ibString& ibBackendLocalization::GetUserLanguage()
 {
 	if (!s_userLanguage.IsEmpty())
 		return s_userLanguage;
@@ -24,7 +24,7 @@ const wxString& ibBackendLocalization::GetUserLanguage()
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 
-void ibTranslateString::SetRawText(const wxString& strRawTranslate)
+void ibTranslateString::SetRawText(const ibString& strRawTranslate)
 {
 	m_translations.clear();
 
@@ -39,11 +39,11 @@ void ibTranslateString::SetRawText(const wxString& strRawTranslate)
 // ⭐ EXACTLY THIS LANGUAGE — the Find half. GetTranslate falls back to the language in force, which
 // is what a reader wants and what an editor must not have: one box per language, and a substitute in
 // the box is stored AS that language's translation the moment OK is pressed.
-bool ibTranslateString::FindTranslate(const wxString& strLangCode, wxString& strResult) const
+bool ibTranslateString::FindTranslate(const ibString& strLangCode, ibString& strResult) const
 {
 	const auto iterator = std::find_if(m_translations.begin(), m_translations.end(),
 		[&strLangCode](const ibLocalizationEntry& entry) {
-			return stringUtils::CompareString(entry.m_code, strLangCode); });
+			return stringUtils::IsSameAs(entry.m_code, strLangCode); });
 
 	if (iterator == m_translations.end()) {
 		strResult.Clear();
@@ -54,18 +54,18 @@ bool ibTranslateString::FindTranslate(const wxString& strLangCode, wxString& str
 	return true;
 }
 
-wxString ibTranslateString::FindTranslate(const wxString& strLangCode) const
+ibString ibTranslateString::FindTranslate(const ibString& strLangCode) const
 {
-	wxString strResult;
+	ibString strResult;
 	FindTranslate(strLangCode, strResult);
 	return strResult;
 }
 
-void ibTranslateString::RemoveTranslate(const wxString& strLangCode)
+void ibTranslateString::RemoveTranslate(const ibString& strLangCode)
 {
 	m_translations.erase(std::remove_if(m_translations.begin(), m_translations.end(),
 		[&strLangCode](const ibLocalizationEntry& entry) {
-			return stringUtils::CompareString(entry.m_code, strLangCode); }),
+			return stringUtils::IsSameAs(entry.m_code, strLangCode); }),
 		m_translations.end());
 }
 
@@ -88,7 +88,7 @@ bool ibTranslateString::operator == (const ibTranslateString& src) const
 
 	for (const ibLocalizationEntry& entry : m_translations) {
 		// EXACTLY this language — the same reason the editor asks that way.
-		wxString strResult;
+		ibString strResult;
 		if (!src.FindTranslate(entry.m_code, strResult) || strResult != entry.m_data)
 			return false;
 	}

@@ -50,7 +50,7 @@ bool ibDialogSavedSettings::Show(ibDataComposer& composer, Mode mode, ibSettings
 
 		// No Id — a new entry with a new identity (save), or no mark at all (default).
 		const ibGuid id = response.Has(ibProtocol::ibRequest::ibSavedSettings::Id) ? response.GetValue<ibGuid>(ibProtocol::ibRequest::ibSavedSettings::Id) : wxNullGuid;
-		const wxString name = response.GetValue<wxString>(ibProtocol::ibRequest::ibSavedSettings::Name);
+		const ibString name = response.GetValue<ibString>(ibProtocol::ibRequest::ibSavedSettings::Name);
 
 		bool done = false;
 		switch (static_cast<ibProtocol::ibRequest::ibSavedSettings::ibAct>(response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibSavedSettings::Act))) {

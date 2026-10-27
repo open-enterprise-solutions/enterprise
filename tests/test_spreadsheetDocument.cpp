@@ -30,7 +30,7 @@ namespace {
 // reader, except the printout, which put the wrapped form on paper. The door now
 // answers with the text; this helper reads a text written in every language the
 // one way the platform reads it, for the tests about that form itself.
-wxString Translated(const wxString& raw) {
+ibString Translated(const ibString& raw) {
 	return ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), raw);
 }
 
@@ -150,7 +150,7 @@ TEST(SpreadsheetDocument, MissingParameter_AnswersFalse)
 }
 
 // A NAME IS FOUND WITHOUT CASE — the rule this lookup always had when it walked every name with
-// CompareString, kept now that it is a find in a map ordered by the same folding (ibCaseFoldLess).
+// IsSameAs, kept now that it is a find in a map ordered by the same folding (ibCaseFoldLess).
 TEST(SpreadsheetDocument, Parameter_IsFoundWithoutCase)
 {
 	auto doc = MakeDocument();
@@ -245,7 +245,7 @@ TEST(SpreadsheetDocument, FillTypeTemplate_AMuchShorterFirstValue_StillLetsTheSe
 TEST(SpreadsheetDocument, FillTypeText_ACaptionIsReadInOneLanguage)
 {
 	auto doc = MakeDocument();
-	const wxString caption = wxT("en = 'Invoice'; uk = 'Rakhunok';");
+	const ibString caption = wxT("en = 'Invoice'; uk = 'Rakhunok';");
 
 	EXPECT_EQ(wxT("Rakhunok"), doc->ComputeStringValueFromParameters(
 		caption, ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, wxT("uk")));
@@ -304,7 +304,7 @@ TEST(SpreadsheetDocument, LocalisedText_WithoutTheLastSemicolon)
 TEST(SpreadsheetDocument, FillTypeTemplate_UnknownTokenRendersEmpty)
 {
 	auto doc = MakeDocument();
-	const wxString out = doc->ComputeStringValueFromParameters(
+	const ibString out = doc->ComputeStringValueFromParameters(
 		wxT("[Whoever]"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate);
 	EXPECT_FALSE(out.Contains(wxT("Whoever")));
 }
@@ -773,8 +773,8 @@ TEST(SpreadsheetDocument, EachDocument_HasItsOwnGuid)
 
 namespace {
 
-wxString CellText(int row, int col) {
-	return wxString::Format(wxT("r%dc%d"), row, col);
+ibString CellText(int row, int col) {
+	return ibString::Format(wxT("r%dc%d"), row, col);
 }
 
 // A print form the way a real one is built: a margin row and a margin column
@@ -1131,13 +1131,13 @@ TEST(SpreadsheetDescription, Cells_KeepTheirAddressesAcrossEveryBlockBoundary)
 
 	const int rows = 1000;                      // past 240 (the growing blocks) and several 256-blocks
 	for (int row = 1; row < rows; ++row)
-		desc.GetOrCreateCell(row, 0)->m_value = wxString::Format(wxT("r%d"), row);
+		desc.GetOrCreateCell(row, 0)->m_value = ibString::Format(wxT("r%d"), row);
 
 	EXPECT_EQ(first, desc.GetOrCreateCell(0, 0));   // the same cell, found — not a new one
 	EXPECT_EQ(first->m_value, wxT("first"));        // …and still where it was
 	EXPECT_EQ(rows, desc.GetCellCount());
 	for (int row : { 15, 16, 47, 48, 111, 112, 239, 240, 495, 496, 999 })
-		EXPECT_EQ(desc.GetCellByIdx(static_cast<size_t>(row))->m_value, wxString::Format(wxT("r%d"), row));
+		EXPECT_EQ(desc.GetCellByIdx(static_cast<size_t>(row))->m_value, ibString::Format(wxT("r%d"), row));
 
 	const ibSpreadsheetDescription copy = desc;     // a copy owns cells of its own, equal to these
 	EXPECT_TRUE(copy == desc);

@@ -2,7 +2,7 @@
 #define __OBJ_INFO_H__
 
 /////////////////////////////////////////////////////////////////////////////
-// Name:        frontend/docView/docView.h
+// Name:        frmclient/docView/docView.h
 // Purpose:     OES Doc/View — combined header.
 //
 //   Top half:   forked doc/view subsystem (ibFrontendDocument, ibFrontendView, ibFrontendDocTemplate,
@@ -13,7 +13,7 @@
 //               Originally:  Author: Julian Smart, (c) Julian Smart,
 //                            Licence: wxWindows licence.
 //
-//   The thin client's copy of frontend/docView: the metadata adapter
+//   The thin client's doc/view: the metadata adapter
 //   (ibMetaDocument, ibMetaDataDocument, ibValueModuleDocument, ibMetaView)
 //   is cut out, and the classes frmserver registers too are prefixed
 //   ibFrontend — the file base loads frmserver into this process, and wx
@@ -388,7 +388,7 @@ private:
 };
 
 // ibFrontendDocTemplate / ibMetaDocTemplate — full definitions in
-// frontend/docView/docManager.h. Kept out of this header so the wx-fork base
+// frmclient/docView/docManager.h. Kept out of this header so the wx-fork base
 // file holds only ibFrontendDocument / ibFrontendView / ibFrontendDocManager (the types that need to
 // be visible to every doc-aware TU). ibFrontendDocManager methods below only hand
 // back ibFrontendDocTemplate* / ibMetaDocTemplate*, so the forward-decls at the top
@@ -588,8 +588,8 @@ protected:
 };
 
 // Shortcut to the process-wide doc manager singleton (set in ibFrontendDocManager
-// ctor, cleared in dtor). Previously hosted in frontend/docView/docManager.h
-// when ibMetaDocManager was a separate subclass; collapsed into the base.
+// ctor, cleared in dtor). Previously hosted in docManager.h when
+// ibMetaDocManager was a separate subclass; collapsed into the base.
 #define docManager ibFrontendDocManager::GetDocumentManager()
 
 // ----------------------------------------------------------------------------
@@ -972,7 +972,7 @@ inline ibDocVector ibFrontendDocManager::GetDocumentsVector() const
 #include "frmclient/backend/metaCollection/metaObject.h"
 
 // ============================================================================
-// THE METADATA DOCUMENT AND VIEW — the desktop's ibMetaDocument / ibMetaView (frontend/docView/docView.h) as the
+// THE METADATA DOCUMENT AND VIEW — the old desktop's ibMetaDocument / ibMetaView, as the
 // documents copied from the desktop call them. A document's metaobject is the server's: the client's has none, and
 // ConvertMetaObjectToType answers none.
 // ============================================================================

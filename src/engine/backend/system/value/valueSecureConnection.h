@@ -39,13 +39,13 @@ public:
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
 
 	// The same for a caller in C++ (and for the tests). Open raises when the file is not there.
-	void Open(const wxString& path, const wxString& password);
-	const wxString& Path() const { return m_path; }
-	const wxString& Password() const { return m_password; }
+	void Open(const ibString& path, const ibString& password);
+	const ibString& Path() const { return m_path; }
+	const ibString& Password() const { return m_password; }
 
 private:
-	wxString m_path;
-	wxString m_password;
+	ibString m_path;
+	ibString m_password;
 };
 
 void ibValueSecureConnection_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);

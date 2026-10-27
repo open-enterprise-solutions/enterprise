@@ -66,12 +66,12 @@ bool ibDatabaseResultSetSQLite::Next()
 	{
 		SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn), ibDatabaseLayerSQLite::ClassifyDatabaseError(nReturn));
 		if (GetErrorCode() != DATABASE_LAYER_QUERY_CANCELLED)   // a cancel is no error - see firebirdResultSet.cpp
-			ibJournalError(wxT("db.sqlite"),wxT("Error with RunQueryWithResults\n"));
+			ibJournalError(ibT("db.sqlite"),ibT("Error with RunQueryWithResults\n"));
 #if SQLITE_VERSION_NUMBER>=3002002
 		// sqlite3_db_handle wasn't added to the SQLite3 API until version 3.2.2
 		SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(sqlite3_db_handle(m_pSqliteStatement))));
 #else
-		SetErrorMessage(wxT("Unknown error advancing result set"));
+		SetErrorMessage(ibT("Unknown error advancing result set"));
 #endif
 		ThrowDatabaseException();
 		return false;
@@ -192,7 +192,7 @@ bool ibDatabaseResultSetSQLite::IsFieldNull(int nField)
 	return (nullptr == sqlite3_column_text(m_pSqliteStatement, nField - 1));
 }
 
-int ibDatabaseResultSetSQLite::LookupField(const wxString& strField)
+int ibDatabaseResultSetSQLite::LookupField(const ibString& strField)
 {
 	// Found, not walked — see firebirdResultSet.cpp.
 	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
@@ -208,8 +208,8 @@ int ibDatabaseResultSetSQLite::LookupField(const wxString& strField)
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
-			/*sqlState*/ wxEmptyString,
-			wxT("Field '") + strField + wxT("' not found in the resultset"));
+			/*sqlState*/ ibEmptyString,
+			ibT("Field '") + strField + ibT("' not found in the resultset"));
 	}
 	else
 	{

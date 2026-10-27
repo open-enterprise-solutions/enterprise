@@ -114,11 +114,11 @@ struct TotalsFoldFix : ::testing::Test {
 
 	static ibDatabaseQueryBuilder Holder() { return ibDatabaseQueryBuilder(ibConnectionPool::ThreadHolder()); }
 
-	wxString Field(ibColumnRole role) const {
+	ibString Field(ibColumnRole role) const {
 		for (const ibColumnSlot& slot : keySlots)
 			if (slot.m_role == role)
 				return slot.m_name;
-		return wxString();
+		return ibString();
 	}
 
 	// One stored row of the key: the dimension empty, spelled `typed` (an empty reference: the reference tag,

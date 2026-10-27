@@ -138,7 +138,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddContro
 		ibValueFrame* const holder = control->GetParent();
 		ibJournalError(wxT("designer"), wxString::Format(wxT("A sizer item of '%s:%s' holds no control"),
 			holder != nullptr ? holder->GetControlName() : wxString(),
-			holder != nullptr ? holder->GetClassName() : wxString()));
+			holder != nullptr ? holder->GetClassName() : ibString()));
 		return;
 	}
 

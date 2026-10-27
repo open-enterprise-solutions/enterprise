@@ -230,12 +230,12 @@ void ibStructureBuilder::UndoAppliedDdl()
 		// run leaves the schema ahead of the baseline, and the next apply's refusal is then traceable
 		// only to this line. It used to be silent, which is how a failed apply could end with nothing
 		// in the journal about why the base no longer matches its configuration.
-		wxString why = wxT("an unknown failure");
+		ibString why = ibT("an unknown failure");
 		try { throw; }
 		catch (const ibCoreException& err) { why = err.GetErrorDescription(); }
 		catch (...) {}
-		ibLog->Warn(wxT("restructure"), wxT("compensation"), wxString::Format(
-			wxT("the compensation of a failed apply could not run (%s) - the schema is ahead of the configuration"), why));
+		ibLog->Warn(ibT("restructure"), ibT("compensation"), ibString::Format(
+			ibT("the compensation of a failed apply could not run (%s) - the schema is ahead of the configuration"), why));
 		if (Conn()->IsActiveTransaction()) {
 			try { Conn()->RollBack(); } catch (...) {}
 		}

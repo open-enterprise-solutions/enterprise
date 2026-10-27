@@ -12,7 +12,6 @@
 #include "core/guid.h"        // ibGuid — an entry's identity
 #include "core/fdatetime.h"   // ibDateTime — when it was written
 
-#include <wx/string.h>
 
 // WHAT KIND OF SETTING THIS IS — the tenant, not a folder name. It is part of
 // the key, so one category's "MainForm" and another's are different rows.
@@ -51,7 +50,7 @@ enum class ibSettingsCategory : int {
 // not out of the storage: reading what is inside a node is not the storage's business.
 struct ibComposerSettingsEntry {
 	ibGuid     m_id;
-	wxString   m_name;
+	ibString   m_name;
 	ibDateTime m_changed;
 };
 

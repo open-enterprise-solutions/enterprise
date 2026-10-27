@@ -49,8 +49,8 @@ const ::testing::Environment* const g_vesCodeStyleEnv =
 // out its timeout, and the report says "timed out" rather than "assertion in
 // this function". One such assert cost a two-minute wait and told us nothing.
 //
-// The GUI suite has had this since it was written (tests/frontendFix.h); the
-// backend suite never did, because until something asserted nobody noticed.
+// The old desktop's GUI suite had this since it was written; the backend
+// suite never did, because until something asserted nobody noticed.
 // Same treatment, one place, applied whatever --gtest_filter selects.
 class HeadlessAssertEnvironment : public ::testing::Environment {
 public:
@@ -98,9 +98,7 @@ public:
 		// THE THIRD DOOR, and the one that actually hung the runner. A wx
 		// WARNING is not an assert: with no log target set, wx installs one
 		// that BUFFERS and flushes into a modal box when the target goes away.
-		// The GUI fixture handles its own case (tests/frontendFix.h, after
-		// wxEntryStart, because a wxApp installs wxLogGui of its own), but a
-		// backend test that makes wx warn had nothing at all. stderr has no
+		// A backend test that makes wx warn had nothing at all. stderr has no
 		// OK button.
 		delete wxLog::SetActiveTarget(new wxLogStderr());
 
@@ -117,7 +115,7 @@ const ::testing::Environment* const g_headlessAssertEnv =
 
 namespace {
 
-bool TryCompile(ibCompileCode& cc, const wxString& src) {
+bool TryCompile(ibCompileCode& cc, const ibString& src) {
 	try {
 		return cc.Compile(src);
 	} catch (...) {
@@ -233,7 +231,7 @@ TEST(CompilerTest, ExportVariableMarkedAsExport) {
 
 TEST(CompilerTest, FunctionDeclarationRegistersInListFunc) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Function Add(x, y)\n")
 		wxT("  Return x + y;\n")
 		wxT("EndFunction\n");
@@ -255,7 +253,7 @@ TEST(CompilerTest, FunctionDeclarationRegistersInListFunc) {
 
 TEST(CompilerTest, ExportFunctionFlagged) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Function PublicFn() Public\n")
 		wxT("  Return 1;\n")
 		wxT("EndFunction\n");
@@ -274,7 +272,7 @@ TEST(CompilerTest, ExportFunctionFlagged) {
 
 TEST(CompilerTest, ProcedureRecognized) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Procedure DoIt()\n")
 		wxT("  a = 1;\n")
 		wxT("EndProcedure\n");
@@ -293,7 +291,7 @@ TEST(CompilerTest, ProcedureRecognized) {
 
 TEST(CompilerTest, IfStatementEmitsBranch) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("a = 0;\n")
 		wxT("If a > 0 Then\n")
 		wxT("  a = 1;\n")
@@ -306,7 +304,7 @@ TEST(CompilerTest, IfStatementEmitsBranch) {
 
 TEST(CompilerTest, WhileLoopEmitsGoto) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("a = 0;\n")
 		wxT("While a < 10 Do\n")
 		wxT("  a = a + 1;\n")
@@ -334,7 +332,7 @@ TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 	// Var declaration + function declaration. NB: the parameter is named
 	// `delta`, not `by` — `By` is a reserved LINQ keyword (group/order ... by),
 	// so using it as an identifier fails to lex ("Identifier expected").
-	const wxString src =
+	const ibString src =
 		wxT("var counter public;\n")
 		wxT("Function Increment(delta)\n")
 		wxT("  counter = counter + delta;\n")
@@ -391,7 +389,7 @@ TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 namespace {
 
 // Find an ibByteFunction by real name (case-insensitive).
-const ibByteCode::ibByteFunction* FindFnByName(const ibByteCode& bc, const wxString& name) {
+const ibByteCode::ibByteFunction* FindFnByName(const ibByteCode& bc, const ibString& name) {
 	for (const auto& fn : bc.m_listFunc)
 		if (fn.m_strRealName.IsSameAs(name, false))
 			return &fn;
@@ -410,7 +408,7 @@ const ibByteCode::ibByteFunction* FindFirstLambda(const ibByteCode& bc) {
 
 TEST(ClosureCapture, LambdaReferencingOuterLocalCompiles) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Function makeAdder(n)\n")
 		wxT("  Return Function(x)\n")
 		wxT("           Return x + n;\n")
@@ -421,7 +419,7 @@ TEST(ClosureCapture, LambdaReferencingOuterLocalCompiles) {
 
 TEST(ClosureCapture, OuterFnMarkedNeedsHeapFrameAfterCapture) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Function makeAdder(n)\n")
 		wxT("  Return Function(x)\n")
 		wxT("           Return x + n;\n")
@@ -438,7 +436,7 @@ TEST(ClosureCapture, OuterFnMarkedNeedsHeapFrameAfterCapture) {
 TEST(ClosureCapture, NoCaptureLeavesNeedsHeapFrameFalse) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	// No inner lambda → no capture → no heap-frame requirement.
-	const wxString src =
+	const ibString src =
 		wxT("Function plainAdd(a, b)\n")
 		wxT("  Return a + b;\n")
 		wxT("EndFunction\n");
@@ -452,7 +450,7 @@ TEST(ClosureCapture, NoCaptureLeavesNeedsHeapFrameFalse) {
 
 TEST(ClosureCapture, LambdaBodyEmitsDepthGreaterOrEqualOneForCapturedVar) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Function makeAdder(n)\n")
 		wxT("  Return Function(x)\n")
 		wxT("           Return x + n;\n")
@@ -597,9 +595,9 @@ TEST(PluginHost, HandsOutTheCapabilitiesItAdvertises) {
 	EXPECT_EQ(IB_PLUGIN_ABI_VERSION, host->abi_version);
 	ASSERT_NE(nullptr, host->query);
 
-	EXPECT_NE(nullptr, host->query(host, ibCapabilityDiagnostics, 1));
-	EXPECT_NE(nullptr, host->query(host, ibCapabilityScript, 1));
-	EXPECT_NE(nullptr, host->query(host, ibCapabilityMetadata, 1));
+	EXPECT_NE(nullptr, host->query(host, ibCapabilityDiagnostics, 2));
+	EXPECT_NE(nullptr, host->query(host, ibCapabilityScript, 2));
+	EXPECT_NE(nullptr, host->query(host, ibCapabilityMetadata, 2));
 }
 
 TEST(PluginHost, RefusesUnknownNamesAndWrongVersions) {
@@ -610,14 +608,15 @@ TEST(PluginHost, RefusesUnknownNamesAndWrongVersions) {
 	EXPECT_EQ(nullptr, host->query(host, nullptr, 1));
 	// A version the host does not implement must answer NULL rather than hand
 	// back a layout the caller was not built against — that is the whole reason
-	// capabilities are versioned one by one.
-	EXPECT_EQ(nullptr, host->query(host, ibCapabilityScript, 2));
+	// capabilities are versioned one by one. v1 is the wxString one, retired on 2026-10-27.
+	EXPECT_EQ(nullptr, host->query(host, ibCapabilityScript, 1));
+	EXPECT_EQ(nullptr, host->query(host, ibCapabilityScript, 3));
 	EXPECT_EQ(nullptr, host->query(host, ibCapabilityScript, 0));
 }
 
 TEST(PluginHost, ScriptCheckReportsWhereTheCodeIsWrong) {
 	const ibPluginHost* host = ibPluginHostInstance();
-	const auto* script = static_cast<const ibPluginScript*>(host->query(host, ibCapabilityScript, 1));
+	const auto* script = static_cast<const ibPluginScript*>(host->query(host, ibCapabilityScript, 2));
 	ASSERT_NE(nullptr, script);
 
 	const std::vector<ibDiagnostic> found = script->Check(wxT("a = "), wxT("draft"));
@@ -631,7 +630,7 @@ TEST(PluginHost, ScriptCheckReportsWhereTheCodeIsWrong) {
 
 TEST(PluginHost, ScriptCheckPassesValidCode) {
 	const ibPluginHost* host = ibPluginHostInstance();
-	const auto* script = static_cast<const ibPluginScript*>(host->query(host, ibCapabilityScript, 1));
+	const auto* script = static_cast<const ibPluginScript*>(host->query(host, ibCapabilityScript, 2));
 	ASSERT_NE(nullptr, script);
 
 	// VES dialect — the suite's global environment sets CODE_VES.
@@ -640,7 +639,7 @@ TEST(PluginHost, ScriptCheckPassesValidCode) {
 
 	EXPECT_TRUE(found.empty()) << "valid code reported "
 		<< found.size() << " diagnostic(s); first: "
-		<< (found.empty() ? wxString() : found.front().m_message).ToStdString();
+		<< (found.empty() ? ibString() : found.front().m_message).ToStdString();
 }
 
 TEST(PluginHost, MetadataAnswersEmptyWithNoConfiguration) {
@@ -648,7 +647,7 @@ TEST(PluginHost, MetadataAnswersEmptyWithNoConfiguration) {
 	// configuration. Answering empty is the contract; crashing or asserting
 	// would make every headless host a special case.
 	const ibPluginHost* host = ibPluginHostInstance();
-	const auto* metadata = static_cast<const ibPluginMetadata*>(host->query(host, ibCapabilityMetadata, 1));
+	const auto* metadata = static_cast<const ibPluginMetadata*>(host->query(host, ibCapabilityMetadata, 2));
 	ASSERT_NE(nullptr, metadata);
 
 	if (metadata->IsConfigurationOpen())
@@ -753,9 +752,9 @@ TEST(BarrierTypes, AreRegisteredLikeAnyOtherType) {
 	// The point of making them types: every declaration site resolves them
 	// through the ordinary registry, with no special case anywhere.
 	for (const wchar_t* name : { L"Any", L"AnyRef", L"AnyControl", L"AnyValue" }) {
-		EXPECT_TRUE(ibValue::IsRegisterCtor(wxString(name)))
-			<< "barrier type not registered: " << wxString(name).ToStdString();
-		EXPECT_NE(nullptr, ibValue::GetAvailableCtor(wxString(name)));
+		EXPECT_TRUE(ibValue::IsRegisterCtor(ibString(name)))
+			<< "barrier type not registered: " << ibString(name).ToStdString();
+		EXPECT_NE(nullptr, ibValue::GetAvailableCtor(ibString(name)));
 	}
 }
 
@@ -845,10 +844,10 @@ TEST(BarrierTypes, AKindBarrierAdmitsEveryMemberOfItsKind) {
 	ASSERT_NE(nullptr, anyValue);
 
 	for (const wchar_t* name : { L"Array", L"Structure", L"Container" }) {
-		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(wxString(name));
+		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(ibString(name));
 		if (ctor == nullptr) continue;
 		EXPECT_TRUE(anyValue->AllowValue(ctor->GetClassType()))
-			<< wxString(name).ToStdString() << " should be an AnyValue";
+			<< ibString(name).ToStdString() << " should be an AnyValue";
 	}
 }
 TEST(AnyKinds, DeclarationCompiles) {
@@ -1020,8 +1019,8 @@ TEST(ValueSerialize, NodeCarriesTheTypeFirst) {
 	ibDataNode node(g_valueNumberCLSID, 0);
 	ASSERT_TRUE(ibValue(7).Serialize(node));
 
-	EXPECT_EQ(wxString::Format(wxT("%llu"), (unsigned long long)g_valueNumberCLSID),
-		node.GetValue<wxString>(wxT("t")));
+	EXPECT_EQ(ibString::Format(wxT("%llu"), (unsigned long long)g_valueNumberCLSID),
+		node.GetValue<ibString>(wxT("t")));
 }
 
 TEST(ValueSerialize, UnknownTypeInANodeIsRefused) {
@@ -1030,7 +1029,7 @@ TEST(ValueSerialize, UnknownTypeInANodeIsRefused) {
 	// empty would be indistinguishable from a value that legitimately IS empty,
 	// and would surface far away as a blank field nobody can explain.
 	ibDataNode node(0, 0);
-	node.SetValue(wxT("t"), wxString(wxT("8613303245920547140")));   // no such registered type
+	node.SetValue(wxT("t"), ibString(wxT("8613303245920547140")));   // no such registered type
 
 	EXPECT_THROW(ibValue::FromNode(node), ibBackendException);
 }
@@ -1059,7 +1058,7 @@ public:
 	// pretending to be one.
 	void SetVersion(const ibVersionID& version) override { m_version = version; }
 	ibVersionID GetVersion() const override { return m_version; }
-	wxString GetLangCode() const override { return wxT("en"); }
+	ibString GetLangCode() const override { return wxT("en"); }
 	bool RunDatabase(int flags = defaultFlag) override { return true; }
 	bool CloseDatabase(int flags = defaultFlag) override { return true; }
 
@@ -1185,7 +1184,7 @@ TEST(MetaDataSerialize, ATypeNOBODYHasIsRefused) {
 	StandInMetaData metaData;
 
 	ibDataNode node(0, 0);
-	node.SetValue(wxT("t"), wxString(wxT("8613303245920547140")));
+	node.SetValue(wxT("t"), ibString(wxT("8613303245920547140")));
 
 	EXPECT_THROW(metaData.Deserialize(node), ibBackendException);
 }
@@ -1250,7 +1249,7 @@ TEST(TypedEmpty, AReferenceOfTheConfigurationIsMadeByTheConfiguration) {
 	MakingStandIn metaData(catalogRef);
 	const ibValue empty = ibValueTypeDescription::AdjustValue(ibTypeDescription(catalogRef), &metaData);
 
-	EXPECT_EQ(empty.GetString(), wxString(wxT("the catalog's empty reference")));
+	EXPECT_EQ(empty.GetString(), ibString(wxT("the catalog's empty reference")));
 }
 
 TEST(TypedEmpty, ATypeNobodyHasIsTheEmptyValueNotARefusal) {
@@ -1611,7 +1610,7 @@ TEST(FilterAst, NestedGroupsRenderWithParentheses) {
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
-	const wxString expr = ibRenderQueryExpr(*ast);
+	const ibString expr = ibRenderQueryExpr(*ast);
 
 	EXPECT_TRUE(expr.Contains(wxT("Amount >")));
 	EXPECT_TRUE(expr.Contains(wxT(" AND ")));
@@ -1629,7 +1628,7 @@ TEST(FilterAst, AFieldOnBothSidesRendersAsTwoPaths) {
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
-	const wxString expr = ibRenderQueryExpr(*ast);
+	const ibString expr = ibRenderQueryExpr(*ast);
 	EXPECT_TRUE(expr.Contains(wxT("Price > Cost"))) << expr.ToStdString();
 	EXPECT_FALSE(expr.Contains(wxT("&"))) << "a field must render as a path, not a parameter";
 }
@@ -1644,7 +1643,7 @@ TEST(FilterAst, AValueRendersAsAParameter) {
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
-	const wxString expr = ibRenderQueryExpr(*ast);
+	const ibString expr = ibRenderQueryExpr(*ast);
 	EXPECT_TRUE(expr.Contains(wxT("&"))) << expr.ToStdString();
 	EXPECT_FALSE(expr.Contains(wxT("O'Brien"))) << "the value was inlined into the text";
 }
@@ -1822,7 +1821,7 @@ TEST(CompilerTest, CachedParsesInTheBraceDialectToo) {
 // variable, after the name). A leading modifier is not a dialect variant, it is
 // a syntax error, and the helper's examples were unrunnable.
 TEST(CompilerTest, AccessModifiersAreTrailingForEveryOneOfThem) {
-	for (const wxString& access : { wxString(wxT("Public")), wxString(wxT("Private")), wxString(wxT("Protected")) }) {
+	for (const ibString& access : { ibString(wxT("Public")), ibString(wxT("Private")), ibString(wxT("Protected")) }) {
 		{	// trailing — the form the grammar has
 			ibCompileCode cc(wxT("test"), wxT("memory"), false);
 			EXPECT_TRUE(TryCompile(cc,
@@ -1847,7 +1846,7 @@ TEST(CompilerTest, AccessModifiersAreTrailingForEveryOneOfThem) {
 // three modifiers (compileCode.cpp, the Var declaration loop), and it reads
 // them after the NAME.
 TEST(CompilerTest, AVariableTakesItsModifierAfterTheNameToo) {
-	for (const wxString& access : { wxString(wxT("Public")), wxString(wxT("Private")), wxString(wxT("Protected")) }) {
+	for (const ibString& access : { ibString(wxT("Public")), ibString(wxT("Private")), ibString(wxT("Protected")) }) {
 		{	// trailing — the form the grammar has
 			ibCompileCode cc(wxT("test"), wxT("memory"), false);
 			EXPECT_TRUE(TryCompile(cc, wxT("Var total ") + access + wxT(";\n")))
@@ -1884,9 +1883,9 @@ TEST(CompilerTest, ADateLiteralBeforeAKeywordIsTwoLexems) {
 // native stack. Two thousand of them overflowed it and the process went down with no diagnostic;
 // past the ceiling (400) the expression is refused as a compile error. The point of the first test
 // is that the assertion is REACHED at all.
-static wxString NestedInParentheses(int depth)
+static ibString NestedInParentheses(int depth)
 {
-	wxString src = wxT("Var a public; a = ");
+	ibString src = wxT("Var a public; a = ");
 	for (int i = 0; i < depth; ++i) src += wxT('(');
 	src += wxT('1');
 	for (int i = 0; i < depth; ++i) src += wxT(')');

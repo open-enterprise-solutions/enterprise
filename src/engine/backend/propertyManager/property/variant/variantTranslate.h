@@ -37,7 +37,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataTranslate"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataTranslate"); }
 
 private:
 	ibTranslateString m_translate;

@@ -18,7 +18,7 @@ class ibMetaData;
 // it went. Whose shelf it is, the server knows: the category and the key are not read here.
 
 FRMCLIENT_API ibGuid ibSaveComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,
-                                           const ibGuid& id, const wxString& name,
+                                           const ibGuid& id, const ibString& name,
                                            const ibDataComposer& composer);
 FRMCLIENT_API bool ibRestoreComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,
                                             const ibGuid& id, ibDataComposer& composer,
@@ -26,7 +26,7 @@ FRMCLIENT_API bool ibRestoreComposerSettings(ibSettingsCategory category, const 
 FRMCLIENT_API std::vector<ibComposerSettingsEntry> ibListComposerSettings(ibSettingsCategory category,
                                                                          const ibGuid& objectKey);
 FRMCLIENT_API bool ibRenameComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,
-                                           const ibGuid& id, const wxString& newName);
+                                           const ibGuid& id, const ibString& newName);
 FRMCLIENT_API bool ibRemoveComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,
                                            const ibGuid& id);
 FRMCLIENT_API bool   ibSetDefaultComposerSettings(const ibGuid& objectKey, const ibGuid& id);

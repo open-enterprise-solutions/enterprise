@@ -1,17 +1,28 @@
 #include "core/startProcess.h"
 
+#include "core/diagnostics/crashGuard.h"   // CurrentPidPortable — the manifest's name
 #include "core/diagnostics/journal.h"
+#include "core/exception.h"    // ibErrorText
 #include "core/fileSystem.h"   // ibRemoveFile
 
-#include <wx/ffile.h>
-#include <wx/filename.h>   // wxFileName::CreateTempFileName
-#include <wx/log.h>   // wxSysErrorMsgStr
-
+#include <atomic>
 #include <chrono>
+#include <fstream>
+#include <iterator>
 #include <thread>
 #include <vector>
 
-#ifdef __WXMSW__
+namespace {
+
+// The system's words for the code a start failed with.
+ibString ErrorText(long code)
+{
+	return ibString::FromUTF8(ibErrorText(std::error_code(static_cast<int>(code), std::system_category())).c_str());
+}
+
+} // namespace
+
+#ifdef __IBMSW__
 #include <algorithm>
 #include <windows.h>
 #else
@@ -25,9 +36,7 @@
 #include <thread>
 #include <unistd.h>
 
-#include <wx/cmdline.h>
-
-#ifdef __APPLE__
+#ifdef __IBOSX__
 #include <crt_externs.h>   // a shared library on macOS has no `environ` of its own
 #define environ (*_NSGetEnviron())
 #else
@@ -35,19 +44,18 @@ extern char** environ;
 #endif
 #endif
 
-#ifdef __WXMSW__
-long ibStartProcess(const wxString& command, const std::vector<unsigned char>& input)
+#ifdef __IBMSW__
+long ibStartProcess(const ibString& command, const std::vector<unsigned char>& input)
 {
 	// CreateProcessW may write into the command line, so it gets a copy of its own.
-	const wxWCharBuffer wide = command.wc_str();
-	std::vector<wchar_t> line(wide.data(), wide.data() + wide.length() + 1);
+	std::vector<wchar_t> line(command.wc_str(), command.wc_str() + command.Len() + 1);
 
 	STARTUPINFOEXW startup{};
 	startup.StartupInfo.cb = sizeof(startup);
 	PROCESS_INFORMATION started{};
 
 	const auto refuse = [&command](DWORD error) {
-		ibJournalWarning(wxT("process"), wxT("%s did not start: %s"), command, wxSysErrorMsgStr(error));
+		ibJournalWarning(ibT("process"), ibT("%s did not start: %s"), command, ErrorText(error));
 		return 0L;
 	};
 
@@ -123,16 +131,53 @@ long ibStartProcess(const wxString& command, const std::vector<unsigned char>& i
 	return (long)started.dwProcessId;
 }
 #else
-long ibStartProcess(const wxString& command, const std::vector<unsigned char>& input)
+namespace {
+
+// A command line in words, as a Unix shell splits it (wxCmdLineParser's SPLIT_UNIX): space between words, quotes
+// around a word that has spaces — single ones take every character as it is, double ones and a bare word take a
+// backslash's next character as itself.
+std::vector<ibString> SplitArguments(const ibString& command)
 {
-	const wxArrayString args = wxCmdLineParser::ConvertStringToArgs(command, wxCMD_LINE_SPLIT_UNIX);
+	std::vector<ibString> words;
+	ibString word;
+	bool inWord = false;
+	ibChar quote = 0;
+	for (size_t i = 0; i < command.Len(); ++i) {
+		const ibChar c = command[i];
+		if (quote == 0 && (c == ibT(' ') || c == ibT('\t'))) {
+			if (inWord)
+				words.push_back(word);
+			word.clear();
+			inWord = false;
+			continue;
+		}
+		inWord = true;
+		if (c == quote)
+			quote = 0;
+		else if (quote == 0 && (c == ibT('"') || c == ibT('\'')))
+			quote = c;
+		else if (c == ibT('\\') && quote != ibT('\'') && i + 1 < command.Len())
+			word += command[++i];
+		else
+			word += c;
+	}
+	if (inWord)
+		words.push_back(word);
+	return words;
+}
+
+} // namespace
+
+long ibStartProcess(const ibString& command, const std::vector<unsigned char>& input)
+{
+	const std::vector<ibString> args = SplitArguments(command);
 	if (args.empty())
 		return 0;
 
 	std::vector<std::string> text;
 	text.reserve(args.size());
-	for (const wxString& arg : args)
-		text.emplace_back(arg.mb_str(wxConvWhateverWorks));
+	for (const ibString& arg : args)
+		text.emplace_back(arg.ToUtf8());
 
 	std::vector<char*> argv;
 	argv.reserve(text.size() + 1);
@@ -157,7 +202,7 @@ long ibStartProcess(const wxString& command, const std::vector<unsigned char>& i
 		if (pipe(pipeEnds) != 0) {
 			const int error = errno;
 			posix_spawnattr_destroy(&attributes);
-			ibJournalWarning(wxT("process"), wxT("%s did not start: %s"), command, wxSysErrorMsgStr(error));
+			ibJournalWarning(ibT("process"), ibT("%s did not start: %s"), command, ErrorText(error));
 			return 0;
 		}
 		fcntl(pipeEnds[0], F_SETFD, FD_CLOEXEC);
@@ -177,7 +222,7 @@ long ibStartProcess(const wxString& command, const std::vector<unsigned char>& i
 	if (error != 0) {
 		if (!input.empty())
 			close(pipeEnds[1]);
-		ibJournalWarning(wxT("process"), wxT("%s did not start: %s"), command, wxSysErrorMsgStr(error));
+		ibJournalWarning(ibT("process"), ibT("%s did not start: %s"), command, ErrorText(error));
 		return 0;
 	}
 
@@ -223,13 +268,17 @@ long ibStartProcess(const wxString& command, const std::vector<unsigned char>& i
 }
 #endif
 
-long ibStartWebServer(const wxString& command, wxString& url, const std::function<void()>& waiting)
+long ibStartWebServer(const ibString& command, ibString& url, const std::function<void()>& waiting)
 {
 	url.clear();
 
-	// The system picks the port; the server says it, with the page's address, in this file.
-	const wxString manifest = wxFileName::CreateTempFileName(wxT("oes-web-"));
-	const long pid = ibStartProcess(command + wxString::Format(wxT(" --port=0 --manifest=\"%s\""), manifest));
+	// The system picks the port; the server says it, with the page's address, in this file — a name of this process's
+	// and this call's in the temporary folder; the server makes the file.
+	static std::atomic<unsigned> s_started{ 0 };
+	std::error_code error;
+	const ibString manifest = ibString((std::filesystem::temp_directory_path(error) / ibPathOf(ibString::Format(
+		ibT("oes-web-%u-%u.txt"), ibCrashGuard::CurrentPidPortable(), s_started.fetch_add(1)))).wstring());
+	const long pid = ibStartProcess(command + ibString::Format(ibT(" --port=0 --manifest=\"%s\""), manifest));
 	if (pid == 0) {
 		ibRemoveFile(manifest);
 		return 0;
@@ -241,14 +290,15 @@ long ibStartWebServer(const wxString& command, wxString& url, const std::functio
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		if (waiting)
 			waiting();
-		wxFFile file(manifest, wxT("rb"));
-		wxString content;
-		if (!file.IsOpened() || !file.ReadAll(&content, wxConvUTF8))
+		std::ifstream file(ibPathOf(manifest), std::ios::binary);
+		if (!file)
 			continue;
-		const int at = content.Find(wxT("url="));
-		const wxString rest = at != wxNOT_FOUND ? content.Mid(at + 4) : wxString();
-		if (rest.Find(wxT('\n')) != wxNOT_FOUND)
-			url = rest.BeforeFirst(wxT('\n')).Trim().Trim(false);
+		const std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+		const ibString content = ibString::FromUTF8(bytes.data(), bytes.size());
+		const int at = content.Find(ibT("url="));
+		const ibString rest = at != wxNOT_FOUND ? content.Mid(at + 4) : ibString();
+		if (rest.Find(ibT('\n')) != wxNOT_FOUND)
+			url = rest.BeforeFirst(ibT('\n')).Trim().Trim(false);
 	}
 	ibRemoveFile(manifest);
 	return pid;

@@ -51,8 +51,8 @@ public:
 
 	// The name a person sees when choosing (e.g. "Excel workbook") and the
 	// extension it is chosen by, without the dot.
-	virtual wxString GetName() const = 0;
-	virtual wxString GetExtension() const = 0;
+	virtual ibString GetName() const = 0;
+	virtual ibString GetExtension() const = 0;
 
 	// ⭐⭐ WHICH DIRECTIONS THIS FORMAT GOES, and it is a property of the format
 	// rather than a gap in it. A Word file is a FLOW that may contain tables among
@@ -75,14 +75,14 @@ public:
 	virtual bool Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const = 0;
 
 	// …and the same over a file on disk — false also when it cannot be opened, or (writing) closed whole.
-	bool ReadFile(const wxString& fileName, ibSpreadsheetDescription& sheet) const;
-	bool WriteFile(const wxString& fileName, const ibSpreadsheetDescription& sheet) const;
+	bool ReadFile(const ibString& fileName, ibSpreadsheetDescription& sheet) const;
+	bool WriteFile(const ibString& fileName, const ibSpreadsheetDescription& sheet) const;
 };
 
 // THE FORMAT A FILE NAME MEANS — null when nothing reads it. One place, so every
 // host (the editor's Open, a report's Save as, a scheduled job) picks the same
 // reader for the same file rather than each keeping its own if-chain.
-CORE_API const ibSheetFormat* ibSheetFormatFor(const wxString& fileName);
+CORE_API const ibSheetFormat* ibSheetFormatFor(const ibString& fileName);
 
 // …and the whole list. Ownership stays with the registrar below.
 CORE_API const std::vector<const ibSheetFormat*>& ibSheetFormats();
@@ -103,9 +103,9 @@ CORE_API const std::vector<const ibSheetFormat*>& ibSheetFormats();
 // The save filter is a LIST OF NAMED LINES rather than one mask, because that is
 // how a person chooses a format while saving: they pick "Word document" from the
 // list instead of remembering to type an extension.
-CORE_API wxString ibSheetFormatMask();
-CORE_API wxString ibSheetFormatExtensions();
-CORE_API wxString ibSheetFormatSaveFilter();
+CORE_API ibString ibSheetFormatMask();
+CORE_API ibString ibSheetFormatExtensions();
+CORE_API ibString ibSheetFormatSaveFilter();
 
 // ⭐ A FORMAT PUTS ITSELF ON THE LIST — the shape every type in this tree already
 // registers by (VALUE_TYPE_REGISTER and its family). One line at the BOTTOM of the

@@ -60,7 +60,7 @@ std::vector<ibQueryConstructorSource> ibAnyQueryConstructorModel::GetTempSources
 		// Listed beside the temp tables because from the constructor's side they are the same
 		// question — "what may this statement select from that the package itself made" — and the
 		// difference (a table versus a named result) is the package's business, not the tree's.
-		const wxString& name = statement.m_select->m_intoTemp.IsEmpty()
+		const ibString& name = statement.m_select->m_intoTemp.IsEmpty()
 			? statement.m_select->m_ontoName : statement.m_select->m_intoTemp;
 		if (name.IsEmpty())
 			continue;
@@ -78,7 +78,7 @@ std::vector<ibQueryConstructorSource> ibAnyQueryConstructorModel::GetTempSources
 // THE WALK, DONE ONCE. Both type questions read its answer — what the leaf REFERS TO and what it
 // HOLDS — so there is one traversal and one place where "this path does not resolve" is decided.
 ibQueryConstructorField ibAnyQueryConstructorModel::FieldOfPath(const ibQuerySelect& select,
-                                                                const std::vector<wxString>& path,
+                                                                const std::vector<ibString>& path,
                                                                 const ibQueryPackage& package,
                                                                 size_t beforeStatement) const
 {
@@ -125,20 +125,20 @@ ibQueryConstructorField ibAnyQueryConstructorModel::FieldOfPath(const ibQuerySel
 	}
 
 	// WHERE THE PATH STARTS among the fields of that source, and the hops after it.
-	return WalkPath(fields, std::vector<wxString>(path.begin() + first, path.end()));
+	return WalkPath(fields, std::vector<ibString>(path.begin() + first, path.end()));
 }
 
 ibQueryConstructorField ibAnyQueryConstructorModel::WalkPath(const std::vector<ibQueryConstructorField>& fields,
-                                                            const std::vector<wxString>& path) const
+                                                            const std::vector<ibString>& path) const
 {
 	for (size_t head = path.size(); head > 0; --head) {
-		wxString name = path.front();
+		ibString name = path.front();
 		for (size_t i = 1; i < head; ++i)
-			name += wxT(".") + path[i];
+			name += ibT(".") + path[i];
 		const auto start = std::find_if(fields.begin(), fields.end(),
 			[&name](const ibQueryConstructorField& field) { return field.m_name.IsSameAs(name, false); });
 		if (start != fields.end())
-			return WalkFrom(*start, std::vector<wxString>(path.begin() + head, path.end()));
+			return WalkFrom(*start, std::vector<ibString>(path.begin() + head, path.end()));
 	}
 	return ibQueryConstructorField();   // a name this model cannot resolve — silence, never a guess
 }
@@ -146,10 +146,10 @@ ibQueryConstructorField ibAnyQueryConstructorModel::WalkPath(const std::vector<i
 // THE HOPS. Each segment must be found among the fields of the level above it; a segment that is not a
 // reference ends the walk, because there is nothing behind it to look in.
 ibQueryConstructorField ibAnyQueryConstructorModel::WalkFrom(const ibQueryConstructorField& from,
-                                                            const std::vector<wxString>& hops) const
+                                                            const std::vector<ibString>& hops) const
 {
 	ibQueryConstructorField leaf = from;
-	for (const wxString& hop : hops) {
+	for (const ibString& hop : hops) {
 		// The whole type, not the single target: a composite hop offers what all its alternatives offer,
 		// merged the way the query merges them — and nothing at all for what is not a reference.
 		const std::vector<ibQueryConstructorField> fields = GetReferenceFields(leaf.m_type);
@@ -170,7 +170,7 @@ ibQueryConstructorField ibAnyQueryConstructorModel::WalkFrom(const ibQueryConstr
 }
 
 ibClassID ibAnyQueryConstructorModel::ReferenceOfPath(const ibQuerySelect& select,
-                                                      const std::vector<wxString>& path,
+                                                      const std::vector<ibString>& path,
                                                       const ibQueryPackage& package,
                                                       size_t beforeStatement) const
 {
@@ -178,7 +178,7 @@ ibClassID ibAnyQueryConstructorModel::ReferenceOfPath(const ibQuerySelect& selec
 }
 
 ibTypeDescription ibAnyQueryConstructorModel::TypeOfPath(const ibQuerySelect& select,
-                                                         const std::vector<wxString>& path,
+                                                         const std::vector<ibString>& path,
                                                          const ibQueryPackage& package,
                                                          size_t beforeStatement) const
 {
@@ -266,7 +266,7 @@ std::vector<ibQueryConstructorField> ibAnyQueryConstructorModel::GetFields(
 	// Every field carries the SOURCE it came out of — stamped once, here, so the shell never has to
 	// work it back out of a qualified name (which a dot-walk path makes ambiguous anyway).
 	struct Stamp {
-		const wxString label;
+		const ibString label;
 		std::vector<ibQueryConstructorField> operator()(std::vector<ibQueryConstructorField> fields) const {
 			for (ibQueryConstructorField& field : fields) field.m_source = label;
 			return fields;
@@ -335,7 +335,7 @@ std::vector<ibQueryConstructorField> ibAnyQueryConstructorModel::GetQualifiedFie
 {
 	// The prefix a query actually writes: the alias where the author gave one, else the source's
 	// own last segment (Catalog.Products -> Products), which is what the lowering resolves by.
-	const wxString prefix = ibQuerySourceName(source);
+	const ibString prefix = ibQuerySourceName(source);
 
 	std::vector<ibQueryConstructorField> out = GetFields(source, package, beforeStatement);
 	if (prefix.IsEmpty())
@@ -347,13 +347,13 @@ std::vector<ibQueryConstructorField> ibAnyQueryConstructorModel::GetQualifiedFie
 	// which is the table's name twice on one line and the field's name pushed off the right — the
 	// whole reason the field trees stopped being readable once a second table joined.
 	for (ibQueryConstructorField& field : out)
-		field.m_name = prefix + wxT(".") + field.m_name;
+		field.m_name = prefix + ibT(".") + field.m_name;
 	return out;
 }
 
 // ONE LEVEL DOWN A REFERENCE — the type of the one class, walked as the overload below walks every type.
 std::vector<ibQueryConstructorField> ibAnyQueryConstructorModel::GetReferenceFields(ibClassID clsid,
-                                                                                   const wxString& sourceLabel) const
+                                                                                   const ibString& sourceLabel) const
 {
 	if (clsid == 0)
 		return {};   // no type at all — nothing behind it
@@ -366,7 +366,7 @@ std::vector<ibQueryConstructorField> ibAnyQueryConstructorModel::GetReferenceFie
 // one the query performs on the same walk: a name carried by several alternatives is ONE field,
 // because `Recorder.Date` is one column whichever document a row points at.
 std::vector<ibQueryConstructorField> ibAnyQueryConstructorModel::GetReferenceFields(const ibTypeDescription& typeDesc,
-                                                                                   const wxString& sourceLabel) const
+                                                                                   const ibString& sourceLabel) const
 {
 	std::vector<ibQueryConstructorField> out;
 
@@ -418,7 +418,7 @@ std::vector<ibQueryConstructorField> ibAnyQueryConstructorModel::GetReferenceBra
 	std::vector<ibQueryConstructorField> out;
 
 	for (const ibClassID& clsid : typeDesc.GetClsidList()) {
-		const wxString table = TableOfReference(clsid);
+		const ibString table = TableOfReference(clsid);
 		if (table.IsEmpty())
 			continue;   // no table behind it — a primitive, a barrier, a report or a data processor
 
@@ -445,15 +445,15 @@ ibQueryAstExprPtr ibAnyQueryConstructorModel::CastTo(ibQueryAstExprPtr value, co
 		return value;
 	auto cast = ibQueryAstExpr::Make(ibQueryAstExprKind::Cast);
 	cast->m_arg = std::move(value);
-	const wxString& table = branches.front().m_name;   // `Catalog.Goods`
-	cast->m_path = { table.BeforeFirst(wxT('.')), table.AfterFirst(wxT('.')) };
+	const ibString& table = branches.front().m_name;   // `Catalog.Goods`
+	cast->m_path = { table.BeforeFirst(ibT('.')), table.AfterFirst(ibT('.')) };
 	return cast;
 }
 
 std::vector<ibQueryConstructorField> ibAnyQueryConstructorModel::FieldsTakenFrom(const ibQuerySelect& reader,
                                                                                   const ibQuerySource& source) const
 {
-	const wxString table = ibQuerySourceName(source);
+	const ibString table = ibQuerySourceName(source);
 	std::vector<ibQueryConstructorField> out;
 	for (const ibQueryProjection& projection : reader.m_projections) {
 		const ibQueryAstExprPtr& e = projection.m_expr;
@@ -462,7 +462,7 @@ std::vector<ibQueryConstructorField> ibAnyQueryConstructorModel::FieldsTakenFrom
 		if (!column || column->m_kind != ibQueryAstExprKind::Column || column->m_arg || column->m_path.size() != 2
 		    || !column->m_path.front().IsSameAs(table, false))
 			continue;
-		const wxString& name = column->m_path.back();
+		const ibString& name = column->m_path.back();
 		if (std::any_of(out.begin(), out.end(), [&name](const ibQueryConstructorField& f) { return f.m_name.IsSameAs(name, false); }))
 			continue;
 		ibQueryConstructorField field;
@@ -531,7 +531,7 @@ bool ibQueryDropRoles(ibQueryPackage& package)
 	return forgot;
 }
 
-wxString ibQueryTextWithoutRoles(const wxString& text)
+ibString ibQueryTextWithoutRoles(const ibString& text)
 {
 	if (text.IsEmpty())
 		return text;

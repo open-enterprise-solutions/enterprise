@@ -323,7 +323,7 @@ bool ibFilterTreeModel::SetValue(const wxVariant& variant, const ibDataViewItem&
 
 		line->m_right.m_path.clear();   // typing a value is choosing a value, not a field
 		ibStoreValue(line->m_right.m_value, ibValueTypeDescription::AdjustValue(
-			line->m_left.m_type, ibValue(variant.GetString())));
+			line->m_left.m_type, ibValue(ibString(variant.GetString()))));
 		return true;
 	}
 	// The comparison and the display mode are written by their own editor — the

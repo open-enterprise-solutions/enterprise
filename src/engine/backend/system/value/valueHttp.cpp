@@ -31,7 +31,7 @@ struct ibValueHttpConnection::ibTransport {
 	// which is to say for as long as the session.
 	bool     m_secure = false;
 	bool     m_verify = true;
-	wxString m_client_certificate, m_client_password, m_trusted;
+	ibString m_client_certificate, m_client_password, m_trusted;
 };
 
 namespace {
@@ -45,37 +45,41 @@ const size_t kMostPemBytes = 16u * 1024u * 1024u;  // a bundle of every authorit
 // The fields a script may NOT set: they say how the message is framed and carried, and that is the engine's
 // (a Content-Length that is not the body's length is a request smuggled past a proxy). Refused by name.
 const ibChar* const kOwnedHeaders[] = {
-	wxT("Content-Length"), wxT("Transfer-Encoding"), wxT("Host"), wxT("Connection"), wxT("Expect"),
-	wxT("Proxy-Authorization"), wxT("Upgrade") };
+	ibT("Content-Length"), ibT("Transfer-Encoding"), ibT("Host"), ibT("Connection"), ibT("Expect"),
+	ibT("Proxy-Authorization"), ibT("Upgrade") };
 
-std::string ibHttpUtf8(const wxString& text)
+std::string ibHttpUtf8(const ibString& text)
 {
-	const wxScopedCharBuffer utf8 = text.utf8_str();
+	const std::string utf8 = text.ToUtf8();
 	return std::string(utf8.data(), utf8.length());
 }
 
 // text -> bytes. No byte-order mark: a body is not a file, and a mark in front of JSON is a parse error at the
 // other end.
-std::string ibHttpEncode(const wxString& text, ibTextEncoding encoding)
+std::string ibHttpEncode(const ibString& text, ibTextEncoding encoding)
 {
 	if (text.empty())
 		return std::string();
 	if (encoding == ibTextEncoding_UTF8)
 		return ibHttpUtf8(text);
 	const std::unique_ptr<wxMBConv> conv = ibCreateTextConv(encoding);
-	const wxScopedCharBuffer bytes = text.mb_str(*conv);
-	if (bytes.length() == 0)
+	// ⚠ THE CONVERTER'S OWN BUFFER, not a wxString's mb_str(): that one points into the string it came from, and
+	// over a temporary `wxString(text)` it was gone before it was read — "ab" in UTF-16 came back as two other
+	// letters (2026-10-27).
+	size_t length = 0;
+	const wxCharBuffer bytes = conv->cWC2MB(text.wc_str(), text.Len(), &length);
+	if (length == 0 || length == wxCONV_FAILED)
 		ibBackendCoreException::Error(_("HTTPRequest: the text cannot be written in this encoding"));
-	return std::string(bytes.data(), bytes.length());
+	return std::string(bytes.data(), length);
 }
 
 // bytes -> text, or a refusal: bytes that are not text in this encoding are not handed over as something else.
 // The same door a TextReader reads a file through, so a mark at the head of a body is a mark there too.
-wxString ibHttpDecode(const std::string& body, ibTextEncoding encoding, const ibChar* who)
+ibString ibHttpDecode(const std::string& body, ibTextEncoding encoding, const ibChar* who)
 {
-	wxString text;
+	ibString text;
 	if (!ibTextFromBytes(body.data(), body.size(), encoding, text))
-		ibBackendCoreException::Error(_("%s: the body is not text in this encoding - take it with GetBodyAsBinaryData()"), wxString(who));
+		ibBackendCoreException::Error(_("%s: the body is not text in this encoding - take it with GetBodyAsBinaryData()"), ibString(who));
 	return text;
 }
 
@@ -106,20 +110,20 @@ ibTextEncoding ibHttpEncodingAt(ibValue** paParams, const long lSizeArray, const
 	return paParams[at]->ConvertToEnumValue<ibTextEncoding>();
 }
 
-bool ibHttpHoldsControl(const wxString& text)
+bool ibHttpHoldsControl(const ibString& text)
 {
 	for (size_t i = 0; i < text.length(); i++) {
-		const wxUniChar::value_type c = text[i].GetValue();
+		const ibChar c = text[i];
 		if (c < 0x20 || c == 0x7F)
 			return true;
 	}
 	return false;
 }
 
-bool ibHttpIsAscii(const wxString& text)
+bool ibHttpIsAscii(const ibString& text)
 {
 	for (size_t i = 0; i < text.length(); i++) {
-		if (text[i].GetValue() > 0x7E)
+		if (text[i] > 0x7E)
 			return false;
 	}
 	return true;
@@ -127,11 +131,11 @@ bool ibHttpIsAscii(const wxString& text)
 
 // Whitespace around a header's value carries no meaning (RFC 9110, 5.5). Taken off here, so that "Bearer token "
 // pasted with its trailing space goes out as the token.
-wxString ibHttpTrimmed(const wxString& value)
+ibString ibHttpTrimmed(const ibString& value)
 {
 	size_t from = 0, to = value.length();
-	while (from < to && (value[from] == wxT(' ') || value[from] == wxT('\t'))) from++;
-	while (to > from && (value[to - 1] == wxT(' ') || value[to - 1] == wxT('\t'))) to--;
+	while (from < to && (value[from] == ibT(' ') || value[from] == ibT('\t'))) from++;
+	while (to > from && (value[to - 1] == ibT(' ') || value[to - 1] == ibT('\t'))) to--;
 	return value.Mid(from, to - from);
 }
 
@@ -151,7 +155,7 @@ bool ibHttpIsToken(const std::string& name)
 
 // What cannot stand in a request target goes out as %XX of its UTF-8; what is already there - a '%', a '?',
 // an '&' - is the script's and stays: an address is encoded once and by one rule.
-std::string ibHttpTarget(const wxString& resource)
+std::string ibHttpTarget(const ibString& resource)
 {
 	static const char digits[] = "0123456789ABCDEF";
 	const std::string utf8 = ibHttpUtf8(resource);
@@ -186,12 +190,12 @@ const char* ibHttpMethodName(ibHttpMethod method)
 
 // A certificate file's text - read here, by its name in whatever script, and handed to the client as text; false
 // when it cannot be read.
-bool ibHttpReadPem(const wxString& path, std::string& text)
+bool ibHttpReadPem(const ibString& path, std::string& text)
 {
 	// wxFFile says a file it cannot open through wxLog, which in the designer is a pane that pops up; the refusal
 	// is the caller's sentence.
 	wxLogNull quiet;
-	wxFFile in(path, wxT("rb"));
+	wxFFile in(path, ibT("rb"));
 	const wxFileOffset length = in.IsOpened() ? in.Length() : wxInvalidOffset;
 	if (length < 0 || static_cast<unsigned long long>(length) > kMostPemBytes)
 		return false;
@@ -208,21 +212,21 @@ bool ibHttpReadPem(const wxString& path, std::string& text)
 // The order here is the order of ::Prop and ::Func - the number is the index into each table.
 void ibValueHttpRequest_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(0, wxT("HTTPRequest()"));
-	helper.AppendConstructor(1, wxT("HTTPRequest(resourceAddress : string)"));
-	helper.AppendConstructor(2, wxT("HTTPRequest(resourceAddress : string, headers : structure)"));
+	helper.AppendConstructor(0, ibT("HTTPRequest()"));
+	helper.AppendConstructor(1, ibT("HTTPRequest(resourceAddress : string)"));
+	helper.AppendConstructor(2, ibT("HTTPRequest(resourceAddress : string, headers : structure)"));
 
-	helper.AppendProp(wxT("ResourceAddress"), true, true, wxNOT_FOUND);
-	helper.AppendProp(wxT("Headers"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("ResourceAddress"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("Headers"), true, true, wxNOT_FOUND);
 
-	helper.AppendFunc(wxT("SetBodyFromString"), 2, wxT("SetBodyFromString(text : string, encoding : TextEncoding = UTF8)"));
-	helper.AppendFunc(wxT("SetBodyFromBinaryData"), 1, wxT("SetBodyFromBinaryData(data : binaryData)"));
-	helper.AppendFunc(wxT("GetBodyAsString"), 1, wxT("GetBodyAsString(encoding : TextEncoding = UTF8)"));
-	helper.AppendFunc(wxT("GetBodyAsBinaryData"), wxT("GetBodyAsBinaryData()"));
+	helper.AppendFunc(ibT("SetBodyFromString"), 2, ibT("SetBodyFromString(text : string, encoding : TextEncoding = UTF8)"));
+	helper.AppendFunc(ibT("SetBodyFromBinaryData"), 1, ibT("SetBodyFromBinaryData(data : binaryData)"));
+	helper.AppendFunc(ibT("GetBodyAsString"), 1, ibT("GetBodyAsString(encoding : TextEncoding = UTF8)"));
+	helper.AppendFunc(ibT("GetBodyAsBinaryData"), ibT("GetBodyAsBinaryData()"));
 }
 
 ibValueHttpRequest::ibValueHttpRequest()
-	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_resource(wxT("/")), m_headers(new ibValueStructure())
+	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_resource(ibT("/")), m_headers(new ibValueStructure())
 {
 }
 
@@ -237,17 +241,17 @@ bool ibValueHttpRequest::Init(ibValue** paParams, const long lSizeArray)
 	return true;
 }
 
-void ibValueHttpRequest::SetResourceAddress(const wxString& resource)
+void ibValueHttpRequest::SetResourceAddress(const ibString& resource)
 {
 	if (resource.empty()) {
-		m_resource = wxT("/");
+		m_resource = ibT("/");
 		return;
 	}
-	if (resource[0] != wxT('/'))
+	if (resource[0] != ibT('/'))
 		ibBackendCoreException::Error(_("HTTPRequest: a resource address starts with '/' - the host and the port are the connection's: '%s'"), resource);
 	if (ibHttpHoldsControl(resource))
 		ibBackendCoreException::Error(_("HTTPRequest: a resource address holds no line breaks and no control characters"));
-	if (resource.Contains(wxT("#")))
+	if (resource.Contains(ibT("#")))
 		ibBackendCoreException::Error(_("HTTPRequest: a fragment (#...) is never sent to a server - leave it out, or spell a '#' in a query as %%23: '%s'"), resource);
 	m_resource = resource;
 }
@@ -260,7 +264,7 @@ void ibValueHttpRequest::SetHeaders(const ibValue& headers)
 	m_headers = given;                                         // shared with whoever gave it, as any value assigned is
 }
 
-void ibValueHttpRequest::SetBodyText(const wxString& text, ibTextEncoding encoding)
+void ibValueHttpRequest::SetBodyText(const ibString& text, ibTextEncoding encoding)
 {
 	m_body = ibHttpEncode(text, encoding);
 }
@@ -314,7 +318,7 @@ bool ibValueHttpRequest::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		return true;
 	}
 	case enGetBodyAsString:
-		pvarRetValue = ibHttpDecode(m_body, ibHttpEncodingAt(paParams, lSizeArray, 0), wxT("HTTPRequest"));
+		pvarRetValue = ibHttpDecode(m_body, ibHttpEncodingAt(paParams, lSizeArray, 0), ibT("HTTPRequest"));
 		return true;
 	case enGetBodyAsBinaryData: {
 		const ibValuePtr<ibValueBinaryData> data(new ibValueBinaryData(m_body.data(), m_body.size()));
@@ -331,11 +335,11 @@ bool ibValueHttpRequest::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 
 void ibValueHttpResponse_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(wxT("StatusCode"), true, false, wxNOT_FOUND);
-	helper.AppendProp(wxT("Headers"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("StatusCode"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("Headers"), true, false, wxNOT_FOUND);
 
-	helper.AppendFunc(wxT("GetBodyAsString"), 1, wxT("GetBodyAsString(encoding : TextEncoding = UTF8)"));
-	helper.AppendFunc(wxT("GetBodyAsBinaryData"), wxT("GetBodyAsBinaryData()"));
+	helper.AppendFunc(ibT("GetBodyAsString"), 1, ibT("GetBodyAsString(encoding : TextEncoding = UTF8)"));
+	helper.AppendFunc(ibT("GetBodyAsBinaryData"), ibT("GetBodyAsBinaryData()"));
 }
 
 ibValueHttpResponse::ibValueHttpResponse()
@@ -350,9 +354,9 @@ ibValueHttpResponse::ibValueHttpResponse(int status, const ibValuePtr<ibValueStr
 
 ibValueHttpResponse::~ibValueHttpResponse() {}
 
-wxString ibValueHttpResponse::BodyAsString(ibTextEncoding encoding) const
+ibString ibValueHttpResponse::BodyAsString(ibTextEncoding encoding) const
 {
-	return ibHttpDecode(m_body, encoding, wxT("HTTPResponse"));
+	return ibHttpDecode(m_body, encoding, ibT("HTTPResponse"));
 }
 
 bool ibValueHttpResponse::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
@@ -389,23 +393,23 @@ bool ibValueHttpResponse::CallAsFunc(const long lMethodNum, ibValue& pvarRetValu
 
 void ibValueHttpConnection_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(1, wxT("HTTPConnection(host : string)"));
-	helper.AppendConstructor(2, wxT("HTTPConnection(host : string, port : number)"));
-	helper.AppendConstructor(4, wxT("HTTPConnection(host : string, port : number, user : string, password : string)"));
-	helper.AppendConstructor(5, wxT("HTTPConnection(host : string, port : number, user : string, password : string, timeout : number)"));
+	helper.AppendConstructor(1, ibT("HTTPConnection(host : string)"));
+	helper.AppendConstructor(2, ibT("HTTPConnection(host : string, port : number)"));
+	helper.AppendConstructor(4, ibT("HTTPConnection(host : string, port : number, user : string, password : string)"));
+	helper.AppendConstructor(5, ibT("HTTPConnection(host : string, port : number, user : string, password : string, timeout : number)"));
 
-	helper.AppendProp(wxT("Host"), true, false, wxNOT_FOUND);
-	helper.AppendProp(wxT("Port"), true, false, wxNOT_FOUND);
-	helper.AppendProp(wxT("Timeout"), true, true, wxNOT_FOUND);
-	helper.AppendProp(wxT("SecureConnection"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("Host"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("Port"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("Timeout"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("SecureConnection"), true, true, wxNOT_FOUND);
 
-	helper.AppendFunc(wxT("Get"), 1, wxT("Get(request : HTTPRequest)"));
-	helper.AppendFunc(wxT("Post"), 1, wxT("Post(request : HTTPRequest)"));
-	helper.AppendFunc(wxT("Put"), 1, wxT("Put(request : HTTPRequest)"));
-	helper.AppendFunc(wxT("Patch"), 1, wxT("Patch(request : HTTPRequest)"));
-	helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(request : HTTPRequest)"));
-	helper.AppendFunc(wxT("Head"), 1, wxT("Head(request : HTTPRequest)"));
-	helper.AppendFunc(wxT("CallMethod"), 2, wxT("CallMethod(method : HTTPMethod, request : HTTPRequest)"));
+	helper.AppendFunc(ibT("Get"), 1, ibT("Get(request : HTTPRequest)"));
+	helper.AppendFunc(ibT("Post"), 1, ibT("Post(request : HTTPRequest)"));
+	helper.AppendFunc(ibT("Put"), 1, ibT("Put(request : HTTPRequest)"));
+	helper.AppendFunc(ibT("Patch"), 1, ibT("Patch(request : HTTPRequest)"));
+	helper.AppendFunc(ibT("Delete"), 1, ibT("Delete(request : HTTPRequest)"));
+	helper.AppendFunc(ibT("Head"), 1, ibT("Head(request : HTTPRequest)"));
+	helper.AppendFunc(ibT("CallMethod"), 2, ibT("CallMethod(method : HTTPMethod, request : HTTPRequest)"));
 }
 
 ibValueHttpConnection::ibValueHttpConnection()
@@ -422,25 +426,25 @@ bool ibValueHttpConnection::Init(ibValue** paParams, const long lSizeArray)
 		return false;
 	const bool portGiven = ibHttpGiven(paParams, lSizeArray, 1);
 	const int port = portGiven ? static_cast<int>(paParams[1]->GetInteger()) : kDefaultPort;
-	const wxString user = lSizeArray > 2 ? paParams[2]->GetString() : ibString();
-	const wxString password = lSizeArray > 3 ? paParams[3]->GetString() : ibString();
+	const ibString user = lSizeArray > 2 ? paParams[2]->GetString() : ibString();
+	const ibString password = lSizeArray > 3 ? paParams[3]->GetString() : ibString();
 	const int timeout = ibHttpGiven(paParams, lSizeArray, 4) ? static_cast<int>(paParams[4]->GetInteger()) : kDefaultTimeout;
 	Open(paParams[0]->GetString(), port, user, password, timeout, portGiven);
 	return true;
 }
 
-void ibValueHttpConnection::Open(const wxString& host, int port, const wxString& user, const wxString& password, int timeoutSeconds, bool portGiven)
+void ibValueHttpConnection::Open(const ibString& host, int port, const ibString& user, const ibString& password, int timeoutSeconds, bool portGiven)
 {
-	if (host.empty() || host.Contains(wxT("://")) || host.Contains(wxT("/")) || host.Contains(wxT("\\")) || host.Contains(wxT("@"))
-		|| host.Contains(wxT("?")) || host.Contains(wxT("#")) || host.Contains(wxT(" ")) || ibHttpHoldsControl(host))
+	if (host.empty() || host.Contains(ibT("://")) || host.Contains(ibT("/")) || host.Contains(ibT("\\")) || host.Contains(ibT("@"))
+		|| host.Contains(ibT("?")) || host.Contains(ibT("#")) || host.Contains(ibT(" ")) || ibHttpHoldsControl(host))
 		ibBackendCoreException::Error(_("HTTPConnection: the host is a name - 'api.example' - not an address: the path goes into the request's ResourceAddress, and 'https' is the SecureConnection property: '%s'"), host);
 	if (!ibHttpIsAscii(host))
 		ibBackendCoreException::Error(_("HTTPConnection: a host name is given in its ASCII form - an international name as its punycode (xn--...): '%s'"), host);
 	// A ':' is a port unless the host is an IPv6 address, which has at least two; the brackets an address
 	// wears in a URL are the URL's, not the name's (the library puts them on the Host header itself).
-	if (host.Contains(wxT("[")) || host.Contains(wxT("]")) || host.Freq(wxT(':')) == 1)
+	if (host.Contains(ibT("[")) || host.Contains(ibT("]")) || host.Freq(ibT(':')) == 1)
 		ibBackendCoreException::Error(_("HTTPConnection: the port is the second argument, not a part of the host, and an IPv6 address is given bare - '::1', not '[::1]': '%s'"), host);
-	if (user.Contains(wxT(":")))
+	if (user.Contains(ibT(":")))
 		ibBackendCoreException::Error(_("HTTPConnection: a user name for Basic authorization cannot hold ':' - that is what parts it from the password"));
 	if (port < 1 || port > 65535)
 		ibBackendCoreException::Error(_("HTTPConnection: the port is 1 to 65535, and %d was given"), port);
@@ -505,7 +509,7 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 	// file needs to know WHICH entry it was.
 	bool authorized = false;
 	for (const auto& entry : request.Headers().Entries()) {
-		const wxString key = entry.key.GetString();
+		const ibString key = entry.key.GetString();
 		const std::string field = ibHttpUtf8(key);
 		if (!ibHttpIsToken(field))
 			ibBackendCoreException::Error(_("HTTPConnection: '%s' is not a header name"), key);
@@ -516,11 +520,11 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 		const ibValueTypes kind = entry.value.GetType();
 		if (kind != ibValueTypes::TYPE_STRING && kind != ibValueTypes::TYPE_NUMBER)
 			ibBackendCoreException::Error(_("HTTPConnection: the value of the header '%s' is a string or a number"), key);
-		const wxString value = ibHttpTrimmed(entry.value.GetString());
+		const ibString value = ibHttpTrimmed(entry.value.GetString());
 		if (ibHttpHoldsControl(value))
 			ibBackendCoreException::Error(_("HTTPConnection: the value of the header '%s' holds a line break or a control character"), key);
 		message.m_headers.emplace_back(field, ibHttpUtf8(value));
-		if (key.IsSameAs(wxT("Authorization"), false))
+		if (key.IsSameAs(ibT("Authorization"), false))
 			authorized = true;
 	}
 	// The connection's user and password, unless the request says who it is by itself (RFC 7617: base64 of the
@@ -539,9 +543,9 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 	const ibValueCertificateFile* const mine = secure ? m_secure->ClientCertificate() : nullptr;
 	const ibValueCertificateFile* const trusted = secure ? m_secure->TrustedCertificates() : nullptr;
 	const bool verify = secure && m_secure->VerifyServerCertificate();
-	const wxString certificatePath = mine != nullptr ? mine->Path() : wxString();
-	const wxString certificatePassword = mine != nullptr ? mine->Password() : wxString();
-	const wxString trustedPath = trusted != nullptr ? trusted->Path() : wxString();
+	const ibString certificatePath = mine != nullptr ? mine->Path() : ibString();
+	const ibString certificatePassword = mine != nullptr ? mine->Password() : ibString();
+	const ibString trustedPath = trusted != nullptr ? trusted->Path() : ibString();
 
 	if (m_transport && (m_transport->m_secure != secure || m_transport->m_verify != verify
 		|| m_transport->m_client_certificate != certificatePath || m_transport->m_client_password != certificatePassword
@@ -569,13 +573,13 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 				if (trusted != nullptr)
 					ibBackendCoreException::Error(_("HTTPConnection: the trusted certificates could not be read from the certificate file '%s' - not a PEM"), trustedPath);
 				ibBackendCoreException::Error(_("HTTPConnection: the platform's trusted certificates could not be read - %s; name the authority's file in TrustedCertificates"),
-					wxString::FromUTF8(error));
+					ibString::FromUTF8(error));
 				break;
 			case ibHttpClientError::Certificate:
 				ibBackendCoreException::Error(_("HTTPConnection: the certificate file '%s' could not be read - not a PEM, or the key's password is wrong"), certificatePath);
 				break;
 			default:
-				ibBackendCoreException::Error(_("HTTPConnection: a secure connection could not be prepared - %s"), wxString::FromUTF8(error));
+				ibBackendCoreException::Error(_("HTTPConnection: a secure connection could not be prepared - %s"), ibString::FromUTF8(error));
 			}
 		}
 		made->m_secure = secure;
@@ -602,22 +606,22 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 		// next request would read it as its own headers.
 		m_transport.reset();
 		ibBackendCoreException::Error(_("HTTPConnection: %s %s://%s:%d%s failed - %s"),
-			wxString::FromAscii(name), wxString(secure ? wxT("https") : wxT("http")), m_host, Port(), request.ResourceAddress(), wxString::FromUTF8(failure.what()));
+			ibString::FromUTF8(name), ibString(secure ? ibT("https") : ibT("http")), m_host, Port(), request.ResourceAddress(), ibString::FromUTF8(failure.what()));
 	}
 	if (error != ibHttpClientError::None) {
 		// ⚠ AND THE TRANSPORT GOES: whatever state the socket is in, the next request starts clean.
 		m_transport.reset();
 
-		wxString why;
+		ibString why;
 		switch (error) {
 		case ibHttpClientError::Timeout:
-			why = wxString::Format(_("nobody answered within the %d s allowed"), m_timeout);
+			why = ibString::Format(_("nobody answered within the %d s allowed"), m_timeout);
 			break;
 		case ibHttpClientError::Read:
 			why = _("the connection was lost before the answer was whole");
 			break;
 		case ibHttpClientError::Answer:
-			why = wxString::Format(_("what came back is not an HTTP answer, or is larger than the %u MB held"),
+			why = ibString::Format(_("what came back is not an HTTP answer, or is larger than the %u MB held"),
 				static_cast<unsigned>(ibHttpClient::kMaxAnswerBytes / (1024u * 1024u)));
 			break;
 		case ibHttpClientError::Write:
@@ -627,8 +631,8 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 			why = _("the connection could not be made - the name does not resolve, or nothing listens on the port");
 			break;
 		case ibHttpClientError::Verification:
-			why = wxString::Format(_("the server's certificate is not trusted - not signed by a trusted authority, expired, or not a certificate (%s); name the authority's file in TrustedCertificates"),
-				wxString::FromUTF8(detail));
+			why = ibString::Format(_("the server's certificate is not trusted - not signed by a trusted authority, expired, or not a certificate (%s); name the authority's file in TrustedCertificates"),
+				ibString::FromUTF8(detail));
 			break;
 		case ibHttpClientError::Hostname:
 			why = _("the server's certificate is not for this host name");
@@ -637,23 +641,23 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 			why = _("the server on this port does not speak TLS, or the handshake failed");
 			break;
 		default:
-			why = wxString::FromUTF8(detail);   // the client's own word for the rest
+			why = ibString::FromUTF8(detail);   // the client's own word for the rest
 		}
 		ibBackendCoreException::Error(_("HTTPConnection: %s %s://%s:%d%s was not answered: %s"),
-			wxString::FromAscii(name), wxString(secure ? wxT("https") : wxT("http")), m_host, Port(), request.ResourceAddress(), why);
+			ibString::FromUTF8(name), ibString(secure ? ibT("https") : ibT("http")), m_host, Port(), request.ResourceAddress(), why);
 	}
 
 	// The headers as a Structure. A name met twice is joined with ", " (RFC 9110, 5.3) - except Set-Cookie,
 	// whose values hold commas of their own: the last one stays.
 	const ibValuePtr<ibValueStructure> headers(new ibValueStructure());
 	for (const auto& field : result.m_headers) {
-		const wxString key = wxString::FromUTF8(field.first.data(), field.first.size());
-		wxString value = wxString::FromUTF8(field.second.data(), field.second.size());
+		const ibString key = ibString::FromUTF8(field.first.data(), field.first.size());
+		ibString value = ibString::FromUTF8(field.second.data(), field.second.size());
 		if (value.empty() && !field.second.empty())
 			value = wxString::From8BitData(field.second.data(), field.second.size());
 		const long held = headers->FindProp(key);
-		if (held >= 0 && !key.IsSameAs(wxT("Set-Cookie"), false))
-			value = headers->Entries()[static_cast<size_t>(held)].value.GetString() + wxT(", ") + value;
+		if (held >= 0 && !key.IsSameAs(ibT("Set-Cookie"), false))
+			value = headers->Entries()[static_cast<size_t>(held)].value.GetString() + ibT(", ") + value;
 		headers->SetAt(ibValue(key), ibValue(value));
 	}
 

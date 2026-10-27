@@ -8,12 +8,12 @@
 struct CORE_API ibStandardCommandDescription {
 
 	ibActionID m_lAction;
-	wxString m_strAction;
+	ibString m_strAction;
 
 	ibStandardCommandDescription(const ibActionID& lAction) : m_lAction(lAction), m_strAction() {}
-	ibStandardCommandDescription(const wxString& strAction) : m_lAction(wxNOT_FOUND), m_strAction(strAction) {}
+	ibStandardCommandDescription(const ibString& strAction) : m_lAction(wxNOT_FOUND), m_strAction(strAction) {}
 
-	wxString GetCustomAction() const { return m_strAction; }
+	const ibString& GetCustomAction() const { return m_strAction; }
 	ibActionID GetSystemAction() const { return m_lAction; }
 
 	bool operator == (const ibStandardCommandDescription& rhs) const {

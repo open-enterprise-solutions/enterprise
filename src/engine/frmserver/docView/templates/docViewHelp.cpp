@@ -43,7 +43,7 @@ wxIMPLEMENT_CLASS(ibHelpDocument, ibDocument);
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibHelpFileDocument, ibHelpDocument);
 
-bool ibHelpFileDocument::OnCreate(const wxString& path, long flags)
+bool ibHelpFileDocument::OnCreate(const ibString& path, long flags)
 {
 	if (!ibDocument::OnCreate(path, flags))
 		return false;
@@ -53,7 +53,7 @@ bool ibHelpFileDocument::OnCreate(const wxString& path, long flags)
 
 // The text is the document's own, so it saves and loads it itself rather than through Save/LoadObject.
 // Its file is the session's temporary one (ibTempFile), where the desktop's was on disk.
-bool ibHelpFileDocument::DoSaveDocument(const wxString& filename)
+bool ibHelpFileDocument::DoSaveDocument(const ibString& filename)
 {
 	ibTempFile file;
 	if (!file.Create(filename, true) || !file.Write(m_text, wxConvUTF8))
@@ -62,7 +62,7 @@ bool ibHelpFileDocument::DoSaveDocument(const wxString& filename)
 	return true;
 }
 
-bool ibHelpFileDocument::DoOpenDocument(const wxString& filename)
+bool ibHelpFileDocument::DoOpenDocument(const ibString& filename)
 {
 	ibTempFile file(filename);
 	if (!file.IsOpened() || !file.ReadAll(&m_text, wxConvUTF8))

@@ -46,9 +46,9 @@ class ibValueEnumDocumentWriteMode : public ibValueEnumeration<ibDocumentWriteMo
 	//ibValueEnumDocumentWriteMode(ibDocumentWriteMode mode) : ibValueEnumeration(mode) {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibDocumentWriteMode::ibDocumentWriteMode_Posting, wxT("Posting"), _("Posting"));
-		AddEnumeration(ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting, wxT("UndoPosting"), _("Undo posting"));
-		AddEnumeration(ibDocumentWriteMode::ibDocumentWriteMode_Write, wxT("Write"), _("Write"));
+		AddEnumeration(ibDocumentWriteMode::ibDocumentWriteMode_Posting, ibT("Posting"), _("Posting"));
+		AddEnumeration(ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting, ibT("UndoPosting"), _("Undo posting"));
+		AddEnumeration(ibDocumentWriteMode::ibDocumentWriteMode_Write, ibT("Write"), _("Write"));
 	}
 };
 class ibValueEnumDocumentPostingMode : public ibValueEnumeration<ibDocumentPostingMode> {
@@ -57,8 +57,8 @@ class ibValueEnumDocumentPostingMode : public ibValueEnumeration<ibDocumentPosti
 	//ibValueEnumDocumentPostingMode(ibDocumentPostingMode mode) : ibValueEnumeration(mode) {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibDocumentPostingMode::ibDocumentPostingMode_RealTime, wxT("RealTime"), _("Real time"));
-		AddEnumeration(ibDocumentPostingMode::ibDocumentPostingMode_Regular, wxT("Regular"), _("Regular"));
+		AddEnumeration(ibDocumentPostingMode::ibDocumentPostingMode_RealTime, ibT("RealTime"), _("Real time"));
+		AddEnumeration(ibDocumentPostingMode::ibDocumentPostingMode_Regular, ibT("Regular"), _("Regular"));
 	}
 };
 class ibValueEnumDocumentRecordsDeletion : public ibValueEnumeration<ibDocumentRecordsDeletion> {
@@ -66,9 +66,9 @@ class ibValueEnumDocumentRecordsDeletion : public ibValueEnumeration<ibDocumentR
 	ibValueEnumDocumentRecordsDeletion() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Automatically, wxT("Automatically"), _("Delete automatically"));
-		AddEnumeration(ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_OnUndoPosting, wxT("OnUndoPosting"), _("Delete automatically on undo posting"));
-		AddEnumeration(ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Never, wxT("Never"), _("Do not delete automatically"));
+		AddEnumeration(ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Automatically, ibT("Automatically"), _("Delete automatically"));
+		AddEnumeration(ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_OnUndoPosting, ibT("OnUndoPosting"), _("Delete automatically on undo posting"));
+		AddEnumeration(ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Never, ibT("Never"), _("Do not delete automatically"));
 	}
 };
 class ibValueEnumNumberPeriodicity : public ibValueEnumeration<ibNumberPeriodicity> {
@@ -76,11 +76,11 @@ class ibValueEnumNumberPeriodicity : public ibValueEnumeration<ibNumberPeriodici
 	ibValueEnumNumberPeriodicity() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical, wxT("Nonperiodical"), _("Nonperiodical"));
-		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Year, wxT("Year"), _("Year"));
-		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Quarter, wxT("Quarter"), _("Quarter"));
-		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Month, wxT("Month"), _("Month"));
-		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Day, wxT("Day"), _("Day"));
+		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical, ibT("Nonperiodical"), _("Nonperiodical"));
+		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Year, ibT("Year"), _("Year"));
+		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Quarter, ibT("Quarter"), _("Quarter"));
+		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Month, ibT("Month"), _("Month"));
+		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Day, ibT("Day"), _("Day"));
 	}
 };
 #pragma endregion

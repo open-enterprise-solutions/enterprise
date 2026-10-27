@@ -16,7 +16,6 @@
 #include "core/core.h"
 #include "core/memory/memoryBuffer.h"
 
-#include <wx/string.h>   // the wxString overloads of w_stringZ / r_string / r_stringZ — until the callers use ibString
 
 #include <cstdint>
 #include <cstring>
@@ -51,7 +50,6 @@ public:
 	inline void			w_string(const char* p) { w(p, (std::uint32_t)strlen(p)); w_u8(13); w_u8(10); }
 	inline void			w_stringZ(const char* p) { w(p, (std::uint32_t)strlen(p) + 1); }
 	inline void			w_stringZ(const std::string& p) { w(p.c_str() ? p.c_str() : "", (std::uint32_t)p.size()); w_u8(0); }
-	inline void			w_stringZ(const wxString& p) { const wxScopedCharBuffer s = p.utf8_str(); w(s.data() ? s.data() : "", (std::uint32_t)s.length()); w_u8(0); }
 	void				w_stringZ(const ibString& p);
 	void				w_stringZ(const wchar_t* p);   // a wide literal — one of the two above would both take it
 
@@ -187,15 +185,14 @@ public:
 
 	void			r_string(char* dest, std::uint32_t tgt_sz) const;
 	void			r_string(std::string& dest) const;
-	void			r_string(wxString& dest) const;
+	void			r_string(ibString& dest) const;
 
 	void			skip_stringZ() const;
 
-	wxString		r_stringZ() const;
+	ibString		r_stringZ() const;
 
 	void			r_stringZ(char* dest, std::uint32_t tgt_sz) const;
 	void			r_stringZ(std::string& dest) const;
-	void			r_stringZ(wxString& dest) const;
 	void			r_stringZ(ibString& dest) const;
 
 	// A chunk opened as a reader of its own — holding the same bytes — or nullptr when there is none.

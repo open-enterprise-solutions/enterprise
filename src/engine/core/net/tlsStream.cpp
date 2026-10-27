@@ -9,10 +9,10 @@
 #include <asio/post.hpp>
 #include <asio/write.hpp>
 
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 #include <windows.h>   // the critical sections Mbed TLS's mutexes are, below
 #include <wincrypt.h>  // the system's certificate stores, a client's authorities
-#elif defined(__APPLE__)
+#elif defined(__IBOSX__)
 #include <Security/Security.h>   // the keychain's trust settings, a client's authorities
 #endif
 
@@ -47,7 +47,7 @@ const char* s_protocols[] = { "http/1.1", nullptr };
 bool LoadSystemTrust(mbedtls_x509_crt& chain)
 {
 	bool loaded = false;
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	for (const wchar_t* const name : { L"ROOT", L"CA" }) {
 		const HCERTSTORE store = CertOpenSystemStoreW(0, name);
 		if (store == nullptr)
@@ -59,7 +59,7 @@ bool LoadSystemTrust(mbedtls_x509_crt& chain)
 		}
 		CertCloseStore(store, 0);
 	}
-#elif defined(__APPLE__)
+#elif defined(__IBOSX__)
 	for (const SecTrustSettingsDomain domain : { kSecTrustSettingsDomainSystem, kSecTrustSettingsDomainAdmin,
 		kSecTrustSettingsDomainUser }) {
 		CFArrayRef certificates = nullptr;

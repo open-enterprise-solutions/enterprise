@@ -18,7 +18,7 @@ class ibClientFrame;
 class FRMSERVER_API ibClientChildFrame : public ibDocChildFrameAnyBase {
 public:
 
-	ibClientChildFrame(ibClientFrame* frame, std::int32_t id, ibDocument* doc, ibView* view, const wxString& title);
+	ibClientChildFrame(ibClientFrame* frame, std::int32_t id, ibDocument* doc, ibView* view, const ibString& title);
 	virtual ~ibClientChildFrame() override;
 
 	// Its id in the frame — what a client names it by (the wire's NodeId of the tab): given when it opens, never
@@ -37,8 +37,8 @@ public:
 
 	// Its title — its document's once the document has one (a form's host sets it from the form's caption,
 	// ibFormVisualEditView::SetCaption, as the desktop's tab followed its document), the one it opened with before.
-	void     SetTitle(const wxString& title) { m_title = title; }
-	wxString GetTitle() const;
+	void     SetTitle(const ibString& title) { m_title = title; }
+	ibString GetTitle() const;
 
 	// The tab's icon — the document's own when it has one (a catalog's form shows the catalog's), the
 	// form's otherwise. An empty icon tells the client to show the title alone.
@@ -53,7 +53,7 @@ private:
 
 	ibClientFrame*        m_frame;
 	std::int32_t                   m_id;
-	wxString              m_title;
+	ibString              m_title;
 	ibPictureDescription  m_icon;
 	bool                  m_locked = false;
 };

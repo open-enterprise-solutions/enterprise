@@ -20,7 +20,7 @@ namespace {
 // A frame's bulk that does not change — so the patch is lighter than the frame, the only patch the server sends.
 void Ballast(ibDataNode& node)
 {
-	node.SetValue(wxT("Ballast"), wxString(wxT('x'), 400));
+	node.SetValue(wxT("Ballast"), ibString(wxT('x'), 400));
 }
 
 // The node as the port writes it, read as the thin client reads it.
@@ -45,10 +45,10 @@ void ExpectApplied(const ibDataNode& from, const ibDataNode& to)
 	EXPECT_TRUE(held == drawn) << "made:  " << held.Write().ToUtf8() << "\ndrawn: " << drawn.Write().ToUtf8();
 }
 
-ibDataNode& Control(ibDataNode& parent, ibMetaID id, const wxString& caption)
+ibDataNode& Control(ibDataNode& parent, ibMetaID id, const ibString& caption)
 {
 	ibDataNode& control = parent.AddChild(0, id);
-	control.SetProp(wxT("Caption"), caption);
+	control.SetValue(wxT("Caption"), caption);
 	control.Child(wxT("State")).SetValue(wxT("Visible"), true);
 	return control;
 }
@@ -59,13 +59,13 @@ TEST(ClientFrameApply, EntrySetAddedRemoved)
 {
 	ibDataNode from;
 	Ballast(from);
-	from.SetValue(wxT("Title"), wxString(wxT("Goods")));
-	from.SetValue(wxT("Status"), wxString(wxT("ready")));
+	from.SetValue(wxT("Title"), ibString(wxT("Goods")));
+	from.SetValue(wxT("Status"), ibString(wxT("ready")));
 	from.SetValue(wxT("ActiveTab"), 1);
 
 	ibDataNode to;
 	Ballast(to);
-	to.SetValue(wxT("Title"), wxString(wxT("Goods: list")));
+	to.SetValue(wxT("Title"), ibString(wxT("Goods: list")));
 	to.SetValue(wxT("ActiveTab"), 1);
 	to.SetValue(wxT("Modified"), true);
 
@@ -77,15 +77,15 @@ TEST(ClientFrameApply, NodeEntryMergedNotReplaced)
 	ibDataNode from;
 	Ballast(from);
 	ibDataNode& view = from.Child(wxT("View"));
-	view.SetValue(wxT("Key"), wxString(wxT("form-1")));
-	view.Child(wxT("State")).SetValue(wxT("Title"), wxString(wxT("Receipt")));
+	view.SetValue(wxT("Key"), ibString(wxT("form-1")));
+	view.Child(wxT("State")).SetValue(wxT("Title"), ibString(wxT("Receipt")));
 	view.Child(wxT("State")).SetValue(wxT("Modified"), false);
 
 	ibDataNode to;
 	Ballast(to);
 	ibDataNode& now = to.Child(wxT("View"));
-	now.SetValue(wxT("Key"), wxString(wxT("form-1")));
-	now.Child(wxT("State")).SetValue(wxT("Title"), wxString(wxT("Receipt")));
+	now.SetValue(wxT("Key"), ibString(wxT("form-1")));
+	now.Child(wxT("State")).SetValue(wxT("Title"), ibString(wxT("Receipt")));
 	now.Child(wxT("State")).SetValue(wxT("Modified"), true);
 
 	ExpectApplied(from, to);
@@ -115,13 +115,13 @@ TEST(ClientFrameApply, AnotherNodeUnderTheSameIdComesWhole)
 {
 	ibDataNode from;
 	Ballast(from);
-	from.AddChild(101, 1).SetProp(wxT("Caption"), wxString(wxT("A field")));
-	from.AddChild(101, 2).SetProp(wxT("Caption"), wxString(wxT("Stays")));
+	from.AddChild(101, 1).SetValue(wxT("Caption"), ibString(wxT("A field")));
+	from.AddChild(101, 2).SetValue(wxT("Caption"), ibString(wxT("Stays")));
 
 	ibDataNode to;
 	Ballast(to);
-	to.AddChild(202, 1).SetProp(wxT("Title"), wxString(wxT("A table now")));
-	to.AddChild(101, 2).SetProp(wxT("Caption"), wxString(wxT("Stays")));
+	to.AddChild(202, 1).SetValue(wxT("Title"), ibString(wxT("A table now")));
+	to.AddChild(101, 2).SetValue(wxT("Caption"), ibString(wxT("Stays")));
 
 	ExpectApplied(from, to);
 }
@@ -137,7 +137,7 @@ TEST(ClientFrameApply, AnotherNodeUnderTheSameNameComesWhole)
 
 	ibDataNode to;
 	Ballast(to);
-	to.Child(wxT("View")).SetValue(wxT("Text"), wxString(wxT("a text")));
+	to.Child(wxT("View")).SetValue(wxT("Text"), ibString(wxT("a text")));
 
 	ExpectApplied(from, to);
 }
@@ -147,15 +147,15 @@ TEST(ClientFrameApply, ChildrenWithoutIdsComeWhole)
 	ibDataNode from;
 	Ballast(from);
 	ibDataNode& menu = from.Child(wxT("Menu"));
-	menu.AddChild(0, 0).SetValue(wxT("Title"), wxString(wxT("File")));
-	menu.AddChild(0, 0).SetValue(wxT("Title"), wxString(wxT("Edit")));
+	menu.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("File")));
+	menu.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("Edit")));
 
 	ibDataNode to;
 	Ballast(to);
 	ibDataNode& now = to.Child(wxT("Menu"));
-	now.AddChild(0, 0).SetValue(wxT("Title"), wxString(wxT("File")));
-	now.AddChild(0, 0).SetValue(wxT("Title"), wxString(wxT("Edit")));
-	now.AddChild(0, 0).SetValue(wxT("Title"), wxString(wxT("Help")));
+	now.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("File")));
+	now.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("Edit")));
+	now.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("Help")));
 
 	ExpectApplied(from, to);
 }
@@ -217,10 +217,10 @@ TEST(ClientFrameApply, NodeFilledAndRead)
 	EXPECT_TRUE(read.GetString("Title") == goods);
 	EXPECT_EQ(read.GetInt("ActiveTab"), 3);
 	EXPECT_TRUE(read.GetBool("Locked"));
-	EXPECT_EQ(read.FindChild("View").GetString("Key"), wxString(wxT("form-1")));
+	EXPECT_EQ(read.FindChild("View").GetString("Key"), ibString(wxT("form-1")));
 	ASSERT_EQ(read.Children().size(), 1u);
 	EXPECT_EQ(read.Children()[0].GetId(), 7);
-	EXPECT_EQ(read.Children()[0].GetType(), wxString(wxT("Tablebox")));
+	EXPECT_EQ(read.Children()[0].GetType(), ibString(wxT("Tablebox")));
 	EXPECT_TRUE(read.FindChild("Nothing").IsEmpty());
 	EXPECT_EQ(read.GetInt("Title", -1), -1);   // another kind — the default
 }
@@ -241,12 +241,12 @@ TEST(ClientFrameApply, NodeFilledGoesAsPacket)
 	EXPECT_TRUE(read == node);
 	EXPECT_EQ(read.GetInt("ActiveTab"), 3);
 	EXPECT_TRUE(read.GetBool("Locked"));
-	EXPECT_EQ(read.FindChild("View").GetString("Key"), wxString(wxT("form-1")));
+	EXPECT_EQ(read.FindChild("View").GetString("Key"), ibString(wxT("form-1")));
 	ASSERT_EQ(read.Children().size(), 1u);
 	EXPECT_EQ(read.Children()[0].GetId(), 7);
-	EXPECT_EQ(read.Children()[0].GetType(), wxString(wxT("Tablebox")));
+	EXPECT_EQ(read.Children()[0].GetType(), ibString(wxT("Tablebox")));
 	ASSERT_EQ(read.GetList("Features").size(), 1u);
-	EXPECT_EQ(read.GetList("Features")[0].AsString(), wxString(wxT("resume")));
+	EXPECT_EQ(read.GetList("Features")[0].AsString(), ibString(wxT("resume")));
 }
 
 // Bytes that are no packet are refused, not read.
@@ -301,18 +301,18 @@ TEST(ClientFrameApply, CloneOfAPartIsWalkedWhole)
 	Ballast(frame);
 	ibDataNode& tree = frame.Child(wxT("Tree"));
 	tree.SetMetaId(1);
-	tree.Child(wxT("First")).SetValue(wxT("Picture"), wxString(wxT("1")));
-	tree.Child(wxT("Second")).SetValue(wxT("Picture"), wxString(wxT("2")));
-	tree.AddChild(0, 2).SetValue(wxT("Picture"), wxString(wxT("3")));
-	tree.AddChild(0, 3).SetValue(wxT("Picture"), wxString(wxT("4")));
+	tree.Child(wxT("First")).SetValue(wxT("Picture"), ibString(wxT("1")));
+	tree.Child(wxT("Second")).SetValue(wxT("Picture"), ibString(wxT("2")));
+	tree.AddChild(0, 2).SetValue(wxT("Picture"), ibString(wxT("3")));
+	tree.AddChild(0, 3).SetValue(wxT("Picture"), ibString(wxT("4")));
 
 	const ibProtocolNode cloned = Wire(frame).FindChild("Tree").Clone();
-	std::vector<wxString> pictures;
+	std::vector<ibString> pictures;
 	for (const auto& [name, entry] : cloned.Entries()) {
 		if (entry.IsNode())
-			pictures.push_back(wxString(entry.GetString("Picture")));
+			pictures.push_back(ibString(entry.GetString("Picture")));
 	}
 	for (const ibProtocolNode& child : cloned.Children())
-		pictures.push_back(wxString(child.GetString("Picture")));
-	EXPECT_EQ(pictures, (std::vector<wxString>{ wxT("1"), wxT("2"), wxT("3"), wxT("4") }));
+		pictures.push_back(ibString(child.GetString("Picture")));
+	EXPECT_EQ(pictures, (std::vector<ibString>{ wxT("1"), wxT("2"), wxT("3"), wxT("4") }));
 }

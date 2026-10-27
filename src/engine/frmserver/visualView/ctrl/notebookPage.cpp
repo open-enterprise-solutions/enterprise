@@ -21,7 +21,7 @@ void ibValueNotebookPage::OnUpdate(ibDataNode& state, ibVisualHost* host)
 
     state.SetValue(ibProtocol::ibForm::ibState::Visible, IsPageShown());
     state.SetValue(ibProtocol::ibForm::ibState::Title, representation != ibRepresentation::ibRepresentation_Picture ?
-        m_propertyTitle->GetValueAsTranslateString() : wxString());
+        m_propertyTitle->GetValueAsTranslateString() : ibString());
     state.SetValue(ibProtocol::ibForm::ibNotebook::PictureVisible, representation != ibRepresentation::ibRepresentation_Text);
     // The picture travels by its id, and only when the tab shows one.
     const ibPictureDescription picture = m_propertyPicture->GetValueAsPictureDesc();

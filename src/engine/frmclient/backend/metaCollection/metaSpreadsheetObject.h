@@ -13,12 +13,12 @@
 // reached at runtime.
 class ibValueMetaObjectSpreadsheetBase {
 public:
-	wxString GetName() const { return m_name; }
+	const ibString& GetName() const { return m_name; }
 	bool IsEditable() const { return false; }
 	ibSpreadsheetDescription& GetSpreadsheetDesc() { return m_spreadsheetDesc; }
 	const ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_spreadsheetDesc; }
 private:
-	wxString                 m_name;
+	ibString                 m_name;
 	ibSpreadsheetDescription m_spreadsheetDesc;
 };
 

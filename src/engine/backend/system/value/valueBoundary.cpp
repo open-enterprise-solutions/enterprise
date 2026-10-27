@@ -30,8 +30,8 @@ bool ibValueBoundary::Init(ibValue** paParams, const long lSizeArray)
 
 ibString ibValueBoundary::GetString() const
 {
-	const wxString side = (m_kind == ibBoundaryKind_Excluding) ? wxT("Excluding") : wxT("Including");
-	return m_value.GetString() + wxT(", ") + side;
+	const ibString side = (m_kind == ibBoundaryKind_Excluding) ? ibT("Excluding") : ibT("Including");
+	return m_value.GetString() + ibT(", ") + side;
 }
 
 enum
@@ -42,8 +42,8 @@ enum
 
 void ibValueBoundary_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(wxT("Value"));
-	helper.AppendProp(wxT("Kind"));
+	helper.AppendProp(ibT("Value"));
+	helper.AppendProp(ibT("Kind"));
 }
 
 bool ibValueBoundary::SetPropVal(const long lPropNum, const ibValue& varPropVal)

@@ -36,8 +36,8 @@ enum
 
 void ibValuePoint_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(wxT("Left"));
-	helper.AppendProp(wxT("Top"));
+	helper.AppendProp(ibT("Left"));
+	helper.AppendProp(ibT("Top"));
 }
 
 bool ibValuePoint::SetPropVal(const long lPropNum, const ibValue& varPropVal)

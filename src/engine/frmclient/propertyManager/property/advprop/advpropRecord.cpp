@@ -135,7 +135,7 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
 					const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
 					const int groupIcon = so != nullptr ? imageList->Add(so->GetClassIcon()) : -1;
 					group = groups.emplace(clsid, tc->AppendItem(tc->GetRootItem(),
-						so != nullptr ? so->GetClassName() : wxString(), groupIcon, groupIcon)).first;
+						so != nullptr ? so->GetClassName() : ibString(), groupIcon, groupIcon)).first;
 				}
 
 				const wxBitmapBundle& bitmap = choices.Item(idx).GetBitmap();

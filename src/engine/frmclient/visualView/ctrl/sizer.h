@@ -6,7 +6,7 @@
 
 #include "frmclient/visualView/ctrl/control.h"
 
-// THE SIZERS OF A VIEW — the desktop's (frontend/visualView/ctrl/sizer.h): a sizer is no window, it lays out what is
+// THE SIZERS OF A VIEW — the old desktop's:a sizer is no window, it lays out what is
 // in it, as its node says; its properties are the server's (ibValueFrame).
 
 // What every sizer does with its minimum size (the desktop's ibValueSizer::UpdateSizer).

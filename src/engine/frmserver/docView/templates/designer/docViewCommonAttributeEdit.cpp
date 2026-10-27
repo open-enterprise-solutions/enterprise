@@ -61,7 +61,7 @@ ibDataNode& ibCommonAttributeCompositionView::GroupFor(ibDataNode& root, const i
 
 	// A group row is named by its place: it carries no object.
 	ibDataNode& group = root.AddChild(0, -static_cast<ibMetaID>(root.Children().size() + 1));
-	const wxString caption = ibMetaGroupCaption(clsid);
+	const ibString caption = ibMetaGroupCaption(clsid);
 	group.SetValue(ibProtocol::ibView::ibCheckTree::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
 	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid));
 	return group;
@@ -90,7 +90,7 @@ void ibCommonAttributeCompositionView::FillData(ibDataNode& root)
 
 	// The root wears the CONFIGURATION's icon, as the section editor's; the desktop's kept the word "Configuration" on it.
 	root.SetMetaId(commonObject->GetMetaID());
-	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, _("Configuration"));
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, ibString(_("Configuration")));
 	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 
 	// ASKED, NOT LISTED: every metaobject that says it can carry one (IsCompositionAllowed), in the order of its group's

@@ -96,10 +96,10 @@ const ibMetaGroupRow* RowFor(const ibClassID& clsid)
 
 } // namespace
 
-wxString ibMetaGroupCaption(const ibClassID& clsid)
+ibString ibMetaGroupCaption(const ibClassID& clsid)
 {
 	const ibMetaGroupRow* row = RowFor(clsid);
-	return row != nullptr ? wxGetTranslation(wxString::FromUTF8(row->m_caption)) : wxString();
+	return row != nullptr ? ibString(wxGetTranslation(ibString::FromUTF8(row->m_caption))) : ibString();
 }
 
 int ibMetaGroupOrder(const ibClassID& clsid)

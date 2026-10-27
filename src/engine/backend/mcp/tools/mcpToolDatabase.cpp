@@ -41,7 +41,7 @@ namespace {
 // existed, and reached only the FIRST of several. The verbs now live on the configuration itself
 // (metaData.h), which is what a tool should be talking to; whether anything is watching, and which
 // of them can actually do it, is answered in there.
-ibMetaDataConfigurationBase* OpenConfiguration(wxString& refusal)
+ibMetaDataConfigurationBase* OpenConfiguration(ibString& refusal)
 {
 	ibMetaDataConfigurationBase* metaData = activeMetaData;
 
@@ -56,18 +56,18 @@ ibMetaDataConfigurationBase* OpenConfiguration(wxString& refusal)
 using ibArg = ibMcpTool::ibMcpArgument;
 
 // database_diff's arguments — declared once and read through the same objects.
-const ibArg& ArgProperties() { static const ibArg a(wxT("properties"), ibArg::Kind::Flag, ibMcpText("Also list the individual PROPERTIES that differ on a changed object. Off by default: a rename shows as one changed object, and the property rows are the detail behind it.")); return a; }
-const ibArg& ArgLimit() { static const ibArg a(wxT("limit"), ibArg::Kind::Whole, ibMcpText("At most this many entries. A first apply of a fresh configuration differs in everything, and the whole list says less than its first page. Default 200.")); return a; }
+const ibArg& ArgProperties() { static const ibArg a(ibT("properties"), ibArg::Kind::Flag, ibMcpText("Also list the individual PROPERTIES that differ on a changed object. Off by default: a rename shows as one changed object, and the property rows are the detail behind it.")); return a; }
+const ibArg& ArgLimit() { static const ibArg a(ibT("limit"), ibArg::Kind::Whole, ibMcpText("At most this many entries. A first apply of a fresh configuration differs in everything, and the whole list says less than its first page. Default 200.")); return a; }
 
 // The word a caller acts on. The enum's own spelling is about two configurations being compared
 // side by side; here one side IS the database, so left and right have names.
-wxString StatusWord(ibMetaDiffStatus status)
+ibString StatusWord(ibMetaDiffStatus status)
 {
 	switch (status) {
-	case ibMetaDiffStatus::OnlyInRight: return wxT("added");     // in the configuration, not in the base
-	case ibMetaDiffStatus::OnlyInLeft:  return wxT("removed");   // in the base, gone from the configuration
-	case ibMetaDiffStatus::Changed:     return wxT("changed");
-	default:                            return wxT("same");
+	case ibMetaDiffStatus::OnlyInRight: return ibT("added");     // in the configuration, not in the base
+	case ibMetaDiffStatus::OnlyInLeft:  return ibT("removed");   // in the base, gone from the configuration
+	case ibMetaDiffStatus::Changed:     return ibT("changed");
+	default:                            return ibT("same");
 	}
 }
 
@@ -76,7 +76,7 @@ wxString StatusWord(ibMetaDiffStatus status)
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgConfirm()
 {
-	static const ibArg s_a(wxT("confirm"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("confirm"), ibArg::Kind::Flag,
 		ibMcpText("true commits it. false runs the whole apply and rolls it back, so the answer "
 			  "describes exactly what would happen. REQUIRED - there is no default, because "
 			  "neither answer is safe to assume."), /*required*/ true);
@@ -92,14 +92,14 @@ const ibArg& ArgConfirm()
 class ibMcpToolConfigSave : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("config_save"); }
+	ibString GetName() const override { return ibT("config_save"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("saving the configuration");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		// 🛑 THIS TEXT WAS TRUE, THEN FALSE FOR TWO DAYS, THEN TRUE AGAIN, AND IT NEVER MOVED.
 		// SaveConfiguration was given saveConfigFlag on 2026-09-04 — the flag that opens the
@@ -128,7 +128,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaDataConfigurationBase* config = OpenConfiguration(refusal);
 		if (config == nullptr)
@@ -159,12 +159,12 @@ public:
 
 		if (!config->SaveConfiguration(refusal)) {
 
-			wxString said;
+			ibString said;
 			for (const ibRestructureInfo::Entry& entry : ledger) {
 				if (entry.type != ibRestructure::error && entry.type != ibRestructure::warning)
 					continue;
 				if (!said.IsEmpty())
-					said += wxT("\n");
+					said += ibT("\n");
 				said += entry.descr;
 			}
 
@@ -173,18 +173,18 @@ public:
 			// The ledger's account first when there is one: it names the object and the fault,
 			// where the returned sentence names the step. Both when both exist.
 			if (!said.IsEmpty())
-				refusal = refusal.IsEmpty() ? said : said + wxT("\n") + refusal;
+				refusal = refusal.IsEmpty() ? said : said + ibT("\n") + refusal;
 
 			return false;
 		}
 
 		ledger.Clear();
 
-		result.AddField(wxT("saved"), ibDataValue::Bool(true));
+		result.AddField(ibT("saved"), ibDataValue::Bool(true));
 		// ⭐ AND THE NOTE SAYS WHAT IS NOW OUTSTANDING, which is the useful half of a save. It said
 		// this before, then said the opposite for the two days the save was restructuring, and says
 		// it again — see the description above for why the text was never the thing to fix.
-		result.SetValue(wxT("note"),
+		result.SetValue(ibT("note"),
 			ibMcpText("Stored. The application still runs the previously applied configuration - "
 			  "database_diff says what it does not yet have."));
 
@@ -201,16 +201,16 @@ MCP_TOOL_REGISTER(ibMcpToolConfigSave);
 class ibMcpToolConfigApply : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("config_apply"); }
+	ibString GetName() const override { return ibT("config_apply"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ArgConfirm().Flag(params)
 			? ibMcpText("applying the configuration to the database")
 			: ibMcpText("rehearsing what applying the configuration would do");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Make the edited configuration the one the database holds - the designer's "
 			"Update database configuration. Code as much as structure: the application runs what the "
@@ -230,7 +230,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaDataConfigurationBase* config = OpenConfiguration(refusal);
 		if (config == nullptr)
@@ -274,10 +274,10 @@ public:
 
 		const auto appendEntry = [&ledger](const ibRestructureInfo::Entry& entry) {
 			std::shared_ptr<ibDataNode> line = std::make_shared<ibDataNode>();
-			line->SetValue(wxT("level"), wxString(
-				entry.type == ibRestructure::error ? wxT("error")
-				: entry.type == ibRestructure::warning ? wxT("warning") : wxT("info")));
-			line->SetValue(wxT("what"), entry.descr);
+			line->SetValue(ibT("level"), ibString(
+				entry.type == ibRestructure::error ? ibT("error")
+				: entry.type == ibRestructure::warning ? ibT("warning") : ibT("info")));
+			line->SetValue(ibT("what"), entry.descr);
 			ledger.push_back(ibDataValue::Child(line));
 		};
 
@@ -316,9 +316,9 @@ public:
 				sawErrors = true;
 		}
 
-		result.AddField(wxT("changes"), ibDataValue::Int((std::int64_t)ledger.size()));
-		result.AddField(wxT("ledger"), ibDataValue::Array(ledger));
-		result.AddField(wxT("applied"), ibDataValue::Bool(applied));
+		result.AddField(ibT("changes"), ibDataValue::Int((std::int64_t)ledger.size()));
+		result.AddField(ibT("ledger"), ibDataValue::Array(ledger));
+		result.AddField(ibT("applied"), ibDataValue::Bool(applied));
 
 		if (applied)
 			return true;
@@ -329,7 +329,7 @@ public:
 		// ⚠ BUT ONLY IF THERE WAS A DECISION TO DECLINE. Everything that stops the apply before
 		// `decide` is a refusal with the engine's own words behind it, and it falls through.
 		if (decisionReached && (!commit || sawErrors)) {
-			result.SetValue(wxT("note"), sawErrors
+			result.SetValue(ibT("note"), sawErrors
 				? ibMcpText("Rolled back: the ledger carries errors, so nothing was written whatever was "
 					"confirmed.")
 				: ibMcpText("Rolled back as asked - nothing was written. The ledger above is what "
@@ -350,14 +350,14 @@ MCP_TOOL_REGISTER(ibMcpToolConfigApply);
 class ibMcpToolConfigRollback : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("config_rollback"); }
+	ibString GetName() const override { return ibT("config_rollback"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("taking the configuration back from the database");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Throw away everything edited since the last apply and take the database's own "
 			"copy again. Only meaningful BEFORE applying - afterwards the database's copy is what "
@@ -371,7 +371,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaDataConfigurationBase* config = OpenConfiguration(refusal);
 		if (config == nullptr)
@@ -386,8 +386,8 @@ public:
 		if (!config->RollbackConfiguration(refusal))
 			return false;
 
-		result.AddField(wxT("rolled_back"), ibDataValue::Bool(true));
-		result.SetValue(wxT("note"),
+		result.AddField(ibT("rolled_back"), ibDataValue::Bool(true));
+		result.SetValue(ibT("note"),
 			ibMcpText("The configuration is the database's copy again. Anything built and not applied is "
 			  "gone."));
 
@@ -437,14 +437,14 @@ MCP_TOOL_REGISTER(ibMcpToolConfigRollback);
 class ibMcpToolDatabaseDiff : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("database_diff"); }
+	ibString GetName() const override { return ibT("database_diff"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("reading what the database does not yet have");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("What would change in the database if the configuration were applied - object by "
 			"object, in the words the metadata tree uses, plus whether the change touches the "
@@ -460,7 +460,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		// The BASE type, which is what the global actually is — a configuration open from a file
 		// is one too, and narrowing here would have refused it for the wrong reason.
@@ -534,23 +534,23 @@ public:
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 
-			entry->SetValue(wxT("status"), StatusWord(record.m_status));
+			entry->SetValue(ibT("status"), StatusWord(record.m_status));
 
 			if (record.IsProperty()) {
-				entry->SetValue(wxT("property"), record.m_propertyName);
-				entry->SetValue(wxT("inDatabase"), record.m_leftValue);
-				entry->SetValue(wxT("inConfiguration"), record.m_rightValue);
+				entry->SetValue(ibT("property"), record.m_propertyName);
+				entry->SetValue(ibT("inDatabase"), record.m_leftValue);
+				entry->SetValue(ibT("inConfiguration"), record.m_rightValue);
 			}
 			else if (const ibValueMetaObject* object = record.GetAnyObject()) {
 				ibMcpSayObject(object, *entry);
 			}
 
-			entry->AddField(wxT("depth"), ibDataValue::Int((std::int64_t)record.m_depth));
+			entry->AddField(ibT("depth"), ibDataValue::Int((std::int64_t)record.m_depth));
 
 			entries.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("differences"), ibDataValue::Int((std::int64_t)differing));
+		result.AddField(ibT("differences"), ibDataValue::Int((std::int64_t)differing));
 
 		// ⭐ WOULD IT TOUCH THE DATABASE AT ALL — the question that decides everything else, and
 		// the platform already answers it: IsDynamicUpdateAvailable is what the apply flow asks
@@ -565,28 +565,28 @@ public:
 		// involved; what DDL falls out is the apply's own truth, shown by the apply's own dialog.
 		// Virtual on ibMetaDataConfigurationBase too — asked of the container it is, not of a class
 		// it was first converted into.
-		result.AddField(wxT("structural"),
+		result.AddField(ibT("structural"),
 			ibDataValue::Bool(differing != 0 && !metaData->IsDynamicUpdateAvailable()));
 
-		result.AddField(wxT("entries"), ibDataValue::Array(entries));
+		result.AddField(ibT("entries"), ibDataValue::Array(entries));
 
 		if ((int)entries.size() < differing) {
-			result.AddField(wxT("shown"), ibDataValue::Int((std::int64_t)entries.size()));
-			result.SetValue(wxT("note"),
+			result.AddField(ibT("shown"), ibDataValue::Int((std::int64_t)entries.size()));
+			result.SetValue(ibT("note"),
 				ibMcpText("More than the limit. Raise `limit` to see the rest."));
 		}
 
 		// ⭐ THE ANSWER A CALLER WANTS MOST, said plainly rather than left to be inferred from an
 		// empty list — which is also what an error looks like.
 		if (differing == 0) {
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("The database already holds this configuration - applying it would change "
 				  "nothing."));
 		}
 		else {
 			// Where the verb is, said here because a caller reading a list of pending changes
 			// will look for it next.
-			result.SetValue(wxT("apply"),
+			result.SetValue(ibT("apply"),
 				ibMcpText("config_apply writes these to the database - the same road the designer's "
 				  "Update database configuration button takes. Read this list first: it is the "
 				  "only description of what that would do."));
@@ -617,14 +617,14 @@ MCP_TOOL_REGISTER(ibMcpToolDatabaseDiff);
 class ibMcpToolConfigCheck : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("config_check"); }
+	ibString GetName() const override { return ibT("config_check"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("checking what is unfinished");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("WHAT IS UNFINISHED IN THIS CONFIGURATION, object by object - the questions each "
 			"verb asks about the thing it just touched, asked of everything at once. Only faults "
@@ -640,7 +640,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaData* metaData = activeMetaData;
 
@@ -657,33 +657,33 @@ public:
 		// composers called MainComposer).
 		// What the audit keeps beside the sentence (a module's diagnostics) goes into the entry as fields.
 		const ibMcpAudit::ibComplain complain(
-			[&problems](const ibValueMetaObject* about, const wxString& says, const ibDataValue& extra) {
+			[&problems](const ibValueMetaObject* about, const ibString& says, const ibDataValue& extra) {
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 			ibMcpSayObject(about, *entry);
 
 			if (const ibValueMetaObject* owner = about->GetParent())
-				entry->SetValue(wxT("in"), owner->GetName());
+				entry->SetValue(ibT("in"), owner->GetName());
 
-			entry->SetValue(wxT("says"), says);
+			entry->SetValue(ibT("says"), says);
 			if (extra.Kind() == ibDataKind::Child && extra.AsChild())
-				for (const std::pair<wxString, ibDataValue>& field : extra.AsChild()->Fields())
+				for (const std::pair<ibString, ibDataValue>& field : extra.AsChild()->Fields())
 					entry->AddField(field.first, field.second);
 			problems.push_back(ibDataValue::Child(entry));
 		});
 
 		// EVERY CHECK THAT REGISTERED ITSELF, whichever DLL it came from. The backend's own are one
-		// of them (below); the form world adds its own from frontend.dll, and a host that links
-		// neither simply has fewer questions rather than a broken call.
+		// of them (below) — today the only ones; a DLL that knows another kind may add its own, and
+		// a host that links none simply has fewer questions rather than a broken call.
 		for (const ibMcpAudit* audit : ibMcpAudits()) {
 			if (audit != nullptr)
 				audit->Check(metaData, complain);
 		}
 
-		result.AddField(wxT("checks"), ibDataValue::Int((std::int64_t)ibMcpAudits().size()));
-		result.AddField(wxT("problems"), ibDataValue::Array(problems));
+		result.AddField(ibT("checks"), ibDataValue::Int((std::int64_t)ibMcpAudits().size()));
+		result.AddField(ibT("problems"), ibDataValue::Array(problems));
 
-		result.SetValue(wxT("note"), problems.empty()
+		result.SetValue(ibT("note"), problems.empty()
 			? ibMcpText("Nothing half-built. Every composer names its variants and shows something, "
 			  "every field can hold a value, every report has a composer.")
 			: ibMcpText("Each line names the object it is about and what it lacks. These are faults "
@@ -766,10 +766,10 @@ public:
 			const ibValueMetaObjectComposer* composer = nullptr;
 			if (object->ConvertToValue(composer)) {
 
-				std::vector<wxString> missing;
+				std::vector<ibString> missing;
 				ibMcpComposerComplaints(composer->GetCompositionDesc(), missing);
 
-				for (const wxString& one : missing)
+				for (const ibString& one : missing)
 					complain(object, one);
 
 				continue;
@@ -817,7 +817,7 @@ public:
 				//
 				// The one-composer case is the trap: with a single composer "the default" reads as
 				// obvious and is still unset, so nothing but this says so.
-				const ibProperty* byDefault = object->GetProperty(wxT("DefaultComposer"));
+				const ibProperty* byDefault = object->GetProperty(ibT("DefaultComposer"));
 
 				if (byDefault != nullptr && byDefault->IsEmptyProperty())
 					complain(object, ibMcpText("no default composer - the report has one but does not "
@@ -852,18 +852,18 @@ public:
 
 			std::shared_ptr<ibDataNode> extra = std::make_shared<ibDataNode>();
 			const bool checked = answer.m_outcome == ibScriptCheckOutcome::Checked;
-			extra->AddField(wxT("checked"), ibDataValue::Bool(checked));
+			extra->AddField(ibT("checked"), ibDataValue::Bool(checked));
 
 			std::vector<ibDataValue> diagnostics;
 			for (const ibDiagnostic& diagnostic : answer.m_diagnostics) {
 				std::shared_ptr<ibDataNode> line = std::make_shared<ibDataNode>();
-				line->AddField(wxT("line"), ibDataValue::Int(static_cast<std::int64_t>(diagnostic.m_line)));
-				line->SetValue(wxT("message"), diagnostic.m_message);
+				line->AddField(ibT("line"), ibDataValue::Int(static_cast<std::int64_t>(diagnostic.m_line)));
+				line->SetValue(ibT("message"), diagnostic.m_message);
 				if (!diagnostic.m_codeLine.IsEmpty())
-					line->SetValue(wxT("codeLine"), diagnostic.m_codeLine);
+					line->SetValue(ibT("codeLine"), diagnostic.m_codeLine);
 				diagnostics.push_back(ibDataValue::Child(line));
 			}
-			extra->AddField(wxT("diagnostics"), ibDataValue::Array(std::move(diagnostics)));
+			extra->AddField(ibT("diagnostics"), ibDataValue::Array(std::move(diagnostics)));
 
 			complain(module,
 				checked

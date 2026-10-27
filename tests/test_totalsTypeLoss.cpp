@@ -52,18 +52,18 @@
 
 namespace {
 
-wxString EnvOr(const char* name, const wxString& fallback)
+ibString EnvOr(const char* name, const ibString& fallback)
 {
 	const char* value = std::getenv(name);
-	return (value != nullptr && *value != '\0') ? wxString::FromUTF8(value) : fallback;
+	return (value != nullptr && *value != '\0') ? ibString::FromUTF8(value) : fallback;
 }
 
-wxString ScratchPath(const char* engine)
+ibString ScratchPath(const char* engine)
 {
 	const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
 	const char* ext = std::string(engine) == "firebird" ? "fdb" : "db";
 	return wxFileName(wxStandardPaths::Get().GetTempDir(),
-		wxString::Format(wxT("oes_totals_%s_%lld.%s"), engine, (long long)now, ext)).GetFullPath();
+		ibString::Format(wxT("oes_totals_%s_%lld.%s"), engine, (long long)now, ext)).GetFullPath();
 }
 
 std::shared_ptr<ibDatabaseLayer> OpenEngine(const char* engine)
@@ -128,7 +128,7 @@ bool FindSlot(const ibBackendQueryColumn* col, ibColumnRole role, ibColumnSlot& 
 	return false;
 }
 
-void Put(std::vector<ibDmlAssign>& row, const wxString& name, const ibValue& value)
+void Put(std::vector<ibDmlAssign>& row, const ibString& name, const ibValue& value)
 {
 	row.push_back({ name, ibConst(value) });
 }
@@ -208,12 +208,12 @@ RegisterShape Declare(ibMetaDataConfigurationFile& cfg)
 	return shape;
 }
 
-wxString HexOf(const ibMemoryBuffer& buffer)
+ibString HexOf(const ibMemoryBuffer& buffer)
 {
-	wxString hex;
+	ibString hex;
 	const auto* bytes = static_cast<const unsigned char*>(buffer.GetData());
 	for (size_t i = 0; i < buffer.GetDataLen(); ++i)
-		hex += wxString::Format(wxT("%02x"), bytes[i]);
+		hex += ibString::Format(wxT("%02x"), bytes[i]);
 	return hex;
 }
 
@@ -222,8 +222,8 @@ struct KeySum {
 	ibNumber m_out;
 };
 
-std::map<wxString, KeySum> ReadFigures(const wxString& table, const wxString& tag, const wxString& target,
-	const wxString& guid, const wxString& inColumn, const wxString& outColumn)
+std::map<ibString, KeySum> ReadFigures(const ibString& table, const ibString& tag, const ibString& target,
+	const ibString& guid, const ibString& inColumn, const ibString& outColumn)
 {
 	ibDatabaseQueryBuilder query;
 	query.From(table);
@@ -238,7 +238,7 @@ std::map<wxString, KeySum> ReadFigures(const wxString& table, const wxString& ta
 		projection.push_back({ ibCol(outColumn), wxT("out_") });
 	query.Project(projection);
 
-	std::map<wxString, KeySum> sums;
+	std::map<ibString, KeySum> sums;
 	ibQueryResult rows = query.Execute();
 	while (rows.Next()) {
 		ibMemoryBuffer id;
@@ -246,10 +246,10 @@ std::map<wxString, KeySum> ReadFigures(const wxString& table, const wxString& ta
 			rows.GetResultBlob(wxT("guid_"), id);
 		// _RTRef is a BIGINT. Firebird's reader refuses a number asked for as text
 		// ("Invalid field type"); the codec reads this slot with GetResultLong.
-		wxString targetText;
+		ibString targetText;
 		if (!rows.IsResultNull(wxT("target_")))
-			targetText = wxString::Format(wxT("%lld"), rows.GetResultLong(wxT("target_")));
-		const wxString key = wxString::Format(wxT("%lld|%s|%s"),
+			targetText = ibString::Format(wxT("%lld"), rows.GetResultLong(wxT("target_")));
+		const ibString key = ibString::Format(wxT("%lld|%s|%s"),
 			rows.IsResultNull(wxT("tag_")) ? 0LL : rows.GetResultLong(wxT("tag_")),
 			targetText, HexOf(id));
 		KeySum& sum = sums[key];
@@ -315,9 +315,9 @@ TEST_P(TotalsTypeLossApply, ADimensionThatLosesATypeKeepsTotalsAtTheMovementSum)
 	ASSERT_TRUE(FindSlot(wide.dimension->GetQueryColumn(), ibColumnRole::Discriminator, tag));
 	ASSERT_TRUE(FindSlot(wide.dimension->GetQueryColumn(), ibColumnRole::ReferenceType, target));
 	ASSERT_TRUE(FindSlot(wide.dimension->GetQueryColumn(), ibColumnRole::ReferenceId, guidCol));
-	wxString inColumn, outColumn;
+	ibString inColumn, outColumn;
 	for (const ibSchemaDelta& delta : totals->m_materialize.m_deltas) {
-		const wxString name = delta.m_column->GetPhysicalName();
+		const ibString name = delta.m_column->GetPhysicalName();
 		if (name.EndsWith(wxT("_In")))
 			inColumn = name;
 		else if (name.EndsWith(wxT("_Out")))
@@ -368,9 +368,9 @@ TEST_P(TotalsTypeLossApply, ADimensionThatLosesATypeKeepsTotalsAtTheMovementSum)
 	if (!FindSlot(wide.resource->GetQueryColumn(), ibColumnRole::Number, qtySlot)) {
 		ASSERT_TRUE(FindSlot(wide.resource->GetQueryColumn(), ibColumnRole::Raw, qtySlot));
 	}
-	const std::map<wxString, KeySum> movement = ReadFigures(movements->m_name, tag.m_name, target.m_name, guidCol.m_name,
-		qtySlot.m_name, wxString());
-	const std::map<wxString, KeySum> total = ReadFigures(totals->m_name, tag.m_name, target.m_name, guidCol.m_name, inColumn, outColumn);
+	const std::map<ibString, KeySum> movement = ReadFigures(movements->m_name, tag.m_name, target.m_name, guidCol.m_name,
+		qtySlot.m_name, ibString());
+	const std::map<ibString, KeySum> total = ReadFigures(totals->m_name, tag.m_name, target.m_name, guidCol.m_name, inColumn, outColumn);
 
 	ASSERT_EQ(movement.size(), 2u);
 	ibNumber moved;

@@ -14,18 +14,17 @@
 #include "core/description/pictureDescription.h"   // ibPictureDescription — how it looks, by its number
 #include "core/query/queryBalanceRole.h"        // ibBalanceRole — what it is in a balance
 
-#include <wx/string.h>
 
 // One field of a source: the name a query writes and the words a person reads.
 struct ibQueryConstructorField
 {
-	wxString m_name;           // the technical name — this is what the AST carries
-	wxString m_presentation;   // what the tree shows — the NAME, the constructor speaks the query's language
+	ibString m_name;           // the technical name — this is what the AST carries
+	ibString m_presentation;   // what the tree shows — the NAME, the constructor speaks the query's language
 	// WHICH SOURCE IT CAME OUT OF, by the name the query calls that source. Carried on the field so
 	// every list of fields can GROUP by it — a flat merge of two tables' fields is unreadable the
 	// moment both have a `Code`, and the reader cannot tell which is which without the prefix on
 	// every single line (which is the other unreadable answer).
-	wxString m_source;
+	ibString m_source;
 	bool     m_reference = false;   // the field is a reference: it can be dot-walked further
 	// WHAT it refers to, when it refers to exactly one thing. Non-zero is the answer to "can this
 	// be unfolded", and it is also the key the fields behind it are asked for by — so the shell
@@ -50,7 +49,7 @@ struct ibQueryConstructorField
 	// (its synonym, ibBackendSourceColumn::GetBalanceRole), empty / None for anything computed. The
 	// constructor still shows the NAME (m_presentation); these are what a composition fills a field in
 	// with before anybody says otherwise — its generated title, and its role.
-	wxString      m_caption;
+	ibString      m_caption;
 	ibBalanceRole m_balanceRole = ibBalanceRole::None;
 };
 

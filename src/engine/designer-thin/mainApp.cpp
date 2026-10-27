@@ -46,21 +46,28 @@ void ibAppDesigner::OnInitCmdLine(wxCmdLineParser& parser)
 
 bool ibAppDesigner::OnCmdLineParsed(wxCmdLineParser& parser)
 {
-	parser.Found(wxT("address"), &appData->m_strAddress);
-	parser.Found(wxT("trusted"), &appData->m_strTrusted);
+	// wxCmdLineParser's own: it writes what it found into a wx string, handed on to the application's data.
+	const auto found = [&parser](const wxString& name, ibString& value) {
+		wxString text;
+		if (parser.Found(name, &text))
+			value = text;
+	};
 
-	parser.Found(wxT("file"), &appData->m_strFile);
+	found(wxT("address"), appData->m_strAddress);
+	found(wxT("trusted"), appData->m_strTrusted);
 
-	parser.Found(wxT("srv"), &appData->m_strServer);
-	parser.Found(wxT("p"), &appData->m_strPort);
-	parser.Found(wxT("db"), &appData->m_strDatabase);
-	parser.Found(wxT("usr"), &appData->m_strUser);
-	parser.Found(wxT("pwd"), &appData->m_strPassword);
+	found(wxT("file"), appData->m_strFile);
 
-	parser.Found(wxT("ib_usr"), &appData->m_strIBUser);
-	parser.Found(wxT("ib_pwd"), &appData->m_strIBPassword);
+	found(wxT("srv"), appData->m_strServer);
+	found(wxT("p"), appData->m_strPort);
+	found(wxT("db"), appData->m_strDatabase);
+	found(wxT("usr"), appData->m_strUser);
+	found(wxT("pwd"), appData->m_strPassword);
 
-	parser.Found(wxT("lc"), &appData->m_strLocale);
+	found(wxT("ib_usr"), appData->m_strIBUser);
+	found(wxT("ib_pwd"), appData->m_strIBPassword);
+
+	found(wxT("lc"), appData->m_strLocale);
 
 	return wxApp::OnCmdLineParsed(parser);
 }
@@ -99,7 +106,7 @@ bool ibAppDesigner::OnInit()
 		wxSPLASH_CENTRE_ON_SCREEN, -1, nullptr, -1, wxDefaultPosition, wxDefaultSize, wxBORDER_SIMPLE), splashDestroy);
 
 	std::unique_ptr<ibProtocolConnection> connection;
-	wxString error;
+	ibString error;
 
 	if (!appData->m_strAddress.IsEmpty()) {
 		// An application server — over its port.

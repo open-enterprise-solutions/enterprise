@@ -46,7 +46,7 @@ void ibPreparedStatementFirebird::Close()
 	}
 }
 
-bool ibPreparedStatementFirebird::AddPreparedStatement(const wxString& strSQL)
+bool ibPreparedStatementFirebird::AddPreparedStatement(const ibString& strSQL)
 {
 	ibPreparedStatementFirebirdWrapper* pWrapper = new ibPreparedStatementFirebirdWrapper(m_pInterface, m_pDatabase, m_pTransaction, strSQL);
 
@@ -60,12 +60,12 @@ bool ibPreparedStatementFirebird::AddPreparedStatement(const wxString& strSQL)
 	return false;
 }
 
-ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL)
+ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const ibString& strSQL)
 {
-	wxArrayString Queries = ParseQueries(strSQL);
+	std::vector<ibString> Queries = ParseQueries(strSQL);
 
-	wxArrayString::iterator start = Queries.begin();
-	wxArrayString::iterator stop = Queries.end();
+	std::vector<ibString>::iterator start = Queries.begin();
+	std::vector<ibString>::iterator stop = Queries.end();
 
 	ibPreparedStatementFirebird *pStatement = NULL;
 
@@ -74,17 +74,17 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 		pStatement = new ibPreparedStatementFirebird(pInterface, pDatabase, pTransaction);
 
 		pStatement->SetErrorCode(DATABASE_LAYER_ERROR);
-		pStatement->SetErrorMessage(wxT("No SQL Statements found"));
+		pStatement->SetErrorMessage(ibT("No SQL Statements found"));
 
 		const int      nCode = pStatement->GetErrorCode();
-		const wxString msg   = pStatement->GetErrorMessage();
+		const ibString msg   = pStatement->GetErrorMessage();
 		// Swallow a possible throw from the statement dtor — original
 		// "no SQL statements" error is the user-visible one; a secondary
 		// cleanup exception would mask it.
 		try { delete pStatement; } catch (const ibCoreException&) {}
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
-			nCode, wxEmptyString, msg);
+			nCode, ibEmptyString, msg);
 		return NULL;
 	}
 
@@ -104,11 +104,11 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 			pStatement->SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(pInterface, nSqlCode, status));
 
 			const int      nCode = pStatement->GetErrorCode();
-			const wxString msg   = pStatement->GetErrorMessage();
+			const ibString msg   = pStatement->GetErrorMessage();
 			// Swallow a possible throw from the statement dtor — the
 			// isc_start_transaction failure is what we want surfaced.
 			try { delete pStatement; } catch (const ibCoreException&) {}
-			ibDatabaseLayerException::Throw(ibDatabaseLayerFirebird::ClassifyDatabaseError(nCode), nCode, wxEmptyString, msg);
+			ibDatabaseLayerException::Throw(ibDatabaseLayerFirebird::ClassifyDatabaseError(nCode), nCode, ibEmptyString, msg);
 		}
 
 		pStatement->SetManageTransaction(true);
@@ -142,14 +142,14 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 		if (pStatement->GetErrorCode() != DATABASE_LAYER_OK)
 		{
 			const int      nCode = pStatement->GetErrorCode();
-			const wxString msg   = pStatement->GetErrorMessage();
+			const ibString msg   = pStatement->GetErrorMessage();
 			// Swallow a possible throw from the statement dtor — the
 			// per-fragment AddPreparedStatement failure recorded above
 			// is the original error and must reach the caller.
 			try { delete pStatement; } catch (const ibCoreException&) {}
 			ibDatabaseLayerException::Throw(
 				ibBackendDatabaseException::Kind::Unknown,
-				nCode, wxEmptyString, msg);
+				nCode, ibEmptyString, msg);
 }
 		start++;
 }
@@ -388,7 +388,7 @@ int ibPreparedStatementFirebird::FindStatementAndAdjustPositionIndex(int* pPosit
 void ibPreparedStatementFirebird::SetInvalidParameterPositionError(int nPosition)
 {
 	SetErrorCode(DATABASE_LAYER_ERROR);
-	SetErrorMessage(wxT("Invalid Prepared Statement Parameter"));
+	SetErrorMessage(ibT("Invalid Prepared Statement Parameter"));
 
 	ThrowDatabaseException();
 }

@@ -77,7 +77,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByRow(const wxVariant& variant
 		
 		if (hasCol) {
 
-			const wxString& strData = variant.GetString();
+			const ibString& strData = variant.GetString();
 
 			const ibValue& selValue = node->GetTableValue(col);
 			const ibValue& newValue = metaData->CreateObject(selValue.GetClassType());

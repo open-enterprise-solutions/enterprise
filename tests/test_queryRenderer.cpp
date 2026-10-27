@@ -28,7 +28,7 @@ ibQueryIR SampleListQuery()
 					ibScan(wxT("Reference17")),
 					ibBinOp(ibQueryBinOp::Eq,
 					        ibCol(wxT("Code_S")),
-					        ibConst(ibValue(wxString(wxT("APPLE-01")))))),
+					        ibConst(ibValue(ibString(wxT("APPLE-01")))))),
 				{ { ibCol(wxT("Code_S")), ibQuerySortDir::Asc } }),
 			50);
 	return ibQueryIR(rel);
@@ -186,7 +186,7 @@ TEST(QueryRenderer, In_ListBindsEachValue)
 {
 	ibQueryRelPtr rel = ibFilter(ibScan(wxT("Reference9")),
 		ibIn(ibCol(wxT("code_S")),
-			{ ibConst(ibValue(wxString(wxT("A")))), ibConst(ibValue(wxString(wxT("B")))), ibConst(ibValue(wxString(wxT("C")))) }));
+			{ ibConst(ibValue(ibString(wxT("A")))), ibConst(ibValue(ibString(wxT("B")))), ibConst(ibValue(ibString(wxT("C")))) }));
 	const ibRenderedQuery out = ibQueryRenderer(SqliteDialect()).Render(ibQueryIR(rel));
 	EXPECT_EQ(Sql(out), "SELECT * FROM Reference9 WHERE (code_S IN (?, ?, ?))");
 	ASSERT_EQ(out.m_params.size(), 3u);
@@ -479,7 +479,7 @@ TEST(QueryDdlRenderer, AlterColumn_SqliteThrows)
 TEST(QueryDmlRenderer, Insert_Postgres_DollarPlaceholders)
 {
 	ibDmlStatement ins = ibInsert(wxT("Reference17"), {
-		{ wxT("Code_S"),  ibConst(ibValue(wxString(wxT("APPLE-01")))) },
+		{ wxT("Code_S"),  ibConst(ibValue(ibString(wxT("APPLE-01")))) },
 		{ wxT("Price_N"), ibParam(0) },
 	});
 	const ibRenderedQuery out = ibQueryRenderer(PgDialect()).RenderDML(ins);
@@ -516,21 +516,21 @@ TEST(QueryDmlRenderer, Delete_Firebird)
 // Firebird's bound is on the whole path of nested aliases (m_maxAliasLength), which a long table name exceeds.
 TEST(QueryDmlRenderer, LongTableIsAliasedAsItIsReferenced_Firebird)
 {
-	const wxString marks = wxT("CalculationRegister1234_Recalculation");
-	const wxString spelled = ibDialectDictionary::BoundedName(marks, FbDialect().m_maxAliasLength);
+	const ibString marks = wxT("CalculationRegister1234_Recalculation");
+	const ibString spelled = ibDialectDictionary::BoundedName(marks, FbDialect().m_maxAliasLength);
 	ASSERT_NE(spelled, marks);
 
 	ibDmlStatement del = ibDelete(marks, ibBinOp(ibQueryBinOp::Eq, ibCol(marks, wxT("Ref")), ibParam(0)));
 	EXPECT_EQ(Sql(ibQueryRenderer(FbDialect()).RenderDML(del)),
-		("DELETE FROM " + marks + " AS " + spelled + " WHERE (" + spelled + ".Ref = ?)").ToStdString());
+		(wxT("DELETE FROM ") + marks + wxT(" AS ") + spelled + wxT(" WHERE (") + spelled + wxT(".Ref = ?)")).ToStdString());
 
 	ibQueryIR ir(ibFilter(ibScan(marks), ibBinOp(ibQueryBinOp::Eq, ibCol(marks, wxT("Ref")), ibParam(0))));
 	EXPECT_EQ(Sql(ibQueryRenderer(FbDialect()).Render(ir)),
-		("SELECT * FROM " + marks + " AS " + spelled + " WHERE (" + spelled + ".Ref = ?)").ToStdString());
+		(wxT("SELECT * FROM ") + marks + wxT(" AS ") + spelled + wxT(" WHERE (") + spelled + wxT(".Ref = ?)")).ToStdString());
 
 	// …and a dialect with no bound renders the name as it stands.
 	EXPECT_EQ(Sql(ibQueryRenderer(SqliteDialect()).RenderDML(del)),
-		("DELETE FROM " + marks + " WHERE (" + marks + ".Ref = ?)").ToStdString());
+		(wxT("DELETE FROM ") + marks + wxT(" WHERE (") + marks + wxT(".Ref = ?)")).ToStdString());
 }
 
 TEST(QueryDmlRenderer, DeleteAll_NoWhere)
@@ -562,8 +562,8 @@ ibQueryIR JoinQuery()
 				ibBinOp(ibQueryBinOp::Eq,
 				        ibCol(wxT("Reference17"), wxT("Code_S")),
 				        ibParam(0))),
-			{ ibQueryProjItem{ ibCol(wxT("Document42"),  wxT("Number_S")), wxString() },
-			  ibQueryProjItem{ ibCol(wxT("Reference17"), wxT("Code_S")),   wxString() } });
+			{ ibQueryProjItem{ ibCol(wxT("Document42"),  wxT("Number_S")), ibString() },
+			  ibQueryProjItem{ ibCol(wxT("Reference17"), wxT("Code_S")),   ibString() } });
 	return ibQueryIR(rel);
 }
 
@@ -782,7 +782,7 @@ TEST(QueryRenderer, With_NamedQueriesComeFirstAndSoDoTheirBinds)
 {
 	ibQueryIR ir(
 		ibFilter(ibScan(wxT("Sales")),
-		         ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("Partner")), ibConst(ibValue(wxString(wxT("BETA")))))));
+		         ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("Partner")), ibConst(ibValue(ibString(wxT("BETA")))))));
 	ir.m_with.push_back({ wxT("Sales"),
 		ibFilter(ibScan(wxT("Document_Sales")),
 		         ibBinOp(ibQueryBinOp::Gt, ibCol(wxT("Amount")), ibConst(ibValue(ibNumber(100))))) });
@@ -844,7 +844,7 @@ namespace {
 
 // The shape dbTableProvider's BuildSubtreeIn builds: a recursive named query — the root, then every row whose
 // parent is already in — handed along BY THE CONDITION (ibQueryExpr::m_with), and the column tested against it.
-ibQueryExprPtr InSubtreeOf(const wxString& name, const wxString& column, const wxString& root, bool dropsRepeats)
+ibQueryExprPtr InSubtreeOf(const ibString& name, const ibString& column, const ibString& root, bool dropsRepeats)
 {
 	const ibQueryRelPtr start = ibProject(
 		ibFilter(ibScan(wxT("Reference9")), ibIn(ibCol(wxT("ref_RRRef")), { ibConst(ibValue(root)) })),
@@ -872,7 +872,7 @@ TEST(QueryRenderer, WithRecursive_TheConditionsWalkIsDeclaredFirstAndBindsFirst)
 	ibQueryIR ir(ibFilter(ibScan(wxT("Document5")),
 		ibBinOp(ibQueryBinOp::And,
 			InSubtreeOf(wxT("q_t1"), wxT("item_RRRef"), wxT("ROOT"), /*dropsRepeats*/ false),
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("code_S")), ibConst(ibValue(wxString(wxT("OUTER"))))))));
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("code_S")), ibConst(ibValue(ibString(wxT("OUTER"))))))));
 
 	const ibRenderedQuery out = ibQueryRenderer(FbDialect()).Render(ir);
 	const std::string sql = Sql(out);

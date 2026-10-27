@@ -50,7 +50,7 @@ void	ibWriterMemory::w_printf(const char* format, ...)
 	char buf[1024];
 
 	va_start(mark, format);
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	vsprintf_s(buf, format, mark);
 #else
 	vsnprintf(buf, sizeof(buf), format, mark);
@@ -312,7 +312,7 @@ int ibReaderMemory::MeasureStringZ(const char*& start) const
 	return static_cast<int>(static_cast<const char*>(nul) - start);
 }
 
-inline bool is_term(const wxUniChar &c) {
+inline bool is_term(const ibChar &c) {
 	return (c == 13) || (c == 10);
 };
 
@@ -338,7 +338,7 @@ void	ibReaderMemory::r_string(char* dest, std::uint32_t tgt_sz) const
 	char* src = (char*)m_data + m_pos;
 	std::uint32_t sz = advance_term_string();
 	wxASSERT(sz < (tgt_sz - 1));
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	strncpy_s(dest, tgt_sz, src, sz);
 #else
 	strncpy(dest, src, tgt_sz - 1);
@@ -354,11 +354,11 @@ void	ibReaderMemory::r_string(std::string& dest) const
 	dest.assign(src, sz);
 }
 
-void	ibReaderMemory::r_string(wxString& dest) const
+void	ibReaderMemory::r_string(ibString& dest) const
 {
 	char* src = (char*)m_data + m_pos;
 	std::uint32_t sz = advance_term_string();
-	dest = wxString::FromUTF8(src, sz);
+	dest = ibString::FromUTF8(src, sz);
 }
 
 void	ibReaderMemory::skip_stringZ() const
@@ -368,12 +368,12 @@ void	ibReaderMemory::skip_stringZ() const
 	m_pos += len + 1;
 }
 
-wxString ibReaderMemory::r_stringZ() const
+ibString ibReaderMemory::r_stringZ() const
 {
 	const char* start = nullptr;
 	const int len = MeasureStringZ(start);
 	m_pos += len + 1;
-	return wxString::FromUTF8(start, len);
+	return ibString::FromUTF8(start, len);
 }
 
 void	ibReaderMemory::r_stringZ(char* dest, std::uint32_t tgt_sz) const
@@ -395,14 +395,6 @@ void	ibReaderMemory::r_stringZ(std::string& dest) const
 	const int len = MeasureStringZ(start);
 	m_pos += len + 1;
 	dest.assign(start, static_cast<size_t>(len));
-}
-
-void	ibReaderMemory::r_stringZ(wxString& dest) const
-{
-	const char* start = nullptr;
-	const int len = MeasureStringZ(start);
-	m_pos += len + 1;
-	dest = wxString::FromUTF8(start, len);
 }
 
 void	ibReaderMemory::r_stringZ(ibString& dest) const

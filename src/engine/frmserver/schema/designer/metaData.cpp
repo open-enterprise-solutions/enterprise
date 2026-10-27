@@ -21,7 +21,7 @@ namespace {
 // Where a new object goes, and what it is — Parent (0: the configuration's own) and Type, a class it takes. Refused,
 // false, otherwise: a schema acts only on what it offered.
 bool FindPlace(ibMetaData* metaData, const ibDataNode& args, ibValueMetaObject*& parent,
-	ibClassID& clsid, ibProtocol::ibRefusal& refusal, wxString& error)
+	ibClassID& clsid, ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	parent = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Parent) != 0
 		? ibSchemaMetaData::FindObject(metaData, args, ibProtocol::ibSchema::ibMetaData::Parent, refusal, error)
@@ -29,17 +29,17 @@ bool FindPlace(ibMetaData* metaData, const ibDataNode& args, ibValueMetaObject*&
 	if (parent == nullptr) {
 		if (refusal == ibProtocol::ibRefusal::None) {
 			refusal = ibProtocol::ibRefusal::NotFound;
-			error = wxT("the configuration has no root");
+			error = ibT("the configuration has no root");
 		}
 		return false;
 	}
 
 	unsigned long long type = 0;
-	args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::Type).ToULongLong(&type);
+	args.GetValue<ibString>(ibProtocol::ibSchema::ibMetaData::Type).ToULongLong(&type);
 	clsid = static_cast<ibClassID>(type);
 	if (clsid == 0 || !parent->FilterChild(clsid)) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = wxString::Format(wxT("'%s' takes no such class"), parent->GetName());
+		error = ibString::Format(ibT("'%s' takes no such class"), parent->GetName());
 		return false;
 	}
 	return true;
@@ -48,17 +48,17 @@ bool FindPlace(ibMetaData* metaData, const ibDataNode& args, ibValueMetaObject*&
 // THE CONFIGURATION ITSELF, its base behind it — what the desktop's Configuration menu acted on, by the right it was
 // enabled by (data administration). Refused, null: an external file's tree has no base, or the person no such right.
 ibMetaDataConfigurationBase* FindConfiguration(const ibSession& session, const ibMetaData* metaData,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	ibMetaDataConfigurationBase* const configuration = session.GetMetaData();
 	if (metaData != configuration) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = wxT("an external file has no base");
+		error = ibT("an external file has no base");
 		return nullptr;
 	}
 	if (!configuration->AccessRight_DataAdministration()) {
 		refusal = ibProtocol::ibRefusal::NoRight;
-		error = wxT("no right to the configuration's base");
+		error = ibT("no right to the configuration's base");
 		return nullptr;
 	}
 	return configuration;
@@ -68,7 +68,7 @@ ibMetaDataConfigurationBase* FindConfiguration(const ibSession& session, const i
 // (ibConfigurationTree::InsertItem, ReplaceItem, SaveItem), through these readers. One of that class read from that file of
 // the session's temporary storage into the configuration, under its root. Null: the file is not one — and what the reader
 // had put in before reading is taken away again, so a bad file leaves nothing behind.
-ibValueMetaObject* ReadExternal(ibMetaData* metaData, const ibClassID& clsid, const wxString& file)
+ibValueMetaObject* ReadExternal(ibMetaData* metaData, const ibClassID& clsid, const ibString& file)
 {
 	ibValueMetaObject* read = nullptr;
 	bool loaded = false;
@@ -90,7 +90,7 @@ ibValueMetaObject* ReadExternal(ibMetaData* metaData, const ibClassID& clsid, co
 }
 
 // …and that one written into that file.
-bool WriteExternal(ibMetaData* metaData, ibValueMetaObject* object, const wxString& file)
+bool WriteExternal(ibMetaData* metaData, ibValueMetaObject* object, const ibString& file)
 {
 	// A writer over the configuration's own object — never closed, for the object stays (the desktop's SaveItem).
 	if (object->GetClassType() == g_metaDataProcessorCLSID)
@@ -112,7 +112,7 @@ void ibSchemaMetaData::Build(const ibSession& /*session*/, const ibDataNode& /*a
 }
 
 std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	ibMetaData* const metaData = FindMetaData(session, args, refusal, error);
 	if (metaData == nullptr)
@@ -121,12 +121,12 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 	switch (static_cast<ibProtocol::ibSchema::ibMetaData::ibCommand>(command)) {
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Open: {
 		// …or by the module's address — where a runtime stopped or failed (the desktop's ibConfigurationTree::EditModule).
-		const wxString module = args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::Module);
+		const ibString module = args.GetValue<ibString>(ibProtocol::ibSchema::ibMetaData::Module);
 		if (!module.IsEmpty()) {
 			ibValueMetaObject* const object = metaData->FindAnyObjectByFilter(ibGuid(module), true);
 			if (object == nullptr || object->IsDeleted()) {
 				refusal = ibProtocol::ibRefusal::NotFound;
-				error = wxString::Format(wxT("nothing in the configuration is the module %s"), module);
+				error = ibString::Format(ibT("nothing in the configuration is the module %s"), module);
 				return nullptr;
 			}
 			return [object]() { docManager->OpenForm(object); };
@@ -176,7 +176,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		const std::int32_t position = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Position);
 		if (parent == nullptr || position < 0 || static_cast<unsigned int>(position) >= parent->GetChildCount()) {
 			refusal = ibProtocol::ibRefusal::BadParameter;
-			error = wxString::Format(wxT("'%s' has no place %d"), object->GetName(), position);
+			error = ibString::Format(ibT("'%s' has no place %d"), object->GetName(), position);
 			return nullptr;
 		}
 		// The door moves it and announces `Moved`; the rows follow.
@@ -189,19 +189,19 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		ibWriterMemory writer;
 		if (!metaData->CopyMetaObject(object, writer)) {
 			refusal = ibProtocol::ibRefusal::Failed;
-			error = wxString::Format(wxT("'%s' could not be copied"), object->GetName());
+			error = ibString::Format(ibT("'%s' could not be copied"), object->GetName());
 			return nullptr;
 		}
 		ibTempFile file;
-		if (!file.Create(args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::File), true)) {
+		if (!file.Create(args.GetValue<ibString>(ibProtocol::ibSchema::ibMetaData::File), true)) {
 			refusal = ibProtocol::ibRefusal::NotFound;
-			error = wxT("no such file");
+			error = ibT("no such file");
 			return nullptr;
 		}
 		const ibMemoryBuffer bytes = writer.buffer();
 		if (!file.Write(bytes.GetData(), bytes.GetDataLen())) {
 			refusal = ibProtocol::ibRefusal::Failed;
-			error = wxT("the copy was not written");
+			error = ibT("the copy was not written");
 			return nullptr;
 		}
 		// Done in the asking — nothing in the configuration changed.
@@ -212,10 +212,10 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		ibClassID clsid = 0;
 		if (!FindPlace(metaData, args, parent, clsid, refusal, error))
 			return nullptr;
-		const ibTempFile file(args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::File));
+		const ibTempFile file(args.GetValue<ibString>(ibProtocol::ibSchema::ibMetaData::File));
 		if (!file.IsOpened()) {
 			refusal = ibProtocol::ibRefusal::NotFound;
-			error = wxT("no such file");
+			error = ibT("no such file");
 			return nullptr;
 		}
 		ibMemoryBuffer bytes;
@@ -234,7 +234,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		ibMetaDataConfigurationBase* const configuration = session.GetMetaData();
 		if (metaData != configuration) {
 			refusal = ibProtocol::ibRefusal::BadParameter;
-			error = wxT("an external file is saved by its tab");
+			error = ibT("an external file is saved by its tab");
 			return nullptr;
 		}
 		return [configuration]() { configuration->SaveDatabase(); };
@@ -251,7 +251,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		ibMetaDataConfigurationBase* const database = configuration->GetConfiguration();
 		if (database == nullptr || database->GetCommonMetaObject() == nullptr) {
 			refusal = ibProtocol::ibRefusal::NotFound;
-			error = wxT("the base has no configuration of its own");
+			error = ibT("the base has no configuration of its own");
 			return nullptr;
 		}
 		// The desktop's OnOpenConfiguration: the browser over the database's copy raised when it is open — found by that
@@ -282,15 +282,15 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		if (configuration == nullptr)
 			return nullptr;
 		return [configuration]() {
-			wxString refusal;
+			ibString refusal;
 			const bool rolledBack = configuration->RollbackConfiguration(refusal);
 			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 			if (frame == nullptr)
 				return;
 			if (rolledBack)
-				frame->ShowModalMessage(_("Successfully rolled back to database configuration!"), wxString(), wxOK | wxCENTRE);
+				frame->ShowModalMessage(_("Successfully rolled back to database configuration!"), ibString(), wxOK | wxCENTRE);
 			else if (!refusal.IsEmpty())
-				frame->ShowModalMessage(refusal, wxString(), wxOK | wxCENTRE | wxICON_WARNING);
+				frame->ShowModalMessage(refusal, ibString(), wxOK | wxCENTRE | wxICON_WARNING);
 		};
 	}
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Apply: {
@@ -300,7 +300,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		// …and the last question is the ledger itself, shown where it has always been shown — the base held until the
 		// person answers it.
 		return [configuration]() {
-			wxString refusal;
+			ibString refusal;
 			const bool applied = configuration->ApplyConfiguration(refusal,
 				[](const ibRestructureInfo& info) { return ibDialogApplyChange::ShowApplyChange(info); });
 			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
@@ -312,11 +312,11 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		// …or a data processor or a report, from the file it is kept in apart (the desktop's tree's Replace and Insert):
 		// that one replaced by the one read (Id), or one read in under that object (Type, Parent).
 		if (args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Id) != 0
-			|| !args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::Type).IsEmpty()) {
+			|| !args.GetValue<ibString>(ibProtocol::ibSchema::ibMetaData::Type).IsEmpty()) {
 			// The reader puts its object in before it reads — so the configuration's word is asked here, not at its door.
 			if (!metaData->IsEditable()) {
 				refusal = ibProtocol::ibRefusal::NoRight;
-				error = wxT("the configuration is read-only");
+				error = ibT("the configuration is read-only");
 				return nullptr;
 			}
 			ibValueMetaObject* replaced = nullptr;
@@ -334,16 +334,16 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 			}
 			if (clsid != g_metaDataProcessorCLSID && clsid != g_metaReportCLSID) {
 				refusal = ibProtocol::ibRefusal::BadParameter;
-				error = wxT("only a data processor or a report is kept in a file");
+				error = ibT("only a data processor or a report is kept in a file");
 				return nullptr;
 			}
 			// A file that is not one leaves the configuration as it was, and the person is told.
-			const wxString file = args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::File);
+			const ibString file = args.GetValue<ibString>(ibProtocol::ibSchema::ibMetaData::File);
 			return [metaData, clsid, replaced, file]() {
 				if (ReadExternal(metaData, clsid, file) == nullptr) {
 					if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
 						frame->ShowModalMessage(BackendErrorChain(_("The data processor or report could not be read from the file.")),
-							wxString(), wxOK | wxCENTRE | wxICON_ERROR);
+							ibString(), wxOK | wxCENTRE | wxICON_ERROR);
 					return;
 				}
 				if (replaced != nullptr)
@@ -353,10 +353,10 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		ibMetaDataConfigurationBase* const configuration = FindConfiguration(session, metaData, refusal, error);
 		if (configuration == nullptr)
 			return nullptr;
-		const ibTempFile file(args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::File));
+		const ibTempFile file(args.GetValue<ibString>(ibProtocol::ibSchema::ibMetaData::File));
 		if (!file.IsOpened()) {
 			refusal = ibProtocol::ibRefusal::NotFound;
-			error = wxT("no such file");
+			error = ibT("no such file");
 			return nullptr;
 		}
 		ibMemoryBuffer bytes;
@@ -370,7 +370,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 				return;
 			if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
 				frame->ShowModalMessage(BackendErrorChain(_("The configuration could not be read from the file.")),
-					wxString(), wxOK | wxCENTRE | wxICON_ERROR);
+					ibString(), wxOK | wxCENTRE | wxICON_ERROR);
 		};
 	}
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Unload: {
@@ -381,12 +381,12 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 				return nullptr;
 			if (object->GetClassType() != g_metaDataProcessorCLSID && object->GetClassType() != g_metaReportCLSID) {
 				refusal = ibProtocol::ibRefusal::BadParameter;
-				error = wxT("only a data processor or a report is kept in a file");
+				error = ibT("only a data processor or a report is kept in a file");
 				return nullptr;
 			}
-			if (!WriteExternal(metaData, object, args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::File))) {
+			if (!WriteExternal(metaData, object, args.GetValue<ibString>(ibProtocol::ibSchema::ibMetaData::File))) {
 				refusal = ibProtocol::ibRefusal::Failed;
-				error = wxString::Format(wxT("'%s' was not written"), object->GetName());
+				error = ibString::Format(ibT("'%s' was not written"), object->GetName());
 				return nullptr;
 			}
 			// Done in the asking — nothing in the configuration changed.
@@ -398,18 +398,18 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		ibMemoryBuffer bytes;
 		if (!configuration->SaveConfigToBuffer(bytes)) {
 			refusal = ibProtocol::ibRefusal::Failed;
-			error = BackendErrorChain(wxT("the configuration could not be written"));
+			error = BackendErrorChain(ibT("the configuration could not be written"));
 			return nullptr;
 		}
 		ibTempFile file;
-		if (!file.Create(args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::File), true)) {
+		if (!file.Create(args.GetValue<ibString>(ibProtocol::ibSchema::ibMetaData::File), true)) {
 			refusal = ibProtocol::ibRefusal::NotFound;
-			error = wxT("no such file");
+			error = ibT("no such file");
 			return nullptr;
 		}
 		if (!file.Write(bytes.GetData(), bytes.GetDataLen())) {
 			refusal = ibProtocol::ibRefusal::Failed;
-			error = wxT("the configuration was not written");
+			error = ibT("the configuration was not written");
 			return nullptr;
 		}
 		// Done in the asking — nothing in the configuration changed.
@@ -420,19 +420,19 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 	}
 
 	refusal = ibProtocol::ibRefusal::NotFound;
-	error = wxString::Format(wxT("the configuration tree has no command %d"), command);
+	error = ibString::Format(ibT("the configuration tree has no command %d"), command);
 	return nullptr;
 }
 
 ibMetaData* ibSchemaMetaData::FindMetaData(const ibSession& session, const ibDataNode& args, ibProtocol::ibRefusal& refusal,
-	wxString& error)
+	ibString& error)
 {
 	const std::int32_t tabId = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Tab);
 	if (tabId == 0) {
 		ibMetaData* const metaData = session.GetMetaData();
 		if (metaData == nullptr) {
 			refusal = ibProtocol::ibRefusal::NoSession;
-			error = wxT("the session has no configuration");
+			error = ibT("the session has no configuration");
 		}
 		return metaData;
 	}
@@ -448,19 +448,19 @@ ibMetaData* ibSchemaMetaData::FindMetaData(const ibSession& session, const ibDat
 		metaData = document->GetMetaObject() != nullptr ? document->GetMetaObject()->GetMetaData() : nullptr;
 	if (metaData == nullptr) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = wxString::Format(wxT("no tab %d shows a configuration"), tabId);
+		error = ibString::Format(ibT("no tab %d shows a configuration"), tabId);
 	}
 	return metaData;
 }
 
-ibValueMetaObject* ibSchemaMetaData::FindObject(ibMetaData* metaData, const ibDataNode& args, const wxString& name,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+ibValueMetaObject* ibSchemaMetaData::FindObject(ibMetaData* metaData, const ibDataNode& args, const ibString& name,
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	const ibMetaID id = args.GetValue<std::int32_t>(name);
 	ibValueMetaObject* const object = id > 0 ? ibFindMetaObjectById(metaData, id) : nullptr;
 	if (object == nullptr || object->IsDeleted()) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = wxString::Format(wxT("nothing in the configuration has id %d"), id);
+		error = ibString::Format(ibT("nothing in the configuration has id %d"), id);
 		return nullptr;
 	}
 	return object;

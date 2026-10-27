@@ -131,10 +131,10 @@ std::size_t ibApplicationHost::GetDefaultConnections() const
 	return m_configConnections > 0 ? m_configConnections : kDefaultConnections;
 }
 
-wxString ibApplicationHost::GetJournalContext()
+ibString ibApplicationHost::GetJournalContext()
 {
 	if (s_instanceCount.load(std::memory_order_acquire) == 0)
-		return wxString();
+		return ibString();
 
 	// THE SAME ORDER `appData` ASKS IN — the session the thread works for, then the base it is bound to — and
 	// then the service whose thread it is (a registry thread, a job tick: no session, no binding, one owner).
@@ -146,7 +146,7 @@ wxString ibApplicationHost::GetJournalContext()
 		applicationInstance = t_instance;
 	if (applicationInstance == nullptr)
 		applicationInstance = t_owner;
-	return applicationInstance != nullptr ? applicationInstance->GetInstanceName() : wxString();
+	return applicationInstance != nullptr ? applicationInstance->GetInstanceName() : ibString();
 }
 
 void ibApplicationHost::SetThreadOwner(const ibApplicationInstance* applicationInstance)
@@ -267,9 +267,9 @@ ibApplicationHost::~ibApplicationHost()
 		m_pluginManager->UnloadAll();
 }
 
-#define BACKEND_CONF wxT("backend.conf")
+#define BACKEND_CONF ibT("backend.conf")
 
-std::size_t ibApplicationHost::ReadCount(const wxConfigBase& conf, const wxString& file, const wxString& key, long least,
+std::size_t ibApplicationHost::ReadCount(const wxConfigBase& conf, const ibString& file, const ibString& key, long least,
 	std::size_t byDefault, std::size_t most)
 {
 	long configured = 0;
@@ -277,13 +277,13 @@ std::size_t ibApplicationHost::ReadCount(const wxConfigBase& conf, const wxStrin
 		return byDefault;
 	if (configured < least) {
 		// A value that cannot be used is SAID, not quietly replaced.
-		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
-			wxT("%s: %s = %ld is less than %ld - the default is used"), file, key, configured, least);
+		ibTechJournal::Print(ibJournalMark::Warning, ibT("engine"),
+			ibT("%s: %s = %ld is less than %ld - the default is used"), file, key, configured, least);
 		return byDefault;
 	}
 	if (most != 0 && configured > static_cast<long>(most)) {
-		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
-			wxT("%s: %s = %ld is more than %ld - %ld is used"), file, key, configured,
+		ibTechJournal::Print(ibJournalMark::Warning, ibT("engine"),
+			ibT("%s: %s = %ld is more than %ld - %ld is used"), file, key, configured,
 			static_cast<long>(most), static_cast<long>(most));
 		return most;
 	}
@@ -301,13 +301,13 @@ std::size_t ibApplicationHost::ResumeSeconds(bool present, long configured)
 	if (configured == 0)
 		return 0;
 	if (configured < 0) {
-		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
-			wxT("%s: Resume = %ld is not a duration - 120 is used"), BACKEND_CONF, configured);
+		ibTechJournal::Print(ibJournalMark::Warning, ibT("engine"),
+			ibT("%s: Resume = %ld is not a duration - 120 is used"), BACKEND_CONF, configured);
 		return kDefault;
 	}
 	if (configured > kMost) {
-		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
-			wxT("%s: Resume = %ld is above %ld seconds - %ld is used"), BACKEND_CONF, configured, kMost, kMost);
+		ibTechJournal::Print(ibJournalMark::Warning, ibT("engine"),
+			ibT("%s: Resume = %ld is above %ld seconds - %ld is used"), BACKEND_CONF, configured, kMost, kMost);
 		return static_cast<std::size_t>(kMost);
 	}
 	return static_cast<std::size_t>(configured);
@@ -315,28 +315,28 @@ std::size_t ibApplicationHost::ResumeSeconds(bool present, long configured)
 
 void ibApplicationHost::ReadBackendConf()
 {
-	const wxString strConfigFile = ibBackendConfPath();
+	const ibString strConfigFile = ibBackendConfPath();
 
 	// Read as written, as infobase.conf is: a Windows path keeps its backslashes (the \t of C:\tls\server.key is not a tab).
-	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile,
+	wxFileConfig fc(ibT(""), ibT(""), ibT(""), strConfigFile,
 		wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_GLOBAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
-	fc.Read(wxT("Locale"), &m_configLocale);
+	m_configLocale = fc.Read(ibT("Locale"), m_configLocale.wc_str());   // what was there, when the file says nothing
 
 	// HOW MUCH THE PROCESS MAY CONSUME — said by whoever runs it, not compiled in. Workers and Bases are the most there
 	// may be: left out, or 0, no limit.
-	m_configWorkers = ReadCount(fc, BACKEND_CONF, wxT("Workers"), 1, 0);
-	m_configBases   = ReadCount(fc, BACKEND_CONF, wxT("Bases"), 1, 0);
+	m_configWorkers = ReadCount(fc, BACKEND_CONF, ibT("Workers"), 1, 0);
+	m_configBases   = ReadCount(fc, BACKEND_CONF, ibT("Bases"), 1, 0);
 	// The application server's client ceiling. Left out, or 0: a thousand — not "no limit", which is what
 	// Workers and Bases mean by 0. Above the most, the most is used. See clientListener.cpp — a connection
 	// holds a thread, and this is how many of those threads the process will make.
-	m_configClientConnections = ReadCount(fc, BACKEND_CONF, wxT("ClientConnections"), 1,
+	m_configClientConnections = ReadCount(fc, BACKEND_CONF, ibT("ClientConnections"), 1,
 		kDefaultClientConnections, kMostClientConnections);
 	// The connections are a base's own — its infobase.conf says them; this is only the default for a base that does
 	// not. Two at least: the registry holds one for its writes, a session needs another.
-	m_configConnections = ReadCount(fc, BACKEND_CONF, wxT("Connections"), 2, 0);
+	m_configConnections = ReadCount(fc, BACKEND_CONF, ibT("Connections"), 2, 0);
 	// Resume is not ReadCount: there 0 means the default, and here 0 means the window is off.
 	long resume = 0;
-	const bool resumePresent = fc.Read(wxT("Resume"), &resume);
+	const bool resumePresent = fc.Read(ibT("Resume"), &resume);
 	m_configResume = ResumeSeconds(resumePresent, resume);
 	// The certificate the listeners speak TLS over, named relative to this file's folder (core/server/listener.h).
 	m_configTls = ibTlsFiles::FromConf(fc, wxFileName(strConfigFile).GetPath());
@@ -349,7 +349,7 @@ void ibApplicationHost::ReadBackendConf()
 	//  and the two would disagree the first time somebody edited the page.)
 }
 
-bool ibApplicationHost::InitLocale(const wxString& locale)
+bool ibApplicationHost::InitLocale(const ibString& locale)
 {
 	// SETTLED ALREADY — by the first base. That is success, not a refusal: a later base asks for the locale
 	// the process speaks, and it has one. (This used to answer false on a second call, which on a base of its
@@ -368,7 +368,7 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 	// The base's word, else backend.conf's — when this machine can set it. A wish it cannot grant is not a refusal to
 	// open the base (a base names its locale on one machine and is opened on every other): the process speaks the
 	// system's language, else English, and the journal says which wish went ungranted.
-	const wxString& wanted = !locale.IsEmpty() ? locale : m_configLocale;
+	const ibString& wanted = !locale.IsEmpty() ? locale : m_configLocale;
 	const wxLanguageInfo* const wish = !wanted.IsEmpty() ? wxLocale::FindLanguageInfo(wanted) : nullptr;
 	if (wish != nullptr && wxLocale::IsAvailable(wish->Language))
 		m_localeLang = wish->Language;
@@ -378,7 +378,7 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 	// Independently of whether we succeeded to set the locale or not, try
 	// to load the translations (for the default system language) here.
 
-	const wxString& workingDir = ibGetCwd();
+	const ibString& workingDir = ibGetCwd();
 
 	// normally this wouldn't be necessary as the catalog files would be found
 	// in the default locations, but when the program is not installed the
@@ -387,8 +387,8 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 
 	wxFileName fn(wxStandardPaths::Get().GetExecutablePath());
 
-	wxLocale::AddCatalogLookupPathPrefix(workingDir + wxFILE_SEP_PATH + wxT("lang"));
-	wxLocale::AddCatalogLookupPathPrefix(ibProgramFolder() + wxFILE_SEP_PATH + wxT("lang"));
+	wxLocale::AddCatalogLookupPathPrefix(workingDir + wxFILE_SEP_PATH + ibT("lang"));
+	wxLocale::AddCatalogLookupPathPrefix(ibProgramFolder() + wxFILE_SEP_PATH + ibT("lang"));
 
 	// …AND, FOR A RUN FROM THE BUILD TREE, THE SOURCE'S OWN `lang` ABOVE THE EXECUTABLE — the walk-up the
 	// syntax helper makes for its corpus (helpService.cpp; bin/Win32/Debug is three levels under it). The
@@ -396,9 +396,9 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 	// anywhere but the source root found none and spoke English engine words between the configuration's
 	// own: a document read "… 00000000003 from 06.07.2026" in a Russian session (2026-09-28).
 	{
-		wxFileName walk(fn.GetPath(), wxEmptyString);
+		wxFileName walk(fn.GetPath(), ibEmptyString);
 		for (int level = 0; level < 6; ++level) {
-			const wxString candidate = walk.GetPath() + wxFILE_SEP_PATH + wxT("lang");
+			const ibString candidate = walk.GetPath() + wxFILE_SEP_PATH + ibT("lang");
 			if (ibDirExists(candidate)) {
 				wxLocale::AddCatalogLookupPathPrefix(candidate);
 				break;
@@ -414,14 +414,14 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 	if (!m_locale.Init(m_localeLang)) {
 		const wxLanguageInfo* const info = wxLocale::GetLanguageInfo(m_localeLang);
 		ibBackendCoreException::Error(_("The locale %s cannot be set on this machine; the base was not opened."),
-			info != nullptr ? info->GetCanonicalWithRegion() : wxString(wxT("(default)")));
+			info != nullptr ? ibString(info->GetCanonicalWithRegion()) : ibString(ibT("(default)")));
 	}
 	if (wish != nullptr && wish->Language != m_localeLang)
-		ibJournalWarning(wxT("session.locale"), wxT("the locale %s is not supported on this machine; the process speaks %s"),
+		ibJournalWarning(ibT("session.locale"), ibT("the locale %s is not supported on this machine; the process speaks %s"),
 			wish->GetCanonicalWithRegion(), m_locale.GetCanonicalName());
 
 	// Initialize the catalogs we'll be using.
-	m_locale.AddCatalog(wxT("open_es"));
+	m_locale.AddCatalog(ibT("open_es"));
 
 	// ⭐ NO CATALOG OF OURS FOR THE LANGUAGE — NOTHING TO ASK. The engine's strings stay as they are written (English
 	// has no catalog: it is what they are written in), and a translations object with nothing of ours misses on every
@@ -430,7 +430,7 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 	// about two thirds of the application server's busy threads waiting on that one lock (2026-10-06, Debug, cdb).
 	// Without the object, `_()` hands the string back at once.
 	if (wxTranslations* const translations = wxTranslations::Get())
-		if (!translations->IsLoaded(wxT("open_es")))
+		if (!translations->IsLoaded(ibT("open_es")))
 			wxTranslations::Set(nullptr);
 
 	// Initialize localization engine
@@ -442,7 +442,7 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 	// Syntax-helper corpus comes up here — locale is settled. An article's class_id is checked by the backend's
 	// registry of classes.
 	m_helpService.reset(new ibHelpService(m_locale.GetCanonicalName(), [](ibClassID id) {
-		return ibValue::IsRegisterCtor(id) ? ibValue::GetNameObjectFromID(id) : wxString();
+		return ibValue::IsRegisterCtor(id) ? ibValue::GetNameObjectFromID(id) : ibString();
 	}));
 
 	return true;

@@ -12,8 +12,8 @@
 
 class ibAuiToolBar;
 
-// A COMMAND BAR — the State's CommandBar of a form, a table or a spreadsheet, drawn: the desktop's toolbar of a
-// command bar (frontend/visualView/layers/commandBar.cpp, BuildCommandBarToolBar) over the entries the server wrote,
+// A COMMAND BAR — the State's CommandBar of a form, a table or a spreadsheet, drawn: the old desktop's toolbar of a
+// command bar (BuildCommandBarToolBar) over the entries the server wrote,
 // not the commands it resolves. A press goes back as Command {Id[, Member]} to whoever the bar is — its owner's
 // `sendCommand` sends it.
 //

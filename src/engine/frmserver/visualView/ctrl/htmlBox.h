@@ -26,7 +26,7 @@ class ibValueHTMLBox : public ibValueWindow {
 private:
 
 	// Set from code only, never saved: the page lives as long as the form is open.
-	wxString m_page;
+	ibString m_page;
 };
 
 #endif // ! _HTMLBOX_H__

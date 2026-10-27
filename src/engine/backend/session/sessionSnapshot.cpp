@@ -2,43 +2,43 @@
 #include "appData.h"   // appData->GetRunModeDescr in GetApplication
 #include "session.h"   // ibSessionKind for CountByKind
 
-wxString ibSessionSnapshot::GetUserName(unsigned int idx) const {
+ibString ibSessionSnapshot::GetUserName(unsigned int idx) const {
 	if (idx > m_listSession.size())
-		return wxEmptyString;
+		return ibEmptyString;
 	return m_listSession[idx].m_strUserName;
 }
 
-wxString ibSessionSnapshot::GetComputerName(unsigned int idx) const {
+ibString ibSessionSnapshot::GetComputerName(unsigned int idx) const {
 	if (idx > m_listSession.size())
-		return wxEmptyString;
+		return ibEmptyString;
 	return m_listSession[idx].m_strComputerName;
 }
 
-wxString ibSessionSnapshot::GetSession(unsigned int idx) const {
+ibString ibSessionSnapshot::GetSession(unsigned int idx) const {
 	if (idx > m_listSession.size())
-		return wxEmptyString;
+		return ibEmptyString;
 	return m_listSession[idx].m_strSession;
 }
 
-wxString ibSessionSnapshot::GetStartedDate(unsigned int idx) const {
+ibString ibSessionSnapshot::GetStartedDate(unsigned int idx) const {
 	if (idx > m_listSession.size())
-		return wxEmptyString;
+		return ibEmptyString;
 	const ibDateTime& startedDate = m_listSession[idx].m_startedDate;
 	if (startedDate.IsEmpty())
-		return wxEmptyString;
-	return startedDate.ToString().ToWxString();
+		return ibEmptyString;
+	return startedDate.ToString();
 }
 
-wxString ibSessionSnapshot::GetApplication(unsigned int idx) const {
+ibString ibSessionSnapshot::GetApplication(unsigned int idx) const {
 	if (idx > m_listSession.size())
-		return wxEmptyString;
+		return ibEmptyString;
 	const auto& row = m_listSession[idx];
 	// THE KIND SAYS WHAT A SESSION WORKS IN; the run mode only says whether its process is a server or a file
 	// base, and either hosts designers, clients and jobs alike. A row whose kind says nothing (Unknown, or a
 	// legacy schema without the column) falls back to the run-mode description.
 	// A JOB IS NOT AN APPLICATION. Its run mode says which executable happens to
 	// host it, which is exactly the wrong answer for the question this column
-	// asks — a fold running inside enterprise.exe is not a thick client, and
+	// asks — a fold running inside a thin client's file base is not a client, and
 	// reading it as one is how three rows look like three users. The kind is
 	// checked first, because for these it carries the real answer.
 	switch (row.m_kind) {
@@ -71,10 +71,10 @@ int ibSessionSnapshot::GetSessionKind(unsigned int idx) const
 	return m_listSession[idx].m_kind;
 }
 
-wxString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
+ibString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
 {
 	if (idx >= m_listSession.size())
-		return wxEmptyString;
+		return ibEmptyString;
 	const auto& row = m_listSession[idx];
 	// The kind carries the server/client split; everything else is user-facing, reported as "Client" for
 	// consistency in the Active Users dialog — a legacy row without a kind (m_kind = 0) included.
@@ -99,7 +99,7 @@ wxString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
 }
 
 void ibSessionSnapshot::SetKindsFromMap(
-	const std::unordered_map<wxString, int>& kindBySession)
+	const std::unordered_map<ibString, int>& kindBySession)
 {
 	for (auto& u : m_listSession) {
 		auto it = kindBySession.find(u.m_strSession);
@@ -108,15 +108,15 @@ void ibSessionSnapshot::SetKindsFromMap(
 	}
 }
 
-wxString ibSessionSnapshot::GetActivity(unsigned int idx) const
+ibString ibSessionSnapshot::GetActivity(unsigned int idx) const
 {
 	if (idx >= m_listSession.size())
-		return wxEmptyString;
+		return ibEmptyString;
 	return m_listSession[idx].m_activity;
 }
 
 void ibSessionSnapshot::SetActivityFromMap(
-	const std::unordered_map<wxString, wxString>& activityBySession)
+	const std::unordered_map<ibString, ibString>& activityBySession)
 {
 	for (auto& u : m_listSession) {
 		auto it = activityBySession.find(u.m_strSession);
@@ -126,7 +126,7 @@ void ibSessionSnapshot::SetActivityFromMap(
 }
 
 void ibSessionSnapshot::SetExclusiveFromMap(
-	const std::unordered_map<wxString, bool>& exclusiveBySession)
+	const std::unordered_map<ibString, bool>& exclusiveBySession)
 {
 	for (auto& u : m_listSession) {
 		auto it = exclusiveBySession.find(u.m_strSession);
@@ -141,20 +141,20 @@ bool ibSessionSnapshot::IsExclusive(unsigned int idx) const
 	return m_listSession[idx].m_exclusive;
 }
 
-wxString ibSessionSnapshot::ExclusiveHolderSession() const
+ibString ibSessionSnapshot::ExclusiveHolderSession() const
 {
 	for (const auto& u : m_listSession)
 		if (u.m_exclusive)
 			return u.m_strSession;
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
-wxString ibSessionSnapshot::ExclusiveHolderUser() const
+ibString ibSessionSnapshot::ExclusiveHolderUser() const
 {
 	for (const auto& u : m_listSession)
 		if (u.m_exclusive)
 			return u.m_strUserName;
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 // IS A PERSON WORKING HERE? Both predicates below answer that, and neither may
@@ -183,7 +183,7 @@ bool ibSessionSnapshot::HasActiveUsers() const
 	return false;
 }
 
-bool ibSessionSnapshot::IsUserActive(const wxString& userName) const
+bool ibSessionSnapshot::IsUserActive(const ibString& userName) const
 {
 	if (userName.IsEmpty())
 		return false;

@@ -27,7 +27,7 @@ public:
 	// THE CLIENT'S COMMAND (ibProtocol::ibDebug::ibCommand; Channel and Listen are the host's) — `params` its fields, done
 	// and answered into `result` at once; false with why. What the runtime answers comes later, as news.
 	bool Command(ibProtocol::ibDebug::ibCommand command, const ibDataNode& params, ibDataNode& result,
-		ibProtocol::ibRefusal& refusal, wxString& error) const;
+		ibProtocol::ibRefusal& refusal, ibString& error) const;
 
 	// The engine's news, each an event of its own (ibProtocol::ibDebug::ibEvent). SessionStart and SessionEnd say whether
 	// a runtime is still attached (Connected) — the engine's HasConnections, asked once it holds.
@@ -40,8 +40,8 @@ public:
 	// ⚠ Not sent: the thin designer's editor completes from the server's module (ibModuleTextView::Fetch), and has no door
 	// for the runtime's answer.
 	virtual void OnAutoComplete(const ibDebugAutoCompleteData& data) override;
-	virtual void OnMessageFromServer(const ibDebugLineData& data, const wxString& message) override;
-	virtual void OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr) override;
+	virtual void OnMessageFromServer(const ibDebugLineData& data, const ibString& message) override;
+	virtual void OnSetToolTip(const ibDebugExpressionData& data, const ibString& resultStr) override;
 
 	virtual void OnSetStack(const ibStackData& stackData) override;
 

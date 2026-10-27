@@ -31,8 +31,8 @@ public:
 
 	// Bound on the caller's thread, so a refusal is said here: on 127.0.0.1, at the first free one of `ports`, which
 	// `port` then holds. `hosts` — the bases served, by name. False, with the reason, when nothing could be bound.
-	bool Start(const ibPortRange& ports, unsigned short& port, std::map<wxString, class ibClientHost*> hosts,
-		wxString& refusal);
+	bool Start(const ibPortRange& ports, unsigned short& port, std::map<ibString, class ibClientHost*> hosts,
+		ibString& refusal);
 
 	// The port closed and every connection let go — before the hosts it carries to are.
 	void Stop();

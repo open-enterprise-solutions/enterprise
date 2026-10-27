@@ -26,18 +26,18 @@ public:
 	virtual ~ibProtocolConnection() = default;
 
 	virtual bool Exchange(const ibMemoryBuffer& request, ibProtocolNode& answer,
-		ibProtocol::ibRefusal& refusal, wxString& error) = 0;
+		ibProtocol::ibRefusal& refusal, ibString& error) = 0;
 
 	// Open this connection again after it has closed. False when there is nowhere to return to — a file base has
 	// no socket. The default is false, so a connection that cannot return does not pretend to.
-	virtual bool Reconnect(wxString& error) { (void)error; return false; }
+	virtual bool Reconnect(ibString& error) { (void)error; return false; }
 
 	// A SECOND CONNECTION TO THE SAME PLACE (protocol 6) — the debugger's, so what it carries is not queued behind this
 	// one's calls: the same server's address, the same file base. Null, with why in `error`, when there is none — the
 	// default, so a connection that cannot open one does not pretend to.
-	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(wxString& error)
+	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(ibString& error)
 	{
-		error = wxT("this connection opens no second one");
+		error = ibT("this connection opens no second one");
 		return nullptr;
 	}
 

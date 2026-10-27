@@ -101,7 +101,7 @@ TEST(ibBackendPicture, SendPicture_ConfigurationPicture_GuidAndVersion)
 	PictureFixture f;
 	ASSERT_NE(f.first, nullptr);
 	ASSERT_TRUE(PictureFixture::Set(f.first, Image("\x89PNG one", 16, 16)));
-	const wxString sent = ibBackendPicture::SendPicture(ibPictureDescription(PictureFixture::Guid(f.first)), &f.cfg).AsString();
+	const ibString sent = ibBackendPicture::SendPicture(ibPictureDescription(PictureFixture::Guid(f.first)), &f.cfg).AsString();
 	EXPECT_EQ(sent, PictureFixture::Guid(f.first).str() + wxT("#") + f.first->GetValueAsVersion().str());
 	// The Picture method reads the guid before the '#'.
 	EXPECT_EQ(ibGuid(sent.BeforeFirst(wxT('#'))), PictureFixture::Guid(f.first));
@@ -113,10 +113,10 @@ TEST(ibBackendPicture, SendPicture_PictureChanged_AnotherIdOfTheSameGuid)
 	ASSERT_NE(f.first, nullptr);
 	const ibPictureDescription desc(PictureFixture::Guid(f.first));
 	ASSERT_TRUE(PictureFixture::Set(f.first, Image("\x89PNG one", 16, 16)));
-	const wxString before = ibBackendPicture::SendPicture(desc, &f.cfg).AsString();
+	const ibString before = ibBackendPicture::SendPicture(desc, &f.cfg).AsString();
 	EXPECT_EQ(ibBackendPicture::SendPicture(desc, &f.cfg).AsString(), before);
 	ASSERT_TRUE(PictureFixture::Set(f.first, Image("\x89PNG two", 16, 16)));
-	const wxString after = ibBackendPicture::SendPicture(desc, &f.cfg).AsString();
+	const ibString after = ibBackendPicture::SendPicture(desc, &f.cfg).AsString();
 	EXPECT_NE(after, before);
 	EXPECT_EQ(after.BeforeFirst(wxT('#')), before.BeforeFirst(wxT('#')));
 }
@@ -139,7 +139,7 @@ TEST(ibBackendPicture, SendPicture_GuidOfNoPicture_Empty)
 TEST(ibBackendPicture, SendPicture_BackendPicture_NumberAlone)
 {
 	// …by its number alone, or described, with a configuration or without: a backend picture is the process's.
-	const wxString number = wxString::Format(wxT("%llu"), static_cast<unsigned long long>(g_picErrorCLSID));
+	const ibString number = ibString::Format(wxT("%llu"), static_cast<unsigned long long>(g_picErrorCLSID));
 	PictureFixture f;
 	EXPECT_EQ(ibBackendPicture::SendPicture(g_picErrorCLSID), number);
 	EXPECT_EQ(ibBackendPicture::SendPicture(ibPictureDescription(g_picErrorCLSID), &f.cfg).AsString(), number);

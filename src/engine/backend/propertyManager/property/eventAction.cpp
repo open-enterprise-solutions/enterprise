@@ -24,7 +24,7 @@ ibActionID ibEventAction::GetValueAsInteger() const {
 	return wxNOT_FOUND;
 }
 
-wxString ibEventAction::GetValueAsString() const
+ibString ibEventAction::GetValueAsString() const
 {
 	return GetValueAsActionDesc().GetCustomAction();
 }

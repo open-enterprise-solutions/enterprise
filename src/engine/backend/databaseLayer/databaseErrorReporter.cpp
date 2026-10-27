@@ -11,7 +11,7 @@ ibDatabaseErrorReporter::~ibDatabaseErrorReporter()
 {
 }
 
-const wxString& ibDatabaseErrorReporter::GetErrorMessage()
+const ibString& ibDatabaseErrorReporter::GetErrorMessage()
 {
 	return m_strErrorMessage;
 }
@@ -21,7 +21,7 @@ int ibDatabaseErrorReporter::GetErrorCode()
 	return m_nErrorCode;
 }
 
-void ibDatabaseErrorReporter::SetErrorMessage(const wxString& strErrorMessage)
+void ibDatabaseErrorReporter::SetErrorMessage(const ibString& strErrorMessage)
 {
 	m_strErrorMessage = strErrorMessage;
 }

@@ -29,7 +29,7 @@ public:
 	// The same row — the same handle, whichever read made the object.
 	virtual bool IsEqualTo(const ibDataViewObject& other) const override;
 	virtual bool IsContainer() const override { return m_container; }
-	virtual bool GetGroupCaption(wxString& caption) const override;
+	virtual bool GetGroupCaption(ibString& caption) const override;
 	virtual ibDataViewItem GetParentItem() const override { return m_parent; }
 
 	long long GetHandle() const { return m_handle; }

@@ -222,19 +222,19 @@ bool ibFetchSpreadsheet(const ibSpreadsheetObject& document, ibDataNode& respons
 	// A value is its bytes, read: the cells are written anew, each as it is or with its text as shown.
 	const ibSpreadsheetDescription& desc = document.GetSpreadsheetDesc();
 	ibDataNode written = *sheet.AsChild();
-	if (const auto cells = written.FindField(wxT("cells"))) {
+	if (const auto cells = written.FindField(ibT("cells"))) {
 		std::vector<ibDataValue> shown;
 		for (const ibDataValue& entry : cells->AsArray()) {
 			ibDataNode node = *entry.AsChild();
-			const ibSpreadsheetCellDescription* const cell = desc.GetCell(node.GetValue<std::int32_t>(wxT("row")), node.GetValue<std::int32_t>(wxT("col")));
+			const ibSpreadsheetCellDescription* const cell = desc.GetCell(node.GetValue<std::int32_t>(ibT("row")), node.GetValue<std::int32_t>(ibT("col")));
 			const ibString text = cell != nullptr ? document.ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType) : ibString();
 			if (cell != nullptr && (text != cell->m_value || cell->m_fillSetType != ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)) {
-				node.SetField(wxT("value"), ibDataValue::String(text));
-				node.SetField(wxT("fill"), ibDataValue::Int(static_cast<std::int64_t>(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)));
+				node.SetField(ibT("value"), ibDataValue::String(text));
+				node.SetField(ibT("fill"), ibDataValue::Int(static_cast<std::int64_t>(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)));
 			}
 			shown.push_back(ibDataValue::Child(std::make_shared<ibDataNode>(std::move(node))));
 		}
-		written.SetField(wxT("cells"), ibDataValue::Array(std::move(shown)));
+		written.SetField(ibT("cells"), ibDataValue::Array(std::move(shown)));
 	}
 
 	response.SetField(ibProtocol::ibForm::ibSpreadsheet::Sheet, ibDataValue::Child(std::make_shared<ibDataNode>(std::move(written))));
@@ -259,7 +259,7 @@ bool ibValueGridBox::ReadData(const ibDataNode& node)
 	// The sheet a designer typed into travels with the control — read into the sheet the MODEL holds,
 	// which with no source bound is the box's own document.
 	if (m_spreadsheetModel) {
-		ibSpreadsheetDescriptionMemory::ReadNode(node.GetProperty(wxT("Spreadsheet")),
+		ibSpreadsheetDescriptionMemory::ReadNode(node.GetProperty(ibT("Spreadsheet")),
 			m_spreadsheetModel->GetSpreadsheetDocument()->GetSpreadsheetDesc());
 	}
 	return ibValueWindowComposite::ReadData(node);
@@ -277,7 +277,7 @@ bool ibValueGridBox::WriteData(ibDataNode& node) const
 		ibDataValue spreadsheet;
 		ibSpreadsheetDescriptionMemory::WriteNode(spreadsheet,
 			m_spreadsheetModel->GetSpreadsheetDocument()->GetSpreadsheetDesc());
-		node.SetProperty(wxT("Spreadsheet"), spreadsheet);
+		node.SetProperty(ibT("Spreadsheet"), spreadsheet);
 	}
 	return ibValueWindowComposite::WriteData(node);
 }
@@ -289,7 +289,7 @@ enum prop {
 
 void ibValueGridBox::FillControlMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(wxT("Value"), eGridValue, eControl);
+	helper.AppendProp(ibT("Value"), eGridValue, eControl);
 }
 
 bool ibValueGridBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)

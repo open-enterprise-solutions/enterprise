@@ -19,13 +19,13 @@ enum action {
 ibValueRecordDataObjectDocument::ibStandardCommandSet ibValueRecordDataObjectDocument::GetStandardCommands(const ibFormID &formType)
 {
 	ibStandardCommandSet documentActions(this);
-	documentActions.AddAction(wxT("PostAndClose"), _("Post and close"), g_picPostCLSID, true, eDefActionAndClose);
-	documentActions.AddAction(wxT("Post"), _("Post"), g_picPostCLSID, true, ePost);
-	documentActions.AddAction(wxT("ClearPosting"), _("Clear posting"), g_picSaveCLSID, true, eClearPosting);
+	documentActions.AddAction(ibT("PostAndClose"), _("Post and close"), g_picPostCLSID, true, eDefActionAndClose);
+	documentActions.AddAction(ibT("Post"), _("Post"), g_picPostCLSID, true, ePost);
+	documentActions.AddAction(ibT("ClearPosting"), _("Clear posting"), g_picSaveCLSID, true, eClearPosting);
 	documentActions.AddSeparator();
-	documentActions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);   // creates a NEW object — doesn't modify THIS one
+	documentActions.AddAction(ibT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);   // creates a NEW object — doesn't modify THIS one
 	documentActions.AddSeparator();
-	documentActions.AddAction(wxT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
+	documentActions.AddAction(ibT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
 
 	return documentActions;
 }
@@ -51,8 +51,8 @@ void ibValueRecordDataObjectDocument::CallAsAction(const ibActionID &action, ibB
 void ibValueMetaObjectDocument::GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const
 {
 	ibValueMetaObjectRecordDataMutableRef::GetCommandCollection(formType, commands);   // Add/Copy/Edit/Delete/MarkAsDelete
-	commands.emplace_back(ePostValue,         wxT("Post"),         _("Post"),          g_picPostCLSID, true);
-	commands.emplace_back(eClearPostingValue, wxT("ClearPosting"), _("Clear posting"), g_picSaveCLSID);
+	commands.emplace_back(ePostValue,         ibT("Post"),         _("Post"),          g_picPostCLSID, true);
+	commands.emplace_back(eClearPostingValue, ibT("ClearPosting"), _("Clear posting"), g_picSaveCLSID);
 }
 
 // The document's row, in three states: marked for deletion, posted, or neither — each read off the row's own
@@ -92,7 +92,7 @@ void ibValueMetaObjectDocument::CallAsCommand(ibActionID id, const ibUniqueKey& 
 		// posting refused for lack of rights, and the user saw nothing but a line in the log.
 		catch (const ibBackendInterruptException&) {}   // the user stopped it — nothing to report
 		catch (const ibCoreException&) {}   // already reported where it happened - see ProcessExceptionError
-		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectDocument::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
+		catch (...) { ibJournalError(ibT("metadata.action"),ibT("ibValueMetaObjectDocument::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
 	ibValueMetaObjectRecordDataMutableRef::CallAsCommand(id, anchor, key, srcForm);   // Add/Copy/Edit/Delete/MarkAsDelete

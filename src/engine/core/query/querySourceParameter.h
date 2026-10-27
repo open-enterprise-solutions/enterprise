@@ -11,7 +11,6 @@
 
 #include "core/description/typeDescription.h"   // ibTypeDescription — what a value argument holds
 
-#include <wx/string.h>
 #include <vector>
 
 // ONE PARAMETER OF A SOURCE CALL — `Balance(&Period, Warehouse = &Store)`.
@@ -43,7 +42,7 @@
 //                 but not by a resource it folded, while a slice admits every attribute it carries.
 struct ibQuerySourceParameter
 {
-	wxString          m_name;                 // Period / Begin / End / Periodicity / Condition
+	ibString          m_name;                 // Period / Begin / End / Periodicity / Condition
 	bool              m_condition = false;    // false = value expression, true = predicate
 	ibTypeDescription m_type;                 // VALUE only: what it holds — and therefore how it is edited
 	bool              m_required = false;
@@ -55,7 +54,7 @@ struct ibQuerySourceParameter
 	//
 	// Empty means "any expression the language can write" — a moment, a parameter, a computation.
 	// Non-empty makes the argument a CHOICE, and the editor shows exactly these and nothing else.
-	std::vector<wxString> m_choices;
+	std::vector<ibString> m_choices;
 
 	// ⭐ WHAT THIS ARGUMENT DECIDES, in one line, when the name alone is not enough — declared by
 	// the source for the same reason the choices are: it is the only one that knows.
@@ -66,7 +65,7 @@ struct ibQuerySourceParameter
 	// Day / Month / …). A newcomer reads one list and writes it into the other, and both refusals
 	// are correct and neither says the two are different questions (measured over MCP, 2026-09-03).
 	// Empty for an argument whose name says it all.
-	wxString m_description;
+	ibString m_description;
 
 	// ⭐⭐ THE SOURCE CONSUMES THIS CONDITION ITSELF — it is not folded into the WHERE around it.
 	//
@@ -84,7 +83,7 @@ struct ibQuerySourceParameter
 	// AND WHAT THE SOURCE USES WHEN THE ARGUMENT IS LEFT OUT. Shown to the author rather than left to
 	// be guessed: an empty box that quietly means "Auto" teaches nothing, and the first surprise
 	// arrives when somebody sets it explicitly and the result changes.
-	wxString              m_default;
+	ibString              m_default;
 
 };
 

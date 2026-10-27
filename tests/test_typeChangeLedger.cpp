@@ -37,34 +37,34 @@ namespace {
 constexpr ibMetaID kGoodsTable = 0x7100;
 
 struct StoredColumn : ibBackendQueryColumn {
-	wxString                  physical;
+	ibString                  physical;
 	mutable ibTypeDescription type;
 
-	wxString GetName() const override { return physical; }
-	wxString GetPhysicalName() const override { return physical; }
+	ibString GetName() const override { return physical; }
+	ibString GetPhysicalName() const override { return physical; }
 	ibTypeDescription& GetTypeDesc() const override { return type; }
 	ibMetaID GetColumnId() const override { return 1; }
 };
 
-wxString FieldOf(const StoredColumn& column, ibColumnRole role)
+ibString FieldOf(const StoredColumn& column, ibColumnRole role)
 {
 	for (const ibColumnSlot& slot : DescribeColumnLayout(&column))
 		if (slot.m_role == role)
 			return slot.m_name;
-	return wxString();
+	return ibString();
 }
 
-wxString EnvOr(const char* name, const wxString& fallback)
+ibString EnvOr(const char* name, const ibString& fallback)
 {
 	const char* value = std::getenv(name);
-	return (value != nullptr && *value != '\0') ? wxString::FromUTF8(value) : fallback;
+	return (value != nullptr && *value != '\0') ? ibString::FromUTF8(value) : fallback;
 }
 
 std::shared_ptr<ibDatabaseLayer> OpenEngine(const std::string& engine)
 {
 	const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-	const wxString scratch = wxFileName(wxStandardPaths::Get().GetTempDir(),
-		wxString::Format(wxT("oes_ledger_%s_%lld.%s"), engine, (long long)now, engine == "firebird" ? "fdb" : "db")).GetFullPath();
+	const ibString scratch = wxFileName(wxStandardPaths::Get().GetTempDir(),
+		ibString::Format(wxT("oes_ledger_%s_%lld.%s"), engine, (long long)now, engine == "firebird" ? "fdb" : "db")).GetFullPath();
 	if (engine == "sqlite") {
 		auto db = std::make_shared<ibDatabaseLayerSQLite>();
 		return db->Open(scratch) ? db : nullptr;
@@ -144,7 +144,7 @@ protected:
 	}
 
 	// was -> next, the way an apply runs it. The ledger lines that say a loss.
-	static std::vector<wxString> Apply(const StoredColumn& was, const StoredColumn& next)
+	static std::vector<ibString> Apply(const StoredColumn& was, const StoredColumn& next)
 	{
 		ibSchemaSnapshot before;
 		before.Shared(kGoodsTable, wxT("goods")).Add(&was);
@@ -153,14 +153,14 @@ protected:
 		ibRestructureInfo ledger;
 		EXPECT_EQ(DiffSnapshots(&before, after, nullptr, &ledger), 1);
 		Settle();
-		std::vector<wxString> said;
+		std::vector<ibString> said;
 		for (const ibRestructureInfo::Entry& entry : ledger)
 			if (entry.descr.Find(wxT("stored values will be cleared")) != wxNOT_FOUND)
 				said.push_back(entry.descr);
 		return said;
 	}
 
-	static void Put(const wxString& columns, const wxString& values)
+	static void Put(const ibString& columns, const ibString& values)
 	{
 		ASSERT_GE(db_query->RunQuery(wxT("%s"),
 			wxT("INSERT INTO goods (") + columns + wxT(") VALUES (") + values + wxT(")")), 0);
@@ -169,7 +169,7 @@ protected:
 	}
 
 	// How many rows hold each tag (0 = cleared).
-	static std::map<int, int> TagCounts(const wxString& typeCol)
+	static std::map<int, int> TagCounts(const ibString& typeCol)
 	{
 		std::map<int, int> counts;
 		ibQueryResult rows = ibDatabaseQueryBuilder().From(wxT("goods")).Select({ typeCol }).Execute();
@@ -191,14 +191,14 @@ TEST_P(TypeChangeLedger, ARemovedTypeIsCountedAndExactlyThoseRowsReadEmpty)
 	next.type.ClearMetaType(ibValue::GetIDByVT(ibValueTypes::TYPE_STRING));
 
 	Create(was);
-	const wxString typeCol = FieldOf(was, ibColumnRole::Discriminator);
+	const ibString typeCol = FieldOf(was, ibColumnRole::Discriminator);
 	const int stringTag = ibPersistedTypeTag(ibColumnRole::String);
 	const int numberTag = ibPersistedTypeTag(ibColumnRole::Number);
-	Put(typeCol, wxString::Format(wxT("%d"), stringTag));
-	Put(typeCol, wxString::Format(wxT("%d"), stringTag));
-	Put(typeCol, wxString::Format(wxT("%d"), numberTag));
+	Put(typeCol, ibString::Format(wxT("%d"), stringTag));
+	Put(typeCol, ibString::Format(wxT("%d"), stringTag));
+	Put(typeCol, ibString::Format(wxT("%d"), numberTag));
 
-	const std::vector<wxString> said = Apply(was, next);
+	const std::vector<ibString> said = Apply(was, next);
 	ASSERT_EQ(said.size(), 1u);
 	EXPECT_NE(said[0].Find(wxT(": 2 stored values will be cleared")), wxNOT_FOUND) << said[0];
 
@@ -222,17 +222,17 @@ TEST_P(TypeChangeLedger, ARemovedTargetLeavesANumberThatStillCarriesItsClsid)
 	next.type.ClearMetaType(gone);
 
 	Create(was);
-	const wxString typeCol = FieldOf(was, ibColumnRole::Discriminator);
-	const wxString targetCol = FieldOf(was, ibColumnRole::ReferenceType);
+	const ibString typeCol = FieldOf(was, ibColumnRole::Discriminator);
+	const ibString targetCol = FieldOf(was, ibColumnRole::ReferenceType);
 	ASSERT_FALSE(targetCol.IsEmpty());
 	const int refTag = ibPersistedTypeTag(ibColumnRole::ReferenceType);
 	const int numberTag = ibPersistedTypeTag(ibColumnRole::Number);
-	const wxString columns = typeCol + wxT(", ") + targetCol;
-	Put(columns, wxString::Format(wxT("%d, %lld"), refTag, (long long)kept));
-	Put(columns, wxString::Format(wxT("%d, %lld"), refTag, (long long)gone));
-	Put(columns, wxString::Format(wxT("%d, %lld"), numberTag, (long long)gone));   // a number over a stale clsid
+	const ibString columns = typeCol + wxT(", ") + targetCol;
+	Put(columns, ibString::Format(wxT("%d, %lld"), refTag, (long long)kept));
+	Put(columns, ibString::Format(wxT("%d, %lld"), refTag, (long long)gone));
+	Put(columns, ibString::Format(wxT("%d, %lld"), numberTag, (long long)gone));   // a number over a stale clsid
 
-	const std::vector<wxString> said = Apply(was, next);
+	const std::vector<ibString> said = Apply(was, next);
 	ASSERT_EQ(said.size(), 1u);
 	EXPECT_NE(said[0].Find(wxT(": 1 stored values will be cleared")), wxNOT_FOUND) << said[0];
 
@@ -252,7 +252,7 @@ TEST_P(TypeChangeLedger, AnAddedTypeClearsNothing)
 	next.type.AppendMetaType(ibValueTypes::TYPE_NUMBER);
 
 	Create(was);
-	Put(FieldOf(was, ibColumnRole::Discriminator), wxString::Format(wxT("%d"), ibPersistedTypeTag(ibColumnRole::String)));
+	Put(FieldOf(was, ibColumnRole::Discriminator), ibString::Format(wxT("%d"), ibPersistedTypeTag(ibColumnRole::String)));
 
 	EXPECT_TRUE(Apply(was, next).empty());
 }
@@ -267,15 +267,15 @@ TEST_P(TypeChangeLedger, AThousandIsGrouped)
 	next.type.ClearMetaType(ibValue::GetIDByVT(ibValueTypes::TYPE_STRING));
 
 	Create(was);
-	const wxString typeCol = FieldOf(was, ibColumnRole::Discriminator);
+	const ibString typeCol = FieldOf(was, ibColumnRole::Discriminator);
 	const int stringTag = ibPersistedTypeTag(ibColumnRole::String);
 	for (int i = 0; i < 1234; ++i)
 		ASSERT_GE(db_query->RunQuery(wxT("%s"),
-			wxString::Format(wxT("INSERT INTO goods (%s) VALUES (%d)"), typeCol, stringTag)), 0);
+			ibString::Format(wxT("INSERT INTO goods (%s) VALUES (%d)"), typeCol, stringTag)), 0);
 	if (db_query->IsActiveTransaction())
 		db_query->Commit();
 
-	const std::vector<wxString> said = Apply(was, next);
+	const std::vector<ibString> said = Apply(was, next);
 	ASSERT_EQ(said.size(), 1u);
 	EXPECT_NE(said[0].Find(wxT(": 1 234 stored values will be cleared")), wxNOT_FOUND) << said[0];
 }

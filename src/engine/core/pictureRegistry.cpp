@@ -19,7 +19,7 @@ static std::vector<ibPictureEntry>& Registry()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibPictureRegistry::RegisterPicture(const wxString& name, ibPictureID id, const ibPicture& picture)
+bool ibPictureRegistry::RegisterPicture(const ibString& name, ibPictureID id, const ibPicture& picture)
 {
 	const std::lock_guard<std::mutex> lock(s_registryLock);
 	std::vector<ibPictureEntry>& registry = Registry();
@@ -52,7 +52,7 @@ std::vector<ibPictureEntry> ibPictureRegistry::GetArrayPicture()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool RegisterPicture(const wxString name, const ibPictureID& id, const wxString& base64)
+bool RegisterPicture(const ibString name, const ibPictureID& id, const ibString& base64)
 {
 	ibMemoryBuffer png;
 	if (ibBase64::Read(base64.wc_str(), base64.length(), png) && ibPictureRegistry::RegisterPicture(name, id, ibPicture(png)))

@@ -11,8 +11,8 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibVa
 	virtual ibCompileModule* GetCompileModule() const;
 	virtual std::shared_ptr<ibProcUnit> GetProcUnit() const;
 
-	virtual std::map<wxString, ibContextVar>& GetContextVariables();
-	virtual std::map<wxString, ibValue*>& GetGlobalVariables();
+	virtual std::map<ibString, ibContextVar>& GetContextVariables();
+	virtual std::map<ibString, ibValue*>& GetGlobalVariables();
 
 	//metaData and external variant
 	ibValueModuleRuntimeManagerExternalDataProcessor(std::shared_ptr<ibMetaData> metaData = nullptr, ibValueMetaObjectDataProcessor* metaObject = nullptr);
@@ -56,8 +56,8 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModu
 	virtual ibCompileModule* GetCompileModule() const;
 	virtual std::shared_ptr<ibProcUnit> GetProcUnit() const;
 
-	virtual std::map<wxString, ibContextVar>& GetContextVariables();
-	virtual std::map<wxString, ibValue*>& GetGlobalVariables();
+	virtual std::map<ibString, ibContextVar>& GetContextVariables();
+	virtual std::map<ibString, ibValue*>& GetGlobalVariables();
 
 	//metaData and external variant
 	ibValueModuleRuntimeManagerExternalReport(std::shared_ptr<ibMetaData> metaData = nullptr, ibValueMetaObjectReport* metaObject = nullptr);

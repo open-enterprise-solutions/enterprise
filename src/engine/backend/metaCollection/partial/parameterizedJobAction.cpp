@@ -23,12 +23,12 @@ enum action {
 ibValueRecordDataObjectParameterizedJob::ibStandardCommandSet ibValueRecordDataObjectParameterizedJob::GetStandardCommands(const ibFormID& formType)
 {
 	ibStandardCommandSet jobActions(this);
-	jobActions.AddAction(wxT("Execute"), _("Execute"), g_picExecuteJobCLSID, true, eExecute).SetModify(false);
+	jobActions.AddAction(ibT("Execute"), _("Execute"), g_picExecuteJobCLSID, true, eExecute).SetModify(false);
 	jobActions.AddSeparator();
-	jobActions.AddAction(wxT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
-	jobActions.AddAction(wxT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
+	jobActions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
+	jobActions.AddAction(ibT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	jobActions.AddSeparator();
-	jobActions.AddAction(wxT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
+	jobActions.AddAction(ibT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
 	return jobActions;
 }
 
@@ -70,7 +70,7 @@ void ibValueRecordDataObjectParameterizedJob::CallAsAction(const ibActionID& act
 void ibValueMetaObjectParameterizedJob::GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const
 {
 	ibValueMetaObjectRecordDataHierarchyMutableRef::GetCommandCollection(formType, commands);
-	commands.emplace_back(eExecuteValue, wxT("Execute"), _("Execute"), g_picPostCLSID, true);
+	commands.emplace_back(eExecuteValue, ibT("Execute"), _("Execute"), g_picPostCLSID, true);
 }
 
 void ibValueMetaObjectParameterizedJob::CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const
@@ -90,7 +90,7 @@ void ibValueMetaObjectParameterizedJob::CallAsCommand(ibActionID id, const ibUni
 		// refused for lack of rights, with nothing but a line in the log to say so.
 		catch (const ibBackendInterruptException&) {}
 		catch (const ibCoreException&) {}   // already reported where it happened - see ProcessExceptionError
-		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectParameterizedJob::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
+		catch (...) { ibJournalError(ibT("metadata.action"),ibT("ibValueMetaObjectParameterizedJob::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
 

@@ -36,9 +36,9 @@ public:
 	explicit ibStructureBatch(const ibBackendQueryable* queryable);
 
 	// Key by a bare table name — for tables that have no queryable yet (virtual register projections).
-	explicit ibStructureBatch(const wxString& table) : m_table(table) {}
+	explicit ibStructureBatch(const ibString& table) : m_table(table) {}
 
-	const wxString&    GetTable()    const { return m_table; }
+	const ibString&    GetTable()    const { return m_table; }
 	const ibMetaData*  GetMetaData() const;   // the queryable's metadata (null when keyed by bare name)
 
 	// --- column-level: expand a LOGICAL column (ibBackendQueryColumn) through the layout tier and
@@ -70,10 +70,10 @@ public:
 	// (a raw uuid column -> "uuid"; a reference attribute -> its _RTRef/_RRRef pair; a dimension -> its
 	// fields). The structure speaks columns, not bare field strings. `descending` — the twin an engine walks
 	// when a list reads backwards (ibDialectDictionary::m_descendingIndexWord).
-	void CreateIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique = false,
+	void CreateIndex(const ibString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique = false,
 		bool descending = false);
 	// Its mirror, carrying what CreateIndex was given — so a failed second phase can put the index back.
-	void DropIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
+	void DropIndex(const ibString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
 		bool descending = false);
 	void Ddl(const ibDdlStatement& ddl);                        // any other prebuilt statement, in order
 
@@ -91,7 +91,7 @@ public:
 
 private:
 	const ibBackendQueryable*         m_queryable = nullptr;   // the schema handle (null when keyed by bare name)
-	wxString                          m_table;
+	ibString                          m_table;
 	std::vector<ibDdlStatement>       m_steps;      // single-op DDL, in emission order
 	std::vector<std::function<bool()>> m_inserts;   // data seeds (deferred past the DDL commit by ibSchemaBuilder's barrier)
 };

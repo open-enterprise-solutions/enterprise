@@ -215,7 +215,7 @@ private:
 	class wxStyledTextCtrl* m_queryText = nullptr;
 	class wxButton* m_queryBuild = nullptr;   // opens the query constructor ON this text and writes back into it
 	class wxStaticText* m_queryError = nullptr;   // the ENGINE's verdict, verbatim; hidden when the query resolves
-	wxString            m_queryFault;             // what it said, kept so the line can be shown on open too
+	ibString            m_queryFault;             // what it said, kept so the line can be shown on open too
 
 	// Push the query onto the list and rebuild everything that depends on it (the three field trees,
 	// the error line). Called when the flag is toggled and when the editor loses focus.

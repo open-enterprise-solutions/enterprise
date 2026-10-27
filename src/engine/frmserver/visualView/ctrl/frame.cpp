@@ -26,7 +26,7 @@ ibValueFrame::~ibValueFrame()
 {
 }
 
-wxString ibValueFrame::GetClassName() const
+ibString ibValueFrame::GetClassName() const
 {
 	const ibClassID& clsid = GetClassType();
 	if (clsid == 0)
@@ -38,7 +38,7 @@ wxString ibValueFrame::GetClassName() const
 	return _("Class not registered");
 }
 
-wxString ibValueFrame::GetObjectTypeName() const
+ibString ibValueFrame::GetObjectTypeName() const
 {
 	const ibCtorControlTypeBase* typeCtor =
 		static_cast<const ibCtorControlTypeBase*>(ibValue::GetAvailableCtor(typeid(*this)));
@@ -80,7 +80,7 @@ bool ibValueFrame::LoadControl(const ibValueMetaObjectFormBase* metaForm, ibRead
 	// Route by the blob's OWN format tag (SELF-DESCRIBING), not a transient paste mark: a copy blob — a pasted form,
 	// possibly saved to disk and reloaded long after the paste mark cleared — re-homes its source hops (guid→id) onto
 	// the pasted objects; a raw blob (incl. every OLD config, no tag) loads plainly. No copy→raw normalization anywhere.
-	if (builder.Root().GetValue<bool>(wxT("PasteFormat")))
+	if (builder.Root().GetValue<bool>(ibT("PasteFormat")))
 		return PasteNode(builder.Root());
 	return LoadNode(builder.Root());
 }
@@ -98,7 +98,7 @@ bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWrit
 	// any live paste mark. Absent on a raw save (and on every old config) → back-compat load as raw. A pasted form keeps
 	// its copy blob on disk and re-homes on each load; editing+saving it writes raw (no tag) — self-healing.
 	if (copy)
-		builder.Root().SetValue(wxT("PasteFormat"), true);
+		builder.Root().SetValue(ibT("PasteFormat"), true);
 	return builder.Save(ibBinaryProvider(), dataWritter);
 }
 
@@ -108,7 +108,7 @@ bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWrit
 bool ibValueFrame::LoadNode(const ibDataNode& node)
 {
 	m_controlId = (ibFormID)node.GetValue<std::int32_t>(ibProtocol::ibForm::ControlId);
-	SetControlName(node.GetValue<wxString>(ibProtocol::ibForm::Name));
+	SetControlName(node.GetValue<ibString>(ibProtocol::ibForm::Name));
 	m_expanded = node.GetValue<bool>(ibProtocol::ibForm::Expanded);
 	if (!ReadData(node))
 		return false;
@@ -125,8 +125,8 @@ bool ibValueFrame::LoadNode(const ibDataNode& node)
 			// symptom (Max, 2026-08-20). NewObject has already reported WHY when it had a reason;
 			// this names WHAT and WHERE, which the reason alone does not carry.
 			if (child == nullptr) {
-				ibJournalError(wxT("ui.form"), _("Control '%s' of '%s' could not be restored (class id %lld)"),
-					childNode.GetValue<wxString>(ibProtocol::ibForm::Name), GetControlName(), (long long)childNode.GetClsid());
+				ibJournalError(ibT("ui.form"), _("Control '%s' of '%s' could not be restored (class id %lld)"),
+					childNode.GetValue<ibString>(ibProtocol::ibForm::Name), GetControlName(), (long long)childNode.GetClsid());
 				continue;
 			}
 			if (!child->LoadNode(childNode))
@@ -215,7 +215,7 @@ bool ibValueFrame::CopyNode(ibDataNode& node) const
 bool ibValueFrame::PasteNode(const ibDataNode& node)
 {
 	m_controlId = (ibFormID)node.GetValue<std::int32_t>(ibProtocol::ibForm::ControlId);
-	SetControlName(node.GetValue<wxString>(ibProtocol::ibForm::Name));
+	SetControlName(node.GetValue<ibString>(ibProtocol::ibForm::Name));
 	m_expanded = node.GetValue<bool>(ibProtocol::ibForm::Expanded);
 
 	for (unsigned int idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++)
@@ -237,8 +237,8 @@ bool ibValueFrame::PasteNode(const ibDataNode& node)
 			// Same rule on the paste road — a control silently missing from what was pasted reads
 			// as "the clipboard lost it", which is the one thing the user cannot investigate.
 			if (child == nullptr) {
-				ibJournalError(wxT("ui.form"), _("Control '%s' of '%s' could not be pasted (class id %lld)"),
-					childNode.GetValue<wxString>(ibProtocol::ibForm::Name), GetControlName(), (long long)childNode.GetClsid());
+				ibJournalError(ibT("ui.form"), _("Control '%s' of '%s' could not be pasted (class id %lld)"),
+					childNode.GetValue<ibString>(ibProtocol::ibForm::Name), GetControlName(), (long long)childNode.GetClsid());
 				continue;
 			}
 			if (!child->PasteNode(childNode))
@@ -442,7 +442,7 @@ ibFormVisualDocument* ibValueFrame::GetVisualDocument() const
 void ibValueFrame::FillMembers(ibMemberTable& helper) const
 {
 	{
-		wxString propertyName;
+		ibString propertyName;
 		for (unsigned int idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++) {
 			ibProperty* property = ibPropertyObject::GetProperty(idx);
 			if (property == nullptr)
@@ -463,7 +463,7 @@ void ibValueFrame::FillMembers(ibMemberTable& helper) const
 		}
 	}
 
-	helper.AppendProp(wxT("Events"), true, false, 0, eEvent);
+	helper.AppendProp(ibT("Events"), true, false, 0, eEvent);
 }
 
 bool ibValueFrame::SetPropVal(const long lPropNum, const ibValue& varPropVal)

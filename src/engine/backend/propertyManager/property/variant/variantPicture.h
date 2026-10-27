@@ -17,7 +17,7 @@ public:
 	// the picture: one read is given a new one.
 	const ibGuid& GetPictureVersion() const { return m_version; }
 
-	wxString GetPictureFileName() const;
+	ibString GetPictureFileName() const;
 	ibPicture GetPicture(const ibSize& size = ibSize(16, 16)) const;
 
 	void SetFromExternalFile(const ibExternalPictureDescription& container) {
@@ -56,7 +56,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataExternalPicture"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataExternalPicture"); }
 
 protected:
 
@@ -137,7 +137,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataPicture"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataPicture"); }
 
 protected:
 

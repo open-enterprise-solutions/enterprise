@@ -45,8 +45,8 @@
 //
 // ⚠ IT IS PASSED, NOT REACHED FOR. Several configurations can be open at once
 // and the active one is not necessarily the caller's.
-BACKEND_API std::vector<ibDiagnostic> ibCheckScript(const wxString& text,
-	const wxString& moduleName = wxT("module"),
+BACKEND_API std::vector<ibDiagnostic> ibCheckScript(const ibString& text,
+	const ibString& moduleName = ibT("module"),
 	const class ibMetaData* metaData = nullptr);
 
 // WHY A SECOND DOOR. The designer's *Syntax control* button does NOT compile a

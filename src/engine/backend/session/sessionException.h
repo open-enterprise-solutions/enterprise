@@ -43,10 +43,10 @@ public:
 
 	Kind GetKind() const { return m_kind; }
 
-	[[noreturn]] static void Throw(Kind kind, const wxString& message);
+	[[noreturn]] static void Throw(Kind kind, const ibString& message);
 
 protected:
-	ibBackendSessionException(Kind kind, const wxString& msg)
+	ibBackendSessionException(Kind kind, const ibString& msg)
 		: ibBackendException(msg), m_kind(kind) {}
 
 private:

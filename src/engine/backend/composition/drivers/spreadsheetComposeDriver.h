@@ -52,8 +52,8 @@ public:
 	// without its parameters is a page of numbers nobody can defend: "sales by partner" means
 	// nothing until it says WHICH PERIOD and WHICH FILTER produced it. Set before the walk; an
 	// empty title and no lines simply produce no heading at all.
-	void SetTitle(const wxString& title) { m_title = title; }
-	void AddHeaderLine(const wxString& line) { m_headerLines.push_back(line); }
+	void SetTitle(const ibString& title) { m_title = title; }
+	void AddHeaderLine(const ibString& line) { m_headerLines.push_back(line); }
 
 	// A REPORT ENDS WITH ITS TOTAL. Whatever the composition's text asks for, a printed report shows
 	// what everything above it adds up to — so the walk is asked for the tree's root, and the row it
@@ -108,7 +108,7 @@ private:
 	// (ibCompositionOutputInfo::TitleOf). NOT the query's column name: that one is what a script
 	// looks the column up by and may have been qualified to stay unique, and a reader should never
 	// meet the qualification.
-	std::vector<wxString>       m_titles;
+	std::vector<ibString>       m_titles;
 
 	// …ASKED, never indexed into: a schema and a list beside it can always disagree about length,
 	// and the answer where they do is the column's own name.
@@ -118,23 +118,23 @@ private:
 	// lays out columns without announcing an output (a bare header, every test that does exactly
 	// that) has no titles here at all. Reading the member instead printed a header of empty cells —
 	// the column names simply vanished.
-	wxString ColumnTitle(size_t column, const std::vector<ibQueryLowering::OutputColumn>& schema) const {
+	ibString ColumnTitle(size_t column, const std::vector<ibQueryLowering::OutputColumn>& schema) const {
 		if (column < m_titles.size() && !m_titles[column].IsEmpty())
 			return m_titles[column];
-		return column < schema.size() ? schema[column].m_name : wxString();
+		return column < schema.size() ? schema[column].m_name : ibString();
 	}
-	wxString ColumnTitle(size_t column) const { return ColumnTitle(column, m_schema); }
+	ibString ColumnTitle(size_t column) const { return ColumnTitle(column, m_schema); }
 
 	// ⭐ WHAT FIELD EACH COLUMN IS A READING OF — taken beside the titles and never printed. This is
 	// what a cell's DETAILS PARAMETER is stamped with: a title is written for a person and may
 	// repeat, while a path is what a grouping and a filter line are written with, and the detail is
 	// going to write both.
-	std::vector<wxString>       m_paths;
+	std::vector<ibString>       m_paths;
 	// Which schema columns are shown at all — a projected field fetched only for a filter or a sort
 	// takes no column. See ibCompositionOutputInfo::m_shown.
 	std::vector<bool>           m_shown;
-	wxString ColumnPath(size_t column) const {
-		return column < m_paths.size() ? m_paths[column] : wxString();
+	ibString ColumnPath(size_t column) const {
+		return column < m_paths.size() ? m_paths[column] : ibString();
 	}
 
 	// ⭐ HOW EACH COLUMN WRITES ITS FIGURES — the format its TYPE gives (ibFormatString::FromTypeDesc), taken beside
@@ -146,15 +146,15 @@ private:
 	// unless the format says how to write them (NZ, DE). A column of amounts reads as the rows that HAVE an
 	// amount, not as a wall of zeros (Max, 2026-09-26). Set once per column in OnOutputBegin.
 	std::vector<ibFormatString> m_formats;
-	wxString ColumnText(size_t column, const ibValue& value) const {
+	ibString ColumnText(size_t column, const ibValue& value) const {
 		if (column < m_formats.size())
 			return m_formats[column].Apply(value);
 		return value.GetString();
 	}
 	// …OR WHAT ITS CONDITIONAL APPEARANCE HAS IT SAY INSTEAD — a Text, or the value in its Format — where that says
 	// anything (ibCompositionAttr::TextOf).
-	wxString ColumnText(size_t column, const ibValue& value, const ibCompositionAttr* attr) const {
-		wxString text;
+	ibString ColumnText(size_t column, const ibValue& value, const ibCompositionAttr* attr) const {
+		ibString text;
 		if (attr != nullptr && attr->TextOf(value, text))
 			return text;
 		return ColumnText(column, value);
@@ -201,12 +201,12 @@ private:
 	const ibCompositionTheme& ThemeOf(const ibCompositionLine& line) const {
 		return *(line.m_theme != nullptr ? line.m_theme : m_theme);
 	}
-	wxString                    m_title;
+	ibString                    m_title;
 	// What THIS output is called — its caption over its own block. Empty for an output nobody named,
 	// and then nothing is printed: a blank caption line would read as a row that failed.
-	wxString                    m_outputName;
+	ibString                    m_outputName;
 	size_t                      m_outputCount = 1;   // how many outputs the run draws (ibCompositionOutputInfo)
-	std::vector<wxString>       m_headerLines;
+	std::vector<ibString>       m_headerLines;
 	int                         m_columnCount = 0;
 	int                         m_rowsWritten = 0;
 	// HAS ANYTHING BEEN PRINTED YET? The first section clears the document; the ones after it print
@@ -317,7 +317,7 @@ private:
 	void TakeSchema(const std::vector<ibQueryLowering::OutputColumn>& schema);
 	void WriteCrossTable();
 	// What one level of a column key reads as in a header cell — the key of dimension level `dimLevel`.
-	wxString HeadingText(const std::vector<ibValue>& values, int dimLevel) const;
+	ibString HeadingText(const std::vector<ibValue>& values, int dimLevel) const;
 	// THE COLUMNS IN PRINTING ORDER — the keys as they came, with each upper heading's subtotal
 	// inserted where that heading ends. Built once per table, because the header and every row have
 	// to agree about which column is which.

@@ -12,7 +12,7 @@ class FRMCLIENT_API ibPropertyObject;
 // ibPGCommandSourceProperty — the inspector picker for a button's COMMAND SOURCE
 // -----------------------------------------------------------------------
 //
-// The desktop's (frontend/propertyManager/property/advprop/advpropCommandSource.h), the command-door twin of
+// The old desktop's, the command-door twin of
 // ibPGDataSourceProperty. A text-and-button cell whose "…" opens a DIALOG showing the form's command sources (own
 // object · main attribute · each table · general) grouped as a tree; picking one binds its command-hop path to the
 // button.

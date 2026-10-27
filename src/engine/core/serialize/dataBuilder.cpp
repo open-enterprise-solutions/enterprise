@@ -9,6 +9,8 @@
 #include "core/exception.h"              // ibCoreException — a kind mismatch, a packet refused
 #include "core/fiber/fiber.h"            // StackLow — the check descends a native frame a node
 
+#include <wx/translation.h>   // _() — the refusals' words
+
 #include <climits>                       // LLONG_MAX — an unsigned number past it is no whole one
 #include <cstring>                       // std::memcpy / memmove / memcmp — the bytes, read and moved
 #include <cwchar>                        // std::wcslen — a key's length
@@ -1173,18 +1175,18 @@ bool ibBinaryProvider::Read(const ibMemoryBuffer& packet, ibDataNode& root) cons
 	const unsigned char* const base = static_cast<const unsigned char*>(packet.GetData());
 	const std::size_t size = packet.GetDataLen();
 	if (base == nullptr || size < kPacketHeader + kNodeHeader || size > 0xFFFFFFF0u)
-		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), wxT("too short"));
+		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), ibT("too short"));
 	if (!IsPacket(base, size))
-		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), wxT("no OES1 at their start"));
+		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), ibT("no OES1 at their start"));
 	if (Rd<std::uint16_t>(base, 4) != kVersion)
 		ibCoreException::Error(_("ibBinaryProvider: the packet is OES-RPC version %u, this end reads %u"),
 			(unsigned)Rd<std::uint16_t>(base, 4), (unsigned)kVersion);
 	if (Rd<std::uint32_t>(base, 8) != size)
-		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), wxT("their length is not what they say"));
+		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), ibT("their length is not what they say"));
 	const ibPacketCheck check{ base };
 	check.Node(kPacketHeader, static_cast<std::uint32_t>(size), 0);
 	if (kPacketHeader + NodeLength(base, kPacketHeader) != size)
-		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), wxT("bytes past the root"));
+		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), ibT("bytes past the root"));
 	root = ibDataNode(packet, kPacketHeader);
 	return true;
 }
@@ -1201,10 +1203,10 @@ bool ibBinaryProvider::Read(ibReaderMemory& reader, ibDataNode& root) const
 {
 	// The packet says how long it is; its bytes are taken out of the stream as they are and read where they lie then.
 	if (reader.elapsed() < static_cast<int>(kPacketHeader))
-		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), wxT("too short"));
+		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), ibT("too short"));
 	const std::uint32_t length = Rd<std::uint32_t>(static_cast<const unsigned char*>(reader.pointer()), 8);
 	if (length < kPacketHeader || static_cast<std::int64_t>(length) > reader.elapsed())
-		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), wxT("their length past the stream"));
+		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), ibT("their length past the stream"));
 	const ibMemoryBuffer packet(reader.pointer(), length);
 	reader.advance(static_cast<int>(length));
 	return Read(packet, root);

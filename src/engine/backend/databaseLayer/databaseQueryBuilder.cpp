@@ -53,29 +53,29 @@ static ibQueryParam ibParamOfConst(const ibQueryExpr& expr)
 // column's typed one belonged, and the journal showed the CASE with `?` in every place that mattered
 // (2026-09-26). Each value as it would bind: a blob in hex, an empty as NULL, a caller's value by index.
 // (maybe_unused: a Release build compiles the journal out, and this with it.)
-[[maybe_unused]] static wxString ibJournalOfParams(const std::vector<ibQueryParam>& params)
+[[maybe_unused]] static ibString ibJournalOfParams(const std::vector<ibQueryParam>& params)
 {
 	static const bool s_traceValues = ibDebugTraceEnabled("OES_TRACE_SQL_PARAMS");
-	wxString text = wxString::Format(wxT("[%u params"), static_cast<unsigned>(params.size()));
+	ibString text = ibString::Format(ibT("[%u params"), static_cast<unsigned>(params.size()));
 	if (s_traceValues) {
 		for (size_t i = 0; i < params.size(); ++i) {
 			const ibQueryParam& p = params[i];
-			text << (i == 0 ? wxT(": ") : wxT("; ")) << (i + 1) << wxT("=");
+			text << (i == 0 ? ibT(": ") : ibT("; ")) << (i + 1) << ibT("=");
 			if (p.m_external)
-				text << wxT("&") << p.m_externalIndex;
+				text << ibT("&") << p.m_externalIndex;
 			else if (p.m_isBlob) {
-				text << wxT("0x");
+				text << ibT("0x");
 				const unsigned char* bytes = static_cast<const unsigned char*>(p.m_blob.GetData());
 				for (size_t b = 0; b < p.m_blob.GetDataLen(); ++b)
-					text << wxString::Format(wxT("%02x"), bytes[b]);
+					text << ibString::Format(ibT("%02x"), bytes[b]);
 			}
 			else if (p.m_value.GetType() == TYPE_EMPTY || p.m_value.GetType() == TYPE_NULL)
-				text << wxT("NULL");
+				text << ibT("NULL");
 			else
 				text << p.m_value.GetString().Left(64);
 		}
 	}
-	return text + wxT("]");
+	return text + ibT("]");
 }
 
 // Bind a whole render plan in placeholder order (1-based). Inline Const values
@@ -107,7 +107,7 @@ struct ibQueryRuns {
 	std::vector<ibRenderedQuery> m_rendered;         // every run, in order; the first is running
 	size_t                       m_next = 1;
 	std::vector<ibValue>         m_external;
-	wxString                     m_prepared;         // the text the statement in hand was prepared from
+	ibString                     m_prepared;         // the text the statement in hand was prepared from
 	bool                         m_again = false;    // the driver runs a prepared statement again (m_batchByReexecution)
 };
 
@@ -135,10 +135,10 @@ static ibQueryResult ibRunRendered(const std::shared_ptr<ibDatabaseLayer>& conn,
 		// saw them — dates compared as garbage on one platform, a `%s` read a pointer that was never passed on
 		// another (2026-09-15, the calculation register's tests: marks on every month, a segfault in the fact).
 		// Every statement this file prepares goes as the one argument of "%s".
-		ibPreparedStatement* stmt = conn->PrepareStatement(wxT("%s"), rendered.m_sql);
+		ibPreparedStatement* stmt = conn->PrepareStatement(ibT("%s"), rendered.m_sql);
 		if (stmt == nullptr)
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
-				wxString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
+				ibString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
 
 		ibBindPlan(stmt, rendered.m_params, externalParams);
 
@@ -160,7 +160,7 @@ static ibQueryResult ibRunRendered(const std::shared_ptr<ibDatabaseLayer>& conn,
 	// ends up in logs and in bug reports.
 	catch (const ibDatabaseLayerException& err) {
 		ibDatabaseLayerException::Throw(err.GetKind(), err.GetDriverErrorCode(), err.GetSqlState(),
-			wxString::Format(_("%s\nThe statement was: %s"), err.GetErrorDescription(), rendered.m_sql));
+			ibString::Format(_("%s\nThe statement was: %s"), err.GetErrorDescription(), rendered.m_sql));
 	}
 }
 
@@ -176,7 +176,7 @@ ibDatabaseQueryBuilder::ibDatabaseQueryBuilder(ibDatabaseConnectionHolder* holde
 // Fluent DQL construction
 // ==========================================================================
 
-ibDatabaseQueryBuilder& ibDatabaseQueryBuilder::From(const wxString& table)
+ibDatabaseQueryBuilder& ibDatabaseQueryBuilder::From(const ibString& table)
 {
 	m_table = table;
 	return *this;
@@ -188,7 +188,7 @@ ibDatabaseQueryBuilder& ibDatabaseQueryBuilder::From(ibQueryRelPtr source)
 	return *this;
 }
 
-ibDatabaseQueryBuilder& ibDatabaseQueryBuilder::Join(const wxString& table,
+ibDatabaseQueryBuilder& ibDatabaseQueryBuilder::Join(const ibString& table,
 	ibQueryExprPtr on, ibQueryJoinType type)
 {
 	return Join(ibScan(table), std::move(on), type);
@@ -202,7 +202,7 @@ ibDatabaseQueryBuilder& ibDatabaseQueryBuilder::Join(ibQueryRelPtr right,
 	return *this;
 }
 
-ibDatabaseQueryBuilder& ibDatabaseQueryBuilder::Select(std::vector<wxString> columns)
+ibDatabaseQueryBuilder& ibDatabaseQueryBuilder::Select(std::vector<ibString> columns)
 {
 	m_select = std::move(columns);
 	return *this;
@@ -214,7 +214,7 @@ ibDatabaseQueryBuilder& ibDatabaseQueryBuilder::Where(ibQueryExprPtr predicate)
 	return *this;
 }
 
-ibDatabaseQueryBuilder& ibDatabaseQueryBuilder::OrderBy(const wxString& column, ibQuerySortDir dir)
+ibDatabaseQueryBuilder& ibDatabaseQueryBuilder::OrderBy(const ibString& column, ibQuerySortDir dir)
 {
 	ibQuerySortKey key;
 	key.m_expr = ibCol(column);
@@ -284,8 +284,8 @@ ibQueryIR ibDatabaseQueryBuilder::Build() const
 	else if (!m_select.empty()) {
 		std::vector<ibQueryProjItem> projection;
 		projection.reserve(m_select.size());
-		for (const wxString& col : m_select)
-			projection.push_back(ibQueryProjItem{ ibCol(col), wxString() });
+		for (const ibString& col : m_select)
+			projection.push_back(ibQueryProjItem{ ibCol(col), ibString() });
 		rel = ibProject(rel, std::move(projection));
 	}
 
@@ -376,16 +376,16 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteRendered(const ibRenderedQuery& ren
 	return ibRunRendered(conn, ibCancelOfReader(m_scope), rendered, externalParams);
 }
 
-bool ibDatabaseQueryBuilder::TableExists(const wxString& table)
+bool ibDatabaseQueryBuilder::TableExists(const ibString& table)
 {
 	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
 	return conn ? conn->TableExists(table) : false;
 }
 
-wxArrayString ibDatabaseQueryBuilder::GetColumns(const wxString& table)
+std::vector<ibString> ibDatabaseQueryBuilder::GetColumns(const ibString& table)
 {
 	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
-	return conn ? conn->GetColumns(table) : wxArrayString();
+	return conn ? conn->GetColumns(table) : std::vector<ibString>();
 }
 
 bool ibDatabaseQueryBuilder::IsOpen()
@@ -410,7 +410,7 @@ int ibDatabaseQueryBuilder::Execute(const ibDdlStatement& ddl)
 	const ibDialectDictionary& dialect = conn->GetDialect();
 
 	ibQueryRenderer renderer(dialect);
-	const wxString sql = renderer.RenderDDL(ddl);
+	const ibString sql = renderer.RenderDDL(ddl);
 
 	// An empty render = the dialect has no statement for this DDL (e.g. ANALYZE on a driver
 	// without one) — a no-op, not an empty query to run.
@@ -419,7 +419,7 @@ int ibDatabaseQueryBuilder::Execute(const ibDdlStatement& ddl)
 
 	// DDL text is generated by us, but it is not free of '%': a SQLite view or trigger truncates a period with
 	// strftime('%Y-…'). So it is the argument of the vararg RunQuery, never its format (ibRunRendered).
-	return conn->RunQuery(wxT("%s"), sql);
+	return conn->RunQuery(ibT("%s"), sql);
 }
 
 // ⭐⭐ A BATCH OF ROWS AS ONE ONE-ROW INSERT, PREPARED ONCE — the form ibSqlFeatures::m_batchByReexecution
@@ -456,8 +456,8 @@ static int ibRunInsertPerRow(const std::shared_ptr<ibDatabaseLayer>& conn, const
 	const bool firstIsConst = ibConstPlanOf(firstValues, plan);
 
 	ibStatementGuard guard(conn, nullptr);
-	wxString prepared;     // the text the statement in `guard` was prepared from
-	wxString constShape;   // the text every all-constant row renders to — the first row's, when it was one
+	ibString prepared;     // the text the statement in `guard` was prepared from
+	ibString constShape;   // the text every all-constant row renders to — the first row's, when it was one
 	int total = 0;
 	for (size_t row = 0; row <= dml.m_extraRows.size(); ++row) {
 		const std::vector<ibQueryExprPtr>* values = row > 0 ? &dml.m_extraRows[row - 1] : nullptr;
@@ -470,10 +470,10 @@ static int ibRunInsertPerRow(const std::shared_ptr<ibDatabaseLayer>& conn, const
 			ibQueryRenderer renderer(dialect);
 			const ibRenderedQuery rendered = renderer.RenderDML(one);
 			if (!guard || rendered.m_sql != prepared) {
-				guard.reset(conn->PrepareStatement(wxT("%s"), rendered.m_sql));   // data, not a format (ibRunRendered)
+				guard.reset(conn->PrepareStatement(ibT("%s"), rendered.m_sql));   // data, not a format (ibRunRendered)
 				if (!guard)
 					ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
-						wxString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
+						ibString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
 				prepared = rendered.m_sql;
 			}
 			if (values == nullptr && firstIsConst)
@@ -505,10 +505,10 @@ int ibDatabaseQueryBuilder::Execute(const ibDmlStatement& dml, const std::vector
 	ibQueryRenderer renderer(dialect);
 	const ibRenderedQuery rendered = renderer.RenderDML(dml);
 
-	ibPreparedStatement* stmt = conn->PrepareStatement(wxT("%s"), rendered.m_sql);   // data, not a format (ibRunRendered)
+	ibPreparedStatement* stmt = conn->PrepareStatement(ibT("%s"), rendered.m_sql);   // data, not a format (ibRunRendered)
 	if (stmt == nullptr)
 		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
-			wxString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
+			ibString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
 
 	ibStatementGuard guard(conn, stmt);   // RAII close — no result set to wrap
 	ibBindPlan(stmt, rendered.m_params, externalParams);
@@ -657,10 +657,10 @@ bool ibQueryResult::Next()
 		if (!m_runs->m_again || run.m_sql != m_runs->m_prepared) {
 			m_conn->CloseStatement(m_stmt);
 			m_stmt = nullptr;
-			m_stmt = m_conn->PrepareStatement(wxT("%s"), run.m_sql);   // data, not a format (ibRunRendered)
+			m_stmt = m_conn->PrepareStatement(ibT("%s"), run.m_sql);   // data, not a format (ibRunRendered)
 			if (m_stmt == nullptr)
 				ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
-					wxString::Format(_("Query layer failed to prepare statement: %s"), run.m_sql));
+					ibString::Format(_("Query layer failed to prepare statement: %s"), run.m_sql));
 			m_runs->m_prepared = run.m_sql;
 		}
 		ibBindPlan(m_stmt, run.m_params, m_runs->m_external);
@@ -675,10 +675,10 @@ int ibQueryResult::ColumnCount()
 	return md != nullptr ? md->GetColumnCount() : 0;
 }
 
-wxString ibQueryResult::ColumnName(int column)
+ibString ibQueryResult::ColumnName(int column)
 {
 	ibResultSetMetaData* md = Meta();
-	return md != nullptr ? md->GetColumnName(column) : wxString();
+	return md != nullptr ? md->GetColumnName(column) : ibString();
 }
 
 ibValue ibQueryResult::GetValue(int column)
@@ -710,7 +710,7 @@ ibValue ibQueryResult::GetValue(int column)
 	}
 }
 
-ibValue ibQueryResult::GetValue(const wxString& name)
+ibValue ibQueryResult::GetValue(const ibString& name)
 {
 	const int col = ColumnIndex(name);
 	if (col < 0)
@@ -718,7 +718,7 @@ ibValue ibQueryResult::GetValue(const wxString& name)
 	return GetValue(col);  // NB: assumes metadata column ids are 1-based (matches GetResult*)
 }
 
-int ibQueryResult::ColumnIndex(const wxString& name)
+int ibQueryResult::ColumnIndex(const ibString& name)
 {
 	// ⭐ THE COLUMNS ARE INDEXED ONCE, NOT WALKED PER CELL. This asked the metadata to find the name,
 	// and the metadata walked every column converting each one's name out of the driver's buffer to
@@ -735,7 +735,7 @@ int ibQueryResult::ColumnIndex(const wxString& name)
 	return found != m_columnsByName.end() ? found->second : -1;
 }
 
-ibQueryResult::FieldSlots& ibQueryResult::FieldsOf(const wxString& base)
+ibQueryResult::FieldSlots& ibQueryResult::FieldsOf(const ibString& base)
 {
 	// The one after the last first — the bases of a row are read in the same order every row — then the
 	// rest, then a new entry. Compared as LookupField compares, without case (ibFieldNameEqual).
@@ -754,7 +754,7 @@ ibQueryResult::FieldSlots& ibQueryResult::FieldsOf(const wxString& base)
 	return m_fields.back().second;
 }
 
-int ibQueryResult::FieldIndex(FieldSlots& slots, const wxString& base, unsigned slot, const wxString& suffix)
+int ibQueryResult::FieldIndex(FieldSlots& slots, const ibString& base, unsigned slot, const ibString& suffix)
 {
 	if (m_rs == nullptr)
 		return 0;   // no cursor — every read below answers as the named read does with none
@@ -785,16 +785,16 @@ bool       ibQueryResult::IsResultNull(int field)                      { return 
 
 // Typed field reads by name — delegate to the borrowed driver cursor (the dialect-normalised
 // physical field). The provider's value-assembly reads through these, never the raw L1 cursor.
-ibString   ibQueryResult::GetResultString(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultString(name)        : ibString(); }
-int        ibQueryResult::GetResultInt(const wxString& name)                     { return m_rs != nullptr ? m_rs->GetResultInt(name)           : 0; }
-long long  ibQueryResult::GetResultLong(const wxString& name)                    { return m_rs != nullptr ? m_rs->GetResultLong(name)          : 0; }
-bool       ibQueryResult::GetResultBool(const wxString& name)                    { return m_rs != nullptr ? m_rs->GetResultBool(name)          : false; }
-ibDateTime ibQueryResult::GetResultDate(const wxString& name)                    { return m_rs != nullptr ? m_rs->GetResultDate(name)          : ibDateTime(); }
-double     ibQueryResult::GetResultDouble(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultDouble(name)        : 0.0; }
-ibNumber   ibQueryResult::GetResultNumber(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultNumber(name)        : ibNumber(); }
-void*      ibQueryResult::GetResultBlob(const wxString& name, ibMemoryBuffer& b) { return m_rs != nullptr ? m_rs->GetResultBlob(name, b)       : nullptr; }
+ibString   ibQueryResult::GetResultString(const ibString& name)                  { return m_rs != nullptr ? m_rs->GetResultString(name)        : ibString(); }
+int        ibQueryResult::GetResultInt(const ibString& name)                     { return m_rs != nullptr ? m_rs->GetResultInt(name)           : 0; }
+long long  ibQueryResult::GetResultLong(const ibString& name)                    { return m_rs != nullptr ? m_rs->GetResultLong(name)          : 0; }
+bool       ibQueryResult::GetResultBool(const ibString& name)                    { return m_rs != nullptr ? m_rs->GetResultBool(name)          : false; }
+ibDateTime ibQueryResult::GetResultDate(const ibString& name)                    { return m_rs != nullptr ? m_rs->GetResultDate(name)          : ibDateTime(); }
+double     ibQueryResult::GetResultDouble(const ibString& name)                  { return m_rs != nullptr ? m_rs->GetResultDouble(name)        : 0.0; }
+ibNumber   ibQueryResult::GetResultNumber(const ibString& name)                  { return m_rs != nullptr ? m_rs->GetResultNumber(name)        : ibNumber(); }
+void*      ibQueryResult::GetResultBlob(const ibString& name, ibMemoryBuffer& b) { return m_rs != nullptr ? m_rs->GetResultBlob(name, b)       : nullptr; }
 // No cursor is not "not null" — there is nothing there at all, which is the same answer.
-bool       ibQueryResult::IsResultNull(const wxString& name)                     { return m_rs == nullptr || m_rs->IsFieldNull(name); }
+bool       ibQueryResult::IsResultNull(const ibString& name)                     { return m_rs == nullptr || m_rs->IsFieldNull(name); }
 
 // ==========================================================================
 // ibQueryRenderer (merged from queryRenderer.cpp)
@@ -868,7 +868,7 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 	// ⭐ THE NAMED QUERIES FIRST — `WITH a AS (…), b AS (…) SELECT …`. They render BEFORE the main
 	// select so their bind parameters land in placeholder order, which is the order the driver binds
 	// them in: a CTE written after the select would have its values bound to the select's markers.
-	wxString with;
+	ibString with;
 	for (const ibQueryCte& cte : declared) {
 		if (cte.m_name.IsEmpty() || !cte.m_query)
 			continue;
@@ -878,15 +878,15 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 		if (!m_dialect.m_features.m_cte)
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 				_("This database cannot read a named query (WITH ...): write it as a nested source instead"));
-		with += with.IsEmpty() ? wxT("WITH ") : wxT(", ");
-		with += QuoteIdent(cte.m_name) + wxT(" AS (") + RenderSelect(cte.m_query.get()) + wxT(")");
+		with += with.IsEmpty() ? ibT("WITH ") : ibT(", ");
+		with += QuoteIdent(cte.m_name) + ibT(" AS (") + RenderSelect(cte.m_query.get()) + ibT(")");
 	}
 	// ONE `RECURSIVE` FOR THE WHOLE LIST — said once, before the first name, and the ordinary named queries
 	// stand beside the recursive ones.
 	if (recursive)
-		with = wxT("WITH RECURSIVE ") + with.Mid(5);   // "WITH " -> "WITH RECURSIVE "
+		with = ibT("WITH RECURSIVE ") + with.Mid(5);   // "WITH " -> "WITH RECURSIVE "
 	if (!with.IsEmpty())
-		with += wxT(" ");
+		with += ibT(" ");
 
 	m_out.m_sql = with + RenderSelect(ir.m_root.get());
 	// Pessimistic row lock — appended to the TOP-level SELECT only (subqueries render through
@@ -904,22 +904,22 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 	//
 	// The parameter COUNT rather than the values, unless asked (ibJournalOfParams). The count is what a
 	// reader checks against the placeholders.
-	ibJournalInfo(wxT("query.sql"), wxT("%s   %s"), m_out.m_sql, ibJournalOfParams(m_out.m_params));
+	ibJournalInfo(ibT("query.sql"), ibT("%s   %s"), m_out.m_sql, ibJournalOfParams(m_out.m_params));
 	return m_out;
 }
 
 // Flatten a relation chain (Filter/Project/Sort/Limit/Aggregate over a Scan/Join/
 // Subquery source) into ONE SELECT, appending its bind params to m_out in placeholder
 // order. Recursive: a Subquery FROM source renders its own SELECT back through here.
-wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
+ibString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 {
 	// Set operations are a SELECT-level combinator, not a linear chain — render the
 	// two members and splice (left before right keeps the bind plan in order). For an
 	// ORDER BY / LIMIT over a union, wrap the union in ibSubquery (SQL needs it too).
 	if (root && (root->m_kind == ibQueryRelKind::Union || root->m_kind == ibQueryRelKind::UnionAll)) {
-		const wxString l = RenderSelect(root->m_input.get());
-		const wxString r = RenderSelect(root->m_right.get());
-		return l + (root->m_kind == ibQueryRelKind::UnionAll ? wxT(" UNION ALL ") : wxT(" UNION ")) + r;
+		const ibString l = RenderSelect(root->m_input.get());
+		const ibString r = RenderSelect(root->m_right.get());
+		return l + (root->m_kind == ibQueryRelKind::UnionAll ? ibT(" UNION ALL ") : ibT(" UNION ")) + r;
 	}
 
 	// --- flatten the linear chain ----------------------------------------
@@ -981,27 +981,27 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 		hasLimit && (m_dialect.m_pagination == ibPagination::FirstSkip
 		          || m_dialect.m_pagination == ibPagination::Top);
 
-	wxString sql = wxT("SELECT ");
+	ibString sql = ibT("SELECT ");
 
 	if (leadingPagination) {
 		if (m_dialect.m_pagination == ibPagination::FirstSkip) {
-			if (limitCount >= 0) sql += wxString::Format(wxT("FIRST %ld "), limitCount);
-			if (limitOffset > 0) sql += wxString::Format(wxT("SKIP %ld "), limitOffset);
+			if (limitCount >= 0) sql += ibString::Format(ibT("FIRST %ld "), limitCount);
+			if (limitOffset > 0) sql += ibString::Format(ibT("SKIP %ld "), limitOffset);
 		} else { // Top
-			if (limitCount >= 0) sql += wxString::Format(wxT("TOP %ld "), limitCount);
+			if (limitCount >= 0) sql += ibString::Format(ibT("TOP %ld "), limitCount);
 		}
 	}
 
-	if (distinct) sql += wxT("DISTINCT ");
+	if (distinct) sql += ibT("DISTINCT ");
 
 	if (projection.empty()) {
-		sql += wxT("*");
+		sql += ibT("*");
 	} else {
 		for (size_t i = 0; i < projection.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			sql += RenderExpr(projection[i].m_expr);
 			if (!projection[i].m_alias.empty())
-				sql += wxT(" AS ") + QuoteIdent(projection[i].m_alias);
+				sql += ibT(" AS ") + QuoteIdent(projection[i].m_alias);
 		}
 	}
 
@@ -1009,14 +1009,14 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 	// no Scan/Join/Subquery -> `source` stays null. Emit the dialect's dummy table (FB "RDB$DATABASE") or,
 	// where a bare FROM-less SELECT is legal (PG/SQLite), no FROM at all.
 	if (source)
-		sql += wxT(" FROM ") + RenderSource(source);
+		sql += ibT(" FROM ") + RenderSource(source);
 	else if (!m_dialect.m_selectFromDual.empty())
-		sql += wxT(" FROM ") + m_dialect.m_selectFromDual;
+		sql += ibT(" FROM ") + m_dialect.m_selectFromDual;
 
 	if (!predicates.empty()) {
-		sql += wxT(" WHERE ");
+		sql += ibT(" WHERE ");
 		for (size_t i = 0; i < predicates.size(); ++i) {
-			if (i) sql += wxT(" AND ");
+			if (i) sql += ibT(" AND ");
 			sql += RenderExpr(predicates[i]);
 		}
 	}
@@ -1024,10 +1024,10 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 	// GROUP BY + HAVING (post-aggregation) — between WHERE and ORDER BY, so the bind
 	// plan stays in SQL-text order (HAVING params follow WHERE params).
 	if (!groupKeys.empty()) {
-		sql += wxT(" GROUP BY ");
+		sql += ibT(" GROUP BY ");
 		if (rollup) sql += m_dialect.m_rollupPrefix;   // "ROLLUP(" (standard) / "" (MSSQL WITH ROLLUP)
 		for (size_t i = 0; i < groupKeys.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			// ⭐ A KEY THAT BINDS A VALUE IS NAMED BY ITS POSITION. Written out a second time, `CASE WHEN
 			// k = ? …` is not the SELECT's expression to the engine — each `?` is its own parameter — and
 			// Firebird refuses the statement (-104). That is the breakdown of an account by an analytics KIND
@@ -1036,13 +1036,13 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 			// the parameters the second rendering appended are taken back, so the bind plan binds it once.
 			const size_t bound    = m_out.m_params.size();
 			const int    boundPos = m_paramPos;   // the $N counter too — PostgreSQL numbers its placeholders
-			wxString key = RenderExpr(groupKeys[i]);
+			ibString key = RenderExpr(groupKeys[i]);
 			if (m_out.m_params.size() > bound && m_dialect.m_groupByPosition && !rollup) {
 				for (size_t p = 0; p < projection.size(); ++p)
 					if (projection[p].m_expr == groupKeys[i]) {
 						m_out.m_params.erase(m_out.m_params.begin() + bound, m_out.m_params.end());
 						m_paramPos = boundPos;
-						key = wxString::Format(wxT("%u"), static_cast<unsigned int>(p + 1));
+						key = ibString::Format(ibT("%u"), static_cast<unsigned int>(p + 1));
 						break;
 					}
 			}
@@ -1051,43 +1051,43 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 		if (rollup) sql += m_dialect.m_rollupSuffix;   // ")" (standard) / " WITH ROLLUP" (MSSQL)
 	}
 	if (having)
-		sql += wxT(" HAVING ") + RenderExpr(having);
+		sql += ibT(" HAVING ") + RenderExpr(having);
 
 	if (!sortKeys.empty()) {
-		sql += wxT(" ORDER BY ");
+		sql += ibT(" ORDER BY ");
 		for (size_t i = 0; i < sortKeys.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			sql += RenderExpr(sortKeys[i].m_expr);
-			sql += (sortKeys[i].m_dir == ibQuerySortDir::Desc) ? wxT(" DESC") : wxT(" ASC");
+			sql += (sortKeys[i].m_dir == ibQuerySortDir::Desc) ? ibT(" DESC") : ibT(" ASC");
 		}
 	}
 
 	if (hasLimit && !leadingPagination) {
 		if (m_dialect.m_pagination == ibPagination::LimitOffset) {
-			if (limitCount >= 0) sql += wxString::Format(wxT(" LIMIT %ld"), limitCount);
-			if (limitOffset > 0) sql += wxString::Format(wxT(" OFFSET %ld"), limitOffset);
+			if (limitCount >= 0) sql += ibString::Format(ibT(" LIMIT %ld"), limitCount);
+			if (limitOffset > 0) sql += ibString::Format(ibT(" OFFSET %ld"), limitOffset);
 		} else if (m_dialect.m_pagination == ibPagination::OffsetFetch) {
-			sql += wxString::Format(wxT(" OFFSET %ld ROWS"), limitOffset);
-			if (limitCount >= 0) sql += wxString::Format(wxT(" FETCH NEXT %ld ROWS ONLY"), limitCount);
+			sql += ibString::Format(ibT(" OFFSET %ld ROWS"), limitOffset);
+			if (limitCount >= 0) sql += ibString::Format(ibT(" FETCH NEXT %ld ROWS ONLY"), limitCount);
 		}
 	}
 
 	return sql;
 }
 
-wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
+ibString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 {
-	if (!expr) return wxString();
+	if (!expr) return ibString();
 
 	switch (expr->m_kind) {
 	case ibQueryExprKind::Column: {
 		// A bare "*" (the qualified all-columns form, t.*) is NOT an identifier — it
 		// must not be quoted. Used by the dot-walk projection (main.* + aliased leaf
 		// columns) so the joined query keeps the main row's columns by their own names.
-		const wxString col = (expr->m_name == wxT("*")) ? wxString(wxT("*")) : QuoteIdent(expr->m_name);
+		const ibString col = (expr->m_name == ibT("*")) ? ibString(ibT("*")) : QuoteIdent(expr->m_name);
 		return expr->m_qualifier.empty()
 			? col
-			: AliasIdent(expr->m_qualifier) + wxT(".") + col;
+			: AliasIdent(expr->m_qualifier) + ibT(".") + col;
 	}
 
 	case ibQueryExprKind::Const: {
@@ -1111,7 +1111,7 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		// `"(" + RenderExpr(lhs) + ... + RenderExpr(rhs) + ")"` reversed the
 		// plan per BinOp and crossed param bindings (e.g. a guid bound into a
 		// DATE column → FB type-mismatch crash). Sequence explicitly.
-		const wxString lhs = RenderExpr(expr->m_lhs);
+		const ibString lhs = RenderExpr(expr->m_lhs);
 		// ⭐ A LIKE PATTERN IS A STRING OF ITS OWN LENGTH, not of the column's. Firebird types a bare
 		// `col LIKE ?` parameter by the column it faces, so `%` + text + `%` against a code of 8 was
 		// refused before any row was compared - "string right truncation", SQL -303 (typing a name into
@@ -1120,24 +1120,24 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		const bool pinPattern = expr->m_binOp == ibQueryBinOp::Like && expr->m_rhs
 			&& expr->m_rhs->m_kind == ibQueryExprKind::Const && expr->m_rhs->m_const.GetType() == TYPE_STRING;
 		const int patternLength = pinPattern ? (int)expr->m_rhs->m_const.GetString().length() : 0;
-		const wxString rhs = pinPattern
+		const ibString rhs = pinPattern
 			? RenderExpr(ibCast(expr->m_rhs, ibTypeString(patternLength > 0 ? patternLength : 1)))
 			: RenderExpr(expr->m_rhs);
-		return wxT("(") + lhs + wxT(" ") + BinOpText(expr->m_binOp) + wxT(" ") + rhs + wxT(")");
+		return ibT("(") + lhs + ibT(" ") + BinOpText(expr->m_binOp) + ibT(" ") + rhs + ibT(")");
 	}
 
 	case ibQueryExprKind::Func: {
 		// COUNT with no argument is COUNT(*). COUNT() is not SQL.
-		if (expr->m_args.empty() && expr->m_name.IsSameAs(wxT("COUNT"), false) && !expr->m_distinct)
-			return wxT("COUNT(*)");
-		wxString s = expr->m_name + wxT("(");
+		if (expr->m_args.empty() && expr->m_name.IsSameAs(ibT("COUNT"), false) && !expr->m_distinct)
+			return ibT("COUNT(*)");
+		ibString s = expr->m_name + ibT("(");
 		if (expr->m_distinct)
-			s += wxT("DISTINCT ");   // COUNT(DISTINCT col) — one spelling, every dialect
+			s += ibT("DISTINCT ");   // COUNT(DISTINCT col) — one spelling, every dialect
 		for (size_t i = 0; i < expr->m_args.size(); ++i) {
-			if (i) s += wxT(", ");
+			if (i) s += ibT(", ");
 			s += RenderExpr(expr->m_args[i]);
 		}
-		s += wxT(")");
+		s += ibT(")");
 		// A window is a MODIFIER of the call, so it is spelled where the call ends. The operands
 		// render first (they append to the bind plan, and the plan is in SQL-text order).
 		if (expr->m_over)
@@ -1148,60 +1148,60 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 	case ibQueryExprKind::Case: {
 		// CASE WHEN c THEN v ... [ELSE e] END. Render each WHEN's condition then its
 		// value in order (RenderExpr appends to the bind plan; keep placeholder order).
-		wxString s = wxT("(CASE");
+		ibString s = ibT("(CASE");
 		for (const auto& wt : expr->m_cases) {
-			const wxString cond = RenderExpr(wt.first);
-			const wxString val  = RenderExpr(wt.second);
-			s += wxT(" WHEN ") + cond + wxT(" THEN ") + val;
+			const ibString cond = RenderExpr(wt.first);
+			const ibString val  = RenderExpr(wt.second);
+			s += ibT(" WHEN ") + cond + ibT(" THEN ") + val;
 		}
 		if (expr->m_else) {
-			const wxString els = RenderExpr(expr->m_else);
-			s += wxT(" ELSE ") + els;
+			const ibString els = RenderExpr(expr->m_else);
+			s += ibT(" ELSE ") + els;
 		}
-		s += wxT(" END)");
+		s += ibT(" END)");
 		return s;
 	}
 
 	case ibQueryExprKind::In: {
 		// A SET THAT IS A QUERY — `x IN ( SELECT … )`: its select renders here, its binds in placeholder order.
 		if (expr->m_subquery) {
-			const wxString lhs = RenderExpr(expr->m_lhs);
-			return wxT("(") + lhs + (expr->m_negated ? wxT(" NOT IN (") : wxT(" IN ("))
-				+ RenderSelect(expr->m_subquery.get()) + wxT("))");
+			const ibString lhs = RenderExpr(expr->m_lhs);
+			return ibT("(") + lhs + (expr->m_negated ? ibT(" NOT IN (") : ibT(" IN ("))
+				+ RenderSelect(expr->m_subquery.get()) + ibT("))");
 		}
 		// Empty list = constant predicate; lhs not evaluated (so no stray bind).
 		if (expr->m_args.empty())
-			return expr->m_negated ? wxT("(1 = 1)") : wxT("(1 = 0)");
-		const wxString lhs = RenderExpr(expr->m_lhs);
-		wxString s = wxT("(") + lhs + (expr->m_negated ? wxT(" NOT IN (") : wxT(" IN ("));
+			return expr->m_negated ? ibT("(1 = 1)") : ibT("(1 = 0)");
+		const ibString lhs = RenderExpr(expr->m_lhs);
+		ibString s = ibT("(") + lhs + (expr->m_negated ? ibT(" NOT IN (") : ibT(" IN ("));
 		for (size_t i = 0; i < expr->m_args.size(); ++i) {
-			if (i) s += wxT(", ");
+			if (i) s += ibT(", ");
 			s += RenderExpr(expr->m_args[i]);
 		}
-		s += wxT("))");
+		s += ibT("))");
 		return s;
 	}
 
 	case ibQueryExprKind::IsNull: {
-		const wxString lhs = RenderExpr(expr->m_lhs);
-		return wxT("(") + lhs + (expr->m_negated ? wxT(" IS NOT NULL)") : wxT(" IS NULL)"));
+		const ibString lhs = RenderExpr(expr->m_lhs);
+		return ibT("(") + lhs + (expr->m_negated ? ibT(" IS NOT NULL)") : ibT(" IS NULL)"));
 	}
 
 	case ibQueryExprKind::Not: {
-		const wxString operand = RenderExpr(expr->m_lhs);
-		return wxT("(NOT ") + operand + wxT(")");
+		const ibString operand = RenderExpr(expr->m_lhs);
+		return ibT("(NOT ") + operand + ibT(")");
 	}
 
 	case ibQueryExprKind::Cast:
 		// Spell the canonical target type through the dialect TYPE-MAP (SQLite date=TEXT, bool=INTEGER,
 		// FB DECIMAL widened) — the same speller the DDL path uses. No dialect fork here.
-		return wxT("CAST(") + RenderExpr(expr->m_lhs) + wxT(" AS ") + MapType(expr->m_castType) + wxT(")");
+		return ibT("CAST(") + RenderExpr(expr->m_lhs) + ibT(" AS ") + MapType(expr->m_castType) + ibT(")");
 
 	case ibQueryExprKind::Exists:
 		// A CORRELATED subquery test: the subquery renders its own SELECT (its binds land in placeholder
 		// order right here) and references the outer write row's columns. `[NOT] EXISTS ( … )`.
-		return (expr->m_negated ? wxT("(NOT EXISTS (") : wxT("(EXISTS ("))
-		     + RenderSelect(expr->m_subquery.get()) + wxT("))");
+		return (expr->m_negated ? ibT("(NOT EXISTS (") : ibT("(EXISTS ("))
+		     + RenderSelect(expr->m_subquery.get()) + ibT("))");
 
 	// ⭐ THE CALENDAR CALLS — one shape, four dictionaries. Each looks its unit up in the map that
 	// belongs to the operation and fills the template's NAMED placeholders. A unit the engine has no
@@ -1211,7 +1211,7 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 	case ibQueryExprKind::PeriodEnd:
 	case ibQueryExprKind::DateAdd:
 	case ibQueryExprKind::DateDiff: {
-		const std::map<ibTotalsPeriod, wxString>& table =
+		const std::map<ibTotalsPeriod, ibString>& table =
 			  expr->m_kind == ibQueryExprKind::PeriodEnd ? m_dialect.m_periodEnd
 			: expr->m_kind == ibQueryExprKind::DateAdd   ? m_dialect.m_dateAdd
 			                                             : m_dialect.m_dateDiff;
@@ -1222,13 +1222,13 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		// Each placeholder is rendered per OCCURRENCE (FillRepeated says why), and left to right, so a
 		// template naming its operand twice binds twice and the plan stays in statement order.
 		if (expr->m_kind == ibQueryExprKind::DateDiff) {
-			const wxString half = FillRepeated(it->second, wxT("{from}"), expr->m_lhs);
-			return FillRepeated(half, wxT("{to}"), expr->m_rhs);
+			const ibString half = FillRepeated(it->second, ibT("{from}"), expr->m_lhs);
+			return FillRepeated(half, ibT("{to}"), expr->m_rhs);
 		}
-		const wxString filled = FillRepeated(it->second, wxT("{expr}"), expr->m_lhs);
+		const ibString filled = FillRepeated(it->second, ibT("{expr}"), expr->m_lhs);
 		if (expr->m_kind != ibQueryExprKind::DateAdd)
 			return filled;
-		return expr->m_args.empty() ? filled : FillRepeated(filled, wxT("{count}"), expr->m_args.front());
+		return expr->m_args.empty() ? filled : FillRepeated(filled, ibT("{count}"), expr->m_args.front());
 	}
 
 	case ibQueryExprKind::DatePart: {
@@ -1236,18 +1236,18 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		if (it == m_dialect.m_datePart.end())
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 				_("The database engine cannot read this part out of a date"));
-		return FillRepeated(it->second, wxT("{expr}"), expr->m_lhs);
+		return FillRepeated(it->second, ibT("{expr}"), expr->m_lhs);
 	}
 
 	case ibQueryExprKind::Substring: {
 		if (m_dialect.m_substring.IsEmpty())
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 				_("The database engine has no substring of its own"));
-		wxString out = FillRepeated(m_dialect.m_substring, wxT("{expr}"), expr->m_lhs);
-		out = expr->m_args.size() > 0 ? FillRepeated(out, wxT("{from}"), expr->m_args[0])
-		                              : (out.Replace(wxT("{from}"), wxT("1")), out);
-		out = expr->m_args.size() > 1 ? FillRepeated(out, wxT("{len}"), expr->m_args[1])
-		                              : (out.Replace(wxT("{len}"), wxT("0")), out);
+		ibString out = FillRepeated(m_dialect.m_substring, ibT("{expr}"), expr->m_lhs);
+		out = expr->m_args.size() > 0 ? FillRepeated(out, ibT("{from}"), expr->m_args[0])
+		                              : (out.Replace(ibT("{from}"), ibT("1")), out);
+		out = expr->m_args.size() > 1 ? FillRepeated(out, ibT("{len}"), expr->m_args[1])
+		                              : (out.Replace(ibT("{len}"), ibT("0")), out);
 		return out;
 	}
 
@@ -1264,11 +1264,11 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 			// nothing — the failure would surface months later, far from here.
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 				_("The database engine cannot truncate a period to this unit"));
-		return FillRepeated(it->second, wxT("{expr}"), expr->m_lhs);
+		return FillRepeated(it->second, ibT("{expr}"), expr->m_lhs);
 	}
 	}
 
-	return wxString();
+	return ibString();
 }
 
 // ⭐⭐ A TEMPLATE THAT NAMES ITS OPERAND TWICE HAS TO RENDER IT TWICE.
@@ -1283,46 +1283,46 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 // So each occurrence is rendered on its own. RenderExpr appends to the bind plan as it goes, and the
 // occurrences are filled LEFT TO RIGHT, so the plan comes out in statement order — the invariant
 // every other multi-operand node here keeps.
-wxString ibQueryRenderer::FillRepeated(const wxString& tpl, const wxString& key, const ibQueryExprPtr& operand)
+ibString ibQueryRenderer::FillRepeated(const ibString& tpl, const ibString& key, const ibQueryExprPtr& operand)
 {
-	wxString out = tpl;
-	for (size_t at = out.find(key); at != wxString::npos; at = out.find(key, at)) {
-		const wxString rendered = RenderExpr(operand);
+	ibString out = tpl;
+	for (size_t at = out.find(key); at != ibString::npos; at = out.find(key, at)) {
+		const ibString rendered = RenderExpr(operand);
 		out = out.Left(at) + rendered + out.Mid(at + key.length());
 		at += rendered.length();
 	}
 	return out;
 }
 
-wxString ibQueryRenderer::RenderOver(const ibQueryWindow& window)
+ibString ibQueryRenderer::RenderOver(const ibQueryWindow& window)
 {
 	// Render the operands HERE and hand finished text to the one clause speller. PARTITION before
 	// ORDER, because RenderExpr appends to the bind plan and the plan must stay in SQL-text order —
 	// the same rule BinOp sequences its operands under.
-	std::vector<wxString> partitionBy;
+	std::vector<ibString> partitionBy;
 	for (const ibQueryExprPtr& e : window.m_partitionBy)
 		partitionBy.push_back(RenderExpr(e));
 
-	std::vector<wxString> orderBy;
+	std::vector<ibString> orderBy;
 	for (const ibQuerySortKey& key : window.m_orderBy)
 		orderBy.push_back(RenderExpr(key.m_expr)
-			+ ((key.m_dir == ibQuerySortDir::Desc) ? wxT(" DESC") : wxT(" ASC")));
+			+ ((key.m_dir == ibQuerySortDir::Desc) ? ibT(" DESC") : ibT(" ASC")));
 
 	return ibRenderOverClause(m_dialect, partitionBy, orderBy, window.m_frame);
 }
 
-wxString ibQueryRenderer::RenderPlaceholder()
+ibString ibQueryRenderer::RenderPlaceholder()
 {
 	++m_paramPos;
 	switch (m_dialect.m_paramStyle) {
-	case ibParamStyle::QuestionMark: return wxT("?");
-	case ibParamStyle::DollarN:      return wxString::Format(wxT("$%d"), m_paramPos);
-	case ibParamStyle::Colon:        return wxString::Format(wxT(":p%d"), m_paramPos);
+	case ibParamStyle::QuestionMark: return ibT("?");
+	case ibParamStyle::DollarN:      return ibString::Format(ibT("$%d"), m_paramPos);
+	case ibParamStyle::Colon:        return ibString::Format(ibT(":p%d"), m_paramPos);
 	}
-	return wxT("?");
+	return ibT("?");
 }
 
-wxString ibQueryRenderer::QuoteIdent(const wxString& name) const
+ibString ibQueryRenderer::QuoteIdent(const ibString& name) const
 {
 	return m_dialect.m_identQuoteOpen + name + m_dialect.m_identQuoteClose;
 }
@@ -1331,7 +1331,7 @@ wxString ibQueryRenderer::QuoteIdent(const wxString& name) const
 // past it, its head plus a hash of the WHOLE name — deterministic, so the definition (`… AS a`) and every
 // reference (`a.col`) spell it the same, and two aliases that share the head still differ. See
 // ibDialectDictionary::m_maxAliasLength for the Firebird failure that asked for it.
-wxString ibQueryRenderer::AliasIdent(const wxString& alias) const
+ibString ibQueryRenderer::AliasIdent(const ibString& alias) const
 {
 	return QuoteIdent(ibDialectDictionary::BoundedName(alias, m_dialect.m_maxAliasLength));
 }
@@ -1341,71 +1341,71 @@ wxString ibQueryRenderer::AliasIdent(const wxString& alias) const
 // AliasIdent, so past the dialect's bound the table is given that spelling as its alias: otherwise `t.col` names a
 // table the statement never had (a correlated EXISTS under a DELETE of the recalculation marks qualifies the marks
 // by their table).
-static wxString ibTableAsReferenced(const wxString& table, const wxString& alias)
+static ibString ibTableAsReferenced(const ibString& table, const ibString& alias)
 {
-	return alias == table ? table : table + wxT(" AS ") + alias;
+	return alias == table ? table : table + ibT(" AS ") + alias;
 }
 
-wxString ibQueryRenderer::BinOpText(ibQueryBinOp op)
+ibString ibQueryRenderer::BinOpText(ibQueryBinOp op)
 {
 	switch (op) {
-	case ibQueryBinOp::Add:    return wxT("+");
-	case ibQueryBinOp::Concat: return wxT("||");   // string addition; see ibQueryBinOp::Concat
-	case ibQueryBinOp::Sub:    return wxT("-");
-	case ibQueryBinOp::Mul: return wxT("*");
-	case ibQueryBinOp::Div: return wxT("/");
-	case ibQueryBinOp::Mod: return wxT("%");   // NB: Firebird wants MOD() — out of MVP scope
-	case ibQueryBinOp::Eq:  return wxT("=");
-	case ibQueryBinOp::Ne:  return wxT("<>");
-	case ibQueryBinOp::Lt:  return wxT("<");
-	case ibQueryBinOp::Le:  return wxT("<=");
-	case ibQueryBinOp::Gt:   return wxT(">");
-	case ibQueryBinOp::Ge:   return wxT(">=");
-	case ibQueryBinOp::Like: return wxT("LIKE");
-	case ibQueryBinOp::And:  return wxT("AND");
-	case ibQueryBinOp::Or:   return wxT("OR");
+	case ibQueryBinOp::Add:    return ibT("+");
+	case ibQueryBinOp::Concat: return ibT("||");   // string addition; see ibQueryBinOp::Concat
+	case ibQueryBinOp::Sub:    return ibT("-");
+	case ibQueryBinOp::Mul: return ibT("*");
+	case ibQueryBinOp::Div: return ibT("/");
+	case ibQueryBinOp::Mod: return ibT("%");   // NB: Firebird wants MOD() — out of MVP scope
+	case ibQueryBinOp::Eq:  return ibT("=");
+	case ibQueryBinOp::Ne:  return ibT("<>");
+	case ibQueryBinOp::Lt:  return ibT("<");
+	case ibQueryBinOp::Le:  return ibT("<=");
+	case ibQueryBinOp::Gt:   return ibT(">");
+	case ibQueryBinOp::Ge:   return ibT(">=");
+	case ibQueryBinOp::Like: return ibT("LIKE");
+	case ibQueryBinOp::And:  return ibT("AND");
+	case ibQueryBinOp::Or:   return ibT("OR");
 	}
-	return wxT("=");
+	return ibT("=");
 }
 
-wxString ibQueryRenderer::JoinTypeText(ibQueryJoinType type)
+ibString ibQueryRenderer::JoinTypeText(ibQueryJoinType type)
 {
 	switch (type) {
-	case ibQueryJoinType::Inner: return wxT("INNER JOIN");
-	case ibQueryJoinType::Left:  return wxT("LEFT JOIN");
-	case ibQueryJoinType::Right: return wxT("RIGHT JOIN");
-	case ibQueryJoinType::Full:  return wxT("FULL OUTER JOIN");  // gated by m_features.m_fullOuterJoin; emulation later
+	case ibQueryJoinType::Inner: return ibT("INNER JOIN");
+	case ibQueryJoinType::Left:  return ibT("LEFT JOIN");
+	case ibQueryJoinType::Right: return ibT("RIGHT JOIN");
+	case ibQueryJoinType::Full:  return ibT("FULL OUTER JOIN");  // gated by m_features.m_fullOuterJoin; emulation later
 	}
-	return wxT("INNER JOIN");
+	return ibT("INNER JOIN");
 }
 
 // FROM source — a Scan (table name) or a Join-tree (rendered recursively). The
 // ON predicate's bind params are pushed here, before the WHERE's, matching
 // their left-to-right position in the finished SQL.
-wxString ibQueryRenderer::RenderSource(const ibQueryRel* rel)
+ibString ibQueryRenderer::RenderSource(const ibQueryRel* rel)
 {
-	if (rel == nullptr) return wxString();
+	if (rel == nullptr) return ibString();
 
 	switch (rel->m_kind) {
 	case ibQueryRelKind::Scan:
 		return rel->m_alias.empty()
 			? ibTableAsReferenced(QuoteIdent(rel->m_table), AliasIdent(rel->m_table))
-			: QuoteIdent(rel->m_table) + wxT(" AS ") + AliasIdent(rel->m_alias);
+			: QuoteIdent(rel->m_table) + ibT(" AS ") + AliasIdent(rel->m_alias);
 	case ibQueryRelKind::Subquery:
 		// ( SELECT ... ) AS alias — the inner relation renders its own SELECT, its
 		// bind params landing in the plan at the FROM position (before the WHERE).
-		return wxT("(") + RenderSelect(rel->m_input.get()) + wxT(") AS ") + AliasIdent(rel->m_alias);
+		return ibT("(") + RenderSelect(rel->m_input.get()) + ibT(") AS ") + AliasIdent(rel->m_alias);
 	case ibQueryRelKind::Join: {
 		// Same operand-sequencing rule as BinOp: RenderSource / RenderExpr push
 		// bind params as a side effect, so left source → right source → ON
 		// predicate must be rendered in that order (operator+ does not sequence
 		// its operands; MSVC evaluates right-to-left). Otherwise nested-join ON
 		// params land in the plan out of placeholder order.
-		const wxString left  = RenderSource(rel->m_input.get());
-		const wxString right = RenderSource(rel->m_right.get());
-		const wxString on    = RenderExpr(rel->m_joinPredicate);
-		return left + wxT(" ") + JoinTypeText(rel->m_joinType) + wxT(" ")
-		     + right + wxT(" ON ") + on;
+		const ibString left  = RenderSource(rel->m_input.get());
+		const ibString right = RenderSource(rel->m_right.get());
+		const ibString on    = RenderExpr(rel->m_joinPredicate);
+		return left + ibT(" ") + JoinTypeText(rel->m_joinType) + ibT(" ")
+		     + right + ibT(" ON ") + on;
 	}
 	default:
 		// A wrapping rel (Filter/Project/...) is never a FROM source in
@@ -1418,17 +1418,17 @@ wxString ibQueryRenderer::RenderSource(const ibQueryRel* rel)
 // DDL
 // ==========================================================================
 
-wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
+ibString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 {
 	switch (ddl.m_kind) {
 	case ibDdlKind::CreateTable: {
 		// A TEMPORARY table substitutes the driver's temp CREATE prefix (from the L1 temp dialect,
 		// supplied on the DDL) for "CREATE TABLE" and appends its suffix (ON COMMIT … / none).
-		wxString sql = (ddl.m_temporary && !ddl.m_createPrefix.empty())
-		             ? ddl.m_createPrefix + wxT(" ")
-		             : wxString(wxT("CREATE TABLE "));
-		if (ddl.m_ifNotExists) sql += wxT("IF NOT EXISTS ");
-		sql += QuoteIdent(ddl.m_table) + wxT(" (");
+		ibString sql = (ddl.m_temporary && !ddl.m_createPrefix.empty())
+		             ? ddl.m_createPrefix + ibT(" ")
+		             : ibString(ibT("CREATE TABLE "));
+		if (ddl.m_ifNotExists) sql += ibT("IF NOT EXISTS ");
+		sql += QuoteIdent(ddl.m_table) + ibT(" (");
 		// Two columns both marked PRIMARY KEY are one key, not two. A column-level PRIMARY KEY
 		// on each is illegal; the key is named once, after the columns.
 		int primaryKeys = 0;
@@ -1436,49 +1436,49 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 			if (col.m_primaryKey) ++primaryKeys;
 		const bool compositeKey = primaryKeys > 1;
 		for (size_t i = 0; i < ddl.m_columns.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			sql += RenderColumn(ddl.m_columns[i], !compositeKey);
 		}
 		if (compositeKey) {
-			sql += wxT(", PRIMARY KEY (");
+			sql += ibT(", PRIMARY KEY (");
 			bool firstKey = true;
 			for (const ibDdlColumn& col : ddl.m_columns) {
 				if (!col.m_primaryKey) continue;
-				if (!firstKey) sql += wxT(", ");
+				if (!firstKey) sql += ibT(", ");
 				sql += QuoteIdent(col.m_name);
 				firstKey = false;
 			}
-			sql += wxT(")");
+			sql += ibT(")");
 		}
-		sql += wxT(")");
+		sql += ibT(")");
 		if (ddl.m_temporary && !ddl.m_createSuffix.empty())
 			sql += ddl.m_createSuffix;
 		return sql;
 	}
 	case ibDdlKind::DropTable: {
-		wxString sql = wxT("DROP TABLE ");
-		if (ddl.m_ifExists) sql += wxT("IF EXISTS ");
+		ibString sql = ibT("DROP TABLE ");
+		if (ddl.m_ifExists) sql += ibT("IF EXISTS ");
 		sql += QuoteIdent(ddl.m_table);
 		return sql;
 	}
 	case ibDdlKind::AddColumn: {
-		wxString sql = wxT("ALTER TABLE ") + QuoteIdent(ddl.m_table) + wxT(" ADD ");
+		ibString sql = ibT("ALTER TABLE ") + QuoteIdent(ddl.m_table) + ibT(" ADD ");
 		if (!ddl.m_columns.empty()) sql += RenderColumn(ddl.m_columns[0]);
 		return sql;
 	}
 	case ibDdlKind::DropColumn: {
-		wxString sql = wxT("ALTER TABLE ") + QuoteIdent(ddl.m_table) + wxT(" ") + m_dialect.m_dropColumnClause;
+		ibString sql = ibT("ALTER TABLE ") + QuoteIdent(ddl.m_table) + ibT(" ") + m_dialect.m_dropColumnClause;
 		if (!ddl.m_columns.empty()) sql += QuoteIdent(ddl.m_columns[0].m_name);
 		return sql;
 	}
 	case ibDdlKind::AlterTable: {
 		// One ALTER folding every coalesced clause: ALTER TABLE t ADD c1, ADD c2, DROP COLUMN c3.
-		wxString sql = wxT("ALTER TABLE ") + QuoteIdent(ddl.m_table) + wxT(" ");
+		ibString sql = ibT("ALTER TABLE ") + QuoteIdent(ddl.m_table) + ibT(" ");
 		for (size_t i = 0; i < ddl.m_alterClauses.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			const ibAlterClause& clause = ddl.m_alterClauses[i];
 			if (clause.m_op == ibAlterOp::Add)
-				sql += wxT("ADD ") + RenderColumn(clause.m_column);
+				sql += ibT("ADD ") + RenderColumn(clause.m_column);
 			else
 				sql += m_dialect.m_dropColumnClause + QuoteIdent(clause.m_column.m_name);
 		}
@@ -1490,58 +1490,58 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 				_("This database cannot change a column's type in place (a table rebuild is required)"));
 		if (ddl.m_columns.empty())
-			return wxString();
-		wxString sql = m_dialect.m_alterColumnTemplate;
-		sql.Replace(wxT("{table}"),  QuoteIdent(ddl.m_table));
-		sql.Replace(wxT("{column}"), QuoteIdent(ddl.m_columns[0].m_name));
-		sql.Replace(wxT("{type}"),   MapType(ddl.m_columns[0].m_type));
+			return ibString();
+		ibString sql = m_dialect.m_alterColumnTemplate;
+		sql.Replace(ibT("{table}"),  QuoteIdent(ddl.m_table));
+		sql.Replace(ibT("{column}"), QuoteIdent(ddl.m_columns[0].m_name));
+		sql.Replace(ibT("{type}"),   MapType(ddl.m_columns[0].m_type));
 		return sql;
 	}
 	case ibDdlKind::CreateIndex: {
 		// A descending twin exists only where the engine needs one (m_descendingIndexWord): elsewhere it renders
 		// empty, and its DROP below does the same, so it is never made and never missed.
 		if (ddl.m_descending && m_dialect.m_descendingIndexWord.empty())
-			return wxString();
-		wxString sql = ddl.m_unique ? wxT("CREATE UNIQUE ") : wxT("CREATE ");
+			return ibString();
+		ibString sql = ddl.m_unique ? ibT("CREATE UNIQUE ") : ibT("CREATE ");
 		if (ddl.m_descending)
-			sql += m_dialect.m_descendingIndexWord + wxT(" ");
-		sql += wxT("INDEX ") + QuoteIdent(ddl.m_indexName) + wxT(" ON ") + QuoteIdent(ddl.m_table) + wxT(" (");
+			sql += m_dialect.m_descendingIndexWord + ibT(" ");
+		sql += ibT("INDEX ") + QuoteIdent(ddl.m_indexName) + ibT(" ON ") + QuoteIdent(ddl.m_table) + ibT(" (");
 		for (size_t i = 0; i < ddl.m_indexColumns.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			sql += QuoteIdent(ddl.m_indexColumns[i]);
 		}
-		sql += wxT(")");
+		sql += ibT(")");
 		return sql;
 	}
 	case ibDdlKind::DropIndex: {
 		if (ddl.m_descending && m_dialect.m_descendingIndexWord.empty())
-			return wxString();   // the twin this engine never made
-		wxString sql = wxT("DROP INDEX ") + QuoteIdent(ddl.m_indexName);
+			return ibString();   // the twin this engine never made
+		ibString sql = ibT("DROP INDEX ") + QuoteIdent(ddl.m_indexName);
 		if (m_dialect.m_dropIndexNeedsTable && !ddl.m_table.empty())
-			sql += wxT(" ON ") + QuoteIdent(ddl.m_table);
+			sql += ibT(" ON ") + QuoteIdent(ddl.m_table);
 		return sql;
 	}
 	case ibDdlKind::Analyze: {
 		// Refresh optimiser stats: `<prefix> <table>`. A driver with no ANALYZE (empty prefix —
 		// e.g. Firebird) renders empty and Execute no-ops.
 		if (m_dialect.m_analyzePrefix.empty())
-			return wxString();
-		return m_dialect.m_analyzePrefix + wxT(" ") + QuoteIdent(ddl.m_table);
+			return ibString();
+		return m_dialect.m_analyzePrefix + ibT(" ") + QuoteIdent(ddl.m_table);
 	}
 	}
-	return wxString();
+	return ibString();
 }
 
-wxString ibQueryRenderer::RenderColumn(const ibDdlColumn& col, bool inlinePrimaryKey)
+ibString ibQueryRenderer::RenderColumn(const ibDdlColumn& col, bool inlinePrimaryKey)
 {
-	wxString s = QuoteIdent(col.m_name) + wxT(" ") + MapType(col.m_type);
-	if (!col.m_default.empty()) s += wxT(" DEFAULT ") + col.m_default;   // before NOT NULL (e.g. "INTEGER DEFAULT 0 NOT NULL")
-	if (inlinePrimaryKey && col.m_primaryKey) s += wxT(" PRIMARY KEY");   // implies NOT NULL
-	else if (col.m_notNull || col.m_primaryKey) s += wxT(" NOT NULL");
+	ibString s = QuoteIdent(col.m_name) + ibT(" ") + MapType(col.m_type);
+	if (!col.m_default.empty()) s += ibT(" DEFAULT ") + col.m_default;   // before NOT NULL (e.g. "INTEGER DEFAULT 0 NOT NULL")
+	if (inlinePrimaryKey && col.m_primaryKey) s += ibT(" PRIMARY KEY");   // implies NOT NULL
+	else if (col.m_notNull || col.m_primaryKey) s += ibT(" NOT NULL");
 	return s;
 }
 
-wxString ibQueryRenderer::MapType(const ibColumnType& type) const
+ibString ibQueryRenderer::MapType(const ibColumnType& type) const
 {
 	return ibMapColumnType(m_dialect, type);
 }
@@ -1552,9 +1552,9 @@ wxString ibQueryRenderer::MapType(const ibColumnType& type) const
 // Operands arrive FINISHED. This function owns the clause: the keywords, their order, the frame,
 // and the refusal — and nothing about how a column or an expression is spelled, which is what lets
 // the IR renderer and the view generator share it while quoting identifiers differently.
-wxString ibRenderOverClause(const ibDialectDictionary& dialect,
-                            const std::vector<wxString>& partitionBy,
-                            const std::vector<wxString>& orderBy,
+ibString ibRenderOverClause(const ibDialectDictionary& dialect,
+                            const std::vector<ibString>& partitionBy,
+                            const std::vector<ibString>& orderBy,
                             ibQueryFrame frame)
 {
 	if (!dialect.m_features.m_window)
@@ -1564,21 +1564,21 @@ wxString ibRenderOverClause(const ibDialectDictionary& dialect,
 		ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 			_("The database engine has no window functions"));
 
-	wxString sql = wxT(" OVER (");
+	ibString sql = ibT(" OVER (");
 
 	if (!partitionBy.empty()) {
-		sql += wxT("PARTITION BY ");
+		sql += ibT("PARTITION BY ");
 		for (size_t i = 0; i < partitionBy.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			sql += partitionBy[i];
 		}
 	}
 
 	if (!orderBy.empty()) {
-		if (!partitionBy.empty()) sql += wxT(" ");
-		sql += wxT("ORDER BY ");
+		if (!partitionBy.empty()) sql += ibT(" ");
+		sql += ibT("ORDER BY ");
 		for (size_t i = 0; i < orderBy.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			sql += orderBy[i];
 		}
 	}
@@ -1598,20 +1598,20 @@ wxString ibRenderOverClause(const ibDialectDictionary& dialect,
 	if (!orderBy.empty()) {
 		switch (frame) {
 		case ibQueryFrame::RangeThroughPeers:
-			sql += wxT(" RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW");
+			sql += ibT(" RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW");
 			break;
 		case ibQueryFrame::RowsThroughCurrent:
-			sql += wxT(" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW");
+			sql += ibT(" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW");
 			break;
 		case ibQueryFrame::RowsBeforeCurrent:
-			sql += wxT(" ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING");
+			sql += ibT(" ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING");
 			break;
 		case ibQueryFrame::NoFrame:
 			break;
 		}
 	}
 
-	sql += wxT(")");
+	sql += ibT(")");
 	return sql;
 }
 
@@ -1619,7 +1619,7 @@ wxString ibRenderOverClause(const ibDialectDictionary& dialect,
 // renderer at L2-2 — cannot be a renderer: it holds a dictionary, not a builder. A copy of the
 // switch there would be a second place where a canonical type turns into SQL, which is the one
 // thing this table exists to prevent.
-wxString ibMapColumnType(const ibDialectDictionary& dialect, const ibColumnType& type)
+ibString ibMapColumnType(const ibDialectDictionary& dialect, const ibColumnType& type)
 {
 	switch (type.m_kind) {
 	case ibCanonicalKind::Boolean: return dialect.m_typeBoolean;
@@ -1629,8 +1629,8 @@ wxString ibMapColumnType(const ibDialectDictionary& dialect, const ibColumnType&
 	case ibCanonicalKind::Guid:    return dialect.m_typeGuid;
 	case ibCanonicalKind::Binary:
 		// PG's BYTEA carries no length — render the pattern verbatim when it has no %d.
-		return dialect.m_typeBinaryPattern.Contains(wxT("%"))
-		     ? wxString::Format(dialect.m_typeBinaryPattern, type.m_length > 0 ? type.m_length : 16)
+		return dialect.m_typeBinaryPattern.Contains(ibT("%"))
+		     ? ibString::Format(dialect.m_typeBinaryPattern, type.m_length > 0 ? type.m_length : 16)
 		     : dialect.m_typeBinaryPattern;
 	case ibCanonicalKind::Date:
 		switch (type.m_datePrec) {
@@ -1640,10 +1640,10 @@ wxString ibMapColumnType(const ibDialectDictionary& dialect, const ibColumnType&
 		}
 		return dialect.m_typeDate;
 	case ibCanonicalKind::String:
-		return wxString::Format(type.m_fixed ? dialect.m_typeCharPattern : dialect.m_typeStringPattern,
+		return ibString::Format(type.m_fixed ? dialect.m_typeCharPattern : dialect.m_typeStringPattern,
 		                        type.m_length > 0 ? type.m_length : 255);
 	case ibCanonicalKind::Number:
-		return wxString::Format(dialect.m_typeNumberPattern,
+		return ibString::Format(dialect.m_typeNumberPattern,
 		                        type.m_precision > 0 ? type.m_precision : 18, type.m_scale);
 	}
 	return dialect.m_typeInteger;
@@ -1658,23 +1658,23 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 	m_out = ibRenderedQuery{};
 	m_paramPos = 0;
 
-	wxString sql;
+	ibString sql;
 
 	switch (dml.m_kind) {
 	case ibDmlKind::Insert: {
 		// INSERT … SELECT — the row source is a relation tree (RenderSelect pushes any of its binds
 		// in placeholder order). Standard SQL, identical on every driver.
 		if (dml.m_selectSource) {
-			sql = wxT("INSERT INTO ") + QuoteIdent(dml.m_table);
+			sql = ibT("INSERT INTO ") + QuoteIdent(dml.m_table);
 			if (!dml.m_insertColumns.empty()) {
-				sql += wxT(" (");
+				sql += ibT(" (");
 				for (size_t i = 0; i < dml.m_insertColumns.size(); ++i) {
-					if (i) sql += wxT(", ");
+					if (i) sql += ibT(", ");
 					sql += QuoteIdent(dml.m_insertColumns[i]);
 				}
-				sql += wxT(")");
+				sql += ibT(")");
 			}
-			sql += wxT(" ") + RenderSelect(dml.m_selectSource.get());
+			sql += ibT(" ") + RenderSelect(dml.m_selectSource.get());
 			break;
 		}
 		// SEVERAL ROWS ON AN ENGINE THAT HAS NO MULTI-ROW VALUES — the same rows, a different spelling.
@@ -1687,8 +1687,8 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 		// the whole reason a caller may batch without knowing which engine it is talking to, and why
 		// this is a second SPELLING rather than a second mechanism.
 		if (!dml.m_extraRows.empty() && !m_dialect.m_features.m_multiRowValues) {
-			const wxString fromDual = m_dialect.m_selectFromDual.empty()
-				? wxString() : (wxT(" FROM ") + m_dialect.m_selectFromDual);
+			const ibString fromDual = m_dialect.m_selectFromDual.empty()
+				? ibString() : (ibT(" FROM ") + m_dialect.m_selectFromDual);
 
 			// A SELECT list types itself, so a placeholder in one cannot take its type from the
 			// column it is going into the way a VALUES list's does. Engines that need to be told
@@ -1696,31 +1696,31 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 			// column comes from m_assignments — every row is IN THE SAME COLUMN ORDER, which is
 			// what m_extraRows means.
 			const auto value = [&](const ibQueryExprPtr& expr, size_t col) {
-				const wxString rendered = RenderExpr(expr);   // pushes a bind param — call ONCE
+				const ibString rendered = RenderExpr(expr);   // pushes a bind param — call ONCE
 				if (m_dialect.m_batchInsertCast.empty() || col >= dml.m_assignments.size())
 					return rendered;
-				wxString cast = m_dialect.m_batchInsertCast;
-				cast.Replace(wxT("{value}"),  rendered);
-				cast.Replace(wxT("{table}"),  QuoteIdent(dml.m_table));
-				cast.Replace(wxT("{column}"), QuoteIdent(dml.m_assignments[col].m_column));
+				ibString cast = m_dialect.m_batchInsertCast;
+				cast.Replace(ibT("{value}"),  rendered);
+				cast.Replace(ibT("{table}"),  QuoteIdent(dml.m_table));
+				cast.Replace(ibT("{column}"), QuoteIdent(dml.m_assignments[col].m_column));
 				return cast;
 			};
 
-			sql = wxT("INSERT INTO ") + QuoteIdent(dml.m_table) + wxT(" (");
+			sql = ibT("INSERT INTO ") + QuoteIdent(dml.m_table) + ibT(" (");
 			for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
-				if (i) sql += wxT(", ");
+				if (i) sql += ibT(", ");
 				sql += QuoteIdent(dml.m_assignments[i].m_column);
 			}
-			sql += wxT(") SELECT ");
+			sql += ibT(") SELECT ");
 			for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
-				if (i) sql += wxT(", ");
+				if (i) sql += ibT(", ");
 				sql += value(dml.m_assignments[i].m_value, i);
 			}
 			sql += fromDual;
 			for (const std::vector<ibQueryExprPtr>& row : dml.m_extraRows) {
-				sql += wxT(" UNION ALL SELECT ");
+				sql += ibT(" UNION ALL SELECT ");
 				for (size_t i = 0; i < row.size(); ++i) {
-					if (i) sql += wxT(", ");
+					if (i) sql += ibT(", ");
 					sql += value(row[i], i);   // binds push after the prior rows' — placeholder order holds
 				}
 				sql += fromDual;
@@ -1728,44 +1728,44 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 			break;
 		}
 
-		sql = wxT("INSERT INTO ") + QuoteIdent(dml.m_table) + wxT(" (");
+		sql = ibT("INSERT INTO ") + QuoteIdent(dml.m_table) + ibT(" (");
 		for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			sql += QuoteIdent(dml.m_assignments[i].m_column);
 		}
-		sql += wxT(") VALUES (");
+		sql += ibT(") VALUES (");
 		for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			sql += RenderExpr(dml.m_assignments[i].m_value);   // pushes a bind param
 		}
-		sql += wxT(")");
+		sql += ibT(")");
 		// Multi-row INSERT — each extra row appends ", (v0, v1, ...)" in the same column order; its
 		// binds push after the prior rows', so the plan stays in placeholder order.
 		for (const std::vector<ibQueryExprPtr>& row : dml.m_extraRows) {
-			sql += wxT(", (");
+			sql += ibT(", (");
 			for (size_t i = 0; i < row.size(); ++i) {
-				if (i) sql += wxT(", ");
+				if (i) sql += ibT(", ");
 				sql += RenderExpr(row[i]);
 			}
-			sql += wxT(")");
+			sql += ibT(")");
 		}
 		break;
 	}
 	case ibDmlKind::Update: {
-		sql = wxT("UPDATE ") + ibTableAsReferenced(QuoteIdent(dml.m_table), AliasIdent(dml.m_table)) + wxT(" SET ");
+		sql = ibT("UPDATE ") + ibTableAsReferenced(QuoteIdent(dml.m_table), AliasIdent(dml.m_table)) + ibT(" SET ");
 		for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			sql += QuoteIdent(dml.m_assignments[i].m_column)
-			     + wxT(" = ") + RenderExpr(dml.m_assignments[i].m_value);
+			     + ibT(" = ") + RenderExpr(dml.m_assignments[i].m_value);
 		}
 		if (dml.m_where)
-			sql += wxT(" WHERE ") + RenderExpr(dml.m_where);
+			sql += ibT(" WHERE ") + RenderExpr(dml.m_where);
 		break;
 	}
 	case ibDmlKind::Delete: {
-		sql = wxT("DELETE FROM ") + ibTableAsReferenced(QuoteIdent(dml.m_table), AliasIdent(dml.m_table));
+		sql = ibT("DELETE FROM ") + ibTableAsReferenced(QuoteIdent(dml.m_table), AliasIdent(dml.m_table));
 		if (dml.m_where)
-			sql += wxT(" WHERE ") + RenderExpr(dml.m_where);
+			sql += ibT(" WHERE ") + RenderExpr(dml.m_where);
 		break;
 	}
 	case ibDmlKind::Upsert: {
@@ -1773,14 +1773,14 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 		// holds NO per-DBMS spelling — that lives entirely in m_upsertTemplate /
 		// m_upsertUpdateItem (dialectDictionary.h). Only {values} pushes bind
 		// params, rendered here in column order, so the plan matches the text.
-		auto isMatchKey = [&](const wxString& col) {
-			for (const wxString& k : dml.m_matchKeys) if (k == col) return true;
+		auto isMatchKey = [&](const ibString& col) {
+			for (const ibString& k : dml.m_matchKeys) if (k == col) return true;
 			return false;
 		};
 
-		wxString columns, values;
+		ibString columns, values;
 		for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
-			const wxString sep = i ? wxT(", ") : wxT("");
+			const ibString sep = i ? ibT(", ") : ibT("");
 			columns += sep + QuoteIdent(dml.m_assignments[i].m_column);
 			values  += sep + RenderExpr(dml.m_assignments[i].m_value);   // pushes a bind param
 		}
@@ -1800,33 +1800,33 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 		// guess at. Silence here would be a duplicate row nobody notices.
 		if (dml.m_matchKeys.empty())
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
-				wxString::Format(
+				ibString::Format(
 					_("An upsert into '%s' names no key columns, so there is nothing to match a "
 					  "row by. Whatever built this statement did not say what identifies a row."),
 					dml.m_table));
 
-		wxString keys;
+		ibString keys;
 		for (size_t i = 0; i < dml.m_matchKeys.size(); ++i)
-			keys += (i ? wxT(", ") : wxT("")) + QuoteIdent(dml.m_matchKeys[i]);
+			keys += (i ? ibT(", ") : ibT("")) + QuoteIdent(dml.m_matchKeys[i]);
 
 		// {update}: m_upsertUpdateItem per non-key column (empty for FB MATCHING).
-		wxString update;
+		ibString update;
 		if (!m_dialect.m_upsertUpdateItem.empty()) {
 			for (const ibDmlAssign& a : dml.m_assignments) {
 				if (isMatchKey(a.m_column)) continue;   // PK is the identity, never updated
-				wxString item = m_dialect.m_upsertUpdateItem;
-				item.Replace(wxT("{col}"), QuoteIdent(a.m_column));
-				if (!update.empty()) update += wxT(", ");
+				ibString item = m_dialect.m_upsertUpdateItem;
+				item.Replace(ibT("{col}"), QuoteIdent(a.m_column));
+				if (!update.empty()) update += ibT(", ");
 				update += item;
 			}
 		}
 
 		sql = m_dialect.m_upsertTemplate;
-		sql.Replace(wxT("{table}"),   QuoteIdent(dml.m_table));
-		sql.Replace(wxT("{columns}"), columns);
-		sql.Replace(wxT("{values}"),  values);
-		sql.Replace(wxT("{keys}"),    keys);
-		sql.Replace(wxT("{update}"),  update);
+		sql.Replace(ibT("{table}"),   QuoteIdent(dml.m_table));
+		sql.Replace(ibT("{columns}"), columns);
+		sql.Replace(ibT("{values}"),  values);
+		sql.Replace(ibT("{keys}"),    keys);
+		sql.Replace(ibT("{update}"),  update);
 		break;
 	}
 	}
@@ -1839,9 +1839,9 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 				_("This database has no RETURNING clause, and emulating it would not be atomic."));
 
-		sql += wxT(" ") + m_dialect.m_returningClause + wxT(" ");
+		sql += ibT(" ") + m_dialect.m_returningClause + ibT(" ");
 		for (size_t i = 0; i < dml.m_returning.size(); ++i) {
-			if (i) sql += wxT(", ");
+			if (i) sql += ibT(", ");
 			sql += QuoteIdent(dml.m_returning[i]);
 		}
 	}
@@ -1849,15 +1849,15 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 	m_out.m_sql = sql;
 	// The WRITE side, said the same way as the read (above): one line per statement, values left out
 	// unless asked.
-	ibJournalInfo(wxT("query.sql"), wxT("%s   %s"), m_out.m_sql, ibJournalOfParams(m_out.m_params));
+	ibJournalInfo(ibT("query.sql"), ibT("%s   %s"), m_out.m_sql, ibJournalOfParams(m_out.m_params));
 	return m_out;
 }
 
 // ==========================================================================
 // ibQueryStatement (merged from queryStatement.cpp)
 // ==========================================================================
-ibQueryStatement::ibQueryStatement(Kind kind, const wxString& table, std::vector<wxString> columns,
-                                   std::vector<wxString> matchKeys, ibDatabaseConnectionHolder* holder)
+ibQueryStatement::ibQueryStatement(Kind kind, const ibString& table, std::vector<ibString> columns,
+                                   std::vector<ibString> matchKeys, ibDatabaseConnectionHolder* holder)
 	: m_kind(kind), m_table(table), m_columns(std::move(columns)),
 	  m_matchKeys(std::move(matchKeys)), m_values(m_columns.size()), m_holder(holder)
 {
@@ -1888,7 +1888,7 @@ void ibQueryStatement::SetParamAccumulate(int p, const ibNumber& delta)
 	// NULL-safe on the stored side: `NULL + delta` is NULL, and the addition vanished (a figure column added to
 	// a table that already had rows — measured 2026-09-17 when the totals fold moved a quantity into such a row).
 	Put(p, ibBinOp(ibQueryBinOp::Add,
-		ibFunc(wxT("COALESCE"), { ibCol(m_columns[p - 1]), ibConst(ibValue(ibNumber())) }),
+		ibFunc(ibT("COALESCE"), { ibCol(m_columns[p - 1]), ibConst(ibValue(ibNumber())) }),
 		ibConst(ibValue(delta))));
 }
 
@@ -1910,8 +1910,8 @@ ibDmlStatement ibQueryStatement::BuildDml() const
 		// UPDATE table SET <non-key cols> WHERE <key cols = value> [AND <extra predicate>]. A match-key
 		// column identifies the row (WHERE); every other column is a SET assignment. The extra predicate
 		// (RLS) is AND-folded in, so a restricted save that may not touch the row matches 0 rows.
-		auto isMatchKey = [&](const wxString& col) {
-			for (const wxString& k : m_matchKeys) if (k == col) return true;
+		auto isMatchKey = [&](const ibString& col) {
+			for (const ibString& k : m_matchKeys) if (k == col) return true;
 			return false;
 		};
 		std::vector<ibDmlAssign> setAssigns;
@@ -1969,7 +1969,7 @@ ibDatabaseResultSet* ibQueryStatement::RunQueryWithResults()
 // column — so this stays in the same neighbourhood rather than inventing a second number.
 static constexpr size_t kRowsPerStatement = 50;
 
-ibBatchInsert::ibBatchInsert(const wxString& table, std::vector<wxString> columns, ibDatabaseConnectionHolder* holder)
+ibBatchInsert::ibBatchInsert(const ibString& table, std::vector<ibString> columns, ibDatabaseConnectionHolder* holder)
 	: ibQueryStatement(Kind::Insert, table, std::move(columns), {}, holder), m_scope(holder), m_held(ibDmlKind::Insert)
 {
 	const std::shared_ptr<ibDatabaseLayer>& conn = m_scope.shared();
@@ -1983,14 +1983,14 @@ ibBatchInsert::ibBatchInsert(const wxString& table, std::vector<wxString> column
 		// same way (a constant renders as a placeholder), and journalled once.
 		ibDmlStatement one(ibDmlKind::Insert);
 		one.m_table = m_table;
-		for (const wxString& column : m_columns)
+		for (const ibString& column : m_columns)
 			one.m_assignments.push_back(ibDmlAssign{ column, ibConst(ibValue()) });
 		ibQueryRenderer renderer(dialect);
 		const ibRenderedQuery rendered = renderer.RenderDML(one);
-		m_prepared = std::make_unique<ibStatementGuard>(conn, conn->PrepareStatement(wxT("%s"), rendered.m_sql));   // data, not a format
+		m_prepared = std::make_unique<ibStatementGuard>(conn, conn->PrepareStatement(ibT("%s"), rendered.m_sql));   // data, not a format
 		if (!*m_prepared)
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
-				wxString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
+				ibString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
 		m_bound.assign(m_columns.size(), false);
 	}
 	else
@@ -2151,7 +2151,7 @@ int ibExecuteDdl(ibDatabaseLayer* layer, const ibDdlStatement& ddl)
 	// RunStatement.) The two doors are indistinguishable on every DDL this renderer can produce today
 	// — which is why this is a hazard removed rather than a behaviour changed.
 	ibQueryRenderer renderer(layer->GetDialect());
-	const wxString sql = renderer.RenderDDL(ddl);
+	const ibString sql = renderer.RenderDDL(ddl);
 
 	// ⚠ AN EMPTY RENDER IS A NO-OP, AND IT HAS TO BE SAID HERE. RenderDDL answers with nothing for a
 	// statement this dialect has no form for — `AlterColumn` with no column, an `Analyze` on an engine

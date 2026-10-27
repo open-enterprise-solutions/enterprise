@@ -69,8 +69,8 @@ public:
 	// Called on the SERVER'S thread, once per exchange. Keep it short: the
 	// answer is not sent until this returns. A front-end notifier should post to
 	// its own queue rather than touch a widget here.
-	virtual void OnMcpExchange(const wxString& method,
-		const wxString& request, const wxString& answer) = 0;
+	virtual void OnMcpExchange(const ibString& method,
+		const ibString& request, const ibString& answer) = 0;
 };
 
 class BACKEND_API ibMcpServer {
@@ -113,14 +113,14 @@ public:
 	// Start listening IN THE NAME OF `session`. False when the settings are
 	// off or unusable, when a server is already up, or when the port cannot be
 	// taken — `refusal` says which, in words a person can act on.
-	bool Start(ibSession* session, wxString& refusal);
+	bool Start(ibSession* session, ibString& refusal);
 	void Stop();
 
 	bool IsRunning() const { return m_running.load(); }
 
 	// What to hand the client, once running — the address a person copies into
 	// their tool's configuration. Empty when stopped.
-	wxString GetEndpoint() const;
+	ibString GetEndpoint() const;
 
 	// --- asking the client's model ----------------------------------------
 	//
@@ -141,7 +141,7 @@ public:
 	// and is published to the notifiers like any other exchange, so a window
 	// that already shows the conversation shows this too, and the caller does
 	// not sit waiting on a socket.
-	bool AskModel(const wxString& question, wxString& refusal);
+	bool AskModel(const ibString& question, ibString& refusal);
 
 	// --- the conversation itself ------------------------------------------
 	//
@@ -156,8 +156,8 @@ public:
 	// to come and look. The long road is MCP sampling, where the server asks the
 	// client without being asked — same window, same notifiers, different
 	// plumbing underneath.
-	void Say(const wxString& text);      // from the window, to whoever is listening
-	std::vector<wxString> TakeSaid();    // from the client: everything not taken yet
+	void Say(const ibString& text);      // from the window, to whoever is listening
+	std::vector<ibString> TakeSaid();    // from the client: everything not taken yet
 
 	// ⭐⭐ WHAT HAPPENED, AS AGAINST WHAT WAS ASKED — and they are kept apart because they oblige
 	// differently (Max, 2026-09-01: *"it is information you can read, but it does not order you to
@@ -171,15 +171,15 @@ public:
 	//
 	// ⚠ AND IT NEVER REACHES THE WINDOW. The person DID the thing; telling them they did it fills
 	// their own pane with their own actions.
-	void Note(const wxString& text);
-	std::vector<wxString> TakeNoted();
+	void Note(const ibString& text);
+	std::vector<ibString> TakeNoted();
 
 	// ⭐ HAS ANYBODY PICKED IT UP — asked WITHOUT taking, which TakeSaid cannot do. The window
 	// needs it to tell two silences apart: a message nobody has collected means nothing is
 	// listening, and one that was collected means an answer is being worked on. Both look like
 	// waiting; only the first is a problem, and calling it "processing" would be a lie.
 	size_t PendingCount() const;
-	void Reply(const wxString& text);    // from the client, into the window
+	void Reply(const ibString& text);    // from the client, into the window
 
 	// ⭐ WHO SAID IT, KEPT WITH WHAT WAS SAID. The queue above answers "what is new"; this answers
 	// "what was the conversation", and they are different questions that were being served by one
@@ -187,7 +187,7 @@ public:
 	// no idea what had been discussed.
 	struct Turn {
 		bool     fromPerson;   // the window, as opposed to the assistant
-		wxString text;
+		ibString text;
 	};
 
 	// ⭐ WHAT THE WINDOW SAYS BEFORE ANYONE HAS SAID ANYTHING. An empty pane tells a person
@@ -202,7 +202,7 @@ public:
 	// ⚠ NOT by Stop(). At the point Stop announces itself the server is still running, so this
 	// would say so — the one moment the text would be exactly wrong. Stopping has words of its
 	// own, and that is the reason, not an oversight.
-	wxString Greeting() const;
+	ibString Greeting() const;
 
 	// Everything said this session, oldest first. The window fills itself from it when it opens;
 	// an assistant reads it to learn the context it is joining.
@@ -232,9 +232,9 @@ private:
 	// ibHttpRequest: the JSON-RPC layer has never known what HTTP is, and the
 	// three strings it now needs are not a reason to teach it.
 	struct ibMcpWireHeaders {
-		wxString m_protocolVersion;   // MCP-Protocol-Version, empty when absent
-		wxString m_method;            // Mcp-Method
-		wxString m_name;              // Mcp-Name (tools/call, resources/read, prompts/get)
+		ibString m_protocolVersion;   // MCP-Protocol-Version, empty when absent
+		ibString m_method;            // Mcp-Method
+		ibString m_name;              // Mcp-Name (tools/call, resources/read, prompts/get)
 	};
 
 	// ANSWER ONE MESSAGE. Parses the envelope, finds the tool, calls it, writes
@@ -255,7 +255,7 @@ private:
 	ibString Answer(const ibString& request, const ibMcpWireHeaders& headers, int* outErrorCode);
 	friend class ibMcpListener;
 
-	void Publish(const wxString& method, const wxString& request, const wxString& answer);
+	void Publish(const ibString& method, const ibString& request, const ibString& answer);
 
 	// ⭐⭐ RUN A TOOL WHERE A MOUSE CLICK RUNS — through the session's worker pool, which on a
 	// desktop host is the wx main thread. The socket thread may not touch a widget or the tree, and
@@ -271,7 +271,7 @@ private:
 	// carry a third state, and the text that explains it is read by a person while the caller is a
 	// machine, for which false is false.
 	bool RunTool(const class ibMcpTool* tool, const class ibDataNode& arguments,
-		class ibDataNode& payload, wxString& refusal, bool* outPending = nullptr);
+		class ibDataNode& payload, ibString& refusal, bool* outPending = nullptr);
 
 	// The configuration its session works in — what every answer here is about. Null while it is stopped.
 	class ibMetaDataConfigurationBase* GetMetaData() const;
@@ -352,7 +352,7 @@ private:
 	// craft is written at: a hint per call would be sixty of them during one layout, which is a
 	// nag, and a nag is read past. Reading the corpus marks its families too, so a caller who went
 	// there first is never told to.
-	std::set<wxString>           m_hinted;
+	std::set<ibString>           m_hinted;
 
 	// ⭐ AND THE ONE FACT THAT CHANGES HOW EVERY VISIBLE STRING IS WRITTEN, said once. A
 	// configuration with two declared languages needs every synonym, caption and heading in BOTH —
@@ -363,10 +363,10 @@ private:
 	mutable std::mutex           m_saidMutex;
 
 	// NOT YET COLLECTED — drained by TakeSaid, so each message is answered once.
-	std::vector<wxString>        m_said;
+	std::vector<ibString>        m_said;
 
 	// …AND WHAT WAS MERELY OBSERVED, drained by TakeNoted. Same mutex, separate list: see Note().
-	std::vector<wxString>        m_noted;
+	std::vector<ibString>        m_noted;
 
 	// WHAT WAS SAID, kept. Guarded by the same mutex: the two are written in one breath and a
 	// second lock would only be a second thing to forget.

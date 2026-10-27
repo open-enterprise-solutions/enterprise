@@ -58,8 +58,8 @@ enum class ibClientStockPicture : std::int32_t {
 // key, "Ctrl+Z"; a client maps them to its own platform's (Ctrl to Cmd on a Mac) — and its picture. The key a person
 // actually presses is theirs: the client puts what they chose, kept in their own directory, over this default.
 struct ibDocCommandInfo {
-	wxString             title;
-	wxString             shortcut;
+	ibString             title;
+	ibString             shortcut;
 	ibClientStockPicture picture = ibClientStockPicture::None;
 };
 

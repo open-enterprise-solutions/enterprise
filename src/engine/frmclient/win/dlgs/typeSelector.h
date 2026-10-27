@@ -1,7 +1,7 @@
 #ifndef _FRMCLIENT_TYPE_SELECTOR_DIALOG_H__
 #define _FRMCLIENT_TYPE_SELECTOR_DIALOG_H__
 
-// THE TYPE PICKER — the desktop's (frontend/win/dlgs/typeSelector.h), with the desktop's door: it reads a type and
+// THE TYPE PICKER — the old desktop's, with its door: it reads a type and
 // returns the edited one, true when the person accepted, false on cancel — and on cancel `inOut` is untouched.
 //
 // WHAT IS ON OFFER is `filter` here, the types the server offered, each named as it offered it (ibValue::RegisterCtor):

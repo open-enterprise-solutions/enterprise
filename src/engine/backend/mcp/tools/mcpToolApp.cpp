@@ -42,7 +42,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 
 const ibArg& ArgDebug()
 {
-	static const ibArg s_a(wxT("debug"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("debug"), ibArg::Kind::Flag,
 		ibMcpText("Start it with the debugger attached, so breakpoints set through debug_breakpoint "
 		  "are honoured. Default true - the reason a tool starts an application is usually "
 		  "to watch it."));
@@ -51,9 +51,9 @@ const ibArg& ArgDebug()
 
 const ibArg& ArgApplication()
 {
-	static const ibArg s_a(wxT("application"), ibArg::Kind::Text,
-		ibMcpText("Which one. Default is the thick client."),
-			/*required*/ false, { wxT("enterprise"), wxT("enterprise-thin"), wxT("webserver") });
+	static const ibArg s_a(ibT("application"), ibArg::Kind::Text,
+		ibMcpText("Which one. Default is the thin client."),
+			/*required*/ false, { ibT("enterprise-thin"), ibT("webserver") });
 	return s_a;
 }
 
@@ -66,7 +66,7 @@ const ibArg& ArgApplication()
 // started with.
 const ibArg& ArgRestart()
 {
-	static const ibArg s_a(wxT("restart"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("restart"), ibArg::Kind::Flag,
 		ibMcpText("End the run that is already going, then start a fresh one. This is what to pass "
 		  "after changing a module: a running application keeps the bytecode it started with, so "
 		  "the change is invisible until it comes up again. A run started from here WITHOUT the "
@@ -88,18 +88,18 @@ const ibArg& ArgRestart()
 class ibMcpToolAppRun : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("app_run"); }
+	ibString GetName() const override { return ibT("app_run"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString what = ArgApplication().Text(params);
-		return wxString::Format(ibMcpText("starting %s"), what.IsEmpty() ? ibMcpText("the application") : what);
+		const ibString what = ArgApplication().Text(params);
+		return ibString::Format(ibMcpText("starting %s"), what.IsEmpty() ? ibMcpText("the application") : what);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
-		return ibMcpText("Start the application on this base - the thick client, the thin one or the web "
-			"server, with or without the debugger attached. The same launch the designer's Debug menu "
+		return ibMcpText("Start the application on this base - the thin client or the web server, with or "
+			"without the debugger attached. The same launch the designer's Debug menu "
 			"performs, so connection flags and the debug port are handled; the web server answers its "
 			"page's address in `page` - no browser is opened. Refuses when the "
 			"configuration has edits the base does not hold - a module written a moment ago as much as "
@@ -115,7 +115,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (appData == nullptr) {
 			refusal = ibMcpText("The application is not up.");
@@ -123,9 +123,9 @@ public:
 		}
 
 		// Any of the argument's words — one it does not take was refused before Call (ibMcpArgument's list).
-		wxString application = ArgApplication().Text(params);
+		ibString application = ArgApplication().Text(params);
 		if (application.IsEmpty())
-			application = wxT("enterprise");
+			application = ibT("enterprise-thin");
 
 		// DEFAULTS TO TRUE, and asked of the field rather than of the value: `debug: false` has
 		// to be distinguishable from "not said", or the default silently wins over an explicit no.
@@ -211,30 +211,30 @@ public:
 			ended = true;
 		}
 
-		const wxString useWeb = application.Lower();
-		const bool manifest = useWeb.IsSameAs(wxT("webserver"));
+		const ibString useWeb = application.Lower();
+		const bool manifest = useWeb.IsSameAs(ibT("webserver"));
 
-		wxString page;
+		ibString page;
 		const long pid = appData->RunApplication(useWeb, withDebug, manifest, &page);
 
 		if (pid == 0) {
-			refusal = wxString::Format(ibMcpText("%s could not be started."), application);
+			refusal = ibString::Format(ibMcpText("%s could not be started."), application);
 			return false;
 		}
 
 		ibMcpRememberStartedApplication(pid);
 
-		result.SetValue(wxT("started"), application);
-		result.AddField(wxT("pid"), ibDataValue::Int((std::int64_t)pid));
-		result.AddField(wxT("debug"), ibDataValue::Bool(withDebug));
+		result.SetValue(ibT("started"), application);
+		result.AddField(ibT("pid"), ibDataValue::Int((std::int64_t)pid));
+		result.AddField(ibT("debug"), ibDataValue::Bool(withDebug));
 		if (!page.IsEmpty())
-			result.SetValue(wxT("page"), page);   // the web server's page, to open in a browser
+			result.SetValue(ibT("page"), page);   // the web server's page, to open in a browser
 
 		if (ended)
-			result.AddField(wxT("endedPrevious"), ibDataValue::Bool(true));
+			result.AddField(ibT("endedPrevious"), ibDataValue::Bool(true));
 
 		if (withDebug) {
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("The debugger attaches as the application comes up; debug_state says when it "
 				  "has stopped somewhere."));
 		}

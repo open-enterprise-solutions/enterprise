@@ -99,7 +99,7 @@ bool ibAppEnterprise::OnInit()
 		wxSPLASH_CENTRE_ON_SCREEN, -1, nullptr, -1, wxDefaultPosition, wxDefaultSize, wxBORDER_SIMPLE), splashDestroy);
 
 	std::unique_ptr<ibProtocolConnection> connection;
-	wxString error;
+	ibString error;
 
 	if (!m_strAddress.IsEmpty()) {
 		// An application server — over its port.

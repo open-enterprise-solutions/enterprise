@@ -14,27 +14,39 @@ namespace {
 // a handful of times per process (a plugin loads, a check starts), while
 // publishing happens only when something has already failed. Neither is a hot
 // path, and the simplest correct thing is the right one here.
-std::mutex& SinkMutex()
-{
-	static std::mutex mutex;
-	return mutex;
-}
+//
+// ⚠ THE LIST CAN GO FIRST. It is made at the first subscription, so at exit it is
+// destroyed before what was made earlier and unsubscribes on its way out — the
+// application host, whose plugins sign off as it goes (2026-10-27: "vector erase
+// iterator outside range" at the exit of every test that loaded a plugin). Past
+// that there is nobody to deliver to, and every call does nothing; the flag that
+// says so is constant-initialised and never destroyed.
+bool s_sinkListGone = false;
 
-std::vector<ibDiagnosticSink*>& Sinks()
+struct ibSinkList {
+	std::mutex                     m_mutex;
+	std::vector<ibDiagnosticSink*> m_sinks;
+	~ibSinkList() { s_sinkListGone = true; }
+};
+
+ibSinkList* SinkList()
 {
-	static std::vector<ibDiagnosticSink*> sinks;
-	return sinks;
+	if (s_sinkListGone)
+		return nullptr;
+	static ibSinkList list;
+	return &list;
 }
 
 } // namespace
 
 void ibDiagnostics::Subscribe(ibDiagnosticSink* sink)
 {
-	if (sink == nullptr)
+	ibSinkList* const list = SinkList();
+	if (sink == nullptr || list == nullptr)
 		return;
 
-	std::lock_guard<std::mutex> lock(SinkMutex());
-	auto& sinks = Sinks();
+	std::lock_guard<std::mutex> lock(list->m_mutex);
+	auto& sinks = list->m_sinks;
 	// Subscribing twice would deliver twice — refuse rather than duplicate.
 	if (std::find(sinks.begin(), sinks.end(), sink) == sinks.end())
 		sinks.push_back(sink);
@@ -42,18 +54,22 @@ void ibDiagnostics::Subscribe(ibDiagnosticSink* sink)
 
 void ibDiagnostics::Unsubscribe(ibDiagnosticSink* sink)
 {
-	if (sink == nullptr)
+	ibSinkList* const list = SinkList();
+	if (sink == nullptr || list == nullptr)
 		return;
 
-	std::lock_guard<std::mutex> lock(SinkMutex());
-	auto& sinks = Sinks();
+	std::lock_guard<std::mutex> lock(list->m_mutex);
+	auto& sinks = list->m_sinks;
 	sinks.erase(std::remove(sinks.begin(), sinks.end(), sink), sinks.end());
 }
 
 bool ibDiagnostics::HasSubscribers()
 {
-	std::lock_guard<std::mutex> lock(SinkMutex());
-	return !Sinks().empty();
+	ibSinkList* const list = SinkList();
+	if (list == nullptr)
+		return false;
+	std::lock_guard<std::mutex> lock(list->m_mutex);
+	return !list->m_sinks.empty();
 }
 
 void ibDiagnostics::Publish(const ibDiagnostic& diagnostic)
@@ -62,12 +78,15 @@ void ibDiagnostics::Publish(const ibDiagnostic& diagnostic)
 	// whatever it likes in OnDiagnostic — including, on a bad day, subscribing
 	// or unsubscribing another one — and holding the mutex across that call
 	// would deadlock on exactly the day nobody has time to debug it.
+	ibSinkList* const list = SinkList();
+	if (list == nullptr)
+		return;
 	std::vector<ibDiagnosticSink*> snapshot;
 	{
-		std::lock_guard<std::mutex> lock(SinkMutex());
-		if (Sinks().empty())
+		std::lock_guard<std::mutex> lock(list->m_mutex);
+		if (list->m_sinks.empty())
 			return;
-		snapshot = Sinks();
+		snapshot = list->m_sinks;
 	}
 
 	for (ibDiagnosticSink* sink : snapshot) {

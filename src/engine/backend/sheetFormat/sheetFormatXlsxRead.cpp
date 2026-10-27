@@ -26,12 +26,12 @@
 namespace {
 
 // A1 -> (row, col), zero-based. Returns false on anything that is not a reference.
-bool CellAt(const wxString& ref, int& row, int& col)
+bool CellAt(const ibString& ref, int& row, int& col)
 {
 	col = 0;
 	size_t at = 0;
 	for (; at < ref.length() && ibIsAlpha(ref[at]); at++)
-		col = col * 26 + (ibToUpper(ref[at]) - wxT('A') + 1);
+		col = col * 26 + (ibToUpper(ref[at]) - ibT('A') + 1);
 
 	if (at == 0 || at >= ref.length())
 		return false;
@@ -46,7 +46,7 @@ bool CellAt(const wxString& ref, int& row, int& col)
 }
 
 // Every part of the package, by name. Read in one forward pass.
-using ibPackage = std::map<wxString, wxString>;
+using ibPackage = std::map<ibString, ibString>;
 
 // ⭐⭐ A PART NAME IS CASE-INSENSITIVE, so there is ONE spelling of it in this file and the entry is
 // folded onto it the moment it is read — never compared as it happened to be stored.
@@ -59,11 +59,11 @@ using ibPackage = std::map<wxString, wxString>;
 //
 // ⚠ AND THE LOOKUPS BELOW USE THE SAME KEY. Normalising on the way in and then searching for a
 // capital letter would be the same defect one step further along.
-wxString PartKey(const wxString& name)
+ibString PartKey(const ibString& name)
 {
-	wxString key = name;
-	key.Replace(wxT("\\"), wxT("/"));
-	if (key.StartsWith(wxT("/")))
+	ibString key = name;
+	key.Replace(ibT("\\"), ibT("/"));
+	if (key.StartsWith(ibT("/")))
 		key = key.Mid(1);
 	return key.Lower();
 }
@@ -71,12 +71,12 @@ wxString PartKey(const wxString& name)
 // ⚠ AND `true` IS `1`. An XSD boolean has FOUR spellings — `1`/`0` and `true`/`false` — Excel writes
 // the first pair and other producers write the second, so an attribute compared against one of them
 // reads every file that chose the other as "absent". The workbook above says `customHeight="true"`.
-bool BoolOf(const wxXmlNode* node, const wxString& attribute, bool absent = false)
+bool BoolOf(const wxXmlNode* node, const ibString& attribute, bool absent = false)
 {
-	const wxString value = node->GetAttribute(attribute, wxEmptyString);
+	const ibString value = node->GetAttribute(attribute, ibEmptyString);
 	if (value.IsEmpty())
 		return absent;
-	return value == wxT("1") || value.IsSameAs(wxT("true"), false);
+	return value == ibT("1") || value.IsSameAs(ibT("true"), false);
 }
 
 // What a sheet is made of, as far as this reader is concerned: which sheets there are and in what
@@ -87,13 +87,13 @@ bool BoolOf(const wxXmlNode* node, const wxString& attribute, bool absent = fals
 // cells pointed at them with `s="…"`, and this side read the text alone (Max, 2026-08-30: *"reading
 // does not take the styles into account"*). Writing them and not reading them is one format
 // implemented twice, in opposite directions, with only one of them finished.
-bool IsPartWeRead(const wxString& key)
+bool IsPartWeRead(const ibString& key)
 {
-	return key == wxT("xl/workbook.xml")
-		|| key == wxT("xl/_rels/workbook.xml.rels")
-		|| key == wxT("xl/sharedstrings.xml")
-		|| key == wxT("xl/styles.xml")
-		|| key.StartsWith(wxT("xl/worksheets/"));
+	return key == ibT("xl/workbook.xml")
+		|| key == ibT("xl/_rels/workbook.xml.rels")
+		|| key == ibT("xl/sharedstrings.xml")
+		|| key == ibT("xl/styles.xml")
+		|| key.StartsWith(ibT("xl/worksheets/"));
 }
 
 // ---------------------------------------------------------------------------
@@ -118,29 +118,29 @@ struct XlsxStyle {
 
 // Excel's nine line names back to a pen and a width. The names that differ only in
 // weight collapse onto the same pen with a wider stroke, which is what the grid draws.
-void PenOf(const wxString& name, ibSpreadsheetBorderDescription& border)
+void PenOf(const ibString& name, ibSpreadsheetBorderDescription& border)
 {
 	border.m_width = 1;
 
-	if (name == wxT("dotted") || name == wxT("hair"))
+	if (name == ibT("dotted") || name == ibT("hair"))
 		border.m_style = ibPenStyle_Dot;
-	else if (name == wxT("dashed"))
+	else if (name == ibT("dashed"))
 		border.m_style = ibPenStyle_ShortDash;
-	else if (name == wxT("mediumDashed")) {
+	else if (name == ibT("mediumDashed")) {
 		border.m_style = ibPenStyle_ShortDash;
 		border.m_width = 2;
 	}
-	else if (name == wxT("dashDot") || name == wxT("dashDotDot"))
+	else if (name == ibT("dashDot") || name == ibT("dashDotDot"))
 		border.m_style = ibPenStyle_DotDash;
-	else if (name == wxT("mediumDashDot") || name == wxT("mediumDashDotDot") || name == wxT("slantDashDot")) {
+	else if (name == ibT("mediumDashDot") || name == ibT("mediumDashDotDot") || name == ibT("slantDashDot")) {
 		border.m_style = ibPenStyle_DotDash;
 		border.m_width = 2;
 	}
-	else if (name == wxT("medium") || name == wxT("double")) {
+	else if (name == ibT("medium") || name == ibT("double")) {
 		border.m_style = ibPenStyle_Solid;
 		border.m_width = 2;
 	}
-	else if (name == wxT("thick")) {
+	else if (name == ibT("thick")) {
 		border.m_style = ibPenStyle_Solid;
 		border.m_width = 3;
 	}
@@ -155,7 +155,7 @@ ibColour ColourOf(const wxXmlNode* node)
 	if (node == nullptr)
 		return ibColour();
 
-	const wxString rgb = node->GetAttribute(wxT("rgb"), wxEmptyString);
+	const ibString rgb = node->GetAttribute(ibT("rgb"), ibEmptyString);
 	if (rgb.length() < 6)
 		return ibColour();
 
@@ -168,7 +168,7 @@ ibColour ColourOf(const wxXmlNode* node)
 	                static_cast<unsigned char>(value & 0xFF));
 }
 
-const wxXmlNode* ChildNamed(const wxXmlNode* parent, const wxString& name)
+const wxXmlNode* ChildNamed(const wxXmlNode* parent, const ibString& name)
 {
 	for (const wxXmlNode* child = parent != nullptr ? parent->GetChildren() : nullptr;
 	     child != nullptr; child = child->GetNext())
@@ -189,18 +189,18 @@ const wxXmlNode* ChildNamed(const wxXmlNode* parent, const wxString& name)
 // at once, on every cell of the sheet. Reported off the screen (Max, 2026-09-02: *"it keeps putting
 // struck-through text"*), with a workbook that says exactly that; one defect standing on four lines
 // that all looked right.
-bool FontFlag(const wxXmlNode* font, const wxString& name, bool absent = false)
+bool FontFlag(const wxXmlNode* font, const ibString& name, bool absent = false)
 {
 	const wxXmlNode* flag = ChildNamed(font, name);
 	if (flag == nullptr)
 		return absent;
 
 	// Present and unqualified is the ordinary "on"; a value is the denial.
-	const wxString value = flag->GetAttribute(wxT("val"), wxEmptyString);
+	const ibString value = flag->GetAttribute(ibT("val"), ibEmptyString);
 	if (value.IsEmpty())
 		return true;
 
-	return !(value == wxT("0") || value.IsSameAs(wxT("false"), false));
+	return !(value == ibT("0") || value.IsSameAs(ibT("false"), false));
 }
 
 // ⚠ UNDERLINE IS NOT A FLAG AT ALL — it is a STYLE with a name, and one of the names means none.
@@ -209,15 +209,15 @@ bool FontFlag(const wxXmlNode* font, const wxString& name, bool absent = false)
 // answer this one: "none" is neither 0 nor false, so it would read as switched on.
 bool Underlined(const wxXmlNode* font)
 {
-	const wxXmlNode* flag = ChildNamed(font, wxT("u"));
+	const wxXmlNode* flag = ChildNamed(font, ibT("u"));
 	if (flag == nullptr)
 		return false;
 
-	const wxString value = flag->GetAttribute(wxT("val"), wxEmptyString);
-	return value.IsEmpty() || !value.IsSameAs(wxT("none"), false);
+	const ibString value = flag->GetAttribute(ibT("val"), ibEmptyString);
+	return value.IsEmpty() || !value.IsSameAs(ibT("none"), false);
 }
 
-std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
+std::vector<XlsxStyle> ReadStyles(const ibString& xmlText)
 {
 	std::vector<XlsxStyle> byIndex;
 	if (xmlText.IsEmpty())
@@ -237,49 +237,49 @@ std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
 	std::vector<Border>  borders;
 
 	for (const wxXmlNode* table = xml.GetRoot()->GetChildren(); table != nullptr; table = table->GetNext()) {
-		if (table->GetName() == wxT("fonts")) {
+		if (table->GetName() == ibT("fonts")) {
 			for (const wxXmlNode* font = table->GetChildren(); font != nullptr; font = font->GetNext()) {
 				double size = 8.0;
-				if (const wxXmlNode* sz = ChildNamed(font, wxT("sz")))
-					sz->GetAttribute(wxT("val"), wxT("8")).ToCDouble(&size);
-				wxString face;
-				if (const wxXmlNode* name = ChildNamed(font, wxT("name")))
-					face = name->GetAttribute(wxT("val"), wxEmptyString);
+				if (const wxXmlNode* sz = ChildNamed(font, ibT("sz")))
+					sz->GetAttribute(ibT("val"), ibT("8")).ToCDouble(&size);
+				ibString face;
+				if (const wxXmlNode* name = ChildNamed(font, ibT("name")))
+					face = name->GetAttribute(ibT("val"), ibEmptyString);
 
 				ibFont made;
 				made.m_pointSize = static_cast<int>(size + 0.5);
 				made.m_faceName = face;
-				made.m_weight = FontFlag(font, wxT("b")) ? ibFONTWEIGHT_BOLD : ibFONTWEIGHT_NORMAL;
-				made.m_style = FontFlag(font, wxT("i")) ? ibFONTSTYLE_ITALIC : ibFONTSTYLE_NORMAL;
+				made.m_weight = FontFlag(font, ibT("b")) ? ibFONTWEIGHT_BOLD : ibFONTWEIGHT_NORMAL;
+				made.m_style = FontFlag(font, ibT("i")) ? ibFONTSTYLE_ITALIC : ibFONTSTYLE_NORMAL;
 				made.m_underlined = Underlined(font);
-				made.m_strikethrough = FontFlag(font, wxT("strike"));
+				made.m_strikethrough = FontFlag(font, ibT("strike"));
 				fonts.push_back(made);
-				fontColours.push_back(ColourOf(ChildNamed(font, wxT("color"))));
+				fontColours.push_back(ColourOf(ChildNamed(font, ibT("color"))));
 			}
 		}
-		else if (table->GetName() == wxT("fills")) {
+		else if (table->GetName() == ibT("fills")) {
 			for (const wxXmlNode* fill = table->GetChildren(); fill != nullptr; fill = fill->GetNext()) {
 				Fill made;
-				if (const wxXmlNode* pattern = ChildNamed(fill, wxT("patternFill")))
-					if (pattern->GetAttribute(wxT("patternType"), wxEmptyString) == wxT("solid"))
-						made.m_colour = ColourOf(ChildNamed(pattern, wxT("fgColor")));
+				if (const wxXmlNode* pattern = ChildNamed(fill, ibT("patternFill")))
+					if (pattern->GetAttribute(ibT("patternType"), ibEmptyString) == ibT("solid"))
+						made.m_colour = ColourOf(ChildNamed(pattern, ibT("fgColor")));
 				fills.push_back(made);
 			}
 		}
-		else if (table->GetName() == wxT("borders")) {
-			static const wxString sideName[4] = { wxT("left"), wxT("right"), wxT("top"), wxT("bottom") };
+		else if (table->GetName() == ibT("borders")) {
+			static const ibString sideName[4] = { ibT("left"), ibT("right"), ibT("top"), ibT("bottom") };
 			for (const wxXmlNode* border = table->GetChildren(); border != nullptr; border = border->GetNext()) {
 				Border made;
 				for (int i = 0; i < 4; i++) {
 					const wxXmlNode* side = ChildNamed(border, sideName[i]);
 					if (side == nullptr)
 						continue;
-					const wxString line = side->GetAttribute(wxT("style"), wxEmptyString);
-					if (line.IsEmpty() || line == wxT("none"))
+					const ibString line = side->GetAttribute(ibT("style"), ibEmptyString);
+					if (line.IsEmpty() || line == ibT("none"))
 						continue;
 					made.m_has[i] = true;
 					PenOf(line, made.m_side[i]);
-					const ibColour colour = ColourOf(ChildNamed(side, wxT("color")));
+					const ibColour colour = ColourOf(ChildNamed(side, ibT("color")));
 					if (colour.IsOk())
 						made.m_side[i].m_colour = colour;
 				}
@@ -291,44 +291,44 @@ std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
 	// …and `cellXfs`, which is what a cell's `s` indexes. Read last, because it points at the three
 	// tables above and they must be in hand.
 	for (const wxXmlNode* table = xml.GetRoot()->GetChildren(); table != nullptr; table = table->GetNext()) {
-		if (table->GetName() != wxT("cellXfs"))
+		if (table->GetName() != ibT("cellXfs"))
 			continue;
 
 		for (const wxXmlNode* xf = table->GetChildren(); xf != nullptr; xf = xf->GetNext()) {
 			XlsxStyle style;
 			long index = 0;
 
-			if (xf->GetAttribute(wxT("fontId"), wxT("0")).ToLong(&index)
+			if (xf->GetAttribute(ibT("fontId"), ibT("0")).ToLong(&index)
 				&& index >= 0 && static_cast<size_t>(index) < fonts.size()) {
 				style.m_font    = fonts[static_cast<size_t>(index)];
 				style.m_hasFont = style.m_font.IsOk();
 				style.m_textColour = fontColours[static_cast<size_t>(index)];
 			}
-			if (xf->GetAttribute(wxT("fillId"), wxT("0")).ToLong(&index)
+			if (xf->GetAttribute(ibT("fillId"), ibT("0")).ToLong(&index)
 				&& index >= 0 && static_cast<size_t>(index) < fills.size())
 				style.m_fillColour = fills[static_cast<size_t>(index)].m_colour;
-			if (xf->GetAttribute(wxT("borderId"), wxT("0")).ToLong(&index)
+			if (xf->GetAttribute(ibT("borderId"), ibT("0")).ToLong(&index)
 				&& index >= 0 && static_cast<size_t>(index) < borders.size())
 				for (int i = 0; i < 4; i++) {
 					style.m_hasBorder[i] = borders[static_cast<size_t>(index)].m_has[i];
 					style.m_border[i]    = borders[static_cast<size_t>(index)].m_side[i];
 				}
 
-			if (const wxXmlNode* align = ChildNamed(xf, wxT("alignment"))) {
-				const wxString horz = align->GetAttribute(wxT("horizontal"), wxEmptyString);
-				const wxString vert = align->GetAttribute(wxT("vertical"), wxEmptyString);
-				if (horz == wxT("center") || horz == wxT("centerContinuous"))
+			if (const wxXmlNode* align = ChildNamed(xf, ibT("alignment"))) {
+				const ibString horz = align->GetAttribute(ibT("horizontal"), ibEmptyString);
+				const ibString vert = align->GetAttribute(ibT("vertical"), ibEmptyString);
+				if (horz == ibT("center") || horz == ibT("centerContinuous"))
 					style.m_alignHorz = ibAlignmentHorz_Center;
-				else if (horz == wxT("right"))  style.m_alignHorz = ibAlignmentHorz_Right;
-				if (vert == wxT("center"))      style.m_alignVert = ibAlignmentVert_Center;
-				else if (vert == wxT("bottom")) style.m_alignVert = ibAlignmentVert_Bottom;
+				else if (horz == ibT("right"))  style.m_alignHorz = ibAlignmentHorz_Right;
+				if (vert == ibT("center"))      style.m_alignVert = ibAlignmentVert_Center;
+				else if (vert == ibT("bottom")) style.m_alignVert = ibAlignmentVert_Bottom;
 				style.m_hasAlign = !horz.IsEmpty() || !vert.IsEmpty();
 
 				// ⚠ `justify` AND `distributed` HAVE NO PLACE OF THEIR OWN HERE, and both mean the
 				// text fills the cell's width — which is `wrapText` by another route, so the cell is
 				// confined rather than left to spill.
-				const bool spread = horz == wxT("justify") || horz == wxT("distributed")
-					|| BoolOf(align, wxT("wrapText"));
+				const bool spread = horz == ibT("justify") || horz == ibT("distributed")
+					|| BoolOf(align, ibT("wrapText"));
 				if (spread)
 					// ⭐ AND IT IS `Wrap` NOW, WHICH IS WHAT THE FILE ACTUALLY SAID. This read
 					// `wrapText` as `Clip` because there was no wrapping mode to read it into, so an
@@ -339,12 +339,12 @@ std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
 
 				// An angle back to a direction: anything that is not level is drawn vertically here.
 				long rotation = 0;
-				if (align->GetAttribute(wxT("textRotation"), wxT("0")).ToLong(&rotation) && rotation != 0)
+				if (align->GetAttribute(ibT("textRotation"), ibT("0")).ToLong(&rotation) && rotation != 0)
 					style.m_textOrient = wxVERTICAL;
 			}
 
-			if (const wxXmlNode* protect = ChildNamed(xf, wxT("protection")))
-				style.m_readOnly = BoolOf(protect, wxT("locked"));
+			if (const wxXmlNode* protect = ChildNamed(xf, ibT("protection")))
+				style.m_readOnly = BoolOf(protect, ibT("locked"));
 
 			byIndex.push_back(style);
 		}
@@ -364,7 +364,7 @@ bool ReadPackage(wxInputStream& input, ibPackage& parts)
 		if (!entry)
 			break;
 
-		const wxString name = PartKey(entry->GetInternalName());
+		const ibString name = PartKey(entry->GetInternalName());
 
 		// ⭐ ONLY THE PARTS THIS READER SPEAKS, NAMED — not everything except a list of what to
 		// skip. The two read the same on the files we thought of and differently on the rest:
@@ -383,7 +383,7 @@ bool ReadPackage(wxInputStream& input, ibPackage& parts)
 	return !parts.empty();
 }
 
-bool ParseXml(const wxString& text, wxXmlDocument& xml)
+bool ParseXml(const ibString& text, wxXmlDocument& xml)
 {
 	if (text.IsEmpty())
 		return false;
@@ -401,9 +401,9 @@ bool ParseXml(const wxString& text, wxXmlDocument& xml)
 // ⚠ A STRING MAY BE SPLIT ACROSS RUNS (<si><r><t>Total</t></r><r><t> 2026</t></r></si>)
 // when part of it is formatted differently — reading only the first <t> silently
 // truncates every such cell, which is exactly what a heading looks like.
-void ReadSharedStrings(const ibPackage& parts, std::vector<wxString>& strings)
+void ReadSharedStrings(const ibPackage& parts, std::vector<ibString>& strings)
 {
-	const auto found = parts.find(wxT("xl/sharedstrings.xml"));
+	const auto found = parts.find(ibT("xl/sharedstrings.xml"));
 	if (found == parts.end())
 		return;
 
@@ -412,16 +412,16 @@ void ReadSharedStrings(const ibPackage& parts, std::vector<wxString>& strings)
 		return;
 
 	for (wxXmlNode* si = xml.GetRoot()->GetChildren(); si != nullptr; si = si->GetNext()) {
-		if (si->GetName() != wxT("si"))
+		if (si->GetName() != ibT("si"))
 			continue;
 
-		wxString text;
+		ibString text;
 		for (wxXmlNode* part = si->GetChildren(); part != nullptr; part = part->GetNext()) {
-			if (part->GetName() == wxT("t"))
+			if (part->GetName() == ibT("t"))
 				text += part->GetNodeContent();
-			else if (part->GetName() == wxT("r")) {
+			else if (part->GetName() == ibT("r")) {
 				for (wxXmlNode* run = part->GetChildren(); run != nullptr; run = run->GetNext())
-					if (run->GetName() == wxT("t"))
+					if (run->GetName() == ibT("t"))
 						text += run->GetNodeContent();
 			}
 		}
@@ -431,33 +431,33 @@ void ReadSharedStrings(const ibPackage& parts, std::vector<wxString>& strings)
 
 // The sheets, in the order the workbook lists them — which is the order a person
 // sees the tabs in, and therefore the order they must be laid out in.
-void ReadSheetOrder(const ibPackage& parts, std::vector<wxString>& sheetParts)
+void ReadSheetOrder(const ibPackage& parts, std::vector<ibString>& sheetParts)
 {
 	// workbook.xml gives each sheet an r:id; the rels part says which file that is.
-	std::map<wxString, wxString> targetById;
+	std::map<ibString, ibString> targetById;
 
 	wxXmlDocument rels;
-	const auto relsPart = parts.find(wxT("xl/_rels/workbook.xml.rels"));
+	const auto relsPart = parts.find(ibT("xl/_rels/workbook.xml.rels"));
 	if (relsPart != parts.end() && ParseXml(relsPart->second, rels) && rels.GetRoot() != nullptr) {
 		for (wxXmlNode* rel = rels.GetRoot()->GetChildren(); rel != nullptr; rel = rel->GetNext()) {
-			const wxString id = rel->GetAttribute(wxT("Id"));
-			wxString target = rel->GetAttribute(wxT("Target"));
+			const ibString id = rel->GetAttribute(ibT("Id"));
+			ibString target = rel->GetAttribute(ibT("Target"));
 			if (id.IsEmpty() || target.IsEmpty())
 				continue;
-			if (!target.StartsWith(wxT("/")))
-				target = wxT("xl/") + target;
+			if (!target.StartsWith(ibT("/")))
+				target = ibT("xl/") + target;
 			targetById[id] = PartKey(target);
 		}
 	}
 
 	wxXmlDocument workbook;
-	const auto workbookPart = parts.find(wxT("xl/workbook.xml"));
+	const auto workbookPart = parts.find(ibT("xl/workbook.xml"));
 	if (workbookPart != parts.end() && ParseXml(workbookPart->second, workbook) && workbook.GetRoot() != nullptr) {
 		for (wxXmlNode* node = workbook.GetRoot()->GetChildren(); node != nullptr; node = node->GetNext()) {
-			if (node->GetName() != wxT("sheets"))
+			if (node->GetName() != ibT("sheets"))
 				continue;
 			for (wxXmlNode* sheet = node->GetChildren(); sheet != nullptr; sheet = sheet->GetNext()) {
-				const wxString id = sheet->GetAttribute(wxT("r:id"), sheet->GetAttribute(wxT("id")));
+				const ibString id = sheet->GetAttribute(ibT("r:id"), sheet->GetAttribute(ibT("id")));
 				const auto target = targetById.find(id);
 				if (target != targetById.end())
 					sheetParts.push_back(target->second);
@@ -467,8 +467,8 @@ void ReadSheetOrder(const ibPackage& parts, std::vector<wxString>& sheetParts)
 
 	// A WORKBOOK THAT NAMES NOTHING WE CAN FOLLOW still usually has the first sheet
 	// where everyone puts it. Better one sheet than an empty document.
-	if (sheetParts.empty() && parts.find(wxT("xl/worksheets/sheet1.xml")) != parts.end())
-		sheetParts.push_back(wxT("xl/worksheets/sheet1.xml"));
+	if (sheetParts.empty() && parts.find(ibT("xl/worksheets/sheet1.xml")) != parts.end())
+		sheetParts.push_back(ibT("xl/worksheets/sheet1.xml"));
 }
 
 // One worksheet, laid into the document starting at `topRow`. Returns how many
@@ -519,7 +519,7 @@ void GroupsFromLevels(const std::map<int, int>& level, const std::map<int, bool>
 	}
 }
 
-int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
+int ReadSheet(const ibString& partText, const std::vector<ibString>& strings,
               const std::vector<XlsxStyle>& styles, ibSpreadsheetDescription& document, int topRow, ibJournalStopwatch& parsed)
 {
 	wxXmlDocument xml;
@@ -544,11 +544,11 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 	double theirRow = s_defaultRowHeight;
 	double theirCol = s_defaultColWidth / 7.0;
 
-	if (const wxXmlNode* format = ChildNamed(xml.GetRoot(), wxT("sheetFormatPr"))) {
+	if (const wxXmlNode* format = ChildNamed(xml.GetRoot(), ibT("sheetFormatPr"))) {
 		double value = 0.0;
-		if (format->GetAttribute(wxT("defaultRowHeight"), wxEmptyString).ToCDouble(&value) && value > 0.0)
+		if (format->GetAttribute(ibT("defaultRowHeight"), ibEmptyString).ToCDouble(&value) && value > 0.0)
 			theirRow = value;
-		if (format->GetAttribute(wxT("defaultColWidth"), wxEmptyString).ToCDouble(&value) && value > 0.0)
+		if (format->GetAttribute(ibT("defaultColWidth"), ibEmptyString).ToCDouble(&value) && value > 0.0)
 			theirCol = value;
 	}
 
@@ -561,15 +561,15 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 		// Only from the FIRST sheet: the document has one pair of frozen edges and the
 		// sheets are laid one under another, so a later sheet's split would land on rows
 		// that belong to the one before it.
-		if (node->GetName() == wxT("sheetViews") && topRow == 0) {
+		if (node->GetName() == ibT("sheetViews") && topRow == 0) {
 			for (wxXmlNode* view = node->GetChildren(); view != nullptr; view = view->GetNext()) {
-				const wxXmlNode* pane = ChildNamed(view, wxT("pane"));
+				const wxXmlNode* pane = ChildNamed(view, ibT("pane"));
 				if (pane == nullptr)
 					continue;
 				long split = 0;
-				if (pane->GetAttribute(wxT("xSplit"), wxT("0")).ToLong(&split) && split > 0)
+				if (pane->GetAttribute(ibT("xSplit"), ibT("0")).ToLong(&split) && split > 0)
 					document.SetColFreeze(static_cast<int>(split));
-				if (pane->GetAttribute(wxT("ySplit"), wxT("0")).ToLong(&split) && split > 0)
+				if (pane->GetAttribute(ibT("ySplit"), ibT("0")).ToLong(&split) && split > 0)
 					document.SetRowFreeze(static_cast<int>(split));
 			}
 			continue;
@@ -580,13 +580,13 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 		// every workbook we save and read back out of none of them, so a file saved with its pages
 		// laid out came home flat. `id` is the index of the first line of the NEW page, and ours
 		// says which line the OLD page ended on — hence the step back.
-		if (node->GetName() == wxT("rowBreaks") || node->GetName() == wxT("colBreaks")) {
-			const bool rows = node->GetName() == wxT("rowBreaks");
+		if (node->GetName() == ibT("rowBreaks") || node->GetName() == ibT("colBreaks")) {
+			const bool rows = node->GetName() == ibT("rowBreaks");
 
 			for (wxXmlNode* brk = node->GetChildren(); brk != nullptr; brk = brk->GetNext()) {
 				long at = 0;
-				if (brk->GetName() != wxT("brk")
-					|| !brk->GetAttribute(wxT("id"), wxT("0")).ToLong(&at) || at <= 0)
+				if (brk->GetName() != ibT("brk")
+					|| !brk->GetAttribute(ibT("id"), ibT("0")).ToLong(&at) || at <= 0)
 					continue;
 
 				if (rows) document.AddRowBrake(topRow + static_cast<int>(at) - 1);
@@ -596,19 +596,19 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 		}
 
 		// --- column widths, and where a column sits in the outline -------------------
-		if (node->GetName() == wxT("cols")) {
+		if (node->GetName() == ibT("cols")) {
 			for (wxXmlNode* col = node->GetChildren(); col != nullptr; col = col->GetNext()) {
 				long from = 0, to = 0;
 				double width = 0.0;
-				if (!col->GetAttribute(wxT("min"), wxT("0")).ToLong(&from) ||
-					!col->GetAttribute(wxT("max"), wxT("0")).ToLong(&to))
+				if (!col->GetAttribute(ibT("min"), ibT("0")).ToLong(&from) ||
+					!col->GetAttribute(ibT("max"), ibT("0")).ToLong(&to))
 					continue;
 
-				const bool sized = col->GetAttribute(wxT("width"), wxEmptyString).ToCDouble(&width) && width > 0.0;
-				const bool folded = BoolOf(col, wxT("hidden"));
+				const bool sized = col->GetAttribute(ibT("width"), ibEmptyString).ToCDouble(&width) && width > 0.0;
+				const bool folded = BoolOf(col, ibT("hidden"));
 
 				long depth = 0;
-				col->GetAttribute(wxT("outlineLevel"), wxT("0")).ToLong(&depth);
+				col->GetAttribute(ibT("outlineLevel"), ibT("0")).ToLong(&depth);
 
 				for (long at = from; at <= to && at > 0; at++) {
 					const int index = static_cast<int>(at) - 1;
@@ -627,16 +627,16 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 			continue;
 		}
 
-		if (node->GetName() != wxT("sheetData"))
+		if (node->GetName() != ibT("sheetData"))
 			continue;
 
 		// --- the cells --------------------------------------------------------------
 		for (wxXmlNode* row = node->GetChildren(); row != nullptr; row = row->GetNext()) {
-			if (row->GetName() != wxT("row"))
+			if (row->GetName() != ibT("row"))
 				continue;
 
 			long rowNumber = 0;
-			if (!row->GetAttribute(wxT("r"), wxT("0")).ToLong(&rowNumber) || rowNumber <= 0)
+			if (!row->GetAttribute(ibT("r"), ibT("0")).ToLong(&rowNumber) || rowNumber <= 0)
 				continue;
 
 			const int documentRow = topRow + static_cast<int>(rowNumber) - 1;
@@ -649,47 +649,47 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 			// out, the ones it fitted to their text included; read as a height of its own, each of those
 			// would lose its automatic height here (spreadsheetDescription.h, HasRowSize) and stop
 			// following its text the moment the workbook was opened.
-			const bool folded = BoolOf(row, wxT("hidden"));
+			const bool folded = BoolOf(row, ibT("hidden"));
 
 			double height = 0.0;
 			if (folded)
 				document.SetRowSize(documentRow, 0);
-			else if (BoolOf(row, wxT("customHeight"))
-				&& row->GetAttribute(wxT("ht"), wxEmptyString).ToCDouble(&height) && height > 0.0)
+			else if (BoolOf(row, ibT("customHeight"))
+				&& row->GetAttribute(ibT("ht"), ibEmptyString).ToCDouble(&height) && height > 0.0)
 				document.SetRowSize(documentRow, static_cast<int>(height * rowScale + 0.5));
 
 			long depth = 0;
-			if (row->GetAttribute(wxT("outlineLevel"), wxT("0")).ToLong(&depth) && depth > 0)
+			if (row->GetAttribute(ibT("outlineLevel"), ibT("0")).ToLong(&depth) && depth > 0)
 				rowLevel[static_cast<int>(rowNumber) - 1] = static_cast<int>(depth);
 			if (folded)
 				rowHidden[static_cast<int>(rowNumber) - 1] = true;
 
 			for (wxXmlNode* cell = row->GetChildren(); cell != nullptr; cell = cell->GetNext()) {
-				if (cell->GetName() != wxT("c"))
+				if (cell->GetName() != ibT("c"))
 					continue;
 
 				int cellRow = 0, cellCol = 0;
-				if (!CellAt(cell->GetAttribute(wxT("r")), cellRow, cellCol))
+				if (!CellAt(cell->GetAttribute(ibT("r")), cellRow, cellCol))
 					continue;
 
-				const wxString type = cell->GetAttribute(wxT("t"), wxT("n"));
+				const ibString type = cell->GetAttribute(ibT("t"), ibT("n"));
 
-				wxString value;
+				ibString value;
 				for (wxXmlNode* part = cell->GetChildren(); part != nullptr; part = part->GetNext()) {
 					// ⚠ <v> IS TAKEN AND <f> IS NOT. A cell may carry a formula and the
 					// value the other program last computed for it; we do not evaluate
 					// formulas, so the value is what a person saw there — and a formula
 					// dropped into a cell as text would be a lie about what it is.
-					if (part->GetName() == wxT("v"))
+					if (part->GetName() == ibT("v"))
 						value = part->GetNodeContent();
-					else if (part->GetName() == wxT("is")) {
+					else if (part->GetName() == ibT("is")) {
 						for (wxXmlNode* inline_ = part->GetChildren(); inline_ != nullptr; inline_ = inline_->GetNext())
-							if (inline_->GetName() == wxT("t"))
+							if (inline_->GetName() == ibT("t"))
 								value += inline_->GetNodeContent();
 					}
 				}
 
-				if (type == wxT("s")) {
+				if (type == ibT("s")) {
 					long index = 0;
 					if (value.ToLong(&index) && index >= 0 && static_cast<size_t>(index) < strings.size())
 						value = strings[static_cast<size_t>(index)];
@@ -701,7 +701,7 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 				// box, a heading's underline — none of them carry a word. Skipped on the value
 				// alone, the sheet came back with its shape but none of its markings.
 				long styleAt = 0;
-				const bool hasStyle = cell->GetAttribute(wxT("s"), wxEmptyString).ToLong(&styleAt)
+				const bool hasStyle = cell->GetAttribute(ibT("s"), ibEmptyString).ToLong(&styleAt)
 					&& styleAt >= 0 && static_cast<size_t>(styleAt) < styles.size();
 
 				if (value.IsEmpty() && !hasStyle)
@@ -743,12 +743,12 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 
 	// --- merged cells ---------------------------------------------------------------
 	for (wxXmlNode* node = xml.GetRoot()->GetChildren(); node != nullptr; node = node->GetNext()) {
-		if (node->GetName() != wxT("mergeCells"))
+		if (node->GetName() != ibT("mergeCells"))
 			continue;
 
 		for (wxXmlNode* merge = node->GetChildren(); merge != nullptr; merge = merge->GetNext()) {
-			const wxString ref = merge->GetAttribute(wxT("ref"));
-			const int colon = ref.Find(wxT(':'));
+			const ibString ref = merge->GetAttribute(ibT("ref"));
+			const int colon = ref.Find(ibT(':'));
 			if (colon == wxNOT_FOUND)
 				continue;
 
@@ -777,20 +777,20 @@ bool ibSheetFormatXlsx::Read(wxInputStream& input, ibSpreadsheetDescription& she
 	if (!opened)
 		return false;
 
-	std::vector<wxString> sheetParts;
+	std::vector<ibString> sheetParts;
 	ReadSheetOrder(parts, sheetParts);
 	if (sheetParts.empty())
 		return false;   // nothing in this file is a worksheet
 
 	said.Resume();
-	std::vector<wxString> strings;
+	std::vector<ibString> strings;
 	ReadSharedStrings(parts, strings);
 	said.Pause();
 
 	styled.Resume();
-	const auto stylePart = parts.find(wxT("xl/styles.xml"));
+	const auto stylePart = parts.find(ibT("xl/styles.xml"));
 	const std::vector<XlsxStyle> styles =
-		ReadStyles(stylePart != parts.end() ? stylePart->second : wxString());
+		ReadStyles(stylePart != parts.end() ? stylePart->second : ibString());
 	styled.Pause();
 
 	// ⚠ FILLED INTO A DOCUMENT OF ITS OWN and handed over only once it is whole: a
@@ -822,7 +822,7 @@ bool ibSheetFormatXlsx::Read(wxInputStream& input, ibSpreadsheetDescription& she
 	sheet = std::move(read);
 	handed.Pause();
 
-	ibJournalInfo(wxT("sheet"), wxT("xlsx read: %u parts unpacked %lld ms, %u strings %lld ms, %u styles %lld ms, %d rows filled %lld ms (the XML parsed %lld ms), handed %lld ms"),
+	ibJournalInfo(ibT("sheet"), ibT("xlsx read: %u parts unpacked %lld ms, %u strings %lld ms, %u styles %lld ms, %d rows filled %lld ms (the XML parsed %lld ms), handed %lld ms"),
 		static_cast<unsigned>(parts.size()), unpacked.Ms(), static_cast<unsigned>(strings.size()), said.Ms(),
 		static_cast<unsigned>(styles.size()), styled.Ms(), topRow, filled.Ms(), parsed.Ms(), handed.Ms());
 	return true;

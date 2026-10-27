@@ -93,7 +93,7 @@ const ibMetaData* ibValueModelTableBoxColumn::GetMetaData() const
 		m_formOwner->GetMetaData() : nullptr;
 }
 
-wxString ibValueModelTableBoxColumn::GetControlTitle() const
+ibString ibValueModelTableBoxColumn::GetControlTitle() const
 {
 	// Explicit Title wins; otherwise the binding's presentation synonym (field synonym | form-attribute
 	// Synonym/Name), resolved once via GetSourceAbstractColumn; else fall back to the control's own name.
@@ -185,14 +185,14 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// settings window shows on the header as surely as one set by a click.
 	const ibValueModelTableBox* owner = GetOwner();
 	ibValueModel* model = owner != nullptr ? owner->GetTableModel() : nullptr;
-	const wxString field = GetSourceFieldName();
+	const ibString field = GetSourceFieldName();
 	const bool sortable = model != nullptr && !appData->DesignerMode() && !field.IsEmpty()
 		&& model->GetFeatures().Has(ibValueModel::Features::Sorting);
 	state.SetValue(ibProtocol::ibForm::ibTable::Sortable, sortable);
 	if (sortable) {
 		const ibDataComposer& composer = model->GetModelComposer();
 		for (size_t i = 0; i < composer.SortCount(); ++i) {
-			wxString sortField; bool asc = true;
+			ibString sortField; bool asc = true;
 			if (composer.GetSortAt(i, sortField, asc) && sortField == field) {
 				const std::int32_t sort = asc ? 1 : -1;
 				state.SetValue(ibProtocol::ibForm::ibTable::Sort, sort);
@@ -250,7 +250,7 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 			cell.SetValue(ibProtocol::ibForm::ibTable::Face, attr.GetFaceName());
 		if (attr.HasAlignment()) {
 			const int align = attr.GetAlignment();
-			cell.SetValue(ibProtocol::ibForm::ibTable::Align, wxString((align & wxALIGN_RIGHT) ? ibProtocol::ibForm::ibTable::ibAlign::Right
+			cell.SetValue(ibProtocol::ibForm::ibTable::Align, ibString((align & wxALIGN_RIGHT) ? ibProtocol::ibForm::ibTable::ibAlign::Right
 				: (align & wxALIGN_CENTER_HORIZONTAL) ? ibProtocol::ibForm::ibTable::ibAlign::Center : ibProtocol::ibForm::ibTable::ibAlign::Left));
 		}
 	}
@@ -264,19 +264,19 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 		model->GetValue(value, item, modelColumn);
 
 	if (value.IsNull()) {
-		cell.SetValue(ibProtocol::ibForm::ibTable::Text, wxString());
+		cell.SetValue(ibProtocol::ibForm::ibTable::Text, ibString());
 		return;
 	}
 
 	// A variant no table model made is shown as it is.
-	if (value.GetType() != wxT("value")) {
-		cell.SetValue(ibProtocol::ibForm::ibTable::Text, value.MakeString());
+	if (value.GetType() != ibT("value")) {
+		cell.SetValue(ibProtocol::ibForm::ibTable::Text, ibString(value.MakeString()));
 		return;
 	}
 
 	// Everything below is asked of the value itself, through the format of the column.
 	const ibValue& cellValue = static_cast<const ibVariantDataValue*>(value.GetData())->GetValue();
-	wxString text;
+	ibString text;
 	if (format != nullptr)
 		format->Apply(cellValue, text);
 	else

@@ -33,7 +33,7 @@ const ibMetaData* ibValueStaticText::GetMetaData() const
 	return ibValueControl::GetMetaData();
 }
 
-wxString ibValueStaticText::GetControlTitle() const
+ibString ibValueStaticText::GetControlTitle() const
 {
 	// The Title when it is filled, otherwise the bound field's synonym — the same rule the text
 	// box and the checkbox follow, so a bound label is captioned by the metadata and nobody types
@@ -48,7 +48,7 @@ wxString ibValueStaticText::GetControlTitle() const
 			return column->GetSynonym();
 	}
 
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 bool ibValueStaticText::GetControlValue(ibValue& pvarControlVal) const

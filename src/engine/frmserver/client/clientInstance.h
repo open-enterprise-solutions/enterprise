@@ -33,14 +33,14 @@ public:
 
 	// The base is handed in: a process serves several, and the session belongs to one of them. The mode says which
 	// application's frame the client gets (ibClientFrame::Create).
-	ibClientInstance(ibApplicationInstance* applicationInstance, const wxString& id, const ibString& address,
+	ibClientInstance(ibApplicationInstance* applicationInstance, const ibString& id, const ibString& address,
 		ibProtocol::ibLogin::ibMode mode);
 	~ibClientInstance();
 
 	// Opens a session in the base as `user`, on the session's own worker. False: refused (the reason is
 	// journalled where it happened). Throws (ibCoreException) what refuses the session before any login — another
 	// designer at work — so the person is told why, not asked to log in again.
-	bool Login(const wxString& user, const wxString& password);
+	bool Login(const ibString& user, const ibString& password);
 
 	// ON THE SESSION'S WORKER, after Login: the frame of the client's mode first — a start may already open forms or
 	// ask the person something, and the client reaches both through it — then the mode's start (AllowRun), which may
@@ -51,8 +51,8 @@ public:
 
 	void OnExit();
 
-	const wxString& Id()   const { return m_id; }
-	const wxString& User() const { return m_user; }
+	const ibString& Id()   const { return m_id; }
+	const ibString& User() const { return m_user; }
 
 	ibClientFrame*   GetFrame() const { return m_frame.get(); }
 	ibClientSession* Session() const;
@@ -73,8 +73,8 @@ public:
 private:
 
 	ibApplicationInstance* m_applicationInstance;
-	wxString               m_id;
-	wxString               m_user;
+	ibString               m_id;
+	ibString               m_user;
 	ibString               m_address;
 	ibProtocol::ibLogin::ibMode           m_mode;
 

@@ -30,19 +30,19 @@ void ibSchemaDebugging::Build(const ibSession& session, const ibDataNode& /*args
 }
 
 std::function<void()> ibSchemaDebugging::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	const ibProtocol::ibSchema::ibCommand what = static_cast<ibProtocol::ibSchema::ibCommand>(command);
 	if (what != ibProtocol::ibSchema::ibCommand::Start && what != ibProtocol::ibSchema::ibCommand::Stop) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = wxString::Format(wxT("debugging has no command %d"), command);
+		error = ibString::Format(ibT("debugging has no command %d"), command);
 		return nullptr;
 	}
 
 	ibDebuggerServer* const server = SwitchableServer(session);
 	if (server == nullptr) {
 		refusal = ibProtocol::ibRefusal::NotNow;
-		error = wxT("debugging cannot be switched here now");
+		error = ibT("debugging cannot be switched here now");
 		return nullptr;
 	}
 

@@ -20,7 +20,7 @@
 #include <map>
 #include <set>
 
-void ibWriteSettingsField(ibDataNode& fields, const wxString& name, const wxString& presentation, ibMetaID id,
+void ibWriteSettingsField(ibDataNode& fields, const ibString& name, const ibString& presentation, ibMetaID id,
 	const ibTypeDescription& type, bool available, const ibPictureDescription& picture, const ibMetaData* metaData)
 {
 	ibDataNode& field = fields.AddChild(0, 0);
@@ -49,7 +49,7 @@ void ibWriteSettingsReferences(ibDataNode& references, const std::vector<ibTypeD
 			if (targets.empty())
 				continue;
 			ibDataNode& reference = references.AddChild(0, 0);
-			reference.SetValue(ibProtocol::ibRequest::ibListSettings::Type, wxString::Format(wxT("%llu"), (unsigned long long)clsid));
+			reference.SetValue(ibProtocol::ibRequest::ibListSettings::Type, ibString::Format(ibT("%llu"), (unsigned long long)clsid));
 			std::vector<ibDataValue> ids;
 			for (const ibMetaID& target : targets)
 				ids.push_back(ibDataValue::Int(target));
@@ -93,7 +93,7 @@ void WriteTargetFields(ibDataNode& expanded, ibDataNode& references, const std::
 	}
 
 	// WHAT EACH NAME MAY BE, ACROSS THE TARGETS — gathered first, so a name is put up once and already knows its whole type.
-	std::map<wxString, ibTypeDescription> united;
+	std::map<ibString, ibTypeDescription> united;
 	for (const ibTargetSource& one : targets)
 		for (unsigned int i = 0; i < one.m_explorer->GetHelperCount(); ++i) {
 			const auto* col = one.m_explorer->GetHelper(i);
@@ -106,7 +106,7 @@ void WriteTargetFields(ibDataNode& expanded, ibDataNode& references, const std::
 		}
 
 	// …then put up in the order the targets declare them; a name already up is not put up again.
-	std::set<wxString> shown;
+	std::set<ibString> shown;
 	std::vector<ibTypeDescription> types;
 	for (const ibTargetSource& one : targets)
 		for (unsigned int i = 0; i < one.m_explorer->GetHelperCount(); ++i) {
@@ -174,7 +174,7 @@ public:
 		chosen.SetValue(ibProtocol::ibRequest::ibListSettings::Choice, m_choice);
 		ibDataNode& value = chosen.Child(ibProtocol::ibRequest::ibListSettings::Value);
 		m_value.Serialize(value);
-		value.SetValue(ibProtocol::ibRequest::ibListSettings::Presentation, wxString(m_value.GetString()));
+		value.SetValue(ibProtocol::ibRequest::ibListSettings::Presentation, ibString(m_value.GetString()));
 	}
 
 	// The window closed: a choice made later is nobody's.
@@ -204,7 +204,7 @@ void ChooseValue(const ibDataNode& act, const ibMetaData* metaData, ibListSettin
 		choosing = nullptr;
 	}
 	unsigned long long parsed = 0;
-	if (metaData == nullptr || !act.GetValue<wxString>(ibProtocol::ibRequest::ibListSettings::Type).ToULongLong(&parsed) || parsed == 0)
+	if (metaData == nullptr || !act.GetValue<ibString>(ibProtocol::ibRequest::ibListSettings::Type).ToULongLong(&parsed) || parsed == 0)
 		return;
 	const ibClassID clsid = parsed;
 
@@ -227,7 +227,7 @@ void ChooseValue(const ibDataNode& act, const ibMetaData* metaData, ibListSettin
 }
 
 // THE WINDOW'S QUESTION — what the door tells it, the setting it edits, and `error` — why the one it gave back was refused.
-ibDataNode SettingsRequest(const ibDataNode& question, const ibSettingsDescription& shown, const wxString& error)
+ibDataNode SettingsRequest(const ibDataNode& question, const ibSettingsDescription& shown, const ibString& error)
 {
 	ibDataNode request = question;
 	ibSettingsDescriptionMemory::WriteNode(request.Child(ibProtocol::ibRequest::ibListSettings::Settings), shown);
@@ -252,7 +252,7 @@ bool ibRequestSettings(const ibDataNode& question, ibSettingsDescription& edited
 
 	// A setting refused is asked again AS IT WAS GIVEN, with why — the person's edits stay in the window.
 	ibSettingsDescription shown = edited;
-	wxString error;
+	ibString error;
 	ibDataNode request = SettingsRequest(question, shown, error);
 
 	// The cell a value is being chosen for — held while the window is up, let go with it.

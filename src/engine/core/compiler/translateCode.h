@@ -19,8 +19,8 @@
 
 //List of keywords
 struct ibKeyWords {
-	wxString m_strKeyWord;
-	wxString m_strShortDescription;
+	ibString m_strKeyWord;
+	ibString m_strShortDescription;
 };
 
 extern CORE_API struct ibKeyWords s_listKeyWord[];
@@ -60,7 +60,7 @@ struct CORE_API ibLexem {
 
 	//lexem content:
 	short m_numData;			// keyword number (KEYWORD) or delimiter symbol (DELIMITER)
-	wxString m_strData;			// or identifier name (variable, function, etc.)
+	ibString m_strData;			// or identifier name (variable, function, etc.)
 	ibLiteral m_valData;		// value, if it is a constant or real identifier name
 
 	// Per-lexem source attribution lives on the owning ibTranslateCode —
@@ -82,9 +82,9 @@ struct CORE_API ibLexem {
 
 public:
 
-	const wxString& GetModuleName() const;
-	const wxString& GetDocPath()    const;
-	const wxString& GetFileName()   const;
+	const ibString& GetModuleName() const;
+	const ibString& GetDocPath()    const;
+	const ibString& GetFileName()   const;
 
 	unsigned int GetLine() const { return m_numLine + 1; }
 	unsigned int GetLength() const {
@@ -232,7 +232,7 @@ typedef std::vector<ibLexem> ibLexemList;
 struct ibTranslateRefusal {
 
 	ibTranslateRefusal(int codeError, unsigned int currPos, unsigned int currLine,
-		const wxString& errorDesc, const ibTranslateCode* translateCode) :
+		const ibString& errorDesc, const ibTranslateCode* translateCode) :
 		m_codeError(codeError), m_currPos(currPos), m_currLine(currLine),
 		m_errorDesc(errorDesc), m_translateCode(translateCode)
 	{
@@ -241,7 +241,7 @@ struct ibTranslateRefusal {
 	int          m_codeError;            // ibScriptError (codeDef.h)
 	unsigned int m_currPos;              // in the text of the translator that raised it
 	unsigned int m_currLine;             // 1-based
-	wxString     m_errorDesc;
+	ibString     m_errorDesc;
 
 	// Who raised it — the attribution and the text it points into, as on ibLexem. A module read as a
 	// part of another (AppendModule) raises in its own text.
@@ -280,18 +280,18 @@ class CORE_API ibTranslateCode {
 
 		// #Undef — local only, symmetric with SetDefine: an ancestor's define
 		// is not ours to remove.
-		void RemoveDef(const wxString& strName);
-		bool HasDefine(const wxString& strName) const { return FindDefine(strName) != nullptr; }
+		void RemoveDef(const ibString& strName);
+		bool HasDefine(const ibString& strName) const { return FindDefine(strName) != nullptr; }
 		// The lookup, chain-walking and read-only: nullptr when nobody defines the
 		// name. Callers expand from the returned list by COPY — it is a dictionary
 		// entry shared with every other expansion site, not scratch space.
-		const ibLexemList* FindDefine(const wxString& strName) const;
-		void SetDefine(const wxString& strName, const ibLexemList* src);
-		void SetDefine(const wxString& strName, const wxString& strValue);
+		const ibLexemList* FindDefine(const ibString& strName) const;
+		void SetDefine(const ibString& strName, const ibLexemList* src);
+		void SetDefine(const ibString& strName, const ibString& strValue);
 
 	private:
 
-		std::map<wxString, ibLexemList, ibCaseFoldLess> m_defineList;//name -> its lexemes, owned by value
+		std::map<ibString, ibLexemList, ibCaseFoldLess> m_defineList;//name -> its lexemes, owned by value
 		const ibDefineCollection* m_parentDefine;
 	};
 
@@ -303,19 +303,19 @@ public:
 
 	// The syntax comes first and has no default: no owner reads a text without saying how it is spelled.
 	explicit ibTranslateCode(short codeStyle);
-	ibTranslateCode(short codeStyle, const wxString& strModuleName, const wxString& strDocPath);
-	ibTranslateCode(short codeStyle, const wxString& strFileName);
+	ibTranslateCode(short codeStyle, const ibString& strModuleName, const ibString& strDocPath);
+	ibTranslateCode(short codeStyle, const ibString& strFileName);
 
 	virtual ~ibTranslateCode();
 
-	bool HasDefine(const wxString& strName) const {
+	bool HasDefine(const ibString& strName) const {
 		if (m_defineList != nullptr)
 			return m_defineList->HasDefine(strName);
 		return false;
 	};
 
 	//methods:
-	void Load(const wxString& strCode);
+	void Load(const ibString& strCode);
 
 	void AppendModule(ibTranslateCode* module);
 	void RemoveModule(ibTranslateCode* module);
@@ -385,9 +385,9 @@ public:
 	// caret — which is what a list filters by, not part of the question.
 	struct ibCaretText {
 		ibCaretPlace m_place = ibCaretPlace::OpenCode;
-		wxString     m_expression;
-		wxString     m_keyword;
-		wxString     m_word;
+		ibString     m_expression;
+		ibString     m_keyword;
+		ibString     m_word;
 	};
 
 	// It walks this object's lexem stream and nothing else, which is why it belongs to the stream's
@@ -408,7 +408,7 @@ public:
 
 protected:
 	// Notes a refusal at `currPos` and returns — the read goes on (see ibTranslateRefusal).
-	void Refuse(int codeError, unsigned int currPos, const wxString& errorDesc = wxEmptyString) const;
+	void Refuse(int codeError, unsigned int currPos, const ibString& errorDesc = ibEmptyString) const;
 public:
 
 	inline void SkipSpaces() const;
@@ -420,47 +420,47 @@ public:
 	void SkipLine() const;
 
 	// The dotted expression ending at the `.` at `dotAt` — see the definition.
-	wxString ExpressionEndingAt(size_t dotAt) const;
+	ibString ExpressionEndingAt(size_t dotAt) const;
 
-	bool IsByte(const wxUniChar& c) const;
+	bool IsByte(const ibChar& c) const;
 #pragma region get_byte
 	bool GetByte() const { return GetByte(nullptr); }
-	bool GetByte(wxUniChar& c) const { return GetByte(&c); }
-	bool GetByte(wxUniChar* c) const;
+	bool GetByte(ibChar& c) const { return GetByte(&c); }
+	bool GetByte(ibChar* c) const;
 #pragma endregion  
 
 	bool IsWord() const;
 #pragma region get_word
 	bool GetWord(bool realName = false, bool get_point = false) const { return GetWord(nullptr, nullptr, realName, get_point); }
-	bool GetWord(wxString& strWord, bool realName = false, bool get_point = false) const { return GetWord(&strWord, nullptr, realName, get_point); }
-	bool GetWord(wxString& strWord, wxString& strRealName, bool realName = false, bool get_point = false) const { return GetWord(&strWord, &strRealName, realName, get_point); }
-	bool GetWord(wxString* strWord, wxString* strRealName, bool realName, bool get_point) const;
+	bool GetWord(ibString& strWord, bool realName = false, bool get_point = false) const { return GetWord(&strWord, nullptr, realName, get_point); }
+	bool GetWord(ibString& strWord, ibString& strRealName, bool realName = false, bool get_point = false) const { return GetWord(&strWord, &strRealName, realName, get_point); }
+	bool GetWord(ibString* strWord, ibString* strRealName, bool realName, bool get_point) const;
 #pragma endregion  
 
 	bool IsNumber() const;
 #pragma region get_number
 	bool GetNumber() const { return GetNumber(nullptr); }
-	bool GetNumber(wxString& strNumber) const { return GetNumber(&strNumber); }
-	bool GetNumber(wxString* strNumber) const;
+	bool GetNumber(ibString& strNumber) const { return GetNumber(&strNumber); }
+	bool GetNumber(ibString* strNumber) const;
 #pragma endregion  
 
 	bool IsString() const;
 #pragma region get_string
 	bool GetString() const { return GetString(nullptr); }
-	bool GetString(wxString& strString) const { return GetString(&strString); }
-	bool GetString(wxString* strString) const;
+	bool GetString(ibString& strString) const { return GetString(&strString); }
+	bool GetString(ibString* strString) const;
 #pragma endregion  
 
 	bool IsDate() const;
 #pragma region get_date
 	bool GetDate() const { return GetDate(nullptr); }
-	bool GetDate(wxString& strDate) const { return GetDate(&strDate); }
-	bool GetDate(wxString* strDate) const;
+	bool GetDate(ibString& strDate) const { return GetDate(&strDate); }
+	bool GetDate(ibString* strDate) const;
 #pragma endregion 
 
 	bool IsEnd() const;
 
-	int IsKeyWord(const wxString& sKeyWord) const;
+	int IsKeyWord(const ibString& sKeyWord) const;
 
 	// The words the preprocessor owns. Asked from the full pass and from the patch, written out
 	// once — a ninth directive must not be able to reach only one of them.
@@ -470,26 +470,26 @@ public:
 			|| keyword == KEY_ELSEDEF || keyword == KEY_ENDIFDEF
 			|| keyword == KEY_REGION || keyword == KEY_ENDREGION;
 	}
-	static wxString GetKeyWord(int keyword);
+	static ibString GetKeyWord(int keyword);
 
-	wxString GetStrToEndLine() const;
-	void PrepareFromCurrent(int nMode, const wxString& strName = wxEmptyString);
+	ibString GetStrToEndLine() const;
+	void PrepareFromCurrent(int nMode, const ibString& strName = ibEmptyString);
 
 	// WHOSE TEXT THIS IS — what every lexem and every refusal is attributed to. The owner says it
 	// before the text is read; a module says it again whenever it is compiled from its metaobject.
-	void SetModuleName(const wxString& strModuleName) { m_strModuleName = strModuleName; }
-	wxString GetModuleName() const { return m_strModuleName; }
-	void SetDocPath(const wxString& strDocPath) { m_strDocPath = strDocPath; }
-	wxString GetDocPath() const { return m_strDocPath; }
-	void SetFileName(const wxString& strFileName) { m_strFileName = strFileName; }
-	wxString GetFileName() const { return m_strFileName; }
+	void SetModuleName(const ibString& strModuleName) { m_strModuleName = strModuleName; }
+	const ibString& GetModuleName() const { return m_strModuleName; }
+	void SetDocPath(const ibString& strDocPath) { m_strDocPath = strDocPath; }
+	const ibString& GetDocPath() const { return m_strDocPath; }
+	void SetFileName(const ibString& strFileName) { m_strFileName = strFileName; }
+	const ibString& GetFileName() const { return m_strFileName; }
 
 	// What the last full Translate could not read, in the order met — see ibTranslateRefusal. A module
 	// read as a part of this one (AppendModule) adds its own.
 	size_t GetRefusalCount() const { return m_listRefusal.size(); }
 	const ibTranslateRefusal& GetRefusalAt(size_t index) const { return m_listRefusal.at(index); } // out of range throws
 
-	wxString GetBuffer() const { return m_strBuffer; }
+	const ibString& GetBuffer() const { return m_strBuffer; }
 	unsigned int GetBufferSize() const { return m_strBuffer.size(); }
 
 	unsigned int GetCurrentLine() const { return m_currentLine; }
@@ -518,9 +518,9 @@ protected:
 
 #ifdef UTF8_LEXEM_TRANSLATE
 
-	inline unsigned int GetUtf8CharOffset(const wxUniChar& c) const {
+	inline unsigned int GetUtf8CharOffset(const ibChar& c) const {
 
-		unsigned int code = c.GetValue();
+		unsigned int code = static_cast<unsigned int>(c);
 
 		//    Char. number range   |        UTF-8 octet sequence
 		//       (hexadecimal)     |              (binary)
@@ -543,11 +543,11 @@ protected:
 		else if (code <= 0x10FFFF)
 			return 4;
 
-		wxFAIL_MSG(wxT("trying to encode undefined Unicode character"));
+		wxFAIL_MSG(ibT("trying to encode undefined Unicode character"));
 		return 0;
 	}
 
-	inline void SetUtf8CharOffset(const wxUniChar& c, unsigned int& raw_pos) const {
+	inline void SetUtf8CharOffset(const ibChar& c, unsigned int& raw_pos) const {
 		raw_pos += GetUtf8CharOffset(c);
 	}
 
@@ -574,9 +574,9 @@ protected:
 	short m_codeStyle;
 
 	//attributes:
-	wxString m_strModuleName;//name of the compiled module (to display information in case of errors)
-	wxString m_strDocPath; // unique path to the document
-	wxString m_strFileName; // path to the file (if external processing)
+	ibString m_strModuleName;//name of the compiled module (to display information in case of errors)
+	ibString m_strDocPath; // unique path to the document
+	ibString m_strFileName; // path to the file (if external processing)
 
 	// Reading position over m_strBuffer. Clear() — reached through Load() — resets
 	// all four, so every path that loads text before parsing it is covered; the
@@ -586,7 +586,7 @@ protected:
 	unsigned int m_bufferSize = 0;//size of the original text
 
 	//original and upper text :
-	wxStringImpl m_strBuffer, m_strBUFFER;
+	ibString m_strBuffer, m_strBUFFER;
 
 	mutable unsigned int m_currentPos = 0; //current position of the processed text
 	mutable unsigned int m_currentLine = 0; //current line of the processed text

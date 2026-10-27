@@ -103,11 +103,11 @@ public:
 	void EnableEditing(bool edit);
 
 	//lang
-	ibString GetLangCode() const { return m_docLangCode; }
+	const ibString& GetLangCode() const { return m_docLangCode; }
 	void SetLangCode(const ibString& strLangCode) { m_docLangCode = strLangCode; }
 
 	//printer
-	ibString GetPrinterName() const { return m_docPrinterName; }
+	const ibString& GetPrinterName() const { return m_docPrinterName; }
 	void SetPrinterName(const ibString& strPrinterName) { m_docPrinterName = strPrinterName; }
 
 	//area

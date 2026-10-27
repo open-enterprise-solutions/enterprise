@@ -562,8 +562,8 @@ inline T* LinqCast(ibValue* held, ibClassID clsid)
 // The two members of a group — declared ONCE, which is exactly what makes them ordinals.
 inline void ibBindLinqGroupMembers(ibValue::ibMemberTable& helper, const ibValue*)
 {
-	helper.AppendProp(wxT("Key"),    true, false, 0);
-	helper.AppendProp(wxT("Values"), true, false, 1);
+	helper.AppendProp(ibT("Key"),    true, false, 0);
+	helper.AppendProp(ibT("Values"), true, false, 1);
 }
 
 class ibValueLinqRows;
@@ -584,8 +584,8 @@ public:
 	// question two names can answer outright, without the virtual hop into the general machinery.
 	// It is asked once per `g.Key` and once per `g.Values`, i.e. per group of every grouped loop.
 	virtual long FindProp(const ibString& name) const override {
-		if (stringUtils::CompareString(name, wxT("Key")))    return 0;
-		if (stringUtils::CompareString(name, wxT("Values"))) return 1;
+		if (stringUtils::IsSameAs(name, ibT("Key")))    return 0;
+		if (stringUtils::IsSameAs(name, ibT("Values"))) return 1;
 		return wxNOT_FOUND;
 	}
 
@@ -621,7 +621,7 @@ public:
 		// One constant, split once. `\n` separates the fields — an identifier cannot contain it.
 		ibString rest = names;
 		while (!rest.IsEmpty()) {
-			const int at = rest.Find(wxT('\n'));
+			const int at = rest.Find(ibT('\n'));
 			if (at == wxNOT_FOUND) { m_fields.push_back(rest); break; }
 			m_fields.push_back(rest.Left(at));
 			rest = rest.Mid(at + 1);
@@ -631,7 +631,7 @@ public:
 	virtual ibClassID GetClassType() const override { return g_valueLinqShape; }
 
 	virtual bool     IsEmpty()   const override { return m_fields.empty(); }
-	virtual ibString GetString() const override { return wxT("<row shape>"); }
+	virtual ibString GetString() const override { return ibT("<row shape>"); }
 
 	long Count() const { return (long)m_fields.size(); }
 	const ibString& NameAt(long i) const { return m_fields[(size_t)i]; }   // by reference — GetPropName lends it
@@ -641,7 +641,7 @@ public:
 	// a contiguous vector — no map, no member table, nothing built to answer it.
 	long Ordinal(const ibString& name) const {
 		for (size_t i = 0; i < m_fields.size(); ++i)
-			if (stringUtils::CompareString(m_fields[i], name))
+			if (stringUtils::IsSameAs(m_fields[i], name))
 				return (long)i;
 		return wxNOT_FOUND;
 	}
@@ -711,8 +711,8 @@ public:
 		// What a watch shows. Names included — the person reading it did not write the ordinals.
 		ibString text;
 		for (size_t i = 0; i < m_count; ++i) {
-			if (i != 0) text << wxT(", ");
-			if (m_shape != nullptr && (long)i < m_shape->Count()) text << m_shape->NameAt((long)i) << wxT("=");
+			if (i != 0) text << ibT(", ");
+			if (m_shape != nullptr && (long)i < m_shape->Count()) text << m_shape->NameAt((long)i) << ibT("=");
 			text << Values()[i].GetString();
 		}
 		return text;
@@ -855,7 +855,7 @@ public:
 			? m_view->Rows().empty()
 			: (m_rows.empty() && (m_index == nullptr || (m_index->m_buckets.empty() && m_index->m_seen.empty())));
 	}
-	virtual ibString GetString() const override { return wxT("<linq>"); }   // watch-safe, and dull
+	virtual ibString GetString() const override { return ibT("<linq>"); }   // watch-safe, and dull
 
 	// ⭐ FIRST TIME? — `Distinct`, entire. ORDERED rather than hashed, and see the note on the
 	// buckets below for the measurement that says to keep it that way.
@@ -2127,7 +2127,7 @@ const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
 // emit, runtime never. Case-insensitive match per OES convention.
 long ibValue::FindLinqMethodByName(const ibString& name) {
 	for (const auto& info : GetLinqMethodTable()) {
-		if (stringUtils::CompareString(name, info.name))
+		if (stringUtils::IsSameAs(name, info.name))
 			return (long)info.id;
 	}
 	return -1;
@@ -2200,7 +2200,7 @@ ibRowColumns ColumnsOfRowItself(const ibValueLinqRows& kept)
 
 	if (answer.m_names.empty()) {
 		// `Value` is what this house calls the one column of a table it had to invent a name for.
-		answer.m_names.push_back(wxT("Value"));
+		answer.m_names.push_back(ibT("Value"));
 		answer.m_rowIsTheCell = true;
 	}
 	return answer;
@@ -2421,8 +2421,8 @@ bool ibLinqNamedColumns(const ibValue& row, std::vector<ibString>& outNames)
 
 	// A group is two columns and names them itself — the same two ordinals its members answer by.
 	if (LinqCast<ibValueLinqGroup>(held, g_valueLinqGroup) != nullptr) {
-		outNames.push_back(wxT("Key"));
-		outNames.push_back(wxT("Values"));
+		outNames.push_back(ibT("Key"));
+		outNames.push_back(ibT("Values"));
 		return true;
 	}
 

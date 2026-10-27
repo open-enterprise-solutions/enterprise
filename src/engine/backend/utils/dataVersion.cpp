@@ -27,7 +27,7 @@ inline std::uint16_t NextCounter() {
 // Encode a non-negative 72-bit value packed into a low + high uint64_t
 // pair into exactly kStampLen base-62 chars, zero-padded on the left.
 // We split 72 bits as: high 8 bits in `hi`, low 64 bits in `lo`.
-wxString Encode(std::uint64_t hi, std::uint64_t lo) {
+ibString Encode(std::uint64_t hi, std::uint64_t lo) {
     char buf[kStampLen + 1];
     buf[kStampLen] = '\0';
 
@@ -58,12 +58,12 @@ wxString Encode(std::uint64_t hi, std::uint64_t lo) {
         hi = hiQuot;
     }
 
-    return wxString::FromAscii(buf);
+    return ibString::FromUTF8(buf);
 }
 
 } // namespace
 
-wxString NewStamp() {
+ibString NewStamp() {
     // Wall-clock milliseconds since Unix epoch (system_clock's epoch on
     // every supported toolchain).
     const std::uint64_t msU = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -80,7 +80,7 @@ wxString NewStamp() {
     return Encode(hi, lo);
 }
 
-bool IsValidStamp(const wxString& str) {
+bool IsValidStamp(const ibString& str) {
     if (str.length() != static_cast<size_t>(kStampLen))
         return false;
     for (size_t i = 0; i < str.length(); ++i) {

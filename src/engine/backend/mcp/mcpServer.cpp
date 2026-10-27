@@ -65,16 +65,16 @@ namespace {
 // (the server returns an InputRequiredResult and the client re-calls) — which is a rebuild of how
 // the assistant window asks the model anything, not a version bump. Naming 2025-11-25 states the
 // truth today; the dual-era work is its own piece.
-const ibChar* const kProtocolVersion = wxT("2025-11-25");
+const ibChar* const kProtocolVersion = ibT("2025-11-25");
 
 // The revisions a caller may name and still be served. They differ, on THIS server's side, only
 // in what the client is obliged to send — the header below arrived in 2025-06-18 — so one
 // implementation answers all three honestly. A version outside this list is refused rather than
 // answered as if it were ours: see IsProtocolVersionAcceptable.
 const ibChar* const kSupportedProtocolVersions[] = {
-	wxT("2025-11-25"),
-	wxT("2025-06-18"),
-	wxT("2025-03-26"),
+	ibT("2025-11-25"),
+	ibT("2025-06-18"),
+	ibT("2025-03-26"),
 	nullptr
 };
 
@@ -95,17 +95,17 @@ std::vector<ibDataValue> SupportedVersionList()
 {
 	std::vector<ibDataValue> versions;
 	for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v)
-		versions.push_back(ibDataValue::String(wxString(*v)));
+		versions.push_back(ibDataValue::String(ibString(*v)));
 
 	return versions;
 }
 
-ibDataNode SupportedVersions(const wxString& asked)
+ibDataNode SupportedVersions(const ibString& asked)
 {
 	ibDataNode data;
-	data.AddField(wxT("supported"), ibDataValue::Array(SupportedVersionList()));
+	data.AddField(ibT("supported"), ibDataValue::Array(SupportedVersionList()));
 	if (!asked.IsEmpty())
-		data.SetValue(wxT("requested"), asked);
+		data.SetValue(ibT("requested"), asked);
 
 	return data;
 }
@@ -136,7 +136,7 @@ public:
 	// LISTENING WHEN THIS RETURNS, started on the caller's thread, deliberately. A person
 	// pressed a button and is owed an answer now: "that port is taken" must come back from
 	// Start(), not appear in a log a second later while the button says it worked.
-	bool Start(wxString& refusal)
+	bool Start(ibString& refusal)
 	{
 		// THE TRANSPORT IS THE PROCESS'S (core/server/listener.h): TLS when backend.conf names a certificate, plain
 		// on this machine's own addresses only - an assistant edits a configuration, and a token sent in the
@@ -146,11 +146,11 @@ public:
 			options = ibListenerOptions(m_settings.m_address, m_settings.m_port, ibApplicationHost::Get()->GetTlsFiles());
 		}
 		catch (const ibCoreException& err) {
-			refusal = wxString::Format(_("Assistant access did not start: %s"), err.GetErrorDescription());
+			refusal = ibString::Format(_("Assistant access did not start: %s"), err.GetErrorDescription());
 			// Said in the journal as well as to the caller: the designer shows it in its messages pane, the
 			// application server writes its own line - and the transport refusing is the one start-up fact
 			// an operator reads the journal for.
-			ibJournalWarning(wxT("mcp"), wxT("assistant access did not start: %s"), err.GetErrorDescription());
+			ibJournalWarning(ibT("mcp"), ibT("assistant access did not start: %s"), err.GetErrorDescription());
 			return false;
 		}
 		options.m_maxBodyBytes = kMaxRequestBytes;
@@ -185,11 +185,11 @@ public:
 		// is whichever answered.
 		std::string error;
 		if (!m_server.Start(options, error)) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				_("Assistant access did not start: %s.\n\n"
 				  "If another designer is open, it holds the port - only one can. "
 				  "Close it, or give this one a port of its own in Tools > Options > Assistant access."),
-				wxString::FromUTF8(error));
+				ibString::FromUTF8(error));
 			return false;
 		}
 
@@ -254,7 +254,7 @@ private:
 	// honest answer to that is no.
 	bool IsAuthorised(const ibHttpRequest& req) const
 	{
-		const wxString expected = m_settings.m_token;
+		const ibString expected = m_settings.m_token;
 		if (expected.IsEmpty())
 			return false;
 
@@ -262,11 +262,11 @@ private:
 		if (header.empty())
 			return false;
 
-		const wxString given = wxString::FromUTF8(header.c_str(), header.size());
+		const ibString given = ibString::FromUTF8(header.c_str(), header.size());
 
 		// The scheme is part of it: a client that sends the bare token is misconfigured in a way
 		// worth telling apart from one that sends the wrong one.
-		if (!given.StartsWith(wxT("Bearer ")))
+		if (!given.StartsWith(ibT("Bearer ")))
 			return false;
 
 		// In constant time, as the session's token is compared: a comparison that stops at the first wrong
@@ -321,12 +321,12 @@ private:
 		if (origin.empty())
 			return true;   // not a browser — nothing to check
 
-		const wxString value = wxString::FromUTF8(origin.c_str(), origin.size()).Lower();
-		return value.StartsWith(wxT("http://127.0.0.1"))
-			|| value.StartsWith(wxT("https://127.0.0.1"))
-			|| value.StartsWith(wxT("http://localhost"))
-			|| value.StartsWith(wxT("https://localhost"))
-			|| value == wxT("null");   // a file:// page, which is local by construction
+		const ibString value = ibString::FromUTF8(origin.c_str(), origin.size()).Lower();
+		return value.StartsWith(ibT("http://127.0.0.1"))
+			|| value.StartsWith(ibT("https://127.0.0.1"))
+			|| value.StartsWith(ibT("http://localhost"))
+			|| value.StartsWith(ibT("https://localhost"))
+			|| value == ibT("null");   // a file:// page, which is local by construction
 	}
 
 	// WHICH REVISION THIS CALLER SPEAKS, and whether we speak it too.
@@ -342,7 +342,7 @@ private:
 		if (header.empty())
 			return true;   // pre-2025-06-18 client — read as 2025-03-26, per the transport
 
-		const wxString asked = wxString::FromUTF8(header.c_str(), header.size()).Trim(true).Trim(false);
+		const ibString asked = ibString::FromUTF8(header.c_str(), header.size()).Trim(true).Trim(false);
 		for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
 			if (asked == *v)
 				return true;
@@ -359,21 +359,21 @@ private:
 	//
 	// The code is the one the specification allocates (`-32022`), and the list is READ FROM THE
 	// ARRAY, which is the only way it cannot drift from what the server actually accepts.
-	static std::string RefuseVersion(const wxString& asked)
+	static std::string RefuseVersion(const ibString& asked)
 	{
 		const ibDataNode data = SupportedVersions(asked);
 
 		// No id: the refusal happens before the body has been read, so there is no call to
 		// answer — which is the shape JSON-RPC allows for exactly this.
 		return ibRpcWriteError(ibDataValue(), ibRpcError::UnsupportedVersion,
-			wxT("Unsupported protocol version"), &data).ToUtf8();
+			ibT("Unsupported protocol version"), &data).ToUtf8();
 	}
 
 	// What the transport saw in the header, for the refusal to quote back.
-	static wxString AskedVersion(const ibHttpRequest& req)
+	static ibString AskedVersion(const ibHttpRequest& req)
 	{
 		const std::string header = req.GetHeader("mcp-protocol-version");
-		return wxString::FromUTF8(header.c_str(), header.size()).Trim(true).Trim(false);
+		return ibString::FromUTF8(header.c_str(), header.size()).Trim(true).Trim(false);
 	}
 
 	// ⭐ THE TRANSPORT'S QUESTIONS, asked of both verbs and before the body is read: who is
@@ -435,9 +435,9 @@ private:
 			// WHAT THE TRANSPORT SAW, handed down so the protocol layer can hold the body to it.
 			// Reading them here and nowhere else keeps the transport out of everything below.
 			ibMcpServer::ibMcpWireHeaders wire;
-			const auto headerOf = [&req](const char* name) -> wxString {
+			const auto headerOf = [&req](const char* name) -> ibString {
 				const std::string v = req.GetHeader(name);
-				return v.empty() ? wxString() : wxString::FromUTF8(v.c_str(), v.size());
+				return v.empty() ? ibString() : ibString::FromUTF8(v.c_str(), v.size());
 			};
 			wire.m_protocolVersion = headerOf("mcp-protocol-version");
 			wire.m_method          = headerOf("mcp-method");
@@ -621,7 +621,7 @@ public:
 			}
 		}
 
-		const wxString said = Word(stage);
+		const ibString said = Word(stage);
 		if (said.IsEmpty())
 			return;   // a stage with nothing to report — see below
 
@@ -635,17 +635,17 @@ private:
 	// template is NESTED, so metadata_list and metadata_get by name answer nothing about it
 	// (2026-09-01, watching exactly that happen the first time this fired). The id is what every
 	// metadata_* argument is written in, and the owner is what makes the line readable.
-	static wxString Line(const wxString& said, const ibValueMetaObject* object)
+	static ibString Line(const ibString& said, const ibValueMetaObject* object)
 	{
 		if (object == nullptr)
-			return wxString::Format(wxT("metadata: %s"), said);
+			return ibString::Format(ibT("metadata: %s"), said);
 
 		const ibValueMetaObject* const owner = object->GetParent();
 
 		return owner != nullptr
-			? wxString::Format(wxT("metadata: %s %s '%s' in '%s' (id %i)"),
+			? ibString::Format(ibT("metadata: %s %s '%s' in '%s' (id %i)"),
 				said, object->GetClassName(), object->GetName(), owner->GetName(), (int)object->GetMetaID())
-			: wxString::Format(wxT("metadata: %s %s '%s' (id %i)"),
+			: ibString::Format(ibT("metadata: %s %s '%s' (id %i)"),
 				said, object->GetClassName(), object->GetName(), (int)object->GetMetaID());
 	}
 
@@ -656,7 +656,7 @@ private:
 	// ⚠ `Edited` IS THE EXCEPTION, and only because of its rate: it arrives on every keystroke in a
 	// property field. Forwarding it would bury the ones that answer something, which is the one way
 	// a log stops being read.
-	static wxString Word(ibMetaStage stage)
+	static ibString Word(ibMetaStage stage)
 	{
 		switch (stage) {
 		case ibMetaStage::Created:  return _("created");
@@ -670,9 +670,9 @@ private:
 		case ibMetaStage::Applying: return _("applying to the database");
 		case ibMetaStage::Applied:  return _("applied to the database");
 		case ibMetaStage::Reverted: return _("rolled back to the database");
-		case ibMetaStage::Edited:   return wxEmptyString;   // a keystroke, not an event
+		case ibMetaStage::Edited:   return ibEmptyString;   // a keystroke, not an event
 		}
-		return wxEmptyString;
+		return ibEmptyString;
 	}
 
 	ibMcpServer* const m_server;
@@ -682,8 +682,8 @@ private:
 
 	// The stage not yet said, waiting to learn whether it stands alone — see MetaObjectChanged.
 	ibMetaID           m_heldId = 0;
-	wxString           m_heldWord;
-	wxString           m_heldLine;
+	ibString           m_heldWord;
+	ibString           m_heldLine;
 
 	ibMcpMetaBridge(const ibMcpMetaBridge&) = delete;
 	ibMcpMetaBridge& operator=(const ibMcpMetaBridge&) = delete;
@@ -715,7 +715,7 @@ namespace {
 // THE SERVER'S OWN ADDRESS in the settings store. A literal, because what is
 // configured here is the PLATFORM — it has no metaobject whose identity it
 // could borrow. Minted once; changing it orphans everything already saved.
-const ibChar* const kMcpSettingsObject = wxT("6d637073-6572-7665-7200-000000000001");
+const ibChar* const kMcpSettingsObject = ibT("6d637073-6572-7665-7200-000000000001");
 
 ibSettingsKey KeyFor(const ibSession* session)
 {
@@ -741,14 +741,14 @@ bool ibMcpServer::LoadSettings(ibSession* session)
 		return false;   // a cold start — the defaults stand
 
 	ibMcpSettings settings;
-	node.GetValue(wxT("enabled"), settings.m_enabled);
-	node.GetValue(wxT("address"), settings.m_address);
+	node.GetValue(ibT("enabled"), settings.m_enabled);
+	node.GetValue(ibT("address"), settings.m_address);
 
 	std::int32_t port = settings.m_port;
-	node.GetValue(wxT("port"), port);
+	node.GetValue(ibT("port"), port);
 	settings.m_port = (unsigned short)port;
 
-	node.GetValue(wxT("token"), settings.m_token);
+	node.GetValue(ibT("token"), settings.m_token);
 
 	// 🛑 A MINTED TOKEN THAT NOBODY WRITES DOWN IS A NEW TOKEN EVERY MORNING. Configure mints one
 	// when the settings carry none — which is right — but minting is a CHANGE, and a change that
@@ -774,10 +774,10 @@ bool ibMcpServer::SaveSettings(ibSession* session) const
 		return false;
 
 	ibDataNode node;
-	node.SetValue(wxT("enabled"), m_settings.m_enabled);
-	node.SetValue(wxT("address"), m_settings.m_address);
-	node.SetValue(wxT("port"), (std::int32_t)m_settings.m_port);
-	node.SetValue(wxT("token"), m_settings.m_token);
+	node.SetValue(ibT("enabled"), m_settings.m_enabled);
+	node.SetValue(ibT("address"), m_settings.m_address);
+	node.SetValue(ibT("port"), (std::int32_t)m_settings.m_port);
+	node.SetValue(ibT("token"), m_settings.m_token);
 
 	return storage->Save(KeyFor(session), node);
 }
@@ -801,7 +801,7 @@ void ibMcpServer::Configure(const ibMcpSettings& settings)
 		m_settings.m_token = wxNewUniqueGuid.str() + wxNewUniqueGuid.str();
 }
 
-bool ibMcpServer::Start(ibSession* session, wxString& refusal)
+bool ibMcpServer::Start(ibSession* session, ibString& refusal)
 {
 	if (IsRunning()) {
 		refusal = _("The server is already running");
@@ -851,7 +851,7 @@ bool ibMcpServer::Start(ibSession* session, wxString& refusal)
 	m_session  = session;
 	m_listener = std::move(listener);
 	m_running.store(true);
-	ibJournalInfo(wxT("mcp"), wxT("assistant access listens on %s"), GetEndpoint());
+	ibJournalInfo(ibT("mcp"), ibT("assistant access listens on %s"), GetEndpoint());
 
 	// ⭐ WATCHING FROM THE MOMENT IT IS UP, not from the first question somebody asks it. The
 	// subscription is also refreshed at every dispatch, because a configuration can be opened and
@@ -868,7 +868,7 @@ bool ibMcpServer::Start(ibSession* session, wxString& refusal)
 	// nothing did it, so a person watching an already-open window got a thinner line than someone
 	// who opened it a second later. One text, both moments, and the promise in the header is now
 	// kept by the code rather than by the comment.
-	Publish(wxT("did"), Greeting(), wxEmptyString);
+	Publish(ibT("did"), Greeting(), ibEmptyString);
 
 	// LISTEN TO THE DEBUGGER TOO, from here on. The bridge is a list, so this
 	// takes nothing away from the IDE's own windows — the developer debugs as
@@ -911,11 +911,11 @@ void ibMcpServer::Stop()
 	// Published HERE rather than by whoever pressed the button, because the server is the only
 	// one that knows it stopped: it also stops when the session ends and when the process goes,
 	// and a caller-side announcement would cover exactly one of the three.
-	Publish(wxT("did"),
+	Publish(ibT("did"),
 		_("Assistant access has been switched off. Nothing is listening, so nothing written here "
 		  "will be collected until it is switched on again in Tools > Options > Assistant "
 		  "access."),
-		wxEmptyString);
+		ibEmptyString);
 
 	m_running.store(false);
 
@@ -938,12 +938,12 @@ void ibMcpServer::Stop()
 	m_session = nullptr;
 }
 
-wxString ibMcpServer::GetEndpoint() const
+ibString ibMcpServer::GetEndpoint() const
 {
 	if (!IsRunning())
-		return wxEmptyString;
+		return ibEmptyString;
 
-	return wxString::Format(wxT("%s://%s:%u/"), ibApplicationHost::Get()->GetTlsFiles().IsNamed() ? wxT("https") : wxT("http"),
+	return ibString::Format(ibT("%s://%s:%u/"), ibApplicationHost::Get()->GetTlsFiles().IsNamed() ? ibT("https") : ibT("http"),
 		m_settings.m_address, (unsigned)m_settings.m_port);
 }
 
@@ -975,15 +975,15 @@ void ibMcpServer::RemoveNotifier(ibMcpNotifier* notifier)
 // ⚠ An unknown word ranks as the LOWEST, so a client that sends something we do not recognise
 // keeps receiving everything rather than silently losing the stream — the failure that would look
 // exactly like the server having stopped talking.
-static int ibMcpLevelRank(const wxString& level)
+static int ibMcpLevelRank(const ibString& level)
 {
-	if (level.IsSameAs(wxT("emergency"), false)) return 7;
-	if (level.IsSameAs(wxT("alert"),     false)) return 6;
-	if (level.IsSameAs(wxT("critical"),  false)) return 5;
-	if (level.IsSameAs(wxT("error"),     false)) return 4;
-	if (level.IsSameAs(wxT("warning"),   false)) return 3;
-	if (level.IsSameAs(wxT("notice"),    false)) return 2;
-	if (level.IsSameAs(wxT("info"),      false)) return 1;
+	if (level.IsSameAs(ibT("emergency"), false)) return 7;
+	if (level.IsSameAs(ibT("alert"),     false)) return 6;
+	if (level.IsSameAs(ibT("critical"),  false)) return 5;
+	if (level.IsSameAs(ibT("error"),     false)) return 4;
+	if (level.IsSameAs(ibT("warning"),   false)) return 3;
+	if (level.IsSameAs(ibT("notice"),    false)) return 2;
+	if (level.IsSameAs(ibT("info"),      false)) return 1;
 
 	return 0;   // debug, and anything we do not know
 }
@@ -991,7 +991,7 @@ static int ibMcpLevelRank(const wxString& level)
 // What Say() sends on the stream. Named so the gate reads as a comparison, not as a number.
 static const int kChatNoteLevel = 1;   // info
 
-void ibMcpServer::Say(const wxString& text)
+void ibMcpServer::Say(const ibString& text)
 {
 	if (text.IsEmpty())
 		return;
@@ -1008,7 +1008,7 @@ void ibMcpServer::Say(const wxString& text)
 
 	// Shown in the window straight away, before anyone has collected it. A
 	// message that only appears once somebody answers looks like it was lost.
-	Publish(wxT("you"), text, wxEmptyString);
+	Publish(ibT("you"), text, ibEmptyString);
 
 	// AND THE LISTENER IS TOLD, so nobody has to poll. This is the whole point
 	// of holding a stream open: the assistant learns that something was said at
@@ -1020,19 +1020,19 @@ void ibMcpServer::Say(const wxString& text)
 	// watching their own designer is not the audience a client's log level is about.
 	if (m_listener && kChatNoteLevel >= m_logLevel.load()) {
 		ibDataNode note;
-		note.SetValue(wxT("jsonrpc"), wxString(wxT("2.0")));
-		note.SetValue(wxT("method"), wxString(wxT("notifications/message")));
+		note.SetValue(ibT("jsonrpc"), ibString(ibT("2.0")));
+		note.SetValue(ibT("method"), ibString(ibT("notifications/message")));
 
-		ibDataNode& params = note.Child(wxT("params"));
-		params.SetValue(wxT("level"), wxString(wxT("info")));
-		params.SetValue(wxT("logger"), wxString(wxT("chat")));
-		params.SetValue(wxT("data"), text);
+		ibDataNode& params = note.Child(ibT("params"));
+		params.SetValue(ibT("level"), ibString(ibT("info")));
+		params.SetValue(ibT("logger"), ibString(ibT("chat")));
+		params.SetValue(ibT("data"), text);
 
 		m_listener->WriteToStream(ibRpcRenderNode(note));
 	}
 }
 
-void ibMcpServer::Note(const wxString& text)
+void ibMcpServer::Note(const ibString& text)
 {
 	if (text.IsEmpty())
 		return;
@@ -1054,30 +1054,30 @@ void ibMcpServer::Note(const wxString& text)
 	// The listener still learns of it at once — see the note in Say() about the log level.
 	if (m_listener && kChatNoteLevel >= m_logLevel.load()) {
 		ibDataNode note;
-		note.SetValue(wxT("jsonrpc"), wxString(wxT("2.0")));
-		note.SetValue(wxT("method"), wxString(wxT("notifications/message")));
+		note.SetValue(ibT("jsonrpc"), ibString(ibT("2.0")));
+		note.SetValue(ibT("method"), ibString(ibT("notifications/message")));
 
-		ibDataNode& params = note.Child(wxT("params"));
-		params.SetValue(wxT("level"), wxString(wxT("info")));
-		params.SetValue(wxT("logger"), wxString(wxT("metadata")));
-		params.SetValue(wxT("data"), text);
+		ibDataNode& params = note.Child(ibT("params"));
+		params.SetValue(ibT("level"), ibString(ibT("info")));
+		params.SetValue(ibT("logger"), ibString(ibT("metadata")));
+		params.SetValue(ibT("data"), text);
 
 		m_listener->WriteToStream(ibRpcRenderNode(note));
 	}
 }
 
-std::vector<wxString> ibMcpServer::TakeNoted()
+std::vector<ibString> ibMcpServer::TakeNoted()
 {
 	std::lock_guard<std::mutex> lock(m_saidMutex);
 
-	std::vector<wxString> taken;
+	std::vector<ibString> taken;
 	taken.swap(m_noted);
 	return taken;
 }
 
-std::vector<wxString> ibMcpServer::TakeSaid()
+std::vector<ibString> ibMcpServer::TakeSaid()
 {
-	std::vector<wxString> taken;
+	std::vector<ibString> taken;
 	{
 		std::lock_guard<std::mutex> lock(m_saidMutex);
 
@@ -1090,27 +1090,27 @@ std::vector<wxString> ibMcpServer::TakeSaid()
 	// that is drawn only when its client asks (the thin designer's) has no timer to ask PendingCount by, and hears it
 	// here. Nothing to show: not a line of the transcript.
 	if (!taken.empty())
-		Publish(wxT("taken"), wxEmptyString, wxEmptyString);
+		Publish(ibT("taken"), ibEmptyString, ibEmptyString);
 	return taken;
 }
 
-void ibMcpServer::Reply(const wxString& text)
+void ibMcpServer::Reply(const ibString& text)
 {
 	{
 		std::lock_guard<std::mutex> lock(m_saidMutex);
 		m_conversation.push_back({ false, text });
 	}
 
-	Publish(wxT("assistant"), wxEmptyString, text);
+	Publish(ibT("assistant"), ibEmptyString, text);
 }
 
-wxString ibMcpServer::Greeting() const
+ibString ibMcpServer::Greeting() const
 {
 	if (!IsRunning())
 		return _("Assistant access is not running. Start it in "
 			"Tools > Options > Assistant access.");
 
-	wxString out = wxString::Format(
+	ibString out = ibString::Format(
 		_("Assistant access is running at %s (build %u)."), GetEndpoint(), GetBuildId());
 
 	// WHAT IS OPEN, because that is what an assistant would be working on and what makes the
@@ -1118,7 +1118,7 @@ wxString ibMcpServer::Greeting() const
 	const ibMetaDataConfigurationBase* const metaData = GetMetaData();
 	if (metaData != nullptr && metaData->IsConfigOpen())
 		if (const ibValueMetaObject* root = metaData->GetCommonMetaObject())
-			out += wxString::Format(_(" Configuration '%s' is open."), root->GetName());
+			out += ibString::Format(_(" Configuration '%s' is open."), root->GetName());
 
 	// ⚠ AND WHETHER ANYBODY IS ACTUALLY THERE. "Running" is not "connected", and a person waiting
 	// for an answer from an assistant that never joined would otherwise have no way to tell the
@@ -1168,7 +1168,7 @@ bool ibMcpServer::CanAskModel() const
 	return IsRunning() && m_clientCanSample.load();
 }
 
-bool ibMcpServer::AskModel(const wxString& question, wxString& refusal)
+bool ibMcpServer::AskModel(const ibString& question, ibString& refusal)
 {
 	if (question.IsEmpty()) {
 		refusal = ibMcpText("There is nothing to ask.");
@@ -1197,33 +1197,33 @@ bool ibMcpServer::AskModel(const wxString& question, wxString& refusal)
 	const long id = m_outgoingId.fetch_add(1);
 
 	ibDataNode ask;
-	ask.SetValue(wxT("jsonrpc"), wxString(wxT("2.0")));
-	ask.AddField(wxT("id"), ibDataValue::Int((std::int64_t)id));
-	ask.SetValue(wxT("method"), wxString(wxT("sampling/createMessage")));
+	ask.SetValue(ibT("jsonrpc"), ibString(ibT("2.0")));
+	ask.AddField(ibT("id"), ibDataValue::Int((std::int64_t)id));
+	ask.SetValue(ibT("method"), ibString(ibT("sampling/createMessage")));
 
-	ibDataNode& params = ask.Child(wxT("params"));
+	ibDataNode& params = ask.Child(ibT("params"));
 
 	// ONE MESSAGE, THE PERSON'S OWN. The shape is the protocol's: a list of messages, each with a
 	// role and a content block. Nothing is prepended to what was typed — a server that quietly
 	// wraps a person's words in instructions of its own is answering a question they did not ask.
 	std::shared_ptr<ibDataNode> message = std::make_shared<ibDataNode>();
-	message->SetValue(wxT("role"), wxString(wxT("user")));
+	message->SetValue(ibT("role"), ibString(ibT("user")));
 
-	ibDataNode& content = message->Child(wxT("content"));
-	content.SetValue(wxT("type"), wxString(wxT("text")));
-	content.SetValue(wxT("text"), question);
+	ibDataNode& content = message->Child(ibT("content"));
+	content.SetValue(ibT("type"), ibString(ibT("text")));
+	content.SetValue(ibT("text"), question);
 
-	params.AddField(wxT("messages"), ibDataValue::Array({ ibDataValue::Child(message) }));
+	params.AddField(ibT("messages"), ibDataValue::Array({ ibDataValue::Child(message) }));
 
 	// A ceiling, because an unbounded request is one a client may refuse outright — and because
 	// what comes back is shown in a window, not saved to a file.
-	params.AddField(wxT("maxTokens"), ibDataValue::Int(4096));
+	params.AddField(ibT("maxTokens"), ibDataValue::Int(4096));
 
 	m_listener->WriteToStream(ibRpcRenderNode(ask));
 
 	// Shown as asked the moment it is asked. The answer arrives later, through Answer() → Reply,
 	// and a window that showed nothing in between would look like the question was swallowed.
-	Publish(wxT("you"), question, wxEmptyString);
+	Publish(ibT("you"), question, ibEmptyString);
 
 	return true;
 }
@@ -1253,7 +1253,7 @@ bool ibMcpServer::AskModel(const wxString& question, wxString& refusal)
 // gone. Everything it touches therefore lives in the shared block, and the arguments are COPIED
 // into it rather than pointed at.
 bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& arguments,
-	ibDataNode& payload, wxString& refusal, bool* outPending)
+	ibDataNode& payload, ibString& refusal, bool* outPending)
 {
 	if (outPending != nullptr)
 		*outPending = false;
@@ -1275,7 +1275,7 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 		const ibMcpTool* m_tool = nullptr;
 		ibDataNode       m_arguments;
 		ibDataNode       m_payload;
-		wxString         m_refusal;
+		ibString         m_refusal;
 		bool             m_ok = false;
 	};
 
@@ -1288,8 +1288,8 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	// never came back left the technology journal without a single line about it — the one place
 	// somebody would look. Two lines per main-thread call: what was asked, and what came of it
 	// with how long it took. Enough to tell "slow" from "never ran" without a debugger.
-	const wxString toolName = tool->GetName();
-	ibJournalInfo(wxT("mcp"), wxT("%s: handed to the main thread"), toolName);
+	const ibString toolName = tool->GetName();
+	ibJournalInfo(ibT("mcp"), ibT("%s: handed to the main thread"), toolName);
 	const auto startedAt = std::chrono::steady_clock::now();
 
 	std::future<void> done = pool->Submit(m_session, [call]() {
@@ -1305,7 +1305,7 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 		// ⚠ A WARNING — the journal's word for "nobody has to be stopped for this". Written as an error it
 		// put a modal "Designer Error" box (and a dump) on top of the very dialog the call was waiting
 		// behind, in front of a person who had pressed nothing (2026-09-28).
-		ibJournalWarning(wxT("mcp"), wxT("%s: not finished within five minutes - most likely waiting behind "
+		ibJournalWarning(ibT("mcp"), ibT("%s: not finished within five minutes - most likely waiting behind "
 			"a dialog; the call still runs when it is answered"), toolName);
 
 		// 🛑 AND THIS IS NOT A REFUSAL, WHICH IS THE WHOLE POINT OF SAYING SO OUT LOUD. The work is
@@ -1337,15 +1337,15 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 
 	// The figure is the point: a caller that was told the connection dropped can read here whether
 	// the work took four seconds or four minutes, and whether it succeeded anyway.
-	ibJournalInfo(wxT("mcp"), wxT("%s: %s in %lld ms"), toolName,
-		call->m_ok ? wxString(wxT("done")) : (call->m_refusal.IsEmpty() ? wxString(wxT("refused")) : call->m_refusal),
+	ibJournalInfo(ibT("mcp"), ibT("%s: %s in %lld ms"), toolName,
+		call->m_ok ? ibString(ibT("done")) : (call->m_refusal.IsEmpty() ? ibString(ibT("refused")) : call->m_refusal),
 		static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::steady_clock::now() - startedAt).count()));
 
 	return call->m_ok;
 }
 
-void ibMcpServer::Publish(const wxString& method, const wxString& request, const wxString& answer)
+void ibMcpServer::Publish(const ibString& method, const ibString& request, const ibString& answer)
 {
 	std::lock_guard<std::mutex> lock(m_notifiersMutex);
 	for (ibMcpNotifier* notifier : m_notifiers) {
@@ -1374,21 +1374,21 @@ void ibMcpServer::Publish(const wxString& method, const wxString& request, const
 //
 // Returns the first name nobody declared, or empty when every name is known.
 //
-static wxString ibMcpUndeclaredArgument(const ibMcpTool* tool, const ibDataNode& arguments)
+static ibString ibMcpUndeclaredArgument(const ibMcpTool* tool, const ibDataNode& arguments)
 {
 	if (tool == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	ibDataNode schema;
 	tool->DescribeInput(schema);
 
-	auto properties = schema.FindChild(wxT("properties"));
+	auto properties = schema.FindChild(ibT("properties"));
 
 	// A tool that declares no properties takes no arguments BY DESCRIPTION, but that is also what
 	// a tool looks like before anyone wrote its schema — so silence here is read as "no opinion"
 	// and lets the call through, rather than refusing every argument of an undocumented verb.
 	if (!properties)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	// ⚠ BOTH AREAS. A node keeps plain values in its FIELDS and composite ones in its PROPERTIES,
 	// and an incoming argument lands in whichever its JSON shape calls for — `id: 5` is a field,
@@ -1403,7 +1403,7 @@ static wxString ibMcpUndeclaredArgument(const ibMcpTool* tool, const ibDataNode&
 			return field.first;
 	}
 
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 // ⭐⭐ AND THE REFUSAL SAYS WHAT IT DOES TAKE. "Check the tool's schema" is a round trip that ends
@@ -1418,25 +1418,25 @@ static wxString ibMcpUndeclaredArgument(const ibMcpTool* tool, const ibDataNode&
 // The near name is said FIRST when there is one, because a typo and a wrong concept are different
 // mistakes and the first is worth pointing straight at.
 // (`closest`, not `near`: `near` is still a macro in the Windows headers.)
-static wxString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const wxString& given, wxString& closest)
+static ibString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const ibString& given, ibString& closest)
 {
 	if (tool == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	ibDataNode schema;
 	tool->DescribeInput(schema);
 
-	auto properties = schema.FindChild(wxT("properties"));
+	auto properties = schema.FindChild(ibT("properties"));
 	if (!properties)
-		return wxEmptyString;
+		return ibEmptyString;
 
-	const wxString wanted = given.Lower();
-	wxString names;
+	const ibString wanted = given.Lower();
+	ibString names;
 
 	for (const auto& declared : properties->Fields()) {
 
 		if (!names.IsEmpty())
-			names += wxT(", ");
+			names += ibT(", ");
 		names += declared.first;
 
 		// ⭐⭐ AND WHICH OF THEM IS THE ONE THE VERB CANNOT WORK WITHOUT. A bare list of four names
@@ -1451,31 +1451,31 @@ static wxString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const wxString& giv
 			if (!argument.Name().IsSameAs(declared.first, false))
 				continue;
 
-			wxString marks;
+			ibString marks;
 			if (argument.IsRequired())
 				marks = ibMcpText("required");
 
 			switch (argument.KindOf()) {
 				case ibMcpTool::ibMcpArgument::Kind::Whole:
-					marks += (marks.IsEmpty() ? wxT("") : wxT(", ")); marks += ibMcpText("integer"); break;
+					marks += (marks.IsEmpty() ? ibT("") : ibT(", ")); marks += ibMcpText("integer"); break;
 				case ibMcpTool::ibMcpArgument::Kind::Flag:
-					marks += (marks.IsEmpty() ? wxT("") : wxT(", ")); marks += ibMcpText("boolean"); break;
+					marks += (marks.IsEmpty() ? ibT("") : ibT(", ")); marks += ibMcpText("boolean"); break;
 				case ibMcpTool::ibMcpArgument::Kind::Many:
-					marks += (marks.IsEmpty() ? wxT("") : wxT(", ")); marks += ibMcpText("array");   break;
+					marks += (marks.IsEmpty() ? ibT("") : ibT(", ")); marks += ibMcpText("array");   break;
 				case ibMcpTool::ibMcpArgument::Kind::Node:
-					marks += (marks.IsEmpty() ? wxT("") : wxT(", ")); marks += ibMcpText("object");  break;
+					marks += (marks.IsEmpty() ? ibT("") : ibT(", ")); marks += ibMcpText("object");  break;
 				default: break;
 			}
 
 			if (!marks.IsEmpty())
-				names += wxT(" (") + marks + wxT(")");
+				names += ibT(" (") + marks + ibT(")");
 			break;
 		}
 
 		// NEAR ENOUGH TO BE A TYPO: one name inside the other (`parent` in `parent_id`, `value` in
 		// `values`). Deliberately not a distance measure — this is a nudge, and a wrong nudge is
 		// worse than none when the full list is right beside it.
-		const wxString candidate = declared.first.Lower();
+		const ibString candidate = declared.first.Lower();
 
 		if (closest.IsEmpty() && wanted.length() >= 3
 			&& (candidate.Find(wanted) != wxNOT_FOUND || wanted.Find(candidate) != wxNOT_FOUND))
@@ -1516,16 +1516,16 @@ static wxString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const wxString& giv
 
 void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibDataNode& into)
 {
-	into.AddField(wxT("build"), ibDataValue::Int((std::int64_t)GetBuildId()));
+	into.AddField(ibT("build"), ibDataValue::Int((std::int64_t)GetBuildId()));
 
 	// ⭐⭐ AND WHICH BASE THIS IS. Every tool here answers for the process that happens to hold the port,
 	// and two designers can stand open on two different bases — so an answer naming the configuration but
 	// not the base lets a caller work in the wrong one and never learn it from anything but the journal
 	// (2026-09-22: a print form, a command and an applied configuration, all built in the base somebody
 	// else had open). Where the base lives is said beside it: a Firebird folder, or a PostgreSQL server's database.
-	into.SetValue(wxT("connection"), applicationInstance->GetDatabaseDescription());
+	into.SetValue(ibT("connection"), applicationInstance->GetDatabaseDescription());
 	if (!applicationInstance->GetFile().IsEmpty())
-		into.SetValue(wxT("base"), applicationInstance->GetFile());
+		into.SetValue(ibT("base"), applicationInstance->GetFile());
 
 	const ibUserInfo& who = applicationInstance->GetUserInfo();
 
@@ -1539,70 +1539,70 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 		// ⚠ And it is the most PERMISSIVE state, not the least: with nobody logged in there are no
 		// roles to fold, so every right answers with its own declared default. That reads
 		// backwards at first glance, which is exactly why it is spelled out.
-		into.AddField(wxT("account"), ibDataValue::Bool(false));
-		into.SetValue(wxT("accountNote"),
+		into.AddField(ibT("account"), ibDataValue::Bool(false));
+		into.SetValue(ibT("accountNote"),
 			ibMcpText("No accounts exist in this base, so nobody is logged in - it opens without asking. "
 			  "That is not a restriction: with no roles to fold, every right answers with its "
 			  "declared default. `metadata_rights` says what those are."));
 	}
 	else {
 
-		into.AddField(wxT("account"), ibDataValue::Bool(true));
+		into.AddField(ibT("account"), ibDataValue::Bool(true));
 
-		ibDataNode& user = into.Child(wxT("user"));
-		user.SetValue(wxT("name"), who.m_strUserName);
+		ibDataNode& user = into.Child(ibT("user"));
+		user.SetValue(ibT("name"), who.m_strUserName);
 
 		if (!who.m_strUserFullName.IsEmpty())
-			user.SetValue(wxT("fullName"), who.m_strUserFullName);
+			user.SetValue(ibT("fullName"), who.m_strUserFullName);
 
 		std::vector<ibDataValue> roles;
 
 		for (const ibUserInfo::ibUserRole& role : who.m_roleArray)
 			roles.push_back(ibDataValue::String(
 				role.m_mode == ibRoleCompositionMode_Intersection
-					? role.m_strRoleName + wxT(" (restricting)")
+					? role.m_strRoleName + ibT(" (restricting)")
 					: role.m_strRoleName));
 
-		user.AddField(wxT("roles"), ibDataValue::Array(roles));
+		user.AddField(ibT("roles"), ibDataValue::Array(roles));
 
 		if (who.IsSetLanguage())
-			user.SetValue(wxT("language"), who.m_strLanguageName);
+			user.SetValue(ibT("language"), who.m_strLanguageName);
 	}
 
 	// The configuration of the session this is asked in — as the user above is that session's.
 	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData();
 
 	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		into.AddField(wxT("configurationOpen"), ibDataValue::Bool(false));
+		into.AddField(ibT("configurationOpen"), ibDataValue::Bool(false));
 		return;
 	}
 
-	into.AddField(wxT("configurationOpen"), ibDataValue::Bool(true));
+	into.AddField(ibT("configurationOpen"), ibDataValue::Bool(true));
 
 	if (ibValueMetaObject* root = metaData->GetCommonMetaObject()) {
 
-		into.SetValue(wxT("configuration"), root->GetName());
+		into.SetValue(ibT("configuration"), root->GetName());
 		if (!root->GetSynonym().IsEmpty())
-			into.SetValue(wxT("synonym"), root->GetSynonym());
+			into.SetValue(ibT("synonym"), root->GetSynonym());
 
 		// ⭐ AND ITS ID, because the root is where the direction is written and nothing else
 		// reports it: it appears in no listing (it is not of a listable KIND) and in no answer
 		// about anything else. Telling a caller to write on the root without this is telling them
 		// to address an object they have no way to name.
-		into.AddField(wxT("configurationId"), ibDataValue::Int((std::int64_t)root->GetMetaID()));
+		into.AddField(ibT("configurationId"), ibDataValue::Int((std::int64_t)root->GetMetaID()));
 	}
 
 	// ⭐⭐ THE ONE A CALLER MUST RE-ASK. Everything else here drifts slowly; this can be flipped
 	// between two calls, and code written in the other dialect is rejected by the compiler while
 	// reading perfectly to a human.
-	into.SetValue(wxT("dialect"), wxString(
-		ibConfigurationWritesInWords(metaData) ? wxT("word-fenced") : wxT("c-style")));
+	into.SetValue(ibT("dialect"), ibString(
+		ibConfigurationWritesInWords(metaData) ? ibT("word-fenced") : ibT("c-style")));
 
 	// ⭐ HOW A TEXT IS WRITTEN, said beside the dialect because both dialects share the one lexer
 	// (ibTranslateCode) and a caller writing code asks here first. A query in code is a MULTI-LINE
 	// string, and without this a caller glues it together line by line with `+` (measured
 	// 2026-09-15: a day of queries written that way through code_run, until Max pointed at `|`).
-	into.SetValue(wxT("strings"),
+	into.SetValue(ibT("strings"),
 		ibMcpText("A string literal may run over several lines, and that is how a query text is "
 		  "written in code: the line break stays in the text, and every continuing line opens with "
 		  "`|` after its indentation, which is dropped. So a query is ONE literal, not a sum of "
@@ -1617,10 +1617,10 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 
 	std::vector<ibDataValue> languages;
 
-	for (const wxString& language : ibListMetaObjectNames(metaData, wxT("Language")))
+	for (const ibString& language : ibListMetaObjectNames(metaData, ibT("Language")))
 		languages.push_back(ibDataValue::String(language));
 
-	into.AddField(wxT("languages"), ibDataValue::Array(languages));
+	into.AddField(ibT("languages"), ibDataValue::Array(languages));
 
 	// 🛑 A NUMBER IS NOT AN ANSWER HERE. This reported 1001, which reads as a build or a revision
 	// and is neither — it is the enumeration member `version_oes_last`, whose label is "Don't use
@@ -1631,13 +1631,13 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// metadata_properties takes for every enumerated property. Not decoded here from the integer:
 	// that would be this file keeping a private copy of a list the enumeration already owns, and
 	// the copy would be wrong the first time a member was added.
-	into.AddField(wxT("compatibilityVersion"), ibDataValue::Int((std::int64_t)metaData->GetVersion()));
+	into.AddField(ibT("compatibilityVersion"), ibDataValue::Int((std::int64_t)metaData->GetVersion()));
 
 	if (ibValueMetaObject* root = metaData->GetCommonMetaObject()) {
 
 		// ⭐ ASKED BY NAME. This walked every property of the root comparing names — which is what
 		// GetProperty(name) does, on the object that owns them.
-		if (const ibProperty* property = root->GetProperty(wxT("Version"))) {
+		if (const ibProperty* property = root->GetProperty(ibT("Version"))) {
 
 			// ⭐⭐ THE PROPERTY HANDS OVER ITS RUNTIME VALUE, AND THE VALUE SPEAKS FOR ITSELF.
 			// `GetDataValue` is pure virtual on the base — EVERY property has it — and what comes
@@ -1651,7 +1651,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 			ibValue held;
 
 			if (property->GetDataValue(held))
-				into.SetValue(wxT("compatibility"), held.GetString());
+				into.SetValue(ibT("compatibility"), held.GetString());
 		}
 	}
 
@@ -1685,7 +1685,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// `storedUnknown` below says so rather than guessing.
 	const bool differs = metaData->IsModified();
 
-	into.AddField(wxT("differsFromDatabase"), ibDataValue::Bool(differs));
+	into.AddField(ibT("differsFromDatabase"), ibDataValue::Bool(differs));
 
 	// ⭐ ASKED OF THE CONTAINER, and there is nothing to recognise first. The ACTIVE metadata is a
 	// configuration by definition — an external report or data processor is a container of the BASE
@@ -1697,7 +1697,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// this field matters most. IsConfigSave is virtual on the base and is the question itself.
 	const bool applied = metaData->IsConfigSave();
 
-	into.AddField(wxT("inDatabase"), ibDataValue::Bool(applied));
+	into.AddField(ibT("inDatabase"), ibDataValue::Bool(applied));
 
 	// ⭐⭐ THE THIRD FACT, AND IT USED TO BE A CONFESSION INSTEAD OF AN ANSWER. "Would closing the
 	// designer lose this?" is the question a session actually needs, and it is independent of both
@@ -1706,7 +1706,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// now keeps it (ibMetaData::IsStored) from the only two occasions that can move it.
 	const bool unsaved = metaData->IsEdited();
 
-	into.AddField(wxT("unsavedEdits"), ibDataValue::Bool(unsaved));
+	into.AddField(ibT("unsavedEdits"), ibDataValue::Bool(unsaved));
 
 	// ⭐⭐ THE STATE AS A WORD, not two flags for the caller to combine. Two booleans carry three
 	// meaningful situations, and leaving them to be folded outside is how one of the three gets
@@ -1718,13 +1718,13 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// A caller reading its own answer found it arguing with itself and had no way to tell which
 	// half to believe (measured over MCP, 2026-09-03).
 	if (!applied) {
-		into.SetValue(wxT("state"), wxString(wxT("storedNotApplied")));
+		into.SetValue(ibT("state"), ibString(ibT("storedNotApplied")));
 
 		// 🛑 THE FIRST HALF OF THIS SENTENCE USED TO BE ASSERTED WITHOUT KNOWING IT. The word says
 		// "stored", and the text said "it survives closing the designer" — while four lines below,
 		// the same answer admitted that nothing tracked whether it had been stored at all. Now it
 		// is known, so the state says which of the two it is instead of asserting the good one.
-		into.SetValue(wxT("meaning"), unsaved
+		into.SetValue(ibT("meaning"), unsaved
 			? ibMcpText("NOT stored: closing the designer loses this work. And the DATABASE holds an "
 			    "older configuration besides, so the running application does not have any of it. "
 			    "`config_save` writes the store; `config_apply` does that AND publishes to the "
@@ -1734,13 +1734,13 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 			    "`database_diff` says what differs; `config_apply` writes it."));
 	}
 	else if (differs) {
-		into.SetValue(wxT("state"), wxString(wxT("editedSinceApplied")));
+		into.SetValue(ibT("state"), ibString(ibT("editedSinceApplied")));
 
 		// ⚠ AND A DIFFERENCE IS NOT ALWAYS A SCHEMA DIFFERENCE, which is why this says which
 		// question `database_diff` answers. A comment, a note, a module's text all change the
 		// configuration and change no table, so the diff can legitimately answer "0" while this is
 		// true — and a reader who takes the diff for the whole answer concludes the flag is broken.
-		into.SetValue(wxT("meaning"),
+		into.SetValue(ibT("meaning"),
 			ibMcpText("The database's copy is behind this one: it was applied, and edited since. The "
 			  "running application still works from what was applied. `database_diff` says what "
 			  "of it reaches the SCHEMA - a comment, a note or a module changes the configuration "
@@ -1748,8 +1748,8 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 			  "there are none. `config_apply` puts them in."));
 	}
 	else {
-		into.SetValue(wxT("state"), wxString(wxT("inStep")));
-		into.SetValue(wxT("meaning"),
+		into.SetValue(ibT("state"), ibString(ibT("inStep")));
+		into.SetValue(ibT("meaning"),
 			ibMcpText("The database holds this configuration - nothing is pending against it."));
 	}
 
@@ -1758,7 +1758,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// case", which is the shape of a warning that gets read past. It is now a fact about THIS
 	// session and appears only when it is true.
 	if (unsaved)
-		into.SetValue(wxT("atRisk"),
+		into.SetValue(ibT("atRisk"),
 			ibMcpText("There are edits that exist only in this process. Closing the designer - including "
 			  "a close for a rebuild - loses them, and nothing else in this answer says so: "
 			  "`differsFromDatabase` is about the DATABASE and stays true after a perfectly good "
@@ -1785,12 +1785,12 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 				attached++;
 		});
 
-		ibDataNode& debugger = into.Child(wxT("debugger"));
-		debugger.AddField(wxT("runtimes"), ibDataValue::Int((std::int64_t)seen));
-		debugger.AddField(wxT("attached"), ibDataValue::Int((std::int64_t)attached));
+		ibDataNode& debugger = into.Child(ibT("debugger"));
+		debugger.AddField(ibT("runtimes"), ibDataValue::Int((std::int64_t)seen));
+		debugger.AddField(ibT("attached"), ibDataValue::Int((std::int64_t)attached));
 
 		if (seen > 0 && attached == 0)
-			debugger.SetValue(wxT("note"),
+			debugger.SetValue(ibT("note"),
 				ibMcpText("Something is running but nothing is attached - breakpoints will not be "
 				  "reached. `debug_attach` takes it."));
 	}
@@ -1803,14 +1803,14 @@ namespace {
 const size_t kOrientationNotesLimit = 20000;
 
 
-wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
+ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 {
-	wxString out;
+	ibString out;
 
-	out << wxT("You are connected to a running OES Enterprise DESIGNER (build ")
+	out << ibT("You are connected to a running OES Enterprise DESIGNER (build ")
 		<< (unsigned)GetBuildId()
-		<< wxT("), working inside the session of the person at it, with exactly their rights. ")
-		<< wxT("What you change is their live configuration.\n\n");
+		<< ibT("), working inside the session of the person at it, with exactly their rights. ")
+		<< ibT("What you change is their live configuration.\n\n");
 
 	// ⭐ WHOSE HANDS THESE ARE. "With their rights" was true and useless without a name: an
 	// assistant that does not know who it is acting as cannot tell a refusal it caused from a
@@ -1826,66 +1826,66 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 	if (who.IsOk()) {
 
-		out << wxT("YOU ARE ACTING AS ") << who.m_strUserName;
+		out << ibT("YOU ARE ACTING AS ") << who.m_strUserName;
 
 		if (!who.m_strUserFullName.IsEmpty() && who.m_strUserFullName != who.m_strUserName)
-			out << wxT(" (") << who.m_strUserFullName << wxT(")");
+			out << ibT(" (") << who.m_strUserFullName << ibT(")");
 
-		out << wxT(".");
+		out << ibT(".");
 
 		if (who.m_roleArray.empty()) {
 			// NO ROLES IS NOT NO RIGHTS. With none assigned every right falls back to its own
 			// declared default, which is usually permissive — worth saying, because "no roles"
 			// reads like "can do nothing" and the opposite is nearer the truth.
-			out << wxT(" No roles are assigned, so every right answers with its declared default ")
-				<< wxT("- `metadata_rights` says what those are.");
+			out << ibT(" No roles are assigned, so every right answers with its declared default ")
+				<< ibT("- `metadata_rights` says what those are.");
 		}
 		else {
-			out << wxT(" Roles: ");
+			out << ibT(" Roles: ");
 
 			bool first = true;
 
 			for (const ibUserInfo::ibUserRole& role : who.m_roleArray) {
 				if (!first)
-					out << wxT(", ");
+					out << ibT(", ");
 				out << role.m_strRoleName;
 				if (role.m_mode == ibRoleCompositionMode_Intersection)
-					out << wxT(" (restricting)");
+					out << ibT(" (restricting)");
 				first = false;
 			}
 
-			out << wxT(". `role_rights` says what they let through.");
+			out << ibT(". `role_rights` says what they let through.");
 		}
 
-		out << wxT("\n\nEverything you do is written to the registration journal under that name, ")
-			<< wxT("beside what they did themselves. There is no separate identity for an ")
-			<< wxT("assistant, by design: an actor that can change a configuration leaves the ")
-			<< wxT("same trail a person does. (Reading it back is `journal_read` - see WRITE DOWN ")
-			<< wxT("WHAT YOU FIND below.)\n\n");
+		out << ibT("\n\nEverything you do is written to the registration journal under that name, ")
+			<< ibT("beside what they did themselves. There is no separate identity for an ")
+			<< ibT("assistant, by design: an actor that can change a configuration leaves the ")
+			<< ibT("same trail a person does. (Reading it back is `journal_read` - see WRITE DOWN ")
+			<< ibT("WHAT YOU FIND below.)\n\n");
 	}
 	else {
 		// The same absence, said in the same breath as it would have been reported. Skipping the
 		// paragraph would have left "with exactly their rights" above pointing at nobody.
-		out << wxT("THERE ARE NO ACCOUNTS in this base yet, so nobody is logged in - it opens ")
-			<< wxT("without asking. Ordinary, and not a restriction: with no roles to fold, every ")
-			<< wxT("right answers with its own declared default, which is the permissive end. ")
-			<< wxT("`user_list` and `metadata_rights` are where that stops being a guess.\n\n");
+		out << ibT("THERE ARE NO ACCOUNTS in this base yet, so nobody is logged in - it opens ")
+			<< ibT("without asking. Ordinary, and not a restriction: with no roles to fold, every ")
+			<< ibT("right answers with its own declared default, which is the permissive end. ")
+			<< ibT("`user_list` and `metadata_rights` are where that stops being a guess.\n\n");
 	}
 
-	out << wxT("FINDING THE TOOLS. Only two are listed: `mcp_search` finds by words in a name or ")
-		<< wxT("description, `mcp_call` {tool, arguments} invokes anything it found. The rest are ")
-		<< wxT("deliberately not announced - the whole set costs some 75 KB of schemas, and most ")
-		<< wxT("of it is never used. `mcp_search` with no query lists everything.\n")
+	out << ibT("FINDING THE TOOLS. Only two are listed: `mcp_search` finds by words in a name or ")
+		<< ibT("description, `mcp_call` {tool, arguments} invokes anything it found. The rest are ")
+		<< ibT("deliberately not announced - the whole set costs some 75 KB of schemas, and most ")
+		<< ibT("of it is never used. `mcp_search` with no query lists everything.\n")
 
 		// ⭐ SAID HERE TOO, not only in the argument's own description. This paragraph is what a
 		// caller reads BEFORE its first call; the schema is read after, or not at all. The finder
 		// has answered patterns since it was written, and the one place that said so was the last
 		// place anyone looks.
-		<< wxT("A query that carries | \\ [ ] ^ $ or .* is read as a REGULAR EXPRESSION rather ")
-		<< wxT("than as words - `lock|block`, `report.*print` - and that holds for BOTH searches ")
-		<< wxT("this server does: the tools, and the pattern corpus that answers questions of the ")
-		<< wxT("trade. Ordinary punctuation does not switch modes, so a sentence with brackets in ")
-		<< wxT("it stays a sentence.\n\n");
+		<< ibT("A query that carries | \\ [ ] ^ $ or .* is read as a REGULAR EXPRESSION rather ")
+		<< ibT("than as words - `lock|block`, `report.*print` - and that holds for BOTH searches ")
+		<< ibT("this server does: the tools, and the pattern corpus that answers questions of the ")
+		<< ibT("trade. Ordinary punctuation does not switch modes, so a sentence with brackets in ")
+		<< ibT("it stays a sentence.\n\n");
 
 	// ⭐⭐ HIGH UP BECAUSE THIS TEXT IS DELIVERED WHOLE OR NOT AT ALL. A client puts `instructions`
 	// into its prompt and several of them CUT IT — measured 2026-09-03, the copy in a live session
@@ -1902,19 +1902,19 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// document chains — has no reason to think the door applies to it. The corpus is sixty-seven
 	// entries covering the whole trade, and the sentence was selling one of them. What a reader
 	// needs first is the RANGE; the metatype advice is a line inside it, not its title.
-	out << wxT("HOW THINGS ARE DONE HERE IS WRITTEN DOWN - `pattern_read`. It is the practice of ")
-		<< wxT("building on this platform, nearly seventy entries of it, and it is there to be ")
-		<< wxT("LOOKED AT rather than deduced: which metatype a request is asking for (a period, a turnover, ")
-		<< wxT("a balance, an accountant's correspondence), how a document posts and what it may ")
-		<< wxT("touch, prices and discounts, payroll, VAT, lots and serial numbers, settlements, ")
-		<< wxT("closing a period, how queries are written here, how names are chosen, how a form is ")
-		<< wxT("laid out, what shapes a report takes, printing, roles and row-level access.\n")
-		<< wxT("`pattern_read` with no argument LISTS the topics - one call, and you know what is ")
-		<< wxT("covered; with a `name` it gives one in full; with a `query` it searches inside them. ")
-		<< wxT("They are recommendations, not rules, and they are written for exactly the moment ")
-		<< wxT("before you invent something: look first, then decide. The choice of shape in ")
-		<< wxT("particular is the one decision that is expensive to revisit once there is data in ")
-		<< wxT("it.\n\n");
+	out << ibT("HOW THINGS ARE DONE HERE IS WRITTEN DOWN - `pattern_read`. It is the practice of ")
+		<< ibT("building on this platform, nearly seventy entries of it, and it is there to be ")
+		<< ibT("LOOKED AT rather than deduced: which metatype a request is asking for (a period, a turnover, ")
+		<< ibT("a balance, an accountant's correspondence), how a document posts and what it may ")
+		<< ibT("touch, prices and discounts, payroll, VAT, lots and serial numbers, settlements, ")
+		<< ibT("closing a period, how queries are written here, how names are chosen, how a form is ")
+		<< ibT("laid out, what shapes a report takes, printing, roles and row-level access.\n")
+		<< ibT("`pattern_read` with no argument LISTS the topics - one call, and you know what is ")
+		<< ibT("covered; with a `name` it gives one in full; with a `query` it searches inside them. ")
+		<< ibT("They are recommendations, not rules, and they are written for exactly the moment ")
+		<< ibT("before you invent something: look first, then decide. The choice of shape in ")
+		<< ibT("particular is the one decision that is expensive to revisit once there is data in ")
+		<< ibT("it.\n\n");
 
 	// ⭐⭐ THE DISCIPLINE TRAVELS WITH THE SERVER, not with whoever happens to remember it: every
 	// client that connects is told to keep the record up, so the next one arrives better informed
@@ -1924,34 +1924,34 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// mcp_search points at the patterns in every answer; NOTHING points at note_write at the moment
 	// a finding appears, so a session that got a cut copy simply does not know the discipline
 	// exists. Highest-value paragraph, therefore first.
-	out << wxT("WRITE DOWN WHAT YOU FIND - a configuration records what was built and never WHY, so ")
-		<< wxT("what you worked out dies with your session unless you put it somewhere. Four ")
-		<< wxT("surfaces, different readers:\n")
-		<< wxT(" * `note_write` {id: <root>, target: \"notes\"} - what is true of the WHOLE ")
-		<< wxT("configuration: how it is put together, what was decided against, where to look ")
-		<< wxT("next. Read first, before any object.\n")
-		<< wxT(" * `note_write` {id, target: \"notes\"} on EACH OBJECT - why it exists, which shape ")
-		<< wxT("was chosen, what was rejected. On the object, not on the root: nobody re-reads the ")
-		<< wxT("root looking for them. `note_read` gives them back.\n")
-		<< wxT(" * `target: \"help\"` - what the person USING the application reads on F1.\n")
-		<< wxT(" * `Comment` (metadata_set) - one line on any node, WHY THIS EXISTS AT ALL. It ")
-		<< wxT("rides along with metadata_tree, so one read of the map shows what everything is for.\n")
-		<< wxT("Markdown, so `[Goods](oes:1005)` names another object: the link survives a rename. ")
-		<< wxT("And what you DID is kept for you - `journal_read` says what was actually done, and ")
-		<< wxT("tells your changes from somebody else's.\n\n");
+	out << ibT("WRITE DOWN WHAT YOU FIND - a configuration records what was built and never WHY, so ")
+		<< ibT("what you worked out dies with your session unless you put it somewhere. Four ")
+		<< ibT("surfaces, different readers:\n")
+		<< ibT(" * `note_write` {id: <root>, target: \"notes\"} - what is true of the WHOLE ")
+		<< ibT("configuration: how it is put together, what was decided against, where to look ")
+		<< ibT("next. Read first, before any object.\n")
+		<< ibT(" * `note_write` {id, target: \"notes\"} on EACH OBJECT - why it exists, which shape ")
+		<< ibT("was chosen, what was rejected. On the object, not on the root: nobody re-reads the ")
+		<< ibT("root looking for them. `note_read` gives them back.\n")
+		<< ibT(" * `target: \"help\"` - what the person USING the application reads on F1.\n")
+		<< ibT(" * `Comment` (metadata_set) - one line on any node, WHY THIS EXISTS AT ALL. It ")
+		<< ibT("rides along with metadata_tree, so one read of the map shows what everything is for.\n")
+		<< ibT("Markdown, so `[Goods](oes:1005)` names another object: the link survives a rename. ")
+		<< ibT("And what you DID is kept for you - `journal_read` says what was actually done, and ")
+		<< ibT("tells your changes from somebody else's.\n\n");
 
 	// The configuration of the session this is asked in — as the user above is that session's.
 	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData();
 
 	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		out << wxT("NO CONFIGURATION IS OPEN in this designer yet.\n");
+		out << ibT("NO CONFIGURATION IS OPEN in this designer yet.\n");
 		return out;
 	}
 
 	// WHAT KIND OF PLACE THIS IS, in a few lines. A caller that knows there are documents and
 	// registers but no charts of accounts asks better first questions.
-	std::map<wxString, int> census;
-	std::vector<std::pair<wxString, wxString> > notes;   // object path, its notes
+	std::map<ibString, int> census;
+	std::vector<std::pair<ibString, ibString> > notes;   // object path, its notes
 
 	for (ibValueMetaObject* object : metaData->GetAnyArrayObject()) {
 
@@ -1960,10 +1960,10 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 		census[object->GetClassName()]++;
 
-		const wxString written = object->GetNoteContent();
+		const ibString written = object->GetNoteContent();
 		if (!written.IsEmpty())
 			notes.push_back(std::make_pair(
-				object->GetClassName() + wxT(".") + object->GetName(), written));
+				object->GetClassName() + ibT(".") + object->GetName(), written));
 	}
 
 	// ⭐⭐ THE ROOT IS NOT ONE MORE OBJECT WITH A NOTE ON IT — it is where the configuration says
@@ -1973,8 +1973,8 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	//
 	// (It is also not in the array, the same absence that made role_grant silently skip the
 	// administration rights.)
-	wxString direction;
-	wxString called;
+	ibString direction;
+	ibString called;
 
 	if (ibValueMetaObject* root = metaData->GetCommonMetaObject()) {
 
@@ -1985,23 +1985,23 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		// writes, and both are worth having before the first one is asked.
 		called = root->GetName();
 
-		const wxString synonym = root->GetSynonym();
+		const ibString synonym = root->GetSynonym();
 		if (!synonym.IsEmpty() && synonym != called)
-			called += wxT(" (") + synonym + wxT(")");
+			called += ibT(" (") + synonym + ibT(")");
 	}
 
 	if (!called.IsEmpty()) {
 
-		out << wxT("THIS CONFIGURATION IS CALLED ") << called;
+		out << ibT("THIS CONFIGURATION IS CALLED ") << called;
 
 		// The id, said where the name is said. The root appears in no listing — it is not of a
 		// kind that can be listed — so this is the only place a caller learns how to address the
 		// object it is told below to write the direction on.
 		if (ibValueMetaObject* root = metaData->GetCommonMetaObject())
-			out << wxT(", and its root has NodeId ") << (int)root->GetMetaID()
-				<< wxT(" (it is in no listing; that is how you address it)");
+			out << ibT(", and its root has NodeId ") << (int)root->GetMetaID()
+				<< ibT(" (it is in no listing; that is how you address it)");
 
-		out << wxT(".\n\n");
+		out << ibT(".\n\n");
 	}
 
 	// ⭐⭐ TWO FACTS THAT DECIDE WHETHER WHAT YOU WRITE COMPILES AT ALL, and neither can be guessed
@@ -2015,35 +2015,35 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// configuration's own settings at any moment, and after that this paragraph is confidently
 	// wrong. There is no "instructions changed" in the protocol — so instead of pretending the
 	// snapshot stays true, it names the tool that answers the same question live.
-	out << wxT("HOW THIS CONFIGURATION IS WRITTEN - true when you connected. `platform_state` ")
-		<< wxT("answers all of it again at any moment. Ask it at two points, not one:\n")
-		<< wxT(" BEFORE WRITING CODE - the dialect can be switched while you are connected, and ")
-		<< wxT("the other one is rejected by the compiler while reading perfectly.\n")
-		<< wxT(" BEFORE SAYING SOMETHING IS DONE - `unsavedEdits` means it dies when the ")
-		<< wxT("designer closes, `inDatabase: false` means the running application never got it. ")
-		<< wxT("Both are silent, and \"done\" is false in each of them for a different reason ")
-		<< wxT("with a different cure.\n");
+	out << ibT("HOW THIS CONFIGURATION IS WRITTEN - true when you connected. `platform_state` ")
+		<< ibT("answers all of it again at any moment. Ask it at two points, not one:\n")
+		<< ibT(" BEFORE WRITING CODE - the dialect can be switched while you are connected, and ")
+		<< ibT("the other one is rejected by the compiler while reading perfectly.\n")
+		<< ibT(" BEFORE SAYING SOMETHING IS DONE - `unsavedEdits` means it dies when the ")
+		<< ibT("designer closes, `inDatabase: false` means the running application never got it. ")
+		<< ibT("Both are silent, and \"done\" is false in each of them for a different reason ")
+		<< ibT("with a different cure.\n");
 
-	out << wxT("Script dialect: ");
+	out << ibT("Script dialect: ");
 
 	if (ibConfigurationWritesInWords(metaData))
-		out << wxT("WORD-FENCED (`If ... Then ... EndIf`, `Procedure ... EndProcedure`).");
+		out << ibT("WORD-FENCED (`If ... Then ... EndIf`, `Procedure ... EndProcedure`).");
 	else
-		out << wxT("C-STYLE (`if (...) { ... }`, braces and semicolons).");
+		out << ibT("C-STYLE (`if (...) { ... }`, braces and semicolons).");
 
-	out << wxT(" Write in that one - the other is a different language to the compiler, and ")
-		<< wxT("`script_check` is how you find out before anyone runs it.\n");
+	out << ibT(" Write in that one - the other is a different language to the compiler, and ")
+		<< ibT("`script_check` is how you find out before anyone runs it.\n");
 
-	const std::vector<wxString> languages = ibListMetaObjectNames(metaData, wxT("Language"));
+	const std::vector<ibString> languages = ibListMetaObjectNames(metaData, ibT("Language"));
 
 	if (!languages.empty()) {
 
-		out << wxT("Languages declared: ");
+		out << ibT("Languages declared: ");
 
 		for (size_t index = 0; index < languages.size(); ++index)
-			out << (index == 0 ? wxT("") : wxT(", ")) << languages[index];
+			out << (index == 0 ? ibT("") : ibT(", ")) << languages[index];
 
-		out << wxT(".\n");
+		out << ibT(".\n");
 	}
 
 	// ⭐⭐ THE LINE BETWEEN WHAT IS WRITTEN AND WHAT IS SHOWN, and it is not a style preference —
@@ -2055,14 +2055,14 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// Said in the orientation because a model working with a Russian-speaking developer will
 	// otherwise mirror their language into the names, helpfully and wrongly, and the mistake is
 	// expensive to undo once modules reference it.
-	out << wxT("NOTE: THE CONFIGURATION IS WRITTEN IN ENGLISH. Names of objects, attributes, tabular ")
-		<< wxT("sections and modules - and the code inside them - are English, always: a name goes ")
-		<< wxT("into script, into query text and into the database schema, and it is what the next ")
-		<< wxT("person has to read.\n")
-		<< wxT("What is NOT English is what a PERSON sees: synonyms (`metadata_set` on Synonym, ")
-		<< wxT("with `language` to fill one at a time), help text, and anything you say in the ")
-		<< wxT("assistant window. Answer them in ")
-		<< wxT("their language; name things in English.\n");
+	out << ibT("NOTE: THE CONFIGURATION IS WRITTEN IN ENGLISH. Names of objects, attributes, tabular ")
+		<< ibT("sections and modules - and the code inside them - are English, always: a name goes ")
+		<< ibT("into script, into query text and into the database schema, and it is what the next ")
+		<< ibT("person has to read.\n")
+		<< ibT("What is NOT English is what a PERSON sees: synonyms (`metadata_set` on Synonym, ")
+		<< ibT("with `language` to fill one at a time), help text, and anything you say in the ")
+		<< ibT("assistant window. Answer them in ")
+		<< ibT("their language; name things in English.\n");
 
 	// ⭐⭐ AND THE LANGUAGES ARE A THING TO SET UP, NOT A SETTING TO READ. A fresh configuration is
 	// created with English alone, so a person working in Russian or Ukrainian has a base whose
@@ -2077,40 +2077,40 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// "a Synonym without `language` goes to the configuration's own" - and the very next assistant
 	// to read it (the one that wrote it, 2026-09-03) still put Russian captions into the ENGLISH
 	// slot on fourteen objects and on the Russian language itself. A rule is read; a STEP is done.
-	out << wxT("CAPTIONS AND LANGUAGES, IN THREE STEPS - the third is where everybody slips:\n")
-		<< wxT(" 1. ASK which language the people USING this read. Not the developer's by default, ")
-		<< wxT("and possibly several.\n")
-		<< wxT(" 2. DECLARE IT FIRST - `metadata_create` {kind: \"Language\", name: \"Russian\"}, an ")
-		<< wxT("English name like any other, then set its `Code` (`ru`, `uk`, `en`).\n")
-		<< wxT(" 3. WRITE EVERY CAPTION WITH `language`. Omitting it is not \"all languages\": it ")
-		<< wxT("writes into the configuration's own - English in a fresh base - so a Russian caption ")
-		<< wxT("is stored as the English one and its reader sees nothing.\n\n");
+	out << ibT("CAPTIONS AND LANGUAGES, IN THREE STEPS - the third is where everybody slips:\n")
+		<< ibT(" 1. ASK which language the people USING this read. Not the developer's by default, ")
+		<< ibT("and possibly several.\n")
+		<< ibT(" 2. DECLARE IT FIRST - `metadata_create` {kind: \"Language\", name: \"Russian\"}, an ")
+		<< ibT("English name like any other, then set its `Code` (`ru`, `uk`, `en`).\n")
+		<< ibT(" 3. WRITE EVERY CAPTION WITH `language`. Omitting it is not \"all languages\": it ")
+		<< ibT("writes into the configuration's own - English in a fresh base - so a Russian caption ")
+		<< ibT("is stored as the English one and its reader sees nothing.\n\n");
 
 	if (who.IsOk() && !who.m_strLanguageName.IsEmpty())
-		out << wxT("The person is working in ") << who.m_strLanguageName
-			<< wxT(" - answer them in it, whatever language this text is in.\n");
+		out << ibT("The person is working in ") << who.m_strLanguageName
+			<< ibT(" - answer them in it, whatever language this text is in.\n");
 
 	// ⚠ THE VERSION A CONFIGURATION DECLARES is not decoration: it is what the platform gates
 	// behaviour on, both in what code may say and in what schema is produced. Raising it IS the
 	// migration, and it is the PERSON's step to take - so it is reported and never touched.
-	out << wxT("Compatibility version: ") << (int)metaData->GetVersion()
-		<< wxT(". It gates what the platform allows; raising it is the developer's own decision ")
-		<< wxT("and is itself the migration - never change it on their behalf.\n\n");
+	out << ibT("Compatibility version: ") << (int)metaData->GetVersion()
+		<< ibT(". It gates what the platform allows; raising it is the developer's own decision ")
+		<< ibT("and is itself the migration - never change it on their behalf.\n\n");
 
 	// ⛔ THE CENSUS USED TO BE SPELLED OUT HERE — "8 Catalogs, 3 Documents, 2 Registers…" — and it is
 	// the clearest example of what does NOT belong in a text paid for on every connection: it is
 	// CONSULTABLE. `metadata_tree {depth: 1}` answers it exactly, on demand, in the caller's own
 	// moment of needing it. What stays is the pointer, because knowing WHERE to ask is the part
 	// nobody can look up.
-	out << wxT("WHAT IS IN IT: `metadata_tree` with depth 1 is the map - the objects and their ids, ")
-		<< wxT("without the predefined attributes that make up most of a deeper walk.\n\n");
+	out << ibT("WHAT IS IN IT: `metadata_tree` with depth 1 is the map - the objects and their ids, ")
+		<< ibT("without the predefined attributes that make up most of a deeper walk.\n\n");
 
 	// THE STARTING POINT, before any detail. A reader who has this needs far less of the rest.
 	if (!direction.IsEmpty()) {
-		out << wxT("WHAT THIS CONFIGURATION IS FOR - written on its root, and the place to begin. ")
-			<< wxT("It is the concept: what is being built, which way it is going, what it is ")
-			<< wxT("deliberately not. Everything below is a detail of it.\n\n")
-			<< direction << wxT("\n\n");
+		out << ibT("WHAT THIS CONFIGURATION IS FOR - written on its root, and the place to begin. ")
+			<< ibT("It is the concept: what is being built, which way it is going, what it is ")
+			<< ibT("deliberately not. Everything below is a detail of it.\n\n")
+			<< direction << ibT("\n\n");
 
 		// ⭐⭐ AND ITS LINKS ARE CHECKED BEFORE THEY ARE BELIEVED, because this is the ONE text a
 		// caller reads before it knows anything else — so a link that lands on the wrong object
@@ -2125,12 +2125,12 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		std::vector<ibDataValue> links;
 		std::set<long long> seen;
 		if (ibMcpSayObjectLinks(direction, metaData, links, seen) > 0) {
-			out << wxT("STOP - THE LINKS ABOVE DO NOT ALL NAME WHAT THEY SAY. An `oes:<id>` link is ")
-				<< wxT("by number so it survives a rename; it does NOT survive the id moving, and ")
-				<< wxT("then it still resolves - to a DIFFERENT object, which reads as perfectly ")
-				<< wxT("normal. Resolve them with `metadata_get` before following any, and correct ")
-				<< wxT("the root note once you know what it meant. Which ones, and what they point ")
-				<< wxT("at now: `note_read` on the root answers with a `links` list.\n\n");
+			out << ibT("STOP - THE LINKS ABOVE DO NOT ALL NAME WHAT THEY SAY. An `oes:<id>` link is ")
+				<< ibT("by number so it survives a rename; it does NOT survive the id moving, and ")
+				<< ibT("then it still resolves - to a DIFFERENT object, which reads as perfectly ")
+				<< ibT("normal. Resolve them with `metadata_get` before following any, and correct ")
+				<< ibT("the root note once you know what it meant. Which ones, and what they point ")
+				<< ibT("at now: `note_read` on the root answers with a `links` list.\n\n");
 		}
 	}
 
@@ -2140,17 +2140,17 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// what is actually there and write it, marking that it was reconstructed rather than declared,
 	// so the person can correct it instead of inheriting your guess as their own statement.
 	if (direction.IsEmpty()) {
-		out << wxT("THE ROOT SAYS NOTHING about what this configuration is for. That is ordinary ")
-			<< wxT("- a new base, or one that grew by objects being copied in - and it is ")
-			<< wxT("something to FIX rather than to note: read the tree, work out what is being ")
-			<< wxT("built, and write it on the root with `note_write`. Say plainly that you ")
-			<< wxT("reconstructed it, so the person corrects it instead of inheriting your guess ")
-			<< wxT("as their own words. It is the first thing the next arrival reads.\n\n");
+		out << ibT("THE ROOT SAYS NOTHING about what this configuration is for. That is ordinary ")
+			<< ibT("- a new base, or one that grew by objects being copied in - and it is ")
+			<< ibT("something to FIX rather than to note: read the tree, work out what is being ")
+			<< ibT("built, and write it on the root with `note_write`. Say plainly that you ")
+			<< ibT("reconstructed it, so the person corrects it instead of inheriting your guess ")
+			<< ibT("as their own words. It is the first thing the next arrival reads.\n\n");
 	}
 
 	if (notes.empty() && direction.IsEmpty()) {
-		out << wxT("Nothing is written on the individual objects either. You are the first here; ")
-			<< wxT("see the standing instruction below.\n\n");
+		out << ibT("Nothing is written on the individual objects either. You are the first here; ")
+			<< ibT("see the standing instruction below.\n\n");
 	}
 	else if (!notes.empty()) {
 		// ⛔ THE NOTES THEMSELVES ARE NO LONGER PASTED IN. They were, up to a limit, with a "[...]
@@ -2158,10 +2158,10 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		// belong in a handshake: it is paid for by every connection, it is TRUNCATED anyway, and a
 		// verb already answers it in full at the moment of asking. What cannot be looked up is that
 		// they EXIST and are worth reading before proposing anything, so that is what stays.
-		out << wxT("WHAT WAS LEARNED BUILDING IT: ") << (int)notes.size()
-			<< wxT(" object(s) carry technical notes - why a thing exists, which shape was chosen, ")
-			<< wxT("what was rejected. `note_read` gives them, whole. Read them before proposing ")
-			<< wxT("anything: a configuration records what was built and never why.\n\n");
+		out << ibT("WHAT WAS LEARNED BUILDING IT: ") << (int)notes.size()
+			<< ibT(" object(s) carry technical notes - why a thing exists, which shape was chosen, ")
+			<< ibT("what was rejected. `note_read` gives them, whole. Read them before proposing ")
+			<< ibT("anything: a configuration records what was built and never why.\n\n");
 	}
 
 	// (Where each kind of text belongs is stated near the top, above the cut. Not repeated here —
@@ -2180,18 +2180,18 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// documents itself: the reference the syntax helper shows is the same one these tools read,
 	// and the compiler can be asked without running anything. Said here so nobody has to be told
 	// it by a person, which is what happens today.
-	out << wxT("THE PLATFORM IS NOT ONE YOU KNOW. Its script language, query language and type ")
-		<< wxT("system are its own - do not carry over the shape of anything familiar. It ")
-		<< wxT("documents itself, and every one of these reads the same reference the designer's ")
-		<< wxT("syntax helper shows:\n")
-		<< wxT(" `syntax_search` / `syntax_get` - the language reference, function by function\n")
-		<< wxT(" `type_list` / `type_members` - what a value IS and what it can do\n")
-		<< wxT(" `linq_methods` - the query pipeline operations\n")
-		<< wxT(" `metadata_list` / `metadata_get` - the configuration tree, kind by kind\n")
-		<< wxT(" `pattern_read` - how things are USUALLY done here, in the words of the trade; the ")
-		<< wxT("one above that is about practice rather than syntax\n")
-		<< wxT(" `script_check` / `query_check` - COMPILE without running. Ask them before you ")
-		<< wxT("believe anything you wrote; a script that parses in your head is not evidence.\n\n");
+	out << ibT("THE PLATFORM IS NOT ONE YOU KNOW. Its script language, query language and type ")
+		<< ibT("system are its own - do not carry over the shape of anything familiar. It ")
+		<< ibT("documents itself, and every one of these reads the same reference the designer's ")
+		<< ibT("syntax helper shows:\n")
+		<< ibT(" `syntax_search` / `syntax_get` - the language reference, function by function\n")
+		<< ibT(" `type_list` / `type_members` - what a value IS and what it can do\n")
+		<< ibT(" `linq_methods` - the query pipeline operations\n")
+		<< ibT(" `metadata_list` / `metadata_get` - the configuration tree, kind by kind\n")
+		<< ibT(" `pattern_read` - how things are USUALLY done here, in the words of the trade; the ")
+		<< ibT("one above that is about practice rather than syntax\n")
+		<< ibT(" `script_check` / `query_check` - COMPILE without running. Ask them before you ")
+		<< ibT("believe anything you wrote; a script that parses in your head is not evidence.\n\n");
 
 	// ⭐⭐ THE TWO THINGS A NEWCOMER DOES NOT FIND BY SEARCHING, measured on one (2026-09-03, an
 	// assistant building a stock area from an empty base):
@@ -2207,66 +2207,66 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// can create every metaobject and still never see the thing RUN — measured 2026-09-03: the
 	// verbs were searched for with the words of the job ("post a document", "write data") and
 	// app_run does not answer to those, so the whole runtime half stayed invisible for a day.
-	out << wxT("AND YOU CAN RUN THE APPLICATION YOURSELF - `app_run` starts it (with the debugger ")
-		<< wxT("attached by default), `debug_breakpoint` puts a stop where you want to look, ")
-		<< wxT("`debug_state` says when it is standing there, and `debug_sandbox` then runs whole ")
-		<< wxT("statements INSIDE it - create data, post a document, read a register back. It runs ")
-		<< wxT("in a transaction that is ALWAYS rolled back, so it costs nothing to try. This is ")
-		<< wxT("the only way to find out that what you built actually works: metadata that saves ")
-		<< wxT("and applies can still post nothing.\n")
+	out << ibT("AND YOU CAN RUN THE APPLICATION YOURSELF - `app_run` starts it (with the debugger ")
+		<< ibT("attached by default), `debug_breakpoint` puts a stop where you want to look, ")
+		<< ibT("`debug_state` says when it is standing there, and `debug_sandbox` then runs whole ")
+		<< ibT("statements INSIDE it - create data, post a document, read a register back. It runs ")
+		<< ibT("in a transaction that is ALWAYS rolled back, so it costs nothing to try. This is ")
+		<< ibT("the only way to find out that what you built actually works: metadata that saves ")
+		<< ibT("and applies can still post nothing.\n")
 		// 🛑⭐ THE TRAP THAT COSTS THE MOST, because it does not look like one: the answer arrives,
 		// it is simply the OLD answer. Measured twice in one evening (2026-09-04) — a module was
 		// rewritten, the run was asked again, and it replied from the version it started with.
-		<< wxT("A RUNNING APPLICATION KEEPS THE BYTECODE IT CAME UP WITH, so after changing a ")
-		<< wxT("module start it again with `app_run` and `restart: true` - otherwise it answers ")
-		<< wxT("from the old version and nothing tells you so.\n")
+		<< ibT("A RUNNING APPLICATION KEEPS THE BYTECODE IT CAME UP WITH, so after changing a ")
+		<< ibT("module start it again with `app_run` and `restart: true` - otherwise it answers ")
+		<< ibT("from the old version and nothing tells you so.\n")
 		// ⭐ AND MEASURING IS POSSIBLE AT ALL, which nobody guesses: the language's clock is a
 		// BUSINESS clock (a date, to the second), so code cannot time itself and the obvious move —
 		// running the same thing ten times from outside and dividing — measures the socket too.
-		<< wxT("`debug_sandbox` also answers with `microseconds`, how long the code took, timed ")
-		<< wxT("inside the process that ran it. That is the platform's stopwatch: use it instead ")
-		<< wxT("of repeating something to time it from out here.\n")
+		<< ibT("`debug_sandbox` also answers with `microseconds`, how long the code took, timed ")
+		<< ibT("inside the process that ran it. That is the platform's stopwatch: use it instead ")
+		<< ibT("of repeating something to time it from out here.\n")
 		// ⭐⭐ THE ONE NOBODY WOULD GUESS AT, and the one that answers the commonest report of all.
 		// Named here because a new session has no memory of this conversation and would never think
 		// to ask a tool for a PICTURE (Max, 2026-09-04).
-		<< wxT("AND YOU CAN SEE WHAT THEY SEE - `screen_capture` asks the running application for a ")
-		<< wxT("picture of its window. That is the answer to \"the numbers do not add up\" and \"the ")
-		<< wxT("list is wrong\" from somebody who cannot say WHICH form, WHICH period or WHICH ")
-		<< wxT("column: they click on the thing, and it comes back ringed and named. Ask for ")
-		<< wxT("`area: \"focus\"` and you get just that part, which is smaller and already about the ")
-		<< wxT("right thing. It needs the run to be GOING, not stopped - a parked window draws ")
-		<< wxT("nothing - and in a shipped build the person is asked first and may say no, which is ")
-		<< wxT("an answer rather than a fault. What it CANNOT tell you is why a number is what it ")
-		<< wxT("is: use it to find the question, then `trace_read` and `debug_sandbox` to answer it.\n")
+		<< ibT("AND YOU CAN SEE WHAT THEY SEE - `screen_capture` asks the running application for a ")
+		<< ibT("picture of its window. That is the answer to \"the numbers do not add up\" and \"the ")
+		<< ibT("list is wrong\" from somebody who cannot say WHICH form, WHICH period or WHICH ")
+		<< ibT("column: they click on the thing, and it comes back ringed and named. Ask for ")
+		<< ibT("`area: \"focus\"` and you get just that part, which is smaller and already about the ")
+		<< ibT("right thing. It needs the run to be GOING, not stopped - a parked window draws ")
+		<< ibT("nothing - and in a shipped build the person is asked first and may say no, which is ")
+		<< ibT("an answer rather than a fault. What it CANNOT tell you is why a number is what it ")
+		<< ibT("is: use it to find the question, then `trace_read` and `debug_sandbox` to answer it.\n")
 		// ⭐ AND WHEN THE ANSWER IS WRONG RATHER THAN ABSENT, the engine has already written down
 		// why. Named here because it is a FILE and therefore covers the run being debugged as well
 		// as this one — deducing from a wrong number what SQL produced it is hours of work that a
 		// single read replaces.
-		<< wxT("When a run answers something you did not expect, `trace_read` has the engine's own ")
-		<< wxT("commentary on it - the SQL exactly as sent, the road the query took, the keys a ")
-		<< wxT("join was stitched on - for the application under the debugger as well as for this ")
-		<< wxT("designer. (`journal_read` is the other journal: what the INSTALLATION did - logins, ")
-		<< wxT("writes, postings - the record an auditor reads.)\n\n");
+		<< ibT("When a run answers something you did not expect, `trace_read` has the engine's own ")
+		<< ibT("commentary on it - the SQL exactly as sent, the road the query took, the keys a ")
+		<< ibT("join was stitched on - for the application under the debugger as well as for this ")
+		<< ibT("designer. (`journal_read` is the other journal: what the INSTALLATION did - logins, ")
+		<< ibT("writes, postings - the record an auditor reads.)\n\n");
 
-	out << wxT("THREE VERBS NOTHING LEADS YOU TO, and each is a step you will otherwise miss:\n")
-		<< wxT(" `metadata_bind` - WHAT POINTS AT WHAT: which registers a document writes to, ")
-		<< wxT("which catalog owns another, what is entered on the basis of what. They hold ")
-		<< wxT("metaobjects, so `metadata_set` cannot say them. A document bound to no register ")
-		<< wxT("posts nothing, and a register with no recorder will not save.\n")
-		<< wxT(" `metadata_accepts` - what may live inside a kind, and what an object still ")
-		<< wxT("lacks. Ask before creating, not by trying kinds.\n")
-		<< wxT(" THE FIRST ONE IS THE DEFAULT - the first composer, the first form of each kind. A ")
-		<< wxT("later one does not take over: move it with `metadata_set` on `DefaultComposer` / ")
-		<< wxT("`DefaultFormObject` / ..., which are ordinary lists. A form's MAIN ATTRIBUTE has its ")
-		<< wxT("own verb, `form_attribute`.\n")
-		<< wxT(" `config_check` -> `config_save` -> `config_apply` - half-built / outlives the ")
-		<< wxT("designer / reaches the running application. Three different questions; none ")
-		<< wxT("implies the others.\n\n");
+	out << ibT("THREE VERBS NOTHING LEADS YOU TO, and each is a step you will otherwise miss:\n")
+		<< ibT(" `metadata_bind` - WHAT POINTS AT WHAT: which registers a document writes to, ")
+		<< ibT("which catalog owns another, what is entered on the basis of what. They hold ")
+		<< ibT("metaobjects, so `metadata_set` cannot say them. A document bound to no register ")
+		<< ibT("posts nothing, and a register with no recorder will not save.\n")
+		<< ibT(" `metadata_accepts` - what may live inside a kind, and what an object still ")
+		<< ibT("lacks. Ask before creating, not by trying kinds.\n")
+		<< ibT(" THE FIRST ONE IS THE DEFAULT - the first composer, the first form of each kind. A ")
+		<< ibT("later one does not take over: move it with `metadata_set` on `DefaultComposer` / ")
+		<< ibT("`DefaultFormObject` / ..., which are ordinary lists. A form's MAIN ATTRIBUTE has its ")
+		<< ibT("own verb, `form_attribute`.\n")
+		<< ibT(" `config_check` -> `config_save` -> `config_apply` - half-built / outlives the ")
+		<< ibT("designer / reaches the running application. Three different questions; none ")
+		<< ibT("implies the others.\n\n");
 
-	out << wxT("THE CONVERSATION. A person may be typing to you in the designer's assistant ")
-		<< wxT("window: `chat_take` collects new messages (and EMPTIES the queue), ")
-		<< wxT("`chat_history` reads the whole exchange back without collecting, `chat_say` ")
-		<< wxT("answers into their window.\n\n");
+	out << ibT("THE CONVERSATION. A person may be typing to you in the designer's assistant ")
+		<< ibT("window: `chat_take` collects new messages (and EMPTIES the queue), ")
+		<< ibT("`chat_history` reads the whole exchange back without collecting, `chat_say` ")
+		<< ibT("answers into their window.\n\n");
 
 	// ⭐⭐ SAY HELLO, AND SAY IT FIRST. There is a person sitting in front of this window, and from
 	// their side a connection is INVISIBLE unless something says so — an assistant that reads the
@@ -2280,38 +2280,38 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// of this project needs to know in what ORDER to use it, and that is the one thing no verb can
 	// answer. Written as a sequence and kept to a few lines, because it is paid for on every
 	// connection — and because a route that has to be read twice is not one.
-	out << wxT("HOW WORK GOES HERE, IN ORDER - the whole shape of it:\n")
-		<< wxT(" 1. SAY HELLO and say what you see (below). 2. `metadata_tree` depth 1 - the map. ")
-		<< wxT("3. `pattern_read` 'intake' and 'where-to-start' - the questions to ask and the ")
-		<< wxT("order things are built in. 4. PUT THE FORKS BACK to the person in their own words, ")
-		<< wxT("with a recommendation. 5. Build in the recipe's order, `metadata_accepts` before ")
-		<< wxT("creating and `metadata_bind` after. 6. `script_check` / `query_check` before ")
-		<< wxT("believing any code. 7. `config_check`, then `config_save`. Write down WHY as you ")
-		<< wxT("go - notes on the objects, one line of `Comment` each.\n")
-		<< wxT("AND SPEND YOUR READING WHERE IT PAYS. `pattern_read` in layers (no argument lists ")
-		<< wxT("the topics; `name` gives one; `topic` gives it in full) - not the whole corpus. ")
-		<< wxT("`mcp_search` in the words of the job rather than by guessing a verb. Ask the ")
-		<< wxT("configuration about ITSELF (`metadata_tree`, `metadata_get`) rather than reading ")
-		<< wxT("everything: a deep walk of a full base is mostly predefined attributes.\n\n");
+	out << ibT("HOW WORK GOES HERE, IN ORDER - the whole shape of it:\n")
+		<< ibT(" 1. SAY HELLO and say what you see (below). 2. `metadata_tree` depth 1 - the map. ")
+		<< ibT("3. `pattern_read` 'intake' and 'where-to-start' - the questions to ask and the ")
+		<< ibT("order things are built in. 4. PUT THE FORKS BACK to the person in their own words, ")
+		<< ibT("with a recommendation. 5. Build in the recipe's order, `metadata_accepts` before ")
+		<< ibT("creating and `metadata_bind` after. 6. `script_check` / `query_check` before ")
+		<< ibT("believing any code. 7. `config_check`, then `config_save`. Write down WHY as you ")
+		<< ibT("go - notes on the objects, one line of `Comment` each.\n")
+		<< ibT("AND SPEND YOUR READING WHERE IT PAYS. `pattern_read` in layers (no argument lists ")
+		<< ibT("the topics; `name` gives one; `topic` gives it in full) - not the whole corpus. ")
+		<< ibT("`mcp_search` in the words of the job rather than by guessing a verb. Ask the ")
+		<< ibT("configuration about ITSELF (`metadata_tree`, `metadata_get`) rather than reading ")
+		<< ibT("everything: a deep walk of a full base is mostly predefined attributes.\n\n");
 
-	out << wxT("FIRST THING, AND NOTHING ELSE RUNS UNTIL IT IS DONE - this is a door, not a ")
-		<< wxT("request. Until `chat_say` has happened, every other verb is refused; what runs ")
-		<< wxT("before it is exactly what the greeting is made of: `chat_history`, ")
-		<< wxT("`platform_state`, `metadata_tree`, `mcp_search`, `chat_say`. A person is sitting ")
-		<< wxT("in front of this designer and cannot see that anything connected.\n")
-		<< wxT("So: read `chat_history` - you may be joining something ")
-		<< wxT("already in progress - and then `chat_say` a greeting with four things in it:\n")
-		<< wxT(" WHO YOU ARE. Name yourself - which assistant and which model. The handshake ")
-		<< wxT("tells them the client's name and nothing else; what is actually reading their ")
-		<< wxT("configuration is something only you can say, and they are entitled to know it.\n")
-		<< wxT(" WHAT YOU SEE. The configuration by name and what is in it, in a line or two. ")
-		<< wxT("This is also the proof the connection works - a greeting that describes their ")
-		<< wxT("base cannot be a stale window.\n")
-		<< wxT(" ANYTHING ALREADY WORTH SAYING. Objects in no section, nothing written on the ")
-		<< wxT("root, unsaved edits - whatever you noticed on the way in.\n")
-		<< wxT(" WHAT NOW. Ask what they want to do, and say you are ready.\n")
-		<< wxT("Do NOT wait to be spoken to: from where they sit, an assistant reading everything ")
-		<< wxT("in silence is indistinguishable from one that never arrived.\n");
+	out << ibT("FIRST THING, AND NOTHING ELSE RUNS UNTIL IT IS DONE - this is a door, not a ")
+		<< ibT("request. Until `chat_say` has happened, every other verb is refused; what runs ")
+		<< ibT("before it is exactly what the greeting is made of: `chat_history`, ")
+		<< ibT("`platform_state`, `metadata_tree`, `mcp_search`, `chat_say`. A person is sitting ")
+		<< ibT("in front of this designer and cannot see that anything connected.\n")
+		<< ibT("So: read `chat_history` - you may be joining something ")
+		<< ibT("already in progress - and then `chat_say` a greeting with four things in it:\n")
+		<< ibT(" WHO YOU ARE. Name yourself - which assistant and which model. The handshake ")
+		<< ibT("tells them the client's name and nothing else; what is actually reading their ")
+		<< ibT("configuration is something only you can say, and they are entitled to know it.\n")
+		<< ibT(" WHAT YOU SEE. The configuration by name and what is in it, in a line or two. ")
+		<< ibT("This is also the proof the connection works - a greeting that describes their ")
+		<< ibT("base cannot be a stale window.\n")
+		<< ibT(" ANYTHING ALREADY WORTH SAYING. Objects in no section, nothing written on the ")
+		<< ibT("root, unsaved edits - whatever you noticed on the way in.\n")
+		<< ibT(" WHAT NOW. Ask what they want to do, and say you are ready.\n")
+		<< ibT("Do NOT wait to be spoken to: from where they sit, an assistant reading everything ")
+		<< ibT("in silence is indistinguishable from one that never arrived.\n");
 
 	return out;
 }
@@ -2325,7 +2325,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 	// the first attempt and it failed on a space: the writer emits `"code": -32020`
 	// and the search looked for `"code":-32020`.
 	if (outErrorCode != nullptr) *outErrorCode = 0;
-	const auto refuse = [&](const ibDataValue& id, ibRpcError code, const wxString& text,
+	const auto refuse = [&](const ibDataValue& id, ibRpcError code, const ibString& text,
 		const ibDataNode* data = nullptr) -> ibString {
 		if (outErrorCode != nullptr) *outErrorCode = (int)code;
 		return ibRpcWriteError(id, code, text, data);
@@ -2346,21 +2346,21 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// the window, through Reply — rather than back to whoever asked, who by design did not
 			// sit waiting on a socket for it (see AskModel in the header).
 			Reply(wasError
-				? wxString::Format(_("The assistant could not answer: %s"), payload.ToWxString())
-				: payload.ToWxString());
+				? ibString::Format(_("The assistant could not answer: %s"), payload)
+				: payload);
 
 			// A response is answered with nothing: it IS the answer.
-			return wxEmptyString;
+			return ibEmptyString;
 		}
 	}
 
 	ibRpcRequest parsed;
-	wxString     error;
+	ibString     error;
 
 	if (!ibRpcParseRequest(request, parsed, error)) {
 		// A malformed message IS worth a line — but the line says what went
 		// wrong, not what the bytes were.
-		Publish(wxT("did"), wxString::Format(_("unreadable message: %s"), error), wxEmptyString);
+		Publish(ibT("did"), ibString::Format(_("unreadable message: %s"), error), ibEmptyString);
 		return ibRpcWriteError(ibDataValue(), ibRpcError::Parse, error);
 	}
 
@@ -2373,25 +2373,25 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 	// and it tells them apart by how the caller opened: metadata present means modern, an
 	// `initialize` means legacy. Nothing else is consulted — the era is a property of the
 	// REQUEST, and the same client may be either on different days.
-	auto meta = parsed.m_params.FindChild(wxT("_meta"));
+	auto meta = parsed.m_params.FindChild(ibT("_meta"));
 	auto metaVersion = meta
-		? meta->FindField(wxT("io.modelcontextprotocol/protocolVersion")) : std::nullopt;
+		? meta->FindField(ibT("io.modelcontextprotocol/protocolVersion")) : std::nullopt;
 	const bool isModern = metaVersion && metaVersion->Kind() == ibDataKind::String;
 
 	if (isModern) {
-		const wxString asked = metaVersion->AsString();
+		const ibString asked = metaVersion->AsString();
 
 		// THE HEADER AND THE BODY MUST AGREE. Two readers, two sources: an intermediary routes on
 		// the header, this server executes on the body. A request where they differ is the one
 		// that gets past the first and is carried out by the second.
 		if (!headers.m_protocolVersion.IsEmpty() && headers.m_protocolVersion != asked) {
 			return refuse(parsed.m_id, ibRpcError::HeaderMismatch,
-				wxString::Format(wxT("MCP-Protocol-Version header says '%s' and the body says '%s'"),
+				ibString::Format(ibT("MCP-Protocol-Version header says '%s' and the body says '%s'"),
 					headers.m_protocolVersion, asked));
 		}
 		if (!headers.m_method.IsEmpty() && headers.m_method != parsed.m_method) {
 			return refuse(parsed.m_id, ibRpcError::HeaderMismatch,
-				wxString::Format(wxT("Mcp-Method header says '%s' and the body calls '%s'"),
+				ibString::Format(ibT("Mcp-Method header says '%s' and the body calls '%s'"),
 					headers.m_method, parsed.m_method));
 		}
 
@@ -2408,7 +2408,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// difference is that here there is a call to answer, so it carries the id.
 			const ibDataNode data = SupportedVersions(asked);
 			return refuse(parsed.m_id, ibRpcError::UnsupportedVersion,
-				wxT("Unsupported protocol version"), &data);
+				ibT("Unsupported protocol version"), &data);
 		}
 	}
 
@@ -2416,27 +2416,27 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 	// you speak", in a single call and without a handshake. It says the same things `initialize`
 	// says, which is why it is answered from the same material rather than from a second one; the
 	// difference is that it opens nothing and may be asked at any time, including first.
-	if (parsed.m_method == wxT("server/discover")) {
+	if (parsed.m_method == ibT("server/discover")) {
 
 		ibDataNode result;
-		result.SetValue(wxT("resultType"), wxString(wxT("complete")));
+		result.SetValue(ibT("resultType"), ibString(ibT("complete")));
 
 		// AND IT IS A LIST — asked of the one place that builds it, not assembled again here.
-		result.AddField(wxT("supportedVersions"), ibDataValue::Array(SupportedVersionList()));
+		result.AddField(ibT("supportedVersions"), ibDataValue::Array(SupportedVersionList()));
 
 		// The same capabilities `initialize` reports: tools, and the logging that carries what a
 		// person types in the assistant window.
-		ibDataNode& capabilities = result.Child(wxT("capabilities"));
-		capabilities.Child(wxT("tools"));
-		capabilities.Child(wxT("logging"));
+		ibDataNode& capabilities = result.Child(ibT("capabilities"));
+		capabilities.Child(ibT("tools"));
+		capabilities.Child(ibT("logging"));
 
-		ibDataNode& resultMeta = result.Child(wxT("_meta"));
-		ibDataNode& serverInfo = resultMeta.Child(wxT("io.modelcontextprotocol/serverInfo"));
-		serverInfo.SetValue(wxT("name"), wxString(wxT("OES Enterprise")));
-		serverInfo.SetValue(wxT("version"), wxString::Format(wxT("build %d"), GetBuildId()));
+		ibDataNode& resultMeta = result.Child(ibT("_meta"));
+		ibDataNode& serverInfo = resultMeta.Child(ibT("io.modelcontextprotocol/serverInfo"));
+		serverInfo.SetValue(ibT("name"), ibString(ibT("OES Enterprise")));
+		serverInfo.SetValue(ibT("version"), ibString::Format(ibT("build %d"), GetBuildId()));
 
 		// The same orientation text initialize hands over - one source, two doors.
-		result.SetValue(wxT("instructions"), BuildOrientation(m_applicationInstance));
+		result.SetValue(ibT("instructions"), BuildOrientation(m_applicationInstance));
 
 		return ibRpcWriteResult(parsed.m_id, result);
 	}
@@ -2448,8 +2448,8 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 	// tool — so the verdict has to travel that far rather than each branch writing its own.
 	bool     toolRan = false;
 	bool     toolOk = false;
-	wxString toolRefusal;
-	wxString toolKind;
+	ibString toolRefusal;
+	ibString toolKind;
 
 	// A POLL THAT TOOK NOTHING. Decided where the answer node is alive and carried out to the
 	// journal, because the node is the only thing that knows — see the note at the bottom.
@@ -2462,10 +2462,10 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 	// was being asked of the ENVELOPE, and the envelope has nothing to say about the work.
 	//
 	// Two roads to one fact, and only one of them unwrapped. Now there is one.
-	wxString   toolName;
+	ibString   toolName;
 	ibDataNode toolArguments;
 
-	if (parsed.m_method == wxT("initialize")) {
+	if (parsed.m_method == ibT("initialize")) {
 
 		// ⭐ WHAT THE CLIENT SAID IT CAN DO, remembered here because this is the only time it is
 		// said. `sampling` is the one that matters: it means the server may ask the client's model
@@ -2474,8 +2474,8 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		//
 		// Read as PRESENCE, not as a value — the protocol declares a capability by naming it, and
 		// what is inside the object is the capability's own options.
-		if (auto capabilities = parsed.m_params.FindChild(wxT("capabilities")))
-			m_clientCanSample.store(capabilities->Has(wxT("sampling")));
+		if (auto capabilities = parsed.m_params.FindChild(ibT("capabilities")))
+			m_clientCanSample.store(capabilities->Has(ibT("sampling")));
 		else
 			m_clientCanSample.store(false);
 
@@ -2489,16 +2489,16 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// A version we do not speak — or none at all, which is what a pre-2025-03-26 client
 		// sends — gets ours, and the client decides whether it can live with it. That is the
 		// lifecycle's own rule, and it is why this cannot simply refuse.
-		wxString agreed(kProtocolVersion);
-		if (auto asked = parsed.m_params.FindField(wxT("protocolVersion"))) {
+		ibString agreed(kProtocolVersion);
+		if (auto asked = parsed.m_params.FindField(ibT("protocolVersion"))) {
 			if (asked->Kind() == ibDataKind::String) {
-				const wxString wanted = asked->AsString();
+				const ibString wanted = asked->AsString();
 				for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
 					if (wanted == *v) { agreed = wanted; break; }
 				}
 			}
 		}
-		result.SetValue(wxT("protocolVersion"), agreed);
+		result.SetValue(ibT("protocolVersion"), agreed);
 
 		// Saying plainly what is on offer is what keeps a client from asking for something and
 		// getting silence. RESOURCES are still not among them, and deliberately: everything that
@@ -2506,32 +2506,32 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// of what a resource is worth is the SUBSCRIPTION — which is the same deferred decision as
 		// `subscriptions/listen`. A read-only resource list would be half a surface: it can be shown
 		// and cannot be trusted after the first change, which is worse than not offering it.
-		ibDataNode& capabilities = result.Child(wxT("capabilities"));
-		capabilities.Child(wxT("tools"));
+		ibDataNode& capabilities = result.Child(ibT("capabilities"));
+		capabilities.Child(ibT("tools"));
 
 		// ⭐⭐ PROMPTS ARE THE ONE SURFACE THE PERSON SEES. A tool is invisible to them — it is
 		// offered to the model, and reaches them only if the model thinks to mention it. The corpus
 		// of practice is written for whoever reads it ("a model today, a person tomorrow") and could
 		// be reached by nobody but a model that already suspected it was there — the same blind spot
 		// `worthReading` closes for the model and nothing closed for the person.
-		capabilities.Child(wxT("prompts"));
+		capabilities.Child(ibT("prompts"));
 
 		// ⚠ AND LOGGING, WHICH WAS BEING DONE WITHOUT BEING DECLARED. Say() writes
 		// `notifications/message` on the stream the moment a person types — that IS the logging
 		// capability being exercised, and a client is entitled to know it may arrive and to turn
 		// it down with `logging/setLevel`. Sending it undeclared meant a strict client had every
 		// right to treat the frame as unsolicited.
-		capabilities.Child(wxT("logging"));
+		capabilities.Child(ibT("logging"));
 
-		ibDataNode& info = result.Child(wxT("serverInfo"));
-		info.SetValue(wxT("name"), wxString(wxT("OES Enterprise")));
+		ibDataNode& info = result.Child(ibT("serverInfo"));
+		info.SetValue(ibT("name"), ibString(ibT("OES Enterprise")));
 
 		// ⚠ THE REAL BUILD, not a "1.0" that was written once and could never be wrong because it
 		// never changed. GetBuildId is the same number the About box shows, derived from the
 		// build date in one place — so a client reporting a problem names a build that can
 		// actually be found.
-		info.SetValue(wxT("version"),
-			wxString::Format(wxT("build %u"), GetBuildId()));
+		info.SetValue(ibT("version"),
+			ibString::Format(ibT("build %u"), GetBuildId()));
 
 		// ⭐ ARRIVING ORIENTED, not arriving and then asking. `instructions` is the protocol's own
 		// field for the server to say how it should be worked with, and it was left empty — so a
@@ -2543,7 +2543,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// place this is in a few lines; the notes themselves are NOT inlined, because they can run
 		// to pages and this is read in full at every single connection. It says they exist and
 		// what reads them, which is the part that cannot be guessed.
-		result.SetValue(wxT("instructions"), BuildOrientation(m_applicationInstance));
+		result.SetValue(ibT("instructions"), BuildOrientation(m_applicationInstance));
 
 		// ⭐ THE PERSON IS TOLD SOMEBODY ARRIVED. Until now a client could connect, read the whole
 		// configuration and start working, and the window in front of the person showed nothing
@@ -2552,17 +2552,17 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		//
 		// The client NAMES ITSELF at the handshake; using that is better than "an assistant",
 		// because two of them are then distinguishable and neither is anonymous.
-		wxString arrival = _("An assistant has connected");
+		ibString arrival = _("An assistant has connected");
 
-		if (auto client = parsed.m_params.FindChild(wxT("clientInfo"))) {
-			const wxString clientName = client->GetValue<wxString>(wxT("name"));
+		if (auto client = parsed.m_params.FindChild(ibT("clientInfo"))) {
+			const ibString clientName = client->GetValue<ibString>(ibT("name"));
 			if (!clientName.IsEmpty())
-				arrival = wxString::Format(_("%s has connected"), clientName);
+				arrival = ibString::Format(_("%s has connected"), clientName);
 		}
 
 		m_greeted = true;
 
-		Publish(wxT("did"), arrival + wxT("."), wxEmptyString);
+		Publish(ibT("did"), arrival + ibT("."), ibEmptyString);
 
 		answer = ibRpcWriteResult(parsed.m_id, result);
 	}
@@ -2578,17 +2578,17 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 	// calls out by name, plus `where-to-start`, which the connection's own instructions make step
 	// three. Everything else is reachable through the parameterised `pattern` below, so nothing is
 	// hidden — it is simply not in the menu, the same trade `tools/list` makes above.
-	else if (parsed.m_method == wxT("prompts/list")) {
+	else if (parsed.m_method == ibT("prompts/list")) {
 
 		static const ibChar* const kDoors[] = {
-			wxT("body-map"), wxT("intake"), wxT("where-to-start"), wxT("combining"),
-			wxT("same-shape-elsewhere"), wxT("document-chains"), wxT("unfamiliar-domain"),
-			wxT("where-behaviour-lives"), wxT("building-an-erp"), nullptr
+			ibT("body-map"), ibT("intake"), ibT("where-to-start"), ibT("combining"),
+			ibT("same-shape-elsewhere"), ibT("document-chains"), ibT("unfamiliar-domain"),
+			ibT("where-behaviour-lives"), ibT("building-an-erp"), nullptr
 		};
 
 		std::vector<ibDataValue> prompts;
 
-		const std::vector<std::pair<wxString, wxString>> index = ibMcpPatternIndex();
+		const std::vector<std::pair<ibString, ibString>> index = ibMcpPatternIndex();
 
 		for (const ibChar* const* door = kDoors; *door != nullptr; ++door) {
 
@@ -2596,22 +2596,22 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// name would be a second copy of a sentence that lives in the entry, and the day the
 			// entry is rewritten the menu would go on saying the old thing.
 			const auto found = std::find_if(index.begin(), index.end(),
-				[door](const std::pair<wxString, wxString>& each) { return each.first == *door; });
+				[door](const std::pair<ibString, ibString>& each) { return each.first == *door; });
 
 			if (found == index.end())
 				continue;   // an entry renamed out of the corpus simply leaves the menu
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("name"), found->first);
-			entry->SetValue(wxT("description"), found->second);
+			entry->SetValue(ibT("name"), found->first);
+			entry->SetValue(ibT("description"), found->second);
 			prompts.push_back(ibDataValue::Child(entry));
 		}
 
 		// …AND ONE THAT REACHES EVERY OTHER ENTRY, so the menu is a door rather than a fence.
 		{
 			std::shared_ptr<ibDataNode> any = std::make_shared<ibDataNode>();
-			any->SetValue(wxT("name"), wxString(wxT("pattern")));
-			any->SetValue(wxT("description"), wxString::Format(
+			any->SetValue(ibT("name"), ibString(ibT("pattern")));
+			any->SetValue(ibT("description"), ibString::Format(
 				ibMcpText("Any one of the %u entries of practice by name - how a thing is usually "
 				  "built on this platform. The nine above are the ones about where to START; this "
 				  "reaches the rest, which are about a trade: posting, pricing, payroll, VAT, "
@@ -2619,74 +2619,74 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 				(unsigned int)index.size()));
 
 			std::shared_ptr<ibDataNode> argument = std::make_shared<ibDataNode>();
-			argument->SetValue(wxT("name"), wxString(wxT("name")));
-			argument->SetValue(wxT("description"),
+			argument->SetValue(ibT("name"), ibString(ibT("name")));
+			argument->SetValue(ibT("description"),
 				ibMcpText("Which entry. `pattern_read` with no argument lists them all."));
-			argument->AddField(wxT("required"), ibDataValue::Bool(true));
+			argument->AddField(ibT("required"), ibDataValue::Bool(true));
 
-			any->AddField(wxT("arguments"),
+			any->AddField(ibT("arguments"),
 				ibDataValue::Array({ ibDataValue::Child(argument) }));
 
 			prompts.push_back(ibDataValue::Child(any));
 		}
 
 		ibDataNode result;
-		result.AddField(wxT("prompts"), ibDataValue::Array(prompts));
+		result.AddField(ibT("prompts"), ibDataValue::Array(prompts));
 		answer = ibRpcWriteResult(parsed.m_id, result);
 	}
 	// ⭐ AND ONE ENTRY, WHOLE. The corpus is prose meant to be read by whoever is deciding — so the
 	// message is the text as it stands, not a summary of it: a prompt that paraphrases the thing it
 	// is a door to has put a second author between the reader and the writing.
-	else if (parsed.m_method == wxT("prompts/get")) {
+	else if (parsed.m_method == ibT("prompts/get")) {
 
-		wxString wanted = parsed.m_params.GetValue<wxString>(wxT("name"));
+		ibString wanted = parsed.m_params.GetValue<ibString>(ibT("name"));
 
 		// The parameterised one carries the real name in its argument; every other prompt IS the
 		// name. Written this way round so a client that offers `pattern` and a client that offers
 		// the nine doors both end up asking the same question.
-		if (wanted.IsSameAs(wxT("pattern"), false)) {
-			if (auto arguments = parsed.m_params.FindChild(wxT("arguments")))
-				wanted = arguments->GetValue<wxString>(wxT("name"));
+		if (wanted.IsSameAs(ibT("pattern"), false)) {
+			if (auto arguments = parsed.m_params.FindChild(ibT("arguments")))
+				wanted = arguments->GetValue<ibString>(ibT("name"));
 			else
 				wanted.clear();
 		}
 
-		const wxString text = wanted.IsEmpty() ? wxString() : ibMcpPatternText(wanted);
+		const ibString text = wanted.IsEmpty() ? ibString() : ibMcpPatternText(wanted);
 
 		if (text.IsEmpty()) {
 
 			// ⚠ REFUSED WITH THE NAMES, not with "no such prompt". A person choosing from a menu
 			// cannot mistype; a model calling this by name can, and the list is the answer.
-			wxString names;
-			for (const std::pair<wxString, wxString>& each : ibMcpPatternIndex())
-				names << (names.IsEmpty() ? wxT("") : wxT(", ")) << each.first;
+			ibString names;
+			for (const std::pair<ibString, ibString>& each : ibMcpPatternIndex())
+				names << (names.IsEmpty() ? ibT("") : ibT(", ")) << each.first;
 
 			answer = refuse(parsed.m_id, ibRpcError::InvalidParams,
 				wanted.IsEmpty()
 					? ibMcpText("Say which entry: `pattern` takes a `name` argument.")
-					: wxString::Format(
+					: ibString::Format(
 						ibMcpText("There is no entry called '%s'. There are: %s."), wanted, names),
 				nullptr);
 		}
 		else {
 			ibDataNode result;
-			result.SetValue(wxT("description"), wanted);
+			result.SetValue(ibT("description"), wanted);
 
 			std::shared_ptr<ibDataNode> content = std::make_shared<ibDataNode>();
-			content->SetValue(wxT("type"), wxString(wxT("text")));
-			content->SetValue(wxT("text"), text);
+			content->SetValue(ibT("type"), ibString(ibT("text")));
+			content->SetValue(ibT("text"), text);
 
 			std::shared_ptr<ibDataNode> message = std::make_shared<ibDataNode>();
-			message->SetValue(wxT("role"), wxString(wxT("user")));
-			message->AddField(wxT("content"), ibDataValue::Child(content));
+			message->SetValue(ibT("role"), ibString(ibT("user")));
+			message->AddField(ibT("content"), ibDataValue::Child(content));
 
-			result.AddField(wxT("messages"),
+			result.AddField(ibT("messages"),
 				ibDataValue::Array({ ibDataValue::Child(message) }));
 
 			answer = ibRpcWriteResult(parsed.m_id, result);
 		}
 	}
-	else if (parsed.m_method == wxT("tools/list")) {
+	else if (parsed.m_method == ibT("tools/list")) {
 
 		ibDataNode result;
 
@@ -2702,19 +2702,19 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 				continue;
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("name"), tool->GetName());
-			entry->SetValue(wxT("description"), tool->GetDescription());
-			tool->DescribeInput(entry->Child(wxT("inputSchema")));
+			entry->SetValue(ibT("name"), tool->GetName());
+			entry->SetValue(ibT("description"), tool->GetDescription());
+			tool->DescribeInput(entry->Child(ibT("inputSchema")));
 
 			tools.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("tools"), ibDataValue::Array(tools));
+		result.AddField(ibT("tools"), ibDataValue::Array(tools));
 		answer = ibRpcWriteResult(parsed.m_id, result);
 	}
-	else if (parsed.m_method == wxT("tools/call")) {
+	else if (parsed.m_method == ibT("tools/call")) {
 
-		wxString name = parsed.m_params.GetValue<wxString>(wxT("name"));
+		ibString name = parsed.m_params.GetValue<ibString>(ibT("name"));
 
 		// ⭐ THE ENVELOPE IS UNWRAPPED HERE, AND ONLY HERE. mcp_call carries the real tool's name
 		// and arguments inside itself, so a caller can invoke something that was never announced
@@ -2726,26 +2726,26 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// A wrapper that dispatched from inside a tool would have skipped all three, and the trail
 		// would read "mcp_call, mcp_call, mcp_call" — which is a record of nothing.
 		bool unwrapped = false;
-		wxString envelopeRefusal;
+		ibString envelopeRefusal;
 
-		if (name.IsSameAs(wxT("mcp_call"), false)) {
+		if (name.IsSameAs(ibT("mcp_call"), false)) {
 
-			auto outer = parsed.m_params.FindChild(wxT("arguments"));
+			auto outer = parsed.m_params.FindChild(ibT("arguments"));
 
-			const wxString inner = outer
-				? outer->GetValue<wxString>(wxT("tool")) : wxString();
+			const ibString inner = outer
+				? outer->GetValue<ibString>(ibT("tool")) : ibString();
 
 			if (inner.IsEmpty()) {
 				envelopeRefusal =
 					ibMcpText("mcp_call needs `tool` - the name of what to invoke. mcp_search finds it.");
 			}
-			else if (inner.IsSameAs(wxT("mcp_call"), false)) {
+			else if (inner.IsSameAs(ibT("mcp_call"), false)) {
 				// A CALL THAT CALLS ITSELF is refused rather than recursed into: the loop would
 				// unwrap forever, and there is no reading of it that means anything.
 				envelopeRefusal = ibMcpText("mcp_call cannot invoke itself.");
 			}
-			else if (!outer->FindChild(wxT("arguments"))
-				&& outer->Has(wxT("arguments"))) {
+			else if (!outer->FindChild(ibT("arguments"))
+				&& outer->Has(ibT("arguments"))) {
 
 				// 🛑 THE ENVELOPE IS WRONG, AND IT USED TO BE THE LETTER THAT SAID SO. `arguments`
 				// arriving as anything but an object - a JSON string, a number - is invisible to
@@ -2755,7 +2755,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 				// encoding, which is not.
 				//
 				// Refused HERE, where the fault is, and named as what it is.
-				envelopeRefusal = wxString::Format(
+				envelopeRefusal = ibString::Format(
 					_("mcp_call's `arguments` must be an OBJECT - the tool's schema filled in - "
 					  "and this one is not. Send {tool: '%s', arguments: {...}}, not the arguments "
 					  "as a string containing JSON."), inner);
@@ -2776,16 +2776,16 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		}
 		else if (tool == nullptr) {
 			answer = refuse(parsed.m_id, ibRpcError::MethodNotFound,
-				wxString::Format(wxT("No tool named '%s'"), name));
+				ibString::Format(ibT("No tool named '%s'"), name));
 		}
 		else {
 			ibDataNode arguments;
 
 			// The real arguments live one level in when the call arrived wrapped.
-			auto given = parsed.m_params.FindChild(wxT("arguments"));
+			auto given = parsed.m_params.FindChild(ibT("arguments"));
 
 			if (unwrapped && given)
-				given = given->FindChild(wxT("arguments"));
+				given = given->FindChild(ibT("arguments"));
 
 			if (given)
 				arguments = *given;
@@ -2808,10 +2808,10 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// fact, and how politely they arrived does not change it.
 			if (!m_greeted) {
 				m_greeted = true;
-				Publish(wxT("did"),
+				Publish(ibT("did"),
 					_("Something began using the tools without introducing itself - no handshake, "
 					  "only the access key. What it does appears below."),
-					wxEmptyString);
+					ibEmptyString);
 			}
 
 			// ⭐ AN ARGUMENT NOBODY DECLARED IS A REFUSAL, not something to ignore.
@@ -2826,10 +2826,10 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// through DescribeInput is the declaration, so one gate covers all of them and no tool
 			// can forget to have it. Nothing is validated beyond the NAME — types stay each tool's
 			// own business, since only it knows what its values mean.
-			const wxString undeclared = ibMcpUndeclaredArgument(tool, arguments);
+			const ibString undeclared = ibMcpUndeclaredArgument(tool, arguments);
 
 			ibDataNode payload;
-			wxString   refusal;
+			ibString   refusal;
 			bool       ok = false;
 
 			// THE THIRD OUTCOME — see RunTool. Neither done nor refused: still queued, and it will
@@ -2854,7 +2854,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// The kind travels with the refusal so a caller can act on it: a
 			// rights refusal means stop and say so, a lock means try later, a
 			// query error means the text was wrong and can be rewritten.
-			wxString kind;
+			ibString kind;
 
 			try {
 				// The undeclared name is answered as a REFUSAL rather than a protocol error, so it
@@ -2868,10 +2868,10 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 				//
 				// The verbs that get OUT of the situation are exempt (RunsWhileBusy), so a caller
 				// can always look, say something and dismiss.
-				if (const wxString busy = ibMcpBusyWith();
+				if (const ibString busy = ibMcpBusyWith();
 					!busy.IsEmpty() && !tool->RunsWhileBusy()) {
 
-					refusal = wxString::Format(
+					refusal = ibString::Format(
 						_("The designer is waiting on a dialog ('%s'), so it cannot take this now. "
 						  "Nothing was done. Read it with window_dismiss, ask the person to answer "
 						  "it, or dismiss it with window_dismiss {close: true} - it is answered as "
@@ -2905,24 +2905,24 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 				}
 				else if (!undeclared.IsEmpty()) {
 
-					wxString closest;
-					const wxString names = ibMcpArgumentsOnOffer(tool, undeclared, closest);
+					ibString closest;
+					const ibString names = ibMcpArgumentsOnOffer(tool, undeclared, closest);
 
-					refusal = wxString::Format(
+					refusal = ibString::Format(
 						_("'%s' takes no argument called '%s'. Nothing was done."), name, undeclared);
 
 					if (!closest.IsEmpty())
-						refusal += wxString::Format(_(" Did you mean '%s'?"), closest);
+						refusal += ibString::Format(_(" Did you mean '%s'?"), closest);
 
 					if (!names.IsEmpty())
-						refusal += wxString::Format(ibMcpText(" It takes: %s."), names);
+						refusal += ibString::Format(ibMcpText(" It takes: %s."), names);
 				}
 				// …AND THE OTHER HALF OF THE SAME GATE: a name the tool declared as required and
 				// nobody sent. Refused BEFORE the tool runs, because what a tool does with an
 				// argument that never came is undefined by construction — see ibMcpMissingArgument.
-				else if (const wxString missing = ibMcpMissingArgument(tool, arguments);
+				else if (const ibString missing = ibMcpMissingArgument(tool, arguments);
 					!missing.IsEmpty()) {
-					refusal = wxString::Format(
+					refusal = ibString::Format(
 						_("'%s' needs '%s', and it did not come. Nothing was done."), name, missing);
 
 					// ⭐ AND WHAT THAT ARGUMENT IS, in the words the schema already uses. A name on
@@ -2935,13 +2935,13 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 						if (!argument.Name().IsSameAs(missing, false))
 							continue;
 
-						wxString says = argument.Description();
-						const int stop = says.Find(wxT(". "));
+						ibString says = argument.Description();
+						const int stop = says.Find(ibT(". "));
 						if (stop != wxNOT_FOUND)
 							says = says.Left(stop + 1);
 
 						if (!says.IsEmpty())
-							refusal += wxT(" ") + missing + wxT(" - ") + says;
+							refusal += ibT(" ") + missing + ibT(" - ") + says;
 						break;
 					}
 				}
@@ -2950,7 +2950,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 				// gate both stop a call that cannot work; this one stops a call that would work on
 				// something the caller did not mean — `id: "abc"` read as id 0, a `comparison` word
 				// nobody declared taken as the default. See ibMcpArgumentFault.
-				else if (const wxString fault = ibMcpArgumentFault(tool, arguments);
+				else if (const ibString fault = ibMcpArgumentFault(tool, arguments);
 					!fault.IsEmpty()) {
 					refusal = fault;
 				}
@@ -2971,18 +2971,18 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// to say FromUTF8 precisely because a plain std::exception has no wxString to offer;
 			// these six do, and taking it costs no conversion at all.
 			catch (const ibBackendQuerySourceException& e) {
-				kind = wxString::Format(wxT("query %u:%u"), e.GetLine(), e.GetColumn());
+				kind = ibString::Format(ibT("query %u:%u"), e.GetLine(), e.GetColumn());
 				refusal = e.GetErrorDescription();
 			}
-			catch (const ibBackendQueryException& e)     { kind = wxT("query");     refusal = e.GetErrorDescription(); }
-			catch (const ibBackendAccessException& e)    { kind = wxT("access");    refusal = e.GetErrorDescription(); }
-			catch (const ibBackendLockException& e)      { kind = wxT("lock");      refusal = e.GetErrorDescription(); }
-			catch (const ibBackendInterruptException& e) { kind = wxT("interrupt"); refusal = e.GetErrorDescription(); }
-			catch (const ibCoreException& e)          { kind = wxT("platform");  refusal = e.GetErrorDescription(); }
-			catch (const std::exception& e)              { kind = wxT("internal");  refusal = wxString::FromUTF8(e.what()); }
+			catch (const ibBackendQueryException& e)     { kind = ibT("query");     refusal = e.GetErrorDescription(); }
+			catch (const ibBackendAccessException& e)    { kind = ibT("access");    refusal = e.GetErrorDescription(); }
+			catch (const ibBackendLockException& e)      { kind = ibT("lock");      refusal = e.GetErrorDescription(); }
+			catch (const ibBackendInterruptException& e) { kind = ibT("interrupt"); refusal = e.GetErrorDescription(); }
+			catch (const ibCoreException& e)          { kind = ibT("platform");  refusal = e.GetErrorDescription(); }
+			catch (const std::exception& e)              { kind = ibT("internal");  refusal = ibString::FromUTF8(e.what()); }
 			catch (...) {
-				kind = wxT("unknown");
-				refusal = wxString::Format(
+				kind = ibT("unknown");
+				refusal = ibString::Format(
 					_("'%s' failed in a way it does not describe."), name);
 			}
 
@@ -2990,13 +2990,13 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// our source: "[access] ..." is actionable where a bare sentence is a
 			// guess.
 			if (!kind.IsEmpty())
-				refusal = wxT("[") + kind + wxT("] ") + refusal;
+				refusal = ibT("[") + kind + ibT("] ") + refusal;
 
 			// A REFUSAL IS AN ANSWER, not a transport failure: the caller is a
 			// machine that will try something else, and it needs the reason in
 			// the same place it reads a result from.
 			std::shared_ptr<ibDataNode> content = std::make_shared<ibDataNode>();
-			content->SetValue(wxT("type"), wxString(wxT("text")));
+			content->SetValue(ibT("type"), ibString(ibT("text")));
 			// Rendered against the configuration this server serves, so a type
 			// reads as "CatalogRef.Goods" rather than as a number that means
 			// nothing on the other side of the socket.
@@ -3018,10 +3018,10 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// ⚠ THE FACT IS "HAS SPOKEN TO THE PERSON", which is not m_greeted — that one means
 			// "somebody connected" and is set by the handshake or by the first tool call, neither
 			// of which the person sees as an introduction.
-			if (ok && name == wxT("chat_say"))
+			if (ok && name == ibT("chat_say"))
 				m_introduced = true;
 
-			content->SetValue(wxT("text"), text);
+			content->SetValue(ibT("text"), text);
 
 			std::vector<ibDataValue> blocks = { ibDataValue::Child(content) };
 
@@ -3031,17 +3031,17 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// text they would arrive as a wall of base64: technically the same bytes, and
 			// unreadable, which for a picture means useless.
 			if (ok) {
-				auto image = payload.FindField(wxT("image"));
-				auto type  = payload.FindField(wxT("imageType"));
+				auto image = payload.FindField(ibT("image"));
+				auto type  = payload.FindField(ibT("imageType"));
 
 				if (image && image->Kind() == ibDataKind::String && !image->AsString().IsEmpty()) {
 
 					std::shared_ptr<ibDataNode> picture = std::make_shared<ibDataNode>();
-					picture->SetValue(wxT("type"), wxString(wxT("image")));
-					picture->SetValue(wxT("data"), image->AsString());
-					picture->SetValue(wxT("mimeType"),
+					picture->SetValue(ibT("type"), ibString(ibT("image")));
+					picture->SetValue(ibT("data"), image->AsString());
+					picture->SetValue(ibT("mimeType"),
 						type && type->Kind() == ibDataKind::String && !type->AsString().IsEmpty()
-							? type->AsString().ToWxString() : wxString(wxT("image/png")));
+							? type->AsString() : ibString(ibT("image/png")));
 
 					blocks.push_back(ibDataValue::Child(picture));
 
@@ -3049,22 +3049,22 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 					// would repeat the picture as a wall of base64 beside it — the identical data in
 					// the form that costs the most and reads the least. What stays is what the image
 					// cannot say for itself: what was in focus, and how big it is.
-					wxString said = ibMcpText("A picture is attached.");
+					ibString said = ibMcpText("A picture is attached.");
 
-					if (auto focus = payload.FindField(wxT("focus")))
+					if (auto focus = payload.FindField(ibT("focus")))
 						if (focus->Kind() == ibDataKind::String && !focus->AsString().IsEmpty())
-							said << wxT("\n") << ibMcpText("In focus: ") << focus->AsString();
+							said << ibT("\n") << ibMcpText("In focus: ") << focus->AsString();
 
-					if (auto note = payload.FindField(wxT("note")))
+					if (auto note = payload.FindField(ibT("note")))
 						if (note->Kind() == ibDataKind::String && !note->AsString().IsEmpty())
-							said << wxT("\n") << note->AsString();
+							said << ibT("\n") << note->AsString();
 
-					content->SetValue(wxT("text"), said);
+					content->SetValue(ibT("text"), said);
 				}
 			}
 
 			ibDataNode result;
-			result.AddField(wxT("content"), ibDataValue::Array(blocks));
+			result.AddField(ibT("content"), ibDataValue::Array(blocks));
 
 			// ⭐⭐ THE PLATFORM REMEMBERS WHAT THE CALLER FORGOT, AND SAYS IT ONCE.
 			//
@@ -3083,12 +3083,12 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// can act on it, and stopped the moment it is honoured.
 			if (ok && !name.IsEmpty()) {
 
-				const wxString family = name.BeforeFirst(wxT('_'));
+				const ibString family = name.BeforeFirst(ibT('_'));
 
 				// The corpus's own doors are exempt: pointing at the patterns from inside
 				// pattern_read is a loop, and mcp_search already answers with places.
 				const bool asksTheCorpusItself =
-					family == wxT("pattern") || family == wxT("mcp") || family == wxT("syntax");
+					family == ibT("pattern") || family == ibT("mcp") || family == ibT("syntax");
 
 				if (!asksTheCorpusItself && m_hinted.insert(family).second) {
 
@@ -3116,18 +3116,18 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 					ibMetaDataConfigurationBase* const metaData = GetMetaData();
 					if (!m_saidLanguages && metaData != nullptr && metaData->IsConfigOpen()) {
 
-						const std::vector<wxString> languages =
-							ibListMetaObjectNames(metaData, wxT("Language"));
+						const std::vector<ibString> languages =
+							ibListMetaObjectNames(metaData, ibT("Language"));
 
 						if (languages.size() > 1) {
 
-							wxString named;
-							for (const wxString& each : languages)
-								named += (named.IsEmpty() ? wxString() : wxString(wxT(", "))) + each;
+							ibString named;
+							for (const ibString& each : languages)
+								named += (named.IsEmpty() ? ibString() : ibString(ibT(", "))) + each;
 
 							m_saidLanguages = true;
-							result.SetValue(wxT("languages"),
-								wxString::Format(
+							result.SetValue(ibT("languages"),
+								ibString::Format(
 									ibMcpText("This configuration declares %d languages (%s), so every string a "
 									  "PERSON reads - a synonym, a form title, a column heading, a caption on "
 									  "a blank - has to carry all of them. Write them together as you go: a "
@@ -3148,7 +3148,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 						// bands and never that `SpreadsheetDocument` and `GetArea` exist.
 						int fromPatterns = 0;
 						for (const ibDataValue& each : places) {
-							if (each.Kind() == ibDataKind::Child && each.AsChild()->Has(wxT("pattern")))
+							if (each.Kind() == ibDataKind::Child && each.AsChild()->Has(ibT("pattern")))
 								++fromPatterns;
 						}
 
@@ -3162,22 +3162,22 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 						// the same mistake as every other one this file has been fixing today, and
 						// the number bought nothing: nobody chooses what to read by how many hits
 						// there were.
-						wxString where;
+						ibString where;
 						if (fromPatterns > 0)
-							where << wxString::Format(
+							where << ibString::Format(
 								ibMcpText("the pattern corpus, for how this is usually built here "
 								  "(pattern_read {query: '%s'})"), family);
 
 						if (fromSyntax > 0) {
 							if (!where.IsEmpty())
 								where << ibMcpText(", and ");
-							where << wxString::Format(
+							where << ibString::Format(
 								ibMcpText("the syntax helper, for what it is called and what it takes "
 								  "(syntax_search {query: '%s'})"), family);
 						}
 
-						result.SetValue(wxT("worthReading"),
-							wxString::Format(
+						result.SetValue(ibT("worthReading"),
+							ibString::Format(
 								ibMcpText("`%s` is written about in %s. Knowledge no single answer "
 								  "carries. Said once."),
 								family, where));
@@ -3194,9 +3194,9 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// looks at nothing else still learns the one thing that decides what to do next, which
 			// is that repeating is the wrong move.
 			if (pending)
-				result.SetValue(wxT("outcome"), wxString(wxT("pending")));
+				result.SetValue(ibT("outcome"), ibString(ibT("pending")));
 			else if (!ok)
-				result.SetValue(wxT("isError"), true);
+				result.SetValue(ibT("isError"), true);
 
 			toolRan = true;
 			toolOk = ok;
@@ -3211,7 +3211,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// ⚠ AND FRUITLESS MEANS BOTH LISTS EMPTY. chat_take now answers two — what was said and
 			// what happened — and a poll that came back carrying a metadata stage is not a poll
 			// that found nothing.
-			if (ok && name == wxT("chat_take")) {
+			if (ok && name == ibT("chat_take")) {
 
 				auto empty = [&payload](const ibChar* field) {
 					auto list = payload.FindField(field);
@@ -3220,13 +3220,13 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 						|| list->AsArray().empty();
 				};
 
-				toolFruitless = empty(wxT("messages")) && empty(wxT("observed"));
+				toolFruitless = empty(ibT("messages")) && empty(ibT("observed"));
 			}
 
 			answer = ibRpcWriteResult(parsed.m_id, result);
 		}
 	}
-	else if (parsed.m_method == wxT("ping")) {
+	else if (parsed.m_method == ibT("ping")) {
 
 		// ⭐ THE PROTOCOL'S OWN LIVENESS CHECK, and it used to fall through to "no method named
 		// ping". A client that pings to see whether anybody is home would read that error as an
@@ -3236,13 +3236,13 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// An empty result IS the answer the spec asks for; there is nothing to report.
 		answer = ibRpcWriteResult(parsed.m_id, ibDataNode());
 	}
-	else if (parsed.m_method == wxT("logging/setLevel")) {
+	else if (parsed.m_method == ibT("logging/setLevel")) {
 
 		// ⚠ WE SEND LOG NOTIFICATIONS, so we owe the client the switch that turns them down.
 		// Say() writes `notifications/message` on the stream when a person types; a server that
 		// emits those and then refuses to be told how much of it is wanted is advertising a
 		// capability it does not honour.
-		const wxString level = parsed.m_params.GetValue<wxString>(wxT("level"));
+		const ibString level = parsed.m_params.GetValue<ibString>(ibT("level"));
 
 		// Kept as the NUMBER of a level, so comparing is comparing — the words are the wire's
 		// business, not the gate's.
@@ -3253,11 +3253,11 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 	else if (!parsed.WantsAnswer()) {
 		// A notification we do not act on — `notifications/initialized`, `notifications/cancelled`
 		// and their kind. The protocol says answer nothing at all.
-		answer = wxEmptyString;
+		answer = ibEmptyString;
 	}
 	else {
 		answer = refuse(parsed.m_id, ibRpcError::MethodNotFound,
-			wxString::Format(wxT("No method named '%s'"), parsed.m_method));
+			ibString::Format(ibT("No method named '%s'"), parsed.m_method));
 	}
 
 	// WHAT THE WINDOW IS TOLD IS NOT THE WIRE.
@@ -3271,13 +3271,13 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 	// Everything else is ACTIVITY, and activity is one short line naming what was
 	// done. The bodies stay out of the window; a wire log is a different tool for
 	// a different reader.
-	if (parsed.m_method == wxT("tools/call")) {
+	if (parsed.m_method == ibT("tools/call")) {
 
 		// THE ONE THE EXECUTOR RESOLVED, envelope already off. Falling back to the wire name only
 		// for a call that never got that far — an unknown tool, a bad envelope — because those
 		// still belong in the record.
-		const wxString tool = toolName.IsEmpty()
-			? parsed.m_params.GetValue<wxString>(wxT("name")) : toolName;
+		const ibString tool = toolName.IsEmpty()
+			? parsed.m_params.GetValue<ibString>(ibT("name")) : toolName;
 
 		// IN THE READER'S WORDS, NOT THE PROTOCOL'S. The person reading either the window or the
 		// journal is a developer looking at their own configuration; "creating catalog Goods" is
@@ -3285,8 +3285,8 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// asked, because it is the only thing that knows what its own arguments mean.
 		//
 		// Asked ONCE, for both readers — a second copy of this would be a second chance to drift.
-		wxString activity = tool;
-		wxString detail;
+		ibString activity = tool;
+		ibString detail;
 
 		if (const ibMcpTool* called = ibFindMcpTool(tool)) {
 
@@ -3342,8 +3342,8 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		//
 		// The chat verbs ARE the conversation and are shown by Say/Reply; announcing them here
 		// would double every line.
-		if (toolOk && tool != wxT("chat_take") && tool != wxT("chat_say"))
-			Publish(wxT("did"), activity, detail);
+		if (toolOk && tool != ibT("chat_take") && tool != ibT("chat_say"))
+			Publish(ibT("did"), activity, detail);
 
 		// ⭐ AND INTO THE REGISTRATION JOURNAL — every tool call, kept.
 		//
@@ -3374,17 +3374,17 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 
 			if (!toolFruitless) {
 
-				wxString line = activity;
+				ibString line = activity;
 
 				if (!toolOk) {
-					line << wxT(" - ") << _("refused");
+					line << ibT(" - ") << _("refused");
 					if (!toolKind.IsEmpty())
-						line << wxT(" (") << toolKind << wxT(")");
+						line << ibT(" (") << toolKind << ibT(")");
 					if (!toolRefusal.IsEmpty())
-						line << wxT(": ") << toolRefusal;
+						line << ibT(": ") << toolRefusal;
 				}
 
-				journal->Audit(wxT("assistant"), toolOk ? wxT("mcp.did") : wxT("mcp.refused"), line);
+				journal->Audit(ibT("assistant"), toolOk ? ibT("mcp.did") : ibT("mcp.refused"), line);
 			}
 		}
 	}

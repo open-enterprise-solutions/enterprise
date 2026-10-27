@@ -30,10 +30,10 @@ TEST(SessionTokenText, ATokenNeverMintedMatchesNothing)
 
 TEST(SessionTokenText, TheRouteIsReadBackAndTheHexIsLeftAsItWas)
 {
-	const wxString hex = wxT("4f0e1c7a9b2d4e6f8a1b3c5d7e9f0a2b");
+	const ibString hex = wxT("4f0e1c7a9b2d4e6f8a1b3c5d7e9f0a2b");
 	EXPECT_EQ(ibSessionToken::WithRoute(hex, 0), hex) << "a server alone: the hex as it is";
 
-	wxString read;
+	ibString read;
 	unsigned route = 0;
 	ibSessionToken::SplitRoute(ibSessionToken::WithRoute(hex, 2), read, route);
 	EXPECT_EQ(read, hex);
@@ -46,9 +46,9 @@ TEST(SessionTokenText, TheRouteIsReadBackAndTheHexIsLeftAsItWas)
 
 TEST(SessionTokenText, WhatIsNotARouteIsLeftInTheToken)
 {
-	for (const wxString& token : { wxString(wxT("abc.")), wxString(wxT("abc.x")), wxString(wxT("abc.0")),
-			wxString(wxT("abc.65536")), wxString(wxT("abc.-1")) }) {
-		wxString read;
+	for (const ibString& token : { ibString(wxT("abc.")), ibString(wxT("abc.x")), ibString(wxT("abc.0")),
+			ibString(wxT("abc.65536")), ibString(wxT("abc.-1")) }) {
+		ibString read;
 		unsigned route = 7;
 		ibSessionToken::SplitRoute(token, read, route);
 		EXPECT_EQ(read, token) << token;

@@ -11,7 +11,7 @@ class FRMCLIENT_API ibPropertyObject;
 // ibPGGenerationProperty
 // -----------------------------------------------------------------------
 
-// THE DESKTOP'S GENERATION EDITOR (frontend/propertyManager/property/advprop/advpropGeneration.h) — what an object is
+// THE GENERATION EDITOR —what an object is
 // entered on the basis of. What may fill it is the row's choices, as the server's property listed them (GetValueList).
 class ibPGGenerationProperty : public wxPGProperty {
 public:

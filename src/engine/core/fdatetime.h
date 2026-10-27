@@ -253,6 +253,10 @@ public:
 
 	// `dd.mm.yyyy hh:mm:ss` - the text a date value gives.
 	ibString ToString() const;
+	// …and the text a FORMAT asks for, as wxDateTime::Format writes it: strftime's specifiers (`%Y-%m-%d %H:%M:%S`),
+	// and `%l` for the milliseconds. A stamp the program writes for itself (a file's name, a journal's line) - the
+	// text a person's date is shown in is the value's (ToString) or the script's Format.
+	ibString Format(const ibString& format) const;
 
 private:
 	// The digit forms of FromString: read, refused (the text IS one of them and names no date), or not theirs.

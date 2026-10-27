@@ -161,7 +161,7 @@ TEST(JobSchedule, ImpossibleCalendarHasNoNextRun) {
 }
 
 TEST(JobSchedule, ToStringNamesOnlyWhatWasSet) {
-    const wxString plain = ibJobScheduleRules::Describe(ibJobScheduleDescription::EverySeconds(600));
+    const ibString plain = ibJobScheduleRules::Describe(ibJobScheduleDescription::EverySeconds(600));
     EXPECT_FALSE(plain.IsEmpty());
     // Defaults are not restated — a description that lists "any day, any month"
     // is one nobody finishes reading.
@@ -341,7 +341,7 @@ TEST(JobManager, TheCapCountsRunsNotDeclarations) {
 
     for (int i = 0; i < 5; ++i) {
         ibJobDescription desc;
-        desc.m_name = wxString::Format(wxT("job-%d"), i);
+        desc.m_name = ibString::Format(wxT("job-%d"), i);
         desc.m_body = [](ibSession*) { return false; };
         EXPECT_TRUE(manager.Register(desc)) << "declaration " << i << " was refused by the run cap";
     }
@@ -426,7 +426,7 @@ TEST(JobManager, UnregisterByPrefixWithdrawsEveryRowOfOneMetaobject) {
 
     for (int i = 0; i < 3; ++i) {
         ibJobDescription row;
-        row.m_name = wxString::Format(wxT("Exchange.%d"), i);
+        row.m_name = ibString::Format(wxT("Exchange.%d"), i);
         row.m_key  = wxNewUniqueGuid;
         row.m_body = [](ibSession*) { return false; };
         ASSERT_TRUE(manager.Register(row));

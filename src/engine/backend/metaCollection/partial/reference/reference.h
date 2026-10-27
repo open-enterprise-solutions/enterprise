@@ -194,7 +194,7 @@ public:
 	//operator '!=' — the same one answer, negated. Never a third telling of it.
 	virtual bool CompareValueNE(const ibValue& cParam) const override { return CompareValueLS(cParam) != 0; }
 
-	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const;
+	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const;
 
 	//support source set/get data — ibValueDataObject value primitive (presentation + runtime read/copy)
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) override;
@@ -231,7 +231,7 @@ protected:
 
 public:
 	virtual ibClassID GetSourceClassType() const override { return GetClassType(); }
-	virtual wxString GetSourceCaption() const override { return GetString(); }
+	virtual ibString GetSourceCaption() const override { return GetString(); }
 	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
 	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
 	// Out-of-line (reference.cpp): the explorer build needs the COMPLETE metaobject types. Covariant
@@ -285,7 +285,7 @@ public:
 	virtual ibClassID GetClassType() const;
 
 	virtual ibString GetString() const;
-	virtual wxString GetClassName() const;
+	virtual ibString GetClassName() const;
 
 	// ⭐ THE VERB GOES TO THE GOVERNOR. Asked to narrow a value, a reference hands the question to the
 	// metaobject that governs it, together with itself as the element — see the definition. Nothing

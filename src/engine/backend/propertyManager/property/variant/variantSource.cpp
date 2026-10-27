@@ -104,10 +104,10 @@ static const ibValueMetaObject* ResolveGateMeta(const ibBackendTypeSourceFactory
 wxString ibVariantDataSource::MakeString() const
 {
 	bool valid = false;
-	wxString text;
+	ibString text;
 	if (m_ownerProperty != nullptr)
 		m_ownerProperty->WalkSource(m_sourceDesc, &valid, &text);
-	return valid ? text : _("<not selected>");
+	return valid ? text : ibString(_("<not selected>"));
 }
 
 ////////////////////////////////////////////////////////////////////////////

@@ -26,7 +26,7 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// The button's OWN Title / Picture win; where it sets nothing, the bound command provides the DEFAULT look —
 	// pulled straight FROM the command through the command door (ResolveValueByPath), not gathered. So a plain
 	// button shows its own text; a command button left blank shows the command's caption + icon.
-	wxString title = m_propertyTitle->GetValueAsTranslateString();
+	ibString title = m_propertyTitle->GetValueAsTranslateString();
 	ibPictureDescription picture = m_propertyPicture->GetValueAsPictureDesc();
 	const ibCommandDescription& cmdDesc = GetCommandDesc();
 	ibValueForm* const ownerForm = GetOwnerForm();
@@ -34,7 +34,7 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	bool cmdResolved = false;   // the bound command still resolves through the door — a button with no LIVE command hides
 	bool cmdPicAndText = true;  // the bound command's DEFAULT display (a standard action like Close is picture-only)
 	if (cmdDesc.IsOk() && ownerForm != nullptr) {
-		wxString cmdCaption; ibPictureDescription cmdPicture;
+		ibString cmdCaption; ibPictureDescription cmdPicture;
 		// THE one resolve (ResolveCommand on the door): walk + reliable gather fallback -> existence + caption + picture
 		// + modifies + default display, decided in ONE place so the button, the command bar and the inspector cell can't drift.
 		cmdResolved = ResolveCommand(cmdDesc, cmdCaption, cmdPicture, &cmdModifies, nullptr, &cmdPicAndText);

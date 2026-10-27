@@ -35,20 +35,20 @@ bool ibJobScheduleDescription::operator==(const ibJobScheduleDescription& o) con
 bool ibJobScheduleDescriptionMemory::WriteNode(ibDataValue& value, const ibJobScheduleDescription& s)
 {
 	auto root = std::make_shared<ibDataNode>();
-	root->SetValue(wxT("IntervalSeconds"),    (std::int32_t)s.m_intervalSeconds);
-	root->SetValue(wxT("StartMinute"),        (std::int32_t)s.m_startMinute);
-	root->SetValue(wxT("EndMinute"),          (std::int32_t)s.m_endMinute);
-	root->SetValue(wxT("StopAfterMinute"),    (std::int32_t)s.m_stopAfterMinute);
-	root->SetValue(wxT("DaysOfWeek"),         (std::int32_t)s.m_daysOfWeek);
-	root->SetValue(wxT("DaysOfMonth"),        (std::int32_t)s.m_daysOfMonth);
-	root->SetValue(wxT("DaysOfMonthFromEnd"), (std::int32_t)s.m_daysOfMonthFromEnd);
-	root->SetValue(wxT("Months"),             (std::int32_t)s.m_months);
-	root->SetValue(wxT("WeekdayOrdinal"),     (std::int32_t)s.m_weekdayOrdinal);
-	root->SetValue(wxT("EveryNWeeks"),        (std::int32_t)s.m_everyNWeeks);
-	root->SetValue(wxT("EveryNMonths"),       (std::int32_t)s.m_everyNMonths);
-	root->SetValue(wxT("PeriodAnchor"),       s.m_periodAnchor);
-	root->SetValue(wxT("ActiveFrom"),         s.m_activeFrom);
-	root->SetValue(wxT("ActiveTo"),           s.m_activeTo);
+	root->SetValue(ibT("IntervalSeconds"),    (std::int32_t)s.m_intervalSeconds);
+	root->SetValue(ibT("StartMinute"),        (std::int32_t)s.m_startMinute);
+	root->SetValue(ibT("EndMinute"),          (std::int32_t)s.m_endMinute);
+	root->SetValue(ibT("StopAfterMinute"),    (std::int32_t)s.m_stopAfterMinute);
+	root->SetValue(ibT("DaysOfWeek"),         (std::int32_t)s.m_daysOfWeek);
+	root->SetValue(ibT("DaysOfMonth"),        (std::int32_t)s.m_daysOfMonth);
+	root->SetValue(ibT("DaysOfMonthFromEnd"), (std::int32_t)s.m_daysOfMonthFromEnd);
+	root->SetValue(ibT("Months"),             (std::int32_t)s.m_months);
+	root->SetValue(ibT("WeekdayOrdinal"),     (std::int32_t)s.m_weekdayOrdinal);
+	root->SetValue(ibT("EveryNWeeks"),        (std::int32_t)s.m_everyNWeeks);
+	root->SetValue(ibT("EveryNMonths"),       (std::int32_t)s.m_everyNMonths);
+	root->SetValue(ibT("PeriodAnchor"),       s.m_periodAnchor);
+	root->SetValue(ibT("ActiveFrom"),         s.m_activeFrom);
+	root->SetValue(ibT("ActiveTo"),           s.m_activeTo);
 	value = ibDataValue::Child(root);
 	return true;
 }
@@ -62,27 +62,27 @@ bool ibJobScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibJobSch
 	// Has before reading, so an absent name leaves the member at its default. That is the
 	// whole forward-compatibility story: a blob written before a field existed must load as "not
 	// restricted", never as "restricted to nothing".
-	const auto readInt = [&root](const wxString& name, auto& target) {
+	const auto readInt = [&root](const ibString& name, auto& target) {
 		if (root->Has(name))
 			target = static_cast<typename std::remove_reference<decltype(target)>::type>(root->GetValue<std::int32_t>(name));
 	};
 
-	readInt(wxT("IntervalSeconds"),    s.m_intervalSeconds);
-	readInt(wxT("StartMinute"),        s.m_startMinute);
-	readInt(wxT("EndMinute"),          s.m_endMinute);
-	readInt(wxT("StopAfterMinute"),    s.m_stopAfterMinute);
-	readInt(wxT("DaysOfWeek"),         s.m_daysOfWeek);
-	readInt(wxT("DaysOfMonth"),        s.m_daysOfMonth);
-	readInt(wxT("DaysOfMonthFromEnd"), s.m_daysOfMonthFromEnd);
-	readInt(wxT("Months"),             s.m_months);
-	readInt(wxT("WeekdayOrdinal"),     s.m_weekdayOrdinal);
-	readInt(wxT("EveryNWeeks"),        s.m_everyNWeeks);
-	readInt(wxT("EveryNMonths"),       s.m_everyNMonths);
+	readInt(ibT("IntervalSeconds"),    s.m_intervalSeconds);
+	readInt(ibT("StartMinute"),        s.m_startMinute);
+	readInt(ibT("EndMinute"),          s.m_endMinute);
+	readInt(ibT("StopAfterMinute"),    s.m_stopAfterMinute);
+	readInt(ibT("DaysOfWeek"),         s.m_daysOfWeek);
+	readInt(ibT("DaysOfMonth"),        s.m_daysOfMonth);
+	readInt(ibT("DaysOfMonthFromEnd"), s.m_daysOfMonthFromEnd);
+	readInt(ibT("Months"),             s.m_months);
+	readInt(ibT("WeekdayOrdinal"),     s.m_weekdayOrdinal);
+	readInt(ibT("EveryNWeeks"),        s.m_everyNWeeks);
+	readInt(ibT("EveryNMonths"),       s.m_everyNMonths);
 
 	// A DATE READS AS EITHER KIND: a node kept by the engine holds a Date, a node that crossed the wire as JSON holds
 	// its ISO text (jsonProvider.h — a Date reads back as a String, "" the empty one). The thin designer's schedule
 	// cell reads the second and writes it back the same way, so both readers meet it.
-	const auto readDate = [&root](const wxString& name, ibDateTime& target) {
+	const auto readDate = [&root](const ibString& name, ibDateTime& target) {
 		const auto v = root->FindField(name);
 		if (!v)
 			return;
@@ -92,7 +92,7 @@ bool ibJobScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibJobSch
 		}
 		if (v->Kind() != ibDataKind::String)
 			return;
-		const wxString text = v->AsString();
+		const ibString text = v->AsString();
 		if (text.IsEmpty()) {
 			target = ibDateTime();
 			return;
@@ -102,9 +102,9 @@ bool ibJobScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibJobSch
 			target = parsed;
 	};
 
-	readDate(wxT("PeriodAnchor"), s.m_periodAnchor);
-	readDate(wxT("ActiveFrom"),   s.m_activeFrom);
-	readDate(wxT("ActiveTo"),     s.m_activeTo);
+	readDate(ibT("PeriodAnchor"), s.m_periodAnchor);
+	readDate(ibT("ActiveFrom"),   s.m_activeFrom);
+	readDate(ibT("ActiveTo"),     s.m_activeTo);
 	return true;
 }
 

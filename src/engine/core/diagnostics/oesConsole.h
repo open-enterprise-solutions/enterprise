@@ -14,9 +14,8 @@
 //
 // Wrapped here so future console exes (next health-check daemon,
 // stress-test driver, etc.) wire in two lines instead of duplicating
-// the three. Header-only — uses only BACKEND_API ibCrashGuard + wx
-// primitives that the binary already links anyway, so it doesn't add
-// a transitive frontend.dll dependency.
+// the three. Header-only, in the core beside the guard it installs — wx
+// primitives that the binary already links anyway, and nothing above the core.
 //
 // Usage:
 //   int main(int argc, char** argv) {

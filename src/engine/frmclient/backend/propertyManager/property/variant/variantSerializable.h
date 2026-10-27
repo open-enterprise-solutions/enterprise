@@ -12,7 +12,7 @@
 class ibVariantDataSerializable : public wxVariantData {
 public:
 
-	ibVariantDataSerializable(const wxString& type, const ibDataValue& value, const wxString& presentation)
+	ibVariantDataSerializable(const ibString& type, const ibDataValue& value, const ibString& presentation)
 		: wxVariantData(), m_type(type), m_value(value), m_presentation(presentation) {}
 
 	const ibDataValue& GetNodeValue() const { return m_value; }
@@ -32,7 +32,7 @@ public:
 	}
 
 #if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const override { str << m_presentation; return true; }
+	virtual bool Write(wxSTD ostream& str) const override { str << m_presentation.utf8_str(); return true; }
 #endif
 	virtual bool Write(wxString& str) const override { str = m_presentation; return true; }
 
@@ -40,9 +40,9 @@ public:
 
 private:
 
-	wxString    m_type;           // the server's class
+	ibString    m_type;           // the server's class
 	ibDataValue m_value;          // the value, as the server stores it
-	wxString    m_presentation;   // the words it reads as — the server's
+	ibString    m_presentation;   // the words it reads as — the server's
 };
 
 #endif // !__SERIALIZABLE_VARIANT_H__

@@ -206,6 +206,7 @@
     <ClCompile Include="pictureRegistry.cpp" />
     <ClCompile Include="launchTicket.cpp" />
     <ClCompile Include="startProcess.cpp" />
+    <ClCompile Include="stringTokenizer.cpp" />
     <ClCompile Include="typeName.cpp" />
     <ClCompile Include="query\queryAggregates.cpp">
       <Filter>query</Filter>
@@ -300,6 +301,7 @@
       <Filter>composition</Filter>
     </ClInclude>
     <ClInclude Include="core.h" />
+    <ClInclude Include="coreApi.h" />
     <ClInclude Include="crypto\fieldCipher.h">
       <Filter>crypto</Filter>
     </ClInclude>
@@ -343,6 +345,12 @@
       <Filter>description</Filter>
     </ClInclude>
     <ClInclude Include="diagnostics\crashGuard.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="diagnostics\oesApp.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="diagnostics\oesConsole.h">
       <Filter>diagnostics</Filter>
     </ClInclude>
     <ClInclude Include="diagnostics\debugTrace.h">
@@ -507,6 +515,7 @@
     <ClInclude Include="spreadsheet\spreadsheetObject.h">
       <Filter>spreadsheet</Filter>
     </ClInclude>
+    <ClInclude Include="stringTokenizer.h" />
     <ClInclude Include="stringUtils.h" />
     <ClInclude Include="syntaxHelper\helpCategory.h">
       <Filter>syntaxHelper</Filter>

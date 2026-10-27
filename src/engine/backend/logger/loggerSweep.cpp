@@ -1,17 +1,15 @@
 #include "backend/logger/loggerSweep.h"
 
-#include "core/fileSystem.h"   // ibRemoveFile
+#include "core/fileSystem.h"   // ibDir, ibRemoveFile
 
-#include <wx/dir.h>
-#include <wx/filename.h>
 #include <wx/datetime.h>
 
 namespace {
 
-bool ParseLogFileMonth(const wxString& name, int& year, int& month)
+bool ParseLogFileMonth(const ibString& name, int& year, int& month)
 {
-    if (!name.StartsWith(wxT("oes_"))) return false;
-    if (!name.EndsWith(wxT(".olg")))   return false;
+    if (!name.StartsWith(ibT("oes_"))) return false;
+    if (!name.EndsWith(ibT(".olg")))   return false;
     long y = 0, m = 0;
     if (!name.Mid(4, 4).ToLong(&y)) return false;
     if (!name.Mid(9, 2).ToLong(&m)) return false;
@@ -22,7 +20,7 @@ bool ParseLogFileMonth(const wxString& name, int& year, int& month)
 
 }   // namespace
 
-int ibLoggerSweep::RunOnce(const wxString& dir, int retentionDays)
+int ibLoggerSweep::RunOnce(const ibString& dir, int retentionDays)
 {
     if (retentionDays <= 0) return 0;
     if (dir.IsEmpty() || !ibDirExists(dir)) return 0;
@@ -33,12 +31,12 @@ int ibLoggerSweep::RunOnce(const wxString& dir, int retentionDays)
     const wxDateTime cutoff = wxDateTime::Now()
         .Subtract(wxDateSpan::Days(retentionDays));
 
-    wxDir d(dir);
+    ibDir d(dir);
     if (!d.IsOpened()) return 0;
 
     int removed = 0;
-    wxString name;
-    bool more = d.GetFirst(&name, wxT("*.olg"), wxDIR_FILES);
+    ibString name;
+    bool more = d.GetFirst(&name, ibT("*.olg"), ibDIR_FILES);
     while (more) {
         int y = 0, m = 0;
         if (ParseLogFileMonth(name, y, m)) {
@@ -48,13 +46,13 @@ int ibLoggerSweep::RunOnce(const wxString& dir, int retentionDays)
             wxDateTime bucketEnd = bucketStart;
             bucketEnd.Add(wxDateSpan::Month());
             if (bucketEnd <= cutoff) {
-                const wxString path = dir + wxFileName::GetPathSeparator() + name;
+                const ibString path = dir + ibFILE_SEP_PATH + name;
                 if (ibRemoveFile(path)) ++removed;
                 // Also clean up the WAL sidecar files SQLite leaves behind. They
                 // are transient — SQLite removes them on a clean close, so their
                 // absence is the NORMAL case, and ibRemoveFile says nothing of it.
-                ibRemoveFile(path + wxT("-wal"));
-                ibRemoveFile(path + wxT("-shm"));
+                ibRemoveFile(path + ibT("-wal"));
+                ibRemoveFile(path + ibT("-shm"));
             }
         }
         more = d.GetNext(&name);

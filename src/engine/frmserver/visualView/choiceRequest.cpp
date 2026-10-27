@@ -11,7 +11,7 @@
 namespace {
 
 // The request a choice is put as — its caption and the items offered.
-ibDataNode ChoiceRequest(const wxString& caption, const std::vector<ibChoiceItem>& items, const ibMetaData* metaData)
+ibDataNode ChoiceRequest(const ibString& caption, const std::vector<ibChoiceItem>& items, const ibMetaData* metaData)
 {
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::Choice));
@@ -30,7 +30,7 @@ ibDataNode ChoiceRequest(const wxString& caption, const std::vector<ibChoiceItem
 
 } // namespace
 
-bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& items, std::int32_t& chosen)
+bool ibRequestChoice(const ibString& caption, const std::vector<ibChoiceItem>& items, std::int32_t& chosen)
 {
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 	if (frame == nullptr || items.empty())
@@ -51,7 +51,7 @@ bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& i
 	return false;
 }
 
-bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& items, std::vector<std::int32_t>& chosen)
+bool ibRequestChoice(const ibString& caption, const std::vector<ibChoiceItem>& items, std::vector<std::int32_t>& chosen)
 {
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 	if (frame == nullptr || items.empty())

@@ -122,8 +122,7 @@ bool ibPropertyCalcSchedule::SetDataValue(const ibValue& varPropVal) { return fa
 
 bool ibPropertyCalcSchedule::GetDataValue(ibValue& pvarPropVal) const
 {
-	wxString name;
-	get_cell_variant<ibVariantDataCalcSchedule>()->Write(name);
+	const ibString name = m_propValue.MakeString();
 	pvarPropVal = ibValue(name);
 	return true;
 }

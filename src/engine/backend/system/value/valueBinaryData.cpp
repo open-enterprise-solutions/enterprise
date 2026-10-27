@@ -19,12 +19,12 @@
 // Order MUST match ibValueBinaryData::Func - the method number is the index into this table.
 void ibValueBinaryData_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(0, wxT("BinaryData()"));
-	helper.AppendConstructor(1, wxT("BinaryData(base64 : string)"));
+	helper.AppendConstructor(0, ibT("BinaryData()"));
+	helper.AppendConstructor(1, ibT("BinaryData(base64 : string)"));
 
-	helper.AppendFunc(wxT("Size"), wxT("Size()"));
-	helper.AppendFunc(wxT("Read"), 1, wxT("Read(path : string)"));
-	helper.AppendFunc(wxT("Write"), 1, wxT("Write(path : string)"));
+	helper.AppendFunc(ibT("Size"), ibT("Size()"));
+	helper.AppendFunc(ibT("Read"), 1, ibT("Read(path : string)"));
+	helper.AppendFunc(ibT("Write"), 1, ibT("Write(path : string)"));
 }
 
 ibValueBinaryData::ibValueBinaryData() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_data() {}
@@ -64,12 +64,12 @@ bool ibValueBinaryData::Init(ibValue** paParams, const long lSizeArray)
 	return false;
 }
 
-void ibValueBinaryData::ReadWholeFile(const wxString& fileName, const wxString& who, ibMemoryBuffer& bytes)
+void ibValueBinaryData::ReadWholeFile(const ibString& fileName, const ibString& who, ibMemoryBuffer& bytes)
 {
 	wxFFile file;
 	{
 		wxLogNull quiet;   // a missing file is said in the platform's words, not in the library's log
-		file.Open(fileName, wxT("rb"));
+		file.Open(fileName, ibT("rb"));
 	}
 	if (!file.IsOpened())
 		ibBackendCoreException::Error(_("%s: cannot open the file '%s' for reading"), who, fileName);
@@ -102,19 +102,19 @@ void ibValueBinaryData::ReadWholeFile(const wxString& fileName, const wxString& 
 	bytes = whole;
 }
 
-void ibValueBinaryData::ReadFile(const wxString& fileName)
+void ibValueBinaryData::ReadFile(const ibString& fileName)
 {
 	ibMemoryBuffer bytes;
-	ReadWholeFile(fileName, wxT("BinaryData"), bytes);
+	ReadWholeFile(fileName, ibT("BinaryData"), bytes);
 	m_data = bytes;
 }
 
-void ibValueBinaryData::WriteFile(const wxString& fileName) const
+void ibValueBinaryData::WriteFile(const ibString& fileName) const
 {
 	wxFFile file;
 	{
 		wxLogNull quiet;
-		file.Open(fileName, wxT("wb"));
+		file.Open(fileName, ibT("wb"));
 	}
 	if (!file.IsOpened())
 		ibBackendCoreException::Error(_("BinaryData: cannot open the file '%s' for writing"), fileName);

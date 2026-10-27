@@ -27,8 +27,8 @@ class ibValue : public ibLiteral {
 public:
 
 	ibValue() = default;
-	ibValue(const wxString& text) : ibLiteral(text) {}
-	ibValue(const wxChar* text) : ibLiteral(text) {}
+	ibValue(const ibString& text) : ibLiteral(text) {}
+	ibValue(const ibChar* text) : ibLiteral(text) {}
 	// A narrow literal is a text too — without this one `ibValue("x")` is the flag TRUE (pointer-to-bool beats the
 	// conversion to wxString), the trap the engine's ctors name.
 	ibValue(const char* text) : ibLiteral(text) {}
@@ -96,7 +96,7 @@ public:
 	// …and their NAMES and PICTURES are the ones the server wrote with them (a type property's offer) — kept as they come,
 	// what a type is offered by (the type picker). No picture: a value's own.
 	static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
-	static void RegisterCtor(const ibClassID& clsid, const wxString& className, const wxIcon& classIcon = wxNullIcon);
+	static void RegisterCtor(const ibClassID& clsid, const ibString& className, const wxIcon& classIcon = wxNullIcon);
 	template <typename valT>
 	valT ConvertToEnumValue() const {
 		if (IsReference() && m_pRef != nullptr)
@@ -106,7 +106,7 @@ public:
 
 	// THE VALUES THIS ONE IS PICKED AMONG — the engine's FindValue with nothing typed (a quick choice): a flag's two, an
 	// enumeration's members. A text typed is looked for among them; what a base holds is the server's to find.
-	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& foundedObjects) const;
+	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& foundedObjects) const;
 
 	// A MEMBER OF AN ENUMERATION as a value — the engine's: it reads as its word, is its number, and is written as the
 	// enumeration's class and that number (enumUnit.h, where T is complete).
@@ -151,7 +151,7 @@ protected:
 	virtual bool DoDeserialize(const class ibDataNode& WXUNUSED(node)) { return false; }
 
 	// A member of an enumeration — the base of one (ibValueEnumerationVariant, enumUnit.h).
-	ibValue(const ibClassID& enumClass, long member, const wxString& word)
+	ibValue(const ibClassID& enumClass, long member, const ibString& word)
 		: ibLiteral(ibValueTypes::TYPE_ENUM), m_classType(enumClass)
 	{
 		m_text = word;
@@ -173,13 +173,13 @@ private:
 // name and its picture.
 class ibCtorAbstractType {
 public:
-	ibCtorAbstractType(const wxString& className, const wxIcon& classIcon) : m_className(className), m_classIcon(classIcon) {}
+	ibCtorAbstractType(const ibString& className, const wxIcon& classIcon) : m_className(className), m_classIcon(classIcon) {}
 
-	wxString GetClassName() const { return m_className; }
+	const ibString& GetClassName() const { return m_className; }
 	wxIcon GetClassIcon() const { return m_classIcon; }
 
 private:
-	wxString m_className;
+	ibString m_className;
 	wxIcon   m_classIcon;
 };
 

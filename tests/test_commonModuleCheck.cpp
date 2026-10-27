@@ -125,7 +125,7 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 	ASSERT_NE(check, nullptr);
 	ibDataNode params;
 	ibDataNode result;
-	wxString refusal;
+	ibString refusal;
 	ASSERT_TRUE(check->Call(params, result, refusal)) << refusal.ToStdString();
 
 	std::optional<ibDataValue> brokenProblem;
@@ -136,21 +136,21 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 	for (const ibDataValue& one : problems->AsArray()) {
 		if (one.Kind() != ibDataKind::Child || !one.AsChild())
 			continue;
-		const wxString text = one.AsChild()->GetValue<wxString>(wxT("name"))
-			+ one.AsChild()->GetValue<wxString>(wxT("says"));
+		const ibString text = one.AsChild()->GetValue<ibString>(wxT("name"))
+			+ one.AsChild()->GetValue<ibString>(wxT("says"));
 		auto diagnostics = one.AsChild()->FindField(wxT("diagnostics"));
 		if (diagnostics && diagnostics->Kind() == ibDataKind::Array) {
 			for (const ibDataValue& line : diagnostics->AsArray()) {
 				if (line.Kind() == ibDataKind::Child && line.AsChild()
-					&& line.AsChild()->GetValue<wxString>(wxT("message")).Contains(wxT("Nope")))
+					&& line.AsChild()->GetValue<ibString>(wxT("message")).Contains(wxT("Nope")))
 					brokenProblem = one;
 			}
 		}
-		if (one.AsChild()->GetValue<wxString>(wxT("name")) == never->GetName()
+		if (one.AsChild()->GetValue<ibString>(wxT("name")) == never->GetName()
 			|| text.Contains(never->GetName()))
 			neverProblem = one;
 		EXPECT_FALSE(text.Contains(clean->GetName()) && one.AsChild()->Has(wxT("diagnostics"))
-			&& one.AsChild()->GetValue<wxString>(wxT("says")).Contains(wxT("does not compile")));
+			&& one.AsChild()->GetValue<ibString>(wxT("says")).Contains(wxT("does not compile")));
 	}
 
 	ASSERT_TRUE(brokenProblem);

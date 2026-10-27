@@ -81,13 +81,13 @@ enum class ibRpcError {
 // JSON-RPC request — malformed JSON, or well-formed JSON that is not one.
 // THE TEXT IS THE ENGINE'S, AND IT IS READ WHERE IT LIES (ibJsonProvider::Read): a transport that holds bytes makes
 // it once (ibString::FromUTF8), one that holds the text — a file base's client — hands it over as it is.
-BACKEND_API bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, wxString& error);
+BACKEND_API bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, ibString& error);
 // …read before its caller is known: only a composition's own parts are turned back into classes, and a node that names
 // its type by any other word keeps the word (`unknownType`) — for the caller's session to look up (ibRpcLookupTypes).
-BACKEND_API bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, wxString& error, bool& unknownType);
+BACKEND_API bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, ibString& error, bool& unknownType);
 // …and the request as a PACKET (OES-RPC 1.0, serialize/dataBuilder.h) — the client protocol's: its bytes checked and
 // taken as the node they are, nothing parsed; the envelope's words are JSON-RPC's (method, id, params), with no jsonrpc.
-BACKEND_API bool ibRpcParseRequest(const ibMemoryBuffer& packet, ibRpcRequest& request, wxString& error);
+BACKEND_API bool ibRpcParseRequest(const ibMemoryBuffer& packet, ibRpcRequest& request, ibString& error);
 // The words a reading kept, looked up in THAT configuration — the caller's session's: the text is not read again.
 BACKEND_API void ibRpcLookupTypes(ibDataNode& node, const class ibMetaData* metaData);
 // ⭐ A PACKET'S TYPES IN WORDS — a node's header says its clsid, and a client knows no classes: the answer carries the
@@ -124,17 +124,17 @@ BACKEND_API void ibRpcInstallTypeLookup(class ibJsonProvider& provider);
 // reply to its call by that value and by nothing else.
 // `result` is taken, not copied, by a caller done with it (std::move): it goes into the envelope as it is.
 BACKEND_API ibString ibRpcWriteResult(const ibDataValue& id, ibDataNode result);
-BACKEND_API ibString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message);
+BACKEND_API ibString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const ibString& message);
 
 // The same, with the `data` member a few refusals owe the caller — chiefly the list
 // of versions this server speaks, which is what makes a version refusal answerable
 // rather than merely final.
-BACKEND_API ibString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message,
+BACKEND_API ibString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const ibString& message,
 	const ibDataNode* data);
 
 // An APPLICATION'S OWN refusal — a code of its own numbering, outside the range JSON-RPC reserves for itself
 // (-32768..-32000), which the specification leaves to the application: the client protocol's reasons
 // (frmserver's ibProtocol::ibRefusal), which a client branches on.
-BACKEND_API ibString ibRpcWriteError(const ibDataValue& id, std::int32_t code, const wxString& message);
+BACKEND_API ibString ibRpcWriteError(const ibDataValue& id, std::int32_t code, const ibString& message);
 
 #endif // _IB_RPC_MESSAGE_H_

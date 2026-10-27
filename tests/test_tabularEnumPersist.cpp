@@ -61,7 +61,7 @@ constexpr unsigned int kCellCol = 777;   // arbitrary — ibComposerNode is keye
 struct TabularEnumPersist : ::testing::Test {
 	wxInitializer m_wxInit;
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
-	wxString dbPath;
+	ibString dbPath;
 	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
 	ibValueMetaObjectEnumeration* vatRates = nullptr;
 	ibValueMetaObjectEnum* vat10 = nullptr;
@@ -123,7 +123,7 @@ struct TabularEnumPersist : ::testing::Test {
 		}
 	}
 
-	static wxString SqliteTypeOf(const wxString& field) {
+	static ibString SqliteTypeOf(const ibString& field) {
 		if (field.EndsWith(wxT("_RRRef"))) return wxT(" BLOB");
 		if (field.EndsWith(wxT("_D")) || field.EndsWith(wxT("_S"))) return wxT(" TEXT");
 		if (field.EndsWith(wxT("_N"))) return wxT(" NUMERIC");
@@ -131,12 +131,12 @@ struct TabularEnumPersist : ::testing::Test {
 	}
 
 	void CreateTable() {
-		wxString list;
-		std::set<wxString> seen;
+		ibString list;
+		std::set<ibString> seen;
 		for (const ibValueMetaObjectAttributeBase* attribute : vatRates->GetGenericAttributeArrayObject()) {
 			if (attribute == nullptr || attribute->GetQueryColumn() == nullptr)
 				continue;
-			for (const wxString& field : ColumnFieldNames(attribute->GetQueryColumn())) {
+			for (const ibString& field : ColumnFieldNames(attribute->GetQueryColumn())) {
 				if (!seen.insert(field).second)
 					continue;
 				list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << SqliteTypeOf(field);
@@ -148,8 +148,8 @@ struct TabularEnumPersist : ::testing::Test {
 	}
 
 	void Assign(std::vector<ibDmlAssign>& out, const ibBackendQueryColumn* column, const ibValue& value) const {
-		const std::vector<wxString> fields = ColumnFieldNames(column);
-		ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+		const std::vector<ibString> fields = ColumnFieldNames(column);
+		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
 		ibColumnCodec::WriteValue(column, cfg.get(), value, &capture, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();

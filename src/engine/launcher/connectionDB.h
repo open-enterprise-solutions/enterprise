@@ -19,7 +19,7 @@
 #include <wx/radiobut.h>
 #include <wx/filepicker.h>
 
-#include "frontend/frontend.h"
+#include <wx/wx.h>
 
 class ibDialogConnection : public wxDialog {
 	wxStaticText* m_staticTextName;

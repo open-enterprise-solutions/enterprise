@@ -13,8 +13,8 @@
 // ibPGCalcScheduleProperty
 // -----------------------------------------------------------------------
 
-// ⭐ A CALCULATION REGISTER'S SCHEDULE, AS ONE ROW THAT UNFOLDS — the desktop's (frontend/propertyManager/property/
-// advprop/advpropCalcSchedule.h), the way a type unfolds into its qualifiers (ibPGTypeProperty). The row picks the
+// ⭐ A CALCULATION REGISTER'S SCHEDULE, AS ONE ROW THAT UNFOLDS — as the old desktop's did,
+// the way a type unfolds into its qualifiers (ibPGTypeProperty). The row picks the
 // information register; below it, from that register, the resource that is the value, the dimension that is the date,
 // and one row per remaining dimension: which field of the calculation register answers for it. Every list is the
 // property's answer — held, so the row only asks.

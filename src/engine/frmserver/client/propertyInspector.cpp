@@ -38,7 +38,7 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 			choice.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(picture, metaData));
 		// Its data, a std::uint64_t — past what a JSON number keeps, so as a decimal.
 		if (const std::uint64_t data = choices.GetData(index)) {
-			choice.SetValue(ibProtocol::ibSchema::ibProperties::Data, ibString::Format(wxT("%llu"), static_cast<unsigned long long>(data)));
+			choice.SetValue(ibProtocol::ibSchema::ibProperties::Data, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(data)));
 			if (std::find(classes.begin(), classes.end(), data) == classes.end())
 				classes.push_back(data);
 		}
@@ -53,7 +53,7 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 			if (ctor == nullptr)
 				continue;
 			ibDataNode& entry = named.AddChild(0, static_cast<ibMetaID>(named.Children().size() + 1));
-			entry.SetValue(ibProtocol::ibSchema::ibProperties::Type, ibString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
+			entry.SetValue(ibProtocol::ibSchema::ibProperties::Type, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(clsid)));
 			entry.SetValue(ibProtocol::ibSchema::ibProperties::Name, ctor->GetClassName());
 			entry.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(clsid));
 		}
@@ -68,7 +68,7 @@ namespace {
 // HIDES IS NOT SENT — nor a category left with nothing: the rows ride every frame, so one shown again comes back with
 // it.
 void AppendCategory(ibDataNode& parent, ibPropertyObject* object, const ibPropertyCategory* category,
-	const std::set<const ibProperty*>& hidden, std::set<wxString>& met)
+	const std::set<const ibProperty*>& hidden, std::set<ibString>& met)
 {
 	for (unsigned int index = 0; index < category->GetPropertyCount(); ++index) {
 		ibProperty* const property = object->GetProperty(category->GetPropertyName(index));
@@ -152,6 +152,6 @@ void ibPropertyInspector::OnDraw(ibDataNode& node) const
 	if (m_tabId != 0)
 		node.SetValue(ibProtocol::ibSchema::ibProperties::Tab, m_tabId);
 
-	std::set<wxString> met;
+	std::set<ibString> met;
 	AppendCategory(node, object, object->GetCategory(), m_hidden, met);
 }

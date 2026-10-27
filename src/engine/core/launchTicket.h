@@ -7,23 +7,22 @@
 
 #include <cstdint>
 
-#include <wx/string.h>
 
 #include "core/core.h"
 
 struct CORE_API ibLaunchSecrets {
 	static constexpr std::uint32_t kMaxFieldBytes = 256u * 1024u;
 
-	wxString m_dbUser;
-	wxString m_dbPassword;
-	wxString m_ibUser;
-	wxString m_ibPassword;
+	ibString m_dbUser;
+	ibString m_dbPassword;
+	ibString m_ibUser;
+	ibString m_ibPassword;
 };
 
 // Start `command` (core/startProcess.h) with `secrets` written on the child's
 // stdin. Returns the process id, or 0 when the process did not start. The
 // session that asked for the launch keeps its own copy of the password.
-CORE_API long ibStartProcess(const wxString& command, const ibLaunchSecrets& secrets);
+CORE_API long ibStartProcess(const ibString& command, const ibLaunchSecrets& secrets);
 
 // Read the block from stdin when stdin is not a terminal, and fold it into
 // `line`. A password in the block replaces one that arrived on the command
@@ -32,6 +31,6 @@ CORE_API long ibStartProcess(const wxString& command, const ibLaunchSecrets& sec
 CORE_API void ibApplyLaunchSecrets(ibLaunchSecrets& line, bool plaintextDb, bool plaintextIb);
 
 // Says, once per call, that a password flag was on a command line.
-CORE_API void ibNotePlaintextLaunchPassword(const wxString& flag);
+CORE_API void ibNotePlaintextLaunchPassword(const ibString& flag);
 
 #endif

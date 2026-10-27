@@ -60,13 +60,13 @@ bool ibDialogSelectTypeForm::ShowModal(int& chosen)
 
 	// …and the texts put on the form, as the desktop's OK put them — a name the window would not have let through
 	// (OnTextEnter cut it) is the kind's.
-	wxString name = response.GetValue<wxString>(ibProtocol::ibRequest::ibFormType::Name);
+	ibString name = response.GetValue<ibString>(ibProtocol::ibRequest::ibFormType::Name);
 	if (name.IsEmpty() || stringUtils::CheckCorrectName(name) != wxNOT_FOUND) {
 		nameRequest.m_prefix = offered->m_name;
 		name = m_metaObject->GetMetaData()->GetNewName(m_metaObject->GetParent(), nameRequest);
 	}
 	m_metaObject->SetName(name);
-	m_metaObject->SetSynonym(response.GetValue<wxString>(ibProtocol::ibRequest::ibFormType::Synonym));
-	m_metaObject->SetComment(response.GetValue<wxString>(ibProtocol::ibRequest::ibFormType::Comment));
+	m_metaObject->SetSynonym(response.GetValue<ibString>(ibProtocol::ibRequest::ibFormType::Synonym));
+	m_metaObject->SetComment(response.GetValue<ibString>(ibProtocol::ibRequest::ibFormType::Comment));
 	return true;
 }

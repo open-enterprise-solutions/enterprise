@@ -26,7 +26,7 @@ if(APPLE)
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist"
     )
     # The platform's one icon, the file the designer's bundle carries.
-    set(OES_ICON "${CMAKE_SOURCE_DIR}/src/engine/designer/resources/oes.icns")
+    set(OES_ICON "${CMAKE_SOURCE_DIR}/src/engine/designer-thin/resources/oes.icns")
     set_source_files_properties(${OES_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
     target_sources(launcher PRIVATE ${OES_ICON})
 endif()

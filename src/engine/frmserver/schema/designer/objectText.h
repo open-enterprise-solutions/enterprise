@@ -18,7 +18,7 @@ public:
 
 	// Save {Id, Help} or {Id, Note} — that text of the object given. Refused, nothing done: no such object, neither text.
 	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
-		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const override;
 };
 
 #endif

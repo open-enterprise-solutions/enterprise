@@ -9,7 +9,7 @@ class BACKEND_API ibValueEvent : public ibValue, public ibEventDispatcher {
 	public:
 
 	ibValueEvent();
-	ibValueEvent(const wxString &eventName);
+	ibValueEvent(const ibString &eventName);
 
 	virtual bool IsEmpty() const override { return m_eventName.IsEmpty(); }   // serves both ibValue and ibEventDispatcher
 
@@ -20,13 +20,13 @@ class BACKEND_API ibValueEvent : public ibValue, public ibEventDispatcher {
 	virtual bool Dispatch(ibProcUnit* runtime, ibValue** args, long argc, ibValue& outCancel) override;
 
 protected:
-	wxString m_eventName;
+	ibString m_eventName;
 };
 
 class BACKEND_API ibValueActionEvent : public ibValueEvent {
 	public:
 	ibValueActionEvent();
-	ibValueActionEvent(const wxString& eventName, ibActionID eventId);
+	ibValueActionEvent(const ibString& eventName, ibActionID eventId);
 private:
 	// Kept from the ctor, read by nobody yet — an action event is dispatched BY NAME today
 	// (ibValueEvent::m_eventName), and this id is the handle a caller would need to route one

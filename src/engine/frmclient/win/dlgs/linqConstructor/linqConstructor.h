@@ -67,7 +67,7 @@ public:
 	ibLinqBlock Collect() const;
 
 	// The block as it will be written; empty — with `refusal` saying why — when it cannot be.
-	wxString GetBlock(wxString& refusal) const;
+	ibString GetBlock(ibString& refusal) const;
 
 	// The stretch of the module the block REPLACES — the query the caret stood in when the window
 	// opened — in characters. False when there was none, and the block goes in at the caret.

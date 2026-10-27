@@ -16,19 +16,19 @@ ibResultSetMetaDataSQLite::ibResultSetMetaDataSQLite(sqlite3_stmt* pStmt)
 int ibResultSetMetaDataSQLite::GetColumnType(int i)
 {
 	int returnType = COLUMN_UNKNOWN;
-	wxString columnTypeString = ConvertFromUnicodeStream(sqlite3_column_decltype(m_pSqliteStatement, i - 1));
+	ibString columnTypeString = ConvertFromUnicodeStream(sqlite3_column_decltype(m_pSqliteStatement, i - 1));
 	columnTypeString.MakeUpper();
-	if (columnTypeString.IsSameAs(wxT("INTEGER")) || columnTypeString.IsSameAs(wxT("INT")) || columnTypeString.IsSameAs(wxT("LONG")))
+	if (columnTypeString.IsSameAs(ibT("INTEGER")) || columnTypeString.IsSameAs(ibT("INT")) || columnTypeString.IsSameAs(ibT("LONG")))
 		returnType = COLUMN_INTEGER;
-	else if (columnTypeString.IsSameAs(wxT("STRING")) || columnTypeString.StartsWith(wxT("VARCHAR")))
+	else if (columnTypeString.IsSameAs(ibT("STRING")) || columnTypeString.StartsWith(ibT("VARCHAR")))
 		returnType = COLUMN_STRING;
-	else if (columnTypeString.IsSameAs(wxT("DOUBLE")) || columnTypeString.IsSameAs(wxT("FLOAT")))
+	else if (columnTypeString.IsSameAs(ibT("DOUBLE")) || columnTypeString.IsSameAs(ibT("FLOAT")))
 		returnType = COLUMN_DOUBLE;
-	else if (columnTypeString.IsSameAs(wxT("BOOL")))
+	else if (columnTypeString.IsSameAs(ibT("BOOL")))
 		returnType = COLUMN_BOOL;
-	else if (columnTypeString.IsSameAs(wxT("BLOB")))
+	else if (columnTypeString.IsSameAs(ibT("BLOB")))
 		returnType = COLUMN_BLOB;
-	else if (columnTypeString.IsSameAs(wxT("DATE")) || columnTypeString.IsSameAs(wxT("DATETIME")) || columnTypeString.IsSameAs(wxT("TIMESTAMP")))
+	else if (columnTypeString.IsSameAs(ibT("DATE")) || columnTypeString.IsSameAs(ibT("DATETIME")) || columnTypeString.IsSameAs(ibT("TIMESTAMP")))
 		returnType = COLUMN_DATE;
 	else
 		returnType = COLUMN_UNKNOWN;
@@ -68,9 +68,9 @@ int ibResultSetMetaDataSQLite::GetColumnSize(int i)
 	return -1;
 }
 
-wxString ibResultSetMetaDataSQLite::GetColumnName(int i)
+ibString ibResultSetMetaDataSQLite::GetColumnName(int i)
 {
-	wxString columnName = ConvertFromUnicodeStream(sqlite3_column_name(m_pSqliteStatement, i - 1));
+	ibString columnName = ConvertFromUnicodeStream(sqlite3_column_name(m_pSqliteStatement, i - 1));
 	return columnName;
 }
 

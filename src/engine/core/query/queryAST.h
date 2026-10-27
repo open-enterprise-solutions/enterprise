@@ -24,7 +24,6 @@
 #include "core/query/queryBalanceRole.h"  // ibBalanceRole — what a projected field is in a balance (ROLE)
 #include "core/query/queryAstExpr.h"      // ibQueryAstExprPtr — the expression's name, which every side hands about
 
-#include <wx/arrstr.h>   // wxbase exports std::vector<wxString> (wxArrayString's base) — seen here, a unit imports it
 #include <vector>
 #include <memory>
 
@@ -92,11 +91,11 @@ struct ibQueryAstExpr
 {
 	ibQueryAstExprKind m_kind = ibQueryAstExprKind::Literal;
 
-	std::vector<wxString> m_path;        // Column: dotted segments
+	std::vector<ibString> m_path;        // Column: dotted segments
 	// Literal — a constant as the text writes one (Undefined, Null, a flag, a number, a date, a text). No run puts
 	// a value here: a captured one goes to the lowering as a parameter, by the Param's name.
 	ibLiteral             m_literal;
-	wxString              m_paramName;   // Param
+	ibString              m_paramName;   // Param
 
 	// ⭐⭐ WHERE A CAPTURED LOCAL LIVES — the address the compiler already worked out.
 	//
@@ -241,7 +240,7 @@ void ibQueryForEachOperand(const ibQueryAstExpr& e, Fn visit)
 struct ibQueryProjection
 {
 	ibQueryAstExprPtr m_expr;    // column path or aggregate func (null when m_star)
-	wxString       m_alias;   // AS alias (empty => derived in lowering)
+	ibString       m_alias;   // AS alias (empty => derived in lowering)
 	bool           m_star = false;
 
 	// ⭐⭐ `<expr> ROLE <word> AS <name>` — WHAT THE FIELD IS IN A BALANCE, said in the query: the PERIOD a
@@ -265,10 +264,10 @@ struct ibQueryProjection
 struct ibQuerySelect;
 struct ibQuerySource
 {
-	std::vector<wxString>            m_name;       // dotted metaobject path (empty when m_subquery set)
+	std::vector<ibString>            m_name;       // dotted metaobject path (empty when m_subquery set)
 	std::shared_ptr<ibQuerySelect>  m_subquery;   // nested SELECT (set => this source is a subquery)
 	std::vector<ibQueryAstExprPtr>     m_args;        // source-call args: Balance(&Period, &Filter) — value exprs (param / literal)
-	wxString                        m_alias;
+	ibString                        m_alias;
 
 	// ⭐ A TABLE HANDED IN FROM OUTSIDE: `FROM &Goods`, where `Goods` is a bound parameter holding a
 	// value table. m_name still carries the name (one segment), and THIS says where it comes from.
@@ -351,7 +350,7 @@ struct ibQueryAstWindow
 // no data there is no series to speak of.
 struct ibQueryTotalPeriods
 {
-	wxString          m_unit;   // the word, verbatim — the lowering reads it (it owns that vocabulary)
+	ibString          m_unit;   // the word, verbatim — the lowering reads it (it owns that vocabulary)
 	ibQueryAstExprPtr m_from;   // optional — null = the earliest period in the data
 	ibQueryAstExprPtr m_to;     // optional — null = the latest
 };
@@ -387,7 +386,7 @@ struct ibQueryTotalAggregate
 	ibQueryAstExprPtr m_expr;    // the aggregate call — SUM(x), COUNT(DISTINCT y), …
 	// AS name. Empty = derive it (the argument's own name), which is what every query written
 	// before this says and what a person means when they do not name the column.
-	wxString          m_alias;
+	ibString          m_alias;
 
 	// ⭐⭐ `OVER <level>` — THE AREA THIS FIGURE IS COMPUTED OVER, and the whole of what the other
 	// systems spell as "evaluate an expression in the context of a grouping".
@@ -407,7 +406,7 @@ struct ibQueryTotalAggregate
 	// levels of the same name — the role a table name plays before a column. A branch alone is not
 	// an area: `SPLIT` does not narrow the rows, so "the total over a branch" is the total of the
 	// node it hangs from. (docs/private/query-language-arc.md §27)
-	wxString          m_scope;
+	ibString          m_scope;
 };
 
 struct ibQueryTotalDim
@@ -417,7 +416,7 @@ struct ibQueryTotalDim
 	// value is asked for by name, so a dimension needs one of its own — without it two levels over
 	// the same column (Date by month, Date by day) answer to the same name and one of them wins.
 	// Empty = the head field's own column name, which is right for the ordinary single-field case.
-	wxString         m_alias;
+	ibString         m_alias;
 
 	// THE HEAD — the level's first field. Callers that legitimately speak of "the level's field"
 	// (its icon, the single-field paging gate) ask here rather than indexing into a vector that a
@@ -443,7 +442,7 @@ struct ibQueryTotalSplit
 {
 	// What a reader asks this node by (`Selection.Select(ByGroups, "ByCharacteristic")`). Empty: the
 	// node still folds, it is simply read by position — which is all an unnamed one can be asked for.
-	wxString                     m_name;
+	ibString                     m_name;
 	// Its groupings, in order. EMPTY IS LEGITIMATE and means "added, nothing hung on it yet": the
 	// node is there to be filled, and a node with nothing on it writes nothing into the query text.
 	std::vector<ibQueryTotalDim> m_levels;
@@ -467,12 +466,12 @@ struct ibQuerySelect
 	// INTO <name> — MATERIALISE this result under a name instead of returning it. The statement then
 	// yields a ROW COUNT (there is no table to hand back — it went into the temp), and later statements
 	// of the same package select FROM that name. Empty = an ordinary select. (docs §5 — query batch.)
-	wxString                       m_intoTemp;
+	ibString                       m_intoTemp;
 	// ONTO <name> — NAME THIS STATEMENT'S RESULT. The result still comes back (unlike INTO, which
 	// puts it in a table and hands back a row count); the name is how a reader asks for it —
 	// `package["Sales"]` rather than "the third statement" — and how a composition's output says
 	// which result it shows. Optional, and usually absent: a lone select needs no name.
-	wxString                       m_ontoName;
+	ibString                       m_ontoName;
 	// INDEX BY … — the columns the temp table this statement makes is indexed by, so the statements
 	// that read it find rows instead of scanning for them. Meaningless without INTO (a table nobody
 	// keeps cannot be looked things up in), and the parser says so rather than accepting it quietly.
@@ -552,7 +551,7 @@ using ibQuerySelectPtr = std::shared_ptr<ibQuerySelect>;
 struct ibQueryAstStatement
 {
 	ibQuerySelectPtr m_select;     // the SELECT (null on a drop statement)
-	wxString         m_dropTemp;   // DROP <name> — release a temp table early (empty on a select)
+	ibString         m_dropTemp;   // DROP <name> — release a temp table early (empty on a select)
 
 	// ⭐⭐ …OR A LINK, WHICH IS A STEP LIKE THE OTHER TWO. `LINK A INNER JOIN B ON …` RECONCILES two
 	// named selections that already ran: rows on either side that found no partner are dropped, and
@@ -584,8 +583,8 @@ struct ibQueryAstStatement
 // own business, and a link that named a source would break the moment a statement moved.
 struct ibQueryPackageLink
 {
-	wxString           m_left;    // the ONTO name on the left of the relation
-	wxString           m_right;   // …and on the right
+	ibString           m_left;    // the ONTO name on the left of the relation
+	ibString           m_right;   // …and on the right
 	ibQueryJoinKindAst m_kind = ibQueryJoinKindAst::Inner;
 	ibQueryAstExprPtr  m_on;      // the condition; null = declared and not written yet
 };

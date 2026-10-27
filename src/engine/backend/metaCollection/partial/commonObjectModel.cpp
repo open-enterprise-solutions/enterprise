@@ -23,7 +23,7 @@ void ibValueRecordSetObject::GetValueByRow(wxVariant& variant,
 bool ibValueRecordSetObject::SetValueByRow(const wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col)
 {
-	const wxString &strData = variant.GetString();
+	const ibString &strData = variant.GetString();
 	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return false;

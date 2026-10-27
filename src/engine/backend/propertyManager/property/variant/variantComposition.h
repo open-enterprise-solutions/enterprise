@@ -52,7 +52,7 @@ public:
 #endif
 	virtual bool Write(wxString& str) const { str = MakeString(); return true; }
 
-	virtual wxString GetType() const { return wxT("ibVariantDataComposition"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataComposition"); }
 
 private:
 

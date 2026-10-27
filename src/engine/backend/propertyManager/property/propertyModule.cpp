@@ -14,12 +14,12 @@ wxVariantData* ibPropertyModule::CreateVariantData()
 
 ////////////////////////////////////////////////////////////////////////
 
-wxString ibPropertyModule::GetValueAsString() const
+ibString ibPropertyModule::GetValueAsString() const
 {
 	return get_cell_variant<ibVariantDataModule>()->GetModuleText();
 }
 
-void ibPropertyModule::SetValue(const wxString& val)
+void ibPropertyModule::SetValue(const ibString& val)
 {
 	get_cell_variant<ibVariantDataModule>()->SetModuleText(val);
 }

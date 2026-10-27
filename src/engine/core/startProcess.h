@@ -9,7 +9,6 @@
 #include <functional>
 #include <vector>
 
-#include <wx/string.h>
 
 // Starts a program and does not wait for it: the new process's id, or 0 when it could not start (the reason goes to
 // the technology journal). The command is one line, split the way wxExecute splits it - a quoted path stays one
@@ -22,12 +21,12 @@
 //
 // `input`, when there is any, is written on the child's stdin and the pipe closed after it - the road a launch hands
 // its passwords by (launchTicket.h), so they are never on a command line. Without it the child's stdin is left alone.
-CORE_API long ibStartProcess(const wxString& command, const std::vector<unsigned char>& input = {});
+CORE_API long ibStartProcess(const ibString& command, const std::vector<unsigned char>& input = {});
 
 // Starts the web server (webserver) and waits, up to five seconds, for the address it serves at: `command` is the
 // binary and what it publishes; `--port=0 --manifest=<file>` are added here, and the server writes `url=` there once
 // its port is open. The process's id, or 0; `url` stays empty when the server never said one. `waiting` is called
 // between the looks - a window keeps painting meanwhile (wxYieldIfNeeded is the caller's: the core has no window).
-CORE_API long ibStartWebServer(const wxString& command, wxString& url, const std::function<void()>& waiting = {});
+CORE_API long ibStartWebServer(const ibString& command, ibString& url, const std::function<void()>& waiting = {});
 
 #endif // __CORE_START_PROCESS_H__

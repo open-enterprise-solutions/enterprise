@@ -218,8 +218,8 @@ bool ibValueContainer::CompareValueEQ(const ibValue& cParam) const
 
 void ibValueContainer::ibValueReturnContainer::BindNames(ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(wxT("Key"));
-	helper.AppendProp(wxT("Value"));
+	helper.AppendProp(ibT("Key"));
+	helper.AppendProp(ibT("Value"));
 }
 
 bool ibValueContainer::ibValueReturnContainer::SetPropVal(const long lPropNum, const ibValue& cValue)
@@ -281,20 +281,20 @@ ibValue::ibMemberTable* ibValueContainer::DoGetPMethods() const
 // the store's job (FindProp / GetPropName).
 void ibValueContainer::BindContainerNames(ibMemberTable& helper, const bool readOnly)
 {
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
-	helper.AppendFunc(wxT("Property"), 2, wxT("Property(key : any, valueFound : any)"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Property"), 2, ibT("Property(key : any, valueFound : any)"));
 	// READ WITHOUT ASKING FIRST. Property answers whether a key is there and hands the value
 	// back through its second argument; [key] answers the value and raises when the key is not
 	// there. Get is the third question, the one the reference system's Map answers: the value,
 	// or Undefined -- which is what "nothing is bound to this key" looks like everywhere else
 	// in the language. A Structure gets it too: the member table is one table, a position in it
 	// is a method number, and a field that is not there is the same question.
-	helper.AppendFunc(wxT("Get"), 1, wxT("Get(key : any)"));
+	helper.AppendFunc(ibT("Get"), 1, ibT("Get(key : any)"));
 
 	if (!readOnly) {
-		helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
-		helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(key : any)"));
-		helper.AppendFunc(wxT("Insert"), 2, wxT("Insert(key : any, value : any)"));
+		helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
+		helper.AppendFunc(ibT("Delete"), 1, ibT("Delete(key : any)"));
+		helper.AppendFunc(ibT("Insert"), 2, ibT("Insert(key : any, value : any)"));
 	}
 }
 
@@ -513,7 +513,7 @@ bool ibValueStructure::Init(ibValue** paParams, const long lSizeArray)
 		return false;
 	}
 
-	const wxString fieldsStr = fieldsArg->GetString();
+	const ibString fieldsStr = fieldsArg->GetString();
 
 	// Single-pass scan: split on ',' and trim whitespace. wxStringTokenizer
 	// would also work but the manual form keeps trimming inline + avoids
@@ -521,23 +521,23 @@ bool ibValueStructure::Init(ibValue** paParams, const long lSizeArray)
 	size_t cursor = 0;
 	long valueIdx = 1;   // index into paParams for the value of the next field
 	while (cursor <= fieldsStr.size()) {
-		size_t comma = fieldsStr.find(wxT(','), cursor);
-		if (comma == wxString::npos) comma = fieldsStr.size();
+		size_t comma = fieldsStr.find(ibT(','), cursor);
+		if (comma == ibString::npos) comma = fieldsStr.size();
 
 		// Trim leading whitespace.
 		size_t start = cursor;
 		while (start < comma
-			&& (fieldsStr[start] == wxT(' ') || fieldsStr[start] == wxT('\t')))
+			&& (fieldsStr[start] == ibT(' ') || fieldsStr[start] == ibT('\t')))
 			++start;
 
 		// Trim trailing whitespace.
 		size_t end = comma;
 		while (end > start
-			&& (fieldsStr[end - 1] == wxT(' ') || fieldsStr[end - 1] == wxT('\t')))
+			&& (fieldsStr[end - 1] == ibT(' ') || fieldsStr[end - 1] == ibT('\t')))
 			--end;
 
 		if (end > start) {
-			const wxString fieldName = fieldsStr.Mid(start, end - start);
+			const ibString fieldName = fieldsStr.Mid(start, end - start);
 			ibValue value;
 			if (valueIdx < lSizeArray && paParams[valueIdx] != nullptr)
 				value = *paParams[valueIdx];
@@ -619,7 +619,7 @@ bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound
 
 bool ibValueContainer::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(wxT("n"), (std::int32_t)m_entries.size());
+	node.SetValue(ibT("n"), (std::int32_t)m_entries.size());
 
 	for (const auto& entry : m_entries) {
 		ibDataNode& keyNode = node.AddChild(entry.key.GetClassType(), 0);
@@ -649,7 +649,7 @@ bool ibValueContainer::DoDeserialize(const ibDataNode& node)
 		Insert(key, value);
 	}
 
-	return (std::int32_t)m_entries.size() == node.GetValue<std::int32_t>(wxT("n"));
+	return (std::int32_t)m_entries.size() == node.GetValue<std::int32_t>(ibT("n"));
 }
 
 //**********************************************************************

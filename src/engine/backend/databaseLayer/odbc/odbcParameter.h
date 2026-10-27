@@ -88,7 +88,7 @@ private:
 	long m_nValue;
 	double m_dblValue;
 	ibNumber m_numValue;
-	wxString m_strDateValue;
+	ibString m_strDateValue;
 	bool m_bValue;
 	ibMemoryBuffer m_BufferValue;
 	wxCharBuffer m_CharBufferValue;

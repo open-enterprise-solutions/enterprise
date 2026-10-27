@@ -24,7 +24,7 @@ bool ibFont::FromString(const ibString& text)
 	ibString piece[6];
 	ibString rest = text;
 	for (size_t i = 0; i < 6 && !rest.IsEmpty(); ++i)
-		piece[i] = rest.BeforeFirst(wxT(','), &rest);
+		piece[i] = rest.BeforeFirst(ibT(','), &rest);
 
 	ibFont font;
 	long number = 0;
@@ -65,6 +65,6 @@ ibString ibFont::ToString() const
 {
 	if (!IsOk())
 		return ibString();
-	return ibString::Format(wxT("%s,%d,%d,%d,%d,%d"), m_faceName, static_cast<int>(m_style),
+	return ibString::Format(ibT("%s,%d,%d,%d,%d,%d"), m_faceName, static_cast<int>(m_style),
 		m_weight, GetPointSize(), static_cast<int>(m_family), m_underlined ? 1 : 0);
 }

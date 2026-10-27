@@ -43,11 +43,11 @@ ibProtocol::ibRefusal RefusalOf(long long code)
 // and an envelope with no id is the server refusing a request it could not read — still that one's. The result is the
 // answer's own bytes, read where they lie.
 bool ReadAnswer(const ibProtocolNode& root, long long id, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
-	wxString& error)
+	ibString& error)
 {
 	if (root.GetInt(ibProtocol::ibRpc::Id, id) != id) {
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the server answered another call");
+		error = ibT("the server answered another call");
 		return false;
 	}
 	const ibProtocolNode failed = root.FindChild(ibProtocol::ibRpc::Error);
@@ -95,7 +95,7 @@ int ExchangeDelay()
 		const char* const value = std::getenv("OES_PROTOCOL_DELAY");
 		const int ms = value != nullptr ? std::atoi(value) : 0;
 		if (ms > 0)
-			ibJournalWarning(wxT("protocol"), wxT("every exchange delayed by %d ms (OES_PROTOCOL_DELAY)"), ms);
+			ibJournalWarning(ibT("protocol"), ibT("every exchange delayed by %d ms (OES_PROTOCOL_DELAY)"), ms);
 		return ms;
 	}();
 	return delay;
@@ -146,7 +146,7 @@ void Redact(ibProtocolNode& node)
 {
 	for (const char* secret : kSecrets) {
 		if (node.Has(secret))
-			node.SetValue(secret, ibString(wxT("***")));
+			node.SetValue(secret, ibString(ibT("***")));
 	}
 	std::vector<std::pair<ibString, std::size_t>> bytes;
 	for (auto& [name, entry] : node.Entries()) {
@@ -160,7 +160,7 @@ void Redact(ibProtocolNode& node)
 		}
 	}
 	for (const auto& [name, length] : bytes)
-		node.SetValue(name.utf8_str().c_str(), ibString::Format(wxT("<%llu bytes>"), static_cast<unsigned long long>(length)));
+		node.SetValue(name.utf8_str().c_str(), ibString::Format(ibT("<%llu bytes>"), static_cast<unsigned long long>(length)));
 }
 
 // A REQUEST AS THE DEBUG JOURNAL WRITES IT — its JSON view, redacted. The release build's macro is empty, and nothing of
@@ -189,8 +189,8 @@ ibCommunicator::~ibCommunicator()
 	Logout();
 }
 
-bool ibCommunicator::Login(const wxString& user, const wxString& password, ibProtocol::ibLogin::ibMode mode, ibProtocolNode& result,
-	ibProtocol::ibRefusal& refusal, wxString& error, const std::vector<ibProtocol::ibSchema::ibKind>& schemas)
+bool ibCommunicator::Login(const ibString& user, const ibString& password, ibProtocol::ibLogin::ibMode mode, ibProtocolNode& result,
+	ibProtocol::ibRefusal& refusal, ibString& error, const std::vector<ibProtocol::ibSchema::ibKind>& schemas)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	Forget();
@@ -221,7 +221,7 @@ bool ibCommunicator::Login(const wxString& user, const wxString& password, ibPro
 	return true;
 }
 
-bool ibCommunicator::Users(std::vector<wxString>& names, ibProtocol::ibRefusal& refusal, wxString& error)
+bool ibCommunicator::Users(std::vector<ibString>& names, ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	ibProtocolNode result;
@@ -244,7 +244,7 @@ void ibCommunicator::Logout()
 
 	ibProtocolNode result;
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	CallLocked(ibProtocol::ibMethod::Logout, ibProtocolNode(), result, refusal, error);
 	Forget();
 }
@@ -268,7 +268,7 @@ void ibCommunicator::Listen(std::function<void()> changed)
 }
 
 bool ibCommunicator::ListenDebug(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal,
-	wxString& error)
+	ibString& error)
 {
 	refusal = ibProtocol::ibRefusal::None;
 	error.clear();
@@ -281,7 +281,7 @@ bool ibCommunicator::ListenDebug(std::function<void(const ibProtocolNode& news)>
 	}
 	if (m_protocol < 6) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = wxT("the server speaks no protocol with the debugger in it");
+		error = ibT("the server speaks no protocol with the debugger in it");
 		return false;
 	}
 
@@ -325,21 +325,21 @@ bool ibCommunicator::ListenDebug(std::function<void(const ibProtocolNode& news)>
 }
 
 bool ibCommunicator::Debug(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
-	wxString& error)
+	ibString& error)
 {
 	std::lock_guard<std::mutex> lock(m_debugMutex);
 	return DebugLocked(params, result, refusal, error);
 }
 
 bool ibCommunicator::DebugLocked(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
-	wxString& error)
+	ibString& error)
 {
 	refusal = ibProtocol::ibRefusal::None;
 	error.clear();
 	result = ibProtocolNode();
 	if (!m_debugConnection) {
 		refusal = ibProtocol::ibRefusal::NoSession;
-		error = wxT("no debugger is listening");
+		error = ibT("no debugger is listening");
 		return false;
 	}
 
@@ -357,7 +357,7 @@ bool ibCommunicator::DebugLocked(const ibProtocolNode& params, ibProtocolNode& r
 }
 
 bool ibCommunicator::Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& result,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	if (!CallLocked(method, params, result, refusal, error)) {
@@ -386,7 +386,7 @@ bool ibCommunicator::Hold(const ibProtocolNode& event)
 }
 
 bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& result,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	refusal = ibProtocol::ibRefusal::None;
 	error.clear();
@@ -403,16 +403,16 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 	long long exchanged = 0;
 	const wxScopeGuard said = wxMakeGuard([&]() {
 		if (refusal == ibProtocol::ibRefusal::None)
-			ibJournalInfo(wxT("call"), wxT("%s: %lld ms, the exchange %lld ms"), ibProtocol::MethodName(method),
+			ibJournalInfo(ibT("call"), ibT("%s: %lld ms, the exchange %lld ms"), ibProtocol::MethodName(method),
 				msSince(began), exchanged);
 		else
-			ibJournalWarning(wxT("call"), wxT("%s refused (%d) after %lld ms: %s"), ibProtocol::MethodName(method),
+			ibJournalWarning(ibT("call"), ibT("%s refused (%d) after %lld ms: %s"), ibProtocol::MethodName(method),
 				static_cast<int>(refusal), msSince(began), error);
 	});
 
 	if (!m_connection) {
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("no connection");
+		error = ibT("no connection");
 		return false;
 	}
 
@@ -421,7 +421,7 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 	const bool beforeLogin = method == ibProtocol::ibMethod::Login || method == ibProtocol::ibMethod::Users;
 	if (!beforeLogin && m_client.IsEmpty()) {
 		refusal = ibProtocol::ibRefusal::NoSession;
-		error = wxT("not logged in");
+		error = ibT("not logged in");
 		return false;
 	}
 
@@ -453,7 +453,7 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 
 	// THE WHOLE EXCHANGE, beside the call's own line — what went, and how long what came back is and took: the debug
 	// build's journal (the macro is nothing in a release one).
-	ibJournalInfo(wxT("protocol"), wxT("%s sent: %s"), ibProtocol::MethodName(method), Redacted(request));
+	ibJournalInfo(ibT("protocol"), ibT("%s sent: %s"), ibProtocol::MethodName(method), Redacted(request));
 
 	ibMemoryBuffer sent;
 	request.Write(sent);
@@ -465,21 +465,21 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 		return false;
 	exchanged = msSince(exchanging);
 
-	ibJournalInfo(wxT("protocol"), wxT("%s answered in %lld ms, %zu bytes"), ibProtocol::MethodName(method),
+	ibJournalInfo(ibT("protocol"), ibT("%s answered in %lld ms, %zu bytes"), ibProtocol::MethodName(method),
 		msSince(began), answer.Held().Weight());
 
 	return ReadAnswer(answer, id, result, refusal, error);
 }
 
 bool ibCommunicator::Resume(const ibMemoryBuffer& sent, ibProtocolNode& answer, ibProtocol::ibRefusal& refusal,
-	wxString& error)
+	ibString& error)
 {
 	// A transport failure of a session the server offered to keep. One try. The unanswered request keeps its id;
 	// the login that precedes it takes a newer one, so the counter never goes backwards and never back to 0.
 	if (!m_resume || m_token.IsEmpty() || refusal != ibProtocol::ibRefusal::NoSession || !m_connection)
 		return false;
 
-	wxString reopen;
+	ibString reopen;
 	if (!m_connection->Reconnect(reopen)) {
 		error = reopen.IsEmpty() ? error : reopen;
 		return false;
@@ -491,13 +491,13 @@ bool ibCommunicator::Resume(const ibMemoryBuffer& sent, ibProtocolNode& answer, 
 		.SetValue(ibProtocol::ibLogin::Mode, static_cast<int>(m_mode))
 		.SetValue(ibProtocol::ibLogin::Protocol, ibProtocol::Version);
 	const ibProtocolNode request = Request(loginId, ibProtocol::ibMethod::Login, params);
-	ibJournalInfo(wxT("protocol"), wxT("login sent: %s"), Redacted(request));
+	ibJournalInfo(ibT("protocol"), ibT("login sent: %s"), Redacted(request));
 	ibMemoryBuffer loginSent;
 	request.Write(loginSent);
 
 	ibProtocolNode loginAnswer;
 	ibProtocol::ibRefusal loginRefusal = ibProtocol::ibRefusal::None;
-	wxString loginError;
+	ibString loginError;
 	if (!m_connection->Exchange(loginSent, loginAnswer, loginRefusal, loginError)) {
 		refusal = loginRefusal;
 		error = loginError;
@@ -510,11 +510,11 @@ bool ibCommunicator::Resume(const ibMemoryBuffer& sent, ibProtocolNode& answer, 
 	if (done.GetString(ibProtocol::ibLogin::Client) != m_client) {
 		// A new Client is another server's session (stage 2). This return is the same process, the same id.
 		refusal = ibProtocol::ibRefusal::NoSession;
-		error = wxT("the session was not resumed");
+		error = ibT("the session was not resumed");
 		return false;
 	}
 
-	ibJournalInfo(wxT("protocol"), wxT("sent again: %zu bytes"), sent.GetDataLen());
+	ibJournalInfo(ibT("protocol"), ibT("sent again: %zu bytes"), sent.GetDataLen());
 	if (!m_connection->Exchange(sent, answer, refusal, error))
 		return false;
 	return true;

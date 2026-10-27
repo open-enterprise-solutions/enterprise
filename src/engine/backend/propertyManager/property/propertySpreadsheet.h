@@ -14,17 +14,17 @@ public:
 	void SetValue(const ibSpreadsheetDescription& val);
 #pragma endregion 
 
-	ibPropertySpreadsheet(ibPropertyCategory* cat, const wxString& name)
+	ibPropertySpreadsheet(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData())
 	{
 	}
 
-	ibPropertySpreadsheet(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertySpreadsheet(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData())
 	{
 	}
 
-	ibPropertySpreadsheet(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertySpreadsheet(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData())
 	{
 	}

@@ -85,7 +85,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 			// it — the choice. The condition goes in WHOLE, empty or not: "nothing narrows this" is a
 			// condition with nothing in it, and the list asks the same question of both.
 			const ibFormRequest request(
-				choiceForm != nullptr ? choiceForm->GetName() : wxString(),
+				choiceForm != nullptr ? choiceForm->GetName() : ibString(),
 				ibCreateRequest(factory->GetSelectMode(), condition));
 			return metaObject->ProcessChoice(ownerValue, request);
 		}
@@ -133,7 +133,7 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClass
 	ownerValue->GetControlValue(current);
 
 	std::vector<ibValue> values;
-	if (!current.FindValue(wxEmptyString, values))
+	if (!current.FindValue(ibEmptyString, values))
 		return false;
 
 	std::vector<ibChoiceItem> items;
@@ -141,12 +141,12 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClass
 		items.push_back(ibChoiceItem{ static_cast<std::int32_t>(idx), values[idx].GetString(), ibPictureDescription(), values[idx] == current });
 
 	std::int32_t chosen = 0;
-	if (ibRequestChoice(wxString(), items, chosen))
+	if (ibRequestChoice(ibString(), items, chosen))
 		ownerValue->ChoiceProcessing(values[static_cast<size_t>(chosen)]);
 	return true;   // the type has a quick choice — offered, whatever the person did with it
 }
 
-void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const wxString& strData)
+void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const ibString& strData)
 {
 	if (controlValue == nullptr)
 		return;
@@ -177,12 +177,12 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 	// typed text up (the field goes back to what it held) or to pick after all.
 	for (;;) {
 		std::int32_t chosen = 0;
-		if (ibRequestChoice(wxString(), items, chosen)) {
+		if (ibRequestChoice(ibString(), items, chosen)) {
 			controlValue->ChoiceProcessing(values[static_cast<size_t>(chosen)]);
 			return;
 		}
 		const int answer = frame->ShowModalMessage(
-			_("Incorrect data entered into field. Do you want to cancel?"), wxString(),
+			_("Incorrect data entered into field. Do you want to cancel?"), ibString(),
 			wxYES_NO | wxICON_QUESTION);
 		if (answer != wxNO) {
 			ibValue retValue;
@@ -246,7 +246,7 @@ ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const
 	for (size_t idx = 0; idx < offered.size(); idx++) {
 		const ibCtorAbstractType* ctor = metaData != nullptr ? metaData->GetAvailableCtor(offered[idx]) : nullptr;
 		items.push_back(ibChoiceItem{ static_cast<std::int32_t>(idx),
-			ctor != nullptr ? ctor->GetClassName() : wxString(),
+			ctor != nullptr ? ctor->GetClassName() : ibString(),
 			ctor != nullptr ? ibPictureDescription(offered[idx]) : ibPictureDescription() });
 	}
 

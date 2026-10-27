@@ -20,7 +20,7 @@
 
 namespace {
 
-ibQueryAstExprPtr Literal(const wxString& text)
+ibQueryAstExprPtr Literal(const ibString& text)
 {
 	const ibQueryAstExprPtr expr = ibQueryParser().ParseExpression(text);
 	EXPECT_TRUE(expr && expr->m_kind == ibQueryAstExprKind::Literal) << text.ToStdString();
@@ -38,14 +38,14 @@ TEST(QueryCoreData, TheTextsConstantsAreLiteralsTheEngineReadsBack)
 	};
 	for (const auto& sample : samples) {
 		const ibQueryAstExprPtr expr = Literal(sample.text);
-		ASSERT_TRUE(expr) << wxString(sample.text).ToStdString();
+		ASSERT_TRUE(expr) << ibString(sample.text).ToStdString();
 		EXPECT_EQ(sample.type, expr->m_literal.GetType());
 		EXPECT_EQ(sample.type, ibValue(expr->m_literal).GetType());
 	}
 	EXPECT_TRUE(ibValue(Literal(wxT("TRUE"))->m_literal).GetBoolean());
 	EXPECT_FALSE(ibValue(Literal(wxT("FALSE"))->m_literal).GetBoolean());
 	EXPECT_EQ(15, ibValue(Literal(wxT("15"))->m_literal).GetNumber().ToInt());
-	EXPECT_EQ(wxString(wxT("A-01")), wxString(ibValue(Literal(wxT("\"A-01\""))->m_literal).GetString()));
+	EXPECT_EQ(ibString(wxT("A-01")), ibString(ibValue(Literal(wxT("\"A-01\""))->m_literal).GetString()));
 }
 
 TEST(QueryCoreData, ThePrimitivesHaveOneTableOfNames)
@@ -53,7 +53,7 @@ TEST(QueryCoreData, ThePrimitivesHaveOneTableOfNames)
 	for (const ibValueTypes vt : { ibValueTypes::TYPE_EMPTY, ibValueTypes::TYPE_BOOLEAN, ibValueTypes::TYPE_NUMBER,
 		ibValueTypes::TYPE_DATE, ibValueTypes::TYPE_STRING, ibValueTypes::TYPE_NULL }) {
 		ASSERT_NE(nullptr, GetNameObjectFromVT(vt)) << static_cast<int>(vt);
-		EXPECT_EQ(wxString(GetNameObjectFromVT(vt)), ibValue::GetNameObjectFromVT(vt));
+		EXPECT_EQ(ibString(GetNameObjectFromVT(vt)), ibValue::GetNameObjectFromVT(vt));
 		// …and it is the name the class is REGISTERED by: the registry finds the primitive's clsid under it.
 		EXPECT_EQ(GetIDByVT(vt), ibValue::GetIDObjectFromString(GetNameObjectFromVT(vt))) << GetNameObjectFromVT(vt);
 	}
@@ -73,7 +73,7 @@ TEST(QueryCoreData, ACastIsWrittenAndReadInThoseNames)
 	const ibQueryAstExprPtr made = ibQueryMakeCast(ibQueryAstExpr::Make(ibQueryAstExprKind::Column), type);
 	ASSERT_TRUE(made);
 	ASSERT_EQ(1u, made->m_path.size());
-	EXPECT_EQ(wxString(wxT("Number")), made->m_path.front());
+	EXPECT_EQ(ibString(wxT("Number")), made->m_path.front());
 	ASSERT_EQ(2u, made->m_args.size());
 	EXPECT_EQ(15, made->m_args[0]->m_literal.GetNumber().ToInt());
 }

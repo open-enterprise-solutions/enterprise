@@ -33,7 +33,7 @@ public:
 
 	virtual void Close();
 
-	bool AddPreparedStatement(const wxString& strSQL);
+	bool AddPreparedStatement(const ibString& strSQL);
 
 	// get field
 	virtual void SetParamInt(int nPosition, int nValue);
@@ -49,7 +49,7 @@ public:
 	virtual int RunQuery();
 	virtual ibDatabaseResultSet* RunQueryWithResults();
 
-	static ibPreparedStatementFirebird* CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL);
+	static ibPreparedStatementFirebird* CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const ibString& strSQL);
 
 	void SetManageTransaction(bool bManageTransaction) { m_bManageTransaction = bManageTransaction; }
 

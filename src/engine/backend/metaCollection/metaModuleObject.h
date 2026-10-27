@@ -107,7 +107,7 @@ private:
 class BACKEND_API ibValueMetaObjectModuleBase : public ibValueMetaObject {
 	public:
 
-	ibValueMetaObjectModuleBase(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString)
+	ibValueMetaObjectModuleBase(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString)
 		: ibValueMetaObject(name, synonym, comment) {
 	}
 
@@ -132,8 +132,8 @@ class BACKEND_API ibValueMetaObjectModuleBase : public ibValueMetaObject {
 	// nothing else, a form's holds the text AND the control tree — so each says it with the setter
 	// that names which half is meant. What every one of them must do AFTER is the same, and that
 	// half is shared below.
-	virtual void SetModuleText(const wxString& moduleText) = 0;
-	virtual wxString GetModuleText() const = 0;
+	virtual void SetModuleText(const ibString& moduleText) = 0;
+	virtual ibString GetModuleText() const = 0;
 
 protected:
 
@@ -145,19 +145,19 @@ protected:
 public:
 
 	//set default procedures
-	void SetDefaultProcedure(const wxString& procName, const ibContentHelper& contentHelper, std::vector<wxString> args = {});
+	void SetDefaultProcedure(const ibString& procName, const ibContentHelper& contentHelper, std::vector<ibString> args = {});
 
 	// Register a default FUNCTION-shaped handler (helper kind eFunctionHelper, so the handler may
 	// `Return` a value) — the function-side sibling of SetDefaultProcedure.
-	void SetDefaultFunction(const wxString& funcName, std::vector<wxString> args = {});
+	void SetDefaultFunction(const ibString& funcName, std::vector<ibString> args = {});
 
 	size_t GetDefaultProcedureCount() const {
 		return m_contentHelper.size();
 	}
 
-	wxString GetDefaultProcedureName(size_t idx) const {
+	ibString GetDefaultProcedureName(size_t idx) const {
 		if (idx > m_contentHelper.size())
-			return wxEmptyString;
+			return ibEmptyString;
 
 		auto it = m_contentHelper.begin();
 		std::advance(it, idx);
@@ -172,9 +172,9 @@ public:
 		return it->second.m_contentType;
 	}
 
-	std::vector<wxString> GetDefaultProcedureArgs(size_t idx) const {
+	std::vector<ibString> GetDefaultProcedureArgs(size_t idx) const {
 		if (idx > m_contentHelper.size())
-			return std::vector<wxString>();
+			return std::vector<ibString>();
 		auto it = m_contentHelper.begin();
 		std::advance(it, idx);
 		return it->second.m_args;
@@ -190,15 +190,15 @@ private:
 
 	struct CContentData {
 		ibContentHelper m_contentType;
-		std::vector<wxString> m_args;
+		std::vector<ibString> m_args;
 	};
 
-	std::map<wxString, CContentData> m_contentHelper;
+	std::map<ibString, CContentData> m_contentHelper;
 };
 
 class BACKEND_API ibValueMetaObjectModule : public ibValueMetaObjectModuleBase {
 	public:
-	ibValueMetaObjectModule(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString)
+	ibValueMetaObjectModule(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString)
 		: ibValueMetaObjectModuleBase(name, synonym, comment)
 	{
 	}
@@ -207,10 +207,10 @@ class BACKEND_API ibValueMetaObjectModule : public ibValueMetaObjectModuleBase {
 	virtual ibProperty* GetModuleProperty() const { return m_propertyModule; }
 
 	//set module code
-	virtual void SetModuleText(const wxString& moduleText) override {
+	virtual void SetModuleText(const ibString& moduleText) override {
 		m_propertyModule->SetValue(moduleText); InvalidateBuiltFromText();
 	}
-	virtual wxString GetModuleText() const { return m_propertyModule->GetValueAsString(); }
+	virtual ibString GetModuleText() const { return m_propertyModule->GetValueAsString(); }
 
 protected:
 
@@ -218,7 +218,7 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
-	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"),
+	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, ibT("Module"), _("Module"),
 		_("The module's code: procedures, functions and variables of its owner (an object, manager, record set or command). Its event handlers are called by the platform by name; its exported methods are callable on the owner's values."));
 };
 
@@ -228,7 +228,7 @@ private:
 
 public:
 
-	ibValueMetaObjectCommonModule(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectCommonModule(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	//support icons
 	virtual ibPicture GetIcon() const;
@@ -240,7 +240,7 @@ public:
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 
-	virtual bool OnRenameMetaObject(const wxString& sNewName);
+	virtual bool OnRenameMetaObject(const ibString& sNewName);
 
 	//module manager is started or exit 
 	virtual bool OnBeforeRunMetaObject(int flags);
@@ -253,10 +253,10 @@ public:
 	virtual ibProperty* GetModuleProperty() const { return m_propertyModule; }
 
 	//set module code
-	virtual void SetModuleText(const wxString& moduleText) override {
+	virtual void SetModuleText(const ibString& moduleText) override {
 		m_propertyModule->SetValue(moduleText); InvalidateBuiltFromText();
 	}
-	virtual wxString GetModuleText() const { return m_propertyModule->GetValueAsString(); }
+	virtual ibString GetModuleText() const { return m_propertyModule->GetValueAsString(); }
 
 	//prepare menu for item
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
@@ -283,17 +283,17 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
-	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"),
+	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, ibT("Module"), _("Module"),
 		_("The common module's code: procedures and functions shared by the whole configuration. Only exported methods are visible outside it, called as ModuleName.Method(...) (or by bare name when the module is global)."));
-	ibPropertyCategory* m_moduleCategory = ibPropertyObject::CreatePropertyCategory(wxT("Common module"), _("Common module"));
-	ibPropertyBoolean* m_propertyGlobalModule = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_moduleCategory, wxT("GlobalModule"), _("Global module"),
+	ibPropertyCategory* m_moduleCategory = ibPropertyObject::CreatePropertyCategory(ibT("Common module"), _("Common module"));
+	ibPropertyBoolean* m_propertyGlobalModule = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_moduleCategory, ibT("GlobalModule"), _("Global module"),
 		_("Whether the module's exported methods are callable by bare name from any code, without the ModuleName. prefix. Off by default: a global module's names share one namespace with every other global name."),
 		false);
 };
 
 class BACKEND_API ibValueMetaObjectManagerModule : public ibValueMetaObjectCommonModule {
 	public:
-	ibValueMetaObjectManagerModule(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString)
+	ibValueMetaObjectManagerModule(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString)
 		: ibValueMetaObjectCommonModule(name, synonym, comment)
 	{
 	}

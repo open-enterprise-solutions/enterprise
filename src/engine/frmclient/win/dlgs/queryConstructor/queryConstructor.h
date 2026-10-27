@@ -303,7 +303,7 @@ private:
 	void OnAddPickedTable(wxCommandEvent&); // a table chosen from the list, added to the query
 	// A TABLE FROM THE CATALOGUE, chosen in a list — for the verbs of the Tables pane, which act without the
 	// catalogue beside them. False = nothing chosen.
-	bool PickTable(const wxString& title, std::vector<wxString>& path);
+	bool PickTable(const wxString& title, std::vector<ibString>& path);
 	// A TABLE WITH NO ROWS YET, DESCRIBED (queryTempTableDialog.h) — a table of THIS query: edited when the
 	// cursor stands on one, added otherwise.
 	void OnDescribeTempTable(wxCommandEvent&);
@@ -342,7 +342,7 @@ private:
 	// a verb that needs a table added calls THIS, never another verb's handler. (One did, by
 	// synthesising an event, and the day that handler grew a case calling back into the first verb
 	// the pair recursed until the stack ran out.)
-	void AddTableSources(const std::vector<std::vector<wxString>>& paths);
+	void AddTableSources(const std::vector<std::vector<ibString>>& paths);
 	void OnAddNestedTable(wxCommandEvent&);
 	void OnEditNestedTable(wxCommandEvent&);
 	void OnRemoveTable(wxCommandEvent&);

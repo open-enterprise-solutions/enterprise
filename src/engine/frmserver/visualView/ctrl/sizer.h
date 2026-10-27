@@ -15,8 +15,8 @@ class FRMSERVER_API ibValueSizer : public ibValueControl {
 	virtual bool WriteData(ibDataNode& node) const;
 
 protected:
-	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(wxT("SizerItem"), _("Sizer"));
-	ibPropertySize* m_propertyMinSize = ibPropertyObject::CreateProperty<ibPropertySize>(m_categorySizer, wxT("MinimumSize"), _("Minimum size"), _("The smallest size the sizer keeps for the area it lays out, in pixels; -1 on a side means no limit there. The form cannot shrink the area below it."), ibDefaultSize);
+	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(ibT("SizerItem"), _("Sizer"));
+	ibPropertySize* m_propertyMinSize = ibPropertyObject::CreateProperty<ibPropertySize>(m_categorySizer, ibT("MinimumSize"), _("Minimum size"), _("The smallest size the sizer keeps for the area it lays out, in pixels; -1 on a side means no limit there. The form cannot shrink the area below it."), ibDefaultSize);
 };
 
 //////////////////////////////////////////////////////////////////////////////
@@ -98,22 +98,22 @@ private:
 	//frame owner 
 	ibValueForm* m_formOwner;
 
-	ibPropertyCategory* m_categorySizerItem = ibPropertyObject::CreatePropertyCategory(wxT("SizerItem"), _("Sizer item"));
-	ibPropertyUInteger* m_propertyProportion = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categorySizerItem, wxT("Proportion"), _("Proportion"),
+	ibPropertyCategory* m_categorySizerItem = ibPropertyObject::CreatePropertyCategory(ibT("SizerItem"), _("Sizer item"));
+	ibPropertyUInteger* m_propertyProportion = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categorySizerItem, ibT("Proportion"), _("Proportion"),
 		_("How much of its sizer's spare room the control takes along the sizer's direction. 0 (the default): the control keeps its natural size. Otherwise the spare room is shared in these proportions - controls with 1 and 2 get one third and two thirds."),
 		0);
-	ibPropertyCategory* m_categorySizerBorder = ibPropertyObject::CreatePropertyCategory(wxT("SizerItemBorder"), _("Border"));
-	ibPropertyUInteger* m_propertyBorder = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categorySizerBorder, wxT("BorderSize"), _("Size"),
+	ibPropertyCategory* m_categorySizerBorder = ibPropertyObject::CreatePropertyCategory(ibT("SizerItemBorder"), _("Border"));
+	ibPropertyUInteger* m_propertyBorder = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categorySizerBorder, ibT("BorderSize"), _("Size"),
 		_("The empty margin kept around the control, in pixels, on the sides switched on below. Default 5."), 5);
-	ibPropertyBoolean* m_propertyFlagBorderLeft = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizerBorder, wxT("BorderLeft"), _("Left"),
+	ibPropertyBoolean* m_propertyFlagBorderLeft = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizerBorder, ibT("BorderLeft"), _("Left"),
 		_("Whether the margin (Size) is kept on the control's left side."), true);
-	ibPropertyBoolean* m_propertyFlagBorderRight = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizerBorder, wxT("BorderRight"), _("Right"),
+	ibPropertyBoolean* m_propertyFlagBorderRight = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizerBorder, ibT("BorderRight"), _("Right"),
 		_("Whether the margin (Size) is kept on the control's right side."), true);
-	ibPropertyBoolean* m_propertyFlagBorderTop = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizerBorder, wxT("BorderTop"), _("Top"),
+	ibPropertyBoolean* m_propertyFlagBorderTop = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizerBorder, ibT("BorderTop"), _("Top"),
 		_("Whether the margin (Size) is kept above the control."), true);
-	ibPropertyBoolean* m_propertyFlagBorderBottom = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizerBorder, wxT("BorderBottom"), _("Bottom"),
+	ibPropertyBoolean* m_propertyFlagBorderBottom = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizerBorder, ibT("BorderBottom"), _("Bottom"),
 		_("Whether the margin (Size) is kept below the control."), true);
-	ibPropertyEnum<ibValueEnumStretch>* m_propertyFlagState = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumStretch>>(m_categorySizerItem, wxT("Stretch"), _("Stretch"),
+	ibPropertyEnum<ibValueEnumStretch>* m_propertyFlagState = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumStretch>>(m_categorySizerItem, ibT("Stretch"), _("Stretch"),
 		_("The control's size across its sizer's direction. Shrink (the default): its natural size. Expand: the full width of a vertical sizer, or the full height of a horizontal one."),
 		wxStretch::wxSHRINK);
 };
@@ -134,7 +134,7 @@ class ibValueBoxSizer : public ibValueSizer {
 	virtual bool WriteData(ibDataNode& node) const;
 
 private:
-	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"),
+	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),
 		_("How the sizer lays out its controls: vertically (the default, one under another) or horizontally (side by side)."),
 		wxVERTICAL);
 };
@@ -153,7 +153,7 @@ class ibValueWrapSizer : public ibValueSizer {
 	virtual bool WriteData(ibDataNode& node) const;
 
 private:
-	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"),
+	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),
 		_("The direction controls are laid out in. When a row (or column) has no room for the next control, it wraps to a new one. Horizontal by default."),
 		wxHORIZONTAL);
 };
@@ -164,7 +164,7 @@ class ibValueStaticBoxSizer : public ibValueSizer {
 	ibValueStaticBoxSizer();
 
 	//get title
-	virtual wxString GetControlTitle() const { return m_propertyTitle->GetValueAsTranslateString(); }
+	virtual ibString GetControlTitle() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
 	// The framed group is the one sizer that is also seen: its caption in the user's language, and whether
 	// the frame is enabled and shown — shown only while the functional options of this base leave it available.
@@ -179,19 +179,19 @@ class ibValueStaticBoxSizer : public ibValueSizer {
 	virtual bool WriteData(ibDataNode& node) const;
 
 private:
-	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"),
+	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),
 		_("How the framed group lays out its controls: horizontally (the default, side by side) or vertically (one under another)."),
 		wxHORIZONTAL);
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categorySizer, wxT("Title"), _("Title"),
-		_("The caption drawn on the group's frame. Empty: a frame with no caption. Can be written per language."), wxT(""));
-	ibPropertyFont* m_propertyFont = ibPropertyObject::CreateProperty<ibPropertyFont>(m_categorySizer, wxT("Font"), _("Font"), _("The font of the frame's caption. Unset: the form's font."));
-	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categorySizer, wxT("ForegroundColour"), _("Foreground"), _("The colour of the frame's caption. Default: the system colour."), ibDefaultStyleFGColour);
-	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categorySizer, wxT("BackgroundColour"), _("Background"), _("The frame's background colour. Default: the system colour."), ibDefaultStyleBGColour);
-	ibPropertyString* m_propertyTooltip = ibPropertyObject::CreateProperty<ibPropertyString>(m_categorySizer, wxT("Tooltip"), _("Tooltip"), _("Text shown when the mouse pointer rests over the frame. Empty: no tooltip."), wxT(""));
-	ibPropertyBoolean* m_propertyContextMenu = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizer, wxT("ContextMenu"), _("Context menu"), _("Saved with the form; nothing reads it yet, so it has no effect on a framed group."));
-	ibPropertyString* m_propertyContextHelp = ibPropertyObject::CreateProperty<ibPropertyString>(m_categorySizer, wxT("ContextHelp"), _("Context help"), _("Saved with the form; nothing reads it yet, so no context help is shown for a framed group."), wxEmptyString);
-	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizer, wxT("Enabled"), _("Enabled"), _("Whether the controls inside the frame take input. Off: the frame and everything in it are greyed out."), true);
-	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizer, wxT("Visible"), _("Visible"), _("Whether the frame is shown. Hiding it hides the frame itself; its controls keep their data."), true);
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categorySizer, ibT("Title"), _("Title"),
+		_("The caption drawn on the group's frame. Empty: a frame with no caption. Can be written per language."), ibT(""));
+	ibPropertyFont* m_propertyFont = ibPropertyObject::CreateProperty<ibPropertyFont>(m_categorySizer, ibT("Font"), _("Font"), _("The font of the frame's caption. Unset: the form's font."));
+	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categorySizer, ibT("ForegroundColour"), _("Foreground"), _("The colour of the frame's caption. Default: the system colour."), ibDefaultStyleFGColour);
+	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categorySizer, ibT("BackgroundColour"), _("Background"), _("The frame's background colour. Default: the system colour."), ibDefaultStyleBGColour);
+	ibPropertyString* m_propertyTooltip = ibPropertyObject::CreateProperty<ibPropertyString>(m_categorySizer, ibT("Tooltip"), _("Tooltip"), _("Text shown when the mouse pointer rests over the frame. Empty: no tooltip."), ibT(""));
+	ibPropertyBoolean* m_propertyContextMenu = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizer, ibT("ContextMenu"), _("Context menu"), _("Saved with the form; nothing reads it yet, so it has no effect on a framed group."));
+	ibPropertyString* m_propertyContextHelp = ibPropertyObject::CreateProperty<ibPropertyString>(m_categorySizer, ibT("ContextHelp"), _("Context help"), _("Saved with the form; nothing reads it yet, so no context help is shown for a framed group."), ibEmptyString);
+	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizer, ibT("Enabled"), _("Enabled"), _("Whether the controls inside the frame take input. Off: the frame and everything in it are greyed out."), true);
+	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizer, ibT("Visible"), _("Visible"), _("Whether the frame is shown. Hiding it hides the frame itself; its controls keep their data."), true);
 };
 
 class ibValueGridSizer : public ibValueSizer {
@@ -208,9 +208,9 @@ class ibValueGridSizer : public ibValueSizer {
 	virtual bool WriteData(ibDataNode& node) const;
 
 private:
-	ibPropertyUInteger* m_propertyRows = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categorySizer, wxT("Rows"), _("Rows"),
+	ibPropertyUInteger* m_propertyRows = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categorySizer, ibT("Rows"), _("Rows"),
 		_("The number of rows in the grid. 0 (the default): as many as the controls need, given the column count."), 0);
-	ibPropertyUInteger* m_propertyCols = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categorySizer, wxT("Cols"), _("Cols"),
+	ibPropertyUInteger* m_propertyCols = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categorySizer, ibT("Cols"), _("Cols"),
 		_("The number of columns in the grid; controls fill it row by row, left to right. All cells get the same size. Default 2."), 2);
 };
 

@@ -152,7 +152,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectFormBase::CreateAndBuildForm(cons
 			ibValue form = result;
 			ibValue cancel = false;
 			ibValue* params[] = { &form, &cancel };
-			ibRuntimeModuleDataObject::ExecAsManagerEvent(owner, wxT("FormGetProcessing"), params, 2);
+			ibRuntimeModuleDataObject::ExecAsManagerEvent(owner, ibT("FormGetProcessing"), params, 2);
 			if (cancel.GetBoolean())
 				return nullptr;
 		}
@@ -217,18 +217,18 @@ bool ibValueMetaObjectFormBase::PasteFormData()
 
 ///////////////////////////////////////////////////////////////////////////
 
-ibValueMetaObjectFormBase::ibValueMetaObjectFormBase(const wxString& name, const wxString& synonym, const wxString& comment) :
+ibValueMetaObjectFormBase::ibValueMetaObjectFormBase(const ibString& name, const ibString& synonym, const ibString& comment) :
 	ibValueMetaObjectModuleBase(name, synonym, comment)
 {
 	//set default proc
-	SetDefaultProcedure(wxT("BeforeOpen"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	SetDefaultProcedure(wxT("OnOpen"), ibContentHelper::eProcedureHelper);
-	SetDefaultProcedure(wxT("BeforeClose"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	SetDefaultProcedure(wxT("OnClose"), ibContentHelper::eProcedureHelper);
+	SetDefaultProcedure(ibT("BeforeOpen"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	SetDefaultProcedure(ibT("OnOpen"), ibContentHelper::eProcedureHelper);
+	SetDefaultProcedure(ibT("BeforeClose"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	SetDefaultProcedure(ibT("OnClose"), ibContentHelper::eProcedureHelper);
 
-	SetDefaultProcedure(wxT("OnReOpen"), ibContentHelper::eProcedureHelper);
-	SetDefaultProcedure(wxT("ChoiceProcessing"), ibContentHelper::eProcedureHelper, { { wxT("SelectedValue") }, { wxT("ChoiceSource") } });
-	SetDefaultProcedure(wxT("RefreshDisplay"), ibContentHelper::eProcedureHelper);
+	SetDefaultProcedure(ibT("OnReOpen"), ibContentHelper::eProcedureHelper);
+	SetDefaultProcedure(ibT("ChoiceProcessing"), ibContentHelper::eProcedureHelper, { { ibT("SelectedValue") }, { ibT("ChoiceSource") } });
+	SetDefaultProcedure(ibT("RefreshDisplay"), ibContentHelper::eProcedureHelper);
 }
 
 
@@ -236,7 +236,7 @@ ibValueMetaObjectFormBase::ibValueMetaObjectFormBase(const wxString& name, const
 //*                            Metaform                                 *
 //***********************************************************************
 
-ibValueMetaObjectForm::ibValueMetaObjectForm(const wxString& name, const wxString& synonym, const wxString& comment) : ibValueMetaObjectFormBase(name, synonym, comment)
+ibValueMetaObjectForm::ibValueMetaObjectForm(const ibString& name, const ibString& synonym, const ibString& comment) : ibValueMetaObjectFormBase(name, synonym, comment)
 {
 }
 
@@ -388,7 +388,7 @@ bool ibValueMetaObjectForm::OnAfterCloseMetaObject()
 //***********************************************************************
 
 
-ibValueMetaObjectCommonForm::ibValueMetaObjectCommonForm(const wxString& name, const wxString& synonym, const wxString& comment) : ibValueMetaObjectFormBase(name, synonym, comment) {}
+ibValueMetaObjectCommonForm::ibValueMetaObjectCommonForm(const ibString& name, const ibString& synonym, const ibString& comment) : ibValueMetaObjectFormBase(name, synonym, comment) {}
 
 bool ibValueMetaObjectCommonForm::ReadData(const ibDataNode& node)
 {
@@ -407,12 +407,12 @@ bool ibValueMetaObjectCommonForm::WriteData(ibDataNode& node) const
 ibFormPtr<ibBackendValueForm> ibValueMetaObjectCommonForm::GetObjectForm(ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	if (!AccessRight_Use()) {
-		ibBackendAccessException::Error(wxString::Format(_("opening form '%s'"), GetSynonym()));
+		ibBackendAccessException::Error(ibString::Format(_("opening form '%s'"), GetSynonym()));
 		return nullptr;
 	}
 
 	return ibValueMetaObjectFormBase::CreateAndBuildForm(
-		ibFormRequest(wxString(), formGuid),
+		ibFormRequest(ibString(), formGuid),
 		this,
 		ownerControl,
 		nullptr

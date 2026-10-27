@@ -18,13 +18,13 @@ namespace {
 
 class Col : public ibBackendQueryColumn {
 public:
-    explicit Col(const wxString& n) : m_n(n) {}
-    wxString           GetName()         const override { return m_n; }
-    wxString           GetPhysicalName() const override { return m_n; }
+    explicit Col(const ibString& n) : m_n(n) {}
+    ibString           GetName()         const override { return m_n; }
+    ibString           GetPhysicalName() const override { return m_n; }
     ibTypeDescription& GetTypeDesc()     const override { return m_t; }
     ibMetaID           GetColumnId()     const override { return 1; }
 private:
-    wxString                  m_n;
+    ibString                  m_n;
     mutable ibTypeDescription m_t;
 };
 
@@ -63,7 +63,7 @@ TEST(QueryColumnExpr, CaseBuildsWhenThenElse) {
     Col c(wxT("qty"));
     auto e = std::make_shared<ibQueryColumnExpr>();
     e->m_kind  = ibQueryColumnExprKind::Case;
-    e->m_else  = ibQueryColumnExpr::Const(ibValue(wxString(wxT("unit"))));
+    e->m_else  = ibQueryColumnExpr::Const(ibValue(ibString(wxT("unit"))));
     EXPECT_TRUE(e->m_kind == ibQueryColumnExprKind::Case);
     ASSERT_NE(e->m_else, nullptr);
     EXPECT_TRUE(e->m_else->m_kind == ibQueryColumnExprKind::Const);

@@ -64,13 +64,13 @@ public:
 	// narrow it (an accounting register's account conditions admit ACCOUNTS only — the source consumes
 	// them and folds by them, so a leaf about anything else cannot be applied at all).
 	std::vector<ibQueryConstructorField> GetConditionFields(const ibQuerySource& source,
-	                                                       const wxString& slot = wxEmptyString) const;
+	                                                       const ibString& slot = ibEmptyString) const;
 
 	// A TABLE'S OWN REFERENCE TYPE — its metaobject's empty reference, asked of the queryable the factory resolves;
 	// 0 for a virtual table (a third segment) and for a table no reference points at.
-	virtual ibClassID ReferenceOfTable(const std::vector<wxString>& path) const override;
+	virtual ibClassID ReferenceOfTable(const std::vector<ibString>& path) const override;
 	// …AND THE TABLE A REFERENCE NAMES — the descriptor the factory holds under the class's metaID.
-	virtual wxString TableOfReference(ibClassID reference) const override;
+	virtual ibString TableOfReference(ibClassID reference) const override;
 
 protected:
 
@@ -102,7 +102,7 @@ private:
 // `error` takes the parser's complaint when the caller shows one. Half-typed text is not a failure:
 // it offers no fields YET, so the list comes back empty and the caller decides whether that is worth
 // saying out loud.
-BACKEND_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
-	const ibMetaData* metaData, wxString* error = nullptr);
+BACKEND_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
+	const ibMetaData* metaData, ibString* error = nullptr);
 
 #endif

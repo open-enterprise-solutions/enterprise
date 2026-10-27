@@ -73,7 +73,7 @@ public:
 #ifdef __WXMSW__
 	ibValueOLE();
 private:
-	ibValueOLE(const CLSID& clsId, IDispatch* dispatch, const wxString& objectName);
+	ibValueOLE(const CLSID& clsId, IDispatch* dispatch, const ibString& objectName);
 public:
 #else
 	ibValueOLE();
@@ -81,7 +81,7 @@ public:
 
 	virtual ~ibValueOLE();
 
-	bool Create(const wxString& strOleName);
+	bool Create(const ibString& strOleName);
 
 	virtual bool Init() {
 		return false;

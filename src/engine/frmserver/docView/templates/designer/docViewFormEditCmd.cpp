@@ -74,7 +74,7 @@ void SetBoundSource(ibValueFrame* control, const ibSourceDescription& desc)
 	// (no leaf column) falls back to the attribute name. The TITLE (form label) is NOT assigned here —
 	// the control DERIVES it on render from the binding (GetControlTitle: Title -> field synonym ->
 	// attribute Synonym/Name).
-	wxString name;
+	ibString name;
 	ibBackendFormAttributeValue* head = !desc.IsOk() ? nullptr : factory->FindSourceHolder(desc.GetFirst());
 	if (head != nullptr && !head->IsMain())
 		name = head->GetName();
@@ -98,14 +98,14 @@ void SetBoundSource(ibValueFrame* control, const ibSourceDescription& desc)
 // the drag carries the path, the drop picks the class from the type AT the leaf). Mirrors BuildForm's
 // per-field choice: a list / table-section leaf -> Tablebox, a single-clsid boolean -> Checkbox, everything
 // else (scalar / reference / multi-type) -> Textctrl. Empty = nothing to create (a bad path).
-wxString ResolveDropControlClass(ibValueForm* form, const ibSourceDescription& desc)
+ibString ResolveDropControlClass(ibValueForm* form, const ibSourceDescription& desc)
 {
 	const std::vector<ibSourceHop>& path = desc.GetPath();
 	if (form == nullptr || path.empty())
-		return wxEmptyString;
+		return ibEmptyString;
 	ibFormAttributeValue* head = form->FindAttributeById(desc.GetFirst());
 	if (head == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 	ibSourceDataObject* source = head->GetSourceValue();
 
 	// The leaf is either the whole attribute (a 1-hop path) or a node reached by walking the head's source
@@ -121,14 +121,14 @@ wxString ResolveDropControlClass(ibValueForm* form, const ibSourceDescription& d
 	else {
 		const ibBackendSourceColumn* leaf = nullptr;
 		if (source == nullptr || !source->WalkColumns(path, 1, leaf, nullptr, &isTable, &containerIsTable))
-			return wxEmptyString;   // broken binding (a hop missed) -> nothing to create
+			return ibEmptyString;   // broken binding (a hop missed) -> nothing to create
 		// A field inside a list / table section is a COLUMN, bindable only INTO that table; the drop's tablebox
 		// branch serves the valid drop, so a canvas / non-table drop here declines instead of a broken control.
 		if (containerIsTable)
-			return wxEmptyString;
+			return ibEmptyString;
 		if (!isTable) {
 			if (leaf == nullptr)
-				return wxEmptyString;   // no descriptor and not a table -> nothing bindable
+				return ibEmptyString;   // no descriptor and not a table -> nothing bindable
 			typeDesc = leaf->GetTypeDesc();
 		}
 	}
@@ -174,7 +174,7 @@ bool ibFormDesignView::FetchControl(const ibDataNode& request, ibDataNode& respo
 	}
 	else {
 		made = CreateControlOfClass(target != nullptr ? target : GetValueForm(),
-			request.GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Class), nullptr);
+			request.GetValue<ibString>(ibProtocol::ibView::ibFormDesigner::Class), nullptr);
 	}
 	if (made == nullptr)
 		return false;
@@ -250,7 +250,7 @@ ibValueFrame* ibFormDesignView::CreateBoundControl(ibValueFrame* parentHint, con
 			// Not a column of THIS table's source. Allow a SINGLE-value source (a scalar / reference
 			// attribute or object field) as a FOREIGN / object column (Mode 2 — one value per row); a column
 			// of a DIFFERENT table (ResolveDropControlClass declines it) has no per-row value here.
-			const wxString foreignClass = ResolveDropControlClass(m_valueForm, desc);
+			const ibString foreignClass = ResolveDropControlClass(m_valueForm, desc);
 			if (foreignClass != ibProtocol::ibForm::ibType::Textctrl && foreignClass != ibProtocol::ibForm::ibType::Checkbox)
 				break;
 		}
@@ -263,7 +263,7 @@ ibValueFrame* ibFormDesignView::CreateBoundControl(ibValueFrame* parentHint, con
 		return column;
 	}
 
-	const wxString className = ResolveDropControlClass(m_valueForm, desc);
+	const ibString className = ResolveDropControlClass(m_valueForm, desc);
 	if (className.IsEmpty())
 		return nullptr;
 	// A scalar control shows its value / a tablebox refills its columns on first build because the source is
@@ -282,7 +282,7 @@ ibValueFrame* ibFormDesignView::CreateCommandButton(ibValueFrame* target, const 
 	// Resolve the display name by matching the dropped id path against the form's gathered command sources (the
 	// ONE gather that also feeds the navigator + picker) — no per-hop kind needed. Only the caption is seeded;
 	// the icon stays LIVE (BuildCommands / the button's Update re-resolve it from the command).
-	wxString caption;   // the command-source CELL text = the full PATH (fullName), so the binding reads as its path
+	ibString caption;   // the command-source CELL text = the full PATH (fullName), so the binding reads as its path
 	for (const ibCommandSourceEntry& entry : GatherFormCommands(m_valueForm))
 		if (entry.desc == desc) { caption = entry.fullName.IsEmpty() ? entry.label : entry.fullName; break; }
 
@@ -318,12 +318,12 @@ ibValueFrame* ibFormDesignView::CreateCommandButton(ibValueFrame* target, const 
 		if (control != nullptr && control->GetClassType() == g_controlButtonCLSID) {   // type by clsid, not dynamic_cast
 			ibValueButton* button = static_cast<ibValueButton*>(control);
 			button->SetCommandDesc(desc, caption);
-			button->SetCaption(wxEmptyString);
+			button->SetCaption(ibEmptyString);
 		}
 	});
 }
 
-ibValueFrame* ibFormDesignView::CreateControlOfClass(ibValueFrame* parentHint, const wxString& className,
+ibValueFrame* ibFormDesignView::CreateControlOfClass(ibValueFrame* parentHint, const ibString& className,
 	const std::function<void(ibValueFrame*)>& bind)
 {
 	// Walk up until a parent that can hold the control (an item / leaf can't be a parent — climb to its container).

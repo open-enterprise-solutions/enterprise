@@ -146,6 +146,8 @@
         4245 : signed/unsigned conversion             (same)
       -->
       <DisableSpecificWarnings>4251;4275;4458;4100;4127;4018;4389;4245</DisableSpecificWarnings>
+      <!-- 4172 : returning address of local variable or temporary - an error, see CMakeLists.txt (/we4172) -->
+      <TreatSpecificWarningsAsErrors>4172</TreatSpecificWarningsAsErrors>
       <!--
         LUABIND_DYNAMIC_LINK : self-explanatory
         MSVC;dSINGLE;WIN32 : for ODE

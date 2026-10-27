@@ -136,12 +136,12 @@ ibClientListener::~ibClientListener()
 	Stop();
 }
 
-bool ibClientListener::Start(const ibPortRange& ports, unsigned short& port, std::map<wxString, ibClientHost*> hosts,
-	wxString& refusal)
+bool ibClientListener::Start(const ibPortRange& ports, unsigned short& port, std::map<ibString, ibClientHost*> hosts,
+	ibString& refusal)
 {
 	ibHttpServerOptions options;
 	try {
-		options = ibListenerOptions(wxT("127.0.0.1"), ports.m_first, ibTlsFiles());
+		options = ibListenerOptions(ibT("127.0.0.1"), ports.m_first, ibTlsFiles());
 	}
 	catch (const ibCoreException& err) {
 		refusal = err.GetErrorDescription();
@@ -184,13 +184,13 @@ bool ibClientListener::Start(const ibPortRange& ports, unsigned short& port, std
 	std::string error;
 	if (m_server->Start(options, ports.m_count, error)) {
 		port = m_server->GetHttpPort();
-		ibAppServerSay(ibJournalMark::Info, wxT("client connections: up to %u"),
+		ibAppServerSay(ibJournalMark::Info, ibT("client connections: up to %u"),
 			static_cast<unsigned>(options.m_maxConnections));
 		return true;
 	}
 
-	refusal = wxString::Format(wxT("no free port from %u to %u on 127.0.0.1 (%s)"), static_cast<unsigned>(ports.m_first),
-		static_cast<unsigned>(ports.Last()), wxString::FromUTF8(error));
+	refusal = ibString::Format(ibT("no free port from %u to %u on 127.0.0.1 (%s)"), static_cast<unsigned>(ports.m_first),
+		static_cast<unsigned>(ports.Last()), ibString::FromUTF8(error));
 	m_server.reset();
 	m_loginRound.reset();
 	return false;

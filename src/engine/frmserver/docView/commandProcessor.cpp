@@ -11,10 +11,10 @@
 namespace {
 
 // A command's name, or what an unnamed one is called.
-wxString CommandName(const ibCommand& command)
+ibString CommandName(const ibCommand& command)
 {
-	const wxString name = command.GetName();
-	return !name.empty() ? name : wxString(_("Unnamed command"));
+	const ibString name = command.GetName();
+	return !name.empty() ? name : ibString(_("Unnamed command"));
 }
 
 } // namespace
@@ -43,7 +43,7 @@ bool ibCommandProcessor::UndoCommand(ibCommand& cmd)
 // unless storeIt is false.
 bool ibCommandProcessor::Submit(ibCommand* command, bool storeIt)
 {
-	wxCHECK_MSG(command, false, wxT("no command in ibCommandProcessor::Submit"));
+	wxCHECK_MSG(command, false, ibT("no command in ibCommandProcessor::Submit"));
 
 	// the user code expects the command to be deleted anyhow
 	std::unique_ptr<ibCommand> owned(command);
@@ -57,7 +57,7 @@ bool ibCommandProcessor::Submit(ibCommand* command, bool storeIt)
 
 void ibCommandProcessor::Store(ibCommand* command)
 {
-	wxCHECK_RET(command, wxT("no command in ibCommandProcessor::Store"));
+	wxCHECK_RET(command, ibT("no command in ibCommandProcessor::Store"));
 
 	// We must chop off the current 'branch' so that we're at the end of the command list.
 	if (m_currentCommand == m_commands.end())
@@ -136,18 +136,18 @@ void ibCommandProcessor::Initialize()
 	m_currentCommand = !m_commands.empty() ? std::prev(m_commands.end()) : m_commands.end();
 }
 
-wxString ibCommandProcessor::GetUndoLabel() const
+ibString ibCommandProcessor::GetUndoLabel() const
 {
 	const ibCommand* const command = GetCurrentCommand();
 	if (command == nullptr)
 		return _("Undo");
 
 	return command->CanUndo()
-		? wxString::Format(_("Undo %s"), CommandName(*command))
-		: wxString::Format(_("Can't Undo %s"), CommandName(*command));
+		? ibString::Format(_("Undo %s"), CommandName(*command))
+		: ibString::Format(_("Can't Undo %s"), CommandName(*command));
 }
 
-wxString ibCommandProcessor::GetRedoLabel() const
+ibString ibCommandProcessor::GetRedoLabel() const
 {
 	// We can redo, if we're not at the end of the history — or, undone to the start of the list, the first.
 	const ibCommandList::const_iterator redoNode = m_currentCommand != m_commands.end()
@@ -155,7 +155,7 @@ wxString ibCommandProcessor::GetRedoLabel() const
 	if (redoNode == m_commands.end())
 		return _("Redo");
 
-	return wxString::Format(_("Redo %s"), CommandName(**redoNode));
+	return ibString::Format(_("Redo %s"), CommandName(**redoNode));
 }
 
 void ibCommandProcessor::ClearCommands()

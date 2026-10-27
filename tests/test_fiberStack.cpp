@@ -52,7 +52,7 @@ void RunOnFiber(const std::function<void()>& fn, std::size_t reserve = ibFiber::
 		std::rethrow_exception(escaped);
 }
 
-wxString Refusal(const std::function<void()>& fn, std::size_t reserve = ibFiber::kStackReserve)
+ibString Refusal(const std::function<void()>& fn, std::size_t reserve = ibFiber::kStackReserve)
 {
 	try {
 		RunOnFiber(fn, reserve);
@@ -63,7 +63,7 @@ wxString Refusal(const std::function<void()>& fn, std::size_t reserve = ibFiber:
 	catch (const ibCoreException& err) {
 		return err.GetErrorDescription();
 	}
-	return wxString();
+	return ibString();
 }
 
 // THE CODE THESE TESTS WRITE IS VES (If…Then…EndIf). The style is the current session's, and it is shared: a fixture
@@ -84,7 +84,7 @@ void RunDepth(int n, int& out)
 {
 	const ibVesCodeStyle style;
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Function Depth(n) Public\n")
 		wxT("  If n <= 0 Then\n")
 		wxT("    Return 0;\n")
@@ -101,9 +101,9 @@ void RunDepth(int n, int& out)
 	out = static_cast<int>(ret.GetInteger());
 }
 
-wxString Parens(int n)
+ibString Parens(int n)
 {
-	wxString expr = wxT("1");
+	ibString expr = wxT("1");
 	for (int i = 0; i < n; ++i)
 		expr = wxT("(") + expr + wxT(")");
 	return wxT("Function Nest() Public\n  Return ") + expr + wxT(";\nEndFunction\n");
@@ -165,7 +165,7 @@ void ExpectCleanInterpreter()
 
 TEST(FiberStack, Recursion_PastTheGuard_Raises)
 {
-	const wxString why = Refusal([&] {
+	const ibString why = Refusal([&] {
 		int ignored = 0;
 		RunDepth(400, ignored);
 	});
@@ -186,7 +186,7 @@ TEST(FiberStack, Recursion_OnATightReserve_Raises)
 	RunOnFiber([&] { RunDepth(4, shallow); }, tight);
 	EXPECT_EQ(shallow, 4);
 
-	const wxString why = Refusal([&] {
+	const ibString why = Refusal([&] {
 		int ignored = 0;
 		RunDepth(400, ignored);
 	}, tight);
@@ -196,11 +196,11 @@ TEST(FiberStack, Recursion_OnATightReserve_Raises)
 
 TEST(FiberStack, AQueryNestedPastTheStack_Raises)
 {
-	wxString expr = wxT("1");
+	ibString expr = wxT("1");
 	for (int i = 0; i < 400; ++i)
 		expr = wxT("(") + expr + wxT(")");
-	const wxString query = wxT("SELECT ") + expr;
-	const wxString why = Refusal([&] {
+	const ibString query = wxT("SELECT ") + expr;
+	const ibString why = Refusal([&] {
 		ibQueryParser parser;
 		parser.Parse(query);
 	}, 256u * 1024u);
@@ -226,7 +226,7 @@ TEST(FiberStack, ABinaryValueNestedPastTheStack_Raises)
 	});
 
 	// Below kStackSlack, so the first nested read is already low.
-	const wxString why = Refusal([&] {
+	const ibString why = Refusal([&] {
 		ibDataNode read;
 		ibReaderMemory reader(blob);
 		ibBinaryProvider().Read(reader, read);
@@ -249,7 +249,7 @@ TEST(FiberStack, Expression_UnderTheCeiling_Compiles)
 
 TEST(FiberStack, Expression_PastTheCeiling_Raises)
 {
-	const wxString why = Refusal([&] {
+	const ibString why = Refusal([&] {
 		const ibVesCodeStyle style;
 		ibCompileCode cc(wxT("test"), wxT("memory"), false);
 		cc.Compile(Parens(450));
@@ -272,7 +272,7 @@ TEST(FiberStack, Json_DeeperThanTheStack_Raises)
 	// Whichever comes first refuses: the depth count (kMaxNesting) or a reserve
 	// that runs out before it — which one depends on how heavy a level of the
 	// descent is on this build. Both raise, and both say the text is too deep.
-	wxString why;
+	ibString why;
 	try {
 		RunOnFiber([&] {
 			const std::string json = NestedObjects(100000);

@@ -13,8 +13,8 @@
 /**
  * Class ibDialogAbout
  *
- * ABOUT — what the client works in, as the server's schema shows it (frmserver/schema/about.cpp): the desktop's
- * dialog (frontend/win/dlgs/about), drawn from what it is answered instead of reading the process itself.
+ * ABOUT — what the client works in, as the server's schema shows it (frmserver/schema/about.cpp): the old desktop's
+ * dialog, drawn from what it is answered instead of reading the process itself.
  */
 class FRMCLIENT_API ibDialogAbout :
 	public wxDialog {

@@ -101,7 +101,7 @@ public:
 	// hierarchical render (the front paints it flowing across the columns that have no value of their own).  The
 	// node SELF-describes it (the model is not consulted — the front asks the item directly, like IsContainer);
 	// only a composer GROUP node overrides.  Default: not a group → false.
-	virtual bool GetGroupCaption(wxString& /*caption*/) const { return false; }
+	virtual bool GetGroupCaption(ibString& /*caption*/) const { return false; }
 
 	// Item's logical parent inside the data source.  Default: no parent.
 	// Tree-node subclasses override to walk up the live tree; row
@@ -242,7 +242,7 @@ public:
 	}
 	// The GROUP row's caption — asked straight off the held node (like IsContainer), so the model stays out of it.
 	// Empty for a detail / non-group. Guards RawId / fake pointers (never dereferenceable).
-	bool GetGroupCaption(wxString& caption) const {
+	bool GetGroupCaption(ibString& caption) const {
 		return m_mode == Mode::Refcounted && m_id->GetGroupCaption(caption);
 	}
 	ibDataViewItem GetParentItem() const;
@@ -348,7 +348,7 @@ public:
 	// wxALIGN_LEFT, wxALIGN_CENTER_HORIZONTAL or wxALIGN_RIGHT and replaces the column's horizontal one.
 	void SetUnderlined(bool set) { m_underlined = set; }
 	void SetPointSize(int size) { m_pointSize = size; }
-	void SetFaceName(const wxString& face) { m_face = face; }
+	void SetFaceName(const ibString& face) { m_face = face; }
 	void SetAlignment(int alignment) { m_alignment = alignment; }
 
 	// accessors
@@ -363,7 +363,7 @@ public:
 	bool GetStrikethrough() const { return m_strikethrough; }
 	bool GetUnderlined() const { return m_underlined; }
 	int GetPointSize() const { return m_pointSize; }
-	const wxString& GetFaceName() const { return m_face; }
+	const ibString& GetFaceName() const { return m_face; }
 
 	bool HasBackgroundColour() const { return m_bgColour.IsOk(); }
 	const ibColour& GetBackgroundColour() const { return m_bgColour; }
@@ -383,7 +383,7 @@ private:
 	ibColour m_bgColour;
 	bool     m_underlined = false;
 	int      m_pointSize = 0;                 // 0 = the view's own
-	wxString m_face;                          // empty = the view's own
+	ibString m_face;                          // empty = the view's own
 	int      m_alignment = wxALIGN_INVALID;   // wxALIGN_INVALID = the column's own
 };
 

@@ -21,21 +21,21 @@ namespace {
 // (especially nasty on POSIX where setenv() is not thread-safe).
 std::once_flag s_initOnce;
 bool           s_success = false;
-wxString       s_fbRuntimeDir;
+ibString       s_fbRuntimeDir;
 
 // Compute the _fb directory path relative to the running executable.
 // Returns empty wxString if the directory doesn't exist (caller falls
 // back to default behaviour).
-wxString DetectFbRuntimeDir() {
+ibString DetectFbRuntimeDir() {
 	// _fb stands in the program folder: beside the executable, or beside the .app when this
 	// process is inside a bundle. The same place as lang/ and backend.conf.
 	//
 	// Missing is tolerated. During early dev / unit tests the directory may not have been
 	// laid out, and the default DLL search still finds fbclient next to the executable.
-	const wxString candidate = ibProgramFolder() + wxFILE_SEP_PATH + wxT("_fb");
+	const ibString candidate = ibProgramFolder() + wxFILE_SEP_PATH + ibT("_fb");
 	if (ibDirExists(candidate))
 		return candidate;
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 void DoInit() {
@@ -60,7 +60,7 @@ void DoInit() {
 	// happens to land in _fb/ anyway, but setting it explicitly is
 	// resilient against future FB releases changing the default
 	// resolution logic.
-	wxSetEnv(wxT("FIREBIRD"), s_fbRuntimeDir);
+	wxSetEnv(ibT("FIREBIRD"), s_fbRuntimeDir);
 
 	// FIREBIRD_LOCK — where FB stores fb_lock_* shared-state files for
 	// Classic-mode multi-process coordination. Default is %TEMP%
@@ -73,8 +73,8 @@ void DoInit() {
 	// passed explicitly so the path is stable across FB version
 	// upgrades that might change the default resolution.
 	{
-		wxFileName logFile(s_fbRuntimeDir, wxT("firebird.log"));
-		wxSetEnv(wxT("FIREBIRD_LOG"), logFile.GetFullPath());
+		wxFileName logFile(s_fbRuntimeDir, ibT("firebird.log"));
+		wxSetEnv(ibT("FIREBIRD_LOG"), logFile.GetFullPath());
 	}
 
 	s_success = true;
@@ -87,6 +87,6 @@ bool ibFirebirdBootstrap::Init() {
 	return s_success;
 }
 
-const wxString& ibFirebirdBootstrap::GetFbRuntimeDir() {
+const ibString& ibFirebirdBootstrap::GetFbRuntimeDir() {
 	return s_fbRuntimeDir;
 }

@@ -25,7 +25,7 @@ bool ibValueGuid::Init(ibValue** paParams, const long lSizeArray)
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
 		// The nil GUID is a GUID: New Guid("00000000-0000-0000-0000-000000000000") is that identity.
 		// Only text that is not a GUID is refused.
-		const wxString text = paParams[0]->GetString();
+		const ibString text = paParams[0]->GetString();
 		if (!ibGuid::parse(text, m_guid))
 			ibBackendCoreException::Error(_("New Guid: '%s' is not a GUID"), text);
 		return true;
@@ -39,7 +39,7 @@ ibGuid GuidOf(const ibValue& value)
 		return (ibGuid)*guidValue;
 
 	// The text road — for a value that really does carry a guid's spelling.
-	const wxString text = value.GetString();
+	const ibString text = value.GetString();
 	const ibGuid parsed(text);
 
 	// ⚠ AN UNREADABLE IDENTITY SAYS SO. Empty is a legitimate answer (an unset key, an empty
@@ -47,7 +47,7 @@ ibGuid GuidOf(const ibValue& value)
 	// over in a form it does not hold, and the invalid guid it becomes travels on to be looked up,
 	// found nowhere, and reported as a missing object far from here — which is exactly the distance
 	// this assert removes.
-	wxASSERT_MSG(parsed.isValid() || text.IsEmpty(), wxT("GuidOf: the value carries no guid"));
+	wxASSERT_MSG(parsed.isValid() || text.IsEmpty(), ibT("GuidOf: the value carries no guid"));
 
 	return parsed;
 }

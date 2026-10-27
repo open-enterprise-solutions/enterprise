@@ -33,7 +33,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_paramStyle  = ibParamStyle::QuestionMark;
 		d.m_pagination  = ibPagination::FirstSkip;    // SELECT FIRST n SKIP m
 		d.m_boolForm    = ibBoolForm::Smallint;       // no native boolean pre-FB3
-		d.m_selectFromDual = wxT("RDB$DATABASE");     // FB has no bare FROM-less SELECT — the WITH-CHECK one-row source needs a dummy table
+		d.m_selectFromDual = ibT("RDB$DATABASE");     // FB has no bare FROM-less SELECT — the WITH-CHECK one-row source needs a dummy table
 		// 🛑 THE BOUND IS ON THE PATH, NOT ON ONE ALIAS. A relation inside nested derived tables is named in the BLR by
 		// the aliases of every table around it, joined — and that string has a length of one byte: past ~210 characters
 		// the request is refused as "invalid request BLR … expected record selection expression clause", the offending
@@ -47,11 +47,11 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
 		// A `?` in a SELECT list is untyped here (-804), and the batched INSERT is spelled as
 		// SELECTs — so each one names the column it is going into and lets FB look the type up.
-		d.m_batchInsertCast = wxT("CAST({value} AS TYPE OF COLUMN {table}.{column})");   // FB 2.5+
+		d.m_batchInsertCast = ibT("CAST({value} AS TYPE OF COLUMN {table}.{column})");   // FB 2.5+
 		// UPDATE OR INSERT … MATCHING (pk) — no separate update body.
-		d.m_upsertTemplate   = wxT("UPDATE OR INSERT INTO {table} ({columns}) VALUES ({values}) MATCHING ({keys})");
-		d.m_upsertUpdateItem = wxEmptyString;
-		d.m_returningClause  = wxT("RETURNING");      // FB 2.1+
+		d.m_upsertTemplate   = ibT("UPDATE OR INSERT INTO {table} ({columns}) VALUES ({values}) MATCHING ({keys})");
+		d.m_upsertUpdateItem = ibEmptyString;
+		d.m_returningClause  = ibT("RETURNING");      // FB 2.1+
 		d.m_features.m_window = true;                 // FB3+
 		// 🛑 FIREBIRD HAS NO `GROUP BY ROLLUP` — not through 5.0, whatever this line used to claim.
 		// MEASURED 2026-08-22 against the vendored engine (5.0.5.1821): its parser's keyword table
@@ -103,23 +103,23 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		// what makes executing the statement again safe (firebirdParameterCollection.cpp).
 		d.m_features.m_batchByReexecution = true;
 		// type map
-		d.m_typeBoolean       = wxT("SMALLINT");
-		d.m_typeDate          = wxT("TIMESTAMP");
-		d.m_typeBlob          = wxT("BLOB");
-		d.m_typeGuid          = wxT("VARCHAR(36)");   // VARCHAR (not CHAR): carries vary_length, so a guid reads back exact — no charset-padded CHAR tail
+		d.m_typeBoolean       = ibT("SMALLINT");
+		d.m_typeDate          = ibT("TIMESTAMP");
+		d.m_typeBlob          = ibT("BLOB");
+		d.m_typeGuid          = ibT("VARCHAR(36)");   // VARCHAR (not CHAR): carries vary_length, so a guid reads back exact — no charset-padded CHAR tail
 		// NUMERIC holds a wider range than DECIMAL (INT128-backed) — matches ibNumber.
-		d.m_typeNumberPattern = wxT("NUMERIC(%d,%d)");
-		d.m_rowLockSuffix     = wxT(" WITH LOCK");     // FB pessimistic row lock (not FOR UPDATE)
-		d.m_rowLockNoWaitSuffix = wxEmptyString;       // FB has no FOR UPDATE NOWAIT — noWait rides the TX (isc_tpb_nowait)
-		d.m_dropColumnClause  = wxT("DROP ");          // FB rejects the COLUMN keyword: ALTER TABLE t DROP c
+		d.m_typeNumberPattern = ibT("NUMERIC(%d,%d)");
+		d.m_rowLockSuffix     = ibT(" WITH LOCK");     // FB pessimistic row lock (not FOR UPDATE)
+		d.m_rowLockNoWaitSuffix = ibEmptyString;       // FB has no FOR UPDATE NOWAIT — noWait rides the TX (isc_tpb_nowait)
+		d.m_dropColumnClause  = ibT("DROP ");          // FB rejects the COLUMN keyword: ALTER TABLE t DROP c
 		d.m_ddlCommitBeforeData = true;                // legacy isc_* API can't mix CREATE/ALTER + bound INSERT in one TX
 		// FB has no CREATE INDEX IF NOT EXISTS. It does not need one: indexes diff by name between the
 		// BASELINE and TARGET snapshots, so the differ emits a CREATE only where the baseline had none.
 		// It does NOT ask RDB$INDICES — reading the physical schema to decide what to emit is banned
 		// (docs/private/schema-authority.md § 3); the introspection this line used to describe, and the
 		// `m_indexListQuery` behind it, were removed 2026-08-14. Do not revive either.
-		d.m_descendingIndexWord = wxT("DESCENDING");   // FB walks an ascending index forward only — measured 2026-10-01: 1100 ms a page backwards, 235 forwards
-		d.m_rowIdColumn    = wxT("RDB$DB_KEY");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
+		d.m_descendingIndexWord = ibT("DESCENDING");   // FB walks an ascending index forward only — measured 2026-10-01: 1100 ms a page backwards, 235 forwards
+		d.m_rowIdColumn    = ibT("RDB$DB_KEY");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
 		d.m_maxIndexSegments = 16;                     // "too many keys defined for index" past this — and a failed DDL rolls the apply back
 		// …and the BYTE ceiling beside it: Firebird bounds an index key at roughly page_size/4, and the
 		// base is created at m_pageSize = 16384, so ~4096. Kept a little under it — a hashed key costs
@@ -129,52 +129,52 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 
 		// --- period truncation: no date_trunc here, so every unit is arithmetic ---
 		// Truncate-to-midnight, the base every coarser unit builds on.
-		const wxString day   = wxT("CAST(CAST({expr} AS DATE) AS TIMESTAMP)");
+		const ibString day   = ibT("CAST(CAST({expr} AS DATE) AS TIMESTAMP)");
 		// Back up to the 1st: today minus (day-of-month - 1) days.
-		const wxString month = wxT("DATEADD(-(EXTRACT(DAY FROM {expr}) - 1) DAY TO ") + day + wxT(")");
+		const ibString month = ibT("DATEADD(-(EXTRACT(DAY FROM {expr}) - 1) DAY TO ") + day + ibT(")");
 		// Sub-day units truncate TEXTUALLY rather than through EXTRACT + DATEADD. Firebird's
 		// EXTRACT(SECOND) / EXTRACT(MILLISECOND) return FRACTIONAL values (a TIMESTAMP carries
 		// 100-microsecond resolution), so subtracting them back out invites rounding — and a
 		// period key that rounds occasionally lands in the wrong bucket. The textual form is
 		// always 'YYYY-MM-DD HH:MM:SS.ttt', so cutting at 19 / 16 / 13 characters is exactly
 		// second / minute / hour: exact and total. Ugly and correct beats elegant and approximate.
-		const wxString text = wxT("CAST({expr} AS VARCHAR(24))");
+		const ibString text = ibT("CAST({expr} AS VARCHAR(24))");
 		d.m_periodTrunc = {
-			{ ibTotalsPeriod::Second,  wxT("CAST(SUBSTRING(") + text + wxT(" FROM 1 FOR 19) AS TIMESTAMP)") },
-			{ ibTotalsPeriod::Minute,  wxT("CAST(SUBSTRING(") + text + wxT(" FROM 1 FOR 16) || ':00' AS TIMESTAMP)") },
-			{ ibTotalsPeriod::Hour,    wxT("CAST(SUBSTRING(") + text + wxT(" FROM 1 FOR 13) || ':00:00' AS TIMESTAMP)") },
+			{ ibTotalsPeriod::Second,  ibT("CAST(SUBSTRING(") + text + ibT(" FROM 1 FOR 19) AS TIMESTAMP)") },
+			{ ibTotalsPeriod::Minute,  ibT("CAST(SUBSTRING(") + text + ibT(" FROM 1 FOR 16) || ':00' AS TIMESTAMP)") },
+			{ ibTotalsPeriod::Hour,    ibT("CAST(SUBSTRING(") + text + ibT(" FROM 1 FOR 13) || ':00:00' AS TIMESTAMP)") },
 			{ ibTotalsPeriod::Day,     day },
 			// Week: EXTRACT(WEEKDAY) is 0=Sunday..6=Saturday; (wd + 6) mod 7 is the distance back
 			// to Monday (Mon->0 … Sun->6), pinning FB to the same ISO week start as the others.
-			{ ibTotalsPeriod::Week,    wxT("DATEADD(-MOD(EXTRACT(WEEKDAY FROM {expr}) + 6, 7) DAY TO ") + day + wxT(")") },
+			{ ibTotalsPeriod::Week,    ibT("DATEADD(-MOD(EXTRACT(WEEKDAY FROM {expr}) + 6, 7) DAY TO ") + day + ibT(")") },
 			// TenDays: forward from the 1st by 0/10/20 days. MINVALUE caps the offset at 2 so a
 			// 31-day month cannot open a fourth, one-day bucket.
-			{ ibTotalsPeriod::TenDays, wxT("DATEADD(MINVALUE((EXTRACT(DAY FROM {expr}) - 1) / 10, 2) * 10 DAY TO ") + month + wxT(")") },
+			{ ibTotalsPeriod::TenDays, ibT("DATEADD(MINVALUE((EXTRACT(DAY FROM {expr}) - 1) / 10, 2) * 10 DAY TO ") + month + ibT(")") },
 			{ ibTotalsPeriod::Month,   month },
 			// Quarter / HalfYear: back up from the start of the month by (month - 1) mod 3 / 6.
-			{ ibTotalsPeriod::Quarter,  wxT("DATEADD(-MOD(EXTRACT(MONTH FROM {expr}) - 1, 3) MONTH TO ") + month + wxT(")") },
-			{ ibTotalsPeriod::HalfYear, wxT("DATEADD(-MOD(EXTRACT(MONTH FROM {expr}) - 1, 6) MONTH TO ") + month + wxT(")") },
+			{ ibTotalsPeriod::Quarter,  ibT("DATEADD(-MOD(EXTRACT(MONTH FROM {expr}) - 1, 3) MONTH TO ") + month + ibT(")") },
+			{ ibTotalsPeriod::HalfYear, ibT("DATEADD(-MOD(EXTRACT(MONTH FROM {expr}) - 1, 6) MONTH TO ") + month + ibT(")") },
 			// Year: EXTRACT(YEARDAY) is 0-based (1 Jan == 0), so subtracting it lands on 1 Jan.
-			{ ibTotalsPeriod::Year,    wxT("DATEADD(-EXTRACT(YEARDAY FROM {expr}) DAY TO ") + day + wxT(")") },
+			{ ibTotalsPeriod::Year,    ibT("DATEADD(-EXTRACT(YEARDAY FROM {expr}) DAY TO ") + day + ibT(")") },
 		};
 
 		// ⭐ THE END OF A PERIOD IS THE START OF THE NEXT ONE, LESS A SECOND — written that way rather
 		// than as ten more hand-built expressions, so the boundary rule lives in ONE place and the
 		// truncations above stay the single authority on where a period begins. (ibDateTime::EndOfPeriod,
 		// the RAM twin, says the same sentence in C++.)
-		auto endOf = [&d](ibTotalsPeriod unit, const wxString& step) {
-			return wxT("DATEADD(-1 SECOND TO DATEADD(1 ") + step + wxT(" TO ") + d.m_periodTrunc[unit] + wxT("))");
+		auto endOf = [&d](ibTotalsPeriod unit, const ibString& step) {
+			return ibT("DATEADD(-1 SECOND TO DATEADD(1 ") + step + ibT(" TO ") + d.m_periodTrunc[unit] + ibT("))");
 		};
 		d.m_periodEnd = {
-			{ ibTotalsPeriod::Second,   endOf(ibTotalsPeriod::Second,  wxT("SECOND")) },
-			{ ibTotalsPeriod::Minute,   endOf(ibTotalsPeriod::Minute,  wxT("MINUTE")) },
-			{ ibTotalsPeriod::Hour,     endOf(ibTotalsPeriod::Hour,    wxT("HOUR"))   },
-			{ ibTotalsPeriod::Day,      endOf(ibTotalsPeriod::Day,     wxT("DAY"))    },
-			{ ibTotalsPeriod::Week,     endOf(ibTotalsPeriod::Week,    wxT("WEEK"))   },
-			{ ibTotalsPeriod::Month,    endOf(ibTotalsPeriod::Month,   wxT("MONTH"))  },
-			{ ibTotalsPeriod::Quarter,  wxT("DATEADD(-1 SECOND TO DATEADD(3 MONTH TO ") + d.m_periodTrunc[ibTotalsPeriod::Quarter]  + wxT("))") },
-			{ ibTotalsPeriod::HalfYear, wxT("DATEADD(-1 SECOND TO DATEADD(6 MONTH TO ") + d.m_periodTrunc[ibTotalsPeriod::HalfYear] + wxT("))") },
-			{ ibTotalsPeriod::Year,     endOf(ibTotalsPeriod::Year,    wxT("YEAR"))   },
+			{ ibTotalsPeriod::Second,   endOf(ibTotalsPeriod::Second,  ibT("SECOND")) },
+			{ ibTotalsPeriod::Minute,   endOf(ibTotalsPeriod::Minute,  ibT("MINUTE")) },
+			{ ibTotalsPeriod::Hour,     endOf(ibTotalsPeriod::Hour,    ibT("HOUR"))   },
+			{ ibTotalsPeriod::Day,      endOf(ibTotalsPeriod::Day,     ibT("DAY"))    },
+			{ ibTotalsPeriod::Week,     endOf(ibTotalsPeriod::Week,    ibT("WEEK"))   },
+			{ ibTotalsPeriod::Month,    endOf(ibTotalsPeriod::Month,   ibT("MONTH"))  },
+			{ ibTotalsPeriod::Quarter,  ibT("DATEADD(-1 SECOND TO DATEADD(3 MONTH TO ") + d.m_periodTrunc[ibTotalsPeriod::Quarter]  + ibT("))") },
+			{ ibTotalsPeriod::HalfYear, ibT("DATEADD(-1 SECOND TO DATEADD(6 MONTH TO ") + d.m_periodTrunc[ibTotalsPeriod::HalfYear] + ibT("))") },
+			{ ibTotalsPeriod::Year,     endOf(ibTotalsPeriod::Year,    ibT("YEAR"))   },
 			// TenDays is absent on purpose: its third bucket runs to the end of the month, so "one
 			// ten-day later" is not a length. The lowering refuses that unit for the moving calls
 			// before either road sees it — see the note there.
@@ -182,58 +182,58 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 
 		// DATEADD(<n> <unit> TO <date>) is Firebird's own spelling, and it is calendar-aware for the
 		// month-shaped units — adding a month to the 31st lands on the last day of a shorter one.
-		auto addOf = [](const wxString& unit, const wxString& factor) {
-			return wxT("DATEADD((") + factor + wxT(") ") + unit + wxT(" TO {expr})");
+		auto addOf = [](const ibString& unit, const ibString& factor) {
+			return ibT("DATEADD((") + factor + ibT(") ") + unit + ibT(" TO {expr})");
 		};
 		d.m_dateAdd = {
-			{ ibTotalsPeriod::Second,   addOf(wxT("SECOND"), wxT("{count}"))     },
-			{ ibTotalsPeriod::Minute,   addOf(wxT("MINUTE"), wxT("{count}"))     },
-			{ ibTotalsPeriod::Hour,     addOf(wxT("HOUR"),   wxT("{count}"))     },
-			{ ibTotalsPeriod::Day,      addOf(wxT("DAY"),    wxT("{count}"))     },
-			{ ibTotalsPeriod::Week,     addOf(wxT("WEEK"),   wxT("{count}"))     },
-			{ ibTotalsPeriod::Month,    addOf(wxT("MONTH"),  wxT("{count}"))     },
-			{ ibTotalsPeriod::Quarter,  addOf(wxT("MONTH"),  wxT("({count}) * 3")) },
-			{ ibTotalsPeriod::HalfYear, addOf(wxT("MONTH"),  wxT("({count}) * 6")) },
-			{ ibTotalsPeriod::Year,     addOf(wxT("YEAR"),   wxT("{count}"))     },
+			{ ibTotalsPeriod::Second,   addOf(ibT("SECOND"), ibT("{count}"))     },
+			{ ibTotalsPeriod::Minute,   addOf(ibT("MINUTE"), ibT("{count}"))     },
+			{ ibTotalsPeriod::Hour,     addOf(ibT("HOUR"),   ibT("{count}"))     },
+			{ ibTotalsPeriod::Day,      addOf(ibT("DAY"),    ibT("{count}"))     },
+			{ ibTotalsPeriod::Week,     addOf(ibT("WEEK"),   ibT("{count}"))     },
+			{ ibTotalsPeriod::Month,    addOf(ibT("MONTH"),  ibT("{count}"))     },
+			{ ibTotalsPeriod::Quarter,  addOf(ibT("MONTH"),  ibT("({count}) * 3")) },
+			{ ibTotalsPeriod::HalfYear, addOf(ibT("MONTH"),  ibT("({count}) * 6")) },
+			{ ibTotalsPeriod::Year,     addOf(ibT("YEAR"),   ibT("{count}"))     },
 		};
 
 		// DATEDIFF(<unit> FROM <a> TO <b>) counts BOUNDARIES crossed, which is the whole-units answer
 		// this language promises: from the 31st of January to the 1st of February is one month.
-		auto diffOf = [](const wxString& unit, const wxString& divisor = wxEmptyString) {
-			const wxString call = wxT("DATEDIFF(") + unit + wxT(" FROM {from} TO {to})");
-			return divisor.IsEmpty() ? call : wxT("(") + call + wxT(" / ") + divisor + wxT(")");
+		auto diffOf = [](const ibString& unit, const ibString& divisor = ibEmptyString) {
+			const ibString call = ibT("DATEDIFF(") + unit + ibT(" FROM {from} TO {to})");
+			return divisor.IsEmpty() ? call : ibT("(") + call + ibT(" / ") + divisor + ibT(")");
 		};
 		d.m_dateDiff = {
-			{ ibTotalsPeriod::Second,   diffOf(wxT("SECOND")) },
-			{ ibTotalsPeriod::Minute,   diffOf(wxT("MINUTE")) },
-			{ ibTotalsPeriod::Hour,     diffOf(wxT("HOUR"))   },
-			{ ibTotalsPeriod::Day,      diffOf(wxT("DAY"))    },
-			{ ibTotalsPeriod::Week,     diffOf(wxT("WEEK"))   },
-			{ ibTotalsPeriod::Month,    diffOf(wxT("MONTH"))  },
-			{ ibTotalsPeriod::Quarter,  diffOf(wxT("MONTH"), wxT("3")) },
-			{ ibTotalsPeriod::HalfYear, diffOf(wxT("MONTH"), wxT("6")) },
-			{ ibTotalsPeriod::Year,     diffOf(wxT("YEAR"))   },
+			{ ibTotalsPeriod::Second,   diffOf(ibT("SECOND")) },
+			{ ibTotalsPeriod::Minute,   diffOf(ibT("MINUTE")) },
+			{ ibTotalsPeriod::Hour,     diffOf(ibT("HOUR"))   },
+			{ ibTotalsPeriod::Day,      diffOf(ibT("DAY"))    },
+			{ ibTotalsPeriod::Week,     diffOf(ibT("WEEK"))   },
+			{ ibTotalsPeriod::Month,    diffOf(ibT("MONTH"))  },
+			{ ibTotalsPeriod::Quarter,  diffOf(ibT("MONTH"), ibT("3")) },
+			{ ibTotalsPeriod::HalfYear, diffOf(ibT("MONTH"), ibT("6")) },
+			{ ibTotalsPeriod::Year,     diffOf(ibT("YEAR"))   },
 		};
 
 		// EXTRACT answers most of these directly. The three that need arithmetic are the ones where
 		// Firebird's numbering is its own: QUARTER is not an EXTRACT unit before FB4, YEARDAY counts
 		// from zero, and WEEKDAY is Sunday = 0 while this language pins Monday = 1 (ISO).
 		d.m_datePart = {
-			{ ibDatePart::Year,      wxT("EXTRACT(YEAR FROM {expr})")   },
-			{ ibDatePart::Quarter,   wxT("((EXTRACT(MONTH FROM {expr}) - 1) / 3 + 1)") },
-			{ ibDatePart::Month,     wxT("EXTRACT(MONTH FROM {expr})")  },
-			{ ibDatePart::DayOfYear, wxT("(EXTRACT(YEARDAY FROM {expr}) + 1)") },
-			{ ibDatePart::Day,       wxT("EXTRACT(DAY FROM {expr})")    },
-			{ ibDatePart::Week,      wxT("EXTRACT(WEEK FROM {expr})")   },
-			{ ibDatePart::WeekDay,   wxT("(MOD(EXTRACT(WEEKDAY FROM {expr}) + 6, 7) + 1)") },
-			{ ibDatePart::Hour,      wxT("EXTRACT(HOUR FROM {expr})")   },
-			{ ibDatePart::Minute,    wxT("EXTRACT(MINUTE FROM {expr})") },
+			{ ibDatePart::Year,      ibT("EXTRACT(YEAR FROM {expr})")   },
+			{ ibDatePart::Quarter,   ibT("((EXTRACT(MONTH FROM {expr}) - 1) / 3 + 1)") },
+			{ ibDatePart::Month,     ibT("EXTRACT(MONTH FROM {expr})")  },
+			{ ibDatePart::DayOfYear, ibT("(EXTRACT(YEARDAY FROM {expr}) + 1)") },
+			{ ibDatePart::Day,       ibT("EXTRACT(DAY FROM {expr})")    },
+			{ ibDatePart::Week,      ibT("EXTRACT(WEEK FROM {expr})")   },
+			{ ibDatePart::WeekDay,   ibT("(MOD(EXTRACT(WEEKDAY FROM {expr}) + 6, 7) + 1)") },
+			{ ibDatePart::Hour,      ibT("EXTRACT(HOUR FROM {expr})")   },
+			{ ibDatePart::Minute,    ibT("EXTRACT(MINUTE FROM {expr})") },
 			// EXTRACT(SECOND) is fractional on a TIMESTAMP — the same fact the sub-day truncations
 			// above work around; the whole second is what a person asked for.
-			{ ibDatePart::Second,    wxT("CAST(FLOOR(EXTRACT(SECOND FROM {expr})) AS INTEGER)") },
+			{ ibDatePart::Second,    ibT("CAST(FLOOR(EXTRACT(SECOND FROM {expr})) AS INTEGER)") },
 		};
 
-		d.m_substring = wxT("SUBSTRING({expr} FROM {from} FOR {len})");
+		d.m_substring = ibT("SUBSTRING({expr} FROM {from} FOR {len})");
 		return d;
 	}();
 	return s_dialect;
@@ -270,29 +270,29 @@ const ibMaterializationDialect& ibDatabaseLayerFirebird::MaterializationDialect(
 		// Firebird names the table BEFORE the timing (CREATE TRIGGER t FOR tbl ACTIVE AFTER
 		// INSERT), the reverse of the ANSI-ish order — exactly the kind of reshuffle a
 		// template absorbs and a token substitution could not.
-		m.m_triggerShellTemplate  = wxT("CREATE TRIGGER {name} FOR {table} ACTIVE {timing} POSITION 0 AS BEGIN {body} END");
-		m.m_functionShellTemplate = wxEmptyString;   // PSQL bodies inline — no separate function object
-		m.m_dropTriggerTemplate   = wxT("DROP TRIGGER {name}");
+		m.m_triggerShellTemplate  = ibT("CREATE TRIGGER {name} FOR {table} ACTIVE {timing} POSITION 0 AS BEGIN {body} END");
+		m.m_functionShellTemplate = ibEmptyString;   // PSQL bodies inline — no separate function object
+		m.m_dropTriggerTemplate   = ibT("DROP TRIGGER {name}");
 		// Firebird has no IF EXISTS for either object, and a failed DDL ROLLS BACK the transaction —
 		// so a drop of something never created would take the whole restructuring with it. Probe first.
-		m.m_viewExistsQuery    = wxT("SELECT 1 FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = UPPER('{name}')");
-		m.m_triggerExistsQuery = wxT("SELECT 1 FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = UPPER('{name}')");
+		m.m_viewExistsQuery    = ibT("SELECT 1 FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = UPPER('{name}')");
+		m.m_triggerExistsQuery = ibT("SELECT 1 FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = UPPER('{name}')");
 
 		m.m_deltaUpsertTemplate =
-			wxT("MERGE INTO {table} {target} USING ({sourceRel}) {source} ON ({keyMatch}) ")
-			wxT("WHEN MATCHED THEN UPDATE SET {update} ")
-			wxT("WHEN NOT MATCHED THEN INSERT ({columns}) VALUES ({values})");
-		m.m_deltaSourceTemplate = wxT("SELECT {selectItems}{from}{where}");
-		m.m_deltaTargetAlias    = wxT("t");
-		m.m_deltaSourceAlias    = wxT("s");
+			ibT("MERGE INTO {table} {target} USING ({sourceRel}) {source} ON ({keyMatch}) ")
+			ibT("WHEN MATCHED THEN UPDATE SET {update} ")
+			ibT("WHEN NOT MATCHED THEN INSERT ({columns}) VALUES ({values})");
+		m.m_deltaSourceTemplate = ibT("SELECT {selectItems}{from}{where}");
+		m.m_deltaTargetAlias    = ibT("t");
+		m.m_deltaSourceAlias    = ibT("s");
 		// The assigned column is NOT qualified: inside MERGE … WHEN MATCHED THEN UPDATE SET,
 		// Firebird takes a bare column name on the left — a `t.col = …` there is a syntax error,
 		// and the parser reports it at the following token rather than at the qualifier.
-		m.m_deltaUpdateItem     = wxT("{col} = COALESCE({target}.{col}, 0) + {source}.{col}");   // NULL-safe — see the default
+		m.m_deltaUpdateItem     = ibT("{col} = COALESCE({target}.{col}, 0) + {source}.{col}");   // NULL-safe — see the default
 		// NULL-safe — see the note on the default in databaseLayer.h. Firebird is the engine that
 		// actually SPENDS this template (its delta is a MERGE), so it is the one where a plain `=`
 		// turned an empty dimension into a duplicate-key refusal on every write.
-		m.m_deltaKeyMatchItem   = wxT("{target}.{col} IS NOT DISTINCT FROM {source}.{col}");
+		m.m_deltaKeyMatchItem   = ibT("{target}.{col} IS NOT DISTINCT FROM {source}.{col}");
 
 		// THE KEY HASH — an identity for a key the sixteen-segment index cannot hold.
 		//
@@ -305,15 +305,15 @@ const ibMaterializationDialect& ibDatabaseLayerFirebird::MaterializationDialect(
 		// Per PART and not over the concatenation: a key field may be a binary reference key or an
 		// unbounded string, and casting either into text to join it is a character-set error or a
 		// truncation. A hashed part is 32 ASCII characters whatever it holds.
-		m.m_keyHashItem   = wxT("COALESCE(HEX_ENCODE(CRYPT_HASH({value} USING MD5)), '~')");
-		m.m_keyHashJoin   = wxT(" || '.' || ");
-		m.m_keyHashDigest = wxT("HEX_ENCODE(CRYPT_HASH({expr} USING MD5))");
+		m.m_keyHashItem   = ibT("COALESCE(HEX_ENCODE(CRYPT_HASH({value} USING MD5)), '~')");
+		m.m_keyHashJoin   = ibT(" || '.' || ");
+		m.m_keyHashDigest = ibT("HEX_ENCODE(CRYPT_HASH({expr} USING MD5))");
 
-		m.m_totalsTableSuffix  = wxEmptyString;                        // no page-fill knob in DDL
-		m.m_connectionIdExpr   = wxT("CURRENT_CONNECTION");            // per-attachment id — the shard hash source
-		m.m_shardExprTemplate  = wxT("MOD({conn}, {n})");              // Firebird has no '%' operator
-		m.m_createViewTemplate = wxT("CREATE OR ALTER VIEW {name} AS {body}");   // FB 2.5+ idempotent form
-		m.m_dropViewTemplate   = wxT("DROP VIEW {name}");               // no IF EXISTS in Firebird
+		m.m_totalsTableSuffix  = ibEmptyString;                        // no page-fill knob in DDL
+		m.m_connectionIdExpr   = ibT("CURRENT_CONNECTION");            // per-attachment id — the shard hash source
+		m.m_shardExprTemplate  = ibT("MOD({conn}, {n})");              // Firebird has no '%' operator
+		m.m_createViewTemplate = ibT("CREATE OR ALTER VIEW {name} AS {body}");   // FB 2.5+ idempotent form
+		m.m_dropViewTemplate   = ibT("DROP VIEW {name}");               // no IF EXISTS in Firebird
 		return m;
 	}();
 	return s_mat;
@@ -337,7 +337,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird()
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading Firebird library"));
+		SetErrorMessage(ibT("Error loading Firebird library"));
 		ThrowDatabaseException();
 		return;
 	}
@@ -345,14 +345,14 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird()
 #endif
 	m_pStatus = new ISC_STATUS_ARRAY();
 
-	m_strServer = wxT("");  // assume embedded database in this case
-	m_strUser = wxT("sysdba");
-	m_strPassword = wxT("masterkey");
-	m_strDatabase = wxT("");
-	m_strRole = wxEmptyString;
+	m_strServer = ibT("");  // assume embedded database in this case
+	m_strUser = ibT("sysdba");
+	m_strPassword = ibT("masterkey");
+	m_strDatabase = ibT("");
+	m_strRole = ibEmptyString;
 }
 
-ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase)
+ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibString& strDatabase)
 	: ibDatabaseLayer()
 {
 	m_pDatabase = 0;
@@ -364,7 +364,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase)
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading Firebird library"));
+		SetErrorMessage(ibT("Error loading Firebird library"));
 		ThrowDatabaseException();
 		return;
 	}
@@ -372,15 +372,15 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase)
 #endif
 	m_pStatus = new ISC_STATUS_ARRAY();
 
-	m_strServer = wxT("");  // assume embedded database in this case
-	m_strUser = wxT("sysdba");
-	m_strPassword = wxT("masterkey");
-	m_strRole = wxEmptyString;
+	m_strServer = ibT("");  // assume embedded database in this case
+	m_strUser = ibT("sysdba");
+	m_strPassword = ibT("masterkey");
+	m_strRole = ibEmptyString;
 
 	Open(strDatabase);
 }
 
-ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
+ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibString& strDatabase, const ibString& strUser, const ibString& strPassword)
 	: ibDatabaseLayer()
 {
 	m_pDatabase = 0;
@@ -391,22 +391,22 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase, co
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading Firebird library"));
+		SetErrorMessage(ibT("Error loading Firebird library"));
 		ThrowDatabaseException();
 		return;
 	}
 #endif
 	m_pStatus = new ISC_STATUS_ARRAY();
 
-	m_strServer = wxT("");  // assume embedded database in this case
+	m_strServer = ibT("");  // assume embedded database in this case
 	m_strUser = strUser;
 	m_strPassword = strPassword;
-	m_strRole = wxEmptyString;
+	m_strRole = ibEmptyString;
 
 	Open(strDatabase);
 }
 
-ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
+ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibString& strServer, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword)
 	: ibDatabaseLayer()
 {
 	m_pDatabase = 0;
@@ -417,7 +417,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading Firebird library"));
+		SetErrorMessage(ibT("Error loading Firebird library"));
 		ThrowDatabaseException();
 		return;
 	}
@@ -427,12 +427,12 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 	m_strServer = strServer;
 	m_strUser = strUser;
 	m_strPassword = strPassword;
-	m_strRole = wxEmptyString;
+	m_strRole = ibEmptyString;
 
 	Open(strDatabase);
 }
 
-ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword, const wxString& strRole)
+ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibString& strServer, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword, const ibString& strRole)
 	: ibDatabaseLayer()
 {
 	m_pDatabase = 0;
@@ -443,7 +443,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading Firebird library"));
+		SetErrorMessage(ibT("Error loading Firebird library"));
 		ThrowDatabaseException();
 		return;
 	}
@@ -468,7 +468,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibDatabaseLayerFirebird& 
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading Firebird library"));
+		SetErrorMessage(ibT("Error loading Firebird library"));
 		ThrowDatabaseException();
 		return;
 	}
@@ -498,13 +498,13 @@ ibDatabaseLayerFirebird::~ibDatabaseLayerFirebird()
 }
 
 // open database
-bool ibDatabaseLayerFirebird::Open(const wxString& strDatabase)
+bool ibDatabaseLayerFirebird::Open(const ibString& strDatabase)
 {
 	m_strDatabase = strDatabase;
 	return Open();
 }
 
-bool ibDatabaseLayerFirebird::Open(const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
+bool ibDatabaseLayerFirebird::Open(const ibString& strDatabase, const ibString& strUser, const ibString& strPassword)
 {
 	m_strUser = strUser;
 	m_strPassword = strPassword;
@@ -512,7 +512,7 @@ bool ibDatabaseLayerFirebird::Open(const wxString& strDatabase, const wxString& 
 	return Open(strDatabase);
 }
 
-bool ibDatabaseLayerFirebird::Open(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
+bool ibDatabaseLayerFirebird::Open(const ibString& strServer, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword)
 {
 	m_strServer = strServer;
 	m_strUser = strUser;
@@ -536,7 +536,7 @@ bool ibDatabaseLayerFirebird::Open()
 	// them over TCP). Local paths bypass the orchestrator and
 	// always go embedded — same behaviour as before leader-mode
 	// landed.
-	wxString strDatabaseUrl;
+	ibString strDatabaseUrl;
 	if (m_strServer.IsEmpty()) {
 		const auto lm = ibFirebirdLeaderMode::InitForDatabase(m_strDatabase);
 		if (!lm.ok) {
@@ -557,7 +557,7 @@ bool ibDatabaseLayerFirebird::Open()
 		}
 	}
 	else {
-		strDatabaseUrl = m_strServer + wxT(":") + m_strDatabase;
+		strDatabaseUrl = m_strServer + ibT(":") + m_strDatabase;
 	}
 
 	wxCharBuffer urlBuffer = ConvertToUnicodeStream(strDatabaseUrl);
@@ -722,28 +722,29 @@ bool ibDatabaseLayerFirebird::Open()
 		dpbBuffer.push_back(isc_dpb_utf8_filename);
 		dpbBuffer.push_back(0);
 
+		// The strings in UTF-8 too (isc_dpb_utf8_filename above), and each one's length is its BYTES.
 		if (m_strUser.length() > 0)
 		{
-			int nUsernameLength = m_strUser.length();
+			const std::string user = m_strUser.ToUtf8();
 			dpbBuffer.push_back(isc_dpb_user_name);
-			dpbBuffer.push_back(nUsernameLength);
-			dpbBuffer.append(m_strUser);
+			dpbBuffer.push_back(static_cast<char>(user.length()));
+			dpbBuffer.append(user);
 		}
 
 		if (m_strPassword.length() > 0)
 		{
-			int nPasswordLength = m_strPassword.length();
+			const std::string password = m_strPassword.ToUtf8();
 			dpbBuffer.push_back(isc_dpb_password);
-			dpbBuffer.push_back(nPasswordLength);
-			dpbBuffer.append(m_strPassword);
+			dpbBuffer.push_back(static_cast<char>(password.length()));
+			dpbBuffer.append(password);
 		}
 
 		if (m_strRole.length() > 0)
 		{
-			int nRoleLength = m_strRole.length();
+			const std::string role = m_strRole.ToUtf8();
 			dpbBuffer.push_back(isc_dpb_sql_role_name);
-			dpbBuffer.push_back(nRoleLength);
-			dpbBuffer.append(m_strRole);
+			dpbBuffer.push_back(static_cast<char>(role.length()));
+			dpbBuffer.append(role);
 		}
 	}
 
@@ -817,7 +818,7 @@ bool ibDatabaseLayerFirebird::Open()
 	// (`server:db`) bypasses leader-mode entirely.
 	m_currentConnectUrl = strDatabaseUrl;
 
-	ibJournalInfo(wxT("db.firebird"), wxT("ibDatabaseLayerFirebird: attached to %s"),
+	ibJournalInfo(ibT("db.firebird"), ibT("ibDatabaseLayerFirebird: attached to %s"),
 	           strDatabaseUrl);
 
 	// THE BASE'S OWN PAGE, not the one this driver creates bases with: a base made before the page size was
@@ -827,7 +828,7 @@ bool ibDatabaseLayerFirebird::Open()
 	ibPreparedStatement* pageStatement = nullptr;
 	ibDatabaseResultSet* pageResult = nullptr;
 	try {
-		pageStatement = DoPrepareStatement(wxT("SELECT MON$PAGE_SIZE FROM MON$DATABASE"));
+		pageStatement = DoPrepareStatement(ibT("SELECT MON$PAGE_SIZE FROM MON$DATABASE"));
 		if (pageStatement != nullptr)
 			pageResult = pageStatement->ExecuteQuery();
 		if (pageResult != nullptr && pageResult->Next()) {
@@ -835,8 +836,8 @@ bool ibDatabaseLayerFirebird::Open()
 			if (pageSize >= 1024)
 				m_maxIndexKeyBytes = (unsigned int)(pageSize / 4 - 96);
 			if (pageSize < m_pageSize)
-				ibJournalInfo(wxT("db.firebird"), wxT("%s has %d-byte pages: an index key is kept under %u bytes ")
-					wxT("(a backup and restore at %d bytes lifts it)"), strDatabaseUrl, pageSize, m_maxIndexKeyBytes,
+				ibJournalInfo(ibT("db.firebird"), ibT("%s has %d-byte pages: an index key is kept under %u bytes ")
+					ibT("(a backup and restore at %d bytes lifts it)"), strDatabaseUrl, pageSize, m_maxIndexKeyBytes,
 					(int)m_pageSize);
 		}
 	}
@@ -906,7 +907,7 @@ bool ibDatabaseLayerFirebird::GetSweepBacklog(long long& transactions)
 {
 	ibDatabaseResultSet* rs = nullptr;
 	try {
-		rs = RunQueryWithResults(wxT("SELECT MON$OLDEST_TRANSACTION, MON$OLDEST_SNAPSHOT FROM MON$DATABASE"));
+		rs = RunQueryWithResults(ibT("SELECT MON$OLDEST_TRANSACTION, MON$OLDEST_SNAPSHOT FROM MON$DATABASE"));
 	}
 	catch (const ibCoreException&) {
 		ResetErrorCodes();
@@ -946,8 +947,8 @@ void ibDatabaseLayerFirebird::Cancel()
 		return;
 	ISC_STATUS_ARRAY status = {};
 	const ISC_STATUS answer = m_pInterface->GetFbCancelOperation()(status, &handle, fb_cancel_raise);
-	ibJournalInfo(wxT("cancel"), wxT("fb_cancel_operation(raise): %s"),
-		answer == 0 ? wxString(wxT("raised")) : wxString::Format(wxT("answered %ld"), (long)status[1]));
+	ibJournalInfo(ibT("cancel"), ibT("fb_cancel_operation(raise): %s"),
+		answer == 0 ? ibString(ibT("raised")) : ibString::Format(ibT("answered %ld"), (long)status[1]));
 }
 
 // close database
@@ -1110,7 +1111,7 @@ void ibDatabaseLayerFirebird::DoCommit()
 	if (m_txLost) {
 		m_txLost = false;
 		SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-		SetErrorMessage(wxT("The transaction was lost before it could be committed"));
+		SetErrorMessage(ibT("The transaction was lost before it could be committed"));
 		ThrowDatabaseException();
 		return;
 	}
@@ -1168,7 +1169,7 @@ void ibDatabaseLayerFirebird::DoRollBack()
 
 
 // query database
-int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQuery)
+int ibDatabaseLayerFirebird::DoRunQuery(const ibString& strQuery, bool bParseQuery)
 {
 	ResetErrorCodes();
 	// Proactive leader-handoff check: any caller (TX-bound or direct
@@ -1182,16 +1183,16 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 	{
 		wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
 #ifdef DEBUG
-		ibJournalInfo(wxT("db.firebird"), wxT("Running query: \"%s\"\n"), (const char*)sqlDebugBuffer);
+		ibJournalInfo(ibT("db.firebird"), ibT("Running query: \"%s\"\n"), (const char*)sqlDebugBuffer);
 #endif // !DEBUG
-		wxArrayString QueryArray;
+		std::vector<ibString> QueryArray;
 		if (bParseQuery)
 			QueryArray = ParseQueries(strQuery);
 		else
 			QueryArray.push_back(strQuery);
 
-		wxArrayString::iterator start = QueryArray.begin();
-		wxArrayString::iterator stop = QueryArray.end();
+		std::vector<ibString>::iterator start = QueryArray.begin();
+		std::vector<ibString>::iterator stop = QueryArray.end();
 
 		// isc_dsql_execute_immediate hands back no statement handle, so there is no
 		// isc_info_sql_records round-trip to ask for a row count — this path reports 0,
@@ -1213,7 +1214,7 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 			if (m_txLost)
 			{
 				SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-				SetErrorMessage(wxT("The transaction was lost; the statement was not run"));
+				SetErrorMessage(ibT("The transaction was lost; the statement was not run"));
 				ThrowDatabaseException();
 				return DATABASE_LAYER_QUERY_RESULT_ERROR;
 			}
@@ -1231,7 +1232,7 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 				BeginTransaction();
 				if (GetErrorCode() != DATABASE_LAYER_OK)
 				{
-					ibJournalError(wxT("db.firebird"),wxT("Unable to start transaction"));
+					ibJournalError(ibT("db.firebird"),ibT("Unable to start transaction"));
 					ThrowDatabaseException();
 					return DATABASE_LAYER_QUERY_RESULT_ERROR;
 				}
@@ -1297,12 +1298,12 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 	}
 	else
 	{
-		ibJournalError(wxT("db.firebird"),wxT("Database handle is NULL"));
+		ibJournalError(ibT("db.firebird"),ibT("Database handle is NULL"));
 		return DATABASE_LAYER_QUERY_RESULT_ERROR;
 	}
 }
 
-ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxString& strQuery)
+ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const ibString& strQuery)
 {
 	ResetErrorCodes();
 	// Self-heal after leader handoff before the SELECT — see
@@ -1316,9 +1317,9 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 		// zero depending on the compiler. Two spellings of one switch mean one of them is off and
 		// nobody notices which.
 #ifdef DEBUG
-		ibJournalInfo(wxT("db.firebird"), wxT("Running query: \"%s\""), (const char*)sqlDebugBuffer);
+		ibJournalInfo(ibT("db.firebird"), ibT("Running query: \"%s\""), (const char*)sqlDebugBuffer);
 #endif
-		wxArrayString QueryArray = ParseQueries(strQuery);
+		std::vector<ibString> QueryArray = ParseQueries(strQuery);
 
 		if (QueryArray.size() > 0)
 		{
@@ -1333,7 +1334,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 			if (m_txLost)
 			{
 				SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-				SetErrorMessage(wxT("The transaction was lost; the query was not run"));
+				SetErrorMessage(ibT("The transaction was lost; the query was not run"));
 				ThrowDatabaseException();
 				return nullptr;
 			}
@@ -1353,7 +1354,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 					BeginTransaction();
 					if (GetErrorCode() != DATABASE_LAYER_OK)
 					{
-						ibJournalError(wxT("db.firebird"),wxT("Unable to start transaction"));
+						ibJournalError(ibT("db.firebird"),ibT("Unable to start transaction"));
 						ThrowDatabaseException();
 						return NULL;
 					}
@@ -1471,7 +1472,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 			if (pOutputSqlda == NULL)
 			{
 				SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-				SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+				SetErrorMessage(ibT("Out of memory allocating the result descriptor"));
 				FreeStatementQuietly(pStatement);
 				if (bManageTransaction)
 					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
@@ -1510,7 +1511,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				if (pOutputSqlda == NULL)
 				{
 					SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-					SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+					SetErrorMessage(ibT("Out of memory allocating the result descriptor"));
 					FreeStatementQuietly(pStatement);
 					if (bManageTransaction)
 						m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
@@ -1613,12 +1614,12 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 	}
 	else
 	{
-		ibJournalError(wxT("db.firebird"),wxT("Database handle is NULL"));
+		ibJournalError(ibT("db.firebird"),ibT("Database handle is NULL"));
 		return NULL;
 	}
 }
 
-ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString& strQuery)
+ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const ibString& strQuery)
 {
 	ResetErrorCodes();
 	// Self-heal after leader handoff so the statement is built against
@@ -1632,7 +1633,7 @@ ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString&
 	if (m_txLost)
 	{
 		SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-		SetErrorMessage(wxT("The transaction was lost; the statement was not prepared"));
+		SetErrorMessage(ibT("The transaction was lost; the statement was not prepared"));
 		ThrowDatabaseException();
 		return NULL;
 	}
@@ -1646,7 +1647,7 @@ ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString&
 #ifdef DEBUG
 	{
 		const wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
-		ibJournalInfo(wxT("db.firebird"), wxT("Prepared query: \"%s\""), (const char*)sqlDebugBuffer);
+		ibJournalInfo(ibT("db.firebird"), ibT("Prepared query: \"%s\""), (const char*)sqlDebugBuffer);
 	}
 #endif
 
@@ -1665,7 +1666,7 @@ ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString&
 	return pStatement;
 }
 
-bool ibDatabaseLayerFirebird::TableExists(const wxString& table)
+bool ibDatabaseLayerFirebird::TableExists(const ibString& table)
 {
 	// Initialize variables
 	bool bReturn = false;
@@ -1674,8 +1675,8 @@ bool ibDatabaseLayerFirebird::TableExists(const wxString& table)
 	ibPreparedStatement* pStatement = NULL;
 	ibDatabaseResultSet* pResult = NULL;
 	try {
-		wxString tableUpperCase = table.Upper();
-		wxString query = wxT("SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NULL AND RDB$RELATION_NAME=?;");
+		ibString tableUpperCase = table.Upper();
+		ibString query = ibT("SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NULL AND RDB$RELATION_NAME=?;");
 		pStatement = DoPrepareStatement(query);
 		if (pStatement)
 		{
@@ -1722,7 +1723,7 @@ bool ibDatabaseLayerFirebird::TableExists(const wxString& table)
 	return bReturn;
 }
 
-bool ibDatabaseLayerFirebird::ViewExists(const wxString& view)
+bool ibDatabaseLayerFirebird::ViewExists(const ibString& view)
 {
 	// Initialize variables
 	bool bReturn = false;
@@ -1731,8 +1732,8 @@ bool ibDatabaseLayerFirebird::ViewExists(const wxString& view)
 	ibPreparedStatement* pStatement = NULL;
 	ibDatabaseResultSet* pResult = NULL;
 	try {
-		wxString viewUpperCase = view.Upper();
-		wxString query = wxT("SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NOT NULL AND RDB$RELATION_NAME=?;");
+		ibString viewUpperCase = view.Upper();
+		ibString query = ibT("SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NOT NULL AND RDB$RELATION_NAME=?;");
 		pStatement = DoPrepareStatement(query);
 		if (pStatement)
 		{
@@ -1779,18 +1780,18 @@ bool ibDatabaseLayerFirebird::ViewExists(const wxString& view)
 	return bReturn;
 }
 
-wxArrayString ibDatabaseLayerFirebird::GetTables()
+std::vector<ibString> ibDatabaseLayerFirebird::GetTables()
 {
-	wxArrayString returnArray;
+	std::vector<ibString> returnArray;
 
 	ibDatabaseResultSet* pResult = NULL;
 	try {
-		wxString query = wxT("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NULL");
+		ibString query = ibT("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NULL");
 		pResult = ExecuteQuery(query);
 
 		while (pResult->Next())
 		{
-			returnArray.Add(pResult->GetResultString(1).Trim());
+			returnArray.push_back(pResult->GetResultString(1).Trim());
 		}
 
 		if (pResult != NULL)
@@ -1812,18 +1813,18 @@ wxArrayString ibDatabaseLayerFirebird::GetTables()
 	return returnArray;
 }
 
-wxArrayString ibDatabaseLayerFirebird::GetViews()
+std::vector<ibString> ibDatabaseLayerFirebird::GetViews()
 {
-	wxArrayString returnArray;
+	std::vector<ibString> returnArray;
 
 	ibDatabaseResultSet* pResult = NULL;
 	try {
-		wxString query = wxT("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NOT NULL");
+		ibString query = ibT("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NOT NULL");
 		pResult = ExecuteQuery(query);
 
 		while (pResult->Next())
 		{
-			returnArray.Add(pResult->GetResultString(1).Trim());
+			returnArray.push_back(pResult->GetResultString(1).Trim());
 		}
 
 		if (pResult != NULL)
@@ -1845,17 +1846,17 @@ wxArrayString ibDatabaseLayerFirebird::GetViews()
 	return returnArray;
 }
 
-wxArrayString ibDatabaseLayerFirebird::GetColumns(const wxString& table)
+std::vector<ibString> ibDatabaseLayerFirebird::GetColumns(const ibString& table)
 {
 	// Initialize variables
-	wxArrayString returnArray;
+	std::vector<ibString> returnArray;
 	// Keep these variables outside of scope so that we can clean them up
 	//  in case of an error
 	ibPreparedStatement* pStatement = NULL;
 	ibDatabaseResultSet* pResult = NULL;
 	try {
-		wxString tableUpperCase = table.Upper();
-		wxString query = wxT("SELECT RDB$FIELD_NAME FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME=?;");
+		ibString tableUpperCase = table.Upper();
+		ibString query = ibT("SELECT RDB$FIELD_NAME FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME=?;");
 		pStatement = DoPrepareStatement(query);
 		if (pStatement)
 		{
@@ -1865,7 +1866,7 @@ wxArrayString ibDatabaseLayerFirebird::GetColumns(const wxString& table)
 			{
 				while (pResult->Next())
 				{
-					returnArray.Add(pResult->GetResultString(1).Trim());
+					returnArray.push_back(pResult->GetResultString(1).Trim());
 				}
 			}
 		}
@@ -1912,10 +1913,10 @@ int ibDatabaseLayerFirebird::TranslateErrorCode(int nCode)
 }
 
 //wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, ISC_STATUS_ARRAY status)
-wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, void* status)
+ibString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, void* status)
 {
 	char szError[512];
-	wxString strReturn;
+	ibString strReturn;
 
 	if (nCode > -901) // Error codes less than -900 indicate that it wasn't a SQL error but an ibase system error
 	{
@@ -1928,14 +1929,14 @@ wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird
 		const ISC_STATUS* pVector = static_cast<const ISC_STATUS*>(status);
 		pInterface->GetFbInterpret()(szError, 512, &pVector);
 
-		strReturn = wxString::Format(wxT("%s\n"), szError);
+		strReturn = ibString::Format(ibT("%s\n"), szError);
 		while (pInterface->GetFbInterpret()(szError, 512, &pVector))
 		{
-			strReturn += wxString::Format(wxT("%s\n"), szError);
+			strReturn += ibString::Format(ibT("%s\n"), szError);
 		}
 
 		pInterface->GetIscSqlInterprete()(nCode, szError, sizeof(szError));
-		strReturn += wxString::Format(wxT("%s\n"), szError);
+		strReturn += ibString::Format(ibT("%s\n"), szError);
 	}
 	else
 	{
@@ -1956,7 +1957,7 @@ wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird
 		// code page is not UTF-8, and the converter hands such bytes to the locale's own conversion.
 		const ISC_STATUS* pVector = static_cast<const ISC_STATUS*>(status);
 		while (pInterface->GetFbInterpret()(szError, 512, &pVector))
-			strReturn += wxT("\n") + ibDatabaseStringConverter::ConvertFromUnicodeStream(szError);
+			strReturn += ibT("\n") + ibDatabaseStringConverter::ConvertFromUnicodeStream(szError);
 	}
 
 	return strReturn;
@@ -2042,7 +2043,7 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 	if (!m_strServer.IsEmpty())
 		return false;
 
-	const wxString currentLeaderUrl = ibFirebirdLeaderMode::CurrentConnectUrl();
+	const ibString currentLeaderUrl = ibFirebirdLeaderMode::CurrentConnectUrl();
 
 	// Empty = leader-mode never initialised (no UNC path → standalone
 	// path) or shut down. Nothing to reconnect against.
@@ -2062,12 +2063,12 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 	// a half-statement-tx onto the new leader. Caller is expected
 	// to catch, rollback their logical TX, and retry from scratch.
 	if (m_pTransaction != 0) {
-		ibJournalError(wxT("db.firebird"),wxT("ibDatabaseLayerFirebird: leader handoff during ")
-		           wxT("active transaction (was %s, now %s) - caller must ")
-		           wxT("rollback and retry"),
+		ibJournalError(ibT("db.firebird"),ibT("ibDatabaseLayerFirebird: leader handoff during ")
+		           ibT("active transaction (was %s, now %s) - caller must ")
+		           ibT("rollback and retry"),
 		           m_currentConnectUrl, currentLeaderUrl);
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Leader handoff during active transaction; "
+		SetErrorMessage(ibT("Leader handoff during active transaction; "
 		                    "transaction state lost. Retry."));
 		ThrowDatabaseException();
 		return false;
@@ -2078,8 +2079,8 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 	// spam 20 identical "handoff detected" lines per cluster event.
 	// Cluster-level handoff is already logged once by
 	// ibFirebirdLeaderMode's heartbeat thread. Debug only.
-	ibJournalInfo(wxT("db.firebird"), wxT("ibDatabaseLayerFirebird: leader handoff detected ")
-	           wxT("(was %s, now %s); reconnecting"),
+	ibJournalInfo(ibT("db.firebird"), ibT("ibDatabaseLayerFirebird: leader handoff detected ")
+	           ibT("(was %s, now %s); reconnecting"),
 	           m_currentConnectUrl, currentLeaderUrl);
 
 	// Tear down the existing handle — best-effort. If the underlying
@@ -2108,8 +2109,8 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 	bool opened = false;
 	try { opened = Open(); } catch (...) { opened = false; }
 	if (!opened) {
-		ibJournalError(wxT("db.firebird"),wxT("ibDatabaseLayerFirebird: reconnect against new ")
-		           wxT("leader URL %s failed"), currentLeaderUrl);
+		ibJournalError(ibT("db.firebird"),ibT("ibDatabaseLayerFirebird: reconnect against new ")
+		           ibT("leader URL %s failed"), currentLeaderUrl);
 		return false;
 	}
 	return true;

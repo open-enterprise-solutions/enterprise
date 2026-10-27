@@ -150,7 +150,7 @@ long ibValueModelStorage::IndexOf(const ibValue& row) const
 	return row.ConvertToValue(line) ? GetRow(line->GetLineItem()) : wxNOT_FOUND;
 }
 
-ibValue ibValueModelStorage::TotalOf(const wxString& column) const
+ibValue ibValueModelStorage::TotalOf(const ibString& column) const
 {
 	ibValueModelColumnCollection* const columns = GetColumnCollection();
 	const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
@@ -425,7 +425,7 @@ bool ibValueModel::GetCompositionAttrByRow(const ibDataViewItem& row, unsigned i
 	const ibDataComposer& composer = GetModelComposer();
 	const std::vector<ibCompositionRule> rules = ibCompositionRulesOf(composer.GetCurrentConditionalAppearanceDesc());
 	std::deque<ibValue> read;   // what the engine is handed stays where it is while the condition is read
-	const ibCompositionValueOf valueOf = [this, node, &read](const wxString& path) -> const ibValue* {
+	const ibCompositionValueOf valueOf = [this, node, &read](const ibString& path) -> const ibValue* {
 		const ibMetaID id = GetColumnIDByName(path);
 		ibValue value;
 		if (id == wxNOT_FOUND || !node->GetValue(id, value))
@@ -436,7 +436,7 @@ bool ibValueModel::GetCompositionAttrByRow(const ibDataViewItem& row, unsigned i
 	attr = ibCompositionAttr();
 	ibCompositionAttr own;
 	const bool held = ibCompositionSayRules(rules, composer.GetMetaData(), valueOf, composer.SubtreeOf(), attr,
-		[this, col, &own](const wxString& field, const ibCompositionAttr& said) {
+		[this, col, &own](const ibString& field, const ibCompositionAttr& said) {
 			if (GetColumnIDByName(field) == static_cast<ibMetaID>(col))
 				own.Say(said);
 		});
@@ -500,7 +500,7 @@ void ibValueModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsi
 	ibValue value;
 	if (const ibComposerNode* node = GetViewData<ibComposerNode>(item))
 		node->GetValue(static_cast<ibMetaID>(col), value);
-	wxString text;
+	ibString text;
 	if (drawn.TextOf(value, text))
 		variant = new ibVariantDataValueModel(ibValue(text));
 }
@@ -575,11 +575,11 @@ enum Prop {
 
 void ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(wxT("Name"));
-	helper.AppendProp(wxT("Types"));
-	helper.AppendProp(wxT("Caption"));
-	helper.AppendProp(wxT("Width"));
-	helper.AppendProp(wxT("Indexing"));
+	helper.AppendProp(ibT("Name"));
+	helper.AppendProp(ibT("Types"));
+	helper.AppendProp(ibT("Caption"));
+	helper.AppendProp(ibT("Width"));
+	helper.AppendProp(ibT("Indexing"));
 }
 
 bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
@@ -647,12 +647,12 @@ ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ibValueModel
 	return nullptr;
 }
 
-ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ibValueModel::ibValueModelColumnCollection::GetColumnByName(const wxString& colName) const
+ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ibValueModel::ibValueModelColumnCollection::GetColumnByName(const ibString& colName) const
 {
 	for (unsigned int idx = 0; idx < GetColumnCount(); idx++) {
 		ibValueModelColumnInfo* columnInfo = GetColumnInfo(idx);
 		wxASSERT(columnInfo);
-		if (stringUtils::CompareString(colName, columnInfo->GetColumnName()))
+		if (stringUtils::IsSameAs(colName, columnInfo->GetColumnName()))
 			return columnInfo;
 	}
 

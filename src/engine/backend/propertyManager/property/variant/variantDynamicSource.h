@@ -67,7 +67,7 @@ public:
 #endif
 	virtual bool Write(wxString& str) const { str = MakeString(); return true; }
 
-	virtual wxString GetType() const { return wxT("ibVariantDataDynamicSource"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataDynamicSource"); }
 
 private:
 	ibMetaID m_tableId = wxNOT_FOUND;   // the chosen source's stable table id (queryable re-resolved on demand)

@@ -28,15 +28,15 @@ class ibPreparedStatementPostgres : public ibPreparedStatement
 public:
 	// ctor
 	ibPreparedStatementPostgres(ibInterfacePostgres* pInterface);
-	ibPreparedStatementPostgres(ibInterfacePostgres* pInterface, PGconn* pDatabase, const wxString& strSQL, const wxString& strStatementName);
+	ibPreparedStatementPostgres(ibInterfacePostgres* pInterface, PGconn* pDatabase, const ibString& strSQL, const ibString& strStatementName);
 
 	// dtor
 	virtual ~ibPreparedStatementPostgres();
 
 	virtual void Close();
 
-	void AddStatement(PGconn* pDatabase, const wxString& strSQL, const wxString& strStatementName);
-	static ibPreparedStatementPostgres* CreateStatement(ibInterfacePostgres* pInterface, PGconn* pDatabase, const wxString& strSQL);
+	void AddStatement(PGconn* pDatabase, const ibString& strSQL, const ibString& strStatementName);
+	static ibPreparedStatementPostgres* CreateStatement(ibInterfacePostgres* pInterface, PGconn* pDatabase, const ibString& strSQL);
 
 	// set field
 	virtual void SetParamInt(int nPosition, int nValue);
@@ -52,12 +52,12 @@ public:
 	virtual int RunQuery();
 	virtual ibDatabaseResultSet* RunQueryWithResults();
 
-	static wxString TranslateSQL(const wxString& strOriginalSQL);
+	static ibString TranslateSQL(const ibString& strOriginalSQL);
 
 private:
 	ibInterfacePostgres* m_pInterface;
 	int FindStatementAndAdjustPositionIndex(int* pPosition);
-	static wxString GenerateStatementName();
+	static ibString GenerateStatementName();
 
 	ArrayOfPostgresPreparedStatementWrappers m_Statements;
 };

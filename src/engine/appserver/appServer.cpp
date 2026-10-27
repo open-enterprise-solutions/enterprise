@@ -69,7 +69,7 @@ void ListenToCluster()
 
 } // namespace
 
-ibAppServer::ibAppServer(ibServerConfig& config, const wxString& locale, const ibString& workerBase, unsigned route) :
+ibAppServer::ibAppServer(ibServerConfig& config, const ibString& locale, const ibString& workerBase, unsigned route) :
 	m_config(config), m_locale(locale), m_workerBase(workerBase), m_route(route)
 {
 }
@@ -82,19 +82,19 @@ int ibAppServer::Run()
 	// A SERVER OF ONE BASE, for the cluster: the clients come in by the cluster's port, and the cluster hands each to the
 	// server of its base. Nothing else starts one.
 	if (m_workerBase.IsEmpty()) {
-		ibAppServerSay(ibJournalMark::Error, wxT("a server serves one base for the application cluster - run appcluster, "
+		ibAppServerSay(ibJournalMark::Error, ibT("a server serves one base for the application cluster - run appcluster, "
 			"which starts one for each base of %s"), m_config.GetConfPath());
 		return 1;
 	}
 
 	if (!m_config.HasConf()) {
-		ibAppServerSay(ibJournalMark::Error, wxT("no config at %s - nothing to serve"), m_config.GetConfPath());
+		ibAppServerSay(ibJournalMark::Error, ibT("no config at %s - nothing to serve"), m_config.GetConfPath());
 		return 1;
 	}
 
 	ibString keyError;
 	if (!m_config.LoadKey(keyError)) {
-		ibAppServerSay(ibJournalMark::Error, wxT("%s - nothing is served"), keyError);
+		ibAppServerSay(ibJournalMark::Error, ibT("%s - nothing is served"), keyError);
 		return 1;
 	}
 
@@ -104,7 +104,7 @@ int ibAppServer::Run()
 	const auto base = std::find_if(instances.begin(), instances.end(),
 		[this](const ibConfiguredInstance& instance) { return instance.m_name == m_workerBase; });
 	if (base == instances.end()) {
-		ibAppServerSay(ibJournalMark::Error, wxT("the config %s has no base '%s' - nothing to serve"),
+		ibAppServerSay(ibJournalMark::Error, ibT("the config %s has no base '%s' - nothing to serve"),
 			m_config.GetConfPath(), m_workerBase);
 		return 1;
 	}
@@ -132,36 +132,36 @@ int ibAppServer::Run()
 
 	// THE PORT THE CLUSTER HANDS THE CLIENTS TO — on this machine alone, the first free one of the servers' own
 	// (ibPort::Workers), said to the cluster once it serves.
-	std::map<wxString, ibClientHost*> hosts;
+	std::map<ibString, ibClientHost*> hosts;
 	for (const auto& entry : m_clientHosts)
 		hosts[entry.first] = entry.second.get();
 	unsigned short port = 0;
-	wxString refusal;
+	ibString refusal;
 	if (!m_clientListener.Start(ibPort::Workers, port, std::move(hosts), refusal)) {
-		ibAppServerSay(ibJournalMark::Error, wxT("the clients' port did not open: %s - nothing is served"), refusal);
+		ibAppServerSay(ibJournalMark::Error, ibT("the clients' port did not open: %s - nothing is served"), refusal);
 		Stop();
 		return 1;
 	}
 	std::printf("%s %u\n", ibWorkerPipe::Serving, static_cast<unsigned>(port));
 	std::fflush(stdout);
 
-	ibAppServerSay(ibJournalMark::Info, wxT("serving '%s' (route %u) for the cluster on 127.0.0.1:%u"), m_workerBase,
+	ibAppServerSay(ibJournalMark::Info, ibT("serving '%s' (route %u) for the cluster on 127.0.0.1:%u"), m_workerBase,
 		m_route, static_cast<unsigned>(port));
 
 	while (s_state.load() == ibServeState::Serving)
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
-	ibAppServerSay(ibJournalMark::Info, wxT("stopping"));
+	ibAppServerSay(ibJournalMark::Info, ibT("stopping"));
 	Stop();
-	ibAppServerSay(ibJournalMark::Info, wxT("stopped"));
+	ibAppServerSay(ibJournalMark::Info, ibT("stopped"));
 	return 0;
 }
 
 bool ibAppServer::Open(const ibConfiguredInstance& instance)
 {
 	ibString ibPassword, error;
-	if (!m_config.OpenSecret(instance.m_name, wxT("IbPassword"), instance.m_ibPassword, ibPassword, error)) {
-		ibAppServerSay(ibJournalMark::Error, wxT("base '%s' is not opened: %s"), instance.m_name, error);
+	if (!m_config.OpenSecret(instance.m_name, ibT("IbPassword"), instance.m_ibPassword, ibPassword, error)) {
+		ibAppServerSay(ibJournalMark::Error, ibT("base '%s' is not opened: %s"), instance.m_name, error);
 		return false;
 	}
 
@@ -183,8 +183,8 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 		error = err.GetErrorDescription();
 	}
 	if (applicationInstance == nullptr) {
-		ibAppServerSay(ibJournalMark::Error, wxT("base '%s' did not open: %s"), instance.m_name,
-			error.IsEmpty() ? ibString(wxT("no reason given")) : error);
+		ibAppServerSay(ibJournalMark::Error, ibT("base '%s' did not open: %s"), instance.m_name,
+			error.IsEmpty() ? ibString(ibT("no reason given")) : error);
 		return false;
 	}
 
@@ -199,12 +199,12 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 			session.Reset();
 	}
 	catch (const ibCoreException& err) {
-		ibAppServerSay(ibJournalMark::Error, wxT("base '%s': login refused: %s"), instance.m_name,
+		ibAppServerSay(ibJournalMark::Error, ibT("base '%s': login refused: %s"), instance.m_name,
 			err.GetErrorDescription());
 		session.Reset();
 	}
 	if (!session) {
-		ibAppServerSay(ibJournalMark::Error, wxT("base '%s': the server could not log in - the base is closed again"),
+		ibAppServerSay(ibJournalMark::Error, ibT("base '%s': the server could not log in - the base is closed again"),
 			instance.m_name);
 		ibApplicationInstance::DestroyAppDataEnv(applicationInstance);
 		return false;
@@ -216,11 +216,11 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 	// base's servers the first one holds it.
 	m_clientHosts[instance.m_name] = std::make_unique<ibClientHost>(applicationInstance, m_route);
 	if (m_route > 1) {
-		ibAppServerSay(ibJournalMark::Info, wxT("base '%s': its MCP is the first server's, not this one's (route %u)"),
+		ibAppServerSay(ibJournalMark::Info, ibT("base '%s': its MCP is the first server's, not this one's (route %u)"),
 			instance.m_name, m_route);
 	}
 	else if (ibMcpServer* const mcp = ibApplicationInstance::GetMcpServer(applicationInstance)) {
-		wxString refusal;
+		ibString refusal;
 		mcp->LoadSettings(session.Get());
 		unsigned long port = 0;
 		if (instance.m_mcpPort.ToULong(&port) && port != 0 && port <= 65535) {
@@ -229,16 +229,16 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 			mcp->Configure(settings);
 		}
 		else {
-			refusal = wxString::Format(wxT("McpPort=%s in %s is not a port"), instance.m_mcpPort, m_config.GetConfPath());
+			refusal = ibString::Format(ibT("McpPort=%s in %s is not a port"), instance.m_mcpPort, m_config.GetConfPath());
 		}
 		if (refusal.IsEmpty() && mcp->Start(session.Get(), refusal))
-			ibAppServerSay(ibJournalMark::Info, wxT("base '%s': MCP at %s"), instance.m_name, mcp->GetEndpoint());
+			ibAppServerSay(ibJournalMark::Info, ibT("base '%s': MCP at %s"), instance.m_name, mcp->GetEndpoint());
 		else
-			ibAppServerSay(ibJournalMark::Info, wxT("base '%s': no MCP - %s"), instance.m_name, refusal);
+			ibAppServerSay(ibJournalMark::Info, ibT("base '%s': no MCP - %s"), instance.m_name, refusal);
 	}
 
 	m_sessions.push_back(std::move(session));
-	ibAppServerSay(ibJournalMark::Info, wxT("base '%s' is served: %s"), instance.m_name,
+	ibAppServerSay(ibJournalMark::Info, ibT("base '%s' is served: %s"), instance.m_name,
 		applicationInstance->GetDatabaseDescription());
 	return true;
 }

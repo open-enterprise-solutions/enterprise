@@ -59,8 +59,8 @@ static_assert(ibCalcBaseArg::Condition == ibCalcBaseArg::Count - 1, "the conditi
 class ibCalcFactSourceDescriptor : public ibQueryableSourceDescriptor {
 public:
 	explicit ibCalcFactSourceDescriptor(ibValueMetaObjectCalculationRegister* meta) : m_meta(meta) {}
-	wxString GetNamespace() const override;
-	wxString GetName() const override;
+	ibString GetNamespace() const override;
+	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	// ⭐ THE CONDITION IS CONSUMED — resolved against the fact surface (GetConditionScope) and applied by the
 	// reading itself: narrowing every table read where it can, and over the pieces exactly (ComputeRows).
@@ -85,8 +85,8 @@ private:
 class ibCalcScheduleDataSourceDescriptor : public ibQueryableSourceDescriptor {
 public:
 	explicit ibCalcScheduleDataSourceDescriptor(ibValueMetaObjectCalculationRegister* meta) : m_meta(meta) {}
-	wxString GetNamespace() const override;
-	wxString GetName() const override;
+	ibString GetNamespace() const override;
+	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	// THE CONDITION IS CONSUMED — resolved against the schedule data's surface and applied to the records read.
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
@@ -110,8 +110,8 @@ class ibCalcBaseSourceDescriptor : public ibQueryableSourceDescriptor {
 public:
 	ibCalcBaseSourceDescriptor(ibValueMetaObjectCalculationRegister* meta, const ibValueMetaObjectCalculationRegister* base)
 		: m_meta(meta), m_base(base) {}
-	virtual wxString GetNamespace() const override;
-	virtual wxString GetName() const override;
+	virtual ibString GetNamespace() const override;
+	virtual ibString GetName() const override;
 	virtual const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	// THE CONDITION IS CONSUMED — resolved against the base's surface and applied to the records read.
 	virtual const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
@@ -134,11 +134,11 @@ class BACKEND_API ibRecalculationQueryable : public ibBackendQueryable {
 public:
 	explicit ibRecalculationQueryable(const ibValueMetaObjectCalculationRegister* reg) : m_reg(reg) {}
 
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;
-	virtual wxString GetQueryTableName() const override;
+	virtual ibString GetQueryTableName() const override;
 	virtual const ibUniqueKey& GetQueryTableGuid() const override;
-	virtual wxString GetQueryName() const override;
+	virtual ibString GetQueryName() const override;
 	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;
 	// What a mark is found by, and a clear deletes by: the recorder, the type, the dimensions, the month. All of them
@@ -152,8 +152,8 @@ private:
 class ibRecalculationSourceDescriptor : public ibQueryableSourceDescriptor {
 public:
 	explicit ibRecalculationSourceDescriptor(ibValueMetaObjectCalculationRegister* meta) : m_meta(meta), m_queryable(meta) {}
-	wxString GetNamespace() const override;
-	wxString GetName() const override;
+	ibString GetNamespace() const override;
+	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	const ibRecalculationQueryable* GetQueryable() const { return &m_queryable; }
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
@@ -176,7 +176,7 @@ private:
 
 	virtual ibFormTypeList GetFormType() const override {
 		ibFormTypeList formList;
-		formList.AppendItem(wxT("FormList"), _("Form list"), eFormList);
+		formList.AppendItem(ibT("FormList"), _("Form list"), eFormList);
 		return formList;
 	}
 
@@ -247,8 +247,8 @@ public:
 	// …and it is there: switched on AND its holder numbered — the marks' table exists, and the source reads it.
 	bool HasRecalculation() const { return IsUseRecalculation() && m_recalculation->GetMetaID() != 0; }
 	// The marks' table — named after its identity's holder, as a derived table is, and identified by it.
-	wxString GetRecalculationTableName() const {
-		return wxString::Format(wxT("%s%i_%s"), GetClassName(), GetMetaID(), m_recalculation->GetName());
+	ibString GetRecalculationTableName() const {
+		return ibString::Format(ibT("%s%i_%s"), GetClassName(), GetMetaID(), m_recalculation->GetName());
 	}
 	const ibValueMetaObjectRegisterTotals* GetRecalculationObject() const { return m_recalculation; }
 	const ibRecalculationQueryable* GetRecalculationQueryable() const { return m_recalculationSource.GetQueryable(); }
@@ -432,13 +432,13 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordSetModule"), _("Record set module"), _("Code that runs with a record set of the register: its BeforeWrite and OnWrite handlers, and the procedures they call. It runs for every set written, whoever writes it - a document's posting or a script."));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the register as a whole rather than of one set: its exported procedures and functions are called on the manager, as CalculationRegisters.<Name>.<Function>()."));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, ibT("RecordSetModule"), _("Record set module"), _("Code that runs with a record set of the register: its BeforeWrite and OnWrite handlers, and the procedures they call. It runs for every set written, whoever writes it - a document's posting or a script."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, ibT("ManagerModule"), _("Manager module"), _("Code of the register as a whole rather than of one set: its exported procedures and functions are called on the manager, as CalculationRegisters.<Name>.<Function>()."));
 
-	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the register's list opens with. Empty: the list form is generated from the register's fields."), &ibValueMetaObjectCalculationRegister::FillFormList);
+	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(ibT("PresetValues"), _("Preset values"));
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormList"), _("Default List Form"), _("The form the register's list opens with. Empty: the list form is generated from the register's fields."), &ibValueMetaObjectCalculationRegister::FillFormList);
 
-	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
 
 	// ⭐⭐ WHICH CHART OF CALCULATION TYPES — the binding a calculation register cannot do without, and
 	// the one the import had no way to author. `SetChartOfCalculationTypes` existed and nothing ever
@@ -446,13 +446,13 @@ private:
 	// calculation types, no displacement relation to read, and therefore no priority to fold with.
 	// Exactly one chart, said the way the accounting register says its own (propertyChartOfAccounts.h).
 	ibPropertyChartOfCalculationTypes* m_propertyChartOfCalculationTypes =
-		ibPropertyObject::CreateProperty<ibPropertyChartOfCalculationTypes>(m_categoryData, wxT("ChartOfCalculationTypes"), _("Chart of calculation types"), _("The chart of calculation types the register is bound to. Every record's CalculationType is a reference into it, and its sections decide the calculation: Displacing - which types cut a record's days, Base - which results its base is made of, Leading - which changes make it stale. Required: the register is not saved without it."));
+		ibPropertyObject::CreateProperty<ibPropertyChartOfCalculationTypes>(m_categoryData, ibT("ChartOfCalculationTypes"), _("Chart of calculation types"), _("The chart of calculation types the register is bound to. Every record's CalculationType is a reference into it, and its sections decide the calculation: Displacing - which types cut a record's days, Base - which results its base is made of, Leading - which changes make it stale. Required: the register is not saved without it."));
 
 	// The grain of the registration period — see GetPeriodicity. A month unless said otherwise; a
 	// configuration saved before the property existed reads as a month too (ibProperty::SetNodeValue:
 	// an absent value leaves the constructor's standing).
 	ibPropertyEnum<ibValueEnumCalcPeriodicity>* m_propertyPeriodicity =
-		ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCalcPeriodicity>>(m_categoryData, wxT("Periodicity"), _("Periodicity"), _("The grain of the registration period: day, month (the default), quarter or year. A record is registered for the start of its period; a reading as of a moment takes the periods up to the one the moment falls in, and a base without a base period spans the record's registration period at this grain."), ibCalcPeriodicity::eCalcPeriodMonth);
+		ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCalcPeriodicity>>(m_categoryData, ibT("Periodicity"), _("Periodicity"), _("The grain of the registration period: day, month (the default), quarter or year. A record is registered for the start of its period; a reading as of a moment takes the periods up to the one the moment falls in, and a base without a base period spans the record's registration period at this grain."), ibCalcPeriodicity::eCalcPeriodMonth);
 
 	// Action period configuration + its standard attributes (predefined). The attributes exist for the
 	// life of the register (stable metaIDs -> stable fld<metaID> columns), but only enter the schema
@@ -460,7 +460,7 @@ private:
 	// ⭐ THE PERIODS ARE DAYS, and an END IS INCLUSIVE: a sick leave 12.06–16.06 is five days (Max's
 	// example, 2026-09-10 — "12.06.2023 0:00:00 .. 16.06.2023 0:00:00", five calendar days). A calculation
 	// is in force over whole days; a second-precise value there only invites a time of day nothing reads.
-	ibPropertyBoolean* m_propertyUseActionPeriod = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseActionPeriod"), _("Use action period"), _("Records carry an action period: the days a record is in force (ActionPeriodStart to ActionPeriodEnd, both inclusive) and the month it is for (ActionPeriod). Needed for displacement: the register's ActualActionPeriod reads what the Displacing types leave of each record. Switching it adds or drops the three columns."), false);
+	ibPropertyBoolean* m_propertyUseActionPeriod = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, ibT("UseActionPeriod"), _("Use action period"), _("Records carry an action period: the days a record is in force (ActionPeriodStart to ActionPeriodEnd, both inclusive) and the month it is for (ActionPeriod). Needed for displacement: the register's ActualActionPeriod reads what the Displacing types leave of each record. Switching it adds or drops the three columns."), false);
 
 	// ⭐ THE SCHEDULE — right under the switch that governs it: a schedule is counted over a record's DAYS, and
 	// the days are the action period's, so without an action period there is nothing to count it over. Declared
@@ -469,19 +469,19 @@ private:
 	// the value and its dimension that is the date, as one property (propertyCalcSchedule.h); shown only while
 	// the action period is on (OnPropertyRefresh), and kept, not cleared, while it is off.
 	ibPropertyCalcSchedule* m_propertySchedule =
-		ibPropertyObject::CreateProperty<ibPropertyCalcSchedule>(m_categoryData, wxT("Schedule"), _("Schedule"), _("The schedule the register's calculations read: an information register holding the schedule, the resource that is its value (hours or days) and the dimension that is its date. The schedule data a record reads is this value summed over its days. Available with the action period."));
-	ibPropertyContainer<>* m_propertyAttributeActionPeriod       = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriod"),       _("Action period"),       _("The period the record is FOR: a correction of June registered in July is for June. A record's position - dimensions, type, this period and its days - is what stornos, displacement and recalculation marks are matched by."), ibDateFractions::ibDateFractions_Date, false));
-	ibPropertyContainer<>* m_propertyAttributeActionPeriodStart  = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriodStart"),  _("Action period start"),  _("The first day the record is in force (whole days, the day itself included). With the end it gives the days displacement cuts and the fact reads pieces of."), ibDateFractions::ibDateFractions_Date, true));
-	ibPropertyContainer<>* m_propertyAttributeActionPeriodEnd    = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriodEnd"),    _("Action period end"),    _("The last day the record is in force, included: a sick leave 12.06-16.06 is five days. A record whose end is before its start has no days and cuts nothing."), ibDateFractions::ibDateFractions_Date, true));
-	ibPropertyContainer<>* m_propertyAttributeRegistrationPeriod = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("RegistrationPeriod"), _("Registration period"), _("The period the record was entered in, at the start of the register's periodicity. A correction of a closed month is registered in the current one. Readings as of a moment (the Period argument of the virtual tables) and a base without a base period go by it."), ibDateFractions::ibDateFractions_Date, true));
-	ibPropertyContainer<>* m_propertyAttributeStorno             = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("Storno"), _("Storno"), _("Marks a record that reverses an earlier one: the same position, the figures with the sign turned, registered now. A position's records net out - a storno counts minus one - so a displacer taken back cuts nothing; a storno also answers the recalculation marks of its position."), false, false));
+		ibPropertyObject::CreateProperty<ibPropertyCalcSchedule>(m_categoryData, ibT("Schedule"), _("Schedule"), _("The schedule the register's calculations read: an information register holding the schedule, the resource that is its value (hours or days) and the dimension that is its date. The schedule data a record reads is this value summed over its days. Available with the action period."));
+	ibPropertyContainer<>* m_propertyAttributeActionPeriod       = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(ibT("ActionPeriod"),       _("Action period"),       _("The period the record is FOR: a correction of June registered in July is for June. A record's position - dimensions, type, this period and its days - is what stornos, displacement and recalculation marks are matched by."), ibDateFractions::ibDateFractions_Date, false));
+	ibPropertyContainer<>* m_propertyAttributeActionPeriodStart  = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(ibT("ActionPeriodStart"),  _("Action period start"),  _("The first day the record is in force (whole days, the day itself included). With the end it gives the days displacement cuts and the fact reads pieces of."), ibDateFractions::ibDateFractions_Date, true));
+	ibPropertyContainer<>* m_propertyAttributeActionPeriodEnd    = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(ibT("ActionPeriodEnd"),    _("Action period end"),    _("The last day the record is in force, included: a sick leave 12.06-16.06 is five days. A record whose end is before its start has no days and cuts nothing."), ibDateFractions::ibDateFractions_Date, true));
+	ibPropertyContainer<>* m_propertyAttributeRegistrationPeriod = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(ibT("RegistrationPeriod"), _("Registration period"), _("The period the record was entered in, at the start of the register's periodicity. A correction of a closed month is registered in the current one. Readings as of a moment (the Period argument of the virtual tables) and a base without a base period go by it."), ibDateFractions::ibDateFractions_Date, true));
+	ibPropertyContainer<>* m_propertyAttributeStorno             = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(ibT("Storno"), _("Storno"), _("Marks a record that reverses an earlier one: the same position, the figures with the sign turned, registered now. A position's records net out - a storno counts minus one - so a displacer taken back cuts nothing; a storno also answers the recalculation marks of its position."), false, false));
 
 	// Use recalculation (IsUseRecalculation), and the identity of the marks' table: a holder created with the register
 	// and saved with it, the way a derived table's identity is held (registerQueryLowering.h). A register created
 	// before it existed gets its number when recalculation is switched on (OnPropertyChanged).
-	ibPropertyBoolean* m_propertyUseRecalculation = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseRecalculation"), _("Use recalculation"), _("Keep a table of recalculation marks for this register. A record written in any register whose types the Leading section names marks the records of this one it makes stale (same shared dimensions, meeting in time); the platform answers a mark when the marked recorder is written again or a storno corrects the position. Queried as CalculationRegister.<Register>.Recalculation. Switching it creates or drops the table."), false);
+	ibPropertyBoolean* m_propertyUseRecalculation = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, ibT("UseRecalculation"), _("Use recalculation"), _("Keep a table of recalculation marks for this register. A record written in any register whose types the Leading section names marks the records of this one it makes stale (same shared dimensions, meeting in time); the platform answers a mark when the marked recorder is written again or a storno corrects the position. Queried as CalculationRegister.<Register>.Recalculation. Switching it creates or drops the table."), false);
 	ibValuePtr<ibValueMetaObjectRegisterTotals> m_recalculation{
-		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(wxT("Recalculation"), _("Recalculation")) };
+		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(ibT("Recalculation"), _("Recalculation")) };
 
 	// The fact and the recalculation, as sources.
 	ibCalcFactSourceDescriptor m_factSource{ this };
@@ -497,12 +497,12 @@ private:
 	// The calculation-type standard attribute — an empty-typed reference whose type is set to the bound
 	// chart of calculation types by SetChartOfCalculationTypes (like the recorder's type is set by its
 	// posting documents). Always a predefined attribute of a calculation register.
-	ibPropertyContainer<>* m_propertyAttributeCalculationType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(wxT("CalculationType"), _("Calculation type"), _("Which calculation type of the bound chart the record is. The chart's sections over this type decide what displaces the record, what its base is made of and which changes mark it for recalculation.")));
+	ibPropertyContainer<>* m_propertyAttributeCalculationType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(ibT("CalculationType"), _("Calculation type"), _("Which calculation type of the bound chart the record is. The chart's sections over this type decide what displaces the record, what its base is made of and which changes mark it for recalculation.")));
 
-	ibPropertyBoolean* m_propertyUseBasePeriod = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseBasePeriod"), _("Use base period"), _("Records carry a base period (BasePeriodStart to BasePeriodEnd): the span GetBase reads the base records over, by action period or by registration as the chart's base dependence says. Off: the base spans the record's registration period at the register's periodicity."), false);
+	ibPropertyBoolean* m_propertyUseBasePeriod = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, ibT("UseBasePeriod"), _("Use base period"), _("Records carry a base period (BasePeriodStart to BasePeriodEnd): the span GetBase reads the base records over, by action period or by registration as the chart's base dependence says. Off: the base spans the record's registration period at the register's periodicity."), false);
 	// NOT required: only a record whose type has a base reads one — a salary line has no base period.
-	ibPropertyContainer<>* m_propertyAttributeBasePeriodStart = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("BasePeriodStart"), _("Base period start"), _("The first day of the span the record's base is read over - a vacation paid from the three months before it, say. Only a record whose type has a Base section reads one; a salary line leaves it empty."), ibDateFractions::ibDateFractions_Date, false));
-	ibPropertyContainer<>* m_propertyAttributeBasePeriodEnd   = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("BasePeriodEnd"),   _("Base period end"),   _("The last day of the span the record's base is read over, included."), ibDateFractions::ibDateFractions_Date, false));
+	ibPropertyContainer<>* m_propertyAttributeBasePeriodStart = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(ibT("BasePeriodStart"), _("Base period start"), _("The first day of the span the record's base is read over - a vacation paid from the three months before it, say. Only a record whose type has a Base section reads one; a salary line leaves it empty."), ibDateFractions::ibDateFractions_Date, false));
+	ibPropertyContainer<>* m_propertyAttributeBasePeriodEnd   = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(ibT("BasePeriodEnd"),   _("Base period end"),   _("The last day of the span the record's base is read over, included."), ibDateFractions::ibDateFractions_Date, false));
 
 	friend class ibValueRecordSetObjectCalculationRegister;
 
@@ -565,33 +565,33 @@ public:
 
 // A register whose records may lead the recalculation's, by physical names.
 struct ibRecalculationLeading {
-	wxString                                   m_table;
-	std::vector<std::pair<wxString, wxString>> m_named;          // its type's fields, each with the Leading row's field of the same role
-	std::vector<std::pair<wxString, wxString>> m_dimensions;     // the dimensions both registers hold: the led register's field, and this one's
-	wxString                                   m_registration;
-	wxString                                   m_active;
-	wxString                                   m_start, m_end;   // its action period; empty when it keeps none
+	ibString                                   m_table;
+	std::vector<std::pair<ibString, ibString>> m_named;          // its type's fields, each with the Leading row's field of the same role
+	std::vector<std::pair<ibString, ibString>> m_dimensions;     // the dimensions both registers hold: the led register's field, and this one's
+	ibString                                   m_registration;
+	ibString                                   m_active;
+	ibString                                   m_start, m_end;   // its action period; empty when it keeps none
 };
 
 // The recalculation's reading by physical names only — filled from the metadata by ibRecalculationSpecOf, so a
 // test can fill one by hand (ibCalcViewSpec is the same arrangement).
 struct ibRecalculationSpec {
-	wxString              m_table;                    // the led register's records
-	std::vector<wxString> m_mark;                     // what a row names: the recorder, the type, the dimensions and the
+	ibString              m_table;                    // the led register's records
+	std::vector<ibString> m_mark;                     // what a row names: the recorder, the type, the dimensions and the
 	                                                  //   month — the led register's own fields, which are the marks' too
-	wxString              m_typeId;                   // the type's reference id — what a Leading row's owner holds
-	wxString              m_registration, m_active, m_storno;
-	wxString              m_start, m_end;             // the action period; empty when it keeps none
-	wxString              m_baseStart, m_baseEnd;     // the base period; empty when it keeps none
+	ibString              m_typeId;                   // the type's reference id — what a Leading row's owner holds
+	ibString              m_registration, m_active, m_storno;
+	ibString              m_start, m_end;             // the action period; empty when it keeps none
+	ibString              m_baseStart, m_baseEnd;     // the base period; empty when it keeps none
 	bool                  m_baseByRegistration = false;      // the chart's base dependence, as ibFindLedRecords reads it
-	wxString              m_leading, m_owner;         // the chart's Leading section, and the field holding a row's owner
+	ibString              m_leading, m_owner;         // the chart's Leading section, and the field holding a row's owner
 	std::vector<ibRecalculationLeading> m_sources;    // every register whose types the chart may name
 };
 
 // What a mark is taken from, asked of a table alias: the predicate its rows must meet there. `source` is -1 for the
 // led register's records — the ones the rows name — and otherwise a leading register's index in the spec's sources:
 // the records that lead. Null — or a null answer — takes everything.
-using ibRecalculationNarrowing = std::function<ibQueryExprPtr(const wxString& alias, int source)>;
+using ibRecalculationNarrowing = std::function<ibQueryExprPtr(const ibString& alias, int source)>;
 
 // The records the leading records lead, one row each under the led register's field names (m_mark). Which records
 // lead, and which may be led, is the narrowing's to say (a recorder's records, and not the recorder's own). Null when
@@ -648,29 +648,29 @@ BACKEND_API ibRecalculationSpec ibRecalculationSpecOf(const ibValueMetaObjectCal
 // The records and the Displacing section by physical names only, filled from the metadata by ibCalcViewSpecOf —
 // nothing that reads it touches a metaobject, which is what lets a test fill one by hand.
 struct ibCalcViewSpec {
-	wxString              m_period;         // the registration period
-	std::vector<wxString> m_dimensions;     // every dimension's fields       } a position, in this order, under
-	std::vector<wxString> m_type;           // the calculation type's fields  }   the register's own field names
-	std::vector<wxString> m_actionPeriod;   // the month-for's fields         }
-	wxString              m_start, m_end;   // the action period's date fields }
-	std::vector<wxString> m_resources;      // every resource — one field each
-	wxString              m_typeId;         // the calculation type's reference id — what owns a Displacing row
+	ibString              m_period;         // the registration period
+	std::vector<ibString> m_dimensions;     // every dimension's fields       } a position, in this order, under
+	std::vector<ibString> m_type;           // the calculation type's fields  }   the register's own field names
+	std::vector<ibString> m_actionPeriod;   // the month-for's fields         }
+	ibString              m_start, m_end;   // the action period's date fields }
+	std::vector<ibString> m_resources;      // every resource — one field each
+	ibString              m_typeId;         // the calculation type's reference id — what owns a Displacing row
 
 	// The displaced type's Displacing section: a row owned by the displaced type names a type that displaces it.
 	// No table — a chart without the section — and nothing displaces anything.
-	wxString              m_displacing;     // its table
-	wxString              m_owner;          // the row's owner — the displaced type's reference id
-	std::vector<std::pair<wxString, wxString>> m_named;   // the displacer type: a record's field and the section's field holding it
-	wxString              m_namedId;        // the section's field holding the displacer type's reference id
+	ibString              m_displacing;     // its table
+	ibString              m_owner;          // the row's owner — the displaced type's reference id
+	std::vector<std::pair<ibString, ibString>> m_named;   // the displacer type: a record's field and the section's field holding it
+	ibString              m_namedId;        // the section's field holding the displacer type's reference id
 
 	// The records themselves — what the fact's rows are, one per record as the register keeps them (Max,
 	// 2026-09-14: the recorder, the line, the registration, the base period, Active, Storno). Under the register's
 	// own field names, as the position's above are.
-	wxString              m_records;        // the register's table
-	std::vector<wxString> m_recordKey;      // the recorder's fields and the line — what a record is, and its pieces are walked by
-	std::vector<wxString> m_recordFields;   // the rest a record carries out: the base period, Active, Storno
-	wxString              m_active;         // Active — the record counts
-	wxString              m_storno;         // Storno
+	ibString              m_records;        // the register's table
+	std::vector<ibString> m_recordKey;      // the recorder's fields and the line — what a record is, and its pieces are walked by
+	std::vector<ibString> m_recordFields;   // the rest a record carries out: the base period, Active, Storno
+	ibString              m_active;         // Active — the record counts
+	ibString              m_storno;         // Storno
 
 	// The type the action period's days are STORED in. A day a reading computes is cast back to it, so it
 	// stands beside a stored one: Firebird's day truncation answers a TIMESTAMP where the field is a DATE, and a
@@ -681,14 +681,14 @@ struct ibCalcViewSpec {
 };
 
 // The columns the fact adds to a record's own — named so no register field can be one of them.
-constexpr const ibChar* ibCalcDisplacerTypePrefix = wxT("ib_y");  // a displacer's fields, each prefixed, in the fact's walk
-constexpr const ibChar* ibCalcPositionFirst  = wxT("ib_ps");      // the fact: the record's own action period
-constexpr const ibChar* ibCalcPositionLast   = wxT("ib_pe");
+constexpr const ibChar* ibCalcDisplacerTypePrefix = ibT("ib_y");  // a displacer's fields, each prefixed, in the fact's walk
+constexpr const ibChar* ibCalcPositionFirst  = ibT("ib_ps");      // the fact: the record's own action period
+constexpr const ibChar* ibCalcPositionLast   = ibT("ib_pe");
 
 // A reader's narrowing, asked of a table alias: the predicate its rows must meet there — `subject` says whether
 // the alias holds the records the reading produces or their displacers (above). Null — or a null answer —
 // reads everything.
-using ibCalcNarrowing = std::function<ibQueryExprPtr(const wxString& alias, bool subject)>;
+using ibCalcNarrowing = std::function<ibQueryExprPtr(const ibString& alias, bool subject)>;
 
 // The fact, for a reader's FROM: a record's fields (m_recordKey, the position's, the registration, m_recordFields,
 // the resources), the action period's two carrying a piece's bounds and ib_ps / ib_pe the record's own; every
@@ -713,7 +713,7 @@ struct ibCalcBaseAsked
 {
 	// A column of the answer: its name, and the base registers' resources summed into it.
 	struct ibFigure {
-		wxString m_name;
+		ibString m_name;
 		std::vector<std::pair<const ibValueMetaObjectCalculationRegister*, const ibValueMetaObjectResource*>> m_resources;
 	};
 	std::vector<ibFigure> m_figures;

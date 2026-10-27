@@ -8,9 +8,9 @@
 #include "backend/createRequest.h"   // ibFormRequest — a common form is opened with one too
 
 //-- Constants:
-#define PageBreak wxT("\n\n")
-#define LineBreak wxT("\n")
-#define TabSymbol wxT("\t")
+#define PageBreak ibT("\n\n")
+#define LineBreak ibT("\n")
+#define TabSymbol ibT("\t")
 
 #include "backend/system/systemEnum.h"
 
@@ -35,7 +35,7 @@ public:
 	static ibDateTime Date(int year, int month, int day,
 		int hour = 0, int minute = 0, int second = 0);
 
-	static wxString String(const ibValue& cValue);
+	static ibString String(const ibValue& cValue);
 
 	//--- Math:
 	static ibNumber Round(const ibValue& cValue, int precision = 0, ibRoundMode mode = ibRoundMode::ibRoundMode_Round15as20);
@@ -61,12 +61,12 @@ public:
 	static ibString StrReplace(const ibValue& cSource, const ibValue& cValue1, const ibValue& cValue2);
 	static int StrCountOccur(const ibValue& cSource, const ibValue& cValue1);
 	static int StrLineCount(const ibValue& cSource);
-	static wxString StrGetLine(const ibValue& cValue, unsigned int nLine);
+	static ibString StrGetLine(const ibValue& cValue, unsigned int nLine);
 	static ibString Upper(const ibValue& cSource);
 	static ibString Lower(const ibValue& cSource);
-	static wxString Chr(short nCode);
+	static ibString Chr(short nCode);
 	static short Asc(const ibValue& cSource);
-	static wxString TStr(const ibValue& cSource, const ibValue& cLanguage);
+	static ibString TStr(const ibValue& cSource, const ibValue& cLanguage);
 
 	//--- Date and time:
 	static ibValue CurrentDate();
@@ -94,16 +94,16 @@ public:
 	static int GetQuartOfYear(const ibValue& cData);
 
 	//--- File operations:
-	static bool CopyFile(const wxString& src, const wxString& dst);
-	static bool DeleteFile(const wxString& file);
-	static wxString GetTempDir();
-	static wxString GetTempFileName();
+	static bool CopyFile(const ibString& src, const ibString& dst);
+	static bool DeleteFile(const ibString& file);
+	static ibString GetTempDir();
+	static ibString GetTempFileName();
 
 	//--- Window operations:
 	static class ibBackendValueForm* ActiveWindow();
 
 	//--- Notifications:
-	static void Message(const wxString& strMessage, ibStatusMessage status = ibStatusMessage::ibStatusMessage_Information);
+	static void Message(const ibString& strMessage, ibStatusMessage status = ibStatusMessage::ibStatusMessage_Information);
 
 	// ⭐⭐ WRITE A LINE INTO THE REGISTRATION JOURNAL — the durable record, stamped with the session
 	// that wrote it, readable afterwards by anyone (journal_read, and the person's own journal).
@@ -120,17 +120,17 @@ public:
 	//
 	// Message first, because it is the one a caller always has; everything else has a default, so
 	// the shortest useful call is one argument - the same shape as `Message` beside it.
-	static void WriteJournalEvent(const wxString& strMessage,
+	static void WriteJournalEvent(const ibString& strMessage,
 		ibStatusMessage status = ibStatusMessage::ibStatusMessage_Information,
-		const wxString& strEvent = wxEmptyString,
+		const ibString& strEvent = ibEmptyString,
 		const ibValue& objectValue = ibValue());
-	static void Alert(const wxString& strMessage);
-	static ibValue Question(const wxString& strMessage, ibQuestionMode mode = ibQuestionMode::ibQuestionMode_OK);
-	static void SetStatus(const wxString& sStatus);
+	static void Alert(const ibString& strMessage);
+	static ibValue Question(const ibString& strMessage, ibQuestionMode mode = ibQuestionMode::ibQuestionMode_OK);
+	static void SetStatus(const ibString& sStatus);
 	static void ClearMessage();
-	static void SetError(const wxString& strError);
-	static void Raise(const wxString& strError);
-	static wxString ErrorDescription();
+	static void SetError(const ibString& strError);
+	static void Raise(const ibString& strError);
+	static ibString ErrorDescription();
 	static bool IsEmptyValue(const ibValue& cData);
 	static bool IsNull(const ibValue& cData);
 	static bool ValueIsFilled(const ibValue& cData);
@@ -146,42 +146,42 @@ public:
 	// the debugger's sandbox can BUILD a value by writing JSON, which is the only way to construct
 	// one from outside the process (Max, 2026-09-02: *"as a bonus, with these you can create
 	// runtime values just by passing JSON"*).
-	static wxString SerializeValue(const ibValue& cData);
-	static ibValue  DeserializeValue(const wxString& strJson);
+	static ibString SerializeValue(const ibValue& cData);
+	static ibValue  DeserializeValue(const ibString& strJson);
 
 	// (⛔ NO MESSAGE CAPTURE HERE. Getting the lines a run printed is not a new mechanism: the
 	//  debug channel already carries messages from a running application to whoever is attached —
 	//  `CommandId_MessageFromServer`, sent by ibDebuggerServer::SendErrorToClient. It looked like
 	//  it did not work because that sender was called from NOWHERE. A road with no writer, not a
 	//  missing road: Message hands them to it below.)
-	static ibValue Evaluate(const wxString& expression);
-	static void Execute(const wxString& sCode);
-	static wxString Format(ibValue& cData, const wxString& fmt = wxEmptyString);
+	static ibValue Evaluate(const ibString& expression);
+	static void Execute(const ibString& sCode);
+	static ibString Format(ibValue& cData, const ibString& fmt = ibEmptyString);
 	static ibValue Type(const ibValue& cTypeName);
 	static ibValue TypeOf(const ibValue& cData);
 	static int Rand();
 	static int ArgCount();
-	static wxString ArgValue(int n);
-	static wxString ComputerName();
-	static void RunApp(const wxString& sCommand);
-	static void SetAppTitle(const wxString& sTitle);
-	static wxString UserDir();
-	static wxString UserName();
-	static wxString UserPassword();
+	static ibString ArgValue(int n);
+	static ibString ComputerName();
+	static void RunApp(const ibString& sCommand);
+	static void SetAppTitle(const ibString& sTitle);
+	static ibString UserDir();
+	static ibString UserName();
+	static ibString UserPassword();
 	static bool ExclusiveMode();
 	static void SetExclusive(bool on);
-	static wxString GeneralLanguage();
+	static ibString GeneralLanguage();
 	static void EndJob(bool force = false);
 
 	static void UserInterruptProcessing();
 
-	static bool AccessRight(const wxString& strRoleName, const ibValue& cData);
+	static bool AccessRight(const ibString& strRoleName, const ibValue& cData);
 	static bool IsInRole(const ibValue& cData);
 
 	static ibValue GetCommonForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
 	static void ShowCommonForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
 
-	static ibValue GetCommonTemplate(const wxString& strTemplateName);
+	static ibValue GetCommonTemplate(const ibString& strTemplateName);
 
 	static void BeginTransaction();
 	static void CommitTransaction();
@@ -199,7 +199,7 @@ public:
 	// unknown or that job is already running. Without this a job could only be
 	// exercised by waiting out its schedule, which makes a misbehaving tenant
 	// impossible to tell apart from a misbehaving manager.
-	static bool RunJob(const wxString& strJobName);
+	static bool RunJob(const ibString& strJobName);
 
 	// Start `procedure` on a session of its own and return a BackgroundJob value —
 	// the caller may wait on it, poll it, cancel it, or drop it and let the work
@@ -210,7 +210,7 @@ public:
 	// sees. `args` is an Array whose elements are passed positionally; every one
 	// of them must be transferable (ibValue::IsTransferable) — passing a form, an
 	// object or a record set throws here rather than failing in the background.
-	static ibValue RunBackground(const wxString& strProcedureName, ibValue* pArgs);
+	static ibValue RunBackground(const ibString& strProcedureName, ibValue* pArgs);
 
 public:
 

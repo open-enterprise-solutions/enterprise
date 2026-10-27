@@ -46,7 +46,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const override { return wxT("ibVariantDataChoiceLink"); }
+	virtual wxString GetType() const override { return ibT("ibVariantDataChoiceLink"); }
 
 protected:
 
@@ -101,7 +101,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const override { return wxT("ibVariantDataChoiceParameters"); }
+	virtual wxString GetType() const override { return ibT("ibVariantDataChoiceParameters"); }
 
 protected:
 
@@ -132,15 +132,15 @@ protected:
 // design one; this header is seen by five files.
 //
 // Empty only when the field is genuinely gone; the caller then says so in its own words.
-BACKEND_API wxString ibChoiceHolderFieldName(const ibPropertyObject* owner, const ibMetaID& id);
-BACKEND_API wxString ibChoiceTargetFieldName(const ibPropertyObject* owner, const ibMetaID& id);
+BACKEND_API ibString ibChoiceHolderFieldName(const ibPropertyObject* owner, const ibMetaID& id);
+BACKEND_API ibString ibChoiceTargetFieldName(const ibPropertyObject* owner, const ibMetaID& id);
 
 // ⭐ WHAT THIS FIELD STANDS IN — the object or the tabular section whose other fields are its
 // neighbours. The editor names its two lists by what they hold, and this is the name of the second:
 // the left pane says "Fields of Goods" (what is filtered), the value column says which object it is
 // filtered BY. Without it a person reads a catalogue's fields on one side and has no idea where the
 // values come from (Max, 2026-09-23: "I do not understand where it is pulled from at all").
-BACKEND_API wxString ibChoiceHolderName(const ibPropertyObject* owner);
+BACKEND_API ibString ibChoiceHolderName(const ibPropertyObject* owner);
 
 // ⭐⭐ WHICH PARAMETERS AN ATTRIBUTE COULD FILL — every one of them, in the order they are worth
 // offering. A parameter is the condition `field of the target = value of this attribute`, so a field

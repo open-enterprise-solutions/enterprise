@@ -382,7 +382,7 @@ wxWindow* ibListSettingsPanel::BuildGroupPage(wxWindow* parent)
 				// is not the other report).
 				ibValueCompositionField* field = nullptr;
 				const bool chosen = value.ConvertToValue(field) && field != nullptr;
-				g->m_lines[idx].m_path = chosen ? field->GetPath() : wxString();
+				g->m_lines[idx].m_path = chosen ? field->GetPath() : ibString();
 				if (m_groupModel != nullptr) m_groupModel->ResetFromList();
 			}),
 		eGroupField, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));

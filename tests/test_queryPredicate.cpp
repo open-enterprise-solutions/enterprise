@@ -18,13 +18,13 @@ namespace {
 // Minimal column (mirrors TestCol in test_queryParity / test_queryComposer).
 class Col : public ibBackendQueryColumn {
 public:
-    explicit Col(const wxString& n) : m_n(n) {}
-    wxString           GetName()         const override { return m_n; }
-    wxString           GetPhysicalName() const override { return m_n; }
+    explicit Col(const ibString& n) : m_n(n) {}
+    ibString           GetName()         const override { return m_n; }
+    ibString           GetPhysicalName() const override { return m_n; }
     ibTypeDescription& GetTypeDesc()     const override { return m_t; }
     ibMetaID           GetColumnId()     const override { return 1; }
 private:
-    wxString                  m_n;
+    ibString                  m_n;
     mutable ibTypeDescription m_t;
 };
 

@@ -87,7 +87,7 @@ void ibHelpDetailView::AdjustFontSize(int delta) {
 }
 
 void ibHelpDetailView::ShowEntry(const ibHelpEntry* entry) {
-	m_lastEntryId = entry ? entry->id : wxString();
+	m_lastEntryId = entry ? entry->id : ibString();
 	if (entry == nullptr) {
 		m_html->SetPage(
 		    wxT("<html><body bgcolor=\"#FAF7F0\">"

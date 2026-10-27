@@ -22,12 +22,11 @@ namespace {
 
 // THE TEXT A PARAMETER KEEPS, ticked or not — what its value cell edits. (Never a reference: an appearance
 // reads back without a configuration — see ibAppearanceValueDescription.)
-wxString KeptText(const ibAppearanceDescription& appearance, ibAppearanceParameter parameter)
+ibString KeptText(const ibAppearanceDescription& appearance, ibAppearanceParameter parameter)
 {
 	const ibAppearanceValueDescription* value = appearance.Find(parameter);
-	// ⚠ BOTH ARMS wxString: an ibString beside a wxString is ambiguous on GCC and clang — each converts to the
-	// other — and MSVC's silence about it cost the Linux and macOS builds of fd601790d their frontend.
-	return value != nullptr ? ibStoredValue(value->m_value, nullptr).GetString().ToWxString() : wxString();
+	// ⚠ BOTH ARMS ibString: an ibString beside a wxString is ambiguous — each converts to the other.
+	return value != nullptr ? ibStoredValue(value->m_value, nullptr).GetString() : ibString();
 }
 
 bool IsTicked(const ibAppearanceDescription& appearance, ibAppearanceParameter parameter)
@@ -38,7 +37,7 @@ bool IsTicked(const ibAppearanceDescription& appearance, ibAppearanceParameter p
 
 // A PARAMETER'S TEXT, written anew — ticked when there is something to apply, the way a value put beside a
 // setting switches it on; emptied, the parameter is forgotten (the door's own rule, Say).
-void SayText(ibAppearanceDescription& appearance, ibAppearanceParameter parameter, const wxString& raw)
+void SayText(ibAppearanceDescription& appearance, ibAppearanceParameter parameter, const ibString& raw)
 {
 	appearance.Say(parameter, !raw.IsEmpty(), raw.IsEmpty() ? ibDataNode() : ibStoreValue(ibValue(raw)));
 }
@@ -80,7 +79,7 @@ public:
 		if (!IsRow(row) || m_readOnly)
 			return false;
 		const ibAppearanceParameter parameter = ParameterAt(row);
-		const wxString kept = KeptText(*m_appearance, parameter);
+		const ibString kept = KeptText(*m_appearance, parameter);
 		if (col == kColUse) {
 			if (variant.GetBool() == IsTicked(*m_appearance, parameter))
 				return false;

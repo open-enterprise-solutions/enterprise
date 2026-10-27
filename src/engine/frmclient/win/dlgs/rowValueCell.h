@@ -225,7 +225,7 @@ private:
 			FinishSelecting();
 			if (!m_chooser)
 				return;
-			const wxString held = (asField != nullptr) ? asField->GetPath() : wxString();
+			const wxString held = (asField != nullptr) ? asField->GetPath() : ibString();
 			if (ibValueCompositionField* chosen = m_chooser(parent, held)) {
 				m_row = row;
 				SetControlValue(ibValue(chosen));
@@ -249,7 +249,7 @@ private:
 		const ibTypeDescription declared = m_typeOf(m_row);
 		if (declared.GetClsidCount() != 1 || !IsPrimitive(declared.GetByIdx(0)))
 			return;
-		m_set(m_row, ibValueTypeDescription::AdjustValue(declared, ibValue(event.GetString()), GetMetaData()));
+		m_set(m_row, ibValueTypeDescription::AdjustValue(declared, ibValue(ibString(event.GetString())), GetMetaData()));
 	}
 
 	// A CELL IN A DIALOG HAS NO FORM TO REFRESH — the tablebox road (m_tableBoxColumn) is null here,

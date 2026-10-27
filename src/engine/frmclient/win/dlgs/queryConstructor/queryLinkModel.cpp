@@ -241,7 +241,7 @@ void ibQueryLinkModel::GetValueByRow(wxVariant& variant, unsigned row, unsigned 
 		// It said "(by reference)" here, which announced a link nobody had asked for and turned an
 		// empty row into a statement about the query. Blank is the truth: nothing has been picked yet.
 		variant = (join->m_on && !ibQueryIsTrueLiteral(join->m_on))
-			? ibRenderQueryExpr(*join->m_on) : wxString();
+			? ibRenderQueryExpr(*join->m_on) : ibString();
 		break;
 	case kLinkColArbitrary:
 		variant = IsArbitrary(row);

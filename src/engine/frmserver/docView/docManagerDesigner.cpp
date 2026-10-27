@@ -66,7 +66,7 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	// The assistant window — no metaobject, the registration journal's shape: an invisible template reached through
 	// CreateDocument<ibAssistantTranscriptDocument>() from its schema's Open.
 	AddDocTemplate(g_picAssistantCLSID,
-		_("Assistant"), wxEmptyString, wxEmptyString,
+		_("Assistant"), ibEmptyString, ibEmptyString,
 		_("Assistant Doc"), _("Assistant View"),
 		CLASSINFO(ibAssistantTranscriptDocument), CLASSINFO(ibAssistantTranscriptView),
 		ibTEMPLATE_INVISIBLE);

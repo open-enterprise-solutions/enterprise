@@ -3,7 +3,7 @@
 
 #include "backend/metaData.h"
 
-// THE OBJECT TO BASE A NEW ONE ON — the desktop's ibDialogGeneration (frontend/win/dlgs/generation.h), its window the
+// THE OBJECT TO BASE A NEW ONE ON — the old desktop's ibDialogGeneration, its window the
 // client's (frmclient/win/dlgs/generation.h): what the window lists is sent (ibProtocol::ibRequest::ibKind::Generation), what was chosen
 // comes back. The form's GenerateForm asks it as the desktop's does.
 class ibDialogGeneration {

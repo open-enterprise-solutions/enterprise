@@ -118,7 +118,7 @@ void ibForceAndRoot(ibFilterDescription& filter)
 // `Period = 01.08.2026 00:00:00` is a condition no record meets, so the detail came up empty (Max,
 // 2026-09-30). The unit is the grouping's own, on its line in the structure in force, so it is asked
 // there.
-bool ibPeriodUnitOfPath(const std::vector<ibLevelDescription>& levels, const wxString& path, ibTotalsPeriod& unit)
+bool ibPeriodUnitOfPath(const std::vector<ibLevelDescription>& levels, const ibString& path, ibTotalsPeriod& unit)
 {
 	for (const ibLevelDescription& level : levels) {
 		for (const ibGroupLineDescription& line : level.m_settings.m_group.m_lines)
@@ -130,7 +130,7 @@ bool ibPeriodUnitOfPath(const std::vector<ibLevelDescription>& levels, const wxS
 	return false;
 }
 
-bool ibPeriodUnitOfPath(const std::vector<ibOutputDescription>& structure, const wxString& path, ibTotalsPeriod& unit)
+bool ibPeriodUnitOfPath(const std::vector<ibOutputDescription>& structure, const ibString& path, ibTotalsPeriod& unit)
 {
 	for (const ibOutputDescription& output : structure)
 		if (ibPeriodUnitOfPath(output.m_rowGroups, path, unit) || ibPeriodUnitOfPath(output.m_columnGroups, path, unit))
@@ -189,7 +189,7 @@ void ibAppendContextConditions(ibFilterDescription& filter,
 // ⚠ ONE OUTPUT, and that is not a guess about which output the cell belonged to: the cell does not
 // carry that today. Building one is the honest answer — pretending to know which of several the
 // reader clicked would be wrong exactly where it mattered.
-std::vector<ibOutputDescription> ibStructureByField(const wxString& path)
+std::vector<ibOutputDescription> ibStructureByField(const ibString& path)
 {
 	ibLevelDescription level;
 	level.m_kind = ibCompositionLevelKind::Grouping;
@@ -270,9 +270,9 @@ void ibOpenReportOver(const ibCompositionDescription& desc, const ibValueMetaObj
 // ⭐ AND IT IS READ BY A PERSON, so the items say the TITLE — the same words that stand over the
 // column in the report. The technical name travels into the query and is not something a reader
 // should ever be shown.
-std::vector<wxString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>& menu, std::int32_t firstId, int row, int col) const
+std::vector<ibString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>& menu, std::int32_t firstId, int row, int col) const
 {
-	std::vector<wxString> paths;
+	std::vector<ibString> paths;
 
 	ibValueDataComposition* composition = dynamic_cast<ibValueDataComposition*>(
 		static_cast<ibValueSpreadsheetModel*>(m_spreadsheetModel));
@@ -295,7 +295,7 @@ std::vector<wxString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>
 
 		// …in the reader's language: a title is kept in every language it was written in, and a sheet reads
 		// it as a cell lands (PutArea) — a menu is not a sheet, and printed it every language at once.
-		wxString title = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), desc.TitleForPath(field.m_name));
+		ibString title = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), desc.TitleForPath(field.m_name));
 		if (title.IsEmpty())
 			title = ibTitleFromName(field.m_name);
 		byMenu.items.push_back(ibMenuItem{ firstId + static_cast<std::int32_t>(paths.size()), title });
@@ -316,7 +316,7 @@ std::vector<wxString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>
 // ⚠ THE COPY IS THE POINT, and it must carry the PARAMETERS with it. A detail that re-read the data
 // with different parameters — another period, another organisation — would show figures that do not
 // add up to the one it was opened from, which is worse than showing nothing.
-void ibValueGridBox::ShowCellDetail(int row, int col, const wxString& byPath)
+void ibValueGridBox::ShowCellDetail(int row, int col, const ibString& byPath)
 {
 	ibValueDataComposition* composition = dynamic_cast<ibValueDataComposition*>(
 		static_cast<ibValueSpreadsheetModel*>(m_spreadsheetModel));

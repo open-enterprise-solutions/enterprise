@@ -19,8 +19,8 @@ bool ibAppLauncher::DoOnInit()
 	// The image handlers are the window's: the backend keeps its pictures as data and puts none up (backend_picture.h).
 	wxInitAllImageHandlers();
 
-	// ibWxApp::OnInit already armed ibCrashGuard. wxApp.h is header-only,
-	// so no frontend.dll dependency was added — launcher still links
+	// ibWxApp::OnInit already armed ibCrashGuard. oesApp.h (core) is header-only,
+	// so no GUI library dependency was added — launcher still links
 	// only backend.lib + wxlibs.
 	ibApplicationInstance::CreateAppDataEnv(ibRunMode::eLAUNCHER_MODE);
 	m_launcher = new ibFrameLauncher(nullptr, wxID_ANY);

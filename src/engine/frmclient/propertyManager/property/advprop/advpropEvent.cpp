@@ -21,7 +21,7 @@ namespace {
 wxString ReadHandler(const wxVariant& value)
 {
 	const auto node = ibVariantDataSerializable::GetNodeValue(value).AsChild();
-	return node ? node->GetValue<wxString>(wxT("Value")) : wxString();
+	return node ? node->GetValue<ibString>(wxT("Value")) : ibString();
 }
 
 // …and the value naming another: the same event's (its name is its own), read as the handler.
@@ -29,7 +29,7 @@ wxVariant WriteHandler(const wxVariant& value, const wxString& handler)
 {
 	const auto held = ibVariantDataSerializable::GetNodeValue(value).AsChild();
 	auto node = held ? std::make_shared<ibDataNode>(*held) : std::make_shared<ibDataNode>();
-	node->SetValue(wxT("Value"), handler);
+	node->SetValue(wxT("Value"), ibString(handler));
 	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::Child(node), handler));
 }
 

@@ -42,6 +42,11 @@ target_include_directories(simplePlugin PRIVATE
 # means something a plugin must derive from or instantiate got marked
 # BACKEND_API. Fix it at the declaration (drop the export attribute), the way
 # ibDiagnosticSink was fixed after it broke this link on 2026-08-05.
+#
+# `core` IS the string the boundary is written in: a diagnostic's text is an
+# ibString, as it was a wxString when this linked wx::base for it — the
+# library the type lives in, not backend's symbols.
 target_link_libraries(simplePlugin PRIVATE
+    core
     wx::base
 )

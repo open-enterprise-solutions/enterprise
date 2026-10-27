@@ -35,7 +35,7 @@
 
 namespace {
 
-wxString SqliteTypeOf(const ibColumnType& type)
+ibString SqliteTypeOf(const ibColumnType& type)
 {
 	switch (type.m_kind) {
 	case ibCanonicalKind::Number: return wxT(" NUMERIC");
@@ -53,7 +53,7 @@ struct InformationRegisterGet : ::testing::Test {
 	// RunDatabase sets this thread's code style to the configuration's; TearDown puts it back.
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
-	wxString dbPath;
+	ibString dbPath;
 	std::shared_ptr<ibSession> session;
 	std::unique_ptr<ibSessionScope> scope;
 	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
@@ -126,8 +126,8 @@ struct InformationRegisterGet : ::testing::Test {
 	void CreateTable(const ibSchemaTable& table) {
 		if (table.m_name.IsEmpty())
 			return;
-		wxString list;
-		std::set<wxString> seen;
+		ibString list;
+		std::set<ibString> seen;
 		auto addColumn = [&](const ibBackendQueryColumn* column) {
 			if (column == nullptr)
 				return;
@@ -146,7 +146,7 @@ struct InformationRegisterGet : ::testing::Test {
 	}
 
 	// The door a record manager's Write stands on: one row, by column, into the register.
-	void Insert(const wxString& keyValue, int value, const ibDateTime& period = ibDateTime()) {
+	void Insert(const ibString& keyValue, int value, const ibDateTime& period = ibDateTime()) {
 		ibDataQueryBuilder q;
 		q.From(reg->GetQueryable());
 		if (reg->HasPeriod())
@@ -156,7 +156,7 @@ struct InformationRegisterGet : ::testing::Test {
 		ASSERT_TRUE(q.Insert()) << keyValue;
 	}
 
-	ibValue KeyFilter(const wxString& keyValue) const {
+	ibValue KeyFilter(const ibString& keyValue) const {
 		ibValuePtr<ibValueStructure> filter(new ibValueStructure());
 		filter->Insert(ibValue(wxT("Key")), ibValue(keyValue));
 		return ibValue(filter);

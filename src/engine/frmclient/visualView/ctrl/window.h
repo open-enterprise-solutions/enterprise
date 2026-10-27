@@ -3,7 +3,7 @@
 
 #include "control.h"
 
-// A CONTROL THAT IS A WINDOW — the desktop's ibValueWindow (frontend/visualView/ctrl/window.h): its sizes, its look,
+// A CONTROL THAT IS A WINDOW — the old desktop's ibValueWindow:its sizes, its look,
 // its tooltip, whether it is enabled and shown are drawn from the frame (UpdateWindow, ApplyLook); its properties are
 // the server's (ibValueFrame).
 class ibValueWindow : public ibValueControl {

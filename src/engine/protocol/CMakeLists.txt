@@ -25,7 +25,7 @@ target_compile_definitions(protocol
         wxUSE_GUI=0   # of wx the base only — a GUI type here is a compile error
 )
 
-# PROTOCOL_API resolves to dllexport only when PROTOCOL_EXPORTS is defined (protocolApi.h) — frontend's rule.
+# PROTOCOL_API resolves to dllexport only when PROTOCOL_EXPORTS is defined (protocolApi.h).
 if(WIN32)
     target_compile_definitions(protocol PRIVATE PROTOCOL_EXPORTS)
 endif()

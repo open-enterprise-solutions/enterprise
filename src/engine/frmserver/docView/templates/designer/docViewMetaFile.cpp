@@ -37,7 +37,7 @@ ibPictureDescription ibMetadataBrowserDocument::GetIcon() const
 	return ibPictureDescription(g_metaCommonMetadataCLSID);
 }
 
-bool ibMetadataBrowserDocument::OnCreate(const wxString& path, long flags)
+bool ibMetadataBrowserDocument::OnCreate(const ibString& path, long flags)
 {
 	if (!ibMetaDocument::OnCreate(path, flags))
 		return false;
@@ -58,7 +58,7 @@ ibConfigurationTree* ibMetadataBrowserDocument::GetMetaTree() const
 	return view != nullptr ? view->GetMetaTree() : nullptr;
 }
 
-bool ibMetadataFileDocument::OnCreate(const wxString& path, long flags)
+bool ibMetadataFileDocument::OnCreate(const ibString& path, long flags)
 {
 	m_metaData = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
 	if (!ibMetaDocument::OnCreate(path, flags))
@@ -73,7 +73,7 @@ bool ibMetadataFileDocument::OnCloseDocument()
 	return ibMetaDocument::OnCloseDocument();
 }
 
-bool ibMetadataFileDocument::DoOpenDocument(const wxString& filename)
+bool ibMetadataFileDocument::DoOpenDocument(const ibString& filename)
 {
 	// A FILE OF THE SESSION'S — the one the client uploaded (File → Open), as an external file's is
 	// (ibDataProcessorEditDocument): the server opens no path of its own disk on a client's word.
@@ -107,7 +107,7 @@ bool ibMetadataFileDocument::DoOpenDocument(const wxString& filename)
 	return true;
 }
 
-bool ibMetadataFileDocument::DoSaveDocument(const wxString& /*filename*/)
+bool ibMetadataFileDocument::DoSaveDocument(const ibString& /*filename*/)
 {
 	// Read-only browser — nothing to write.
 	return true;

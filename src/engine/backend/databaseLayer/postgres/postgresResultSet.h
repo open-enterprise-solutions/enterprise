@@ -32,7 +32,7 @@ public:
 	virtual bool Next();
 	virtual void Close();
 
-	virtual int LookupField(const wxString& strField);
+	virtual int LookupField(const ibString& strField);
 
 	// get field
 	virtual int GetResultInt(int nField);

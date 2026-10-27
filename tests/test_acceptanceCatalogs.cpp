@@ -43,9 +43,9 @@
 
 namespace {
 
-nlohmann::json LoadFixture(const wxString& fileName)
+nlohmann::json LoadFixture(const ibString& fileName)
 {
-	wxFileName here(wxString::FromUTF8(__FILE__));
+	wxFileName here(ibString::FromUTF8(__FILE__));
 	here.SetFullName(wxEmptyString);
 	here.AppendDir(wxT("fixtures"));
 	here.AppendDir(wxT("acceptance"));
@@ -55,20 +55,20 @@ nlohmann::json LoadFixture(const wxString& fileName)
 	return nlohmann::json::parse(in);
 }
 
-wxString AsWx(const nlohmann::json& node)
+ibString AsWx(const nlohmann::json& node)
 {
-	return wxString::FromUTF8(node.get<std::string>());
+	return ibString::FromUTF8(node.get<std::string>());
 }
 
-std::set<wxString> AsSet(const nlohmann::json& array)
+std::set<ibString> AsSet(const nlohmann::json& array)
 {
-	std::set<wxString> out;
+	std::set<ibString> out;
 	for (const auto& item : array)
 		out.insert(AsWx(item));
 	return out;
 }
 
-wxString SqliteTypeOf(const wxString& field)
+ibString SqliteTypeOf(const ibString& field)
 {
 	if (field.EndsWith(wxT("_RRRef"))) return wxT(" BLOB");
 	if (field.EndsWith(wxT("_D")) || field.EndsWith(wxT("_S"))) return wxT(" TEXT");
@@ -82,15 +82,15 @@ struct AcceptanceCatalogs : ::testing::Test {
 	// (test_compiler.cpp), so TearDown puts it back, as StyleGuard does.
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
-	wxString dbPath;
+	ibString dbPath;
 	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
 	ibValueMetaObjectCatalog* goods = nullptr;
 	ibValueMetaObjectCatalog* parties = nullptr;
 	ibValueMetaObjectCatalog* contracts = nullptr;
 	nlohmann::json fixture;
-	std::map<wxString, ibValue> goodsRef;
-	std::map<wxString, ibValue> partyRef;
-	std::map<wxString, ibValue> contractRef;
+	std::map<ibString, ibValue> goodsRef;
+	std::map<ibString, ibValue> partyRef;
+	std::map<ibString, ibValue> contractRef;
 	bool ready = false;
 
 	void SetUp() override {
@@ -168,12 +168,12 @@ struct AcceptanceCatalogs : ::testing::Test {
 	}
 
 	void CreateTable(ibValueMetaObjectCatalog* catalog) {
-		wxString list;
-		std::set<wxString> seen;
+		ibString list;
+		std::set<ibString> seen;
 		for (const ibValueMetaObjectAttributeBase* attribute : catalog->GetGenericAttributeArrayObject()) {
 			if (attribute == nullptr || attribute->GetQueryColumn() == nullptr)
 				continue;
-			for (const wxString& field : ColumnFieldNames(attribute->GetQueryColumn())) {
+			for (const ibString& field : ColumnFieldNames(attribute->GetQueryColumn())) {
 				if (!seen.insert(field).second)
 					continue;
 				list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << SqliteTypeOf(field);
@@ -185,8 +185,8 @@ struct AcceptanceCatalogs : ::testing::Test {
 	}
 
 	void Assign(std::vector<ibDmlAssign>& out, const ibBackendQueryColumn* column, const ibValue& value) const {
-		const std::vector<wxString> fields = ColumnFieldNames(column);
-		ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+		const std::vector<ibString> fields = ColumnFieldNames(column);
+		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
 		ibColumnCodec::WriteValue(column, cfg.get(), value, &capture, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
@@ -206,7 +206,7 @@ struct AcceptanceCatalogs : ::testing::Test {
 		Assign(row, catalog->GetDataCode()->GetQueryColumn(), ibValue(AsWx(node["code"])));
 		Assign(row, catalog->GetDataDescription()->GetQueryColumn(), ibValue(AsWx(node["code"])));
 		const std::string predefined = node.value("predefined", std::string());
-		Assign(row, catalog->GetDataPredefinedName()->GetQueryColumn(), ibValue(wxString::FromUTF8(predefined)));
+		Assign(row, catalog->GetDataPredefinedName()->GetQueryColumn(), ibValue(ibString::FromUTF8(predefined)));
 		if (catalog->HasParentLink())
 			Assign(row, catalog->GetDataParent()->GetQueryColumn(), parent);
 		if (catalog->HasFolders())
@@ -221,8 +221,8 @@ struct AcceptanceCatalogs : ::testing::Test {
 		for (const auto& node : nodes)
 			goodsRef[AsWx(node["code"])] = NewRef(goods);
 		for (const auto& node : nodes) {
-			const wxString code = AsWx(node["code"]);
-			const wxString parent = AsWx(node["parent"]);
+			const ibString code = AsWx(node["code"]);
+			const ibString parent = AsWx(node["parent"]);
 			const ibValue parentRef = parent.IsEmpty() ? ibValue() : goodsRef[parent];
 			InsertRow(goods, goodsRef[code], node, parentRef, ibValue());
 		}
@@ -233,7 +233,7 @@ struct AcceptanceCatalogs : ::testing::Test {
 			nlohmann::json row = node;
 			row["deletion_mark"] = false;
 			row["folder"] = false;
-			const wxString code = AsWx(node["code"]);
+			const ibString code = AsWx(node["code"]);
 			partyRef[code] = NewRef(parties);
 			InsertRow(parties, partyRef[code], row, ibValue(), ibValue());
 		}
@@ -244,13 +244,13 @@ struct AcceptanceCatalogs : ::testing::Test {
 			nlohmann::json row = node;
 			row["folder"] = false;
 			row["predefined"] = "";
-			const wxString code = AsWx(node["code"]);
+			const ibString code = AsWx(node["code"]);
 			contractRef[code] = NewRef(contracts);
 			InsertRow(contracts, contractRef[code], row, ibValue(), partyRef[AsWx(node["owner"])]);
 		}
 	}
 
-	void DeleteGoods(const wxString& code) {
+	void DeleteGoods(const ibString& code) {
 		std::vector<ibDmlAssign> key;
 		Assign(key, goods->GetDataReference()->GetQueryColumn(), goodsRef[code]);
 		ibQueryExprPtr where;
@@ -262,20 +262,20 @@ struct AcceptanceCatalogs : ::testing::Test {
 		ASSERT_GE(drop.Execute(ibDelete(goods->GetQueryable()->GetQueryTableName(), where)), 0);
 	}
 
-	ibQueryHierarchyScope Scope(const wxString& root, ibQueryDimUnfold unfold) const {
+	ibQueryHierarchyScope Scope(const ibString& root, ibQueryDimUnfold unfold) const {
 		return ibQueryHierarchyScope(goods->GetQueryable(), goods->GetDataParent()->GetQueryColumn(),
 			{ goodsRef.at(root) }, unfold);
 	}
 
-	std::set<wxString> Admitted(const ibQueryHierarchyScope& scope) const {
-		std::set<wxString> codes;
+	std::set<ibString> Admitted(const ibQueryHierarchyScope& scope) const {
+		std::set<ibString> codes;
 		for (const auto& one : goodsRef)
 			if (scope.Admits(one.second))
 				codes.insert(one.first);
 		return codes;
 	}
 
-	std::set<wxString> CodesWhere(ibValueMetaObjectCatalog* catalog, const ibBackendQueryColumn* extra,
+	std::set<ibString> CodesWhere(ibValueMetaObjectCatalog* catalog, const ibBackendQueryColumn* extra,
 		const ibValue& extraValue, bool unmarkedOnly) {
 		ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
 		q.From(catalog->GetQueryable());
@@ -285,13 +285,13 @@ struct AcceptanceCatalogs : ::testing::Test {
 		if (extra != nullptr)
 			q.Where(extra, extraValue);
 		ibDataQueryResult rows = q.Execute(ibReadPageRequest{});
-		std::set<wxString> codes;
+		std::set<ibString> codes;
 		while (rows.Next())
 			codes.insert(rows.GetValue(catalog->GetDataCode()->GetQueryColumn()).GetString());
 		return codes;
 	}
 
-	std::set<wxString> CodesInHierarchy(const wxString& root) {
+	std::set<ibString> CodesInHierarchy(const ibString& root) {
 		ibQueryCondition cond;
 		cond.m_col = goods->GetDataReference()->GetQueryColumn();
 		cond.m_op = ibQueryFilterOp::In;
@@ -302,13 +302,13 @@ struct AcceptanceCatalogs : ::testing::Test {
 		q.Select(goods->GetDataCode()->GetQueryColumn(), wxT("code"));
 		q.Where(cond);
 		ibDataQueryResult rows = q.Execute(ibReadPageRequest{});
-		std::set<wxString> codes;
+		std::set<ibString> codes;
 		while (rows.Next())
 			codes.insert(rows.GetValue(goods->GetDataCode()->GetQueryColumn()).GetString());
 		return codes;
 	}
 
-	ibNumber RolledUnder(const wxString& root) {
+	ibNumber RolledUnder(const ibString& root) {
 		const ibBackendQueryColumn* refCol = goods->GetDataReference()->GetQueryColumn();
 		const ibBackendQueryColumn* qtySlot = goods->GetDataCode()->GetQueryColumn();
 		ibQueryRamTable snap;
@@ -340,16 +340,16 @@ struct AcceptanceCatalogs : ::testing::Test {
 		return nullptr;
 	}
 
-	std::set<wxString> ChoiceCodes(ibValueMetaObjectCatalog* catalog) {
+	std::set<ibString> ChoiceCodes(ibValueMetaObjectCatalog* catalog) {
 		ibValue holder(ibValueReferenceDataObject::Create(cfg.get(), catalog->GetMetaID(), ibGuid(ibGuid::newGuid())));
 		ibValueReferenceDataObject* ref = holder.ConvertToType<ibValueReferenceDataObject>();
 		std::vector<ibValue> list;
 		if (ref != nullptr)
 			ref->FindValue(wxEmptyString, list);
-		std::map<wxString, ibValue> all = goodsRef;
+		std::map<ibString, ibValue> all = goodsRef;
 		all.insert(partyRef.begin(), partyRef.end());
 		all.insert(contractRef.begin(), contractRef.end());
-		std::set<wxString> codes;
+		std::set<ibString> codes;
 		for (const ibValue& one : list)
 			for (const auto& known : all)
 				if (known.second.CompareValueEQ(one))
@@ -382,8 +382,8 @@ TEST_F(AcceptanceCatalogs, AFolderContainsItsItemsAndTheFoldersUnderIt)
 TEST_F(AcceptanceCatalogs, MovingAnItemChangesTheFolderItSumsUnder)
 {
 	if (!ready) return;
-	const wxString code = AsWx(fixture["goods"]["move"]["code"]);
-	const wxString to = AsWx(fixture["goods"]["move"]["to"]);
+	const ibString code = AsWx(fixture["goods"]["move"]["code"]);
+	const ibString to = AsWx(fixture["goods"]["move"]["to"]);
 	nlohmann::json node;
 	for (const auto& one : fixture["goods"]["nodes"])
 		if (AsWx(one["code"]) == code)
@@ -405,7 +405,7 @@ TEST_F(AcceptanceCatalogs, MovingAnItemChangesTheFolderItSumsUnder)
 TEST_F(AcceptanceCatalogs, DISABLED_ADeletionMarkStaysInTheTreeAndTheChoiceStillShowsIt)
 {
 	if (!ready) return;
-	const wxString marked = AsWx(fixture["choice"]["marked_code"]);
+	const ibString marked = AsWx(fixture["choice"]["marked_code"]);
 	EXPECT_TRUE(Admitted(Scope(wxT("FOOD"), ibQueryDimUnfold::Hierarchy)).count(marked))
 		<< "a mark does not take the item out of the tree";
 
@@ -418,7 +418,7 @@ TEST_F(AcceptanceCatalogs, DISABLED_ADeletionMarkStaysInTheTreeAndTheChoiceStill
 TEST_F(AcceptanceCatalogs, AQueryNarrowsASubordinateCatalogToItsOwner)
 {
 	if (!ready) return;
-	const std::set<wxString> partiesSeen = CodesWhere(parties, nullptr, ibValue(), false);
+	const std::set<ibString> partiesSeen = CodesWhere(parties, nullptr, ibValue(), false);
 	EXPECT_TRUE(partiesSeen.count(wxT("ACME")));
 	EXPECT_TRUE(partiesSeen.count(wxT("GLOBEX")));
 

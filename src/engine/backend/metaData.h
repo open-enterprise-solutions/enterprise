@@ -194,7 +194,7 @@ public:
 class BACKEND_API ibModuleStorage {
 public:
 	bool AddCommonModule(ibValueMetaObjectCommonModule* commonModule);
-	bool RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName);
+	bool RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName);
 	bool RemoveCommonModule(ibValueMetaObjectCommonModule* commonModule);
 
 	// Drop every registration — used on the RunDatabase bail-out path, where
@@ -398,7 +398,7 @@ struct ibNameRequest {
 	ibClassID m_clsid = 0;
 
 	// The name's stem; empty = "newItem".
-	wxString m_prefix;
+	ibString m_prefix;
 
 	// The bare prefix is the first candidate; otherwise numbering starts at 1.
 	bool m_forConstructor = false;
@@ -556,9 +556,9 @@ public:
 	// (external DataProcessor / Report, each its own file) answer empty. Anything derived FROM the
 	// metadata and stored outside it — compiled bytecode, above all — keys on this, so a save produces
 	// a new key and every artefact of the previous state simply stops being found.
-	virtual wxString GetConfigMD5() const { return wxEmptyString; }
+	virtual ibString GetConfigMD5() const { return ibEmptyString; }
 
-	virtual wxString GetFileName() const { return wxEmptyString; }
+	virtual ibString GetFileName() const { return ibEmptyString; }
 	virtual const ibValueMetaObject* GetCommonMetaObject() const { return nullptr; }
 	virtual ibValueMetaObject* GetCommonMetaObject() { return nullptr; }
 
@@ -578,7 +578,7 @@ public:
 	// runtime support — every factory answers with the OWNER, empty when nothing was made (see
 	// ibValue::CreateObject). A caller that needs the type asks the owner: `ibValuePtr<T> v = ...`.
 	virtual ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const;
-	virtual ibValue CreateObject(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
+	virtual ibValue CreateObject(const ibString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
 		const ibClassID& clsid = GetIDObjectFromString(className);
 		return CreateObject(clsid, paParams, lSizeArray);
 	}
@@ -597,7 +597,7 @@ public:
 	void RegisterCtor(ibCtorMetaValueType* typeCtor);
 	void UnRegisterCtor(ibCtorMetaValueType*& typeCtor);
 
-	void UnRegisterCtor(const wxString& className);
+	void UnRegisterCtor(const ibString& className);
 
 	// UNREGISTER BY IDENTITY — the door every metatype's teardown uses. A metaobject's clsid is
 	// CONSTRUCTIVE (its body IS the metaID), so it is the one key that a rename cannot move; the
@@ -609,22 +609,22 @@ public:
 	// metadata (no image ⇒ nothing registered ⇒ nothing to recompute).
 	void InvalidateCtorNames() const;
 
-	virtual bool IsRegisterCtor(const wxString& className) const;
-	virtual bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType) const;
-	virtual bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType, enum ibCtorObjectMetaType metaType) const;
+	virtual bool IsRegisterCtor(const ibString& className) const;
+	virtual bool IsRegisterCtor(const ibString& className, ibCtorObjectType objectType) const;
+	virtual bool IsRegisterCtor(const ibString& className, ibCtorObjectType objectType, enum ibCtorObjectMetaType metaType) const;
 
 	virtual bool IsRegisterCtor(const ibClassID& clsid) const;
 
-	virtual ibClassID GetIDObjectFromString(const wxString& className) const;
-	virtual wxString GetNameObjectFromID(const ibClassID& clsid, bool upper = false) const;
+	virtual ibClassID GetIDObjectFromString(const ibString& className) const;
+	virtual ibString GetNameObjectFromID(const ibClassID& clsid, bool upper = false) const;
 
 	ibClassID GetIDObjectFromMetaID(const ibMetaID& metaID, enum ibCtorObjectMetaType refType) const;
 
-	virtual ibCtorMetaValueType* GetTypeCtor(const wxString& className) const;
+	virtual ibCtorMetaValueType* GetTypeCtor(const ibString& className) const;
 	virtual ibCtorMetaValueType* GetTypeCtor(const ibClassID& clsid) const;
 	virtual ibCtorMetaValueType* GetTypeCtor(const ibValueMetaObject* metaValue, enum ibCtorObjectMetaType refType) const;
 
-	virtual ibCtorAbstractType* GetAvailableCtor(const wxString& className) const;
+	virtual ibCtorAbstractType* GetAvailableCtor(const ibString& className) const;
 	virtual ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid) const;
 
 	virtual std::vector<ibCtorMetaValueType*> GetListCtorsByType() const;
@@ -640,7 +640,7 @@ public:
 	}
 
 	//get language code 
-	virtual wxString GetLangCode() const = 0;
+	virtual ibString GetLangCode() const = 0;
 
 	//Check is full access 
 	virtual bool IsFullAccess() const { return true; }
@@ -786,7 +786,7 @@ public:
 	// accident, because there is no longer a way to.
 	bool CopyMetaObject(const ibValueMetaObject* object, class ibWriterMemory& writer) const;
 
-	bool RenameMetaObject(ibValueMetaObject* object, const wxString& newName);
+	bool RenameMetaObject(ibValueMetaObject* object, const ibString& newName);
 	// Answers whether it went. It was void, so a refusal — a close phase that said no, a read-only
 	// configuration — was indistinguishable from a delete that happened, and the caller reported
 	// success either way.
@@ -892,7 +892,7 @@ public:
 	ibMetaID GenerateNewID() const;
 
 	//generate new name
-	wxString GetNewName(ibValueMetaObject* parent, const ibNameRequest& request);
+	ibString GetNewName(ibValueMetaObject* parent, const ibNameRequest& request);
 
 #pragma region serialization
 

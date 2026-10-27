@@ -416,7 +416,7 @@ SQLRETURN ibPreparedStatementODBC::Execute(SQLHSTMT hstmt)
 
 void ibPreparedStatementODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr)
 {
-	ibJournalInfo(wxT("db.odbc"),wxT("ibPreparedStatementODBC::InterpretErrorCodes()\n"));
+	ibJournalInfo(ibT("db.odbc"),ibT("ibPreparedStatementODBC::InterpretErrorCodes()\n"));
 
 	//if ((nCode != SQL_SUCCESS) ) // && (nCode != SQL_SUCCESS_WITH_INFO))
 	{
@@ -435,11 +435,11 @@ void ibPreparedStatementODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr
 			m_pInterface->GetSQLGetDiagRec()(SQL_HANDLE_DBC, m_sqlHDBC, 1, strState, &iNativeCode,
 				strBuffer, ERR_BUFFER_LEN, &iMsgLen);
 
-		const wxString strSqlState = ConvertFromUnicodeStream((char*)strState);
+		const ibString strSqlState = ConvertFromUnicodeStream((char*)strState);
 		SetErrorCode(ibDatabaseLayerODBC::TranslateErrorCode((int)iNativeCode, strSqlState),
 			ibDatabaseLayerODBC::ClassifySqlState(strSqlState, (int)iNativeCode));
 		//SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
-		SetErrorMessage(wxString((ibChar*)strBuffer));
+		SetErrorMessage(ibString((ibChar*)strBuffer));
 	}
 }
 

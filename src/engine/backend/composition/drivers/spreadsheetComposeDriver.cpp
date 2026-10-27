@@ -192,7 +192,7 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 	m_formats.resize(info.m_schema.size());
 	for (size_t i = 0; i < info.m_schema.size(); ++i) {
 		ibFormatString& format = m_formats[i];
-		const wxString said = ibTranslateString(
+		const ibString said = ibTranslateString(
 			ibStoredValue(info.AppearanceOf(i).ValueInForce(ibAppearanceParameter::Format), nullptr).GetString()).GetString();
 		if (said.IsEmpty() || !ibFormatString::Parse(said, format)) {
 			format = ibFormatString();
@@ -200,9 +200,9 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 		}
 		// …and the report's own rule, where the format says nothing of its own: nothing is written empty.
 		if (!format.m_number.m_zero)
-			format.m_number.m_zero = wxString();
+			format.m_number.m_zero = ibString();
 		if (!format.m_date.m_empty)
-			format.m_date.m_empty = wxString();
+			format.m_date.m_empty = ibString();
 	}
 	// …AND WHICH OF THEM ARE SHOWN, taken here for the same reason as the two above: the layout is
 	// decided later and the info does not outlive this call.
@@ -395,7 +395,7 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::O
 		// make it look like a heading of its own.
 		for (int line = 0; line < kSectionGapLines; ++line) {
 			std::shared_ptr<ibSpreadsheetObject> gap(std::make_shared<ibSpreadsheetObject>());
-			gap->SetCellValue(0, 0, wxEmptyString);
+			gap->SetCellValue(0, 0, ibEmptyString);
 			m_document->PutArea(gap, 0);
 		}
 	}
@@ -546,7 +546,7 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::O
 		// WHAT A PERSON READS OVER THE COLUMN — the composition's title for it. The query's NAME is
 		// what a script looks the column up by and may have been qualified to stay unique; the
 		// header is not the place that difference should ever show (see m_titles).
-		const wxString caption = ColumnTitle(i, schema);
+		const ibString caption = ColumnTitle(i, schema);
 		header->SetCellValue(row, col, caption);
 		m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], caption.length());
 
@@ -662,13 +662,13 @@ void ibSpreadsheetComposeDriver::WriteHeading()
 		++row;
 	}
 
-	for (const wxString& line : m_headerLines) {
+	for (const ibString& line : m_headerLines) {
 		heading->SetCellValue(row, 0, line);
 		heading->SetCellSize(row, 0, 1, span);
 		++row;
 	}
 
-	heading->SetCellValue(row, 0, wxEmptyString);   // one blank line between the heading and the table
+	heading->SetCellValue(row, 0, ibEmptyString);   // one blank line between the heading and the table
 
 	m_document->PutArea(heading, 0);
 }
@@ -827,10 +827,10 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 
 		const ibValue& value = values[i];
 		// …in what its conditional appearance has it say, where that says anything (the attribute's text).
-		wxString text = ColumnText(i, value, line.m_attr != nullptr ? &line.m_attr->AttrOf(i) : nullptr);
+		ibString text = ColumnText(i, value, line.m_attr != nullptr ? &line.m_attr->AttrOf(i) : nullptr);
 		// The indent rides on the FIRST field of the level — the column the grouping is read down.
 		if (isDimension && page > 0 && m_layout[i] == 0)
-			text.insert(0, page * kIndentPerLevel, wxT(' '));
+			text.insert(0, page * kIndentPerLevel, ibT(' '));
 
 		row->SetCellValue(0, col, text);
 
@@ -844,7 +844,7 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 		// above; everything else on the row — its figures, a record's own fields — hangs under the
 		// row's chain, which is what the click reads back.
 		if (!value.IsEmpty()) {
-			const wxString name = wxString::Format(wxT("Cell_%d"), col);
+			const ibString name = ibString::Format(ibT("Cell_%d"), col);
 			row->SetParameter(name, (packed[i].IsEmpty() ? PackDetails(i, value, chain) : packed[i]).ToAnyValue());
 			row->SetCellDetailsParameter(0, col, name);
 		}
@@ -926,7 +926,7 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 	// first number with a caption — so the line is figures only, which is unambiguous when it is the
 	// only row of the section.
 	if (m_dimWidth > 0) {
-		const wxString caption = _("Grand total");
+		const ibString caption = _("Grand total");
 		row->SetCellValue(0, 0, caption);
 		if (!m_widest.empty())
 			m_widest[0] = std::max(m_widest[0], caption.length());
@@ -941,13 +941,13 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 		if (col < m_dimWidth || isDimension)
 			continue;
 		const ibValue& value = values[i];
-		const wxString text = ColumnText(i, value, attr != nullptr ? &attr->AttrOf(i) : nullptr);
+		const ibString text = ColumnText(i, value, attr != nullptr ? &attr->AttrOf(i) : nullptr);
 		row->SetCellValue(0, col, text);
 		// ⭐ THE GRAND TOTAL STANDS UNDER NOTHING — it is the figure over everything, so its cells are
 		// packed with no links at all. A click on it still opens the value; there is simply no
 		// context to break down by, which is the truth about that line.
 		if (!value.IsEmpty()) {
-			const wxString name = wxString::Format(wxT("Cell_%d"), col);
+			const ibString name = ibString::Format(ibT("Cell_%d"), col);
 			row->SetParameter(name, PackDetails(i, value, ibValue()).ToAnyValue());
 			row->SetCellDetailsParameter(0, col, name);
 		}
@@ -1007,13 +1007,13 @@ std::vector<size_t> ibColumnsOfLevel(const std::vector<ibQueryLowering::OutputCo
 
 // What one level of a key reads as in a header cell — its fields, side by side, because they are
 // one heading and not several; each written as its own column writes it.
-wxString ibSpreadsheetComposeDriver::HeadingText(const std::vector<ibValue>& values, int dimLevel) const
+ibString ibSpreadsheetComposeDriver::HeadingText(const std::vector<ibValue>& values, int dimLevel) const
 {
 	const std::vector<size_t> at = ibColumnsOfLevel(m_schema, dimLevel);
-	wxString text;
+	ibString text;
 	for (size_t f = 0; f < values.size(); ++f) {
 		if (!text.IsEmpty())
-			text += wxT(" ");
+			text += ibT(" ");
 		text += ColumnText(f < at.size() ? at[f] : m_schema.size(), values[f]);
 	}
 	return text;
@@ -1365,7 +1365,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	// above and the header showed the DEEPEST name alone (Max, 2026-08-26: "the group heading is not
 	// shown").
 	{
-		std::map<int, wxString> caption;   // column within the dimension area -> its names, joined
+		std::map<int, ibString> caption;   // column within the dimension area -> its names, joined
 		std::map<int, int> filled;
 		for (size_t i = 0; i < m_schema.size(); ++i) {
 			const ibQueryLowering::OutputColumn& column = m_schema[i];
@@ -1375,16 +1375,16 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			const int col = filled[column.m_level]++;
 			if (col >= dimWidth)
 				continue;
-			wxString& into = caption[col];
+			ibString& into = caption[col];
 			if (!into.IsEmpty())
-				into += wxT(" / ");
+				into += ibT(" / ");
 			into += ColumnTitle(i);
 		}
 		// ⭐ AND IT TAKES THE WHOLE HEIGHT. The column keys stack above — one line per column level —
 		// while this caption has one line to say and used to say it on the LAST of them, leaving blank
 		// cells over a heading that names the entire left side of the table (Max, 2026-08-28: *"if a
 		// field lands with emptiness above it, let it use that place"*).
-		for (const std::pair<const int, wxString>& named : caption) {
+		for (const std::pair<const int, ibString>& named : caption) {
 			header->SetCellValue(0, named.first, named.second);
 			if (headerRows > 1) {
 				mergeAt(0, named.first, headerRows, 1);
@@ -1433,8 +1433,8 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			const CrossKey& key = slots[runStart].m_key;
 			// The level's value where the key reaches this deep; where it stops, this slot is the
 			// TOTAL of the level above — and that is the word its own line carries.
-			const wxString text = (depthAt < key.size()) ? HeadingText(key[depthAt], static_cast<int>(m_rowLevels + depthAt))
-				: (slots[runStart].m_subtotal && depthAt == key.size() ? wxString(wxT("Total")) : wxString());
+			const ibString text = (depthAt < key.size()) ? HeadingText(key[depthAt], static_cast<int>(m_rowLevels + depthAt))
+				: (slots[runStart].m_subtotal && depthAt == key.size() ? ibString(ibT("Total")) : ibString());
 
 			if (!text.IsEmpty()) {
 				header->SetCellValue(static_cast<int>(depthAt), first, text);
@@ -1509,7 +1509,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		for (int k = 0; k < keys; ++k)
 			for (int m = 0; m < measures; ++m) {
 				const int col = dimWidth + k * perKey + m;
-				const wxString name = ColumnTitle(m_measureAt[static_cast<size_t>(m)]);
+				const ibString name = ColumnTitle(m_measureAt[static_cast<size_t>(m)]);
 				header->SetCellValue(headerRows - 1, col, name);
 				if (static_cast<size_t>(col) < m_widest.size())
 					m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], name.length());
@@ -1520,7 +1520,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	// up to — so it stands outside the key blocks and outside their folds.
 	if (measures > 0) {
 		const int first = dimWidth + keys * perKey;
-		header->SetCellValue(0, first, wxT("Total"));
+		header->SetCellValue(0, first, ibT("Total"));
 		if (measures > 1)
 			mergeAt(0, first, static_cast<int>(m_colLevels), measures);   // the measure names go underneath
 		else if (headerRows > 1) {
@@ -1579,7 +1579,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	// text, its alignment, its link and its look — instead of a setter per attribute, each finding the
 	// cell again. Kept across the lines so their storage is reused.
 	const size_t width = static_cast<size_t>(std::max(totalCols, 0));
-	std::vector<wxString> cellText(width), cellLink(width);
+	std::vector<ibString> cellText(width), cellLink(width);
 	std::vector<char>     cellSaid(width), cellRight(width);
 	// …and what its conditional appearance draws it with — the attribute of the line that wrote the cell: the row's
 	// on its heading and its total, a crossing's on its own figures. Null where no rule held; EMPTY where no line of
@@ -1602,7 +1602,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		std::fill(cellSaid.begin(), cellSaid.end(), 0);
 		std::fill(cellRight.begin(), cellRight.end(), 0);
 		std::fill(cellAttr.begin(), cellAttr.end(), nullptr);
-		for (wxString& link : cellLink)
+		for (ibString& link : cellLink)
 			link.clear();
 		// ⚠ THE DIGITS BY HAND. `wxString << int` formats through a printf, and this name is spelled
 		// for every cell of the table — a quarter of the writing, in the samples (2026-09-12, Debug).
@@ -1627,7 +1627,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			put(at, 8);
 			text[n++] = L'_';
 			put(col, 4);
-			return wxString(text, n);
+			return ibString(text, n);
 		};
 
 		// ⭐ THE ROW'S CHAIN — its own heading fields, one under the next, under the heading above it.
@@ -1648,9 +1648,9 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			const ibCompositionAttr* const drawn = rowAttr != nullptr ? &rowAttr->AttrOf(column) : nullptr;
 			if (drawn != nullptr)
 				cellAttr[f] = drawn;
-			wxString text = ColumnText(f < headingAt.size() ? headingAt[f] : m_schema.size(), source.m_heading[f], drawn);
+			ibString text = ColumnText(f < headingAt.size() ? headingAt[f] : m_schema.size(), source.m_heading[f], drawn);
 			if (f == 0)
-				text.insert(0, source.m_level * kIndentPerLevel, wxT(' '));
+				text.insert(0, source.m_level * kIndentPerLevel, ibT(' '));
 			if (f < m_widest.size())
 				m_widest[f] = std::max(m_widest[f], text.length());
 			cellText[f] = std::move(text);
@@ -1767,7 +1767,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	// them would repeat the corner figure a row lower with nothing new to say.
 	if (!m_columnTotalCells.empty() || m_hasGrandTotal) {
 		std::shared_ptr<ibSpreadsheetObject> totals(std::make_shared<ibSpreadsheetObject>());
-		totals->SetCellValue(0, 0, wxT("Total"));
+		totals->SetCellValue(0, 0, ibT("Total"));
 
 		// The caption stands where the root's heading would — the root's line draws it, as a row's draws its heading.
 		std::fill(cellAttr.begin(), cellAttr.end(), nullptr);
@@ -1786,7 +1786,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				const ibCompositionAttr* const drawn = attr != nullptr ? &attr->AttrOf(column) : nullptr;
 				if (drawn != nullptr)
 					cellAttr[static_cast<size_t>(col)] = drawn;
-				const wxString text = ColumnText(column, figures[m], drawn);
+				const ibString text = ColumnText(column, figures[m], drawn);
 				totals->SetCellValue(0, col, text);
 				if (figures[m].GetType() == ibValueTypes::TYPE_NUMBER)
 					totals->SetCellAlignment(0, col, wxALIGN_RIGHT, wxALIGN_CENTER);
@@ -1794,7 +1794,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				// that column over every row, so it breaks down by the column heading and by nothing
 				// on the row axis. (The corner figure is under neither — it is everything.)
 				if (!figures[m].IsEmpty()) {
-					const wxString name = wxString::Format(wxT("Cell_%d"), col);
+					const ibString name = ibString::Format(ibT("Cell_%d"), col);
 					totals->SetParameter(name, PackDetails(
 						m < m_measureAt.size() ? m_measureAt[m] : m_schema.size(),
 						figures[m], colChain).ToAnyValue());
@@ -1834,7 +1834,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		// returned figures — they still have to LAND, and a figure whose key does not match a slot
 		// lands nowhere and says nothing about it. Journalled because that gap is invisible on screen:
 		// an empty totals row looks exactly like a report that had no totals to show.
-		ibJournalInfo(wxT("composer.cross"), wxT("totals row: %d cell(s) from %u key total(s) + %u subtotal(s) over %d slot(s)"),
+		ibJournalInfo(ibT("composer.cross"), ibT("totals row: %d cell(s) from %u key total(s) + %u subtotal(s) over %d slot(s)"),
 			wrote, static_cast<unsigned>(m_columnTotalCells.size()),
 			static_cast<unsigned>(m_columnTotalSubtotals.size()), static_cast<int>(slots.size()));
 	}
@@ -1843,7 +1843,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 
 	// ⚠ WHAT THE TABLE ACTUALLY CAME OUT AS, said out loud — the two numbers a complaint is always
 	// about ("nothing above the sub-groups", "the records are missing") read straight off this line.
-	ibJournalInfo(wxT("composer.cross"), wxT("%d line(s) x %d column key(s), %d measure(s); %d column total(s), %d detail row(s)"),
+	ibJournalInfo(ibT("composer.cross"), ibT("%d line(s) x %d column key(s), %d measure(s); %d column total(s), %d detail row(s)"),
 		static_cast<int>(m_crossRows.size()), keys, measures,
 		static_cast<int>(m_columnTotalCells.size()), m_crossDetailRows);
 	m_crossDetailRows = 0;

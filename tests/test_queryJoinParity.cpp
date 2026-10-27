@@ -41,13 +41,13 @@ const ibTypeDescription kNoType;
 // (Mirrors TestCol in test_queryParity.cpp / test_queryComposer.cpp.)
 class TestCol : public ibBackendQueryColumn {
 public:
-	TestCol(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	TestCol(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
@@ -63,7 +63,7 @@ ibQueryRamTable MakeCustRam()
 	ibQueryRamTable t;
 	t.AddColumn(CUST_ID,   wxT("id"),   kNoType);
 	t.AddColumn(CUST_NAME, wxT("name"), kNoType);
-	auto row = [&](long id, const wxString& name) {
+	auto row = [&](long id, const ibString& name) {
 		const long r = t.AppendRow();
 		t.SetCell(r, CUST_ID,   ibValue(ibNumber(id)));
 		t.SetCell(r, CUST_NAME, ibValue(name));
@@ -112,9 +112,9 @@ bool MakeSqlFixture(ibDatabaseLayerSQLite& db)
 	return true;
 }
 
-int SqlCount(ibDatabaseLayerSQLite& db, const wxString& fromJoin)
+int SqlCount(ibDatabaseLayerSQLite& db, const ibString& fromJoin)
 {
-	const wxString q = wxT("SELECT COUNT(*) AS cnt FROM ") + fromJoin;
+	const ibString q = wxT("SELECT COUNT(*) AS cnt FROM ") + fromJoin;
 	ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), q);   // query as %s arg, not format string
 	if (rs == nullptr)
 		return -1;

@@ -24,10 +24,10 @@ void ReadPasswordChunk(const ibMemoryBuffer& buffer, ibUserInfo& info)
 	// from chunk garbage, so Verify against the user-typed password
 	// failed even for users created without a password).  Read into
 	// locals first, commit only after all four reads succeed.
-	wxString g = reader.r_stringZ();
-	wxString n = reader.r_stringZ();
-	wxString f = reader.r_stringZ();
-	wxString p = reader.r_stringZ();
+	ibString g = reader.r_stringZ();
+	ibString n = reader.r_stringZ();
+	ibString f = reader.r_stringZ();
+	ibString p = reader.r_stringZ();
 	info.m_strUserGuid     = std::move(g);
 	info.m_strUserName     = std::move(n);
 	info.m_strUserFullName = std::move(f);
@@ -69,8 +69,8 @@ void ReadRoleChunk(const ibMemoryBuffer& buffer, ibUserInfo& info)
 void ReadLanguageChunk(const ibMemoryBuffer& buffer, ibUserInfo& info)
 {
 	ibReaderMemory reader(buffer);
-	wxString g = reader.r_stringZ();
-	wxString c = reader.r_stringZ();
+	ibString g = reader.r_stringZ();
+	ibString c = reader.r_stringZ();
 	info.m_strLanguageGuid = std::move(g);
 	info.m_strLanguageCode = std::move(c);
 }
@@ -110,12 +110,12 @@ ibMemoryBuffer WriteLanguageChunk(const ibUserInfo& info)
 // use. Caller has already advanced the cursor onto the row of interest.
 void FillFromRow(ibQueryResult& row, ibUserInfo& info)
 {
-	info.m_strUserGuid     = row.GetResultString(wxT("guid"));
-	info.m_strUserName     = row.GetResultString(wxT("name"));
-	info.m_strUserFullName = row.GetResultString(wxT("fullName"));
+	info.m_strUserGuid     = row.GetResultString(ibT("guid"));
+	info.m_strUserName     = row.GetResultString(ibT("name"));
+	info.m_strUserFullName = row.GetResultString(ibT("fullName"));
 
 	ibMemoryBuffer buffer;
-	row.GetResultBlob(wxT("binaryData"), buffer);
+	row.GetResultBlob(ibT("binaryData"), buffer);
 	ibReaderMemory reader(buffer);
 
 	ibMemoryBuffer chunkPswd, chunkRole, chunkLang;
@@ -138,10 +138,10 @@ static ibQueryIR SysUserRowQuery(ibQueryExprPtr where)
 {
 	return ibQueryIR(ibProject(
 		where ? ibFilter(ibScan(user_table), where) : ibScan(user_table),
-		{ { ibCol(wxT("guid")),       wxEmptyString },
-		  { ibCol(wxT("name")),       wxEmptyString },
-		  { ibCol(wxT("fullName")),   wxEmptyString },
-		  { ibCol(wxT("binaryData")), wxEmptyString } }));
+		{ { ibCol(ibT("guid")),       ibEmptyString },
+		  { ibCol(ibT("name")),       ibEmptyString },
+		  { ibCol(ibT("fullName")),   ibEmptyString },
+		  { ibCol(ibT("binaryData")), ibEmptyString } }));
 }
 
 ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)
@@ -153,7 +153,7 @@ ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)
 	try {
 		ibDatabaseQueryBuilder q;
 		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(userGuid.str())))));
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("guid")), ibConst(ibValue(userGuid.str())))));
 		if (result.Next())
 			FillFromRow(result, info);
 	}
@@ -162,7 +162,7 @@ ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)
 	return info;
 }
 
-ibUserInfo ibUserInfo::Read(const wxString& userName)
+ibUserInfo ibUserInfo::Read(const ibString& userName)
 {
 	ibUserInfo info;
 	if (userName.IsEmpty())
@@ -171,7 +171,7 @@ ibUserInfo ibUserInfo::Read(const wxString& userName)
 	try {
 		ibDatabaseQueryBuilder q;
 		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("name")), ibConst(ibValue(userName)))));
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("name")), ibConst(ibValue(userName)))));
 		if (result.Next())
 			FillFromRow(result, info);
 	}
@@ -186,7 +186,7 @@ bool ibUserInfo::HasAny()
 	// as false, and an empty name was then accepted as open access.
 	ibDatabaseQueryBuilder q;
 	ibQueryResult result = q.ExecuteIR(
-		ibQueryIR(ibProject(ibScan(user_table), { { ibCol(wxT("name")), wxEmptyString } })));
+		ibQueryIR(ibProject(ibScan(user_table), { { ibCol(ibT("name")), ibEmptyString } })));
 	return result.Next();
 }
 
@@ -197,15 +197,15 @@ std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()
 	std::vector<Brief> list;
 	ibDatabaseQueryBuilder q;
 	ibQueryResult result = q.ExecuteIR(ibQueryIR(ibProject(ibScan(user_table),
-		{ { ibCol(wxT("guid")),     wxEmptyString },
-		  { ibCol(wxT("name")),     wxEmptyString },
-		  { ibCol(wxT("fullName")), wxEmptyString } })));
+		{ { ibCol(ibT("guid")),     ibEmptyString },
+		  { ibCol(ibT("name")),     ibEmptyString },
+		  { ibCol(ibT("fullName")), ibEmptyString } })));
 
 	while (result.Next()) {
 		Brief entry;
-		entry.m_strUserGuid     = result.GetResultString(wxT("guid"));
-		entry.m_strUserName     = result.GetResultString(wxT("name"));
-		entry.m_strUserFullName = result.GetResultString(wxT("fullName"));
+		entry.m_strUserGuid     = result.GetResultString(ibT("guid"));
+		entry.m_strUserName     = result.GetResultString(ibT("name"));
+		entry.m_strUserFullName = result.GetResultString(ibT("fullName"));
 		list.emplace_back(std::move(entry));
 	}
 	return list;
@@ -226,13 +226,13 @@ bool ibUserInfo::Save(const ibUserInfo& info)
 	try {
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibUpsert(user_table, {
-			{ wxT("guid"),       ibConst(ibValue(info.m_strUserGuid)) },
-			{ wxT("name"),       ibConst(ibValue(info.m_strUserName)) },
-			{ wxT("fullName"),   ibConst(ibValue(info.m_strUserFullName)) },
-			{ wxT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
-			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
-			{ wxT("binaryData"), ibConstBlob(writer.pointer(), writer.size()) },
-		}, { wxT("guid") }));
+			{ ibT("guid"),       ibConst(ibValue(info.m_strUserGuid)) },
+			{ ibT("name"),       ibConst(ibValue(info.m_strUserName)) },
+			{ ibT("fullName"),   ibConst(ibValue(info.m_strUserFullName)) },
+			{ ibT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
+			{ ibT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
+			{ ibT("binaryData"), ibConstBlob(writer.pointer(), writer.size()) },
+		}, { ibT("guid") }));
 		return true;   // a real failure THROWS (caught below); the affected-row count is not an error
 	}
 	catch (...) { return false; }
@@ -245,7 +245,7 @@ bool ibUserInfo::Delete(const ibGuid& userGuid)
 	try {
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibDelete(user_table,
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(userGuid.str())))));
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("guid")), ibConst(ibValue(userGuid.str())))));
 		return true;   // deleting an absent user (0 rows) is success; a real failure THROWS
 	}
 	catch (...) { return false; }

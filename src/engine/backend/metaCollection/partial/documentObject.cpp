@@ -55,7 +55,7 @@ bool ibValueRecordDataObjectDocument::IsPosted() const
 const ibSourceExplorer* ibValueRecordDataObjectDocument::GetSourceExplorer() const
 {
 	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
-		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+		ibT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false, false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
@@ -141,18 +141,18 @@ void ibValueRecordDataObjectDocument::FillMethods(ibMemberTable& helper) const
 	// ⭐ THE SAME MOMENT THE REFERENCE VENDS. An object is asked when it is exactly as its reference
 	// is, and both answer with the pair already assembled -- one question, one answer, whichever
 	// hand it is asked from.
-	helper.AppendFunc(wxT("PointInTime"), wxT("PointInTime()"));
-	helper.AppendFunc(wxT("IsNew"), wxT("IsNew()"));
-	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
-	helper.AppendFunc(wxT("Fill"), 1, wxT("Fill(object : any)"));
-	helper.AppendFunc(wxT("Write"), 2, wxT("Write(writeMode : writeMode, postingMode : postingMode)"));
-	helper.AppendFunc(wxT("Delete"), wxT("Delete()"));
-	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
-	helper.AppendFunc(wxT("GetFormObject"), 2, wxT("GetFormObject(name : string, owner : any)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-	helper.AppendProc(wxT("Lock"),   wxT("Lock()"));
-	helper.AppendProc(wxT("Unlock"), wxT("Unlock()"));
+	helper.AppendFunc(ibT("PointInTime"), ibT("PointInTime()"));
+	helper.AppendFunc(ibT("IsNew"), ibT("IsNew()"));
+	helper.AppendFunc(ibT("Copy"), ibT("Copy()"));
+	helper.AppendFunc(ibT("Fill"), 1, ibT("Fill(object : any)"));
+	helper.AppendFunc(ibT("Write"), 2, ibT("Write(writeMode : writeMode, postingMode : postingMode)"));
+	helper.AppendFunc(ibT("Delete"), ibT("Delete()"));
+	helper.AppendFunc(ibT("Modified"), ibT("Modified()"));
+	helper.AppendFunc(ibT("GetFormObject"), 2, ibT("GetFormObject(name : string, owner : any)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
+	helper.AppendProc(ibT("Lock"),   ibT("Lock()"));
+	helper.AppendProc(ibT("Unlock"), ibT("Unlock()"));
 }
 
 bool ibValueRecordDataObjectDocument::SetPropVal(const long lPropNum, const ibValue& varPropVal)

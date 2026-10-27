@@ -22,12 +22,11 @@
 //	              configuration is loaded. Every tool answers these questions
 //	              from its own declaration.
 //
-//	⚠ BACKEND TOOLS ONLY. The registry is filled by the MCP_TOOL_REGISTER lines
-//	  at the bottom of each tool's file, so it holds whatever is LINKED — and
-//	  oes_tests links backend, not frontend or designer. The form verbs
-//	  (frontend/mcp/tools) and the message verbs (designer/mcp/tools) are absent
-//	  here by construction, not by oversight. The count assertion below is
-//	  deliberately a floor rather than an equality for the same reason.
+//	⚠ BACKEND TOOLS, PLUS WHAT ELSE IS LINKED. The registry is filled by the
+//	  MCP_TOOL_REGISTER lines at the bottom of each tool's file, so it holds
+//	  whatever is LINKED — oes_tests links backend and frmserver (its one verb,
+//	  client_call, in frmserver/mcp/tools), no client. The count assertion below
+//	  is deliberately a floor rather than an equality for the same reason.
 ////////////////////////////////////////////////////////////////////////////
 
 #include <gtest/gtest.h>
@@ -56,9 +55,9 @@ namespace {
 
 // The engine's sources, found from THIS file's location - CMake runs the binary from the build tree,
 // so the path is resolved the way test_propertySerialized.cpp resolves its partials.
-wxString EngineSourceDir()
+ibString EngineSourceDir()
 {
-	wxFileName here(wxString::FromUTF8(__FILE__));
+	wxFileName here(ibString::FromUTF8(__FILE__));
 	here.SetFullName(wxEmptyString);
 	here.RemoveLastDir();                      // tests -> enterprise
 	here.AppendDir(wxT("src"));
@@ -159,7 +158,7 @@ ibDataNode SchemaOf(const ibMcpTool* tool)
 // What KIND a tool declared an argument as, found by the name the schema publishes
 // it under. The schema walk sees names and JSON fields; the kind lives on the
 // argument, and one check below needs both sides of that pair.
-ibMcpTool::ibMcpArgument::Kind KindOfArgument(const ibMcpTool* tool, const wxString& name)
+ibMcpTool::ibMcpArgument::Kind KindOfArgument(const ibMcpTool* tool, const ibString& name)
 {
 	for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
 		if (argument.Name() == name)
@@ -168,9 +167,9 @@ ibMcpTool::ibMcpArgument::Kind KindOfArgument(const ibMcpTool* tool, const wxStr
 	return ibMcpTool::ibMcpArgument::Kind::Text;
 }
 
-std::set<wxString> DeclaredArguments(const ibDataNode& schema)
+std::set<ibString> DeclaredArguments(const ibDataNode& schema)
 {
-	std::set<wxString> names;
+	std::set<ibString> names;
 
 	if (auto properties = schema.FindChild(wxT("properties"))) {
 		for (const auto& entry : properties->Fields())
@@ -181,9 +180,9 @@ std::set<wxString> DeclaredArguments(const ibDataNode& schema)
 }
 
 // The names a tool says it cannot work without.
-std::vector<wxString> RequiredArguments(const ibDataNode& schema)
+std::vector<ibString> RequiredArguments(const ibDataNode& schema)
 {
-	std::vector<wxString> names;
+	std::vector<ibString> names;
 
 	if (auto required = schema.FindField(wxT("required"))) {
 		if (required->Kind() == ibDataKind::Array) {
@@ -213,11 +212,11 @@ TEST(McpToolRegistry, Tools_AreRegisteredByLinkingTheirOwnFile)
 
 TEST(McpToolRegistry, EveryTool_HasANameNobodyElseHas)
 {
-	std::map<wxString, int> seen;
+	std::map<ibString, int> seen;
 
 	for (const ibMcpTool* tool : ibMcpTools()) {
 		ASSERT_NE(tool, nullptr);
-		const wxString name = tool->GetName();
+		const ibString name = tool->GetName();
 
 		EXPECT_FALSE(name.IsEmpty()) << "a tool with no name cannot be invoked at all";
 		seen[name]++;
@@ -250,7 +249,7 @@ TEST(McpGreetingGate, EveryVerbAllowedBeforeTheGreeting_IsARealTool)
 {
 	ASSERT_FALSE(ibMcpGreetingVerbs().empty());
 
-	for (const wxString& verb : ibMcpGreetingVerbs())
+	for (const ibString& verb : ibMcpGreetingVerbs())
 		EXPECT_NE(ibFindMcpTool(verb), nullptr) << "greeting verb with no tool: " << verb.ToStdString();
 }
 
@@ -303,10 +302,10 @@ TEST(McpToolContract, EveryTool_DescribesItselfForTheCaller)
 // verbs and the message verbs are sent down the same wire.
 TEST(McpToolContract, EveryTextSentDownTheWire_IsAscii)
 {
-	const wxString engine = EngineSourceDir();
+	const ibString engine = EngineSourceDir();
 	size_t scanned = 0;
 
-	for (const wxString& layer : { wxString(wxT("backend")), wxString(wxT("frontend")), wxString(wxT("designer")) }) {
+	for (const ibString& layer : { ibString(wxT("backend")), ibString(wxT("frontend")), ibString(wxT("designer")) }) {
 		wxFileName dir(engine, wxEmptyString);
 		dir.AppendDir(layer);
 		dir.AppendDir(wxT("mcp"));
@@ -316,8 +315,8 @@ TEST(McpToolContract, EveryTextSentDownTheWire_IsAscii)
 		wxArrayString files;
 		wxDir::GetAllFiles(dir.GetPath(), &files, wxEmptyString, wxDIR_FILES | wxDIR_DIRS);
 
-		for (const wxString& path : files) {
-			const wxString ext = wxFileName(path).GetExt().Lower();
+		for (const ibString& path : files) {
+			const ibString ext = wxFileName(path).GetExt().Lower();
 			if (ext != wxT("cpp") && ext != wxT("h"))
 				continue;
 
@@ -406,9 +405,9 @@ TEST(McpToolContract, EveryRequiredArgument_IsAlsoDeclared)
 	for (const ibMcpTool* tool : ibMcpTools()) {
 
 		const ibDataNode schema = SchemaOf(tool);
-		const std::set<wxString> declared = DeclaredArguments(schema);
+		const std::set<ibString> declared = DeclaredArguments(schema);
 
-		for (const wxString& name : RequiredArguments(schema)) {
+		for (const ibString& name : RequiredArguments(schema)) {
 			EXPECT_TRUE(declared.count(name) != 0)
 				<< tool->GetName().ToStdString() << " requires '" << name.ToStdString()
 				<< "' and never declares it";
@@ -427,10 +426,10 @@ TEST(McpToolContract, PictureSet_DeclaresTheNameItAsksForWhenTheImageComesAsData
 	const ibMcpTool* tool = ibFindMcpTool(wxT("picture_set"));
 	ASSERT_NE(tool, nullptr);
 
-	const std::set<wxString> declared = DeclaredArguments(SchemaOf(tool));
-	for (const wxString name : { wxT("id"), wxT("engine"), wxT("configuration"), wxT("data"), wxT("svg"),
+	const std::set<ibString> declared = DeclaredArguments(SchemaOf(tool));
+	for (const ibString name : { wxT("id"), wxT("engine"), wxT("configuration"), wxT("data"), wxT("svg"),
 		wxT("width"), wxT("height"), wxT("name") })
-		EXPECT_TRUE(declared.count(name) != 0) << "picture_set does not declare '" << wxString(name).ToStdString() << "'";
+		EXPECT_TRUE(declared.count(name) != 0) << "picture_set does not declare '" << ibString(name).ToStdString() << "'";
 }
 
 // The same fact for the drawing verb: it refuses without `svg` and without `name`, and sizes by `width` /
@@ -440,9 +439,9 @@ TEST(McpToolContract, PictureFromSvg_DeclaresEverythingItReads)
 	const ibMcpTool* tool = ibFindMcpTool(wxT("picture_from_svg"));
 	ASSERT_NE(tool, nullptr);
 
-	const std::set<wxString> declared = DeclaredArguments(SchemaOf(tool));
-	for (const wxString name : { wxT("svg"), wxT("width"), wxT("height"), wxT("name") })
-		EXPECT_TRUE(declared.count(name) != 0) << "picture_from_svg does not declare '" << wxString(name).ToStdString() << "'";
+	const std::set<ibString> declared = DeclaredArguments(SchemaOf(tool));
+	for (const ibString name : { wxT("svg"), wxT("width"), wxT("height"), wxT("name") })
+		EXPECT_TRUE(declared.count(name) != 0) << "picture_from_svg does not declare '" << ibString(name).ToStdString() << "'";
 }
 
 TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
@@ -523,20 +522,20 @@ TEST(McpToolContract, EveryNameSaidInADescription_IsANameThatExists)
 	for (const ibMcpTool* tool : ibMcpTools()) {
 
 		// What this tool itself declares — its own arguments are fair game to name.
-		std::set<wxString> declared;
+		std::set<ibString> declared;
 		for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments())
 			declared.insert(argument.Name());
 
-		const wxString said = tool->GetDescription();
+		const ibString said = tool->GetDescription();
 
 		size_t at = said.find(wxT('`'));
-		while (at != wxString::npos) {
+		while (at != ibString::npos) {
 
 			const size_t close = said.find(wxT('`'), at + 1);
-			if (close == wxString::npos)
+			if (close == ibString::npos)
 				break;
 
-			const wxString word = said.Mid(at + 1, close - at - 1);
+			const ibString word = said.Mid(at + 1, close - at - 1);
 			at = said.find(wxT('`'), close + 1);
 
 			// Only the shape a verb has: lower_snake_case with a family prefix. A back-quoted
@@ -587,7 +586,7 @@ TEST(McpToolContract, EveryToolName_IsSpelledTheWayTheProtocolSpellsThem)
 	// that there is no rule, and it starts guessing.
 	for (const ibMcpTool* tool : ibMcpTools()) {
 
-		const wxString name = tool->GetName();
+		const ibString name = tool->GetName();
 
 		for (size_t index = 0; index < name.length(); ++index) {
 			const wxUniChar symbol = name[index];
@@ -620,7 +619,7 @@ TEST(McpToolContract, EveryRequiredArgument_IsRefusedWhenItDoesNotCome)
 	// and took the designer down (2026-09-01) — the class, not that one tool.
 	for (const ibMcpTool* tool : ibMcpTools()) {
 
-		const std::vector<wxString> required = RequiredArguments(SchemaOf(tool));
+		const std::vector<ibString> required = RequiredArguments(SchemaOf(tool));
 		if (required.empty())
 			continue;
 
@@ -635,7 +634,7 @@ TEST(McpToolContract, EveryRequiredArgument_IsRefusedWhenItDoesNotCome)
 
 		// …and it names ONE OF ITS OWN, so the refusal a caller reads points at something they can
 		// send rather than at a name from somewhere else.
-		const wxString named = ibMcpMissingArgument(tool, emptyHands);
+		const ibString named = ibMcpMissingArgument(tool, emptyHands);
 		EXPECT_TRUE(std::find(required.begin(), required.end(), named) != required.end())
 			<< tool->GetName().ToStdString() << " refuses by naming '" << named.ToStdString()
 			<< "', which is not among the arguments it publishes as required";
@@ -661,7 +660,7 @@ TEST(McpToolContract, EveryArgument_IsHeldToTheShapeItPublishes)
 				continue;
 
 			ibDataNode wrong;
-			wrong.SetValue(argument.Name(), wxString(wxT("plainly a string")));
+			wrong.SetValue(argument.Name(), ibString(wxT("plainly a string")));
 
 			EXPECT_FALSE(ibMcpArgumentFault(tool, wrong).IsEmpty())
 				<< tool->GetName().ToStdString() << "'s '" << argument.Name().ToStdString()
@@ -682,14 +681,14 @@ TEST(McpToolContract, EveryClosedSet_RefusesAWordOutsideIt)
 				continue;
 
 			ibDataNode outside;
-			outside.SetValue(argument.Name(), wxString(wxT("no-tool-declares-this-word")));
+			outside.SetValue(argument.Name(), ibString(wxT("no-tool-declares-this-word")));
 
 			EXPECT_FALSE(ibMcpArgumentFault(tool, outside).IsEmpty())
 				<< tool->GetName().ToStdString() << "'s '" << argument.Name().ToStdString()
 				<< "' publishes a closed set and took a word from outside it";
 
 			// …and the words it DOES publish are taken, or the set is a wall rather than a contract.
-			for (const wxString& word : argument.Values()) {
+			for (const ibString& word : argument.Values()) {
 				ibDataNode inside;
 				inside.SetValue(argument.Name(), word);
 				EXPECT_TRUE(ibMcpArgumentFault(tool, inside).IsEmpty())
@@ -711,7 +710,7 @@ TEST(McpToolContract, EveryClosedSet_RefusesAWordOutsideIt)
 
 TEST(McpSearch, AWordTooMany_NarrowsTheAnswerInsteadOfErasingIt)
 {
-	const wxString text = wxT("Stock is moved between warehouses with a transfer document.");
+	const ibString text = wxT("Stock is moved between warehouses with a transfer document.");
 
 	size_t asked = 0;
 
@@ -729,7 +728,7 @@ TEST(McpSearch, AWordTooMany_NarrowsTheAnswerInsteadOfErasingIt)
 
 TEST(McpSearch, AWordIsMetAtItsStem_SoTheFormOfTheNounDoesNotDecide)
 {
-	const wxString text = wxT("Distribution of overheads by a base, lot by lot.");
+	const ibString text = wxT("Distribution of overheads by a base, lot by lot.");
 
 	EXPECT_GT(ibMcpWordsFound(text, wxT("distributing"), nullptr), 0u);
 	EXPECT_GT(ibMcpWordsFound(text, wxT("bases"), nullptr), 0u);
@@ -750,7 +749,7 @@ TEST(McpSearch, AWordIsMetAtItsStem_SoTheFormOfTheNounDoesNotDecide)
 // a different word.
 TEST(McpSearch, AStemKeepsTwoThirdsOfItsWord_SoOneWordDoesNotBecomeAnother)
 {
-	const wxString commands = wxT("A command bar holds the common commands of a section.");
+	const ibString commands = wxT("A command bar holds the common commands of a section.");
 
 	EXPECT_EQ(ibMcpWordsFound(commands, wxT("comment"), nullptr), 0u);
 	EXPECT_EQ(ibMcpWordsFound(commands, wxT("commission"), nullptr), 0u);
@@ -761,14 +760,14 @@ TEST(McpSearch, AStemKeepsTwoThirdsOfItsWord_SoOneWordDoesNotBecomeAnother)
 
 	// And the inflections the rule exists for are untouched: two thirds of a long word is still
 	// plenty of room for an ending to differ.
-	const wxString text = wxT("Distribution of overheads by a base, lot by lot.");
+	const ibString text = wxT("Distribution of overheads by a base, lot by lot.");
 	EXPECT_GT(ibMcpWordsFound(text, wxT("distributing"), nullptr), 0u);
 	EXPECT_GT(ibMcpWordsFound(text, wxT("bases"), nullptr), 0u);
 }
 
 TEST(McpSearch, APatternIsReadAsOne_ButAnOrdinaryBracketIsNot)
 {
-	const wxString text = wxT("Write-off by FIFO takes the oldest lot first.");
+	const ibString text = wxT("Write-off by FIFO takes the oldest lot first.");
 
 	EXPECT_TRUE(ibMcpIsRegex(wxT("lot|batch|fifo")));
 	EXPECT_GT(ibMcpWordsFound(text, wxT("lot|batch|fifo"), nullptr), 0u);
@@ -819,7 +818,7 @@ TEST(McpClipboard, ASlot_KeepsWhatWasPutInItUntilItIsReplaced)
 	slot.m_kind = ibMcpClipboardKind::Metadata;
 	slot.m_name = wxT("GoodsReceipt");
 	slot.m_what = wxT("Document");
-	slot.m_payload.SetValue(wxT("marker"), wxString(wxT("first")));
+	slot.m_payload.SetValue(wxT("marker"), ibString(wxT("first")));
 
 	// The SAME slot is handed back — a copy would make copy/paste two verbs over
 	// two different things.
@@ -829,7 +828,7 @@ TEST(McpClipboard, ASlot_KeepsWhatWasPutInItUntilItIsReplaced)
 	EXPECT_EQ(again.m_kind, ibMcpClipboardKind::Metadata);
 	EXPECT_EQ(again.m_name, wxT("GoodsReceipt"));
 	EXPECT_EQ(again.m_what, wxT("Document"));
-	EXPECT_EQ(again.m_payload.GetValue<wxString>(wxT("marker")), wxT("first"));
+	EXPECT_EQ(again.m_payload.GetValue<ibString>(wxT("marker")), wxT("first"));
 }
 
 TEST(McpClipboard, EveryKind_NamesItselfForARefusal)
@@ -853,7 +852,7 @@ TEST(McpClipboard, OnlyFilledSlots_AreListed)
 
 	ibMcpClipboard(wxT("test.notlisted"));   // touched, still empty
 
-	const std::vector<wxString> slots = ibMcpClipboardSlots();
+	const std::vector<ibString> slots = ibMcpClipboardSlots();
 
 	EXPECT_NE(std::find(slots.begin(), slots.end(), wxT("test.listed")), slots.end());
 	EXPECT_EQ(std::find(slots.begin(), slots.end(), wxT("test.notlisted")), slots.end());
@@ -898,11 +897,11 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 	const ibMcpTool* tool = ibFindMcpTool(wxT("metadata_bind"));
 	ASSERT_NE(tool, nullptr);
 
-	const auto bind = [&](auto setTarget, bool remove, wxString& refusal) {
+	const auto bind = [&](auto setTarget, bool remove, ibString& refusal) {
 		ibDataNode params;
 		ibDataNode result;
 		params.SetValue(wxT("id"), (std::int32_t)document->GetMetaID());
-		params.SetValue(wxT("property"), wxString(wxT("ListRegisterRecord")));
+		params.SetValue(wxT("property"), ibString(wxT("ListRegisterRecord")));
 		setTarget(params);
 		if (remove)
 			params.SetValue(wxT("remove"), true);
@@ -910,9 +909,9 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 		return ok;
 	};
 
-	wxString refusal;
+	ibString refusal;
 	ASSERT_TRUE(bind([&](ibDataNode& params) {
-		params.SetValue(wxT("target"), wxString(wxT("Cars")));
+		params.SetValue(wxT("target"), ibString(wxT("Cars")));
 	}, false, refusal)) << refusal.ToStdString();
 
 	ibValueMetaObjectRegisterData* asRegister = dynamic_cast<ibValueMetaObjectRegisterData*>(registerOne);
@@ -922,7 +921,7 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 
 	refusal.clear();
 	EXPECT_TRUE(bind([&](ibDataNode& params) {
-		params.SetValue(wxT("target"), wxString(wxT("AccumulationRegister.Cars")));
+		params.SetValue(wxT("target"), ibString(wxT("AccumulationRegister.Cars")));
 	}, false, refusal)) << refusal.ToStdString();
 
 	ibValueMetaObject* registerTwo = cfg->CreateMetaObject(g_metaAccumulationRegisterCLSID, root, false);
@@ -931,15 +930,15 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 
 	refusal.clear();
 	EXPECT_FALSE(bind([&](ibDataNode& params) {
-		params.SetValue(wxT("target"), wxString(wxT("Cars")));
+		params.SetValue(wxT("target"), ibString(wxT("Cars")));
 	}, false, refusal));
-	EXPECT_TRUE(refusal.Contains(wxString::Format(wxT("#%ld"), (long)registerOne->GetMetaID())));
-	EXPECT_TRUE(refusal.Contains(wxString::Format(wxT("#%ld"), (long)registerTwo->GetMetaID())));
+	EXPECT_TRUE(refusal.Contains(ibString::Format(wxT("#%ld"), (long)registerOne->GetMetaID())));
+	EXPECT_TRUE(refusal.Contains(ibString::Format(wxT("#%ld"), (long)registerTwo->GetMetaID())));
 	EXPECT_TRUE(refusal.Contains(wxT("AccumulationRegister.Cars")));
 
 	refusal.clear();
 	ASSERT_TRUE(bind([&](ibDataNode& params) {
-		params.SetValue(wxT("target"), wxString::Format(wxT("%ld"), (long)registerTwo->GetMetaID()));
+		params.SetValue(wxT("target"), ibString::Format(wxT("%ld"), (long)registerTwo->GetMetaID()));
 	}, false, refusal)) << refusal.ToStdString();
 
 	ibValueMetaObjectRegisterData* second = dynamic_cast<ibValueMetaObjectRegisterData*>(registerTwo);

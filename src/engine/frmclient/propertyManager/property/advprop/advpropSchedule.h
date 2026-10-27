@@ -9,8 +9,7 @@
 class FRMCLIENT_API ibPropertyObject;
 
 // -----------------------------------------------------------------------
-// ibPGScheduleProperty — the frontend half of the schedule property, the desktop's (frontend/propertyManager/property/
-// advprop/advpropSchedule.h).
+// ibPGScheduleProperty — the frontend half of the schedule property, as the old desktop's.
 //
 // Modelled on ibPGDynamicListProperty: read-only, no in-place editor, the value is a click flag;
 // clicking fires OnSetValue, which CallAfter-opens the schedule editor. A schedule is a structure

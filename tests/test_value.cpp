@@ -26,10 +26,10 @@
 TEST(ValueTest, SizeofReport) {
     RecordProperty("sizeof_ibValue", (int)sizeof(ibValue));
     RecordProperty("sizeof_ibNumber", (int)sizeof(ibNumber));
-    RecordProperty("sizeof_wxString", (int)sizeof(wxString));
+    RecordProperty("sizeof_wxString", (int)sizeof(ibString));
     std::cout << "[ footprint ] sizeof(ibValue)="  << sizeof(ibValue)
               << "  sizeof(ibNumber)=" << sizeof(ibNumber)
-              << "  sizeof(wxString)=" << sizeof(wxString) << std::endl;
+              << "  sizeof(wxString)=" << sizeof(ibString) << std::endl;
     SUCCEED();
 }
 
@@ -59,13 +59,13 @@ TEST(ValueUnion, EveryKindStartsFromAnEmptyWord) {
     v = wxT("text");
     v.SetType(ibValueTypes::TYPE_NUMBER);       // nor a string's text
     EXPECT_TRUE(v.GetNumber().IsZero());
-    v = ibNumber(wxString(wxT("765.3456754567765443343")));
+    v = ibNumber(ibString(wxT("765.3456754567765443343")));
     v.SetType(ibValueTypes::TYPE_STRING);       // nor a heap-tier number
     EXPECT_TRUE(v.GetString().IsEmpty());
 }
 
 TEST(ValueUnion, KindChangesOnTheLetRoad) {
-    const ibValue number(ibNumber(wxString(wxT("765.3456754567765443343"))));
+    const ibValue number(ibNumber(ibString(wxT("765.3456754567765443343"))));
     const ibValue text(wxT("text"));
     const ibValue flag(true);
     ibValue slot;
@@ -131,7 +131,7 @@ TEST(ValueTest, NumberGetBoolean) {
 
 TEST(ValueTest, NumberToString) {
     ibValue v(123);
-    wxString s = v.GetString();
+    ibString s = v.GetString();
     EXPECT_FALSE(s.IsEmpty());
 }
 
@@ -140,13 +140,13 @@ TEST(ValueTest, NumberToString) {
 // ===========================================================================
 
 TEST(ValueTest, StringConstruction) {
-    ibValue v(wxString(wxT("hello")));
+    ibValue v(ibString(wxT("hello")));
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
     EXPECT_EQ(v.GetString(), wxT("hello"));
 }
 
 TEST(ValueTest, EmptyString) {
-    ibValue v(wxString(wxT("")));
+    ibValue v(ibString(wxT("")));
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
     EXPECT_TRUE(v.GetString().IsEmpty());
 }
@@ -397,7 +397,7 @@ TEST(ValueTest, AssignmentOperator) {
 
 TEST(ValueTest, AssignString) {
     ibValue v;
-    v = wxString(wxT("test"));
+    v = ibString(wxT("test"));
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
     EXPECT_EQ(v.GetString(), wxT("test"));
 }
@@ -431,9 +431,9 @@ TEST(ValueTest, NumberOrdering) {
 }
 
 TEST(ValueTest, StringEquality) {
-    ibValue a(wxString(wxT("abc")));
-    ibValue b(wxString(wxT("abc")));
-    ibValue c(wxString(wxT("xyz")));
+    ibValue a(ibString(wxT("abc")));
+    ibValue b(ibString(wxT("abc")));
+    ibValue c(ibString(wxT("xyz")));
     EXPECT_TRUE(a == b);
     EXPECT_TRUE(a != c);
 }
@@ -637,7 +637,7 @@ TEST(ValueAccess, BooleanReadsBack) {
 }
 
 TEST(ValueAccess, StringReadsBack) {
-    EXPECT_EQ(ibValue(wxString(wxT("hi"))).GetString(), wxT("hi"));
+    EXPECT_EQ(ibValue(ibString(wxT("hi"))).GetString(), wxT("hi"));
 }
 
 // ===========================================================================
@@ -652,8 +652,8 @@ TEST(ValueAccess, StringReadsBack) {
 
 TEST(ValueHash, DeterministicForSameValue) {
     EXPECT_EQ(ibValue(ibNumber(7)).GetValueHash(), ibValue(ibNumber(7)).GetValueHash());
-    EXPECT_EQ(ibValue(wxString(wxT("k"))).GetValueHash(),
-              ibValue(wxString(wxT("k"))).GetValueHash());
+    EXPECT_EQ(ibValue(ibString(wxT("k"))).GetValueHash(),
+              ibValue(ibString(wxT("k"))).GetValueHash());
 }
 
 TEST(ValueHash, DiffersForDifferentNumbers) {
@@ -674,21 +674,21 @@ TEST(ValueHash, DiffersForDifferentNumbers) {
 // ===========================================================================
 
 TEST(ValueOrderAcrossKinds, NumberOrdersBeforeString) {
-    EXPECT_TRUE (ibValue(1) < ibValue(wxString(wxT("abc"))));
-    EXPECT_FALSE(ibValue(wxString(wxT("abc"))) < ibValue(1));
+    EXPECT_TRUE (ibValue(1) < ibValue(ibString(wxT("abc"))));
+    EXPECT_FALSE(ibValue(ibString(wxT("abc"))) < ibValue(1));
 }
 
 // The case that pins the rule down: with coercion, "0" would become 0 and this
 // would read false. The kinds are apart, so the digits in the string are not
 // consulted at all.
 TEST(ValueOrderAcrossKinds, NumberOrdersBeforeStringThatLooksSmaller) {
-    EXPECT_TRUE (ibValue(1) < ibValue(wxString(wxT("0"))));
-    EXPECT_FALSE(ibValue(wxString(wxT("0"))) < ibValue(1));
+    EXPECT_TRUE (ibValue(1) < ibValue(ibString(wxT("0"))));
+    EXPECT_FALSE(ibValue(ibString(wxT("0"))) < ibValue(1));
 }
 
 TEST(ValueOrderAcrossKinds, BooleanOrdersBeforeString) {
-    EXPECT_TRUE (ibValue(true) < ibValue(wxString(wxT("True"))));
-    EXPECT_FALSE(ibValue(wxString(wxT("True"))) < ibValue(true));
+    EXPECT_TRUE (ibValue(true) < ibValue(ibString(wxT("True"))));
+    EXPECT_FALSE(ibValue(ibString(wxT("True"))) < ibValue(true));
 }
 
 // A BOOLEAN AND A NUMBER NO LONGER MEET ON VALUE, and that is a fix rather than
@@ -713,7 +713,7 @@ TEST(ValueOrderAcrossKinds, BooleanAndNumberAreSeparatedNotCoerced) {
 TEST(ValueOrderAcrossKinds, EqualityUnderOrderIsTransitive) {
     const ibValue samples[] = {
         ibValue(), ibValue(true), ibValue(false), ibValue(0), ibValue(1), ibValue(2),
-        ibValue(ibNumber(1.0)), ibValue(wxString(wxT("1"))), ibValue(wxString(wxT("abc"))),
+        ibValue(ibNumber(1.0)), ibValue(ibString(wxT("1"))), ibValue(ibString(wxT("abc"))),
     };
     for (const ibValue& a : samples)
         for (const ibValue& b : samples)
@@ -728,21 +728,21 @@ TEST(ValueOrderAcrossKinds, EqualityUnderOrderIsTransitive) {
 
 TEST(ValueOrderAcrossKinds, EmptySortsBelowEverything) {
     EXPECT_TRUE(ibValue() < ibValue(1));
-    EXPECT_TRUE(ibValue() < ibValue(wxString(wxT("a"))));
+    EXPECT_TRUE(ibValue() < ibValue(ibString(wxT("a"))));
 }
 
 // Equality is type-strict and stays so: it never had the coercion the order is
 // giving up here, and `1` was never equal to "1".
 TEST(ValueOrderAcrossKinds, EqualityRemainsTypeStrict) {
-    EXPECT_FALSE(ibValue(1) == ibValue(wxString(wxT("1"))));
-    EXPECT_TRUE (ibValue(1) != ibValue(wxString(wxT("1"))));
+    EXPECT_FALSE(ibValue(1) == ibValue(ibString(wxT("1"))));
+    EXPECT_TRUE (ibValue(1) != ibValue(ibString(wxT("1"))));
 }
 
 // '<>' is '=' negated now, so the two can no longer answer differently about
 // one pair — which is what they could do while each carried its own switch.
 TEST(ValueOrderAcrossKinds, NotEqualIsExactlyTheNegationOfEqual) {
     const ibValue samples[] = {
-        ibValue(), ibValue(1), ibValue(true), ibValue(wxString(wxT("1"))), ibValue(wxString(wxT("x"))),
+        ibValue(), ibValue(1), ibValue(true), ibValue(ibString(wxT("1"))), ibValue(ibString(wxT("x"))),
     };
     for (const ibValue& a : samples)
         for (const ibValue& b : samples)
@@ -775,8 +775,8 @@ TEST(ValueThroughReference, NumberEqualsAReferenceToTheSameNumber) {
 }
 
 TEST(ValueThroughReference, StringEqualsAReferenceToTheSameString) {
-    const ibValue direct(wxString(wxT("abc")));
-    const ibValue viaRef(new ibValue(wxString(wxT("abc"))));
+    const ibValue direct(ibString(wxT("abc")));
+    const ibValue viaRef(new ibValue(ibString(wxT("abc"))));
     EXPECT_TRUE(direct.CompareValueEQ(viaRef));
     EXPECT_TRUE(viaRef.CompareValueEQ(direct));
 }
@@ -792,14 +792,14 @@ TEST(ValueThroughReference, OrderingIsTheSameThroughAReference) {
 // before a bare string and against a referenced one by a different rule.
 TEST(ValueThroughReference, RankRuleReadsThroughAReference) {
     const ibValue number(1);
-    const ibValue textViaRef(new ibValue(wxString(wxT("0"))));
+    const ibValue textViaRef(new ibValue(ibString(wxT("0"))));
     EXPECT_EQ(number.CompareValueLS(textViaRef), -1);
     EXPECT_EQ(textViaRef.CompareValueLS(number),  1);
 }
 
 TEST(ValueThroughReference, ReferenceToNumberIsNotEqualToItsSpelling) {
     const ibValue numberViaRef(new ibValue(1));
-    EXPECT_FALSE(numberViaRef.CompareValueEQ(ibValue(wxString(wxT("1")))));
+    EXPECT_FALSE(numberViaRef.CompareValueEQ(ibValue(ibString(wxT("1")))));
 }
 
 // ===========================================================================
@@ -832,10 +832,10 @@ TEST(ValueHashContract, OrderEqualImpliesHashEqual) {
         ibValue(ibNumber(1.0)),                      // the same number as 1
         ibValue(ibNumber(1.5)),                      // shares 1's bucket, differs in order
         ibValue(true), ibValue(false),               // True coerces to 1
-        ibValue(wxString(wxT("1"))),                 // NOT the number 1
-        ibValue(wxString(wxT("abc"))),
+        ibValue(ibString(wxT("1"))),                 // NOT the number 1
+        ibValue(ibString(wxT("abc"))),
         ibValue(new ibValue(1)),                     // a reference to 1
-        ibValue(new ibValue(wxString(wxT("abc")))),  // a reference to "abc"
+        ibValue(new ibValue(ibString(wxT("abc")))),  // a reference to "abc"
         ibValue(static_cast<ibValue*>(arrayA)),
         ibValue(static_cast<ibValue*>(arrayB)),      // equal contents, separate object
     };
@@ -859,8 +859,8 @@ TEST(ValueHashContract, TrailingZeroHashesWithTheInteger) {
 
 TEST(ValueHashContract, ReferenceHashesAsItsTarget) {
     EXPECT_EQ(ibValue(7).GetValueHash(), ibValue(new ibValue(7)).GetValueHash());
-    EXPECT_EQ(ibValue(wxString(wxT("k"))).GetValueHash(),
-              ibValue(new ibValue(wxString(wxT("k")))).GetValueHash());
+    EXPECT_EQ(ibValue(ibString(wxT("k"))).GetValueHash(),
+              ibValue(new ibValue(ibString(wxT("k")))).GetValueHash());
 }
 
 TEST(ValueHashContract, ArraysWithEqualContentsHashAlike) {

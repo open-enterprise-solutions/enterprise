@@ -112,8 +112,8 @@ bool ibVisualHost::UpdateVisualHost(ibDataNode& frame)
 		frame.SetMetaId(form->EnsureControlID());
 		RefreshControl(form, frame);
 	}
-	ibJournalInfo(wxT("client"), wxT("      the view %s: %u controls drawn, properties written %lld ms, states %lld ms"),
-		whole ? wxT("whole") : wxT("in part"), s_drawTimes.controls, s_drawTimes.propertiesUs / 1000,
+	ibJournalInfo(ibT("client"), ibT("      the view %s: %u controls drawn, properties written %lld ms, states %lld ms"),
+		whole ? ibT("whole") : ibT("in part"), s_drawTimes.controls, s_drawTimes.propertiesUs / 1000,
 		s_drawTimes.statesUs / 1000);
 
 	m_drawnFrame = std::make_unique<ibDataNode>(frame);
@@ -209,7 +209,7 @@ void ibVisualHost::RefreshControl(ibValueFrame* control, ibDataNode& node, const
 	const long long updated = NowUs() - updating;
 	s_drawTimes.statesUs += updated;
 	if (updated > 2000)
-		ibJournalInfo(wxT("client"), wxT("        %s: its state %lld ms"), control->GetControlName(), updated / 1000);
+		ibJournalInfo(ibT("client"), ibT("        %s: its state %lld ms"), control->GetControlName(), updated / 1000);
 
 	// What is in it, in its order now — one drawn there copied as it was, one not read whole.
 	for (unsigned int idx = 0; idx < control->GetChildCount(); idx++) {

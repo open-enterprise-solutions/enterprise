@@ -96,7 +96,7 @@ ibCompileCode::ibCompileCode() :
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
-ibCompileCode::ibCompileCode(const wxString& strModuleName, const wxString& strDocPath, bool onlyFunction) :
+ibCompileCode::ibCompileCode(const ibString& strModuleName, const ibString& strDocPath, bool onlyFunction) :
 	m_onlyFunction(onlyFunction),
 	m_translateCode(GetCodeStyle(), strModuleName, strDocPath),
 	m_rootContext(new ibCompileContext(this)),
@@ -106,7 +106,7 @@ ibCompileCode::ibCompileCode(const wxString& strModuleName, const wxString& strD
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
-ibCompileCode::ibCompileCode(const wxString& strFileName) :
+ibCompileCode::ibCompileCode(const ibString& strFileName) :
 	m_onlyFunction(false),
 	m_translateCode(GetCodeStyle(), strFileName),
 	m_rootContext(new ibCompileContext(this)),
@@ -162,9 +162,9 @@ void ibCompileCode::PrepareModuleData()
 {
 	// Helper — locate the freshly-added compile-context entry by name
 	// to stamp post-AddVariable flags (External / clsid / scoped).
-	auto stampOnContext = [&](const wxString& name, auto&& mutate) {
+	auto stampOnContext = [&](const ibString& name, auto&& mutate) {
 		auto it = std::find_if(m_rootContext->m_listVariable.begin(), m_rootContext->m_listVariable.end(),
-			[&](const auto& v) { return v && stringUtils::CompareString(name, v->m_strRealName); });
+			[&](const auto& v) { return v && stringUtils::IsSameAs(name, v->m_strRealName); });
 		if (it != m_rootContext->m_listVariable.end() && *it)
 			mutate(**it);
 	};
@@ -215,7 +215,7 @@ void ibCompileCode::PrepareModuleData()
 
 		// adding variables from context
 		for (unsigned int i = 0; i < contextValue->GetNProps(); i++) {
-			const wxString& propName = contextValue->GetPropName(i);
+			const ibString& propName = contextValue->GetPropName(i);
 			// Skip the self-named prop (ThisForm exposes a "ThisForm"
 			// prop pointing at itself; ThisObject does the same). The
 			// binding entry from Pass 2 already owns this name as
@@ -223,7 +223,7 @@ void ibCompileCode::PrepareModuleData()
 			// self-prop here would overwrite that via PushVariable's
 			// insert_or_assign (Pass-2 entry lost → binder skips the
 			// slot at pre-flight → runtime reads garbage).
-			if (stringUtils::CompareString(propName, pair.first))
+			if (stringUtils::IsSameAs(propName, pair.first))
 				continue;
 			mainContext->PushVariable(propName, pair.first, i);
 
@@ -252,9 +252,9 @@ void ibCompileCode::PrepareModuleData()
  * The method does not return control!
  */
 
-void ibCompileCode::Refuse(int codeError, const wxString& errorDesc)
+void ibCompileCode::Refuse(int codeError, const ibString& errorDesc)
 {
-	wxString strFileName, strModuleName, strDocPath; int currPos = 0, currLine = 0;
+	ibString strFileName, strModuleName, strDocPath; int currPos = 0, currLine = 0;
 
 	if (m_numCurrentCompile >= m_translateCode.GetLexCount()) {
 		m_numCurrentCompile = m_translateCode.GetLexCount() - 1;
@@ -286,9 +286,9 @@ void ibCompileCode::Refuse(int codeError, const wxString& errorDesc)
  * another function option
  */
 
-void ibCompileCode::Refuse(int nErr, const wxUniChar& c)
+void ibCompileCode::Refuse(int nErr, const ibChar& c)
 {
-	Refuse(nErr, wxString::Format(wxT("%c"), c));
+	Refuse(nErr, ibString::Format(ibT("%c"), c));
 }
 
 /**
@@ -300,16 +300,16 @@ void ibCompileCode::Refuse(int nErr, const wxUniChar& c)
  */
 
 void ibCompileCode::DoRefuse(int codeError,
-	const wxString& strFileName, const wxString& strModuleName, const wxString& strDocPath,
+	const ibString& strFileName, const ibString& strModuleName, const ibString& strDocPath,
 	const ibTranslateCode& translateCode, unsigned int currPos, unsigned int currLine,
-	const wxString& strErrorDesc) const
+	const ibString& strErrorDesc) const
 {
 	// ⭐⭐ THE SENTENCE IS KEPT EITHER WAY — this is where refusals accumulate. It used to travel on
 	// the exception, so a compile that raises nothing would have lost it, and "why did that dot not
 	// resolve" is precisely the question it answers. Written before the fork, so both modes record
 	// the same line and only the CONSEQUENCE differs.
-	m_strRefusal << wxString::Format(wxT("[%u:%u] "), currLine, currPos)
-	              << ibBackendException::Format(codeError, strErrorDesc) << wxT("\n");
+	m_strRefusal << ibString::Format(ibT("[%u:%u] "), currLine, currPos)
+	              << ibBackendException::Format(codeError, strErrorDesc) << ibT("\n");
 
 	// ⭐⭐ A TOLERANT COMPILE STOPS FOR NOTHING. It is READING — working out what is at a caret — and
 	// a reader has nobody to raise to: no window, no subscriber, no exception. It does not raise,
@@ -323,7 +323,7 @@ void ibCompileCode::DoRefuse(int codeError,
 	if (m_compileMode == ibCompileMode::Tolerant)
 		return;
 
-	const wxString& strCodeError =
+	const ibString& strCodeError =
 		ibBackendException::FindErrorCodeLine(translateCode.GetBuffer(), currPos);
 
 	ibBackendException::ProcessError(
@@ -432,7 +432,7 @@ const ibLexem& ibCompileCode::ExpectLexem()
  * no (if failure occurs, an exception is thrown)
  */
 
-void ibCompileCode::ExpectDelimiter(const wxUniChar& c)
+void ibCompileCode::ExpectDelimiter(const ibChar& c)
 {
 	const ibLexem& lex = GetLexem();
 	if (lex.m_lexType == DELIMITER && c == lex.m_numData)
@@ -491,7 +491,7 @@ bool ibCompileCode::IsNextKeyword(int k)
  * true,false
  */
 
-bool ibCompileCode::IsDelimiter(const wxUniChar& c)
+bool ibCompileCode::IsDelimiter(const ibChar& c)
 {
 	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount()) {
 		const ibLexem& lex = m_translateCode.GetLexAt(m_numCurrentCompile);
@@ -509,7 +509,7 @@ bool ibCompileCode::IsDelimiter(const wxUniChar& c)
  * true,false
  */
 
-bool ibCompileCode::IsNextDelimiter(const wxUniChar& c)
+bool ibCompileCode::IsNextDelimiter(const ibChar& c)
 {
 	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount()) {
 		const ibLexem& lex = m_translateCode.GetLexAt(m_numCurrentCompile + 1);
@@ -535,7 +535,7 @@ void ibCompileCode::ExpectKeyword(int nKey)
 	// See ExpectDelimiter on why this does not search forward either.
 	m_numCurrentCompile--;
 	Refuse(ibScriptError_Keyword,
-		wxString::Format(wxT("%s"), s_listKeyWord[nKey].m_strKeyWord)
+		ibString::Format(ibT("%s"), s_listKeyWord[nKey].m_strKeyWord)
 	);
 }
 
@@ -546,7 +546,7 @@ void ibCompileCode::ExpectKeyword(int nKey)
  * identifier string
  */
 
-wxString ibCompileCode::ExpectIdentifier(bool strRealName, bool acceptKeyword)
+ibString ibCompileCode::ExpectIdentifier(bool strRealName, bool acceptKeyword)
 {
 	const ibLexem& lex = GetLexem();
 	if (lex.m_lexType != IDENTIFIER) {
@@ -568,7 +568,7 @@ wxString ibCompileCode::ExpectIdentifier(bool strRealName, bool acceptKeyword)
 			m_numCurrentCompile--;
 
 		Refuse(ibScriptError_IdentifierDefine);
-		return wxEmptyString;
+		return ibEmptyString;
 	}
 
 	if (strRealName) {
@@ -621,7 +621,7 @@ ibValue ibCompileCode::ExpectConstant()
 }
 
 // getting the number with a string constant (to determine the method number)
-const int ibCompileCode::GetConstString(const wxString& strConstName)
+const int ibCompileCode::GetConstString(const ibString& strConstName)
 {
 	// EXACT match, deliberately. The language is case-blind about NAMES, but this pool
 	// stores a SPELLING, and the runtime prints that spelling back when a member is not
@@ -647,7 +647,7 @@ const int ibCompileCode::GetConstString(const wxString& strConstName)
  * Add the name and address of an external variable to a special array for later use
  */
 
-void ibCompileCode::AddVariable(const wxString& strVarName, const ibValue& vObject)
+void ibCompileCode::AddVariable(const ibString& strVarName, const ibValue& vObject)
 {
 	if (strVarName.IsEmpty())
 		return;
@@ -666,7 +666,7 @@ void ibCompileCode::AddVariable(const wxString& strVarName, const ibValue& vObje
  * Add the name and address of an external variable to a special array for later use
  */
 
-void ibCompileCode::AddVariable(const wxString& strVarName, ibValue* pValue)
+void ibCompileCode::AddVariable(const ibString& strVarName, ibValue* pValue)
 {
 	if (strVarName.IsEmpty())
 		return;
@@ -684,7 +684,7 @@ void ibCompileCode::AddVariable(const wxString& strVarName, ibValue* pValue)
  * Add the name and address of an external variable to a special array for later use
  */
 
-void ibCompileCode::AddContextVariable(const wxString& strVarName, const ibValue& vObject, bool scopeContext)
+void ibCompileCode::AddContextVariable(const ibString& strVarName, const ibValue& vObject, bool scopeContext)
 {
 	if (strVarName.IsEmpty())
 		return;
@@ -704,7 +704,7 @@ void ibCompileCode::AddContextVariable(const wxString& strVarName, const ibValue
  * Add the name and address of an external variable to a special array for later use
  */
 
-void ibCompileCode::AddContextVariable(const wxString& strVarName, ibValue* pValue, bool scopeContext)
+void ibCompileCode::AddContextVariable(const ibString& strVarName, ibValue* pValue, bool scopeContext)
 {
 	if (strVarName.IsEmpty())
 		return;
@@ -719,7 +719,7 @@ void ibCompileCode::AddContextVariable(const wxString& strVarName, ibValue* pVal
 // Bound LOCAL — the name resolves to a plain frame local (kind=Local), but the
 // binder fills its slot at init with pValue. The module body reads/writes it as a
 // normal local (e.g. a constant's Value, backed by &m_constValue).
-void ibCompileCode::AddLocalVariable(const wxString& strVarName, ibValue* pValue)
+void ibCompileCode::AddLocalVariable(const ibString& strVarName, ibValue* pValue)
 {
 	if (strVarName.IsEmpty())
 		return;
@@ -734,7 +734,7 @@ void ibCompileCode::AddLocalVariable(const wxString& strVarName, ibValue* pValue
  * Remove the name and address of an external variable
  */
 
-void ibCompileCode::RemoveVariable(const wxString& strVarName)
+void ibCompileCode::RemoveVariable(const ibString& strVarName)
 {
 	if (strVarName.IsEmpty())
 		return;
@@ -815,7 +815,7 @@ bool ibCompileCode::Compile()
  * true,false
  */
 
-bool ibCompileCode::Compile(const wxString& strCode)
+bool ibCompileCode::Compile(const ibString& strCode)
 {
 	//clear functions & variables
 	Reset();
@@ -860,7 +860,7 @@ bool ibCompileCode::Compile(const wxString& strCode)
 //
 // `outName` receives the assembled name; `outLexemCount` how many lexems it
 // spans (1 or 3), so the caller can consume exactly that many.
-bool ibCompileCode::IsTypeVar(const wxString& strType)
+bool ibCompileCode::IsTypeVar(const ibString& strType)
 {
 	// NAMED FORM — the caller already has the word and only asks whether it names
 	// a type. Any REGISTERED type counts: the narrowing to the five primitives was
@@ -903,7 +903,7 @@ bool ibCompileCode::IsTypeVar(const wxString& strType)
 	return ibValue::IsRegisterCtor(m_translateCode.GetLexAt(first).m_strData);
 }
 
-ibClassID ibCompileCode::GetTypeVar(const wxString& strType)
+ibClassID ibCompileCode::GetTypeVar(const ibString& strType)
 {
 	// THE ID, NOT THE NAME. Everything downstream — the gate, the typed-opcode
 	// choice, the bytecode — speaks class ids; handing back a name would only mean
@@ -925,13 +925,13 @@ ibClassID ibCompileCode::GetTypeVar(const wxString& strType)
 		Refuse(ibScriptError_TypeDef, lex.m_strData);
 		return 0;
 	}
-	wxString name = lex.m_strData;
-	wxString written = lex.m_valData.GetString();   // as the person spelled it — m_strData is folded to upper case
+	ibString name = lex.m_strData;
+	ibString written = lex.m_valData.GetString();   // as the person spelled it — m_strData is folded to upper case
 	if (IsNextDelimiter('.')) {   // the dotted form — see IsTypeVar
 		ExpectDelimiter('.');
-		const wxString member = ExpectIdentifier(true);
-		name += wxT(".") + member;
-		written += wxT(".") + member;
+		const ibString member = ExpectIdentifier(true);
+		name += ibT(".") + member;
+		written += ibT(".") + member;
 	}
 	// ⚠ A CONFIGURATION'S OWN TYPE (`CatalogRef.Goods`) IS NOT IN THIS REGISTRY. The configuration registers it
 	// with itself (ibMetaImage), and a compiler has no road to its module's configuration without a hook on
@@ -963,8 +963,8 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 	}
 
 	while (true) {
-		wxString strRealName = ExpectIdentifier(true);
-		wxString strName = stringUtils::MakeUpper(strRealName);
+		ibString strRealName = ExpectIdentifier(true);
+		ibString strName = stringUtils::MakeUpper(strRealName);
 
 
 		int numParent = 0;
@@ -984,7 +984,7 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 			// compile-context doesn't (i.e. the parent module isn't
 			// re-compiled along with this one).
 			auto existing = std::find_if(pCurContext->m_listVariable.begin(), pCurContext->m_listVariable.end(),
-				[&strName](const auto& v) { return v && stringUtils::CompareString(strName, v->m_strRealName); });
+				[&strName](const auto& v) { return v && stringUtils::IsSameAs(strName, v->m_strRealName); });
 			if (existing != pCurContext->m_listVariable.end()) {
 				const auto& currentVariable = *existing;
 				if (currentVariable->IsPublic() ||
@@ -1257,7 +1257,7 @@ bool ibCompileCode::CompileModule()
 	for (auto& v : m_cByteCode.m_listVar) {
 		if (!v.IsContextProp()) continue;
 		auto pIt = std::find_if(m_cByteCode.m_listVar.begin(), m_cByteCode.m_listVar.end(),
-			[&](const auto& p) { return stringUtils::CompareString(v.m_strContext, p.m_strRealName); });
+			[&](const auto& p) { return stringUtils::IsSameAs(v.m_strContext, p.m_strRealName); });
 		if (pIt != m_cByteCode.m_listVar.end())
 			v.m_parentRef = static_cast<long>(std::distance(m_cByteCode.m_listVar.begin(), pIt));
 	}
@@ -1277,9 +1277,9 @@ bool ibCompileCode::CompileModule()
 	for (const auto& fnPtr : mainContext->m_listFunction) {
 		if (!fnPtr) continue;
 		if (fnPtr->m_strContext.IsEmpty()) continue;  // own user-defined func
-		const wxString& nameKey = fnPtr->m_strRealName;
+		const ibString& nameKey = fnPtr->m_strRealName;
 		auto existing = std::find_if(m_cByteCode.m_listFunc.begin(), m_cByteCode.m_listFunc.end(),
-			[&](const auto& fn) { return stringUtils::CompareString(nameKey, fn.m_strRealName); });
+			[&](const auto& fn) { return stringUtils::IsSameAs(nameKey, fn.m_strRealName); });
 		if (existing != m_cByteCode.m_listFunc.end()) continue;
 		m_cByteCode.m_listFunc.emplace_back(/*lAddress=*/-1, *fnPtr);
 	}
@@ -1291,7 +1291,7 @@ bool ibCompileCode::CompileModule()
 	for (auto& fn : m_cByteCode.m_listFunc) {
 		if (!fn.IsContextMethod()) continue;
 		auto pIt = std::find_if(m_cByteCode.m_listVar.begin(), m_cByteCode.m_listVar.end(),
-			[&](const auto& p) { return stringUtils::CompareString(fn.m_strContext, p.m_strRealName); });
+			[&](const auto& p) { return stringUtils::IsSameAs(fn.m_strContext, p.m_strRealName); });
 		if (pIt != m_cByteCode.m_listVar.end())
 			fn.m_parentRef = static_cast<long>(std::distance(m_cByteCode.m_listVar.begin(), pIt));
 	}
@@ -1327,7 +1327,7 @@ bool ibCompileCode::CompileModule()
 }
 
 // search for function definition in the current module and all parent ones
-bool ibCompileCode::GetFunction(const wxString& strName, std::shared_ptr<ibCompileContext::ibFunction>& function, int* pNumFunction)
+bool ibCompileCode::GetFunction(const ibString& strName, std::shared_ptr<ibCompileContext::ibFunction>& function, int* pNumFunction)
 {
 	int numFunction = 0;
 
@@ -1495,8 +1495,8 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 		return false;
 
 	ibCompileContext* functionContext = functionContextOwner.get();
-	const wxString& strFuncName = createdFunction->m_strRealName;
-	const wxString& strFuncRealName = createdFunction->m_strRealName;
+	const ibString& strFuncName = createdFunction->m_strRealName;
+	const ibString& strFuncRealName = createdFunction->m_strRealName;
 
 	// A second declaration in THIS module collides. A function of the same
 	// name in a parent module does not: an object module and its manager are
@@ -1517,7 +1517,7 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 	// Upsert into the vector (was map subscript assign): replace a same-named
 	// entry, else append.
 	auto fit = std::find_if(context->m_listFunction.begin(), context->m_listFunction.end(),
-		[&](const auto& f) { return f && stringUtils::CompareString(strFuncName, f->m_strRealName); });
+		[&](const auto& f) { return f && stringUtils::IsSameAs(strFuncName, f->m_strRealName); });
 	if (fit != context->m_listFunction.end())
 		*fit = createdFunction;
 	else
@@ -1566,9 +1566,9 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 	// pull out the text of the function declaration
 	const ibLexem& lex = PreviewGetLexem();
 
-	wxString strShortDescription;
+	ibString strShortDescription;
 	const int numLine = lex.m_numLine;
-	const wxString strBuffer = m_translateCode.GetBuffer();
+	const ibString strBuffer = m_translateCode.GetBuffer();
 	int numRes = strBuffer.find('\n', lex.m_numLine);
 	if (numRes >= 0) {
 		strShortDescription = strBuffer.substr(lex.m_numLine, numRes - lex.m_numLine - 1);
@@ -1593,19 +1593,19 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 	// guarantees zero chance of collision with any user-written
 	// identifier (Variable or Function in any scope), and signals at a
 	// glance "synthetic — never look this up by name".
-	wxString strFuncRealName;
+	ibString strFuncRealName;
 	if (IsNextDelimiter('(')) {
-		strFuncRealName = wxT("__lambda_") + wxNewUniqueGuid.str();
+		strFuncRealName = ibT("__lambda_") + wxNewUniqueGuid.str();
 	}
 	else {
 		strFuncRealName = ExpectIdentifier(true);
 	}
 	// Original-cased name through both the ibFunction storage and the
-	// m_listFunction map key — lookups use stringUtils::CompareString
+	// m_listFunction map key — lookups use stringUtils::IsSameAs
 	// (case-insensitive), so storage no longer needs to upper-normalize.
 	// Renderers (debugger / catalog object PrepareNames) read map keys
 	// directly and now show the user's source casing.
-	const wxString& strFuncName = strFuncRealName;
+	const ibString& strFuncName = strFuncRealName;
 
 	outErrorPlace = m_numCurrentCompile;
 
@@ -1637,7 +1637,7 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 		// check for typing
 		const ibClassID typeVar = IsTypeVar() ? GetTypeVar() : 0;
 
-		const wxString& strRealName = ExpectIdentifier(true);
+		const ibString& strRealName = ExpectIdentifier(true);
 
 		cVariable.m_strName = strRealName;
 		cVariable.m_clsid = typeVar;
@@ -1775,7 +1775,7 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	// Phase A there was no nesting (CompileBlock rejected KEY_FUNCTION
 	// inside a function body) so plain set+clear was safe; with lambdas
 	// as expressions the inner emit can fire while outer is still open.
-	const wxString savedCurFuncName = m_strCurFuncName;
+	const ibString savedCurFuncName = m_strCurFuncName;
 	m_strCurFuncName                = createdFunction->m_strRealName;
 
 	if (bareExprBody) {
@@ -1846,7 +1846,7 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 			return false;
 		const ibLexem& last = m_translateCode.GetLexAt((size_t)m_numCurrentCompile);
 		if (last.m_lexType == DELIMITER)
-			return last.m_numData == wxT('}');
+			return last.m_numData == ibT('}');
 		return last.m_lexType == KEYWORD
 			&& (last.m_numData == KEY_ENDFUNCTION || last.m_numData == KEY_ENDPROCEDURE);
 	};
@@ -1883,7 +1883,7 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	}
 	if (isLambda) {
 		byteFn.m_kind        = ibFnKind::Lambda;
-		byteFn.m_strRealName = wxString::Format(wxT("<lambda@%ld>"), lAddress);
+		byteFn.m_strRealName = ibString::Format(ibT("<lambda@%ld>"), lAddress);
 	} else if (byteFn.m_strRealName.IsEmpty()) {
 		byteFn.m_strRealName = createdFunction->m_strRealName;
 	}
@@ -1994,19 +1994,19 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 		// ⭐ THE ONE FACT THE INSTRUCTIONS CANNOT ANSWER ON THEIR OWN is a captured outer local's
 		// NAME: it lives in a function that is still being compiled, so its symbol table is in no
 		// bytecode yet. The compile context IS that table.
-		const auto nameOfOuter = [context](long framesOut, long slot) -> wxString {
+		const auto nameOfOuter = [context](long framesOut, long slot) -> ibString {
 			const ibCompileContext* ctx = context;
 			for (long hop = 1; hop < framesOut && ctx != nullptr; ++hop)
 				ctx = ctx->m_parentContext;
 			if (ctx == nullptr)
-				return wxString();
+				return ibString();
 			for (const std::shared_ptr<ibCompileContext::ibVariable>& var : ctx->m_listVariable)
 				if (var && !var->m_bTempVar && (long)var->m_numVariable == slot)
 					return var->m_strRealName;
-			return wxString();
+			return ibString();
 		};
 
-		wxString refused;
+		ibString refused;
 		const std::shared_ptr<ibQueryAstExpr> tree =
 			ibBuildLambdaQueryAstFromCode(m_cByteCode, funcIndex, &refused, nameOfOuter);
 
@@ -2015,18 +2015,18 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 		// screen and every request after it was refused because the designer was waiting on it.
 		// ⚠ ASCII only in this line: a non-ASCII dash in a wxT() literal reaches the journal as
 		// mojibake, and a diagnostic nobody can read is worse than a plainer one.
-		ibJournalInfo(wxT("linq"), wxT("lambda `%s` at %d: %s"),
+		ibJournalInfo(ibT("linq"), ibT("lambda `%s` at %d: %s"),
 			createdFunction->m_listParam[0].m_strName,
 			(int)m_translateCode.GetLexAt(lambdaBodyFrom).m_numString,
-			tree ? wxT("query tree recorded: ") + ibDescribeQueryAst(tree)
-				: wxString::Format(wxT("runs in RAM: %s"),
-					refused.IsEmpty() ? wxString(wxT("no query tree")) : refused));
+			tree ? ibT("query tree recorded: ") + ibDescribeQueryAst(tree)
+				: ibString::Format(ibT("runs in RAM: %s"),
+					refused.IsEmpty() ? ibString(ibT("no query tree")) : refused));
 	}
 		else if (funcIndex >= 0) {
 		// The other silent gate, said out loud: only a ONE-parameter lambda is ever recorded, so
 		// WhereIndexed / SelectIndexed / an Aggregate reducer / a Join result-selector never push
 		// down — not because they cannot be translated, but because nobody looked.
-		ibJournalInfo(wxT("linq"), wxT("lambda with %d parameters: not recorded (only one-parameter "
+		ibJournalInfo(ibT("linq"), ibT("lambda with %d parameters: not recorded (only one-parameter "
 			"bodies are), so this step will run in RAM"),
 			(int)createdFunction->m_listParam.size());
 	}
@@ -2134,8 +2134,8 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 	//     the `{` it saw, so the brace is back in the stream — must consume.
 	//   * control-structure body without braces (`if (x) stmt;`) is also
 	//     RETURN_BLOCK with no `{` — guarded by IsNextDelimiter check below.
-	if (GetCodeStyle() == CODE_CES && context->m_numReturn != RETURN_NONE && IsNextDelimiter(wxT('{'))) {
-		ExpectDelimiter(wxT('{'));
+	if (GetCodeStyle() == CODE_CES && context->m_numReturn != RETURN_NONE && IsNextDelimiter(ibT('{'))) {
+		ExpectDelimiter(ibT('{'));
 		bCompileBlock = true;
 
 		// CTX_BEGIN/END are emitted only for RETURN_BLOCK — actual
@@ -2377,8 +2377,8 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					context->m_listLabelDef[nextLexem.m_strData] = m_cByteCode.m_listCode.size() - 1;
 					ExpectDelimiter(':');
 				}
-				else if (IsNextDelimiter(wxT('+')) || IsNextDelimiter(wxT('-'))
-				      || IsNextDelimiter(wxT('*')) || IsNextDelimiter(wxT('/')) || IsNextDelimiter(wxT('%'))) {
+				else if (IsNextDelimiter(ibT('+')) || IsNextDelimiter(ibT('-'))
+				      || IsNextDelimiter(ibT('*')) || IsNextDelimiter(ibT('/')) || IsNextDelimiter(ibT('%'))) {
 					// Compound assignment / increment on a BARE variable. Reached only when the
 					// identifier is IMMEDIATELY followed by an arithmetic op (no '.' / '[' / '('
 					// between), so a member/array GET-temp can never be silently mutated:
@@ -2386,11 +2386,11 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					//   x += e / x -= e / x *= e / x /= e / x %= e  -> x = x <op> e
 					// At statement level the result is unused, so postfix == prefix store. All emit
 					// the in-place shape (param1 == param2 == variable) the `x = x <op> e` fold makes.
-					const wxUniChar op = IsNextDelimiter(wxT('+')) ? wxT('+')
-					                   : IsNextDelimiter(wxT('-')) ? wxT('-')
-					                   : IsNextDelimiter(wxT('*')) ? wxT('*')
-					                   : IsNextDelimiter(wxT('/')) ? wxT('/') : wxT('%');
-					const wxString strRealName = nextLexem.m_valData.GetString();
+					const ibChar op = IsNextDelimiter(ibT('+')) ? ibT('+')
+					                   : IsNextDelimiter(ibT('-')) ? ibT('-')
+					                   : IsNextDelimiter(ibT('*')) ? ibT('*')
+					                   : IsNextDelimiter(ibT('/')) ? ibT('/') : ibT('%');
+					const ibString strRealName = nextLexem.m_valData.GetString();
 					ExpectDelimiter(op); // consume the operator
 
 					ibParamUnit variable = context->GetVariable(strRealName, true, true); // must already exist
@@ -2399,21 +2399,21 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					code.m_param1 = variable; // dest in place
 					code.m_param2 = variable; // left operand
 
-					if ((op == wxT('+') || op == wxT('-')) && IsNextDelimiter(op)) {
+					if ((op == ibT('+') || op == ibT('-')) && IsNextDelimiter(op)) {
 						// ++ / -- : right operand = 1
 						ExpectDelimiter(op);
-						code.m_numOper = (op == wxT('+')) ? OPER_ADD : OPER_SUB;
-						ibValue oneVal; oneVal.SetNumber(wxT("1"));
+						code.m_numOper = (op == ibT('+')) ? OPER_ADD : OPER_SUB;
+						ibValue oneVal; oneVal.SetNumber(ibT("1"));
 						code.m_param3 = FindConst(oneVal);
 					}
-					else if (IsNextDelimiter(wxT('='))) {
+					else if (IsNextDelimiter(ibT('='))) {
 						// += / -= / *= / /= / %= : right operand = expression
-						ExpectDelimiter(wxT('='));
+						ExpectDelimiter(ibT('='));
 						code.m_param3 = GetExpression(context);
-						code.m_numOper = (op == wxT('+')) ? OPER_ADD
-						               : (op == wxT('-')) ? OPER_SUB
-						               : (op == wxT('*')) ? OPER_MULT
-						               : (op == wxT('/')) ? OPER_DIV : OPER_MOD;
+						code.m_numOper = (op == ibT('+')) ? OPER_ADD
+						               : (op == ibT('-')) ? OPER_SUB
+						               : (op == ibT('*')) ? OPER_MULT
+						               : (op == ibT('/')) ? OPER_DIV : OPER_MOD;
 					}
 					else { // a lone +/-/*// after a bare identifier — not valid here
 						Refuse(ibScriptError_Code);
@@ -2502,35 +2502,35 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				}
 			}
 			else if (nextLexem.m_lexType == DELIMITER
-				&& (nextLexem.m_numData == wxT('+') || nextLexem.m_numData == wxT('-')))
+				&& (nextLexem.m_numData == ibT('+') || nextLexem.m_numData == ibT('-')))
 			{
 				// prefix ++ / -- (statement form): `++x;` / `--x;` is sugar for
 				// `x = x +/- 1`. The first +/- was just consumed as nextLexem;
 				// require it doubled, then a bare variable. Value is unused at
 				// statement level, so this is identical to the postfix store.
-				const wxUniChar incOp = nextLexem.m_numData;
+				const ibChar incOp = nextLexem.m_numData;
 				if (!IsNextDelimiter(incOp)) { // a lone leading +/- — syntax error, as before
 					Refuse(ibScriptError_Code);
 					return false;
 				}
 				ExpectDelimiter(incOp); // consume the second +/-
-				const wxString strRealName = ExpectIdentifier(true); // target variable
+				const ibString strRealName = ExpectIdentifier(true); // target variable
 				ibParamUnit variable = context->GetVariable(strRealName, true, true); // must already exist
 				ibByteUnit code;
 				StampSource(code);
-				code.m_numOper = (incOp == wxT('+')) ? OPER_ADD : OPER_SUB;
-				ibValue oneVal; oneVal.SetNumber(wxT("1"));
+				code.m_numOper = (incOp == ibT('+')) ? OPER_ADD : OPER_SUB;
+				ibValue oneVal; oneVal.SetNumber(ibT("1"));
 				code.m_param1 = variable;
 				code.m_param2 = variable;
 				code.m_param3 = FindConst(oneVal);
 				m_cByteCode.m_listCode.emplace_back(std::move(code));
 			}
 			else if (nextLexem.m_lexType == DELIMITER
-				&& nextLexem.m_numData == wxT(';'))
+				&& nextLexem.m_numData == ibT(';'))
 			{
 			}
 			else if (GetCodeStyle() == CODE_CES && nextLexem.m_lexType == DELIMITER
-				&& nextLexem.m_numData == wxT('{'))
+				&& nextLexem.m_numData == ibT('{'))
 			{
 				m_numCurrentCompile--;// step back
 
@@ -2541,7 +2541,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 
 			}
 			else if (GetCodeStyle() == CODE_CES && nextLexem.m_lexType == DELIMITER
-				&& nextLexem.m_numData == wxT('}'))
+				&& nextLexem.m_numData == ibT('}'))
 			{
 				// `}` at the module-level body is a syntax error — there
 				// was no opening `{` to match. Without this branch we'd
@@ -2576,7 +2576,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 		PreviewGetLexem();
 
 	if (GetCodeStyle() == CODE_CES && bCompileBlock) {
-		ExpectDelimiter(wxT('}'));
+		ExpectDelimiter(ibT('}'));
 
 		// Pair with CTX_BEGIN — emit only for RETURN_BLOCK.
 		if (context->m_numReturn == RETURN_BLOCK) {
@@ -2599,7 +2599,7 @@ bool ibCompileCode::CompileNewObject(ibCompileContext* context)
 {
 	ExpectKeyword(KEY_NEW);
 
-	wxString strClassName = ExpectIdentifier(true);
+	ibString strClassName = ExpectIdentifier(true);
 	const int numConst = GetConstString(strClassName);
 
 	std::vector <ibParamUnit> listParam;
@@ -2708,8 +2708,8 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 {
 	ibParamUnit variable; int numPrevSet = numIsSet;
 
-	const wxString& strRealName = ExpectIdentifier(true);
-	const wxString& strName = stringUtils::MakeUpper(strRealName);
+	const ibString& strRealName = ExpectIdentifier(true);
+	const ibString& strName = stringUtils::MakeUpper(strRealName);
 
 	if (IsNextDelimiter('(')) { // this is a function call
 		std::shared_ptr<ibCompileContext::ibFunction> foundedFunc = nullptr;
@@ -3018,7 +3018,7 @@ loopLabel:
 			StampSource(code);
 			code.m_numOper = OPER_GET_A;
 			code.m_param2 = variable;                                 // the receiver, still in hand
-			code.m_param3.m_numIndex = GetConstString(wxEmptyString);  // the name nobody typed yet
+			code.m_param3.m_numIndex = GetConstString(ibEmptyString);  // the name nobody typed yet
 			variable = context->CreateVariable();
 			code.m_param1 = variable;
 
@@ -3042,7 +3042,7 @@ loopLabel:
 
 		// acceptKeyword=true: contextual LINQ keywords (Where/Select/...)
 		// must work as method names in property-access positions.
-		wxString strIdentifier = ExpectIdentifier(true, /*acceptKeyword*/true);
+		ibString strIdentifier = ExpectIdentifier(true, /*acceptKeyword*/true);
 		const int numConst = GetConstString(strIdentifier);
 		if (IsNextDelimiter('(')) { // this is a method call
 			std::vector <ibParamUnit> listParam;
@@ -3140,7 +3140,7 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 	code.m_numOper = OPER_IF;
 
 	if (GetCodeStyle() == CODE_CES)
-		ExpectDelimiter(wxT('('));
+		ExpectDelimiter(ibT('('));
 
 	ibParamUnit variable = GetExpression(context);
 	code.m_param1 = variable;
@@ -3153,7 +3153,7 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 	if (GetCodeStyle() == CODE_VES)
 		ExpectKeyword(KEY_THEN);
 	else
-		ExpectDelimiter(wxT(')'));
+		ExpectDelimiter(ibT(')'));
 
 	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
@@ -3183,7 +3183,7 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 		code2.m_numOper = OPER_IF;
 
 		if (GetCodeStyle() == CODE_CES)
-			ExpectDelimiter(wxT('('));
+			ExpectDelimiter(ibT('('));
 
 		variable = GetExpression(context);
 		code2.m_param1 = variable;
@@ -3195,7 +3195,7 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 		if (GetCodeStyle() == CODE_VES)
 			ExpectKeyword(KEY_THEN);
 		else
-			ExpectDelimiter(wxT(')'));
+			ExpectDelimiter(ibT(')'));
 
 		if (GetCodeStyle() == CODE_CES)
 			CompileBlock(CreateLocalContext(context));
@@ -3271,7 +3271,7 @@ bool ibCompileCode::CompileWhile(ibCompileContext* context)
 	code.m_numOper = OPER_IF;
 
 	if (GetCodeStyle() == CODE_CES)
-		ExpectDelimiter(wxT('('));
+		ExpectDelimiter(ibT('('));
 
 	ibParamUnit variable = GetExpression(context);
 	code.m_param1 = variable;
@@ -3284,7 +3284,7 @@ bool ibCompileCode::CompileWhile(ibCompileContext* context)
 	if (GetCodeStyle() == CODE_VES)
 		ExpectKeyword(KEY_DO);
 	else
-		ExpectDelimiter(wxT(')'));
+		ExpectDelimiter(ibT(')'));
 
 	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
@@ -3315,10 +3315,10 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 	ExpectKeyword(KEY_FOR);
 
 	if (GetCodeStyle() == CODE_CES)
-		ExpectDelimiter(wxT('('));
+		ExpectDelimiter(ibT('('));
 
-	const wxString& strRealName = ExpectIdentifier(true);
-	const wxString& strName = stringUtils::MakeUpper(strRealName);
+	const ibString& strRealName = ExpectIdentifier(true);
+	const ibString& strName = stringUtils::MakeUpper(strRealName);
 
 	ibParamUnit variable = context->GetVariable(strRealName);
 
@@ -3351,7 +3351,7 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 	ExpectKeyword(KEY_TO);
 
 	ibParamUnit variableTo =
-		context->GetVariable(strName + wxT("@to"), true, false, false, true); //loop variable
+		context->GetVariable(strName + ibT("@to"), true, false, false, true); //loop variable
 
 	ibByteUnit code1;
 	StampSource(code1);
@@ -3372,7 +3372,7 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 	if (GetCodeStyle() == CODE_VES)
 		ExpectKeyword(KEY_DO);
 	else
-		ExpectDelimiter(wxT(')'));
+		ExpectDelimiter(ibT(')'));
 
 	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
@@ -3408,9 +3408,9 @@ int ibCompileCode::FindForeachHeaderEnd(int at) const
 	if (at < 0)
 		return wxNOT_FOUND;
 
-	const auto isDelim = [&](size_t i, wxUniChar c) {
+	const auto isDelim = [&](size_t i, ibChar c) {
 		return i < m_translateCode.GetLexCount() && m_translateCode.GetLexAt(i).m_lexType == DELIMITER
-			&& (wxUniChar)m_translateCode.GetLexAt(i).m_numData == c;
+			&& (ibChar)m_translateCode.GetLexAt(i).m_numData == c;
 	};
 
 	int depth = 0;
@@ -3419,8 +3419,8 @@ int ibCompileCode::FindForeachHeaderEnd(int at) const
 		if (m_translateCode.GetLexAt(i).m_lexType == ENDPROGRAM)
 			break;
 
-		if (isDelim(i, wxT('(')) || isDelim(i, wxT('['))) { ++depth; continue; }
-		if (isDelim(i, wxT(')')) || isDelim(i, wxT(']'))) {
+		if (isDelim(i, ibT('(')) || isDelim(i, ibT('['))) { ++depth; continue; }
+		if (isDelim(i, ibT(')')) || isDelim(i, ibT(']'))) {
 			// The header's own closer is the first one the source did not open.
 			if (depth == 0)
 				return GetCodeStyle() == CODE_CES ? (int)i : wxNOT_FOUND;
@@ -3441,17 +3441,17 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 	ExpectKeyword(KEY_FOREACH);
 
 	if (GetCodeStyle() == CODE_CES)
-		ExpectDelimiter(wxT('('));
+		ExpectDelimiter(ibT('('));
 
-	const wxString& strRealName = ExpectIdentifier(true);
-	const wxString& strName = stringUtils::MakeUpper(strRealName);
+	const ibString& strRealName = ExpectIdentifier(true);
+	const ibString& strName = stringUtils::MakeUpper(strRealName);
 
 	ibParamUnit variable = context->GetVariable(strRealName);
 
 	ExpectKeyword(KEY_IN);
 
 	ibParamUnit variableIn =
-		context->GetVariable(strName + wxT("@in_"), true, false, false, true); //loop variable
+		context->GetVariable(strName + ibT("@in_"), true, false, false, true); //loop variable
 
 	ibByteUnit code1;
 	StampSource(code1);
@@ -3471,7 +3471,7 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 	m_cByteCode.m_listCode.emplace_back(std::move(code1));
 
 	ibParamUnit variableIt =
-		context->GetVariable(strName + wxT("@it_"), true, false, false, true);  //storage iterpos;
+		context->GetVariable(strName + ibT("@it_"), true, false, false, true);  //storage iterpos;
 
 	ibByteUnit code;
 	StampSource(code);
@@ -3493,7 +3493,7 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 	if (GetCodeStyle() == CODE_VES)
 		ExpectKeyword(KEY_DO);
 	else
-		ExpectDelimiter(wxT(')'));
+		ExpectDelimiter(ibT(')'));
 
 	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
@@ -3572,7 +3572,7 @@ bool ibCompileCode::CompileException(ibCompileContext* context)
  * processing a function or procedure call
  */
 
-ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const wxString& strRealName, const int& numIsSet)
+ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const ibString& strRealName, const int& numIsSet)
 {
 	std::shared_ptr<ibCallFunction> callFunc(new ibCallFunction);
 
@@ -3621,7 +3621,7 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const wxSt
 	// body compiles (it includes the temps created during it). The whole point
 	// of deferring a self-call to m_listCallFunc is to resolve it at finalize
 	// once the count is settled, so the recursive frame is sized correctly.
-	if (foundedFunc != nullptr && !stringUtils::CompareString(m_strCurFuncName, callFunc->m_strName)) {
+	if (foundedFunc != nullptr && !stringUtils::IsSameAs(m_strCurFuncName, callFunc->m_strName)) {
 
 		if (!PushCallFunction(callFunc))
 			return ibParamUnit();
@@ -3660,8 +3660,8 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const wxSt
 
 ibParamUnit ibCompileCode::FindConst(const ibValue& constData)
 {
-	const wxString& strConstant =
-		wxString::Format(wxT("%d:%s"), constData.GetType(), constData.GetString());
+	const ibString& strConstant =
+		ibString::Format(ibT("%d:%s"), constData.GetType(), constData.GetString());
 
 	ibParamUnit variable;
 	variable.m_numArray = DEF_VAR_CONST;
@@ -3699,7 +3699,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		~ibExpressionDepthGuard() { --ts_expressionDepth; }
 	} depthGuard;
 	if (ts_expressionDepth > gs_maxExpressionDepth) {
-		Refuse(ibScriptError_Expression, wxString::Format(
+		Refuse(ibScriptError_Expression, ibString::Format(
 			_("it is nested deeper than %d levels - split it into steps"), gs_maxExpressionDepth));
 		return ibParamUnit();
 	}
@@ -3754,7 +3754,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	}
 	else if ((lex.m_lexType == KEYWORD && lex.m_numData == KEY_NEW)) {
 
-		const wxString strObjectName = ExpectIdentifier(true);
+		const ibString strObjectName = ExpectIdentifier(true);
 		const int numConst = GetConstString(strObjectName);
 
 		std::vector <ibParamUnit> listParam;
@@ -3896,17 +3896,17 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		// IMMEDIATELY followed by a doubled, source-ADJACENT +/- — so member /
 		// array GET-temps (`obj.a++`, `arr[i]++`) fall through to a normal read,
 		// and `a - -b` (spaced) is not mistaken for `a--`.
-		wxUniChar incOp = 0;
+		ibChar incOp = 0;
 		if (m_numCurrentCompile + 2 < m_translateCode.GetLexCount()
 			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_lexType == DELIMITER
 			&& m_translateCode.GetLexAt(m_numCurrentCompile + 2).m_lexType == DELIMITER
 			&& (m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData == '+' || m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData == '-')
 			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData == m_translateCode.GetLexAt(m_numCurrentCompile + 2).m_numData
 			&& m_translateCode.GetLexAt(m_numCurrentCompile + 2).m_numString == m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numString + 1)
-			incOp = (wxUniChar)m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData;
+			incOp = (ibChar)m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData;
 
 		if (incOp != 0) {
-			const wxString strRealName = lex.m_valData.GetString();
+			const ibString strRealName = lex.m_valData.GetString();
 			ExpectDelimiter(incOp);
 			ExpectDelimiter(incOp);
 			ibParamUnit target = context->GetVariable(strRealName, true, true); // lvalue, must exist
@@ -3922,7 +3922,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 			ibByteUnit incCode;
 			StampSource(incCode);
 			incCode.m_numOper = (incOp == '+') ? OPER_ADD : OPER_SUB;
-			ibValue oneVal; oneVal.SetNumber(wxT("1"));
+			ibValue oneVal; oneVal.SetNumber(ibT("1"));
 			incCode.m_param1 = target;
 			incCode.m_param2 = target;
 			incCode.m_param3 = FindConst(oneVal);
@@ -3948,14 +3948,14 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_lexType == DELIMITER
 			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData == lex.m_numData
 			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numString == m_translateCode.GetLexAt(m_numCurrentCompile).m_numString + 1) {
-			const wxUniChar incOp = lex.m_numData;
+			const ibChar incOp = lex.m_numData;
 			ExpectDelimiter(incOp); // consume the second +/-
-			const wxString strRealName = ExpectIdentifier(true); // target — a bare variable
+			const ibString strRealName = ExpectIdentifier(true); // target — a bare variable
 			ibParamUnit target = context->GetVariable(strRealName, true, true); // must already exist
 			ibByteUnit incCode;
 			StampSource(incCode);
 			incCode.m_numOper = (incOp == '+') ? OPER_ADD : OPER_SUB;
-			ibValue oneVal; oneVal.SetNumber(wxT("1"));
+			ibValue oneVal; oneVal.SetNumber(ibT("1"));
 			incCode.m_param1 = target;
 			incCode.m_param2 = target;
 			incCode.m_param3 = FindConst(oneVal);
@@ -4008,7 +4008,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		// …and the same here: the token that could not start an expression, named. An identifier
 		// carries its own text; a delimiter is the character itself.
 		Refuse(ibScriptError_Expression, lex.m_strData.IsEmpty()
-			? wxString::Format(wxT("%c"), wxUniChar(lex.m_numData)) : lex.m_strData);
+			? ibString::Format(ibT("%c"), ibChar(lex.m_numData)) : lex.m_strData);
 		return ibParamUnit();
 	}
 
@@ -4091,7 +4091,7 @@ delimOperation:
 					// is far more likely a hand slipping than an intention, and a silent `false`
 					// filters every row away without saying why.
 					if (!any) {
-						Refuse(ibScriptError_Expression, wxString(
+						Refuse(ibScriptError_Expression, ibString(
 							_("'in' needs something to look in - the list is empty")));
 						return ibParamUnit();
 					}
@@ -4242,7 +4242,7 @@ delimOperation:
 					// something is wrong (measured over MCP, 2026-09-02 — it cost a full round of
 					// bisecting a five-line block to find).
 					if (IsNextDelimiter('=')) {
-						Refuse(ibScriptError_Expression, wxString(
+						Refuse(ibScriptError_Expression, ibString(
 							_("'==' is not an operator here - comparison is written with a single '='")));
 						return ibParamUnit();
 					}
@@ -4254,7 +4254,7 @@ delimOperation:
 					// answer: `a == b` reaches this branch because comparison in this language is a
 					// single `=`, and a caller who writes the other spelling gets a compile error
 					// that names no operator, no token and nothing to change (measured 2026-09-02).
-					Refuse(ibScriptError_Expression, wxUniChar(next_lex.m_numData));
+					Refuse(ibScriptError_Expression, ibChar(next_lex.m_numData));
 					return ibParamUnit();
 				}
 

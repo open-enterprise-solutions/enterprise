@@ -5,7 +5,7 @@
 // The FORMAT STRING CONSTRUCTOR — three tabs over an ibFormatString.
 ////////////////////////////////////////////////////////////////////////////
 //
-// The desktop's (frontend/win/dlgs/formatConstructor), whole: the string is core's (core/formatString.h), and its
+// The old desktop's, whole: the string is core's (core/formatString.h), and its
 // sample is read off the client's value (ibAnyValue) as the engine's reads it off its own.
 //
 // A tab per kind of value the string formats — numbers, dates, booleans — and a row per code:

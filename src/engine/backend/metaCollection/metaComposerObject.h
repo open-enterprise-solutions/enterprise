@@ -79,9 +79,9 @@ public:
 	// ⚠ TWO BASES ANSWER THESE, so the metaobject's answers are named as the ones. A composer is a
 	// metaobject that ALSO wears a column face; its name, its synonym and whether it is allowed are
 	// facts about the metaobject, and the column face inherits them rather than holding its own.
-	virtual wxString GetName()    const override { return ibValueMetaObject::GetName(); }
-	virtual wxString GetSynonym() const override { return ibValueMetaObject::GetSynonym(); }
-	virtual wxString GetComment() const override { return ibValueMetaObject::GetComment(); }
+	virtual ibString GetName()    const override { return ibValueMetaObject::GetName(); }
+	virtual ibString GetSynonym() const override { return ibValueMetaObject::GetSynonym(); }
+	virtual ibString GetComment() const override { return ibValueMetaObject::GetComment(); }
 	virtual bool     IsAllowed()  const override { return ibValueMetaObject::IsAllowed(); }
 
 	// The column face: what this "field" of the report holds — a composition, always.
@@ -126,8 +126,8 @@ private:
 	// (ibValueMetaObjectSpreadsheet / ibPropertySpreadsheet). That is what makes this metatype's
 	// serialisation the same two symmetric lines every other metatype has — one property out, one
 	// property in — and what keeps its node's CHILDREN area for metaobjects alone.
-	ibPropertyCategory*    m_categoryComposer = ibPropertyObject::CreatePropertyCategory(wxT("Composer"), _("Composer"));
-	ibPropertyComposition* m_propertyComposition = ibPropertyObject::CreateProperty<ibPropertyComposition>(m_categoryComposer, wxT("CompositionData"), _("Composition data"),
+	ibPropertyCategory*    m_categoryComposer = ibPropertyObject::CreatePropertyCategory(ibT("Composer"), _("Composer"));
+	ibPropertyComposition* m_propertyComposition = ibPropertyObject::CreateProperty<ibPropertyComposition>(m_categoryComposer, ibT("CompositionData"), _("Composition data"),
 		_("The composition this composer declares: its query (the data), resources (what is totalled), parameters, structure (groupings, table, charts) and settings variants. It is the DEFAULT of the user's settings - saved user settings replace it. The report's first composer is its default one: its generated form is built from it, so such a report needs no form of its own."));
 
 

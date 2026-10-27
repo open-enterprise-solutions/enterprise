@@ -33,7 +33,7 @@ public:
 	// meets the schedule dimension's — a dimension for a dimension.
 	void GetScheduleFieldList(ibMetaID dimension, ibPropertyChoiceList& list) const;
 
-	ibPropertyCalcSchedule(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyCalcSchedule(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
 	// NOTHING CHOSEN — a register whose calculations read no schedule.

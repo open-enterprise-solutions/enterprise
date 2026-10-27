@@ -28,12 +28,12 @@ class ibPreparedStatementFirebirdWrapper : public ibDatabaseErrorReporter, publi
 {
 public:
 	// ctor
-	ibPreparedStatementFirebirdWrapper(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL);
+	ibPreparedStatementFirebirdWrapper(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const ibString& strSQL);
 
 	// dtor
 	virtual ~ibPreparedStatementFirebirdWrapper();
 
-	bool Prepare(const wxString& strSQL);
+	bool Prepare(const ibString& strSQL);
 	bool Prepare();
 
 	// set field
@@ -56,7 +56,7 @@ public:
 private:
 	void InterpretErrorCodes();
 
-	wxString m_strSQL;
+	ibString m_strSQL;
 	isc_stmt_handle m_pStatement;
 	XSQLDA* m_pParameters;
 	isc_db_handle m_pDatabase;

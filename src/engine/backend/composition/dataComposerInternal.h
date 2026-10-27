@@ -19,7 +19,7 @@
 // ⭐ DOES THIS COLUMN ANSWER TO THIS PATH — and the two are NOT spelled the same. A path is what a
 // person picked (`Ref.Date`, `Sales.Qty`); the OUTPUT NAME the engine gives it drops a leading
 // source qualifier and CONCATENATES the walk (`ibQueryProposedName`): `RefDate`, `Qty`.
-bool ibComposerColumnAnswersTo(const ibQueryLowering::OutputColumn& oc, const wxString& path);
+bool ibComposerColumnAnswersTo(const ibQueryLowering::OutputColumn& oc, const ibString& path);
 
 // A ROW OF THE WALK, READ BY FIELD — what the evaluator is handed as the row (ibCompositionValueOf): a column's name,
 // else its alias. Asked by the walk hiding a heading and by the conditional appearance marking a line.
@@ -28,19 +28,19 @@ ibCompositionValueOf ibComposerRowValueOf(const std::vector<ibQueryLowering::Out
 
 // WHAT THE CONDITIONAL APPEARANCE OF AN OUTPUT LOOKS AT — the fields its rules' conditions name, of every storey in
 // force: the setting's, the output's, each node's on either axis. Read IN ADDITION to the selection, never in its place.
-std::vector<wxString> ibComposerRuleFieldsOf(const ibDataComposer::Output& output,
+std::vector<ibString> ibComposerRuleFieldsOf(const ibDataComposer::Output& output,
                                              const ibConditionalAppearanceDescription& setting);
 
 // ONE TABLE, RESOLVED AGAINST WHAT IS IN FORCE ABOVE IT — the whole of the inheritance rule: an
 // empty table inherits, an `Auto` row is WHERE the inherited set lands, and a table without one
 // states this node's composition whole.
-void ibComposerResolveSelected(std::vector<wxString>& into,
+void ibComposerResolveSelected(std::vector<ibString>& into,
                                const std::vector<ibSelectedFieldDescription>& rows,
-                               const std::vector<wxString>& inherited);
+                               const std::vector<ibString>& inherited);
 
 // WHAT IS IN FORCE UNDER A NODE, given what was in force above it. The chain is CARRIED by whoever
 // walks the tree, never worked out by climbing back up.
-std::vector<wxString> ibComposerSelectedUnder(const std::vector<wxString>& above,
+std::vector<ibString> ibComposerSelectedUnder(const std::vector<ibString>& above,
                                               const ibDataComposer::GroupNode& level);
 
 // (IS THIS LEVEL THE RECORDS — asked of the LEVEL: `ibLevelDescription::IsDetailRecords()`. It was
@@ -48,6 +48,6 @@ std::vector<wxString> ibComposerSelectedUnder(const std::vector<wxString>& above
 //  fact about one, and the settings window — which cannot see this header — went on holding its own.)
 
 // WHAT A REPORT READS WHEN NOBODY HAS CHOSEN A FIELD — the fields it groups BY, and nothing else.
-std::vector<wxString> ibComposerGroupingFieldsOf(const ibDataComposer::Output& output);
+std::vector<ibString> ibComposerGroupingFieldsOf(const ibDataComposer::Output& output);
 
 #endif

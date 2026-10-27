@@ -1,6 +1,8 @@
 #include "core/core.h"
 
-#include <wx/wx.h>   // DllMain's types (windows.h, by wx's door)
+#ifdef __IBMSW__
+#include <windows.h>   // DllMain's types
+#endif
 
 #include "core/memory/memoryPool.h"
 
@@ -20,7 +22,7 @@
 //*                                 DllMain													*
 //*******************************************************************************************
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 BOOL APIENTRY DllMain(HANDLE hModule,
 	DWORD  ul_reason_for_call, LPVOID lpReserved)
 {

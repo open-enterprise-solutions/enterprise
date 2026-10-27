@@ -48,8 +48,8 @@ ibColumnType WidenForTemp(ibColumnRole role)
 // the DB write decomposition (a capture-only ibQueryStatement records each SetParam* as an IR node).
 std::vector<ibQueryExprPtr> DecomposeCell(const ibBackendQueryColumn* col, const ibMetaData* meta, const ibValue& cell)
 {
-	const std::vector<wxString> fields = ColumnFieldNames(col);
-	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+	const std::vector<ibString> fields = ColumnFieldNames(col);
+	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 	int pos = 1;
 	ibColumnCodec::WriteValue(col, meta, cell, &capture, pos);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
@@ -80,9 +80,9 @@ bool ProbeTempCapability(ibDatabaseConnectionHolder* holder, const ibTempTableDi
 	bool capable = false;
 	try {
 		static std::atomic<unsigned long> s_probeSeq{ 0 };
-		const wxString name = wxString::Format(wxT("oes_tmp_probe_%lu"), ++s_probeSeq);
+		const ibString name = ibString::Format(ibT("oes_tmp_probe_%lu"), ++s_probeSeq);
 		std::vector<ibDdlColumn> col(1);
-		col[0].m_name = wxT("probe");
+		col[0].m_name = ibT("probe");
 		col[0].m_type = ibTypeInteger();
 		ibDatabaseQueryBuilder q(holder);
 		q.Execute(ibCreateTempTable(name, col, dialect.m_createPrefix, dialect.m_onCommitClause));
@@ -139,7 +139,7 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 		return nullptr;   // dialect present but this connection can't create temp tables (no DDL right / read-only) -> RAM
 
 	static std::atomic<unsigned long> s_seq{ 0 };
-	const wxString tableName = wxString::Format(wxT("oes_tmp_%lu"), ++s_seq);
+	const ibString tableName = ibString::Format(ibT("oes_tmp_%lu"), ++s_seq);
 
 	// Metadata-format columns: one ibTempColumn per logical column (real type), each EXPANDING to its
 	// physical spread via DescribeColumnLayout — the ONE authority for the field set, ORDER and role.
@@ -155,7 +155,7 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 		for (const ibColumnSlot& s : DescribeColumnLayout(&tc))
 			slots.push_back(s);
 
-	std::vector<wxString> allFields;   // slot names — the INSERT column order
+	std::vector<ibString> allFields;   // slot names — the INSERT column order
 	allFields.reserve(slots.size());
 	for (const ibColumnSlot& s : slots)
 		allFields.push_back(s.m_name);
@@ -228,7 +228,7 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 }
 
 ibTempTableManager::ibTempTableManager(ibConnectionScope scope, ibDatabaseConnectionHolder* holder,
-                                       ibTempTableDialect dialect, wxString tableName,
+                                       ibTempTableDialect dialect, ibString tableName,
                                        std::unique_ptr<ibDbTempTableQueryable> queryable)
 	: m_scope(std::move(scope))
 	, m_holder(holder)

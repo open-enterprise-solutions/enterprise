@@ -2,20 +2,17 @@
 //	Author		: Maxim Kornienko
 //	Description : OES doc-manager wiring — bodies that the collapsed
 //	              ibFrontendDocManager class (declared in docView.h) needs on top of
-//	              the wx-fork base in docView.cpp. The file lives in both
-//	              frontend (desktop) and wfrontend (web) builds; the few
-//	              desktop-specific bodies (Find/Replace dialog parented on
-//	              the AUI mainFrame) are reduced to stubs under OES_USE_WEB.
+//	              the wx-fork base in docView.cpp (Find/Replace dialog
+//	              parented on the AUI mainFrame among them).
 ////////////////////////////////////////////////////////////////////////////
 
 #include "frmclient/docView/docManager.h"  // also brings docView.h transitively
 
 #include "frmclient/win/dlgs/choiceTemplate.h"
 
-// Desktop-only: Find/Replace dialog parents the wxFindReplaceDialog against
+// Find/Replace dialog parents the wxFindReplaceDialog against
 // the main frame singleton. mainFrame.h pulls in ibFrontendMainFrame
-// + AUI + objectInspector — none of which exist on wfrontend.dll. Also the
-// home of ibFrontendMainFrame::CreateChildFrame used below to wire
+// + AUI + objectInspector. Also the home of ibFrontendMainFrame::CreateChildFrame used below to wire
 // m_viewFrame on every view going through the template path.
 #include "frmclient/mainFrame/mainFrame.h"
 

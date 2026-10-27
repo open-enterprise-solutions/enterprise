@@ -11,10 +11,11 @@ All rights reserved. Permission granted for non-commercial use.
 */
 
 #include "lzhuf.h"
+#include "core/coreApi.h"   // __IBMSW__
 
 #pragma hdrstop
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 #include <io.h>
 #include <fcntl.h>
 #include <sys\stat.h>
@@ -25,7 +26,7 @@ All rights reserved. Permission granted for non-commercial use.
 #endif
 
 #include <stdio.h>
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 #include <malloc.h>
 #else
 #include <stdlib.h>
@@ -669,7 +670,7 @@ unsigned _writeLZ(int hf, void* d, unsigned size)
 	Encode();
 	// Flush cache
 	int size_out = fs.OutSize();
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	if (size_out) _write(hf, fs.OutPointer(), size_out);
 #else
 	// Result named, not dropped: glibc marks write() warn_unused_result. A short write here is
@@ -702,7 +703,7 @@ unsigned _readLZ(int hf, void* &d, unsigned size)
 {
 	// Read file in memory
 	std::uint8_t*	data = (std::uint8_t*)malloc(size);
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	_read(hf, data, size);
 #else
 	{ const ssize_t got = read(hf, data, size); (void)got; }   // see the write() note in _writeLZ

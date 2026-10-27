@@ -54,20 +54,20 @@ constexpr auto       kStopWaitReport = std::chrono::seconds(5);
 //  wait's predicate, so a worker holding parked fibers waits as long as an idle one.)
 
 // What the POOL failed at — its own loop, not a task (a task's exception goes to its future; see RunTask).
-void LogWorkerException(const wxString& location)
+void LogWorkerException(const ibString& location)
 {
 	// Reraise to identify the type — the outer catch(...) keeps the exception alive across this nested rethrow.
 	try { throw; }
 	catch (const ibCoreException& e) {
-		ibJournalWarning(wxT("session.worker"),wxT("%s: ibBackendException: %s"),
+		ibJournalWarning(ibT("session.worker"),ibT("%s: ibBackendException: %s"),
 		             location, e.GetErrorDescription());
 	}
 	catch (const std::exception& e) {
-		ibJournalWarning(wxT("session.worker"),wxT("%s: std::exception: %s"),
-		             location, wxString::FromUTF8(e.what()));
+		ibJournalWarning(ibT("session.worker"),ibT("%s: std::exception: %s"),
+		             location, ibString::FromUTF8(e.what()));
 	}
 	catch (...) {
-		ibJournalWarning(wxT("session.worker"),wxT("%s: unknown exception"), location);
+		ibJournalWarning(ibT("session.worker"),ibT("%s: unknown exception"), location);
 	}
 }
 
@@ -153,8 +153,8 @@ ibWorkerPoolHeadless::~ibWorkerPoolHeadless()
 			// ibJournalWarning compiles out of Release. This line is the
 			// only record that a worker detached itself on the way out.
 			if (ibTechJournal::IsOpen()) {
-				ibTechJournal::Print(ibJournalMark::Warning, wxT("session.worker"),
-					wxT("worker pool: detaching the worker that is destroying the pool"));
+				ibTechJournal::Print(ibJournalMark::Warning, ibT("session.worker"),
+					ibT("worker pool: detaching the worker that is destroying the pool"));
 			}
 			tl_poolAbandoned = true;
 			worker.detach();
@@ -507,7 +507,7 @@ void ibWorkerPoolHeadless::StartLease(ibSession* session, ibSessionQueue* q)
 	}
 	catch (const std::bad_alloc&) {
 		delete args;
-		LogWorkerException(wxT("worker pool lease: no room for the stack"));
+		LogWorkerException(ibT("worker pool lease: no room for the stack"));
 		RefuseQueued(q, "the session could not start: there is no room for its stack");
 		return;
 	}
@@ -556,7 +556,7 @@ void ibWorkerPoolHeadless::FinishFiber(ibSession* session, ibSessionQueue* q, ib
 			// Logged here, and not rethrown onto the worker. A throw out of
 			// the scheduler would kill the thread and skip the unwind of
 			// every other fiber parked on it.
-			LogWorkerException(wxT("worker pool fiber"));
+			LogWorkerException(ibT("worker pool fiber"));
 		}
 	}
 
@@ -708,7 +708,7 @@ void ibWorkerPoolHeadless::WorkerLoop()
 		catch (...) {
 			if (tl_poolAbandoned)
 				break;
-			LogWorkerException(wxT("worker pool lease"));
+			LogWorkerException(ibT("worker pool lease"));
 			{
 				std::lock_guard<std::mutex> lk(m_mtx);
 				q->leased.store(false);
@@ -726,7 +726,7 @@ void ibWorkerPoolHeadless::WorkerLoop()
 		// (ibSessionScope ctor, mutex lock, set_exception OOM). Log,
 		// then fall through to BookkeepingOnExit. Without this catch,
 		// std::terminate would fire and skip the bookkeeping dtor.
-		LogWorkerException(wxT("worker pool loop"));
+		LogWorkerException(ibT("worker pool loop"));
 	}
 
 	// m_aliveWorkers decrement + Stop-cv notify happen in BookkeepingOnExit's
@@ -814,7 +814,7 @@ void ibWorkerPoolHeadless::Stop()
 		while (!m_stopCv.wait_for(lk, kStopWaitReport, [this, leave]() {
 			return m_aliveWorkers.load(std::memory_order_acquire) <= leave;
 		})) {
-			ibJournalWarning(wxT("session.worker"),wxT("worker pool: still waiting on %lu worker(s) after stop"),
+			ibJournalWarning(ibT("session.worker"),ibT("worker pool: still waiting on %lu worker(s) after stop"),
 			             (unsigned long)m_aliveWorkers.load(std::memory_order_acquire));
 		}
 	}

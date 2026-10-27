@@ -46,7 +46,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 
 const ibArg& ArgId()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The object to check in, as NodeId - the CARRIER, not the declaration. "
 			  "metadata_list and metadata_tree give it."), /*required*/ true);
 	return s_a;
@@ -54,7 +54,7 @@ const ibArg& ArgId()
 
 const ibArg& ArgInto()
 {
-	static const ibArg s_a(wxT("into"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("into"), ibArg::Kind::Whole,
 		ibMcpText("The common attribute's declaration, as NodeId. Omit it to be TOLD instead: the "
 			  "answer is what this object is already checked into."));
 	return s_a;
@@ -62,7 +62,7 @@ const ibArg& ArgInto()
 
 const ibArg& ArgRemove()
 {
-	static const ibArg s_a(wxT("remove"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("remove"), ibArg::Kind::Flag,
 		ibMcpText("Take it OUT of that composition instead of putting it in. The column and the data "
 			  "in it go at the next apply, which is a restructuring - so this is the direction worth "
 			  "being sure about."));
@@ -72,14 +72,14 @@ const ibArg& ArgRemove()
 class ibMcpToolMetadataInclude : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("metadata_include"); }
+	ibString GetName() const override { return ibT("metadata_include"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("checking an object into a composition");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("CHECK AN OBJECT INTO A COMMON ATTRIBUTE'S COMPOSITION - the step that turns a "
 			"declaration into a real column on that object. A common attribute declares a name and a "
@@ -93,7 +93,7 @@ public:
 			"says yes and registers say no. Omit `into` to READ what this object already carries.");
 	}
 
-	wxString GetSearchText() const override
+	ibString GetSearchText() const override
 	{
 		return ibMcpText("composition common attribute check in membership separator data separation "
 			"tick box carrier declaration");
@@ -105,7 +105,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaDataConfigurationBase* metaData = activeMetaData;
 
@@ -118,7 +118,7 @@ public:
 		ibValueMetaObject* const carrier = ibFindMetaObjectById(metaData, carrierId);
 
 		if (carrier == nullptr) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("Nothing in this configuration has the id %d."), (int)carrierId);
 			return false;
 		}
@@ -129,14 +129,14 @@ public:
 		ibCompositionObject* const composition = dynamic_cast<ibCompositionObject*>(carrier);
 
 		if (composition == nullptr || !composition->IsCompositionAllowed()) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' cannot be part of a composition - it says so itself. A common attribute "
 					  "needs somewhere to put the column it produces, so the catalog / document "
 					  "line accepts one and a register does not."), carrier->GetName());
 			return false;
 		}
 
-		result.SetValue(wxT("object"), carrier->GetName());
+		result.SetValue(ibT("object"), carrier->GetName());
 
 		// READING - no `into` given. What this object already carries, by declaration, with the
 		// names beside the ids: an id alone would send the caller back for a second call.
@@ -145,12 +145,12 @@ public:
 			for (const ibMetaID& id : composition->GetCompositions()) {
 				ibValueMetaObject* const declaration = ibFindMetaObjectById(metaData, id);
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-				entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)id));
-				entry->SetValue(wxT("name"),
-					declaration != nullptr ? declaration->GetName() : wxString(wxT("?")));
+				entry->AddField(ibT("id"), ibDataValue::Int((std::int64_t)id));
+				entry->SetValue(ibT("name"),
+					declaration != nullptr ? declaration->GetName() : ibString(ibT("?")));
 				in.push_back(ibDataValue::Child(entry));
 			}
-			result.AddField(wxT("in"), ibDataValue::Array(in));
+			result.AddField(ibT("in"), ibDataValue::Array(in));
 			return true;
 		}
 
@@ -158,7 +158,7 @@ public:
 		ibValueMetaObject* const declaration = ibFindMetaObjectById(metaData, declarationId);
 
 		if (declaration == nullptr) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("Nothing in this configuration has the id %d."), (int)declarationId);
 			return false;
 		}
@@ -170,9 +170,9 @@ public:
 		// in queries or on the object, while this tool answered "included".
 		if (auto* const commonAttribute = dynamic_cast<ibValueMetaObjectCommonAttribute*>(declaration)) {
 			if (!commonAttribute->SetCompositionObject(carrier, !remove)) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("'%s' could not be checked %s '%s'."), carrier->GetName(),
-					remove ? wxString(wxT("out of")) : wxString(wxT("into")), declaration->GetName());
+					remove ? ibString(ibT("out of")) : ibString(ibT("into")), declaration->GetName());
 				return false;
 			}
 		}
@@ -180,12 +180,12 @@ public:
 			composition->SetComposition(declarationId, !remove);
 		}
 
-		result.SetValue(wxT("declaration"), declaration->GetName());
-		result.SetValue(wxT("included"), !remove);
+		result.SetValue(ibT("declaration"), declaration->GetName());
+		result.SetValue(ibT("included"), !remove);
 		// ⚠ SAID OUT LOUD, because the two states read alike from here: the column does not exist
 		// until the configuration is applied. A caller that stops at this answer has changed the
 		// configuration and not the database.
-		result.SetValue(wxT("next"), ibMcpText("The column appears when the configuration is applied - "
+		result.SetValue(ibT("next"), ibMcpText("The column appears when the configuration is applied - "
 			"config_apply. Until then this is a declaration the database has not been told about."));
 		return true;
 	}

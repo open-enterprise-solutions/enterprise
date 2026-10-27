@@ -826,7 +826,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 		if (select == nullptr || row >= select->m_projections.size())
 			return wxEmptyString;
 		const ibQueryProjection& projection = select->m_projections[row];
-		wxString shown = projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : wxString();
+		wxString shown = projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : ibString();
 		// …AND ITS ROLE, when the query says one — in brackets after it, in the query's own words, so the list
 		// shows at a glance which fields were given one (Max, 2026-09-29). Shown only: the cell is not typed into.
 		if (projection.m_roleSaid) {
@@ -1167,8 +1167,8 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 		// THE ARGUMENT in one column and the FUNCTION in the other — `SUM(x)` in a single cell buries
 		// the thing actually being chosen about an aggregate.
 		if (col == kGridCol1)
-			return projection.m_expr->m_star ? wxString(wxT("*"))
-				: (projection.m_expr->m_arg ? ibRenderQueryExpr(*projection.m_expr->m_arg) : wxString());
+			return projection.m_expr->m_star ? ibString(ibT("*"))
+				: (projection.m_expr->m_arg ? ibRenderQueryExpr(*projection.m_expr->m_arg) : ibString());
 		// ⭐⭐ …AND OVER WHAT IT IS COMPUTED. Here the grouping is the QUERY's own (GROUP BY), so this
 		// is a window in the plainest sense: the DBMS folds the rows, then computes this over the
 		// folded ones. `RANK() OVER (ORDER BY SUM(x) DESC)` — the place of a group — is an ordinary
@@ -1189,7 +1189,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 		// the dropdown would then quietly agree with the lie.
 		return ibQueryKeywordText(projection.m_expr->m_func)
 			+ (projection.m_expr->m_distinctArg
-				? wxT(" (") + ibQueryKeywordText(ibQueryKeyword::Distinct) + wxT(")") : wxString());
+				? wxT(" (") + ibQueryKeywordText(ibQueryKeyword::Distinct) + wxT(")") : ibString());
 	});
 	m_aggregateModel->SetWriter([this](unsigned int row, unsigned int col, const wxString& text) -> bool {
 		ibQuerySelect* select = Current();
@@ -1547,7 +1547,7 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 			return wxEmptyString;
 		const ibQueryOrderItem& item = select->m_orderBy[row];
 		if (col == kGridCol1)
-			return item.m_expr ? ibRenderQueryExpr(*item.m_expr) : wxString();
+			return item.m_expr ? ibRenderQueryExpr(*item.m_expr) : ibString();
 		return ibQueryKeywordText(item.m_ascending ? ibQueryKeyword::Asc : ibQueryKeyword::Desc);
 	});
 	m_orderModel->SetWriter([this](unsigned int row, unsigned int col, const wxString& text) -> bool {
@@ -1683,7 +1683,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			if (col == kGridCol2)
 				return wxEmptyString;
 			return static_cast<size_t>(at.m_node) < select->m_totalsSplits.size()
-				? select->m_totalsSplits[at.m_node].m_name : wxString();
+				? select->m_totalsSplits[at.m_node].m_name : ibString();
 		}
 
 		const std::vector<ibQueryTotalDim>* levels =
@@ -1783,7 +1783,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			const ibQueryTotalField* head = dim.Head();
 			const wxString natural = head != nullptr && head->m_expr
 			                         && head->m_expr->m_kind == ibQueryAstExprKind::Column
-			                         && !head->m_expr->m_path.empty() ? head->m_expr->m_path.back() : wxString();
+			                         && !head->m_expr->m_path.empty() ? head->m_expr->m_path.back() : ibString();
 			if (alias.IsSameAs(natural, false)) { dim.m_alias.clear(); return true; }
 			if (!alias.IsEmpty() && !AcceptName(alias, _("totals level name")))
 				return false;
@@ -2175,7 +2175,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			return ibRenderQueryExpr(expr);
 		// The field the total is OVER — the argument, which is what a person looks down this column for.
 		if (expr.m_kind == ibQueryAstExprKind::Func)
-			return expr.m_star ? wxString(wxT("*")) : (expr.m_arg ? ibRenderQueryExpr(*expr.m_arg) : wxString());
+			return expr.m_star ? ibString(ibT("*")) : (expr.m_arg ? ibRenderQueryExpr(*expr.m_arg) : ibString());
 		return ibRenderQueryExpr(expr);
 	});
 	m_totalsAggregateModel->SetWriter([this](unsigned int row, unsigned int col, const wxString& text) -> bool {

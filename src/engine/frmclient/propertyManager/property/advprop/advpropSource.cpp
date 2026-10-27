@@ -51,7 +51,7 @@ wxVariant ReadSourceType(const wxVariant& value)
 		? node.AsChild()->FindChild(ibProtocol::ibSchema::ibProperties::SourceType) : std::nullopt;
 	return wxVariant(new ibVariantDataSerializable(value.GetType(),
 		type ? type->GetProperty(ibProtocol::ibSchema::ibProperties::Value) : ibDataValue(),
-		type ? type->GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Presentation) : wxString()));
+		type ? type->GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Presentation) : ibString()));
 }
 
 }
@@ -78,7 +78,7 @@ public:
 				if (const auto classes = row.FindChild(ibProtocol::ibSchema::ibProperties::Classes)) {
 					for (const ibDataNode& entry : classes->Children()) {
 						unsigned long long clsid = 0;
-						entry.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Type).ToULongLong(&clsid);
+						entry.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Type).ToULongLong(&clsid);
 						types.push_back(static_cast<ibClassID>(clsid));
 					}
 				}

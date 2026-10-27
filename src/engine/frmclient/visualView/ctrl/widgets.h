@@ -15,7 +15,7 @@ class ibControlButton;
 class ibControlCheckbox;
 class ibTextEditor;
 
-// THE WIDGETS OF A VIEW — the desktop's (frontend/visualView/ctrl/widgets.h), each on the control it drew with, now
+// THE WIDGETS OF A VIEW — the old desktop's, each on the control it drew with, now
 // drawing what the node says.
 
 // A caption — and, bound, the value beside it, a link where there is something to open.

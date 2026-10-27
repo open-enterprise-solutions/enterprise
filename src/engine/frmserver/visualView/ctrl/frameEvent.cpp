@@ -93,11 +93,11 @@ bool ibValueFrame::ibValueEventContainer::GetAt(const ibValue& varKeyValue, ibVa
 
 bool ibValueFrame::ibValueEventContainer::Property(const ibValue& varKeyValue, ibValue& cValueFound)
 {
-	const wxString& key = varKeyValue.GetString();
+	const ibString& key = varKeyValue.GetString();
 	for (unsigned int idx = 0; idx < m_controlEvent->GetEventCount(); idx++) {
 		ibEvent* event = m_controlEvent->GetEvent(idx);
 		if (event == nullptr) continue;
-		if (stringUtils::CompareString(key, event->GetName())) {
+		if (stringUtils::IsSameAs(key, event->GetName())) {
 			//cValueFound = new ibValueEvent(event->GetName());
 			//return true;
 			return event->GetDataValue(cValueFound);
@@ -114,8 +114,8 @@ enum
 
 void ibValueFrame::ibValueEventContainer::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Property"), 2, wxT("Property(key : string, valueFound : event)"));
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(ibT("Property"), 2, ibT("Property(key : string, valueFound : event)"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
 
 	for (unsigned int idx = 0; idx < m_controlEvent->GetEventCount(); idx++) {
 		ibEvent* event = m_controlEvent->GetEvent(idx);
@@ -150,7 +150,7 @@ bool ibValueFrame::ibValueEventContainer::GetPropVal(const long lPropNum, ibValu
 	ibEvent* event = m_controlEvent->GetEvent(lPropNum);
 	if (event == nullptr) return false;
 
-	const wxString& eventValue = event->GetValue();
+	const ibString eventValue = event->GetValue().GetString();
 	if (eventValue.IsEmpty()) return true;
 	//pvarPropVal = new ibValueEvent(eventValue);
 	return event->GetDataValue(pvarPropVal);

@@ -14,12 +14,12 @@ ibValue EmptyOf(const ibClassID& clsid)
 	case ibValueTypes::TYPE_BOOLEAN: return ibValue(false);
 	case ibValueTypes::TYPE_NUMBER:  return ibValue(ibNumber());
 	case ibValueTypes::TYPE_DATE:    return ibValue(ibDateTime());
-	case ibValueTypes::TYPE_STRING:  return ibValue(wxString());
+	case ibValueTypes::TYPE_STRING:  return ibValue(ibString());
 	default:
 		break;
 	}
 	ibDataNode written;
-	written.SetValue(kValueFieldClsid, wxString::Format(wxT("%llu"), (unsigned long long)clsid));
+	written.SetValue(kValueFieldClsid, ibString::Format(ibT("%llu"), (unsigned long long)clsid));
 	return ibValue::FromNode(written);
 }
 
@@ -56,7 +56,7 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 		case ibValueTypes::TYPE_STRING:
 			if (data.GetLength() == 0)
 				return varValue;
-			return ibValue(wxString(varValue.GetString()).Left(data.GetLength()));
+			return ibValue(ibString(varValue.GetString()).Left(data.GetLength()));
 		default:
 			return varValue;
 		}
@@ -80,8 +80,8 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 			return ibValue(varValue.GetDate());
 		case ibValueTypes::TYPE_STRING:
 			if (data.GetLength() == 0)
-				return ibValue(wxString(varValue.GetString()));
-			return ibValue(wxString(varValue.GetString()).Left(data.GetLength()));
+				return ibValue(ibString(varValue.GetString()));
+			return ibValue(ibString(varValue.GetString()).Left(data.GetLength()));
 		case ibValueTypes::TYPE_BOOLEAN:
 			return ibValue(varValue.GetBoolean());
 		default:

@@ -16,6 +16,8 @@
 #include "core/job/jobSchedule.h"
 #include "core/serialize/dataBuilder.h"
 
+#include <wx/datetime.h>   // wxDateTime::Month, the months the cases are written with
+
 namespace {
 
 // A wall-clock reading, spelled the way a schedule reads it (wx's month names, January = 0).
@@ -303,9 +305,9 @@ TEST(JobSchedule, Serialization_ReadsDatesThatCrossedTheWireAsText)
 	// writes one back, so the reader takes either kind; a text that names no date leaves the default.
 	auto root = std::make_shared<ibDataNode>();
 	root->SetValue(wxT("IntervalSeconds"), (std::int32_t)7200);
-	root->SetValue(wxT("PeriodAnchor"), wxString(wxT("2026-01-05 12:00:00")));
-	root->SetValue(wxT("ActiveFrom"),   wxString());
-	root->SetValue(wxT("ActiveTo"),     wxString(wxT("not a date")));
+	root->SetValue(wxT("PeriodAnchor"), ibString(wxT("2026-01-05 12:00:00")));
+	root->SetValue(wxT("ActiveFrom"),   ibString());
+	root->SetValue(wxT("ActiveTo"),     ibString(wxT("not a date")));
 	const ibDataValue value = ibDataValue::Child(root);
 
 	ibJobScheduleDescription s;

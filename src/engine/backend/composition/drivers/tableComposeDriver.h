@@ -73,9 +73,9 @@ struct ibComposedNode
 // column behind it.
 struct ibComposedColumn
 {
-	wxString m_title;
-	wxString m_name;
-	wxString m_alias;
+	ibString m_title;
+	ibString m_name;
+	ibString m_alias;
 	ibMetaID m_id    = 0;
 	bool     m_hasId = false;   // …because 0 is a value
 };
@@ -88,7 +88,7 @@ public:
 	// exactly that row, and a driver that declines it gets a tree with no root.
 	bool WantsGrandTotal() const override { return true; }
 
-	const wxString&                      Name()    const { return m_name; }
+	const ibString&                      Name()    const { return m_name; }
 	const std::vector<ibComposedColumn>& Columns() const { return m_columns; }
 	bool                                 Totals()  const { return m_totals; }
 
@@ -137,7 +137,7 @@ protected:
 	void Pop() { if (!m_open.empty()) m_open.pop_back(); }
 
 private:
-	wxString                          m_name;
+	ibString                          m_name;
 	std::vector<ibComposedColumn>     m_columns;
 	bool                              m_totals = false;
 	std::vector<std::vector<ibValue>> m_open;   // the walk's cursor, kept because the walk hands none

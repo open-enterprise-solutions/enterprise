@@ -26,8 +26,8 @@ class ibWriterMemory;
 struct BACKEND_API ibUserInfo {
 
 	struct ibUserRole {
-		wxString m_strRoleGuid;
-		wxString m_strRoleName;
+		ibString m_strRoleGuid;
+		ibString m_strRoleName;
 		ibRoleID m_miRoleId = wxNOT_FOUND;
 		// HOW this role combines with the user's others (ibRoleCompositionMode) — it travels WITH the
 		// membership, in the same chunk as the id, so a reader gets the identifier and how to compare
@@ -43,34 +43,34 @@ struct BACKEND_API ibUserInfo {
 	bool IsSetLanguage() const { return !m_strLanguageGuid.IsEmpty() && !m_strLanguageCode.IsEmpty(); }
 
 	//User info
-	wxString m_strUserGuid;
-	wxString m_strUserName;
-	wxString m_strUserFullName;
-	wxString m_strUserPassword;
+	ibString m_strUserGuid;
+	ibString m_strUserName;
+	ibString m_strUserFullName;
+	ibString m_strUserPassword;
 
 	//Role info
 	std::vector<ibUserRole> m_roleArray;
 
 	//Language info
-	wxString m_strLanguageGuid;
-	wxString m_strLanguageName;
-	wxString m_strLanguageCode;
+	ibString m_strLanguageGuid;
+	ibString m_strLanguageName;
+	ibString m_strLanguageCode;
 
 	// Compact projection of a sys_user row — guid + name + fullName.
 	// Used by login dialogs (combobox source) and admin UIs that only
 	// need the visible columns, never the role / language / password
 	// blob. Avoids reading binaryData for every row in the table.
 	struct Brief {
-		wxString m_strUserGuid;
-		wxString m_strUserName;
-		wxString m_strUserFullName;
+		ibString m_strUserGuid;
+		ibString m_strUserName;
+		ibString m_strUserFullName;
 	};
 
 	// DB I/O against sys_user via the global db_query layer.
 	// Read returns a default-constructed (IsOk() == false) record on miss
 	// or invalid input; Save does an upsert keyed by m_strUserGuid.
 	static ibUserInfo Read(const ibGuid& userGuid);
-	static ibUserInfo Read(const wxString& userName);
+	static ibUserInfo Read(const ibString& userName);
 	static bool       Save(const ibUserInfo& info);
 	// Remove the sys_user row keyed by guid. True on success (or no-op miss).
 	static bool       Delete(const ibGuid& userGuid);

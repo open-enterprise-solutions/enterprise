@@ -11,9 +11,9 @@
 #include "backend/session/sessionRegistry.h"
 #include "backend/metadataConfiguration.h"
 
-#define objectManager wxT("Manager")
-#define objectMetadataManager wxT("Metadata")
-#define objectDataManager wxT("Data")
+#define objectManager ibT("Manager")
+#define objectMetadataManager ibT("Metadata")
+#define objectDataManager ibT("Data")
 
 //*********************************************************************************************************
 //*                          ibValueModuleManager — lightweight base                                    *
@@ -112,11 +112,11 @@ bool ibValueModuleRuntimeManager::RuntimeRegisterCommonModule(ibValueMetaObjectC
 	m_listCommonModuleManager.emplace_back(moduleValue);
 
 	if (!commonModule->IsGlobalModule()) {
-		const wxString& strModuleName = commonModule->GetName();
+		const ibString& strModuleName = commonModule->GetName();
 		BindExportVariable(strModuleName, moduleValue);
 	}
 	else {
-		const wxString& strModuleName = commonModule->GetName();
+		const ibString& strModuleName = commonModule->GetName();
 		UnbindVariable(strModuleName);
 		m_compileModule->AppendModule(moduleValue->GetCompileModule());
 	}
@@ -135,7 +135,7 @@ bool ibValueModuleRuntimeManager::RuntimeRegisterCommonModule(ibValueMetaObjectC
 				//
 				// The failure is not lost: it is in the journal, and the compile diagnostic reaches
 				// the message pane through the ordinary error road.
-				ibJournalInfo(wxT("module"),_("Common module '%s' failed to compile: %s"),
+				ibJournalInfo(ibT("module"),_("Common module '%s' failed to compile: %s"),
 					commonModule->GetName(), err.GetErrorDescription());
 			};
 		}
@@ -159,7 +159,7 @@ ibValueModuleManager::ibValueModuleUnit* ibValueModuleRuntimeManager::FindCommon
 	return nullptr;
 }
 
-bool ibValueModuleRuntimeManager::RuntimeRenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName)
+bool ibValueModuleRuntimeManager::RuntimeRenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName)
 {
 	ibValue* moduleValue = FindCommonModule(commonModule);
 	wxASSERT(moduleValue);
@@ -171,7 +171,7 @@ bool ibValueModuleRuntimeManager::RuntimeRenameCommonModule(ibValueMetaObjectCom
 			Compile();
 		}
 		catch (const ibCoreException& err) {
-			ibJournalWarning(wxT("module"),_("Rename of common module '%s' to '%s' left compile in failed state: %s"),
+			ibJournalWarning(ibT("module"),_("Rename of common module '%s' to '%s' left compile in failed state: %s"),
 				commonModule->GetName(), newName, err.GetErrorDescription());
 		};
 	}
@@ -517,7 +517,7 @@ ibValueModuleManagerDesigner::ibValueModuleManagerDesigner(
 	m_external = true;
 }
 
-std::map<wxString, ibValue*>& ibValueModuleManagerDesigner::GetGlobalVariables()
+std::map<ibString, ibValue*>& ibValueModuleManagerDesigner::GetGlobalVariables()
 {
 	// Config-root holder: own globals (compile module's extern map). External
 	// DP/Report holder: delegate to the configuration root so its editor sees the
@@ -607,7 +607,7 @@ bool ibValueModuleManagerDesigner::AddCommonModule(ibValueMetaObjectCommonModule
 	m_listCommonModule.emplace_back(moduleValue);
 
 	if (!commonModule->IsGlobalModule()) {
-		const wxString& strModuleName = commonModule->GetName();
+		const ibString& strModuleName = commonModule->GetName();
 		BindExportVariable(strModuleName, moduleValue);
 	}
 
@@ -646,7 +646,7 @@ ibValueModuleManager::ibValueModuleUnit* ibValueModuleManagerDesigner::FindCommo
 	return nullptr;
 }
 
-bool ibValueModuleManagerDesigner::RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName)
+bool ibValueModuleManagerDesigner::RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName)
 {
 	ibValue* moduleValue = FindCommonModule(commonModule);
 

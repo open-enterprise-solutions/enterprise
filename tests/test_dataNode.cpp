@@ -137,11 +137,11 @@ TEST(DataNode, ANewNodeKeepsTheIdentityItIsGiven) {
 // Typed values: SetValue<T> writes, GetValue<T> reads back (round-trip).
 TEST(DataNode, NamedFields_TypedValues_RoundTrip) {
 	ibDataNode n;
-	n.SetValue(wxT("name"), wxString(wxT("Catalog1")));
+	n.SetValue(wxT("name"), ibString(wxT("Catalog1")));
 	n.SetValue(wxT("flag"), true);
 	n.SetValue(wxT("num"), (std::int32_t)-42);
 
-	EXPECT_EQ(n.GetValue<wxString>(wxT("name")), wxT("Catalog1"));
+	EXPECT_EQ(n.GetValue<ibString>(wxT("name")), wxT("Catalog1"));
 	EXPECT_TRUE(n.GetValue<bool>(wxT("flag")));
 	EXPECT_EQ(n.GetValue<std::int32_t>(wxT("num")), -42);
 }
@@ -171,14 +171,14 @@ TEST(DataNode, ADateIsStoredAsItself) {
 // Optimistic cursor: out-of-order access still resolves; absent name defaults.
 TEST(DataNode, NamedFields_OptimisticCursor_ReorderedAndMissing) {
 	ibDataNode n;
-	n.SetValue(wxT("a"), wxString(wxT("A")));
-	n.SetValue(wxT("b"), wxString(wxT("B")));
-	n.SetValue(wxT("c"), wxString(wxT("C")));
+	n.SetValue(wxT("a"), ibString(wxT("A")));
+	n.SetValue(wxT("b"), ibString(wxT("B")));
+	n.SetValue(wxT("c"), ibString(wxT("C")));
 
-	EXPECT_EQ(n.GetValue<wxString>(wxT("c")), wxT("C"));
-	EXPECT_EQ(n.GetValue<wxString>(wxT("a")), wxT("A"));
-	EXPECT_EQ(n.GetValue<wxString>(wxT("b")), wxT("B"));
+	EXPECT_EQ(n.GetValue<ibString>(wxT("c")), wxT("C"));
+	EXPECT_EQ(n.GetValue<ibString>(wxT("a")), wxT("A"));
+	EXPECT_EQ(n.GetValue<ibString>(wxT("b")), wxT("B"));
 	// absent name -> default-constructed (empty)
-	EXPECT_TRUE(n.GetValue<wxString>(wxT("zzz")).IsEmpty());
+	EXPECT_TRUE(n.GetValue<ibString>(wxT("zzz")).IsEmpty());
 }
 

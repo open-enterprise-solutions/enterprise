@@ -84,7 +84,7 @@ TEST_F(TempDbSqliteFix, MaterialiseScalarRoundTrip)
 	ibQueryRamTable ram;
 	ram.AddColumn(ID,   wxT("id"),   ibTypeDescription(g_valueNumberCLSID));
 	ram.AddColumn(NAME, wxT("name"), ibTypeDescription(g_valueStringCLSID));
-	auto row = [&](long id, const wxString& name) {
+	auto row = [&](long id, const ibString& name) {
 		const long r = ram.AppendRow();
 		ram.SetCell(r, ID,   ibValue(ibNumber(id)));
 		ram.SetCell(r, NAME, ibValue(name));
@@ -118,7 +118,7 @@ TEST_F(TempDbSqliteFix, MaterialiseScalarRoundTrip)
 	// EXECUTED (not silently swallowed): ANALYZE creates an sqlite_stat1 table (in the temp schema
 	// for a temp table, or main). The actual plan/perf benefit is DB-specific and measured on PG —
 	// SQLite test data is too small for timing to mean anything; this only asserts the lever fired.
-	ibDatabaseResultSet* stat = db->RunQueryWithResults(wxT("%s"), wxString(wxT(
+	ibDatabaseResultSet* stat = db->RunQueryWithResults(wxT("%s"), ibString(wxT(
 		"SELECT (SELECT count(*) FROM sqlite_temp_master WHERE type='table' AND name='sqlite_stat1') + "
 		"       (SELECT count(*) FROM sqlite_master      WHERE type='table' AND name='sqlite_stat1') AS c")));
 	const int statTables = (stat != nullptr && stat->Next()) ? stat->GetResultInt(wxT("c")) : 0;
@@ -149,7 +149,7 @@ TEST_F(TempDbSqliteFix, DoorReadsBackExactCellValues)
 	ram.AddColumn(ID,   wxT("id"),   ibTypeDescription(g_valueNumberCLSID));
 	ram.AddColumn(NAME, wxT("name"), ibTypeDescription(g_valueStringCLSID));
 	ram.AddColumn(AMT,  wxT("amt"),  ibTypeDescription(g_valueNumberCLSID));
-	auto add = [&](long id, const wxString& nm, long amt) {
+	auto add = [&](long id, const ibString& nm, long amt) {
 		const long r = ram.AppendRow();
 		ram.SetCell(r, ID,   ibValue(ibNumber(id)));
 		ram.SetCell(r, NAME, ibValue(nm));
@@ -188,7 +188,7 @@ TEST_F(TempDbSqliteFix, DoorReadsBackExactCellValues)
 	while (sel.Next()) {
 		++rows;
 		const int      id   = sel.GetValue(cId).GetInteger();
-		const wxString name = sel.GetValue(cName).GetString();
+		const ibString name = sel.GetValue(cName).GetString();
 		const int      amt  = sel.GetValue(cAmt).GetInteger();
 		if (id == 1) { EXPECT_EQ(name, wxT("Alice")); EXPECT_EQ(amt, 1050); sawAlice = true; }
 		if (id == 2) { EXPECT_EQ(name, wxT("Bob"));   EXPECT_EQ(amt, -325); sawBob   = true; }
@@ -216,7 +216,7 @@ TEST_F(TempDbSqliteFix, WriteDoorInsertReadDeleteRoundTrip)
 	{	// one seed row so Materialise creates the table with both columns
 		const long r = ram.AppendRow();
 		ram.SetCell(r, ID,   ibValue(ibNumber(1)));
-		ram.SetCell(r, NAME, ibValue(wxString(wxT("Seed"))));
+		ram.SetCell(r, NAME, ibValue(ibString(wxT("Seed"))));
 	}
 
 	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
@@ -253,7 +253,7 @@ TEST_F(TempDbSqliteFix, WriteDoorInsertReadDeleteRoundTrip)
 	const bool inserted = ibDataQueryBuilder(holder)
 		.From(temp)
 		.SetValue(cId,   ibValue(ibNumber(2)))
-		.SetValue(cName, ibValue(wxString(wxT("Added"))))
+		.SetValue(cName, ibValue(ibString(wxT("Added"))))
 		.Insert();
 	EXPECT_TRUE(inserted) << "door INSERT should render and execute against the temp table";
 	EXPECT_EQ(countRows(), 2) << "read-your-writes: the inserted row is visible on the same holder";
@@ -287,7 +287,7 @@ struct DoorRows {
 		ram.AddColumn(ID,   wxT("id"),   ibTypeDescription(g_valueNumberCLSID));
 		ram.AddColumn(NAME, wxT("name"), ibTypeDescription(g_valueStringCLSID));
 		ram.AddColumn(AMT,  wxT("amt"),  ibTypeDescription(g_valueNumberCLSID));
-		auto add = [&](long id, const wxString& nm, long amt) {
+		auto add = [&](long id, const ibString& nm, long amt) {
 			const long r = ram.AppendRow();
 			ram.SetCell(r, ID,   ibValue(ibNumber(id)));
 			ram.SetCell(r, NAME, ibValue(nm));
@@ -318,7 +318,7 @@ TEST_F(TempDbSqliteFix, DoorWhereLikeFiltersRows)
 
 	// name LIKE 'A%' -> Apple, Avocado (2 of 3).
 	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
-	q.From(d.temp).WhereLike(d.cName, ibValue(wxString(wxT("A%"))));
+	q.From(d.temp).WhereLike(d.cName, ibValue(ibString(wxT("A%"))));
 	ibReadPageRequest page;
 	ibDataQueryResult sel = q.Execute(page);
 	int n = 0;

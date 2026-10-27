@@ -30,7 +30,7 @@ class ibQueryHierarchyScope;   // queryHierarchy.h — what «in hierarchy» adm
 //
 // One implementation, because there is one question. The RAM composer asks it per row, the walk
 // asks it per group, and a second copy of the spelling would answer one of them differently.
-BACKEND_API bool ibCompositionCompare(const ibValue& cell, const wxString& op, const ibValue& value);
+BACKEND_API bool ibCompositionCompare(const ibValue& cell, const ibString& op, const ibValue& value);
 // …AND ASKED WITH THE KIND A STORED CONDITION ACTUALLY HOLDS — see the definition.
 BACKEND_API bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind, const ibValue& value);
 
@@ -44,8 +44,8 @@ BACKEND_API bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind
 // NULL — the fold's word for a column its level does not hold), a subtree nobody answered. A filter that HIDES
 // shows then (true); a rule that MARKS does not mark (false). Inside, the reading is three-valued — AND, OR and
 // NOT combine "unknown" honestly — and only the whole condition's unknown becomes the caller's answer.
-using ibCompositionValueOf = std::function<const ibValue*(const wxString& path)>;
-using ibCompositionSubtreeOf = std::function<const ibQueryHierarchyScope*(const wxString& path, const ibValue& named)>;
+using ibCompositionValueOf = std::function<const ibValue*(const ibString& path)>;
+using ibCompositionSubtreeOf = std::function<const ibQueryHierarchyScope*(const ibString& path, const ibValue& named)>;
 BACKEND_API bool ibCompositionFilterHolds(const ibFilterDescription& filter, const class ibMetaData* metaData,
 	const ibCompositionValueOf& valueOf, const ibCompositionSubtreeOf& subtreeOf, bool whenUnknown);
 
@@ -64,7 +64,7 @@ BACKEND_API std::vector<ibCompositionRule> ibCompositionRulesOf(const ibConditio
 // ⭐ …AND WHAT THEY SAY OF ONE ROW — each rule whose condition holds on it (a condition it cannot read marks nothing)
 // said over the LINE where it names no field, else handed to `sayField` once per field it names: the caller knows
 // its own columns — the walk its schema, a list its model. True when any rule held.
-using ibCompositionSayField = std::function<void(const wxString& field, const ibCompositionAttr& attr)>;
+using ibCompositionSayField = std::function<void(const ibString& field, const ibCompositionAttr& attr)>;
 BACKEND_API bool ibCompositionSayRules(const std::vector<ibCompositionRule>& rules, const class ibMetaData* metaData,
 	const ibCompositionValueOf& valueOf, const ibCompositionSubtreeOf& subtreeOf,
 	ibCompositionAttr& line, const ibCompositionSayField& sayField);

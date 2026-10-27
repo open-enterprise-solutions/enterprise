@@ -35,7 +35,7 @@ class ibWriterMemory;      // binary-wire writer (core/memory/memoryStream.h)
 // (the layout below, the read keyset anchor, the DDL builder, the attribute field machinery) spells the
 // suffix through this, so the lettering lives in exactly one map and can never disagree between writers.
 // Raw -> empty (the column is its own field, no suffix).
-BACKEND_API const wxString& ibFieldSuffix(ibColumnRole role);
+BACKEND_API const ibString& ibFieldSuffix(ibColumnRole role);
 
 // ⭐⭐ WHAT THE STATEMENT CALLS AN OUTPUT — as opposed to what the AUTHOR calls it.
 //
@@ -65,7 +65,7 @@ BACKEND_API const wxString& ibFieldSuffix(ibColumnRole role);
 //
 // ⭐ ASKED AT BOTH ENDS. Whatever writes `AS <x>` and whatever reads that column back off the cursor
 // go through here, so writer and reader cannot drift apart.
-BACKEND_API wxString ibSqlAliasOf(const wxString& outputName);
+BACKEND_API ibString ibSqlAliasOf(const ibString& outputName);
 
 // ⭐ IS THIS A PLAIN SCALAR — one type, and that type a number, a string, a date or a boolean. Such a value is
 // ONE field of a result and is read by its name; anything else (a reference, an enum, a composite) comes back
@@ -98,7 +98,7 @@ BACKEND_API bool ibReadsBackAsItself(const ibTypeDescription& type);
 // The PHYSICAL field is unchanged (`Row` + the reference-id suffix, spelled through the same suffix
 // table as every other field): existing databases carry it, and renaming a column is a migration, not
 // a cleanup.
-BACKEND_API const wxString& ibOwnerRefField();
+BACKEND_API const ibString& ibOwnerRefField();
 
 // CAN THIS COLUMN BE COMPARED AT ALL? A value kept WHOLE — a schedule, a type description — lives in a
 // single BLOB field, and a blob is not something SQL can test for equality or order. Filtering or
@@ -138,7 +138,7 @@ BACKEND_API bool ibIsValueRole(ibColumnRole role);
 // A column's VALUE field names — its layout slots minus the _TYPE discriminator and the reference
 // TYPE id (the value-carrying roles). Metadata-free, derived over DescribeColumnLayout. The DB
 // provider asks this for sort / group-by / key field expansion; the column stays a pure descriptor.
-BACKEND_API std::vector<wxString> ColumnValueFields(const ibBackendQueryColumn* col);
+BACKEND_API std::vector<ibString> ColumnValueFields(const ibBackendQueryColumn* col);
 
 // ⭐ THE SAME FIELDS, WITH THEIR ROLE STILL ATTACHED. A consumer that must know what a field IS —
 // a reference id needs its _RTRef tiebreak, a counter scan wants the number field — reads m_role.
@@ -152,7 +152,7 @@ BACKEND_API std::vector<ibColumnSlot> ColumnValueSlots(const ibBackendQueryColum
 // empty key of one type orders apart from an empty key of another). One answer for the ORDER BY a read
 // writes and for the fields an index is built over — an index whose leading fields are not the order's
 // own is one the engine cannot walk, and every page of a list sorts the whole table instead.
-BACKEND_API std::vector<wxString> ColumnSortFields(const ibBackendQueryColumn* col);
+BACKEND_API std::vector<ibString> ColumnSortFields(const ibBackendQueryColumn* col);
 
 // The column's FIRST value slot — the field a scalar comparison / sort / anchor rides. Empty name
 // and Raw role when the column spreads to nothing.
@@ -182,9 +182,9 @@ BACKEND_API int ibPersistedTypeTag(ibColumnRole role);
 //   ColumnFieldNames        : the physical field NAMES in bind order (index columns / statement list)
 //   ColumnFieldList         : "f_TYPE,f_B,f_N,…"  (SELECT list; aggr wraps the N/D measures)
 //   ColumnComparePredicate  : "f_TYPE = ? AND f_B <cmp> ? AND …"  (WHERE by value)
-BACKEND_API std::vector<wxString> ColumnFieldNames(const ibBackendQueryColumn* col);
-BACKEND_API wxString       ColumnFieldList(const ibBackendQueryColumn* col, const wxString& aggr = wxEmptyString);
-BACKEND_API wxString       ColumnComparePredicate(const ibBackendQueryColumn* col, const wxString& cmp = wxT("="));
+BACKEND_API std::vector<ibString> ColumnFieldNames(const ibBackendQueryColumn* col);
+BACKEND_API ibString       ColumnFieldList(const ibBackendQueryColumn* col, const ibString& aggr = ibEmptyString);
+BACKEND_API ibString       ColumnComparePredicate(const ibBackendQueryColumn* col, const ibString& cmp = ibT("="));
 
 
 // ⭐⭐ BIND A VALUE INTO A COLUMN — THE ONE DOOR, and the thing to call instead of the codec.
@@ -245,14 +245,14 @@ public:
 	// A caller that truly needs the row NOW says so, in one word, at its own call site.
 	static bool ReadValue(const ibBackendQueryColumn* col, const ibMetaData* metaData,
 	                      ibValue& retValue, ibQueryResult& result, bool createData = false);
-	static bool ReadValue(const wxString& fieldName, const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	static bool ReadValue(const ibString& fieldName, const ibBackendQueryColumn* col, const ibMetaData* metaData,
 	                      ibValue& retValue, ibQueryResult& result, bool createData = false);
 
 	// READ ONE physical field of a KNOWN variant type (the read leaf). `fieldType` is the persisted
 	// variant tag (ibValueMetaObjectAttributeBase::ibFieldTypes) passed as a plain int, so this
 	// header need not pull the heavy attribute header in. Used directly by callers that already
 	// know a field's type (a register reading a numeric balance/turnover column).
-	static bool ReadField(const wxString& fieldName, int fieldType, const ibBackendQueryColumn* col,
+	static bool ReadField(const ibString& fieldName, int fieldType, const ibBackendQueryColumn* col,
 	                      const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData = false);
 
 	// Does the column's type admit a reference value — its spread carries _RTRef/_RRRef?
@@ -267,7 +267,7 @@ private:
 	// The tag switch itself, WITHOUT the "no such field" guard ReadValue wraps it in. The guard is
 	// what turns a missing field into an answer the caller can act on, so the unguarded shape is not
 	// offered: asking for it would be asking for the failure the guard exists to prevent.
-	static bool ReadTaggedValue(const wxString& fieldName, const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	static bool ReadTaggedValue(const ibString& fieldName, const ibBackendQueryColumn* col, const ibMetaData* metaData,
 	                            ibValue& retValue, ibQueryResult& result, bool createData);
 };
 

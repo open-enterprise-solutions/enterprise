@@ -9,22 +9,22 @@ class BACKEND_API ibPropertyFont : public ibProperty {
 public:
 
 	ibFont GetValueAsFont() const { ibFont font; font.FromString(m_propValue.GetString()); return font; }
-	wxString GetValueAsString() const { return m_propValue; }
-	void SetValue(const ibFont& val) { m_propValue = wxString(val.ToString()); }
-	void SetValue(const wxString& val) { m_propValue = val; }
+	ibString GetValueAsString() const { return m_propValue.GetString(); }
+	void SetValue(const ibFont& val) { m_propValue = ibString(val.ToString()); }
+	void SetValue(const ibString& val) { m_propValue = val; }
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const ibFont& f = ibFont())
-		: ibProperty(cat, name, wxString(f.ToString()))
+	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibFont& f = ibFont())
+		: ibProperty(cat, name, f.ToString().wc_str())
 	{
 	}
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibFont& f = ibFont())
-		: ibProperty(cat, name, label, wxString(f.ToString()))
+	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibFont& f = ibFont())
+		: ibProperty(cat, name, label, f.ToString().wc_str())
 	{
 	}
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibFont& f = ibFont())
-		: ibProperty(cat, name, label, helpString, wxString(f.ToString()))
+	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibFont& f = ibFont())
+		: ibProperty(cat, name, label, helpString, f.ToString().wc_str())
 	{
 	}
 

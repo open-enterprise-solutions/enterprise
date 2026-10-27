@@ -5,7 +5,7 @@
 // THE DESIGNER'S CHOICE OF A DECLARED VALUE
 ////////////////////////////////////////////////////////////////////////////
 //
-// The desktop's (frontend/win/dlgs/selectPredefined.h), asked of the thin client. At run time a reference is chosen
+// The old desktop's dialog, asked of the thin client (frmclient/win/dlgs/selectPredefined.h). At run time a reference is chosen
 // from the ROWS — the metaobject's own selection form. While a configuration is being WRITTEN there are none, and what
 // a person needs to say is one of the things the configuration DECLARES: the empty reference of a type, a predefined
 // element, an enumeration member.

@@ -49,10 +49,10 @@ static ibQueryableSourceDescriptor* DescriptorOf(ibQueryableFactory* factory, co
 	if (factory == nullptr || source.m_name.size() < 2 || source.m_subquery)
 		return nullptr;
 
-	const wxString ns = source.m_name[0];
-	wxString name = source.m_name[1];
+	const ibString ns = source.m_name[0];
+	ibString name = source.m_name[1];
 	for (size_t i = 2; i < source.m_name.size(); ++i)
-		name += wxT(".") + source.m_name[i];   // `Register.Stock.Balance` — the virtual table is the third segment
+		name += ibT(".") + source.m_name[i];   // `Register.Stock.Balance` — the virtual table is the third segment
 
 	for (ibQueryableSourceDescriptor* descriptor : factory->GetDescriptors())
 		if (descriptor != nullptr && descriptor->GetNamespace().IsSameAs(ns, false)
@@ -93,10 +93,10 @@ std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetSources() cons
 
 		// A descriptor's name is already the composite one for a virtual table
 		// ("Goods.Balance"), so it splits back into the segments a query writes.
-		const wxString name = descriptor->GetName();
-		wxString segment;
+		const ibString name = descriptor->GetName();
+		ibString segment;
 		for (size_t i = 0; i < name.length(); ++i) {
-			if (name[i] == wxT('.')) { source.m_path.push_back(segment); segment.clear(); }
+			if (name[i] == ibT('.')) { source.m_path.push_back(segment); segment.clear(); }
 			else                      { segment += name[i]; }
 		}
 		if (!segment.IsEmpty())
@@ -121,7 +121,7 @@ std::vector<ibQuerySourceParameter> ibQueryConstructorModel::GetSourceParameters
 	return out;
 }
 
-std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields(const ibQuerySource& source, const wxString& slot) const
+std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields(const ibQuerySource& source, const ibString& slot) const
 {
 	std::vector<ibQueryConstructorField> out;
 	ibQueryableSourceDescriptor* descriptor = DescriptorOf(Factory(), source);
@@ -144,7 +144,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields
 	return out;
 }
 
-ibClassID ibQueryConstructorModel::ReferenceOfTable(const std::vector<wxString>& path) const
+ibClassID ibQueryConstructorModel::ReferenceOfTable(const std::vector<ibString>& path) const
 {
 	if (path.size() != 2)
 		return 0;   // a virtual table — `AccumulationRegister.Stock.Balance` — is no table a reference points at
@@ -159,13 +159,13 @@ ibClassID ibQueryConstructorModel::ReferenceOfTable(const std::vector<wxString>&
 
 // Named as a query names the type (`Document.GoodsIssue`), which is both what a tree shows and what a
 // person would have to write to cast to it.
-wxString ibQueryConstructorModel::TableOfReference(ibClassID reference) const
+ibString ibQueryConstructorModel::TableOfReference(ibClassID reference) const
 {
 	ibQueryableFactory* const factory = Factory();
 	const std::vector<ibMetaID> tables = ConvertToMetaIds({ reference });
 	const ibQueryableSourceDescriptor* const descriptor =
 		factory != nullptr && tables.size() == 1 ? factory->ResolveDescriptorById(tables.front()) : nullptr;
-	return descriptor != nullptr ? descriptor->GetNamespace() + wxT(".") + descriptor->GetName() : wxString();
+	return descriptor != nullptr ? descriptor->GetNamespace() + ibT(".") + descriptor->GetName() : ibString();
 }
 
 // A REAL SOURCE answers through its descriptor — the very call a dynamic list fills its columns
@@ -292,8 +292,8 @@ std::vector<ibMetaID> ibQueryConstructorModel::ConvertToMetaIds(const std::vecto
 #include "core/query/queryParser.h"                 // ibQueryParser — the text is parsed here and nowhere else
 #include "queryLowering.h"               // PlacePackageLinks — where a linked selection stands, asked ONCE
 
-std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
-	const ibMetaData* metaData, wxString* error)
+std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
+	const ibMetaData* metaData, ibString* error)
 {
 	std::vector<ibQueryConstructorField> fields;
 	if (error != nullptr)
@@ -323,7 +323,7 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 		// ⚠ AND ONLY THE SELECTIONS THE LINKS ACTUALLY PLACED. One that relates to nothing is not in
 		// the final query, so offering its fields would offer a path that cannot resolve.
 		if (!package.m_links.empty()) {
-			std::vector<wxString> declared;
+			std::vector<ibString> declared;
 			for (const ibQueryAstStatement& statement : package.m_statements)
 				if (statement.m_select && !statement.m_select->m_ontoName.IsEmpty())
 					declared.push_back(statement.m_select->m_ontoName);
@@ -331,7 +331,7 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 			const ibQueryLowering::FromTree tree =
 				ibQueryLowering::PlacePackageLinks(package.m_links, declared);
 
-			std::vector<wxString> placed;
+			std::vector<ibString> placed;
 			if (!tree.m_head.IsEmpty()) {
 				placed.push_back(tree.m_head);
 				for (const ibQueryLowering::JoinStep& step : tree.m_steps)
@@ -339,7 +339,7 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 			}
 
 			const ibQueryConstructorModel model(metaData);
-			for (const wxString& name : placed) {
+			for (const ibString& name : placed) {
 				for (size_t i = 0; i < package.m_statements.size(); ++i) {
 					const ibQuerySelectPtr select = package.m_statements[i].m_select;
 					if (!select || !select->m_ontoName.IsSameAs(name, false))
@@ -347,7 +347,7 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 					// RESOLVED AS OF ITS MAKER, like every other named result (GetFields).
 					for (ibQueryConstructorField field : model.FieldsOfSelect(*select, package, i)) {
 						field.m_source = name;
-						field.m_name   = name + wxT(".") + field.m_name;
+						field.m_name   = name + ibT(".") + field.m_name;
 						fields.push_back(std::move(field));
 					}
 					break;

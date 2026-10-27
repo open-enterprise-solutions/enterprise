@@ -54,8 +54,8 @@ struct ibJsonNode {
 	enum Kind { Null, Boolean, Number, String, Object, Array } m_kind = Null;
 	bool        m_flag = false;
 	std::string m_digits;                                     // a number AS TEXT, already in its shortest spelling
-	wxString    m_text;
-	std::vector<std::pair<wxString, ibJsonNode>> m_members;   // in the order they are written
+	ibString    m_text;
+	std::vector<std::pair<ibString, ibJsonNode>> m_members;   // in the order they are written
 	std::vector<ibJsonNode> m_items;
 };
 
@@ -89,10 +89,10 @@ public:
 
 	// A string out of the pieces that have each broken a JSON writer somewhere: what must be escaped, what must
 	// NOT be, text that is not ASCII, a character outside the basic plane, and nothing at all.
-	wxString Text()
+	ibString Text()
 	{
-		if (Chance(8)) { m_census.m_emptyStrings++; return wxString(); }
-		wxString text;
+		if (Chance(8)) { m_census.m_emptyStrings++; return ibString(); }
+		ibString text;
 		const unsigned int pieces = 1u + Below(5);
 		for (unsigned int i = 0; i < pieces; i++) {
 			switch (Below(9)) {
@@ -100,11 +100,11 @@ public:
 			case 1: text += wxT(" a b "); break;
 			case 2: text += wxT('"'); m_census.m_escaped++; break;
 			case 3: text += wxT('\\'); m_census.m_escaped++; break;
-			case 4: text += wxString(wxT("\n\r\t\b\f")).Mid(Below(5), 1); m_census.m_escaped++; break;
-			case 5: text += wxString(wxUniChar(1 + static_cast<int>(Below(0x1F)))); m_census.m_escaped++; break;
-			case 6: text += wxString(wxUniChar(Chance(2) ? 0x2028 : 0x2029)); m_census.m_escaped++; break;
-			case 7: text += wxString::FromUTF8("\xD0\x91\xD0\xBE\xD1\x80\xD1\x89 \xD1\x97"); m_census.m_nonAscii++; break;
-			default: text += wxString::FromUTF8("\xF0\x9F\x98\x80"); m_census.m_surrogates++; break;
+			case 4: text += ibString(wxT("\n\r\t\b\f")).Mid(Below(5), 1); m_census.m_escaped++; break;
+			case 5: text += ibString(static_cast<wchar_t>(1 + static_cast<int>(Below(0x1F)))); m_census.m_escaped++; break;
+			case 6: text += ibString(static_cast<wchar_t>(Chance(2) ? 0x2028 : 0x2029)); m_census.m_escaped++; break;
+			case 7: text += ibString::FromUTF8("\xD0\x91\xD0\xBE\xD1\x80\xD1\x89 \xD1\x97"); m_census.m_nonAscii++; break;
+			default: text += ibString::FromUTF8("\xF0\x9F\x98\x80"); m_census.m_surrogates++; break;
 			}
 		}
 		return text;
@@ -169,15 +169,15 @@ private:
 	// Keys of one object never differ only in case - a Structure folds case, and what becomes of two such keys is
 	// asked on its own (test_valueJson.cpp). The position in front keeps them apart whatever follows it: a plain
 	// name, a name with a space, text that is not ASCII, a word the language reads as a constant.
-	wxString Key(unsigned int position)
+	ibString Key(unsigned int position)
 	{
-		wxString key = wxString::Format(wxT("k%u"), position);
+		ibString key = ibString::Format(wxT("k%u"), position);
 		switch (Below(5)) {
 		case 0: break;
 		case 1: key += wxT(" odd key"); m_census.m_oddKeys++; break;
-		case 2: key += wxString::FromUTF8("\xD0\xBA\xD0\xBB\xD1\x8E\xD1\x87"); m_census.m_oddKeys++; break;
+		case 2: key += ibString::FromUTF8("\xD0\xBA\xD0\xBB\xD1\x8E\xD1\x87"); m_census.m_oddKeys++; break;
 		case 3: key += wxT("\"q\\"); m_census.m_oddKeys++; break;
-		default: key = wxString(Chance(2) ? wxT("null") : wxT("true")) + key; m_census.m_constantKeys++; break;
+		default: key = ibString(Chance(2) ? wxT("null") : wxT("true")) + key; m_census.m_constantKeys++; break;
 		}
 		return key;
 	}
@@ -189,11 +189,11 @@ private:
 //  The expected text - this file's own spelling of JSON, compact
 // ---------------------------------------------------------------------------
 
-void AppendExpectedString(wxString& out, const wxString& text)
+void AppendExpectedString(ibString& out, const ibString& text)
 {
 	out += wxT('"');
 	for (size_t i = 0; i < text.length(); i++) {
-		const wxUniChar::value_type c = text[i].GetValue();
+		const wchar_t c = text[i];
 		if      (c == '"')  out += wxT("\\\"");
 		else if (c == '\\') out += wxT("\\\\");
 		else if (c == '\b') out += wxT("\\b");
@@ -202,19 +202,19 @@ void AppendExpectedString(wxString& out, const wxString& text)
 		else if (c == '\r') out += wxT("\\r");
 		else if (c == '\t') out += wxT("\\t");
 		else if (c < 0x20 || c == 0x2028 || c == 0x2029)
-			out += wxString::Format(wxT("\\u%04x"), static_cast<unsigned>(c));
+			out += ibString::Format(wxT("\\u%04x"), static_cast<unsigned>(c));
 		else
 			out += text[i];
 	}
 	out += wxT('"');
 }
 
-void AppendExpected(wxString& out, const ibJsonNode& node)
+void AppendExpected(ibString& out, const ibJsonNode& node)
 {
 	switch (node.m_kind) {
 	case ibJsonNode::Null:    out += wxT("null"); break;
 	case ibJsonNode::Boolean: out += node.m_flag ? wxT("true") : wxT("false"); break;
-	case ibJsonNode::Number:  out += wxString::FromAscii(node.m_digits.c_str()); break;
+	case ibJsonNode::Number:  out += ibString::FromUTF8(node.m_digits.c_str()); break;
 	case ibJsonNode::String:  AppendExpectedString(out, node.m_text); break;
 	case ibJsonNode::Object:
 		out += wxT('{');
@@ -246,7 +246,7 @@ ibValue Build(const ibJsonNode& node)
 	switch (node.m_kind) {
 	case ibJsonNode::Null:    return ibValue(ibValueTypes::TYPE_NULL);
 	case ibJsonNode::Boolean: return ibValue(node.m_flag);
-	case ibJsonNode::Number:  return ibValue(ibNumber(wxString::FromAscii(node.m_digits.c_str())));
+	case ibJsonNode::Number:  return ibValue(ibNumber(ibString::FromUTF8(node.m_digits.c_str())));
 	case ibJsonNode::String:  return ibValue(node.m_text);
 	case ibJsonNode::Object: {
 		const ibValuePtr<ibValueStructure> object(new ibValueStructure());   // born held
@@ -264,58 +264,58 @@ ibValue Build(const ibJsonNode& node)
 }
 
 // Empty when the value IS the tree; otherwise where it is not, as a path a person can follow.
-wxString Differs(const ibValue& value, const ibJsonNode& node, const wxString& path)
+ibString Differs(const ibValue& value, const ibJsonNode& node, const ibString& path)
 {
 	switch (node.m_kind) {
 	case ibJsonNode::Null:
-		return value.IsNull() ? wxString() : path + wxT(": not Null");
+		return value.IsNull() ? ibString() : path + wxT(": not Null");
 	case ibJsonNode::Boolean:
 		return value.GetType() == ibValueTypes::TYPE_BOOLEAN && value.GetBoolean() == node.m_flag
-			? wxString() : path + wxT(": not the Boolean");
+			? ibString() : path + wxT(": not the Boolean");
 	case ibJsonNode::Number: {
 		if (value.GetType() != ibValueTypes::TYPE_NUMBER) return path + wxT(": not a Number");
-		const wxString read = value.GetNumber().ToString();
-		return read == wxString::FromAscii(node.m_digits.c_str()) ? wxString()
-			: path + wxT(": the number reads ") + read + wxT(", written ") + wxString::FromAscii(node.m_digits.c_str());
+		const ibString read = value.GetNumber().ToString();
+		return read == ibString::FromUTF8(node.m_digits.c_str()) ? ibString()
+			: path + wxT(": the number reads ") + read + wxT(", written ") + ibString::FromUTF8(node.m_digits.c_str());
 	}
 	case ibJsonNode::String:
 		if (value.GetType() != ibValueTypes::TYPE_STRING) return path + wxT(": not a String");
-		return value.GetString() == node.m_text ? wxString() : path + wxT(": the string differs");
+		return value.GetString() == node.m_text ? ibString() : path + wxT(": the string differs");
 	case ibJsonNode::Object: {
 		const ibValueStructure* object = dynamic_cast<const ibValueStructure*>(value.GetRef());
 		if (object == nullptr) return path + wxT(": not a Structure");
 		if (object->Entries().size() != node.m_members.size())
-			return path + wxString::Format(wxT(": %u members, written %u"),
+			return path + ibString::Format(wxT(": %u members, written %u"),
 				static_cast<unsigned>(object->Entries().size()), static_cast<unsigned>(node.m_members.size()));
 		for (size_t i = 0; i < node.m_members.size(); i++) {
 			if (object->Entries()[i].key.GetString() != node.m_members[i].first)
-				return path + wxString::Format(wxT(": member %u is not the key written there"), static_cast<unsigned>(i));
-			const wxString inner = Differs(object->Entries()[i].value, node.m_members[i].second,
+				return path + ibString::Format(wxT(": member %u is not the key written there"), static_cast<unsigned>(i));
+			const ibString inner = Differs(object->Entries()[i].value, node.m_members[i].second,
 				path + wxT(".") + node.m_members[i].first);
 			if (!inner.empty()) return inner;
 		}
-		return wxString();
+		return ibString();
 	}
 	default: {
 		const ibValueArray* list = dynamic_cast<const ibValueArray*>(value.GetRef());
 		if (list == nullptr) return path + wxT(": not an Array");
 		if (list->Values().size() != node.m_items.size()) return path + wxT(": the array's length differs");
 		for (size_t i = 0; i < node.m_items.size(); i++) {
-			const wxString inner = Differs(list->Values()[i], node.m_items[i], path + wxString::Format(wxT("[%u]"), static_cast<unsigned>(i)));
+			const ibString inner = Differs(list->Values()[i], node.m_items[i], path + ibString::Format(wxT("[%u]"), static_cast<unsigned>(i)));
 			if (!inner.empty()) return inner;
 		}
-		return wxString();
+		return ibString();
 	}
 	}
 }
 
-std::string Shown(const wxString& text)
+std::string Shown(const ibString& text)
 {
-	const wxScopedCharBuffer utf8 = text.Left(600).utf8_str();
+	const std::string utf8 = text.Left(600).utf8_str();
 	return std::string(utf8.data(), utf8.length());
 }
 
-wxString Written(const ibValue& value, ibJsonFormatting formatting)
+ibString Written(const ibValue& value, ibJsonFormatting formatting)
 {
 	ibValueJsonWriter writer;
 	writer.SetFormatting(formatting);
@@ -334,17 +334,17 @@ TEST(JsonRoundTrip, WhatIsWrittenIsTheExpectedTextAndReadsBackAsTheTree)
 	for (unsigned int seed = 1; seed <= kSeeds; seed++) {
 		ibJsonGen gen(seed);
 		const ibJsonNode tree = gen.Value(0);
-		wxString expected;
+		ibString expected;
 		AppendExpected(expected, tree);
 
-		const wxString written = Written(Build(tree), ibJsonFormatting_Compact);
+		const ibString written = Written(Build(tree), ibJsonFormatting_Compact);
 		ASSERT_EQ(written, expected) << "seed " << seed << "\nexpected: " << Shown(expected) << "\nwritten:  " << Shown(written);
 
 		// The indented text is the same document: read back, it is the same tree.
-		for (const wxString& text : { written, Written(Build(tree), ibJsonFormatting_Indented) }) {
+		for (const ibString& text : { written, Written(Build(tree), ibJsonFormatting_Indented) }) {
 			ibValueJsonReader reader;
 			reader.SetText(text);
-			const wxString differs = Differs(reader.ReadValue(), tree, wxT("$"));
+			const ibString differs = Differs(reader.ReadValue(), tree, wxT("$"));
 			ASSERT_TRUE(differs.empty()) << "seed " << seed << ": " << Shown(differs) << "\ntext: " << Shown(text);
 			ASSERT_FALSE(reader.Read()) << "seed " << seed << ": the value was the whole document";
 		}
@@ -357,34 +357,34 @@ TEST(JsonRoundTrip, WhatIsWrittenIsTheExpectedTextAndReadsBackAsTheTree)
 // test's: damage almost never produces one, and a property hardly asked is a property not held.)
 TEST(JsonRoundTrip, DamagedTextIsReadOrRefusedAndNeverAnythingElse)
 {
-	const wxString structural = wxT("{}[],:\"\\ntf0-.eE ");
+	const ibString structural = wxT("{}[],:\"\\ntf0-.eE ");
 	int accepted = 0, refused = 0;
 
 	for (unsigned int seed = 1; seed <= kSeeds; seed++) {
 		ibJsonGen gen(seed * 7919u);
-		wxString clean;
+		ibString clean;
 		AppendExpected(clean, gen.Value(0));
 
 		for (int round = 0; round < 12; round++) {
-			wxString text = clean;
+			ibString text = clean;
 			const unsigned int damages = 1u + gen.Below(3);
 			for (unsigned int d = 0; d < damages && !text.empty(); d++) {
 				const size_t at = gen.Below(static_cast<unsigned int>(text.length()));
 				switch (gen.Below(5)) {
 				case 0: text.erase(at, 1); break;                                                     // a character cut
-				case 1: text.insert(at, wxString(text[at])); break;                                   // doubled
+				case 1: text.insert(at, ibString(text[at])); break;                                   // doubled
 				case 2: text[at] = structural[gen.Below(static_cast<unsigned int>(structural.length()))]; break;
 				case 3: text.insert(at, text.Mid(at, 1 + gen.Below(12))); break;                       // a slice repeated
 				default: text.Truncate(at); break;                                                   // the end torn off
 				}
 			}
 
-			const wxScopedCharBuffer utf8 = text.utf8_str();
+			const std::string utf8 = text.utf8_str();
 			const bool libraryAccepts = nlohmann::json::accept(utf8.data(), utf8.data() + utf8.length());
 
 			ibValueJsonReader reader;
 			bool readerAccepts = false;
-			wxString why;
+			ibString why;
 			try {
 				reader.SetText(text);
 				readerAccepts = true;
@@ -459,7 +459,7 @@ TEST(JsonRoundTrip, DamagedTextIsReadOrRefusedAndNeverAnythingElse)
 			// …and what was built is stable: written and read again it writes the same text. Apart from the try
 			// above, so that a writer handing over a text the reader refuses is reported as THAT.
 			try {
-				const wxString once = Written(value, ibJsonFormatting_Compact);
+				const ibString once = Written(value, ibJsonFormatting_Compact);
 				ibValueJsonReader again;
 				again.SetText(once);
 				ASSERT_EQ(Written(again.ReadValue(), ibJsonFormatting_Compact), once) << "seed " << seed << "\ntext: " << Shown(text);
@@ -482,7 +482,7 @@ TEST(JsonRoundTrip, DamagedTextIsReadOrRefusedAndNeverAnythingElse)
 TEST(JsonRoundTrip, ARefusedWholeValueLeavesTheReaderWhereItStood)
 {
 	struct ibTwin {
-		static bool Plant(ibJsonNode& node, wxString& first, wxString& twin)
+		static bool Plant(ibJsonNode& node, ibString& first, ibString& twin)
 		{
 			if (node.m_kind == ibJsonNode::Object && !node.m_members.empty()) {
 				first = node.m_members.front().first;
@@ -504,7 +504,7 @@ TEST(JsonRoundTrip, ARefusedWholeValueLeavesTheReaderWhereItStood)
 		// More than half of what the generator makes is a scalar, or containers with nothing in them: draw until
 		// there is an object with a member to plant into.
 		ibJsonNode tree;
-		wxString first, twin;
+		ibString first, twin;
 		bool planted = false;
 		for (int draw = 0; draw < 20 && !planted; draw++) {
 			tree = gen.Value(0);
@@ -514,7 +514,7 @@ TEST(JsonRoundTrip, ARefusedWholeValueLeavesTheReaderWhereItStood)
 		ASSERT_NE(first, twin) << "seed " << seed << ": the generator's keys all carry a letter";
 		asked++;
 
-		wxString text;
+		ibString text;
 		AppendExpected(text, tree);
 
 		ibValueJsonReader reader;
@@ -525,7 +525,7 @@ TEST(JsonRoundTrip, ARefusedWholeValueLeavesTheReaderWhereItStood)
 				FAIL() << "seed " << seed << ", attempt " << attempt << ": two keys that differ only in case were read into one Structure\ntext: " << Shown(text);
 			}
 			catch (const ibBackendException& refusal) {
-				const wxString why = refusal.GetErrorDescription();
+				const ibString why = refusal.GetErrorDescription();
 				ASSERT_TRUE(why.Contains(first) && why.Contains(twin)) << "seed " << seed << ": the refusal names both keys - " << Shown(why);
 			}
 			ASSERT_EQ(reader.CurrentType(), ibJsonValueType_None) << "seed " << seed << ", attempt " << attempt << ": a refused ReadValue() moved the reader\ntext: " << Shown(text);
@@ -563,36 +563,36 @@ TEST(JsonRoundTrip, ARefusedWholeValueLeavesTheReaderWhereItStood)
 // checked build and an order below what the quadratic one took.
 TEST(JsonRoundTrip, ExpensiveShapesStayCheap)
 {
-	const auto seconds = [](const wxString& text) {
+	const auto seconds = [](const ibString& text) {
 		const auto started = std::chrono::steady_clock::now();
 		ibValueJsonReader reader;
 		reader.SetText(text);
 		const ibValue value = reader.ReadValue();
-		const wxString written = Written(value, ibJsonFormatting_Compact);
+		const ibString written = Written(value, ibJsonFormatting_Compact);
 		EXPECT_FALSE(written.empty());
 		return std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
 	};
 
-	wxString twice = wxT("{");
+	ibString twice = wxT("{");
 	for (int pass = 0; pass < 2; pass++)
 		for (int i = 0; i < 12000; i++)
-			twice += wxString::Format(wxT("%s\"key%d\":%d"), twice.length() > 1 ? wxT(",") : wxT(""), i, pass);
+			twice += ibString::Format(wxT("%s\"key%d\":%d"), twice.length() > 1 ? wxT(",") : wxT(""), i, pass);
 	twice += wxT("}");
 	EXPECT_LT(seconds(twice), 10.0) << "every key listed twice";
 
-	wxString numbers = wxT("[");
+	ibString numbers = wxT("[");
 	for (int i = 0; i < 40000; i++)
-		numbers += wxString::Format(wxT("%s%d.%02d"), i > 0 ? wxT(",") : wxT(""), i, i % 100);
+		numbers += ibString::Format(wxT("%s%d.%02d"), i > 0 ? wxT(",") : wxT(""), i, i % 100);
 	numbers += wxT("]");
 	EXPECT_LT(seconds(numbers), 10.0) << "forty thousand amounts";
 
-	wxString strings = wxT("[");
+	ibString strings = wxT("[");
 	for (int i = 0; i < 20000; i++)
-		strings += wxString(i > 0 ? wxT(",") : wxT("")) + wxT("\"line\\n\\t\\\"quoted\\\" \\u0416\"");
+		strings += ibString(i > 0 ? wxT(",") : wxT("")) + wxT("\"line\\n\\t\\\"quoted\\\" \\u0416\"");
 	strings += wxT("]");
 	EXPECT_LT(seconds(strings), 10.0) << "twenty thousand strings, each with escapes";
 
-	wxString nested;   // an object in an array a hundred times over: two hundred levels, inside the bound declared
+	ibString nested;   // an object in an array a hundred times over: two hundred levels, inside the bound declared
 	for (int i = 0; i < 100; i++) nested += wxT("{\"a\":[");
 	nested += wxT("1");
 	for (int i = 0; i < 100; i++) nested += wxT("]}");

@@ -9,8 +9,7 @@
 // over, instead of poking at a running object — the desktop's page beside the server, the client's
 // through the server's schema (McpServer). One value, so it lives here.
 
-#include <wx/string.h>
-
+#include "core/fstring.h"
 #include "core/net/ports.h"
 
 struct ibMcpSettings {
@@ -21,7 +20,7 @@ struct ibMcpSettings {
 
 	// Loopback by default, and a person has to mean it to widen that. The port is the designer's; a server's base takes
 	// its own from server.conf (McpPort).
-	wxString       m_address = wxT("127.0.0.1");
+	ibString       m_address = ibT("127.0.0.1");
 	unsigned short m_port    = ibPort::Assistant.m_first;
 
 	// ⭐ WHO IS ALLOWED TO SPEAK. Every request carries it as `Authorization: Bearer <token>`,
@@ -36,7 +35,7 @@ struct ibMcpSettings {
 	// secret that may be blank is a secret nobody sets, and the failure of that choice is silent
 	// where the failure of this one is a message saying where to copy it from. One is generated
 	// the first time the settings are written, so it is never blank by accident.
-	wxString       m_token;
+	ibString       m_token;
 
 	bool IsOk() const { return !m_address.IsEmpty() && m_port != 0; }
 };

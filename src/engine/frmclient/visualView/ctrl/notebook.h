@@ -7,7 +7,7 @@
 
 class ibPanelPage;
 
-// THE NOTEBOOK OF A VIEW — the desktop's (frontend/visualView/ctrl/notebook.h): its pages the controls in it, the one
+// THE NOTEBOOK OF A VIEW — the old desktop's:its pages the controls in it, the one
 // the State's ActivePage names brought up. A page picked goes to the server (Page), a tab dragged too (Move).
 class ibValueNotebook : public ibValueWindow {
 public:

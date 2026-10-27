@@ -251,7 +251,7 @@ public:
 	// overload — accepting Local and Export and nothing else:
 	//
 	//     for (const auto& v : bc.m_listVar)
-	//         if ((v.IsLocal() || v.IsExport()) && stringUtils::CompareString(name, v.m_strRealName))
+	//         if ((v.IsLocal() || v.IsExport()) && stringUtils::IsSameAs(name, v.m_strRealName))
 	//             unit.GetPropVal((long)v, value);
 	//
 	// (job/jobRunByteCode.cpp does exactly this to carry a run's `Result` back.)

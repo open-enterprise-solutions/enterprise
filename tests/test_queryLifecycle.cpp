@@ -53,7 +53,7 @@ public:
 	bool Next() override { return false; }
 	void Close() override { ++m_closeCount; }
 
-	int        LookupField(const wxString&) override { return -1; }
+	int        LookupField(const ibString&) override { return -1; }
 	int        GetResultInt(int) override { return 0; }
 	ibString   GetResultString(int) override { return ibString(); }
 	long long  GetResultLong(int) override { return 0; }

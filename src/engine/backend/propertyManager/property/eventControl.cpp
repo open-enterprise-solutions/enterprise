@@ -63,7 +63,7 @@ bool ibEventControl::GetDataValue(ibValue& pvarPropVal) const
 		pvarPropVal = m_dispatcherValue;   // the assigned lambda
 		return true;
 	}
-	pvarPropVal = ibValue::CreateObjectValue<ibValueEvent>(m_propValue);
+	pvarPropVal = ibValue::CreateObjectValue<ibValueEvent>(ibString(m_propValue.GetString()));
 	return true;
 }
 
@@ -74,15 +74,15 @@ bool ibEventControl::ReadNodeValue(const ibDataValue& value)
 {
 	const auto node = value.AsChild();
 	if (node)
-		m_propValue = node->GetValue<wxString>(wxT("Value"));
+		m_propValue = node->GetValue<ibString>(ibT("Value"));
 	return true;
 }
 
 bool ibEventControl::WriteNodeValue(ibDataValue& value) const
 {
 	auto node = std::make_shared<ibDataNode>();
-	node->SetValue(wxT("Name"), m_propName);
-	node->SetValue(wxT("Value"), m_propValue.GetString());
+	node->SetValue(ibT("Name"), m_propName);
+	node->SetValue(ibT("Value"), ibString(m_propValue.GetString()));
 	value = ibDataValue::Child(node);
 	return true;
 }

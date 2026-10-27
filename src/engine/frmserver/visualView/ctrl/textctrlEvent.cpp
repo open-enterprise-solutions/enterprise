@@ -8,7 +8,7 @@
 // The typed text becomes a value of the field's type, or is refused. A refused text leaves the value
 // as it was, and the next Update shows that value again in place of what was typed. A read-only field
 // (IsReadOnly) takes no text at all.
-bool ibValueTextCtrl::TextProcessing(const wxString& strData)
+bool ibValueTextCtrl::TextProcessing(const ibString& strData)
 {
 	if (IsReadOnly())
 		return false;
@@ -86,7 +86,7 @@ bool ibValueTextCtrl::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibD
 		if (const auto value = args.FindChild(ibProtocol::ibEvent::Value))
 			ValueProcessing(*value);
 		else
-			OnTextEnter(args.GetValue<wxString>(ibProtocol::ibEvent::Text));
+			OnTextEnter(args.GetValue<ibString>(ibProtocol::ibEvent::Text));
 		return true;
 	}
 	case ibProtocol::ibEvent::ibKind::Select: OnSelectButtonPressed(); return true;
@@ -106,7 +106,7 @@ bool ibValueTextCtrl::IsSubscribed(ibProtocol::ibEvent::ibKind event) const
 }
 
 // The text as it stands is committed.
-void ibValueTextCtrl::OnTextEnter(const wxString& text)
+void ibValueTextCtrl::OnTextEnter(const ibString& text)
 {
 	TextProcessing(text);
 }

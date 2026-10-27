@@ -22,7 +22,7 @@ bool ibPropertyList::SetDataValue(const ibValue& varPropVal)
 	}
 	// …and set outside the lock: setting marks the list for its next fill (DoSetValue).
 	if (found)
-		SetValue(stringUtils::IntToStr(id));
+		SetValue(stringUtils::IntToStr(id).wc_str());
 	return found;
 };
 

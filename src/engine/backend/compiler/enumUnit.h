@@ -13,11 +13,11 @@ public:
 	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	virtual ibValue* GetEnumVariantValue() const = 0;
-	virtual wxString GetClassName() const = 0;
+	virtual ibString GetClassName() const = 0;
 	virtual ibString GetString() const = 0;
 
 protected:
-	std::vector<wxString> m_listEnumStr;
+	std::vector<ibString> m_listEnumStr;
 };
 
 //***************************************************************************************************
@@ -81,7 +81,7 @@ class ibValueEnumerationBase : public ibValueEnumerationWrapper {
 template <typename valT>
 class ibValueEnumeration : public ibValueEnumerationBase<valT> {
 	public:
-	std::map<valT, wxString> m_listEnumData, m_listEnumDesc;
+	std::map<valT, ibString> m_listEnumData, m_listEnumDesc;
 protected:
 
 	template <typename valType>
@@ -91,7 +91,7 @@ protected:
 		ibValueEnumerationVariant(const valType& v, const ibClassID& clsid) : ibValueEnumerationVariantBase<valType>(), m_clsid(clsid), m_value(v) {}
 
 		void CreateEnumeration(
-			const wxString& name, const wxString& descr,
+			const ibString& name, const ibString& descr,
 			const valType& v) {
 			m_name = name;
 			m_description = descr;
@@ -101,7 +101,7 @@ protected:
 		virtual valT GetEnumValue() const override { return m_value; }
 		virtual void SetEnumValue(const valT& v) override { m_value = v; }
 
-		virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const override {
+		virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const override {
 			const ibValuePtr<ibValueEnumeration<valType>> enumOwner(ibValue::CreateObject(m_clsid));
 			for (auto& e : enumOwner->m_listEnumData) {
 				if (e.second.Contains(findData)) {
@@ -178,7 +178,7 @@ protected:
 		virtual bool IsEmpty() const override { return static_cast<long>(m_value) <= emptyEnum; }
 
 		//type info
-		virtual wxString GetClassName() const override { return ibValue::GetNameObjectFromID(m_clsid); }
+		virtual ibString GetClassName() const override { return ibValue::GetNameObjectFromID(m_clsid); }
 
 		//type conversion
 		// THE DESCRIPTION IS WHAT A PERSON READS — the caption in their own
@@ -191,7 +191,7 @@ protected:
 			return m_description.IsEmpty() ? m_name : m_description;
 		}
 		// The identifier, for whoever needs it as such.
-		const wxString& GetEnumMemberName() const { return m_name; }
+		const ibString& GetEnumMemberName() const { return m_name; }
 		// ⚠ CAST, NOT AN IMPLICIT CONVERSION — the same one IsEmpty above already writes. A member
 		// number is a number, but only an UNSCOPED enum says so on its own: a scoped one
 		// (`enum class`) converts to nothing implicitly, so this line was what refused to register a
@@ -200,8 +200,8 @@ protected:
 		virtual ibNumber GetNumber() const override { return static_cast<long>(m_value); }
 
 	private:
-		wxString m_name;
-		wxString m_description;
+		ibString m_name;
+		ibString m_description;
 		// ⭐ THE DEFAULT STATE IS "NO MEMBER", SPELLED — not whatever the memory happened to hold.
 		// Every member number is valid, so an uninitialised field is indistinguishable from a
 		// choice, and the one thing it can never be is caught. Starting at emptyEnum means the
@@ -210,8 +210,8 @@ protected:
 		valType m_value = static_cast<valType>(emptyEnum);
 	};
 
-	virtual wxString GetEnumName(const valT& v) const { return m_listEnumData.at(v); }
-	virtual wxString GetEnumDescription(const valT& v) const { return m_listEnumDesc.at(v); }
+	virtual ibString GetEnumName(const valT& v) const { return m_listEnumData.at(v); }
+	virtual ibString GetEnumDescription(const valT& v) const { return m_listEnumDesc.at(v); }
 
 private:
 
@@ -230,7 +230,7 @@ public:
 
 	using valEnumType = valT;
 
-	inline void AddEnumeration(const valT& v, const wxString& name, const wxString& descr = wxEmptyString) {
+	inline void AddEnumeration(const valT& v, const ibString& name, const ibString& descr = ibEmptyString) {
 		wxASSERT(m_listEnumData.find(v) == m_listEnumData.end());
 		m_listEnumData.insert_or_assign(v, name);
 		m_listEnumDesc.insert_or_assign(v, descr.IsEmpty() ? name : descr);
@@ -344,17 +344,17 @@ public:
 
 	virtual ibValue* GetEnumVariantValue() const override { return m_value; }
 
-	wxString GetEnumName(unsigned int idx) const {
+	ibString GetEnumName(unsigned int idx) const {
 		if (idx > m_listEnumData.size())
-			return wxEmptyString;
+			return ibEmptyString;
 		auto it = m_listEnumData.begin();
 		std::advance(it, idx);
 		return it->second;
 	}
 
-	wxString GetEnumDesc(unsigned int idx) const {
+	ibString GetEnumDesc(unsigned int idx) const {
 		if (idx > m_listEnumDesc.size())
-			return wxEmptyString;
+			return ibEmptyString;
 		auto it = m_listEnumDesc.begin();
 		std::advance(it, idx);
 		return it->second;
@@ -378,7 +378,7 @@ public:
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override { //attribute value
 		if (lPropNum < 0 || static_cast<size_t>(lPropNum) >= this->m_listEnumStr.size())
 			return false;
-		const wxString& name = this->m_listEnumStr[lPropNum];
+		const ibString& name = this->m_listEnumStr[lPropNum];
 		for (const auto& e : m_listEnumData) {
 			if (e.second != name)
 				continue;
@@ -388,7 +388,7 @@ public:
 		return false;
 	}
 
-	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const override {
+	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const override {
 		for (auto& e : m_listEnumData) {
 			if (e.second.Contains(findData)) {
 				ibValueEnumerationVariant<valT>* enumValue = new ibValueEnumerationVariant<valT>(e.first, ibValue::GetClassType());
@@ -430,7 +430,7 @@ public:
 	virtual bool IsEmpty() const override { return m_value == nullptr; }
 
 	//type info
-	virtual wxString GetClassName() const final {
+	virtual ibString GetClassName() const final {
 		return m_value ? m_value->GetClassName() :
 			ibValue::GetClassName();
 	};

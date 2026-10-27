@@ -59,7 +59,7 @@ public:
 	// or, to a call naming the frame it holds (Since), the Patch to it (clientPatch.h); beside either the events,
 	// Messages (Level, Text) and Clear, and the answer's number, Frame.
 	bool Call(ibProtocol::ibMethod method, const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
-		wxString& error, const void* connection = nullptr, const ibString& address = ibString());
+		ibString& error, const void* connection = nullptr, const ibString& address = ibString());
 
 	// THE PORT'S CALL — one request as a packet in (OES-RPC 1.0, serialize/dataBuilder.h), its answer as a packet out
 	// (empty for a notification, which wants none): the envelope read and written around the call above. Nothing is
@@ -158,18 +158,18 @@ private:
 	void                    RemoveClient(const ibString& id);
 	// login {Token} and no User — the same client, no frame drawn.
 	bool                    ResumeByToken(const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
-		wxString& error, const void* connection);
+		ibString& error, const void* connection);
 	// The password login's bearer: drawn, hashed into sys_session, digest kept, plaintext put on `result` once.
-	bool                    RememberToken(Client& client, ibDataNode& result, ibProtocol::ibRefusal& refusal, wxString& error);
+	bool                    RememberToken(Client& client, ibDataNode& result, ibProtocol::ibRefusal& refusal, ibString& error);
 	// debug {Command} — the client's debugger, answered at once (ibProtocol::ibDebug): Channel and Listen bind its
 	// connection here, the rest are its frame's debugger's (ibClientDebugger::Command).
 	bool                    Debug(Client& client, const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
-		wxString& error, const void* connection);
+		ibString& error, const void* connection);
 
 	// The work on the client's session worker, waited for until it settles; then the frame drawn into `result` —
 	// numbered, and the patch from the frame of number `since` when that is the last one the client was answered.
 	bool Run(Client& client, std::function<void(ibClientFrame*)> work, std::int32_t since, ibDataNode& result,
-		ibProtocol::ibRefusal& refusal, wxString& error);
+		ibProtocol::ibRefusal& refusal, ibString& error);
 	void Settle(Client& client);
 	// The frame: what it is (`state`, what a patch is made of) and what happened since the last answer (`events`:
 	// the messages, a clear) — drawn apart.

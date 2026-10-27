@@ -28,7 +28,7 @@
 #include "frmclient/win/ctrls/checktree.h"
 #include "frmclient/win/theme/luna_tabart.h"
 
-// A USER — the desktop's dialog (frontend/win/dlgs/userItem) as it is, on ibUserInfo: its roles and languages offered
+// A USER — the old desktop's dialog as it was, on ibUserInfo: its roles and languages offered
 // as the server lists them, where the desktop's took the active configuration. What its OK checked before it saved — that
 // some user keeps a role with the administration rights — and the password's hash are the server's: a refusal comes
 // back with the desktop's text.

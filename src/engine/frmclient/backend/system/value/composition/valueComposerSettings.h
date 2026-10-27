@@ -57,9 +57,9 @@ public:
 	virtual void CreateEnumeration() override {
 		// Captions are the OPERATOR alone — the choice opens on a group's operator cell, and it
 		// must offer what it sets.
-		AddEnumeration(ibFilterGroupKind_And, wxT("And"), _("And"));
-		AddEnumeration(ibFilterGroupKind_Or,  wxT("Or"),  _("Or"));
-		AddEnumeration(ibFilterGroupKind_Not, wxT("Not"), _("Not"));
+		AddEnumeration(ibFilterGroupKind_And, ibT("And"), _("And"));
+		AddEnumeration(ibFilterGroupKind_Or,  ibT("Or"),  _("Or"));
+		AddEnumeration(ibFilterGroupKind_Not, ibT("Not"), _("Not"));
 	}
 };
 
@@ -68,9 +68,9 @@ public:
 	ibValueEnumFilterDisplayMode() : ibValueEnumeration() {}
 	virtual ibClassID GetClassType() const override { return enum_to_clsid("EN_FDSP"); }
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibFilterDisplayMode_Normal,       wxT("Normal"),       _("Normal"));
-		AddEnumeration(ibFilterDisplayMode_QuickAccess,  wxT("QuickAccess"),  _("Quick access"));
-		AddEnumeration(ibFilterDisplayMode_Inaccessible, wxT("Inaccessible"), _("Inaccessible"));
+		AddEnumeration(ibFilterDisplayMode_Normal,       ibT("Normal"),       _("Normal"));
+		AddEnumeration(ibFilterDisplayMode_QuickAccess,  ibT("QuickAccess"),  _("Quick access"));
+		AddEnumeration(ibFilterDisplayMode_Inaccessible, ibT("Inaccessible"), _("Inaccessible"));
 	}
 };
 
@@ -81,9 +81,9 @@ public:
 	ibValueEnumGroupKind() : ibValueEnumeration() {}
 	virtual ibClassID GetClassType() const override { return enum_to_clsid("EN_GRPK"); }
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibQueryDimUnfold::Elements,      wxT("Elements"),      _("Elements"));
-		AddEnumeration(ibQueryDimUnfold::Hierarchy,     wxT("Hierarchy"),     _("Elements and hierarchy"));
-		AddEnumeration(ibQueryDimUnfold::HierarchyOnly, wxT("HierarchyOnly"), _("Hierarchy only"));
+		AddEnumeration(ibQueryDimUnfold::Elements,      ibT("Elements"),      _("Elements"));
+		AddEnumeration(ibQueryDimUnfold::Hierarchy,     ibT("Hierarchy"),     _("Elements and hierarchy"));
+		AddEnumeration(ibQueryDimUnfold::HierarchyOnly, ibT("HierarchyOnly"), _("Hierarchy only"));
 	}
 };
 
@@ -92,19 +92,19 @@ public:
 	ibValueEnumComparisonKind() : ibValueEnumeration() {}
 	virtual ibClassID GetClassType() const override { return enum_to_clsid("EN_CMPK"); }
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibComparisonKind_Equal,        wxT("Equal"),        _("Equal"));
-		AddEnumeration(ibComparisonKind_NotEqual,     wxT("NotEqual"),     _("Not equal"));
-		AddEnumeration(ibComparisonKind_Greater,      wxT("Greater"),      _("Greater"));
-		AddEnumeration(ibComparisonKind_Less,         wxT("Less"),         _("Less"));
-		AddEnumeration(ibComparisonKind_GreaterEqual, wxT("GreaterEqual"), _("Greater or equal"));
-		AddEnumeration(ibComparisonKind_LessEqual,    wxT("LessEqual"),    _("Less or equal"));
-		AddEnumeration(ibComparisonKind_Contains,     wxT("Contains"),     _("Contains"));
+		AddEnumeration(ibComparisonKind_Equal,        ibT("Equal"),        _("Equal"));
+		AddEnumeration(ibComparisonKind_NotEqual,     ibT("NotEqual"),     _("Not equal"));
+		AddEnumeration(ibComparisonKind_Greater,      ibT("Greater"),      _("Greater"));
+		AddEnumeration(ibComparisonKind_Less,         ibT("Less"),         _("Less"));
+		AddEnumeration(ibComparisonKind_GreaterEqual, ibT("GreaterEqual"), _("Greater or equal"));
+		AddEnumeration(ibComparisonKind_LessEqual,    ibT("LessEqual"),    _("Less or equal"));
+		AddEnumeration(ibComparisonKind_Contains,     ibT("Contains"),     _("Contains"));
 		// Naming a comparison here is what makes it offerable — the language could say both of
 		// these long before a filter could.
-		AddEnumeration(ibComparisonKind_In,           wxT("In"),           _("In"));
-		AddEnumeration(ibComparisonKind_InHierarchy,  wxT("InHierarchy"),  _("In hierarchy"));
-		AddEnumeration(ibComparisonKind_Filled,       wxT("Filled"),       _("Filled"));
-		AddEnumeration(ibComparisonKind_NotFilled,    wxT("NotFilled"),    _("Not filled"));
+		AddEnumeration(ibComparisonKind_In,           ibT("In"),           _("In"));
+		AddEnumeration(ibComparisonKind_InHierarchy,  ibT("InHierarchy"),  _("In hierarchy"));
+		AddEnumeration(ibComparisonKind_Filled,       ibT("Filled"),       _("Filled"));
+		AddEnumeration(ibComparisonKind_NotFilled,    ibT("NotFilled"),    _("Not filled"));
 	}
 };
 
@@ -113,8 +113,8 @@ public:
 	ibValueEnumSortDirection() : ibValueEnumeration() {}
 	virtual ibClassID GetClassType() const override { return enum_to_clsid("EN_SDIR"); }
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibSortDirection_Ascending,  wxT("Ascending"),  _("Ascending"));
-		AddEnumeration(ibSortDirection_Descending, wxT("Descending"), _("Descending"));
+		AddEnumeration(ibSortDirection_Ascending,  ibT("Ascending"),  _("Ascending"));
+		AddEnumeration(ibSortDirection_Descending, ibT("Descending"), _("Descending"));
 	}
 };
 

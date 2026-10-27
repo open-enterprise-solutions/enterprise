@@ -54,20 +54,20 @@ public:
 		}
 
 		//Is global module?
-		wxString GetModuleFullName() const {
-			return m_moduleObject ? m_moduleObject->GetFullName() : wxString(wxEmptyString);
+		ibString GetModuleFullName() const {
+			return m_moduleObject ? m_moduleObject->GetFullName() : ibString(ibEmptyString);
 		}
 
-		wxString GetModuleDocPath() const {
-			return m_moduleObject ? m_moduleObject->GetDocPath() : wxString(wxEmptyString);
+		ibString GetModuleDocPath() const {
+			return m_moduleObject ? m_moduleObject->GetDocPath() : ibString(ibEmptyString);
 		}
 
-		wxString GetModuleName() const {
-			return m_moduleObject ? m_moduleObject->GetName() : wxString(wxEmptyString);
+		ibString GetModuleName() const {
+			return m_moduleObject ? m_moduleObject->GetName() : ibString(ibEmptyString);
 		}
 
-		wxString GetModuleText() const {
-			return m_moduleObject ? m_moduleObject->GetModuleText() : wxString(wxEmptyString);
+		ibString GetModuleText() const {
+			return m_moduleObject ? m_moduleObject->GetModuleText() : ibString(ibEmptyString);
 		}
 
 		bool IsGlobalModule() const {
@@ -269,8 +269,8 @@ public:
 	//associated map — globals are the compile module's extern variables (single
 	// source; m_listGlConstValue registry removed). Values are owned by
 	// m_metaManager / m_listCommonModuleManager, the map only references them.
-	virtual std::map<wxString, ibValue*>& GetGlobalVariables() { return m_compileModule->m_listExternValue; }
-	virtual std::map<wxString, ibContextVar>& GetContextVariables() { return m_compileModule->m_listContextValue; }
+	virtual std::map<ibString, ibValue*>& GetGlobalVariables() { return m_compileModule->m_listExternValue; }
+	virtual std::map<ibString, ibContextVar>& GetContextVariables() { return m_compileModule->m_listContextValue; }
 
 	//return external module
 	virtual ibValue* GetObjectValue() const { return nullptr; }
@@ -360,7 +360,7 @@ public:
 	// init-modules list. Not for direct caller use outside metadata
 	// or CreateMainModule.
 	bool RuntimeRegisterCommonModule(ibValueMetaObjectCommonModule* commonModule, bool compileNow = false);
-	bool RuntimeRenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName);
+	bool RuntimeRenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName);
 	bool RuntimeUnregisterCommonModule(ibValueMetaObjectCommonModule* commonModule);
 
 	ibValueModuleUnit* FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const override;
@@ -474,7 +474,7 @@ class BACKEND_API ibValueModuleManagerDesigner : public ibValueModuleManager {
 	// designer); false defers compilation to CreateMainModule (bulk load path).
 	bool AddCommonModule(ibValueMetaObjectCommonModule* commonModule, bool managerModule = false, bool runModule = false);
 	bool RemoveCommonModule(ibValueMetaObjectCommonModule* commonModule);
-	bool RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName);
+	bool RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName);
 	ibValueModuleUnit* FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const override;
 
 	std::vector<ibValuePtr<ibValueModuleUnit>>& GetCommonModules() { return m_listCommonModule; }
@@ -484,7 +484,7 @@ class BACKEND_API ibValueModuleManagerDesigner : public ibValueModuleManager {
 	// modules surfaced as names), which never enter this holder's own map. The
 	// config-root holder (m_external == false) returns its own map. Mirrors the
 	// Ext runtime managers' GetContextVariables/GetGlobalVariables delegation.
-	std::map<wxString, ibValue*>& GetGlobalVariables() override;
+	std::map<ibString, ibValue*>& GetGlobalVariables() override;
 
 private:
 	bool m_populated = false;

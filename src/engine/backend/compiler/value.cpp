@@ -40,7 +40,7 @@ static inline void DebugValueEmit(const char* tag, unsigned int count) {
 	std::ostringstream os;
 	os << tag << ' ' << count
 	   << " tid=" << std::this_thread::get_id();
-	ibJournalInfo(wxT("value"),wxT("%s"), wxString::FromUTF8(os.str().c_str()));
+	ibJournalInfo(ibT("value"),ibT("%s"), ibString::FromUTF8(os.str().c_str()));
 }
 
 // OFF unless OES_TRACE_VALUES says otherwise — see utils/debugTrace.h. The counter itself keeps
@@ -168,7 +168,7 @@ CVALUE_BYTYPE(const ibDateTime&, ibValueTypes::TYPE_DATE, m_dData);
 ibValue::ibValue(const char* cParam)
 	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
 {
-	if (cParam && *cParam) m_sData = ibString(wxString(cParam));
+	if (cParam && *cParam) m_sData = ibString(ibString(cParam));
 	DEBUG_VALUE_CREATE();
 }
 
@@ -179,7 +179,7 @@ ibValue::ibValue(const wchar_t* cParam)
 	DEBUG_VALUE_CREATE();
 }
 
-ibValue::ibValue(const wxString& cParam)
+ibValue::ibValue(const ibString& cParam)
 	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	m_sData = ibString(cParam);
@@ -448,7 +448,7 @@ void ibValue::operator = (const ibDateTime& cParam)
 }
 
 
-void ibValue::operator = (const wxString& cParam)
+void ibValue::operator = (const ibString& cParam)
 {
 	Reset();
 
@@ -465,7 +465,7 @@ void ibValue::operator = (const char* cParam)
 	Reset();
 
 	m_typeClass = ibValueTypes::TYPE_STRING;
-	if (cParam && *cParam) m_sData = ibString(wxString(cParam));
+	if (cParam && *cParam) m_sData = ibString(ibString(cParam));
 }
 
 void ibValue::operator = (const wchar_t* cParam)
@@ -583,7 +583,7 @@ void ibValue::SetValue(const ibValue& varValue)
 		Copy(varValue);
 }
 
-bool ibValue::SetBoolean(const wxString& strBoolean)
+bool ibValue::SetBoolean(const ibString& strBoolean)
 {
 	if (m_bReadOnly && m_typeClass == ibValueTypes::TYPE_REFFER) {
 		return m_pRef->SetBoolean(strBoolean);
@@ -600,7 +600,7 @@ bool ibValue::SetBoolean(const wxString& strBoolean)
 	return true;
 }
 
-bool ibValue::SetNumber(const wxString& strNumber)
+bool ibValue::SetNumber(const ibString& strNumber)
 {
 	if (m_bReadOnly && m_typeClass == ibValueTypes::TYPE_REFFER) {
 		return m_pRef->SetNumber(strNumber);
@@ -618,7 +618,7 @@ bool ibValue::SetNumber(const wxString& strNumber)
 	return true;
 }
 
-bool ibValue::SetDate(const wxString& strDate)
+bool ibValue::SetDate(const ibString& strDate)
 {
 	if (m_bReadOnly && m_typeClass == ibValueTypes::TYPE_REFFER) {
 		return m_pRef->SetDate(strDate);
@@ -636,7 +636,7 @@ bool ibValue::SetDate(const wxString& strDate)
 	return true;
 }
 
-bool ibValue::SetString(const wxString& strString)
+bool ibValue::SetString(const ibString& strString)
 {
 	if (m_bReadOnly && m_typeClass == ibValueTypes::TYPE_REFFER) {
 		return m_pRef->SetString(strString);
@@ -659,7 +659,7 @@ bool ibValue::SetString(const wxString& strString)
 bool ibValue::SetString(ibString&& strString)
 {
 	if (m_bReadOnly && m_typeClass == ibValueTypes::TYPE_REFFER)
-		return m_pRef->SetString(strString.ToWxString());
+		return m_pRef->SetString(strString);
 
 	// Already a string: the text is taken over in place of the one held.
 	if (!m_bReadOnly && m_typeClass == ibValueTypes::TYPE_STRING) {
@@ -675,7 +675,7 @@ bool ibValue::SetString(ibString&& strString)
 	return true;
 }
 
-bool ibValue::FindValue(const wxString& findData, std::vector<ibValue>& listValue) const
+bool ibValue::FindValue(const ibString& findData, std::vector<ibValue>& listValue) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->FindValue(findData, listValue);
@@ -778,7 +778,7 @@ ibNumber ibValue::GetNumber() const
 	case ibValueTypes::TYPE_NUMBER:
 		return m_fData;
 	case ibValueTypes::TYPE_STRING: {
-		wxString strVal = GetString();
+		ibString strVal = GetString();
 		strVal.Trim(true);
 		strVal.Trim(false);
 		strVal.MakeUpper();
@@ -908,7 +908,7 @@ void ibValue::SetType(ibValueTypes type)
 	// A plain (owned) reference still delegates — it may be a transparent
 	// read-only wrapper over a mutable object. The assert catches a future
 	// caller loudly in Debug; the Error keeps Release graceful.
-	wxASSERT_MSG(!IsConstReference(), wxT("SetType on a const reference (TYPE_CONST_REFFER)"));
+	wxASSERT_MSG(!IsConstReference(), ibT("SetType on a const reference (TYPE_CONST_REFFER)"));
 	if (m_typeClass == ibValueTypes::TYPE_CONST_REFFER)
 		ibBackendCoreException::Error(_("Attempt to change the type of a read-only (const) object"));
 	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
@@ -935,7 +935,7 @@ ibValueTypes ibValue::GetType() const
 
 //*************************************************************
 
-wxString ibValue::GetClassName() const
+ibString ibValue::GetClassName() const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetClassName();
@@ -1410,7 +1410,7 @@ bool ibValue::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 	// A plain (owned) reference still delegates — it may be a transparent
 	// read-only wrapper over a mutable object. The assert catches a future
 	// caller loudly in Debug; the Error keeps Release graceful.
-	wxASSERT_MSG(!IsConstReference(), wxT("SetPropVal on a const reference (TYPE_CONST_REFFER)"));
+	wxASSERT_MSG(!IsConstReference(), ibT("SetPropVal on a const reference (TYPE_CONST_REFFER)"));
 	if (m_typeClass == ibValueTypes::TYPE_CONST_REFFER)
 		ibBackendCoreException::Error(_("Attempt to write to a field of a read-only (const) object"));
 	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)

@@ -69,7 +69,7 @@ void ibStoreValue(ibDataNode& stored, const ibValue& value)
 	case ibValueTypes::TYPE_STRING:
 		break;
 	default:
-		stored.SetValue<wxString>(wxT("Presentation"), value.GetString());
+		stored.SetValue<ibString>(ibT("Presentation"), value.GetString());
 	}
 }
 
@@ -155,9 +155,9 @@ bool ibBackendCompositionDescriptionMemory::ReadNode(const ibDataNode& node, ibC
 // A VARIANT'S CAPTION, in the CONFIGURATION's language — see the note beside the declaration. The
 // synonym is stored as a translated text; a language missing from it is answered inside the localizer,
 // and a synonym written plainly (no languages in it at all) is its own caption.
-wxString ibVariantCaption(const ibVariantDescription& variant)
+ibString ibVariantCaption(const ibVariantDescription& variant)
 {
-	const wxString caption = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), variant.m_synonym);
+	const ibString caption = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), variant.m_synonym);
 	return caption.IsEmpty() ? variant.m_name : caption;
 }
 

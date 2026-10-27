@@ -62,7 +62,7 @@ void ibPropertySource::SetValue(const ibSourceDescription& val) { m_propValue = 
 
 ibSourceDescription& ibPropertySource::GetValueAsSourceDesc() const { return get_cell_variant<ibVariantDataSource>()->GetSourceDesc(); }
 const std::vector<ibSourceHop>& ibPropertySource::GetValueAsPath() const { return get_cell_variant<ibVariantDataSource>()->GetSourceDesc().GetPath(); }
-wxString ibPropertySource::GetValueAsString() const { wxString s; get_cell_variant<ibVariantDataSource>()->Write(s); return s; }
+ibString ibPropertySource::GetValueAsString() const { return m_propValue.MakeString(); }
 ////////////////////////////////////////////////////////////////////////
 
 bool ibPropertySource::IsDotWalk() const
@@ -108,7 +108,7 @@ bool ibPropertySource::SetDataValue(const ibValue& varPropVal)
 
 bool ibPropertySource::GetDataValue(ibValue& pvarPropVal) const
 {
-	pvarPropVal = m_propValue.GetString();
+	pvarPropVal = ibString(m_propValue.GetString());
 	return true;
 }
 
@@ -216,15 +216,15 @@ bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
 namespace {
 
 // The desktop's source window (frontend advpropSource.cpp): a type as its classes' names.
-wxString MakeTypeString(const ibMetaData* metaData, const ibTypeDescription& typeDesc)
+ibString MakeTypeString(const ibMetaData* metaData, const ibTypeDescription& typeDesc)
 {
-	wxString strDescr;
+	ibString strDescr;
 	for (const ibClassID& clsid : typeDesc.GetClsidList()) {
 		const ibCtorAbstractType* const typeCtor = metaData->GetAvailableCtor(clsid);
 		if (typeCtor != nullptr)
-			strDescr = strDescr.IsEmpty() ? typeCtor->GetClassName() : strDescr + wxT(", ") + typeCtor->GetClassName();
+			strDescr = strDescr.IsEmpty() ? typeCtor->GetClassName() : strDescr + ibT(", ") + typeCtor->GetClassName();
 	}
-	return strDescr.IsEmpty() ? wxString(wxT("<empty>")) : strDescr;
+	return strDescr.IsEmpty() ? ibString(ibT("<empty>")) : strDescr;
 }
 
 // …a table source, per the class factory.
@@ -238,7 +238,7 @@ bool IsTableType(const ibMetaData* metaData, const ibTypeDescription& typeDesc)
 
 // …one of its rows, as the attribute tree's are written (docViewFormEditAttribute.cpp): the label, the path from the
 // attribute (none: not one to bind to), a reference's targets — opened as the tree opens it.
-ibDataNode& AppendSource(ibDataNode& parent, const wxString& label, const std::vector<ibSourceHop>& path,
+ibDataNode& AppendSource(ibDataNode& parent, const ibString& label, const std::vector<ibSourceHop>& path,
 	const std::vector<ibMetaID>& refTypes, bool tableSection)
 {
 	ibDataNode& row = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
@@ -249,7 +249,7 @@ ibDataNode& AppendSource(ibDataNode& parent, const wxString& label, const std::v
 		std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 		node->SetValue(ibProtocol::ibView::ibFormDesigner::Id, static_cast<std::int32_t>(hop.m_id));
 		if (hop.m_type != g_valueUndefinedCLSID)
-			node->SetValue(ibProtocol::ibView::ibFormDesigner::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(hop.m_type)));
+			node->SetValue(ibProtocol::ibView::ibFormDesigner::Type, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(hop.m_type)));
 		hops.push_back(ibDataValue::Child(node));
 	}
 	row.AddField(ibProtocol::ibView::ibFormDesigner::Path, ibDataValue::Array(std::move(hops)));
@@ -308,7 +308,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 			ibDataNode& sourceType = row.Child(ibProtocol::ibSchema::ibProperties::Value).Child(ibProtocol::ibSchema::ibProperties::SourceType);
 			sourceType.SetProperty(ibProtocol::ibSchema::ibProperties::Value, typeDesc);
 			sourceType.SetValue(ibProtocol::ibSchema::ibProperties::Presentation,
-				wxVariant(get_cell_variant<ibVariantDataSource>()->CloneSourceAttribute()).MakeString());
+				ibString(wxVariant(get_cell_variant<ibVariantDataSource>()->CloneSourceAttribute()).MakeString()));
 			sourceType.SetValue(ibProtocol::ibSchema::ibProperties::Multiple, shape != ibSelectorDataType::ibSelectorDataType_table);
 
 			// …and the classes the desktop's Type row offered (GetTypesByFilter by the control's shape, with what it
@@ -327,7 +327,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 				if (ctor == nullptr)
 					continue;
 				ibDataNode& entry = named.AddChild(0, static_cast<ibMetaID>(named.Children().size() + 1));
-				entry.SetValue(ibProtocol::ibSchema::ibProperties::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
+				entry.SetValue(ibProtocol::ibSchema::ibProperties::Type, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(clsid)));
 				entry.SetValue(ibProtocol::ibSchema::ibProperties::Name, ctor->GetClassName());
 				entry.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(clsid));
 			}
@@ -356,7 +356,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 			if (holder == nullptr)
 				continue;
 			const std::vector<ibSourceHop> basePrefix{ { holder->GetId() } };
-			const wxString rootLabel = holder->GetName() + wxT(" (") + MakeTypeString(metaData, holder->GetTypeDesc()) + wxT(")");
+			const ibString rootLabel = holder->GetName() + ibT(" (") + MakeTypeString(metaData, holder->GetTypeDesc()) + ibT(")");
 			ibDataNode& root = AppendSource(sources, rootLabel, basePrefix, {}, IsTableType(metaData, holder->GetTypeDesc()));
 			ibSourceDataObject* const attrSource = holder->GetSourceValue();
 			const ibSourceExplorer* const explorer = attrSource != nullptr ? attrSource->GetSourceExplorer() : nullptr;
@@ -373,7 +373,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 					AppendSource(root, col->GetSourceName(), childPath, {}, true);
 				}
 				else {
-					const wxString label = col->GetSourceName() + wxT(" (") + MakeTypeString(metaData, col->GetTypeDesc()) + wxT(")");
+					const ibString label = col->GetSourceName() + ibT(" (") + MakeTypeString(metaData, col->GetTypeDesc()) + ibT(")");
 					AppendSource(root, label, childPath, ibValueReferenceDataObject::ConvertToMetaIds(col->GetClsidList(), metaData), false);
 				}
 			}

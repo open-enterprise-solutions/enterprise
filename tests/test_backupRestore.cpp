@@ -52,7 +52,7 @@ ibMemoryBuffer ConfigBlob(std::uint64_t sign, bool withBody)
 }
 
 struct TempFile {
-	wxString path;
+	ibString path;
 	TempFile() : path(wxFileName::CreateTempFileName(wxT("oesbak"))) {}
 	~TempFile()
 	{
@@ -61,7 +61,7 @@ struct TempFile {
 	}
 };
 
-bool WriteArchive(const wxString& path, const std::vector<std::pair<wxString, ibMemoryBuffer>>& entries)
+bool WriteArchive(const ibString& path, const std::vector<std::pair<ibString, ibMemoryBuffer>>& entries)
 {
 	wxFFileOutputStream out(path);
 	if (!out.IsOk())

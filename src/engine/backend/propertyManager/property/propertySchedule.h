@@ -19,17 +19,17 @@ public:
 	ibJobScheduleDescription& GetValueAsSchedule() const;
 	void SetValue(const ibJobScheduleDescription& schedule);
 
-	ibPropertySchedule(ibPropertyCategory* cat, const wxString& name)
+	ibPropertySchedule(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData())
 	{
 	}
 
-	ibPropertySchedule(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertySchedule(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData())
 	{
 	}
 
-	ibPropertySchedule(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertySchedule(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData())
 	{
 	}

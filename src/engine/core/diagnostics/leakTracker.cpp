@@ -5,7 +5,7 @@
 
 #include "core/diagnostics/leakTracker.h"
 
-#if defined(DEBUG) && defined(__WXMSW__)
+#if defined(DEBUG) && defined(__IBMSW__)
 
 #include <windows.h>
 #include <crtdbg.h>
@@ -510,7 +510,7 @@ CORE_API void ibLeakTrackReport()
 	}
 
 	// Symbols only now: dbghelp enumerates the modules that are loaded when it is initialised,
-	// and backend.dll / frontend.dll arrive long after static init.
+	// and the engine's DLLs (backend.dll, frmclient.dll…) arrive long after static init.
 	SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
 	SymInitialize(GetCurrentProcess(), nullptr, TRUE);
 
@@ -631,4 +631,4 @@ CORE_API bool ibLeakTrackArm()
 	return true;
 }
 
-#endif // DEBUG && __WXMSW__
+#endif // DEBUG && __IBMSW__

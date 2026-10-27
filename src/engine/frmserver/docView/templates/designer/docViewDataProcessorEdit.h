@@ -45,7 +45,7 @@ public:
 		return m_metaData.get();
 	}
 
-	virtual bool OnCreate(const wxString& path, long flags) override;
+	virtual bool OnCreate(const ibString& path, long flags) override;
 	virtual bool OnNewDocument() override;
 	virtual bool OnCloseDocument() override;
 
@@ -57,8 +57,8 @@ public:
 protected:
 
 	// Its file is the session's temporary one (by its id): what the client uploaded, what it takes down.
-	virtual bool DoOpenDocument(const wxString& filename) override;
-	virtual bool DoSaveDocument(const wxString& filename) override;
+	virtual bool DoOpenDocument(const ibString& filename) override;
+	virtual bool DoSaveDocument(const ibString& filename) override;
 
 	ibDataProcessorEditDocument(const ibDataProcessorEditDocument&) = delete;
 	ibDataProcessorEditDocument& operator=(const ibDataProcessorEditDocument&) = delete;

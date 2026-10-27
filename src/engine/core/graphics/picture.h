@@ -9,7 +9,7 @@
 // one with no wx object between them. A wx image counts its references in a plain int
 // (wxRefCounter::m_count, and wx stays as it is upstream): four sessions copying the same class icon freed
 // it under each other (2026-10-06). A window makes its wx image from this one anew — the side's converter
-// does (the desktop: frontend/win/picture.h; the thin client: frmclient/win/picture.h). Read, scaled and written
+// does (the thin client: frmclient/win/picture.h; codeRunner: codeRunner/win/picture.h). Read, scaled and written
 // here by LodePNG, drawn from SVG and said as SVG here (NanoSVG), so the server has no wx image at all.
 //
 ////////////////////////////////////////////////////////////////////////////

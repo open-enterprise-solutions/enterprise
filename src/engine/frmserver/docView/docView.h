@@ -115,11 +115,11 @@ public:
     virtual ~ibDocument();
 
     // accessors
-    void SetFilename(const wxString& filename, bool notifyViews = false);
-    wxString GetFilename() const { return m_documentFile; }
+    void SetFilename(const ibString& filename, bool notifyViews = false);
+    const ibString& GetFilename() const { return m_documentFile; }
 
-    void SetTitle(const wxString& title) { m_documentTitle = title; }
-    wxString GetTitle() const { return m_documentTitle; }
+    void SetTitle(const ibString& title) { m_documentTitle = title; }
+    const ibString& GetTitle() const { return m_documentTitle; }
 
     // ⭐⭐ WHAT MAKES THIS DOCUMENT THE SAME DOCUMENT — asked by the manager before it opens
     // anything, so a second Open on something already on screen RAISES it instead of building a
@@ -140,10 +140,10 @@ public:
     //
     // Empty for a document with no identity of this kind: the manager reads that as "no answer"
     // rather than as a match, so two anonymous documents are never mistaken for each other.
-    virtual wxString GetUniqueIdentifier() const { return wxEmptyString; }
+    virtual ibString GetUniqueIdentifier() const { return ibEmptyString; }
 
-    void SetDocumentName(const wxString& name) { m_documentTypeName = name; }
-    wxString GetDocumentName() const { return m_documentTypeName; }
+    void SetDocumentName(const ibString& name) { m_documentTypeName = name; }
+    const ibString& GetDocumentName() const { return m_documentTypeName; }
 
     bool GetDocumentSaved() const { return m_savedYet; }
     void SetDocumentSaved(bool saved = true) { m_savedYet = saved; }
@@ -165,15 +165,15 @@ public:
     virtual wxInputStream& LoadObject(wxInputStream& stream);
 #endif
 
-    virtual bool OnSaveDocument(const wxString& filename);
-    virtual bool OnOpenDocument(const wxString& filename);
+    virtual bool OnSaveDocument(const ibString& filename);
+    virtual bool OnOpenDocument(const ibString& filename);
     virtual bool OnNewDocument();
     virtual bool OnCloseDocument();
 
     virtual bool OnSaveModified();
     virtual void OnSaveBeforeForceClose();
     virtual void OnChangeFilename(bool notifyViews);
-    virtual bool OnCreate(const wxString& path, long flags);
+    virtual bool OnCreate(const ibString& path, long flags);
 
     virtual ibCommandProcessor *OnCreateCommandProcessor();
     virtual ibCommandProcessor *GetCommandProcessor() const
@@ -211,12 +211,12 @@ public:
     virtual void SetDocumentTemplate(ibDocTemplate *temp)
         { m_documentTemplate = temp; }
 
-    virtual wxString GetUserReadableName() const;
+    virtual ibString GetUserReadableName() const;
 
     // ⭐ WHAT THIS DOCUMENT CAN BE SAVED AS — named lines, as a file dialog takes them ("Name (*.x)|*.x|…"), the desktop's
     // GetSaveFilter: what a client's Save as offers (its tab's Formats). Its template's, unless it writes more formats than
     // that; empty — it saves to no file of the person's (a form).
-    virtual wxString GetSaveFilter() const;
+    virtual ibString GetSaveFilter() const;
 
     // The frame this document's first view shows in — its own tab, or its parent's frame when
     // the parent composes it. Null while no view has one.
@@ -278,16 +278,16 @@ public:
     // search answers about the manager's own documents and cannot see these (Max, 2026-09-01:
     // *"split the search by parent from the search by name"* — they are two questions, and one
     // function with an optional parent made them look like one).
-    ibDocument* FindChildDocument(const wxString& identifier) const;
+    ibDocument* FindChildDocument(const ibString& identifier) const;
 
     // The documents opened from this one, which close with it.
     const std::list<ibDocument*>& GetChildDocuments() const { return m_childDocuments; }
 
 protected:
     wxList                m_documentViews;
-    wxString              m_documentFile;
-    wxString              m_documentTitle;
-    wxString              m_documentTypeName;
+    ibString              m_documentFile;
+    ibString              m_documentTitle;
+    ibString              m_documentTypeName;
     ibDocTemplate*        m_documentTemplate;
     bool                  m_documentModified;
     ibDocument*           m_documentParent;
@@ -295,8 +295,8 @@ protected:
     bool                  m_savedYet;
     ibPictureDescription  m_docIcon;
 
-    virtual bool DoSaveDocument(const wxString& file);
-    virtual bool DoOpenDocument(const wxString& file);
+    virtual bool DoSaveDocument(const ibString& file);
+    virtual bool DoOpenDocument(const ibString& file);
 
     // View factory for the OnCreate pipeline. Default pulls the view class from
     // the document template (the wx-style path used by every templated doc).
@@ -304,7 +304,7 @@ protected:
     // template) override this to construct their view explicitly.
     virtual ibView* DoCreateView();
 
-    wxString DoGetUserReadableName() const;
+    ibString DoGetUserReadableName() const;
 
     // Promoted from private (was wxDocument's private slot) to protected so
     // derived classes — ibMetaDocument in particular — can offer typed
@@ -326,8 +326,8 @@ public:
     ibDocument *GetDocument() const { return m_viewDocument; }
     virtual void SetDocument(ibDocument *doc);
 
-    wxString GetViewName() const { return m_viewTypeName; }
-    void SetViewName(const wxString& name) { m_viewTypeName = name; }
+    const ibString& GetViewName() const { return m_viewTypeName; }
+    void SetViewName(const ibString& name) { m_viewTypeName = name; }
 
     // The frame this view shows in: its own tab, or the frame its parent hands it when the
     // document is composed.
@@ -379,7 +379,7 @@ public:
 
 protected:
     ibDocument*             m_viewDocument;
-    wxString                m_viewTypeName;
+    ibString                m_viewTypeName;
     ibDocChildFrameAnyBase* m_viewFrame;
 
     ibDocChildFrameAnyBase *m_docChildFrame;
@@ -414,15 +414,15 @@ public:
 
     virtual bool Initialize();
 
-    virtual ibDocument *CreateDocument(const wxString& path, long flags = 0);
+    virtual ibDocument *CreateDocument(const ibString& path, long flags = 0);
 
     ibDocument *CreateNewDocument()
-        { return CreateDocument(wxString(), ibDOC_NEW); }
+        { return CreateDocument(ibString(), ibDOC_NEW); }
 
     virtual ibView *CreateView(ibDocument *doc, long flags = 0);
     virtual void DeleteTemplate(ibDocTemplate *temp, long flags = 0);
     virtual bool FlushDoc(ibDocument *doc);
-    virtual ibDocTemplate *MatchTemplate(const wxString& path);
+    virtual ibDocTemplate *MatchTemplate(const ibString& path);
 
     // Which template makes a new document / which view to make: the single
     // candidate there is, or null when there are several — choosing among them
@@ -431,14 +431,14 @@ public:
             int noTemplates);
     virtual ibDocTemplate *SelectViewType(ibDocTemplate **templates,
             int noTemplates);
-    virtual ibDocTemplate *FindTemplateForPath(const wxString& path);
+    virtual ibDocTemplate *FindTemplateForPath(const ibString& path);
 
     void AssociateTemplate(ibDocTemplate *temp);
     void DisassociateTemplate(ibDocTemplate *temp);
 
     ibDocTemplate* FindTemplate(const wxClassInfo* documentClassInfo);
 
-    ibDocument* FindDocumentByPath(const wxString& path) const;
+    ibDocument* FindDocumentByPath(const ibString& path) const;
 
     // ⭐ THE SAME QUESTION FOR THINGS THAT HAVE NO FILE. FindDocumentByPath answers for documents
     // opened FROM DISK; everything inside a configuration — a form, a module, an object editor —
@@ -477,7 +477,7 @@ public:
     wxList& GetDocuments() { return m_docs; }
     wxList& GetTemplates() { return m_templates; }
 
-    virtual wxString MakeNewDocumentName();
+    virtual ibString MakeNewDocumentName();
 
     // The current client session's manager. There is one per session, so the
     // body lives with the session (frmserver/client/clientFrame.cpp).
@@ -496,30 +496,30 @@ public:
     // ------------------------------------------------------------------
 
     void AddDocTemplate(const ibPictureID& id,
-                        const wxString& descr,
-                        const wxString& filter,
-                        const wxString& dir,
-                        const wxString& ext,
-                        const wxString& docTypeName,
-                        const wxString& viewTypeName,
+                        const ibString& descr,
+                        const ibString& filter,
+                        const ibString& dir,
+                        const ibString& ext,
+                        const ibString& docTypeName,
+                        const ibString& viewTypeName,
                         wxClassInfo* docClassInfo,
                         wxClassInfo* viewClassInfo,
                         long flags = ibTEMPLATE_VISIBLE);
 
     void AddDocTemplate(const ibPictureID& id,
-                        const wxString& descr,
-                        const wxString& filter,
-                        const wxString& ext,
-                        const wxString& docTypeName,
-                        const wxString& viewTypeName,
+                        const ibString& descr,
+                        const ibString& filter,
+                        const ibString& ext,
+                        const ibString& docTypeName,
+                        const ibString& viewTypeName,
                         wxClassInfo* docClassInfo,
                         wxClassInfo* viewClassInfo,
                         long flags = ibTEMPLATE_VISIBLE);
 
     void AddDocTemplate(const ibClassID& clsid,
-                        const wxString& descr,
-                        const wxString& filter,
-                        const wxString& ext,
+                        const ibString& descr,
+                        const ibString& filter,
+                        const ibString& ext,
                         wxClassInfo* docClassInfo,
                         wxClassInfo* viewClassInfo);
 
@@ -580,7 +580,7 @@ public:
 
 protected:
     void RegisterSchema(ibProtocol::ibSchema::ibKind kind, std::unique_ptr<ibClientSchema> schema);
-    void RegisterCommand(ibDocCommand command, const wxString& title, const wxString& shortcut,
+    void RegisterCommand(ibDocCommand command, const ibString& title, const ibString& shortcut,
         ibClientStockPicture picture);
 
     std::map<ibProtocol::ibSchema::ibKind, std::unique_ptr<ibClientSchema>> m_schemas;
@@ -590,10 +590,10 @@ protected:
     // asks. An owner answers about its children separately (ibDocument::FindChildDocument). No cast:
     // a document that has no identity of this kind answers with an empty string and simply never
     // matches.
-    ibDocument* FindDocumentByIdentifier(const wxString& identifier) const;
+    ibDocument* FindDocumentByIdentifier(const ibString& identifier) const;
 
     // At the owner: its editors, or mine where there is no owner (the desktop's).
-    ibDocument* FindOpenDocument(const wxString& identifier, const ibDocument* docParent) const;
+    ibDocument* FindOpenDocument(const ibString& identifier, const ibDocument* docParent) const;
 
     // WHICH DOCUMENT IS SHOWING THIS CONFIGURATION — null for the session's own, which the frame's tree holds with no
     // document at all (the desktop's). This is the owner an editor is opened under; getting it wrong puts the editor in
@@ -611,9 +611,9 @@ protected:
     ibDocManager& operator=(const ibDocManager&) = delete;
 };
 
-// Shortcut to the current session's doc manager. Previously hosted in
-// frontend/docView/docManager.h when ibMetaDocManager was a separate
-// subclass; collapsed into the base.
+// Shortcut to the current session's doc manager. Previously hosted
+// with ibMetaDocManager when that was a separate subclass; collapsed
+// into the base.
 #define docManager ibDocManager::GetDocumentManager()
 
 // ----------------------------------------------------------------------------
@@ -706,14 +706,14 @@ protected:
 
 #if wxUSE_STD_IOSTREAM
 bool FRMSERVER_API
-ibTransferFileToStream(const wxString& filename, std::ostream& stream);
+ibTransferFileToStream(const ibString& filename, std::ostream& stream);
 bool FRMSERVER_API
-ibTransferStreamToFile(std::istream& stream, const wxString& filename);
+ibTransferStreamToFile(std::istream& stream, const ibString& filename);
 #else
 bool FRMSERVER_API
-ibTransferFileToStream(const wxString& filename, wxOutputStream& stream);
+ibTransferFileToStream(const ibString& filename, wxOutputStream& stream);
 bool FRMSERVER_API
-ibTransferStreamToFile(wxInputStream& stream, const wxString& filename);
+ibTransferStreamToFile(wxInputStream& stream, const ibString& filename);
 #endif // wxUSE_STD_IOSTREAM
 
 inline ibViewVector ibDocument::GetViewsVector() const
@@ -765,15 +765,15 @@ public:
 		return object != nullptr ? object->ConvertToType<T>() : nullptr;
 	}
 
-	wxString GetModuleName() const;
+	ibString GetModuleName() const;
 
 	// The metaobject's guid IS this document's identity — see ibDocument::GetUniqueIdentifier.
-	virtual wxString GetUniqueIdentifier() const override {
+	virtual ibString GetUniqueIdentifier() const override {
 		// wxString(wxEmptyString), never the bare constant: outside MSVC wxEmptyString is a
 		// `const wxChar *`, and a conditional whose arms are wxString and const wxChar * is
 		// AMBIGUOUS — each converts to the other. The wrapper is what the rest of the tree writes
 		// (portability.md 1.10, which already records this trap in eight other places).
-		return m_metaObject != nullptr ? m_metaObject->GetGuid().GetGuid().str() : wxString(wxEmptyString);
+		return m_metaObject != nullptr ? m_metaObject->GetGuid().GetGuid().str() : ibString(ibEmptyString);
 	}
 
 	ibMetaDocument(ibMetaDocument* docParent = nullptr);
@@ -788,7 +788,7 @@ public:
 	// document template, so meta docs need no override.
 
 	virtual bool OnSaveModified() override;
-	virtual bool OnSaveDocument(const wxString& filename) override;
+	virtual bool OnSaveDocument(const ibString& filename) override;
 	virtual bool OnCloseDocument() override;
 
 	virtual bool IsModified() const override;

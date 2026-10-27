@@ -47,18 +47,18 @@ ibClientDebugger::ibClientDebugger(const ibApplicationInstance* applicationInsta
 }
 
 bool ibClientDebugger::Command(ibProtocol::ibDebug::ibCommand command, const ibDataNode& params, ibDataNode& result,
-	ibProtocol::ibRefusal& refusal, wxString& error) const
+	ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	if (debugClient == nullptr) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = wxT("the configuration has no debugger");
+		error = ibT("the configuration has no debugger");
 		return false;
 	}
 
-	const wxString host = params.GetValue<wxString>(ibProtocol::ibDebug::Host);
+	const ibString host = params.GetValue<ibString>(ibProtocol::ibDebug::Host);
 	const unsigned short port = static_cast<unsigned short>(params.GetValue<std::int32_t>(ibProtocol::ibDebug::Port));
 	const bool kill = params.GetValue<bool>(ibProtocol::ibDebug::Kill);
-	const wxString expression = params.GetValue<wxString>(ibProtocol::ibDebug::Expression);
+	const ibString expression = params.GetValue<ibString>(ibProtocol::ibDebug::Expression);
 	const auto item = params.FindField(ibProtocol::ibDebug::Item);
 	const unsigned long long itemId = item ? item->AsUInt() : 0;
 
@@ -108,14 +108,14 @@ bool ibClientDebugger::Command(ibProtocol::ibDebug::ibCommand command, const ibD
 		debugClient->Stop(kill);
 		return true;
 	case ibProtocol::ibDebug::ibCommand::ToolTip:
-		debugClient->EvaluateToolTip(params.GetValue<wxString>(ibProtocol::ibDebug::File),
-			params.GetValue<wxString>(ibProtocol::ibDebug::Module), expression);
+		debugClient->EvaluateToolTip(params.GetValue<ibString>(ibProtocol::ibDebug::File),
+			params.GetValue<ibString>(ibProtocol::ibDebug::Module), expression);
 		return true;
 	case ibProtocol::ibDebug::ibCommand::AddExpression:
-		debugClient->AddExpression(expression, itemId, params.GetValue<wxString>(ibProtocol::ibDebug::Asker));
+		debugClient->AddExpression(expression, itemId, params.GetValue<ibString>(ibProtocol::ibDebug::Asker));
 		return true;
 	case ibProtocol::ibDebug::ibCommand::ExpandExpression:
-		debugClient->ExpandExpression(expression, itemId, params.GetValue<wxString>(ibProtocol::ibDebug::Asker));
+		debugClient->ExpandExpression(expression, itemId, params.GetValue<ibString>(ibProtocol::ibDebug::Asker));
 		return true;
 	case ibProtocol::ibDebug::ibCommand::RemoveExpression:
 		debugClient->RemoveExpression(itemId);
@@ -128,7 +128,7 @@ bool ibClientDebugger::Command(ibProtocol::ibDebug::ibCommand command, const ibD
 	}
 
 	refusal = ibProtocol::ibRefusal::NotFound;
-	error = wxString::Format(wxT("the debugger has no command %d"), static_cast<int>(command));
+	error = ibString::Format(ibT("the debugger has no command %d"), static_cast<int>(command));
 	return false;
 }
 
@@ -164,7 +164,7 @@ void ibClientDebugger::OnAutoComplete(const ibDebugAutoCompleteData& /*data*/)
 {
 }
 
-void ibClientDebugger::OnMessageFromServer(const ibDebugLineData& data, const wxString& message)
+void ibClientDebugger::OnMessageFromServer(const ibDebugLineData& data, const ibString& message)
 {
 	ibDataNode event;
 	WriteLine(data, event);
@@ -172,7 +172,7 @@ void ibClientDebugger::OnMessageFromServer(const ibDebugLineData& data, const wx
 	Notify(ibProtocol::ibDebug::ibEvent::Message, event);
 }
 
-void ibClientDebugger::OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr)
+void ibClientDebugger::OnSetToolTip(const ibDebugExpressionData& data, const ibString& resultStr)
 {
 	ibDataNode event;
 	WritePlace(data, event);

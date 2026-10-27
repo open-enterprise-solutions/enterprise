@@ -37,7 +37,7 @@ bool ibFormCommandValue::OnPropertyChanging(ibProperty* property, const wxVarian
 
 bool ibFormCommandValue::WriteProperty(ibDataNode& node) const
 {
-	node.SetValue(wxT("CommandId"), (int)m_commandId);   // form-unique id (not a property)
+	node.SetValue(ibT("CommandId"), (int)m_commandId);   // form-unique id (not a property)
 	// Each own property + the Action event by hand — the base only serializes ATTACHED objects.
 	node.SetProperty(m_propertyName->GetName(),    m_propertyName->GetNodeValue());
 	node.SetProperty(m_propertyCaption->GetName(), m_propertyCaption->GetNodeValue());
@@ -48,7 +48,7 @@ bool ibFormCommandValue::WriteProperty(ibDataNode& node) const
 
 bool ibFormCommandValue::ReadProperty(const ibDataNode& node)
 {
-	m_commandId = (ibMetaID)node.GetValue<int>(wxT("CommandId"));
+	m_commandId = (ibMetaID)node.GetValue<int>(ibT("CommandId"));
 	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
 	m_propertyCaption->SetNodeValue(node.GetProperty(m_propertyCaption->GetName()));
 	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));

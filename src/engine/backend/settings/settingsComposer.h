@@ -64,7 +64,7 @@ BACKEND_API ibSettingsKey ibUserSettingsKey(ibSettingsCategory category, const i
 // identity is minted; a given id REWRITES that entry, which is what both "save
 // over this one" and "rename" are. Returns the id, empty on refusal.
 BACKEND_API ibGuid ibSaveComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,
-                                          const ibGuid& id, const wxString& name,
+                                          const ibGuid& id, const ibString& name,
                                           const ibDataComposer& composer, const ibUserInfo* user = nullptr);
 
 // RESTORE — one call at the end: SetUserSettingsDesc, the same act as picking a
@@ -91,7 +91,7 @@ BACKEND_API std::vector<ibComposerSettingsEntry> ibListComposerSettings(ibSettin
 // person renaming the entry they are not currently using must not have it
 // applied to them as a side effect.
 BACKEND_API bool ibRenameComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,
-                                          const ibGuid& id, const wxString& newName,
+                                          const ibGuid& id, const ibString& newName,
                                           const ibUserInfo* user = nullptr);
 
 // Drop one entry. Clears the default pointer as well when it pointed here — a

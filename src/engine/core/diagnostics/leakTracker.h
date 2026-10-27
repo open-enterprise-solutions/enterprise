@@ -28,7 +28,7 @@
 // -DOES_SANITIZE=address. The procedure in docs/private/engineering-playbook/25-memory-leaks.md is the
 // same either way; only the instrument differs.
 
-#if defined(DEBUG) && defined(__WXMSW__)
+#if defined(DEBUG) && defined(__IBMSW__)
 
 #include <cstdlib>
 
@@ -63,6 +63,6 @@ CORE_API void ibLeakTrackReport();
 
 #define IB_LEAK_TRACKER_ARM()
 
-#endif // DEBUG && __WXMSW__
+#endif // DEBUG && __IBMSW__
 
 #endif // __IB_LEAK_TRACKER_H__

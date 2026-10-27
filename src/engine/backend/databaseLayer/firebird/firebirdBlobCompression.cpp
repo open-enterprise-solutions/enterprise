@@ -69,9 +69,9 @@ ibMemoryBuffer ibFirebirdBlobCompression::Wrap(const void* data, size_t size) {
 				// Stream reported a different size than we just queried —
 				// internal inconsistency, refuse to write a half-baked
 				// body. Fall through to raw branch below.
-				ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdBlobCompression::Wrap: zStream ")
-				             wxT("CopyTo copied %zu/%zu bytes; falling back ")
-				             wxT("to raw"), copied, compressedSize);
+				ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdBlobCompression::Wrap: zStream ")
+				             ibT("CopyTo copied %zu/%zu bytes; falling back ")
+				             ibT("to raw"), copied, compressedSize);
 				// Truncate the partial body + flag byte back off.
 				out.SetDataLen(out.GetDataLen() - copied - /*flag=*/1);
 			} else {

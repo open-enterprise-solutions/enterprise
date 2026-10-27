@@ -37,7 +37,7 @@ public:
 
 	// The binding rendered as its dotted NAME (e.g. "Product.SKU") — the variant's own MakeString, the
 	// same string the designer shows and the composer's ORDER BY / Filter dot-walks. "<not selected>" when unbound.
-	wxString GetValueAsString() const;
+	ibString GetValueAsString() const;
 
 	void SetValue(const ibMetaID& val);
 	void SetValue(const ibGuid& val, bool fillTypeDesc = true);
@@ -64,32 +64,32 @@ public:
 	// fixed source (legacy behaviour).
 	std::vector<class ibBackendFormAttributeValue*> GetSourceList() const;
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), type))
 	{
 	}
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const ibClassID& clsid)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibClassID& clsid)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), clsid))
 	{
 	}
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), type))
 	{
 	}
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibClassID& clsid)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibClassID& clsid)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), clsid))
 	{
 	}
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), type))
 	{
 	}
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibClassID& clsid)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibClassID& clsid)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), clsid))
 	{
 	}

@@ -26,7 +26,7 @@ class wxProcessEvent;
 
 // What the tray says goes to the journal (appcluster-tray).
 template <typename... Args>
-void ibAppClusterTraySay(ibJournalMark mark, const wxFormatString& format, const Args&... args)
+void ibAppClusterTraySay(ibJournalMark mark, const ibString& format, const Args&... args)
 {
 	ibTechJournal::Print(mark, wxT("appcluster-tray"), format, args...);
 }

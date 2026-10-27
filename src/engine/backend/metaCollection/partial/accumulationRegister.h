@@ -3,7 +3,7 @@
 
 #include "commonObject.h"
 #include "accumulationRegisterEnum.h"
-#include "core/stringUtils.h"   // CompareString — the one case-insensitive name comparison
+#include "core/stringUtils.h"   // IsSameAs — the one case-insensitive name comparison
 #include "backend/query/queryable.h"          // ibComputedRegisterQueryable<TReg> — shared base for the balance / turnover virtual tables
 #include "backend/query/tempTableQueryable.h" // ibDbTempTableQueryable — a named physical relation; what a VIEW is to L3
 // The register-shared lowering: ibRegFilterPredicate / ibRegFlatLeaves / ibRegCompositeIR. Shared on
@@ -35,8 +35,8 @@ class ibAccumRegisterBalanceDescriptor : public ibQueryableSourceDescriptor
 public:
 	explicit ibAccumRegisterBalanceDescriptor(ibValueMetaObjectAccumulationRegister* reg) : m_reg(reg) {}
 	~ibAccumRegisterBalanceDescriptor() override;
-	wxString GetNamespace() const override;
-	wxString GetName() const override;
+	ibString GetNamespace() const override;
+	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	// ⭐ THE CONDITION IS CONSUMED — resolved against the movements (GetConditionScope) and applied INSIDE the
 	// reading, before the fold, on whichever surface it stands (ibRegConditionOn). The same for all three tables.
@@ -63,8 +63,8 @@ class ibAccumRegisterTurnoverDescriptor : public ibQueryableSourceDescriptor
 public:
 	explicit ibAccumRegisterTurnoverDescriptor(ibValueMetaObjectAccumulationRegister* reg) : m_reg(reg) {}
 	~ibAccumRegisterTurnoverDescriptor() override;
-	wxString GetNamespace() const override;
-	wxString GetName() const override;
+	ibString GetNamespace() const override;
+	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
 	                                          const std::vector<ibQueryPredicatePtr>& conditions,
@@ -91,8 +91,8 @@ class ibAccumRegisterBalanceAndTurnoverDescriptor : public ibQueryableSourceDesc
 public:
 	explicit ibAccumRegisterBalanceAndTurnoverDescriptor(ibValueMetaObjectAccumulationRegister* reg) : m_reg(reg) {}
 	~ibAccumRegisterBalanceAndTurnoverDescriptor() override;
-	wxString GetNamespace() const override;
-	wxString GetName() const override;
+	ibString GetNamespace() const override;
+	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
 	                                          const std::vector<ibQueryPredicatePtr>& conditions,
@@ -120,7 +120,7 @@ private:
 
 	virtual ibFormTypeList GetFormType() const override {
 		ibFormTypeList formList;
-		formList.AppendItem(wxT("FormList"), _("Form list"), eFormList);
+		formList.AppendItem(ibT("FormList"), _("Form list"), eFormList);
 		return formList;
 	}
 
@@ -159,15 +159,15 @@ public:
 	// registers naming the same kind of thing by two different rules is a difference nobody chose.
 	//
 	// ⚠ One-time rename for existing bases, not a migration — an old base must be re-created.
-	wxString GetRegisterTableNameDB(ibRegisterType rType) const {
+	ibString GetRegisterTableNameDB(ibRegisterType rType) const {
 		wxASSERT(m_metaId != 0);
 		const ibValueMetaObjectTotals* totals = GetTotalsObject(rType);
-		return wxString::Format(wxT("%s%i_%s"), GetClassName(), GetMetaID(),
+		return ibString::Format(ibT("%s%i_%s"), GetClassName(), GetMetaID(),
 			totals != nullptr ? totals->GetName()
-			                  : wxString(rType == ibRegisterType::eBalances ? wxT("BalanceTotals") : wxT("TurnoverTotals")));
+			                  : ibString(rType == ibRegisterType::eBalances ? ibT("BalanceTotals") : ibT("TurnoverTotals")));
 	}
 
-	wxString GetRegisterTableNameDB() const { return GetRegisterTableNameDB(GetRegisterType()); }
+	ibString GetRegisterTableNameDB() const { return GetRegisterTableNameDB(GetRegisterType()); }
 
 	// ============================================================================
 	// The totals table AS A METAOBJECT. It carries no data and declares nothing — it exists to hold
@@ -255,12 +255,12 @@ public:
 
 	// Physical names of the read views — the register's table plus a suffix, by convention. These
 	// are what a queryable points at, so they are API the moment a configuration is applied.
-	wxString GetBalanceViewName() const            { return GetPhysicalTableName() + wxT("_Balance"); }
-	wxString GetTurnoverViewName() const           { return GetPhysicalTableName() + wxT("_Turnovers"); }
+	ibString GetBalanceViewName() const            { return GetPhysicalTableName() + ibT("_Balance"); }
+	ibString GetTurnoverViewName() const           { return GetPhysicalTableName() + ibT("_Turnovers"); }
 	// Whether the surface HAS a movement arm — the recorder and the line number a movement is told apart by.
 	// Asked once, by the schema that declares the arm and by every reading that cuts against it.
 	bool HasMovementArm() const { return HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr; }
-	wxString GetBalanceAndTurnoverViewName() const { return GetPhysicalTableName() + wxT("_BalanceAndTurnovers"); }
+	ibString GetBalanceAndTurnoverViewName() const { return GetPhysicalTableName() + ibT("_BalanceAndTurnovers"); }
 
 	// ⭐⭐ THE ROWS AS THEY STAND — the totals and the movements as two relations, for a reading that folds
 	// them itself (ibMaterializeReadSpec::m_storedRows / m_movedRows). Rendered from the very declaration
@@ -311,7 +311,7 @@ public:
 	// BalanceAndTurnovers has no VIEW behind it — it is a query over the turnovers view — but it
 	// still needs a column description, and it is the same kind of description. `viewName` is then
 	// only a cache key.
-	const ibBackendQueryable* GetViewQueryable(const wxString& viewName, ibViewShape shape) const;
+	const ibBackendQueryable* GetViewQueryable(const ibString& viewName, ibViewShape shape) const;
 
 	// Is the materialised surface usable? False when the driver cannot maintain derived state
 	// (ODBC) — the register then answers from live aggregation, correct at any scale and only
@@ -443,13 +443,13 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordSetModule"), _("Record set module"), _("Code that runs with a record set of the register: its BeforeWrite and OnWrite handlers, and the procedures they call. It runs for every set written, whoever writes it - a document's posting or a script."));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the register as a whole rather than of one set: its exported procedures and functions are called on the manager, as AccumulationRegisters.<Name>.<Function>()."));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, ibT("RecordSetModule"), _("Record set module"), _("Code that runs with a record set of the register: its BeforeWrite and OnWrite handlers, and the procedures they call. It runs for every set written, whoever writes it - a document's posting or a script."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, ibT("ManagerModule"), _("Manager module"), _("Code of the register as a whole rather than of one set: its exported procedures and functions are called on the manager, as AccumulationRegisters.<Name>.<Function>()."));
 
-	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the register's list of movements opens with. Empty: the list form is generated from the register's fields."), &ibValueMetaObjectAccumulationRegister::FillFormList);
-	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertyEnum<ibValueEnumAccumulationRegisterType>* m_propertyRegisterType = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumAccumulationRegisterType>>(m_categoryData, wxT("RegisterType"), _("Register type"), _("Balances (the default): movements are receipts and expenses (RecordType), and the register answers what stands at a moment - Balance, Turnovers, BalanceAndTurnovers. Turnovers: movements are only summed over a period - Turnovers only, no RecordType. Switching it replaces the totals table."), ibRegisterType::eBalances);
+	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(ibT("PresetValues"), _("Preset values"));
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormList"), _("Default List Form"), _("The form the register's list of movements opens with. Empty: the list form is generated from the register's fields."), &ibValueMetaObjectAccumulationRegister::FillFormList);
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
+	ibPropertyEnum<ibValueEnumAccumulationRegisterType>* m_propertyRegisterType = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumAccumulationRegisterType>>(m_categoryData, ibT("RegisterType"), _("Register type"), _("Balances (the default): movements are receipts and expenses (RecordType), and the register answers what stands at a moment - Balance, Turnovers, BalanceAndTurnovers. Turnovers: movements are only summed over a period - Turnovers only, no RecordType. Switching it replaces the totals table."), ibRegisterType::eBalances);
 
 	// SPLIT TOTALS — spread one logical totals row across several physical ones, so concurrent
 	// posters stop queueing on the same row. OFF by default, and deliberately a switch rather than
@@ -462,7 +462,7 @@ private:
 	// ON by default — same reasoning as the accounting register's: concurrent posting is the ordinary
 	// case, and splitting keeps two writers off the same totals row. Kept in step with it deliberately;
 	// two registers differing in this by accident would be a difference nobody chose.
-	ibPropertyBoolean* m_propertySplitTotals = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("SplitTotals"), _("Split totals"), _("Spread one logical totals row over several physical ones, so sessions posting at the same time stop queueing on the same row. A read sums the parts back, as it reads anyway. On by default; switching it changes the totals table."), true);
+	ibPropertyBoolean* m_propertySplitTotals = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, ibT("SplitTotals"), _("Split totals"), _("Spread one logical totals row over several physical ones, so sessions posting at the same time stop queueing on the same row. A read sums the parts back, as it reads anyway. On by default; switching it changes the totals table."), true);
 
 	// The two totals tables — held for their IDENTITY (see ibValueMetaObjectTotals above). Predefined
 	// children: created with the register in its constructor, pinned to it for life, serialized as
@@ -472,7 +472,7 @@ private:
 	ibValuePtr<ibValueMetaObjectTotals> m_totalsBalances;
 	ibValuePtr<ibValueMetaObjectTotals> m_totalsTurnovers;
 
-	ibPropertyContainer<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("RecordType"), _("Record type"), _("Receipt or expense - whether the movement adds its resources to the balance or takes them away. Only in a register of balances."), g_enumRecordTypeCLSID, false, ibValueEnumAccumulationRegisterRecordType::CreateDefEnumValue()));
+	ibPropertyContainer<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(ibT("RecordType"), _("Record type"), _("Receipt or expense - whether the movement adds its resources to the balance or takes them away. Only in a register of balances."), g_enumRecordTypeCLSID, false, ibValueEnumAccumulationRegisterRecordType::CreateDefEnumValue()));
 
 	friend class ibBalanceQueryable;
 	friend class ibTurnoverQueryable;
@@ -638,7 +638,7 @@ public:
 		: ibAccumulationTotalsQueryable(reg, ibViewShape::Balance), m_period(period), m_filter(filter) {}
 
 	virtual bool IsComputedInRam() const override { return !m_reg->HasMaterializedViews(); }
-	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 
 	// ⚠ NO KEY OF ITS OWN. A balance reads the SAME materialised table the totals surface keys —
 	// stored per period (the grain is a day), so a row there is period + dimensions and nothing
@@ -674,7 +674,7 @@ public:
 	// is how the easy case stayed in memory while the hard one — the running balance next door —
 	// already ran on the server.)
 	virtual bool IsComputedInRam() const override;
-	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 
 	// ⭐⭐ A COLUMN THE GRANULARITY DOES NOT PRODUCE IS NOT A COLUMN OF THIS READING.
 	//
@@ -686,7 +686,7 @@ public:
 	//
 	// Refusing here makes the resolver raise "unknown attribute" NAMING the field — which is what an
 	// author who changed the periodicity and left the old fields behind needs to be told.
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
 	{
 		return ibRegisterFoldOffersColumn(m_reg, name, m_fold)
 			? ibAccumulationTotalsQueryable::ResolveColumnByName(name) : nullptr;
@@ -745,10 +745,10 @@ public:
 	// Out of line because the answer depends on the CONNECTION (ibCanPushWindow), not only on the
 	// register and the fold.
 	virtual bool IsComputedInRam() const override;
-	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 
 	// Same rule as the turnover reading — see ibTurnoverQueryable::ResolveColumnByName.
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
 	{
 		return ibRegisterFoldOffersColumn(m_reg, name, m_fold)
 			? ibAccumulationTotalsQueryable::ResolveColumnByName(name) : nullptr;
@@ -785,7 +785,7 @@ private:
 //  recorder, line -- and two copies of it are two answers to "does this reading have a Period".)
 
 inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRegister* reg,
-	const wxString& viewName, ibValueMetaObjectAccumulationRegister::ibViewShape shape,
+	const ibString& viewName, ibValueMetaObjectAccumulationRegister::ibViewShape shape,
 	ibSourceDataObject::ibSourceExplorer& explorer, const ibRegFold& fold = ibRegFold())
 {
 	if (reg == nullptr)
@@ -806,15 +806,15 @@ inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRe
 	// offered a recorder that was no period and a dimension that was no key (Max, 2026-09-29: "you do not work
 	// with the attribute, you get a set of virtual tables"). The id still matches the attribute's, so a read
 	// reaches the column exactly as on the movements table.
-	const wxString periodName = reg->GetRegisterPeriod() != nullptr
-		? reg->GetRegisterPeriod()->GetName() : wxString();
+	const ibString periodName = reg->GetRegisterPeriod() != nullptr
+		? reg->GetRegisterPeriod()->GetName() : ibString();
 
 	for (const ibBackendQueryColumn* col : view->GetColumns()) {
 		if (col == nullptr)
 			continue;
 		if (!periodName.IsEmpty() && !ibRegisterViewColumnFits(col->GetName(), periodName, fold,
-				reg->HasRecorder() && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : wxString(),
-				reg->HasRecorder() && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : wxString()))
+				reg->HasRecorder() && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : ibString(),
+				reg->HasRecorder() && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : ibString()))
 			continue;
 		explorer.AppendColumn(col);
 	}
@@ -890,14 +890,14 @@ static_assert(ibRegBalTurnArg::Filter  == ibRegBalTurnArg::Count - 1,     "the c
 
 inline ibAccumRegisterBalanceDescriptor::~ibAccumRegisterBalanceDescriptor() = default;
 
-inline wxString ibAccumRegisterBalanceDescriptor::GetNamespace() const
+inline ibString ibAccumRegisterBalanceDescriptor::GetNamespace() const
 {
 	return ibValue::GetNameObjectFromID(m_reg->GetClassType());
 }
 
-inline wxString ibAccumRegisterBalanceDescriptor::GetName() const
+inline ibString ibAccumRegisterBalanceDescriptor::GetName() const
 {
-	return m_reg->GetName() + wxT(".Balance");
+	return m_reg->GetName() + ibT(".Balance");
 }
 
 inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
@@ -935,7 +935,7 @@ inline void ibAccumRegisterBalanceDescriptor::FillSourceExplorer(ibSourceDataObj
 inline void ibAccumRegisterBalanceDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
 {
 	ibQuerySourceParameter moment;
-	moment.m_name = wxT("Period");
+	moment.m_name = ibT("Period");
 	moment.m_description = _("AS OF WHEN - one moment, not an interval: this table answers what is on hand "
 	                  "at it. It may name a DOCUMENT instead of a date, which is how \"the balance "
 	                  "as of this receipt\" is asked when three of them share a day. Left out, the "
@@ -964,14 +964,14 @@ inline void ibAccumRegisterBalanceDescriptor::FillConditionExplorer(ibSourceData
 
 inline ibAccumRegisterTurnoverDescriptor::~ibAccumRegisterTurnoverDescriptor() = default;
 
-inline wxString ibAccumRegisterTurnoverDescriptor::GetNamespace() const
+inline ibString ibAccumRegisterTurnoverDescriptor::GetNamespace() const
 {
 	return ibValue::GetNameObjectFromID(m_reg->GetClassType());
 }
 
-inline wxString ibAccumRegisterTurnoverDescriptor::GetName() const
+inline ibString ibAccumRegisterTurnoverDescriptor::GetName() const
 {
-	return m_reg->GetName() + wxT(".Turnovers");
+	return m_reg->GetName() + ibT(".Turnovers");
 }
 
 inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
@@ -1063,14 +1063,14 @@ inline void ibAccumRegisterTurnoverDescriptor::FillConditionExplorer(ibSourceDat
 
 inline ibAccumRegisterBalanceAndTurnoverDescriptor::~ibAccumRegisterBalanceAndTurnoverDescriptor() = default;
 
-inline wxString ibAccumRegisterBalanceAndTurnoverDescriptor::GetNamespace() const
+inline ibString ibAccumRegisterBalanceAndTurnoverDescriptor::GetNamespace() const
 {
 	return ibValue::GetNameObjectFromID(m_reg->GetClassType());
 }
 
-inline wxString ibAccumRegisterBalanceAndTurnoverDescriptor::GetName() const
+inline ibString ibAccumRegisterBalanceAndTurnoverDescriptor::GetName() const
 {
-	return m_reg->GetName() + wxT(".BalanceAndTurnovers");
+	return m_reg->GetName() + ibT(".BalanceAndTurnovers");
 }
 
 inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
@@ -1103,7 +1103,7 @@ inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::Cr
 	// narrower reading — the one that drops those — and it is not built, so it is told rather than
 	// answered with the wider shape. (Silently returning more than was asked for is as wrong as
 	// returning less; it just looks harmless until somebody sums the column.)
-	if (fill.GetType() == TYPE_STRING && stringUtils::CompareString(fill.GetString(), wxT("Movements")))
+	if (fill.GetType() == TYPE_STRING && stringUtils::IsSameAs(fill.GetString(), ibT("Movements")))
 		ibBackendCoreException::Error(
 			_("fill method 'Movements' drops the opening and closing balance rows, which this table "
 			  "does not do yet: leave it out for movements and period boundaries"));
@@ -1157,17 +1157,17 @@ inline void ibAccumRegisterBalanceAndTurnoverDescriptor::DescribeParameters(std:
 	ibAppendRegisterPeriodicityParameter(out);
 
 	ibQuerySourceParameter fillMethod;
-	fillMethod.m_name    = wxT("FillMethod");
+	fillMethod.m_name    = ibT("FillMethod");
 	fillMethod.m_description = _("Whether the opening and closing balances are reported beside the "
 	                             "movements, or the movements alone. Boundaries are what make this "
 	                             "table different from Turnovers - ask for Movements only when the "
 	                             "balances are genuinely not wanted.");
-	fillMethod.m_choices = { wxT("MovementsAndBoundaries"), wxT("Movements") };   // a word, see the periodicity
+	fillMethod.m_choices = { ibT("MovementsAndBoundaries"), ibT("Movements") };   // a word, see the periodicity
 	// ⭐ LEFT OUT, THE BOUNDARIES ARE THERE. This table exists to say where the quantity STOOD as the
 	// period opened and as it closed; a reading without those is a narrower thing somebody asks for
 	// on purpose, not the natural state of it. So the empty box means movements AND boundaries, and
 	// the list is ordered the same way — what happens by default reads first.
-	fillMethod.m_default = wxT("MovementsAndBoundaries");
+	fillMethod.m_default = ibT("MovementsAndBoundaries");
 	out.push_back(fillMethod);
 
 	ibAppendRegisterConditionParameter(out);

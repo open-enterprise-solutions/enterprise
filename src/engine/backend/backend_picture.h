@@ -12,14 +12,14 @@
 class ibDataValue;   // core/serialize/dataBuilder.h — a picture as an answer names it
 
 // ⭐ THE SERVER'S PICTURES ARE DATA — ibPicture, a PNG's bytes, read and scaled by the core; no wx image here. A window
-// makes its own from one (the desktop: frontend/win/picture.h).
+// makes its own from one (the thin client: frmclient/win/picture.h).
 class BACKEND_API ibBackendPicture {
 	ibBackendPicture() = delete;
 public:
 
 	// A FILE'S PICTURE — its PNG, as it is: the server reads no other kind. Refused: no file, or no PNG in it.
-	static bool LoadFromFile(const wxString& strFileName, ibExternalPictureDescription& pictureDesc);
-	static bool LoadFromFile(const wxString& strFileName, ibPictureDescription& pictureDesc);
+	static bool LoadFromFile(const ibString& strFileName, ibExternalPictureDescription& pictureDesc);
+	static bool LoadFromFile(const ibString& strFileName, ibPictureDescription& pictureDesc);
 
 	static ibPicture CreatePicture(const ibExternalPictureDescription& pictureDesc, const ibSize& size = ibSize(16, 16));
 	static ibPicture CreatePicture(const ibPictureDescription& pictureDesc,

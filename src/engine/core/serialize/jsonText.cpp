@@ -20,19 +20,19 @@ void AppendQuotedWide(Wide& out, const wchar_t* text, size_t length)
 	const wchar_t* const begin = text;
 	const wchar_t* const end = begin + length;
 
-	out += wxT("\"");
+	out += ibT("\"");
 	const wchar_t* run = begin;
 	for (const wchar_t* p = begin; p != end; ++p) {
 		const unsigned long c = static_cast<unsigned long>(*p);
 		const ibChar* escape = nullptr;
 		switch (c) {
-		case '"':  escape = wxT("\\\""); break;
-		case '\\': escape = wxT("\\\\"); break;
-		case '\b': escape = wxT("\\b"); break;
-		case '\f': escape = wxT("\\f"); break;
-		case '\n': escape = wxT("\\n"); break;
-		case '\r': escape = wxT("\\r"); break;
-		case '\t': escape = wxT("\\t"); break;
+		case '"':  escape = ibT("\\\""); break;
+		case '\\': escape = ibT("\\\\"); break;
+		case '\b': escape = ibT("\\b"); break;
+		case '\f': escape = ibT("\\f"); break;
+		case '\n': escape = ibT("\\n"); break;
+		case '\r': escape = ibT("\\r"); break;
+		case '\t': escape = ibT("\\t"); break;
 		default:
 			if (c >= 0x20 && c != 0x2028 && c != 0x2029)
 				continue;   // goes out as itself, with the run it is part of
@@ -51,15 +51,10 @@ void AppendQuotedWide(Wide& out, const wchar_t* text, size_t length)
 	}
 	if (end != run)
 		out.append(run, static_cast<size_t>(end - run));
-	out += wxT("\"");
+	out += ibT("\"");
 }
 
 } // namespace
-
-void ibJsonText::AppendQuoted(wxString& out, const wchar_t* text, size_t length)
-{
-	AppendQuotedWide(out, text, length);
-}
 
 void ibJsonText::AppendQuoted(ibString& out, const wchar_t* text, size_t length)
 {

@@ -3,7 +3,6 @@
 
 #include "core/core.h"
 
-#include <wx/string.h>
 
 #include <cstddef>
 #include <string>
@@ -21,12 +20,9 @@ class ibString;   // core/fstring.h — the engine's text, written into
 class CORE_API ibJsonText {
 public:
 	// `text` quoted and escaped, appended to `out`. The characters themselves are all it reads, so a runtime
-	// string (ibString) is escaped where it lies rather than copied into a wxString first.
-	static void AppendQuoted(wxString& out, const wchar_t* text, size_t length);
-	static void AppendQuoted(wxString& out, const wxString& text) { AppendQuoted(out, text.wc_str(), text.length()); }
-
-	// The same into the engine's text — a run of characters appended whole, nothing encoded.
+	// string is escaped where it lies rather than copied first.
 	static void AppendQuoted(ibString& out, const wchar_t* text, size_t length);
+	static void AppendQuoted(ibString& out, const ibString& text) { AppendQuoted(out, text.wc_str(), text.length()); }
 
 	// The same as UTF-8 bytes - for a writer that builds its document in bytes: encoded as it is escaped, straight
 	// into `out`, with no text of its own in between. A surrogate with no pair goes out as U+FFFD.

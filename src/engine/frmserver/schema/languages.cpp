@@ -14,12 +14,12 @@ void ibSchemaLanguages::Build(const ibSession& session, const ibDataNode& args, 
 	// The configuration of the tab the text is edited in (Tab); none named — the session's. An extension's languages
 	// are its owner's.
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
-	wxString error;
+	ibString error;
 	const ibMetaData* const metaData = ibSchemaMetaData::FindMetaData(session, args, refusal, error);
 	if (metaData == nullptr) {
 		if (refusal == ibProtocol::ibRefusal::NoSession)
 			return;
-		ibCoreException::Error(wxT("%s"), error);
+		ibCoreException::Error(ibT("%s"), error);
 	}
 
 	ibMetaData* ownerRaw = nullptr;
@@ -28,7 +28,7 @@ void ibSchemaLanguages::Build(const ibSession& session, const ibDataNode& args, 
 
 	// The configuration's own language (DefaultLanguage) is told by its code, as the desktop's user record finds it
 	// (activeMetaData->GetLangCode()).
-	const wxString defaultCode = owner->GetLangCode();
+	const ibString defaultCode = owner->GetLangCode();
 	ibMetaID idx = 0;
 	for (const auto object : owner->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID)) {
 		ibDataNode& row = languages.AddChild(0, idx++);

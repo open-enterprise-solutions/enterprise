@@ -44,7 +44,7 @@ enum class ibMcpClipboardKind {
 	Cells			// a rectangle out of an ibSpreadsheetDescription
 };
 
-BACKEND_API wxString ibMcpClipboardKindName(ibMcpClipboardKind kind);
+BACKEND_API ibString ibMcpClipboardKindName(ibMcpClipboardKind kind);
 
 struct BACKEND_API ibMcpClipboardSlot {
 
@@ -53,8 +53,8 @@ struct BACKEND_API ibMcpClipboardSlot {
 	// WHAT WAS COPIED, so the caller can confirm it grabbed the right thing
 	// before pasting it somewhere. A copy that answers only "ok" leaves the
 	// mistake to be discovered at the far end.
-	wxString m_name;
-	wxString m_what;			// its class as a script spells it: "Document", "Button"
+	ibString m_name;
+	ibString m_what;			// its class as a script spells it: "Document", "Button"
 
 	// ⭐ THE PAYLOAD IS A NODE, whatever family it came from. Cells describe
 	// themselves as nodes already; a metaobject and a control describe
@@ -69,9 +69,9 @@ struct BACKEND_API ibMcpClipboardSlot {
 // THE BOARD. Returns the named slot, creating it empty on first ask, and lives
 // for the process — a function-local static, the shape this tree uses wherever
 // static-initialisation order across modules would otherwise decide.
-BACKEND_API ibMcpClipboardSlot& ibMcpClipboard(const wxString& slot = wxEmptyString);
+BACKEND_API ibMcpClipboardSlot& ibMcpClipboard(const ibString& slot = ibEmptyString);
 
 // Every slot that holds something, for a caller that lost track.
-BACKEND_API std::vector<wxString> ibMcpClipboardSlots();
+BACKEND_API std::vector<ibString> ibMcpClipboardSlots();
 
 #endif // !_IB_MCP_CLIPBOARD_H_

@@ -15,7 +15,7 @@ namespace {
 // A FILE OF THE PERSON'S, asked as File → Open asks it (ibClientFrame::OpenChosenFile) — the desktop's file dialog over
 // the data files: picked and uploaded (`file` empty), or a file of the session's taken down where they chose. False —
 // cancelled.
-bool RequestFile(ibBackendDocFrame* frame, const wxString& caption, wxString& file)
+bool RequestFile(ibBackendDocFrame* frame, const ibString& caption, ibString& file)
 {
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::File));
@@ -23,7 +23,7 @@ bool RequestFile(ibBackendDocFrame* frame, const wxString& caption, wxString& fi
 	if (!file.IsEmpty())
 		request.SetValue(ibProtocol::ibRequest::ibFile::File, file);
 	ibDataNode& item = request.AddChild(0, 0);
-	item.SetValue(ibProtocol::ibRequest::ibFile::Title, _("Data files"));
+	item.SetValue(ibProtocol::ibRequest::ibFile::Title, ibString(_("Data files")));
 	item.SetValue(ibProtocol::ibRequest::ibFile::Mask, ibFileMask(ibFileKind::Save));
 
 	ibDataNode response;
@@ -31,7 +31,7 @@ bool RequestFile(ibBackendDocFrame* frame, const wxString& caption, wxString& fi
 		return false;
 	if (!file.IsEmpty())
 		return response.GetValue<bool>(ibProtocol::ibRequest::ibFile::Done);
-	file = response.GetValue<wxString>(ibProtocol::ibRequest::ibFile::File);
+	file = response.GetValue<ibString>(ibProtocol::ibRequest::ibFile::File);
 	return !file.IsEmpty();
 }
 
@@ -49,12 +49,12 @@ void ibSchemaDatabase::Build(const ibSession& /*session*/, const ibDataNode& /*a
 }
 
 std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 	if (applicationInstance == nullptr) {
 		refusal = ibProtocol::ibRefusal::NoSession;
-		error = wxT("the session has no base");
+		error = ibT("the session has no base");
 		return nullptr;
 	}
 
@@ -64,29 +64,29 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 	case ibProtocol::ibSchema::ibCommand::Load:
 		return [applicationInstance]() {
 			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
-			wxString id;
+			ibString id;
 			if (frame == nullptr || !RequestFile(frame, _("Open database file"), id))
 				return;     // the user changed idea...
 
-			wxString failure;
+			ibString failure;
 			try {
 				const ibTempFile file(id);
 				ibTempFileInputStream stream(file);
 				if (file.IsOpened() && applicationInstance->LoadDatabase(stream)) {
 					frame->ShowModalMessage(_("Loading of tasks completed successful. Restart the program!"),
-						wxString(), wxOK | wxCENTRE);
+						ibString(), wxOK | wxCENTRE);
 					if (ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry(applicationInstance))
 						registry->CloseAll(true);
 					return;
 				}
-				failure = _("Error when trying to load database from a file!") + wxT("\n\n") + BackendErrorChain();
+				failure = _("Error when trying to load database from a file!") + ibT("\n\n") + BackendErrorChain();
 			}
 			catch (const ibCoreException& e) {
-				failure = _("Loading the database failed.") + wxT("\n\n") + BackendErrorChain(e.GetErrorDescription());
+				failure = _("Loading the database failed.") + ibT("\n\n") + BackendErrorChain(e.GetErrorDescription());
 			}
 			catch (const std::exception& e) {
-				failure = _("Loading the database failed with an internal error.") + wxT("\n\n")
-					+ BackendErrorChain(wxString::FromUTF8(e.what()));
+				failure = _("Loading the database failed with an internal error.") + ibT("\n\n")
+					+ BackendErrorChain(ibString::FromUTF8(e.what()));
 			}
 			frame->ShowModalMessage(failure, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 		};
@@ -94,11 +94,11 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 		// THE DUMP IS WRITTEN FIRST, into a file of the session's, and then taken down: the server cannot write where
 		// the person chose. The desktop asked first — a dump cancelled here has been made for nothing.
 		ibTempStorage* const storage = ibApplicationInstance::GetTempStorage(applicationInstance);
-		const wxString id = storage != nullptr
-			? storage->Create(session.Identity().m_guid, wxT("database.") + ibFileExtension(ibFileKind::Save)) : wxString();
+		const ibString id = storage != nullptr
+			? storage->Create(session.Identity().m_guid, ibT("database.") + ibFileExtension(ibFileKind::Save)) : ibString();
 		if (id.IsEmpty()) {
 			refusal = ibProtocol::ibRefusal::Failed;
-			error = wxT("no file to dump the base into");
+			error = ibT("no file to dump the base into");
 			return nullptr;
 		}
 		return [applicationInstance, id]() {
@@ -109,13 +109,13 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 			if (file.Create(id, true)) {
 				ibTempFileOutputStream stream(file);
 				if (applicationInstance->SaveDatabase(stream) && stream.Close()) {
-					wxString taken = id;
+					ibString taken = id;
 					if (RequestFile(frame, _("Save database file"), taken))
-						frame->ShowModalMessage(_("Data upload completed successfully!"), wxString(), wxOK | wxCENTRE);
+						frame->ShowModalMessage(_("Data upload completed successfully!"), ibString(), wxOK | wxCENTRE);
 					return;
 				}
 			}
-			frame->ShowModalMessage(_("Error when trying to upload data to a file!") + wxT("\n\n") + BackendErrorChain(),
+			frame->ShowModalMessage(_("Error when trying to upload data to a file!") + ibT("\n\n") + BackendErrorChain(),
 				_("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 		};
 	}
@@ -123,12 +123,12 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 		return [applicationInstance]() {
 			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 			if (frame == nullptr || frame->ShowModalMessage(_("Are you sure you want to clear the database?"),
-				wxString(), wxYES_NO | wxCENTRE | wxICON_QUESTION) != wxYES)
+				ibString(), wxYES_NO | wxCENTRE | wxICON_QUESTION) != wxYES)
 				return;
 			if (applicationInstance->ClearDatabase())
-				frame->ShowModalMessage(_("Database cleared successfully!"), wxString(), wxOK | wxCENTRE);
+				frame->ShowModalMessage(_("Database cleared successfully!"), ibString(), wxOK | wxCENTRE);
 			else
-				frame->ShowModalMessage(_("Error when trying to clear database!") + wxT("\n\n") + BackendErrorChain(),
+				frame->ShowModalMessage(_("Error when trying to clear database!") + ibT("\n\n") + BackendErrorChain(),
 					_("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 		};
 	default:
@@ -136,6 +136,6 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 	}
 
 	refusal = ibProtocol::ibRefusal::NotFound;
-	error = wxString::Format(wxT("the base has no command %d"), command);
+	error = ibString::Format(ibT("the base has no command %d"), command);
 	return nullptr;
 }

@@ -9,9 +9,6 @@
 
 #include "core/fileSystem.h"
 
-#include <wx/filename.h>
-#include <wx/stdpaths.h>
-
 namespace {
 
 // Resolve the platform corpus directory. Returns the first root that
@@ -20,30 +17,26 @@ namespace {
 // ResolveSource picks zip-first inside the chosen root. On no hit
 // returns the prod path candidate — the loader will surface a kFatal
 // and the service publishes an empty corpus snapshot.
-wxString ResolvePlatformDir(const wxString& locale)
+ibString ResolvePlatformDir(const ibString& locale)
 {
-	wxFileName exeFile(wxStandardPaths::Get().GetExecutablePath());
-	const wxString exeDir = exeFile.GetPath();
-	const wxString programDir = ibProgramFolder(exeFile.GetFullPath());
+	const std::filesystem::path exeDir = ibPathOf(ibExecutablePath()).parent_path();
+	const ibString programDir = ibProgramFolder();
 
-	auto hasLocale = [&](const wxString& root) -> bool {
-		return ibFileExists(root + wxFILE_SEP_PATH + locale + wxT(".hlk"))
-		    || ibDirExists(root + wxFILE_SEP_PATH + locale);
+	auto hasLocale = [&](const ibString& root) -> bool {
+		return ibFileExists(root + ibFILE_SEP_PATH + locale + ibT(".hlk"))
+		    || ibDirExists(root + ibFILE_SEP_PATH + locale);
 	};
 
 	// Candidate 1: <program folder>/help — prod layout. Inside a bundle that
 	// folder is beside the .app, not Contents/MacOS/. PostBuildEvent copies
 	// syntaxHelper/<locale>/ into here in 1.1; 1.1b will switch
 	// the layout to <locale>.hlk and the service will gain a ZipSource.
-	wxString platformDir = programDir + wxFILE_SEP_PATH + wxT("help");
+	ibString platformDir = programDir + ibFILE_SEP_PATH + ibT("help");
 
-#if defined(__WXOSX__) || defined(__APPLE__)
+#if defined(__IBOSX__)
 	if (!hasLocale(platformDir)) {
 		// Inside the bundle (Contents/Resources), which is not the program folder.
-		wxFileName resources(exeDir, wxEmptyString);
-		resources.RemoveLastDir();
-		resources.AppendDir(wxT("Resources"));
-		const wxString c = resources.GetPath() + wxFILE_SEP_PATH + wxT("help");
+		const ibString c = ibString((exeDir.parent_path() / "Resources" / "help").wstring());
 		if (hasLocale(c)) platformDir = c;
 	}
 #endif
@@ -55,20 +48,19 @@ wxString ResolvePlatformDir(const wxString& locale)
 	//   build/src/engine/X/X.app/...     varies (macOS)
 	// Cap at 6 levels — bounded, no infinite loop on weird paths.
 	if (!hasLocale(platformDir)) {
-		wxFileName walk(exeDir, wxEmptyString);
+		std::filesystem::path walk = exeDir;
 		for (int i = 0; i < 6; ++i) {
-			const wxString candidate = walk.GetPath() + wxFILE_SEP_PATH
-				+ wxT("syntaxHelper");
+			const ibString candidate = ibString((walk / "syntaxHelper").wstring());
 			if (hasLocale(candidate)) { platformDir = candidate; break; }
-			if (walk.GetDirCount() == 0) break;
-			walk.RemoveLastDir();
+			if (!walk.has_relative_path()) break;   // the root: no folder left to leave
+			walk = walk.parent_path();
 		}
 	}
 
 	// Last resort: <cwd>/syntaxHelper — running from repo root.
 	if (!hasLocale(platformDir)) {
-		const wxString cwdCandidate = ibGetCwd() + wxFILE_SEP_PATH
-			+ wxT("syntaxHelper");
+		const ibString cwdCandidate = ibGetCwd() + ibFILE_SEP_PATH
+			+ ibT("syntaxHelper");
 		if (hasLocale(cwdCandidate)) platformDir = cwdCandidate;
 	}
 
@@ -77,7 +69,7 @@ wxString ResolvePlatformDir(const wxString& locale)
 
 }   // namespace
 
-ibHelpService::ibHelpService(const wxString& locale, const ibHelpClassName& className)
+ibHelpService::ibHelpService(const ibString& locale, const ibHelpClassName& className)
 	: m_locale(CanonicaliseLocale(locale)), m_className(className)
 {
 	Rebuild();
@@ -114,9 +106,9 @@ void ibHelpService::Rebuild()
 	// latest waiter wins.
 	std::lock_guard<std::mutex> lk(m_mutex);
 
-	const wxString platformDir = ResolvePlatformDir(m_locale);
+	const ibString platformDir = ResolvePlatformDir(m_locale);
 	ibHelpLoadResult result =
-	    LoadHelpCorpus(m_locale, platformDir, wxEmptyString, m_className);
+	    LoadHelpCorpus(m_locale, platformDir, ibEmptyString, m_className);
 
 	// Errors live inside the corpus snapshot — readers reach them via
 	// GetCorpus()->LoadErrors(). No parallel error vector on the

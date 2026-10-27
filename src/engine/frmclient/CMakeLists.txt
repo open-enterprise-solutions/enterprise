@@ -24,9 +24,12 @@ if(APPLE)
     target_link_libraries(frmclient PRIVATE "-framework AppKit")
 endif()
 
-# The FORKED widget layer compiles quiet — frontend's rule, for the same forks copied here (win/ctrls: wx's dataview,
-# grid, treelistctrl; win/theme: wxAUI dock art; uikit: wxUniversal). frontend/CMakeLists.txt has the why and the
-# limit: this reaches the .cpp only, a vendored header silences itself with `#pragma GCC system_header`.
+# The FORKED widget layer compiles quiet — the wxWidgets submodule's rule (the root CMakeLists), applied per file
+# because these live inside our target: win/ctrls (wx's dataview, grid, treelistctrl), win/theme (wxAUI dock art) and
+# uikit (wxUniversal) are vendored forks. Upstream style is not ours to correct, and the volume hides our own: 150 of
+# the 168 -Wreorder lines in the 2026-08-02 CI run came from dataview alone. The limit, learned from a CI log: this
+# reaches the .cpp only; a vendored header with inline definitions warns inside every one of ours that includes it,
+# and silences itself with `#pragma GCC system_header`. docs/private/wx-fork.md is the inventory of the forks.
 set(FRMCLIENT_VENDORED_SOURCES ${FRMCLIENT_SOURCES})
 list(FILTER FRMCLIENT_VENDORED_SOURCES INCLUDE REGEX "/(uikit|win/ctrls|win/theme)/")
 
@@ -53,7 +56,7 @@ target_compile_definitions(frmclient
         NOPCH
 )
 
-# FRMCLIENT_API resolves to dllexport only when FRMCLIENT_EXPORTS is defined (frmclient.h) — frontend's rule.
+# FRMCLIENT_API resolves to dllexport only when FRMCLIENT_EXPORTS is defined (frmclient.h).
 if(WIN32)
     target_compile_definitions(frmclient PRIVATE FRMCLIENT_EXPORTS)
 endif()

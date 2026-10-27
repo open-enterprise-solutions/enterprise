@@ -212,7 +212,7 @@ void ibDialogActiveUser::OnContextMenu(wxListEvent& event)
 	const wxString guid = m_activeTable->GetItemText(row, 5);
 	if (guid.IsEmpty()) return;
 
-	// Kick / Reload are designer-only admin actions. enterprise.exe
+	// Kick / Reload are designer-only admin actions. Runtime
 	// users see the dialog read-only — runtime operators don't get to
 	// boot peers off. (The server refuses them to any other session too.)
 	if (!appData->DesignerMode()) return;

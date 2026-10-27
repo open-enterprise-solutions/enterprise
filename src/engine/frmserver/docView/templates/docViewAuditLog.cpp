@@ -41,7 +41,7 @@ static ibClientFrame* ClientOf(const ibView* view)
 }
 
 // A time on the wire — ms since the epoch, past what an std::int32_t keeps.
-static long long MsOf(const ibDataNode& node, const wxString& name)
+static long long MsOf(const ibDataNode& node, const ibString& name)
 {
 	long long ms = 0;
 	node.GetValue<ibNumber>(name).ToInt(ms);
@@ -60,12 +60,12 @@ bool ibAuditLogView::Fetch(const ibDataNode& request, ibDataNode& response)
 	filter.to_ms = MsOf(request, ibProtocol::ibView::ibAuditLog::To);
 	filter.min_level = -1;
 	request.GetValue(ibProtocol::ibView::ibAuditLog::Level, filter.min_level);
-	filter.user_name = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::User);
-	filter.session_id = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Session);
-	filter.source = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Source);
-	filter.event_type = request.GetValue<wxString>(ibProtocol::ibEvent::Event);
-	filter.ref_guid = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Ref);
-	filter.search = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Search);
+	filter.user_name = request.GetValue<ibString>(ibProtocol::ibView::ibAuditLog::User);
+	filter.session_id = request.GetValue<ibString>(ibProtocol::ibView::ibAuditLog::Session);
+	filter.source = request.GetValue<ibString>(ibProtocol::ibView::ibAuditLog::Source);
+	filter.event_type = request.GetValue<ibString>(ibProtocol::ibEvent::Event);
+	filter.ref_guid = request.GetValue<ibString>(ibProtocol::ibView::ibAuditLog::Ref);
+	filter.search = request.GetValue<ibString>(ibProtocol::ibView::ibAuditLog::Search);
 	filter.offset = static_cast<std::size_t>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibAuditLog::Offset));
 	filter.limit = static_cast<std::size_t>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibAuditLog::Count));
 
@@ -88,7 +88,7 @@ bool ibAuditLogView::Fetch(const ibDataNode& request, ibDataNode& response)
 bool ibAuditLogView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	const ibAuditLogDocument* const document = dynamic_cast<const ibAuditLogDocument*>(GetDocument());
-	const wxString ref = args.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Ref);
+	const ibString ref = args.GetValue<ibString>(ibProtocol::ibView::ibAuditLog::Ref);
 	if (document == nullptr || event != ibProtocol::ibEvent::ibKind::Open || ref.IsEmpty())
 		return false;
 

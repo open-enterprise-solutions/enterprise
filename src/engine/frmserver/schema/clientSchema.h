@@ -48,7 +48,7 @@ public:
 	// person waits for the response. Empty with a refusal — why, and its text: the schema takes no such command, or
 	// not with these arguments — a schema acts only on what it offered; nothing is done then.
 	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
-		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const;
 
 protected:
 
@@ -56,7 +56,7 @@ protected:
 	// under its heading: `detail` (an exception's own text, an engine's refusal) and what the base pushed on the way, each
 	// once, a repeat counted, the first twenty shown. Drained whatever it says — the chain is the thread's, and must not
 	// leak into the next asking.
-	static wxString BackendErrorChain(const wxString& detail = wxEmptyString);
+	static ibString BackendErrorChain(const ibString& detail = ibEmptyString);
 };
 
 #endif

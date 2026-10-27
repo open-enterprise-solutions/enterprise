@@ -24,7 +24,7 @@ namespace {
 
 namespace qc = ibProtocol::ibView::ibQueryConstructor;
 
-ibDataNode Request(qc::ibRequest kind, const wxString& source = wxString())
+ibDataNode Request(qc::ibRequest kind, const ibString& source = ibString())
 {
 	ibDataNode request;
 	request.SetValue(qc::Kind, static_cast<std::int32_t>(kind));
@@ -33,7 +33,7 @@ ibDataNode Request(qc::ibRequest kind, const wxString& source = wxString())
 	return request;
 }
 
-ibDataNode CheckRequest(const wxString& text)
+ibDataNode CheckRequest(const ibString& text)
 {
 	ibDataNode request;
 	request.SetValue(qc::Kind, static_cast<std::int32_t>(qc::ibRequest::Check));
@@ -41,7 +41,7 @@ ibDataNode CheckRequest(const wxString& text)
 	return request;
 }
 
-ibDataNode UngroupedRequest(const wxString& text, std::int32_t statement, std::int32_t unionBranch)
+ibDataNode UngroupedRequest(const ibString& text, std::int32_t statement, std::int32_t unionBranch)
 {
 	ibDataNode request = CheckRequest(text);
 	request.SetValue(qc::Statement, statement);
@@ -51,7 +51,7 @@ ibDataNode UngroupedRequest(const wxString& text, std::int32_t statement, std::i
 
 // THE DESKTOP'S ANSWER — the window's own calls, made here inside the configuration's scope: the reference the request's
 // answer is compared with, word for word.
-wxString DesktopCheckNames(const wxString& text, const ibMetaData& metaData)
+ibString DesktopCheckNames(const ibString& text, const ibMetaData& metaData)
 {
 	const ibSourceMetaDataScope scope(&metaData);
 	try {
@@ -60,14 +60,14 @@ wxString DesktopCheckNames(const wxString& text, const ibMetaData& metaData)
 	catch (const ibCoreException& error) {
 		return error.GetErrorDescription();
 	}
-	return wxString();
+	return ibString();
 }
 
-std::vector<wxString> DesktopUngroupedProjections(const wxString& text, const ibMetaData& metaData)
+std::vector<ibString> DesktopUngroupedProjections(const ibString& text, const ibMetaData& metaData)
 {
 	const ibSourceMetaDataScope scope(&metaData);
 	const ibQueryPackage package = ibQueryParser().ParsePackage(text);
-	std::vector<wxString> out;
+	std::vector<ibString> out;
 	for (const ibQueryAstExprPtr& missing : ibQueryLowering::UngroupedProjections(*package.SingleSelect(), {}))
 		out.push_back(ibRenderQueryExpr(*missing));
 	return out;
@@ -88,8 +88,8 @@ class Sales : public ibQueryableSourceDescriptor
 public:
 	Sales() : m_rows(TableWith({ wxT("Region"), wxT("Period"), wxT("Amount") })) {}
 
-	wxString GetNamespace() const override { return wxT("Document"); }
-	wxString GetName() const override { return wxT("Sales"); }
+	ibString GetNamespace() const override { return wxT("Document"); }
+	ibString GetName() const override { return wxT("Sales"); }
 	const ibBackendQueryable* CreateQueryable(ibValue**, long) override { return &m_rows; }
 
 private:
@@ -102,9 +102,9 @@ struct OpenConfiguration : ibMetaDataConfigurationFile
 	LoadGuard m_open{ this };
 };
 
-std::vector<wxString> Strings(const std::optional<ibDataValue>& listed)
+std::vector<ibString> Strings(const std::optional<ibDataValue>& listed)
 {
-	std::vector<wxString> out;
+	std::vector<ibString> out;
 	if (listed)
 		for (const ibDataValue& item : listed->AsArray())
 			out.push_back(item.AsString());
@@ -153,32 +153,32 @@ TEST(QueryConstructorRequest, EachKindIsOneRowWithItsClassPicture)
 
 	ibDataNode response;
 	ASSERT_TRUE(ibFetchQueryConstructorRequest(Request(qc::ibRequest::Sources), response, &cfg));
-	std::set<wxString> expected;
+	std::set<ibString> expected;
 	for (const ibQueryConstructorSource& source : ibQueryConstructorModel(&cfg).GetSources())
 		expected.insert(source.m_path.front());
-	std::vector<wxString> kinds;
+	std::vector<ibString> kinds;
 	for (const ibDataNode& row : response.FindChild(qc::Kinds)->Children()) {
-		kinds.push_back(row.GetValue<wxString>(qc::Name));
+		kinds.push_back(row.GetValue<ibString>(qc::Name));
 		const ibCtorAbstractType* const ctor = cfg.GetAvailableCtor(kinds.back());
-		EXPECT_EQ(ctor != nullptr ? wxString(ibBackendPicture::SendPicture(ctor->GetClassType())) : wxString(),
-			row.Has(qc::Picture) ? row.GetValue<wxString>(qc::Picture) : wxString()) << kinds.back();
+		EXPECT_EQ(ctor != nullptr ? ibString(ibBackendPicture::SendPicture(ctor->GetClassType())) : ibString(),
+			row.Has(qc::Picture) ? row.GetValue<ibString>(qc::Picture) : ibString()) << kinds.back();
 	}
-	EXPECT_EQ(expected, std::set<wxString>(kinds.begin(), kinds.end()));
+	EXPECT_EQ(expected, std::set<ibString>(kinds.begin(), kinds.end()));
 	EXPECT_EQ(expected.size(), kinds.size()) << "a kind is one row";
 	EXPECT_NE(expected.end(), expected.find(wxT("Document")));
 }
 
 TEST(QueryConstructorRequest, CheckSaysWhyATextDoesNotParse)
 {
-	const wxString text = wxT("SELECT * FROM Catalog.Goods(");
-	wxString parser;
+	const ibString text = wxT("SELECT * FROM Catalog.Goods(");
+	ibString parser;
 	try { ibQueryParser().ParsePackage(text); }
 	catch (const ibCoreException& error) { parser = error.GetErrorDescription(); }
 	ASSERT_FALSE(parser.IsEmpty());
 
 	ibDataNode response;
 	ASSERT_TRUE(ibFetchQueryConstructorRequest(CheckRequest(text), response, nullptr));
-	EXPECT_EQ(parser, response.GetValue<wxString>(qc::Error));
+	EXPECT_EQ(parser, response.GetValue<ibString>(qc::Error));
 }
 
 TEST(QueryConstructorRequest, CheckAnswersTheDesktopsCheckNames)
@@ -188,14 +188,14 @@ TEST(QueryConstructorRequest, CheckAnswersTheDesktopsCheckNames)
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&sales);
 
-	for (const wxString& text : {
-			wxString(wxT("SELECT S.Region, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region")),
-			wxString(wxT("SELECT S.Nowhere FROM Document.Sales AS S")),
-			wxString(wxT("SELECT S.Region, S.Period, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region")) }) {
-		const wxString desktop = DesktopCheckNames(text, cfg);
+	for (const ibString& text : {
+			ibString(wxT("SELECT S.Region, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region")),
+			ibString(wxT("SELECT S.Nowhere FROM Document.Sales AS S")),
+			ibString(wxT("SELECT S.Region, S.Period, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region")) }) {
+		const ibString desktop = DesktopCheckNames(text, cfg);
 		ibDataNode response;
 		ASSERT_TRUE(ibFetchQueryConstructorRequest(CheckRequest(text), response, &cfg));
-		EXPECT_EQ(desktop, response.Has(qc::Error) ? response.GetValue<wxString>(qc::Error) : wxString())
+		EXPECT_EQ(desktop, response.Has(qc::Error) ? response.GetValue<ibString>(qc::Error) : ibString())
 			<< text.ToStdString();
 		EXPECT_FALSE(response.Has(qc::UngroupedProjections)) << "the verdict is asked alone";
 	}
@@ -211,16 +211,16 @@ TEST(QueryConstructorRequest, CheckWithTheSelectNamedAnswersTheDesktopsUngrouped
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&sales);
 
-	for (const wxString& text : {
-			wxString(wxT("SELECT S.Region, S.Period, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region")),
-			wxString(wxT("SELECT S.Region, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region")) }) {
+	for (const ibString& text : {
+			ibString(wxT("SELECT S.Region, S.Period, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region")),
+			ibString(wxT("SELECT S.Region, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region")) }) {
 		ibDataNode response;
 		ASSERT_TRUE(ibFetchQueryConstructorRequest(UngroupedRequest(text, 0, -1), response, &cfg));
 		EXPECT_EQ(DesktopUngroupedProjections(text, cfg), Strings(response.FindField(qc::UngroupedProjections)))
 			<< text.ToStdString();
 		EXPECT_FALSE(response.Has(qc::Error)) << "the grouping is asked alone";
 	}
-	EXPECT_EQ(std::vector<wxString>{ wxT("S.Period") }, DesktopUngroupedProjections(
+	EXPECT_EQ(std::vector<ibString>{ wxT("S.Period") }, DesktopUngroupedProjections(
 		wxT("SELECT S.Region, S.Period, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region"), cfg));
 }
 
@@ -245,7 +245,7 @@ TEST(QueryConstructorRequest, ASourceTheParserRefusesSaysWhy)
 {
 	ibDataNode response;
 	ASSERT_TRUE(ibFetchQueryConstructorRequest(Request(qc::ibRequest::Fields, wxT("Catalog.Goods(")), response, nullptr));
-	EXPECT_FALSE(response.GetValue<wxString>(qc::Error).IsEmpty());
+	EXPECT_FALSE(response.GetValue<ibString>(qc::Error).IsEmpty());
 }
 
 TEST(QueryConstructorRequest, ASourceNobodyHasTakesNoParameters)

@@ -27,7 +27,7 @@ ibQueryAstExprPtr FieldOf(const wxString& table, const wxString& field)
 
 wxString ibDialogQueryTempTable::NameOf(const ibQuerySource& source)
 {
-	const wxString name = source.m_name.empty() ? wxString() : source.m_name.front();
+	const wxString name = source.m_name.empty() ? ibString() : source.m_name.front();
 	return source.m_parameter ? wxT("&") + name : name;
 }
 
@@ -215,7 +215,7 @@ wxString ibDialogQueryTempTable::GetTableName() const
 wxString ibDialogQueryTempTable::TypeText(const ibTypeDescription& type) const
 {
 	const ibQueryAstExprPtr cast = m_model.CastTo(FieldOf(wxT("T"), wxT("F")), type);
-	return cast && cast->m_kind == ibQueryAstExprKind::Cast ? ibRenderQueryCastTarget(*cast) : wxString();
+	return cast && cast->m_kind == ibQueryAstExprKind::Cast ? ibRenderQueryCastTarget(*cast) : ibString();
 }
 
 bool ibDialogQueryTempTable::ReadType(const wxString& text, ibTypeDescription& type) const

@@ -35,7 +35,7 @@ struct ibCompositionTheme {
 	const ibColour& GroupFill(int level) const {
 		return m_groupFill[level <= 0 ? 0 : level >= 2 ? 2 : level];
 	}
-	ibString Caption() const { return wxGetTranslation(wxString::FromUTF8(m_caption)); }
+	ibString Caption() const { return wxGetTranslation(ibString::FromUTF8(m_caption)); }
 };
 
 // THE PLATFORM'S THEMES, in the order a window offers them. The first is the default.

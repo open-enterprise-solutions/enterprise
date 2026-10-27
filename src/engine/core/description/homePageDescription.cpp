@@ -51,7 +51,7 @@ bool ibHomePageDescription::MoveItem(ibHomePageColumn column, unsigned int index
 //                             node form                              //
 ////////////////////////////////////////////////////////////////////////
 
-static const ibChar* s_columnNodeName[eHomePageColumn_Count] = { wxT("Left"), wxT("Right") };
+static const ibChar* s_columnNodeName[eHomePageColumn_Count] = { ibT("Left"), ibT("Right") };
 
 bool ibHomePageDescription::ReadNode(const ibDataValue& value)
 {
@@ -62,7 +62,7 @@ bool ibHomePageDescription::ReadNode(const ibDataValue& value)
 	if (!root)
 		return false;
 
-	m_template = (ibHomePageTemplate)root->GetValue<std::int32_t>(wxT("Template"));
+	m_template = (ibHomePageTemplate)root->GetValue<std::int32_t>(ibT("Template"));
 
 	for (int idx = eHomePageColumn_Left; idx < eHomePageColumn_Count; idx++) {
 		m_columns[idx].clear();
@@ -76,9 +76,9 @@ bool ibHomePageDescription::ReadNode(const ibDataValue& value)
 			if (!itemNode)
 				continue;
 			ibHomePageItem item;
-			item.m_formId = (ibMetaID)itemNode->GetValue<std::int32_t>(wxT("Form"));
-			item.m_height = (unsigned int)itemNode->GetValue<std::int32_t>(wxT("Height"));
-			item.m_visible = itemNode->GetValue<bool>(wxT("Visible"));
+			item.m_formId = (ibMetaID)itemNode->GetValue<std::int32_t>(ibT("Form"));
+			item.m_height = (unsigned int)itemNode->GetValue<std::int32_t>(ibT("Height"));
+			item.m_visible = itemNode->GetValue<bool>(ibT("Visible"));
 			if (item.IsOk())
 				m_columns[idx].push_back(item);
 		}
@@ -90,15 +90,15 @@ bool ibHomePageDescription::ReadNode(const ibDataValue& value)
 bool ibHomePageDescription::WriteNode(ibDataValue& value) const
 {
 	auto root = std::make_shared<ibDataNode>();
-	root->SetValue(wxT("Template"), (std::int32_t)m_template);
+	root->SetValue(ibT("Template"), (std::int32_t)m_template);
 
 	for (int idx = eHomePageColumn_Left; idx < eHomePageColumn_Count; idx++) {
 		std::vector<ibDataValue> items;
 		for (const ibHomePageItem& item : m_columns[idx]) {
 			auto itemNode = std::make_shared<ibDataNode>();
-			itemNode->SetValue(wxT("Form"), (std::int32_t)item.m_formId);
-			itemNode->SetValue(wxT("Height"), (std::int32_t)item.m_height);
-			itemNode->SetValue(wxT("Visible"), item.m_visible);
+			itemNode->SetValue(ibT("Form"), (std::int32_t)item.m_formId);
+			itemNode->SetValue(ibT("Height"), (std::int32_t)item.m_height);
+			itemNode->SetValue(ibT("Visible"), item.m_visible);
 			items.push_back(ibDataValue::Child(itemNode));
 		}
 		root->AddField(s_columnNodeName[idx], ibDataValue::Array(items));

@@ -22,8 +22,8 @@ class BACKEND_API ibCompileCode {
 
 	struct ibCallFunction {
 
-		wxString m_strName;			// name of called function
-		wxString m_strRealName;		// name of called function
+		ibString m_strName;			// name of called function
+		ibString m_strRealName;		// name of called function
 
 		ibParamUnit m_puRetValue;	// variable where the result of the function execution should be returned
 		ibParamUnit m_puContextVal;  // pointer to the Context variable
@@ -36,7 +36,7 @@ class BACKEND_API ibCompileCode {
 
 		int m_numIsSet = 0;			// a sign that there is no assignment
 
-		wxString m_strModuleName;	// module name (since it is possible to include connections from different modules)
+		ibString m_strModuleName;	// module name (since it is possible to include connections from different modules)
 
 		std::vector<ibParamUnit> m_listParam; // list of passed parameters (list of variables, if the value is not specified, then d.b. (-1, -1))
 	};
@@ -46,8 +46,8 @@ class BACKEND_API ibCompileCode {
 public:
 
 	ibCompileCode();
-	ibCompileCode(const wxString& strModuleName, const wxString& strDocPath, bool onlyFunction = false);
-	ibCompileCode(const wxString& strFileName);
+	ibCompileCode(const ibString& strModuleName, const ibString& strDocPath, bool onlyFunction = false);
+	ibCompileCode(const ibString& strFileName);
 
 	virtual ~ibCompileCode();
 
@@ -57,21 +57,21 @@ public:
 
 	void PrepareModuleData();
 
-	void AddVariable(const wxString& strName, const ibValue& value);	// support for external variables
-	void AddVariable(const wxString& strName, ibValue* pValue);		// support for external variables
+	void AddVariable(const ibString& strName, const ibValue& value);	// support for external variables
+	void AddVariable(const ibString& strName, ibValue* pValue);		// support for external variables
 
-	void AddContextVariable(const wxString& strName, const ibValue& value, bool scopeContext = false);
-	void AddContextVariable(const wxString& strName, ibValue* pValue, bool scopeContext = false);
+	void AddContextVariable(const ibString& strName, const ibValue& value, bool scopeContext = false);
+	void AddContextVariable(const ibString& strName, ibValue* pValue, bool scopeContext = false);
 
-	void AddLocalVariable(const wxString& strName, ibValue* pValue);	// bound local — binder-filled frame slot
+	void AddLocalVariable(const ibString& strName, ibValue* pValue);	// bound local — binder-filled frame slot
 
-	void RemoveVariable(const wxString& strName);
+	void RemoveVariable(const ibString& strName);
 
 	void SetParent(ibCompileCode* parent); // setting the parent module and prohibited max. ancestor
 
 	// THE TEXT, through the compiler — the doors a module's owner goes through, so that whoever holds a
 	// compile does not reach for its translator.
-	void Load(const wxString& strCode) { m_translateCode.Load(strCode); }
+	void Load(const ibString& strCode) { m_translateCode.Load(strCode); }
 
 	// Reads the text in the session's syntax, and puts what could not be read through DoRefuse — a
 	// runtime compile raises on the first refusal, a tolerant one notes them all.
@@ -82,7 +82,7 @@ public:
 	void AppendModule(ibCompileCode* module) { m_translateCode.AppendModule(&module->m_translateCode); }
 	void RemoveModule(ibCompileCode* module) { m_translateCode.RemoveModule(&module->m_translateCode); }
 
-	wxString GetModuleName() const { return m_translateCode.GetModuleName(); }
+	const ibString& GetModuleName() const { return m_translateCode.GetModuleName(); }
 
 	// Base ibCompileCode has no compile-side parent — only the
 	// ibCompileModule subclass holds a typed `m_parentModule` for
@@ -98,7 +98,7 @@ public:
 	virtual bool Recompile(); // recompiling a module from a meta object
 
 	virtual bool Compile(); // compiling a module from a meta object
-	virtual bool Compile(const wxString& strCode); // Compiling module
+	virtual bool Compile(const ibString& strCode); // Compiling module
 
 	// Eval host function (the function frame eval expression is opening
 	// into). Non-eval compile modules return nullptr; ibCompileEval
@@ -215,7 +215,7 @@ public:
 	//
 	// One line per refusal, in the order they happened. A runtime compile stops at the first, so
 	// its log holds one line; a tolerant compile reads on and collects them all.
-	const wxString& GetRefusal() const { return m_strRefusal; }
+	const ibString& GetRefusal() const { return m_strRefusal; }
 
 	// Compile-time block-scope nesting depth. ++ on `{` (RETURN_BLOCK
 	// CompileBlock entry), -- on matching `}`. Stamped into each var
@@ -228,7 +228,7 @@ public:
 
 	// See GetRefusal. Mutable because DoRefuse is const — reporting a refusal does not change
 	// what the compile IS, and the const there predates this by years.
-	mutable wxString m_strRefusal;
+	mutable ibString m_strRefusal;
 
 	// See SetCaret. -1 = nobody asked, and then NoteCaret does nothing at all.
 	long m_caretPos = -1;
@@ -290,16 +290,16 @@ public:
 	static const long kCaretAtModule = -1;
 
 	// matching external variables
-	std::map<wxString, ibValue*> m_listExternValue;
+	std::map<ibString, ibValue*> m_listExternValue;
 
 	// matching context variables
-	std::map<wxString, ibContextVar> m_listContextValue;
+	std::map<ibString, ibContextVar> m_listContextValue;
 
 	// bound LOCAL variables — registered as plain frame locals (kind=Local, NOT
 	// External/Context), the binder fills the slot at init; the module body reads/
 	// writes them as ordinary locals (e.g. a constant's Value). No required/type
 	// pre-flight, no kind opcode — a normal slot.
-	std::map<wxString, ibValue*> m_listLocalValue;
+	std::map<ibString, ibValue*> m_listLocalValue;
 
 protected:
 
@@ -307,20 +307,20 @@ protected:
 	// translator's (Translate). `translateCode` holds the text the position points into — a module
 	// read as a part of this one (AppendModule) refuses in its own.
 	void DoRefuse(int codeError,
-		const wxString& strFileName, const wxString& strModuleName, const wxString& strDocPath,
+		const ibString& strFileName, const ibString& strModuleName, const ibString& strDocPath,
 		const ibTranslateCode& translateCode, unsigned int currPos, unsigned int currLine,
-		const wxString& strErrorDesc) const;
+		const ibString& strErrorDesc) const;
 
 	const ibLexem& PreviewGetLexem();
 	const ibLexem& GetLexem();
 	const ibLexem& ExpectLexem();
 
-	void ExpectDelimiter(const wxUniChar& c);
+	void ExpectDelimiter(const ibChar& c);
 
-	bool IsDelimiter(const wxUniChar& c);
+	bool IsDelimiter(const ibChar& c);
 	bool IsKeyword(int nKey);
 
-	bool IsNextDelimiter(const wxUniChar& c);
+	bool IsNextDelimiter(const ibChar& c);
 	bool IsNextKeyword(int nKey);
 
 	void ExpectKeyword(int nKey);
@@ -331,7 +331,7 @@ protected:
 	//   used in property-access positions (`obj.<X>`) where contextual
 	//   LINQ keywords (`Where`/`Select`/...) clash with valid method
 	//   names. Returns m_strData for keywords (their lexer-emitted form).
-	wxString ExpectIdentifier(bool strRealName = false, bool acceptKeyword = false);
+	ibString ExpectIdentifier(bool strRealName = false, bool acceptKeyword = false);
 	ibValue ExpectConstant();
 
 	void StampSource(ibByteUnit& code);
@@ -459,7 +459,7 @@ protected:
 	// cursor and record its L4 pushdown AST from the same span. One param = a where predicate
 	// (`s => cond`); a non-empty param2 = a join ON predicate (`(s, a) => s.k <op> a.k`).
 	ibParamUnit EmitRestrictBody(ibCompileContext* context,
-	                             const wxString& paramName, const wxString& paramName2);
+	                             const ibString& paramName, const ibString& paramName2);
 
 	// CompileLinqBlock — outer entry: parses `<id> in <expr>` from
 	// source, emits OPER_LET + OPER_FOREACH, dives into the leaf
@@ -542,26 +542,26 @@ protected:
 	bool CompileForeach(ibCompileContext* context);
 	bool CompileException(ibCompileContext* context);
 
-	ibParamUnit GetCallFunction(ibCompileContext* context, const wxString& strName, const int& nIsSet);
+	ibParamUnit GetCallFunction(ibCompileContext* context, const ibString& strName, const int& nIsSet);
 	ibParamUnit GetCurrentIdentifier(ibCompileContext* context, int& nIsSet);
 
 	ibParamUnit FindConst(const ibValue& constData);
 
 	bool PushCallFunction(const std::shared_ptr<ibCallFunction>& function);
-	bool GetFunction(const wxString& strName, std::shared_ptr<ibCompileContext::ibFunction>& function, int* pNumFunction = nullptr);
+	bool GetFunction(const ibString& strName, std::shared_ptr<ibCompileContext::ibFunction>& function, int* pNumFunction = nullptr);
 
 	// Look ahead for a type name in a DECLARATION position without consuming it.
 	// Handles the one-lexem form ("Boolean flag") and the dotted metadata form
 	// ("CatalogRef.Item value"), and requires an identifier after the type — so
 	// extending this beyond the five primitives cannot change what existing code
 	// means.
-	bool IsTypeVar(const wxString& sVariable = wxEmptyString);
-	ibClassID GetTypeVar(const wxString& sVariable = wxEmptyString);
+	bool IsTypeVar(const ibString& sVariable = ibEmptyString);
+	ibClassID GetTypeVar(const ibString& sVariable = ibEmptyString);
 	void AddTypeSet(const ibParamUnit& sVariable);
 
-	const int GetConstString(const wxString& strConstName);
+	const int GetConstString(const ibString& strConstName);
 
-	std::map<wxString, unsigned int> m_listHashConst;
+	std::map<ibString, unsigned int> m_listHashConst;
 	std::vector<std::shared_ptr<ibCallFunction>> m_listCallFunc;	// list of encountered procedure and function calls
 
 private:
@@ -608,10 +608,10 @@ private:
 	unsigned int FindQueryTextEnd() const;
 
 	// methods for displaying errors during compilation::
-	void Refuse(int nErr, const wxString& strError = wxEmptyString);
-	void Refuse(int nErr, const wxUniChar& c);
+	void Refuse(int nErr, const ibString& strError = ibEmptyString);
+	void Refuse(int nErr, const ibChar& c);
 
-	wxString m_strCurFuncName;//name of the current compiled function (for processing the recursive function call option)
+	ibString m_strCurFuncName;//name of the current compiled function (for processing the recursive function call option)
 
 	// ⭐⭐ `foreach (r in src.Where(λ))` — THE SAME FOLD, INTO A LOOP THAT ALREADY EXISTS.
 	//

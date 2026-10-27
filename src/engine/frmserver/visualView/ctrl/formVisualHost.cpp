@@ -65,7 +65,7 @@ bool ibValueFrame::CallAsEvent(const ibEvent* event, ibValue** ppParams, const l
 	}
 }
 
-bool ibValueFrame::CallAsEvent(const wxString& functionName, ibValue** ppParams, const long lSizeArray) const
+bool ibValueFrame::CallAsEvent(const ibString& functionName, ibValue** ppParams, const long lSizeArray) const
 {
 	std::shared_ptr<ibProcUnit> formProcUnit = GetFormProcUnit();
 	if (formProcUnit == nullptr || functionName.IsEmpty())
@@ -177,7 +177,7 @@ bool ibValueForm::GetCommandByHop(const ibCommandHop& hop, ibValue& out)
 
 //////////////////////////////////////////////////////////////
 
-wxString ibValueForm::GetControlTitle() const
+ibString ibValueForm::GetControlTitle() const
 {
 	if (m_propertyTitle->IsEmptyProperty()) {
 
@@ -236,13 +236,13 @@ bool ibValueForm::CreateDocForm(ibDocument* docParent, bool createContext)
 
 		ibValue bCancel = false;
 
-		if (!CallAsEvent(wxT("beforeOpen"), bCancel))
+		if (!CallAsEvent(ibT("beforeOpen"), bCancel))
 			return false;
 
 		if (bCancel.GetBoolean())
 			return false;
 
-		if (!CallAsEvent(wxT("onOpen")))
+		if (!CallAsEvent(ibT("onOpen")))
 			return false;
 	}
 
@@ -281,7 +281,7 @@ void ibValueForm::ActivateDocForm()
 {
 	ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
 	if (ownerDocForm != nullptr) {
-		CallAsEvent(wxT("onReOpen"));
+		CallAsEvent(ibT("onReOpen"));
 		ownerDocForm->Activate();
 	}
 }
@@ -291,7 +291,7 @@ void ibValueForm::ChoiceDocForm(ibValue& vSelected)
 	if (m_controlOwner != nullptr) {
 		ibValueForm* ownerForm = m_controlOwner->GetOwnerForm();
 		if (ownerForm != nullptr)
-			ownerForm->CallAsEvent(wxT("choiceProcessing"), vSelected, GetValue());
+			ownerForm->CallAsEvent(ibT("choiceProcessing"), vSelected, GetValue());
 		m_controlOwner->ChoiceProcessing(vSelected);
 		if (ownerForm != nullptr)
 			ownerForm->UpdateForm();
@@ -301,7 +301,7 @@ void ibValueForm::ChoiceDocForm(ibValue& vSelected)
 void ibValueForm::RefreshDocForm()
 {
 	if (!appData->DesignerMode()) {
-		CallAsEvent(wxT("refreshDisplay"));
+		CallAsEvent(ibT("refreshDisplay"));
 	}
 }
 
@@ -315,12 +315,12 @@ bool ibValueForm::CloseDocForm()
 	if (!appData->DesignerMode() && !visualDoc->IsVisualDemonstrationDoc()) {
 
 		ibValue bCancel = false;
-		CallAsEvent(wxT("beforeClose"), bCancel);
+		CallAsEvent(ibT("beforeClose"), bCancel);
 
 		if (bCancel.GetBoolean())
 			return false;
 
-		CallAsEvent(wxT("onClose"));
+		CallAsEvent(ibT("onClose"));
 	}
 
 	return true;

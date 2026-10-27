@@ -642,7 +642,7 @@ void ibCodeEditor::LoadAutoComplete()
 	// trailing whitespace). The word under the caret then lands as the Append filter — and
 	// `Find("MESSAGE")` rejects every system keyword like `If`, `Then`. Clear it so the dropdown
 	// shows all candidates; the user filters live by typing forward.
-	const wxString currentWord = (lenEntered == 0) ? wxString() : at.m_word;
+	const wxString currentWord = (lenEntered == 0) ? wxString() : wxString(at.m_word);
 
 	m_ac.Start(currentWord, currentPos, lenEntered, TextHeight(GetCurrentLine()));
 

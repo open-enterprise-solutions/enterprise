@@ -29,7 +29,7 @@ public:
 
 
 	struct LoadedPlugin {
-		wxString               m_path;
+		ibString               m_path;
 		std::unique_ptr<wxDynamicLibrary> m_lib;
 		const ibPluginInfo*    m_info = nullptr;
 		ibPluginShutdownFn     m_shutdown = nullptr;
@@ -52,7 +52,7 @@ public:
 
 	// Directory that will be scanned (<exe-dir>/plugins). Exposed so UI can
 	// display it and a user can be told where to drop new plugins.
-	static wxString GetPluginsDir();
+	static ibString GetPluginsDir();
 
 	~ibPluginManager() { UnloadAll(); }
 

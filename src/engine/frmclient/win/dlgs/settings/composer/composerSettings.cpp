@@ -344,7 +344,7 @@ public:
 	// THE PATH A ROW STANDS FOR — what every entry is keyed by. Empty past the end.
 	wxString PathAt(unsigned row) const {
 		const std::vector<ibQueryConstructorField>* fields = m_fields ? m_fields() : nullptr;
-		return fields != nullptr && row < fields->size() ? (*fields)[row].m_name : wxString();
+		return fields != nullptr && row < fields->size() ? (*fields)[row].m_name : ibString();
 	}
 
 	// WHAT WAS SAID about the field on this row — null when nothing was, which is the ordinary case.
@@ -476,14 +476,14 @@ public:
 			// TICKED, THE TITLE STARTS FROM WHAT WAS SHOWN — the generated one becomes the person's to edit, not an
 			// empty cell to retype it into. Unticked, the field follows its source and its name again.
 			said->SayTitle(variant.GetBool()
-				? said->TitleInForce(FieldAt(row) != nullptr ? FieldAt(row)->m_caption : wxString())
-				: wxString());
+				? said->TitleInForce(FieldAt(row) != nullptr ? FieldAt(row)->m_caption : ibString())
+				: ibString());
 		}
 		else {
 			// THE LANGUAGE IN FORCE is the one the cell shows, so it is the one typing writes; the others
 			// stay as they were (the "..." edits them all). Emptied, that language is taken out — and a
 			// title with no language left is given back, the door's own rule (SayTitle).
-			ibTranslateString title(said->m_useTitle ? said->m_title : wxString());
+			ibTranslateString title(said->m_useTitle ? said->m_title : ibString());
 			if (text.IsEmpty())
 				title.RemoveTranslate(ibBackendLocalization::GetUserLanguage());
 			else
@@ -711,7 +711,7 @@ public:
 			return;   // BOUNDS FIRST — a queued paint can outlive the variant it was queued for
 		// AN UNNAMED VARIANT SHOWS WHAT IT HAS — its place in the list, as the picker's menu shows it
 		// (ibUnnamedVariantCaption); an empty row cannot be picked with any confidence (Max, 2026-09-29).
-		variant = (*list)[row].m_name.IsEmpty() ? ibUnnamedVariantCaption(row) : (*list)[row].m_name;
+		variant = (*list)[row].m_name.IsEmpty() ? ibString(ibUnnamedVariantCaption(row)) : (*list)[row].m_name;
 	}
 	// …and it reads grey, like everything else here that generates itself.
 	bool GetAttrByRow(unsigned row, unsigned col, ibDataViewItemAttr& attr) const override {
@@ -920,7 +920,7 @@ public:
 			// ⚠ NOT "Grouping" — that is what its LEVELS are called, and two rows reading the same
 			// word one under another is how a tree stops saying anything (Max, on the first run).
 			// An output is a place: what it holds is its levels, what it is called is its own.
-			const wxString kind = HasTwoAxes(pos.m_output) ? _("Table") : _("Output");
+			const ibString kind = HasTwoAxes(pos.m_output) ? _("Table") : _("Output");
 			// ⚠ ASCII IN THE SEPARATOR, deliberately. This file has no BOM, so MSVC reads a UTF-8
 			// em-dash in a literal as ANSI bytes and the row came out with mojibake between the two
 			// names, `Output ??? Output2` (seen
@@ -1223,7 +1223,7 @@ void ibSelectedListModel::GetValue(wxVariant& variant, const ibDataViewItem& ite
 	// ⭐ THE `Auto` ROW READS AS WHAT IT IS. It names no field — it says "everything the storey above
 	// chose, here" — so it is drawn as the word rather than as a blank line, which is what an empty
 	// path would look like and is a different thing entirely.
-	variant = (*list)[row].IsAuto() ? _("<Auto>") : (*list)[row].m_path;
+	variant = (*list)[row].IsAuto() ? ibString(_("<Auto>")) : (*list)[row].m_path;
 }
 
 unsigned int ibSelectedListModel::GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem&,
@@ -1618,7 +1618,7 @@ private:
 		else {
 			const int unitAt = m_periodUnit->GetSelection();
 			periods.m_unit = unitAt != wxNOT_FOUND
-				? m_periodUnit->GetString(unitAt) : ibPeriodUnits().front().second;
+				? ibString(m_periodUnit->GetString(unitAt)) : ibPeriodUnits().front().second;
 			periods.m_from = m_periodFrom->GetValue().Trim(true).Trim(false);
 			periods.m_to   = m_periodTo->GetValue().Trim(true).Trim(false);
 		}
@@ -3291,7 +3291,7 @@ bool ibComposerSettingsPanel::EditFieldTitle(wxString& text)
 
 	// A GENERATED TITLE OPENS AS ITSELF — what the cell showed, in the language in force.
 	const ibFieldDescription* said = m_fieldModel->Said(row);
-	const ibTranslateString before(said != nullptr && said->m_useTitle ? said->m_title : text);
+	const ibTranslateString before(said != nullptr && said->m_useTitle ? said->m_title : ibString(text));
 	ibDialogTranslateConstructor dialog(this, _("Title"), before, GetEditedMetaData(), m_readOnly);
 	if (dialog.ShowModal() != wxID_OK)
 		return false;

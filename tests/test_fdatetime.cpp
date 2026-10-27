@@ -301,8 +301,8 @@ TEST(DateTime, ATextSpellsAReadingByItsDigits)
 	EXPECT_FALSE(date.FromParts(2026, -1, 1));
 	EXPECT_EQ(ibDateTime(2024, 2, 29, 23, 59, 59), date);
 
-	EXPECT_EQ(wxString(wxT("29.03.2026 02:30:45")), ibDateTime(2026, 3, 29, 2, 30, 45).ToString());
-	EXPECT_EQ(wxString(wxT("01.01.0001 00:00:00")), ibDateTime().ToString());
+	EXPECT_EQ(ibString(wxT("29.03.2026 02:30:45")), ibDateTime(2026, 3, 29, 2, 30, 45).ToString());
+	EXPECT_EQ(ibString(wxT("01.01.0001 00:00:00")), ibDateTime().ToString());
 
 	static_assert(ibDateTime::IsADate(2024, 2, 29), "a leap day");
 	static_assert(!ibDateTime::IsADate(2023, 2, 29), "not in a common year");

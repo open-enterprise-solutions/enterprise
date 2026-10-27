@@ -15,7 +15,7 @@
 // ibPGExternalImageProperty
 // -----------------------------------------------------------------------
 
-// THE DESKTOP'S PICTURE CELLS (frontend/propertyManager/property/advprop/advpropPicture.h): a picture of a file, read
+// THE PICTURE CELLS:a picture of a file, read
 // whole into the value (ibPGExternalImageProperty), and a picture by where it comes from — the engine's, the
 // configuration's, a file's (wxPGPictureProperty).
 class ibPGExternalImageProperty : public wxEditorDialogProperty {

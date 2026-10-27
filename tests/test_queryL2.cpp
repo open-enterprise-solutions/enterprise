@@ -27,7 +27,7 @@ ibDialectDictionary SqliteDialect() { return ibDatabaseLayerSQLite::Dialect(); }
 // Render a DQL IR through SQLite (the stable-spelling default).
 std::string Lite(const ibQueryIR& ir) { return Sql(ibQueryRenderer(SqliteDialect()).Render(ir)); }
 
-ibQueryExprPtr Eq(const wxString& q, const wxString& a, const wxString& q2, const wxString& b)
+ibQueryExprPtr Eq(const ibString& q, const ibString& a, const ibString& q2, const ibString& b)
 {
 	return ibBinOp(ibQueryBinOp::Eq, ibCol(q, a), ibCol(q2, b));
 }
@@ -55,7 +55,7 @@ TEST(QueryL2_Join, LeftJoin)
 {
 	ibQueryRelPtr from = ibJoin(ibScan(wxT("A")), ibScan(wxT("B")),
 		Eq(wxT("A"), wxT("k"), wxT("B"), wxT("k")), ibQueryJoinType::Left);
-	ibQueryIR ir(ibProject(from, { { ibCol(wxT("A"), wxT("v")), wxString() } }));
+	ibQueryIR ir(ibProject(from, { { ibCol(wxT("A"), wxT("v")), ibString() } }));
 	EXPECT_EQ(Lite(ir), "SELECT A.v FROM A LEFT JOIN B ON (A.k = B.k)");
 }
 
@@ -63,14 +63,14 @@ TEST(QueryL2_Join, ThreeWayLeftDeep)
 {
 	ibQueryRelPtr ab  = ibJoin(ibScan(wxT("A")), ibScan(wxT("B")), Eq(wxT("A"), wxT("k"), wxT("B"), wxT("k")));
 	ibQueryRelPtr abc = ibJoin(ab, ibScan(wxT("C")), Eq(wxT("B"), wxT("m"), wxT("C"), wxT("m")));
-	ibQueryIR ir(ibProject(abc, { { ibCol(wxT("C"), wxT("x")), wxString() } }));
+	ibQueryIR ir(ibProject(abc, { { ibCol(wxT("C"), wxT("x")), ibString() } }));
 	EXPECT_EQ(Lite(ir),
 		"SELECT C.x FROM A INNER JOIN B ON (A.k = B.k) INNER JOIN C ON (B.m = C.m)");
 }
 
 TEST(QueryL2_Join, AliasedScan)
 {
-	ibQueryIR ir(ibProject(ibScan(wxT("Reference17"), wxT("t")), { { ibCol(wxT("t"), wxT("Code_S")), wxString() } }));
+	ibQueryIR ir(ibProject(ibScan(wxT("Reference17"), wxT("t")), { { ibCol(wxT("t"), wxT("Code_S")), ibString() } }));
 	EXPECT_EQ(Lite(ir), "SELECT t.Code_S FROM Reference17 AS t");
 }
 
@@ -119,7 +119,7 @@ TEST(QueryL2_Aggregate, GroupByHaving)
 TEST(QueryL2_Set, DerivedTable)
 {
 	ibQueryRelPtr inner = ibProject(ibScan(wxT("Reg")), { { ibCol(wxT("v_N")), wxT("v") } });
-	ibQueryIR ir(ibProject(ibSubquery(inner, wxT("u")), { { ibCol(wxT("u"), wxT("v")), wxString() } }));
+	ibQueryIR ir(ibProject(ibSubquery(inner, wxT("u")), { { ibCol(wxT("u"), wxT("v")), ibString() } }));
 	EXPECT_EQ(Lite(ir), "SELECT u.v FROM (SELECT v_N AS v FROM Reg) AS u");
 }
 
@@ -144,7 +144,7 @@ TEST(QueryL2_Set, UnionWrappedForOrderLimit)
 
 TEST(QueryL2_Set, Distinct)
 {
-	ibQueryIR ir(ibDistinct(ibProject(ibScan(wxT("T")), { { ibCol(wxT("c_S")), wxString() } })));
+	ibQueryIR ir(ibDistinct(ibProject(ibScan(wxT("T")), { { ibCol(wxT("c_S")), ibString() } })));
 	EXPECT_EQ(Lite(ir), "SELECT DISTINCT c_S FROM T");
 }
 
@@ -184,8 +184,8 @@ TEST(QueryL2_Expr, NotAndBetween)
 TEST(QueryL2_Expr, CaseAndCast)
 {
 	ibQueryExprPtr c = ibCase(
-		{ { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("t")), ibConst(ibValue(ibNumber(1)))), ibConst(ibValue(wxString(wxT("a")))) } },
-		ibConst(ibValue(wxString(wxT("b")))));
+		{ { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("t")), ibConst(ibValue(ibNumber(1)))), ibConst(ibValue(ibString(wxT("a")))) } },
+		ibConst(ibValue(ibString(wxT("b")))));
 	EXPECT_EQ(Lite(ibQueryIR(ibProject(ibScan(wxT("T")), { { c, wxT("x") } }))),
 		"SELECT (CASE WHEN (t = ?) THEN ? ELSE ? END) AS x FROM T");
 	EXPECT_EQ(Lite(ibQueryIR(ibProject(ibScan(wxT("Reg")),
@@ -208,7 +208,7 @@ TEST(QueryL2_Bind, ParamsInTextOrder)
 {
 	// WHERE (a = const) AND (b = param0): two binds, the Const first, the external Param second.
 	ibQueryExprPtr pred = ibBinOp(ibQueryBinOp::And,
-		ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("a")), ibConst(ibValue(wxString(wxT("X"))))),
+		ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("a")), ibConst(ibValue(ibString(wxT("X"))))),
 		ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("b")), ibParam(0)));
 	const ibRenderedQuery out = ibQueryRenderer(SqliteDialect()).Render(ibQueryIR(ibFilter(ibScan(wxT("T")), pred)));
 	EXPECT_EQ(Sql(out), "SELECT * FROM T WHERE ((a = ?) AND (b = ?))");
@@ -240,10 +240,10 @@ TEST(QueryL2_Dml, MultiRowInsert)
 {
 	ibDmlStatement ins(ibDmlKind::Insert);
 	ins.m_table       = wxT("oes_tmp_1");
-	ins.m_assignments = { { wxT("a"), ibConst(ibValue(ibNumber(1))) }, { wxT("b"), ibConst(ibValue(wxString(wxT("x")))) } };
+	ins.m_assignments = { { wxT("a"), ibConst(ibValue(ibNumber(1))) }, { wxT("b"), ibConst(ibValue(ibString(wxT("x")))) } };
 	ins.m_extraRows   = {
-		{ ibConst(ibValue(ibNumber(2))), ibConst(ibValue(wxString(wxT("y")))) },
-		{ ibConst(ibValue(ibNumber(3))), ibConst(ibValue(wxString(wxT("z")))) },
+		{ ibConst(ibValue(ibNumber(2))), ibConst(ibValue(ibString(wxT("y")))) },
+		{ ibConst(ibValue(ibNumber(3))), ibConst(ibValue(ibString(wxT("z")))) },
 	};
 	const ibRenderedQuery out = ibQueryRenderer(SqliteDialect()).RenderDML(ins);
 	EXPECT_EQ(Sql(out), "INSERT INTO oes_tmp_1 (a, b) VALUES (?, ?), (?, ?), (?, ?)");

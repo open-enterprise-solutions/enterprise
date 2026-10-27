@@ -115,7 +115,7 @@ bool ibPropertyType::GetProtocolValue(ibDataNode& row, ibReader reader)
 		if (so == nullptr)
 			continue;
 		ibDataNode& type = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
-		type.SetValue(ibProtocol::ibSchema::ibProperties::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
+		type.SetValue(ibProtocol::ibSchema::ibProperties::Type, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(clsid)));
 		type.SetValue(ibProtocol::ibSchema::ibProperties::Title, so->GetClassName());
 		type.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(clsid));
 	}

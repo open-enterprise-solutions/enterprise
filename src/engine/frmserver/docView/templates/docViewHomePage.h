@@ -89,8 +89,8 @@ public:
 
 protected:
 
-	virtual bool DoSaveDocument(const wxString&) override { return true; }
-	virtual bool DoOpenDocument(const wxString&) override { return true; }
+	virtual bool DoSaveDocument(const ibString&) override { return true; }
+	virtual bool DoOpenDocument(const ibString&) override { return true; }
 
 private:
 

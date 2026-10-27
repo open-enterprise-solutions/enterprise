@@ -16,7 +16,7 @@ ibDatabaseLayerODBC::ibDatabaseLayerODBC()
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading ODBC library"));
+		SetErrorMessage(ibT("Error loading ODBC library"));
 		ThrowDatabaseException();
 		return;
 	}
@@ -46,10 +46,10 @@ ibDatabaseLayerODBC::ibDatabaseLayerODBC()
 		ThrowDatabaseException();
 	}
 
-	m_strDSN = wxEmptyString;
-	m_strUser = wxEmptyString;
-	m_strPassword = wxEmptyString;
-	m_strConnection = wxEmptyString;
+	m_strDSN = ibEmptyString;
+	m_strUser = ibEmptyString;
+	m_strPassword = ibEmptyString;
+	m_strConnection = ibEmptyString;
 
 }
 
@@ -62,7 +62,7 @@ ibDatabaseLayerODBC::ibDatabaseLayerODBC(const ibDatabaseLayerODBC& src)
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading ODBC library"));
+		SetErrorMessage(ibT("Error loading ODBC library"));
 		ThrowDatabaseException();
 		return;
 	}
@@ -92,10 +92,10 @@ ibDatabaseLayerODBC::ibDatabaseLayerODBC(const ibDatabaseLayerODBC& src)
 		ThrowDatabaseException();
 	}
 
-	m_strDSN = wxEmptyString;
-	m_strUser = wxEmptyString;
-	m_strPassword = wxEmptyString;
-	m_strConnection = wxEmptyString;
+	m_strDSN = ibEmptyString;
+	m_strUser = ibEmptyString;
+	m_strPassword = ibEmptyString;
+	m_strConnection = ibEmptyString;
 
 }
 
@@ -179,22 +179,22 @@ bool ibDatabaseLayerODBC::Open()
 	return true;
 }
 
-bool ibDatabaseLayerODBC::Open(const wxString& strConnection)
+bool ibDatabaseLayerODBC::Open(const ibString& strConnection)
 {
-	m_strDSN = wxEmptyString;
-	m_strUser = wxEmptyString;
-	m_strPassword = wxEmptyString;
+	m_strDSN = ibEmptyString;
+	m_strUser = ibEmptyString;
+	m_strPassword = ibEmptyString;
 	m_strConnection = strConnection;
 
 	return Open();
 }
 
-bool ibDatabaseLayerODBC::Open(const wxString& strDSN, const wxString& strUser, const wxString& strPassword)
+bool ibDatabaseLayerODBC::Open(const ibString& strDSN, const ibString& strUser, const ibString& strPassword)
 {
 	m_strDSN = strDSN;
 	m_strUser = strUser;
 	m_strPassword = strPassword;
-	m_strConnection = wxEmptyString;
+	m_strConnection = ibEmptyString;
 
 	return Open();
 }
@@ -252,7 +252,7 @@ void ibDatabaseLayerODBC::DoBeginTransaction(const ibTxOptions& opts)
 	// ignore the statement (some error-out). Wrapped so a failing
 	// driver just falls back to default wait-mode.
 	if (opts.noWait) {
-		try { DoRunQuery(wxT("SET LOCK_TIMEOUT 0"), false); }
+		try { DoRunQuery(ibT("SET LOCK_TIMEOUT 0"), false); }
 		catch (...) { /* best-effort — MSSQL: ok; other DBMSes: no-op */ }
 	}
 }
@@ -298,7 +298,7 @@ void ibDatabaseLayerODBC::DoRollBack()
 // IsActiveTransaction inherits the base-class default (m_txDepth > 0).
 
 
-int ibDatabaseLayerODBC::DoRunQuery(const wxString& strQuery, bool bParseQuery)
+int ibDatabaseLayerODBC::DoRunQuery(const ibString& strQuery, bool bParseQuery)
 {
 	ResetErrorCodes();
 
@@ -326,7 +326,7 @@ int ibDatabaseLayerODBC::DoRunQuery(const wxString& strQuery, bool bParseQuery)
 		return DATABASE_LAYER_QUERY_RESULT_ERROR;
 }
 
-ibDatabaseResultSet* ibDatabaseLayerODBC::DoRunQueryWithResults(const wxString& strQuery)
+ibDatabaseResultSet* ibDatabaseLayerODBC::DoRunQueryWithResults(const ibString& strQuery)
 {
 	ResetErrorCodes();
 
@@ -369,18 +369,18 @@ void* ibDatabaseLayerODBC::allocStmth()
 	return handle;
 }
 
-ibPreparedStatement* ibDatabaseLayerODBC::DoPrepareStatement(const wxString& strQuery)
+ibPreparedStatement* ibDatabaseLayerODBC::DoPrepareStatement(const ibString& strQuery)
 {
 	ibPreparedStatement* pStatement = DoPrepareStatement(strQuery, true);
 	LogStatementForCleanup(pStatement);
 	return pStatement;
 }
 
-ibPreparedStatement* ibDatabaseLayerODBC::DoPrepareStatement(const wxString& strQuery, bool bParseQuery)
+ibPreparedStatement* ibDatabaseLayerODBC::DoPrepareStatement(const ibString& strQuery, bool bParseQuery)
 {
 	ResetErrorCodes();
 
-	wxArrayString QueryArray;
+	std::vector<ibString> QueryArray;
 	if (bParseQuery)
 		QueryArray = ParseQueries(strQuery);
 	else
@@ -414,13 +414,13 @@ ibPreparedStatement* ibDatabaseLayerODBC::DoPrepareStatement(const wxString& str
 	return pReturnStatement;
 }
 
-bool ibDatabaseLayerODBC::TableExists(const wxString& table)
+bool ibDatabaseLayerODBC::TableExists(const ibString& table)
 {
 	bool bReturn = false;
 	// Use SQLTables
 	SQLHSTMT pStatement = allocStmth();
 	wxCharBuffer tableBuffer = ConvertToUnicodeStream(table);
-	wxString tableType = wxT("TABLE");
+	ibString tableType = ibT("TABLE");
 	wxCharBuffer tableTypeBuffer = ConvertToUnicodeStream(tableType);
 	int tableTypeBufferLength = GetEncodedStreamLength(tableType);
 	SQLRETURN nRet = m_pInterface->GetSQLTables()(pStatement,
@@ -446,13 +446,13 @@ bool ibDatabaseLayerODBC::TableExists(const wxString& table)
 	return bReturn;
 }
 
-bool ibDatabaseLayerODBC::ViewExists(const wxString& view)
+bool ibDatabaseLayerODBC::ViewExists(const ibString& view)
 {
 	bool bReturn = false;
 	// Use SQLTables
 	SQLHSTMT pStatement = allocStmth();
 	wxCharBuffer viewBuffer = ConvertToUnicodeStream(view);
-	wxString tableType = wxT("VIEW");
+	ibString tableType = ibT("VIEW");
 	wxCharBuffer tableTypeBuffer = ConvertToUnicodeStream(tableType);
 	int tableTypeBufferLength = GetEncodedStreamLength(tableType);
 	SQLRETURN nRet = m_pInterface->GetSQLTables()(pStatement,
@@ -478,11 +478,11 @@ bool ibDatabaseLayerODBC::ViewExists(const wxString& view)
 	return bReturn;
 }
 
-wxArrayString ibDatabaseLayerODBC::GetTables()
+std::vector<ibString> ibDatabaseLayerODBC::GetTables()
 {
-	wxArrayString returnArray;
+	std::vector<ibString> returnArray;
 	SQLHSTMT pStatement = allocStmth();
-	wxString tableType = wxT("TABLE");
+	ibString tableType = ibT("TABLE");
 	wxCharBuffer tableTypeBuffer = ConvertToUnicodeStream(tableType);
 	int tableTypeBufferLength = GetEncodedStreamLength(tableType);
 	SQLRETURN nRet = m_pInterface->GetSQLTables()(pStatement,
@@ -523,8 +523,8 @@ wxArrayString ibDatabaseLayerODBC::GetTables()
 			ThrowDatabaseException();
 			return returnArray;
 		}
-		wxString strTable = ConvertFromUnicodeStream((const char*)buff);
-		returnArray.Add(strTable);
+		ibString strTable = ConvertFromUnicodeStream((const char*)buff);
+		returnArray.push_back(strTable);
 		nRet = m_pInterface->GetSQLFetch()(pStatement);
 	}
 
@@ -533,11 +533,11 @@ wxArrayString ibDatabaseLayerODBC::GetTables()
 	return returnArray;
 }
 
-wxArrayString ibDatabaseLayerODBC::GetViews()
+std::vector<ibString> ibDatabaseLayerODBC::GetViews()
 {
-	wxArrayString returnArray;
+	std::vector<ibString> returnArray;
 	SQLHSTMT pStatement = allocStmth();
-	wxString tableType = wxT("VIEW");
+	ibString tableType = ibT("VIEW");
 	wxCharBuffer tableTypeBuffer = ConvertToUnicodeStream(tableType);
 	int tableTypeBufferLength = GetEncodedStreamLength(tableType);
 	SQLRETURN nRet = m_pInterface->GetSQLTables()(pStatement,
@@ -579,8 +579,8 @@ wxArrayString ibDatabaseLayerODBC::GetViews()
 			ThrowDatabaseException();
 			return returnArray;
 		}
-		wxString strView = ConvertFromUnicodeStream((const char*)buff);
-		returnArray.Add(strView);
+		ibString strView = ConvertFromUnicodeStream((const char*)buff);
+		returnArray.push_back(strView);
 		nRet = m_pInterface->GetSQLFetch()(pStatement);
 	}
 
@@ -589,9 +589,9 @@ wxArrayString ibDatabaseLayerODBC::GetViews()
 	return returnArray;
 }
 
-wxArrayString ibDatabaseLayerODBC::GetColumns(const wxString& table)
+std::vector<ibString> ibDatabaseLayerODBC::GetColumns(const ibString& table)
 {
-	wxArrayString returnArray;
+	std::vector<ibString> returnArray;
 	// Use SQLColumns
 	SQLHSTMT pStatement = allocStmth();
 	wxCharBuffer tableBuffer = ConvertToUnicodeStream(table);
@@ -635,8 +635,8 @@ wxArrayString ibDatabaseLayerODBC::GetColumns(const wxString& table)
 			ThrowDatabaseException();
 			return returnArray;
 		}
-		wxString strColumn = ConvertFromUnicodeStream((const char*)buff);
-		returnArray.Add(strColumn);
+		ibString strColumn = ConvertFromUnicodeStream((const char*)buff);
+		returnArray.push_back(strColumn);
 		nRet = m_pInterface->GetSQLFetch()(pStatement);
 	}
 
@@ -648,7 +648,7 @@ wxArrayString ibDatabaseLayerODBC::GetColumns(const wxString& table)
 //void ibDatabaseLayerODBC::InterpretErrorCodes( long nCode, SQLHSTMT stmth_ptr )
 void ibDatabaseLayerODBC::InterpretErrorCodes(long nCode, void* stmth_ptr)
 {
-	ibJournalInfo(wxT("db.odbc"),wxT("ibDatabaseLayerODBC::InterpretErrorCodes()\n"));
+	ibJournalInfo(ibT("db.odbc"),ibT("ibDatabaseLayerODBC::InterpretErrorCodes()\n"));
 
 	//if ((nCode != SQL_SUCCESS) ) // && (nCode != SQL_SUCCESS_WITH_INFO))
 	{
@@ -667,7 +667,7 @@ void ibDatabaseLayerODBC::InterpretErrorCodes(long nCode, void* stmth_ptr)
 			m_pInterface->GetSQLGetDiagRec()(SQL_HANDLE_DBC, (SQLHDBC)m_sqlHDBC, 1, strState, &iNativeCode,
 				strBuffer, ERR_BUFFER_LEN, &iMsgLen);
 
-		const wxString strSqlState = ConvertFromUnicodeStream((char*)strState);
+		const ibString strSqlState = ConvertFromUnicodeStream((char*)strState);
 		SetErrorCode(TranslateErrorCode((int)iNativeCode, strSqlState), ClassifySqlState(strSqlState, (int)iNativeCode));
 		//SetErrorMessage(wxString((wxChar*)strBuffer));
 		SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
@@ -676,10 +676,10 @@ void ibDatabaseLayerODBC::InterpretErrorCodes(long nCode, void* stmth_ptr)
 	}
 }
 
-int ibDatabaseLayerODBC::TranslateErrorCode(int nNativeCode, const wxString& strSqlState)
+int ibDatabaseLayerODBC::TranslateErrorCode(int nNativeCode, const ibString& strSqlState)
 {
 	// An interrupted statement (Cancel -> SQLCancel) is the cancel, recorded as the platform's.
-	if (strSqlState == wxT("HY008"))   // operation canceled
+	if (strSqlState == ibT("HY008"))   // operation canceled
 		return DATABASE_LAYER_QUERY_CANCELLED;
 	return nNativeCode;
 }
@@ -693,28 +693,28 @@ void ibDatabaseLayerODBC::Cancel()
 		m_pInterface->GetSQLCancel()((SQLHSTMT)hstmt);
 }
 
-ibBackendDatabaseException::Kind ibDatabaseLayerODBC::ClassifySqlState(const wxString& sqlState, int nativeCode)
+ibBackendDatabaseException::Kind ibDatabaseLayerODBC::ClassifySqlState(const ibString& sqlState, int nativeCode)
 {
 	// Same SQLSTATE class-digit dispatch as PostgreSQL — ODBC standardises
 	// on the SQL-spec SQLSTATE format, so the classification is portable.
 	// See https://learn.microsoft.com/en-us/sql/odbc/reference/appendixes/appendix-a-odbc-error-codes
 	using Kind = ibBackendDatabaseException::Kind;
 	if (sqlState.length() >= 2) {
-		const wxString cls = sqlState.Left(2);
-		if (cls == wxT("08")) return Kind::ConnectionLost;
-		if (cls == wxT("23")) return Kind::Constraint;
-		if (cls == wxT("42")) return Kind::Syntax;
-		if (cls == wxT("57")) return Kind::ConnectionLost;
-		if (cls == wxT("HY")) {
+		const ibString cls = sqlState.Left(2);
+		if (cls == ibT("08")) return Kind::ConnectionLost;
+		if (cls == ibT("23")) return Kind::Constraint;
+		if (cls == ibT("42")) return Kind::Syntax;
+		if (cls == ibT("57")) return Kind::ConnectionLost;
+		if (cls == ibT("HY")) {
 			// HYT00 = ODBC timeout expired; HYT01 = connection timeout
-			if (sqlState == wxT("HYT00") || sqlState == wxT("HYT01"))
+			if (sqlState == ibT("HYT00") || sqlState == ibT("HYT01"))
 				return Kind::Timeout;
 		}
-		if (cls == wxT("40")) {
+		if (cls == ibT("40")) {
 			// MSSQL surfaces deadlock as native error 1205 with SQLSTATE
 			// 40001 (serialization failure) — we treat both as Deadlock
 			// since the engine already rolled the TX back.
-			if (sqlState == wxT("40001") || sqlState == wxT("40P01"))
+			if (sqlState == ibT("40001") || sqlState == ibT("40P01"))
 				return Kind::Deadlock;
 			return Kind::Timeout;
 		}

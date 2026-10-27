@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-# The thin runtime — enterprise.exe as a thin client (mainApp.h says what it is). It links the thin client's core
+# The thin runtime — enterprise-thin.exe, the runtime as a thin client (mainApp.h says what it is). It links the thin client's core
 # alone; a file base's server half (fileserver) is loaded by it when one is opened.
 set(ENTERPRISE_THIN_SOURCES
     mainApp.cpp

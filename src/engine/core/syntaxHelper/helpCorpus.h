@@ -60,7 +60,7 @@ public:
 	// Construct an empty corpus. Used as the fallback when LoadHelpCorpus
 	// fails completely so appData's accessor invariant
 	// (returns non-null shared_ptr) holds without special-case code.
-	explicit ibHelpCorpus(const wxString& locale);
+	explicit ibHelpCorpus(const ibString& locale);
 
 	// Single-source constructor. The loader produces one of these per
 	// source (platform / per-config), then hands them to the merging
@@ -68,11 +68,11 @@ public:
 	// `categoryNames` is the locale's `_categories.json` dictionary, key →
 	// display name. It is passed IN rather than read here because the corpus
 	// does not know about files — the loader owns every source medium.
-	ibHelpCorpus(const wxString&                   locale,
+	ibHelpCorpus(const ibString&                   locale,
 	             Source                            source,
 	             std::vector<ibHelpEntry>          entries,
 	             std::vector<ibHelpLoadError>      loadErrors,
-	             std::map<wxString, wxString>      categoryNames = {});
+	             std::map<ibString, ibString>      categoryNames = {});
 
 	// Merging constructor — composes platform + per-config into a single
 	// immutable snapshot. Platform entries are added first; per-config
@@ -81,7 +81,7 @@ public:
 	// fromConfiguration=true.
 	ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
 	             std::shared_ptr<const ibHelpCorpus> perConfig,
-	             const wxString&                     locale);
+	             const ibString&                     locale);
 
 	// No copy / move — the corpus is owned through shared_ptr; accidental
 	// duplication of the indexes would defeat the snapshot-share design.
@@ -98,7 +98,7 @@ public:
 	const ibHelpCategory* GetRoot() const;
 
 	// id → entry. Returns nullptr if the id is not in the corpus.
-	const ibHelpEntry* FindById(const wxString& id) const;
+	const ibHelpEntry* FindById(const ibString& id) const;
 
 	// All entries in deterministic order (by id ascending). Cheap — entries
 	// are stored contiguously; this returns pointers into that storage.
@@ -106,12 +106,12 @@ public:
 
 	// Prefix search over `nameLocal` and `nameEn` (case-insensitive,
 	// NFC-normalised). Used by the Phase 3 Index tab's filter textbox.
-	std::vector<const ibHelpEntry*> SearchPrefix(const wxString& prefix) const;
+	std::vector<const ibHelpEntry*> SearchPrefix(const ibString& prefix) const;
 
 	// Token search over name + signature tokens (Phase 1 — no description
 	// tokens; description tokens land in Phase 6 behind a feature flag,
 	// §3.5). Used by the Phase 3 Search tab.
-	std::vector<const ibHelpEntry*> SearchText(const wxString& query) const;
+	std::vector<const ibHelpEntry*> SearchText(const ibString& query) const;
 
 	// === Diagnostics ======================================================
 
@@ -119,10 +119,10 @@ public:
 	// loaded files (buckets + _categories.json) of the locale,
 	// concatenated with locale and schema_version. Truncated to 16 hex
 	// chars. Used as the HTTP ETag (§6.1).
-	wxString Fingerprint() const;
+	ibString Fingerprint() const;
 
 	int             EntryCount() const;
-	const wxString& Locale()     const;
+	const ibString& Locale()     const;
 
 	// Errors collected during construction (and during merge, if this
 	// corpus came out of the merging constructor). Never throws — even
@@ -135,19 +135,19 @@ private:
 	std::vector<ibHelpEntry> m_entries;
 
 	// id → slot in m_entries.
-	std::unordered_map<wxString, ibHelpEntryIndex> m_byId;
+	std::unordered_map<ibString, ibHelpEntryIndex> m_byId;
 
 	// Case-insensitive name lookups, used by the resolver.
-	std::unordered_map<wxString, std::vector<ibHelpEntryIndex>> m_byNameEn;
-	std::unordered_map<wxString, std::vector<ibHelpEntryIndex>> m_byNameLocal;
+	std::unordered_map<ibString, std::vector<ibHelpEntryIndex>> m_byNameEn;
+	std::unordered_map<ibString, std::vector<ibHelpEntryIndex>> m_byNameLocal;
 
 	// Ordered prefix index. Value is a vector because multiple entries
 	// can share the same normalised prefix key (e.g. several entries
 	// with the same identifier in different kinds).
-	std::map<wxString, std::vector<ibHelpEntryIndex>> m_prefixIndex;
+	std::map<ibString, std::vector<ibHelpEntryIndex>> m_prefixIndex;
 
 	// Token → entries. Built from name + signature tokens only in Phase 1.
-	std::unordered_map<wxString, std::vector<ibHelpEntryIndex>> m_tokenIndex;
+	std::unordered_map<ibString, std::vector<ibHelpEntryIndex>> m_tokenIndex;
 
 	// Root of the category tree. Owned.
 	std::unique_ptr<ibHelpCategory> m_root;
@@ -157,13 +157,13 @@ private:
 	// file shipped inside every .hlk, ibHelpCategory::displayName was declared
 	// and never assigned, and the tree view fell back to showing the raw key
 	// ("global_functions" instead of its title, "Global functions"). Wired 2026-09-04.
-	std::map<wxString, wxString> m_categoryNames;
+	std::map<ibString, ibString> m_categoryNames;
 
 	// Source-file digest used by Fingerprint(). Computed once at
 	// construction time so the accessor is trivial.
-	wxString m_fingerprint;
+	ibString m_fingerprint;
 
-	wxString                     m_locale;
+	ibString                     m_locale;
 	std::vector<ibHelpLoadError> m_loadErrors;
 
 	// Internal helpers — used by the constructors only.
@@ -177,7 +177,7 @@ private:
 	// a dllexport build. clang/gcc accept either form, but matching is
 	// the portable spelling.
 	friend CORE_API std::vector<const ibHelpEntry*> ResolveByName(
-	    const ibHelpCorpus&, const wxString&, const struct ibHelpResolveHint&);
+	    const ibHelpCorpus&, const ibString&, const struct ibHelpResolveHint&);
 };
 
 #endif // _IB_HELP_CORPUS_H_

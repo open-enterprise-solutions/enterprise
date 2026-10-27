@@ -51,13 +51,13 @@ class ibBackendValueForm;
 struct ibQueryReadColumns
 {
 	bool                  m_all = true;
-	std::vector<wxString> m_names;
+	std::vector<ibString> m_names;
 
-	bool Reads(const wxString& name) const
+	bool Reads(const ibString& name) const
 	{
 		if (m_all)
 			return true;
-		for (const wxString& read : m_names)
+		for (const ibString& read : m_names)
 			if (read.IsSameAs(name, false))
 				return true;
 		return false;
@@ -154,8 +154,8 @@ private:
 
 public:
 
-	virtual wxString GetNamespace() const = 0;
-	virtual wxString GetName() const = 0;
+	virtual ibString GetNamespace() const = 0;
+	virtual ibString GetName() const = 0;
 
 	// ⭐ THE COMPANIONS GO WHEN THE REGISTRATION GOES — said by the factory's Unregister, the door every
 	// source passes when its configuration closes. A companion holds the VALUES of its call: dates, a
@@ -299,7 +299,7 @@ public:
 	//
 	// `slot` empty = the general condition, which is what the plain overload above answers.
 	virtual void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
-	                                   const wxString& slot) const {
+	                                   const ibString& slot) const {
 		FillConditionExplorer(explorer);
 	}
 
@@ -362,12 +362,12 @@ public:
 	// Drop ALL references (config teardown). Does NOT delete — descriptors are owned elsewhere.
 	void Clear();
 
-	bool HasNamespace(const wxString& ns) const;
+	bool HasNamespace(const ibString& ns) const;
 
 	// Resolve <ns>.<objectName> (+ call-scoped params) -> queryable: find the (ns,name)
 	// descriptor and ask it to CREATE the queryable. Null when unknown. VIRTUAL — the per-config subclass
 	// descends to the global factory on a local miss.
-	virtual const ibBackendQueryable* Resolve(const wxString& ns, const wxString& objectName,
+	virtual const ibBackendQueryable* Resolve(const ibString& ns, const ibString& objectName,
 	                                  ibValue** paParams = nullptr, long lSizeArray = 0) const;
 
 	// Enumerate registered source descriptors — the dynamic-list source picker lists
@@ -377,7 +377,7 @@ public:
 	// THE DESCRIPTOR ITSELF, not the queryable it builds. The lowering needs it to ask what the
 	// source's arguments MEAN (DescribeParameters) before evaluating them — a condition argument
 	// must not be evaluated as a value at all. Null when nothing answers to that name.
-	virtual ibQueryableSourceDescriptor* FindDescriptor(const wxString& ns, const wxString& objectName) const;
+	virtual ibQueryableSourceDescriptor* FindDescriptor(const ibString& ns, const ibString& objectName) const;
 
 	// Resolve a source by its table id (queryable->GetQueryTableId()) — the stable id the
 	// dynamic-source property serializes. Null when none matches. VIRTUAL (see Resolve).
@@ -395,17 +395,17 @@ private:
 	ibQueryableFactory(const ibQueryableFactory&) = delete;
 	ibQueryableFactory& operator=(const ibQueryableFactory&) = delete;
 
-	static wxString Key(const wxString& ns, const wxString& name);   // upper("ns|name")
-	std::map<wxString, ibQueryableSourceDescriptor*> m_descriptors;  // non-owning
+	static ibString Key(const ibString& ns, const ibString& name);   // upper("ns|name")
+	std::map<ibString, ibQueryableSourceDescriptor*> m_descriptors;  // non-owning
 
 	// ⭐ THE SAME DESCRIPTORS, BY TABLE ID — so a lookup by id is a lookup and not a walk. Kept by Register /
 	// Unregister / Clear alongside m_descriptors: for each id, its descriptors in KEY order (the first one is what
 	// the walk found first), and for each key the id it was filed under — so a key is taken out of the index
 	// without asking the descriptor that stood under it, which may already be gone.
-	void IndexById(const wxString& key, ibQueryableSourceDescriptor* descriptor);
-	void UnindexById(const wxString& key);
-	std::map<ibMetaID, std::map<wxString, ibQueryableSourceDescriptor*>> m_byTableId;   // non-owning
-	std::map<wxString, ibMetaID> m_tableIdOfKey;
+	void IndexById(const ibString& key, ibQueryableSourceDescriptor* descriptor);
+	void UnindexById(const ibString& key);
+	std::map<ibMetaID, std::map<ibString, ibQueryableSourceDescriptor*>> m_byTableId;   // non-owning
+	std::map<ibString, ibMetaID> m_tableIdOfKey;
 };
 
 // The PER-CONFIG source factory — one per open snapshot (ibMetaImage), holding that config's OWN metadata-backed
@@ -417,13 +417,13 @@ class BACKEND_API ibMetaQueryableFactory : public ibQueryableFactory
 public:
 	ibMetaQueryableFactory() = default;   // owned by the snapshot; no appData token
 
-	const ibBackendQueryable* Resolve(const wxString& ns, const wxString& objectName,
+	const ibBackendQueryable* Resolve(const ibString& ns, const ibString& objectName,
 	                                  ibValue** paParams = nullptr, long lSizeArray = 0) const override;
 	const ibBackendQueryable* ResolveById(ibMetaID tableId) const override;
 	ibQueryableSourceDescriptor* ResolveDescriptorById(ibMetaID tableId) const override;
 	// Own registry first, then the global one — the same order Resolve keeps, for the same reason:
 	// a configuration's sources are its own, and a miss falls through to what the platform declares.
-	ibQueryableSourceDescriptor* FindDescriptor(const wxString& ns, const wxString& objectName) const override;
+	ibQueryableSourceDescriptor* FindDescriptor(const ibString& ns, const ibString& objectName) const override;
 };
 
 #endif

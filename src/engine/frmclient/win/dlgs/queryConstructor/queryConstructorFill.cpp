@@ -90,7 +90,7 @@ wxString ibDialogQueryConstructor::ChooseField(const wxString& title)
 		labels.Add(field.m_presentation);
 
 	const int index = wxGetSingleChoiceIndex(_("Field"), title, labels, this);
-	return index >= 0 ? fields[static_cast<size_t>(index)].m_name : wxString();
+	return index >= 0 ? fields[static_cast<size_t>(index)].m_name : ibString();
 }
 
 // ===========================================================================
@@ -242,9 +242,9 @@ void ibDialogQueryConstructor::FillPackage()
 	if (m_queryKind != nullptr)
 		m_queryKind->SetSelection(kind);
 	if (m_tempName != nullptr) {
-		m_tempName->ChangeValue(statement == nullptr ? wxString()
+		m_tempName->ChangeValue(statement == nullptr ? ibString()
 			: statement->IsDrop() ? statement->m_dropTemp
-			: statement->m_select == nullptr ? wxString()
+			: statement->m_select == nullptr ? ibString()
 			: (kind == 3 ? statement->m_select->m_ontoName : statement->m_select->m_intoTemp));
 		m_tempName->Enable(kind != 0);   // the name is asked only by the kinds that need one
 	}
@@ -900,7 +900,7 @@ bool ibDialogQueryConstructor::FillCatalogueFields(const wxTreeItemId& item)
 	icons.m_field  = FieldIconOf(m_sourceTree);
 	ibQuerySource asSource;
 	asSource.m_name = node->m_path;
-	const std::vector<wxString> path = node->m_path;
+	const std::vector<ibString> path = node->m_path;
 	for (const ibQueryConstructorField& field : m_model.GetFields(asSource, m_package, m_statement))
 		ibQueryAddFieldNode(m_sourceTree, item, field, FieldIcon(icons, field), -1, wxEmptyString, path);
 	return true;
@@ -971,7 +971,7 @@ static wxString KindOfSource(const ibQuerySource& source)
 		return kKindNestedQuery;
 	if (source.m_name.size() == 1)
 		return kKindTempTable;   // a bare name is what a temp table is
-	return source.m_name.size() > 1 ? source.m_name[0] : wxString();
+	return source.m_name.size() > 1 ? source.m_name[0] : ibString();
 }
 
 void ibDialogQueryConstructor::FillSourceTree()
@@ -1246,7 +1246,7 @@ void ibDialogQueryConstructor::FillFieldSources()
 			if (select != nullptr)
 				for (const ibQueryProjection& projection : select->m_projections) {
 					ibQueryConstructorField field;
-					const wxString written = projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : wxString();
+					const wxString written = projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : ibString();
 					wxString shown = ibQueryOutputName(projection);
 					if (shown.IsEmpty())
 						shown = written;
@@ -1559,7 +1559,7 @@ void ibDialogQueryConstructor::FillTotalsPeriods()
 	// The unit: what the field says, or Month for a level about to be given one — the period a report
 	// is asked for more often than any other, so the common case is one click.
 	int unitAt = -1;
-	const std::vector<std::pair<ibTotalsPeriod, wxString>>& units = ibPeriodUnits();
+	const std::vector<std::pair<ibTotalsPeriod, ibString>>& units = ibPeriodUnits();
 	for (size_t i = 0; i < units.size(); ++i) {
 		const bool match = periods != nullptr
 			? units[i].second.IsSameAs(periods->m_unit, false)
@@ -1571,9 +1571,9 @@ void ibDialogQueryConstructor::FillTotalsPeriods()
 	// ChangeValue, not SetValue: filling the panel is not somebody typing in it, and the difference
 	// is exactly the edit event the commit rule below depends on.
 	m_periodFrom->ChangeValue(periods != nullptr && periods->m_from
-		? ibRenderQueryExpr(*periods->m_from) : wxString());
+		? ibRenderQueryExpr(*periods->m_from) : ibString());
 	m_periodTo->ChangeValue(periods != nullptr && periods->m_to
-		? ibRenderQueryExpr(*periods->m_to) : wxString());
+		? ibRenderQueryExpr(*periods->m_to) : ibString());
 	// …and what stands in them now came from the level, so there is nothing of a person's in there
 	// to commit. (A pending edit is committed by the focus leaving the field, which happens before a
 	// click reaches the grid — so switching levels mid-typing lands on the level being left.)

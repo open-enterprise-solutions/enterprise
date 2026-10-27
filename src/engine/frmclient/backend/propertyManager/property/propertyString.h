@@ -8,19 +8,19 @@ class FRMCLIENT_API ibPropertyStringBase : public ibPropertySerializable {
 public:
 
 	// …held as its node (ibPropertySerializable::ReadNodeValue) — set by the string it is.
-	wxString GetValueAsString() const;
-	void SetValue(const wxString& strValue);
+	ibString GetValueAsString() const;
+	void SetValue(const ibString& strValue);
 
-	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name) : ibPropertySerializable(cat, name, wxNullVariant)
+	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name) : ibPropertySerializable(cat, name, wxNullVariant)
 	{
 	}
 
-	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibPropertySerializable(cat, name, label, wxNullVariant)
 	{
 	}
 
-	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
 	{
 	}
@@ -40,20 +40,20 @@ public:
 class FRMCLIENT_API ibPropertyString : public ibPropertyStringBase {
 public:
 
-	ibPropertyString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyStringBase(cat, name)
+	ibPropertyString(ibPropertyCategory* cat, const ibString& name,
+		const ibString& value) : ibPropertyStringBase(cat, name)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyStringBase(cat, name, label)
+	ibPropertyString(ibPropertyCategory* cat, const ibString& name, const ibString& label,
+		const ibString& value) : ibPropertyStringBase(cat, name, label)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString)
+	ibPropertyString(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
+		const ibString& value) : ibPropertyStringBase(cat, name, label, helpString)
 	{
 		SetValue(value);
 	}
@@ -64,20 +64,20 @@ public:
 class FRMCLIENT_API ibPropertyUString : public ibPropertyStringBase {
 public:
 
-	ibPropertyUString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyStringBase(cat, name)
+	ibPropertyUString(ibPropertyCategory* cat, const ibString& name,
+		const ibString& value) : ibPropertyStringBase(cat, name)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyUString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyStringBase(cat, name, label)
+	ibPropertyUString(ibPropertyCategory* cat, const ibString& name, const ibString& label,
+		const ibString& value) : ibPropertyStringBase(cat, name, label)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyUString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString)
+	ibPropertyUString(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
+		const ibString& value) : ibPropertyStringBase(cat, name, label, helpString)
 	{
 		SetValue(value);
 	}
@@ -88,20 +88,20 @@ public:
 class FRMCLIENT_API ibPropertyUEString : public ibPropertyUString {
 public:
 
-	ibPropertyUEString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyUString(cat, name, value)
+	ibPropertyUEString(ibPropertyCategory* cat, const ibString& name,
+		const ibString& value) : ibPropertyUString(cat, name, value)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyUEString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyUString(cat, name, label, value)
+	ibPropertyUEString(ibPropertyCategory* cat, const ibString& name, const ibString& label,
+		const ibString& value) : ibPropertyUString(cat, name, label, value)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyUEString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyUString(cat, name, label, helpString, value)
+	ibPropertyUEString(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
+		const ibString& value) : ibPropertyUString(cat, name, label, helpString, value)
 	{
 		SetValue(value);
 	}
@@ -121,7 +121,7 @@ public:
 
 	// THE ACTIVE SYNONYM — the text, in the language in force. It is the translation converting
 	// itself, and it is the one question a label, a tooltip or a page header ever asks.
-	wxString GetValueAsTranslateString() const { return GetValueAsTranslate().GetString(); }
+	ibString GetValueAsTranslateString() const { return GetValueAsTranslate().GetString(); }
 
 	// …AND THE RAW TEMPLATE — `en = 'Goods'; de = 'Waren';`, every language at once, as it is
 	// written down. What a template cell keeps, and what a file is written with.
@@ -130,24 +130,24 @@ public:
 	// every other string property has, and two callers asked for it while meaning the text — so a
 	// person was shown `en = 'Title';` in a notebook page header, and the rename gate compared a
 	// synonym against a template.
-	wxString GetValueAsRawString() const { return GetValueAsTranslate().GetRawText(); }
+	ibString GetValueAsRawString() const { return GetValueAsTranslate().GetRawText(); }
 
 	// ⚠ NO DEFAULT FOR THE VALUE. The three differ only by how many STRINGS precede it, so a default
 	// makes `(cat, name, text)` fit the second one as well — `C2668: ambiguous call` at every
 	// declaration (measured on the first build). The number property can afford one; this cannot.
-	ibPropertyTString(ibPropertyCategory* cat, const wxString& name,
+	ibPropertyTString(ibPropertyCategory* cat, const ibString& name,
 		const ibTranslateString& value) : ibPropertySerializable(cat, name, wxNullVariant)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
+	ibPropertyTString(ibPropertyCategory* cat, const ibString& name, const ibString& label,
 		const ibTranslateString& value) : ibPropertySerializable(cat, name, label, wxNullVariant)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
+	ibPropertyTString(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
 		const ibTranslateString& value) : ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
 	{
 		SetValue(value);
@@ -166,20 +166,20 @@ public:
 class FRMCLIENT_API ibPropertyMString : public ibPropertyStringBase {
 public:
 
-	ibPropertyMString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyStringBase(cat, name)
+	ibPropertyMString(ibPropertyCategory* cat, const ibString& name,
+		const ibString& value) : ibPropertyStringBase(cat, name)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyMString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyStringBase(cat, name, label)
+	ibPropertyMString(ibPropertyCategory* cat, const ibString& name, const ibString& label,
+		const ibString& value) : ibPropertyStringBase(cat, name, label)
 	{
 		SetValue(value);
 	}
 
-	ibPropertyMString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString)
+	ibPropertyMString(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
+		const ibString& value) : ibPropertyStringBase(cat, name, label, helpString)
 	{
 		SetValue(value);
 	}

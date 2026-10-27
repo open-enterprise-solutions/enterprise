@@ -12,6 +12,8 @@
 #include <wx/wx.h>
 #endif
 
+#include "core/fstring.h"   // ibString, ibT
+
 #include <wx/dynlib.h>
 
 #include <sql.h>

@@ -13,7 +13,7 @@
 //*                            Event handler                            *
 //***********************************************************************
 
-ibValueMetaObjectEventHandler::ibValueMetaObjectEventHandler(const wxString& name, const wxString& synonym, const wxString& comment)
+ibValueMetaObjectEventHandler::ibValueMetaObjectEventHandler(const ibString& name, const ibString& synonym, const ibString& comment)
 	: ibValueMetaObject(name, synonym, comment)
 {
 	// NOTHING IS HANDLED until the source is said: the property's constructor wants a type to start
@@ -43,9 +43,9 @@ bool ibValueMetaObjectEventHandler::Handles(const ibClassID& sourceType, long ev
 	return ibValueTypeDescription::AllowValue(GetSource(), sourceType, m_metaData);
 }
 
-std::map<wxString, ibValueMetaObjectEventHandler::ibSourceEvent> ibValueMetaObjectEventHandler::GetSourceEvents() const
+std::map<ibString, ibValueMetaObjectEventHandler::ibSourceEvent> ibValueMetaObjectEventHandler::GetSourceEvents() const
 {
-	std::map<wxString, ibSourceEvent> events;
+	std::map<ibString, ibSourceEvent> events;
 	if (m_metaData == nullptr || !GetSource().IsOk())
 		return events;
 
@@ -57,7 +57,7 @@ std::map<wxString, ibValueMetaObjectEventHandler::ibSourceEvent> ibValueMetaObje
 			if (!ibValueTypeDescription::AllowValue(GetSource(), type->GetClassType(), m_metaData))
 				continue;
 
-			std::map<wxString, ibSourceEvent> own;
+			std::map<ibString, ibSourceEvent> own;
 			if (const ibValueMetaObjectModuleBase* const module = type->GetEventModule()) {
 				for (size_t idx = 0; idx < module->GetDefaultProcedureCount(); idx++) {
 					ibSourceEvent& event = own[module->GetDefaultProcedureName(idx)];
@@ -107,7 +107,7 @@ void ibValueMetaObjectEventHandler::PrepareModule()
 	for (const auto& event : GetSourceEvents()) {
 		if (EventId(event.first) != id)
 			continue;
-		std::vector<wxString> args = { wxT("Source") };
+		std::vector<ibString> args = { ibT("Source") };
 		args.insert(args.end(), event.second.m_args.begin(), event.second.m_args.end());
 		if (event.second.m_kind == ibContentHelper::eFunctionHelper)
 			module->SetDefaultFunction(event.first, args);

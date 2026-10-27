@@ -96,7 +96,7 @@ CORE_API bool ibQueryMentionsAggregate(const ibQueryAstExprPtr& expr);
 //     nothing free (`BEGINOFPERIOD(Date, Month)` grouped fixes `Date` for its group).
 CORE_API void ibQueryCollectFoldedAndFree(const ibQueryAstExprPtr& expr, bool insideAggregate,
 	std::vector<const ibQueryAstExpr*>& folded, std::vector<const ibQueryAstExpr*>& free,
-	const std::vector<wxString>* groupedExprs = nullptr);
+	const std::vector<ibString>* groupedExprs = nullptr);
 // A COLUMN NODE STANDING ON ITS OWN — a path the caller can resolve and report without holding the projection alive.
 CORE_API ibQueryAstExprPtr ibQueryColumnCopy(const ibQueryAstExpr& column);
 // THE COLUMNS A SELECT ALREADY FOLDS — those inside a GROUP aggregate, each a column of its own. They are accounted for:
@@ -153,7 +153,7 @@ CORE_API bool ibQueryIsTrueLiteral(const ibQueryAstExprPtr& expr);
 //
 // It takes the SELECT because that is where the answer lives: whether the first segment names a
 // SOURCE, or is the first hop of a walk, is a fact about the query and not about the projection.
-CORE_API wxString ibQueryProposedName(const ibQuerySelect& select, const ibQueryProjection& projection);
+CORE_API ibString ibQueryProposedName(const ibQuerySelect& select, const ibQueryProjection& projection);
 
 // EVERY OUTPUT COLUMN GETS A NAME, and no two get the same one.
 //
@@ -172,7 +172,7 @@ CORE_API void ibQueryEnsureUniqueName(ibQuerySelect& select, ibQueryProjection& 
 // current name does not count as taken — otherwise renaming a table to what it already is would
 // number it. Two tables answering to one name makes every qualified field ambiguous, and the engine
 // would be right to refuse the text; numbering the second is what a DBMS does.
-CORE_API wxString ibQueryUniqueSourceAlias(const ibQuerySelect& select, const wxString& wanted,
+CORE_API ibString ibQueryUniqueSourceAlias(const ibQuerySelect& select, const ibString& wanted,
                                               const ibQuerySource* except = nullptr);
 
 #endif

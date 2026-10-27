@@ -24,7 +24,7 @@ public:
 
 	// Open — only an item a page offers this person, as that page offers it; anything else is refused.
 	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
-		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const override;
 };
 
 #endif

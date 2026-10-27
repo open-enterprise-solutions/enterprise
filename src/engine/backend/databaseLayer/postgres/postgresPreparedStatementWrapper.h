@@ -26,7 +26,7 @@ class ibPreparedStatementPostgresWrapper : public ibDatabaseErrorReporter, publi
 {
 public:
 	// ctor
-	ibPreparedStatementPostgresWrapper(ibInterfacePostgres* pInterface, PGconn* pDatabase, const wxString& strSQL, const wxString& strStatementName);
+	ibPreparedStatementPostgresWrapper(ibInterfacePostgres* pInterface, PGconn* pDatabase, const ibString& strSQL, const ibString& strStatementName);
 
 	// dtor
 	virtual ~ibPreparedStatementPostgresWrapper();
@@ -47,7 +47,7 @@ public:
 
 	// The statement throws from here, not from the layer, so the SQLSTATE
 	// has to be on this reporter or the exception leaves with an empty one.
-	wxString GetSqlState() const override { return m_sqlState; }
+	ibString GetSqlState() const override { return m_sqlState; }
 
 	// Frees the statement on the server. Called by its owner's Close, once — not by this dtor: the owner's
 	// array holds copies, and a temporary copy dying would free a statement still in use.
@@ -56,11 +56,11 @@ public:
 private:
 	ibInterfacePostgres* m_pInterface;
 	PGconn* m_pDatabase;
-	wxString m_strSQL;
-	wxString m_strStatementName;
+	ibString m_strSQL;
+	ibString m_strStatementName;
 
 	ibPreparedStatementPostgresParameterCollection m_Parameters;
-	wxString m_sqlState;
+	ibString m_sqlState;
 };
 
 #endif // __POSTGRESQL_PREPARED_STATEMENT_WRAPPER_H__

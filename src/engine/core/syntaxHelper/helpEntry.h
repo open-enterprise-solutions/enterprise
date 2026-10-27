@@ -20,8 +20,6 @@
 #include "core/core.h"
 #include "core/clsid.h"   // ibClassID — the class an article is about
 
-#include <wx/string.h>
-#include <wx/arrstr.h>   // wxbase exports std::vector<wxString> (wxArrayString's base) — seen here, a unit imports it
                          // instead of defining its own (LNK2005 in core.dll; the backend's precompiled header had it)
 
 #include <vector>
@@ -68,58 +66,58 @@ struct CORE_API ibHelpEntry {
 	// Canonical, locale-independent. Loader rejects duplicates within a
 	// single source corpus (platform OR per-config); cross-source
 	// collisions become overlays (§3.6).
-	wxString id;
+	ibString id;
 
 	// Localised identifier — the user types this in the editor and
 	// search bar; resolver matches against it. May coincide with
 	// nameEn for English locales.
-	wxString nameLocal;
+	ibString nameLocal;
 
 	// English identifier ("Date"). Stable join key across locales — used
 	// by the resolver when `preferLocalName == false`, and by tooling
 	// that needs locale-independent reference (id grammar, alias maps).
-	wxString nameEn;
+	ibString nameEn;
 
 	// One-line call form, e.g. "Date(<Year>, <Month>, <Day>)". Used in
 	// autocomplete tooltips and as the entry's subtitle in the detail
 	// pane.
-	wxString signature;
+	ibString signature;
 
 	// Long-form prose. Authored in markdown (subset documented in §8 —
 	// headings, lists, fenced code, no tables). Rendered to HTML by the
 	// detail-view at display time; not pre-rendered on disk.
-	wxString description;
+	ibString description;
 
 	// Multi-line formatted declaration / call form for the "Syntax"
 	// section of the detail pane. Holds the CES (C-style — `if (…) { … }`)
 	// form, which is the default mode for new configurations.
-	wxString syntaxBlock;
+	ibString syntaxBlock;
 
 	// Alternative VES (Visual-style — `If … Then … EndIf`) syntax form.
 	// Rendered next to the CES block so authors switching between the
 	// two modes can see them side-by-side. Empty when an entry has only
 	// one canonical form (e.g. operators, preprocessor directives).
-	wxString syntaxBlockVes;
+	ibString syntaxBlockVes;
 
 	// Markdown <dl>-style key:value list — one entry per formal parameter.
-	wxString parameters;
+	ibString parameters;
 
 	// Return-value semantics. Empty for procedures and statement-form
 	// keywords.
-	wxString returnDescr;
+	ibString returnDescr;
 
 	// Worked example (markdown fenced code block). Multiple examples
 	// concatenated with blank lines between blocks. CES form by default.
-	wxString example;
+	ibString example;
 
 	// Worked example in VES syntax. Shown alongside the CES example
 	// when the entry's behaviour differs between the two modes.
-	wxString exampleVes;
+	ibString exampleVes;
 
 	// Free-form tier list — OES runtime targets the entry is valid on
 	// (e.g. "Thin client, Server").
 	// Localised string, no parsing required by readers.
-	wxString availability;
+	ibString availability;
 
 	// ⭐ THE CLASS THIS ARTICLE IS ABOUT, by its id — set on the article of a runtime value type
 	// (`cls.<Name>`, the Value types section). A HIDDEN field: the detail pane does not show it. It is
@@ -136,13 +134,13 @@ struct CORE_API ibHelpEntry {
 	// at render time. Adding a locale = adding one dictionary + one
 	// buckets directory; no entry schema change.
 	//   e.g. {"applied_objects","documents","invoice","properties","code"}
-	std::vector<wxString> categoryKeys;
+	std::vector<ibString> categoryKeys;
 
 	// Opaque ids of related entries — rendered as "See
 	// also" links in the detail pane. Loader validates each at LoadAll
 	// time; dangling ids demote to load warnings (kWarning) and the
 	// entry still loads.
-	std::vector<wxString> seeAlso;
+	std::vector<ibString> seeAlso;
 
 	// Set after human review (Phase 7 help-editor). LLM-filled drafts
 	// ship with `reviewed=false`; the UI tags drafts with a "draft" badge,
@@ -184,18 +182,18 @@ struct CORE_API ibHelpEntry {
 	// "Local / English" composite label. When both names match (English
 	// locale or single-script keyword) returns one form to avoid the
 	// redundant "Procedure / Procedure" display.
-	inline wxString BilingualLabel() const {
+	inline ibString BilingualLabel() const {
 		if (nameLocal.IsEmpty()) return nameEn;
 		if (nameEn.IsEmpty())    return nameLocal;
 		if (nameLocal == nameEn) return nameLocal;
-		return nameLocal + wxT(" / ") + nameEn;
+		return nameLocal + ibT(" / ") + nameEn;
 	}
 
 	// Text payload for drag-from-helper → drop-into-editor. Returns the
 	// syntax_block template that matches the requested compile style
 	// (codeStyle: 0 = VES, 1 = CES), falling back to the other form and
 	// finally to the entry's identifier when no template is authored.
-	inline wxString InsertTemplate(short codeStyle) const {
+	inline ibString InsertTemplate(short codeStyle) const {
 		const bool prefersVes = (codeStyle == 0);
 		if (prefersVes && !syntaxBlockVes.IsEmpty()) return syntaxBlockVes;
 		if (!syntaxBlock.IsEmpty())                   return syntaxBlock;

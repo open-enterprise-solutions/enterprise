@@ -63,17 +63,17 @@ class ibBackendQueryable;       // defined below — ibTempSourceScope reference
 class BACKEND_API ibTempSourceScope
 {
 public:
-	explicit ibTempSourceScope(const std::map<wxString, const ibBackendQueryable*>& sources);
+	explicit ibTempSourceScope(const std::map<ibString, const ibBackendQueryable*>& sources);
 	~ibTempSourceScope();
 
 	// The active scope's queryable for `name`, or null (no scope / not a temp source).
-	static const ibBackendQueryable* Find(const wxString& name);
+	static const ibBackendQueryable* Find(const ibString& name);
 
 	ibTempSourceScope(const ibTempSourceScope&) = delete;
 	ibTempSourceScope& operator=(const ibTempSourceScope&) = delete;
 
 private:
-	const std::map<wxString, const ibBackendQueryable*>* m_prev;
+	const std::map<ibString, const ibBackendQueryable*>* m_prev;
 };
 
 struct ibQuerySelect;   // an AST select — a named result IS one, kept by pointer only
@@ -96,17 +96,17 @@ struct ibQuerySelect;   // an AST select — a named result IS one, kept by poin
 class BACKEND_API ibNamedResultScope
 {
 public:
-	explicit ibNamedResultScope(const std::map<wxString, const ibQuerySelect*>& results);
+	explicit ibNamedResultScope(const std::map<ibString, const ibQuerySelect*>& results);
 	~ibNamedResultScope();
 
 	// The named result for `name` (matched without regard to case), or null.
-	static const ibQuerySelect* Find(const wxString& name);
+	static const ibQuerySelect* Find(const ibString& name);
 
 	ibNamedResultScope(const ibNamedResultScope&) = delete;
 	ibNamedResultScope& operator=(const ibNamedResultScope&) = delete;
 
 private:
-	const std::map<wxString, const ibQuerySelect*>* m_prev;
+	const std::map<ibString, const ibQuerySelect*>* m_prev;
 };
 
 class ibMetaData;   // the config a query runs on behalf of — its factory resolves by-name metaobject sources
@@ -257,7 +257,7 @@ struct ibQuerySortItem
 	// (measured 2026-09-04). A person asking for the top three items by turnover had no way to say it.
 	//
 	// Empty = an ordinary sort; the fields above say which of the three it is.
-	wxString                    m_outputAlias;
+	ibString                    m_outputAlias;
 };
 
 // ==========================================================================
@@ -445,7 +445,7 @@ struct ibQueryColumnExpr
 	ibQueryColumnExprKind       m_kind = ibQueryColumnExprKind::Column;
 
 	const ibBackendQueryColumn* m_col = nullptr;          // Column — the source column (its FIRST sql field)
-	wxString                    m_field;                  // Column — ONE named physical field of it (empty = the first)
+	ibString                    m_field;                  // Column — ONE named physical field of it (empty = the first)
 	ibValue                     m_const;                  // Const — a literal value
 
 	ibQueryColumnArithOp        m_arith = ibQueryColumnArithOp::Add;   // Arith
@@ -470,7 +470,7 @@ struct ibQueryColumnExpr
 	std::vector<ibQueryColumnExprPtr> m_args;
 
 	// OutputRef — the published NAME of the result column this node reads (an aggregate's alias).
-	wxString                    m_outputName;
+	ibString                    m_outputName;
 	// ValueAsk — which question is put to m_lhs's value, and for `AsType` the type it is brought to.
 	ibQueryValueAsk             m_valueAsk = ibQueryValueAsk::Presentation;
 	ibTypeDescription           m_asType;
@@ -504,7 +504,7 @@ struct ibQueryColumnExpr
 	// and nothing else — a column that plainly reports a reference and returns a number.
 	//
 	// Empty name = the first value field, i.e. exactly what Col() has always meant.
-	static ibQueryColumnExprPtr ColField(const ibBackendQueryColumn* col, const wxString& field) {
+	static ibQueryColumnExprPtr ColField(const ibBackendQueryColumn* col, const ibString& field) {
 		auto e = std::make_shared<ibQueryColumnExpr>();
 		e->m_kind = ibQueryColumnExprKind::Column; e->m_col = col; e->m_field = field; return e;
 	}
@@ -570,7 +570,7 @@ struct ibQueryColumnExpr
 		return e;
 	}
 	// The figure a fold left behind, named by the alias it was published under — see OutputRef above.
-	static ibQueryColumnExprPtr OutputRef(const wxString& name) {
+	static ibQueryColumnExprPtr OutputRef(const ibString& name) {
 		auto e = std::make_shared<ibQueryColumnExpr>();
 		e->m_kind = ibQueryColumnExprKind::OutputRef; e->m_outputName = name; return e;
 	}
@@ -595,7 +595,7 @@ struct ibQueryColumnExpr
 struct ibQueryColumnSelect
 {
 	ibQueryColumnExprPtr m_expr;
-	wxString             m_alias;
+	ibString             m_alias;
 
 	// ⭐⭐ …AND WHERE ITS INPUTS LANDED, for an expression the RESULT evaluates.
 	//
@@ -610,7 +610,7 @@ struct ibQueryColumnSelect
 	// value was in the row under a name nobody had told the evaluator about.
 	struct Input {
 		const ibBackendQueryColumn* m_col    = nullptr;   // what the expression names
-		wxString                    m_prefix;             // …and what the statement called it
+		ibString                    m_prefix;             // …and what the statement called it
 		bool                        m_object = false;     // read as a whole value (reference / enum), not one field
 	};
 	std::vector<Input>   m_inputs;
@@ -628,15 +628,15 @@ struct ibQueryColumnSelect
 // So the wrapper is TOLD its output instead of guessing it.
 struct ibSubqueryOutput
 {
-	wxString                    m_name;            // what the outer query writes
+	ibString                    m_name;            // what the outer query writes
 	const ibBackendQueryColumn* m_col = nullptr;   // read through this column…
-	wxString                    m_alias;           // …or by this name, when the door has no column for it
+	ibString                    m_alias;           // …or by this name, when the door has no column for it
 	
 	// …or, for a reference / enum / composite leaf, reassembled from the field spread projected under
 	// this prefix. THE SAME THREE-WAY RULE the selection reader uses (queryLowering, MaterialiseInto):
 	// prefix first, then alias, then the column. A nested table reads its rows the one way its own
 	// schema is read, or the value arrives as one field of an object instead of the object.
-	wxString                    m_objectPrefix;
+	ibString                    m_objectPrefix;
 	ibTypeDescription           m_type;            // empty = unknown (a computed expression)
 	
 	// ⭐ AND WHO KEEPS `m_col` ALIVE, when it is not the metadata. The inner SELECT's schema owns the
@@ -728,11 +728,11 @@ public:
 	// if absent. The DEFAULT (a record source) forwards to the row reader's attribute-by-name
 	// (an attribute IS a column) — defined out-of-line (queryProvider.cpp) so this header
 	// names no attribute / row-reader type.
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const;
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const;
 
 	// --- physical layout -------------------------------------------------
 	// The real backing table for the main row scan.
-	virtual wxString GetQueryTableName() const = 0;
+	virtual ibString GetQueryTableName() const = 0;
 
 	// What this source IS inside a FROM clause, when it is not a plain table scan. Returning a
 	// relation makes the provider emit `FROM (<that>) AS alias` instead of `FROM <table> alias` —
@@ -748,7 +748,7 @@ public:
 	// system into a transfer. The pattern is not new here: the information register's slice
 	// already joins a nested MAX(period) aggregate through ibSubquery — this only lets a queryable
 	// declare the same thing for itself.
-	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const { return nullptr; }
+	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const { return nullptr; }
 
 	// This source's guid — DERIVED from GetSourceMetaObject by default, so a metaobject-backed source
 	// says nothing: it already said which metaobject it is. Still virtual, because a source can own an
@@ -759,7 +759,7 @@ public:
 	// The USER-facing name (as in the metadata tree, e.g. "Enumeration3") — for the restructure change
 	// ledger, NOT for SQL. A metaobject-backed source returns its metaobject's name; the default is the
 	// physical table name (a temp / computed source has no friendlier name).
-	virtual wxString GetQueryName() const { return GetQueryTableName(); }
+	virtual ibString GetQueryName() const { return GetQueryTableName(); }
 
 	// This queryable's metaID (the parent-reference blob / tree filter needs it) — the same projection
 	// of the same metaobject, with the same escape for a source that has none.
@@ -870,7 +870,7 @@ public:
 	// ⚠ LAST IN THE CLASS ON PURPOSE — a virtual inserted among the others renumbers every slot
 	// after it, and a partially-rebuilt tree then calls through the wrong one: the stack does not
 	// unwind and the frame pointer reads as a code address. New optional virtuals go here.
-	virtual wxString GetQueryTableAlias() const { return wxEmptyString; }
+	virtual ibString GetQueryTableAlias() const { return ibEmptyString; }
 
 	// ⭐⭐ THE COLUMN THIS SOURCE'S ROWS ARE ORDERED BY — what a sort by a REFERENCE to it sorts by
 	// (ibDataQueryBuilder::OrderBy). Not a field but the list of them, made a column the way a document's
@@ -933,7 +933,7 @@ public:
 	                    const std::vector<ibSubqueryOutput>& outputs);
 	~ibSubqueryQueryable() override;                                 // out-of-line — unique_ptr of an incomplete type
 
-	const ibBackendQueryColumn* Column(const wxString& name) const {
+	const ibBackendQueryColumn* Column(const ibString& name) const {
 		for (const ibBackendQueryColumn* c : m_columns)
 			if (c != nullptr && c->GetName() == name) return c;
 		return nullptr;
@@ -966,7 +966,7 @@ public:
 	// hand-picking (the query result: it holds columns in four separate lists, and a list added later
 	// would silently be the one nobody remembered to keep).
 	const std::vector<std::shared_ptr<ibBackendQueryColumn>>& SharedColumns() const { return m_ownedColumns; }
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return Column(name); }
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return Column(name); }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_columns; }
 	// ⭐ …AND WHICH OF THEM IS THE ROW — the inner source's key, republished as THIS wrapper's own
 	// columns. Same shape ibAliasQueryable answers with, for the same reason: a wrapper is the same
@@ -979,7 +979,7 @@ public:
 
 	// trivial L3 surface for a non-metaobject (derived) source — no metadata guid, no table name
 	// (matches the RAM temp-table queryable).
-	wxString GetQueryTableName() const override { return wxEmptyString; }
+	ibString GetQueryTableName() const override { return ibEmptyString; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
 
 	// ⭐ BUT IT DOES KNOW WHICH CONFIGURATION IT READS — the inner query's own. Answering "no
@@ -1004,10 +1004,10 @@ private:
 	std::vector<const ibBackendQueryColumn*> m_readFrom;
 	// …and the ones read BY ALIAS instead: a dot-walked selection has no column of its own in the
 	// door, only an output name. Non-empty here means "ask the result for this name".
-	std::vector<wxString>                    m_readAlias;
+	std::vector<ibString>                    m_readAlias;
 	// …and the ones REASSEMBLED from a field spread: a reference / enum / composite leaf is not one
 	// field but several, projected under this prefix. Non-empty wins over both of the above.
-	std::vector<wxString>                    m_readPrefix;
+	std::vector<ibString>                    m_readPrefix;
 	// AGGREGATE inner query support: owned synthetic columns for the aggregate aliases (raw numeric,
 	// unique model ids), the mode flag, and the optional row limit (SELECT TOP n in the branch).
 	std::vector<std::shared_ptr<ibBackendQueryColumn>> m_ownedColumns;
@@ -1056,10 +1056,10 @@ public:
 	// IDENTITY — the one thing that is this column's own. Everything below is the origin's.
 	ibMetaID GetColumnId() const override { return m_id; }
 
-	wxString           GetName()          const override { return m_origin->GetName(); }
-	wxString           GetSynonym()       const override { return m_origin->GetSynonym(); }
-	wxString           GetComment()       const override { return m_origin->GetComment(); }
-	wxString           GetPhysicalName()  const override { return m_origin->GetPhysicalName(); }
+	ibString           GetName()          const override { return m_origin->GetName(); }
+	ibString           GetSynonym()       const override { return m_origin->GetSynonym(); }
+	ibString           GetComment()       const override { return m_origin->GetComment(); }
+	ibString           GetPhysicalName()  const override { return m_origin->GetPhysicalName(); }
 	ibTypeDescription& GetTypeDesc()      const override { return m_origin->GetTypeDesc(); }
 	ibTypeDescription& GetTypeValueDesc() const override { return m_origin->GetTypeValueDesc(); }
 	bool               IsAllowed()        const override { return m_origin->IsAllowed(); }
@@ -1074,7 +1074,7 @@ public:
 
 	std::vector<ibColumnSlot> DescribeLayout() const override { return m_origin->DescribeLayout(); }
 
-	bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
+	bool ReadValue(const ibString& fieldName, const class ibMetaData* metaData,
 	               class ibValue& retValue, class ibQueryResult& result, bool createData = false) const override {
 		return m_origin->ReadValue(fieldName, metaData, retValue, result, createData);
 	}
@@ -1093,16 +1093,16 @@ class BACKEND_API ibAliasQueryable : public ibBackendQueryable
 public:
 	// Mints one twin per column the origin publishes. `sqlAlias` is what the statement calls this
 	// reading — the author's `AS B` — and it is what qualifies the twins in SQL.
-	ibAliasQueryable(const ibBackendQueryable* origin, const wxString& sqlAlias);
+	ibAliasQueryable(const ibBackendQueryable* origin, const ibString& sqlAlias);
 	// …AND THE ORIGIN AS AN OWNING HANDLE, for a source that was built FOR this query (a subquery, a
 	// named result): the alias outlives the lowering that made it, so it must be a co-owner rather
 	// than hold a pointer into something the lowering was keeping. A metadata source's share is
 	// non-owning and this costs nothing — the same arrangement the builder's From already has.
-	ibAliasQueryable(std::shared_ptr<const ibBackendQueryable> origin, const wxString& sqlAlias)
+	ibAliasQueryable(std::shared_ptr<const ibBackendQueryable> origin, const ibString& sqlAlias)
 		: ibAliasQueryable(origin.get(), sqlAlias) { m_hold = std::move(origin); }
 
 	const ibBackendQueryable* Origin()   const { return m_origin; }
-	wxString                  SqlAlias() const { return m_sqlAlias; }
+	const ibString&                  SqlAlias() const { return m_sqlAlias; }
 
 	// WHERE A TWIN'S VALUE ACTUALLY LIVES — the origin's own column, or null if this is not ours.
 	// Asked by every road that has to READ rather than route: the leaf materialisation, the pushed
@@ -1130,22 +1130,22 @@ public:
 	// Minting only from the published set would leave those names resolving to the ORIGIN's column —
 	// which belongs to the other side of the join, and reads its value. So the twin is minted on
 	// demand, and the published face stays exactly what the origin publishes.
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_published; }
 	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;
 	const ibBackendQueryColumn*              GetHierarchyColumn() const override;
 
 	// …AND EVERYTHING ELSE IS THE ORIGIN'S, because it is the same table.
 	ibBackendQueryProvider& GetProvider()      const override { return m_origin->GetProvider(); }
-	wxString  GetQueryTableName()              const override { return m_origin->GetQueryTableName(); }
+	ibString  GetQueryTableName()              const override { return m_origin->GetQueryTableName(); }
 	// …UNDER THIS NAME. A second reading of one table exists in SQL only as `T AS b`, and every
 	// qualification of its columns has to say `b`, not `T` — which is the whole reason the source
 	// carries the author's alias down here rather than leaving it in the statement.
-	wxString  GetQueryTableAlias()             const override { return m_sqlAlias; }
-	ibQueryRelPtr GetSourceRelation(const wxString& alias) const override { return m_origin->GetSourceRelation(alias); }
+	ibString  GetQueryTableAlias()             const override { return m_sqlAlias; }
+	ibQueryRelPtr GetSourceRelation(const ibString& alias) const override { return m_origin->GetSourceRelation(alias); }
 	const ibUniqueKey& GetQueryTableGuid()     const override { return m_origin->GetQueryTableGuid(); }
 	ibMetaID  GetQueryTableId()                const override { return m_origin->GetQueryTableId(); }
-	wxString  GetQueryName()                   const override { return m_origin->GetQueryName(); }
+	ibString  GetQueryName()                   const override { return m_origin->GetQueryName(); }
 	const ibMetaData* GetMetaData()            const override { return m_origin->GetMetaData(); }
 	const class ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return m_origin->GetSourceMetaObject(); }
 	ibHierarchyType GetHierarchyType()         const override { return m_origin->GetHierarchyType(); }
@@ -1155,7 +1155,7 @@ public:
 private:
 	const ibBackendQueryable*                m_origin;
 	std::shared_ptr<const ibBackendQueryable> m_hold;     // set only when the origin is query-scoped
-	wxString                                 m_sqlAlias;
+	ibString                                 m_sqlAlias;
 	// EVERY twin this reading has minted — the published ones plus whatever a name lookup asked for.
 	// Mutable because minting is a lookup's business: the set is not state the query changes, it is
 	// the set of columns this reading has been ASKED about, and a const source answers by growing it.
@@ -1224,10 +1224,10 @@ public:
 	// columns for a totals row.
 	virtual const ibBackendQueryable* NavigationSource() const { return m_reg->GetQueryable(); }
 
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return NavigationSource()->ResolveColumnByName(name); }
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return NavigationSource()->ResolveColumnByName(name); }
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override { return NavigationSource()->GetColumns(); }
-	virtual wxString GetQueryTableName() const override { return NavigationSource()->GetQueryTableName(); }
-	virtual wxString GetQueryName()       const override { return NavigationSource()->GetQueryName(); }
+	virtual ibString GetQueryTableName() const override { return NavigationSource()->GetQueryTableName(); }
+	virtual ibString GetQueryName()       const override { return NavigationSource()->GetQueryName(); }
 	virtual const ibMetaData* GetMetaData() const override { return m_reg->GetQueryable()->GetMetaData(); }
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return NavigationSource()->GetPrimaryKeyColumns(); }
 

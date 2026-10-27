@@ -12,17 +12,17 @@ public:
 	ibNumber& GetValueAsNumber() const;
 	void SetValue(const ibNumber& val);
 
-	ibPropertyNumber(ibPropertyCategory* cat, const wxString& name,
+	ibPropertyNumber(ibPropertyCategory* cat, const ibString& name,
 		const ibNumber& value = 0) : ibProperty(cat, name, CreateVariantData(value))
 	{
 	}
 
-	ibPropertyNumber(ibPropertyCategory* cat, const wxString& name, const wxString& label,
+	ibPropertyNumber(ibPropertyCategory* cat, const ibString& name, const ibString& label,
 		const ibNumber& value = 0) : ibProperty(cat, name, label, CreateVariantData(value))
 	{
 	}
 
-	ibPropertyNumber(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
+	ibPropertyNumber(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
 		const ibNumber& value = 0) : ibProperty(cat, name, label, helpString, CreateVariantData(value))
 	{
 	}
@@ -50,17 +50,17 @@ public:
 	void SetValue(const int& val) { m_propValue = CreateVariantData(val); }
 	int GetValueAsInteger() const { return m_propValue.GetLong(); }
 
-	ibPropertyInteger(ibPropertyCategory* cat, const wxString& name,
+	ibPropertyInteger(ibPropertyCategory* cat, const ibString& name,
 		const int& value = 0) : ibProperty(cat, name, CreateVariantData(value))
 	{
 	}
 
-	ibPropertyInteger(ibPropertyCategory* cat, const wxString& name, const wxString& label,
+	ibPropertyInteger(ibPropertyCategory* cat, const ibString& name, const ibString& label,
 		const int& value = 0) : ibProperty(cat, name, label, CreateVariantData(value))
 	{
 	}
 
-	ibPropertyInteger(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
+	ibPropertyInteger(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
 		const int& value = 0) : ibProperty(cat, name, label, helpString, CreateVariantData(value))
 	{
 	}
@@ -100,17 +100,17 @@ public:
 	void SetValue(const unsigned int& val) { m_propValue = CreateVariantData(val); }
 	unsigned int GetValueAsUInteger() const { return m_propValue.GetLong(); }
 
-	ibPropertyUInteger(ibPropertyCategory* cat, const wxString& name,
+	ibPropertyUInteger(ibPropertyCategory* cat, const ibString& name,
 		const unsigned int& value = 0) : ibProperty(cat, name, CreateVariantData(value))
 	{
 	}
 
-	ibPropertyUInteger(ibPropertyCategory* cat, const wxString& name, const wxString& label,
+	ibPropertyUInteger(ibPropertyCategory* cat, const ibString& name, const ibString& label,
 		const unsigned int& value = 0) : ibProperty(cat, name, label, CreateVariantData(value))
 	{
 	}
 
-	ibPropertyUInteger(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
+	ibPropertyUInteger(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
 		const unsigned int& value = 0) : ibProperty(cat, name, label, helpString, CreateVariantData(value))
 	{
 	}

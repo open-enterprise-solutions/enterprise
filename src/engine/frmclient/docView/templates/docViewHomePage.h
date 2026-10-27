@@ -1,7 +1,7 @@
 #ifndef _FRMCLIENT_DOCVIEW_HOME_PAGE_H__
 #define _FRMCLIENT_DOCVIEW_HOME_PAGE_H__
 
-// Home page — the desktop's composite doc/view (frontend/docView/templates/docViewHomePage.h), in a tab the server
+// Home page — the old desktop's composite doc/view, in a tab the server
 // opened (the tab's Kind HomePage). The forms are the server's, each opened there as a child of its page: the client
 // lays the columns out as the desktop did and draws each cell's form in a host of its own — what the person does in a
 // cell goes to that form by its key (ibVisualHostClient), so the page's forms are told apart.

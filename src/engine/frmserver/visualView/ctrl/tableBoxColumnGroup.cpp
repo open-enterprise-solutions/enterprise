@@ -48,7 +48,7 @@ const ibMetaData* ibValueModelTableBoxColumnGroup::GetMetaData() const
 	return m_formOwner != nullptr ? m_formOwner->GetMetaData() : nullptr;
 }
 
-wxString ibValueModelTableBoxColumnGroup::GetControlTitle() const
+ibString ibValueModelTableBoxColumnGroup::GetControlTitle() const
 {
 	if (!m_propertyTitle->IsEmptyProperty())
 		return m_propertyTitle->GetValueAsTranslateString();

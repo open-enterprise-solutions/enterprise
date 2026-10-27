@@ -1,7 +1,7 @@
 #include "backend/sheetFormat/sheetFormat.h"
 #include "backend/temp/tempStorage.h"   // ibTempFile and its wx streams — the formats over the session's temporary storage
 
-bool ibSheetFormatReadTempFile(const wxString& id, ibSpreadsheetDescription& sheet)
+bool ibSheetFormatReadTempFile(const ibString& id, ibSpreadsheetDescription& sheet)
 {
 	ibTempFile file(id);
 	const ibSheetFormat* const format = file.IsOpened() ? ibSheetFormatFor(file.GetName()) : nullptr;
@@ -12,7 +12,7 @@ bool ibSheetFormatReadTempFile(const wxString& id, ibSpreadsheetDescription& she
 	return format->Read(input, sheet);
 }
 
-bool ibSheetFormatWriteTempFile(const wxString& id, const ibSpreadsheetDescription& sheet)
+bool ibSheetFormatWriteTempFile(const ibString& id, const ibSpreadsheetDescription& sheet)
 {
 	ibTempFile file;
 	if (!file.Create(id, true))

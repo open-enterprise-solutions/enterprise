@@ -66,14 +66,14 @@ std::vector<ibDiagnostic> CollectFrom(Compile compile)
 
 } // namespace
 
-std::vector<ibDiagnostic> ibCheckScript(const wxString& text, const wxString& moduleName,
+std::vector<ibDiagnostic> ibCheckScript(const ibString& text, const ibString& moduleName,
 	const ibMetaData* metaData)
 {
 	return CollectFrom([&] {
 		// COMPILED AND DISCARDED. The compiler is constructed here and dies
 		// here: nothing is registered, no module is replaced, the open
 		// configuration never learns this happened.
-		ibCompileCode compiler(moduleName, wxT("check"), false);
+		ibCompileCode compiler(moduleName, ibT("check"), false);
 
 		// ⚠ AND IT COMPILES THE ORDINARY WAY — the first refusal ends it, exactly as the designer's
 		// own Syntax button behaves. The tolerant mode is NOT for this: it exists so a reader
@@ -109,8 +109,8 @@ std::vector<ibDiagnostic> ibCheckScript(const wxString& text, const wxString& mo
 					// invisible otherwise.
 					try { context->Compile(); }
 					catch (const ibCoreException& error) {
-						ibJournalInfo(wxT("compiler"),
-							wxT("script check: the module manager did not compile - %s"),
+						ibJournalInfo(ibT("compiler"),
+							ibT("script check: the module manager did not compile - %s"),
 							error.GetErrorDescription());
 					}
 

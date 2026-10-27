@@ -261,7 +261,7 @@ void ibDatabaseParameterFirebirdCollection::FreeParameterSpace()
 					//wxDELETE(pVar->sqldata);
 					break;
 				default:
-					ibJournalError(wxT("db.firebird"),wxT("Error deleting unknown parameter type\n"));
+					ibJournalError(ibT("db.firebird"),ibT("Error deleting unknown parameter type\n"));
 					break;
 				}
 			}

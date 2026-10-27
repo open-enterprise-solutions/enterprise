@@ -46,9 +46,9 @@ enum
 
 void ibValueColour_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(wxT("Red"));
-	helper.AppendProp(wxT("Green"));
-	helper.AppendProp(wxT("Blue"));
+	helper.AppendProp(ibT("Red"));
+	helper.AppendProp(ibT("Green"));
+	helper.AppendProp(ibT("Blue"));
 }
 
 bool ibValueColour::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -86,7 +86,7 @@ bool ibValueColour::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 }
 
 namespace {
-const wxString kColourText = wxT("v");
+const ibString kColourText = ibT("v");
 }
 
 bool ibValueColour::DoSerialize(ibDataNode& node) const
@@ -97,7 +97,7 @@ bool ibValueColour::DoSerialize(ibDataNode& node) const
 
 bool ibValueColour::DoDeserialize(const ibDataNode& node)
 {
-	m_colour.FromString(node.GetValue<wxString>(kColourText));
+	m_colour.FromString(node.GetValue<ibString>(kColourText));
 	return true;
 }
 

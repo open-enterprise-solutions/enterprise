@@ -23,7 +23,7 @@ static ibQueryableFactory* ibDynamicSourceFactory(const ibPropertyObject* owner)
 	return factory != nullptr ? factory : ibApplicationInstance::GetQueryableFactory();
 }
 
-void ibPropertyDynamicSource::SetSource(const wxString& ns, const wxString& name)
+void ibPropertyDynamicSource::SetSource(const ibString& ns, const ibString& name)
 {
 	if (ibQueryableFactory* factory = ibDynamicSourceFactory(m_owner))
 		SetQueryable(factory->Resolve(ns, name));
@@ -96,7 +96,7 @@ bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row, ibReader reader)
 			continue;   // a source with no table id (temp, computed) cannot be stored
 		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
 		choice.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(tableId));
-		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, descriptor->GetNamespace() + wxT(".") + descriptor->GetName());
+		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, descriptor->GetNamespace() + ibT(".") + descriptor->GetName());
 		// …drawn as the desktop's drop-down draws it: the picture of the metaobject behind the source (its class's, as
 		// CreateValueList draws a metaobject); a source with no metaobject behind it goes without.
 		const ibValueMetaObjectGenericData* const metaObject = queryable->GetSourceMetaObject();

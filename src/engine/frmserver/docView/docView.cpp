@@ -39,7 +39,7 @@
 #include "wx/filename.h"
 #include "wx/file.h"
 #include "wx/ffile.h"
-#include "wx/tokenzr.h"
+#include "core/fileSystem.h"   // ibPathOf — the file's name
 #include "wx/vector.h"
 #include "wx/scopeguard.h"
 
@@ -326,7 +326,7 @@ bool ibDocument::OnNewDocument()
 
     SetDocumentSaved(false);
 
-    const wxString name = GetDocumentManager()->MakeNewDocumentName();
+    const ibString name = GetDocumentManager()->MakeNewDocumentName();
     SetTitle(name);
     SetFilename(name, true);
 
@@ -352,7 +352,7 @@ bool ibDocument::SaveAs()
     return false;
 }
 
-bool ibDocument::OnSaveDocument(const wxString& file)
+bool ibDocument::OnSaveDocument(const ibString& file)
 {
     if ( file.empty() )
         return false;
@@ -369,7 +369,7 @@ bool ibDocument::OnSaveDocument(const wxString& file)
     return true;
 }
 
-bool ibDocument::OnOpenDocument(const wxString& file)
+bool ibDocument::OnOpenDocument(const ibString& file)
 {
     // notice that there is no need to check the modified flag here for the
     // reasons explained in OnNewDocument()
@@ -417,7 +417,7 @@ bool ibDocument::Revert()
     {
         const int rc = frame->ShowModalMessage(
             _("Discard changes and reload the last saved version?"),
-            wxString(),   // the client's own caption
+            ibString(),   // the client's own caption
             wxYES_NO | wxCANCEL | wxICON_QUESTION);
         if ( rc != wxYES )
             return false;
@@ -434,20 +434,20 @@ bool ibDocument::Revert()
 
 
 // Get title, or filename if no title, else unnamed
-wxString ibDocument::GetUserReadableName() const
+ibString ibDocument::GetUserReadableName() const
 {
     return DoGetUserReadableName();
 }
 
-wxString ibDocument::GetSaveFilter() const
+ibString ibDocument::GetSaveFilter() const
 {
     const ibDocTemplate* const docTemplate = GetDocumentTemplate();
     if ( docTemplate == nullptr || docTemplate->GetDefaultExtension().empty() )
-        return wxString();
-    return docTemplate->GetDescription() + wxT(" (") + docTemplate->GetFileFilter() + wxT(")|") + docTemplate->GetFileFilter();
+        return ibString();
+    return docTemplate->GetDescription() + ibT(" (") + docTemplate->GetFileFilter() + ibT(")|") + docTemplate->GetFileFilter();
 }
 
-wxString ibDocument::DoGetUserReadableName() const
+ibString ibDocument::DoGetUserReadableName() const
 {
     if ( !m_documentTitle.empty() )
         return m_documentTitle;
@@ -455,8 +455,8 @@ wxString ibDocument::DoGetUserReadableName() const
     // A temporary file's id — the name the file came under (ibTempFile); any other, its path's last part.
     if ( !m_documentFile.empty() )
     {
-        const wxString name = ibTempFile(m_documentFile).GetName();
-        return !name.empty() ? name : wxFileNameFromPath(m_documentFile);
+        const ibString name = ibTempFile(m_documentFile).GetName();
+        return !name.empty() ? name : ibString(ibPathOf(m_documentFile).filename().wstring());
     }
 
     return _("unnamed");
@@ -485,9 +485,9 @@ bool ibDocument::OnSaveModified()
             return true;   // no frame → no prompt → treat as "ok to close"
 
         const int rc = frame->ShowModalMessage(
-            wxString::Format(_("Do you want to save changes to %s?"),
+            ibString::Format(_("Do you want to save changes to %s?"),
                              GetUserReadableName()),
-            wxString(),   // the client's own caption
+            ibString(),   // the client's own caption
             wxYES_NO | wxCANCEL | wxICON_QUESTION | wxCENTRE);
         switch ( rc )
         {
@@ -511,20 +511,20 @@ void ibDocument::OnSaveBeforeForceClose()
     if ( frame )
     {
         const int rc = frame->ShowModalMessage(
-            wxString::Format(
+            ibString::Format(
                 _("Do you want to save changes to %s before closing it?"),
                 GetUserReadableName()),
-            wxString(),   // the client's own caption
+            ibString(),   // the client's own caption
             wxYES_NO | wxICON_QUESTION | wxCENTRE);
         if ( rc == wxYES )
         {
             while ( !Save() )
             {
                 const int retry = frame->ShowModalMessage(
-                    wxString::Format(
+                    ibString::Format(
                         _("Saving %s failed, would you like to retry?"),
                         GetUserReadableName()),
-                    wxString(),   // the client's own caption
+                    ibString(),   // the client's own caption
                     wxYES_NO | wxICON_ERROR | wxCENTRE);
                 if ( retry != wxYES )
                     break;
@@ -596,7 +596,7 @@ void ibDocument::NotifyClosing()
     }
 }
 
-void ibDocument::SetFilename(const wxString& filename, bool notifyViews)
+void ibDocument::SetFilename(const ibString& filename, bool notifyViews)
 {
     m_documentFile = filename;
     OnChangeFilename(notifyViews);
@@ -624,12 +624,12 @@ void ibDocument::OnChangeFilename(bool notifyViews)
     #error "a document's file is read and written as a std stream over the temporary storage"
 #endif
 
-bool ibDocument::DoSaveDocument(const wxString& file)
+bool ibDocument::DoSaveDocument(const ibString& file)
 {
     ibTempFile temp;
     if ( !temp.Create(file, true) )
     {
-        ibJournalError(wxT("docview"), _("File \"%s\" could not be opened for writing."), file);
+        ibJournalError(ibT("docview"), _("File \"%s\" could not be opened for writing."), file);
         return false;
     }
 
@@ -637,19 +637,19 @@ bool ibDocument::DoSaveDocument(const wxString& file)
     std::ostream store(&writer);
     if ( !SaveObject(store) || !writer.Finish() )
     {
-        ibJournalError(wxT("docview"), _("Failed to save document to the file \"%s\"."), file);
+        ibJournalError(ibT("docview"), _("Failed to save document to the file \"%s\"."), file);
         return false;
     }
 
     return true;
 }
 
-bool ibDocument::DoOpenDocument(const wxString& file)
+bool ibDocument::DoOpenDocument(const ibString& file)
 {
     const ibTempFile temp(file);
     if ( !temp.IsOpened() )
     {
-        ibJournalError(wxT("docview"), _("File \"%s\" could not be opened for reading."), file);
+        ibJournalError(ibT("docview"), _("File \"%s\" could not be opened for reading."), file);
         return false;
     }
 
@@ -658,7 +658,7 @@ bool ibDocument::DoOpenDocument(const wxString& file)
     LoadObject(store);
     if ( !store )
     {
-        ibJournalError(wxT("docview"), _("Failed to read document from the file \"%s\"."), file);
+        ibJournalError(ibT("docview"), _("Failed to read document from the file \"%s\"."), file);
         return false;
     }
 
@@ -763,8 +763,8 @@ void ibView::Activate(bool activate)
         mgr->ActivateView(this, activate);
     }
 
-    if (activate) ibJournalInfo(wxT("docview"), "! <debug> activate view %s", GetViewName());
-    else ibJournalInfo(wxT("docview"), "! <debug> deactivate view %s", GetViewName());
+    if (activate) ibJournalInfo(ibT("docview"), "! <debug> activate view %s", GetViewName());
+    else ibJournalInfo(ibT("docview"), "! <debug> deactivate view %s", GetViewName());
 }
 
 bool ibView::OnClose(bool /*deleteWindow*/)
@@ -924,7 +924,7 @@ void ibDocument::Activate()
         frame->Show();
 }
 
-ibDocument* ibDocManager::FindDocumentByPath(const wxString& path) const
+ibDocument* ibDocManager::FindDocumentByPath(const ibString& path) const
 {
     const wxFileName fileName(path);
     for ( wxList::const_iterator i = m_docs.begin(); i != m_docs.end(); ++i )
@@ -937,7 +937,7 @@ ibDocument* ibDocManager::FindDocumentByPath(const wxString& path) const
     return nullptr;
 }
 
-ibDocument* ibDocument::FindChildDocument(const wxString& identifier) const
+ibDocument* ibDocument::FindChildDocument(const ibString& identifier) const
 {
     if ( identifier.empty() )
         return nullptr;
@@ -949,7 +949,7 @@ ibDocument* ibDocument::FindChildDocument(const wxString& identifier) const
     return nullptr;
 }
 
-ibDocument* ibDocManager::FindDocumentByIdentifier(const wxString& identifier) const
+ibDocument* ibDocManager::FindDocumentByIdentifier(const ibString& identifier) const
 {
     if ( identifier.empty() )
         return nullptr;
@@ -980,7 +980,7 @@ ibMetaDataDocument* ibDocManager::FindMetaDataDocument(const ibMetaData* metaDat
     return nullptr;
 }
 
-ibDocument* ibDocManager::FindOpenDocument(const wxString& identifier,
+ibDocument* ibDocManager::FindOpenDocument(const ibString& identifier,
                                            const ibDocument* docParent) const
 {
     // ⚠ AT THE OWNER, NOT MINE FIRST. The same guid is in every configuration open at once — the session's, the
@@ -1000,7 +1000,7 @@ ibMetaDocument* ibDocManager::FindOpenDocument(ibValueMetaObject* metaObject) co
                          FindMetaDataDocument(metaObject->GetMetaData())));
 }
 
-ibDocument *ibDocManager::CreateDocument(const wxString& path, long flags)
+ibDocument *ibDocManager::CreateDocument(const ibString& path, long flags)
 {
     // this ought to be const but SelectDocumentType() is not const-correct
     // and can't be changed as, being virtual, this risks breaking user code
@@ -1023,7 +1023,7 @@ ibDocument *ibDocManager::CreateDocument(const wxString& path, long flags)
         temp = FindTemplateForPath(path);
         if ( !temp )
         {
-            ibJournalWarning(wxT("docview"), _("The format of file '%s' couldn't be determined."),
+            ibJournalWarning(ibT("docview"), _("The format of file '%s' couldn't be determined."),
                          path);
         }
     }
@@ -1126,9 +1126,9 @@ ibDocument *ibDocManager::GetCurrentDocument() const
 }
 
 // Make a default name for a new document
-wxString ibDocManager::MakeNewDocumentName()
+ibString ibDocManager::MakeNewDocumentName()
 {
-    wxString name;
+    ibString name;
 
     name.Printf(_("unnamed%d"), m_defaultDocumentNameCounter);
     m_defaultDocumentNameCounter++;
@@ -1137,19 +1137,19 @@ wxString ibDocManager::MakeNewDocumentName()
 }
 
 // Not yet implemented
-ibDocTemplate *ibDocManager::MatchTemplate(const wxString& /*path*/)
+ibDocTemplate *ibDocManager::MatchTemplate(const ibString& /*path*/)
 {
     return nullptr;
 }
 
 // Find out the document template via matching in the document file format
 // against that of the template
-ibDocTemplate *ibDocManager::FindTemplateForPath(const wxString& path)
+ibDocTemplate *ibDocManager::FindTemplateForPath(const ibString& path)
 {
     ibDocTemplate *theTemplate = nullptr;
 
     // The path is a temporary file's id (ibTempFile): the name it came under says what it is.
-    const wxString name = ibTempFile(path).GetName();
+    const ibString name = ibTempFile(path).GetName();
 
     // Find the template which this extension corresponds to
     for (size_t i = 0; i < m_templates.GetCount(); i++)
@@ -1275,10 +1275,10 @@ void ibDocManager::ActivateView(ibView *view, bool activate)
 
 #if wxUSE_STD_IOSTREAM
 
-bool ibTransferFileToStream(const wxString& filename, std::ostream& stream)
+bool ibTransferFileToStream(const ibString& filename, std::ostream& stream)
 {
 #if wxUSE_FFILE
-    wxFFile file(filename, wxT("rb"));
+    wxFFile file(filename, ibT("rb"));
 #elif wxUSE_FILE
     wxFile file(filename, wxFile::read);
 #endif
@@ -1302,10 +1302,10 @@ bool ibTransferFileToStream(const wxString& filename, std::ostream& stream)
     return true;
 }
 
-bool ibTransferStreamToFile(std::istream& stream, const wxString& filename)
+bool ibTransferStreamToFile(std::istream& stream, const ibString& filename)
 {
 #if wxUSE_FFILE
-    wxFFile file(filename, wxT("wb"));
+    wxFFile file(filename, ibT("wb"));
 #elif wxUSE_FILE
     wxFile file(filename, wxFile::write);
 #endif
@@ -1329,10 +1329,10 @@ bool ibTransferStreamToFile(std::istream& stream, const wxString& filename)
 
 #else // !wxUSE_STD_IOSTREAM
 
-bool ibTransferFileToStream(const wxString& filename, wxOutputStream& stream)
+bool ibTransferFileToStream(const ibString& filename, wxOutputStream& stream)
 {
 #if wxUSE_FFILE
-    wxFFile file(filename, wxT("rb"));
+    wxFFile file(filename, ibT("rb"));
 #elif wxUSE_FILE
     wxFile file(filename, wxFile::read);
 #endif
@@ -1357,10 +1357,10 @@ bool ibTransferFileToStream(const wxString& filename, wxOutputStream& stream)
     return true;
 }
 
-bool ibTransferStreamToFile(wxInputStream& stream, const wxString& filename)
+bool ibTransferStreamToFile(wxInputStream& stream, const ibString& filename)
 {
 #if wxUSE_FFILE
-    wxFFile file(filename, wxT("wb"));
+    wxFFile file(filename, ibT("wb"));
 #elif wxUSE_FILE
     wxFile file(filename, wxFile::write);
 #endif
@@ -1431,11 +1431,11 @@ ibView* ibDocument::DoCreateView()
 	return static_cast<ibView*>(viewClassInfo->CreateObject());
 }
 
-wxString ibMetaDocument::GetModuleName() const
+ibString ibMetaDocument::GetModuleName() const
 {
 	if (m_metaObject)
 		return m_metaObject->GetFullName();
-	return wxString();
+	return ibString();
 }
 
 ibMetaDocument::ibMetaDocument(ibMetaDocument* docParent) :
@@ -1455,7 +1455,7 @@ ibMetaDocument::ibMetaDocument(ibMetaDocument* docParent) :
 // (ibFormVisualDocument, which overrides DoCreateView) — gets a view + child
 // frame without needing a document template. Replaces the old one-liner that
 // delegated to ibDocTemplate::CreateView.
-bool ibDocument::OnCreate(const wxString& /*path*/, long flags)
+bool ibDocument::OnCreate(const ibString& /*path*/, long flags)
 {
 	if (ibSession::IsCurrentForceExit())
 		return false;
@@ -1494,7 +1494,7 @@ bool ibMetaDocument::OnSaveModified()
 	return ibDocument::OnSaveModified();
 }
 
-bool ibMetaDocument::OnSaveDocument(const wxString& filename)
+bool ibMetaDocument::OnSaveDocument(const ibString& filename)
 {
 	if (ibSession::IsCurrentForceExit())
 		return false;

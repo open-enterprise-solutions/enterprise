@@ -129,13 +129,13 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 			// {Pictures}) — one call for the lot, and none once the client keeps them.
 			std::vector<wxString> ids;
 			for (const ibDataNode& item : pictures->Children())
-				ids.push_back(item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Id));
+				ids.push_back(item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Id));
 			ibProtocolPictureReceive(ids);
 			for (const ibDataNode& item : pictures->Children()) {
-				const wxString guid = item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Guid);
+				const wxString guid = item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Guid);
 				wxPGChoiceEntry& entry = configurationChoices.AddAsSorted(
-					item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name), system_config++);
-				entry.SetBitmap(ibProtocolPicture(item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Id)));
+					item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Name), system_config++);
+				entry.SetBitmap(ibProtocolPicture(item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Id)));
 				m_confChoices.insert_or_assign(entry.GetValue(), ibGuid(guid));
 			}
 		}

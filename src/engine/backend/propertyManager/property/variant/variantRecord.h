@@ -27,7 +27,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataRecord"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataRecord"); }
 };
 
 #endif // !_DOCUMENT_VARIANT_

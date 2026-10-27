@@ -251,7 +251,7 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 
 	// ⭐ SAVE AND RESTORE-THE-DEFAULT STAND ON THE LEFT, away from OK / Apply / Cancel — they are not
 	// about this window's edit at all. OK applies what was just changed; these two decide whether the
-	// arrangement outlives the window (frontend/settings/formSettings.h).
+	// arrangement outlives the window (frmclient/settings/formSettings.h).
 	wxBoxSizer* settingSizer = new wxBoxSizer(wxHORIZONTAL);
 	settingSizer->Add(new wxButton(this, BUTTON_SAVE_SETTING, _("Save setting")),
 		0, wxALL, FromDIP(5));

@@ -31,11 +31,11 @@
 // 1 - the family's name
 TEST(EventHandler, AFamilyIsNamedByItsMetatypeAndKind)
 {
-	EXPECT_EQ(ibCtorMetaAnyKind::NameOf(wxT("Document"), ibCtorObjectMetaType_Reference), wxString(wxT("DocumentRef")));
-	EXPECT_EQ(ibCtorMetaAnyKind::NameOf(wxT("Document"), ibCtorObjectMetaType_Object), wxString(wxT("DocumentObject")));
-	EXPECT_EQ(ibCtorMetaAnyKind::NameOf(wxT("Document"), ibCtorObjectMetaType_Manager), wxString(wxT("DocumentManager")));
+	EXPECT_EQ(ibCtorMetaAnyKind::NameOf(wxT("Document"), ibCtorObjectMetaType_Reference), ibString(wxT("DocumentRef")));
+	EXPECT_EQ(ibCtorMetaAnyKind::NameOf(wxT("Document"), ibCtorObjectMetaType_Object), ibString(wxT("DocumentObject")));
+	EXPECT_EQ(ibCtorMetaAnyKind::NameOf(wxT("Document"), ibCtorObjectMetaType_Manager), ibString(wxT("DocumentManager")));
 	EXPECT_EQ(ibCtorMetaAnyKind::NameOf(wxT("AccumulationRegister"), ibCtorObjectMetaType_RecordSet),
-		wxString(wxT("AccumulationRegisterRecordSet")));
+		ibString(wxT("AccumulationRegisterRecordSet")));
 }
 
 // 2 - the families a metatype has
@@ -83,12 +83,12 @@ TEST(EventHandler, TheSourceFilterAsksTheConfiguration)
 // 5 - an event's number
 TEST(EventHandler, AnEventIsNumberedByItsName)
 {
-	const wxString events[] = {
+	const ibString events[] = {
 		wxT("BeforeWrite"), wxT("OnWrite"), wxT("BeforeDelete"), wxT("OnDelete"), wxT("Posting"), wxT("UndoPosting"),
 		wxT("Filling"), wxT("OnCopy"), wxT("SetNewCode"), wxT("SetNewNumber"), wxT("JobProcessing"),
 	};
 	std::set<long> ids;
-	for (const wxString& event : events) {
+	for (const ibString& event : events) {
 		const long id = ibValueMetaObjectEventHandler::EventId(event);
 		EXPECT_GE(id, 0) << event.ToStdString() << " - wxNOT_FOUND stays free for \"none\"";
 		EXPECT_EQ(id, ibValueMetaObjectEventHandler::EventId(event)) << "the same whoever asks";

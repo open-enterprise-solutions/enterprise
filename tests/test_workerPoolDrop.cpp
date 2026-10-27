@@ -69,7 +69,7 @@ private:
 
 // Sessions are held by shared_ptr because ibSessionScope — which the worker
 // takes around every task — binds through weak_from_this.
-std::shared_ptr<ibSession> MakeSession(const wxString& id) {
+std::shared_ptr<ibSession> MakeSession(const ibString& id) {
 	return std::make_shared<ibSession>(id, ibSessionKind::Designer);
 }
 
@@ -201,7 +201,7 @@ private:
 
 // A session whose cancel always stands: a job's. A host session's cancel is for a running script only
 // (ibSession::Cancel), and these tasks are not scripts.
-std::shared_ptr<ibSession> MakeJobSession(const wxString& id) {
+std::shared_ptr<ibSession> MakeJobSession(const ibString& id) {
 	return std::make_shared<ibSession>(id, ibSessionKind::BackgroundJob);
 }
 

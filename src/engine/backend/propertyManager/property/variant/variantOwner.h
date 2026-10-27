@@ -28,7 +28,7 @@ public:
 		return true;
 	}
 
-	virtual wxString GetType() const { return wxT("ibVariantDataOwner"); }
+	virtual wxString GetType() const { return ibT("ibVariantDataOwner"); }
 };
 
 // ⭐⭐ THE CANDIDATES FOR A RELATIONSHIP — every metaobject of the classes that may fill it, each

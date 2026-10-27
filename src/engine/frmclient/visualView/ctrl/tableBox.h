@@ -15,7 +15,7 @@ class ibDataViewColumnGroup;
 class ibDataViewEvent;
 class ibHeaderGenericCtrlEvent;
 
-// A TABLE OF A VIEW — the desktop's (frontend/visualView/ctrl/tableBox), a composite: its command bar above the data
+// A TABLE OF A VIEW — the old desktop's, a composite: its command bar above the data
 // view (the desktop's chrome, ibValueWindowComposite). Its columns and their groups are built by the host under it, as
 // any control is, and hang themselves on it (GetColumnHolder); its rows are fetched (ibViewTableModel). The server
 // re-reads its rows and says so by the Version of its State — the client reads them again then; the cursor it moves,

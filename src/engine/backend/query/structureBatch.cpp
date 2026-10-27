@@ -14,7 +14,7 @@ ibStructureBatch::ibStructureBatch(const ibBackendQueryable* queryable)
 	// Null-tolerant: not every table in a snapshot stands behind a metaobject. A DERIVED table
 	// (a register's totals) is declared by one but IS none, so it carries no queryable — and the
 	// name-keyed constructor is the right one for it. Dereferencing here crashed the apply.
-	: m_queryable(queryable), m_table(queryable != nullptr ? queryable->GetQueryTableName() : wxString())
+	: m_queryable(queryable), m_table(queryable != nullptr ? queryable->GetQueryTableName() : ibString())
 {
 }
 
@@ -110,29 +110,29 @@ void ibStructureBatch::DropTable(std::vector<const ibBackendQueryColumn*> column
 // the tags beside their own columns the period's `_TYPE` stood between the date and the recorder, so a list
 // ordered by period, recorder and line was not the index's leading fields, and Firebird sorted a million
 // movements for every page of the register's list: 1100 ms a page, 235 ms walked by the index (2026-10-01).
-static std::vector<wxString> IndexFields(const std::vector<const ibBackendQueryColumn*>& columns)
+static std::vector<ibString> IndexFields(const std::vector<const ibBackendQueryColumn*>& columns)
 {
-	std::vector<wxString> fields;
+	std::vector<ibString> fields;
 	for (const ibBackendQueryColumn* col : columns)
-		for (const wxString& f : ColumnSortFields(col))
+		for (const ibString& f : ColumnSortFields(col))
 			fields.push_back(f);
 	for (const ibBackendQueryColumn* col : columns)
-		for (const wxString& f : ColumnFieldNames(col))
+		for (const ibString& f : ColumnFieldNames(col))
 			if (std::find(fields.begin(), fields.end(), f) == fields.end())
 				fields.push_back(f);
 	return fields;
 }
 
-void ibStructureBatch::CreateIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
+void ibStructureBatch::CreateIndex(const ibString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
 	bool descending)
 {
-	std::vector<wxString> fields = IndexFields(columns);
+	std::vector<ibString> fields = IndexFields(columns);
 	if (fields.empty())   // a column with no physical fields => no index (the old explicit guard)
 		return;
 	m_steps.push_back(ibCreateIndex(m_table, indexName, std::move(fields), unique, descending));
 }
 
-void ibStructureBatch::DropIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
+void ibStructureBatch::DropIndex(const ibString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
 	bool descending)
 {
 	m_steps.push_back(ibDropIndex(indexName, m_table, IndexFields(columns), unique, descending));
@@ -243,7 +243,7 @@ const ibColumnSlot* SlotOfRole(const std::vector<ibColumnSlot>& layout, ibColumn
 	return nullptr;
 }
 
-const ibColumnSlot* SlotByName(const std::vector<ibColumnSlot>& layout, const wxString& name)
+const ibColumnSlot* SlotByName(const std::vector<ibColumnSlot>& layout, const ibString& name)
 {
 	for (const ibColumnSlot& s : layout)
 		if (s.m_name == name) return &s;
@@ -268,12 +268,12 @@ bool DescContainsClsid(const ibTypeDescription& td, const ibClassID& clsid)
 //
 // ONE predicate for the UPDATE that clears and the COUNT the ledger shows, so the number said before
 // the apply is the number the apply empties.
-ibQueryExprPtr OfType(const wxString& fieldName, int typeTag)
+ibQueryExprPtr OfType(const ibString& fieldName, int typeTag)
 {
 	return ibBinOp(ibQueryBinOp::Eq, ibCol(fieldName + ibFieldSuffix(ibColumnRole::Discriminator)), ibConst(ibValue(typeTag)));
 }
 
-ibQueryExprPtr OfTarget(const wxString& fieldName, ibClassID clsid)
+ibQueryExprPtr OfTarget(const ibString& fieldName, ibClassID clsid)
 {
 	// clsid is a 64-bit ibClassID — bind through ibNumber: ibValue has no 64-bit integer ctor.
 	return ibBinOp(ibQueryBinOp::And,
@@ -295,16 +295,16 @@ ibQueryExprPtr OfTarget(const wxString& fieldName, ibClassID clsid)
 // through the DDL barrier so they land after the shape is settled. The order the cleanup needs is
 // preserved either way — the discriminator (_TYPE) is never added or dropped, only the per-type data
 // fields around it are, so clearing it after the drop reads the same as clearing it before.
-long long ClearRows(ibStructureBatch& batch, const wxString& fieldName, const ibQueryExprPtr& where)
+long long ClearRows(ibStructureBatch& batch, const ibString& fieldName, const ibQueryExprPtr& where)
 {
-	const wxString& tableName = batch.GetTable();
+	const ibString& tableName = batch.GetTable();
 	ibQueryIR count;
 	count.m_root = ibProject(ibFilter(ibScan(tableName), where),
-		{ ibQueryProjItem{ ibFunc(wxT("COUNT"), {}), wxT("n") } });
+		{ ibQueryProjItem{ ibFunc(ibT("COUNT"), {}), ibT("n") } });
 	ibQueryResult rows = ibDatabaseQueryBuilder().ExecuteIR(count);
-	const long long cleared = rows.Next() ? rows.GetResultLong(wxT("n")) : 0;
+	const long long cleared = rows.Next() ? rows.GetResultLong(ibT("n")) : 0;
 
-	const wxString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
+	const ibString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
 	batch.Insert([tableName, typeCol, where]() {
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibUpdate(tableName, { { typeCol, ibConst(ibValue(0)) } }, where));
@@ -338,7 +338,7 @@ long long DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* sr
 	if (srcTypeDesc == dstTypeDesc)
 		return 0;
 
-	const wxString fieldName = srcCol->GetPhysicalName();
+	const ibString fieldName = srcCol->GetPhysicalName();
 	long long cleared = 0;
 	const std::vector<ibColumnSlot> srcLayout = DescribeColumnLayout(srcCol);
 	const std::vector<ibColumnSlot> dstLayout = DescribeColumnLayout(dstCol);
