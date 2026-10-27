@@ -100,5 +100,5 @@ target_include_directories(designer-thin PRIVATE
 target_link_libraries(designer-thin PRIVATE
     protocol
     frmclient
-    wx::core wx::aui wx::stc wx::html wx::xml wx::base
+    wx::core wx::aui wx::stc wx::html wx::qa wx::xml wx::base
 )

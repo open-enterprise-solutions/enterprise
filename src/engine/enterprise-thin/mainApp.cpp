@@ -12,7 +12,6 @@
 #include <wx/image.h>
 #include <wx/msgdlg.h>
 
-#include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
 #include "frmclient/artProvider/splash/splashLogo.h"   // the splash's picture, the desktop's
 #include "frmclient/backend/backend_picture.h"         // ibBackendPicture::GetImageFromBase64 — the splash, a master in the source
 #include "protocol/connectionFile.h"
@@ -78,18 +77,10 @@ bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 
 #endif
 
-bool ibAppEnterprise::OnInit()
+bool ibAppEnterprise::DoOnInit()
 {
-	// THE JOURNAL AND THE DUMPS — the first act, as every application of the platform does (ibCrashGuard::Install), so
-	// whatever goes wrong after it has somewhere to be said: one journal of the process, the client's, the protocol's
-	// and a file base's engine's lines in it alike.
-	ibCrashGuard::Install(wxT("enterprise-thin"));
-
-	// THE APPLICATION IS LIGHT — the desktop's (ibWxApp::OnInit, frontend/diagnostics/oesApp.h, says why at length):
-	// every surface is painted from a fixed light palette and the text is left to the system, so under a dark macOS
-	// appearance the metadata tree was white on cream and Messages black among light panels (2026-10-27). Before any
-	// window, as wx wants it; CannotChange is not a failure.
-	SetAppearance(Appearance::Light);
+	// The journal, the dumps and the light appearance are the base's (ibWxApp::OnInit, core/diagnostics/oesApp.h), set
+	// before this runs — as every application of the platform has them.
 
 	// THE COMMAND LINE FIRST, then the connection: wx calls OnExit only after an OnInit that succeeded, so nothing is
 	// opened before a refusal here could leave it behind (the codeRunner exit crash, 2026-10-07).
