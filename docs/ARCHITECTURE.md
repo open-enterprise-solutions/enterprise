@@ -1109,6 +1109,9 @@ msgfmt --check-format --output-file=lang/ru/open_es.mo lang/ru/open_es.po
 msgfmt --check-format --output-file=lang/uk/open_es.mo lang/uk/open_es.po
 ```
 
+wx's own words (stock labels, its dialogs) are its catalog `wxstd`: `lang/<code>/wxstd.po` is wx's
+`locale/<code>.po`, compiled the same way to `lang/<code>/wxstd.mo`; `wxLocale::Init` loads it by itself.
+
 The Poedit GUI (`File → Open` on the .po) does Step 1 + the editing UI in one shot. CLI route is faster for batch updates from CI.
 
 One English word with two meanings takes a context for the special one: `ibGETTEXT_IN_CONTEXT("document attribute", "Number")` is translated apart from `_("Number")`.

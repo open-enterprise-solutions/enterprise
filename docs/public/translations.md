@@ -54,6 +54,10 @@ table of languages and no machine default. `ForLanguage` and `SetProcessLanguage
 ## Where wx stays
 
 - `wxLocale` remains for the C locale and wx's own windows. `InitLocale` still adds `open_es` to it.
+- wx's own words - the stock labels of New, Open..., Save As..., Undo, Paste and the rest, and its dialogs -
+  come from its own catalog, `wxstd`, which `wxLocale::Init` loads by itself from the same `lang/<code>/`.
+  `lang/<code>/wxstd.po` is wx's `locale/<code>.po`; in `ru` the three stock labels it left fuzzy
+  (`&Find...`, `Rep&lace...`, `&CD-ROM`) are settled, since a fuzzy entry is not compiled.
 - `WXINTL_NO_GETTEXT_MACRO` is defined for every target that links core: wx's `_()` is off. `core/core.h`
   brings the engine's.
 - wx's `wxGetTranslation`, `wxPLURAL`, `wxGETTEXT_IN_CONTEXT` and `wxTRANSLATE` are not used. Their
