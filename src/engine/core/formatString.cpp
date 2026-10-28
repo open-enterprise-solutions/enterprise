@@ -4,9 +4,8 @@
 
 #include "core/formatString.h"
 #include "core/variant.h"   // ibVariant — what Apply asks of a value
+#include "core/localization/dictionary.h"   // ibDictionary — the language L names, the long date as it writes it
 #include <cwchar>      // std::wcstol — a code's number read
-
-#include <algorithm>   // std::max / std::min — a month and a weekday kept to their names
 
 namespace {
 
@@ -61,44 +60,6 @@ int FirstNumber(const ibString& value)
 	return static_cast<int>(std::wcstol(value.wc_str(), nullptr, 10));
 }
 
-// The names a pattern spells out (MMMM, MMM, dddd, ddd), per language. Non-ASCII text is escaped so the
-// source stays ASCII. MMMM after a day is the genitive in ru/uk ("13 октября"), on its own the nominative.
-struct ibDateNames {
-	const ibChar* const* m_month;        // nominative
-	const ibChar* const* m_monthOf;      // genitive
-	const ibChar* const* m_monthShort;
-	const ibChar* const* m_day;
-	const ibChar* const* m_dayShort;
-	const ibChar*        m_yearSuffix;   // after the year of a long date
-};
-const ibChar* const s_enMonth[] = { ibT("January"), ibT("February"), ibT("March"), ibT("April"), ibT("May"), ibT("June"), ibT("July"), ibT("August"), ibT("September"), ibT("October"), ibT("November"), ibT("December") };
-const ibChar* const s_enMonthShort[] = { ibT("Jan"), ibT("Feb"), ibT("Mar"), ibT("Apr"), ibT("May"), ibT("Jun"), ibT("Jul"), ibT("Aug"), ibT("Sep"), ibT("Oct"), ibT("Nov"), ibT("Dec") };
-const ibChar* const s_enDay[] = { ibT("Monday"), ibT("Tuesday"), ibT("Wednesday"), ibT("Thursday"), ibT("Friday"), ibT("Saturday"), ibT("Sunday") };
-const ibChar* const s_enDayShort[] = { ibT("Mon"), ibT("Tue"), ibT("Wed"), ibT("Thu"), ibT("Fri"), ibT("Sat"), ibT("Sun") };
-const ibChar* const s_ruMonth[] = { ibT("\u044F\u043D\u0432\u0430\u0440\u044C"), ibT("\u0444\u0435\u0432\u0440\u0430\u043B\u044C"), ibT("\u043C\u0430\u0440\u0442"), ibT("\u0430\u043F\u0440\u0435\u043B\u044C"), ibT("\u043C\u0430\u0439"), ibT("\u0438\u044E\u043D\u044C"), ibT("\u0438\u044E\u043B\u044C"), ibT("\u0430\u0432\u0433\u0443\u0441\u0442"), ibT("\u0441\u0435\u043D\u0442\u044F\u0431\u0440\u044C"), ibT("\u043E\u043A\u0442\u044F\u0431\u0440\u044C"), ibT("\u043D\u043E\u044F\u0431\u0440\u044C"), ibT("\u0434\u0435\u043A\u0430\u0431\u0440\u044C") };
-const ibChar* const s_ruMonthOf[] = { ibT("\u044F\u043D\u0432\u0430\u0440\u044F"), ibT("\u0444\u0435\u0432\u0440\u0430\u043B\u044F"), ibT("\u043C\u0430\u0440\u0442\u0430"), ibT("\u0430\u043F\u0440\u0435\u043B\u044F"), ibT("\u043C\u0430\u044F"), ibT("\u0438\u044E\u043D\u044F"), ibT("\u0438\u044E\u043B\u044F"), ibT("\u0430\u0432\u0433\u0443\u0441\u0442\u0430"), ibT("\u0441\u0435\u043D\u0442\u044F\u0431\u0440\u044F"), ibT("\u043E\u043A\u0442\u044F\u0431\u0440\u044F"), ibT("\u043D\u043E\u044F\u0431\u0440\u044F"), ibT("\u0434\u0435\u043A\u0430\u0431\u0440\u044F") };
-const ibChar* const s_ruMonthShort[] = { ibT("\u044F\u043D\u0432"), ibT("\u0444\u0435\u0432"), ibT("\u043C\u0430\u0440"), ibT("\u0430\u043F\u0440"), ibT("\u043C\u0430\u044F"), ibT("\u0438\u044E\u043D"), ibT("\u0438\u044E\u043B"), ibT("\u0430\u0432\u0433"), ibT("\u0441\u0435\u043D"), ibT("\u043E\u043A\u0442"), ibT("\u043D\u043E\u044F"), ibT("\u0434\u0435\u043A") };
-const ibChar* const s_ruDay[] = { ibT("\u043F\u043E\u043D\u0435\u0434\u0435\u043B\u044C\u043D\u0438\u043A"), ibT("\u0432\u0442\u043E\u0440\u043D\u0438\u043A"), ibT("\u0441\u0440\u0435\u0434\u0430"), ibT("\u0447\u0435\u0442\u0432\u0435\u0440\u0433"), ibT("\u043F\u044F\u0442\u043D\u0438\u0446\u0430"), ibT("\u0441\u0443\u0431\u0431\u043E\u0442\u0430"), ibT("\u0432\u043E\u0441\u043A\u0440\u0435\u0441\u0435\u043D\u044C\u0435") };
-const ibChar* const s_ruDayShort[] = { ibT("\u041F\u043D"), ibT("\u0412\u0442"), ibT("\u0421\u0440"), ibT("\u0427\u0442"), ibT("\u041F\u0442"), ibT("\u0421\u0431"), ibT("\u0412\u0441") };
-const ibChar* const s_ukMonth[] = { ibT("\u0441\u0456\u0447\u0435\u043D\u044C"), ibT("\u043B\u044E\u0442\u0438\u0439"), ibT("\u0431\u0435\u0440\u0435\u0437\u0435\u043D\u044C"), ibT("\u043A\u0432\u0456\u0442\u0435\u043D\u044C"), ibT("\u0442\u0440\u0430\u0432\u0435\u043D\u044C"), ibT("\u0447\u0435\u0440\u0432\u0435\u043D\u044C"), ibT("\u043B\u0438\u043F\u0435\u043D\u044C"), ibT("\u0441\u0435\u0440\u043F\u0435\u043D\u044C"), ibT("\u0432\u0435\u0440\u0435\u0441\u0435\u043D\u044C"), ibT("\u0436\u043E\u0432\u0442\u0435\u043D\u044C"), ibT("\u043B\u0438\u0441\u0442\u043E\u043F\u0430\u0434"), ibT("\u0433\u0440\u0443\u0434\u0435\u043D\u044C") };
-const ibChar* const s_ukMonthOf[] = { ibT("\u0441\u0456\u0447\u043D\u044F"), ibT("\u043B\u044E\u0442\u043E\u0433\u043E"), ibT("\u0431\u0435\u0440\u0435\u0437\u043D\u044F"), ibT("\u043A\u0432\u0456\u0442\u043D\u044F"), ibT("\u0442\u0440\u0430\u0432\u043D\u044F"), ibT("\u0447\u0435\u0440\u0432\u043D\u044F"), ibT("\u043B\u0438\u043F\u043D\u044F"), ibT("\u0441\u0435\u0440\u043F\u043D\u044F"), ibT("\u0432\u0435\u0440\u0435\u0441\u043D\u044F"), ibT("\u0436\u043E\u0432\u0442\u043D\u044F"), ibT("\u043B\u0438\u0441\u0442\u043E\u043F\u0430\u0434\u0430"), ibT("\u0433\u0440\u0443\u0434\u043D\u044F") };
-const ibChar* const s_ukMonthShort[] = { ibT("\u0441\u0456\u0447"), ibT("\u043B\u044E\u0442"), ibT("\u0431\u0435\u0440"), ibT("\u043A\u0432\u0456"), ibT("\u0442\u0440\u0430"), ibT("\u0447\u0435\u0440"), ibT("\u043B\u0438\u043F"), ibT("\u0441\u0435\u0440"), ibT("\u0432\u0435\u0440"), ibT("\u0436\u043E\u0432"), ibT("\u043B\u0438\u0441"), ibT("\u0433\u0440\u0443") };
-const ibChar* const s_ukDay[] = { ibT("\u043F\u043E\u043D\u0435\u0434\u0456\u043B\u043E\u043A"), ibT("\u0432\u0456\u0432\u0442\u043E\u0440\u043E\u043A"), ibT("\u0441\u0435\u0440\u0435\u0434\u0430"), ibT("\u0447\u0435\u0442\u0432\u0435\u0440"), ibT("\u043F'\u044F\u0442\u043D\u0438\u0446\u044F"), ibT("\u0441\u0443\u0431\u043E\u0442\u0430"), ibT("\u043D\u0435\u0434\u0456\u043B\u044F") };
-const ibChar* const s_ukDayShort[] = { ibT("\u041F\u043D"), ibT("\u0412\u0442"), ibT("\u0421\u0440"), ibT("\u0427\u0442"), ibT("\u041F\u0442"), ibT("\u0421\u0431"), ibT("\u041D\u0434") };
-const ibDateNames s_en = { s_enMonth, s_enMonth, s_enMonthShort, s_enDay, s_enDayShort, ibT("") };
-const ibDateNames s_ru = { s_ruMonth, s_ruMonthOf, s_ruMonthShort, s_ruDay, s_ruDayShort, ibT(" \u0433.") };
-const ibDateNames s_uk = { s_ukMonth, s_ukMonthOf, s_ukMonthShort, s_ukDay, s_ukDayShort, ibT(" \u0440.") };
-
-// `L=ru`, `L=uk_UA`, `L=en`: the language part decides; anything else is English.
-const ibDateNames& NamesFor(const std::optional<ibString>& language)
-{
-	if (!language) return s_en;
-	const ibString code = language->Left(2).Lower();
-	if (code == ibT("ru")) return s_ru;
-	if (code == ibT("uk")) return s_uk;
-	return s_en;
-}
-
 // The letters of a date pattern. ⚠ `MM` IS THE MONTH and `mm` the minutes, as everywhere else they are written.
 enum ibDateLetter { eYear, eMonth, eDay, eHour24, eHour12, eMinute, eSecond, eAmPm, eNone };
 ibDateLetter DateLetter(ibChar c)
@@ -130,11 +91,14 @@ void AppendNumber(int value, size_t width, ibString& out)
 	else out += static_cast<ibChar>(L'0' + value);
 }
 
-// ⭐ THE DATE PATTERN WRITTEN STRAIGHT INTO `out`: a run of one letter is one field, its length picking the form - `d` 1, `dd` 01, `ddd` Mon, `dddd` Monday; `M` 1, `MM` 01, `MMM` Oct,
-// `MMMM` October; `y` 6, `yy` 26, `yyyy` 2026; `H`/`HH` hours, `h`/`hh` on a 12-hour clock, `m`/`mm`
-// minutes, `s`/`ss` seconds, `tt` AM/PM. Text in single quotes stands as written; every other character
-// stands as it is. No strftime pattern is built: a report prints a date per row.
-void WriteDate(const ibString& pattern, const ibDateTimeParts& tm, const ibDateNames& names, ibString& out)
+// ⭐ THE DATE PATTERN WRITTEN STRAIGHT INTO `out`: a run of one letter is one field, its length picking the
+// form - `d` 1, `dd` 01, `ddd` Mon, `dddd` Monday; `M` 1, `MM` 01, `MMM` Oct, `MMMM` October; `y` 6, `yy` 26,
+// `yyyy` 2026; `H`/`HH` hours, `h`/`hh` on a 12-hour clock, `m`/`mm` minutes, `s`/`ss` seconds, `tt` AM/PM.
+// Text in single quotes stands as written; every other character stands as it is. The names are the date's
+// (ibDateTime::MonthName and the rest), in the language of `dictionary` - L's - or the thread's; `MMMM` after
+// a day is the month as it stands there, the genitive in a language with cases. No strftime pattern is built:
+// a report prints a date per row.
+void WriteDate(const ibString& pattern, const ibDateTimeParts& tm, const ibDictionary* dictionary, ibString& out)
 {
 	const size_t length = pattern.length();
 	bool hasDay = false;
@@ -154,8 +118,6 @@ void WriteDate(const ibString& pattern, const ibDateTimeParts& tm, const ibDateN
 		}
 		size_t run = 1;
 		while (i + run < length && pattern[i + run] == c) ++run;
-		const unsigned month = std::min(std::max(tm.m_month, 1u), 12u) - 1;
-		const unsigned weekDay = std::min(std::max(tm.m_weekDay, 1u), 7u) - 1;
 		switch (DateLetter(c)) {
 		case eYear:
 			if (run >= 3) {
@@ -165,13 +127,13 @@ void WriteDate(const ibString& pattern, const ibDateTimeParts& tm, const ibDateN
 			else AppendNumber((tm.m_year % 100 + 100) % 100, run, out);
 			break;
 		case eMonth:
-			if (run >= 4)      out += hasDay ? names.m_monthOf[month] : names.m_month[month];
-			else if (run == 3) out += names.m_monthShort[month];
+			if (run >= 4)      out += hasDay ? ibDateTime::MonthGenitiveName(tm.m_month, dictionary) : ibDateTime::MonthName(tm.m_month, dictionary);
+			else if (run == 3) out += ibDateTime::MonthShortName(tm.m_month, dictionary);
 			else               AppendNumber(static_cast<int>(tm.m_month), run, out);
 			break;
 		case eDay:
-			if (run >= 4)      out += names.m_day[weekDay];
-			else if (run == 3) out += names.m_dayShort[weekDay];
+			if (run >= 4)      out += ibDateTime::WeekDayName(tm.m_weekDay, dictionary);
+			else if (run == 3) out += ibDateTime::WeekDayShortName(tm.m_weekDay, dictionary);
 			else               AppendNumber(static_cast<int>(tm.m_day), run, out);
 			break;
 		case eHour24: AppendNumber(static_cast<int>(tm.m_hour), run, out); break;
@@ -185,14 +147,16 @@ void WriteDate(const ibString& pattern, const ibDateTimeParts& tm, const ibDateN
 	}
 }
 
+// The long date, `13 October 2026` - marked for the catalog here, said in the language asked: a language's
+// catalog gives the order and what follows the year, quoted where it is text ("d MMMM yyyy 'г.'").
+const char* const s_longDatePattern = ibTRANSLATE_IN_CONTEXT("date pattern", "d MMMM yyyy");
+
 // DLF: the presets named by letter - D, DD, T, DT, DDT. Empty when the value is none of them.
-ibString LocalFormatPattern(const ibString& preset, const ibDateNames& names)
+ibString LocalFormatPattern(const ibString& preset, const ibDictionary* dictionary)
 {
 	ibString key = preset.Upper();
 	key.Trim(true).Trim(false);
-	// The long date: `13 October 2026`, and in ru/uk with the year suffix - the suffix quoted so its letters are text.
-	const ibString suffix = names.m_yearSuffix;
-	const ibString longDate = ibT("d MMMM yyyy") + (suffix.IsEmpty() ? ibString() : ibT("'") + suffix + ibT("'"));
+	const ibString longDate = ibGetTranslation(dictionary, ibString(s_longDatePattern), ibT("date pattern"));
 	if (key == ibT("D"))   return ibT("dd.MM.yyyy");
 	if (key == ibT("DD"))  return longDate;
 	if (key == ibT("T"))   return ibT("H:mm:ss");
@@ -486,20 +450,21 @@ bool ibFormatString::Apply(const ibVariant& value, ibString& result) const
 		if (value.IsEmpty() && m_date.m_empty)
 			result = *m_date.m_empty;
 		else {
+			// The language L names, its own dictionary; with none (or one this engine has no name for) the thread's.
+			const ibDictionary* const dictionary = m_date.m_language ? ibDictionary::ForLanguage(*m_date.m_language) : nullptr;
 			// DF first; DLF when there is no DF - a pattern written out wins over a preset named.
-			const ibDateNames& names = NamesFor(m_date.m_language);
 			ibString pattern;
 			if (m_date.m_pattern)
 				pattern = *m_date.m_pattern;
 			else if (m_date.m_localFormat)
-				pattern = LocalFormatPattern(*m_date.m_localFormat, names);
+				pattern = LocalFormatPattern(*m_date.m_localFormat, dictionary);
 			if (pattern.IsEmpty()) {
 				result = value.GetString();
 				return !result.IsEmpty();
 			}
 			ibDateTimeParts parts;
 			value.GetDate().ToParts(parts);
-			WriteDate(pattern, parts, names, result);
+			WriteDate(pattern, parts, dictionary, result);
 		}
 		return !result.IsEmpty();
 	default:

@@ -18,9 +18,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   writer could not write is raised at `Close`.
 - **`Format` spells a date out and pads a number.** A date pattern takes `d`/`dd`, `ddd`/`dddd`
   (the weekday), `M`/`MM`, `MMM`/`MMMM` (the month's name, after a day in the genitive in ru and
-  uk), `h`/`hh` and `tt` (a 12-hour clock) and text in single quotes. New codes: `DLF` (a preset —
-  `D`, `DD`, `T`, `DT`, `DDT` — used when there is no `DF`), `L` (the language of the names: en,
-  ru, uk) and `NLZ` (the whole part padded with zeros to `ND − NFD` digits).
+  uk), `h`/`hh` and `tt` (a 12-hour clock) and text in single quotes. The names come from the base's
+  language; `L=ru` says them in the language it names. New codes: `DLF` (a preset — `D`, `DD`, `T`,
+  `DT`, `DDT` — used when there is no `DF`), `L` and `NLZ` (the whole part padded with zeros to
+  `ND − NFD` digits).
 
 ## Fixes
 

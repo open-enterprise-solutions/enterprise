@@ -19,7 +19,9 @@
 #include <vector>
 
 #include "core/fileSystem.h"   // ibPathOf
+#include "core/formatString.h"   // Format's L - the names said in the language it names
 #include "core/localization/dictionary.h"
+#include "core/variant.h"        // ibVariant - the date Format is handed
 
 namespace {
 
@@ -84,6 +86,9 @@ protected:
 			{ std::string("access right\x04") + "Delete", "\xD0\x92\xD0\xB8\xD0\xBB\xD1\x83\xD1\x87\xD0\xB8\xD1\x82\xD0\xB8" },   // Вилучити
 			{ std::string("%d document") + '\0' + "%d documents",
 			  std::string("%d \xD0\xB4\xD0\xBE\xD0\xBA") + '\0' + "%d \xD0\xB4\xD0\xBE\xD0\xBA\xD0\xB0" + '\0' + "%d \xD0\xB4\xD0\xBE\xD0\xBA\xD0\xBE\xD0\xB2" },   // док / дока / доков
+			{ std::string("date pattern\x04") + "d MMMM yyyy", "d MMMM yyyy '\xD0\xB3.'" },                            // …'г.'
+			{ std::string("month\x04") + "October", "\xD0\xBE\xD0\xBA\xD1\x82\xD1\x8F\xD0\xB1\xD1\x80\xD1\x8C" },            // октябрь
+			{ std::string("month, genitive\x04") + "October", "\xD0\xBE\xD0\xBA\xD1\x82\xD1\x8F\xD0\xB1\xD1\x80\xD1\x8F" },  // октября
 		});
 		Write("qb", {
 			{ "", kHeader },
@@ -135,6 +140,20 @@ TEST_F(TranslationFix, ACatalogIsReadWithoutAnyLocale)
 	EXPECT_EQ(nullptr, qa->GetTranslatedString(ibT("Nobody wrote this")));
 	EXPECT_EQ(nullptr, qa->GetTranslatedString(ibString()));
 	EXPECT_EQ(qa, ibDictionary::ForLanguage(ibT("qa"))) << "one set per language, kept";
+}
+
+// Format's L names the language the names are said in: that language's catalog, whatever the thread speaks. A
+// month after a day is the catalog's genitive, on its own its nominative; the long date is the catalog's pattern.
+TEST_F(TranslationFix, FormatSaysTheNamesInTheLanguageLNames)
+{
+	ibDictionary::SetProcessLanguage(ibString());   // the thread speaks no language: the names as written
+	const ibVariant date(ibDateTime(2026, 10, 13, 15, 30, 45));
+	EXPECT_EQ(ibString::FromUTF8("13 \xD0\xBE\xD0\xBA\xD1\x82\xD1\x8F\xD0\xB1\xD1\x80\xD1\x8F 2026 \xD0\xB3."),   // 13 октября 2026 г.
+		ibFormatString::Parse(ibT("L=qa; DLF=DD")).Apply(date));
+	EXPECT_EQ(ibString::FromUTF8("\xD0\xBE\xD0\xBA\xD1\x82\xD1\x8F\xD0\xB1\xD1\x80\xD1\x8C"),                        // октябрь
+		ibFormatString::Parse(ibT("L=qa; DF=MMMM")).Apply(date));
+	EXPECT_EQ(ibString(ibT("13 October 2026")), ibFormatString::Parse(ibT("DLF=DD")).Apply(date));
+	EXPECT_EQ(ibString(ibT("Tue")), ibFormatString::Parse(ibT("L=qa; DF=ddd")).Apply(date)) << "a word qa has not";
 }
 
 TEST_F(TranslationFix, ThePluralRuleAndTheContextAreTheCatalogs)

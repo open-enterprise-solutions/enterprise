@@ -114,7 +114,7 @@ public:
 			"separator - groups of three unless NG says otherwise; NG digits per group; NZ what a zero "
 			"prints as.\n"
 			"  DATE    DF the pattern; DE what an empty date prints as; DLF a preset (D, DD, T, DT, DDT) used "
-			"when there is no DF; L the language of month and day names (en, ru, uk).\n"
+			"when there is no DF; L the language month and day names are said in (ru, uk_UA), the base's when absent.\n"
 			"  BOOLEAN BT and BF what True and False print as.\n"
 			  "\n"
 			"STOP: IN A DATE PATTERN `MM` IS THE MONTH AND `mm` THE MINUTES. yyyy or yy the year, "

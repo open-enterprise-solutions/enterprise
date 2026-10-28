@@ -12315,6 +12315,71 @@ msgctxt "month"
 msgid "December"
 msgstr ""
 
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "January"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "February"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "March"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "April"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "May"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "June"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "July"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "August"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "September"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "October"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "November"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "December"
+msgstr ""
+
+#: src/engine/core/formatString.cpp
+msgctxt "date pattern"
+msgid "d MMMM yyyy"
+msgstr ""
+
 #: src/engine/core/fdatetime.cpp:202
 msgctxt "month, short"
 msgid "Jan"

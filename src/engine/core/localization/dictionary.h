@@ -97,6 +97,8 @@ private:
 // msgctxt; `n` chooses the plural form by the catalog's rule.
 CORE_API ibString ibGetTranslation(const ibString& text, const ibString& context = ibString());
 CORE_API ibString ibGetTranslation(const ibString& one, const ibString& many, int n, const ibString& context = ibString());
+// …in the language of `dictionary` when the caller was told one (Format's `L=ru`), the thread's when it is null.
+CORE_API ibString ibGetTranslation(const ibDictionary* dictionary, const ibString& text, const ibString& context = ibString());
 
 // ---- the gettext macros, over the engine's own catalogs ----
 //

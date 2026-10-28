@@ -4,6 +4,7 @@
 #include "core/core.h"    // CORE_API
 
 class ibString;                          // core/fstring.h - the date's text; the family meets in backend_core.h
+class ibDictionary;                      // core/localization/dictionary.h - the language the calendar's names are asked in
 
 // ibDateTime — a date and a time of day, 8 bytes: a WALL-CLOCK READING. The engine's own date, as
 // ibNumber is its number and ibString its text: the server works with dates in it, and wxDateTime is
@@ -162,11 +163,14 @@ public:
 	}
 
 	// The calendar's names, in the language of the thread (core/localization/dictionary.h) - not the machine's:
-	// a base speaks its own. Empty outside the range. A month 1..12; a weekday 1..7, Monday first.
-	static ibString MonthName(unsigned month);
-	static ibString MonthShortName(unsigned month);
-	static ibString WeekDayName(unsigned weekDay);
-	static ibString WeekDayShortName(unsigned weekDay);
+	// a base speaks its own - or in the language of `dictionary` when one is named (Format's `L=ru`). Empty
+	// outside the range. A month 1..12; a weekday 1..7, Monday first.
+	static ibString MonthName(unsigned month, const ibDictionary* dictionary = nullptr);
+	// …as it stands after a day, "13 October": a language with cases says it in the genitive.
+	static ibString MonthGenitiveName(unsigned month, const ibDictionary* dictionary = nullptr);
+	static ibString MonthShortName(unsigned month, const ibDictionary* dictionary = nullptr);
+	static ibString WeekDayName(unsigned weekDay, const ibDictionary* dictionary = nullptr);
+	static ibString WeekDayShortName(unsigned weekDay, const ibDictionary* dictionary = nullptr);
 
 	// The parts. Defined for any count: a reading before year 1 or past 9999 gets the year the calendar
 	// gives it (0, -1, 10000), so a caller printing it sees where it is.

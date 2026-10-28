@@ -12323,6 +12323,71 @@ msgid "December"
 msgstr "грудень"
 
 #: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "January"
+msgstr "січня"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "February"
+msgstr "лютого"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "March"
+msgstr "березня"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "April"
+msgstr "квітня"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "May"
+msgstr "травня"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "June"
+msgstr "червня"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "July"
+msgstr "липня"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "August"
+msgstr "серпня"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "September"
+msgstr "вересня"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "October"
+msgstr "жовтня"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "November"
+msgstr "листопада"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "December"
+msgstr "грудня"
+
+#: src/engine/core/formatString.cpp
+msgctxt "date pattern"
+msgid "d MMMM yyyy"
+msgstr "d MMMM yyyy 'р.'"
+
+#: src/engine/core/fdatetime.cpp
 msgctxt "month, short"
 msgid "Jan"
 msgstr "січ"

@@ -156,7 +156,8 @@ TEST(FormatString, ACodeIsItsLatinName)
 	EXPECT_EQ(wxT("\u0434\u0434.10.2026"), ibFormatString::Parse(wxT("DF=\u0434\u0434.MM.yyyy")).Apply(date));
 }
 
-// DLF presets; DF wins over DLF; L picks the language of the names.
+// DLF presets; DF wins over DLF; L is kept and written back. The names said in the language L names are
+// test_dictionary's (FormatSaysTheNamesInTheLanguageLNames): they need a catalog, which the test writes there.
 TEST(FormatString, LocalFormatAndLanguage)
 {
 	const ibValue date(2026, 10, 13, 15, 30, 45);
@@ -165,13 +166,6 @@ TEST(FormatString, LocalFormatAndLanguage)
 	EXPECT_EQ(wxT("13.10.2026 15:30:45"), ibFormatString::Parse(wxT("DLF=DT")).Apply(date));
 	EXPECT_EQ(wxT("13 October 2026"), ibFormatString::Parse(wxT("DLF=DD")).Apply(date));
 	EXPECT_EQ(wxT("2026"), ibFormatString::Parse(wxT("DLF=DD; DF=yyyy")).Apply(date));
-	// The long date after a day: the month in the genitive and the year's suffix - 13 zhovtnia 2026 r.
-	EXPECT_EQ(wxT("13 \u0436\u043E\u0432\u0442\u043D\u044F 2026 \u0440."),
-		ibFormatString::Parse(wxT("L=uk; DLF=DD")).Apply(date));
-	EXPECT_EQ(wxT("13 \u043E\u043A\u0442\u044F\u0431\u0440\u044F 2026 \u0433."),
-		ibFormatString::Parse(wxT("L=ru; DLF=DD")).Apply(date));
-	// The month alone is the nominative.
-	EXPECT_EQ(wxT("\u0436\u043E\u0432\u0442\u0435\u043D\u044C"), ibFormatString::Parse(wxT("L=uk; DF=MMMM")).Apply(date));
 	EXPECT_EQ(wxT("DLF=DD; L=uk"), ibFormatString::Parse(wxT("L=uk; DLF=DD")).Render());
 }
 

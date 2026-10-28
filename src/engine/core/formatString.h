@@ -52,7 +52,7 @@ enum class ibFormatCode {
 	// Appended, never inserted: a code's position is the order of the constructor's tabs.
 	NumberLeadingZero,         // NLZ - pad the whole part with zeros up to ND - NFD digits
 	DateLocalFormat,           // DLF - a preset: D, DD, T, DT, DDT (date, long date, time, both, long date and time)
-	Language,                  // L   - the language of month and day names: en, ru, uk (en when absent)
+	Language,                  // L   - the language the names are said in (ru, uk_UA); the thread's when absent
 };
 
 // The patterns a date pattern is usually one of. `Custom` is any other.

@@ -1238,6 +1238,14 @@ ibString ibGetTranslation(const ibString& text, const ibString& context)
 	return translated != nullptr ? *translated : text;
 }
 
+ibString ibGetTranslation(const ibDictionary* dictionary, const ibString& text, const ibString& context)
+{
+	if (dictionary == nullptr)
+		return ibGetTranslation(text, context);
+	const ibString* const translated = text.IsEmpty() ? nullptr : dictionary->GetTranslatedString(text, context);
+	return translated != nullptr ? *translated : text;
+}
+
 ibString ibGetTranslation(const ibString& one, const ibString& many, int n, const ibString& context)
 {
 	const ibDictionary* const set = ibDictionary::ForThisThread();
