@@ -12470,3 +12470,816 @@ msgstr "полдень"
 msgctxt "time"
 msgid "midnight"
 msgstr "полночь"
+
+#: src/engine/appcluster-tray/appClusterTray.cpp:63
+#, c-format
+msgid "The cluster's service is not opened: %s"
+msgstr "Служба кластера не открыта: %s"
+
+#: src/engine/appcluster-tray/appClusterTray.cpp:73
+#, c-format
+msgid "The cluster's service is not started: %s"
+msgstr "Служба кластера не запущена: %s"
+
+#: src/engine/appcluster-tray/appClusterTray.cpp:178
+#, c-format
+msgid "%s names no port - the cluster has never started"
+msgstr "%s не указывает порт - кластер ни разу не запускался"
+
+#: src/engine/appcluster-tray/appClusterTray.cpp:240
+msgid "the cluster closed the connection"
+msgstr "кластер закрыл соединение"
+
+#: src/engine/appcluster-tray/appClusterTray.cpp:283
+#, c-format
+msgid "%s did not start."
+msgstr "%s не запустился."
+
+#: src/engine/appcluster-tray/appClusterTray.cpp:292
+msgid "Application cluster"
+msgstr "Кластер приложений"
+
+#: src/engine/appcluster-tray/appClusterTray.cpp:305
+#, c-format
+msgid "The cluster's service stopped with code %lu - its journal in %s says why."
+msgstr "Служба кластера остановилась с кодом %lu - причина записана в её журнале в %s."
+
+#: src/engine/appcluster-tray/appClusterTray.cpp:317
+#, c-format
+msgid "The application cluster ended with code %d - its journal in %s says why."
+msgstr "Кластер приложений завершился с кодом %d - причина записана в его журнале в %s."
+
+#: src/engine/appcluster-tray/clusterTray.cpp:29
+#, c-format
+msgid "starting, process %ld"
+msgstr "запускается, процесс %ld"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:30
+#, c-format
+msgid "serving, process %ld"
+msgstr "работает, процесс %ld"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:31
+msgid "stopping"
+msgstr "останавливается"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:32
+msgid "restarting"
+msgstr "перезапускается"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:33
+#, c-format
+msgid "fallen (%u), started again soon"
+msgstr "упал (%u), скоро будет запущен снова"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:34
+msgid "stopped"
+msgstr "остановлен"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:51
+#: src/engine/appcluster-tray/clusterTray.cpp:75
+msgid "Application cluster: not running"
+msgstr "Кластер приложений: не запущен"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:64
+#, c-format
+msgid "Application cluster, port %u: %u of %u server(s) serving"
+msgstr "Кластер приложений, порт %u: работает серверов: %u из %u"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:79
+msgid "Start the cluster"
+msgstr "Запустить кластер"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:82
+#, c-format
+msgid "Application cluster, port %u"
+msgstr "Кластер приложений, порт %u"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:94
+msgid "Start"
+msgstr "Запустить"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:96
+msgid "Do not start again"
+msgstr "Не запускать снова"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:96
+msgid "Stop"
+msgstr "Остановить"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:97
+msgid "Restart"
+msgstr "Перезапустить"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:113
+msgid "Stop the cluster"
+msgstr "Остановить кластер"
+
+#: src/engine/appcluster-tray/clusterTray.cpp:117
+msgid "Open the server folder"
+msgstr "Открыть папку сервера"
+
+#: src/engine/backend/appData.cpp:936
+#, c-format
+msgid "The configuration of the base %s could not be loaded."
+msgstr "Не удалось загрузить конфигурацию базы %s."
+
+#: src/engine/backend/appHost.cpp:435
+#, c-format
+msgid "The locale %s cannot be set on this machine; the base was not opened."
+msgstr "Локаль %s не может быть установлена на этом компьютере; база не открыта."
+
+#: src/engine/backend/compiler/compileCode.cpp:3531
+#: src/engine/backend/compiler/compileCode.cpp:3710
+#: src/engine/backend/compiler/compileCodeLINQ.cpp:2568
+#: src/engine/backend/compiler/compileCodeLINQ.cpp:2627
+msgid "it is nested deeper than the stack allows - split it into steps"
+msgstr "вложенность глубже, чем позволяет стек - разбейте выражение на шаги"
+
+#: src/engine/backend/compiler/procContext.cpp:162
+#, c-format
+msgid "Missing required argument '%s'"
+msgstr "Не указан обязательный аргумент '%s'"
+
+#: src/engine/backend/compiler/procUnit.cpp:517
+msgid ""
+"The native stack is too low to continue this call.\n"
+"Call stack :"
+msgstr "Недостаточно места в стеке для продолжения этого вызова.\nСтек вызовов :"
+
+#: src/engine/backend/compiler/procUnitLINQ.cpp:1600
+msgid "the query is nested deeper than the stack allows"
+msgstr "запрос вложен глубже, чем позволяет стек"
+
+#: src/engine/backend/compiler/value.cpp:157
+msgid "The value is not a value of the runtime"
+msgstr "Значение не является значением среды выполнения"
+
+#: src/engine/backend/lock/lockManager.cpp:95
+msgid "ibLockManager: failed to insert the lock key."
+msgstr "ibLockManager: не удалось вставить ключ блокировки."
+
+#: src/engine/backend/lock/lockManager.cpp:255
+msgid "ibLockManager: failed to upgrade the held lock."
+msgstr "ibLockManager: не удалось повысить удерживаемую блокировку."
+
+#: src/engine/backend/lock/lockManager.cpp:300
+msgid "ibLockManager: the lock header stayed busy."
+msgstr "ibLockManager: заголовок блокировки так и остался занят."
+
+#: src/engine/backend/mcp/mcpServer.cpp:149
+#, c-format
+msgid "Assistant access did not start: %s"
+msgstr "Доступ для ассистента не запустился: %s"
+
+#: src/engine/backend/mcp/mcpServer.cpp:189
+#, c-format
+msgid ""
+"Assistant access did not start: %s.\n"
+"\n"
+"If another designer is open, it holds the port - only one can. Close it, or give this one a port of its own in Tools > Options > Assistant access."
+msgstr "Доступ для ассистента не запустился: %s.\n\nЕсли открыт другой конфигуратор, порт занят им - он может быть только у одного. Закройте его или назначьте этому свой порт в Сервис > Параметры > Доступ для ассистента."
+
+#: src/engine/backend/mcp/tools/mcpToolSession.cpp:114
+#, c-format
+msgid "The user list could not be read: %s"
+msgstr "Не удалось прочитать список пользователей: %s"
+
+#: src/engine/backend/metaCollection/metaObjectSerialize.cpp:95
+#, c-format
+msgid "'%s' writes the field '%s' twice - a property named like one of the object's own fields reads the other one back"
+msgstr "'%s' записывает поле '%s' дважды - свойство, названное как одно из собственных полей объекта, читает обратно другое"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1323
+#, c-format
+msgid "%s: %zu dimension(s) of the register are paired with %zu of the base register - name as many of each"
+msgstr "%s: измерениям регистра (%zu) сопоставлено %zu измерений базового регистра - укажите их поровну"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1329
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1332
+#, c-format
+msgid "%s: '%s' is not a dimension of '%s'"
+msgstr "%s: '%s' не является измерением '%s'"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1341
+#, c-format
+msgid "%s: the base is not broken down by '%s' - a section is a dimension, an attribute or a record's registration, recorder, line, type or month of '%s'"
+msgstr "%s: база не разрезается по '%s' - разрез - это измерение, реквизит или период регистрации, регистратор, строка, вид или месяц записи '%s'"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1379
+msgid "Base"
+msgstr "База"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1384
+msgid "Section"
+msgstr "Разрез"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1483
+#, c-format
+msgid "%s: register '%s' keeps no action periods - leave BeginOfActionPeriod and EndOfActionPeriod out"
+msgstr "%s: регистр '%s' не хранит периоды действия - не указывайте BeginOfActionPeriod и EndOfActionPeriod"
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1505
+msgid "AS OF WHICH REGISTRATION PERIOD - a moment: the records registered up to the end of the period it falls in, in the register's periodicity. Left out, every period is read."
+msgstr "НА КАКОЙ ПЕРИОД РЕГИСТРАЦИИ - момент: записи, зарегистрированные до конца периода, в который он попадает, с периодичностью регистра. Если не указан, читаются все периоды."
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1508
+msgid "FOR WHICH DAYS OF ACTION, from - the records in force on this day or later. Left out, from the first; only for a register that keeps action periods."
+msgstr "ЗА КАКИЕ ДНИ ДЕЙСТВИЯ, с - записи, действующие в этот день или позже. Если не указан, с первого; только для регистра, хранящего периоды действия."
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1511
+msgid "FOR WHICH DAYS OF ACTION, to - the records in force on this day or earlier. Left out, to the last; only for a register that keeps action periods."
+msgstr "ЗА КАКИЕ ДНИ ДЕЙСТВИЯ, по - записи, действующие в этот день или раньше. Если не указан, по последний; только для регистра, хранящего периоды действия."
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1514
+msgid "WHICH DIMENSIONS OF THIS REGISTER HOLD THE BASE TO A RECORD'S VALUES - an array of their names, or a string of them separated by commas. Left out, a record's base is the base register's whole."
+msgstr "КАКИЕ ИЗМЕРЕНИЯ ЭТОГО РЕГИСТРА ПРИВЯЗЫВАЮТ БАЗУ К ЗНАЧЕНИЯМ ЗАПИСИ - массив их имён или строка с ними через запятую. Если не указаны, база записи - весь базовый регистр."
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1517
+msgid "THE BASE REGISTER'S DIMENSIONS THEY ARE COMPARED WITH, paired with Dimensions in order. Left out, the dimensions of the same names."
+msgstr "ИЗМЕРЕНИЯ БАЗОВОГО РЕГИСТРА, С КОТОРЫМИ ОНИ СРАВНИВАЮТСЯ, в паре с Dimensions по порядку. Если не указаны, измерения с теми же именами."
+
+#: src/engine/backend/metaCollection/partial/calculationRegisterMetadataTotals.cpp:1520
+msgid "WHAT THE BASE IS BROKEN DOWN BY - the base register's fields: a dimension, an attribute, the registration period, recorder, line, type or month. Each fills its <Field>Section column, a row a record and a section. Left out, a row a record."
+msgstr "ПО ЧЕМУ РАЗРЕЗАЕТСЯ БАЗА - поля базового регистра: измерение, реквизит, период регистрации, регистратор, строка, вид или месяц. Каждое заполняет свою колонку <Field>Section, строка - на запись и разрез. Если не указаны, строка - на запись."
+
+#: src/engine/backend/metaCollection/partial/commonObjectRecordSetQuery.cpp:298
+#, c-format
+msgid "The %s is required on line %ld of the %s"
+msgstr "%s необходимо указать в строке %ld %s"
+
+#: src/engine/backend/metaCollection/partial/document.h:195
+msgid "Number periodicity"
+msgstr "Периодичность номера"
+
+#: src/engine/backend/metaCollection/partial/document.h:195
+msgid "When the document's numbers start again. Nonperiodical (the default): one series for the life of the document. Year, quarter, month or day: the next number is the next one inside that period of the document's date, and a new period starts again at one. A document saved before this setting existed stays nonperiodical, on the series it already has."
+msgstr "Когда номера документа начинаются заново. Непериодический (по умолчанию): одна серия на всё время жизни документа. Год, квартал, месяц или день: следующий номер - следующий внутри этого периода по дате документа, а новый период снова начинается с единицы. Документ, записанный до появления этой настройки, остаётся непериодическим, на той серии, что у него уже есть."
+
+#: src/engine/backend/metaCollection/partial/documentEnum.h:79
+msgid "Nonperiodical"
+msgstr "Непериодический"
+
+#: src/engine/backend/metaCollection/partial/tabularSection/tabularSectionQuery.cpp:167
+#, c-format
+msgid "The %s is required on line %ld of the %s list"
+msgstr "%s необходимо указать в строке %ld списка %s"
+
+#: src/engine/backend/propertyManager/propertyObject.cpp:72
+#: src/engine/frmclient/backend/propertyManager/propertyObject.cpp:74
+#, c-format
+msgid "'%s' would not take that value."
+msgstr "'%s' не принимает такое значение."
+
+#: src/engine/backend/query/queryLowering.cpp:203
+#: src/engine/core/query/queryParser.cpp:1363
+msgid "it is nested deeper than the stack allows"
+msgstr "вложенность глубже, чем позволяет стек"
+
+#: src/engine/backend/query/schemaSnapshot.cpp:704
+#, c-format
+msgid "%s in %s: %s stored values will be cleared"
+msgstr "%s в %s: будет очищено сохранённых значений: %s"
+
+#: src/engine/backend/session/session.cpp:1081
+#, c-format
+msgid "Role handler '%s' cannot ask the user"
+msgstr "Обработчик роли '%s' не может обращаться к пользователю"
+
+#: src/engine/backend/system/value/valueGuid.cpp:30
+#, c-format
+msgid "New Guid: '%s' is not a GUID"
+msgstr "New Guid: '%s' не является GUID"
+
+#: src/engine/backend/system/value/valueHttp.cpp:565
+#, c-format
+msgid "HTTPConnection: the trusted certificates could not be read from the certificate file '%s'"
+msgstr "HTTPConnection: не удалось прочитать доверенные сертификаты из файла сертификатов '%s'"
+
+#: src/engine/backend/system/value/valueHttp.cpp:567
+#, c-format
+msgid "HTTPConnection: the certificate file '%s' could not be read"
+msgstr "HTTPConnection: не удалось прочитать файл сертификата '%s'"
+
+#: src/engine/backend/system/value/valueHttp.cpp:574
+#, c-format
+msgid "HTTPConnection: the trusted certificates could not be read from the certificate file '%s' - not a PEM"
+msgstr "HTTPConnection: не удалось прочитать доверенные сертификаты из файла сертификатов '%s' - это не PEM"
+
+#: src/engine/backend/system/value/valueHttp.cpp:575
+#, c-format
+msgid "HTTPConnection: the platform's trusted certificates could not be read - %s; name the authority's file in TrustedCertificates"
+msgstr "HTTPConnection: не удалось прочитать доверенные сертификаты платформы - %s; укажите файл центра сертификации в TrustedCertificates"
+
+#: src/engine/backend/system/value/valueHttp.cpp:582
+#, c-format
+msgid "HTTPConnection: a secure connection could not be prepared - %s"
+msgstr "HTTPConnection: не удалось подготовить защищённое соединение - %s"
+
+#: src/engine/backend/system/value/valueHttp.cpp:621
+msgid "the connection was lost before the answer was whole"
+msgstr "соединение прервалось до того, как ответ пришёл целиком"
+
+#: src/engine/backend/system/value/valueHttp.cpp:624
+#, c-format
+msgid "what came back is not an HTTP answer, or is larger than the %u MB held"
+msgstr "полученное не является ответом HTTP или больше допустимых %u МБ"
+
+#: src/engine/backend/system/value/valueHttp.cpp:634
+#, c-format
+msgid "the server's certificate is not trusted - not signed by a trusted authority, expired, or not a certificate (%s); name the authority's file in TrustedCertificates"
+msgstr "сертификат сервера не является доверенным - не подписан доверенным центром, просрочен или не является сертификатом (%s); укажите файл центра сертификации в TrustedCertificates"
+
+#: src/engine/backend/system/value/valueTable.cpp:732
+msgid "GroupBy: a column cannot be both grouped and summed"
+msgstr "GroupBy: колонка не может быть одновременно группируемой и суммируемой"
+
+#: src/engine/core/fdatetimeParse.cpp:45
+msgctxt "day of month"
+msgid "first"
+msgstr "первое"
+
+#: src/engine/core/fdatetimeParse.cpp:45
+msgctxt "day of month"
+msgid "second"
+msgstr "второе"
+
+#: src/engine/core/fdatetimeParse.cpp:46
+msgctxt "day of month"
+msgid "third"
+msgstr "третье"
+
+#: src/engine/core/fdatetimeParse.cpp:46
+msgctxt "day of month"
+msgid "fourth"
+msgstr "четвёртое"
+
+#: src/engine/core/fdatetimeParse.cpp:47
+msgctxt "day of month"
+msgid "fifth"
+msgstr "пятое"
+
+#: src/engine/core/fdatetimeParse.cpp:47
+msgctxt "day of month"
+msgid "sixth"
+msgstr "шестое"
+
+#: src/engine/core/fdatetimeParse.cpp:48
+msgctxt "day of month"
+msgid "seventh"
+msgstr "седьмое"
+
+#: src/engine/core/fdatetimeParse.cpp:48
+msgctxt "day of month"
+msgid "eighth"
+msgstr "восьмое"
+
+#: src/engine/core/fdatetimeParse.cpp:49
+msgctxt "day of month"
+msgid "ninth"
+msgstr "девятое"
+
+#: src/engine/core/fdatetimeParse.cpp:49
+msgctxt "day of month"
+msgid "tenth"
+msgstr "десятое"
+
+#: src/engine/core/fdatetimeParse.cpp:50
+msgctxt "day of month"
+msgid "eleventh"
+msgstr "одиннадцатое"
+
+#: src/engine/core/fdatetimeParse.cpp:50
+msgctxt "day of month"
+msgid "twelfth"
+msgstr "двенадцатое"
+
+#: src/engine/core/fdatetimeParse.cpp:51
+msgctxt "day of month"
+msgid "thirteenth"
+msgstr "тринадцатое"
+
+#: src/engine/core/fdatetimeParse.cpp:51
+msgctxt "day of month"
+msgid "fourteenth"
+msgstr "четырнадцатое"
+
+#: src/engine/core/fdatetimeParse.cpp:52
+msgctxt "day of month"
+msgid "fifteenth"
+msgstr "пятнадцатое"
+
+#: src/engine/core/fdatetimeParse.cpp:52
+msgctxt "day of month"
+msgid "sixteenth"
+msgstr "шестнадцатое"
+
+#: src/engine/core/fdatetimeParse.cpp:53
+msgctxt "day of month"
+msgid "seventeenth"
+msgstr "семнадцатое"
+
+#: src/engine/core/fdatetimeParse.cpp:53
+msgctxt "day of month"
+msgid "eighteenth"
+msgstr "восемнадцатое"
+
+#: src/engine/core/fdatetimeParse.cpp:54
+msgctxt "day of month"
+msgid "nineteenth"
+msgstr "девятнадцатое"
+
+#: src/engine/core/fdatetimeParse.cpp:54
+msgctxt "day of month"
+msgid "twentieth"
+msgstr "двадцатое"
+
+#: src/engine/core/memory/memoryStream.cpp:147
+#, c-format
+msgid "Seeking to %i would pass the end of a %i-byte block"
+msgstr "Переход к позиции %i вышел бы за конец блока размером %i байт"
+
+#: src/engine/core/memory/memoryStream.cpp:154
+#, c-format
+msgid "Advancing %i bytes from offset %i would pass the end of a %i-byte block"
+msgstr "Сдвиг на %i байт от смещения %i вышел бы за конец блока размером %i байт"
+
+#: src/engine/core/memory/memoryStream.cpp:299
+#, c-format
+msgid "A zero-terminated string starts at %i, outside a %i-byte block"
+msgstr "Строка с завершающим нулём начинается в %i, вне блока размером %i байт"
+
+#: src/engine/core/memory/memoryStream.cpp:309
+#, c-format
+msgid "A zero-terminated string at offset %i has no terminator in the %i bytes left"
+msgstr "У строки с завершающим нулём по смещению %i нет завершающего нуля в оставшихся %i байтах"
+
+#: src/engine/core/memory/memoryStream.cpp:385
+#, c-format
+msgid "A zero-terminated string of %i bytes does not fit a %u-byte buffer"
+msgstr "Строка с завершающим нулём длиной %i байт не помещается в буфер размером %u байт"
+
+#: src/engine/core/serialize/dataBuilder.cpp:991
+#, c-format
+msgid "ibBinaryProvider: the bytes are no OES-RPC packet: %s at byte %u"
+msgstr "ibBinaryProvider: байты не являются пакетом OES-RPC: %s в байте %u"
+
+#: src/engine/core/serialize/dataBuilder.cpp:1000
+msgid "ibBinaryProvider: the packet is nested deeper than the stack allows"
+msgstr "ibBinaryProvider: пакет вложен глубже, чем позволяет стек"
+
+#: src/engine/core/serialize/dataBuilder.cpp:1108
+#: src/engine/core/serialize/dataBuilder.cpp:1110
+#: src/engine/core/serialize/dataBuilder.cpp:1115
+#: src/engine/core/serialize/dataBuilder.cpp:1119
+#: src/engine/core/serialize/dataBuilder.cpp:1136
+#: src/engine/core/serialize/dataBuilder.cpp:1139
+#, c-format
+msgid "ibBinaryProvider: the bytes are no OES-RPC packet: %s"
+msgstr "ibBinaryProvider: байты не являются пакетом OES-RPC: %s"
+
+#: src/engine/core/serialize/dataBuilder.cpp:1112
+#, c-format
+msgid "ibBinaryProvider: the packet is OES-RPC version %u, this end reads %u"
+msgstr "ibBinaryProvider: пакет имеет версию OES-RPC %u, а эта сторона читает %u"
+
+#: src/engine/core/serialize/jsonProvider.cpp:336
+#, c-format
+msgid "ibJsonProvider: the JSON is nested deeper than %d levels at byte %d"
+msgstr "ibJsonProvider: вложенность JSON глубже %d уровней в байте %d"
+
+#: src/engine/core/serialize/jsonProvider.cpp:339
+msgid "ibJsonProvider: the JSON is nested deeper than the stack allows"
+msgstr "ibJsonProvider: вложенность JSON глубже, чем позволяет стек"
+
+#: src/engine/core/serialize/jsonProvider.cpp:546
+#, c-format
+msgid "ibJsonProvider: malformed JSON at character %d"
+msgstr "ibJsonProvider: некорректный JSON в символе %d"
+
+#: src/engine/core/server/listener.cpp:44
+#: src/engine/core/server/listener.cpp:49
+#, c-format
+msgid "The file %s named in backend.conf could not be read."
+msgstr "Не удалось прочитать файл %s, указанный в backend.conf."
+
+#: src/engine/core/server/listener.cpp:46
+#, c-format
+msgid "The file %s named in backend.conf is larger than a certificate or a key is."
+msgstr "Файл %s, указанный в backend.conf, больше, чем бывает сертификат или ключ."
+
+#: src/engine/core/server/listener.cpp:80
+#, c-format
+msgid "%s is not this machine's own address, and backend.conf names no certificate: the server would listen in the clear. Name Certificate and PrivateKey there, or keep the address at 127.0.0.1."
+msgstr "%s не является собственным адресом этого компьютера, а backend.conf не указывает сертификат: сервер слушал бы в открытом виде. Укажите там Certificate и PrivateKey или оставьте адрес 127.0.0.1."
+
+#: src/engine/core/server/listener.cpp:85
+msgid "backend.conf names a Certificate without a PrivateKey, or the key without the certificate: the two go together."
+msgstr "backend.conf указывает Certificate без PrivateKey или ключ без сертификата: они указываются вместе."
+
+#: src/engine/core/server/listener.cpp:88
+#, c-format
+msgid "The file %s named in backend.conf is not there."
+msgstr "Файла %s, указанного в backend.conf, нет."
+
+#: src/engine/designer-thin/backend/debugger/debugClient.cpp:92
+#, c-format
+msgid "The debugger did not take the command: %s"
+msgstr "Отладчик не принял команду: %s"
+
+#: src/engine/designer-thin/backend/debugger/debugClient.cpp:160
+#, c-format
+msgid "The debugger is not available: %s"
+msgstr "Отладчик недоступен: %s"
+
+#: src/engine/designer-thin/backend/debugger/debugClientBridge.cpp:23
+msgid "SetDebuggerClientBridge: debugClient is null (call after the frame logged in)"
+msgstr "SetDebuggerClientBridge: debugClient равен null (вызывайте после входа окна в систему)"
+
+#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:420
+msgid "Merge failed."
+msgstr "Не удалось выполнить объединение."
+
+#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:420
+msgid "The server refused the merge."
+msgstr "Сервер отказал в объединении."
+
+#: src/engine/designer-thin/mainApp.cpp:147
+msgid ""
+"Cannot start designer-thin.exe - no infobase specified.\n"
+"\n"
+"Provide one of:\n"
+"  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
+"  --file=<path>          (Firebird embedded / SQLite file)\n"
+"  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]"
+msgstr "Невозможно запустить designer-thin.exe - не указана информационная база.\n\nУкажите одно из:\n  --address=oes://<server>[:port]/<base>   (сервер приложений; oess:// через TLS)\n  --file=<path>          (Firebird embedded / файл SQLite)\n  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]"
+
+#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:282
+msgid "Failed to upload configuration file."
+msgstr "Не удалось загрузить файл конфигурации."
+
+#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:288
+msgid "Failed to compare with the configuration file."
+msgstr "Не удалось сравнить с файлом конфигурации."
+
+#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:329
+msgid "Failed to upload one of the configuration files."
+msgstr "Не удалось загрузить один из файлов конфигурации."
+
+#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:744
+msgid "Save data processor file"
+msgstr "Сохранить файл обработки"
+
+#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:744
+msgid "Save report file"
+msgstr "Сохранить файл отчёта"
+
+#: src/engine/enterprise-thin/mainApp.cpp:138
+msgid ""
+"Cannot start enterprise-thin.exe - no infobase specified.\n"
+"\n"
+"Provide one of:\n"
+"  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
+"  --file=<path>          (Firebird embedded / SQLite file)\n"
+"  --server=<host> --db=<name> [--dbport=...] [--user=...]"
+msgstr "Невозможно запустить enterprise-thin.exe - не указана информационная база.\n\nУкажите одно из:\n  --address=oes://<server>[:port]/<base>   (сервер приложений; oess:// через TLS)\n  --file=<path>          (Firebird embedded / файл SQLite)\n  --server=<host> --db=<name> [--dbport=...] [--user=...]"
+
+#: src/engine/frmclient/docView/templates/docViewSpreadsheet.cpp:233
+msgid "Zoom"
+msgstr "Масштаб"
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:762
+msgid "The start was refused."
+msgstr "Запуск отклонён."
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:1644
+msgid "The server refused it."
+msgstr "Сервер отклонил это."
+
+#: src/engine/frmclient/mainFrame/settings/editorsettingspanel.cpp:22
+msgid "Convert tabs to spaces on load"
+msgstr "Преобразовывать табуляцию в пробелы при загрузке"
+
+#: src/engine/frmclient/mainFrame/settings/editorsettingspanel.cpp:29
+msgid "Show line numbers in margin"
+msgstr "Показывать номера строк на полях"
+
+#: src/engine/frmclient/mainFrame/settings/fontcolorsettingspanel.cpp:21
+msgid "Foreground:"
+msgstr "Текст:"
+
+#: src/engine/frmclient/mainFrame/settings/fontcolorsettingspanel.cpp:24
+msgid "Background:"
+msgstr "Фон:"
+
+#: src/engine/frmclient/mainFrame/settings/keybinderpanel.cpp:29
+msgid "Find a command or a key"
+msgstr "Найти команду или клавишу"
+
+#: src/engine/frmclient/mainFrame/settings/keybinderpanel.cpp:36
+msgid "Keys"
+msgstr "Клавиши"
+
+#: src/engine/frmclient/mainFrame/settings/keybinderpanel.cpp:37
+msgid "Menu"
+msgstr "Меню"
+
+#: src/engine/frmclient/mainFrame/settings/keybinderpanel.cpp:44
+msgid "Press a key:"
+msgstr "Нажмите клавишу:"
+
+#: src/engine/frmclient/mainFrame/settings/keybinderpanel.cpp:47
+msgid "Assign"
+msgstr "Назначить"
+
+#: src/engine/frmclient/mainFrame/settings/keybinderpanel.cpp:55
+msgid "Remove keys"
+msgstr "Удалить клавиши"
+
+#: src/engine/frmclient/mainFrame/settings/keybinderpanel.cpp:57
+msgid "Reset to default"
+msgstr "Сбросить по умолчанию"
+
+#: src/engine/frmclient/mainFrame/settings/keybinderpanel.cpp:148
+#, c-format
+msgid "Now on \"%s\" (%s); assigning moves it here."
+msgstr "Сейчас назначена на \"%s\" (%s); назначение перенесёт её сюда."
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropChoiceLink.cpp:105
+msgid "Editing the choice parameters is not available in the thin designer yet."
+msgstr "Изменение параметров выбора в тонком конфигураторе пока недоступно."
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:31
+msgid "Navy"
+msgstr "Тёмно-синий"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:33
+msgid "Teal"
+msgstr "Сине-зелёный"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:34
+msgid "Gray"
+msgstr "Серый"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:37
+msgid "Brown"
+msgstr "Коричневый"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:39
+msgid "Fuchsia"
+msgstr "Фуксия"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:41
+msgid "Orange"
+msgstr "Оранжевый"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:42
+msgid "Silver"
+msgstr "Серебряный"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:43
+msgid "Lime"
+msgstr "Лайм"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:44
+msgid "Aqua"
+msgstr "Цвет морской волны"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:47
+msgid "Custom"
+msgstr "Другой..."
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropCommandSource.cpp:156
+msgid "Choosing a command is not available in the thin designer yet."
+msgstr "Выбор команды в тонком конфигураторе пока недоступен."
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropSource.cpp:157
+msgid "Choosing a data source is not available in the thin designer yet."
+msgstr "Выбор источника данных в тонком конфигураторе пока недоступен."
+
+#: src/engine/frmclient/visualView/ctrl/placeholder.cpp:13
+#, c-format
+msgid "The control type \"%s\" is not registered in this client yet."
+msgstr "Тип элемента управления \"%s\" в этом клиенте пока не зарегистрирован."
+
+#: src/engine/frmclient/win/dlgs/connectionDB.cpp:128
+msgid "Testing a connection is not in the thin client yet."
+msgstr "Проверка соединения в тонком клиенте пока недоступна."
+
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:111
+msgid "The module's tab was not asked: the tables and the names visible at the caret are not listed, and a query the caret stands in is not opened."
+msgstr "Вкладка модуля не была опрошена: таблицы и имена, видимые в позиции курсора, не перечислены, а запрос, в котором стоит курсор, не открыт."
+
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:623
+msgid "The module's tab did not answer: what this place holds is not listed."
+msgstr "Вкладка модуля не ответила: содержимое этого места не перечислено."
+
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:1392
+msgid "The compiler's reading of the block is not asked here - check the module after OK."
+msgstr "Прочтение блока компилятором здесь не запрашивается - проверьте модуль после OK."
+
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:1402
+msgid "The compiler reads the block when the group's name is written."
+msgstr "Компилятор читает блок, когда записывается имя группы."
+
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:1419
+msgid "The compiler's reading of the block was not answered - check the module after OK."
+msgstr "Компилятор не ответил на прочтение блока - проверьте модуль после OK."
+
+#: src/engine/frmclient/win/dlgs/userItem.cpp:24
+msgid "The password is set - type a new one to change it"
+msgstr "Пароль задан - введите новый, чтобы изменить его"
+
+#: src/engine/frmclient/win/editor/gridEditor/gridEditor.cpp:260
+msgid "The settings have changed. Press Compose to build the report."
+msgstr "Настройки изменились. Нажмите «Сформировать», чтобы построить отчёт."
+
+#: src/engine/frmserver/client/clientFrame.cpp:772
+#, c-format
+msgid "Nothing here opens '%s'."
+msgstr "Здесь нечем открыть '%s'."
+
+#: src/engine/frmserver/client/clientHost.cpp:96
+#, c-format
+msgid "detached until %s"
+msgstr "отсоединён до %s"
+
+#: src/engine/frmserver/docView/docManager.cpp:328
+msgid "Close All"
+msgstr "Закрыть все"
+
+#: src/engine/frmserver/docView/docManager.cpp:329
+msgid "Open..."
+msgstr "Открыть..."
+
+#: src/engine/frmserver/docView/docManager.cpp:336
+msgid "Save as..."
+msgstr "Сохранить как..."
+
+#: src/engine/frmserver/docView/docManagerDesigner.cpp:70
+msgid "Assistant Doc"
+msgstr "Документ ассистента"
+
+#: src/engine/frmserver/docView/docManagerDesigner.cpp:70
+msgid "Assistant View"
+msgstr "Представление ассистента"
+
+#: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:303
+#, c-format
+msgid "Form editor: the form \"%s\" handed back could not be read whole."
+msgstr "Редактор формы: возвращённую форму \"%s\" не удалось прочитать целиком."
+
+#: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:354
+msgid "Add page"
+msgstr "Добавить страницу"
+
+#: src/engine/frmserver/docView/templates/docViewAuditLog.cpp:101
+msgid "A user's card is not opened from the journal yet"
+msgstr "Карточка пользователя из журнала пока не открывается"
+
+#: src/engine/frmserver/schema/designer/configCompare.cpp:355
+msgid "Not applied:"
+msgstr "Не применено:"
+
+#: src/engine/frmserver/schema/designer/metaData.cpp:345
+msgid "The data processor or report could not be read from the file."
+msgstr "Не удалось прочитать обработку или отчёт из файла."
+
+#: src/engine/frmserver/schema/designer/metaData.cpp:372
+msgid "The configuration could not be read from the file."
+msgstr "Не удалось прочитать конфигурацию из файла."
+
+#: src/engine/frmserver/visualView/ctrl/notebook.h:75
+msgid "Where the page tabs are drawn: above the pages (the default), below them, or nowhere - then the notebook is a panel: only the active page shows, and code switches it (ActivePage)."
+msgstr "Где рисуются ярлыки страниц: над страницами (по умолчанию), под ними или нигде - тогда панель вкладок становится панелью: видна только активная страница, и переключает её код (ActivePage)."
+
+#: src/engine/protocol/connectionFile.cpp:37
+#, c-format
+msgid "The file base library could not be loaded: %s"
+msgstr "Не удалось загрузить библиотеку файловой базы: %s"
+
+#: src/engine/protocol/connectionFile.cpp:47
+#, c-format
+msgid "%s is not the file base library this program was built with."
+msgstr "%s не является библиотекой файловой базы, с которой собрана эта программа."
+
+#: src/engine/protocol/connectionServer.cpp:87
+#: src/engine/protocol/connectionServer.cpp:92
+#, c-format
+msgid "the trusted certificates %s could not be read"
+msgstr "не удалось прочитать доверенные сертификаты %s"
+
+#: src/engine/protocol/connectionServer.cpp:113
+#, c-format
+msgid "'%s' is not the address of a base: oes://server[:port]/<base> or oess://..."
+msgstr "'%s' не является адресом базы: oes://server[:port]/<base> или oess://..."
+
+#: src/engine/protocol/connectionServer.cpp:121
+#, c-format
+msgid "The connection to the server at %s:%d is not prepared: %s."
+msgstr "Соединение с сервером %s:%d не подготовлено: %s."
+
+#: src/engine/protocol/connectionServer.cpp:184
+#, c-format
+msgid "The connection to the server at %s:%d did not open: %s."
+msgstr "Соединение с сервером %s:%d не открылось: %s."
