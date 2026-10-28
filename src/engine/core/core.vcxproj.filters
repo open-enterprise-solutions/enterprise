@@ -243,6 +243,9 @@
     <ClCompile Include="serialize\dataBuilder.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
+    <ClCompile Include="serialize\fileProvider.cpp">
+      <Filter>serialize</Filter>
+    </ClCompile>
     <ClCompile Include="serialize\jsonProvider.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
@@ -502,6 +505,9 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="serialize\dataBuilder.h">
+      <Filter>serialize</Filter>
+    </ClInclude>
+    <ClInclude Include="serialize\fileProvider.h">
       <Filter>serialize</Filter>
     </ClInclude>
     <ClInclude Include="serialize\jsonProvider.h">

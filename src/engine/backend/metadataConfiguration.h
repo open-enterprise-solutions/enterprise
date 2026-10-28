@@ -12,6 +12,7 @@
 
 class ibDebuggerServer;
 class ibDebuggerClient;
+class ibDataNode;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 // activeMetaData — the configuration the calling thread's session works in: its own reference
@@ -175,6 +176,13 @@ public:
 	//load/save form file
 	bool LoadConfigFromFile(const ibString& strFileName);
 	bool SaveConfigToFile(const ibString& strFileName);
+
+	// …into a directory of files, one a part (ibFileProvider) — and as the set of those files itself, for a directory on
+	// another machine: a thin designer's, the set travelling as one node.
+	bool LoadConfigFromFiles(const ibString& directory);
+	bool LoadConfigFromFiles(const ibDataNode& files);
+	bool SaveConfigToFiles(const ibString& directory);
+	bool SaveConfigToFiles(ibDataNode& files);
 
 public:
 

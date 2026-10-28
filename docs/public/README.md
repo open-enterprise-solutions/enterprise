@@ -43,6 +43,7 @@ Add a row to the table below when you add a document, so this folder can be read
 | [ai-quickstart.md](ai-quickstart.md) | Building a configuration with an assistant: connecting it to the designer over MCP, the first request, where it stops |
 | [browser-client.md](browser-client.md) | The browser client: a page with no build, its parts, who does what, what it guarantees, where it stops |
 | [client-protocol.md](client-protocol.md) | How a client works with a base: transports, methods, the frame, schemas, questions, files, the menu, what it guarantees |
+| [configuration-files.md](configuration-files.md) | A configuration as a directory of text files: the layout, the value kinds, export and import over MCP, publication and refusal |
 | [date-model.md](date-model.md) | The date: a wall-clock reading in `ibDateTime`, its calendar, its doors, stored forms, where it stops |
 | [listeners.md](listeners.md) | The listeners: TLS when backend.conf names a certificate; where the clear is allowed, and where it is refused |
 | [event-handlers.md](event-handlers.md) | Event handlers: one event of many objects handled in one module, the call order, the composite rule, the manager events |

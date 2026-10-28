@@ -13289,3 +13289,143 @@ msgstr "З'єднання з сервером %s:%d не підготовлен�
 #, c-format
 msgid "The connection to the server at %s:%d did not open: %s."
 msgstr "З'єднання з сервером %s:%d не відкрилося: %s."
+
+#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:96
+msgid "Load configuration from files..."
+msgstr "Завантажити конфігурацію з файлів..."
+
+#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:97
+msgid "Save configuration to files..."
+msgstr "Зберегти конфігурацію у файли..."
+
+#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:276
+msgid "Choose the directory the configuration was saved to"
+msgstr "Виберіть теку, у яку конфігурацію було збережено"
+
+#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:295
+msgid "Choose a directory of its own for the configuration's files"
+msgstr "Виберіть окрему теку для файлів конфігурації"
+
+#: src/engine/backend/metadataConfiguration.cpp:83
+msgid "The directory does not contain a configuration."
+msgstr "У теці немає конфігурації."
+
+#: src/engine/core/serialize/dataBuilder.cpp:255
+#, c-format
+msgid "ibDataValue: '%s' is no date"
+msgstr "ibDataValue: '%s' - не дата"
+
+#: src/engine/core/serialize/fileProvider.cpp:40
+#, c-format
+msgid "Configuration files: %s"
+msgstr "Файли конфігурації: %s"
+
+#: src/engine/core/serialize/fileProvider.cpp:46
+msgid "the structure is nested too deeply"
+msgstr "структура вкладена занадто глибоко"
+
+#: src/engine/core/serialize/fileProvider.cpp:93
+#, c-format
+msgid "'%s' is not UTF-8 text"
+msgstr "'%s' - не текст у UTF-8"
+
+#: src/engine/core/serialize/fileProvider.cpp:108
+#: src/engine/core/serialize/fileProvider.cpp:117
+#, c-format
+msgid "'%s' is not a file name inside the directory"
+msgstr "'%s' - не ім'я файлу всередині теки"
+
+#: src/engine/core/serialize/fileProvider.cpp:111
+msgid "an export directory cannot be a symbolic link"
+msgstr "тека вивантаження не може бути символічним посиланням"
+
+#: src/engine/core/serialize/fileProvider.cpp:120
+msgid "a configuration file cannot be a symbolic link"
+msgstr "файл конфігурації не може бути символічним посиланням"
+
+#: src/engine/core/serialize/fileProvider.cpp:129
+#, c-format
+msgid "'%s' is missing or is not a file"
+msgstr "'%s' відсутній або не є файлом"
+
+#: src/engine/core/serialize/fileProvider.cpp:133
+#, c-format
+msgid "'%s' could not be read"
+msgstr "не вдалося прочитати '%s'"
+
+#: src/engine/core/serialize/fileProvider.cpp:146
+#, c-format
+msgid "'%s' could not be written"
+msgstr "не вдалося записати '%s'"
+
+#: src/engine/core/serialize/fileProvider.cpp:179
+#, c-format
+msgid "two parts of '%s' are named '%s'"
+msgstr "у '%s' дві частини з іменем '%s'"
+
+#: src/engine/core/serialize/fileProvider.cpp:193
+#, c-format
+msgid ""
+"two parts of the configuration are named '%s' - a name told apart only by "
+"case is the same folder"
+msgstr ""
+"дві частини конфігурації названо '%s' - імена, що відрізняються лише "
+"регістром, дають одну теку"
+
+#: src/engine/core/serialize/fileProvider.cpp:262
+#, c-format
+msgid "'%s' is empty"
+msgstr "'%s' порожній"
+
+#: src/engine/core/serialize/fileProvider.cpp:271
+#, c-format
+msgid "'%s': %s must hold a list"
+msgstr "'%s': %s має містити список"
+
+#: src/engine/core/serialize/fileProvider.cpp:274
+#, c-format
+msgid "'%s': '%s' names no folder"
+msgstr "'%s': '%s' - не ім'я теки"
+
+#: src/engine/core/serialize/fileProvider.cpp:281
+#, c-format
+msgid "'%s': '%s' names no file beside it"
+msgstr "'%s': '%s' - не ім'я файлу поруч із ним"
+
+#: src/engine/core/serialize/fileProvider.cpp:300
+#, c-format
+msgid "'%s' is named more than once"
+msgstr "'%s' зазначено більше одного разу"
+
+#: src/engine/core/serialize/fileProvider.cpp:334
+msgid "the directory holds no configuration export of a version this build reads"
+msgstr "у теці немає вивантаження конфігурації у версії, яку читає ця збірка"
+
+#: src/engine/core/serialize/fileProvider.cpp:344
+#, c-format
+msgid "no type is named '%s' here"
+msgstr "тут немає типу з іменем '%s'"
+
+#: src/engine/core/serialize/fileProvider.cpp:384
+#, c-format
+msgid "'%s' is missing"
+msgstr "'%s' відсутній"
+
+#: src/engine/core/serialize/fileProvider.cpp:421
+msgid "there is no configuration export to write"
+msgstr "немає вивантаження конфігурації для запису"
+
+#: src/engine/core/serialize/fileProvider.cpp:431
+msgid "choose a directory of its own for the export"
+msgstr "виберіть для вивантаження окрему теку"
+
+#: src/engine/core/serialize/fileProvider.cpp:436
+msgid "the directory holds files and no export - choose a directory of its own"
+msgstr "у теці є файли, але немає вивантаження - виберіть окрему теку"
+
+#: src/engine/core/serialize/fileProvider.cpp:455
+#, c-format
+msgid ""
+"the directory holds '%s', which is no part of an export - choose a directory "
+"of its own"
+msgstr "у теці є '%s', який не входить до вивантаження, - виберіть окрему теку"

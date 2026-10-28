@@ -112,9 +112,11 @@ void ibJsonProvider::EmitValue(const ibDataValue& v, Text& out, int depth) const
 		const ibDateTime date = v.AsDate();   // the wall-clock reading (fdatetime.h); the empty date is ""
 		ibDateTimeParts p;
 		date.ToParts(p);
-		// readable ISO — digits only
+		// readable ISO — digits only; the milliseconds when there are any, so a date reads back whole (AsDate)
 		char text[32] = "";
-		if (!date.IsEmpty())
+		if (!date.IsEmpty() && p.m_millisecond != 0)
+			std::snprintf(text, sizeof(text), "%04d-%02u-%02u %02u:%02u:%02u.%03u", p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second, p.m_millisecond);
+		else if (!date.IsEmpty())
 			std::snprintf(text, sizeof(text), "%04d-%02u-%02u %02u:%02u:%02u", p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second);
 		Put(out, "\"");
 		Put(out, text);

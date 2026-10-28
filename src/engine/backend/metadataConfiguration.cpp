@@ -28,8 +28,76 @@
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
 #include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot / ibSchemaTable — ContributeTables drives data dump
 #include "backend/query/dataMover.h"         // ibDataMover::Dump / Restore (L3-3 row mover)
+#include "core/serialize/fileProvider.h"
 #include "core/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/objCtor.h"                       // ibCtorMetaValueType::GetClassName — clsid -> type name
+
+namespace {
+
+// ⭐ THE TYPES A DIRECTORY NAMES ARE THE REGISTRY'S — Catalog, Attribute, Form: the same in every configuration, so an
+// export reads into any one. A configuration's own (CatalogRef.Goods) would read back into that one alone.
+ibFileProvider ConfigurationFiles()
+{
+	ibFileProvider provider;
+	provider.SetTypeResolver([](ibClassID clsid) {
+		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(clsid);
+		return ctor != nullptr ? ctor->GetClassName() : ibString();
+	});
+	provider.SetTypeLookup([](const ibString& name) {
+		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(name);
+		return ctor != nullptr ? ctor->GetClassType() : ibClassID(0);
+	});
+	return provider;
+}
+
+} // namespace
+
+bool ibMetaDataConfigurationBase::SaveConfigToFiles(const ibString& directory)
+{
+	ibDataNode files;
+	return SaveConfigToFiles(files) && ibFileProvider::Publish(files, directory);
+}
+
+bool ibMetaDataConfigurationBase::SaveConfigToFiles(ibDataNode& files)
+{
+	ibDataNode root;
+	if (!GetCommonMetaObject()->BuildDataNode(root, saveToFileFlag))
+		return false;
+	return ConfigurationFiles().Write(root, files);
+}
+
+bool ibMetaDataConfigurationBase::LoadConfigFromFiles(const ibString& directory)
+{
+	ibDataNode files;
+	return ibFileProvider::Collect(directory, files) && LoadConfigFromFiles(files);
+}
+
+bool ibMetaDataConfigurationBase::LoadConfigFromFiles(const ibDataNode& files)
+{
+	if (!IsEditable())
+		ibBackendCoreException::Error(_("This configuration is open for reading only."));
+	ibDataNode root;
+	if (!ConfigurationFiles().Read(files, root))
+		return false;
+	if (root.GetClsid() != g_metaCommonMetadataCLSID)
+		ibBackendCoreException::Error(_("The directory does not contain a configuration."));
+
+	// Enter through the same detached-root load as a configuration file. Parsing all
+	// files finishes before that door closes editors or replaces any live metadata.
+	ibWriterMemory inner;
+	ibBinaryProvider provider;
+	if (!provider.Write(root, inner))
+		return false;
+	ibWriterMemory header;
+	header.w_u64(sign_metadata);
+	header.w_stringZ(root.GetValue<ibString>(ibT("Guid")));
+	ibWriterMemory metadata;
+	metadata.w_chunk(static_cast<std::uint64_t>(root.GetMetaId()), inner.buffer());
+	ibWriterMemory configuration;
+	configuration.w_chunk(eHeaderBlock, header.buffer());
+	configuration.w_chunk(root.GetClsid(), metadata.buffer());
+	return LoadConfigFromBuffer(configuration.buffer());
+}
 
 bool ibMetaDataConfigurationBase::LoadConfigFromFile(const ibString& strFileName)
 {

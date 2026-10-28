@@ -20,9 +20,11 @@ public:
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantForm* srcData = dynamic_cast<const ibVariantForm*>(data.GetRef());
 		if (srcData != nullptr) {
+			// The length first: an empty form holds no buffer at all, and memcmp is not given a null.
 			return m_moduleData == srcData->m_moduleData &&
-				std::memcmp(m_formData.GetData(), srcData->m_formData.GetData(), m_formData.GetDataLen()) == 0 && 
-				srcData->m_formData.GetDataLen() == m_formData.GetDataLen();
+				srcData->m_formData.GetDataLen() == m_formData.GetDataLen() &&
+				(m_formData.GetDataLen() == 0
+					|| std::memcmp(m_formData.GetData(), srcData->m_formData.GetData(), m_formData.GetDataLen()) == 0);
 		}
 		return false;
 	}

@@ -1370,13 +1370,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 				const ibDataNode held = *value.AsChild();
 				ibDataNode& shown = entry->Child(ibT("value"));
 
-				// ⚠ THE NAME IS A PROPERTY, THE ID IS A FIELD — the node keeps two areas and they are
-				// not interchangeable. `GetValue` reads the FIELD area, so asking it for `Name`
-				// came back empty and every structure was reported with an id and no name.
-				// ibValueMetaObject::SaveNode is where the split is written down: intrinsics
-				// (Guid, Id, Deleted) go to fields, editable values (Name, Synonym, Comment) go to
-				// properties.
-				shown.SetValue(ibT("name"), held.GetProp<ibString>(ibT("Name")));
+				shown.SetValue(ibT("name"), held.GetValue<ibString>(ibT("Name")));
 				if (auto id = held.FindField(ibT("Id")))
 					shown.AddField(ibT("id"), *id);
 			}

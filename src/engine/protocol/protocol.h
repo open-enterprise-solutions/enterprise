@@ -1099,6 +1099,10 @@ namespace ibProtocol {
 				Apply    = 10,   // written and the base restructured, its ledger asked first (ibRequest::ibApplyChange)
 				Load     = 11,   // {File} — read from that uploaded file
 				Unload   = 12,   // {File} — written into that one (uploaded empty)
+				// …and as a directory of files, one a part (ibFileProvider): the files travel as one node, in its binary
+				// form, and the client writes them into the directory or reads them out of it.
+				LoadFiles   = 14,   // {File} — read from that uploaded node of files
+				UnloadFiles = 15,   // {File} — the node of files written into that one (uploaded empty)
 				Browse   = 13,   // the base's configuration in a tab, read-only (ibView::ibKind::Configuration): raised when
 				                 // open, else opened
 				// …and Load and Unload over a data processor or a report, as the file it is kept in apart (the desktop's

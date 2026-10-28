@@ -57,6 +57,10 @@ enum {
 
 	wxID_DESIGNER_ABOUT,
 
+	// …and the configuration as a directory of files, one a part (ibFileProvider) — last, as every new one goes.
+	wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILES,
+	wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILES,
+
 	wxID_DESIGNER_END
 };
 

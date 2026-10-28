@@ -245,6 +245,16 @@ std::uint64_t ibDataValue::AsUInt() const
 
 ibDateTime ibDataValue::AsDate() const
 {
+	// ⭐ A DATE THAT CAME AS ITS TEXT is read by the one who asks for a date. The JSON view writes a date as its ISO
+	// string (jsonProvider.cpp) — the wire's clients read it so — and a reading of that text cannot tell it from a
+	// string; whoever asks for a date can. "" is the empty date, as the view writes it; a text that names none refuses.
+	if (Kind() == ibDataKind::String) {
+		ibDateTime date;
+		const ibString text = AsString();
+		if (!text.IsEmpty() && !date.FromString(text))
+			ibCoreException::Error(_("ibDataValue: '%s' is no date"), text);
+		return date;
+	}
 	Expect(ibDataKind::Date);
 	return Kind() == ibDataKind::Date ? ibDateTime(Rd<std::int64_t>(Base(), ValueAt())) : ibDateTime();
 }

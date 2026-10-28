@@ -277,11 +277,12 @@ public:
 	// Save uses the non-const Set* (writes the node); Load uses the const Get*
 	// (reads it). No direction flag — the METHOD (SaveNode / LoadNode) decides,
 	// so on load the node is genuinely const. Get*<T> RETURNS the value (inline);
-	// Get*(name, out) deduces T. One pair for the FIELD walk, one for PROPERTIES:
-	//   save: node.SetValue("id", m_metaId);          node.SetProp("Name", GetName());
-	//   load: m_metaId = node.GetValue<std::int32_t>("id");     SetName(node.GetProp<wxString>("Name"));
+	// Get*(name, out) deduces T. Fields and properties are one set, so one pair:
+	//   save: node.SetValue("id", m_metaId);          node.SetValue("Name", GetName());
+	//   load: m_metaId = node.GetValue<std::int32_t>("id");     SetName(node.GetValue<ibString>("Name"));
 	// An absent name yields a default-constructed T — forward-compatible with
-	// add / drop / reorder.
+	// add / drop / reorder. (No SetProp/GetProp: <windows.h> renames SetProp to
+	// SetPropW wherever it is seen first, and the call stops matching the declaration.)
 	template<class T> void SetValue(const ibString& name, const T& value) { AddField(name, ibDataCodec<T>::To(value)); }
 	template<class T> T    GetValue(const ibDataKey& name) const {
 		if (const auto v = FindField(name)) return ibDataCodec<T>::From(*v);
@@ -290,9 +291,6 @@ public:
 	template<class T> void GetValue(const ibDataKey& name, T& out) const {
 		if (const auto v = FindField(name)) out = ibDataCodec<T>::From(*v);
 	}
-	template<class T> void SetProp(const ibString& name, const T& value) { AddField(name, ibDataCodec<T>::To(value)); }
-	template<class T> T    GetProp(const ibDataKey& name) const { return GetValue<T>(name); }
-	template<class T> void GetProp(const ibDataKey& name, T& out) const { GetValue(name, out); }
 
 	// --- named-field primitives (internals of Field) ----------------------
 	void AddField(const ibString& name, const ibDataValue& value);

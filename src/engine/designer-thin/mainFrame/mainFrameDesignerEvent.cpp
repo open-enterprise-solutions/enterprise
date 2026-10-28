@@ -8,6 +8,7 @@
 #include <vector>
 #include <wx/filename.h>
 #include <wx/filedlg.h>
+#include <wx/dirdlg.h>
 #include <wx/msgdlg.h>
 
 //********************************************************************************
@@ -19,6 +20,7 @@
 #include "designer-thin/mainFrame/metaTree/treeConfiguration.h"
 #include "designer-thin/backend/metaCollection/metaDiff.h"
 #include "designer-thin/docManager/templates/docViewConfigCompare.h"
+#include "core/exception.h"   // ibCoreException — a directory of files refused on this computer, said here
 
 // Common shape for the three places that save the configuration before
 // kicking off a child process (enterprise-thin.exe / webserver.exe
@@ -265,6 +267,41 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 
 		if (m_metaWindow->SaveConfigToFile(saveFileDialog.GetPath())) {
 			wxMessageBox(_("Successfully unloaded to: ") + saveFileDialog.GetPath());
+		}
+	}
+	// …and as a directory of files: read and written on this computer, so what refuses here (a directory that is no
+	// export, or holds other files) is said here.
+	else if (wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILES == event.GetId())
+	{
+		wxDirDialog dirDialog(this, _("Choose the directory the configuration was saved to"), "",
+			wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+		if (dirDialog.ShowModal() == wxID_CANCEL)
+			return;
+
+		try {
+			if (m_metaWindow->LoadConfigFromFiles(dirDialog.GetPath()) && m_metaWindow->IsEdited()) {
+				if (wxMessageBox(ibString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
+					m_metaWindow->GetConfigName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
+					OnUpdateConfiguration(event);
+				}
+			}
+		}
+		catch (const ibCoreException& err) {
+			wxMessageBox(err.GetErrorDescription(), wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
+		}
+	}
+	else if (wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILES == event.GetId())
+	{
+		wxDirDialog dirDialog(this, _("Choose a directory of its own for the configuration's files"), "", wxDD_DEFAULT_STYLE);
+		if (dirDialog.ShowModal() == wxID_CANCEL)
+			return;
+
+		try {
+			if (m_metaWindow->SaveConfigToFiles(dirDialog.GetPath()))
+				wxMessageBox(_("Successfully unloaded to: ") + dirDialog.GetPath());
+		}
+		catch (const ibCoreException& err) {
+			wxMessageBox(err.GetErrorDescription(), wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 		}
 	}
 	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_FILE == event.GetId())

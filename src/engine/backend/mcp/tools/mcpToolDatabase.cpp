@@ -195,6 +195,101 @@ public:
 MCP_TOOL_REGISTER(ibMcpToolConfigSave);
 
 //---------------------------------------------------------------------------
+// Configuration directories use the same metadata door as the Designer menu.
+//---------------------------------------------------------------------------
+
+namespace {
+const ibArg& ArgDirectory()
+{
+	static const ibArg argument(ibT("directory"), ibArg::Kind::Text,
+		ibMcpText("A dedicated configuration export directory on the designer host. "
+			"Keep it inside a source repository, alongside the local database directory."), true);
+	return argument;
+}
+const ibArg& ArgImportConfirm()
+{
+	static const ibArg argument(ibT("confirm"), ibArg::Kind::Flag,
+		ibMcpText("true permits replacing the edited configuration with the selected files. "
+			"false refuses without reading or changing metadata."), true);
+	return argument;
+}
+}
+
+class ibMcpToolConfigExportFiles : public ibMcpTool {
+public:
+	virtual ibString GetName() const override { return ibT("config_export_files"); }
+	virtual ibString GetActivity(const ibDataNode&) const override { return ibMcpText("exporting configuration files"); }
+	virtual ibString GetDescription() const override
+	{
+		return ibMcpText("Export configuration metadata to text files for version control: a part is its name's folder "
+			"under its type's (Catalog/Goods/node.json, the node in the engine's JSON form), a module's text and a "
+			"binary are files beside it. Replaces a dedicated export directory, refusing unrelated files. Does not "
+			"save or apply the database or export records.");
+	}
+	virtual const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> argumentArray = { ArgDirectory() };
+		return argumentArray;
+	}
+	virtual bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
+	{
+		ibMetaDataConfigurationBase* config = OpenConfiguration(refusal);
+		if (config == nullptr) return false;
+		if (!config->AccessRight_DataAdministration()) {
+			refusal = ibMcpText("Not enough access rights for this user.");
+			return false;
+		}
+		if (!config->SaveConfigToFiles(ArgDirectory().Text(params))) {
+			refusal = ibMcpText("The configuration files could not be exported.");
+			return false;
+		}
+		result.SetValue(ibT("directory"), ArgDirectory().Text(params));
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolConfigExportFiles);
+
+class ibMcpToolConfigImportFiles : public ibMcpTool {
+public:
+	virtual ibString GetName() const override { return ibT("config_import_files"); }
+	virtual ibString GetActivity(const ibDataNode&) const override { return ibMcpText("importing configuration files"); }
+	virtual ibString GetDescription() const override
+	{
+		return ibMcpText("Replace the edited configuration with metadata from a configuration export directory "
+			"on the designer host. Reads and validates every referenced file before replacing metadata. "
+			"Requires confirm=true, closes open editors, and discards their edits. Does not save or apply: "
+			"use config_check, database_diff, config_save and config_apply afterwards.");
+	}
+	virtual const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> argumentArray = { ArgDirectory(), ArgImportConfirm() };
+		return argumentArray;
+	}
+	virtual bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
+	{
+		ibMetaDataConfigurationBase* config = OpenConfiguration(refusal);
+		if (config == nullptr) return false;
+		if (!ArgImportConfirm().Flag(params)) {
+			refusal = ibMcpText("Importing replaces the edited configuration. Pass confirm=true to proceed.");
+			return false;
+		}
+		if (!config->AccessRight_DataAdministration() || !config->IsEditable()) {
+			refusal = ibMcpText("The configuration is read-only or access is denied.");
+			return false;
+		}
+		if (!config->LoadConfigFromFiles(ArgDirectory().Text(params))) {
+			refusal = ibMcpText("The configuration files could not be imported.");
+			return false;
+		}
+		result.SetValue(ibT("directory"), ArgDirectory().Text(params));
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolConfigImportFiles);
+
+//---------------------------------------------------------------------------
 // config_apply
 //---------------------------------------------------------------------------
 
