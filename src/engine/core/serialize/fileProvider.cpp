@@ -231,8 +231,8 @@ private:
 			kept.AddField(kNodeFile_, ibDataValue::String(file));
 			return ibDataValue::Child(std::make_shared<ibDataNode>(kept));
 		}
-		if (value.Kind() == ibDataKind::Child && value.AsChild())
-			return ibDataValue::Child(std::make_shared<ibDataNode>(AsideNode(*value.AsChild(), named, placed, folder, names, depth)));
+		if (const std::optional<ibDataNode> shown = value.AsChild())
+			return ibDataValue::Child(std::make_shared<ibDataNode>(AsideNode(*shown, named, placed, folder, names, depth)));
 		if (value.Kind() == ibDataKind::Array) {
 			std::vector<ibDataValue> items;
 			for (const ibDataValue& item : value.AsArray()) {
@@ -347,8 +347,8 @@ private:
 			const ibMemoryBuffer bytes = Take(keptPath);
 			return kept->EndsWith(ibT(".txt")) ? ibDataValue::String(Text(bytes, keptPath)) : ibDataValue::Binary(bytes);
 		}
-		if (value.Kind() == ibDataKind::Child && value.AsChild())
-			return ibDataValue::Child(std::make_shared<ibDataNode>(RestoredNode(*value.AsChild(), folder, path, depth)));
+		if (const std::optional<ibDataNode> shown = value.AsChild())
+			return ibDataValue::Child(std::make_shared<ibDataNode>(RestoredNode(*shown, folder, path, depth)));
 		if (value.Kind() == ibDataKind::Array) {
 			std::vector<ibDataValue> items;
 			for (const ibDataValue& item : value.AsArray())
@@ -382,11 +382,12 @@ private:
 
 	static std::optional<ibString> KeptFile(const ibDataValue& value)
 	{
-		if (value.Kind() != ibDataKind::Child || !value.AsChild())
+		// The node held here: AsChild() hands out a copy, and a reference into it would outlive it.
+		const std::optional<ibDataNode> kept = value.AsChild();
+		if (!kept)
 			return std::nullopt;
-		const ibDataNode& kept = *value.AsChild();
-		const auto file = kept.FindField(kNodeFile_);
-		if (!file || file->Kind() != ibDataKind::String || kept.Fields().size() != 1 || !kept.Children().empty())
+		const auto file = kept->FindField(kNodeFile_);
+		if (!file || file->Kind() != ibDataKind::String || kept->Fields().size() != 1 || !kept->Children().empty())
 			return std::nullopt;
 		return file->AsString();
 	}
