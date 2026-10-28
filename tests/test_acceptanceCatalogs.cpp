@@ -24,6 +24,8 @@
 #include <nlohmann/json.hpp>
 
 #include "backend/appData.h"
+#include "backend/backend_composition.h"
+#include "backend/composition/dataComposer.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"
@@ -340,6 +342,22 @@ struct AcceptanceCatalogs : ::testing::Test {
 		return nullptr;
 	}
 
+	// THE LIST A PERSON SEES, narrowed by one line of its filter — the composer's own read of the
+	// contracts, the road a dynamic list takes, not a hand-built condition.
+	std::set<ibString> ContractsWhere(const ibString& path, ibComparisonKind comparison, const ibValue& value) {
+		ibDataDBComposer composer;
+		composer.FromSource(contracts->GetQueryable());
+		composer.Select(contracts->GetDataCode()->GetQueryColumn());
+		composer.UserSettings().m_filter.Append(path, comparison, ibStoreValue(value));
+		std::vector<ibQueryLowering::OutputColumn> schema;
+		bool hasTotals = false;
+		ibDataQueryResult rows = composer.Execute(schema, hasTotals);
+		std::set<ibString> codes;
+		while (rows.Next())
+			codes.insert(rows.GetValue(contracts->GetDataCode()->GetQueryColumn()).GetString());
+		return codes;
+	}
+
 	std::set<ibString> ChoiceCodes(ibValueMetaObjectCatalog* catalog) {
 		ibValue holder(ibValueReferenceDataObject::Create(cfg.get(), catalog->GetMetaID(), ibGuid(ibGuid::newGuid())));
 		ibValueReferenceDataObject* ref = holder.ConvertToType<ibValueReferenceDataObject>();
@@ -428,4 +446,34 @@ TEST_F(AcceptanceCatalogs, AQueryNarrowsASubordinateCatalogToItsOwner)
 	// the regression to fix, not a reason to edit the oracle.
 	for (auto it = block["of_owner_including_marked"].begin(); it != block["of_owner_including_marked"].end(); ++it)
 		EXPECT_EQ(CodesWhere(contracts, ownerCol, partyRef[AsWx(it.key())], false), AsSet(it.value()));
+}
+
+// «CONTAINS» IS A SUBSTRING, on a stored list as in memory. The condition used to reach the
+// database as `LIKE 'value'` — an exact match — so "contains 1" found nothing while "%1%" did.
+TEST_F(AcceptanceCatalogs, AContainsConditionOnAStoredListMatchesASubstring)
+{
+	if (!ready) return;
+	EXPECT_EQ(ContractsWhere(wxT("Code"), ibComparisonKind_Contains, ibValue(ibT("3"))),
+		(std::set<ibString>{ wxT("C3") }));
+	EXPECT_EQ(ContractsWhere(wxT("Code"), ibComparisonKind_Contains, ibValue(ibT("C"))),
+		(std::set<ibString>{ wxT("C1"), wxT("C2"), wxT("C3") }));
+	// …through a reference, too: the owner's code, read by a join.
+	EXPECT_EQ(ContractsWhere(wxT("Owner.Code"), ibComparisonKind_Contains, ibValue(ibT("CM"))),
+		(std::set<ibString>{ wxT("C1"), wxT("C2") }));
+	// A wildcard the person typed stays a wildcard, as it does in memory (ibCompositionCompare).
+	EXPECT_EQ(ContractsWhere(wxT("Owner.Code"), ibComparisonKind_Contains, ibValue(ibT("G_OBEX"))),
+		(std::set<ibString>{ wxT("C3") }));
+
+	// …while a LIKE condition of the query builder (ibQueryFilterOp::Like) keeps the pattern its author wrote: the
+	// wrapping is the filter's «contains», not the LIKE's.
+	ibQueryCondition like;
+	like.m_col = contracts->GetDataCode()->GetQueryColumn();
+	like.m_op = ibQueryFilterOp::Like;
+	like.m_value = ibValue(ibT("C"));
+	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
+	q.From(contracts->GetQueryable());
+	q.Select(contracts->GetDataCode()->GetQueryColumn(), wxT("code"));
+	q.Where(like);
+	ibDataQueryResult rows = q.Execute(ibReadPageRequest{});
+	EXPECT_FALSE(rows.Next()) << "LIKE 'C' is not a substring match";
 }

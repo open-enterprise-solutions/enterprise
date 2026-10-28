@@ -26,6 +26,11 @@ bool ibComposerColumnAnswersTo(const ibQueryLowering::OutputColumn& oc, const ib
 ibCompositionValueOf ibComposerRowValueOf(const std::vector<ibQueryLowering::OutputColumn>& schema,
                                           const std::vector<ibValue>& row);
 
+// «CONTAINS» AS THE LIKE PATTERN IT STANDS FOR — `%value%`, a `%` or `_` typed into the value left a wildcard. One
+// spelling for the row's reading (ibCompositionCompare) and the base's (ibBuildFilterCondition), so a list read from
+// the base and the same list filtered in memory select the same rows.
+ibString ibComposerContainsPattern(const ibString& value);
+
 // WHAT THE CONDITIONAL APPEARANCE OF AN OUTPUT LOOKS AT — the fields its rules' conditions name, of every storey in
 // force: the setting's, the output's, each node's on either axis. Read IN ADDITION to the selection, never in its place.
 std::vector<ibString> ibComposerRuleFieldsOf(const ibDataComposer::Output& output,

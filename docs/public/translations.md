@@ -19,8 +19,8 @@ Asked on every call, in this order:
    The base answers with its dictionary (`ibApplicationInstance::GetDictionary`), a pointer read
    without a lock.
 2. **The process's language** (`SetProcessLanguage`). On the server it is what `InitLocale` settled
-   from the request or `backend.conf`. On a thin client it is the `Locale` of the login's answer: the
-   base's locale, else the server's language.
+   from the request or `backend.conf`, else US English — never the machine's own language. On a thin
+   client it is the `Locale` of the login's answer: the base's locale, else the server's language.
 3. Otherwise the text itself.
 
 ## The base's locale

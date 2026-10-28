@@ -352,6 +352,25 @@ ibQueryAstExprPtr ibBuildFilledCondition(ibDataComposer& composer, const ibFilte
 	return filled;
 }
 
+// ⭐ «CONTAINS» IS A SUBSTRING — the value becomes the pattern `%value%` HERE, where the comparison is
+// still known, and not in the lowering's LIKE: the query language's own `LIKE` takes the pattern its
+// author wrote, literally. The row-side reading (ibCompositionCompare) wraps it with the same function
+// (ibComposerContainsPattern), so a list read from the base and the same list filtered in memory
+// select the same rows.
+//
+// 🛑 THIS USED TO REACH THE BASE AS `LIKE 'value'` — an exact match — so "Comment contains Оплат" found
+// nothing while "%Оплат%" found the rows, and only somebody who knew SQL could filter a list at all.
+//
+// A `%` or `_` the person typed is NOT escaped: it stays a wildcard, as it does in memory, and a filter
+// somebody already wrote as "%Оплат%" keeps selecting what it selected.
+ibQueryAstExprPtr ibBuildContainsPattern(ibDataComposer& composer, const ibFilterOperandDescription& side)
+{
+	const ibValue value = ibStoredValue(side.m_value, composer.GetMetaData());
+	ibQueryAstExprPtr e = ibQueryAstExpr::Make(ibQueryAstExprKind::Param);
+	e->m_paramName = composer.AddParam(ibValue(ibComposerContainsPattern(value.GetString())));
+	return e;
+}
+
 ibQueryAstExprPtr ibBuildFilterCondition(ibDataComposer& composer, const ibFilterNodeDescription& item)
 {
 	// «FILLED» HAS NO RIGHT SIDE and is not one comparison but a question about the value — see above.
@@ -409,6 +428,8 @@ ibQueryAstExprPtr ibBuildFilterCondition(ibDataComposer& composer, const ibFilte
 	// — the node is already the set-valued one.
 	if (isIn)
 		e->m_list.push_back(ibBuildFilterSide(composer, item.m_right));
+	else if (isLike && !item.m_right.IsField())
+		e->m_rhs = ibBuildContainsPattern(composer, item.m_right);
 	else
 		e->m_rhs = ibBuildFilterSide(composer, item.m_right);
 	return e;
