@@ -675,6 +675,13 @@ public:
 
 private:
 
+	// …the replacement itself — the one handed in put in m_activeMetaData, the one before let go; the public
+	// ReplaceActiveMetaData() hands in what it read from the database, a test — a configuration made in memory.
+	void ReplaceActiveMetaData(std::shared_ptr<class ibMetaDataConfigurationBase> metaData);
+#ifdef OES_TESTING
+	friend struct ActiveMetaDataAccess;
+#endif
+
 	// Build the absolute path for the .olg directory:
 	//   - a Firebird base   → <m_strFile>/oeslog
 	//   - a PostgreSQL base → <m_strDirLocal>/oeslog when the opener named the base's folder,

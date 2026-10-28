@@ -38,6 +38,8 @@
 #include "backend/query/columnLayout.h"
 #include "backend/system/value/valuePointInTime.h"
 
+#include "activeMetaDataAccess.h"
+
 namespace {
 
 struct SequenceBorderFix : ::testing::Test {
@@ -289,7 +291,7 @@ TEST(SequenceWithoutDimensions, SavesAndKeepsOneBorderWhileAnEmptyRegisterDoesNo
 		GTEST_SKIP() << "appData env unavailable headless";
 
 	std::shared_ptr<ibMetaDataConfigurationFile> cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
-	ibApplicationInstance::Get()->ReplaceActiveMetaData(cfg);
+	ActiveMetaDataAccess::Replace(cfg);
 	struct Release {
 		~Release() {
 			// The active configuration is this test's file config. Destroying the base drops

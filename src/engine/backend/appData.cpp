@@ -397,19 +397,23 @@ bool ibApplicationInstance::ReplaceActiveMetaData()
 		ibMetaData::MakeShared<ibMetaDataConfiguration>(ib::AppDataCtorToken{ this });
 	if (!metaData->LoadDatabase(onlyLoadFlag) || !metaData->RunDatabase(loadConfigFlag))
 		return false;
+	ReplaceActiveMetaData(metaData);
+	return true;
+}
 
+void ibApplicationInstance::ReplaceActiveMetaData(std::shared_ptr<ibMetaDataConfigurationBase> metaData)
+{
 	const ibString digest = metaData->GetConfigMD5();
 	std::shared_ptr<ibMetaDataConfigurationBase> previous;
 	{
 		std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
-		previous = std::exchange(m_activeMetaData, metaData);
+		previous = std::exchange(m_activeMetaData, std::move(metaData));
 	}
 
 	// …and the base lets the old one go. The sessions working in it hold it, each by its own reference, and the
 	// last of them closes it (ibMetaData::MakeShared) — or the end of this call does, when nobody works in it.
 	ibJournalInfo(ibT("metadata"), ibT("the active configuration is now %s; the one before stays with %ld holder(s)"),
 		digest, previous != nullptr ? previous.use_count() - 1 : 0L);
-	return true;
 }
 
 void ibApplicationInstance::WireSessionEvents()

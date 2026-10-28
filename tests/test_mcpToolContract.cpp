@@ -40,6 +40,8 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "core/clsid.h"
 
+#include "activeMetaDataAccess.h"
+
 #include <wx/init.h>
 
 #include <wx/dir.h>        // the ASCII rule reads the MCP sources themselves
@@ -869,7 +871,7 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 		GTEST_SKIP() << "appData env unavailable headless";
 
 	std::shared_ptr<ibMetaDataConfigurationFile> cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
-	ibApplicationInstance::Get()->ReplaceActiveMetaData(cfg);
+	ActiveMetaDataAccess::Replace(cfg);
 	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES
 	// (test_compiler.cpp), so the release puts it back, as StyleGuard does.
 	struct Release {
