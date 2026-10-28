@@ -484,7 +484,7 @@ TEST(RegisterSurface, EveryFigureWordHasACaption) {
         ibRegFigure::Turnover, ibRegFigure::Receipt, ibRegFigure::Expense,
         ibRegFigure::Balance,  ibRegFigure::OpeningBalance, ibRegFigure::ClosingBalance,
     };
-    for (const wxChar* figure : figures)
+    for (const ibChar* figure : figures)
         EXPECT_FALSE(ibRegFigureCaption(figure).IsEmpty()) << "no caption for " << ibString(figure).ToStdString();
 
     EXPECT_EQ(wxT("SomethingNobodyCaptioned"), ibRegFigureCaption(wxT("SomethingNobodyCaptioned")));
