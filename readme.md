@@ -13,6 +13,20 @@ a server process of its own, a thin client and a web server — and a built-in *
 AI assistant can read, build and check a configuration alongside the developer, through the same
 doors the developer uses.
 
+**Status: [2.0.0-preview.1](docs/release-notes/v2.0.0-preview.1.md)** — the first release after the alpha, on the
+road to beta: the database format may still change, and nothing migrates from 1.x.
+
+## Try it
+
+1. Download the [latest release](https://github.com/open-enterprise-solutions/enterprise/releases/latest):
+   Windows x64 (`.zip`), Linux x64 (`.tar.gz`) or macOS arm64 (`.dmg`, unsigned — the
+   [installation page](https://github.com/open-enterprise-solutions/enterprise/wiki/Installation) says how to open it).
+2. Unpack it and run `launcher`: **Add** a base, choose **File (local database)**, then press **Designer**.
+3. Follow [First steps](https://github.com/open-enterprise-solutions/enterprise/wiki/First-steps): a small stock
+   application, built in about fifteen minutes.
+
+Building from source is under [Quick Start](#quick-start).
+
 **New here?** The [wiki](https://github.com/open-enterprise-solutions/enterprise/wiki) is the
 user's guide: installing a build, a first application step by step, the designer, the metadata
 tree, forms, the language, queries and reports, and the pitfalls.
