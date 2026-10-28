@@ -447,8 +447,8 @@ private:
 		_("Whether the table works as a picker: double-click or Enter hands the current row back to whoever opened the form, instead of opening or editing it, and a Select command leads its command bar. Set automatically on a choice form's list."),
 		false);
 	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
-	ibEventControl* m_eventSelection = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("Selection"), _("Selection"), _("On double mouse click or pressing of Enter."), std::vector<ibString>{ ibT("Control"), ibT("RowSelected"), ibT("StandardProcessing") });
-	ibEventControl* m_eventOnActivateRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("OnActivateRow"), _("Activate row"), _("When row is activated"), std::vector<ibString>{ {ibT("Control")} });
+	ibEventControl* m_eventSelection = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("Selection"), _("Selection"), _("When the current row changes. Turning standard processing off keeps the row where it was."), std::vector<ibString>{ ibT("Control"), ibT("RowSelected"), ibT("StandardProcessing") });
+	ibEventControl* m_eventOnActivateRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("OnActivateRow"), _("Activate row"), _("On double mouse click or pressing of Enter."), std::vector<ibString>{ {ibT("Control")} });
 	ibEventControl* m_eventBeforeAddRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("BeforeAddRow"), _("Before add row"), _("When row addition mode is called"), std::vector<ibString>{ ibT("Control"), ibT("Cancel"), ibT("Clone") });
 	ibEventControl* m_eventBeforeDeleteRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("BeforeDeleteRow"), _("Before delete row"), _("When row deletion is called"), std::vector<ibString>{ ibT("Control"), ibT("Cancel") });
 	// After-add / after-delete pair — fires when the MODEL says a row was added / deleted (the model's

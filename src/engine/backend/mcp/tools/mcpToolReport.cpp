@@ -48,6 +48,7 @@
 #include "backend/query/queryException.h"          // …and the judge that refuses one
 #include "backend/query/queryLowering.h"
 #include "core/query/queryParser.h"
+#include "core/query/queryRender.h"    // ibQueryColumnFromPath — a dotted path laid out as hops, as the composer lays it
 #include "core/stringTokenizer.h"
 #include "backend/query/queryable.h"
 
@@ -489,17 +490,31 @@ bool PathIsOffered(const ibCompositionDescription& composition,
 		return false;
 	}
 
-	ibString available;
+	// ⭐ A PATH, NOT A NAME — walked as the composer walks it when it runs (ibDataDBComposer::WalkPath: where it
+	// starts among the query's fields, then each hop by its type), so a field of what a selected reference points
+	// at, `Goods.Unit`, is offered exactly as far as a run reads it. Compared with the names alone, every such
+	// field was refused, and the query got edited to select what a dot already reaches (2026-10-28).
+	const ibQueryAstExprPtr column = ibQueryColumnFromPath(path);
+	if (column && !column->m_path.empty()
+		&& !ibQueryConstructorModel(activeMetaData).WalkPath(fields, column->m_path).m_name.IsEmpty())
+		return true;
+
+	ibString available, references;
 	for (const ibQueryConstructorField& field : fields) {
-		if (field.m_name.IsSameAs(path, false))
-			return true;
 		available << (available.IsEmpty() ? ibT("") : ibT(", ")) << field.m_name;
+		if (field.m_reference)
+			references << (references.IsEmpty() ? ibT("") : ibT(", ")) << field.m_name;
 	}
 
 	refusal = available.IsEmpty()
 		? ibMcpText("The composer's query projects no fields yet - give it a query first.")
 		: ibString::Format(ibMcpText("'%s' is not a field this query offers. It has: %s."),
 			path, available);
+
+	// …and says where a dot goes, because the field asked for is most often one behind a reference.
+	if (!references.IsEmpty())
+		refusal << ibString::Format(ibMcpText(" A dot reaches the fields of what a reference points at, as deep as "
+			"it goes - '%s.<field>'; the references here: %s."), references.BeforeFirst(ibT(',')), references);
 	return false;
 }
 
@@ -1874,11 +1889,8 @@ public:
 
 			if (!typeName.IsEmpty()) {
 
-				ibClassID clsid = 0;
-				if (const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(typeName))
-					clsid = ctor->GetClassType();
-				else if (const ibCtorAbstractType* builtin = ibValue::GetAvailableCtor(typeName))
-					clsid = builtin->GetClassType();
+				const ibCtorAbstractType* const named = metaData->GetAvailableCtor(typeName);
+				const ibClassID clsid = named != nullptr ? named->GetClassType() : 0;
 
 				if (clsid == 0) {
 					refusal = ibString::Format(

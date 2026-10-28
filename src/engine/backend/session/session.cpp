@@ -1034,7 +1034,7 @@ void ibSession::AcquireMetaData()
 		// Held BEFORE it loads — a session's own configuration is the first answer `activeMetaData` gives on its
 		// thread (ibApplicationInstance::GetActiveMetaData), and its loading asks for it. The session is bound to the
 		// thread for its bring-up (NotifyAuthenticated), so the rights checked and the language pinned are its user's.
-		m_metaData = ibMetaData::MakeShared<ibMetaDataConfigurationStorage>(ib::AppDataCtorToken{ GetApplicationInstance() });
+		m_metaData = ibMetaData::MakeShared<ibMetaDataConfigurationStorage>(ib::AppDataCtorToken{ GetApplicationInstance(), GetKind() });
 
 		// …and one that did not come up goes with the reference: nobody else holds it.
 		if (!m_metaData->OnInitialize(_app_start_default_flag) || !m_metaData->RunDatabase())

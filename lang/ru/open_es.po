@@ -3222,6 +3222,15 @@ msgstr "корр."
 msgid "unknown attribute '%s' on source '%s'"
 msgstr "неизвестный реквизит '%s' у источника '%s'"
 
+#: src/engine/backend/query/dbTableProvider.cpp:217
+#, c-format
+msgid "the list's query does not select '%s', and a hierarchical view needs it"
+msgstr "запрос списка не выбирает '%s', а иерархическому виду это поле нужно"
+
+#: src/engine/backend/metadataConfigurationQuery.cpp:483
+msgid "The configuration was applied, but the base could not read it: the sessions to come work in the one before."
+msgstr "Конфигурация применена, но база не смогла её прочитать: новые сеансы работают в прежней."
+
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataTotals.cpp:5978
 msgid "A condition on the ACCOUNT, consumed by the reading itself: `IN HIERARCHY` reports the subordinate accounts folded under the one named, which a filter applied around the reading could never do. Any condition on the account is taken - NOT, OR, `NOT Account.OffBalance`, `Account.Code LIKE \"6%\"` - and selects the rows before they are folded."
 msgstr "Условие на СЧЁТ, которое обрабатывает само чтение: `IN HIERARCHY` выдаёт подчинённые счета, свёрнутые под указанным, чего фильтр вокруг чтения никогда бы не смог. Принимается любое условие на счёт - NOT, OR, `NOT Account.OffBalance`, `Account.Code LIKE \"6%\"` - и отбирает строки до свёртки."
@@ -9759,8 +9768,8 @@ msgid "Activate row"
 msgstr "Активировать строку"
 
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:441
-msgid "When row is activated"
-msgstr "Когда строка активирована"
+msgid "When the current row changes. Turning standard processing off keeps the row where it was."
+msgstr "При смене текущей строки. Отказ от стандартной обработки оставляет строку на месте."
 
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:442
 msgid "Before add row"

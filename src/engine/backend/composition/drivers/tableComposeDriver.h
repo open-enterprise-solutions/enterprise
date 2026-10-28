@@ -95,9 +95,16 @@ public:
 	void OnOutputBegin(const ibCompositionOutputInfo& info) override
 	{
 		m_name = info.m_name;
+		m_shown = info.m_shown;
 		m_columns.clear();
 		m_columns.reserve(info.m_schema.size());
 		for (size_t i = 0; i < info.m_schema.size(); ++i) {
+			// ⭐ ONLY WHAT IS SHOWN, as the sheet lays it out (ibCompositionOutputInfo::m_shown): a field the read
+			// fetched for a filter, a sort or a conditional appearance takes no column here either. Laid out, it
+			// stood beside the chosen ones, headed and empty — a rule on `Goods.Unit` grew a `GoodsUnit` column the
+			// person's sheet does not have (2026-10-28). The lines drop its value to match (ShownValues).
+			if (!info.ShowsColumn(i))
+				continue;
 			const ibQueryLowering::OutputColumn& oc = info.m_schema[i];
 			ibComposedColumn c;
 			c.m_title = info.TitleOf(i);   // the output's own wording, falling back to the name
@@ -126,18 +133,31 @@ protected:
 		n.m_hasChildren      = line.m_hasChildren;
 		n.m_showsWhatIsUnder = line.m_showsWhatIsUnder;
 		n.m_isHeading        = heading;
-		n.m_values           = values;
+		n.m_values           = ShownValues(values);
 		n.m_path             = m_open;   // the address, snapshotted as it stood
 		return n;
 	}
 
-	void Push(const std::vector<ibValue>& values) { m_open.push_back(values); }
+	void Push(const std::vector<ibValue>& values) { m_open.push_back(ShownValues(values)); }
 	// Guarded: a walk closing more than it opened would take the stack negative and every address
 	// after it would be wrong — silently, which is the failure worth spending a branch on.
 	void Pop() { if (!m_open.empty()) m_open.pop_back(); }
 
 private:
+	// A line arrives with the whole schema's values; it keeps those of the shown columns, so they line up
+	// with Columns() positionally — the address of a heading as much as its figures.
+	std::vector<ibValue> ShownValues(const std::vector<ibValue>& values) const
+	{
+		std::vector<ibValue> shown;
+		shown.reserve(values.size());
+		for (size_t i = 0; i < values.size(); ++i)
+			if (i >= m_shown.size() || m_shown[i])
+				shown.push_back(values[i]);
+		return shown;
+	}
+
 	ibString                          m_name;
+	std::vector<bool>                 m_shown;   // per schema column (ibCompositionOutputInfo::m_shown)
 	std::vector<ibComposedColumn>     m_columns;
 	bool                              m_totals = false;
 	std::vector<std::vector<ibValue>> m_open;   // the walk's cursor, kept because the walk hands none

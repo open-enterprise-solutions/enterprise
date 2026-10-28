@@ -1885,7 +1885,9 @@ start_label:
 				ibRunContext cRunContext(index3, ibRunLifetime::PerCall);
 				cRunContext.m_lStart = index2;
 				cRunContext.m_lParamCount = array3;
-				cRunContext.m_parentRunContext = pContext;
+				// ⭐ THE OUTSIDE OF A NAMED FUNCTION IS ITS MODULE, not its caller — the capture walk
+				// (OPER_LFUNC) counts the rungs the compiler counted, and the compiler counts the text.
+				cRunContext.m_parentRunContext = &m_ppArrayCode[lModuleNumber]->m_cCurContext;
 				// Function bodies exit via OPER_RET / OPER_ENDFUNC /
 				// OPER_ENDLFUNC (all fall through to lCodeLine = lFinish;
 				// break), so callers don't need to range-bound the
@@ -1938,7 +1940,7 @@ start_label:
 				ibRunCallFrame heapCtx(new ibRunCaptureContext(index3));
 				heapCtx->m_lStart = index2;
 				heapCtx->m_lParamCount = array3;
-				heapCtx->m_parentRunContext = pContext;
+				heapCtx->m_parentRunContext = &m_ppArrayCode[lModuleNumber]->m_cCurContext;   // its module (OPER_CALL)
 				ibValue* pRetValue = &variable1;
 				//load parameters — same SET/SETCONST tape as OPER_CALL
 				for (long i = 0; i < heapCtx->m_lParamCount; i++) {
@@ -2177,38 +2179,55 @@ start_label:
 						? &m_pByteCode->m_listFunc[funcIdx] : nullptr;
 					if (bfnLfunc) newFn->m_needsHeapFrame = bfnLfunc->m_needsHeapFrame;
 				}
-				// Closure capture (Phase B) — walk the call-stack chain
-				// via m_parentRunContext; every ancestor of the CAPTURED
+				// Closure capture (Phase B) — walk the LEXICAL chain via
+				// m_parentRunContext (a named function's outside is its
+				// module, a lambda's the frame it was written in — every
+				// road that builds a frame says so); every ancestor of the CAPTURED
 				// kind becomes a link of the chain the lambda keeps, each
-				// link holding the next. An ordinary frame is skipped: it
-				// could not be captured anyway (it dies on return; no
-				// inner lambda flagged the enclosing fn at compile time,
-				// so OPER_CALL built no capture frame for it).
+				// link holding the next. An ordinary frame cannot be
+				// taken (it dies on return; no inner lambda read its
+				// locals, so no capture frame was built for it) — it
+				// keeps its rung, empty (below).
 				//
 				// Order: the nearest link is the direct enclosing frame
-				// (the materialising lambda's caller), its outer is the
+				// (the one the lambda is written in), its outer is the
 				// next one out. Matches the depth math from Phase A's GetVariable
 				// (numParent - numContext counting): emit depth = 1
 				// reads CapturedAt(0), depth = 2 reads CapturedAt(1), etc.
 				for (ibRunContext* p = pContext; p != nullptr; p = p->m_parentRunContext) {
 
+					// Ask the frame what KIND it is — an ordinary one ends with its call and cannot
+					// be captured. Recorded in the order walked, which IS the depth order the
+					// compiler emitted: this lambda's own view of the chain, taken now.
+					// ⚠ ASKED FIRST: an empty rung (below) runs no function, and asked "module body?"
+					// it said yes — a lambda made inside a lambda took its outer's empty rung for the
+					// module and read the module's variables out of a frame of no slots (2026-10-28).
+					if (ibRunCaptureContext* captured = AsCaptureContext(p))
+						newFn->m_capturedFrames.emplace_back(captured);
+
 					// ⭐⭐ THE MODULE BODY'S FRAME IS TAKEN SEPARATELY, and it has to be: it is
-					// Retained rather than captured, so the question below answers no for it, and a
+					// Retained rather than captured, so the question above answers no for it, and a
 					// lambda was left unable to read the module's own variables — see
 					// ibValueFunction::m_moduleFrame for the measurement. The FIRST one found wins:
 					// walking further would reach a parent module, whose variables this lambda
 					// reaches by name through the bytecode chain, not by frame depth.
-					if (p->IsModuleBody()) {
+					else if (p->IsModuleBody()) {
 						if (newFn->m_moduleFrame == nullptr)
 							newFn->m_moduleFrame = p;
-						continue;
 					}
-
-					// Ask the frame what KIND it is — an ordinary one ends with its call and cannot
-					// be captured. Recorded in the order walked, which IS the depth order the
-					// compiler emitted: this lambda's own view of the chain, taken now.
-					if (ibRunCaptureContext* captured = AsCaptureContext(p))
-						newFn->m_capturedFrames.emplace_back(captured);
+					// ⭐ …AND A FRAME NOT TAKEN STILL HOLDS ITS RUNG, EMPTY. The compiler counts every
+					// function the text nests the lambda in; it flags one for capture only when the
+					// lambda reads ITS locals. Left out, the rung went with it and everything further
+					// out was read one frame short: a module variable as the root's `Data`, a global
+					// function not found (a lambda in a function reading only the module, 2026-10-28).
+					// A FRAME, not a null, linked to the one outside it: this lambda's own call hangs
+					// below its first rung (OPER_CALL_LAMBDA), and a lambda made in that call walks
+					// the links — a null there sent it straight to the module, past every rung after.
+					else {
+						ibRunCaptureContext* const rung = new ibRunCaptureContext(0);
+						rung->m_parentRunContext = p->m_parentRunContext;
+						newFn->m_capturedFrames.emplace_back(rung);
+					}
 				}
 				CopyValue(variable1, ibValue(newFn));
 				// Skip past the body — body opcodes are inert at
@@ -2881,10 +2900,22 @@ void ibProcUnit::CallAsProc(const long lCodeLine, ibValue** ppParams, const long
 	// run with none bound) means no stack to lease from, and the frame falls back to
 	// the heap on its own.
 	const ibByteUnit* const codeBase = m_pByteCode->m_listCode.data();   // what `curCode` reads (index3 / array3)
-	ibRunContext cRunContext(index3, ibRunLifetime::PerCall);// number of local variables
+
+	// ⭐⭐ THE FRAME THE SCRIPT'S OWN CALL BUILDS (OPER_CALL / OPER_CALL_CLOSURE): one a lambda may take when the body
+	// makes one, and its module outside it. This road built a plain frame with nothing outside, so a lambda made in a
+	// handler — `OnOpen` putting one on a control's event, a pipeline in a posting — lost two rungs of the chain the
+	// compiler counted: a module variable read as some other slot, a global function was not found at all (2026-10-28).
+	const ibByteCode::ibByteFunction* const function = m_pByteCode->FindFunctionByEntry(lCodeLine);
+	const bool captured = function != nullptr && function->m_needsHeapFrame;
+	ibRunCallFrame captureFrame;
+	ibRunContext plainFrame(captured ? wxNOT_FOUND : (int)index3, ibRunLifetime::PerCall);// number of local variables
+	if (captured)
+		captureFrame.Reset(new ibRunCaptureContext(index3));
+	ibRunContext& cRunContext = captured ? *captureFrame : plainFrame;
 
 	cRunContext.m_lParamCount = array3;//number of formal parameters
 	cRunContext.m_lStart = lCodeLine;
+	cRunContext.m_parentRunContext = &m_cCurContext;
 	// m_currentFunction set by OPER_FUNC handler in Execute (tape-driven).
 
 	//load parameters
@@ -2916,10 +2947,19 @@ void ibProcUnit::CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue
 	}
 
 	const ibByteUnit* const codeBase = m_pByteCode->m_listCode.data();   // what `curCode` reads (index3 / array3)
-	ibRunContext cRunContext(index3, ibRunLifetime::PerCall);// number of local variables
+
+	// The frame the script's own call builds — see CallAsProc.
+	const ibByteCode::ibByteFunction* const function = m_pByteCode->FindFunctionByEntry(lCodeLine);
+	const bool captured = function != nullptr && function->m_needsHeapFrame;
+	ibRunCallFrame captureFrame;
+	ibRunContext plainFrame(captured ? wxNOT_FOUND : (int)index3, ibRunLifetime::PerCall);// number of local variables
+	if (captured)
+		captureFrame.Reset(new ibRunCaptureContext(index3));
+	ibRunContext& cRunContext = captured ? *captureFrame : plainFrame;
 
 	cRunContext.m_lParamCount = array3;//number of formal parameters
 	cRunContext.m_lStart = lCodeLine;
+	cRunContext.m_parentRunContext = &m_cCurContext;
 	// m_currentFunction set by OPER_FUNC handler in Execute (tape-driven).
 
 	//load parameters

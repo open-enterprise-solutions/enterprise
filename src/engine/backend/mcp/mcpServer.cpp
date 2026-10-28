@@ -1812,6 +1812,14 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("), working inside the session of the person at it, with exactly their rights. ")
 		<< ibT("What you change is their live configuration.\n\n");
 
+	// ⭐ HOW THIS SERVER IS SPOKEN TO — beside WHERE YOU ARE, the first thing after the handshake (Max,
+	// 2026-10-28: "the engine must tell you how it communicates … when you get here"). A script without
+	// `use utf8` sent Cyrillic encoded twice, and the person read "Ð¿Ñ…" in the chat. The gate refuses that
+	// now (ibMcpArgumentFault); this line is so nobody has to be refused to learn it.
+	out << ibT("TEXT TRAVELS AS UTF-8, ONCE - in arguments and in answers. A script that hands the ")
+		<< ibT("request BYTES where it means characters (Perl without `use utf8`) encodes every ")
+		<< ibT("non-Latin letter a second time, and such a call is refused.\n\n");
+
 	// ⭐ WHOSE HANDS THESE ARE. "With their rights" was true and useless without a name: an
 	// assistant that does not know who it is acting as cannot tell a refusal it caused from a
 	// permission it never had, and cannot warn that something is about to be recorded against a
@@ -2226,6 +2234,15 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("`debug_sandbox` also answers with `microseconds`, how long the code took, timed ")
 		<< ibT("inside the process that ran it. That is the platform's stopwatch: use it instead ")
 		<< ibT("of repeating something to time it from out here.\n")
+		// ⭐⭐ AND THE WINDOW ITSELF IS READABLE — which a session learned only from the person (Max, 2026-10-28: "so
+		// anyone can know it is possible, without notes"). The frame a client is answered with IS what the desktop and
+		// the browser draw from, so reading it is looking: no picture, and nobody asked.
+		<< ibT("AND YOU CAN READ THE WINDOW - `client_call` speaks the protocol the desktop and the browser ")
+		<< ibT("speak: log in, open a form, and the answer is the FRAME they draw from - every control with its ")
+		<< ibT("state (caption, value, enabled, its command bar), the messages shown, the question waiting. ")
+		<< ibT("`event` does what a person does - presses a button, opens a row; `fetch` reads a table's rows ")
+		<< ibT("and a report's sheet. Read it BEFORE guessing what a form shows or why it is empty. It is not ")
+		<< ibT("a picture: whether a caption fits is the next verb's.\n")
 		// ⭐⭐ THE ONE NOBODY WOULD GUESS AT, and the one that answers the commonest report of all.
 		// Named here because a new session has no memory of this conversation and would never think
 		// to ask a tool for a PICTURE (Max, 2026-09-04).
@@ -2262,6 +2279,16 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT(" `config_check` -> `config_save` -> `config_apply` - half-built / outlives the ")
 		<< ibT("designer / reaches the running application. Three different questions; none ")
 		<< ibT("implies the others.\n\n");
+
+	// ⭐ AND A STEP NOTHING LEADS YOU TO EITHER, the one taken instead being a query (Max, 2026-10-28: "sometimes
+	// you write a query in a dynamic list, and sometimes a dot reaches it, and then the query need not be edited -
+	// Product dot INN"). A path walks the tree a reference opens, on every level, wherever a field is named.
+	out << ibT("A FIELD BEHIND A REFERENCE IS A DOT AWAY, as deep as you write it, wherever a field is ")
+		<< ibT("named: `List.Counterparty.TaxNumber` as a dynamic list's column, `Goods.Goods.Unit` in a ")
+		<< ibT("tabular section, `Counterparty.TaxNumber` in a header field (`form_bind`; `form_source` ")
+		<< ibT("unfolds the tree a level at a time); `Goods.Unit` in a report's filter, conditional ")
+		<< ibT("appearance or grouping. A list's query is not edited for it - a query is for what a dot ")
+		<< ibT("cannot say: a total, a balance, a table joined by something other than a reference.\n\n");
 
 	out << ibT("THE CONVERSATION. A person may be typing to you in the designer's assistant ")
 		<< ibT("window: `chat_take` collects new messages (and EMPTIES the queue), ")

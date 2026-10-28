@@ -1142,20 +1142,28 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				// A TAB'S OWN VIEW, named by the tab — a spreadsheet document's cells, not a control's of a form.
 				const std::int32_t tabId = params.GetValue<std::int32_t>(ibProtocol::ibFetch::Tab);
 				if (frame != nullptr && session != nullptr) {
-					session->Submit([frame, controlId, &fetchRequest, &formKey, tabId, &result, &done]() {
-						if (tabId != 0) {
-							ibClientChildFrame* const tab = frame->Tab(frame->FindTab(tabId));
-							ibView* const view = tab != nullptr ? tab->GetView() : nullptr;
-							done = view != nullptr && view->Fetch(fetchRequest, result);
+					// A READ THAT FAILS IS REFUSED IN THE ENGINE'S WORDS — Fetch throws and leaves it to its caller, and
+					// this one let it out of the call: the client was answered a bare 500 (a list whose query could not
+					// be read, 2026-10-28). The person was told by the frame that read the list first (tableBox OnUpdate).
+					session->Submit([frame, controlId, &fetchRequest, &formKey, tabId, &result, &done, &refuse]() {
+						try {
+							if (tabId != 0) {
+								ibClientChildFrame* const tab = frame->Tab(frame->FindTab(tabId));
+								ibView* const view = tab != nullptr ? tab->GetView() : nullptr;
+								done = view != nullptr && view->Fetch(fetchRequest, result);
+							}
+							else {
+								ibValueForm* const form = FormOfCall(frame, formKey);
+								ibValueFrame* const control = form != nullptr ? form->FindControlByID(controlId) : nullptr;
+								done = control != nullptr && control->Fetch(fetchRequest, result);
+							}
 						}
-						else {
-							ibValueForm* const form = FormOfCall(frame, formKey);
-							ibValueFrame* const control = form != nullptr ? form->FindControlByID(controlId) : nullptr;
-							done = control != nullptr && control->Fetch(fetchRequest, result);
+						catch (const ibCoreException& err) {
+							refuse(ibProtocol::ibRefusal::Failed, err.GetErrorDescription());
 						}
 					}).get();
 				}
-				if (!done)
+				if (!done && refusal == ibProtocol::ibRefusal::None)
 					refuse(ibProtocol::ibRefusal::NotFound, ibT("nothing to fetch there"));
 			}
 			else if (method == ibProtocol::ibMethod::Presentation) {

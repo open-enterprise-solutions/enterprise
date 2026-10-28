@@ -188,6 +188,7 @@
     <ClCompile Include="docView\templates\docViewHomePage.cpp" />
     <ClCompile Include="docView\templates\docViewSpreadsheet.cpp" />
     <ClCompile Include="docView\templates\docViewText.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolForms.cpp" />
     <ClCompile Include="mcp\tools\mcpToolProtocol.cpp" />
     <ClCompile Include="metaTree\treeConfiguration.cpp" />
     <ClCompile Include="metaTree\treeDataProcessor.cpp" />

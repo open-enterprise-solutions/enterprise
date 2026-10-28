@@ -384,6 +384,17 @@ void ibSessionRegistry::Stop()
 	}
 	m_submitCv.notify_all();
 
+	// ⭐⭐ AND A STATEMENT ALREADY WAITING IS STOPPED, NOT ASKED — the registry's own connection cancelled, as each
+	// own session's was above (ibDatabaseConnectionHolder::Cancel). ThreadBody reads `m_stop` between phases; a
+	// SELECT already waiting in the database reads nothing until it returns, and it need not return: rows held by
+	// a peer process that was KILLED stay locked until the server notices the owner is gone. The wait below then
+	// detached the thread, the connections were torn down under it, and it woke into freed memory — a close that
+	// crashed (enterprise-thin 2104, 2026-10-28: the designer beside it killed for a rebuild a second before;
+	// "Error retrieving Next record: invalid statement handle", then an access violation on 0xdddddddd).
+	// Cancelled, the statement throws, the throw leaves the loop as a deliberate stop (Die returns quietly once
+	// `m_stop` is set), and the join below is an ordinary one. Nothing running — nothing is cancelled.
+	m_writeHolder.Cancel();
+
 	// Timed join with detach backstop. ThreadBody may be mid-ProcessRemove
 	// when m_stop fires; if its NotifyDisconnect → DetachRuntime path
 	// blocks on a mutex that main holds further up the stack (classic

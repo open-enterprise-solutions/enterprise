@@ -145,6 +145,8 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	// every body is entered — the defaults from the lambda's own module (ibRunContext::Enter).
 	for (long i = argCount; i < lambdaParamCount; ++i)
 		cRunContext.m_pRefLocVars[i] = nullptr;
+	// Its outside, as OPER_CALL_LAMBDA wires it: a lambda made in this body walks out from here (OPER_LFUNC).
+	cRunContext.m_parentRunContext = fn.GetCaptured() != nullptr ? fn.GetCaptured() : fn.m_moduleFrame;
 	cRunContext.Enter(bfn, fn.GetParentBc());
 
 	fn.Execute(&cRunContext, &retVal, /*bDelta*/false);
@@ -173,6 +175,13 @@ bool ibValueFunction::Dispatch(ibProcUnit* /*runtime*/, ibValue** args, long arg
 {
 	std::vector<ibValue*> params(args, args + argc);
 	params.push_back(&outCancel);
+	// ⭐ …AS MANY OF THEM AS THE LAMBDA DECLARES — the rule a named handler is called by (ibProcUnit::CallAsProc binds
+	// the lesser of given and declared). The trailing cancel is the dispatch's, not the event's: OnActivateRow declares
+	// (Control), and `Function(Control) {…}` was refused "must accept at least 2" where the procedure ran (2026-10-28).
+	// The pipelines keep the strict count: a projection given two values and declaring one is a mistake there.
+	if (const ibByteCode::ibByteFunction* const bfn = GetFunction())
+		if (params.size() > bfn->m_listParam.size())
+			params.resize(bfn->m_listParam.size());
 	ibValue ret;
 	CallLambdaWithArgs(*this, params.data(), (long)params.size(), ret);
 	return outCancel.GetBoolean();

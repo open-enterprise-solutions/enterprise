@@ -57,8 +57,12 @@ bool ibDatabaseResultSetFirebird::Next()
 		// ⚠ READ BEFORE IT IS REPORTED. An interrupted fetch is a cancel, not a failure (ThrowDatabaseException
 		// throws it as one); written first as an error, it put an error window in front of the person who had
 		// just closed the report (a debug build shows its error lines) and a crash dump beside it (2026-09-11).
+		//
+		// ⚠ …AND A FAILURE IS THROWN, NOT SAID. Whoever read the rows tells the person, in the base's words; an
+		// error line here was a second window over that message, saying only "Error retrieving Next record"
+		// (a list whose query divides by zero, 2026-10-28). The file keeps the line, with the base's words.
 		if (GetErrorCode() != DATABASE_LAYER_QUERY_CANCELLED)
-			ibJournalError(ibT("db.firebird"),ibT("Error retrieving Next record\n"));
+			ibJournalWarning(ibT("db.firebird"), ibT("Error retrieving Next record: %s"), GetErrorMessage());
 		ThrowDatabaseException();
 		return false;
 	}

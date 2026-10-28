@@ -388,19 +388,28 @@ ibMetaDataConfigurationBase* ibApplicationInstance::GetActiveMetaData(const ibAp
 	return applicationInstance->m_activeMetaData.get();
 }
 
-void ibApplicationInstance::ReplaceActiveMetaData(std::shared_ptr<ibMetaDataConfigurationBase> metaData)
+bool ibApplicationInstance::ReplaceActiveMetaData()
 {
+	// ⭐ THE BASE READS ITS OWN, made with its own token — for no session, whatever thread asks: the designer's apply
+	// asks on its own, and what the designer reads there is the designer's (its compile cache with it). Read as the
+	// apply's copy is read, the mirror of the database (loadConfigFlag).
+	const std::shared_ptr<ibMetaDataConfiguration> metaData =
+		ibMetaData::MakeShared<ibMetaDataConfiguration>(ib::AppDataCtorToken{ this });
+	if (!metaData->LoadDatabase(onlyLoadFlag) || !metaData->RunDatabase(loadConfigFlag))
+		return false;
+
 	const ibString digest = metaData->GetConfigMD5();
 	std::shared_ptr<ibMetaDataConfigurationBase> previous;
 	{
 		std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
-		previous = std::exchange(m_activeMetaData, std::move(metaData));
+		previous = std::exchange(m_activeMetaData, metaData);
 	}
 
 	// …and the base lets the old one go. The sessions working in it hold it, each by its own reference, and the
 	// last of them closes it (ibMetaData::MakeShared) — or the end of this call does, when nobody works in it.
 	ibJournalInfo(ibT("metadata"), ibT("the active configuration is now %s; the one before stays with %ld holder(s)"),
 		digest, previous != nullptr ? previous.use_count() - 1 : 0L);
+	return true;
 }
 
 void ibApplicationInstance::WireSessionEvents()

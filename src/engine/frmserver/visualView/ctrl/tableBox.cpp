@@ -719,7 +719,23 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 			request.SetValue(ibProtocol::ibForm::ibTable::Before, count);
 		if (fromTop)
 			m_fetchFromTop = true;
-		if (Fetch(request, fetched)) {
+		// ⭐ A READ THAT FAILS IS SAID TO THE PERSON, here — Fetch throws and leaves it to its caller, and this caller let it
+		// go through the frame: the client was answered "the frame could not be drawn" and nobody read why (a list whose
+		// query a hierarchical view could not read, 2026-10-28). The version is answered with no rows, so the frames after
+		// it do not say it again; a version moved by the person reads anew.
+		bool read = false;
+		try {
+			read = Fetch(request, fetched);
+		}
+		catch (const ibCoreException& err) {
+			ibValueSystemFunction::Message(err.GetErrorDescription(), ibStatusMessage::ibStatusMessage_Error);
+			ibDataNode& none = state.Child(ibProtocol::ibForm::ibTable::Rows);
+			none.SetValue(ibProtocol::ibForm::ibTable::End, true);
+			none.SetValue(ibProtocol::ibForm::ibTable::Before, 0);
+			none.SetValue(ibProtocol::ibForm::ibTable::Count, count);
+			m_rowsSentVersion = m_rowsVersion;
+		}
+		if (read) {
 			if (anchor != 0)
 				fetched.SetValue(ibProtocol::ibForm::ibTable::Anchor, anchor);
 			if (fromTop)
