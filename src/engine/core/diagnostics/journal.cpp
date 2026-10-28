@@ -162,7 +162,7 @@ void ibTechJournal::Open(const ibString& exeName)
 		(static_cast<int>(version_oes_last) % 1000) / 100,
 		static_cast<int>(version_oes_last) % 100,
 		// THE BUILD NUMBER — the compile itself, not the product version. Two binaries carrying
-		// `1.0.1` are the same release and may be different code; this is what tells them apart in
+		// `2.0.0` are the same release and may be different code; this is what tells them apart in
 		// a report. The SAME number the About box shows, deliberately: a person reading the journal
 		// and a person reading the dialog must be able to say they are looking at one binary.
 		GetBuildId(),

@@ -9,7 +9,6 @@ class ibValueEnumVersion : public ibValueEnumeration<ibProgramVersion> {
 	ibValueEnumVersion() : ibValueEnumeration<ibProgramVersion>() {}
 
 	virtual void CreateEnumeration() {
-		this->AddEnumeration(version_oes_1_0_0, ibT("OES_1_0_0"), _("1.0.0"));
 		this->AddEnumeration(version_oes_last, ibT("OES_Last"), _("Don't use compatibility"));
 	};
 };
