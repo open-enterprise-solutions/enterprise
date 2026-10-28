@@ -124,7 +124,11 @@ enum
 	// everything else — the ordinal IS the method index, so a new name goes at the END or every
 	// later case answers to the wrong verb.
 	enSerializeValue,
-	enDeserializeValue
+	enDeserializeValue,
+	// Appended at the end: the ordinal is the method index.
+	enCurrentLanguage,
+	enPrivilegedMode,
+	enSetPrivilegedMode
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -251,6 +255,9 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	//--- …and value-as-text last, matching the enSerializeValue / enDeserializeValue tail above.
 	helper.AppendFunc(ibT("SerializeValue"), 1, ibT("SerializeValue(value : any)"));
 	helper.AppendFunc(ibT("DeserializeValue"), 1, ibT("DeserializeValue(json : string)"));
+	helper.AppendFunc(ibT("CurrentLanguage"), ibT("CurrentLanguage()"));
+	helper.AppendFunc(ibT("PrivilegedMode"), ibT("PrivilegedMode()"));
+	helper.AppendProc(ibT("SetPrivilegedMode"), 1, ibT("SetPrivilegedMode(on : boolean)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -396,6 +403,8 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			return true;
 		case enSerializeValue: pvarRetValue = SerializeValue(*paParams[0]); return true;
 		case enDeserializeValue: pvarRetValue = DeserializeValue(paParams[0]->GetString()); return true;
+		case enCurrentLanguage: pvarRetValue = CurrentLanguage(); return true;
+		case enPrivilegedMode: pvarRetValue = PrivilegedMode(); return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;
@@ -493,6 +502,11 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		case enRunApp: RunApp(paParams[0]->GetString()); return true;
 		case enSetAppTitle: SetAppTitle(paParams[0]->GetString()); return true;
 		case enSetExclusive: SetExclusive(paParams[0]->GetBoolean()); return true;
+		case enSetPrivilegedMode:
+			if (lSizeArray < 1 || paParams == nullptr || paParams[0] == nullptr)
+				ibBackendCoreException::Error(_("SetPrivilegedMode: on or off is not given"));
+			SetPrivilegedMode(paParams[0]->GetBoolean());
+			return true;
 		case enEndJob: EndJob(paParams[0]->GetInteger()); return true;
 		case enUserInterruptProcessing: UserInterruptProcessing(); return true;
 		case enShowCommonForm: ShowCommonForm(
