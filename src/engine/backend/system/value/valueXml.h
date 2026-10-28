@@ -6,11 +6,11 @@
 #include "core/serialize/xmlText.h"  // ibXmlParser, ibXmlNodeType - the parser under the reader
 
 #include <deque>
+#include <iosfwd>     // std::ifstream, std::ofstream - the files, through the standard library
 #include <memory>
 #include <string>
 #include <vector>
 
-class wxFFile;
 
 void ibValueXmlNamespaceContext_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
@@ -191,7 +191,7 @@ private:
 	const ibValue& TypeValue(ibXmlNodeType type);
 
 	std::unique_ptr<ibXmlParser> m_parser;
-	std::unique_ptr<wxFFile>  m_file;             // the source when it is a file...
+	std::unique_ptr<std::ifstream> m_file;        // the source when it is a file...
 	std::vector<char>         m_chunk;            // ...read into this, a chunk at a time
 	std::string               m_text;             // ...or the text, as UTF-8, when it is a string
 	size_t                    m_textAt = 0;
@@ -279,7 +279,7 @@ private:
 	void LetGo();                                 // the target closed as it stands, nothing raised
 
 	std::unique_ptr<ibXmlWriter> m_writer;
-	std::unique_ptr<wxFFile>     m_file;          // null: a string
+	std::unique_ptr<std::ofstream> m_file;        // null: a string
 	ibXmlCodePage                m_page;
 	ibString                     m_encoding;      // as the declaration names it
 	ibString                     m_fileName;

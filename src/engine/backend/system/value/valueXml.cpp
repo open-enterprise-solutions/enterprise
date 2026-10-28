@@ -10,13 +10,13 @@
 #include "backend/system/value/valueArray.h"
 #include "backend/system/value/valueMap.h"
 
-#include <wx/ffile.h>
-#include <wx/filename.h>
-#include <wx/log.h>
+#include "core/fileSystem.h"   // ibPathOf - a path as the standard library takes it
 
 #include <algorithm>   // std::min, std::none_of
 #include <cstddef>     // std::size_t
 #include <exception>
+#include <filesystem>  // std::filesystem::equivalent - the same file under two spellings
+#include <fstream>
 #include <string>
 #include <utility>     // std::move, std::pair
 
@@ -217,12 +217,8 @@ void ibValueXmlReader::OpenFile(const ibString& path)
 {
 	Close();
 
-	auto file = std::make_unique<wxFFile>();
-	{
-		wxLogNull quiet;   // a missing file is said in the platform's words, not in the library's log
-		file->Open(path, wxT("rb"));
-	}
-	if (!file->IsOpened())
+	auto file = std::make_unique<std::ifstream>(ibPathOf(path), std::ios::binary);
+	if (!file->is_open())
 		ibBackendCoreException::Error(_("XMLReader: cannot open the file '%s' for reading"), path);
 
 	m_parser = std::make_unique<ibXmlParser>(ibT("XMLReader"), ibXmlParser::kBytes);
@@ -270,8 +266,9 @@ bool ibValueXmlReader::Fill()
 		else if (m_file != nullptr) {
 			if (m_chunk.empty())
 				m_chunk.resize(ibXmlParser::kChunk);            // one buffer for the whole file: expat copies what it keeps
-			const size_t size = m_file->Read(m_chunk.data(), ibXmlParser::kChunk);
-			if (m_file->Error())
+			m_file->read(m_chunk.data(), static_cast<std::streamsize>(ibXmlParser::kChunk));
+			const size_t size = static_cast<size_t>(m_file->gcount());
+			if (m_file->bad())
 				ibBackendCoreException::Error(_("XMLReader: reading the file '%s' failed"), m_fileName);
 			m_parser->Feed(m_chunk.data(), size, size < ibXmlParser::kChunk, m_fileName);
 		}
@@ -492,7 +489,7 @@ bool ibValueXmlReader::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	case enIgnoreWhitespace: pvarPropVal = m_ignoreWhitespace; return true;
 	case enIsEmptyElement: pvarPropVal = IsEmptyElement(); return true;
 	case enDepth:          pvarPropVal = Depth(); return true;
-	// Numbers, not wxLongLong_t: an ibValue made from one of those is a DATE.
+	// Numbers: a line or a column is a count.
 	case enLineNumber:     pvarPropVal = ibNumber(static_cast<unsigned long long>(m_current.m_line)); return true;
 	case enLinePosition:   pvarPropVal = ibNumber(static_cast<unsigned long long>(m_current.m_column)); return true;
 	case enNamespaceContext: pvarPropVal = NamespaceContext(); return true;
@@ -666,15 +663,12 @@ void ibValueXmlWriter::OpenFile(const ibString& path, const ibString& encoding, 
 {
 	const ibXmlCodePage page = ibXmlPageNamed(encoding);
 	// The same file again: let go of first, or two handles would write one file over each other.
-	if (m_file != nullptr && wxFileName(m_fileName).SameAs(wxFileName(path)))
+	std::error_code differs;
+	if (m_file != nullptr && std::filesystem::equivalent(ibPathOf(m_fileName), ibPathOf(path), differs))
 		LetGo();
 
-	auto file = std::make_unique<wxFFile>();
-	{
-		wxLogNull quiet;   // a file that cannot be made is said in the platform's words, not in the library's log
-		file->Open(path, wxT("wb"));
-	}
-	if (!file->IsOpened())
+	auto file = std::make_unique<std::ofstream>(ibPathOf(path), std::ios::binary | std::ios::trunc);
+	if (!file->is_open())
 		ibBackendCoreException::Error(_("XMLWriter: cannot open the file '%s' for writing"), path);
 
 	LetGo();
@@ -710,7 +704,7 @@ void ibValueXmlWriter::Pass()
 	m_page.Encode(m_writer->Take(), ibT("XMLWriter"), m_bytes);
 	if (m_bytes.size() < ibXmlParser::kChunk)
 		return;
-	if (m_file->Write(m_bytes.data(), m_bytes.size()) != m_bytes.size())
+	if (!m_file->write(m_bytes.data(), static_cast<std::streamsize>(m_bytes.size())))
 		ibBackendCoreException::Error(_("XMLWriter: writing to the file '%s' failed"), m_fileName);
 	m_bytes.clear();
 }
@@ -719,16 +713,16 @@ void ibValueXmlWriter::Pass()
 // a file cut at its last full piece is worse than one that holds all that was written. Nothing is raised from here.
 void ibValueXmlWriter::LetGo()
 {
-	const std::unique_ptr<wxFFile> file = std::move(m_file);
+	const std::unique_ptr<std::ofstream> file = std::move(m_file);
 	if (file != nullptr && m_writer != nullptr) {
-		wxLogNull quiet;   // nobody to tell: a failure here is Close()'s to report, and Close() was not called
+		// Nobody to tell: a failure here is Close()'s to report, and Close() was not called.
 		try {
 			m_page.Encode(m_writer->Take(), ibT("XMLWriter"), m_bytes);
 		}
 		catch (...) {
 		}
-		file->Write(m_bytes.data(), m_bytes.size());
-		file->Close();
+		file->write(m_bytes.data(), static_cast<std::streamsize>(m_bytes.size()));
+		file->close();
 	}
 	m_writer.reset();
 	m_bytes.clear();
@@ -746,14 +740,15 @@ ibString ibValueXmlWriter::Close()
 		return text;
 	}
 	m_page.Encode(m_writer->Take(), ibT("XMLWriter"), m_bytes);
-	const std::unique_ptr<wxFFile> file = std::move(m_file);
+	const std::unique_ptr<std::ofstream> file = std::move(m_file);
 	const ibString fileName = m_fileName;
 	m_writer.reset();
 	m_fileName.clear();
 	// ⚠ ON DISK WHEN THE FILE CLOSED, not when the last Write answered: a full disk says so at the close.
-	const bool written = file->Write(m_bytes.data(), m_bytes.size()) == m_bytes.size();
+	const bool written = static_cast<bool>(file->write(m_bytes.data(), static_cast<std::streamsize>(m_bytes.size())));
 	m_bytes.clear();
-	if (!file->Close() || !written)
+	file->close();
+	if (file->fail() || !written)
 		ibBackendCoreException::Error(_("XMLWriter: writing to the file '%s' failed"), fileName);
 	return ibString();
 }
