@@ -541,6 +541,12 @@ that tree to bytes (and reads it back).
   A type is named only by the injected `SetTypeResolver` (no built-in fallback — the
   engine's resolvers, e.g. `ibMetaTypeResolver`, name built-in types from the static
   registry); `SetTypeLookup` supplies the name→clsid inverse. Tests: `tests/test_jsonProvider.cpp`.
+- **`ibXmlProvider`** (`serialize/provider/xmlProvider.{h,cpp}`) — the node as XML, on the core's
+  own XML (`core/xml/xmlText.h`, expat). Unlike the JSON view it loses nothing: a field that is not
+  a string names its kind (`Kind="Number|Bool|Date|Binary|Empty|Array"`), a date keeps its
+  milliseconds, a string XML 1.0 cannot hold goes as base64 — Write→Read→Write gives the same text.
+  Refuses nesting past `ibXmlProvider::kMaxNesting` (256); types by the same `SetTypeResolver` /
+  `SetTypeLookup`. Tests: `tests/test_xmlProvider.cpp`.
 - **`ibFileProvider`** (`serialize/fileProvider.{h,cpp}`) — a configuration as a directory
   of files: `Catalog/Goods/node.json` (the node in `ibJsonProvider`'s form), module texts and
   binaries beside it, from any depth of a value (`ObjectModule.Module.txt`). Laid out in memory (`files`, one field a file); `Publish` / `Collect`

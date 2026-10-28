@@ -3,6 +3,7 @@
 
 #include "systemEnum.h"
 #include "backend/compiler/enumUnit.h"
+#include "core/xml/xmlNodeType.h"   // ibXmlNodeType - the parser's; the enumeration below is a script's view of it
 
 class ibValueEnumStatusMessage : public ibValueEnumeration<ibStatusMessage> {
 	public:
@@ -133,6 +134,29 @@ class ibValueEnumJsonFormatting : public ibValueEnumeration<ibJsonFormatting> {
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibJsonFormatting::ibJsonFormatting_Compact, ibT("Compact"), _("Compact"));
 		AddEnumeration(ibJsonFormatting::ibJsonFormatting_Indented, ibT("Indented"), _("Indented"));
+	}
+};
+
+class ibValueEnumXmlNodeType : public ibValueEnumeration<ibXmlNodeType> {
+	public:
+	ibValueEnumXmlNodeType() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_None, ibT("None"), _("None"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_StartElement, ibT("StartElement"), _("Start element"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_EndElement, ibT("EndElement"), _("End element"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_Text, ibT("Text"), _("Text"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_Whitespace, ibT("Whitespace"), _("Whitespace"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_CDATASection, ibT("CDATASection"), _("CDATA section"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_Comment, ibT("Comment"), _("Comment"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_ProcessingInstruction, ibT("ProcessingInstruction"), _("Processing instruction"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_XMLDeclaration, ibT("XMLDeclaration"), _("XML declaration"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_DocumentTypeDefinition, ibT("DocumentTypeDefinition"), _("Document type definition"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_Attribute, ibT("Attribute"), _("Attribute"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_EntityReference, ibT("EntityReference"), _("Entity reference"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_Entity, ibT("Entity"), _("Entity"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_EndEntity, ibT("EndEntity"), _("End entity"));
+		AddEnumeration(ibXmlNodeType::ibXmlNodeType_Notation, ibT("Notation"), _("Notation"));
 	}
 };
 

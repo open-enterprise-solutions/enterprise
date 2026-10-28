@@ -91,7 +91,7 @@ git submodule update --init --recursive
 
 The `--recursive` flag is required because wxWidgets itself contains submodules.
 
-**A CMake configure fetches what is missing.** wxWidgets, cpp-httplib, Mbed TLS, nlohmann/json, Asio, llhttp, LodePNG and NanoSVG are
+**A CMake configure fetches what is missing.** wxWidgets, cpp-httplib, Mbed TLS, nlohmann/json, Asio, llhttp, LodePNG, NanoSVG and Expat are
 each checked before use, and one that is not there is fetched with `git submodule update --init --recursive` for
 that path (three attempts); only a tree with no git, or no network, stops with the command to run. A
 checkout that fetched less than the tree needs - an older workflow, a partial clone - still builds.
@@ -107,6 +107,9 @@ carries the generated C sources; built as the static `llhttp` target, linked int
 (`core/graphics/picture.h`) have LodePNG (`<lodepng.h>`, one source, `LODEPNG_NO_COMPILE_DISK`; the static `lodepng`
 target, `core/graphics/lodepng/lodepng.vcxproj` in the solution, linked into core only). SVG is the core's too:
 NanoSVG (`<nanosvg/src/nanosvg.h>`, header only, compiled in `core/graphics/picture.cpp` — `ibPicture::FromSvg`).
+XML is the core's as well: Expat (`<expat.h>`, tag `R_2_9_0`; the static `expat` target, its configuration
+`core/xml/expat/expat_config.h`, `core/xml/expat/expat.vcxproj` in the solution, linked into core only), read and
+written through `core/xml/xmlText.h`.
 
 **nlohmann/json is the upstream repository, pinned to a release** (`src/3rdparty/nlohmann`). Updating it is
 moving the pin:

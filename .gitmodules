@@ -28,3 +28,6 @@
 [submodule "src/3rdparty/nanosvg"]
 	path = src/3rdparty/nanosvg
 	url = https://github.com/memononen/nanosvg.git
+[submodule "src/3rdparty/expat"]
+	path = src/3rdparty/expat
+	url = https://github.com/libexpat/libexpat.git

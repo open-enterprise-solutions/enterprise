@@ -2,6 +2,13 @@
 
 Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
+## Script language
+
+- **XML: `XMLReader`, `XMLWriter`, `XMLNamespaceContext`, `XMLNodeType`.** A script reads a document
+  node by node and writes one, to a file or to a string, in UTF-8, UTF-16, windows-1251 or cp866.
+  The parser is expat, built into the engine; an external entity is refused, not read. A file the
+  writer could not write is raised at `Close`.
+
 ## Fixes
 
 - **A list filtered by «contains» finds the rows that contain the value.** On a list read from the
