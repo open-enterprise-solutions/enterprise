@@ -510,6 +510,9 @@
     <ClInclude Include="serialize\jsonText.h">
       <Filter>serialize</Filter>
     </ClInclude>
+    <ClInclude Include="serialize\expat\expat_config.h">
+      <Filter>serialize</Filter>
+    </ClInclude>
     <ClInclude Include="server\clusterControl.h">
       <Filter>server</Filter>
     </ClInclude>
