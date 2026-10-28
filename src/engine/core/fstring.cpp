@@ -11,6 +11,10 @@
 #include "core/memory/memoryPool.h"   // the blocks a text is made in
 
 #include <atomic>
+#include <bit>           // std::countr_zero, std::endian — TerminatedLength reads a word for four characters
+#if defined(__IBMSW__)
+#include <intrin.h>      // _BitScanForward64 — the place of TerminatedLength's zero
+#endif
 #include <cerrno>        // ToLong & co read ERANGE, as wx does
 #include <climits>       // ToInt's range
 #include <cstdarg>       // Print — the arguments Format hands on
@@ -44,14 +48,18 @@ struct ibString::Impl : ibString::Shared
 
 	// Room for `cap` characters at least — and for as many more as the pool's block holds anyway. The class is
 	// counted once: it says which block and how big it is.
-	static Impl* Make(size_t cap) {
+	//
+	// FORCED, with the disassembly in hand (2026-10-28, Release without LTO): left to the inliner, Make and Copy
+	// stayed calls, so a short text was made through four frames — the constructor, Copy, Make, AllocateClass. Pasted
+	// in, a 54-character text made and let go takes 29 ns where it took 37 (IbStringBench, Windows x64).
+	static IB_FORCEINLINE Impl* Make(size_t cap) {
 		const size_t asked = BytesFor(cap);
 		const int c = ibMemoryPool::detail::ClassOf(asked);
 		const size_t bytes = c < 0 ? asked : ibMemoryPool::detail::kClasses[c];
 		void* const place = c < 0 ? ::operator new(bytes) : ibMemoryPool::AllocateClass(c);
 		return new (place) Impl((bytes - sizeof(Shared)) / sizeof(ibChar) - 1);
 	}
-	static Impl* Copy(const ibChar* text, size_t len, size_t cap) {
+	static IB_FORCEINLINE Impl* Copy(const ibChar* text, size_t len, size_t cap) {
 		Impl* const impl = Make(cap < len ? len : cap);
 		if (len != 0) Traits::copy(impl->Chars(), text, len);
 		impl->SetLength(len);
@@ -100,6 +108,55 @@ bool IsSpace(ibChar c) noexcept {
 
 // A piece of a text, made a text of its own — one block, the characters copied once.
 ibString Slice(std::u16string_view piece) { return ibString(piece.data(), piece.size()); }
+
+// WHERE A TERMINATED TEXT ENDS, four characters at a step. One at a time was two thirds of making a 54-character
+// text: 31 ns, 11 with the length handed in, and 16 read this way (IbStringBench, Windows x64, 2026-10-28). Every
+// read is a whole aligned word, so it never reaches into another page — but it may take up to three characters
+// before the text and after its terminator, which the sanitizers would report as an overflow: hence the marks. The
+// characters before the text are made non-zero; of the characters the test marks, the lowest is a true zero — a
+// borrow only runs upward — so its place is the length, with no character-by-character loop at either end. FORCED
+// on Windows, where MSVC left it a call (a four-character text paid ~0.7 ns for it); GCC refuses to force a function
+// across a sanitizer mark in the ASan job, and pastes one this small in by itself in a release build.
+#if defined(__IBMSW__)
+__declspec(no_sanitize_address) IB_FORCEINLINE
+#else
+__attribute__((no_sanitize("address", "thread")))
+#endif
+size_t TerminatedLength(const ibChar* s) noexcept {
+	static_assert(std::endian::native == std::endian::little, "the lowest bits are the first character");
+#if defined(__IBMSW__)
+	typedef uint64_t Word;
+#else
+	typedef uint64_t __attribute__((may_alias)) Word;   // read as characters elsewhere, as a word here
+#endif
+	constexpr uint64_t kLow  = 0x0001000100010001ull;   // one in each character
+	constexpr uint64_t kHigh = 0x8000800080008000ull;   // a character's top bit — where the test marks a zero
+	const uintptr_t at = reinterpret_cast<uintptr_t>(s);
+	const Word* w = reinterpret_cast<const Word*>(at & ~static_cast<uintptr_t>(sizeof(Word) - 1));
+	uint64_t word = *w | ((uint64_t{ 1 } << ((at & (sizeof(Word) - 1)) * 8)) - 1);   // the characters before s
+	for (;;) {
+		const uint64_t zero = (word - kLow) & ~word & kHigh;
+		if (zero != 0) {
+#if defined(__IBMSW__)
+			unsigned long bit;
+			_BitScanForward64(&bit, zero);   // std::countr_zero asks the CPU for tzcnt at every call (__isa_available)
+#else
+			const unsigned bit = static_cast<unsigned>(std::countr_zero(zero));
+#endif
+			const ibChar* const end = reinterpret_cast<const ibChar*>(w) + bit / 16;   // unsigned: a shift
+			return static_cast<size_t>(end - s);
+		}
+		word = *++w;
+	}
+}
+
+// …and a wide one, the boundary's (wxT, std::wstring): where wchar_t is two bytes it is this very text, read the same
+// way — the naive scan was there too; where it is four, the C library's own.
+#if WCHAR_MAX <= 0xFFFF
+IB_FORCEINLINE size_t TerminatedLength(const wchar_t* s) noexcept { return TerminatedLength(reinterpret_cast<const ibChar*>(s)); }
+#else
+size_t TerminatedLength(const wchar_t* s) noexcept { return std::wcslen(s); }
+#endif
 
 // Two texts the same, a case-insensitive pair folded only where the characters differ — matching
 // characters need no folding, and names that are the same usually match exactly.
@@ -219,7 +276,7 @@ bool ToNumeric(const wchar_t* start, T* val, R (*convert)(const wchar_t*, wchar_
 
 ibString::ibString(const ibChar* s)
 {
-	if (s != nullptr && *s != ibT('\0')) { const size_t n = Traits::length(s); m_impl = Impl::Copy(s, n, n); }
+	if (s != nullptr && *s != ibT('\0')) { const size_t n = TerminatedLength(s); m_impl = Impl::Copy(s, n, n); }
 }
 ibString::ibString(const ibChar* s, size_t n) { if (s != nullptr && n != 0) m_impl = Impl::Copy(s, n, n); }
 ibString::ibString(ibChar c, size_t count)
@@ -230,7 +287,7 @@ ibString::ibString(ibChar c, size_t count)
 	impl->SetLength(count);
 	m_impl = impl;
 }
-ibString::ibString(const wchar_t* ws) : ibString(ws, ws != nullptr ? std::wcslen(ws) : 0) {}
+ibString::ibString(const wchar_t* ws) : ibString(ws, ws != nullptr ? TerminatedLength(ws) : 0) {}
 ibString::ibString(const wchar_t* ws, size_t n)
 {
 	if (ws == nullptr || n == 0) return;
@@ -668,10 +725,10 @@ ibString& ibString::operator+=(const ibString& o)
 	return append(o.c_str(), o.Len());   // `o` may be this very string — append takes it out first
 }
 
-ibString& ibString::operator+=(const ibChar* s) { if (s != nullptr && *s != ibT('\0')) append(s, Traits::length(s)); return *this; }
+ibString& ibString::operator+=(const ibChar* s) { if (s != nullptr && *s != ibT('\0')) append(s, TerminatedLength(s)); return *this; }
 ibString& ibString::operator+=(const wchar_t* s)
 {
-	if (s != nullptr && *s != L'\0') { const auto units = Utf16(s, std::wcslen(s)); append(units.data(), units.size()); }
+	if (s != nullptr && *s != L'\0') { const auto units = Utf16(s, TerminatedLength(s)); append(units.data(), units.size()); }
 	return *this;
 }
 ibString& ibString::operator+=(ibChar c) { push_back(c); return *this; }
@@ -721,7 +778,7 @@ size_t ibString::Replace(const ibString& fromText, const ibString& toText, bool 
 bool ibString::operator==(const wchar_t* s) const
 {
 	if (s == nullptr) s = L"";
-	const auto units = Utf16(s, std::wcslen(s));
+	const auto units = Utf16(s, TerminatedLength(s));
 	return View() == std::u16string_view(units);
 }
 
@@ -782,13 +839,13 @@ bool ibString::IsSameAs(const ibString& o, bool caseSensitive) const
 bool ibString::IsSameAs(const ibChar* s, bool caseSensitive) const
 {
 	if (s == nullptr) s = ibT("");
-	return SameText(c_str(), Len(), s, Traits::length(s), caseSensitive);
+	return SameText(c_str(), Len(), s, TerminatedLength(s), caseSensitive);
 }
 
 bool ibString::IsSameAs(const wchar_t* s, bool caseSensitive) const
 {
 	if (s == nullptr) s = L"";
-	const auto units = Utf16(s, std::wcslen(s));
+	const auto units = Utf16(s, TerminatedLength(s));
 	return SameText(c_str(), Len(), units.data(), units.size(), caseSensitive);
 }
 

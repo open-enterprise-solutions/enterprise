@@ -59,6 +59,28 @@ TEST(IbString, FromWcharLiteral) {
     EXPECT_STREQ(s.wc_str(), L"abc");
 }
 
+// A terminated text is measured four characters at a step once its pointer is aligned (TerminatedLength): every
+// start inside a word, every place of the terminator in it, and characters after it — none of them counted. The
+// filler sets each character's top bit in turn, where a zero is told apart by bits.
+TEST(IbString, APointerIsReadToItsTerminatorAtEveryAlignment) {
+    const ibChar kFill[] = { ibT('x'), 0x8000, 0xFFFF, 0x0100 };
+    alignas(8) ibChar buffer[48];
+    for (size_t start = 0; start < 4; ++start)
+        for (size_t len = 0; len < 24; ++len) {
+            for (size_t i = 0; i < sizeof(buffer) / sizeof(buffer[0]); ++i)
+                buffer[i] = kFill[i % 4];
+            buffer[start + len] = ibT('\0');
+            const ibChar* text = buffer + start;
+            EXPECT_EQ(ibString(text).Len(), len) << "start " << start << ", length " << len;
+#if WCHAR_MAX <= 0xFFFF   // …and the same text through the wide door, which is the same characters here
+            EXPECT_EQ(ibString(reinterpret_cast<const wchar_t*>(text)).Len(), len) << "start " << start << ", length " << len;
+#endif
+            ibString appended(ibT("a"));
+            appended += text;
+            EXPECT_EQ(appended.Len(), len + 1) << "start " << start << ", length " << len;
+        }
+}
+
 // A text decoded from UTF-8 got room for its BYTES - Cyrillic two to a character - and kept it for as long as it
 // lived; a parsed document keeps every string it read. It keeps the room its characters take now. Counted on the
 // debug heap, which the test and backend share (both /MDd): 10 000 characters of `Ж` held in more than their own

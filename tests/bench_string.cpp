@@ -181,6 +181,12 @@ TEST(IbStringBench, DISABLED_CompareU16) {
         const double u16 = TimeNsPerOp(N, [&](int){ std::u16string s(kLong); g_sink += s.size(); });
         Row("ctor+dtor (heap)", ib, u16);
     }
+    {   // …the length handed in: what is left is the block and the copy, and the row above less this one is the scan
+        const size_t n = sizeof(kLong) / sizeof(kLong[0]) - 1;
+        const double ib  = TimeNsPerOp(N, [&](int){ ibString       s(kLong, n); g_sink += s.Len(); });
+        const double u16 = TimeNsPerOp(N, [&](int){ std::u16string s(kLong, n); g_sink += s.size(); });
+        Row("ctor+dtor (heap, n)", ib, u16);
+    }
     {
         const double ib  = TimeNsPerOp(N, [&](int){ ibString       s(kShort); g_sink += s.Len(); });
         const double u16 = TimeNsPerOp(N, [&](int){ std::u16string s(kShort); g_sink += s.size(); });
