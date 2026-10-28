@@ -382,6 +382,9 @@ struct SessionBench : ::testing::Test {
             GTEST_SKIP() << "no session registry after CreateAppDataEnv";
         m_session = std::make_shared<ibSession>(ibString(wxT("bench")), ibSessionKind::Enterprise);
         m_bound   = std::make_unique<ibSessionScope>(m_session.get());
+        // A bound session compiles in ITS syntax, which starts as CES (compileState.h) — the suite's VES is the
+        // sessionless thread's. The modules here are VES; the style goes with the session, nothing to put back.
+        ibCompileCode::SetCodeStyle(CODE_VES);
     }
 
     // Put back as found, so the benches that run after this one stay sessionless.
