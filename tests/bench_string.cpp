@@ -74,6 +74,14 @@ void Row(const char* name, double ib, double wx, double stl) {
     std::cout << "\n";
 }
 
+// Two columns: ibString against std::u16string, the same character width.
+void Row(const char* name, double ib, double u16) {
+    std::cout << "  " << std::left << std::setw(20) << name << std::right << std::fixed << std::setprecision(1)
+              << "  ib=" << std::setw(8) << ib << "ns"
+              << "  u16=" << std::setw(8) << u16 << "ns"
+              << "  ib/u16 x" << std::setprecision(2) << (u16 > 0 ? ib / u16 : 0.0) << "\n";
+}
+
 } // namespace
 
 TEST(IbStringBench, DISABLED_Compare) {
@@ -92,13 +100,6 @@ TEST(IbStringBench, DISABLED_Compare) {
         const double wx  = TimeNsPerOp(N, [&](int){ wxString     s(kLong); g_sink += s.length(); });
         const double stl = TimeNsPerOp(N, [&](int){ std::wstring s(kLong); g_sink += s.size(); });
         Row("ctor+dtor (heap)", ib, wx, stl);
-        // The same characters as an ibT literal — the engine's road — against std::u16string from the same
-        // literal: one character width on both sides, so the row is the copy and the allocator alone. The row
-        // above is the road from wx: where wchar_t is four bytes its text is narrowed to UTF-16 on the way in.
-        const ibChar kLongIb[] = ibT("the quick brown fox jumps over the lazy dog 0123456789");
-        const double lit = TimeNsPerOp(N, [&](int){ ibString       s(kLongIb); g_sink += s.Len(); });
-        const double u16 = TimeNsPerOp(N, [&](int){ std::u16string s(kLongIb); g_sink += s.size(); });
-        Row("ctor+dtor (heap,ibT)", lit, wx, u16);
     }
     // 2) construct + destruct a short string — 4 wchar: std::wstring keeps it inside itself (SSO), ibString takes a
     //    block of the pool
@@ -108,10 +109,6 @@ TEST(IbStringBench, DISABLED_Compare) {
         const double wx  = TimeNsPerOp(N, [&](int){ wxString     s(kShort); g_sink += s.length(); });
         const double stl = TimeNsPerOp(N, [&](int){ std::wstring s(kShort); g_sink += s.size(); });
         Row("ctor+dtor (short)", ib, wx, stl);
-        const ibChar kShortIb[] = ibT("Name");
-        const double lit = TimeNsPerOp(N, [&](int){ ibString       s(kShortIb); g_sink += s.Len(); });
-        const double u16 = TimeNsPerOp(N, [&](int){ std::u16string s(kShortIb); g_sink += s.size(); });
-        Row("ctor+dtor(short,ibT)", lit, wx, u16);
     }
     // 3) copy a heap string
     {
@@ -161,6 +158,60 @@ TEST(IbStringBench, DISABLED_Compare) {
         const double wx  = TimeNsPerOp(N, [&](int){ g_sink += (size_t)wxStr.Find(wxPat); g_sink += wxStr.Mid(4, 9).length(); });
         const double stl = TimeNsPerOp(N, [&](int){ g_sink += stlS.find(stlPat); g_sink += stlS.substr(4, 9).size(); });
         Row("find+mid", ib, wx, stl);
+    }
+
+    EXPECT_NE(g_sink, 0xFFFFFFFFu);   // observe the sink
+    SUCCEED();
+}
+
+// The same operations from an ibT literal against std::u16string from the same literal — one character width on
+// both sides, so what is left is the copy, the allocator and the count. The table above starts from wide text:
+// where wchar_t is four bytes ibString narrows it on the way in, and its first rows are the road from wx.
+TEST(IbStringBench, DISABLED_CompareU16) {
+    const int N = 200000;
+    const ibChar kLong[]  = ibT("the quick brown fox jumps over the lazy dog 0123456789");
+    const ibChar kShort[] = ibT("Name");
+
+    std::cout << "\n[ ibString vs std::u16string | N=" << N
+              << " | sizeof ib=" << sizeof(ibString) << " u16=" << sizeof(std::u16string)
+              << " | x = ib/u16, <1 = ibString faster ]\n";
+
+    {
+        const double ib  = TimeNsPerOp(N, [&](int){ ibString       s(kLong); g_sink += s.Len(); });
+        const double u16 = TimeNsPerOp(N, [&](int){ std::u16string s(kLong); g_sink += s.size(); });
+        Row("ctor+dtor (heap)", ib, u16);
+    }
+    {
+        const double ib  = TimeNsPerOp(N, [&](int){ ibString       s(kShort); g_sink += s.Len(); });
+        const double u16 = TimeNsPerOp(N, [&](int){ std::u16string s(kShort); g_sink += s.size(); });
+        Row("ctor+dtor (short)", ib, u16);
+    }
+    {
+        const ibString ibSrc(kLong); const std::u16string u16Src(kLong);
+        const double ib  = TimeNsPerOp(N, [&](int){ ibString       c(ibSrc);  g_sink += c.Len(); });
+        const double u16 = TimeNsPerOp(N, [&](int){ std::u16string c(u16Src); g_sink += c.size(); });
+        Row("copy (heap)", ib, u16);
+    }
+    {
+        const int kThreads = 8;
+        const ibString ibSrc(kLong); const std::u16string u16Src(kLong);
+        const double ib  = TimeNsPerOp(kThreads, N, [&](int){ const ibString       c(ibSrc);  return c.Len(); });
+        const double u16 = TimeNsPerOp(kThreads, N, [&](int){ const std::u16string c(u16Src); return c.size(); });
+        Row("copy x8 threads", ib, u16);
+    }
+    {
+        const ibString       ibA(kLong),  ibB(ibT("-suffix"));
+        const std::u16string u16A(kLong), u16B(ibT("-suffix"));
+        const double ib  = TimeNsPerOp(N, [&](int){ ibString       c = ibA + ibB;   g_sink += c.Len(); });
+        const double u16 = TimeNsPerOp(N, [&](int){ std::u16string c = u16A + u16B; g_sink += c.size(); });
+        Row("concat", ib, u16);
+    }
+    {
+        const ibString       ibS(kLong),  ibPat(ibT("brown"));
+        const std::u16string u16S(kLong), u16Pat(ibT("brown"));
+        const double ib  = TimeNsPerOp(N, [&](int){ g_sink += ibS.Find(ibPat); g_sink += ibS.Mid(4, 9).Len(); });
+        const double u16 = TimeNsPerOp(N, [&](int){ g_sink += u16S.find(u16Pat); g_sink += u16S.substr(4, 9).size(); });
+        Row("find+mid", ib, u16);
     }
 
     EXPECT_NE(g_sink, 0xFFFFFFFFu);   // observe the sink
