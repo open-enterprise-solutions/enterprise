@@ -11,14 +11,34 @@
 namespace ibMemoryPool {
 namespace detail {
 
+	// Every size to the smallest class that holds it — all of them, at compile time, once. A block's going looks its
+	// class up again from the room it was made with, so a size given a wrong class is a block in the wrong list.
+	constexpr bool EverySizeCountsToTheSmallestClassThatHoldsIt() {
+		for (std::size_t bytes = 1; bytes <= kClasses[kNum - 1] + 1; ++bytes) {
+			int smallest = 0;
+			while (smallest < kNum && kClasses[smallest] < bytes) ++smallest;
+			if (ClassOf(bytes) != (smallest < kNum ? smallest : -1)) return false;
+		}
+		return true;
+	}
+	static_assert(EverySizeCountsToTheSmallestClassThatHoldsIt(), "ClassOf and kClasses disagree");
+
 	struct Node { Node* next; };
+
+	// The most a thread's cache holds of one class — in bytes. It was 128 blocks a class until 2026-10-28, and then
+	// a list's strings past the 128th were the CRT's both ways: 54 characters, 1000 alive at once, 127 ns a string
+	// made and let go where the pool's blocks take 15 (IbStringBench, `heap, N alive`). Each class its own: one sum
+	// for all of them, filled by 100000 strings of one size, left the others none — a short string 11 → 36 ns. And
+	// a cap still: a thread that frees what another one makes would otherwise keep all of it — at most 56 MB a
+	// thread, every class full.
+	constexpr std::size_t kCap = 2 * 1024 * 1024;
 
 	struct ThreadPool {
 		// ⚠ NO INITIALIZERS: a thread_local of a trivial type is zeroed STATICALLY. `= {}` here gave the pool a
 		// constructor, and MSVC then asked a lazy-init guard at EVERY access — four of them in one free, seen in
 		// the disassembly (`cmp byte ptr [tls+0A0h],0 … call __dyn_tls_on_demand_init`, 2026-09-28).
 		Node*         head[kNum];
-		std::size_t   count[kNum];
+		std::size_t   bytes[kNum];   // what each list holds, against kCap
 
 		// Hand every cached block back to the CRT. Shared by Drain() and, off Windows, by the
 		// destructor below.
@@ -31,7 +51,7 @@ namespace detail {
 					node = next;
 				}
 				head[c] = nullptr;
-				count[c] = 0;
+				bytes[c] = 0;
 			}
 		}
 
@@ -70,7 +90,7 @@ void* AllocateClass(int c) {
 	detail::ThreadPool& pool = detail::t_pool;       // the thread's pool reached once
 	if (detail::Node* n = pool.head[c]) {            // reuse a cached block
 		pool.head[c] = n->next;
-		--pool.count[c];
+		pool.bytes[c] -= detail::kClasses[c];
 		return n;
 	}
 	return ::operator new(detail::kClasses[c]);       // fresh block, full class size
@@ -78,14 +98,14 @@ void* AllocateClass(int c) {
 
 void Deallocate(void* p, std::size_t bytes) noexcept {
 	if (p == nullptr) return;
-	const int c = detail::ClassOf(bytes == 0 ? 1 : bytes);
-	if (c < 0) { ::operator delete(p); return; }      // oversized → return to the OS
+	const int c = detail::ClassOf(bytes);
+	if (c < 0) { ::operator delete(p); return; }      // no class, or oversized → return to the OS
 	detail::ThreadPool& pool = detail::t_pool;
-	if (pool.count[c] >= detail::kCap) { ::operator delete(p); return; }   // cache full
+	if (pool.bytes[c] >= detail::kCap) { ::operator delete(p); return; }   // cache full
 	detail::Node* n = static_cast<detail::Node*>(p);   // cache for reuse
 	n->next = pool.head[c];
 	pool.head[c] = n;
-	++pool.count[c];
+	pool.bytes[c] += detail::kClasses[c];
 }
 
 // Hands this thread's cached blocks back to the CRT. The cache exists to make string and buffer

@@ -187,6 +187,17 @@ TEST(IbStringBench, DISABLED_CompareU16) {
         const double u16 = TimeNsPerOp(N, [&](int){ std::u16string s(kLong, n); g_sink += s.size(); });
         Row("ctor+dtor (heap, n)", ib, u16);
     }
+    {   // …many alive at once, as a list's rows hold them: a freed block goes back to the pool while the thread's
+        // cache has room for it, and past that the CRT makes and takes every one
+        const size_t n = sizeof(kLong) / sizeof(kLong[0]) - 1;
+        for (const size_t live : { size_t(1000), size_t(10000), size_t(100000) }) {
+            std::vector<ibString>       ibs;  ibs.reserve(live);
+            std::vector<std::u16string> u16s; u16s.reserve(live);
+            const double ib  = TimeNsPerOp(100, [&](int){ for (size_t k = 0; k < live; ++k) ibs.emplace_back(kLong, n);  ibs.clear(); }) / live;
+            const double u16 = TimeNsPerOp(100, [&](int){ for (size_t k = 0; k < live; ++k) u16s.emplace_back(kLong, n); u16s.clear(); }) / live;
+            Row(("heap, " + std::to_string(live) + " alive").c_str(), ib, u16);
+        }
+    }
     {
         const double ib  = TimeNsPerOp(N, [&](int){ ibString       s(kShort); g_sink += s.Len(); });
         const double u16 = TimeNsPerOp(N, [&](int){ std::u16string s(kShort); g_sink += s.size(); });

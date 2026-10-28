@@ -4,7 +4,8 @@
 /////////////////////////////////////////////////////////////////////////////
 // ibMemoryPool — the per-thread, size-classed free list the engine's small blocks come from: a text's
 // (ibString) and a buffer's bytes (ibMemoryBuffer). A block freed goes back to the pool of the thread
-// that frees it, up to kCap per class; one larger than the biggest class goes straight to the CRT.
+// that frees it while that thread's cache has room (kCap, memoryPool.cpp); one larger than the biggest class
+// goes straight to the CRT.
 //
 // It was ibString's alone (fstring.cpp) until the buffer took the string's shape (2026-10-23); the code is
 // the string's, moved. AllocateClass and Deallocate are core's own — not exported, so on Linux, where core
@@ -13,42 +14,43 @@
 
 #include "core/core.h"
 
+#include <array>
 #include <cstddef>
-#if defined(_MSC_VER)
-#include <intrin.h>      // _BitScanReverse — the pool's class, counted
-#endif
+#include <cstdint>
 
 namespace ibMemoryPool {
 namespace detail {
 
-	constexpr std::size_t kClasses[] = { 16, 32, 64, 128, 256, 512, 1024, 2048, 4096 };
+	// Sixteen bytes a step up to 64, then four classes a doubling: past 64 a block is at most a quarter more than
+	// asked. Powers of two (until 2026-10-28) gave a 54-character text, 134 bytes, a block of 256; it takes 160.
+	constexpr std::size_t kClasses[] = {
+		  16,   32,   48,   64,
+		  80,   96,  112,  128,
+		 160,  192,  224,  256,
+		 320,  384,  448,  512,
+		 640,  768,  896, 1024,
+		1280, 1536, 1792, 2048,
+		2560, 3072, 3584, 4096 };
 	constexpr int         kNum       = static_cast<int>(sizeof(kClasses) / sizeof(kClasses[0]));
-	constexpr std::size_t kCap       = 128;   // max cached blocks per class per thread
 
-	static_assert(kClasses[0] == 16, "ClassOf counts classes as powers of two from 16");
+	// The class of each sixteen bytes' step, made from the classes above at compile time — every class is whole
+	// steps, so a step never straddles two (memoryPool.cpp checks every size).
+	inline constexpr auto kClassOfStep = [] {
+		std::array<std::uint8_t, kClasses[kNum - 1] / 16> classOf{};
+		int c = 0;
+		for (std::size_t step = 0; step < classOf.size(); ++step) {
+			while (kClasses[c] < (step + 1) * 16) ++c;
+			classOf[step] = static_cast<std::uint8_t>(c);
+		}
+		return classOf;
+	}();
 
-	// The width of a number in bits — std::bit_width, which this C++17 tree does not have.
-	inline int BitWidth(std::size_t x) noexcept {
-		if (x == 0) return 0;
-#if defined(_MSC_VER)
-		unsigned long top;
-#  if defined(_WIN64)
-		_BitScanReverse64(&top, x);
-#  else
-		_BitScanReverse(&top, x);
-#  endif
-		return static_cast<int>(top) + 1;
-#else
-		return static_cast<int>(sizeof(unsigned long long) * 8) - __builtin_clzll(static_cast<unsigned long long>(x));
-#endif
-	}
-
-	// The class a block of this many bytes comes from (16 << class holds it), counted rather than searched:
-	// a block's making and its going both ask.
-	inline int ClassOf(std::size_t bytes) noexcept {
-		if (bytes <= kClasses[0]) return 0;
-		if (bytes > kClasses[kNum - 1]) return -1;   // larger than the biggest class → straight to ::operator new
-		return BitWidth(bytes - 1) - 4;               // 17..32 → 1, 33..64 → 2, … 2049..4096 → 8
+	// The class a block of this many bytes comes from — the smallest that holds it — looked up, not counted: a
+	// block's making and its going both ask, and the bit count with its shifts cost a text 1.5–2 ns more than one
+	// load (IbStringBench, 2026-10-28).
+	constexpr int ClassOf(std::size_t bytes) noexcept {
+		if (bytes - 1 >= kClasses[kNum - 1]) return -1;   // none, or larger than the biggest class → ::operator new
+		return kClassOfStep[(bytes - 1) / 16];
 	}
 
 } // namespace detail
@@ -57,7 +59,7 @@ namespace detail {
 // already — the block's maker asks it once, and knows then how much room it gets.
 void* AllocateClass(int c);
 
-// A block of `bytes` back: to this thread's pool when its class has room there, to the CRT otherwise.
+// A block of `bytes` back: to this thread's pool while its cache has room, to the CRT otherwise.
 void Deallocate(void* p, std::size_t bytes) noexcept;
 
 // Hands this thread's cached blocks back to the CRT — see the note at the definition.
