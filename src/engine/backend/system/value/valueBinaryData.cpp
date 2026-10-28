@@ -8,6 +8,7 @@
 #include "backend/backend_exception.h"
 
 #include "core/utils/base64.h"   // ibBase64 — the value as text, and back
+#include "core/serialize/dataBuilder.h"   // ibDataNode — the packed form
 
 #include <wx/ffile.h>
 #include <wx/log.h>
@@ -181,6 +182,24 @@ bool ibValueBinaryData::CompareValueEQ(const ibVariant& cParam) const
 bool ibValueBinaryData::CompareValueNE(const ibVariant& cParam) const
 {
 	return !CompareValueEQ(cParam);
+}
+
+bool ibValueBinaryData::DoSerialize(ibDataNode& node) const
+{
+	node.SetValue(kValueFieldData, m_data);
+	return true;
+}
+
+bool ibValueBinaryData::DoDeserialize(const ibDataNode& node)
+{
+	const auto stored = node.FindField(kValueFieldData);
+	if (!stored)
+		m_data = ibMemoryBuffer();
+	else if (stored->Kind() == ibDataKind::Binary)
+		m_data = stored->AsBinary();
+	else
+		return false;
+	return true;
 }
 
 //**********************************************************************

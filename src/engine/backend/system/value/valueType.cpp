@@ -566,7 +566,7 @@ bool ibValueQualifierString::Init(ibValue** paParams, const long lSizeArray)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueType, "Type", value_to_clsid("VL_TYPE"));
+VALUE_TYPE_REGISTER(ibValueType, "Type", g_valueTypeCLSID);
 VALUE_TYPE_REGISTER(ibValueTypeDescription, "TypeDescription", value_to_clsid("VL_TYPED"));
 
 VALUE_TYPE_REGISTER(ibValueQualifierNumber, "QualifierNumber", value_to_clsid("VL_QNUM"));

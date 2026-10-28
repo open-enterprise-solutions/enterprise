@@ -772,6 +772,57 @@ ibValue ibValueSystemFunction::DeserializeValue(const ibString& strJson)
 	return activeMetaData->Deserialize(node);
 }
 
+#include "core/serialize/provider/xmlProvider.h"   // the node as XML — the twins of the two verbs above
+#include "backend/system/value/valueType.h"
+#include "backend/compiler/valueSerialization.h"         // ibReadNodeType — whose value a node holds
+
+// ⭐ A VALUE AS XML — SerializeValue's twin, with the XML provider where that one has the JSON view: the value packs
+// itself into a node, the configuration's door adds what only it can make (references, enumeration members), and
+// the provider writes the node. The XML form keeps every kind the node holds, so XMLValue reads the value back as
+// it went - as far as the node does: a structure or an array reads its elements through the value registry alone,
+// so a reference inside one does not come back yet. A value that cannot pack itself is refused by the door; the
+// provider refuses on its own what it cannot write or read.
+ibString ibValueSystemFunction::XMLString(const ibValue& value)
+{
+	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
+		ibBackendCoreException::Error(_("There is no open configuration to write this value against"));
+
+	ibDataNode node;
+	activeMetaData->Serialize(value, node);   // raises on a value that cannot travel
+
+	ibXmlProvider provider;
+	provider.SetTypeResolver(ibMetaTypeResolver(activeMetaData));
+	ibString text;
+	provider.Write(node, text);
+	return text;
+}
+
+// …AND BACK: the text XMLString wrote, read into a node and the node into a value. The type the node names is
+// compared with the one asked for BEFORE anything is made of it: a text that holds another type's value is not
+// this type's, and is refused naming both.
+ibValue ibValueSystemFunction::XMLValue(const ibValue& type, const ibValue& text)
+{
+	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
+		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
+	if (type.GetClassType() != g_valueTypeCLSID)
+		ibBackendCoreException::Error(_("XMLValue: the type is what Type() or TypeOf() answers, not a value of the type '%s'"),
+			type.GetClassName());
+
+	ibXmlProvider provider;
+	provider.SetTypeLookup([](const ibString& name) -> ibClassID {
+		return activeMetaData != nullptr
+			? activeMetaData->GetIDObjectFromString(name) : ibClassID(0); });
+
+	ibDataNode node;
+	provider.Read(text.GetString(), node);
+
+	ibValuePtr<ibValueType> held(new ibValueType(ibReadNodeType(node)));
+	if (!type.CompareValueEQ(held))
+		ibBackendCoreException::Error(_("XMLValue: the text holds a value of the type '%s', not of the type '%s'"),
+			held->GetString(), type.GetString());
+	return activeMetaData->Deserialize(node);
+}
+
 ibValue ibValueSystemFunction::Evaluate(const ibString& strExpression)
 {
 	auto* puState = ibSession::GetPUState();
@@ -798,7 +849,6 @@ ibString ibValueSystemFunction::Format(ibValue& cData, const ibString& fmt)
 	return ibFormatString::Parse(fmt).Apply(cData);
 }
 
-#include "backend/system/value/valueType.h"
 
 ibValue ibValueSystemFunction::Type(const ibValue& cTypeName)
 {

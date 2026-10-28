@@ -35,6 +35,10 @@ class BACKEND_API ibValueGuid : public ibValue {
 		return m_guid != ibGuid(cParam.GetString());
 	}
 
+	// ⭐ A PACKED FORM — its text, the nil guid's included; a text that is not a guid is refused.
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
+
 private:
 	ibGuid m_guid;
 };
