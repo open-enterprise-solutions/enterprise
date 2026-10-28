@@ -92,6 +92,11 @@ TEST(IbStringBench, DISABLED_Compare) {
         const double wx  = TimeNsPerOp(N, [&](int){ wxString     s(kLong); g_sink += s.length(); });
         const double stl = TimeNsPerOp(N, [&](int){ std::wstring s(kLong); g_sink += s.size(); });
         Row("ctor+dtor (heap)", ib, wx, stl);
+        // The same characters as an ibT literal — the engine's road. The row above is the road from wx: where
+        // wchar_t is four bytes its text is narrowed to UTF-16 on the way in.
+        const ibChar kLongIb[] = ibT("the quick brown fox jumps over the lazy dog 0123456789");
+        const double lit = TimeNsPerOp(N, [&](int){ ibString s(kLongIb); g_sink += s.Len(); });
+        Row("ctor+dtor (heap,ibT)", lit, wx, stl);
     }
     // 2) construct + destruct a short string — 4 wchar: std::wstring keeps it inside itself (SSO), ibString takes a
     //    block of the pool
@@ -101,6 +106,9 @@ TEST(IbStringBench, DISABLED_Compare) {
         const double wx  = TimeNsPerOp(N, [&](int){ wxString     s(kShort); g_sink += s.length(); });
         const double stl = TimeNsPerOp(N, [&](int){ std::wstring s(kShort); g_sink += s.size(); });
         Row("ctor+dtor (short)", ib, wx, stl);
+        const ibChar kShortIb[] = ibT("Name");
+        const double lit = TimeNsPerOp(N, [&](int){ ibString s(kShortIb); g_sink += s.Len(); });
+        Row("ctor+dtor(short,ibT)", lit, wx, stl);
     }
     // 3) copy a heap string
     {

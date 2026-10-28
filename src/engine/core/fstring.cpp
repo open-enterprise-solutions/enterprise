@@ -149,25 +149,32 @@ char* EncodeUtf8(uint32_t cp, char* at) noexcept {
 }
 
 // A wide text as UTF-16 units. Where wchar_t is two bytes (Windows) it IS UTF-16, read where it lies; where it
-// is four (Linux, macOS) it is UTF-32, and a character past the basic plane becomes a surrogate pair.
+// is four (Linux, macOS) it is UTF-32, and a character past the basic plane becomes a surrogate pair — counted,
+// then laid down through a pointer, as ToUtf8 does.
 #if WCHAR_MAX <= 0xFFFF
 std::u16string_view Utf16(const wchar_t* s, size_t n) noexcept {
 	return std::u16string_view(reinterpret_cast<const ibChar*>(s), n);
 }
 #else
-std::u16string Utf16(const wchar_t* s, size_t n) {
-	std::u16string units;
-	units.reserve(n);
-	for (size_t i = 0; i < n; ++i) {
-		uint32_t cp = static_cast<uint32_t>(s[i]);
-		if (cp > 0xFFFF) {
-			cp -= 0x10000;
-			units.push_back(static_cast<ibChar>(0xD800 + (cp >> 10)));
-			units.push_back(static_cast<ibChar>(0xDC00 + (cp & 0x3FF)));
-		}
-		else units.push_back(static_cast<ibChar>(cp));
+size_t Utf16Length(uint32_t cp) noexcept { return cp > 0xFFFF ? 2 : 1; }
+
+ibChar* EncodeUtf16(uint32_t cp, ibChar* at) noexcept {
+	if (cp > 0xFFFF) {
+		cp -= 0x10000;
+		*at++ = static_cast<ibChar>(0xD800 + (cp >> 10));
+		*at++ = static_cast<ibChar>(0xDC00 + (cp & 0x3FF));
 	}
-	return units;
+	else *at++ = static_cast<ibChar>(cp);
+	return at;
+}
+
+std::u16string Utf16(const wchar_t* s, size_t n) {
+	size_t units = 0;
+	for (size_t i = 0; i < n; ++i) units += Utf16Length(static_cast<uint32_t>(s[i]));
+	std::u16string text(units, ibT('\0'));
+	ibChar* at = text.data();
+	for (size_t i = 0; i < n; ++i) at = EncodeUtf16(static_cast<uint32_t>(s[i]), at);
+	return text;
 }
 #endif
 
@@ -208,18 +215,24 @@ ibString::ibString(const wchar_t* ws) : ibString(ws, ws != nullptr ? std::wcslen
 ibString::ibString(const wchar_t* ws, size_t n)
 {
 	if (ws == nullptr || n == 0) return;
-	const auto units = Utf16(ws, n);
-	m_impl = Impl::Copy(units.data(), units.size(), units.size());
+#if WCHAR_MAX <= 0xFFFF
+	m_impl = Impl::Copy(reinterpret_cast<const ibChar*>(ws), n, n);
+#else
+	// Into the block itself: every text from wx crosses here, and a text made on the way to the block paid a
+	// second allocation each time (100 ns against 21 for the bench's 54 characters, 2026-10-28).
+	size_t units = 0;
+	for (size_t i = 0; i < n; ++i) units += Utf16Length(static_cast<uint32_t>(ws[i]));
+	Impl* const impl = Impl::Make(units);
+	ibChar* at = impl->Chars();
+	for (size_t i = 0; i < n; ++i) at = EncodeUtf16(static_cast<uint32_t>(ws[i]), at);
+	impl->SetLength(units);
+	m_impl = impl;
+#endif
 }
 ibString::ibString(const std::wstring& ws) : ibString(ws.data(), ws.size()) {}
 ibString::ibString(const char* utf8) { if (utf8) SetUtf8(utf8, std::char_traits<char>::length(utf8)); }
-ibString::ibString(const wxString& s)
-{
-	if (s.empty()) return;
-	const auto& wide = s.ToStdWstring();   // wx's own wide storage, by reference where the build keeps one
-	const auto units = Utf16(wide.data(), wide.size());
-	m_impl = Impl::Copy(units.data(), units.size(), units.size());
-}
+// wx's own wide storage, by reference where the build keeps one.
+ibString::ibString(const wxString& s) : ibString(s.ToStdWstring()) {}
 
 // --- conversions -----------------------------------------------------------------
 

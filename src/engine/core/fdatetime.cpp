@@ -99,14 +99,14 @@ ibDateTime AddMonths(const ibDateTime& date, long months) noexcept
 }
 
 // Two digits, and four, into a text being written.
-wchar_t* PutTwo(wchar_t* at, unsigned value) noexcept
+ibChar* PutTwo(ibChar* at, unsigned value) noexcept
 {
-	*at++ = static_cast<wchar_t>(L'0' + value / 10 % 10);
-	*at++ = static_cast<wchar_t>(L'0' + value % 10);
+	*at++ = static_cast<ibChar>(ibT('0') + value / 10 % 10);
+	*at++ = static_cast<ibChar>(ibT('0') + value % 10);
 	return at;
 }
 
-wchar_t* PutFour(wchar_t* at, unsigned value) noexcept
+ibChar* PutFour(ibChar* at, unsigned value) noexcept
 {
 	return PutTwo(PutTwo(at, value / 100), value % 100);
 }
@@ -519,18 +519,20 @@ ibString ibDateTime::ToString() const
 	const CivilDay day = CivilOf(*this);
 	unsigned hour, minute, second, millisecond;
 	TimeOf(*this, hour, minute, second, millisecond);
-	wchar_t text[48];
 	if (day.m_year < 1 || day.m_year > 9999) {
-		const int length = std::swprintf(text, sizeof(text) / sizeof(text[0]), L"%02u.%02u.%04d %02u:%02u:%02u",
+		wchar_t wide[48];
+		const int length = std::swprintf(wide, sizeof(wide) / sizeof(wide[0]), L"%02u.%02u.%04d %02u:%02u:%02u",
 			day.m_day, day.m_month, day.m_year, hour, minute, second);
-		return length > 0 ? ibString(text, static_cast<size_t>(length)) : ibString();
+		return length > 0 ? ibString(wide, static_cast<size_t>(length)) : ibString();
 	}
-	wchar_t* at = text;
-	at = PutTwo(at, day.m_day);    *at++ = L'.';
-	at = PutTwo(at, day.m_month);  *at++ = L'.';
-	at = PutFour(at, static_cast<unsigned>(day.m_year)); *at++ = L' ';
-	at = PutTwo(at, hour);         *at++ = L':';
-	at = PutTwo(at, minute);       *at++ = L':';
+	// In the text's own characters: written as wchar_t, the date was converted once more where wchar_t is four bytes.
+	ibChar text[20];
+	ibChar* at = text;
+	at = PutTwo(at, day.m_day);    *at++ = ibT('.');
+	at = PutTwo(at, day.m_month);  *at++ = ibT('.');
+	at = PutFour(at, static_cast<unsigned>(day.m_year)); *at++ = ibT(' ');
+	at = PutTwo(at, hour);         *at++ = ibT(':');
+	at = PutTwo(at, minute);       *at++ = ibT(':');
 	at = PutTwo(at, second);
 	return ibString(text, static_cast<size_t>(at - text));
 }
