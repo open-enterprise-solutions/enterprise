@@ -13,7 +13,7 @@
 #include <atomic>
 #include <bit>           // std::countr_zero, std::endian — TerminatedLength reads a word for four characters
 #if defined(__IBMSW__)
-#include <intrin.h>      // _BitScanForward64 — the place of TerminatedLength's zero
+#include <intrin.h>      // _BitScanForward(64) — the place of TerminatedLength's zero
 #endif
 #include <cerrno>        // ToLong & co read ERANGE, as wx does
 #include <climits>       // ToInt's range
@@ -139,7 +139,14 @@ size_t TerminatedLength(const ibChar* s) noexcept {
 		if (zero != 0) {
 #if defined(__IBMSW__)
 			unsigned long bit;
+#  if defined(_WIN64)
 			_BitScanForward64(&bit, zero);   // std::countr_zero asks the CPU for tzcnt at every call (__isa_available)
+#  else
+			if (!_BitScanForward(&bit, static_cast<unsigned long>(zero))) {   // 32-bit Windows: a half at a time
+				_BitScanForward(&bit, static_cast<unsigned long>(zero >> 32));
+				bit += 32;
+			}
+#  endif
 #else
 			const unsigned bit = static_cast<unsigned>(std::countr_zero(zero));
 #endif
