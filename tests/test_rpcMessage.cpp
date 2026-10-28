@@ -24,7 +24,7 @@
 
 #include "backend/rpc/rpcMessage.h"
 #include "core/serialize/dataBuilder.h"
-#include "core/serialize/jsonProvider.h"   // kMaxNesting — the reader's ceiling, one number
+#include "core/serialize/provider/jsonProvider.h"   // kMaxNesting — the reader's ceiling, one number
 
 //---------------------------------------------------------------------------
 // reading

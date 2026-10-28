@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "core/serialize/fileProvider.h"
+#include "core/serialize/provider/fileProvider.h"
 #include "core/exception.h"
 #include "core/fileSystem.h"
 #include "backend/compiler/value.h"

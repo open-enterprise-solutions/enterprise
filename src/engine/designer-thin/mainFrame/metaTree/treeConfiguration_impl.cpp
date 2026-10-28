@@ -15,7 +15,7 @@
 
 #include "clipboardLock.h"   // the Open/Close pair, taken as a guard — the desktop's
 #include "core/fileKind.h"   // ibFileKindOf, ibFileFilter — the file a data processor or a report is kept in
-#include "core/serialize/fileProvider.h"   // ibFileProvider — the configuration as a directory of files, written here
+#include "core/serialize/provider/fileProvider.h"   // ibFileProvider — the configuration as a directory of files, written here
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"   // a module's tab — the line a stop shows
 #include "frmclient/artProvider/artProvider.h"
 #include "frmclient/backend/metaCollection/metaObjectMetadata.h"      // the objects a modal editor of its menu is over

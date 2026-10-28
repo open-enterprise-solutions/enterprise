@@ -1,5 +1,5 @@
-#include "core/serialize/jsonProvider.h"
-#include "core/serialize/jsonText.h"  // ibJsonText — how a string is spelled in JSON, said once
+#include "core/serialize/provider/jsonProvider.h"
+#include "core/json/jsonText.h"  // ibJsonText — how a string is spelled in JSON, said once
 #include "core/utils/base64.h"        // ibBase64 — a binary's text, into the output and read in place
 #include "core/exception.h"           // ibCoreException — malformed-JSON throw
 #include "core/fiber/fiber.h"         // StackLow — the depth count's backstop when the reserve runs out first

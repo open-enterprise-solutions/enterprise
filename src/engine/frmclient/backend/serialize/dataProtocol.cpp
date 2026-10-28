@@ -1,6 +1,6 @@
 #include "dataProtocol.h"
 
-#include "core/serialize/jsonProvider.h"
+#include "core/serialize/provider/jsonProvider.h"
 #include "core/description/compositionDescription.h"   // ibCompositionNodeClsid — a composition's part by its name
 
 namespace {

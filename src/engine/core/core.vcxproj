@@ -239,9 +239,8 @@
     <ClCompile Include="query\anyQueryConstructorModel.cpp" />
     <ClCompile Include="query\queryRefusal.cpp" />
     <ClCompile Include="serialize\dataBuilder.cpp" />
-    <ClCompile Include="serialize\fileProvider.cpp" />
-    <ClCompile Include="serialize\jsonProvider.cpp" />
-    <ClCompile Include="serialize\jsonText.cpp" />
+    <ClCompile Include="serialize\provider\fileProvider.cpp" />
+    <ClCompile Include="serialize\provider\jsonProvider.cpp" />
     <ClCompile Include="serialize\provider\xmlProvider.cpp" />
     <ClCompile Include="server\listener.cpp" />
     <ClCompile Include="server\serverConfig.cpp" />
@@ -258,6 +257,7 @@
     <ClCompile Include="variant.cpp" />
     <ClCompile Include="utils\base64.cpp" />
     <ClCompile Include="utils\md5.cpp" />
+    <ClCompile Include="json\jsonText.cpp" />
     <ClCompile Include="xml\xmlText.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -347,9 +347,8 @@
     <ClInclude Include="roleCompositionMode.h" />
     <ClInclude Include="selectorDataType.h" />
     <ClInclude Include="serialize\dataBuilder.h" />
-    <ClInclude Include="serialize\fileProvider.h" />
-    <ClInclude Include="serialize\jsonProvider.h" />
-    <ClInclude Include="serialize\jsonText.h" />
+    <ClInclude Include="serialize\provider\fileProvider.h" />
+    <ClInclude Include="serialize\provider\jsonProvider.h" />
     <ClInclude Include="serialize\provider\xmlProvider.h" />
     <ClInclude Include="server\clusterControl.h" />
     <ClInclude Include="server\listener.h" />
@@ -373,6 +372,7 @@
     <ClInclude Include="variant_ptr.h" />
     <ClInclude Include="utils\base64.h" />
     <ClInclude Include="utils\md5.hpp" />
+    <ClInclude Include="json\jsonText.h" />
     <ClInclude Include="xml\xmlNodeType.h" />
     <ClInclude Include="xml\xmlText.h" />
     <ClInclude Include="xml\expat\expat_config.h" />

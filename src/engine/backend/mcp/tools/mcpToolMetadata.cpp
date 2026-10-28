@@ -1951,7 +1951,7 @@ MCP_TOOL_REGISTER(ibMcpToolMetadataSet);
 // structure back through the JSON view does not work and cannot be made to:
 // the reader takes the type list from the node's PROPERTY area, while a JSON
 // array comes back in the FIELD area, because the view flattens the two on the
-// way out and guesses on the way in (serialize/jsonProvider.h says so plainly).
+// way out and guesses on the way in (serialize/provider/jsonProvider.h says so plainly).
 // The value went in, nothing landed, and no error was raised.
 //
 // So the shape stops being the caller's problem: it says "String, 20" and this

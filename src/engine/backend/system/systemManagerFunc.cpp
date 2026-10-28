@@ -18,7 +18,7 @@
 
 #include "systemManagerEnum.h"
 
-#include "core/serialize/jsonProvider.h"          // a value as text — the two verbs below
+#include "core/serialize/provider/jsonProvider.h"          // a value as text — the two verbs below
 #include "backend/metaCollection/metaIntrospect.h"   // …and the type names the writing needs
 
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
@@ -745,7 +745,7 @@ ibString ibValueSystemFunction::SerializeValue(const ibValue& cData)
 //
 // ⚠ NOT EVERY WRITING SURVIVES THE RETURN TRIP. The JSON view is a rendering: a date becomes an
 // ISO string, a type description is written out by name, and fields and properties flatten into one
-// set (serialize/jsonProvider.h says so in its own words). What comes back is what the text can
+// set (serialize/provider/jsonProvider.h says so in its own words). What comes back is what the text can
 // carry, so a value that must return EXACTLY as it left travels as the binary form instead. Said
 // here rather than discovered: a lossy round trip that nobody warned about is read as a defect in
 // whatever used it next.

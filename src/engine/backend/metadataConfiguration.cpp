@@ -28,7 +28,7 @@
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
 #include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot / ibSchemaTable — ContributeTables drives data dump
 #include "backend/query/dataMover.h"         // ibDataMover::Dump / Restore (L3-3 row mover)
-#include "core/serialize/fileProvider.h"
+#include "core/serialize/provider/fileProvider.h"
 #include "core/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/objCtor.h"                       // ibCtorMetaValueType::GetClassName — clsid -> type name
 

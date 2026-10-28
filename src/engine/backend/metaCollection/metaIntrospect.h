@@ -93,7 +93,7 @@ BACKEND_API bool ibConfigurationWritesInWords(const ibMetaData* metaData);
 BACKEND_API std::function<ibString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData);
 
 // The node, rendered. ⚠ READ ONLY: the JSON view is lossy BY DESIGN (see
-// serialize/jsonProvider.h) — it is a readable rendering, not a way back in.
+// serialize/provider/jsonProvider.h) — it is a readable rendering, not a way back in.
 // Writing goes property by property, through the gate that knows what may be
 // written; it never goes by handing a whole document back.
 BACKEND_API ibString ibDescribeMetaObject(ibMetaData* metaData,

@@ -1,5 +1,5 @@
-#include "core/serialize/fileProvider.h"
-#include "core/serialize/jsonProvider.h"   // ibJsonProvider — a node's one JSON form, each file's text
+#include "core/serialize/provider/fileProvider.h"
+#include "core/serialize/provider/jsonProvider.h"   // ibJsonProvider — a node's one JSON form, each file's text
 #include "core/exception.h"
 #include "core/fileSystem.h"
 #include "core/fiber/fiber.h"

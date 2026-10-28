@@ -1,6 +1,6 @@
 // OES-RPC 1.0 — THE PACKET, read and written in the page: the bytes a server's ibDataNode is (src/engine/core/serialize/
 // dataBuilder.h — the layout in its header), turned into the objects the page has always read — what
-// ibJsonProvider::EmitNode wrote as JSON (src/engine/core/serialize/jsonProvider.cpp) — and back. Nothing in the bytes is
+// ibJsonProvider::EmitNode wrote as JSON (src/engine/core/serialize/provider/jsonProvider.cpp) — and back. Nothing in the bytes is
 // a place, only lengths: the reader goes by them. Checked as it is walked — a length past its container, a count its
 // lengths do not hold, a kind unknown, nesting past 256: it throws, and the packet is not read at all.
 //

@@ -2,7 +2,7 @@
 //	Description : how a string is spelled in JSON
 ////////////////////////////////////////////////////////////////////////////
 
-#include "jsonText.h"
+#include "core/json/jsonText.h"
 
 #include "core/fstring.h"   // ibString — appended into
 

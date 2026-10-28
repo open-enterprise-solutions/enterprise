@@ -9,7 +9,7 @@
 #include "backend/appHost.h"            // ibApplicationInstanceScope
 #include "backend/backend_exception.h"
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the journal and the dumps of the process
-#include "core/serialize/jsonProvider.h"   // the request read, as the port's are
+#include "core/serialize/provider/jsonProvider.h"   // the request read, as the port's are
 
 #include "protocol/protocol.h"          // ibProtocol::ibFileBase — the request's words
 
