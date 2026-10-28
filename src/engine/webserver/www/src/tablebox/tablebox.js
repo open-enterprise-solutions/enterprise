@@ -5,8 +5,9 @@
 // that do not fit into the row they belong to. The thin client's table (frmclient/visualView/ctrl/tableBox.cpp) is
 // the one this follows.
 //
-// The first page comes in the State (Rows, protocol 5) or is fetched from the top; the next ones are fetched as the
-// person scrolls — after the last row held (Direction 1) and before the first (Direction -1), keyset, never an offset.
+// The first page comes in the State (Rows, protocol 5) or is fetched around the server's current row, rows ahead of it
+// asked too (a reset with no anchor); the next ones are fetched as the person scrolls — after the last row held
+// (Direction 1) and before the first (Direction -1), keyset, never an offset.
 // A new Version is the rows read anew IN PLACE: around the row at the top of the window, which stays where it stood —
 // from the State's page when it holds that row, else fetched. A read is one of a generation: a page asked before the
 // rows were read anew is dropped when it comes.
@@ -269,7 +270,7 @@ class Tablebox extends Control {
 	 */
 	edge(direction) {
 		const holder = this.holder();
-		if (holder === null)
+		if (holder === null || holder.clientHeight === 0)
 			return;
 		const margin = slack * this.rowHeight();
 		if (direction > 0 && holder.scrollHeight - holder.scrollTop - holder.clientHeight < margin)
@@ -278,11 +279,22 @@ class Tablebox extends Control {
 			this.back();
 	}
 
-	/** Rows read on while those held do not reach `slack` past the window — a short first page, a window grown. */
+	/**
+	 * Rows read while those held do not reach `slack` past the window — a short first page, a window grown: on, and back
+	 * once there is nothing after them (a window read around the last row would otherwise hold that row alone, with no
+	 * scroll to reach the rows before it). Not while the table is not on show (a notebook page behind another): with no
+	 * height no number of rows would fill it, and the whole list was read; it is read when shown (the resize).
+	 */
 	fill() {
 		const holder = this.holder();
-		if (holder !== null && holder.scrollHeight - holder.clientHeight < slack * this.rowHeight())
+		if (holder === null || holder.clientHeight === 0)
+			return;
+		if (holder.scrollHeight - holder.clientHeight >= slack * this.rowHeight())
+			return;
+		if (!this.end)
 			this.more();
+		else if (!this.begin)
+			this.back();
 	}
 
 	/** The rows the window shows (the thin client's GetCountPerPage) — the size of a page. */
@@ -562,19 +574,23 @@ class Tablebox extends Control {
 	}
 
 	/**
-	 * The rows of the table's first Version: the page the State carries, or the first one fetched from the top — and
-	 * the row the server stands on, read around when the page does not hold it (a choice form opened on its value).
+	 * The rows of the table's first Version: the page the State carries, or the first one fetched — and the row the
+	 * server stands on, read around when the page does not hold it (a choice form opened on its value).
+	 * ⚠ A Reset with no Anchor reads AROUND THE SERVER'S CURRENT ROW, not from the top (frmserver tableBox.cpp, Fetch):
+	 * so rows are asked ahead of it too, and the top is where the answer says fewer stood ahead than asked. Asked with
+	 * Before 0, a table whose current row was its last came back as that one row taken for the top, with no way to the
+	 * rows above it (a resumed session on the gallery's grown table, 2026-10-28).
 	 * @param {ProtocolNode | undefined} rows
 	 * @param {number} current
 	 */
 	async load(rows, current) {
 		const generation = ++this.generation;
-		const page = rows ?? await this.fetch({ Direction: reset, Count: this.perPage() + slack, Before: 0 });
+		const page = rows ?? await this.fetch({ Direction: reset, Count: this.perPage() + slack, Before: slack });
 		if (page === null || generation !== this.generation || this.table === null)
 			return;
 		const read = readPage(page);
 		await this.table.setData(read.records);
-		this.take(read, read.anchor !== 0 ? read.count : 0);
+		this.take(read, rows === undefined ? slack : read.anchor !== 0 ? read.count : 0);
 		const at = read.current || current;
 		if (at !== 0 && !this.select(at))
 			this.around(at);
@@ -582,17 +598,21 @@ class Tablebox extends Control {
 		this.fill();
 	}
 
-	/** The list read again from its first row, the window at its top — the thumb let go at the very top. */
+	/**
+	 * The list read again, the window at its top — the thumb let go at the very top. From the first row when the server
+	 * reads from the top; a reset with no anchor reads around its current row else, with rows asked ahead of it, so the
+	 * page is not taken for the top when it is not (see `load`) and the rows above stay to be read.
+	 */
 	async fromTop() {
 		if (this.table === null)
 			return;
 		const generation = ++this.generation;
-		const page = await this.fetch({ Direction: reset, Count: this.perPage() + slack, Before: 0 });
+		const page = await this.fetch({ Direction: reset, Count: this.perPage() + slack, Before: slack });
 		if (page === null || generation !== this.generation || this.table === null)
 			return;
 		const read = readPage(page);
 		await this.table.replaceData(read.records);
-		this.take(read, 0);
+		this.take(read, slack);
 		this.scrollTo(0);
 		this.restore(read);
 		this.updatePager();
@@ -612,10 +632,11 @@ class Tablebox extends Control {
 		const top = visible[0]?.getData().handle ?? 0;
 		const place = this.placeOf(top);
 		const held = rows !== undefined && (top === 0 || (rows.NodeChildren ?? []).some((row) => row.NodeId === top));
-		const ahead = held ? (rows?.Anchor ? rows.Count ?? 0 : 0) : top !== 0 ? slack : 0;
+		// No row held to read around: the server's current row is read around (see `load`), rows asked ahead of it.
+		const ahead = held ? (rows?.Anchor ? rows.Count ?? 0 : 0) : slack;
 		const page = held ? rows : await this.fetch(top !== 0
 			? { Direction: reset, Anchor: top, Count: this.perPage() + slack, Before: slack }
-			: { Direction: reset, Count: this.perPage() + slack, Before: 0 });
+			: { Direction: reset, Count: this.perPage() + slack, Before: slack });
 		if (page === null || generation !== this.generation || this.table === null)
 			return;
 		const read = readPage(page);
