@@ -541,6 +541,13 @@ that tree to bytes (and reads it back).
   A type is named only by the injected `SetTypeResolver` (no built-in fallback — the
   engine's resolvers, e.g. `ibMetaTypeResolver`, name built-in types from the static
   registry); `SetTypeLookup` supplies the name→clsid inverse. Tests: `tests/test_jsonProvider.cpp`.
+- **`ibFileProvider`** (`serialize/fileProvider.{h,cpp}`) — lossless configuration
+  directories: GUID paths for metadata, typed exact decimals and dates, binary sidecars
+  and multiline text files. Entry points: `SaveConfigToFiles(directory)` /
+  `LoadConfigFromFiles(directory)` and MCP `config_export_files` / `config_import_files`.
+  Records and user accounts are excluded. It also reads an export written before
+  OES-RPC 1.0, which is how a configuration stored in the old binary form crosses over.
+  See [configuration-files.md](docs/public/configuration-files.md). Tests: `tests/test_fileProvider.cpp`.
 - The old XML/JSON config layer is **gone**: `metadataConfigurationXML.cpp` /
   `metadataConfigurationJSON.cpp` and the `SaveConfigToXML` / `LoadConfigFromXML`
   / `SaveConfigToJSON` / `LoadConfigFromJSON` methods no longer exist.

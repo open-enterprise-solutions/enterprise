@@ -176,6 +176,9 @@ public:
 	bool LoadConfigFromFile(const ibString& strFileName);
 	bool SaveConfigToFile(const ibString& strFileName);
 
+	bool LoadConfigFromFiles(const ibString& directory);
+	bool SaveConfigToFiles(const ibString& directory);
+
 public:
 
 	// Called by the appData fabric right after construction (OnInitialize)
