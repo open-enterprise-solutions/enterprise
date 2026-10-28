@@ -978,6 +978,15 @@ public:
 	// (m_bReadOnly). Without this overload `value = constPtr` silently picked
 	// operator=(bool) (const ptr → bool) and the object became a Boolean.
 	void operator = (const ibValue* pParam);
+	// Any other pointer — the deleted constructor's other half, and the same exemptions. Closing
+	// the constructor alone left `value = wxT("text")` (a `wchar_t*` since ibChar is char16_t)
+	// arriving through operator=(bool) as TRUE.
+	template <class T, class = typename std::enable_if<
+		!std::is_same<typename std::remove_cv<T>::type, char>::value &&
+		!std::is_same<typename std::remove_cv<T>::type, ibChar>::value &&
+		!std::is_base_of<ibValue, T>::value &&
+		!std::is_base_of<ibBackendValue, T>::value>::type>
+	void operator = (T*) = delete;
 
 	const ibValue& operator+(const ibValue& cParam);
 	const ibValue& operator-(const ibValue& cParam);

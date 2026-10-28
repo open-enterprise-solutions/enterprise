@@ -174,7 +174,7 @@ TEST(ValueTest, EmptyStringPointerIsStringNotBoolean) {
     EXPECT_NE(v.GetString(), ibT("True"));
 }
 
-TEST(ValueTest, OwnLiteralIsStringNotBoolean) {
+TEST(ValueTest, LiteralIsStringNotBoolean) {
     ibValue v = ibT("text");
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
     EXPECT_EQ(v.GetString(), ibT("text"));
@@ -184,6 +184,8 @@ TEST(ValueTest, OwnLiteralIsStringNotBoolean) {
 // another pointer, and the deleted constructor refuses it at compile time rather than letting it turn TRUE.
 static_assert(!std::is_constructible<ibValue, const wchar_t*>::value,
     "a wide literal must not become a value - write it as ibT(\"...\")");
+static_assert(!std::is_assignable<ibValue&, const wchar_t*>::value,
+    "a wide literal must not be assigned to a value - write it as ibT(\"...\")");
 
 TEST(ValueTest, NarrowLiteralIsStringNotBoolean) {
     ibValue v = "narrow";
@@ -193,16 +195,16 @@ TEST(ValueTest, NarrowLiteralIsStringNotBoolean) {
 
 TEST(ValueTest, AssignEmptyStringPointerIsStringNotBoolean) {
     ibValue v(ibNumber(1));
-    v = wxEmptyString;
+    v = ibEmptyString;
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
     EXPECT_TRUE(v.GetString().IsEmpty());
 }
 
-TEST(ValueTest, AssignWideLiteralIsStringNotBoolean) {
+TEST(ValueTest, AssignLiteralIsStringNotBoolean) {
     ibValue v(ibNumber(1));
-    v = wxT("assigned");
+    v = ibT("assigned");
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
-    EXPECT_EQ(v.GetString(), wxT("assigned"));
+    EXPECT_EQ(v.GetString(), ibT("assigned"));
 }
 
 // ===========================================================================
