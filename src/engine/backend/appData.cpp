@@ -1081,8 +1081,8 @@ long ibApplicationInstance::RunApplication(const ibString& strAppName, const ibS
 	if (!binary.FileExists()) {
 		wxFileName bundled(home);
 		bundled.AppendDir(strAppName + ibT(".app"));
-		bundled.AppendDir(ibT("Contents"));
-		bundled.AppendDir(ibT("MacOS"));
+		bundled.AppendDir(wxT("Contents"));
+		bundled.AppendDir(wxT("MacOS"));
 		bundled.SetFullName(strAppName);
 		if (bundled.FileExists())
 			binary = bundled;

@@ -57,7 +57,7 @@ TEST(ValueUnion, EveryKindStartsFromAnEmptyWord) {
     ibValue v(true);
     v.SetType(ibValueTypes::TYPE_NUMBER);       // a boolean's byte is not read as a number
     EXPECT_TRUE(v.GetNumber().IsZero());
-    v = wxT("text");
+    v = ibT("text");
     v.SetType(ibValueTypes::TYPE_NUMBER);       // nor a string's text
     EXPECT_TRUE(v.GetNumber().IsZero());
     v = ibNumber(ibString(wxT("765.3456754567765443343")));
