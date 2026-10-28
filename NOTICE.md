@@ -69,6 +69,7 @@ They live in:
 | `src/engine/frmclient/propertyManager/property/advprop` (advpropFont, advpropSize) | 2 |
 | `src/engine/core/localization` (dictionary.cpp: the `.mo` reader and the plural-forms calculator) | 1 |
 | `src/engine/core` (fdatetimeParse.cpp: the free-form date and time reader) | 1 |
+| `lang/<code>` (wxstd.po and its .mo: wxWidgets' own translations, from its `locale/<code>.po`) | 2 + 2 |
 
 The per-file notices are authoritative; the table is a map, not a substitute. See
 `docs/private/wx-fork.md` (private) for what was changed and why.
