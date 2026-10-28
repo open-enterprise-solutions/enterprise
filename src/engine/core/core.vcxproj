@@ -241,6 +241,7 @@
     <ClCompile Include="serialize\dataBuilder.cpp" />
     <ClCompile Include="serialize\jsonProvider.cpp" />
     <ClCompile Include="serialize\jsonText.cpp" />
+    <ClCompile Include="serialize\xmlText.cpp" />
     <ClCompile Include="server\listener.cpp" />
     <ClCompile Include="server\serverConfig.cpp" />
     <ClCompile Include="spreadsheet\sheetFormat.cpp" />
@@ -346,6 +347,8 @@
     <ClInclude Include="serialize\dataBuilder.h" />
     <ClInclude Include="serialize\jsonProvider.h" />
     <ClInclude Include="serialize\jsonText.h" />
+    <ClInclude Include="serialize\xmlNodeType.h" />
+    <ClInclude Include="serialize\xmlText.h" />
     <ClInclude Include="serialize\expat\expat_config.h" />
     <ClInclude Include="server\clusterControl.h" />
     <ClInclude Include="server\listener.h" />
