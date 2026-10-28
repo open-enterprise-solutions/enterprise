@@ -168,12 +168,31 @@ ibChar* EncodeUtf16(uint32_t cp, ibChar* at) noexcept {
 	return at;
 }
 
-std::u16string Utf16(const wchar_t* s, size_t n) {
+// Nearly every text has all its characters in the basic plane, and then it is as long in UTF-16 as it was: the
+// characters' bits ORed together tell it in one plain loop, which a compiler vectorises.
+size_t Utf16Length(const wchar_t* s, size_t n) noexcept {
+	uint32_t bits = 0;
+	for (size_t i = 0; i < n; ++i) bits |= static_cast<uint32_t>(s[i]);
+	if (bits <= 0xFFFF) return n;
 	size_t units = 0;
 	for (size_t i = 0; i < n; ++i) units += Utf16Length(static_cast<uint32_t>(s[i]));
-	std::u16string text(units, ibT('\0'));
-	ibChar* at = text.data();
+	return units;
+}
+
+// The units laid down at `at`; `units` is Utf16Length(s, n). As many units as characters means no pair to make,
+// and the characters are narrowed straight across — the other plain loop.
+void EncodeUtf16(const wchar_t* s, size_t n, size_t units, ibChar* at) noexcept {
+	if (units == n) {
+		for (size_t i = 0; i < n; ++i) at[i] = static_cast<ibChar>(s[i]);
+		return;
+	}
 	for (size_t i = 0; i < n; ++i) at = EncodeUtf16(static_cast<uint32_t>(s[i]), at);
+}
+
+std::u16string Utf16(const wchar_t* s, size_t n) {
+	const size_t units = Utf16Length(s, n);
+	std::u16string text(units, ibT('\0'));
+	EncodeUtf16(s, n, units, text.data());
 	return text;
 }
 #endif
@@ -220,11 +239,9 @@ ibString::ibString(const wchar_t* ws, size_t n)
 #else
 	// Into the block itself: every text from wx crosses here, and a text made on the way to the block paid a
 	// second allocation each time (100 ns against 21 for the bench's 54 characters, 2026-10-28).
-	size_t units = 0;
-	for (size_t i = 0; i < n; ++i) units += Utf16Length(static_cast<uint32_t>(ws[i]));
+	const size_t units = Utf16Length(ws, n);
 	Impl* const impl = Impl::Make(units);
-	ibChar* at = impl->Chars();
-	for (size_t i = 0; i < n; ++i) at = EncodeUtf16(static_cast<uint32_t>(ws[i]), at);
+	EncodeUtf16(ws, n, units, impl->Chars());
 	impl->SetLength(units);
 	m_impl = impl;
 #endif

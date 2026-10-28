@@ -252,10 +252,33 @@ public:
 	ibString& Append(const ibString& o)     { return *this += o; }
 	ibString& Append(ibChar c, size_t count = 1);
 	ibString& Prepend(const ibString& o)    { return insert(0, o); }
-	friend ibString operator+(ibString a, const ibString& b) { a += b; return a; }
+	// A text on the left is read, not taken: taken by value it was counted up only for the append to copy it out
+	// of the shared block and count it down again — two atomic steps per `a + b`. One block of both lengths
+	// instead; a temporary on the left (`a + b + c`) is appended to where it lies.
+	friend ibString operator+(const ibString& a, const ibString& b)
+	{
+		if (b.IsEmpty()) return a;
+		if (a.IsEmpty()) return b;
+		ibString r;
+		r.reserve(a.Len() + b.Len());
+		r.append(a.c_str(), a.Len());
+		r.append(b.c_str(), b.Len());
+		return r;
+	}
+	friend ibString operator+(ibString&& a, const ibString& b) { a += b; return std::move(a); }
 	// Exact matches for a literal or a character on either side, so `name + ibT(".")` is one append, not a text
 	// made of the literal first…
-	friend ibString operator+(ibString a, const ibChar* b) { a += b; return a; }
+	friend ibString operator+(const ibString& a, const ibChar* b)
+	{
+		const size_t n = b != nullptr ? std::char_traits<ibChar>::length(b) : 0;
+		if (n == 0) return a;
+		ibString r;
+		r.reserve(a.Len() + n);
+		r.append(a.c_str(), a.Len());
+		r.append(b, n);
+		return r;
+	}
+	friend ibString operator+(ibString&& a, const ibChar* b) { a += b; return std::move(a); }
 	friend ibString operator+(const ibChar* a, const ibString& b) { ibString r(a); r += b; return r; }
 	friend ibString operator+(ibString a, ibChar b) { a += b; return a; }
 	friend ibString operator+(ibChar a, const ibString& b) { ibString r; r += a; r += b; return r; }
