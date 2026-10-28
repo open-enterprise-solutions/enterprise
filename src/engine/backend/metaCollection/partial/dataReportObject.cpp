@@ -4,6 +4,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataReport.h"
+#include "backend/metadataReport.h"   // ibMetaDataReport::GetManagerModule — whom the object gives its borrow back to
+#include "backend/moduleManager/moduleManagerExt.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — a composer's settings travel as a node
 #include "backend/metaData.h"                // GetFactoryCountChanges — the version an explorer is built at
 
@@ -166,4 +168,14 @@ bool ibValueRecordDataObjectReport::SetValueByMetaID(const ibMetaID& id, const i
 		return false;
 
 	return ibValueRecordDataObject::SetValueByMetaID(id, varMetaVal);
+}
+
+// The manager's compile module and proc unit are BORROWED (moduleManagerExt.cpp, ForgetObject says why this matters):
+// they go back while the container is still held here, before the bases below run — the base dtor deletes the compile
+// module it holds. The container's own dtor, when this object was its last holder, runs after that (the holder base).
+ibValueRecordDataObjectExternalReport::~ibValueRecordDataObjectExternalReport()
+{
+	const ibMetaDataReport* const container = dynamic_cast<const ibMetaDataReport*>(m_externalMetadata.get());
+	if (container != nullptr && container->GetManagerModule() != nullptr)
+		container->GetManagerModule()->ForgetObject(this);
 }

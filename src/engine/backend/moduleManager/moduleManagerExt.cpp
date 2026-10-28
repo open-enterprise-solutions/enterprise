@@ -94,7 +94,7 @@ ibValueModuleRuntimeManagerExternalDataProcessor::~ibValueModuleRuntimeManagerEx
 		m_objectValue->m_compileModule = nullptr;
 		m_objectValue->m_procUnit = nullptr;
 	}
-	if (appData->DesignerMode()) {
+	if (appData->DesignerMode() && m_objectValue != nullptr) {
 		//decrRef
 		m_objectValue->DecrRef();
 	}
@@ -104,6 +104,10 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 {
 	if (m_initialized)
 		return true;
+
+	// The object is gone (ForgetObject): there is nothing left for the module to be the module of.
+	if (m_objectValue == nullptr)
+		return false;
 
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
@@ -183,8 +187,10 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::DestroyMainModule()
 
 	//set complile module 
 	//set proc unit
-	m_objectValue->m_compileModule = nullptr;
-	m_objectValue->m_procUnit = nullptr;
+	if (m_objectValue != nullptr) {
+		m_objectValue->m_compileModule = nullptr;
+		m_objectValue->m_procUnit = nullptr;
+	}
 
 	//Setup common modules — best-effort: destroy every module even if one
 	//fails, so teardown never leaks the remainder; report the aggregate.
@@ -196,6 +202,26 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::DestroyMainModule()
 
 	m_initialized = false;
 	return ok;
+}
+
+// ⭐ THE OBJECT MAY GO BEFORE ITS CONTAINER. On the ordinary road it does not: the form takes the object, the document
+// lets go of the container once the open is over, and when the form closes the object is the container's last holder —
+// the container, and this manager with it, die INSIDE the object's dtor, and the manager's dtor takes the borrow back.
+// But the open is not over while the form's own run is: a form whose module fails there asks its Error, the answer
+// closes the form, and the object's last reference goes with it while the document still holds the container. Its base
+// dtor then deleted the compile module it borrowed from this manager, and this manager kept pointing at the freed
+// object — so the document's release of the container reset and deleted the compile module a second time (the
+// webserver SIGSEGV on answering that Error, 2026-10-28).
+//
+// So the object says it is going (its dtor, before its bases run): the borrow comes back, and the manager forgets it.
+// The runtime stays this manager's until the container goes — nothing that may still be on the stack is torn down here.
+void ibValueModuleRuntimeManagerExternalDataProcessor::ForgetObject(ibValueRecordDataObjectDataProcessor* objectValue)
+{
+	if (objectValue == nullptr || objectValue != m_objectValue)
+		return;
+	m_objectValue->m_compileModule = nullptr;
+	m_objectValue->m_procUnit = nullptr;
+	m_objectValue = nullptr;
 }
 
 //main module - initialize
@@ -353,7 +379,7 @@ ibValueModuleRuntimeManagerExternalReport::~ibValueModuleRuntimeManagerExternalR
 		m_objectValue->m_compileModule = nullptr;
 		m_objectValue->m_procUnit = nullptr;
 	}
-	if (appData->DesignerMode()) {
+	if (appData->DesignerMode() && m_objectValue != nullptr) {
 		//decrRef
 		m_objectValue->DecrRef();
 	}
@@ -363,6 +389,10 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 {
 	if (m_initialized)
 		return true;
+
+	// The object is gone (ForgetObject): there is nothing left for the module to be the module of.
+	if (m_objectValue == nullptr)
+		return false;
 
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
@@ -423,8 +453,10 @@ bool ibValueModuleRuntimeManagerExternalReport::DestroyMainModule()
 
 	//set complile module 
 	//set proc unit 
-	m_objectValue->m_compileModule = nullptr;
-	m_objectValue->m_procUnit = nullptr;
+	if (m_objectValue != nullptr) {
+		m_objectValue->m_compileModule = nullptr;
+		m_objectValue->m_procUnit = nullptr;
+	}
 
 	//Setup common modules — best-effort: destroy every module even if one
 	//fails, so teardown never leaks the remainder; report the aggregate.
@@ -436,6 +468,16 @@ bool ibValueModuleRuntimeManagerExternalReport::DestroyMainModule()
 
 	m_initialized = false;
 	return ok;
+}
+
+// The data processor's twin — see there.
+void ibValueModuleRuntimeManagerExternalReport::ForgetObject(ibValueRecordDataObjectReport* objectValue)
+{
+	if (objectValue == nullptr || objectValue != m_objectValue)
+		return;
+	m_objectValue->m_compileModule = nullptr;
+	m_objectValue->m_procUnit = nullptr;
+	m_objectValue = nullptr;
 }
 
 //main module - initialize

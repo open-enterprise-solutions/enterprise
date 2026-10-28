@@ -170,6 +170,8 @@ class ibValueRecordDataObjectExternalDataProcessor :
 public:
 	ibValueRecordDataObjectExternalDataProcessor(const ibValueMetaObjectDataProcessor* metaObject, std::shared_ptr<ibMetaData> externalMetadata = nullptr)
 		: ibValueRecordDataObjectDataProcessor(metaObject), ibExternalOwnerHelper(std::move(externalMetadata)) {}
+	// Gives its manager back what it borrowed while the container still stands (ForgetObject).
+	virtual ~ibValueRecordDataObjectExternalDataProcessor();
 };
 
 #endif

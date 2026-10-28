@@ -21,6 +21,10 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibVa
 	//return external module
 	virtual ibValueRecordDataObjectExt* GetObjectValue() const { return m_objectValue; }
 
+	// The object is going (its dtor says so): the compile module and proc unit it borrowed come back, and this
+	// manager stops pointing at it. A no-op for any other object.
+	void ForgetObject(ibValueRecordDataObjectDataProcessor* objectValue);
+
 	//Create common module
 	virtual bool CreateMainModule();
 
@@ -65,6 +69,10 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModu
 
 	//return external module
 	virtual ibValueRecordDataObjectExt* GetObjectValue() const { return m_objectValue; }
+
+	// The object is going (its dtor says so): the compile module and proc unit it borrowed come back, and this
+	// manager stops pointing at it. A no-op for any other object.
+	void ForgetObject(ibValueRecordDataObjectReport* objectValue);
 
 	//Create common module
 	virtual bool CreateMainModule();

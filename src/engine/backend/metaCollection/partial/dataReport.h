@@ -279,6 +279,8 @@ class ibValueRecordDataObjectExternalReport :
 public:
 	ibValueRecordDataObjectExternalReport(const ibValueMetaObjectReport* metaObject, std::shared_ptr<ibMetaData> externalMetadata = nullptr)
 		: ibValueRecordDataObjectReport(metaObject), ibExternalOwnerHelper(std::move(externalMetadata)) {}
+	// Gives its manager back what it borrowed while the container still stands (ForgetObject).
+	virtual ~ibValueRecordDataObjectExternalReport();
 };
 
 #endif
