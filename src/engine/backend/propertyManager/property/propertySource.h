@@ -12,12 +12,12 @@ struct ibSourceHop;   // {id, expected type} — GetValueAsPath returns the hop 
 
 //base property for "source"
 class BACKEND_API ibPropertySource : public ibProperty {
-	static wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibValueTypes& type);
-	static wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibClassID& id);
-	static wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibTypeDescription& typeDesc);
-	static wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibMetaID& id);
-	static wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibGuid& id, bool fillTypeDesc = true);
-	static wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibSourceDescription& desc);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibValueTypes& type);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibClassID& id);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibTypeDescription& typeDesc);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibMetaID& id);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibGuid& id, bool fillTypeDesc = true);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibSourceDescription& desc);
 public:
 
 #pragma region _value_
@@ -35,9 +35,9 @@ public:
 	// or writes the value itself.
 	const std::vector<ibSourceHop>& GetValueAsPath() const;   // the {id, expected type} hop path — id + type per hop
 
-	// The binding rendered as its dotted NAME (e.g. "Product.SKU") — the variant's own MakeString, the
+	// The binding rendered as its dotted NAME (e.g. "Product.SKU") — the value's own GetString, the
 	// same string the designer shows and the composer's ORDER BY / Filter dot-walks. "<not selected>" when unbound.
-	wxString GetValueAsString() const;
+	ibString GetValueAsString() const;
 
 	void SetValue(const ibMetaID& val);
 	void SetValue(const ibGuid& val, bool fillTypeDesc = true);
@@ -64,32 +64,32 @@ public:
 	// fixed source (legacy behaviour).
 	std::vector<class ibBackendFormAttributeValue*> GetSourceList() const;
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), type))
 	{
 	}
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const ibClassID& clsid)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibClassID& clsid)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), clsid))
 	{
 	}
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), type))
 	{
 	}
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibClassID& clsid)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibClassID& clsid)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), clsid))
 	{
 	}
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), type))
 	{
 	}
 
-	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibClassID& clsid)
+	ibPropertySource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibClassID& clsid)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), clsid))
 	{
 	}
@@ -108,6 +108,12 @@ public:
 	// pasted object (marked with that guid), not the original. Transient — the first normal save re-emits raw.
 	virtual bool CopyNodeValue(ibDataValue& value) const override;
 	virtual bool PasteNodeValue(const ibDataValue& value) override;
+
+	// What its source window may offer: SourceDataType (ibSourceDataType).
+	// …and in its Value, beside the path, the type the binding holds (SourceType — its node and its words), with the
+	// classes it names (Classes). Its editor: the window's tree, as it opens (Sources) — the desktop's, written as the
+	// attribute tree's rows.
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 
 public:
 

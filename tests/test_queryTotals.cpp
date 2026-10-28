@@ -27,13 +27,13 @@ namespace {
 // attribute: exactly what a temp source already proves a column may be.
 class TestCol : public ibBackendQueryColumn {
 public:
-	TestCol(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	TestCol(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()      const override { return m_id; }
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
@@ -55,7 +55,7 @@ TEST(QueryTotals, HierarchicalSubtotalsTree)
 	detail.AddColumn(REGION,  wxT("region"),  ibTypeDescription());
 	detail.AddColumn(PRODUCT, wxT("product"), ibTypeDescription());
 	detail.AddColumn(AMOUNT,  wxT("amount"),  ibTypeDescription());
-	auto add = [&](const wxString& r, const wxString& p, long a) {
+	auto add = [&](const ibString& r, const ibString& p, long a) {
 		const long row = detail.AppendRow();
 		detail.SetCell(row, REGION,  ibValue(r));
 		detail.SetCell(row, PRODUCT, ibValue(p));
@@ -142,7 +142,7 @@ TEST(QueryTotals, ABalanceIsTakenAtEachKeysFirstAndLastPeriod)
 	                       std::make_pair(DAY, wxT("day")), std::make_pair(OPENING, wxT("opening")),
 	                       std::make_pair(CLOSING, wxT("closing")) })
 		detail.AddColumn(c.first, c.second, ibTypeDescription());
-	auto add = [&](const wxString& item, const wxString& store, long day, long opening, long closing) {
+	auto add = [&](const ibString& item, const ibString& store, long day, long opening, long closing) {
 		const long row = detail.AppendRow();
 		detail.SetCell(row, ITEM,    ibValue(item));
 		detail.SetCell(row, STORE,   ibValue(store));
@@ -207,7 +207,7 @@ TEST(QueryCompose, InnerJoinByKey)
 	ibQueryRamTable customers;
 	customers.AddColumn(CUSTKEY, wxT("custKey"), ibTypeDescription());
 	customers.AddColumn(NAME,    wxT("name"),    ibTypeDescription());
-	auto addCust = [&](long key, const wxString& nm) {
+	auto addCust = [&](long key, const ibString& nm) {
 		const long row = customers.AppendRow();
 		customers.SetCell(row, CUSTKEY, ibValue(ibNumber(key)));
 		customers.SetCell(row, NAME,    ibValue(nm));
@@ -249,7 +249,7 @@ TEST(QueryCompose, UnionHeterogeneousBranches)
 	ibQueryRamTable a;
 	a.AddColumn(A_CODE, wxT("code"), ibTypeDescription());
 	a.AddColumn(A_NAME, wxT("name"), ibTypeDescription());
-	auto addA = [&](const wxString& c, const wxString& n) {
+	auto addA = [&](const ibString& c, const ibString& n) {
 		const long row = a.AppendRow(); a.SetCell(row, A_CODE, ibValue(c)); a.SetCell(row, A_NAME, ibValue(n));
 	};
 	addA(wxT("A1"), wxT("Apple"));
@@ -261,7 +261,7 @@ TEST(QueryCompose, UnionHeterogeneousBranches)
 	const ibMetaID B_CODE = 20;
 	ibQueryRamTable b;
 	b.AddColumn(B_CODE, wxT("code"), ibTypeDescription());
-	{ const long row = b.AppendRow(); b.SetCell(row, B_CODE, ibValue(wxString(wxT("B1")))); }
+	{ const long row = b.AppendRow(); b.SetCell(row, B_CODE, ibValue(ibString(wxT("B1")))); }
 	TestCol bCode(wxT("code"), B_CODE);
 	ibQueryComposer::AppendUnionBranch(out, b, outCols, { &bCode, nullptr });
 
@@ -290,7 +290,7 @@ TEST(QueryTotals, EmptyLevelHangsTheDetailRows)
 	detail.AddColumn(REGION,  wxT("region"),  ibTypeDescription());
 	detail.AddColumn(PRODUCT, wxT("product"), ibTypeDescription());
 	detail.AddColumn(AMOUNT,  wxT("amount"),  ibTypeDescription());
-	auto add = [&](const wxString& r, const wxString& p, long a) {
+	auto add = [&](const ibString& r, const ibString& p, long a) {
 		const long row = detail.AppendRow();
 		detail.SetCell(row, REGION,  ibValue(r));
 		detail.SetCell(row, PRODUCT, ibValue(p));
@@ -355,7 +355,7 @@ TEST(QueryTotals, TupleLevelGroupsByEveryFieldTogether)
 	detail.AddColumn(REGION,  wxT("region"),  ibTypeDescription());
 	detail.AddColumn(PRODUCT, wxT("product"), ibTypeDescription());
 	detail.AddColumn(AMOUNT,  wxT("amount"),  ibTypeDescription());
-	auto add = [&](const wxString& r, const wxString& p, long a) {
+	auto add = [&](const ibString& r, const ibString& p, long a) {
 		const long row = detail.AppendRow();
 		detail.SetCell(row, REGION,  ibValue(r));
 		detail.SetCell(row, PRODUCT, ibValue(p));
@@ -411,7 +411,7 @@ TEST(QueryTotals, TwoAggregatesOverOneColumnNeedTwoColumns)
 	detail.AddColumn(REGION,       wxT("region"), ibTypeDescription());
 	detail.AddColumn(AMOUNT,       wxT("amount"), ibTypeDescription());
 	detail.AddColumn(AMOUNT_AGAIN, wxT("agg0"),   ibTypeDescription());   // the second projection of it
-	auto add = [&](const wxString& r, long a) {
+	auto add = [&](const ibString& r, long a) {
 		const long row = detail.AppendRow();
 		detail.SetCell(row, REGION,       ibValue(r));
 		detail.SetCell(row, AMOUNT,       ibValue(ibNumber(a)));
@@ -484,8 +484,8 @@ public:
 
 	ibValue Get(ibMetaID id) const override
 	{
-		if (id == m_region)  return ibValue(wxString::Format(wxT("R%ld"), m_row % m_regions));
-		if (id == m_product) return ibValue(wxString::Format(wxT("P%ld"), m_row % m_products));
+		if (id == m_region)  return ibValue(ibString::Format(wxT("R%ld"), m_row % m_regions));
+		if (id == m_product) return ibValue(ibString::Format(wxT("P%ld"), m_row % m_products));
 		if (id == m_amount)  return ibValue(ibNumber(1L));
 		return ibValue();
 	}
@@ -702,7 +702,7 @@ TEST(QueryTotals, CrossTableHangsTheColumnsUnderEveryRowHeading)
 	detail.AddColumn(STORE,   wxT("store"),   ibTypeDescription());
 	detail.AddColumn(PRODUCT, wxT("product"), ibTypeDescription());
 	detail.AddColumn(AMOUNT,  wxT("amount"),  ibTypeDescription());
-	auto add = [&](const wxString& r, const wxString& s, const wxString& p, long a) {
+	auto add = [&](const ibString& r, const ibString& s, const ibString& p, long a) {
 		const long row = detail.AppendRow();
 		detail.SetCell(row, REGION,  ibValue(r));
 		detail.SetCell(row, STORE,   ibValue(s));
@@ -782,7 +782,7 @@ TEST(QueryTotals, CrossTableDetailRecordsHangUnderTheRowHeadingWithTheirOwnCells
 	detail.AddColumn(REGION,  wxT("region"),  ibTypeDescription());
 	detail.AddColumn(PRODUCT, wxT("product"), ibTypeDescription());
 	detail.AddColumn(AMOUNT,  wxT("amount"),  ibTypeDescription());
-	auto add = [&](const wxString& r, const wxString& p, long a) {
+	auto add = [&](const ibString& r, const ibString& p, long a) {
 		const long row = detail.AppendRow();
 		detail.SetCell(row, REGION,  ibValue(r));
 		detail.SetCell(row, PRODUCT, ibValue(p));
@@ -842,7 +842,7 @@ TEST(QueryTotals, SplitFoldsTheSameRowsDownEveryBranch)
 	detail.AddColumn(CHARACTERISTIC, wxT("charac"), ibTypeDescription());
 	detail.AddColumn(SERIES,         wxT("series"), ibTypeDescription());
 	detail.AddColumn(AMOUNT,         wxT("amount"), ibTypeDescription());
-	auto add = [&](const wxString& i, const wxString& c, const wxString& s, long a) {
+	auto add = [&](const ibString& i, const ibString& c, const ibString& s, long a) {
 		const long row = detail.AppendRow();
 		detail.SetCell(row, ITEM,           ibValue(i));
 		detail.SetCell(row, CHARACTERISTIC, ibValue(c));
@@ -924,7 +924,7 @@ TEST(QueryTotals, SplitWithNothingInCommonForksAtTheRoot)
 	detail.AddColumn(ITEM,   wxT("item"),   ibTypeDescription());
 	detail.AddColumn(STORE,  wxT("store"),  ibTypeDescription());
 	detail.AddColumn(AMOUNT, wxT("amount"), ibTypeDescription());
-	auto add = [&](const wxString& i, const wxString& s, long a) {
+	auto add = [&](const ibString& i, const ibString& s, long a) {
 		const long row = detail.AppendRow();
 		detail.SetCell(row, ITEM,   ibValue(i));
 		detail.SetCell(row, STORE,  ibValue(s));
@@ -969,7 +969,7 @@ TEST(QueryTotals, WithoutSplitTheTreeHasNoForks)
 	detail.AddColumn(REGION, wxT("region"), ibTypeDescription());
 	detail.AddColumn(AMOUNT, wxT("amount"), ibTypeDescription());
 	const long row = detail.AppendRow();
-	detail.SetCell(row, REGION, ibValue(wxT("North")));
+	detail.SetCell(row, REGION, ibValue(ibT("North")));
 	detail.SetCell(row, AMOUNT, ibValue(ibNumber(7L)));
 
 	TestCol region(wxT("region"), REGION), amount(wxT("amount"), AMOUNT);
@@ -1032,7 +1032,7 @@ TEST(QueryTotals, EveryBranchWalksOneFoldWithoutRereadingTheCursor)
 	const long readsAfterFold = *reads;
 
 	// …AND EACH BRANCH WALKS IT. No cursor is given to either — the tree is the whole answer.
-	const auto walk = [&](const wxString& branch) {
+	const auto walk = [&](const ibString& branch) {
 		ibSelector s(ibQueryRamTable(), ibSelectKind::ibSelectKind_ByGroups);
 		s.WithTotals(levels, { sum }, false);
 		s.WithReadyTree(tree);
@@ -1069,7 +1069,7 @@ TEST(QueryTotals, AggregateOverALevelStandsThereAndIsCarriedDown)
 	detail.AddColumn(ITEM,      wxT("item"),      ibTypeDescription());
 	detail.AddColumn(WAREHOUSE, wxT("warehouse"), ibTypeDescription());
 	detail.AddColumn(AMOUNT,    wxT("amount"),    ibTypeDescription());
-	const auto add = [&](const wxString& item, const wxString& house, long amount) {
+	const auto add = [&](const ibString& item, const ibString& house, long amount) {
 		const long r = detail.AppendRow();
 		detail.SetCell(r, ITEM,      ibValue(item));
 		detail.SetCell(r, WAREHOUSE, ibValue(house));

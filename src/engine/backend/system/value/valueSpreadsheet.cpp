@@ -8,9 +8,9 @@
 
 void ibValueSpreadsheetDocumentBorder::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(wxT("Style"));
-	helper.AppendProp(wxT("Colour"));
-	helper.AppendProp(wxT("Width"));
+	helper.AppendProp(ibT("Style"));
+	helper.AppendProp(ibT("Colour"));
+	helper.AppendProp(ibT("Width"));
 }
 
 bool ibValueSpreadsheetDocumentBorder::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -40,9 +40,9 @@ bool ibValueSpreadsheetDocumentBorder::GetPropVal(const long lPropNum, ibValue& 
 
 static void ibValueSpreadsheetDocumentRange_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(wxT("Label"));
-	helper.AppendProp(wxT("Start"));
-	helper.AppendProp(wxT("End"));
+	helper.AppendProp(ibT("Label"));
+	helper.AppendProp(ibT("Start"));
+	helper.AppendProp(ibT("End"));
 }
 
 class ibValueSpreadsheetDocumentRange :
@@ -59,7 +59,7 @@ class ibValueSpreadsheetDocumentRange :
 public:
 
 	ibValueSpreadsheetDocumentRange() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_label(), m_start(-1), m_end(-1) {}
-	ibValueSpreadsheetDocumentRange(const wxString& label, int start, int end) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_label(label), m_start(start), m_end(end) {}
+	ibValueSpreadsheetDocumentRange(const ibString& label, int start, int end) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_label(label), m_start(start), m_end(end) {}
 
 	virtual bool IsEmpty() const { return false; }
 
@@ -86,7 +86,7 @@ public:
 
 private:
 
-	const wxString m_label;
+	const ibString m_label;
 	const int m_start, m_end;
 
 };
@@ -107,7 +107,7 @@ public:
 	{
 	}
 
-	ibValueSpreadsheetDocumentAreaCollection(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadsheetDoc) :
+	ibValueSpreadsheetDocumentAreaCollection(const std::shared_ptr<ibSpreadsheetObject>& spreadsheetDoc) :
 		ibValueStructure(true), m_spreadsheetDoc(spreadsheetDoc)
 	{
 		for (int idx = 0; idx < spreadsheetDoc->GetSpreadsheetDesc().GetAreaNumberRows(); idx++) {
@@ -121,7 +121,7 @@ public:
 
 private:
 
-	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
+	std::shared_ptr<ibSpreadsheetObject> m_spreadsheetDoc;
 };
 
 class ibValueSpreadsheetDocumentParameterCollection : public ibValueDynamicMembers {
@@ -135,27 +135,27 @@ class ibValueSpreadsheetDocumentParameterCollection : public ibValueDynamicMembe
 		enSet,
 	};
 
-	static wxVector<wxString> ParseBrackets(const wxString& str) {
+	static std::vector<ibString> ParseBrackets(const ibString& str) {
 
-		wxVector<wxString> tokens;
+		std::vector<ibString> tokens;
 
 		size_t start_pos = 0;
 		size_t end_pos = 0;
 
-		const wxString delimiters = wxT("[]");
+		const ibString delimiters = ibT("[]");
 
 		// Find the first opening or closing bracket
 		start_pos = str.find_first_of(delimiters, start_pos);
 
-		while (start_pos != wxString::npos) {
+		while (start_pos != ibString::npos) {
 
 			// Find the next bracket of any type
 			end_pos = str.find_first_of(delimiters, start_pos + 1);
 
-			if (end_pos != wxString::npos) {
+			if (end_pos != ibString::npos) {
 				// Extract the substring between the brackets
 				// +1 to start after the opening bracket
-				wxString token = str.substr(start_pos + 1, end_pos - start_pos - 1);
+				ibString token = str.substr(start_pos + 1, end_pos - start_pos - 1);
 				if (!token.empty()) {
 					tokens.push_back(token);
 				}
@@ -182,7 +182,7 @@ public:
 		// No doc → no parameters; leave the helper empty (no binder).
 	}
 
-	ibValueSpreadsheetDocumentParameterCollection(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadsheetDoc) :
+	ibValueSpreadsheetDocumentParameterCollection(const std::shared_ptr<ibSpreadsheetObject>& spreadsheetDoc) :
 		ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_spreadsheetDoc(spreadsheetDoc)
 	{
 		m_members.Bind(this, &ibValueSpreadsheetDocumentParameterCollection::FillMembers);
@@ -198,8 +198,7 @@ public:
 	}
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) {
-		if (!m_spreadsheetDoc->GetParameter(m_members.GetPropName(lPropNum), pvarPropVal))
-			pvarPropVal = ibValue();   // see Get below
+		pvarPropVal = ibValue(m_spreadsheetDoc->GetParameter(m_members.GetPropName(lPropNum)));   // see Get below
 		return true;
 	}
 
@@ -215,8 +214,7 @@ public:
 			// found it on a miss, and the slot is the caller's: a script asking for a missing parameter
 			// got whatever the PREVIOUS call had answered — a figure in a column that has none (found
 			// 2026-09-12, reading a composed payroll sheet back).
-			if (!m_spreadsheetDoc->GetParameter(paParams[0]->GetString(), pvarRetValue))
-				pvarRetValue = ibValue();
+			pvarRetValue = ibValue(m_spreadsheetDoc->GetParameter(paParams[0]->GetString()));
 			return true;
 		}
 
@@ -235,7 +233,7 @@ public:
 				for (int lPropPos = 0; lPropPos < lSelfProps; lPropPos++) {
 					if (lPropPos >= methodHelper->GetNProps())
 						continue;
-					const wxString& strPropName = methodHelper ->GetPropName(lPropPos);
+					const ibString& strPropName = methodHelper ->GetPropName(lPropPos);
 					long lPropNum = methodHelper->FindProp(strPropName);
 					if (lPropNum == wxNOT_FOUND)
 						continue;
@@ -257,15 +255,15 @@ public:
 
 	void FillMembers(ibMemberTable& helper) const {   // bound in ctor (was PrepareNames)
 
-		helper.AppendFunc(wxT("Count"), wxT("Count"));
-		helper.AppendProc(wxT("Fill"), 1, wxT("Fill(any : value)"));
-		helper.AppendFunc(wxT("Get"), 1, wxT("Get(parameter: string)"));
-		helper.AppendProc(wxT("Set"), 2, wxT("Set(parameter: string, any: value)"));
+		helper.AppendFunc(ibT("Count"), ibT("Count"));
+		helper.AppendProc(ibT("Fill"), 1, ibT("Fill(any : value)"));
+		helper.AppendFunc(ibT("Get"), 1, ibT("Get(parameter: string)"));
+		helper.AppendProc(ibT("Set"), 2, ibT("Set(parameter: string, any: value)"));
 
 		// ⚠ FOLDED IN PLACE, NOT UPPER-CASED INTO COPIES — the names were compared as `Upper() < Upper()`, two
 		// strings built per comparison, some twenty comparisons per name: on a composed sheet of 400 thousand
 		// links, asking this collection for its first member took minutes (Debug, 2026-09-12).
-		std::set<wxString, ibCaseFoldLess> arrParameter;
+		std::set<ibString, ibCaseFoldLess> arrParameter;
 
 		for (int idx = 0; idx < m_spreadsheetDoc->GetSpreadsheetDesc().GetCellCount(); idx++) {
 
@@ -291,7 +289,7 @@ public:
 
 private:
 
-	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
+	std::shared_ptr<ibSpreadsheetObject> m_spreadsheetDoc;
 };
 
 
@@ -331,31 +329,31 @@ enum
 void ibValueSpreadsheetDocument_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
 	//freeze row/col
-	helper.AppendProp(wxT("FixedLeft"), eFixedLeft);
-	helper.AppendProp(wxT("FixedTop"), eFixedTop);
-	helper.AppendProp(wxT("Areas"), eAreas);
-	helper.AppendProp(wxT("Parameters"), eParameters);
-	helper.AppendProp(wxT("ReadOnly"), eReadOnly);
-	helper.AppendProp(wxT("PrinterName"), ePrinterName);
-	helper.AppendProp(wxT("LanguageCode"), eLanguageCode);
+	helper.AppendProp(ibT("FixedLeft"), eFixedLeft);
+	helper.AppendProp(ibT("FixedTop"), eFixedTop);
+	helper.AppendProp(ibT("Areas"), eAreas);
+	helper.AppendProp(ibT("Parameters"), eParameters);
+	helper.AppendProp(ibT("ReadOnly"), eReadOnly);
+	helper.AppendProp(ibT("PrinterName"), ePrinterName);
+	helper.AppendProp(ibT("LanguageCode"), eLanguageCode);
 
 	// 🛑 THE SIGNATURE SAID `string` AND THE BODY READS `GetInteger()`. A caller following the
 	// published shape passed cell names and got row 0 of column 0 — the one cell that always
 	// exists, so it answered rather than refusing. Says what it takes now: a cell, by number.
-	helper.AppendFunc(wxT("Area"), 2, wxT("Area(number: row, number: col = 0)"));
-	helper.AppendFunc(wxT("Range"), 2, wxT("Range(number: row start, number: row end, number: col start = -1, number: col end = -1)"));
-	helper.AppendProc(wxT("PutVerticalPageBreak"), wxT("PutVerticalPageBreak()"));
-	helper.AppendProc(wxT("PutHorizontalPageBreak"), wxT("PutHorizontalPageBreak()"));
-	helper.AppendFunc(wxT("GetArea"), 1, wxT("GetArea(string: label)"));
-	helper.AppendProc(wxT("Clear"), wxT("Clear()"));
-	helper.AppendProc(wxT("Print"), wxT("Print(bool: showPrintDlg = true)"));
-	helper.AppendProc(wxT("Show"), 1, wxT("Show(string: title)"));
-	helper.AppendProc(wxT("Put"), 2, wxT("Put(spreadsheetDocument: table, number: groupLevel = 0)"));
-	helper.AppendProc(wxT("Join"), 2, wxT("Join(spreadsheetDocument: table, number: groupLevel = 0)"));
-	helper.AppendProc(wxT("BeginRowGroup"), wxT("BeginRowGroup()"));
-	helper.AppendProc(wxT("EndRowGroup"), wxT("EndRowGroup()"));
-	helper.AppendProc(wxT("BeginColGroup"), wxT("BeginColGroup()"));
-	helper.AppendProc(wxT("EndColGroup"), wxT("EndColGroup()"));
+	helper.AppendFunc(ibT("Area"), 2, ibT("Area(number: row, number: col = 0)"));
+	helper.AppendFunc(ibT("Range"), 2, ibT("Range(number: row start, number: row end, number: col start = -1, number: col end = -1)"));
+	helper.AppendProc(ibT("PutVerticalPageBreak"), ibT("PutVerticalPageBreak()"));
+	helper.AppendProc(ibT("PutHorizontalPageBreak"), ibT("PutHorizontalPageBreak()"));
+	helper.AppendFunc(ibT("GetArea"), 1, ibT("GetArea(string: label)"));
+	helper.AppendProc(ibT("Clear"), ibT("Clear()"));
+	helper.AppendProc(ibT("Print"), ibT("Print(bool: showPrintDlg = true)"));
+	helper.AppendProc(ibT("Show"), 1, ibT("Show(string: title)"));
+	helper.AppendProc(ibT("Put"), 2, ibT("Put(spreadsheetDocument: table, number: groupLevel = 0)"));
+	helper.AppendProc(ibT("Join"), 2, ibT("Join(spreadsheetDocument: table, number: groupLevel = 0)"));
+	helper.AppendProc(ibT("BeginRowGroup"), ibT("BeginRowGroup()"));
+	helper.AppendProc(ibT("EndRowGroup"), ibT("EndRowGroup()"));
+	helper.AppendProc(ibT("BeginColGroup"), ibT("BeginColGroup()"));
+	helper.AppendProc(ibT("EndColGroup"), ibT("EndColGroup()"));
 }
 
 
@@ -417,7 +415,7 @@ bool ibValueSpreadsheetDocument::GetPropVal(const long lPropNum, ibValue& pvarPr
 	return false;
 }
 
-#include <wx/tokenzr.h>
+#include "core/stringTokenizer.h"
 #include "backend/backend_exception.h"
 
 bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -442,8 +440,8 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 		// the content's own end (no empty cells made for it), and the answer is always a document. Two refusals
 		// stood here, heard by nobody (the return slot kept the call before), and the second checked the row END
 		// against the number of COLUMNS.
-		const int rowEnd = wxMin(paParams[1]->GetInteger(), m_spreadsheetDoc->GetNumberRows());
-		const int colEnd = lSizeArray > 3 ? wxMin(paParams[3]->GetInteger(), m_spreadsheetDoc->GetNumberCols()) : -1;
+		const int rowEnd = std::min(paParams[1]->GetInteger(), m_spreadsheetDoc->GetNumberRows());
+		const int colEnd = lSizeArray > 3 ? std::min(paParams[3]->GetInteger(), m_spreadsheetDoc->GetNumberCols()) : -1;
 		pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetArea(
 			paParams[0]->GetInteger(), rowEnd, lSizeArray > 2 ? paParams[2]->GetInteger() : -1, colEnd));
 
@@ -453,7 +451,7 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 
 		if (lSizeArray == 1) {
 
-			wxStringTokenizer tkn(paParams[0]->GetString(), wxT("|"));
+			ibStringTokenizer tkn(paParams[0]->GetString(), ibT("|"));
 
 			// 🛑 THE COLUMN HALF WAS LOOKED FOR AMONG THE ROWS. Both tokens of "Row|Column" went to
 			// GetRowAreaByName, so the column block was never found — `c` came back null, the call
@@ -470,19 +468,19 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 			if (!r)
 				return false;
 
-			pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetAreaByName(r->m_label, c ? c->m_label : wxT("")));
+			pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetAreaByName(r->m_label, c ? c->m_label : ibT("")));
 			return true;
 		}
 
 		// Same pair, same rule — see the note above: the second name is a COLUMN block.
 		const ibSpreadsheetAreaDescription* r = m_spreadsheetDoc->GetSpreadsheetDesc().GetRowAreaByName(paParams[0]->GetString());
-		const ibSpreadsheetAreaDescription* c = m_spreadsheetDoc->GetSpreadsheetDesc().GetColAreaByName(lSizeArray > 1 ? paParams[1]->GetString() : wxT(""));
+		const ibSpreadsheetAreaDescription* c = m_spreadsheetDoc->GetSpreadsheetDesc().GetColAreaByName(lSizeArray > 1 ? paParams[1]->GetString() : ibT(""));
 
 		if (!r)
 			return false;
 
 		pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetAreaByName(
-			r->m_label, c ? c->m_label : wxT("")));
+			r->m_label, c ? c->m_label : ibT("")));
 
 		return true;
 	}
@@ -523,7 +521,7 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 		ibValuePtr<ibValueSpreadsheetDocument> valueSpreadsheet(
 			paParams[0]->ConvertToType<ibValueSpreadsheetDocument>());
 		const unsigned int groupLevel = (lSizeArray > 1)
-			? (unsigned int)wxMax(0, paParams[1]->GetInteger()) : 0u;
+			? (unsigned int)std::max(0, paParams[1]->GetInteger()) : 0u;
 		if (valueSpreadsheet)
 			m_spreadsheetDoc->PutArea(valueSpreadsheet->GetSpreadsheetDocument(), groupLevel);
 		return true;
@@ -532,7 +530,7 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 		ibValuePtr<ibValueSpreadsheetDocument> valueSpreadsheet(
 			paParams[0]->ConvertToType<ibValueSpreadsheetDocument>());
 		const unsigned int groupLevel = (lSizeArray > 1)
-			? (unsigned int)wxMax(0, paParams[1]->GetInteger()) : 0u;
+			? (unsigned int)std::max(0, paParams[1]->GetInteger()) : 0u;
 		if (valueSpreadsheet)
 			m_spreadsheetDoc->JoinArea(valueSpreadsheet->GetSpreadsheetDocument(), groupLevel);
 		return true;

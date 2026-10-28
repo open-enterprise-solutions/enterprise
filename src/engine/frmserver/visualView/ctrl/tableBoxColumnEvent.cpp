@@ -9,7 +9,7 @@
 // The typed text becomes a value of the cell's type, or is refused. A refused text leaves the cell as it
 // was, and the next fetch of the row shows that value again in place of what was typed. A read-only
 // column (IsReadOnly) takes no text at all.
-bool ibValueModelTableBoxColumn::TextProcessing(const wxString& strData)
+bool ibValueModelTableBoxColumn::TextProcessing(const ibString& strData)
 {
 	if (IsReadOnly())
 		return false;
@@ -84,7 +84,7 @@ void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& vSelected)
 ///////////////////////////////////////////////////////////////////////
 
 // Enter — the text as it stands is committed into the current row's cell.
-void ibValueModelTableBoxColumn::OnTextEnter(const wxString& text)
+void ibValueModelTableBoxColumn::OnTextEnter(const ibString& text)
 {
 	TextProcessing(text);
 }

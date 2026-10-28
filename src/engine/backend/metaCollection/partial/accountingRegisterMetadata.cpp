@@ -21,12 +21,12 @@
 
 ibValueMetaObjectAccountingRegister::ibValueMetaObjectAccountingRegister() : ibValueMetaObjectRegisterData()
 {
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel"), ibT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel"), ibT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
 	
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("Form"), ibT("Cancel") });
 
 	// The two totals tables are declared with their initialiser on the class itself — see
 	// accountingRegister.h; nothing about them is done here.
@@ -95,35 +95,35 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 		// apply re-issued ADD for columns that already existed — surfacing as RDB$INDEX_15 three
 		// layers from here. Asking each slot for its own name costs one extra lookup and cannot be
 		// wrong about a block it is not part of.
-		wxString slotName = wxString::Format(wxT("AccountDimensionDr%u"), no);
-		const ibDataValue* saved = node.FindProperty(slotName);
-		if (saved == nullptr) {
-			slotName = wxString::Format(wxT("AccountDimension%u"), no);
+		ibString slotName = ibString::Format(ibT("AccountDimensionDr%u"), no);
+		auto saved = node.FindProperty(slotName);
+		if (!saved) {
+			slotName = ibString::Format(ibT("AccountDimension%u"), no);
 			saved = node.FindProperty(slotName);
 		}
-		if (saved == nullptr)
+		if (!saved)
 			break;
 
 		// The label follows the name that was actually found, not a prefix guessed elsewhere.
-		const wxString debitPrefix = slotName.StartsWith(wxT("AccountDimensionDr")) ? wxT("Dr") : wxEmptyString;
+		const ibString debitPrefix = slotName.StartsWith(ibT("AccountDimensionDr")) ? ibT("Dr") : ibEmptyString;
 
 		ibValueMetaObjectAttributePredefined* slot = CreateEmptyType(
-			slotName, wxString::Format(_("Account dimension %s%u"), debitPrefix, no),
-			wxEmptyString, false, ibItemMode::ibItemMode_Item);
+			slotName, ibString::Format(_("Account dimension %s%u"), debitPrefix, no),
+			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 
-		const std::shared_ptr<ibDataNode>& child = saved->AsChild();
+		const auto child = saved->AsChild();
 		if (child)
 			slot->LoadNode(*child);
 
 		// The KIND half of the same pair — its own metaobject, its own id, its own column. Derived
 		// from the slot's own name, so the two halves cannot end up under different spellings.
-		const wxString kindName = slotName + wxT("Kind");
+		const ibString kindName = slotName + ibT("Kind");
 		ibValueMetaObjectAttributePredefined* kind = CreateEmptyType(
-			kindName, wxString::Format(_("Account dimension %s%u kind"), debitPrefix, no),
-			wxEmptyString, false, ibItemMode::ibItemMode_Item);
+			kindName, ibString::Format(_("Account dimension %s%u kind"), debitPrefix, no),
+			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 
-		if (const ibDataValue* savedKind = node.FindProperty(kindName)) {
-			const std::shared_ptr<ibDataNode>& kindChild = savedKind->AsChild();
+		if (auto savedKind = node.FindProperty(kindName)) {
+			const auto kindChild = savedKind->AsChild();
 			if (kindChild)
 				kind->LoadNode(*kindChild);
 		}
@@ -135,24 +135,24 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	// The credit side. Its presence in the file IS the record that this register was saved in
 	// correspondence mode — the property says so too, and the two are written together.
 	for (unsigned int no = 1; ; no++) {
-		const wxString valueName = wxString::Format(wxT("AccountDimensionCr%u"), no);
-		const ibDataValue* savedValue = node.FindProperty(valueName);
-		if (savedValue == nullptr)
+		const ibString valueName = ibString::Format(ibT("AccountDimensionCr%u"), no);
+		auto savedValue = node.FindProperty(valueName);
+		if (!savedValue)
 			break;
 
 		ibValueMetaObjectAttributePredefined* value = CreateEmptyType(
-			valueName, wxString::Format(_("Account dimension Cr%u"), no),
-			wxEmptyString, false, ibItemMode::ibItemMode_Item);
-		const std::shared_ptr<ibDataNode>& valueChild = savedValue->AsChild();
+			valueName, ibString::Format(_("Account dimension Cr%u"), no),
+			ibEmptyString, false, ibItemMode::ibItemMode_Item);
+		const auto valueChild = savedValue->AsChild();
 		if (valueChild)
 			value->LoadNode(*valueChild);
 
-		const wxString kindName = wxString::Format(wxT("AccountDimensionCr%uKind"), no);
+		const ibString kindName = ibString::Format(ibT("AccountDimensionCr%uKind"), no);
 		ibValueMetaObjectAttributePredefined* kind = CreateEmptyType(
-			kindName, wxString::Format(_("Account dimension Cr%u kind"), no),
-			wxEmptyString, false, ibItemMode::ibItemMode_Item);
-		if (const ibDataValue* savedKind = node.FindProperty(kindName)) {
-			const std::shared_ptr<ibDataNode>& kindChild = savedKind->AsChild();
+			kindName, ibString::Format(_("Account dimension Cr%u kind"), no),
+			ibEmptyString, false, ibItemMode::ibItemMode_Item);
+		if (auto savedKind = node.FindProperty(kindName)) {
+			const auto kindChild = savedKind->AsChild();
 			if (kindChild)
 				kind->LoadNode(*kindChild);
 		}
@@ -161,10 +161,10 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 		m_accountDimensionSlotsCr.push_back(value);
 	}
 
-	if (const ibDataValue* savedAccountCr = node.FindProperty(wxT("AccountCr"))) {
-		m_accountCr = CreateEmptyType(wxT("AccountCr"), _("Credit account"),
-			wxEmptyString, false, ibItemMode::ibItemMode_Item);
-		const std::shared_ptr<ibDataNode>& child = savedAccountCr->AsChild();
+	if (auto savedAccountCr = node.FindProperty(ibT("AccountCr"))) {
+		m_accountCr = CreateEmptyType(ibT("AccountCr"), _("Credit account"),
+			ibEmptyString, false, ibItemMode::ibItemMode_Item);
+		const auto child = savedAccountCr->AsChild();
 		if (child)
 			m_accountCr->LoadNode(*child);
 	}
@@ -172,12 +172,12 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	// THE SIDES OF THE FIELDS KEPT PER SIDE — keyed in the file by the side and the FIELD'S id
 	// (`Dr1391`, `Cr1391`), not by their names: a side is named after its field, and a field renamed
 	// between two saves would otherwise leave its sides unfindable and re-created under new ids.
-	if (const ibDataNode* saved = node.FindChild(wxT("FieldSides"))) {
-		for (const std::pair<wxString, ibDataValue>& entry : saved->Properties()) {
-			const bool credit = entry.first.StartsWith(wxT("Cr"));
+	if (auto saved = node.FindChild(ibT("FieldSides"))) {
+		for (const std::pair<ibString, ibDataValue>& entry : saved->Fields()) {
+			const bool credit = entry.first.StartsWith(ibT("Cr"));
 			long long field = 0;
 			// A metaID is an `int`: a number past it is not an id this configuration could have written.
-			if ((!credit && !entry.first.StartsWith(wxT("Dr"))) || !entry.first.Mid(2).ToLongLong(&field)
+			if ((!credit && !entry.first.StartsWith(ibT("Dr"))) || !entry.first.Mid(2).ToLongLong(&field)
 			    || field <= 0 || field > std::numeric_limits<ibMetaID>::max())
 				continue;
 
@@ -190,15 +190,15 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 				found = m_fieldSides.end() - 1;
 			}
 
-			ibValueMetaObjectAttributePredefined* side = CreateEmptyType(entry.first, wxEmptyString,
-				wxEmptyString, false, ibItemMode::ibItemMode_Item);
-			if (const std::shared_ptr<ibDataNode>& child = entry.second.AsChild())
+			ibValueMetaObjectAttributePredefined* side = CreateEmptyType(entry.first, ibEmptyString,
+				ibEmptyString, false, ibItemMode::ibItemMode_Item);
+			if (const auto child = entry.second.AsChild())
 				side->LoadNode(*child);
 			(credit ? found->m_cr : found->m_dr) = side;
 		}
 	}
 
-	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormList->GetName())));
 
 	m_propertyChartOfAccounts->SetNodeValue(node.GetProperty(m_propertyChartOfAccounts->GetName()));
 
@@ -226,9 +226,9 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	// Absent sub-node = a configuration written before the totals tables existed. The object keeps the
 	// id it was given at construction rather than being left at zero — and a zero id is what makes the
 	// schema differ pour one register's columns into another's table.
-	if (const ibDataNode* totals = node.FindChild(wxT("DebitTotals")))
+	if (auto totals = node.FindChild(ibT("DebitTotals")))
 		m_totalsDr->LoadNode(*totals);
-	if (const ibDataNode* totals = node.FindChild(wxT("CreditTotals")))
+	if (auto totals = node.FindChild(ibT("CreditTotals")))
 		m_totalsCr->LoadNode(*totals);
 	// (A file written while the account grain existed still carries `DebitAccountTotals` /
 	// `CreditAccountTotals`; nothing reads them now, and the next save leaves them out.)
@@ -276,7 +276,7 @@ bool ibValueMetaObjectAccountingRegister::WriteData(ibDataNode& node) const
 
 	// The sides of the fields kept per side, under the side and the field's id — see ReadData.
 	if (!m_fieldSides.empty()) {
-		ibDataNode& sidesNode = node.Child(wxT("FieldSides"));
+		ibDataNode& sidesNode = node.Child(ibT("FieldSides"));
 		for (const ibFieldSides& sides : m_fieldSides) {
 			for (const bool credit : { false, true }) {
 				const ibValueMetaObjectAttributePredefined* side = credit ? sides.m_cr : sides.m_dr;
@@ -284,7 +284,7 @@ bool ibValueMetaObjectAccountingRegister::WriteData(ibDataNode& node) const
 					continue;
 				auto child = std::make_shared<ibDataNode>();
 				side->SaveNode(*child);
-				sidesNode.SetProperty(wxString::Format(wxT("%s%d"), credit ? wxT("Cr") : wxT("Dr"), sides.m_field),
+				sidesNode.SetProperty(ibString::Format(ibT("%s%d"), credit ? ibT("Cr") : ibT("Dr"), sides.m_field),
 					ibDataValue::Child(child));
 			}
 		}
@@ -302,8 +302,8 @@ bool ibValueMetaObjectAccountingRegister::WriteData(ibDataNode& node) const
 	// The two totals tables are written for their IDENTITY alone: the sub-node carries each object's
 	// metaID, which is what makes the id survive a save and what the schema differ matches the physical
 	// table by.
-	m_totalsDr->SaveNode(node.Child(wxT("DebitTotals")));
-	m_totalsCr->SaveNode(node.Child(wxT("CreditTotals")));
+	m_totalsDr->SaveNode(node.Child(ibT("DebitTotals")));
+	m_totalsCr->SaveNode(node.Child(ibT("CreditTotals")));
 
 	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
 	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
@@ -375,7 +375,7 @@ bool ibValueMetaObjectAccountingRegister::OnSaveMetaObject(int flags)
 	if (m_propertyChartOfAccounts->IsEmptyProperty()) {
 		// Into the LEDGER — see metaComposerObject.cpp. The ledger is what restructuring fills as it
 		// goes, and both readers already take it from there.
-		RestructureError(wxString::Format(
+		RestructureError(ibString::Format(
 			_("%s: a chart of accounts is required - the account type, the number of analytics and their type all come from it"), GetName()));
 		return false;
 	}
@@ -523,18 +523,18 @@ void ibValueMetaObjectAccountingRegister::SyncFieldSides(const ibValueMetaObject
 
 		for (const bool credit : { false, true }) {
 			ibValueMetaObjectAttributePredefined*& side = credit ? found->m_cr : found->m_dr;
-			const wxString name = field->GetName() + (credit ? ibRegSide::Credit : ibRegSide::Debit);
+			const ibString name = field->GetName() + (credit ? ibRegSide::Credit : ibRegSide::Debit);
 			if (side == nullptr) {
 				if (!createMissing)
 					continue;
-				side = CreateEmptyType(name, wxEmptyString, wxEmptyString, false, ibItemMode::ibItemMode_Item);
+				side = CreateEmptyType(name, ibEmptyString, ibEmptyString, false, ibItemMode::ibItemMode_Item);
 				if (m_metaData != nullptr)
 					side->OnCreateMetaObject(m_metaData, 0);
 			}
 			if (side->GetName() != name)
 				side->SetName(name);
 			side->SetOwnerSynonym(ibRegColumnCaptionOf(field->GetSynonym(), ibRegSideCaption(credit)));
-			side->SetOwnerIcon(field->GetColumnIcon());   // drawn as the dimension or the figure it is a side of
+			side->SetOwnerPicture(field->GetColumnPicture());   // drawn as the dimension or the figure it is a side of
 			side->GetTypeDesc().SetDefaultMetaType(field->GetTypeDesc());
 			if (perSide) side->ClearFlag(metaDisableFlag);
 			else         side->SetFlag(metaDisableFlag);
@@ -582,7 +582,7 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	// One dimension is a PAIR of columns; the side prefix appears only where there are two sides to
 	// tell apart. In a one-sided register the side is already said by RecordType, so the name
 	// carries none.
-	auto makePair = [&](const wxString& prefix, unsigned int no,
+	auto makePair = [&](const ibString& prefix, unsigned int no,
 		std::vector<ibValueMetaObjectAttributePredefined*>& kinds,
 		std::vector<ibValueMetaObjectAttributePredefined*>& values) {
 		// Numbered, because a slot is a POSITION: the same slot holds an item on one account and a
@@ -590,13 +590,13 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 		// stored next to it — which is why a slot is created as a PAIR.
 		ibValueMetaObjectAttributePredefined* kind = CreateEmptyType(
 			AccountDimensionKindColumnName(prefix, no),
-			wxString::Format(_("Account dimension %s%u kind"), prefix, no),
-			wxEmptyString, false, ibItemMode::ibItemMode_Item);
+			ibString::Format(_("Account dimension %s%u kind"), prefix, no),
+			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 
 		ibValueMetaObjectAttributePredefined* value = CreateEmptyType(
 			AccountDimensionColumnName(prefix, no),
-			wxString::Format(_("Account dimension %s%u"), prefix, no),
-			wxEmptyString, false, ibItemMode::ibItemMode_Item);
+			ibString::Format(_("Account dimension %s%u"), prefix, no),
+			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 
 		// The id is what makes each of them a column, and it is handed out by the create event — a
 		// slot born after the register's own creation has to ask for one itself. GenerateNewID is
@@ -611,7 +611,7 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	};
 
 	const bool correspondence = IsCorrespondence();
-	const wxString debitPrefix = GetDebitSidePrefix();
+	const ibString debitPrefix = GetDebitSidePrefix();
 
 	// ⭐⭐ THE SETTING RENAMES THE DEBIT SIDE — it does not only decide what gets written.
 	//
@@ -632,7 +632,7 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	// change too — so a register whose account was already `AccountDr` kept the caption "Account"
 	// beside "Credit account", and the debit side was the one column that never said which side it is.
 	auto applySideName = [](ibValueMetaObjectAttributePredefined* attribute,
-		const wxString& name, const wxString& synonym) {
+		const ibString& name, const ibString& synonym) {
 		if (attribute == nullptr)
 			return;
 		if (attribute->GetName() != name)
@@ -646,10 +646,10 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	for (size_t idx = 0; idx < m_accountDimensionSlots.size(); idx++) {
 		const unsigned int no = static_cast<unsigned int>(idx) + 1;
 		applySideName(m_accountDimensionSlots[idx], AccountDimensionColumnName(debitPrefix, no),
-			wxString::Format(_("Account dimension %s%u"), debitPrefix, no));
+			ibString::Format(_("Account dimension %s%u"), debitPrefix, no));
 		if (idx < m_accountDimensionKinds.size())
 			applySideName(m_accountDimensionKinds[idx], AccountDimensionKindColumnName(debitPrefix, no),
-				wxString::Format(_("Account dimension %s%u kind"), debitPrefix, no));
+				ibString::Format(_("Account dimension %s%u kind"), debitPrefix, no));
 	}
 
 	// THE CREDIT ACCOUNT. In correspondence mode the line names both sides, so the inherited
@@ -661,8 +661,8 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	// whenever correspondence happened to be off, and the maintenance built later keyed it by the
 	// credit one: two shapes for the same table, and "Column unknown T.FLDnnnn_RRRef" when they met.
 	if (m_accountCr == nullptr) {
-		m_accountCr = CreateEmptyType(wxT("AccountCr"), _("Credit account"),
-			wxEmptyString, false, ibItemMode::ibItemMode_Item);
+		m_accountCr = CreateEmptyType(ibT("AccountCr"), _("Credit account"),
+			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 		if (m_metaData != nullptr)
 			m_accountCr->OnCreateMetaObject(m_metaData, 0);
 	}
@@ -675,7 +675,7 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	// breakdown, so nothing is created for it. What already exists is kept (see below).
 	if (correspondence) {
 		while (m_accountDimensionSlotsCr.size() < want)
-			makePair(wxT("Cr"), static_cast<unsigned int>(m_accountDimensionSlotsCr.size()) + 1,
+			makePair(ibT("Cr"), static_cast<unsigned int>(m_accountDimensionSlotsCr.size()) + 1,
 				m_accountDimensionKindsCr, m_accountDimensionSlotsCr);
 	}
 	// ⭐⭐ AND THEY ARE NOT THROWN AWAY WHEN CORRESPONDENCE GOES OFF.
@@ -1019,12 +1019,12 @@ void ibValueMetaObjectAccountingRegister::FillSourceExplorer(ibSourceDataObject:
 	//
 	// …AND THE TWO STACK LIKE THE BREAKDOWN DOES: a side's split fields are one thing to read, so they
 	// share a group and the form draws them as one cell rather than a header per column.
-	struct ibPostingColumn { const ibBackendQueryColumn* m_column; const ibValueMetaObjectAttributeBase* m_field; wxString m_group; };
+	struct ibPostingColumn { const ibBackendQueryColumn* m_column; const ibValueMetaObjectAttributeBase* m_field; ibString m_group; };
 	std::vector<ibPostingColumn> posting;
 	std::set<const ibValueMetaObjectAttributeBase*> inBlock;
 
 	const auto place = [&](const ibValueMetaObjectAttributeBase* field, const ibBackendQueryColumn* column,
-		const wxString& group) {
+		const ibString& group) {
 		if (field == nullptr || column == nullptr)
 			return;
 		posting.push_back({ column, field, group });
@@ -1038,7 +1038,7 @@ void ibValueMetaObjectAccountingRegister::FillSourceExplorer(ibSourceDataObject:
 			if (kindSlot != nullptr) place(kindSlot, kindSlot->GetQueryColumn(), GetSourceGroupOf(kindSlot));
 			if (slot     != nullptr) place(slot,     slot->GetQueryColumn(),     GetSourceGroupOf(slot));
 		}
-		const wxString group = creditSide ? wxT("RegisterFieldCrGroup") : wxT("RegisterFieldDrGroup");
+		const ibString group = creditSide ? ibT("RegisterFieldCrGroup") : ibT("RegisterFieldDrGroup");
 		const auto placeSide = [&](const ibValueMetaObjectAttributeBase* field) {
 			const ibValueMetaObjectAttributeBase* side = GetFieldSide(creditSide, field);
 			place(side, side != nullptr ? side->GetQueryColumn() : nullptr, group);

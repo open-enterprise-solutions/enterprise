@@ -8,6 +8,7 @@
 #include <wx/init.h>
 
 #include "backend/backend_core.h"                              // ibDateTime
+#include "frmclient/win/dateconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 
 #include <wx/filefn.h>   // wxFileExists / wxRemoveFile - the cross-zone base
@@ -25,13 +26,13 @@ namespace {
 // runtime reads TZ (in its POSIX spelling, on Windows too) when told to, and wxDateTime's local
 // parts and mktime follow it - which is exactly the road the bridge takes and the value must not.
 struct ZoneScope {
-	wxString m_before;
+	ibString m_before;
 	bool     m_had = false;
 	explicit ZoneScope(const char* tz) {
-		if (const char* had = std::getenv("TZ")) { m_had = true; m_before = wxString::FromAscii(had); }
+		if (const char* had = std::getenv("TZ")) { m_had = true; m_before = ibString::FromUTF8(had); }
 		Set(tz);
 	}
-	~ZoneScope() { Set(m_had ? static_cast<const char*>(m_before.ToAscii()) : nullptr); }
+	~ZoneScope() { Set(m_had ? m_before.ToUTF8().c_str() : nullptr); }
 	static void Set(const char* tz) {
 #ifdef _WIN32
 		_putenv_s("TZ", tz != nullptr ? tz : "");
@@ -59,8 +60,8 @@ struct Base {
 		db->CloseStatement(statement);
 	}
 	// The reading and the text the row holds, by id.
-	std::pair<ibDateTime, wxString> Get(int id, bool* isNull = nullptr) {
-		std::pair<ibDateTime, wxString> out{ ibDateTime(), wxString() };
+	std::pair<ibDateTime, ibString> Get(int id, bool* isNull = nullptr) {
+		std::pair<ibDateTime, ibString> out{ ibDateTime(), ibString() };
 		ibPreparedStatement* statement = db->PrepareStatement(wxT("SELECT at FROM stamps WHERE id = ?"));
 		EXPECT_NE(statement, nullptr);
 		statement->SetParamInt(1, id);
@@ -121,7 +122,7 @@ TEST(DriverDates, TheSkippedHourIsHeldEvenWhereTheMachineSkipsIt)
 	EXPECT_EQ(ibDateTime(2026, 3, 8, 2, 30, 0), ibValue(2026, 3, 8, 2, 30, 0).GetDate());
 	EXPECT_EQ(wxT("08.03.2026 02:30:00"), ibValue(2026, 3, 8, 2, 30, 0).GetString());
 	// ...and the bridge is the one road that cannot hold it, which is why nothing of the value's goes over it.
-	EXPECT_EQ(3u, static_cast<unsigned>(ibDateTime(2026, 3, 8, 2, 30, 0).ToWxDateTime().GetHour()));
+	EXPECT_EQ(3u, static_cast<unsigned>(typeConv::DateTimeToWxDateTime(ibDateTime(2026, 3, 8, 2, 30, 0)).GetHour()));
 }
 
 // ⭐ A BASE WRITTEN UNDER ONE CLOCK AND READ UNDER ANOTHER - the measurement of 2026-09-26 as a test.
@@ -138,8 +139,8 @@ const ibDateTime kCrossZoneRows[] = {
 	ibDateTime(9999, 12, 31, 23, 59, 59),
 };
 
-wxString CrossZonePath() { const char* p = std::getenv("OES_CROSS_ZONE_BASE"); return p != nullptr ? wxString::FromUTF8(p) : wxString(); }
-wxString CrossZoneStep() { const char* s = std::getenv("OES_CROSS_ZONE_STEP"); return s != nullptr ? wxString::FromAscii(s) : wxString(); }
+ibString CrossZonePath() { const char* p = std::getenv("OES_CROSS_ZONE_BASE"); return p != nullptr ? ibString::FromUTF8(p) : ibString(); }
+ibString CrossZoneStep() { const char* s = std::getenv("OES_CROSS_ZONE_STEP"); return s != nullptr ? ibString::FromUTF8(s) : ibString(); }
 
 } // namespace
 
@@ -221,7 +222,7 @@ TEST(DriverDates, AnotherSpellingInTheRowStillReads)
 TEST(DriverDates, TheWeekIsTheIsoWeekOnSqliteToo)
 {
 	Base base;
-	const wxString tpl = base.db->GetDialect().m_datePart.at(ibDatePart::Week);
+	const ibString tpl = base.db->GetDialect().m_datePart.at(ibDatePart::Week);
 	struct Case { ibDateTime reading; const wxChar* text; long week; };
 	const Case cases[] = {
 		{ ibDateTime(2021, 1, 3),   wxT("'2021-01-03'"), 53 },
@@ -231,7 +232,7 @@ TEST(DriverDates, TheWeekIsTheIsoWeekOnSqliteToo)
 		{ ibDateTime(2026, 9, 26),  wxT("'2026-09-26'"), 39 },
 	};
 	for (const Case& c : cases) {
-		wxString expr = tpl;
+		ibString expr = tpl;
 		expr.Replace(wxT("{expr}"), c.text);
 		// The query door is printf-shaped, and the template holds a '%': the text goes in as an argument.
 		ibDatabaseResultSet* rs = base.db->RunQueryWithResults(wxT("%s"), wxT("SELECT ") + expr + wxT(" AS w"));

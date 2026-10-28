@@ -10,27 +10,28 @@
 #include <wx/file.h>
 #include <wx/dir.h>
 #include <wx/utils.h>   // wxExecute, wxEXEC_SYNC, wxGetProcessId
+#include "core/fileSystem.h"   // ibFILE_SEP_PATH
 
 namespace {
 
 // Unique temp working dir per test instance. We never collide because the
 // directory name folds in a monotonically-bumped counter.
 static int s_counter = 0;
-wxString MakeTempDir() {
-	wxString base = wxStandardPaths::Get().GetTempDir();
-	wxString dir;
-	dir << base << wxFileName::GetPathSeparator()
+ibString MakeTempDir() {
+	ibString base = wxStandardPaths::Get().GetTempDir();
+	ibString dir;
+	dir << base << ibFILE_SEP_PATH
 	    << wxT("oes_git_test_") << (++s_counter) << wxT("_") << (long)wxGetProcessId();
 	wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
 	return dir;
 }
 
-void RmDir(const wxString& dir) {
+void RmDir(const ibString& dir) {
 	if (wxDirExists(dir)) wxFileName::Rmdir(dir, wxPATH_RMDIR_RECURSIVE);
 }
 
-void WriteFile(const wxString& dir, const wxString& name, const wxString& body) {
-	wxFile f(dir + wxFileName::GetPathSeparator() + name, wxFile::write);
+void WriteFile(const ibString& dir, const ibString& name, const ibString& body) {
+	wxFile f(dir + ibFILE_SEP_PATH + name, wxFile::write);
 	f.Write(body);
 	f.Close();
 }
@@ -42,7 +43,7 @@ protected:
 		m_dir = MakeTempDir();
 	}
 	void TearDown() override { if (!m_dir.empty()) RmDir(m_dir); }
-	wxString m_dir;
+	ibString m_dir;
 };
 
 TEST_F(GitServiceTest, NonRepoDirIsNotRepo) {
@@ -93,7 +94,7 @@ TEST_F(GitServiceTest, BranchCreateCheckoutRoundTrips) {
 	WriteFile(m_dir, wxT("a.txt"), wxT("x"));
 	ASSERT_TRUE(g.CommitAll(wxT("init")).ok);
 
-	const wxString start = g.CurrentBranch();
+	const ibString start = g.CurrentBranch();
 	ASSERT_FALSE(start.empty());
 
 	ASSERT_TRUE(g.CreateBranch(wxT("feature/x"), /*checkout*/true).ok);

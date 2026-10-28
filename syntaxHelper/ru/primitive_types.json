@@ -19,7 +19,7 @@
       "parameters": "<Год> — четырёхзначный год.\n<Месяц> — 1..12.\n<День> — 1..31.\nЛитерал — строка, состоящая только из цифр или отформатированная, разбираемая как 'ГГГГММДД[ччмм[сс]]'.",
       "return_descr": "Значение типа Дата.",
       "example": "today = Дата(2026, 5, 19);\nstamp = Дата('20260519104525'); // 2026-05-19 10:45:25",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "fn.Message"
       ],
@@ -40,7 +40,7 @@
       "parameters": "Записывается литералом (42, -3.14) либо получается из Number(value).",
       "return_descr": "Значение типа Число.",
       "example": "price = 1250.55;\ntotal = price * 3;\nMessage(Format(total, \"NFD=2\"));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": ["fn.Number", "fn.Round", "fn.Int", "fn.Format"],
       "reviewed": true
     },
@@ -59,7 +59,7 @@
       "parameters": "Записывается в двойных кавычках либо получается из String(value).",
       "return_descr": "Значение типа Строка.",
       "example": "name = \"Acme\" + \" \" + \"Ltd\";\nIf Not IsBlankString(name) Then\n    Message(name);\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": ["fn.String", "fn.StrLen", "fn.Mid", "fn.Find", "fn.IsBlankString"],
       "reviewed": true
     },
@@ -78,7 +78,7 @@
       "parameters": "Записывается как True или False либо получается из Boolean(value).",
       "return_descr": "Значение типа Булево.",
       "example": "posted = True;\nIf posted And Not cancelled Then\n    Message(\"in effect\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": ["fn.Boolean", "kw.True", "kw.False", "kw.Not"],
       "reviewed": true
     },
@@ -97,7 +97,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var x;\nIf x == Undefined Then\n    Message(\"nothing was assigned\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": ["kw.Undefined", "type.Null", "fn.IsEmptyValue", "fn.ValueIsFilled"],
       "reviewed": true
     },
@@ -116,7 +116,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "If IsNull(selection.Discount) Then\n    discount = 0;\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": ["kw.Null", "type.Undefined", "fn.IsNull", "fn.IsEmptyValue"],
       "reviewed": true
     }

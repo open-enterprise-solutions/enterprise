@@ -8,7 +8,7 @@
 // The typed text becomes a value of the field's type, or is refused. A refused text leaves the value
 // as it was, and the next Update shows that value again in place of what was typed. A read-only field
 // (IsReadOnly) takes no text at all.
-bool ibValueTextCtrl::TextProcessing(const wxString& strData)
+bool ibValueTextCtrl::TextProcessing(const ibString& strData)
 {
 	if (IsReadOnly())
 		return false;
@@ -77,27 +77,36 @@ void ibValueTextCtrl::ChoiceProcessing(ibValue& vSelected)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibValueTextCtrl::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibValueTextCtrl::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	switch (event) {
-	case ibProtocolEvent::Input:  OnTextUpdated(); return true;
-	case ibProtocolEvent::Change: {
+	case ibProtocol::ibEvent::ibKind::Input:  OnTextUpdated(); return true;
+	case ibProtocol::ibEvent::ibKind::Change: {
 		// The value with its type when the client has one (Value), else the text it typed.
-		if (const ibDataNode* const value = args.FindChild(wxT("Value")))
+		if (const auto value = args.FindChild(ibProtocol::ibEvent::Value))
 			ValueProcessing(*value);
 		else
-			OnTextEnter(args.GetValue<wxString>(wxT("Text")));
+			OnTextEnter(args.GetValue<ibString>(ibProtocol::ibEvent::Text));
 		return true;
 	}
-	case ibProtocolEvent::Select: OnSelectButtonPressed(); return true;
-	case ibProtocolEvent::Open:   OnOpenButtonPressed(); return true;
-	case ibProtocolEvent::Clear:  OnClearButtonPressed(); return true;
+	case ibProtocol::ibEvent::ibKind::Select: OnSelectButtonPressed(); return true;
+	case ibProtocol::ibEvent::ibKind::Open:   OnOpenButtonPressed(); return true;
+	case ibProtocol::ibEvent::ibKind::Clear:  OnClearButtonPressed(); return true;
 	default:                    return ibValueWindow::OnClientEvent(event, args);
 	}
 }
 
+bool ibValueTextCtrl::IsSubscribed(ibProtocol::ibEvent::ibKind event) const
+{
+	if (event != ibProtocol::ibEvent::ibKind::Input)
+		return ibValueWindow::IsSubscribed(event);
+	// What OnTextUpdated would modify, and only while it is not.
+	ibSourceDataObject* const sourceObject = m_formOwner != nullptr ? m_formOwner->GetSourceObject() : nullptr;
+	return !IsReadOnly() && sourceObject != nullptr && sourceObject->ModifiesData() && !sourceObject->IsModified();
+}
+
 // The text as it stands is committed.
-void ibValueTextCtrl::OnTextEnter(const wxString& text)
+void ibValueTextCtrl::OnTextEnter(const ibString& text)
 {
 	TextProcessing(text);
 }

@@ -7,9 +7,9 @@
 //*                             Events                              *
 //*******************************************************************
 
-bool ibValueStaticText::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibValueStaticText::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	if (event != ibProtocolEvent::Open)
+	if (event != ibProtocol::ibEvent::ibKind::Open)
 		return ibValueWindow::OnClientEvent(event, args);
 	OnHyperlinkClicked();
 	return true;

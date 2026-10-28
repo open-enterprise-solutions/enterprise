@@ -22,8 +22,8 @@ namespace {
 // The node: one child per control, its id as the child's identity, the properties in the child's
 // property bag and the position as a field. Nothing else — the storage stores nodes, and this is
 // the smallest node that says what a form looks like.
-const wxChar* const s_fieldControl  = wxT("Control");
-const wxChar* const s_fieldPosition = wxT("Position");
+const ibChar* const s_fieldControl  = ibT("Control");
+const ibChar* const s_fieldPosition = ibT("Position");
 
 // ⭐⭐ A GENERATED FORM IS ADDRESSED BY WHAT IT SHOWS. Not every form is declared in the Designer —
 // a catalog with no list form of its own still opens as a list, built on the spot by `BuildForm`,
@@ -103,12 +103,12 @@ void ibRestoreFormSettings(ibValueForm* form)
 
 	ibDataNode root;
 	if (!storage->Restore(key, root)) {
-		ibJournalInfo(wxT("ui.form"), wxT("restore form setting: nothing stored for object %s, type %s"),
+		ibJournalInfo(ibT("ui.form"), ibT("restore form setting: nothing stored for object %s, type %s"),
 			key.m_objectKey.str(), key.m_settingKey.str());
 		return;   // nobody saved anything here — the ordinary case, and not an error
 	}
 
-	ibJournalInfo(wxT("ui.form"), wxT("restore form setting: object %s, type %s"),
+	ibJournalInfo(ibT("ui.form"), ibT("restore form setting: object %s, type %s"),
 		key.m_objectKey.str(), key.m_settingKey.str());
 	ibApplyFormSettings(form, root);
 }
@@ -121,7 +121,7 @@ void ibApplyFormSettings(ibValueForm* form, const ibDataNode& root)
 
 		stored_count++;
 
-		const ibFormID controlId = (ibFormID)stored.GetValue<s32>(s_fieldControl);
+		const ibFormID controlId = (ibFormID)stored.GetValue<std::int32_t>(s_fieldControl);
 		if (controlId == 0)
 			continue;
 
@@ -135,19 +135,21 @@ void ibApplyFormSettings(ibValueForm* form, const ibDataNode& root)
 		// ⭐ THE WHITELIST GATES THE WAY IN AS WELL AS THE WAY OUT. Read any other way, a value
 		// saved while a property was allowed would become a way past the list the day it is taken
 		// off — so the loop walks the LIST, not whatever the row happens to hold.
-		for (const wxString& name : ibValueFrame::GetAllowedUserProperty()) {
-
-			// The value where the setting keeps it — its properties; a node read from the wire (the editor's Apply) has
-			// it among its fields: JSON has one key set, and a plain value is read back as a field (ibJsonReader).
-			const ibDataValue* value = stored.FindProperty(name);
-			if (value == nullptr)
-				value = stored.FindField(name);
-			if (value == nullptr)
-				continue;
+		for (const ibString& name : ibValueFrame::GetAllowedUserProperty()) {
 
 			ibProperty* property = control->GetProperty(name);
 			if (property == nullptr)
 				continue;   // the author renamed or dropped it
+
+			// The value where the setting keeps it — its properties, under the list's name (the desktop's too: one
+			// storage); a node read from the wire (the editor's Apply) has it among its fields, under the property's
+			// own name — the row the editor was asked with (AppendControl): JSON has one key set, and a plain value is
+			// read back as a field (ibJsonReader).
+			auto value = stored.FindProperty(name);
+			if (!value)
+				value = stored.FindField(property->GetName());
+			if (!value)
+				continue;
 
 			// 🛑 ONE PROPERTY AT A TIME, GUARDED — a value written by an older shape of this form
 			// may no longer be of the kind the property expects, and this runs inside the form's
@@ -157,28 +159,28 @@ void ibApplyFormSettings(ibValueForm* form, const ibDataNode& root)
 				applied++;
 			}
 			catch (const ibCoreException& err) {
-				ibJournalWarning(wxT("ui.form"), wxT("saved form setting: '%s' not restored (%s)"),
+				ibJournalWarning(ibT("ui.form"), ibT("saved form setting: '%s' not restored (%s)"),
 					name, err.GetErrorDescription());
 			}
 			catch (...) {
-				ibJournalWarning(wxT("ui.form"), wxT("saved form setting: '%s' not restored"), name);
+				ibJournalWarning(ibT("ui.form"), ibT("saved form setting: '%s' not restored"), name);
 			}
 		}
 
 		// …and where it sits among its siblings. Clamped rather than refused: the author may have
 		// removed the very controls this one was pushed past.
-		const int position = stored.GetValue<s32>(s_fieldPosition);
+		const int position = stored.GetValue<std::int32_t>(s_fieldPosition);
 		ibValueFrame* parent = control->GetParent();
 		if (position != wxNOT_FOUND && parent != nullptr && parent->GetChildCount() > 0) {
 			const int last = (int)parent->GetChildCount() - 1;
-			parent->ChangeChildPosition(control, (unsigned int)wxMax(0, wxMin(position, last)));
+			parent->ChangeChildPosition(control, (unsigned int)std::max(0, std::min(position, last)));
 		}
 	}
 
 	// PROBE — how much of the setting reached a live control. `found` far below `stored` means the ids do not match
 	// this build of the form; `applied` at zero with `found` high means the values are being refused rather than the
 	// controls being missing.
-	ibJournalInfo(wxT("ui.form"), wxT("lay form setting: stored %d, found %d, missing %d, applied %d"),
+	ibJournalInfo(ibT("ui.form"), ibT("lay form setting: stored %d, found %d, missing %d, applied %d"),
 		stored_count, found, missing, applied);
 }
 
@@ -208,9 +210,9 @@ ibFormSettingsResult ibSaveFormSettings(const ibValueForm* form)
 		written++;
 
 		ibDataNode& child = root.AddChild(0, (ibMetaID)controlId);
-		child.SetValue(s_fieldControl, (s32)controlId);
+		child.SetValue(s_fieldControl, (std::int32_t)controlId);
 
-		for (const wxString& name : ibValueFrame::GetAllowedUserProperty()) {
+		for (const ibString& name : ibValueFrame::GetAllowedUserProperty()) {
 			ibProperty* property = control->GetProperty(name);
 			if (property == nullptr)
 				continue;
@@ -223,15 +225,15 @@ ibFormSettingsResult ibSaveFormSettings(const ibValueForm* form)
 
 		ibValueFrame* parent = control->GetParent();
 		child.SetValue(s_fieldPosition,
-			parent != nullptr ? (s32)parent->GetChildPosition(control) : (s32)wxNOT_FOUND);
+			parent != nullptr ? (std::int32_t)parent->GetChildPosition(control) : (std::int32_t)wxNOT_FOUND);
 	});
 
 	const bool saved = storage->Save(key, root);
 
 	// PROBE — how much of the form actually reached the row. A control with no id is invisible to
 	// the setting, and that is the difference between "nothing was saved" and "nothing was there".
-	ibJournalInfo(wxT("ui.form"),
-		wxT("save form setting: object %s, type %s, controls seen %d, written %d, no id %d, saved %d"),
+	ibJournalInfo(ibT("ui.form"),
+		ibT("save form setting: object %s, type %s, controls seen %d, written %d, no id %d, saved %d"),
 		key.m_objectKey.str(), key.m_settingKey.str(), seen, written, unaddressed, (int)saved);
 
 	return saved ? ibFormSettingsResult::Ok : ibFormSettingsResult::Refused;

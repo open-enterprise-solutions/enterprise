@@ -28,10 +28,10 @@
 #include "backend/query/queryableFactory.h"      // ibQuerySourceParameter — what a virtual table takes
 #include "backend/query/queryException.h"
 #include "backend/query/queryLowering.h"
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 #include "backend/query/queryable.h"
 
-#include <wx/tokenzr.h>
+#include "core/stringTokenizer.h"
 
 namespace {
 
@@ -42,16 +42,16 @@ ibDataValue FieldEntry(const ibQueryConstructorField& field)
 	// The technical name is what a query writes; the presentation is what a
 	// person reads. Both, and named apart — putting a synonym into a query is
 	// the mistake this distinction exists to prevent.
-	node->SetValue(wxT("name"), field.m_name);
+	node->SetValue(ibT("name"), field.m_name);
 	if (!field.m_presentation.IsEmpty() && field.m_presentation != field.m_name)
-		node->SetValue(wxT("title"), field.m_presentation);
+		node->SetValue(ibT("title"), field.m_presentation);
 	if (!field.m_source.IsEmpty())
-		node->SetValue(wxT("source"), field.m_source);
+		node->SetValue(ibT("source"), field.m_source);
 
 	// A reference can be walked one level further — a COMPOSITE one too: the query branches per
 	// alternative and coalesces the leaf, so what is offered here is what the walk can then do.
 	if (field.m_reference)
-		node->AddField(wxT("reference"), ibDataValue::Bool(true));
+		node->AddField(ibT("reference"), ibDataValue::Bool(true));
 
 	return ibDataValue::Child(node);
 }
@@ -62,14 +62,14 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgContains()
 {
-	static const ibArg s_a(wxT("contains"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("contains"), ibArg::Kind::Text,
 		ibMcpText("Narrow to paths containing this text. Omit for all of them."));
 	return s_a;
 }
 
 const ibArg& ArgPath()
 {
-	static const ibArg s_a(wxT("path"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("path"), ibArg::Kind::Text,
 		ibMcpText("The source's dotted path, as query_sources gives it - optionally followed by "
 			"reference fields to step through, exactly as a query would write them "
 			"(`AccumulationRegister.GoodsInWarehouses.Recorder`)."), /*required*/ true);
@@ -78,7 +78,7 @@ const ibArg& ArgPath()
 
 const ibArg& ArgText()
 {
-	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("text"), ibArg::Kind::Text,
 		ibMcpText("The query text, exactly as it would be written in the module - the whole package "
 			  "if it is one."), /*required*/ true);
 	return s_a;
@@ -92,14 +92,14 @@ const ibArg& ArgText()
 class ibMcpToolQuerySources : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("query_sources"); }
+	ibString GetName() const override { return ibT("query_sources"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("looking at what a query can read from");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Everything a query may read from in this configuration, by the dotted path a "
 			"query names it with - Catalog.Goods, AccumulationRegister.StockBalance.Balance and "
@@ -113,33 +113,33 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
-		const wxString contains = ArgContains().Text(params);
+		const ibString contains = ArgContains().Text(params);
 
 		ibQueryConstructorModel model(activeMetaData);
 
 		std::vector<ibDataValue> sources;
 		for (const ibQueryConstructorSource& source : model.GetSources()) {
 
-			const wxString path = source.Text();
+			const ibString path = source.Text();
 			if (!contains.IsEmpty() && path.Lower().Find(contains.Lower()) == wxNOT_FOUND)
 				continue;
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("path"), path);
+			entry->SetValue(ibT("path"), path);
 			if (!source.m_presentation.IsEmpty() && source.m_presentation != path)
-				entry->SetValue(wxT("title"), source.m_presentation);
+				entry->SetValue(ibT("title"), source.m_presentation);
 
 			sources.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("sources"), ibDataValue::Array(sources));
+		result.AddField(ibT("sources"), ibDataValue::Array(sources));
 		return true;
 	}
 };
@@ -152,15 +152,15 @@ MCP_TOOL_REGISTER(ibMcpToolQuerySources);
 class ibMcpToolQueryFields : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("query_fields"); }
+	ibString GetName() const override { return ibT("query_fields"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("looking at the fields of %s"),
+		return ibString::Format(ibMcpText("looking at the fields of %s"),
 			ArgPath().Text(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("The fields of one query source, with the name a query writes and the words a "
 			"person reads. A field marked as a reference can be walked further with a dot - and "
@@ -176,14 +176,14 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
-		const wxString path = ArgPath().Text(params);
+		const ibString path = ArgPath().Text(params);
 		if (path.IsEmpty()) {
 			refusal = ibMcpText("No source named.");
 			return false;
@@ -197,7 +197,7 @@ public:
 		// "AccumulationRegister.StockBalance.Balance" is three answers to three
 		// questions, not one string.
 		ibQuerySource source;
-		wxStringTokenizer segments(path, wxT("."));
+		ibStringTokenizer segments(path, ibT("."));
 		while (segments.HasMoreTokens())
 			source.m_name.push_back(segments.GetNextToken());
 
@@ -256,7 +256,7 @@ public:
 		}
 
 		if (fields.empty()) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' answers with no fields - check the path with query_sources."), path);
 			return false;
 		}
@@ -269,9 +269,9 @@ public:
 		for (const ibQuerySourceParameter& parameter : model.GetSourceParameters(source)) {
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("name"), parameter.m_name);
-			entry->AddField(wxT("required"), ibDataValue::Bool(parameter.m_required));
-			entry->AddField(wxT("condition"), ibDataValue::Bool(parameter.m_condition));
+			entry->SetValue(ibT("name"), parameter.m_name);
+			entry->AddField(ibT("required"), ibDataValue::Bool(parameter.m_required));
+			entry->AddField(ibT("condition"), ibDataValue::Bool(parameter.m_condition));
 
 			// ⭐ A CLOSED SET, WHEN THE SOURCE DECLARES ONE — the periodicity a
 			// turnover rolls up to, and its like. Declared by the source because
@@ -280,27 +280,27 @@ public:
 			// that parses and means nothing.
 			if (!parameter.m_choices.empty()) {
 				std::vector<ibDataValue> choices;
-				for (const wxString& choice : parameter.m_choices)
+				for (const ibString& choice : parameter.m_choices)
 					choices.push_back(ibDataValue::String(choice));
-				entry->AddField(wxT("choices"), ibDataValue::Array(choices));
+				entry->AddField(ibT("choices"), ibDataValue::Array(choices));
 			}
 
 			// ⭐ …AND WHAT IT DECIDES, where the source says so. A list of words answers "which may
 			// I write" and not "what will happen", and for `Periodicity` the two are a whole
 			// storey apart from the property of the same name.
 			if (!parameter.m_description.IsEmpty())
-				entry->SetValue(wxT("description"), parameter.m_description);
+				entry->SetValue(ibT("description"), parameter.m_description);
 
 			parameters.push_back(ibDataValue::Child(entry));
 		}
 
-		result.SetValue(wxT("path"), path);
-		result.AddField(wxT("fields"), ibDataValue::Array(out));
+		result.SetValue(ibT("path"), path);
+		result.AddField(ibT("fields"), ibDataValue::Array(out));
 
 		// A VIRTUAL TABLE TAKES ARGUMENTS, and a caller that does not know which
 		// writes a balance with no date and gets today's by accident.
 		if (!parameters.empty())
-			result.AddField(wxT("parameters"), ibDataValue::Array(parameters));
+			result.AddField(ibT("parameters"), ibDataValue::Array(parameters));
 
 		return true;
 	}
@@ -340,14 +340,14 @@ MCP_TOOL_REGISTER(ibMcpToolQueryFields);
 class ibMcpToolQueryCheck : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("query_check"); }
+	ibString GetName() const override { return ibT("query_check"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("checking a query against the configuration");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Read a query the way the engine will: parse it, then resolve every name in it "
 			"against this configuration. ALWAYS ASK THIS BEFORE PUTTING A QUERY IN A MODULE - "
@@ -372,23 +372,23 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 			refusal = ibMcpText("No configuration is open.");
 			return false;
 		}
 
-		wxString text = ArgText().Text(params);
-		if (wxString(text).Trim(true).Trim(false).IsEmpty()) {
+		ibString text = ArgText().Text(params);
+		if (ibString(text).Trim(true).Trim(false).IsEmpty()) {
 			refusal = ibMcpText("Nothing to check - pass the query text.");
 			return false;
 		}
 
-		wxString complaint;
-		wxString stage;
-		s32      line = 0;
-		s32      column = 0;
+		ibString complaint;
+		ibString stage;
+		std::int32_t      line = 0;
+		std::int32_t      column = 0;
 
 		// Kept beyond the try: the composer verdict below is read off the AST that was just
 		// parsed, rather than off the text — a JOIN inside a string literal is not a join.
@@ -396,22 +396,24 @@ public:
 
 		try {
 			ibQueryParser parser;
-			package = parser.ParsePackage(text);
+			// The engine's door: the core parser's refusal is raised as the engine's, so the syntax handler below reads its span.
+			try { package = parser.ParsePackage(text); }
+			catch (const ibQueryRefusal& refusal) { ibBackendQuerySyntaxException::Raise(refusal); }
 
 			// AGAINST THIS CONFIGURATION, and said so explicitly. A query in a
 			// module sets no scope of its own and still means the tree it lives in;
 			// here the tree is named, because a tool is not standing inside one.
 			const ibSourceMetaDataScope resolveAgainst(activeMetaData);
-			ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
+			ibQueryLowering::CheckNames(package, std::map<ibString, ibValue>());
 
 			// ⭐ A SOUND QUERY CAN STILL READ THE WHOLE REGISTER TO ANSWER ABOUT ONE WAREHOUSE. Said beside
 			// the verdict, in the engine's words: which condition stands in the WHERE and which parameter
 			// of the table takes it.
 			std::vector<ibDataValue> advice;
-			for (const wxString& sentence : ibQueryLowering::FiltersAroundVirtualTables(package))
+			for (const ibString& sentence : ibQueryLowering::FiltersAroundVirtualTables(package))
 				advice.push_back(ibDataValue::String(sentence));
 			if (!advice.empty())
-				result.AddField(wxT("tableParameters"), ibDataValue::Array(advice));
+				result.AddField(ibT("tableParameters"), ibDataValue::Array(advice));
 		}
 		// ⚠ TWO DIFFERENT FAILURES, TWO VARIETIES, TOLD APART BY WHICH ARRIVED. The
 		// lowering raises a NAME refusal (the text reads and asks for something that is
@@ -424,29 +426,29 @@ public:
 		// telling an author to hunt for a typo in a query that parses perfectly. The
 		// repair the old comment here asked for is the one that was made.
 		catch (const ibBackendQueryNameException& e) {
-			stage = wxT("names");
+			stage = ibT("names");
 			complaint = e.GetErrorDescription();
-			line = (s32)e.GetLine();
-			column = (s32)e.GetColumn();
+			line = (std::int32_t)e.GetLine();
+			column = (std::int32_t)e.GetColumn();
 		}
 		catch (const ibBackendQuerySourceException& e) {
-			stage = wxT("syntax");
+			stage = ibT("syntax");
 			complaint = e.GetErrorDescription();
-			line = (s32)e.GetLine();
-			column = (s32)e.GetColumn();
+			line = (std::int32_t)e.GetLine();
+			column = (std::int32_t)e.GetColumn();
 		}
 		catch (const ibBackendQueryException& e) {
 			// Parsed, but names something that is not there. query_sources and
 			// query_fields are where the right names come from.
-			stage = wxT("names");
+			stage = ibT("names");
 			complaint = e.GetErrorDescription();
 		}
 		catch (const ibCoreException& e) {
-			stage = wxT("engine");
+			stage = ibT("engine");
 			complaint = e.GetErrorDescription();
 		}
 
-		result.AddField(wxT("ok"), ibDataValue::Bool(complaint.IsEmpty()));
+		result.AddField(ibT("ok"), ibDataValue::Bool(complaint.IsEmpty()));
 
 		if (complaint.IsEmpty()) {
 
@@ -463,7 +465,7 @@ public:
 			//
 			// TOTALS is still the composer's own to place, so it stays here. Asked of the AST, not
 			// of the text: the word TOTALS inside a string literal is not one.
-			wxString cannot;
+			ibString cannot;
 
 			for (const ibQueryAstStatement& statement : package.m_statements) {
 
@@ -477,10 +479,10 @@ public:
 				}
 			}
 
-			result.AddField(wxT("composer"), ibDataValue::Bool(cannot.IsEmpty()));
+			result.AddField(ibT("composer"), ibDataValue::Bool(cannot.IsEmpty()));
 
 			if (!cannot.IsEmpty()) {
-				result.SetValue(wxT("composerNote"), wxString::Format(
+				result.SetValue(ibT("composerNote"), ibString::Format(
 					ibMcpText("Good as a query in a MODULE, but a composer cannot read it: %s, and a "
 					  "composer reads its query as a nested source, which does not carry that yet. "
 					  "Subtotals over a composer are the composer's own to place - report_level "
@@ -490,20 +492,20 @@ public:
 			return true;
 		}
 
-		result.SetValue(wxT("stage"), stage);
-		result.SetValue(wxT("problem"), complaint);
+		result.SetValue(ibT("stage"), stage);
+		result.SetValue(ibT("problem"), complaint);
 
 		// Only when there is one: 0:0 means the engine had nowhere to point, and
 		// reporting it as a position sends a reader to the first character.
 		if (line > 0 || column > 0) {
-			result.AddField(wxT("line"), ibDataValue::Int((s64)line));
-			result.AddField(wxT("column"), ibDataValue::Int((s64)column));
+			result.AddField(ibT("line"), ibDataValue::Int((std::int64_t)line));
+			result.AddField(ibT("column"), ibDataValue::Int((std::int64_t)column));
 		}
 
 		// WHICH QUESTION TO ASK NEXT, said rather than left to be guessed. The two
 		// failures have different remedies and pointing at the wrong one costs a
 		// round trip every time.
-		result.SetValue(wxT("nextStep"), stage == wxT("names")
+		result.SetValue(ibT("nextStep"), stage == ibT("names")
 			? ibMcpText("A name in the query does not resolve. query_sources lists what can be read "
 			    "from, query_fields what a source has.")
 			: ibMcpText("The engine could not read the text at that position."));

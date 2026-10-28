@@ -17,8 +17,6 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
-
 #include <vector>
 
 class BACKEND_API ibFirebirdReplicationConfig {
@@ -28,9 +26,9 @@ public:
 	// `password` are the credentials FB uses to authenticate as it
 	// connects out to that peer.
 	struct Peer {
-		wxString address;     // "192.168.1.5:3050"
-		wxString username;    // peer's auth user (default "SYSDBA")
-		wxString password;    // peer's auth password
+		ibString address;     // "192.168.1.5:3050"
+		ibString username;    // peer's auth user (default "SYSDBA")
+		ibString password;    // peer's auth password
 	};
 
 	// Build a `replication.conf` for `databasePath`. `journalDir` is
@@ -39,16 +37,16 @@ public:
 	// this database ships to.
 	//
 	// Returns the text content suitable for writing to disk.
-	static wxString Build(
-		const wxString& databasePath,
-		const wxString& journalDir,
+	static ibString Build(
+		const ibString& databasePath,
+		const ibString& journalDir,
 		const std::vector<Peer>& peers);
 
 	// Write the generated content to `_fb/replication.conf`.
 	// Returns true on success.
 	static bool WriteToRuntimeDir(
-		const wxString& fbRuntimeDir,
-		const wxString& content);
+		const ibString& fbRuntimeDir,
+		const ibString& content);
 
 	// Default ports / paths used when the user hasn't specified
 	// otherwise.

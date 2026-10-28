@@ -95,7 +95,7 @@ public:
 	// columns carry numbers of their own — and a list reading every cell by its attribute's id found none of
 	// them: a grouped chart of accounts showed its headings as empty lines (journal `list.group`, 2026-09-29:
 	// "read under column 1067, ABSENT; carries -646 … -6").
-	using ColumnIdOf = std::function<ibMetaID(const wxString&)>;
+	using ColumnIdOf = std::function<ibMetaID(const ibString&)>;
 	ibListFetchDriver(const ibReadPageRequest& page, ColumnIdOf idOf)
 		: m_paged(true), m_page(page), m_idOf(std::move(idOf)) {}
 

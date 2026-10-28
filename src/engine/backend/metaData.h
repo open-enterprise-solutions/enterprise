@@ -194,7 +194,7 @@ public:
 class BACKEND_API ibModuleStorage {
 public:
 	bool AddCommonModule(ibValueMetaObjectCommonModule* commonModule);
-	bool RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName);
+	bool RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName);
 	bool RemoveCommonModule(ibValueMetaObjectCommonModule* commonModule);
 
 	// Drop every registration — used on the RunDatabase bail-out path, where
@@ -390,6 +390,26 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
+// What ibMetaData::GetNewName is asked with, held by value — the parent it is asked under goes beside it,
+// as it does to CreateMetaObject and PasteMetaObject.
+struct ibNameRequest {
+
+	// The kind whose names are compared.
+	ibClassID m_clsid = 0;
+
+	// The name's stem; empty = "newItem".
+	ibString m_prefix;
+
+	// The bare prefix is the first candidate; otherwise numbering starts at 1.
+	bool m_forConstructor = false;
+
+	// Whom the name is for: its own entry under the parent is no collision (BuildNewName keeps an
+	// object's name through a paste or a merge while nobody else carries it). 0 — nobody.
+	ibMetaID m_metaId = 0;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
 // ⭐ EVERY METADATA IS HELD BY A shared_ptr (Max, 2026-10-06: *"implement shared_from_this in the metadata, and hold
 // the reference properly, as a shared_ptr — all the metadata"*): a configuration, an external report or data
 // processor, a configuration file, both sides of a comparison. It is handed around as a plain pointer; whoever
@@ -536,9 +556,9 @@ public:
 	// (external DataProcessor / Report, each its own file) answer empty. Anything derived FROM the
 	// metadata and stored outside it — compiled bytecode, above all — keys on this, so a save produces
 	// a new key and every artefact of the previous state simply stops being found.
-	virtual wxString GetConfigMD5() const { return wxEmptyString; }
+	virtual ibString GetConfigMD5() const { return ibEmptyString; }
 
-	virtual wxString GetFileName() const { return wxEmptyString; }
+	virtual ibString GetFileName() const { return ibEmptyString; }
 	virtual const ibValueMetaObject* GetCommonMetaObject() const { return nullptr; }
 	virtual ibValueMetaObject* GetCommonMetaObject() { return nullptr; }
 
@@ -558,7 +578,7 @@ public:
 	// runtime support — every factory answers with the OWNER, empty when nothing was made (see
 	// ibValue::CreateObject). A caller that needs the type asks the owner: `ibValuePtr<T> v = ...`.
 	virtual ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const;
-	virtual ibValue CreateObject(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
+	virtual ibValue CreateObject(const ibString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
 		const ibClassID& clsid = GetIDObjectFromString(className);
 		return CreateObject(clsid, paParams, lSizeArray);
 	}
@@ -577,7 +597,7 @@ public:
 	void RegisterCtor(ibCtorMetaValueType* typeCtor);
 	void UnRegisterCtor(ibCtorMetaValueType*& typeCtor);
 
-	void UnRegisterCtor(const wxString& className);
+	void UnRegisterCtor(const ibString& className);
 
 	// UNREGISTER BY IDENTITY — the door every metatype's teardown uses. A metaobject's clsid is
 	// CONSTRUCTIVE (its body IS the metaID), so it is the one key that a rename cannot move; the
@@ -589,22 +609,22 @@ public:
 	// metadata (no image ⇒ nothing registered ⇒ nothing to recompute).
 	void InvalidateCtorNames() const;
 
-	virtual bool IsRegisterCtor(const wxString& className) const;
-	virtual bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType) const;
-	virtual bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType, enum ibCtorObjectMetaType metaType) const;
+	virtual bool IsRegisterCtor(const ibString& className) const;
+	virtual bool IsRegisterCtor(const ibString& className, ibCtorObjectType objectType) const;
+	virtual bool IsRegisterCtor(const ibString& className, ibCtorObjectType objectType, enum ibCtorObjectMetaType metaType) const;
 
 	virtual bool IsRegisterCtor(const ibClassID& clsid) const;
 
-	virtual ibClassID GetIDObjectFromString(const wxString& className) const;
-	virtual wxString GetNameObjectFromID(const ibClassID& clsid, bool upper = false) const;
+	virtual ibClassID GetIDObjectFromString(const ibString& className) const;
+	virtual ibString GetNameObjectFromID(const ibClassID& clsid, bool upper = false) const;
 
 	ibClassID GetIDObjectFromMetaID(const ibMetaID& metaID, enum ibCtorObjectMetaType refType) const;
 
-	virtual ibCtorMetaValueType* GetTypeCtor(const wxString& className) const;
+	virtual ibCtorMetaValueType* GetTypeCtor(const ibString& className) const;
 	virtual ibCtorMetaValueType* GetTypeCtor(const ibClassID& clsid) const;
 	virtual ibCtorMetaValueType* GetTypeCtor(const ibValueMetaObject* metaValue, enum ibCtorObjectMetaType refType) const;
 
-	virtual ibCtorAbstractType* GetAvailableCtor(const wxString& className) const;
+	virtual ibCtorAbstractType* GetAvailableCtor(const ibString& className) const;
 	virtual ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid) const;
 
 	virtual std::vector<ibCtorMetaValueType*> GetListCtorsByType() const;
@@ -620,7 +640,7 @@ public:
 	}
 
 	//get language code 
-	virtual wxString GetLangCode() const = 0;
+	virtual ibString GetLangCode() const = 0;
 
 	//Check is full access 
 	virtual bool IsFullAccess() const { return true; }
@@ -766,7 +786,7 @@ public:
 	// accident, because there is no longer a way to.
 	bool CopyMetaObject(const ibValueMetaObject* object, class ibWriterMemory& writer) const;
 
-	bool RenameMetaObject(ibValueMetaObject* object, const wxString& newName);
+	bool RenameMetaObject(ibValueMetaObject* object, const ibString& newName);
 	// Answers whether it went. It was void, so a refusal — a close phase that said no, a read-only
 	// configuration — was indistinguishable from a delete that happened, and the caller reported
 	// success either way.
@@ -872,8 +892,7 @@ public:
 	ibMetaID GenerateNewID() const;
 
 	//generate new name
-	wxString GetNewName(const ibClassID& clsid,
-		ibValueMetaObject* parent, const wxString& strPrefix = wxEmptyString, bool forConstructor = false);
+	ibString GetNewName(ibValueMetaObject* parent, const ibNameRequest& request);
 
 #pragma region serialization
 
@@ -951,10 +970,7 @@ protected:
 	_T3* FindObjectByFilter(
 		const _T1& id,
 		const std::initializer_list<ibClassID> filter) const {
-		const auto commonObject = GetCommonMetaObject();
-		if (commonObject != nullptr)
-			return commonObject->FindObjectByFilter<_T3>(id, filter, false);
-		return nullptr;
+		return FindObjectByFilter<_T1, _T2, _T3>(id, filter, false);
 	}
 
 	template<typename _T1, typename _T2 = ibValueMetaObject, typename _T3 = ibValueMetaObject>
@@ -963,8 +979,19 @@ protected:
 		const std::initializer_list<ibClassID> filter,
 		const bool use_child_filter) const {
 		const auto commonObject = GetCommonMetaObject();
-		if (commonObject != nullptr)
-			return commonObject->FindObjectByFilter<_T3>(id, filter, use_child_filter);
+		if (commonObject != nullptr) {
+			if (_T3* const found = commonObject->FindObjectByFilter<_T3>(id, filter, use_child_filter))
+				return found;
+		}
+		// ⭐ …AND NOT FOUND HERE, IN THE OWNER'S COMMON OBJECT, its root only: an external processor or report declares no
+		// catalog and no document, and what its fields' types name is its configuration's (GetTypeCtor answers there
+		// already) — asked of its own tree only, a reference attribute of its form opened empty (2026-10-19).
+		ibMetaData* owner = nullptr;
+		if (GetOwner(owner) && owner != nullptr && owner != this) {
+			const auto ownerObject = owner->GetCommonMetaObject();
+			if (ownerObject != nullptr)
+				return ownerObject->FindObjectByFilter<_T3>(id, filter, false);
+		}
 		return nullptr;
 	}
 

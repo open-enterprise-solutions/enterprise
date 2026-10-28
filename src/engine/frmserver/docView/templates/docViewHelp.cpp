@@ -1,6 +1,7 @@
 #include "docViewHelp.h"
 
 #include "backend/temp/tempStorage.h"   // ibTempFile — the document's file
+#include "frmserver/visualView/ctrl/textBox.h"   // the text drawn as a textbox's
 
 // ----------------------------------------------------------------------------
 // ibHelpEditView implementation
@@ -21,11 +22,13 @@ void ibHelpEditView::OnDraw(ibDataNode& frame)
 	if (document == nullptr)
 		return;
 
-	frame.SetValue(wxT("Text"), document->GetText());
+	// Drawn as a text document's is (ibTextEditView::OnDraw): a textbox's node, the text it shows, and whether it takes
+	// typing — help is read, so it does not.
+	frame.SetClsid(g_controlTextBoxCLSID);
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibView::ibText::Text, document->GetText());
 	if (m_readOnly)
-		frame.SetValue(wxT("ReadOnly"), true);
-	if (document->IsModified())
-		frame.SetValue(wxT("Modified"), true);
+		state.SetValue(ibProtocol::ibView::ibText::ReadOnly, true);
 }
 
 // ----------------------------------------------------------------------------
@@ -40,7 +43,7 @@ wxIMPLEMENT_CLASS(ibHelpDocument, ibDocument);
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibHelpFileDocument, ibHelpDocument);
 
-bool ibHelpFileDocument::OnCreate(const wxString& path, long flags)
+bool ibHelpFileDocument::OnCreate(const ibString& path, long flags)
 {
 	if (!ibDocument::OnCreate(path, flags))
 		return false;
@@ -50,7 +53,7 @@ bool ibHelpFileDocument::OnCreate(const wxString& path, long flags)
 
 // The text is the document's own, so it saves and loads it itself rather than through Save/LoadObject.
 // Its file is the session's temporary one (ibTempFile), where the desktop's was on disk.
-bool ibHelpFileDocument::DoSaveDocument(const wxString& filename)
+bool ibHelpFileDocument::DoSaveDocument(const ibString& filename)
 {
 	ibTempFile file;
 	if (!file.Create(filename, true) || !file.Write(m_text, wxConvUTF8))
@@ -59,7 +62,7 @@ bool ibHelpFileDocument::DoSaveDocument(const wxString& filename)
 	return true;
 }
 
-bool ibHelpFileDocument::DoOpenDocument(const wxString& filename)
+bool ibHelpFileDocument::DoOpenDocument(const ibString& filename)
 {
 	ibTempFile file(filename);
 	if (!file.IsOpened() || !file.ReadAll(&m_text, wxConvUTF8))

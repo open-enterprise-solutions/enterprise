@@ -59,7 +59,7 @@ struct ibDiagnostic {
 	// into "3: ModuleName (#line 12)"; the pair is what that sentence is made
 	// of, and a caller that wants to navigate needs the pair, not the sentence.
 	struct Frame {
-		wxString     m_module;
+		ibString     m_module;
 		unsigned int m_line = 0;   // 1-based, as a person counts
 	};
 
@@ -71,9 +71,9 @@ struct ibDiagnostic {
 	//   m_moduleName— what a person reads;
 	//   m_fileName  — the external file (external report / data processor),
 	//                 empty for a module inside the open configuration.
-	wxString     m_fileName;
-	wxString     m_moduleName;
-	wxString     m_docPath;
+	ibString     m_fileName;
+	ibString     m_moduleName;
+	ibString     m_docPath;
 
 	// 1-based line, the way the editor counts and the way the message shows it.
 	unsigned int m_line = 0;
@@ -89,9 +89,9 @@ struct ibDiagnostic {
 
 	// The failure itself, WITHOUT the "{Module(42)}: " decoration — that is
 	// assembled for display and would be noise for anyone else.
-	wxString     m_message;
+	ibString     m_message;
 	// The offending source line, when the module text was reachable.
-	wxString     m_codeLine;
+	ibString     m_codeLine;
 
 	std::vector<Frame> m_stack;
 

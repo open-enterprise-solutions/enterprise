@@ -14,7 +14,7 @@
 #include "backend/query/querySelector.h"         // ibSelector::Snapshot — ToTable's rows as the fast table
 #include "backend/system/value/valueType.h"      // ibValueTypeDescription::AdjustValue — an empty value of a declared type
 #include "backend/query/queryReadState.h"        // ibQueryReadState — one state for a whole pipeline
-#include "backend/query/queryAST.h"              // ibQueryAstExpr — the tree a predicate lowers from
+#include "core/query/queryAST.h"              // ibQueryAstExpr — the tree a predicate lowers from
 #include "backend/compiler/lambdaQueryAST.h"    // it is READ off the instructions, never stored
 #include "backend/query/queryLowering.h"         // LowerLambdaPredicate / LowerLambdaColumnPath
 #include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — wrap a RAM value-table Join argument
@@ -61,7 +61,7 @@ bool ResolveCapturedAt(const ibValueFunction* fn, long frame, long slot, ibValue
 // ⚠ STILL HERE FOR THE TREE THAT HAS NO COORDINATES: an AST that came back from an older AOT blob,
 // or one the text query language built, carries a name and nothing else. A lambda compiled by this
 // engine takes the road above.
-bool ResolveCapturedByName(const ibValueFunction* fn, const wxString& name, ibValue& out)
+bool ResolveCapturedByName(const ibValueFunction* fn, const ibString& name, ibValue& out)
 {
 	for (size_t k = 0; k < fn->CapturedDepth(); ++k) {
 		const ibRunContext* frame = fn->CapturedAt(k);
@@ -83,7 +83,7 @@ bool ResolveCapturedByName(const ibValueFunction* fn, const wxString& name, ibVa
 // (resolved AT FOLD TIME — the chain is built and consumed in one expression,
 // so the values cannot drift). False = some capture did not resolve -> RAM.
 bool CollectCaptured(const ibQueryAstExpr& e, const ibValueFunction* fn,
-                     std::map<wxString, ibValue>& out)
+                     std::map<ibString, ibValue>& out)
 {
 	if (e.m_kind == ibQueryAstExprKind::Param) {
 		if (out.find(e.m_paramName) != out.end())
@@ -145,7 +145,7 @@ std::shared_ptr<ibQueryAstExpr> AstOf(const ibValueFunction* fn)
 ibValue RowValue(ibDataQueryResult& sel, const ibBackendQueryColumn* refCol,
                  const std::vector<const ibBackendQueryColumn*>& cols,
                  const ibBackendQueryColumn* projectCol = nullptr,
-                 const wxString& projectAlias = wxEmptyString)
+                 const ibString& projectAlias = ibEmptyString)
 {
 	if (!projectAlias.IsEmpty())
 		return sel.GetColumn(projectAlias);   // Select(x => x.Ref.Field) — the dot-walk leaf projected AS this alias
@@ -169,7 +169,7 @@ public:
 	                         std::vector<const ibBackendQueryColumn*> cols,
 	                         std::shared_ptr<const ibBackendQueryable> ownedSource,
 	                         const ibBackendQueryColumn* projectCol = nullptr,
-	                         const wxString& projectAlias = wxEmptyString)
+	                         const ibString& projectAlias = ibEmptyString)
 		: m_builder(builder), m_take(take), m_refCol(refCol), m_cols(std::move(cols)),
 		  m_ownedSource(std::move(ownedSource)), m_projectCol(projectCol), m_projectAlias(projectAlias)
 		  {}   // m_readState stays null — see queryReadState.h
@@ -234,7 +234,7 @@ private:
 	std::vector<const ibBackendQueryColumn*>  m_cols;          // structure-row column set
 	std::shared_ptr<const ibBackendQueryable> m_ownedSource;   // keeps a Data.From wrapper alive
 	const ibBackendQueryColumn* m_projectCol;                  // single-column scalar projection (null = full row)
-	wxString                    m_projectAlias;                // dot-walk scalar projection, read by alias
+	ibString                    m_projectAlias;                // dot-walk scalar projection, read by alias
 
 	// ⭐ THE STATE THE ROWS ARE READ IN, held because THIS outlives the call that made it — a Foreach
 	// draws rows long after the pipeline returned, out of a live cursor. DECLARED BEFORE m_sel on
@@ -260,13 +260,13 @@ private:
 // ibValueQueryable
 //////////////////////////////////////////////////////////////////////
 
-ibValueQueryable::ibValueQueryable(const ibBackendQueryable* queryable, const wxString& sourceName)
+ibValueQueryable::ibValueQueryable(const ibBackendQueryable* queryable, const ibString& sourceName)
 	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_queryable(queryable), m_sourceName(sourceName)
 {
 	m_builder.From(queryable);
 }
 
-ibValueQueryable::ibValueQueryable(std::shared_ptr<const ibBackendQueryable> owned, const wxString& sourceName)
+ibValueQueryable::ibValueQueryable(std::shared_ptr<const ibBackendQueryable> owned, const ibString& sourceName)
 	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_queryable(owned.get()), m_sourceName(sourceName),
 	  m_ownedSource(std::move(owned))
 {
@@ -319,28 +319,28 @@ std::shared_ptr<const ibBackendQueryable> ibValueQueryable::AsSource() const
 ibString ibValueQueryable::GetString() const
 {
 	if (m_ops.empty())
-		return wxString::Format(wxT("Queryable(%s)"), m_sourceName);
-	wxString ops;
-	for (const wxString& op : m_ops)
-		ops += (ops.IsEmpty() ? wxT("") : wxT(", ")) + op;
-	return wxString::Format(wxT("Queryable(%s | %s)"), m_sourceName, ops);
+		return ibString::Format(ibT("Queryable(%s)"), m_sourceName);
+	ibString ops;
+	for (const ibString& op : m_ops)
+		ops += (ops.IsEmpty() ? ibT("") : ibT(", ")) + op;
+	return ibString::Format(ibT("Queryable(%s | %s)"), m_sourceName, ops);
 }
 
 void ibValueQueryable::MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibValue** args, long n,
-	const wxChar* why)
+	const ibChar* why)
 {
 	// ⭐⭐ AND IT SAYS SO. Dropping to RAM changes what this step COSTS — every row leaves the
 	// database and the op runs over the materialised set — and it used to happen in silence, at five
 	// different call sites. One line, here, because here is where they all arrive: which op fell,
 	// why, and off which source. Said at INFO: a diagnostic must never interrupt the person (a
 	// warning in this engine comes back as a modal dialog).
-	wxString opName = wxString::Format(wxT("#%d"), (int)method);
+	ibString opName = ibString::Format(ibT("#%d"), (int)method);
 	for (const ibValue::ibLinqMethodInfo& info : ibValue::GetLinqMethodTable())
 		if (info.id == method) { opName = info.name; break; }
 
 	// GetString already spells the pipeline as it stands — `Queryable(source | Where, OrderBy)` —
 	// so the line says WHICH query fell to RAM, not just which verb.
-	ibJournalInfo(wxT("linq"), wxT("%s runs in RAM: %s [%s]"), opName, why, GetString());
+	ibJournalInfo(ibT("linq"), ibT("%s runs in RAM: %s [%s]"), opName, why, GetString());
 
 	// The RAM floor: stream the ACCUMULATED query into an Array (references for
 	// single-key sources, structures otherwise — folded Where/OrderBy/Take stay
@@ -405,8 +405,8 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 	// reshape the order / row set BEFORE the join, which this path does not reproduce
 	// server-side.
 	if (m_take != 0)                                 return false;
-	for (const wxString& op : m_ops)
-		if (op.StartsWith(wxT("OrderBy")))           return false;
+	for (const ibString& op : m_ops)
+		if (op.StartsWith(ibT("OrderBy")))           return false;
 
 	// --- key selectors -> ONE join column each -----------------------------------
 	// Same recorded AST the text language lowers; a computed / multi-segment key
@@ -435,23 +435,23 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 	link->m_builder.Join(innerQ, lcols.front(), rcols.front(), ibQueryJoinKind::Inner);
 
 	std::vector<const ibBackendQueryColumn*> outerCols, innerCols;
-	std::vector<wxString>                    outerAlias, innerAlias;
-	auto plan = [](const ibBackendQueryColumn* refCol, const ibBackendQueryable* q, const wxString& pfx,
-	               std::vector<const ibBackendQueryColumn*>& cols, std::vector<wxString>& alias) {
+	std::vector<ibString>                    outerAlias, innerAlias;
+	auto plan = [](const ibBackendQueryColumn* refCol, const ibBackendQueryable* q, const ibString& pfx,
+	               std::vector<const ibBackendQueryColumn*>& cols, std::vector<ibString>& alias) {
 		if (refCol != nullptr) {
 			cols.push_back(refCol);
-			alias.push_back(pfx + wxT("ref"));
+			alias.push_back(pfx + ibT("ref"));
 			return;
 		}
 		const std::vector<const ibBackendQueryColumn*> all = q->GetColumns();
 		for (size_t i = 0; i < all.size(); ++i) {
 			if (all[i] == nullptr) continue;
 			cols.push_back(all[i]);
-			alias.push_back(pfx + wxString::Format(wxT("%lu"), (unsigned long) i));
+			alias.push_back(pfx + ibString::Format(ibT("%lu"), (unsigned long) i));
 		}
 	};
-	plan(outerRef, m_queryable,        wxT("o"), outerCols, outerAlias);
-	plan(innerRef, innerQ, wxT("i"), innerCols, innerAlias);
+	plan(outerRef, m_queryable,        ibT("o"), outerCols, outerAlias);
+	plan(innerRef, innerQ, ibT("i"), innerCols, innerAlias);
 	if (outerCols.empty() || innerCols.empty())
 		return false;   // a source with no projectable columns -> RAM
 	for (size_t i = 0; i < outerCols.size(); ++i) link->m_builder.Select(outerCols[i], outerAlias[i]);
@@ -467,7 +467,7 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 	// lambda sees the same shapes it would on the RAM floor.
 	auto rowOf = [&sel](const ibBackendQueryColumn* refCol,
 	                    const std::vector<const ibBackendQueryColumn*>& cols,
-	                    const std::vector<wxString>& alias) -> ibValue {
+	                    const std::vector<ibString>& alias) -> ibValue {
 		if (refCol != nullptr)
 			return sel.GetColumn(alias.front());   // the rehydrated reference cell
 		ibValueStructure* st = new ibValueStructure();
@@ -517,7 +517,7 @@ bool ibValueQueryable::TryJoinThroughL3(ibValue& receiver, ibValue& ret, ibValue
 	// temp-promotes the computed outer and runs the join server-side. leftKey / rightKey /
 	// projection map 1:1 onto JoinPushDown's outer / inner / result-selector.
 	ibValueQueryable wrapped(std::make_shared<ibTempTableQueryable>(ibValue(&receiver), innerQV->GetQueryable()->GetMetaData()),
-	                         wxT("Join"));   // its references are read in the configuration of the side it joins
+	                         ibT("Join"));   // its references are read in the configuration of the side it joins
 	return wrapped.JoinPushDown(ret, args, n);
 }
 
@@ -545,12 +545,12 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		if (fn == nullptr)
 			ibBackendCoreException::Error(_("Queryable.Where: a function argument is required"));
 		if (std::shared_ptr<ibQueryAstExpr> ast = AstOf(fn)) {
-			std::map<wxString, ibValue> captured;
+			std::map<ibString, ibValue> captured;
 			if (CollectCaptured(*ast, fn, captured)) {
 				if (ibQueryPredicatePtr pred = ibQueryLowering::LowerLambdaPredicate(m_queryable, *ast, captured)) {
 					ibValueQueryable* link = CloneLink();
 					link->m_builder.Where(pred);
-					link->m_ops.push_back(wxT("Where"));
+					link->m_ops.push_back(ibT("Where"));
 					ret = link;
 					return;
 				}
@@ -559,7 +559,7 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		// The predicate could not be lowered: either the lambda recorded no query tree (the compile
 		// journal says which construct stopped it) or a captured name was not found in any frame.
 		MaterialiseThenRam(method, ret, args, n,
-			wxT("the predicate does not lower to SQL - see the compile line for this lambda"));
+			ibT("the predicate does not lower to SQL - see the compile line for this lambda"));
 		return;
 	}
 
@@ -575,14 +575,14 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 					ibValueQueryable* link = CloneLink();
 					if (cols.size() == 1) link->m_builder.OrderBy(cols.front(), ascending);
 					else                  link->m_builder.OrderBy(cols, ascending);
-					link->m_ops.push_back(ascending ? wxT("OrderBy") : wxT("OrderByDescending"));
+					link->m_ops.push_back(ascending ? ibT("OrderBy") : ibT("OrderByDescending"));
 					ret = link;
 					return;
 				}
 			}
 		}
 		MaterialiseThenRam(method, ret, args, n,
-			wxT("the sort key is not a plain column of this source"));
+			ibT("the sort key is not a plain column of this source"));
 		return;
 	}
 
@@ -594,7 +594,7 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 			ibBackendCoreException::Error(_("Queryable.Take: the row count must be positive"));
 		ibValueQueryable* link = CloneLink();
 		link->m_take = (m_take > 0 && m_take < count) ? m_take : count;
-		link->m_ops.push_back(wxString::Format(wxT("Take %ld"), count));
+		link->m_ops.push_back(ibString::Format(ibT("Take %ld"), count));
 		ret = link;
 		return;
 	}
@@ -602,9 +602,9 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 	case M::Count: {
 		// Server-side COUNT(*) over the folded filter; an explicit Take caps it.
 		ibDataQueryBuilder b = m_builder;
-		b.Count(wxT("cnt"));
+		b.Count(ibT("cnt"));
 		ibDataQueryResult r = b.SelectAggregate();
-		long count = r.Next() ? r.GetColumn(wxT("cnt")).GetInteger() : 0;
+		long count = r.Next() ? r.GetColumn(ibT("cnt")).GetInteger() : 0;
 		if (m_take > 0 && count > m_take)
 			count = m_take;
 		ret = ibValue(ibNumber(count));
@@ -665,7 +665,7 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		if (JoinPushDown(ret, args, n))
 			return;
 		MaterialiseThenRam(method, ret, args, n,
-			wxT("the join could not be folded into the query - see JoinPushDown"));
+			ibT("the join could not be folded into the query - see JoinPushDown"));
 		return;
 	}
 
@@ -687,29 +687,29 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 					if (cols.size() == 1 && cols.front() != nullptr) {
 						ibValueQueryable* link = CloneLink();
 						link->m_projectCol = cols.front();       // plain column — read by pointer
-						link->m_ops.push_back(wxT("Select"));
+						link->m_ops.push_back(ibT("Select"));
 						ret = link;
 						return;
 					}
 					if (cols.size() > 1) {                        // dot-walk leaf — project through the door
 						ibValueQueryable* link = CloneLink();
-						const wxString alias = wxT("__proj");
+						const ibString alias = ibT("__proj");
 						link->m_builder.SelectPath(cols, alias);
 						link->m_projectAlias = alias;
-						link->m_ops.push_back(wxT("Select"));
+						link->m_ops.push_back(ibT("Select"));
 						ret = link;
 						return;
 					}
 					// arithmetic / CASE projection (x => x.A * 2, x => IIF(c, a, b)) — a computed
 					// output column lowered server-side, read back by its alias like a dot-walk leaf.
-					std::map<wxString, ibValue> captured;
+					std::map<ibString, ibValue> captured;
 					if (CollectCaptured(*ast, fn, captured)) {
 						if (ibQueryColumnExprPtr projExpr = ibQueryLowering::LowerLambdaColumnExpr(m_queryable, *ast, captured)) {
 							ibValueQueryable* link = CloneLink();
-							const wxString alias = wxT("__proj");
+							const ibString alias = ibT("__proj");
 							link->m_builder.SelectExpr(projExpr, alias);
 							link->m_projectAlias = alias;
-							link->m_ops.push_back(wxT("Select"));
+							link->m_ops.push_back(ibT("Select"));
 							ret = link;
 							return;
 						}
@@ -718,7 +718,7 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 			}
 		}
 		MaterialiseThenRam(method, ret, args, n,
-			wxT("the projection is not a column or a dot-walk this source can answer"));
+			ibT("the projection is not a column or a dot-walk this source can answer"));
 		return;
 	}
 
@@ -726,25 +726,20 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		// GroupBy / Skip / Distinct / Contains / ... — the RAM floor: the folded
 		// prefix still runs server-side, the rest runs over the materialised refs.
 		MaterialiseThenRam(method, ret, args, n,
-			wxT("this operator has no server-side form yet (GroupBy / Skip / Distinct / aggregates / set ops)"));
+			ibT("this operator has no server-side form yet (GroupBy / Skip / Distinct / aggregates / set ops)"));
 		return;
 	}
 }
 
 namespace {
 
-// ⭐⭐ A CAPTURED VALUE IS PUT IN PLACE, NOT CARRIED IN A MAP.
-//
-// The old road passed `std::map<wxString, ibValue>` from the fold down to the lowering, which then
-// looked each value up BY NAME — a container and a string compare to move something the tree already
-// pointed at. Both existed only because the capture used to be known by name.
-//
-// It is known by ADDRESS now (queryAST.h, m_capturedFrame / m_capturedSlot), and this tree is
-// transient — built here, lowered here, dropped here — so the value simply REPLACES the node. No
-// container, no keys, no lookup, and the lowering sees a literal, which it already knew how to read.
+// …AND A LOOP'S: the value is read where the compiler put it — this frame, this cell (queryAST.h,
+// m_capturedFrame / m_capturedSlot) — and goes to the lowering as the lambda's do, a parameter by the
+// Param's name. The tree is the core's and holds constants as the text writes them, so a run's value
+// (a reference among them) is not put in it.
 //
 // False = something is not readable from here, and the caller leaves the filter to the loop.
-bool ResolveCapturesInPlace(ibQueryAstExpr& e, const ibRunContext* frame)
+bool CollectCaptured(const ibQueryAstExpr& e, const ibRunContext* frame, std::map<ibString, ibValue>& out)
 {
 	if (e.m_kind == ibQueryAstExprKind::Param) {
 		if (frame == nullptr || frame->m_pRefLocVars == nullptr)
@@ -756,17 +751,16 @@ bool ResolveCapturesInPlace(ibQueryAstExpr& e, const ibRunContext* frame)
 		const ibValue* const cell = frame->m_pRefLocVars[e.m_capturedSlot];
 		if (cell == nullptr)
 			return false;
-		e.m_kind    = ibQueryAstExprKind::Literal;
-		e.m_literal = *cell;
+		out.emplace(e.m_paramName, *cell);
 		return true;
 	}
-	ibQueryAstExprPtr* children[] = { &e.m_arg, &e.m_lhs, &e.m_rhs, &e.m_low, &e.m_high, &e.m_else };
-	for (ibQueryAstExprPtr* c : children)
-		if (*c && !ResolveCapturesInPlace(**c, frame)) return false;
-	for (ibQueryAstExprPtr& i : e.m_list)
-		if (i && !ResolveCapturesInPlace(*i, frame)) return false;
-	for (ibQueryAstExprPtr& i : e.m_args)
-		if (i && !ResolveCapturesInPlace(*i, frame)) return false;
+	const ibQueryAstExprPtr* children[] = { &e.m_arg, &e.m_lhs, &e.m_rhs, &e.m_low, &e.m_high, &e.m_else };
+	for (const ibQueryAstExprPtr* c : children)
+		if (*c && !CollectCaptured(**c, frame, out)) return false;
+	for (const ibQueryAstExprPtr& i : e.m_list)
+		if (i && !CollectCaptured(*i, frame, out)) return false;
+	for (const ibQueryAstExprPtr& i : e.m_args)
+		if (i && !CollectCaptured(*i, frame, out)) return false;
 	return true;
 }
 
@@ -782,32 +776,33 @@ bool ibValueQueryable::NarrowByInstructions(const ibByteCode& byteCode, long fro
 	// and the same def-use walk that answers the caret turns it into the query tree — so a chain
 	// compiled as a loop reaches the database with nothing stored for it anywhere. See
 	// OPER_LINQ_NARROW.
-	wxString refused;
+	ibString refused;
 	const std::shared_ptr<ibQueryAstExpr> ast =
 		ibBuildQueryAstFromRange(byteCode, from, to, rowSlot, resultSlot, &refused);
 	if (!ast) {
 		// Ordinary, and worth saying once: this is the difference between a server-side filter and
 		// streaming every row to be filtered here.
-		ibJournalInfo(wxT("linq"), wxT("%s: the loop's filter stays in RAM: %s"),
-			m_sourceName, refused.IsEmpty() ? wxString(wxT("(no reason)")) : refused);
+		ibJournalInfo(ibT("linq"), ibT("%s: the loop's filter stays in RAM: %s"),
+			m_sourceName, refused.IsEmpty() ? ibString(ibT("(no reason)")) : refused);
 		return false;
 	}
 
-	// A capture is read where the compiler put it and PUT IN PLACE — no map, no name, no lookup.
-	if (!ResolveCapturesInPlace(*ast, frame))
+	// A capture is read where the compiler put it, and handed to the lowering as a parameter.
+	std::map<ibString, ibValue> captured;
+	if (!CollectCaptured(*ast, frame, captured))
 		return false;
 
 	const ibQueryPredicatePtr pred =
-		ibQueryLowering::LowerLambdaPredicate(m_queryable, *ast, {});
+		ibQueryLowering::LowerLambdaPredicate(m_queryable, *ast, captured);
 	if (!pred) {
-		ibJournalInfo(wxT("linq"), wxT("%s: the loop's filter does not lower to SQL"), m_sourceName);
+		ibJournalInfo(ibT("linq"), ibT("%s: the loop's filter does not lower to SQL"), m_sourceName);
 		return false;
 	}
 
 	// Narrowed IN PLACE: the loop is about to iterate this very value, so there is no new link to
 	// hand back and nobody to hand it to.
 	m_builder.Where(pred);
-	m_ops.push_back(wxT("Where"));
+	m_ops.push_back(ibT("Where"));
 	return true;
 }
 
@@ -825,13 +820,13 @@ std::shared_ptr<ibValueIteratorState> ibValueQueryable::CreateIterator()
 //////////////////////////////////////////////////////////////////////
 
 // Optional ON comparison for a decorator Join — default equality; a theta ON (s.Date >= a.From).
-static ibJoinCompareOp JoinOpFromString(const wxString& s)
+static ibJoinCompareOp JoinOpFromString(const ibString& s)
 {
-	if (s == wxT("<>") || s == wxT("!=")) return ibJoinCompareOp::Ne;
-	if (s == wxT("<"))                    return ibJoinCompareOp::Lt;
-	if (s == wxT("<="))                   return ibJoinCompareOp::Le;
-	if (s == wxT(">"))                    return ibJoinCompareOp::Gt;
-	if (s == wxT(">="))                   return ibJoinCompareOp::Ge;
+	if (s == ibT("<>") || s == ibT("!=")) return ibJoinCompareOp::Ne;
+	if (s == ibT("<"))                    return ibJoinCompareOp::Lt;
+	if (s == ibT("<="))                   return ibJoinCompareOp::Le;
+	if (s == ibT(">"))                    return ibJoinCompareOp::Gt;
+	if (s == ibT(">="))                   return ibJoinCompareOp::Ge;
 	return ibJoinCompareOp::Eq;   // "=" / anything else
 }
 
@@ -848,7 +843,7 @@ static ibJoinCompareOp JoinOpFromCompare(ibQueryCompareOp c)
 	}
 }
 
-ibValueQueryDecorator::ibValueQueryDecorator(ibDataQueryBuilder* target, const ibBackendQueryable* source, const wxString& sourceName)
+ibValueQueryDecorator::ibValueQueryDecorator(ibDataQueryBuilder* target, const ibBackendQueryable* source, const ibString& sourceName)
 	: ibValue(ibValueTypes::TYPE_VALUE), m_target(target), m_source(source), m_sourceName(sourceName)
 {
 	// No own builder, no policy dance: the target IS the (already policy-nulled) main query, so folding
@@ -857,7 +852,7 @@ ibValueQueryDecorator::ibValueQueryDecorator(ibDataQueryBuilder* target, const i
 
 ibString ibValueQueryDecorator::GetString() const
 {
-	return wxString::Format(wxT("QueryDecorator(%s)"), m_sourceName);
+	return ibString::Format(ibT("QueryDecorator(%s)"), m_sourceName);
 }
 
 // RLS folds ONLY dot-walk conditions; mark each lowered LEAF so the provider renders it as a correlated
@@ -909,7 +904,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 		if (fn == nullptr)
 			ibBackendCoreException::Error(_("QueryDecorator.Where: a function argument is required"));
 		std::shared_ptr<ibQueryAstExpr> ast = AstOf(fn);
-		std::map<wxString, ibValue> captured;
+		std::map<ibString, ibValue> captured;
 		if (ast && CollectCaptured(*ast, fn, captured)) {
 			if (ibQueryPredicatePtr pred = ibQueryLowering::LowerLambdaPredicate(m_source, *ast, captured)) {
 				ibMarkRestrictExists(pred);   // RLS dot-walk lowers as a correlated EXISTS on reads too — filter, not JOIN
@@ -1036,7 +1031,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 	}
 }
 
-bool ibValueQueryDecorator::CompareValueEQ(const ibValue& cParam) const
+bool ibValueQueryDecorator::CompareValueEQ(const ibVariant& cParam) const
 {
 	// Source = "Document.Receipt" — a module identifies the source by its canonical FULL NAME
 	// string ("<ClassName>.<Name>", GetFullName), which the policy passes as m_sourceName.

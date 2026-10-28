@@ -31,6 +31,7 @@
 //     Not an error at all.
 
 #include "backend/backend_exception.h"
+#include "core/query/queryRefusal.h"   // ibQueryRefusal — what the core parser gives back
 
 // ibBackendQueryException — the query layer could not do its job.
 //
@@ -51,10 +52,10 @@ public:
 
 	Kind GetKind() const { return m_kind; }
 
-	[[noreturn]] static void Throw(Kind kind, const wxString& message);
+	[[noreturn]] static void Throw(Kind kind, const ibString& message);
 
 protected:
-	ibBackendQueryException(Kind kind, const wxString& msg)
+	ibBackendQueryException(Kind kind, const ibString& msg)
 		: ibBackendException(msg), m_kind(kind) {}
 
 private:
@@ -106,7 +107,7 @@ public:
 	// class a subclass rather than a Kind applies one floor down: catching by TYPE needs no
 	// rethrow, and the audiences differ by remedy — punctuation, or query_sources / query_fields.
 protected:
-	ibBackendQuerySourceException(const wxString& msg, unsigned int line, unsigned int col)
+	ibBackendQuerySourceException(const ibString& msg, unsigned int line, unsigned int col)
 		: ibBackendQueryException(Kind::TranslationFailure, msg), m_line(line), m_col(col) {}
 
 private:
@@ -122,19 +123,17 @@ class BACKEND_API ibBackendQuerySyntaxException : public ibBackendQuerySourceExc
 public:
 	// The span first, then the format and its arguments — the same vararg shape the other varieties
 	// use, so a callsite reads like every other raise in the codebase.
-	WX_DEFINE_VARARG_FUNC(static void, ErrorAt, 3, (unsigned int, unsigned int, const wxFormatErrorString&),
-		DoErrorAtWchar, DoErrorAtUtf8);
+	template <class... Args>
+	[[noreturn]] static void ErrorAt(unsigned int line, unsigned int col, const ibString& format, const Args&... args) {
+		throw ibBackendQuerySyntaxException(ibString::Format(format, args...), line, col);
+	}
+
+	// The core parser's refusal (core/query/queryRefusal.h), raised at the engine's door: its span and its words.
+	[[noreturn]] static void Raise(const ibQueryRefusal& refusal);
 
 private:
-	ibBackendQuerySyntaxException(const wxString& msg, unsigned int line, unsigned int col)
+	ibBackendQuerySyntaxException(const ibString& msg, unsigned int line, unsigned int col)
 		: ibBackendQuerySourceException(msg, line, col) {}
-
-#if !wxUSE_UTF8_LOCALE_ONLY
-	static void DoErrorAtWchar(unsigned int line, unsigned int col, const wxChar* format, ...);
-#endif
-#if wxUSE_UNICODE_UTF8
-	static void DoErrorAtUtf8(unsigned int line, unsigned int col, const wxChar* format, ...);
-#endif
 };
 
 // IT READS, AND ASKS FOR SOMETHING THAT IS NOT THERE — the lowering. A table this configuration
@@ -144,26 +143,21 @@ private:
 class BACKEND_API ibBackendQueryNameException : public ibBackendQuerySourceException
 {
 public:
-	WX_DEFINE_VARARG_FUNC(static void, ErrorAt, 3, (unsigned int, unsigned int, const wxFormatErrorString&),
-		DoErrorAtWchar, DoErrorAtUtf8);
+	template <class... Args>
+	[[noreturn]] static void ErrorAt(unsigned int line, unsigned int col, const ibString& format, const Args&... args) {
+		throw ibBackendQueryNameException(ibString::Format(format, args...), line, col);
+	}
 
 	// No position known — a refusal reached with no node to point at. Rare, and said as itself:
 	// no span is printed rather than line 0 offered as though it were a place.
-	WX_DEFINE_VARARG_FUNC(static void, Error, 1, (const wxFormatErrorString&),
-		DoErrorWchar, DoErrorUtf8);
+	template <class... Args>
+	[[noreturn]] static void Error(const ibString& format, const Args&... args) {
+		throw ibBackendQueryNameException(ibString::Format(format, args...), 0, 0);
+	}
 
 private:
-	ibBackendQueryNameException(const wxString& msg, unsigned int line, unsigned int col)
+	ibBackendQueryNameException(const ibString& msg, unsigned int line, unsigned int col)
 		: ibBackendQuerySourceException(msg, line, col) {}
-
-#if !wxUSE_UTF8_LOCALE_ONLY
-	static void DoErrorAtWchar(unsigned int line, unsigned int col, const wxChar* format, ...);
-	static void DoErrorWchar(const wxChar* format, ...);
-#endif
-#if wxUSE_UNICODE_UTF8
-	static void DoErrorAtUtf8(unsigned int line, unsigned int col, const wxChar* format, ...);
-	static void DoErrorUtf8(const wxChar* format, ...);
-#endif
 };
 
 // ibBackendQueryLinqException — THE PIPELINE REFUSED. The other L4 door: a query written as a chain
@@ -184,19 +178,14 @@ private:
 class BACKEND_API ibBackendQueryLinqException : public ibBackendQueryException
 {
 public:
-	WX_DEFINE_VARARG_FUNC(static void, Error, 1, (const wxFormatErrorString&),
-		DoErrorWchar, DoErrorUtf8);
+	template <class... Args>
+	[[noreturn]] static void Error(const ibString& format, const Args&... args) {
+		throw ibBackendQueryLinqException(ibString::Format(format, args...));
+	}
 
 private:
-	explicit ibBackendQueryLinqException(const wxString& msg)
+	explicit ibBackendQueryLinqException(const ibString& msg)
 		: ibBackendQueryException(Kind::UnsupportedNode, msg) {}
-
-#if !wxUSE_UTF8_LOCALE_ONLY
-	static void DoErrorWchar(const wxChar* format, ...);
-#endif
-#if wxUSE_UNICODE_UTF8
-	static void DoErrorUtf8(const wxChar* format, ...);
-#endif
 };
 
 // ⭐ ONE MORE KIND OF REFUSAL, and it deliberately raises NOTHING.

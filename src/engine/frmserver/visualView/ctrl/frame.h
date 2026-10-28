@@ -36,11 +36,11 @@ class FRMSERVER_API ibVisualHost;   // visualHost.h — who holds the form; ever
 // toolbars, dataviews, dialogs. Aligned with interior palette: deep
 // dusty blue text on cream content surface. Was Windows-blue accent
 // (#0078D7) + light off-white grey (#EBEBF1) - both clashed with the
-// powder-blue + cream + terracotta palette.
-#define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
-#define wxDefaultStypeBGColour wxColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
+// powder-blue + cream + terracotta palette. The core's colour: the server draws nothing.
+#define ibDefaultStyleFGColour ibColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
+#define ibDefaultStyleBGColour ibColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 class FRMSERVER_API ibFormVisualDocument;
 
@@ -96,7 +96,7 @@ protected:
 private:
 
 	ibValueFrame* DoFindControlByID(const ibFormID& id, ibValueFrame* control) const;
-	ibValueFrame* DoFindControlByName(const wxString& controlName, ibValueFrame* control) const;
+	ibValueFrame* DoFindControlByName(const ibString& controlName, ibValueFrame* control) const;
 	void DoGenerateNewID(ibFormID& id, ibValueFrame* top) const;
 
 public:
@@ -111,9 +111,9 @@ public:
 	// form is showing can be re-derived on the other side; the form itself cannot.
 	virtual bool IsTransferable() const override { return false; }
 
-	void SetControlName(const wxString& controlName) { SetControlNameAsString(controlName); }
-	wxString GetControlName() const {
-		wxString result;
+	void SetControlName(const ibString& controlName) { SetControlNameAsString(controlName); }
+	ibString GetControlName() const {
+		ibString result;
 		GetControlNameAsString(result);
 		return result;
 	}
@@ -122,8 +122,8 @@ public:
 	virtual ~ibValueFrame();
 
 	//system override 
-	virtual wxString GetClassName() const final;
-	virtual wxString GetObjectTypeName() const final;
+	virtual ibString GetClassName() const final;
+	virtual ibString GetObjectTypeName() const final;
 
 	/**
 	* Support generate id
@@ -170,18 +170,18 @@ public:
 	* Support control name
 	*/
 
-	virtual bool GetControlNameAsString(wxString& result) const {
+	virtual bool GetControlNameAsString(ibString& result) const {
 		result = GetObjectTypeName();
 		return true;
 	}
 
-	virtual bool SetControlNameAsString(const wxString& result) const {
+	virtual bool SetControlNameAsString(const ibString& result) const {
 		return false;
 	}
 
 	// get control caption
-	virtual wxString GetControlTitle() const {
-		return wxGetTranslation(stringUtils::GenerateSynonym(GetClassName()));
+	virtual ibString GetControlTitle() const {
+		return ibGetTranslation(stringUtils::GenerateSynonym(GetClassName()));
 	}
 
 	virtual ibGuid GetControlGuid() const { return m_controlGuid; }
@@ -189,7 +189,7 @@ public:
 	/**
 	* Find by control id
 	*/
-	virtual ibValueFrame* FindControlByName(const wxString& controlName) const;
+	virtual ibValueFrame* FindControlByName(const ibString& controlName) const;
 	virtual ibValueFrame* FindControlByID(const ibFormID& id) const;
 
 	/**
@@ -234,7 +234,9 @@ public:
 	// …and OnSelected: the control picked out (the client's Focus). What holds the form is asked of the host
 	// (IsDesignerHost), as the window's events asked it.
 	virtual void OnCreate(ibVisualHost* host) {}
-	virtual void OnCreated(ibVisualHost* host) {}
+	// firstCreated — the designer has just made it (the desktop's), never on a form opened: a source control with no
+	// source binds to a fresh attribute (ibValueControl::AutoBindNewSource).
+	virtual void OnCreated(ibVisualHost* host, bool firstCreated) {}
 	virtual void OnSelected(ibVisualHost* host) {}
 	virtual void OnCleanup(ibVisualHost* host) {}
 
@@ -253,12 +255,19 @@ public:
 	// …and the children have written theirs: what a container says once its children are drawn.
 	virtual void OnUpdated(ibDataNode& state, ibVisualHost* host) {}
 
-	// ⭐ AN EVENT FROM THE CLIENT, on this control: `event` is what happened to it (ibProtocolEvent), `args` the rest
+	// ⭐ AN EVENT FROM THE CLIENT, on this control: `event` is what happened to it (ibProtocol::ibEvent::ibKind), `args` the rest
 	// of it. Each control answers the events it has and maps them onto its own model methods; the base answers
 	// Command — an entry of the control's command bar pressed. False — not an event this control has. Reached
 	// only through the form's door (ibValueForm::DispatchEvent), which has already refused a control that is not
 	// enabled or not shown.
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args);
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args);
+	// …and of the state events (ibProtocol::ibEvent::IsStateEvent), the ones it is subscribed to: something here runs on them, so
+	// the client sends them at once (its State's Subscribed); any other one waits for the client's next call. Asked
+	// at each frame, so a handler a script hangs on at run time subscribes with the frame it draws. The base: Focus, on
+	// a control with a view of its own — the form's menu and toolbar become that view's.
+	virtual bool IsSubscribed(ibProtocol::ibEvent::ibKind event) const {
+		return event == ibProtocol::ibEvent::ibKind::Focus && GetControlView() != nullptr;
+	}
 
 	// ⭐ A PART OF WHAT THIS CONTROL SHOWS, written when the client asks for it — what is too large to travel in
 	// the frame: a table's rows, a spreadsheet's cells. `request` says which part, `response` gets it. False —
@@ -277,14 +286,16 @@ public:
 
 	//call current form
 	template <typename ...Types>
-	bool CallAsEvent(const wxString& functionName, Types&&... args) const {
+	bool CallAsEvent(const ibString& functionName, Types&&... args) const {
 		ibValue* ppParams[] = { (&args)..., nullptr };
 		return CallAsEvent(functionName, ppParams, (long)sizeof...(args));
 	}
 
 	// ⭐ A HANDLER RUN UPDATES THE FORM WHOLE (ibVisualHost::UpdateControl) — whatever it changed, the next frame draws.
 	bool CallAsEvent(const ibEvent* event, ibValue** ppParams, const long lSizeArray) const;
-	bool CallAsEvent(const wxString& functionName, ibValue** ppParams, const long lSizeArray) const;
+	bool CallAsEvent(const ibString& functionName, ibValue** ppParams, const long lSizeArray) const;
+	// …something to run: a named handler or a lambda — what CallAsEvent dispatches, and IsSubscribed asks.
+	bool HasHandler(const ibEvent* event) const;
 
 public:
 
@@ -358,13 +369,13 @@ public:
 	/**
 	* Property events
 	*/
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 	// `override` on purpose: this was declared with `const wxString&`, overrode nothing, and ran for
-	// nobody — the inspector calls through ibPropertyObject, whose signature takes a wxVariant.
-	virtual bool OnEventChanging(ibEvent* event, const wxVariant& newValue) override;
-	virtual void OnEventChanged(ibEvent* event, const wxVariant& oldValue, const wxVariant& newValue);
+	// nobody — the inspector calls through ibPropertyObject, whose signature takes an ibVariant.
+	virtual bool OnEventChanging(ibEvent* event, const ibVariant& newValue) override;
+	virtual void OnEventChanged(ibEvent* event, const ibVariant& oldValue, const ibVariant& newValue);
 
 	/**
 	* Devuelve la posicion del hijo o GetChildCount() en caso de no encontrarlo
@@ -420,22 +431,22 @@ public:
 
 public:
 
-	static inline wxArrayString GetAllowedUserProperty() {
+	static inline std::vector<ibString> GetAllowedUserProperty() {
 
-		wxArrayString arr;
+		std::vector<ibString> arr;
 
-		arr.Add(wxT("title"));
-		arr.Add(wxT("minimum_size"));
-		arr.Add(wxT("maximum_size"));
-		arr.Add(wxT("font"));
-		arr.Add(wxT("fg"));
-		arr.Add(wxT("bg"));
-		arr.Add(wxT("align"));
-		arr.Add(wxT("stretch"));
-		arr.Add(wxT("proportion"));
-		arr.Add(wxT("orient"));
-		arr.Add(wxT("tooltip"));
-		arr.Add(wxT("visible"));
+		arr.push_back(ibT("title"));
+		arr.push_back(ibT("minimum_size"));
+		arr.push_back(ibT("maximum_size"));
+		arr.push_back(ibT("font"));
+		arr.push_back(ibT("fg"));
+		arr.push_back(ibT("bg"));
+		arr.push_back(ibT("align"));
+		arr.push_back(ibT("stretch"));
+		arr.push_back(ibT("proportion"));
+		arr.push_back(ibT("orient"));
+		arr.push_back(ibT("tooltip"));
+		arr.push_back(ibT("visible"));
 
 		return arr;
 	}

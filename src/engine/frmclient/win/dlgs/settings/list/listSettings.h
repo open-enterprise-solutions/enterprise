@@ -12,7 +12,7 @@
 
 #include <memory>
 
-#include "frmclient/backend/compositionDescription.h"
+#include "frmclient/backend/backend_composition.h"
 #include "frmclient/win/dlgs/settings/settingsFieldTree.h"   // ibSettingsPlainField — a field, described
 
 // The tabs are model-driven grids, and the value cells are type-driven selectors — both live on the
@@ -215,7 +215,7 @@ private:
 	class wxStyledTextCtrl* m_queryText = nullptr;
 	class wxButton* m_queryBuild = nullptr;   // opens the query constructor ON this text and writes back into it
 	class wxStaticText* m_queryError = nullptr;   // the ENGINE's verdict, verbatim; hidden when the query resolves
-	wxString            m_queryFault;             // what it said, kept so the line can be shown on open too
+	ibString            m_queryFault;             // what it said, kept so the line can be shown on open too
 
 	// Push the query onto the list and rebuild everything that depends on it (the three field trees,
 	// the error line). Called when the flag is toggled and when the editor loses focus.
@@ -277,7 +277,7 @@ public:
 	// The PANEL below is handed the copy and nothing else — no model. Whose setting it is, and what
 	// accepting it means, is this door's business; a setting is a setting, and the panel edits one.
 	//
-	// ON THE CLIENT the model is the server's: the copy and the fields come in its question (ibProtocolRequestKind::
+	// ON THE CLIENT the model is the server's: the copy and the fields come in its question (ibProtocol::ibRequest::ibKind::
 	// ListSettings), and on OK the edited copy is the answer.
 	static bool ShowUserSettings(wxWindow* parent, const ibProtocolNode& request, ibProtocolNode& response);
 

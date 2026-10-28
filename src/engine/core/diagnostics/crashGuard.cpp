@@ -2,18 +2,14 @@
 
 #include "journal.h"                 // the technology journal opens with the guard, before anything else
 #include "core/exception.h"         // ibCoreException — a refusal, named as such in the dump's reason
-#include "core/programFolder.h"     // crashdumps/ sits with the journal, in the diagnostic folder
+#include "core/fileSystem.h"        // crashdumps/ sits with the journal, in the diagnostic folder
 
-#include <wx/datetime.h>
-#include <wx/ffile.h>
-#include <wx/file.h>
-#include <wx/filename.h>
-#include <wx/log.h>
-#include <wx/thread.h>
-#include <wx/utils.h>
+#include "core/fdatetime.h"         // ibDateTime — the stamp a dump and a log line carry
 
+#include <fstream>
 #include <atomic>
 #include <cstdarg>      // va_list — the journal's vararg door
+#include <cstdint>      // std::uint64_t — a thread's id on macOS
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -21,7 +17,7 @@
 #include <exception>
 #include <mutex>
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 #include <windows.h>
 #include <dbghelp.h>
 #pragma comment(lib, "dbghelp.lib")
@@ -30,6 +26,9 @@
 // Wrap behind a feature check if a future port lacks it.
 #include <execinfo.h>
 #include <fcntl.h>
+#include <pthread.h>        // pthread_threadid_np — a thread's id on macOS
+#include <sys/mman.h>
+#include <sys/syscall.h>    // SYS_gettid — on Linux
 #include <unistd.h>
 #endif
 
@@ -47,17 +46,7 @@ namespace {
 char s_crashDir[4096] = {};
 char s_exeName[64] = {};
 
-unsigned int CurrentPidPortable()
-{
-	return static_cast<unsigned int>(wxGetProcessId());
-}
-
-unsigned long CurrentTidPortable()
-{
-	return static_cast<unsigned long>(wxThread::GetCurrentId());
-}
-
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 LPTOP_LEVEL_EXCEPTION_FILTER s_prevSehFilter = nullptr;
 #endif
 std::terminate_handler       s_prevTerminate = nullptr;
@@ -66,18 +55,27 @@ std::atomic<bool>            s_installed{ false };
 void EnsureCrashDir()
 {
 	if (s_crashDir[0] == '\0') {
-		const wxString crashDir = ibDiagnosticFolder()
-			+ wxFILE_SEP_PATH + wxT("crashdumps");
+		const ibString crashDir = ibDiagnosticFolder()
+			+ ibFILE_SEP_PATH + ibT("crashdumps");
 		std::snprintf(s_crashDir, sizeof(s_crashDir), "%s", crashDir.utf8_str().data());
 	}
-	wxFileName::Mkdir(wxString::FromUTF8(s_crashDir), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+	std::error_code error;
+	std::filesystem::create_directories(ibPathOf(ibString::FromUTF8(s_crashDir)), error);
+}
+
+// A line added at a file's end, the file made when it is not there.
+void AppendLine(const ibString& path, const ibString& line)
+{
+	std::ofstream file(ibPathOf(path), std::ios::binary | std::ios::app);
+	if (file)
+		file << line.ToUtf8();
 }
 
 // WINDOWS ONLY, and declared under the same guard as its single caller (the minidump writer).
 // The POSIX handler builds its path with snprintf into a stack buffer, because it runs in a signal
 // context where wxString is not allowed — so off MSW this function has no user at all.
-#ifdef __WXMSW__
-wxString MakeDumpPath(const wxString& kindSuffix, const wxString& extension)
+#ifdef __IBMSW__
+ibString MakeDumpPath(const ibString& kindSuffix, const ibString& extension)
 {
 	EnsureCrashDir();
 	// Stamp + pid + tid + counter — two threads crashing in the same
@@ -85,11 +83,11 @@ wxString MakeDumpPath(const wxString& kindSuffix, const wxString& extension)
 	// the first. tid disambiguates the common case; the atomic counter
 	// handles two faults on the same thread within one second.
 	static std::atomic<unsigned> s_seq{ 0 };
-	const wxString stamp = wxDateTime::Now().Format(wxT("%Y%m%dT%H%M%S"));
+	const ibString stamp = ibDateTime::Now().Format(ibT("%Y%m%dT%H%M%S"));
 	const unsigned seq = s_seq.fetch_add(1, std::memory_order_relaxed);
-	return wxString::Format(wxT("%s%c%s_%s%u_t%lu_%s_%u.%s"),
-		wxString::FromUTF8(s_crashDir), wxFILE_SEP_PATH,
-		wxString::FromUTF8(s_exeName),
+	return ibString::Format(ibT("%s%c%s_%s%u_t%lu_%s_%u.%s"),
+		ibString::FromUTF8(s_crashDir), ibFILE_SEP_PATH,
+		ibString::FromUTF8(s_exeName),
 		kindSuffix,
 		CurrentPidPortable(),
 		CurrentTidPortable(),
@@ -97,61 +95,80 @@ wxString MakeDumpPath(const wxString& kindSuffix, const wxString& extension)
 		seq,
 		extension);
 }
-#endif // __WXMSW__
+#endif // __IBMSW__
 
-void LogTerminateReason(const wxString& reason)
+void LogTerminateReason(const ibString& reason)
 {
 	// Multiple background threads can hit terminate concurrently and
 	// each one's reason should land in the log, not clobber the previous.
 	// Mutex guards format-then-write — OS-level append-write is atomic
-	// but a wxString::Format followed by wxFile::Write is not.
+	// but a format followed by a write is not.
 	static std::mutex s_logMtx;
 	std::lock_guard<std::mutex> lk(s_logMtx);
 
 	EnsureCrashDir();
-	const wxString logPath = wxString::Format(wxT("%s%c%s_terminate_%u.log"),
-		wxString::FromUTF8(s_crashDir), wxFILE_SEP_PATH,
-		wxString::FromUTF8(s_exeName),
+	const ibString logPath = ibString::Format(ibT("%s%c%s_terminate_%u.log"),
+		ibString::FromUTF8(s_crashDir), ibFILE_SEP_PATH,
+		ibString::FromUTF8(s_exeName),
 		CurrentPidPortable());
-	wxFile f(logPath, wxFile::write_append);
-	if (f.IsOpened()) {
-		const wxString line = wxString::Format(wxT("%s  tid=%lu  %s\n"),
-			wxDateTime::Now().FormatISOCombined(),
-			CurrentTidPortable(),
-			reason);
-		f.Write(line);
-		f.Close();
-	}
+	AppendLine(logPath, ibString::Format(ibT("%s  tid=%lu  %s\n"),
+		ibDateTime::Now().Format(ibT("%Y-%m-%dT%H:%M:%S")),
+		CurrentTidPortable(),
+		reason));
 }
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
+struct ibDumpJob {
+	EXCEPTION_POINTERS* ep = nullptr;
+	DWORD tid = 0;
+};
+
+// MiniDumpWriteDump does not fit on a stack that just overflowed. This
+// thread has its own stack. The filter waits, because `ep` is valid only
+// until the filter returns.
+DWORD WINAPI DumpOnFreshStack(void* raw)
+{
+	ibDumpJob* const job = static_cast<ibDumpJob*>(raw);
+	const ibString dumpPath = MakeDumpPath(ibEmptyString, ibT("dmp"));
+	HANDLE hFile = ::CreateFileW(dumpPath.wc_str(), GENERIC_WRITE, 0, nullptr,
+		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (hFile == INVALID_HANDLE_VALUE)
+		return 1;
+
+	MINIDUMP_EXCEPTION_INFORMATION mei = {};
+	mei.ThreadId = job->tid;
+	mei.ExceptionPointers = job->ep;
+	mei.ClientPointers = FALSE;
+
+	const MINIDUMP_TYPE type = static_cast<MINIDUMP_TYPE>(
+		MiniDumpWithDataSegs |
+		MiniDumpWithHandleData |
+		MiniDumpWithUnloadedModules |
+		MiniDumpWithThreadInfo |
+		MiniDumpWithFullMemory);
+
+	::MiniDumpWriteDump(::GetCurrentProcess(), ::GetCurrentProcessId(),
+		hFile, type, job->ep ? &mei : nullptr, nullptr, nullptr);
+	::CloseHandle(hFile);
+	return 0;
+}
+
 LONG WINAPI PersistentCrashDumpFilter(EXCEPTION_POINTERS* ep)
 {
 	// Persistent minidump fires before any wx-level dialog. wx wipes
 	// its temp directory on dialog close; our dumps survive.
-	const wxString dumpPath = MakeDumpPath(wxEmptyString, wxT("dmp"));
-
-	HANDLE hFile = ::CreateFileW(dumpPath.wc_str(), GENERIC_WRITE, 0, nullptr,
-		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-	if (hFile != INVALID_HANDLE_VALUE) {
-		MINIDUMP_EXCEPTION_INFORMATION mei = {};
-		mei.ThreadId = ::GetCurrentThreadId();
-		mei.ExceptionPointers = ep;
-		mei.ClientPointers = FALSE;
-
-		const MINIDUMP_TYPE type = static_cast<MINIDUMP_TYPE>(
-			MiniDumpWithDataSegs |
-			MiniDumpWithHandleData |
-			MiniDumpWithUnloadedModules |
-			MiniDumpWithThreadInfo |
-			MiniDumpWithFullMemory);
-
-		::MiniDumpWriteDump(::GetCurrentProcess(), ::GetCurrentProcessId(),
-			hFile, type, ep ? &mei : nullptr, nullptr, nullptr);
-		::CloseHandle(hFile);
+	ibDumpJob job;
+	job.ep = ep;
+	job.tid = ::GetCurrentThreadId();
+	HANDLE helper = ::CreateThread(nullptr, 0, &DumpOnFreshStack, &job, 0, nullptr);
+	if (helper != nullptr) {
+		::WaitForSingleObject(helper, 60000);
+		::CloseHandle(helper);
 	}
 
-	// Chain to the previous filter (wx's, if frontend installed it).
+	// The guard page is restored after an unwind, never here. This filter
+	// runs before any unwind, and _resetstkoflw in that window is what the
+	// recovery function's own contract rules out.
 	return s_prevSehFilter ? s_prevSehFilter(ep) : EXCEPTION_CONTINUE_SEARCH;
 }
 #else
@@ -194,7 +211,7 @@ void PosixCrashSignalHandler(int sig)
 }
 #endif
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 void __cdecl OesTerminateHandler()
 #else
 void OesTerminateHandler()
@@ -213,19 +230,19 @@ void OesTerminateHandler()
 	// re-enter std::terminate — that's an infinite recursion on most
 	// platforms. Swallow and fall through to the raise below.
 	try {
-		wxString reason = wxT("std::terminate (no in-flight exception)");
+		ibString reason = ibT("std::terminate (no in-flight exception)");
 		try {
 			auto p = std::current_exception();
 			if (p) std::rethrow_exception(p);
 		}
 		catch (const ibCoreException& e) {
-			reason = wxT("ibCoreException: ") + e.GetErrorDescription();
+			reason = ibT("ibCoreException: ") + e.GetErrorDescription();
 		}
 		catch (const std::exception& e) {
-			reason = wxT("std::exception: ") + wxString::FromUTF8(e.what());
+			reason = ibT("std::exception: ") + ibString::FromUTF8(e.what());
 		}
 		catch (...) {
-			reason = wxT("unknown C++ exception");
+			reason = ibT("unknown C++ exception");
 		}
 
 		LogTerminateReason(reason);
@@ -233,7 +250,7 @@ void OesTerminateHandler()
 	catch (...) {
 	}
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	// Synthetic non-continuable SEH so PersistentCrashDumpFilter writes
 	// a dump on this thread. 0xE0E50001 — 'OE' magic + sub-code.
 	::RaiseException(0xE0E50001, EXCEPTION_NONCONTINUABLE, 0, nullptr);
@@ -247,7 +264,98 @@ void OesTerminateHandler()
 
 } // namespace
 
-void Install(const wxString& exeName)
+void ArmCurrentThread()
+{
+#ifdef __IBMSW__
+	// EXCEPTION_STACK_OVERFLOW reaches PersistentCrashDumpFilter. The dump
+	// is written on a helper thread. SetThreadStackGuarantee, armed with
+	// the fiber, is what leaves this filter enough stack to start it.
+#else
+	thread_local bool armed = false;
+	if (armed)
+		return;
+
+	// ASan (and anything else that already armed this thread) owns a
+	// page-aligned alternate stack. Replacing it with storage this thread
+	// did not mmap is what makes a later throw abort, and what makes ASan
+	// fail when it frees that stack on the way out. Keep the one in place.
+	stack_t existing;
+	std::memset(&existing, 0, sizeof(existing));
+	if (::sigaltstack(nullptr, &existing) == 0
+	    && existing.ss_sp != nullptr
+	    && (existing.ss_flags & SS_DISABLE) == 0) {
+		armed = true;
+		return;
+	}
+
+	// backtrace_symbols_fd needs more than SIGSTKSZ. mmap, not a
+	// thread_local array: the array lands in static TLS, so every thread
+	// in the process carries it, and a small pthread stack then fails
+	// with EINVAL.
+	const long page = ::sysconf(_SC_PAGESIZE);
+	const std::size_t pageSize = page > 0 ? static_cast<std::size_t>(page) : 4096u;
+	const std::size_t bytes = (static_cast<std::size_t>(64 * 1024) + pageSize - 1) & ~(pageSize - 1);
+	void* const mem = ::mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (mem == MAP_FAILED)
+		return;
+
+	stack_t ss;
+	std::memset(&ss, 0, sizeof(ss));
+	ss.ss_sp = mem;
+	ss.ss_size = bytes;
+	ss.ss_flags = 0;
+	if (::sigaltstack(&ss, nullptr) != 0) {
+		::munmap(mem, bytes);
+		return;
+	}
+
+	// Disable the alternate stack before the mapping goes away. Freeing it
+	// while it is still installed is the fault the signal handler would
+	// then run on.
+	struct AltStack {
+		void* mem = nullptr;
+		std::size_t bytes = 0;
+		~AltStack()
+		{
+			if (mem == nullptr)
+				return;
+			stack_t off;
+			std::memset(&off, 0, sizeof(off));
+			off.ss_flags = SS_DISABLE;
+			::sigaltstack(&off, nullptr);
+			::munmap(mem, bytes);
+		}
+	};
+	thread_local AltStack hold;
+	hold.mem = mem;
+	hold.bytes = bytes;
+	armed = true;
+#endif
+}
+
+unsigned int CurrentPidPortable()
+{
+#ifdef __IBMSW__
+	return static_cast<unsigned int>(::GetCurrentProcessId());
+#else
+	return static_cast<unsigned int>(::getpid());
+#endif
+}
+
+unsigned long CurrentTidPortable()
+{
+#ifdef __IBMSW__
+	return static_cast<unsigned long>(::GetCurrentThreadId());
+#elif defined(__IBOSX__)
+	std::uint64_t tid = 0;
+	::pthread_threadid_np(nullptr, &tid);
+	return static_cast<unsigned long>(tid);
+#else
+	return static_cast<unsigned long>(::syscall(SYS_gettid));
+#endif
+}
+
+void Install(const ibString& exeName)
 {
 	// Update the label even on repeat install — frontend might call
 	// after console / web layer already armed the handlers.
@@ -265,14 +373,17 @@ void Install(const wxString& exeName)
 	// write one at all yet — turning it on there is a decision about disk, privacy and support
 	// workflow, and it will be made when there is a Release story to make it for. The API stays
 	// either way, so a `ibJournalInfo(...)` callsite compiles in both and simply writes nowhere.
-#ifndef NDEBUG
+	// Opened in both all the same: Open decides the file, and the program's name is the console's too.
 	ibTechJournal::Open(exeName);
-#endif
 
 	if (s_prevTerminate == nullptr)
 		s_prevTerminate = std::set_terminate(&OesTerminateHandler);
 
-#ifdef __WXMSW__
+	// Before the handlers, so a fault in the rest of Install can be logged.
+	// Worker threads arm themselves when they become fiber schedulers.
+	ArmCurrentThread();
+
+#ifdef __IBMSW__
 	if (s_prevSehFilter == nullptr)
 		s_prevSehFilter = ::SetUnhandledExceptionFilter(&PersistentCrashDumpFilter);
 #else
@@ -280,7 +391,10 @@ void Install(const wxString& exeName)
 	std::memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = &PosixCrashSignalHandler;
 	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_RESTART;
+	// SA_ONSTACK: the handler runs on the alternate stack ArmCurrentThread
+	// installed. Without it a guard-page fault has nowhere to run and the
+	// process dies with no log.
+	sa.sa_flags = SA_RESTART | SA_ONSTACK;
 	::sigaction(SIGSEGV, &sa, nullptr);
 	::sigaction(SIGABRT, &sa, nullptr);
 	::sigaction(SIGFPE,  &sa, nullptr);
@@ -290,32 +404,21 @@ void Install(const wxString& exeName)
 }
 
 
-void LogStartupError(const wxString& exeName, const wxString& message)
+void LogStartupError(const ibString& exeName, const ibString& message)
 {
-	const wxString logPath = exeName + wxT("_startup.log");
-	wxFile f(logPath, wxFile::write_append);
-	if (f.IsOpened()) {
-		const wxString line = wxDateTime::Now().FormatISOCombined()
-			+ wxT("  ") + message + wxT("\n");
-		f.Write(line);
-		f.Close();
-	}
+	AppendLine(exeName + ibT("_startup.log"),
+		ibDateTime::Now().Format(ibT("%Y-%m-%dT%H:%M:%S")) + ibT("  ") + message + ibT("\n"));
 }
 
-void LogUnhandledException(const wxString& exeName, const wxString& diag)
+void LogUnhandledException(const ibString& exeName, const ibString& diag)
 {
-	const wxString logPath = exeName + wxT("_unhandled.log");
-	wxFile f(logPath, wxFile::write_append);
-	if (f.IsOpened()) {
-		f.Write(wxDateTime::Now().FormatISOCombined()
-			+ wxT("  ") + diag + wxT("\n"));
-		f.Close();
-	}
+	AppendLine(exeName + ibT("_unhandled.log"),
+		ibDateTime::Now().Format(ibT("%Y-%m-%dT%H:%M:%S")) + ibT("  ") + diag + ibT("\n"));
 }
 
-void PlatformNativeMessage(const wxString& caption, const wxString& message)
+void PlatformNativeMessage(const ibString& caption, const ibString& message)
 {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	// MessageBoxW doesn't depend on the wx event loop being up. Safer
 	// than wxMessageBox during startup / on background threads / after
 	// teardown.
@@ -324,48 +427,48 @@ void PlatformNativeMessage(const wxString& caption, const wxString& message)
 #else
 	// stderr — async-signal-safe enough, no GUI to drive in console mode.
 	std::fprintf(stderr, "[%s] %s\n",
-		(const char*)caption.ToUTF8(),
-		(const char*)message.ToUTF8());
+		caption.ToUTF8().c_str(),
+		message.ToUTF8().c_str());
 	std::fflush(stderr);
 #endif
 }
 
 void TerminateProcessFast(int exitCode)
 {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	::TerminateProcess(::GetCurrentProcess(), static_cast<UINT>(exitCode));
 #else
 	std::_Exit(exitCode);
 #endif
 }
 
-int WrapStartup(const wxString& exeName, std::function<int()> body)
+int WrapStartup(const ibString& exeName, std::function<int()> body)
 {
-	auto report = [&exeName](const wxString& msg) {
+	auto report = [&exeName](const ibString& msg) {
 		LogStartupError(exeName, msg);
-		PlatformNativeMessage(wxT("OES ") + exeName + wxT(" - startup error"), msg);
+		PlatformNativeMessage(ibT("OES ") + exeName + ibT(" - startup error"), msg);
 	};
 	try {
 		return body();
 	}
 	catch (const ibCoreException& e) {
-		report(wxT("ibCoreException during startup: ") + e.GetErrorDescription());
+		report(ibT("ibCoreException during startup: ") + e.GetErrorDescription());
 		return 1;
 	}
 	catch (const std::exception& e) {
-		report(wxT("std::exception during startup: ") + wxString::FromUTF8(e.what()));
+		report(ibT("std::exception during startup: ") + ibString::FromUTF8(e.what()));
 		return 1;
 	}
 	catch (...) {
-		report(wxT("Unknown exception during startup (non-std)"));
+		report(ibT("Unknown exception during startup (non-std)"));
 		return 1;
 	}
 }
 
-void WriteDumpNow(const wxString& kindSuffix)
+void WriteDumpNow(const ibString& kindSuffix)
 {
-#ifdef __WXMSW__
-	const wxString dumpPath = MakeDumpPath(kindSuffix, wxT("dmp"));
+#ifdef __IBMSW__
+	const ibString dumpPath = MakeDumpPath(kindSuffix, ibT("dmp"));
 	HANDLE hFile = ::CreateFileW(dumpPath.wc_str(), GENERIC_WRITE, 0, nullptr,
 		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 	if (hFile == INVALID_HANDLE_VALUE)
@@ -391,10 +494,10 @@ void WriteDumpNow(const wxString& kindSuffix)
 #endif
 }
 
-wxString GetCrashDir()
+ibString GetCrashDir()
 {
 	EnsureCrashDir();
-	return wxString::FromUTF8(s_crashDir);
+	return ibString::FromUTF8(s_crashDir);
 }
 
 } // namespace ibCrashGuard

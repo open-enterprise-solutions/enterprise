@@ -50,7 +50,7 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 			// flushing a line per read costs more than the read on a list of forty.
 			static const bool s_traceRefs = ibDebugTraceEnabled("OES_TRACE_REFS");
 			if (s_traceRefs)
-				ibJournalInfo(wxT("reference"), wxT("read %s <%i>"),
+				ibJournalInfo(ibT("reference"), ibT("read %s <%i>"),
 					m_objGuid.GetGuid().str(), static_cast<int>(m_metaObject->GetMetaID()));
 			return true;
 		}
@@ -68,13 +68,13 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 	// but the fault is now SAID, with the table it happened on.
 	catch (const ibCoreException& err) {
 		if (ibLogger* const log = ibApplicationInstance::GetLogger())
-			log->Error(wxT("reference"), wxT("read"),
-				m_metaObject->GetPhysicalTableName() + wxT(": ") + err.GetErrorDescription());
+			log->Error(ibT("reference"), ibT("read"),
+				m_metaObject->GetPhysicalTableName() + ibT(": ") + err.GetErrorDescription());
 	}
 	catch (...) {
 		if (ibLogger* const log = ibApplicationInstance::GetLogger())
-			log->Error(wxT("reference"), wxT("read"),
-				m_metaObject->GetPhysicalTableName() + wxT(": ") + _("unknown exception"));
+			log->Error(ibT("reference"), ibT("read"),
+				m_metaObject->GetPhysicalTableName() + ibT(": ") + _("unknown exception"));
 	}
 	return false;
 }
@@ -124,10 +124,10 @@ void ibValueReferenceDataObject::ReadBatch()
 			// …and the row brings what is read of it: the key that says whose row it is, and the template's
 			// fields — a read by keys that names its columns projects them and no others.
 			ibDataQueryBuilder q;
-			q.From(metaObject->GetQueryable()).WhereKeyIn(keys).Select(keyColumn, wxEmptyString)
-				.Select(parameter.m_first->GetQueryColumn(), wxEmptyString);
+			q.From(metaObject->GetQueryable()).WhereKeyIn(keys).Select(keyColumn, ibEmptyString)
+				.Select(parameter.m_first->GetQueryColumn(), ibEmptyString);
 			if (parameter.m_second != nullptr)
-				q.Select(parameter.m_second->GetQueryColumn(), wxEmptyString);
+				q.Select(parameter.m_second->GetQueryColumn(), ibEmptyString);
 			execute.Resume();
 			ibDataQueryResult selection = q.Execute(ibReadPageRequest{});   // every row the keys name
 			execute.Pause();
@@ -166,21 +166,21 @@ void ibValueReferenceDataObject::ReadBatch()
 		// object it happened on.
 		catch (const ibCoreException& err) {
 			if (ibLogger* const log = ibApplicationInstance::GetLogger())
-				log->Error(wxT("reference"), wxT("read"),
-					metaObject->GetPhysicalTableName() + wxT(": ") + err.GetErrorDescription());
+				log->Error(ibT("reference"), ibT("read"),
+					metaObject->GetPhysicalTableName() + ibT(": ") + err.GetErrorDescription());
 		}
 		catch (...) {
 			if (ibLogger* const log = ibApplicationInstance::GetLogger())
-				log->Error(wxT("reference"), wxT("read"),
-					metaObject->GetPhysicalTableName() + wxT(": ") + _("unknown exception"));
+				log->Error(ibT("reference"), ibT("read"),
+					metaObject->GetPhysicalTableName() + ibT(": ") + _("unknown exception"));
 		}
-		ibJournalInfo(wxT("reference"), wxT("batch %s: %u keys - execute %lld ms, fetch %lld ms, fill %lld ms"),
+		ibJournalInfo(ibT("reference"), ibT("batch %s: %u keys - execute %lld ms, fetch %lld ms, fill %lld ms"),
 			metaObject->GetPhysicalTableName(), static_cast<unsigned>(count), execute.Ms(), fetch.Ms(), fill.Ms());
 		tableAt = tableEnd;
 	}
 }
 
-bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector<ibValue>& listValue) const
+bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector<ibValue>& listValue) const
 {
 	// ⭐ THE MANAGER IS ASKED FIRST — ChoiceDataGetProcessing(ChoiceData, Parameters, StandardProcessing), in
 	// its module and in its event handlers. Every quick choice and every choice by typed text comes through
@@ -189,13 +189,13 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 	if (m_metaObject->AccessRight_Show()) {
 		const ibValuePtr<ibValueArray> choiceData(new ibValueArray());
 		const ibValuePtr<ibValueStructure> parameters(new ibValueStructure());
-		parameters->Insert(wxT("SearchString"), findData);
+		parameters->Insert(ibT("SearchString"), findData);
 
 		ibValue choiceDataValue(choiceData);
 		ibValue parametersValue(parameters);
 		ibValue standardProcessing = true;
 		ibValue* params[] = { &choiceDataValue, &parametersValue, &standardProcessing };
-		ibRuntimeModuleDataObject::ExecAsManagerEvent(m_metaObject, wxT("ChoiceDataGetProcessing"), params, 3);
+		ibRuntimeModuleDataObject::ExecAsManagerEvent(m_metaObject, ibT("ChoiceDataGetProcessing"), params, 3);
 		if (!standardProcessing.GetBoolean()) {
 			listValue = choiceData->Values();
 			return !listValue.empty();
@@ -229,15 +229,15 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 		// description), then the presentation, which is what a kind with no searchable fields of its
 		// own — an enumeration — is recognised by.
 		// Case aside, as the database's own match may be: "milk" finds "Milk".
-		bool Matches(const wxString& findData) const
+		bool Matches(const ibString& findData) const
 		{
-			const wxString wanted = findData.Lower();
+			const ibString wanted = findData.Lower();
 			for (const auto object : m_metaObject->GetSearchedAttributeObjectArray()) {
 				const auto it = m_listObjectValue.find(object->GetMetaID());
 				if (it != m_listObjectValue.end() && it->second.GetString().Lower().Contains(wanted))
 					return true;
 			}
-			wxString desc;
+			ibString desc;
 			return m_metaObject->GenerateDataDesc(this, desc) && desc.Lower().Contains(wanted);
 		}
 
@@ -290,7 +290,7 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 			ibQueryPredicatePtr any;
 			for (const ibValueMetaObjectAttributeBase* attribute : searched) {
 				ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(
-					ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Like, ibValue(wxT("%") + findData + wxT("%")) });
+					ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Like, ibValue(ibT("%") + findData + ibT("%")) });
 				any = any ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, any, leaf) : leaf;
 			}
 			q.Where(any);
@@ -320,8 +320,8 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 			int attributeAt = 0;
 			for (const ibValueMetaObjectAttributeBase* attribute : searched) {
 				if (attribute != nullptr) {
-					const wxString text = row.GetValue(attribute->GetQueryColumn()).GetString();
-					if (stringUtils::CompareString(text, findData))
+					const ibString text = row.GetValue(attribute->GetQueryColumn()).GetString();
+					if (stringUtils::IsSameAs(text, findData))
 						return attributeAt * 3;
 					if (text.Lower().StartsWith(findData.Lower()))
 						return attributeAt * 3 + 1;

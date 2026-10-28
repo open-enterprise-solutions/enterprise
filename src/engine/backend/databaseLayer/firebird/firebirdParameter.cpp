@@ -36,7 +36,7 @@ void ibDatabaseParameterFirebird::Set(const ibString& strValue)
 
 	// Set to SQL_TEXT manually. The bytes are made once and their length read off them — asking for the
 	// length separately converted the whole string a second time.
-	const wxCharBuffer valueBuffer = ConvertToUnicodeStream(m_strValue);
+	const std::string valueBuffer = ConvertToUnicodeStream(m_strValue);
 	unsigned int length = static_cast<unsigned int>(valueBuffer.length());
 
 	m_pParameter->sqltype = SQL_TEXT | 1;
@@ -82,7 +82,7 @@ void ibDatabaseParameterFirebird::Set(const ibString& strValue)
 	if (m_pParameter->sqllen > 0 && length > (unsigned int)m_pParameter->sqllen)
 		length = (unsigned int)m_pParameter->sqllen;
 
-	memcpy(m_pParameter->sqldata, (const char*)valueBuffer, length);
+	memcpy(m_pParameter->sqldata, valueBuffer.c_str(), length);
 	m_pParameter->sqllen = (ISC_SHORT)length;
 
 	m_nNullFlag = 0;
@@ -122,7 +122,7 @@ void ibDatabaseParameterFirebird::Set(const ibNumber& dblValue)
 	//
 	// ⚠ The description is DATA, so it rides as an ARGUMENT: `Error` is a printf-style vararg, and a
 	// value handed in as the format string would read any '%' inside it as a specifier.
-	const auto storedInteger = [](const ibNumber& stored, int64_t low, int64_t high, const wxChar* what) {
+	const auto storedInteger = [](const ibNumber& stored, int64_t low, int64_t high, const ibChar* what) {
 		int64_t out = 0;
 		if (stored.ToInt(out) != 0 || out < low || out > high) {
 			ibBackendCoreException::Error(
@@ -135,7 +135,7 @@ void ibDatabaseParameterFirebird::Set(const ibNumber& dblValue)
 	if (nType == SQL_SHORT)
 	{
 		m_numValue = scaledForStorage(dblValue);
-		m_sValue   = static_cast<short>(storedInteger(m_numValue, -32768, 32767, wxT("SMALLINT")));
+		m_sValue   = static_cast<short>(storedInteger(m_numValue, -32768, 32767, ibT("SMALLINT")));
 		m_pParameter->sqldata = (char*)&m_sValue;
 	}
 	else if (nType == SQL_FLOAT)
@@ -154,7 +154,7 @@ void ibDatabaseParameterFirebird::Set(const ibNumber& dblValue)
 	else if (nType == SQL_LONG)
 	{
 		m_numValue = scaledForStorage(dblValue);
-		m_nValue   = static_cast<int32_t>(storedInteger(m_numValue, -2147483648LL, 2147483647LL, wxT("INTEGER")));
+		m_nValue   = static_cast<int32_t>(storedInteger(m_numValue, -2147483648LL, 2147483647LL, ibT("INTEGER")));
 		m_pParameter->sqldata = (char*)&m_nValue;
 	}
 	else if (nType == SQL_INT64)
@@ -349,7 +349,7 @@ void ibDatabaseParameterFirebird::Set(const void* pData, long nDataLength)
 		// magic and decompresses transparently; legacy BLOBs that
 		// pre-date this code path have no magic and pass through
 		// untouched.
-		wxMemoryBuffer wrapped = ibFirebirdBlobCompression::Wrap(pData, nDataLength);
+		ibMemoryBuffer wrapped = ibFirebirdBlobCompression::Wrap(pData, nDataLength);
 		const size_t wrappedSize = wrapped.GetDataLen();
 		void* pBuffer = m_BufferValue.GetWriteBuf(wrappedSize);
 		memcpy(pBuffer, wrapped.GetData(), wrappedSize);
@@ -372,7 +372,7 @@ void ibDatabaseParameterFirebird::Set(const void* pData, long nDataLength)
 	else if (nType == SQL_VARYING) {
 		// Variable-length VARCHAR / VARBINARY — FB describes unnamed
 		// `?` parameters bound for CHAR(N) columns as SQL_VARYING in
-		// some builds.  Layout in sqldata is [u16 length][N data bytes]
+		// some builds.  Layout in sqldata is [std::uint16_t length][N data bytes]
 		// (length prefix is little-endian on x86/x64). Without this
 		// branch SetParamBlob was a silent no-op against varying-typed
 		// params, leaving sqldata zero-init and breaking equality
@@ -410,9 +410,9 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 	{
 		const long nSqlCode = m_pInterface->GetIscSqlcode()(status);
 		ibDatabaseLayerException::Throw(
-			ibBackendDatabaseException::Kind::Unknown,
-			ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
-			/*sqlState*/ wxEmptyString,
+			ibDatabaseLayerFirebird::ClassifyDatabaseError(ibDatabaseLayerFirebird::TranslateErrorCode(status)),
+			ibDatabaseLayerFirebird::TranslateErrorCode(status),
+			/*sqlState*/ ibEmptyString,
 			ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
 	}
 
@@ -426,9 +426,9 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 		{
 			const long nSqlCode = m_pInterface->GetIscSqlcode()(status);
 			ibDatabaseLayerException::Throw(
-				ibBackendDatabaseException::Kind::Unknown,
-				ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
-				/*sqlState*/ wxEmptyString,
+				ibDatabaseLayerFirebird::ClassifyDatabaseError(ibDatabaseLayerFirebird::TranslateErrorCode(status)),
+				ibDatabaseLayerFirebird::TranslateErrorCode(status),
+				/*sqlState*/ ibEmptyString,
 				ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
 		}
 
@@ -442,9 +442,9 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 	{
 		const long nSqlCode = m_pInterface->GetIscSqlcode()(status);
 		ibDatabaseLayerException::Throw(
-			ibBackendDatabaseException::Kind::Unknown,
-			ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
-			/*sqlState*/ wxEmptyString,
+			ibDatabaseLayerFirebird::ClassifyDatabaseError(ibDatabaseLayerFirebird::TranslateErrorCode(status)),
+			ibDatabaseLayerFirebird::TranslateErrorCode(status),
+			/*sqlState*/ ibEmptyString,
 			ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
 	}
 

@@ -21,21 +21,21 @@ ibValueMetaObjectParameterizedJob::ibValueMetaObjectParameterizedJob()
 {
 	// The write hooks a reference object has — the object module is where "may this be saved"
 	// lives, exactly as a catalog's.
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"), ibContentHelper::eProcedureHelper, { wxT("FillingData"), wxT("StandardProcessing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"), ibContentHelper::eProcedureHelper, { wxT("CopiedObject") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewCode"), ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandardProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("Filling"), ibContentHelper::eProcedureHelper, { ibT("FillingData"), ibT("StandardProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnCopy"), ibContentHelper::eProcedureHelper, { ibT("CopiedObject") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("SetNewCode"), ibContentHelper::eProcedureHelper, { ibT("Prefix"), ibT("StandardProcessing") });
 
 	// THE HANDLER — in the MANAGER module, taking the row's own reference. The name is deliberately
 	// the same one a predefined job uses (where it takes nothing), so the two kinds are described,
 	// documented and debugged as one thing.
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("JobProcessing"), ibContentHelper::eProcedureHelper, { wxT("Job") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("JobProcessing"), ibContentHelper::eProcedureHelper, { ibT("Job") });
 
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("ChoiceData"), wxT("Parameters"), wxT("StandardProcessing") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("Form"), ibT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("ChoiceData"), ibT("Parameters"), ibT("StandardProcessing") });
 }
 
 ibValueMetaObjectParameterizedJob::~ibValueMetaObjectParameterizedJob()
@@ -398,11 +398,11 @@ bool ibValueMetaObjectParameterizedJob::ReadData(const ibDataNode& node)
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
 	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
-	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolder->GetName())));
-	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
-	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolderSelect->GetName())));
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormFolder->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormSelect->GetName())));
+	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormFolderSelect->GetName())));
 
 	m_propertyUse->SetNodeValue(node.GetProperty(m_propertyUse->GetName()));
 	m_propertySchedule->SetNodeValue(node.GetProperty(m_propertySchedule->GetName()));

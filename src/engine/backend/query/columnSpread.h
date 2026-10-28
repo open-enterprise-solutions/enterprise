@@ -74,7 +74,7 @@ inline void BindAbsentPrimitive(ibQueryStatement* st, ibColumnRole role, int& po
 	case ibColumnRole::Boolean: st->SetParamBool(pos++, false);             break;
 	case ibColumnRole::Number:  st->SetParamNumber(pos++, 0);               break;
 	case ibColumnRole::Date:    st->SetParamDate(pos++, ibDateTime());      break;
-	case ibColumnRole::String:  st->SetParamString(pos++, wxEmptyString);   break;
+	case ibColumnRole::String:  st->SetParamString(pos++, ibEmptyString);   break;
 	case ibColumnRole::Enum:    st->SetParamInt(pos++, emptyEnum);          break;
 	default:                                                                break;
 	}

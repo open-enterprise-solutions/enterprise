@@ -75,9 +75,9 @@ enum dimensionFunc
 
 void ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
-	helper.AppendFunc(wxT("Kind"), 1, wxT("Kind(number)"));
-	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Kind"), 1, ibT("Kind(number)"));
+	helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
 }
 
 bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::CallAsFunc(
@@ -250,7 +250,7 @@ void ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::Clear()
 
 ibString ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::GetString() const
 {
-	return m_creditSide ? wxT("AccountDimensionCr") : wxT("AccountDimension");
+	return m_creditSide ? ibT("AccountDimensionCr") : ibT("AccountDimension");
 }
 
 //****************************************************************************
@@ -299,7 +299,7 @@ std::vector<std::pair<ibString, ibValue>> KindsOfAccount(const ibValue& account)
 
 		// The characteristic's own description is the name. Asked of the element, not spelled here:
 		// a kind is an ordinary record of the chart of characteristic types.
-		wxString name;
+		ibString name;
 		ibValueReferenceDataObject* kindRef = nullptr;
 		if (kind.ConvertToValue(kindRef) && kindRef != nullptr) {
 			const ibValueMetaObjectChartOfCharacteristicTypes* kindChart = nullptr;
@@ -363,7 +363,7 @@ long ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::FindPro
 {
 	const std::vector<std::pair<ibString, ibValue>> kinds = DeclaredKinds();
 	for (size_t idx = 0; idx < kinds.size(); idx++)
-		if (stringUtils::CompareString(kinds[idx].first, strPropName))
+		if (stringUtils::IsSameAs(kinds[idx].first, strPropName))
 			return static_cast<long>(idx);
 	return wxNOT_FOUND;
 }
@@ -428,11 +428,11 @@ void ibValueRecordSetObjectAccountingRegister::DescribeReturnLine(ibMemberTable&
 		return;
 
 	if (meta->IsCorrespondence()) {
-		helper.AppendProp(wxT("AccountDimensionDr"), ibValueAccountingLine::ePropAccountDimensionDr);
-		helper.AppendProp(wxT("AccountDimensionCr"), ibValueAccountingLine::ePropAccountDimensionCr);
+		helper.AppendProp(ibT("AccountDimensionDr"), ibValueAccountingLine::ePropAccountDimensionDr);
+		helper.AppendProp(ibT("AccountDimensionCr"), ibValueAccountingLine::ePropAccountDimensionCr);
 	}
 	else {
-		helper.AppendProp(wxT("AccountDimension"), ibValueAccountingLine::ePropAccountDimension);
+		helper.AppendProp(ibT("AccountDimension"), ibValueAccountingLine::ePropAccountDimension);
 	}
 }
 
@@ -493,7 +493,7 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountingLine::SetPropVal
 
 void ibValueRecordSetObjectAccountingRegister::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Add"), wxT("Add()"));
+	helper.AppendFunc(ibT("Add"), ibT("Add()"));
 	// ⭐ THE VERB SETS THE SIDE, so the author never writes the flag by hand and it cannot be forgotten
 	// or contradicted by the account assigned next to it. They are ordinary verbs of the collection,
 	// not a second mode — and a correspondence register needs them too: an OFF-BALANCE account has no
@@ -503,17 +503,17 @@ void ibValueRecordSetObjectAccountingRegister::FillMembers(ibMemberTable& helper
 	// ⚠ The accumulation register has the same IDEA in its own words (AddReceipt / AddExpense) and the
 	// two sets do NOT meet: receipt/expense belongs there, debit/credit here, and neither vocabulary is
 	// a special case of the other. Similar in shape, separate in meaning — no shared verb.
-	helper.AppendFunc(wxT("AddDebit"), wxT("AddDebit()"));
-	helper.AppendFunc(wxT("AddCredit"), wxT("AddCredit()"));
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
-	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
-	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	helper.AppendFunc(wxT("Load"), 1, wxT("Load(value: table)"));
-	helper.AppendFunc(wxT("Unload"), wxT("Unload()"));
-	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
-	helper.AppendFunc(wxT("Read"), wxT("Read()"));
-	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendFunc(ibT("AddDebit"), ibT("AddDebit()"));
+	helper.AppendFunc(ibT("AddCredit"), ibT("AddCredit()"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
+	helper.AppendFunc(ibT("Write"), 1, ibT("Write(replace : boolean)"));
+	helper.AppendFunc(ibT("Load"), 1, ibT("Load(value: table)"));
+	helper.AppendFunc(ibT("Unload"), ibT("Unload()"));
+	helper.AppendFunc(ibT("Modified"), ibT("Modified()"));
+	helper.AppendFunc(ibT("Read"), ibT("Read()"));
+	helper.AppendFunc(ibT("Selected"), ibT("Selected()"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 
 	// `Filter` is NOT declared here — see informationRegisterObject.cpp: it is an export variable of
 	// the set, bound in InitializeObject, and that reaches this table on its own.

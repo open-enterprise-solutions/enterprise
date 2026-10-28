@@ -38,7 +38,7 @@ ibFormID ibValueRecordDataObjectParameterizedJob::GetCurrentObjectFormID() const
 const ibSourceExplorer* ibValueRecordDataObjectParameterizedJob::GetSourceExplorer() const
 {
 	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
-		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false))
+		ibT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	ibValueMetaObjectParameterizedJob* metaRef = nullptr;
@@ -219,7 +219,7 @@ bool ibValueRecordDataObjectParameterizedJob::ExecuteJob()
 	// run by hand and a run by calendar leave the row in identical states.
 	const ibValueMetaObjectParameterizedJob* const meta = metaJob;
 	const ibGuid rowGuid = m_objGuid;
-	const wxString jobName = metaJob->GetRowJobName(m_objGuid);
+	const ibString jobName = metaJob->GetRowJobName(m_objGuid);
 
 	auto run = manager->StartBackground(
 		[meta, rowGuid, jobName](ibSession*) -> ibValue {
@@ -239,7 +239,7 @@ bool ibValueRecordDataObjectParameterizedJob::ExecuteJob()
 
 			return ibValue();
 		},
-		wxString::Format(wxT("job: %s"), jobName));
+		ibString::Format(ibT("job: %s"), jobName));
 
 	return run != nullptr;
 }
@@ -266,19 +266,19 @@ enum Func {
 void ibValueRecordDataObjectParameterizedJob::FillMethods(ibMemberTable& helper) const
 {
 	// Order is load-bearing — CallAsFunc switches on the method index (enIsNew = 0 …).
-	helper.AppendFunc(wxT("IsNew"), wxT("IsNew()"));
-	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
-	helper.AppendFunc(wxT("Fill"), 1, wxT("Fill(object)"));
-	helper.AppendFunc(wxT("Write"), wxT("Write()"));
-	helper.AppendFunc(wxT("Delete"), wxT("Delete()"));
-	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
+	helper.AppendFunc(ibT("IsNew"), ibT("IsNew()"));
+	helper.AppendFunc(ibT("Copy"), ibT("Copy()"));
+	helper.AppendFunc(ibT("Fill"), 1, ibT("Fill(object)"));
+	helper.AppendFunc(ibT("Write"), ibT("Write()"));
+	helper.AppendFunc(ibT("Delete"), ibT("Delete()"));
+	helper.AppendFunc(ibT("Modified"), ibT("Modified()"));
 	// The second verb — next to Write, which is the whole shape of a parameterized job.
-	helper.AppendFunc(wxT("Execute"), wxT("Execute()"));
-	helper.AppendFunc(wxT("GetFormObject"), 3, wxT("GetFormObject(name : string, owner : any , id : guid)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-	helper.AppendProc(wxT("Lock"), wxT("Lock()"));
-	helper.AppendProc(wxT("Unlock"), wxT("Unlock()"));
+	helper.AppendFunc(ibT("Execute"), ibT("Execute()"));
+	helper.AppendFunc(ibT("GetFormObject"), 3, ibT("GetFormObject(name : string, owner : any , id : guid)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
+	helper.AppendProc(ibT("Lock"), ibT("Lock()"));
+	helper.AppendProc(ibT("Unlock"), ibT("Unlock()"));
 }
 
 bool ibValueRecordDataObjectParameterizedJob::SetPropVal(const long lPropNum, const ibValue& varPropVal)

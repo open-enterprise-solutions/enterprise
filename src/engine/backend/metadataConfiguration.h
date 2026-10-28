@@ -21,9 +21,11 @@ class ibDebuggerClient;
 // appData's static getters.
 #define activeMetaData			(appEnv::ActiveMetaData())
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-// Lifecycle — ibApplicationInstance::CreateActiveMetaData picks the concrete subclass by the kind of the
-// base's first session; teardown happens in the base's Close (ibApplicationInstance::Close), which calls
-// OnDestroy and then lets the base's reference go — the polymorphic dtor chain runs with the last holder.
+// Lifecycle — ibApplicationInstance::CreateActiveMetaData makes the application's (ibMetaDataConfiguration) as the
+// base opens; teardown happens in the base's Close (ibApplicationInstance::Close), which closes it, calls OnDestroy
+// and then lets the base's reference go — the polymorphic dtor chain runs with the last holder. A designer's
+// session's own (ibMetaDataConfigurationStorage) is made by the session itself (ibSession::AcquireMetaData) and goes
+// with it.
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
 enum ibConfigType {
@@ -61,8 +63,8 @@ public:
 
 	virtual ibApplicationInstance* GetApplicationInstance() const override { return m_applicationInstance; }
 
-	virtual wxString GetConfigMD5() const = 0;
-	virtual wxString GetConfigName() const = 0;
+	virtual ibString GetConfigMD5() const = 0;
+	virtual ibString GetConfigName() const = 0;
 
 	virtual ibGuid GetConfigGuid() const = 0;
 
@@ -116,12 +118,12 @@ public:
 	virtual bool RollbackDatabase() { return true; }
 
 	//load/save config form buffer
-	virtual bool LoadConfigFromBuffer(const wxMemoryBuffer& buffer) { return true; }
-	virtual bool SaveConfigToBuffer(wxMemoryBuffer& buffer) { return true; }
+	virtual bool LoadConfigFromBuffer(const ibMemoryBuffer& buffer) { return true; }
+	virtual bool SaveConfigToBuffer(ibMemoryBuffer& buffer) { return true; }
 
 	//load/save config form buffer
-	virtual bool RestoreDataFromBuffer(const wxMemoryBuffer& buffer) { return true; }
-	virtual bool DumpDataToBuffer(wxMemoryBuffer& buffer) { return true; }
+	virtual bool RestoreDataFromBuffer(const ibMemoryBuffer& buffer) { return true; }
+	virtual bool DumpDataToBuffer(ibMemoryBuffer& buffer) { return true; }
 
 	//get common metadata
 	virtual const ibValueMetaObjectConfiguration* GetCommonMetaObject() const = 0;
@@ -152,10 +154,10 @@ public:
 	// editors first, reload the navigator afterwards". The code did neither: three bodies of
 	// `m_metaData->...`, a read-only guard, and an exception turned into words. The rollback's one
 	// exception - an explicit `Load()` - is what the Loaded stage now does by itself.
-	virtual bool SaveConfiguration(wxString& refusal);
-	virtual bool ApplyConfiguration(wxString& refusal,
+	virtual bool SaveConfiguration(ibString& refusal);
+	virtual bool ApplyConfiguration(ibString& refusal,
 		const std::function<bool(const class ibRestructureInfo&)>& decide = {});
-	virtual bool RollbackConfiguration(wxString& refusal);
+	virtual bool RollbackConfiguration(ibString& refusal);
 
 	//special delete and create 
 	virtual bool ReCreateDatabase() { return false; }
@@ -171,8 +173,8 @@ public:
 	virtual bool IsDynamicUpdateAvailable() const { return false; }
 
 	//load/save form file
-	bool LoadConfigFromFile(const wxString& strFileName);
-	bool SaveConfigToFile(const wxString& strFileName);
+	bool LoadConfigFromFile(const ibString& strFileName);
+	bool SaveConfigToFile(const ibString& strFileName);
 
 public:
 
@@ -212,8 +214,8 @@ public:
 	ibMetaDataConfigurationFile();
 	virtual ~ibMetaDataConfigurationFile();
 
-	virtual wxString GetConfigMD5() const { return m_md5Hash; }
-	virtual wxString GetConfigName() const { return m_commonObject->GetName(); }
+	virtual ibString GetConfigMD5() const { return m_md5Hash; }
+	virtual ibString GetConfigName() const { return m_commonObject->GetName(); }
 
 	virtual ibGuid GetConfigGuid() const { return m_commonObject->GetDocPath(); }
 
@@ -226,7 +228,7 @@ public:
 	}
 
 	//get language code 
-	virtual wxString GetLangCode() const;
+	virtual ibString GetLangCode() const;
 
 	//Check is full access 
 	virtual bool IsFullAccess() const;
@@ -243,8 +245,8 @@ public:
 	// so they live at the File level; the data-buffer counterparts
 	// (Load/SaveDataFromBuffer) stay on Storage since they go through the
 	// saved baseline.
-	virtual bool LoadConfigFromBuffer(const wxMemoryBuffer& buffer);
-	virtual bool SaveConfigToBuffer(wxMemoryBuffer& buffer);
+	virtual bool LoadConfigFromBuffer(const ibMemoryBuffer& buffer);
+	virtual bool SaveConfigToBuffer(ibMemoryBuffer& buffer);
 
 	// Out-of-line: m_commonObject is an ibValuePtr; its operator T* downcast needs
 	// the full ibValueMetaObjectConfiguration, kept out of this header.
@@ -270,7 +272,7 @@ protected:
 	// ⭐ THE CONFIGURATION'S DIGEST, and it is the AOT cache's KEY rather than a mark of what has
 	// been applied — recomputed on every load and every save, so a save retires every cached row of
 	// the previous configuration by putting them out of reach (byteCodeCache.h).
-	wxString m_md5Hash;
+	ibString m_md5Hash;
 
 	//common meta object — owning handle (ibValuePtr): bind = IncrRef, rebind / dtor = DecrRef
 	ibValuePtr<ibValueMetaObjectConfiguration> m_commonObject;
@@ -287,7 +289,7 @@ public:
 	// restructure -> bogus ALTER TABLE -> Firebird -607). Standalone file
 	// documents stay on the load-only base impl (ibMetaDataConfigurationFile)
 	// and run explicitly with onlyLoadFlag where needed.
-	virtual bool LoadConfigFromBuffer(const wxMemoryBuffer& buffer) override {
+	virtual bool LoadConfigFromBuffer(const ibMemoryBuffer& buffer) override {
 		if (ibMetaDataConfigurationFile::LoadConfigFromBuffer(buffer)) {
 			Modify(true); //set modify for check metaData
 			return RunDatabase();
@@ -300,7 +302,7 @@ public:
 	// in metadataConfiguration.cpp where debugServer.h is included.
 	virtual ~ibMetaDataConfiguration();
 
-	virtual wxString GetConfigName() const { return m_commonObject->GetName(); }
+	virtual ibString GetConfigName() const { return m_commonObject->GetName(); }
 	virtual ibGuid GetConfigGuid() const { return m_metaGuid; }
 
 	//metaData 
@@ -309,12 +311,10 @@ public:
 	//get config type
 	virtual ibConfigType GetConfigType() const { return ibConfigType::ibConfigType_Load; };
 
-	// The compile-value cache lives on EVERY designer-side config — not only the designer's active edit config
-	// (Storage) but also a config browsed read-only from the DB / file (which is THIS inner baseline). Its
-	// metaobjects need the cache to build their forms: the owner + the seated source object come THROUGH it, so
-	// without it an object form (catalog / document / list / choice) opens sourceless and crashes. Enterprise
-	// runtime never opens the metadata tree (only objects execute) → nullptr. Regression from the per-config
-	// image (ibMetaImage): the cache had narrowed to Storage only.
+	// ⭐ THE COMPILE CACHE IS A DESIGNER'S — on a configuration made for a designer's session: the one it edits and its
+	// copy of the database's. Asked of the token it was made with, not of the thread that builds it: an apply builds
+	// on the designer's thread, and the base's own configuration, the one the runtime works in, carries none — given
+	// one, it handed the runtime the designer's one instance of a form ("duplicate identifier Controls", 2026-10-28).
 	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() override;
 
 protected:
@@ -329,10 +329,13 @@ public:
 	// which designer edits are compared). Both gate on the
 	// ib::AppDataCtorToken — appData mints once, Storage forwards the
 	// token it received when constructing its inner baseline. The token names
-	// the base it is made for (GetApplicationInstance).
+	// the base it is made for (GetApplicationInstance) and the session it is made for (GetSessionKind).
 	explicit ibMetaDataConfiguration(ib::AppDataCtorToken owner);
 
 protected:
+
+	// What it was made with — its base, and the session it was made for; a new copy is made with it.
+	const ib::AppDataCtorToken m_owner;
 
 	ibGuid m_metaGuid;
 	bool m_configNew;
@@ -348,8 +351,8 @@ class BACKEND_API ibMetaDataConfigurationStorage : public ibMetaDataConfiguratio
 
 	struct CSequenceData {
 		int m_interval;
-		wxString m_strGuid;
-		wxString m_strPrefix;
+		ibString m_strGuid;
+		ibString m_strPrefix;
 		int m_number;
 	};
 
@@ -357,7 +360,7 @@ public:
 
 	virtual ~ibMetaDataConfigurationStorage();
 
-	// Construction restricted to ibApplicationInstance::CreateActiveMetaData
+	// Construction restricted to a designer's session (ibSession::AcquireMetaData)
 	// via the ib::AppDataCtorToken gate. The inner baseline reference
 	// (m_configMetadata) is constructed by forwarding the same token — and with it the same base.
 	explicit ibMetaDataConfigurationStorage(ib::AppDataCtorToken owner);
@@ -403,8 +406,8 @@ public:
 	//load/save data form buffer (table rows + sequence — goes through the
 	// saved baseline, so it stays on Storage; config metadata seam lives on
 	// ibMetaDataConfigurationFile)
-	virtual bool RestoreDataFromBuffer(const wxMemoryBuffer& buffer);
-	virtual bool DumpDataToBuffer(wxMemoryBuffer& buffer);
+	virtual bool RestoreDataFromBuffer(const ibMemoryBuffer& buffer);
+	virtual bool DumpDataToBuffer(ibMemoryBuffer& buffer);
 
 	// get config metaData
 	virtual ibMetaDataConfiguration* GetConfiguration() const { return m_configMetadata.get(); }
@@ -456,13 +459,10 @@ private:
 	bool LoadSequenceFromBuffer(const ibReaderMemory& reader);
 	bool SaveSequenceToBuffer(ibWriterMemory& writer);
 
-	// THE DATABASE'S COPY — what IsConfigSave compares against and what an apply diffs from. Shared: an apply reads
-	// the published configuration into a NEW one and hands it to the base as its active configuration, so the copy
-	// before is never re-read in place under the sessions working in it (OnAfterSaveDatabase).
+	// THE DATABASE'S COPY — what IsConfigSave compares against and what an apply diffs from. The designer's, made with
+	// its token: an apply reads the published configuration into a NEW one, and the base reads its own
+	// (ibApplicationInstance::ReplaceActiveMetaData) — the designer's copy is never handed to the runtime.
 	std::shared_ptr<ibMetaDataConfiguration> m_configMetadata;
-
-	// What a new copy is made with — the token this Storage was made with, and with it its base.
-	const ib::AppDataCtorToken m_owner;
 
 	// The config-save STRUCTURE + SEED engine — METADATA-AGNOSTIC: it works only on snapshots this Storage
 	// hands it (built via ContributeTables on the edited config + the saved baseline). On save the Storage

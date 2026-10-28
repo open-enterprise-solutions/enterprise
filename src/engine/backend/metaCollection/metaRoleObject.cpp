@@ -9,7 +9,7 @@
 //*                           Metamodule                                *
 //***********************************************************************
 
-ibValueMetaObjectRole::ibValueMetaObjectRole(const wxString& name, const wxString& synonym, const wxString& comment) :
+ibValueMetaObjectRole::ibValueMetaObjectRole(const ibString& name, const ibString& synonym, const ibString& comment) :
 	ibValueMetaObject(name, synonym, comment)
 {
 	// RLS contract: OnAccessRead / OnAccessWrite are PROCEDURES (the OES idiom — a verdict is returned via
@@ -20,8 +20,8 @@ ibValueMetaObjectRole::ibValueMetaObjectRole(const wxString& name, const wxStrin
 	// exception, or set False), the query is DENIED — a mistake over-restricts (visible), never exposes. A
 	// role with NO handler leaves this source alone (allow). Source (FIRST) is the source as a QUERYABLE;
 	// Operation is a per-type string ("Read" / "Post" / "Delete" / …); Allowed (THIRD, by-ref) = the verdict.
-	(*m_propertyRoleModule)->SetDefaultProcedure(wxT("OnAccessRead"),  ibContentHelper::eProcedureHelper, { wxT("Source"), wxT("Operation"), wxT("Allowed") });
-	(*m_propertyRoleModule)->SetDefaultProcedure(wxT("OnAccessWrite"), ibContentHelper::eProcedureHelper, { wxT("Source"), wxT("Operation"), wxT("Allowed") });
+	(*m_propertyRoleModule)->SetDefaultProcedure(ibT("OnAccessRead"),  ibContentHelper::eProcedureHelper, { ibT("Source"), ibT("Operation"), ibT("Allowed") });
+	(*m_propertyRoleModule)->SetDefaultProcedure(ibT("OnAccessWrite"), ibContentHelper::eProcedureHelper, { ibT("Source"), ibT("Operation"), ibT("Allowed") });
 }
 
 //***********************************************************************

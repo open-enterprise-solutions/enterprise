@@ -2,7 +2,7 @@
 #define __FUNCTIONAL_OPTION_HELPER_H__
 
 #include "backend_core.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 #include <set>
 

@@ -22,9 +22,9 @@ namespace {
 // among several — it is the only one. Everything a run has to say about itself goes through
 // here, stamped with the session id by the logger, which is what makes `journal_read
 // {session}` the account of a single run rather than of the whole installation.
-void Journal(const wxString& text, ibStatusMessage status)
+void Journal(const ibString& text, ibStatusMessage status)
 {
-	ibValueSystemFunction::WriteJournalEvent(text, status, wxT("job.background"));
+	ibValueSystemFunction::WriteJournalEvent(text, status, ibT("job.background"));
 }
 
 // HOW LONG A TENANT WAITS — for the registry to answer its Add, and for the pool to
@@ -48,7 +48,7 @@ struct ibBackgroundLaunch {
 	ibSessionRegistry*                m_registry = nullptr;
 	ibUserInfo                        m_initiator;            // empty for a tenant — it installs none
 	ibJobManager::ibBackgroundBody    m_body;
-	wxString                          m_activity;
+	ibString                          m_activity;
 	bool                              m_tenant   = false;
 	// The session this run RENTS. Held for the run's lifetime rather than for its
 	// use: a tenant reads through its parent's access policy, so the object that
@@ -109,13 +109,13 @@ ibValue ibBackgroundRun::Result() const
 	return m_result;
 }
 
-wxString ibBackgroundRun::Error() const
+ibString ibBackgroundRun::Error() const
 {
 	std::lock_guard<std::mutex> lk(m_mtx);
 	return m_error;
 }
 
-wxString ibBackgroundRun::Activity() const
+ibString ibBackgroundRun::Activity() const
 {
 	std::lock_guard<std::mutex> lk(m_mtx);
 	return m_activity;
@@ -126,7 +126,7 @@ ibBackgroundRun* ibBackgroundRun::Current()
 	return t_currentRun;
 }
 
-void ibBackgroundRun::Say(const wxString& text, ibStatusMessage status)
+void ibBackgroundRun::Say(const ibString& text, ibStatusMessage status)
 {
 	std::lock_guard<std::mutex> lk(m_mtx);
 	m_said.push_back({ text, status });
@@ -140,14 +140,14 @@ std::vector<ibBackgroundRun::ibSaid> ibBackgroundRun::Said() const
 	return std::vector<ibSaid>(m_said.begin(), m_said.end());
 }
 
-wxString ibBackgroundRun::SessionGuid() const
+ibString ibBackgroundRun::SessionGuid() const
 {
 	std::lock_guard<std::mutex> lk(m_mtx);
 	// ⚠ THE HOLDER MAY BE EMPTY — a run that has finished and let its session go. Answering with
 	// nothing is right: the row is gone, and inventing a name for it would send the caller looking
 	// in Active Users for something that is no longer there.
 	const ibSession* const session = m_holder.Get();
-	return session != nullptr ? session->Identity().m_guid.str() : wxString();
+	return session != nullptr ? session->Identity().m_guid.str() : ibString();
 }
 
 void ibBackgroundRun::Cancel()
@@ -167,7 +167,7 @@ void ibBackgroundRun::Cancel()
 	}
 	if (!session) {
 		// Said, because a cancel that does not arrive looks exactly like one that arrived and was ignored.
-		ibJournalInfo(wxT("cancel"), wxT("background run '%s': nothing to cancel - it holds no session"), m_activity);
+		ibJournalInfo(ibT("cancel"), ibT("background run '%s': nothing to cancel - it holds no session"), m_activity);
 		return;
 	}
 	session->Cancel();
@@ -175,7 +175,7 @@ void ibBackgroundRun::Cancel()
 
 // ---------------------------------------------------------------------------
 
-std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const wxString& procedureName,
+std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const ibString& procedureName,
                                                                const std::vector<ibValue>& args)
 {
 	// Gate first, before anything is created: a bad argument is the caller's
@@ -211,8 +211,8 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const wxString& p
 					_("Background job: '%s' must name the module - ModuleName.MethodName"),
 					procedureName);
 			}
-			const wxString moduleName = procedureName.Left(dot);
-			const wxString methodName = procedureName.Mid(dot + 1);
+			const ibString moduleName = procedureName.Left(dot);
+			const ibString methodName = procedureName.Mid(dot + 1);
 
 			// ⭐ A COMMON MODULE IS FOUND AMONG THE SESSION'S COMMON MODULES, not among the root's properties.
 			// `GetPropVal(name)` answers only for EXPORT variables of the root module (ibProcUnit::FindProp
@@ -264,11 +264,11 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const wxString& p
 			                       static_cast<long>(callArgs.size()));
 			return result;
 		},
-		wxString::Format(wxT("background: %s"), procedureName));
+		ibString::Format(ibT("background: %s"), procedureName));
 }
 
 std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody body,
-                                                               const wxString& activity,
+                                                               const ibString& activity,
                                                                ibJobTenancy tenancy)
 {
 	if (!body)
@@ -337,17 +337,14 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 		// connection of its own (taken just below), and a teardown that gives the
 		// connection back (~ibSession) without troubling the registry (Teardown
 		// reads m_listed).
-		auto minted = std::make_shared<ibSession>(wxString(wxNewUniqueGuid),
+		auto minted = std::make_shared<ibSession>(ibString(wxNewUniqueGuid),
 		                                          ibSessionKind::BackgroundJob);
-		minted->SetUnlisted();
-		// It reads for its parent in this manager's base: the base's registry is its owner, and the base's pool
-		// gives its connection — and takes it back on whatever thread the session dies.
-		minted->m_registry = registry;
-		minted->m_dbHolder.SetPool(ibApplicationInstance::GetConnectionPool(m_applicationInstance));
-		// …and in its parent's configuration — the one the parent works in, not the base's newest: a read for a
-		// session is read the way that session reads.
+		// It reads in its parent's configuration — the one the parent works in, not the base's newest: a read for
+		// a session is read the way that session reads.
 		minted->m_metaData = launch->m_parent->m_metaData;
-		run->m_holder = ibSessionHolder(std::move(minted));
+		// …for its parent in this manager's base: the base's registry is its owner, and the base's pool gives its
+		// connection — and takes it back on whatever thread the session dies.
+		run->m_holder = registry->MintUnlisted(std::move(minted));
 	}
 	else {
 		run->m_holder = registry->CreateSessionOfKind(
@@ -415,14 +412,14 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 		// rather than a silence to interpret.
 		struct ibRunEnded {
 			const std::shared_ptr<ibBackgroundRun>& m_run;
-			const wxString&                         m_activity;
+			const ibString&                         m_activity;
 			bool                                    m_said = false;
 
 			~ibRunEnded()
 			{
 				if (!m_said) {
 					try {
-						Journal(wxString::Format(
+						Journal(ibString::Format(
 							_("Background job ENDED WITHOUT SAYING HOW: %s - the run left its body by a "
 							  "path that reported nothing. Anything it committed stays."), m_activity),
 							ibStatusMessage_Error);
@@ -461,7 +458,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 			// — the policy — it borrows through Server() (ibSession::GetAccessPolicy).
 			if (!l.m_tenant) {
 				if (l.m_initiator.IsOk())
-					l.m_registry->InstallUser(l.m_session, l.m_initiator, wxEmptyString);
+					l.m_registry->InstallUser(l.m_session, l.m_initiator, ibEmptyString);
 				l.m_registry->NotifyAuthenticated(l.m_session);
 			}
 
@@ -491,7 +488,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 			// already holds the handle; it has no row in Active Users for the same reason, and a
 			// line per scrolled page would bury the runs that are actually jobs.
 			if (!l.m_tenant)
-				Journal(wxString::Format(_("Background job finished: %s"), l.m_activity),
+				Journal(ibString::Format(_("Background job finished: %s"), l.m_activity),
 					ibStatusMessage_Information);
 
 			std::lock_guard<std::mutex> lk(run->m_mtx);
@@ -517,21 +514,21 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 			// and it obeyed; writing it under `level: error` would put a successful cancellation in
 			// front of whoever scans the journal for what is broken. It is still recorded, because
 			// "why did that run not finish" is a real question with a real answer.
-			Journal(wxString::Format(_("Background job cancelled: %s"), l.m_activity),
+			Journal(ibString::Format(_("Background job cancelled: %s"), l.m_activity),
 				ibStatusMessage_Warning);
 
 			std::lock_guard<std::mutex> lk(run->m_mtx);
 			run->m_error = _("the run was cancelled");
 		}
 		catch (const ibCoreException& err) {
-			Journal(wxString::Format(_("Background job FAILED: %s - %s"),
+			Journal(ibString::Format(_("Background job FAILED: %s - %s"),
 				l.m_activity, err.GetErrorDescription()), ibStatusMessage_Error);
 
 			std::lock_guard<std::mutex> lk(run->m_mtx);
 			run->m_error = err.GetErrorDescription();
 		}
 		catch (...) {
-			Journal(wxString::Format(_("Background job FAILED: %s - unknown error"), l.m_activity),
+			Journal(ibString::Format(_("Background job FAILED: %s - unknown error"), l.m_activity),
 				ibStatusMessage_Error);
 
 			std::lock_guard<std::mutex> lk(run->m_mtx);

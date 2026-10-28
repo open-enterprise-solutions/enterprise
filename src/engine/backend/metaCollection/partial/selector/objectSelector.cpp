@@ -29,7 +29,7 @@ ibClassID ibValueSelectorDataObject::GetClassType() const
 	return clsFactory->GetClassType();
 }
 
-wxString ibValueSelectorDataObject::GetClassName() const
+ibString ibValueSelectorDataObject::GetClassName() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		GetMetaObject()->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Selection);
@@ -102,12 +102,12 @@ enum Func {
 
 void ibValueSelectorRecordDataObject::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Next"), wxT("Next()"));
-	helper.AppendFunc(wxT("Reset"), wxT("Reset()"));
-	helper.AppendFunc(wxT("GetObject"), wxT("GetObject()"));
+	helper.AppendFunc(ibT("Next"), ibT("Next()"));
+	helper.AppendFunc(ibT("Reset"), ibT("Reset()"));
+	helper.AppendFunc(ibT("GetObject"), ibT("GetObject()"));
 
 	//set object name
-	wxString objectName;
+	ibString objectName;
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
 		if (object->IsDeleted())
@@ -135,7 +135,7 @@ void ibValueSelectorRecordDataObject::FillMembers(ibMemberTable& helper) const
 		);
 	}
 
-	helper.AppendProp(wxT("Ref"), m_metaObject->GetMetaID());
+	helper.AppendProp(ibT("Ref"), m_metaObject->GetMetaID());
 }
 
 bool ibValueSelectorRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -180,15 +180,15 @@ bool ibValueSelectorRecordDataObject::GetPropVal(const long lPropNum, ibValue& p
 
 void ibValueSelectorRegisterDataObject::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Next"), wxT("Next()"));
-	helper.AppendFunc(wxT("Reset"), wxT("Reset()"));
+	helper.AppendFunc(ibT("Next"), ibT("Next()"));
+	helper.AppendFunc(ibT("Reset"), ibT("Reset()"));
 
 	if (m_metaObject->HasRecordManager()) {
-		helper.AppendFunc(wxT("GetRecordManager"), wxT("GetRecordManager()"));
+		helper.AppendFunc(ibT("GetRecordManager"), ibT("GetRecordManager()"));
 	}
 
 	//set object name
-	wxString objectName;
+	ibString objectName;
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())

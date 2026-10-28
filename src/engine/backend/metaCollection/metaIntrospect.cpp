@@ -4,14 +4,14 @@
 
 #include "backend/metaCollection/metaIntrospect.h"
 
-#include "core/fileSystem/fs.h"            // ibWriterMemory — the JSON sink
+#include "core/memory/memoryStream.h"            // ibWriterMemory — the JSON sink
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaObjectMetadata.h"   // GetCompileSyntax — the configuration's dialect
 #include "backend/objCtor.h"                  // ibCtorMetaValueType — full type, for the type resolver
 #include "core/serialize/jsonProvider.h"
 
-ibClassID ibResolveMetaKind(const ibMetaData* metaData, const wxString& kind)
+ibClassID ibResolveMetaKind(const ibMetaData* metaData, const ibString& kind)
 {
 	if (metaData == nullptr || !metaData->IsConfigOpen())
 		return 0;
@@ -33,7 +33,7 @@ ibClassID ibResolveMetaKind(const ibMetaData* metaData, const wxString& kind)
 	return ctor->GetClassType();
 }
 
-std::vector<const ibValueMetaObject*> ibListMetaObjects(const ibMetaData* metaData, const wxString& kind)
+std::vector<const ibValueMetaObject*> ibListMetaObjects(const ibMetaData* metaData, const ibString& kind)
 {
 	std::vector<const ibValueMetaObject*> objects;
 
@@ -48,9 +48,9 @@ std::vector<const ibValueMetaObject*> ibListMetaObjects(const ibMetaData* metaDa
 	return objects;
 }
 
-std::vector<wxString> ibListMetaObjectNames(const ibMetaData* metaData, const wxString& kind)
+std::vector<ibString> ibListMetaObjectNames(const ibMetaData* metaData, const ibString& kind)
 {
-	std::vector<wxString> names;
+	std::vector<ibString> names;
 
 	for (const ibValueMetaObject* object : ibListMetaObjects(metaData, kind))
 		names.push_back(object->GetName());
@@ -58,7 +58,7 @@ std::vector<wxString> ibListMetaObjectNames(const ibMetaData* metaData, const wx
 	return names;
 }
 
-ibValueMetaObject* ibFindMetaObject(ibMetaData* metaData, const wxString& kind, const wxString& name)
+ibValueMetaObject* ibFindMetaObject(ibMetaData* metaData, const ibString& kind, const ibString& name)
 {
 	const ibClassID clsid = ibResolveMetaKind(metaData, kind);
 	if (clsid == 0)
@@ -135,9 +135,9 @@ bool ibConfigurationWritesInWords(const ibMetaData* metaData)
 	return configuration->GetCompileSyntax() == ibProgramSyntax::syntax_ves;
 }
 
-std::function<wxString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData)
+std::function<ibString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData)
 {
-	return [metaData](ibClassID clsid) -> wxString {
+	return [metaData](ibClassID clsid) -> ibString {
 
 		const ibCtorMetaValueType* typeCtor = metaData != nullptr
 			? metaData->GetTypeCtor(clsid) : nullptr;
@@ -161,26 +161,26 @@ std::function<wxString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData
 		if (const ibCtorAbstractType* staticCtor = ibValue::GetAvailableCtor(clsid))
 			return staticCtor->GetClassName();
 
-		return wxString();
+		return ibString();
 	};
 }
 
-wxString ibDescribeMetaObject(ibMetaData* metaData, const wxString& kind, const wxString& name)
+ibString ibDescribeMetaObject(ibMetaData* metaData, const ibString& kind, const ibString& name)
 {
 	ibValueMetaObject* found = ibFindMetaObject(metaData, kind, name);
 	if (found == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	ibDataNode node;
 	if (!ibBuildMetaObjectNode(found, node))
-		return wxEmptyString;
+		return ibEmptyString;
 
 	ibJsonProvider provider;
 	provider.SetTypeResolver(ibMetaTypeResolver(metaData));
 
 	ibWriterMemory writer;
 	if (!provider.Write(node, writer))
-		return wxEmptyString;
+		return ibEmptyString;
 
-	return wxString::FromUTF8(reinterpret_cast<const char*>(writer.pointer()), writer.size());
+	return ibString::FromUTF8(reinterpret_cast<const char*>(writer.pointer()), writer.size());
 }

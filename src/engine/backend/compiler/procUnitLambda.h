@@ -327,17 +327,17 @@ private:
 // AsIterator returns nullptr.
 inline ibValueFunction* AsFunction(const ibValue* v) {
 	if (v == nullptr) return nullptr;
-	const ibValue* target = (v->IsReference()) ? v->m_pConstRef : v;
+	const ibVariant* target = (v->IsReference()) ? v->m_pConstRef : v;
 	return (target != nullptr && target->m_typeClass == ibValueTypes::TYPE_FUNCTION)
-		? static_cast<ibValueFunction*>(const_cast<ibValue*>(target)) : nullptr;
+		? static_cast<ibValueFunction*>(const_cast<ibVariant*>(target)) : nullptr;
 }
 inline ibValueFunction* AsFunction(const ibValue& v) { return AsFunction(&v); }
 
 inline ibValueIterator* AsIterator(const ibValue* v) {
 	if (v == nullptr) return nullptr;
-	const ibValue* target = (v->IsReference()) ? v->m_pConstRef : v;
+	const ibVariant* target = (v->IsReference()) ? v->m_pConstRef : v;
 	return (target != nullptr && target->m_typeClass == ibValueTypes::TYPE_ITERATOR)
-		? static_cast<ibValueIterator*>(const_cast<ibValue*>(target)) : nullptr;
+		? static_cast<ibValueIterator*>(const_cast<ibVariant*>(target)) : nullptr;
 }
 inline ibValueIterator* AsIterator(const ibValue& v) { return AsIterator(&v); }
 
@@ -428,7 +428,7 @@ inline void CopyValue(ibValue& cValue1, ibValue&& cValue2)
 // Lets go of one reference — the deleter of a guard that ADOPTS the reference a destination held, so the
 // object is released once, when the guard goes, and never counted up and down in between.
 struct ibReleaseRef {
-	void operator()(ibValue* ref) const { ref->DecrRef(); }
+	void operator()(ibVariant* ref) const { ref->DecrRef(); }
 };
 
 // CopyValue from const source — direct field-copy without going
@@ -459,7 +459,7 @@ inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 	// it go on every way out of here, a throwing copy included. A bare pointer, not an ibValuePtr — that
 	// one IS an ibValue, built and torn down on every assignment, and it cost the LET road 24% (measured
 	// 2026-09-10: 1M × 3 assignments, 110 → 136 ms).
-	const std::unique_ptr<ibValue, ibReleaseRef> destHeld(destWas == ibValueTypes::TYPE_REFFER ? cValue1.m_pRef : nullptr);
+	const std::unique_ptr<ibVariant, ibReleaseRef> destHeld(destWas == ibValueTypes::TYPE_REFFER ? cValue1.m_pRef : nullptr);
 
 	// A destination that held ANOTHER KIND lets go of its text or its number here (its object
 	// went to the guard above), and its word is zeroed — the empty state of every kind (value.h,
@@ -523,7 +523,7 @@ inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 		return;
 
 	const ibValueTypes destWas = cValue1.m_typeClass;
-	const std::unique_ptr<ibValue, ibReleaseRef> destHeld(destWas == ibValueTypes::TYPE_REFFER ? cValue1.m_pRef : nullptr);   // adopts the destination's reference
+	const std::unique_ptr<ibVariant, ibReleaseRef> destHeld(destWas == ibValueTypes::TYPE_REFFER ? cValue1.m_pRef : nullptr);   // adopts the destination's reference
 
 	// The destination's own text or number goes now, and its word is zeroed (value.h, the union).
 	if (destWas == ibValueTypes::TYPE_STRING)

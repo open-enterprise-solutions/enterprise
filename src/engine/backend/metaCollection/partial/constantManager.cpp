@@ -19,7 +19,7 @@ ibClassID ibValueManagerDataObjectConstant::GetClassType() const
 	return clsFactory->GetClassType();
 }
 
-wxString ibValueManagerDataObjectConstant::GetClassName() const
+ibString ibValueManagerDataObjectConstant::GetClassName() const
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
 	wxASSERT(metaData);
@@ -46,8 +46,8 @@ enum Func {
 
 void ibValueManagerDataObjectConstant::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Set"), 1, wxT("Set(value : any)"));
-	helper.AppendFunc(wxT("Get"), wxT("Get()"));
+	helper.AppendFunc(ibT("Set"), 1, ibT("Set(value : any)"));
+	helper.AppendFunc(ibT("Get"), ibT("Get()"));
 }
 
 bool ibValueManagerDataObjectConstant::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)

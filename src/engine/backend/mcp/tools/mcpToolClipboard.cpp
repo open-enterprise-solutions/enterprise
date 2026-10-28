@@ -31,14 +31,14 @@
 #include "backend/mcp/mcpTool.h"
 #include "backend/mcp/mcpClipboard.h"
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metadataConfiguration.h"
 
 namespace {
 
-ibMetaData* OpenConfiguration(wxString& refusal)
+ibMetaData* OpenConfiguration(ibString& refusal)
 {
 	ibMetaData* metaData = activeMetaData;
 
@@ -53,19 +53,19 @@ ibMetaData* OpenConfiguration(wxString& refusal)
 // The object a call is about — by id, which is how everything else here
 // addresses one.
 ibValueMetaObject* FindObject(ibMetaData* metaData, const ibDataNode& params,
-	const wxString& field, wxString& refusal)
+	const ibString& field, ibString& refusal)
 {
-	const ibDataValue* asked = params.FindField(field);
+	auto asked = params.FindField(field);
 
-	if (asked == nullptr || asked->Kind() != ibDataKind::Number) {
-		refusal = wxString::Format(ibMcpText("No %s given."), field);
+	if (!asked || asked->Kind() != ibDataKind::Number) {
+		refusal = ibString::Format(ibMcpText("No %s given."), field);
 		return nullptr;
 	}
 
 	ibValueMetaObject* found = ibFindMetaObjectById(metaData, (ibMetaID)asked->AsInt());
 
 	if (found == nullptr) {
-		refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %s."),
+		refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
 			asked->AsNumber().ToString());
 		return nullptr;
 	}
@@ -73,12 +73,12 @@ ibValueMetaObject* FindObject(ibMetaData* metaData, const ibDataNode& params,
 	return found;
 }
 
-void DescribeSlot(ibDataNode& result, const wxString& name, const ibMcpClipboardSlot& slot)
+void DescribeSlot(ibDataNode& result, const ibString& name, const ibMcpClipboardSlot& slot)
 {
-	result.SetValue(wxT("slot"), name);
-	result.SetValue(wxT("holds"), ibMcpClipboardKindName(slot.m_kind));
-	result.SetValue(wxT("name"), slot.m_name);
-	result.SetValue(wxT("what"), slot.m_what);
+	result.SetValue(ibT("slot"), name);
+	result.SetValue(ibT("holds"), ibMcpClipboardKindName(slot.m_kind));
+	result.SetValue(ibT("name"), slot.m_name);
+	result.SetValue(ibT("what"), slot.m_what);
 }
 
 using ibArg = ibMcpTool::ibMcpArgument;
@@ -87,7 +87,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgId()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The object's NodeId. Anything in the tree may be copied - an object, an "
 			  "attribute, a tabular section, a form."), /*required*/ true);
 	return s_a;
@@ -95,7 +95,7 @@ const ibArg& ArgId()
 
 const ibArg& ArgSlot()
 {
-	static const ibArg s_a(wxT("slot"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("slot"), ibArg::Kind::Text,
 		ibMcpText("Which buffer to put it in. Omit for the usual one; name it to hold several "
 			  "things at once."));
 	return s_a;
@@ -103,14 +103,14 @@ const ibArg& ArgSlot()
 
 const ibArg& ArgParentId()
 {
-	static const ibArg s_a(wxT("parentId"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("parentId"), ibArg::Kind::Whole,
 		ibMcpText("Where it goes. Omit for the top level of the configuration."));
 	return s_a;
 }
 
 const ibArg& ArgName()
 {
-	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("name"), ibArg::Kind::Text,
 		ibMcpText("What to call it. Omit and it is named after the original with a number, the "
 			  "way a pasted object is named in the designer."));
 	return s_a;
@@ -118,7 +118,7 @@ const ibArg& ArgName()
 
 const ibArg& ArgKind()
 {
-	static const ibArg s_a(wxT("kind"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("kind"), ibArg::Kind::Text,
 		ibMcpText("Paste it as a DIFFERENT kind - the payload is a set of values merged by "
 			  "property name, so pasting a document's values onto a catalog is allowed and "
 			  "keeps whatever the two have in common. Omit to paste the kind that was "
@@ -135,14 +135,14 @@ const ibArg& ArgKind()
 class ibMcpToolMetadataCopy : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("metadata_copy"); }
+	ibString GetName() const override { return ibT("metadata_copy"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("copying a metadata object");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Copy a metadata object - with everything under it - into the caller's own "
 			"buffer, to be pasted somewhere else. The copy carries EVERY property the object "
@@ -156,24 +156,24 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaData* metaData = OpenConfiguration(refusal);
 		if (metaData == nullptr)
 			return false;
 
-		ibValueMetaObject* object = FindObject(metaData, params, wxT("id"), refusal);
+		ibValueMetaObject* object = FindObject(metaData, params, ibT("id"), refusal);
 		if (object == nullptr)
 			return false;
 
 		ibWriterMemory writer;
 
 		if (!metaData->CopyMetaObject(object, writer)) {
-			refusal = wxString::Format(ibMcpText("'%s' could not be copied."), object->GetName());
+			refusal = ibString::Format(ibMcpText("'%s' could not be copied."), object->GetName());
 			return false;
 		}
 
-		const wxString slotName = ArgSlot().Text(params);
+		const ibString slotName = ArgSlot().Text(params);
 
 		ibMcpClipboardSlot& slot = ibMcpClipboard(slotName);
 
@@ -181,10 +181,10 @@ public:
 		slot.m_name = object->GetName();
 		slot.m_what = object->GetClassName();
 		slot.m_payload = ibDataNode();
-		slot.m_payload.SetValue(wxT("bytes"), writer.buffer());
+		slot.m_payload.SetValue(ibT("bytes"), writer.buffer());
 
-		DescribeSlot(result, slotName.IsEmpty() ? wxString(wxT("default")) : slotName, slot);
-		result.AddField(wxT("bytes"), ibDataValue::Int((s64)writer.size()));
+		DescribeSlot(result, slotName.IsEmpty() ? ibString(ibT("default")) : slotName, slot);
+		result.AddField(ibT("bytes"), ibDataValue::Int((std::int64_t)writer.size()));
 
 		return true;
 	}
@@ -207,14 +207,14 @@ MCP_TOOL_REGISTER(ibMcpToolMetadataCopy);
 class ibMcpToolMetadataPaste : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("metadata_paste"); }
+	ibString GetName() const override { return ibT("metadata_paste"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("pasting a metadata object");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Paste what metadata_copy put in the buffer, as a new object under a parent. "
 			"The new object gets a name of its own so it does not collide with the original; "
@@ -227,13 +227,13 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaData* metaData = OpenConfiguration(refusal);
 		if (metaData == nullptr)
 			return false;
 
-		const wxString slotName = ArgSlot().Text(params);
+		const ibString slotName = ArgSlot().Text(params);
 
 		ibMcpClipboardSlot& slot = ibMcpClipboard(slotName);
 
@@ -246,31 +246,31 @@ public:
 		// payloads are both chunked memory and would half-parse into each
 		// other, leaving an object that looks pasted and is not.
 		if (slot.m_kind != ibMcpClipboardKind::Metadata) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("The buffer holds %s, not a metadata object."),
 				ibMcpClipboardKindName(slot.m_kind));
 			return false;
 		}
 
 		// WHICH CLASS. The copy's own by default; the caller's when they say so.
-		wxString kind = ArgKind().Text(params);
+		ibString kind = ArgKind().Text(params);
 		if (kind.IsEmpty())
 			kind = slot.m_what;
 
 		const ibClassID clsid = ibResolveMetaKind(metaData, kind);
 		if (clsid == 0) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' is not a kind of metadata object in this configuration."), kind);
 			return false;
 		}
 
 		ibValueMetaObject* parent = nullptr;
 
-		if (const ibDataValue* parentId = params.FindField(ArgParentId().Name())) {
+		if (auto parentId = params.FindField(ArgParentId().Name())) {
 			if (parentId->Kind() == ibDataKind::Number) {
 				parent = ibFindMetaObjectById(metaData, (ibMetaID)parentId->AsInt());
 				if (parent == nullptr) {
-					refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %s."),
+					refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
 						parentId->AsNumber().ToString());
 					return false;
 				}
@@ -288,18 +288,12 @@ public:
 		// THE GATE, asked of the parent — the same question a drop onto that
 		// branch asks, so a paste cannot put a thing where a click could not.
 		if (!parent->FilterChild(clsid)) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("A %s cannot be added to '%s'."), kind, parent->GetName());
 			return false;
 		}
 
-		// ⚠ NAMED LOCAL, NOT THE EXPRESSION. The getter returns the buffer by
-		// value and ibReaderMemory borrows what it is handed — reading straight
-		// out of the call would leave it pointing at memory freed at the
-		// semicolon. fs.h deletes the rvalue overload for exactly this, so the
-		// mistake would not compile; the local is the way to write it, not a
-		// precaution around it.
-		wxMemoryBuffer bytes = slot.m_payload.GetValue<wxMemoryBuffer>(wxT("bytes"));
+		ibMemoryBuffer bytes = slot.m_payload.GetValue<ibMemoryBuffer>(ibT("bytes"));
 
 		ibReaderMemory reader(bytes);
 
@@ -308,13 +302,13 @@ public:
 		// announced, and nothing left behind if the payload was bad: all of it is the paste's.
 		ibValueMetaObject* created = metaData->PasteMetaObject(clsid, parent, reader);
 		if (created == nullptr) {
-			refusal = wxString::Format(ibMcpText("'%s' could not be pasted here."), slot.m_name);
+			refusal = ibString::Format(ibMcpText("'%s' could not be pasted here."), slot.m_name);
 			return false;
 		}
 
 		// BuildNewName already gave it a name that does not collide. A name the
 		// caller asked for replaces that one, and only then.
-		const wxString name = ArgName().Text(params);
+		const ibString name = ArgName().Text(params);
 		if (!name.IsEmpty())
 			metaData->RenameMetaObject(created, name);
 
@@ -326,15 +320,15 @@ public:
 
 		// ⚠ AddField WITH AN EXPLICIT Int, NOT SetValue. The node's SetValue
 		// dispatches through ibDataCodec<T>, and there is a specialization for
-		// s32 and none for s64 — on purpose, the undefined primary template is
-		// the guard. A `SetValue(name, (s64)x)` therefore fails to compile inside
+		// std::int32_t and none for std::int64_t — on purpose, the undefined primary template is
+		// the guard. A `SetValue(name, (std::int64_t)x)` therefore fails to compile inside
 		// dataBuilder.h, far from the line that wrote it. Same trap as a bare
 		// string literal, which has no codec either.
-		result.AddField(wxT("id"), ibDataValue::Int((s64)created->GetMetaID()));
-		result.SetValue(wxT("name"), created->GetName());
-		result.SetValue(wxT("kind"), created->GetClassName());
-		result.SetValue(wxT("parent"), parent->GetName());
-		result.SetValue(wxT("copiedFrom"), slot.m_name);
+		result.AddField(ibT("id"), ibDataValue::Int((std::int64_t)created->GetMetaID()));
+		result.SetValue(ibT("name"), created->GetName());
+		result.SetValue(ibT("kind"), created->GetClassName());
+		result.SetValue(ibT("parent"), parent->GetName());
+		result.SetValue(ibT("copiedFrom"), slot.m_name);
 
 		ibMcpReportComplaints(result, created);
 

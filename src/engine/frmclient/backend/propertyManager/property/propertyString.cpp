@@ -2,27 +2,19 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode — readable String node value
 
 
-//base property for "string"
-bool ibPropertyStringBase::SetDataValue(const ibValue& varPropVal)
+//base property for "string" — held as its node (ibPropertySerializable::ReadNodeValue)
+ibString ibPropertyStringBase::GetValueAsString() const
 {
-	ibPropertyStringBase::SetValue(varPropVal.GetString());
-	return true;
+	return GetNodeValue().AsString();
 }
 
-bool ibPropertyStringBase::GetDataValue(ibValue& pvarPropVal) const
+void ibPropertyStringBase::SetValue(const ibString& strValue)
 {
-	pvarPropVal = ibPropertyStringBase::GetValueAsString();
-	return true;
+	ibPropertySerializable::ReadNodeValue(ibDataValue::String(strValue));
 }
 
 bool ibPropertyStringBase::ReadNodeValue(const ibDataValue& value)
 {
 	ibPropertyStringBase::SetValue(value.AsString()); // AsString validates kind (Empty -> default "")
-	return true;
-}
-
-bool ibPropertyStringBase::WriteNodeValue(ibDataValue& value) const
-{
-	value = ibDataValue::String(ibPropertyStringBase::GetValueAsString());
 	return true;
 }

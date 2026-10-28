@@ -1,83 +1,132 @@
 #include "clientListener.h"
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
-#include <memory>
+#include <condition_variable>
 #include <mutex>
 #include <string>
+#include <thread>
+#include <vector>
+
+#include "core/exception.h"                   // ibCoreException — the listener refused, with the reason
+#include "core/net/webSocketFrame.h"         // ibWebSocketClose — what a socket that did not log in is told
+#include "core/server/listener.h"            // ibListenerOptions — the one door every listener opens through
 
 #include "frmserver/client/clientHost.h"
 
-// After wx, with the guard already set: wx aliases ssize_t and so does cpp-httplib (backend/mcp/mcpServer.cpp).
-#if defined(_WIN32) && !defined(_SSIZE_T_DEFINED)
-#	define _SSIZE_T_DEFINED
-#endif
-
-#include <cpp-httplib/httplib.h>
-
-#include <wx/mstream.h>
-#include <wx/zstream.h>
+#include "backend/appHost.h"                 // ClientConnections — how many connections at once
+#include "core/server/serverConfig.h"     // ibAppServerSay — the line a person watching the console sees
 
 namespace {
 
-// The largest request a client sends — a frame's answer goes the other way; a request is a method and its
-// arguments, a typed text at most.
-constexpr std::size_t kMaxRequestBytes = 4 * 1024 * 1024;
+// ⭐ A SOCKET THAT HAS NOT LOGGED IN GOES FIFTEEN SECONDS AFTER IT OPENED — counted from the open: a message does not
+// move that mark. A connection costs a buffer here, not a thread, but the ceiling (ClientConnections) is counted in
+// connections, and sockets that never log in would hold every place. Once logged in, the host's half-hour round is
+// the idle, and this no longer applies.
+constexpr std::chrono::seconds kLoginWithin(15);
 
-// How often a connection waiting for its client looks up to see whether the server is stopping.
-constexpr std::chrono::seconds kStopPoll(1);
+// How often the round looks for a socket past that mark.
+constexpr std::chrono::seconds kLoginRoundEvery(1);
 
-// The furthest a chosen port goes from where it started looking.
-constexpr unsigned int kChooseRange = 100;
+// A CLIENT'S CONNECTION TO A BASE THIS SERVER HOLDS — the connection its clients log in through, told what the base
+// says to them unasked, and they leave with it. Packets both ways (OES-RPC): the socket hands them over as they are
+// (and deflates one of some size, when the client asked).
+class ibHostRelay : public ibWebSocketHandler {
+public:
 
-// ⭐ THE TRANSPORT DEFLATES, when the client asked for it as it connected (?compress=deflate): an answer of some size
-// goes as a BINARY message holding it deflated — raw, RFC 1951, what a browser's DecompressionStream("deflate-raw")
-// reads — and a small one as text, as before. The protocol never knows: the same JSON either way. A frame is text
-// that repeats itself (names, ids, the same fields on every control) and shrinks several times over.
-constexpr std::size_t kDeflateFrom = 1024;
-
-bool SendAnswer(httplib::ws::WebSocket& ws, const std::string& text, bool deflate)
-{
-	if (!deflate || text.size() < kDeflateFrom)
-		return ws.send(text);
-
-	wxMemoryOutputStream packed;
+	ibHostRelay(ibClientHost& host, std::shared_ptr<ibWebSocket> socket) :
+		m_host(host), m_socket(std::move(socket))
 	{
-		wxZlibOutputStream zip(packed, wxZ_DEFAULT_COMPRESSION, wxZLIB_NO_HEADER);
-		zip.Write(text.data(), text.size());
-		if (!zip.Close())
-			return ws.send(text);   // not packed — sent as it is
+		// WHAT THE SERVER SAYS UNASKED goes out on it too — a notification from a session's thread (a client's frame
+		// changed by itself), between the answers. The socket queues both in order, and once it closed sends nothing.
+		const std::weak_ptr<ibWebSocket> told = m_socket;
+		m_host.SetNotifier(this, [told](const ibMemoryBuffer& packet) {
+			if (const std::shared_ptr<ibWebSocket> socket = told.lock())
+				socket->Send(packet.GetData(), packet.GetDataLen(), ibWebSocketSend::Deflate);
+		});
 	}
-	const wxStreamBuffer* const buffer = packed.GetOutputStreamBuffer();
-	return ws.send(static_cast<const char*>(buffer->GetBufferStart()), static_cast<size_t>(packed.GetLength()));
-}
 
-// A connection's way out — one send at a time, and none once it closed: a notification from a session's thread may
-// come while the connection goes.
-struct ibConnectionOut {
-	std::mutex mutex;
-	bool       open = true;
+	virtual void OnMessage(const ibString&) override
+	{
+		m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks packets");
+	}
+
+	virtual void OnBinary(std::string data) override
+	{
+		const ibMemoryBuffer packet(data.data(), data.size());
+		const ibMemoryBuffer answer = m_host.Call(packet, this, m_socket->GetRequest().m_address);
+		if (!answer.IsEmpty())
+			m_socket->Send(answer.GetData(), answer.GetDataLen(), ibWebSocketSend::Deflate);
+	}
+
+	// THE CLIENTS LOGGED IN THROUGH IT GO WITH IT — a closed tab is a client gone, not one idle for half an hour.
+	virtual void OnClose() override
+	{
+		m_host.Disconnect(this);
+	}
+
+	ibClientHost& GetHost() const { return m_host; }
+	ibWebSocket&  GetSocket() const { return *m_socket; }
+
+private:
+	ibClientHost&                m_host;
+	std::shared_ptr<ibWebSocket> m_socket;
 };
 
 } // namespace
 
-class ibClientListener::ibServer {
+// THE FIFTEEN SECONDS BEFORE A LOGIN, kept by one thread for the whole listener: a socket waiting for its client has
+// no thread of its own to keep a deadline on.
+class ibClientListener::ibLoginRound {
 public:
 
-	httplib::Server                   m_http;
-	std::map<wxString, ibClientHost*> m_hosts;
-	std::atomic<bool>                 m_stopping{ false };
+	ibLoginRound() : m_thread([this]() { Run(); }) {}
 
-	// The base the path names; null — none served by that name.
-	ibClientHost* FindHost(const httplib::Request& req) const
+	~ibLoginRound()
 	{
-		const auto base = req.path_params.find("base");
-		if (base == req.path_params.end())
-			return nullptr;
-		const auto host = m_hosts.find(wxString::FromUTF8(base->second));
-		return host != m_hosts.end() ? host->second : nullptr;
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			m_stopping = true;
+		}
+		m_wake.notify_all();
+		m_thread.join();
 	}
+
+	// A socket just opened, its mark counted from now.
+	void Watch(const std::shared_ptr<ibHostRelay>& relay)
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_watched.push_back(ibWatched{ relay, std::chrono::steady_clock::now() + kLoginWithin });
+	}
+
+private:
+
+	struct ibWatched {
+		std::weak_ptr<ibHostRelay>            m_relay;      // gone — the socket closed by itself
+		std::chrono::steady_clock::time_point m_deadline;
+	};
+
+	void Run()
+	{
+		std::unique_lock<std::mutex> lock(m_mutex);
+		while (!m_wake.wait_for(lock, kLoginRoundEvery, [this]() { return m_stopping; })) {
+			// The marks in the order the sockets opened, so the round stops at the first one still ahead.
+			const auto now = std::chrono::steady_clock::now();
+			auto past = m_watched.begin();
+			for (; past != m_watched.end() && past->m_deadline <= now; ++past) {
+				const std::shared_ptr<ibHostRelay> relay = past->m_relay.lock();
+				if (relay != nullptr && !relay->GetHost().LoggedIn(relay.get()))
+					relay->GetSocket().Close(ibWebSocketClose::Policy, "not logged in");
+			}
+			m_watched.erase(m_watched.begin(), past);
+		}
+	}
+
+	std::mutex              m_mutex;
+	std::condition_variable m_wake;
+	bool                    m_stopping = false;
+	std::vector<ibWatched>  m_watched;
+	std::thread             m_thread;   // last: it starts on the members above
 };
 
 ibClientListener::ibClientListener() = default;
@@ -87,108 +136,63 @@ ibClientListener::~ibClientListener()
 	Stop();
 }
 
-bool ibClientListener::Start(const wxString& host, unsigned short& port, bool choose,
-	std::map<wxString, ibClientHost*> hosts, wxString& refusal)
+bool ibClientListener::Start(const ibPortRange& ports, unsigned short& port, std::map<ibString, ibClientHost*> hosts,
+	ibString& refusal)
 {
-	m_server = std::make_unique<ibServer>();
-	ibServer* const server = m_server.get();
-	server->m_hosts = std::move(hosts);
-
-	server->m_http.set_payload_max_length(kMaxRequestBytes);
-	server->m_http.set_tcp_nodelay(true);
-
-	// 🛑 ONE LISTENER PER PORT, SAID TO THE OPERATING SYSTEM — on Windows httplib's SO_REUSEADDR lets a second
-	// process bind a port another one listens on, and which of them a connection reaches is undefined. Two
-	// application servers on one machine would both "start" on 7373. The MCP listener's cure, the same lines
-	// (backend/mcp/mcpServer.cpp, Bind).
-#ifdef _WIN32
-	server->m_http.set_socket_options([](auto sock) {
-		const int yes = 1;
-		::setsockopt((SOCKET)sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
-			reinterpret_cast<const char*>(&yes), sizeof(yes));
-	});
-#endif
-
-	server->m_http.Post("/:base/client", [server](const httplib::Request& req, httplib::Response& res) {
-		ibClientHost* const clientHost = server->FindHost(req);
-		if (clientHost == nullptr) {
-			res.status = httplib::StatusCode::NotFound_404;
-			return;
-		}
-		const wxString response = clientHost->Call(wxString::FromUTF8(req.body), nullptr,
-			wxString::FromUTF8(req.remote_addr));
-		if (response.IsEmpty())
-			res.status = httplib::StatusCode::NoContent_204;   // a notification — no answer wanted
-		else
-			res.set_content(std::string(response.utf8_str()), "application/json");
-	});
-
-	server->m_http.WebSocket("/:base/client", [server](const httplib::Request& req, httplib::ws::WebSocket& ws) {
-		ibClientHost* const clientHost = server->FindHost(req);
-		if (clientHost == nullptr) {
-			ws.close(httplib::ws::CloseStatus::PolicyViolation, "no such base");
-			return;
-		}
-
-		// The connection's wait is bounded, so a stopping server is noticed between messages.
-		ws.set_read_timeout(kStopPoll);
-		const wxString address = wxString::FromUTF8(req.remote_addr);
-		const bool deflate = req.has_param("compress") && req.get_param_value("compress") == "deflate";
-
-		// WHAT THE SERVER SAYS UNASKED goes out on it too — a notification from a session's thread (a client's frame
-		// changed by itself), between the answers this thread sends: one send at a time, and none once it closed.
-		const std::shared_ptr<ibConnectionOut> out = std::make_shared<ibConnectionOut>();
-		clientHost->SetNotifier(&ws, [&ws, out, deflate](const wxString& text) {
-			std::lock_guard<std::mutex> lock(out->mutex);
-			if (out->open)
-				SendAnswer(ws, std::string(text.utf8_str()), deflate);
-		});
-
-		std::string message;
-		for (;;) {
-			const httplib::ws::ReadResult read = ws.read(message);
-			if (read == httplib::ws::Timeout) {
-				if (server->m_stopping.load())
-					break;
-				continue;
-			}
-			if (read != httplib::ws::Text)
-				break;   // closed — or a binary frame, which this protocol does not speak (yet)
-
-			const wxString response = clientHost->Call(wxString::FromUTF8(message), &ws, address);
-			if (response.IsEmpty())
-				continue;
-			std::lock_guard<std::mutex> lock(out->mutex);
-			if (!SendAnswer(ws, std::string(response.utf8_str()), deflate))
-				break;
-		}
-
-		// THE CLIENTS LOGGED IN THROUGH IT GO WITH IT — a closed tab is a client gone, not one idle for
-		// half an hour; and the connection is told nothing more: closed here, before the socket goes, for a
-		// notification already on its way.
-		{
-			std::lock_guard<std::mutex> lock(out->mutex);
-			out->open = false;
-		}
-		clientHost->Disconnect(&ws);
-	});
-
-	const std::string address = host.IsEmpty() ? std::string("0.0.0.0") : std::string(host.utf8_str());
-	const unsigned int first = port;
-	const unsigned int last = choose ? std::min(first + kChooseRange, 65535u) : first;
-	for (unsigned int candidate = first; candidate <= last; ++candidate) {
-		if (server->m_http.bind_to_port(address, static_cast<int>(candidate))) {
-			port = static_cast<unsigned short>(candidate);
-			m_thread = std::thread([server]() { server->m_http.listen_after_bind(); });
-			return true;
-		}
+	ibHttpServerOptions options;
+	try {
+		options = ibListenerOptions(ibT("127.0.0.1"), ports.m_first, ibTlsFiles());
+	}
+	catch (const ibCoreException& err) {
+		refusal = err.GetErrorDescription();
+		return false;
 	}
 
-	refusal = choose
-		? wxString::Format(wxT("no free port from %u to %u on %s"), first, last, wxString::FromUTF8(address))
-		: wxString::Format(wxT("port %u on %s is taken - another application server is probably holding it"),
-			first, wxString::FromUTF8(address));
+	m_server = std::make_unique<ibHttpServer>();
+	m_loginRound = std::make_unique<ibLoginRound>();
+	ibLoginRound* const round = m_loginRound.get();
+
+	for (const auto& entry : hosts) {
+		ibClientHost* const clientHost = entry.second;
+		const std::string path = "/" + std::string(entry.first.utf8_str()) + "/client";
+
+		m_server->Post(path, [clientHost](const ibHttpRequest& request, ibHttpResponder respond) {
+			const ibString response = clientHost->Call(request.GetText(), nullptr, request.m_address);
+			ibHttpResponse answer;
+			if (response.IsEmpty())
+				answer.m_status = 204;   // a notification — no answer wanted
+			else
+				answer.SetText(response, "application/json");
+			respond(std::move(answer));
+		});
+
+		m_server->WebSocket(path, [clientHost, round](const std::shared_ptr<ibWebSocket>& socket) {
+			const std::shared_ptr<ibHostRelay> relay = std::make_shared<ibHostRelay>(*clientHost, socket);
+			round->Watch(relay);
+			return relay;
+		});
+	}
+
+	// ClientConnections (backend.conf) is how many this process holds at once. Left out, or 0, that is
+	// kDefaultClientConnections (1000), not "no limit".
+	const std::size_t connections = ibApplicationHost::Get() != nullptr
+		? ibApplicationHost::Get()->GetClientConnections()
+		: ibApplicationHost::kDefaultClientConnections;
+
+	options.m_maxConnections = std::max<std::size_t>(connections, 1);
+
+	std::string error;
+	if (m_server->Start(options, ports.m_count, error)) {
+		port = m_server->GetHttpPort();
+		ibAppServerSay(ibJournalMark::Info, ibT("client connections: up to %u"),
+			static_cast<unsigned>(options.m_maxConnections));
+		return true;
+	}
+
+	refusal = ibString::Format(ibT("no free port from %u to %u on 127.0.0.1 (%s)"), static_cast<unsigned>(ports.m_first),
+		static_cast<unsigned>(ports.Last()), ibString::FromUTF8(error));
 	m_server.reset();
+	m_loginRound.reset();
 	return false;
 }
 
@@ -197,11 +201,9 @@ void ibClientListener::Stop()
 	if (m_server == nullptr)
 		return;
 
-	// The connections first: each notices between messages and lets its clients go; then the port closes, and
-	// listen_after_bind returns once the last connection has.
-	m_server->m_stopping.store(true);
-	m_server->m_http.stop();
-	if (m_thread.joinable())
-		m_thread.join();
+	// The port closes and every connection goes — each one's clients let go (OnClose) before Stop returns; the round
+	// after them, since an opening socket hands itself to it.
+	m_server->Stop();
 	m_server.reset();
+	m_loginRound.reset();
 }

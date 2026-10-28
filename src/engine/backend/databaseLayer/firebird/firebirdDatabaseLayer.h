@@ -30,10 +30,10 @@ class BACKEND_API ibDatabaseLayerFirebird : public ibDatabaseLayer
 public:
 	// ctor()
 	ibDatabaseLayerFirebird();
-	ibDatabaseLayerFirebird(const wxString& strDatabase);
-	ibDatabaseLayerFirebird(const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
-	ibDatabaseLayerFirebird(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
-	ibDatabaseLayerFirebird(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword, const wxString& strRole);
+	ibDatabaseLayerFirebird(const ibString& strDatabase);
+	ibDatabaseLayerFirebird(const ibString& strDatabase, const ibString& strUser, const ibString& strPassword);
+	ibDatabaseLayerFirebird(const ibString& strServer, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword);
+	ibDatabaseLayerFirebird(const ibString& strServer, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword, const ibString& strRole);
 
 	ibDatabaseLayerFirebird(isc_db_handle pDatabase) { m_pDatabase = pDatabase; }
 
@@ -44,9 +44,9 @@ public:
 
 	// open database
 	virtual bool Open();
-	virtual bool Open(const wxString& strDatabase);
-	virtual bool Open(const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
-	virtual bool Open(const wxString& strServer, const wxString& strDatabase, const wxString& strUser = wxEmptyString, const wxString& strPassword = wxEmptyString);
+	virtual bool Open(const ibString& strDatabase);
+	virtual bool Open(const ibString& strDatabase, const ibString& strUser, const ibString& strPassword);
+	virtual bool Open(const ibString& strServer, const ibString& strDatabase, const ibString& strUser = ibEmptyString, const ibString& strPassword = ibEmptyString);
 
 	// close database  
 	virtual bool Close();
@@ -65,33 +65,30 @@ public:
 	// DoRollBack) are protected — see below.
 
 	static int TranslateErrorCode(int nCode);
-	//static wxString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, ISC_STATUS_ARRAY status);
-	static wxString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, void* status);
+	// …OF A STATUS VECTOR — the code every error path of this driver records: the primary gds code,
+	// status[1], whatever the SQLCODE says. Recording the SQLCODE instead (-803 for a duplicate key)
+	// left ClassifyDatabaseError below nothing to match, so a key violation surfaced as Unknown.
+	static int TranslateErrorCode(const void* status);
+	// The portable Kind of a gds code — recorded with the code wherever the driver reads one
+	// (SetErrorCode(code, kind)): the layer, the prepared statement, its wrapper, the result set and
+	// the blob writes. FB has no SQLSTATE — the gds code is the identifier.
+	static ibBackendDatabaseException::Kind ClassifyDatabaseError(int code);
+	//static ibString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, ISC_STATUS_ARRAY status);
+	static ibString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, void* status);
 	static bool IsAvailable();
 
-	// Map an isc_status[1] value (the FB "primary" gds code stashed
-	// into m_nErrorCode by every error path in this driver) to a
-	// portable Kind. FB doesn't expose SQLSTATE — the gds codes are
-	// the authoritative identifier. Common ones:
-	//   isc_lock_conflict / isc_deadlock              → Deadlock
-	//   isc_lock_timeout                              → Timeout
-	//   isc_network_error / isc_net_*                 → ConnectionLost
-	//   isc_dsql_command_err / isc_dsql_token_unk_err → Syntax
-	//   isc_unique_key_violation / isc_foreign_key    → Constraint
-	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
-
-	void SetServer(const wxString& strServer) { m_strServer = strServer; }
-	void SetDatabase(const wxString& strDatabase) { m_strDatabase = strDatabase; }
-	void SetUser(const wxString& strUser) { m_strUser = strUser; }
-	void SetPassword(const wxString& strPassword) { m_strPassword = strPassword; }
-	void SetRole(const wxString& strRole) { m_strRole = strRole; }
+	void SetServer(const ibString& strServer) { m_strServer = strServer; }
+	void SetDatabase(const ibString& strDatabase) { m_strDatabase = strDatabase; }
+	void SetUser(const ibString& strUser) { m_strUser = strUser; }
+	void SetPassword(const ibString& strPassword) { m_strPassword = strPassword; }
+	void SetRole(const ibString& strRole) { m_strRole = strRole; }
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
-	virtual bool TableExists(const wxString& table);
-	virtual bool ViewExists(const wxString& view);
-	virtual wxArrayString GetTables();
-	virtual wxArrayString GetViews();
-	virtual wxArrayString GetColumns(const wxString& table);
+	virtual bool TableExists(const ibString& table);
+	virtual bool ViewExists(const ibString& view);
+	virtual std::vector<ibString> GetTables();
+	virtual std::vector<ibString> GetViews();
+	virtual std::vector<ibString> GetColumns(const ibString& table);
 
 	virtual int GetDatabaseLayerType() const {
 		return DATABASELAYER_FIREBIRD;
@@ -167,11 +164,11 @@ public:
 protected:
 
 	// query database
-	virtual int DoRunQuery(const wxString& strQuery, bool bParseQuery);
-	virtual ibDatabaseResultSet* DoRunQueryWithResults(const wxString& strQuery);
+	virtual int DoRunQuery(const ibString& strQuery, bool bParseQuery);
+	virtual ibDatabaseResultSet* DoRunQueryWithResults(const ibString& strQuery);
 
 	// ibPreparedStatement support
-	virtual ibPreparedStatement* DoPrepareStatement(const wxString& strQuery);
+	virtual ibPreparedStatement* DoPrepareStatement(const ibString& strQuery);
 
 	// Driver-level transaction primitives. The base-class nesting
 	// counter (m_txDepth) guarantees these fire only on outermost
@@ -209,7 +206,7 @@ private:
 	// successful `Open`; compared against `ibFirebirdLeaderMode::
 	// CurrentConnectUrl()` on the reconnect path. Empty when no
 	// connection / standalone mode (no leader-mode involvement).
-	wxString m_currentConnectUrl;
+	ibString m_currentConnectUrl;
 
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	// Ref-counted: the maintenance scheduler (a process singleton) borrows this
@@ -225,11 +222,11 @@ private:
 	// anywhere to write it — see the note at the assignment.
 	bool m_localMaintenanceEligible = false;
 
-	wxString m_strServer;
-	wxString m_strDatabase;
-	wxString m_strUser;
-	wxString m_strPassword;
-	wxString m_strRole;
+	ibString m_strServer;
+	ibString m_strDatabase;
+	ibString m_strUser;
+	ibString m_strPassword;
+	ibString m_strRole;
 
 	// Single active transaction handle (0 when no TX is open). The
 	// base class collapses nested Begin/Commit calls onto this slot,

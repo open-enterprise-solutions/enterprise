@@ -2,14 +2,14 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantOwner.h"
 
-wxVariantData* ibPropertyChartOfCalculationTypes::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
+ibVariant ibPropertyChartOfCalculationTypes::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
 	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
-	return new ibVariantDataOwner(property, typeDesc);
+	return ibVariant(new ibVariantOwner(property, typeDesc));
 }
 
 ibMetaDescription& ibPropertyChartOfCalculationTypes::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
+	return get_cell_variant<ibVariantMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyChartOfCalculationTypes::SetValue(const ibMetaDescription& val)
@@ -18,9 +18,9 @@ void ibPropertyChartOfCalculationTypes::SetValue(const ibMetaDescription& val)
 }
 
 // The family rule — see propertyRecord.cpp.
-void ibPropertyChartOfCalculationTypes::DoSetValue(const wxVariant& val)
+void ibPropertyChartOfCalculationTypes::DoSetValue(const ibVariant& val)
 {
-	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+	if (const ibVariantMetaDesc* carried = find_cell_variant<ibVariantMetaDesc>(val)) {
 		SetValue(carried->GetMetaDesc());
 		return;
 	}
@@ -38,7 +38,7 @@ bool ibPropertyChartOfCalculationTypes::SetDataValue(const ibValue& varPropVal) 
 
 bool ibPropertyChartOfCalculationTypes::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibVariantDataOwner* owner = get_cell_variant<ibVariantDataOwner>();
+	const ibVariantOwner* owner = get_cell_variant<ibVariantOwner>();
 	wxASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;
@@ -46,12 +46,12 @@ bool ibPropertyChartOfCalculationTypes::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyChartOfCalculationTypes::ReadNodeValue(const ibDataValue& value)
 {
-	ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
+	ibBackendMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
 	return true;
 }
 
 bool ibPropertyChartOfCalculationTypes::WriteNodeValue(ibDataValue& value) const
 {
 	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
-	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
+	return ibBackendMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

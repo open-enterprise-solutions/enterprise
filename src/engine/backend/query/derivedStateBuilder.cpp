@@ -205,18 +205,18 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 	if (!folded)
 		ibBackendCoreException::Error(_("The derived table '%s' cannot be rebuilt: its source is not read from the database"),
 		                              derived.m_name);
-	std::vector<wxString> columns;
+	std::vector<ibString> columns;
 	std::vector<ibQueryProjItem> values;
-	const auto take = [&](const wxString& column, const wxString& output) {
+	const auto take = [&](const ibString& column, const ibString& output) {
 		columns.push_back(column);
-		values.push_back(ibQueryProjItem{ ibCol(wxT("r_"), output), column });
+		values.push_back(ibQueryProjItem{ ibCol(ibT("r_"), output), column });
 	};
 	if (!spec.m_periodColumn.IsEmpty() && spec.m_periodSource != nullptr)   // the read's own condition, above
 		take(spec.m_periodColumn, ibSqlAliasOf(spec.m_periodColumn));
 	// The period and the shard are named here each once, from their own names — `m_keys` holds neither, so
 	// nothing can put the same physical column into the statement twice.
 	for (const ibBackendQueryColumn* k : spec.m_keys)
-		for (const wxString& field : ColumnFieldNames(k))
+		for (const ibString& field : ColumnFieldNames(k))
 			take(field, field);
 	for (const ibSchemaDelta& d : spec.m_deltas)
 		take(d.m_column->GetPhysicalName(), ibSqlAliasOf(d.m_column->GetPhysicalName()));
@@ -228,7 +228,7 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 	// same transaction, and refuses it at commit.
 	{
 		ibSchemaBuilder schema(holder);
-		const ibDmlStatement insert = ibInsertSelect(derived.m_name, columns, ibProject(ibSubquery(folded, wxT("r_")), values));
+		const ibDmlStatement insert = ibInsertSelect(derived.m_name, columns, ibProject(ibSubquery(folded, ibT("r_")), values));
 		if (!schema.RunOrDefer(derived.m_name, [insert, holder]() {
 				ibDatabaseQueryBuilder write(holder);
 				return write.Execute(insert) >= 0;
@@ -332,7 +332,7 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 		for (const ibColumnSlot& slot : DescribeColumnLayout(k))
 			fields.push_back(slot);
 
-	const auto SumAlias = [](size_t n) { return wxString::Format(wxT("sum%u_"), static_cast<unsigned>(n)); };
+	const auto SumAlias = [](size_t n) { return ibString::Format(ibT("sum%u_"), static_cast<unsigned>(n)); };
 
 	// 1. READ one row per (key, shard) straight off the TOTALS table — never the movements. This
 	//    re-packs figures that are already correct instead of recomputing them, which is the whole
@@ -348,8 +348,8 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 	items.push_back(ibQueryProjItem{ ibCol(ShardColumnName()), ShardColumnName() });
 	read.GroupBy(ibCol(ShardColumnName()));
 	for (size_t n = 0; n < spec.m_deltas.size(); n++)
-		items.push_back(ibQueryProjItem{ ibFunc(wxT("SUM"), { ibCol(spec.m_deltas[n].m_column->GetPhysicalName()) }), SumAlias(n) });
-	items.push_back(ibQueryProjItem{ ibFunc(wxT("COUNT"), { ibCol(ShardColumnName()) }), wxT("rows_") });
+		items.push_back(ibQueryProjItem{ ibFunc(ibT("SUM"), { ibCol(spec.m_deltas[n].m_column->GetPhysicalName()) }), SumAlias(n) });
+	items.push_back(ibQueryProjItem{ ibFunc(ibT("COUNT"), { ibCol(ShardColumnName()) }), ibT("rows_") });
 	read.Project(std::move(items));
 	if (bounded)
 		read.Where(ibBinOp(ibQueryBinOp::Lt, ibCol(spec.m_periodColumn), ibConst(periodBefore)));
@@ -367,16 +367,16 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 		long long                   m_rows = 0;  // physical rows under this (key, shard)
 		bool                        m_addressable = true;
 	};
-	std::map<wxString, std::vector<ibShardRow>> spread;
+	std::map<ibString, std::vector<ibShardRow>> spread;
 
 	while (rows.Next()) {
 		ibShardRow row;
-		wxString id;
+		ibString id;
 		for (const ibColumnSlot& f : fields) {
-			id += wxT("\x1F");   // unit separator — never inside a field
+			id += ibT("\x1F");   // unit separator — never inside a field
 			if (rows.IsResultNull(f.m_name)) {
 				row.m_fields.push_back(ibIsNull(ibCol(f.m_name), false));
-				id += wxT("<null>");
+				id += ibT("<null>");
 				continue;
 			}
 			ibQueryExprPtr value;
@@ -384,14 +384,14 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 			case ibCanonicalKind::Boolean: {
 				const bool v = rows.GetResultBool(f.m_name);
 				value = ibConst(ibValue(v));
-				id += v ? wxT("1") : wxT("0");
+				id += v ? ibT("1") : ibT("0");
 				break;
 			}
 			case ibCanonicalKind::Integer:
 			case ibCanonicalKind::BigInt: {
 				const long long v = rows.GetResultLong(f.m_name);
 				value = ibConst(ibValue(ibNumber(v)));
-				id += wxString::Format(wxT("%lld"), v);
+				id += ibString::Format(ibT("%lld"), v);
 				break;
 			}
 			case ibCanonicalKind::Number: {
@@ -403,24 +403,24 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 			case ibCanonicalKind::Date: {
 				const ibDateTime v = rows.GetResultDate(f.m_name);
 				value = ibConst(ibValue(v));
-				id += wxString::Format(wxT("%lld"), v.GetValue());
+				id += ibString::Format(ibT("%lld"), v.GetValue());
 				break;
 			}
 			case ibCanonicalKind::String: {
-				const wxString v = rows.GetResultString(f.m_name);
+				const ibString v = rows.GetResultString(f.m_name);
 				value = ibConst(ibValue(v));
 				id += v;
 				break;
 			}
 			default: {   // Blob / Binary / Guid — the bytes as they are stored
-				wxMemoryBuffer bytes(0);
+				ibMemoryBuffer bytes(0);
 				rows.GetResultBlob(f.m_name, bytes);
 				// An empty but present blob has no spelling a statement can bind (ibParamOfConst takes it
 				// for a NULL), so a row that holds one cannot be named - it is read, and left alone.
 				row.m_addressable = row.m_addressable && bytes.GetDataLen() > 0;
 				value = ibConstBlob(bytes.GetData(), bytes.GetDataLen());
 				for (size_t b = 0; b < bytes.GetDataLen(); ++b)
-					id += wxString::Format(wxT("%02x"), static_cast<const unsigned char*>(bytes.GetData())[b]);
+					id += ibString::Format(ibT("%02x"), static_cast<const unsigned char*>(bytes.GetData())[b]);
 				break;
 			}
 			}
@@ -429,7 +429,7 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 		row.m_shard = rows.GetResultLong(ShardColumnName());
 		for (size_t n = 0; n < spec.m_deltas.size(); n++)
 			row.m_sums.push_back(rows.IsResultNull(SumAlias(n)) ? ibNumber() : rows.GetResultNumber(SumAlias(n)));
-		row.m_rows = rows.GetResultLong(wxT("rows_"));
+		row.m_rows = rows.GetResultLong(ibT("rows_"));
 		spread[id].push_back(std::move(row));
 	}
 
@@ -481,9 +481,9 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 		const auto Moved = [&spec](const std::vector<ibNumber>& sums, bool negate) {
 			std::vector<ibDmlAssign> assign;
 			for (size_t n = 0; n < spec.m_deltas.size(); n++) {
-				const wxString column = spec.m_deltas[n].m_column->GetPhysicalName();
+				const ibString column = spec.m_deltas[n].m_column->GetPhysicalName();
 				assign.push_back(ibDmlAssign{ column, ibBinOp(ibQueryBinOp::Add,
-					ibFunc(wxT("COALESCE"), { ibCol(column), ibConst(ibValue(ibNumber())) }),
+					ibFunc(ibT("COALESCE"), { ibCol(column), ibConst(ibValue(ibNumber())) }),
 					ibConst(ibValue(negate ? -sums[n] : sums[n]))) });
 			}
 			return assign;
@@ -516,7 +516,7 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 			ibQueryExprPtr empty = Aim(src);
 			for (const ibSchemaDelta& d : spec.m_deltas)
 				empty = ibBinOp(ibQueryBinOp::And, empty, ibBinOp(ibQueryBinOp::Eq,
-					ibFunc(wxT("COALESCE"), { ibCol(d.m_column->GetPhysicalName()), ibConst(ibValue(ibNumber())) }),
+					ibFunc(ibT("COALESCE"), { ibCol(d.m_column->GetPhysicalName()), ibConst(ibValue(ibNumber())) }),
 					ibConst(ibValue(ibNumber()))));
 			if (write.Execute(ibDelete(derived.m_name, empty)) < 0)
 				return false;

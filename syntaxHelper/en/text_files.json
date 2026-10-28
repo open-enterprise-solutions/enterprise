@@ -21,7 +21,7 @@
       "parameters": "path - the file to read. One that cannot be opened is refused, and the message names it.\nencoding - a member of TextEncoding; left out or given empty it is UTF8, which is STRICT: bytes that are not UTF-8 are refused rather than read with holes in them.",
       "return_descr": "TextReader.",
       "example": "Reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {              // Undefined, not \"\": an empty line is a line\n    if (Line <> \"\") {\n        Cut = Find(Line, \";\");\n        Code = Left(Line, Cut - 1);      // the first field\n    }\n    Line = Reader.ReadLine();\n}\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader.ReadLine",
         "cls.TextReader.Read",
@@ -49,7 +49,7 @@
       "parameters": "path - the file to read.\nencoding - a member of TextEncoding; left out or given empty it is UTF8.",
       "return_descr": "",
       "example": "Reader = New TextReader(first);\nMessage(Reader.ReadLine());\nReader.Open(second);          // the first file is let go; the reader stands at line 1 of the second\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Close",
@@ -73,7 +73,7 @@
       "parameters": "None.",
       "return_descr": "String - or Undefined at the end of the file.",
       "example": "Line = Reader.ReadLine();\nwhile (Line <> Undefined) {       // not while (Line <> \"\")\n    Message(Line);\n    Line = Reader.ReadLine();\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Read",
@@ -98,7 +98,7 @@
       "parameters": "None.",
       "return_descr": "String - \"\" when nothing is left.",
       "example": "Header = Reader.ReadLine();       // the first line on its own\nBody = Reader.Read();             // everything after it, line breaks and all\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.ReadLine",
@@ -122,7 +122,7 @@
       "parameters": "None.",
       "return_descr": "Number.",
       "example": "Reader = New TextReader(path);\nfor (n = 1 To Reader.LineCount()) {\n    Message(Reader.GetLine(n));\n}\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.GetLine",
@@ -147,7 +147,7 @@
       "parameters": "line - the line's number, counted from one. Below one, or past the last, the answer is Undefined.",
       "return_descr": "String - or Undefined when there is no such line.",
       "example": "Reader = New TextReader(path);\nMessage(Reader.GetLine(1));                    // the header line\nMessage(Reader.GetLine(Reader.LineCount()));   // the last one\nMessage(Reader.ReadLine());                    // still line 1: GetLine did not move it\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.LineCount",
@@ -172,7 +172,7 @@
       "parameters": "None.",
       "return_descr": "",
       "example": "Reader.Close();\nReader.Open(nextFile);        // the same reader, another file",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Open"
@@ -196,7 +196,7 @@
       "parameters": "path - the file to write. One that cannot be opened for writing is refused, and the message names it.\nencoding - a member of TextEncoding; left out or given empty it is UTF8.\nappend - True adds to the end of the file; False, the default, replaces it.",
       "return_descr": "TextWriter.",
       "example": "Writer = New TextWriter(GetTempDir() + \"sales.csv\", TextEncoding.UTF8);\nWriter.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"00001;Paper;12\");\nWriter.Close();                      // the export is whole only once this returned",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextWriter.Write",
         "cls.TextWriter.WriteLine",
@@ -223,7 +223,7 @@
       "parameters": "path - the file to write.\nencoding - a member of TextEncoding; left out or given empty it is UTF8.\nappend - True adds to the end of the file; False, the default, replaces it.",
       "return_descr": "",
       "example": "Writer = New TextWriter(first);\nWriter.WriteLine(\"one\");\nWriter.Open(second);          // the first file is CLOSED here - and a close that failed is told here\nWriter.WriteLine(\"two\");\nWriter.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Close",
@@ -247,7 +247,7 @@
       "parameters": "text - what to put down, as it is.",
       "return_descr": "",
       "example": "Writer.Write(\"00001;\");\nWriter.Write(\"Paper;\");\nWriter.WriteLine(\"12\");        // the break that ends the row",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.WriteLine",
@@ -272,7 +272,7 @@
       "parameters": "text - what to put down; the line break after it is added by this verb.",
       "return_descr": "",
       "example": "Writer.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"\");           // an empty line is a line - just the break",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Write",
@@ -296,7 +296,7 @@
       "parameters": "None.",
       "return_descr": "",
       "example": "try {\n    Writer.Close();\n} except {\n    Message(\"the export did not reach the disk: \" + ErrorDescription());\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Write",
@@ -321,7 +321,7 @@
       "parameters": "base64 - the bytes written as base64, the same form the value shows as text; strict, and anything else is refused. Another BinaryData is copied instead. Left out, the value holds no bytes.",
       "return_descr": "BinaryData.",
       "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\logo.png\");\nMessage(Bytes.Size());\nBytes.Write(GetTempDir() + \"logo.png\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.BinaryData.Size",
         "cls.BinaryData.Read",
@@ -347,7 +347,7 @@
       "parameters": "None.",
       "return_descr": "Number.",
       "example": "Bytes.Read(path);\nif (Bytes.Size() = 0) { Message(\"the file is empty\"); }",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Read"
@@ -370,7 +370,7 @@
       "parameters": "path - the file to read.",
       "return_descr": "",
       "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\price.zip\");\nMessage(Bytes.Size());",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Write",
@@ -395,7 +395,7 @@
       "parameters": "path - the file to write; it is replaced.",
       "return_descr": "",
       "example": "Bytes.Write(GetTempDir() + \"answer.bin\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Read",
@@ -420,7 +420,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.OEM);   // a file from a console program\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding.UTF8",
         "enum.TextEncoding.UTF16",
@@ -447,7 +447,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(path, TextEncoding.UTF8);   // the same as New TextReader(path)",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding",
         "cls.TextReader",
@@ -471,7 +471,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Writer = New TextWriter(path, TextEncoding.UTF16);\nWriter.WriteLine(\"code;name;qty\");\nWriter.Close();\nReader = New TextReader(path, TextEncoding.UTF16);   // the mark says which end comes first",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding",
         "cls.TextReader",
@@ -495,7 +495,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.ANSI);\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.OEM",
@@ -519,7 +519,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(\"C:\\in\\report.txt\", TextEncoding.OEM);   // written by a console program\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.ANSI",
@@ -543,7 +543,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(path, TextEncoding.System);   // whatever this machine writes\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.ANSI",

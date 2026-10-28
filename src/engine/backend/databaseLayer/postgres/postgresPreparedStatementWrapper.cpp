@@ -7,7 +7,19 @@
 #include <algorithm> // std::max — the highest `$N` of a statement
 #include <cstdlib>   // std::strtol — the affected-row count off libpq's ASCII buffer
 
-ibPreparedStatementPostgresWrapper::ibPreparedStatementPostgresWrapper(ibInterfacePostgres* pInterface, PGconn* pDatabase, const wxString& strSQL, const wxString& strStatementName)
+namespace {
+
+ibString SqlStateOf(ibInterfacePostgres* iface, PGresult* result)
+{
+	if (iface == nullptr || result == nullptr)
+		return ibString();
+	const char* state = iface->GetPQresultErrorField()(result, PG_DIAG_SQLSTATE);
+	return state != nullptr ? ibString::FromUTF8(state) : ibString();
+}
+
+}
+
+ibPreparedStatementPostgresWrapper::ibPreparedStatementPostgresWrapper(ibInterfacePostgres* pInterface, PGconn* pDatabase, const ibString& strSQL, const ibString& strStatementName)
 	: ibDatabaseErrorReporter(), m_strSQL(strSQL), m_strStatementName(strStatementName)
 {
 	m_pInterface = pInterface;
@@ -72,37 +84,25 @@ int ibPreparedStatementPostgresWrapper::GetParameterCount()
 
 	unsigned int len = m_strSQL.length();
 
-#ifndef _WXSTRING_COMPARE_STRING_
-	const auto& stl_strSQL = m_strSQL.ToStdWstring();
-#endif // !_WXSTRING_COMPARE_STRING_
-
 	for (unsigned int i = 0; i < len; i++)
 	{
-#ifndef _WXSTRING_COMPARE_STRING_
-		const auto& c = stl_strSQL.at(i);
-#else
-		const auto& c = m_strSQL.at(i);
-#endif
+		const ibChar c = m_strSQL[i];
 
-		if (wxT('\'') == c) {
+		if (ibT('\'') == c) {
 			// Signify that we are inside a string literal inside the SQL
 			bInStringLiteral = !bInStringLiteral;
 		}
-		else if ((wxT('?') == c) && !bInStringLiteral) {
+		else if ((ibT('?') == c) && !bInStringLiteral) {
 			nParameterCount++;
 		}
-		else if ((wxT('$') == c) && !bInStringLiteral) {
+		else if ((ibT('$') == c) && !bInStringLiteral) {
 			int nNumber = 0;
 			unsigned int j = i + 1;
 			for (; j < len; j++) {
-#ifndef _WXSTRING_COMPARE_STRING_
-				const auto& d = stl_strSQL.at(j);
-#else
-				const auto& d = m_strSQL.at(j);
-#endif
-				if (d < wxT('0') || d > wxT('9'))
+				const ibChar d = m_strSQL[j];
+				if (d < ibT('0') || d > ibT('9'))
 					break;
-				nNumber = nNumber * 10 + static_cast<int>(d - wxT('0'));
+				nNumber = nNumber * 10 + static_cast<int>(d - ibT('0'));
 			}
 			if (j > i + 1) {          // `$` followed by digits — a placeholder, not a `$` of some other use
 				nHighestDollar = std::max(nHighestDollar, nNumber);
@@ -118,8 +118,8 @@ void ibPreparedStatementPostgresWrapper::Deallocate()
 {
 	if (m_pDatabase == nullptr || m_strStatementName.IsEmpty())
 		return;
-	const wxCharBuffer sql = ConvertToUnicodeStream(wxT("DEALLOCATE \"") + m_strStatementName + wxT("\""));
-	PGresult* const pResult = m_pInterface->GetPQexec()(m_pDatabase, sql);
+	const std::string sql = ConvertToUnicodeStream(ibT("DEALLOCATE \"") + m_strStatementName + ibT("\""));
+	PGresult* const pResult = m_pInterface->GetPQexec()(m_pDatabase, sql.c_str());
 	// A refusal is not reported: the statement then lives until its connection closes, as every one did before.
 	// (Inside an aborted transaction the server takes nothing but its end — a statement closed there stays.)
 	if (pResult != nullptr)
@@ -128,20 +128,23 @@ void ibPreparedStatementPostgresWrapper::Deallocate()
 
 int ibPreparedStatementPostgresWrapper::DoRunQuery()
 {
+	m_sqlState.clear();
 	long nRows = -1;
 	int nParameters = m_Parameters.GetSize();
 	char** paramValues = m_Parameters.GetParamValues();
 	int* paramLengths = m_Parameters.GetParamLengths();
 	int* paramFormats = m_Parameters.GetParamFormats();
 	int nResultFormat = 0; // 0 = text, 1 = binary (all or none on the result set, not column based)
-	wxCharBuffer statementNameBuffer = ConvertToUnicodeStream(m_strStatementName);
-	PGresult* pResult = m_pInterface->GetPQexecPrepared()(m_pDatabase, statementNameBuffer, nParameters, paramValues, paramLengths, paramFormats, nResultFormat);
+	std::string statementNameBuffer = ConvertToUnicodeStream(m_strStatementName);
+	PGresult* pResult = m_pInterface->GetPQexecPrepared()(m_pDatabase, statementNameBuffer.c_str(), nParameters, paramValues, paramLengths, paramFormats, nResultFormat);
 	if (pResult != nullptr)
 	{
 		ExecStatusType status = m_pInterface->GetPQresultStatus()(pResult);
 		if ((status != PGRES_COMMAND_OK) && (status != PGRES_TUPLES_OK))
 		{
-			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)));
+			m_sqlState = SqlStateOf(m_pInterface, pResult);
+			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)),
+				ibDatabaseLayerPostgres::ClassifySqlState(m_sqlState));
 			SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQresultErrorMessage()(pResult)));
 		}
 
@@ -149,7 +152,7 @@ int ibPreparedStatementPostgresWrapper::DoRunQuery()
 		{
 			// Straight off libpq's ASCII buffer — this runs on every DML statement, and the
 			// count is a decimal digit string, so neither the charset conversion nor the
-			// wxString it fed was buying anything. Matches DoRunQuery in the layer.
+			// string it fed was buying anything. Matches DoRunQuery in the layer.
 			const char* const cmdTuples = m_pInterface->GetPQcmdTuples()(pResult);
 			if (cmdTuples != nullptr && *cmdTuples != '\0')
 				nRows = std::strtol(cmdTuples, nullptr, 10);
@@ -171,19 +174,22 @@ int ibPreparedStatementPostgresWrapper::DoRunQuery()
 
 ibDatabaseResultSet* ibPreparedStatementPostgresWrapper::DoRunQueryWithResults()
 {
+	m_sqlState.clear();
 	int nParameters = m_Parameters.GetSize();
 	char** paramValues = m_Parameters.GetParamValues();
 	int* paramLengths = m_Parameters.GetParamLengths();
 	int* paramFormats = m_Parameters.GetParamFormats();
 	int nResultFormat = 0; // 0 = text, 1 = binary (all or none on the result set, not column based)
-	wxCharBuffer statementNameBuffer = ConvertToUnicodeStream(m_strStatementName);
-	PGresult* pResult = m_pInterface->GetPQexecPrepared()(m_pDatabase, statementNameBuffer, nParameters, paramValues, paramLengths, paramFormats, nResultFormat);
+	std::string statementNameBuffer = ConvertToUnicodeStream(m_strStatementName);
+	PGresult* pResult = m_pInterface->GetPQexecPrepared()(m_pDatabase, statementNameBuffer.c_str(), nParameters, paramValues, paramLengths, paramFormats, nResultFormat);
 	if (pResult != nullptr)
 	{
 		ExecStatusType status = m_pInterface->GetPQresultStatus()(pResult);
 		if ((status != PGRES_COMMAND_OK) && (status != PGRES_TUPLES_OK))
 		{
-			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)));
+			m_sqlState = SqlStateOf(m_pInterface, pResult);
+			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)),
+				ibDatabaseLayerPostgres::ClassifySqlState(m_sqlState));
 			SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQresultErrorMessage()(pResult)));
 		}
 		else

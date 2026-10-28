@@ -9,7 +9,7 @@
 #include "backend/compiler/cache/byteCodeCache.h"              // AOT cache Load / Save
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModuleBase full type for GetGuid/GetClassType
 #include "backend/metaData.h"                         // ibMetaData::GetConfigMD5 — the cache key's second half
-#include "backend/compiler/scriptParseCode.h"          // ibParseCode — the export names a TEXT declares
+#include "core/compiler/scriptParseCode.h"          // ibParseCode — the export names a TEXT declares
 // DEF_VAR_SKIP — the sentinel a parameter's default-value slot carries when there is NO default.
 // ⚠ It lives on the COMPILE side while the field it marks (ibByteParam::m_defaultValue) lives in
 // byteCode.h, which describes it in a comment and cannot see it. Included rather than duplicated;
@@ -28,7 +28,7 @@ ibRuntimeModuleDataObject::~ibRuntimeModuleDataObject()
 		if (descId.isValid())
 			ibByteCode::Unregister(descId);
 	}
-	wxDELETE(m_compileModule);
+	delete m_compileModule;
 	// m_procUnit auto-destructs via shared_ptr when the last reference
 	// drops.
 }
@@ -192,7 +192,7 @@ static void ibExportNamesFromText(const ibValueMetaObjectModuleBase* moduleObjec
 	if (moduleObject == nullptr)
 		return;
 
-	ibParseCode parser;
+	ibParseCode parser(ibCompileCode::GetCodeStyle());
 
 	// A refusal is ordinary and says nothing: the text is somebody's work in progress, and half a
 	// declaration is what a module looks like while it is being typed. No names, no noise.
@@ -212,7 +212,7 @@ static void ibExportNamesFromText(const ibValueMetaObjectModuleBase* moduleObjec
 			// members: `Print` with nothing to say how to call it).
 			//
 			// Written here rather than at each reader: the parser is the one that saw the text.
-			const wxString signature = ibModuleCallForm(element);
+			const ibString signature = ibModuleCallForm(element);
 
 			if (element.m_eType == eExportFunction)
 				helper->AppendFunc(element.m_name, element.ParamCount(), signature, wxNOT_FOUND, alias);
@@ -246,26 +246,26 @@ void ibRuntimeModuleDataObject::ExportMethodsToHelper(ibValue::ibMemberTable* he
 		// records — the names travel there too (ibByteParam::m_strName), and this passed an empty
 		// helper string beside them. One convention, both roads: a caller must not be able to tell
 		// which side of the designer/runtime line answered it.
-		wxString signature = fn.m_strRealName + wxT("(");
+		ibString signature = fn.m_strRealName + ibT("(");
 		for (size_t index = 0; index < fn.m_listParam.size(); ++index) {
 
 			const auto& param = fn.m_listParam[index];
 			const bool optional = param.m_defaultValue.m_numArray != DEF_VAR_SKIP;
 
 			if (index > 0)
-				signature += wxT(", ");
+				signature += ibT(", ");
 
 			if (optional)
-				signature += wxT("[");
+				signature += ibT("[");
 			if (param.m_bByValue)
-				signature += wxT("Val ");
+				signature += ibT("Val ");
 
 			signature += param.m_strName;
 
 			if (optional)
-				signature += wxT("]");
+				signature += ibT("]");
 		}
-		signature += wxT(")");
+		signature += ibT(")");
 
 		helper->AppendMethod(fn.m_strRealName,
 			signature,
@@ -305,7 +305,7 @@ void ibRuntimeModuleDataObject::FillHelperFromBinds(ibValue::ibMemberTable* help
 		helper->AppendProp(kv.first, wxNOT_FOUND, alias);
 }
 
-ibValue* ibRuntimeModuleDataObject::GetBoundValue(const wxString& name) const
+ibValue* ibRuntimeModuleDataObject::GetBoundValue(const ibString& name) const
 {
 	const ibCompileModule* cm = GetCompileModule();
 	if (cm == nullptr) return nullptr;
@@ -313,8 +313,23 @@ ibValue* ibRuntimeModuleDataObject::GetBoundValue(const wxString& name) const
 	return (it != cm->m_listExternValue.end()) ? it->second : nullptr;
 }
 
+bool ibRuntimeModuleDataObject::GetBoundValue(const ibString& name, ibValue& out) const
+{
+	// A slot that cannot be written must not answer true and leave `out` stale.
+	if (out.m_bReadOnly)
+		return false;
+	ibValue* bound = GetBoundValue(name);
+	if (bound == nullptr)
+		return false;
+	// Copy what the cell holds. When the cell is a reference, that copy is the
+	// object it points at: the document stays writable, a const reference stays
+	// const, and the cell itself (an embedded member, refcount 0) is not counted.
+	out = *bound;
+	return true;
+}
+
 // Named context variable — name VISIBLE in the editor (ThisObject / ThisForm).
-void ibRuntimeModuleDataObject::BindContextVariable(const wxString& name, ibValue* value)
+void ibRuntimeModuleDataObject::BindContextVariable(const ibString& name, ibValue* value)
 {
 	if (ibCompileModule* cm = EnsureCompileModule())
 		cm->AddContextVariable(name, value, /*scopeContext=*/false);
@@ -327,7 +342,7 @@ void ibRuntimeModuleDataObject::BindContextVariable(const wxString& name, ibValu
 
 // Transparent scope container — name NOT an identifier, members surface into
 // scope (Manager / EnumManager / SystemManager).
-void ibRuntimeModuleDataObject::BindScopeVariable(const wxString& name, ibValue* value)
+void ibRuntimeModuleDataObject::BindScopeVariable(const ibString& name, ibValue* value)
 {
 	if (ibCompileModule* cm = EnsureCompileModule())
 		cm->AddContextVariable(name, value, /*scopeContext=*/true);
@@ -339,7 +354,7 @@ void ibRuntimeModuleDataObject::BindScopeVariable(const wxString& name, ibValue*
 
 // Export variable — name VISIBLE, stored in the extern map (global constants,
 // module-valued names).
-void ibRuntimeModuleDataObject::BindExportVariable(const wxString& name, ibValue* value)
+void ibRuntimeModuleDataObject::BindExportVariable(const ibString& name, ibValue* value)
 {
 	if (ibCompileModule* cm = EnsureCompileModule())
 		cm->AddVariable(name, value);
@@ -350,7 +365,7 @@ void ibRuntimeModuleDataObject::BindExportVariable(const wxString& name, ibValue
 // Plain writable LOCAL — name resolves to an ordinary frame local (kind=Local),
 // but the binder seeds its slot with `value` at init. No required/type pre-flight,
 // no member access. E.g. a constant's Value backed by &m_constValue.
-void ibRuntimeModuleDataObject::BindLocalVariable(const wxString& name, ibValue* value)
+void ibRuntimeModuleDataObject::BindLocalVariable(const ibString& name, ibValue* value)
 {
 	if (ibCompileModule* cm = EnsureCompileModule())
 		cm->AddLocalVariable(name, value);
@@ -360,7 +375,7 @@ void ibRuntimeModuleDataObject::BindLocalVariable(const wxString& name, ibValue*
 
 // Undo any Bind… for `name`. Does NOT lazy-create the compile module — there's
 // nothing to remove from a module that was never wired.
-void ibRuntimeModuleDataObject::UnbindVariable(const wxString& name)
+void ibRuntimeModuleDataObject::UnbindVariable(const ibString& name)
 {
 	if (m_compileModule != nullptr)
 		m_compileModule->RemoveVariable(name);
@@ -417,7 +432,7 @@ bool ibRuntimeModuleDataObject::Compile()
 	// standard save). In the Designer, editing a module and closing the document saves the metadata —
 	// the digest moves, the cache row retires by itself. A door that skips that has to be fixed at
 	// the door.
-	const wxString configMd5 = owner != nullptr ? owner->GetConfigMD5() : wxString();
+	const ibString configMd5 = owner != nullptr ? owner->GetConfigMD5() : ibString();
 
 	bool ready = false;
 	if (meta != nullptr && ibByteCodeCache::Load(bc, meta->GetGuid(), configMd5)) {

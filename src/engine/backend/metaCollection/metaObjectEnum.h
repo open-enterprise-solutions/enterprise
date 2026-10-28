@@ -21,9 +21,9 @@ class ibValueEnumSelectMode : public ibValueEnumeration<ibSelectMode> {
 	ibValueEnumSelectMode() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSelectMode_Items, wxT("Items"), _("Items"));
-		AddEnumeration(ibSelectMode_Folders, wxT("Folders"), _("Folders"));
-		AddEnumeration(ibSelectMode_FoldersAndItems, wxT("FoldersAndItems"), _("Folders and items"));
+		AddEnumeration(ibSelectMode_Items, ibT("Items"), _("Items"));
+		AddEnumeration(ibSelectMode_Folders, ibT("Folders"), _("Folders"));
+		AddEnumeration(ibSelectMode_FoldersAndItems, ibT("FoldersAndItems"), _("Folders and items"));
 	}
 };
 

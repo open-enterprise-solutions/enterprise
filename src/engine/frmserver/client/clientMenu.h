@@ -4,8 +4,8 @@
 // THE CLIENT'S MENU — wx's menu (wxMenuBar, wxMenu, wxMenuItem) made data: what the desktop's main frame put in its
 // menu bar, which a client draws as it likes. Built by the frame of the client's mode, as the desktop's
 // InitializeDefaultMenu built it (ibClientFrameRuntime, ibClientFrameDesigner). An item does one of the things the
-// protocol already does — a command of the documents (`command`), or a schema the client shows (`schema`) — or
-// opens a menu of its own; its name and key are the command's own, as the doc manager registered it. Whether an
+// protocol already does — a command of the documents (`command`), a schema the client shows (`schema`) or that
+// schema's command (`schema` with Command) — or opens a menu of its own; its name and key are the command's own, as the doc manager registered it. Whether an
 // item is enabled is not kept here: it is asked as the frame is drawn — of the document a command is done on, of
 // the schema's own right — the same questions a call of it is refused by.
 
@@ -13,12 +13,13 @@
 
 #include <wx/string.h>
 
+#include "core/core.h"   // ibPictureID
 #include "frmserver/docView/docCommand.h"
 #include "frmserver/schema/clientSchema.h"
 #include "frmserver/frmserver.h"
 
 // What a menu item is — wx's item kinds, those a server menu has, each with what it does.
-enum class ibClientMenuItemKind : s32 {
+enum class ibClientMenuItemKind : std::int32_t {
 	Separator = 0,   // a line between groups
 	Command   = 1,   // one of the documents' commands — done by the server (`command`)
 	Schema    = 2,   // a schema — asked for and shown by the client (`schema`)
@@ -31,14 +32,18 @@ public:
 	struct Item {
 		ibClientMenuItemKind kind = ibClientMenuItemKind::Separator;
 		ibDocCommand         command{};   // a command's
-		ibProtocolSchema   schema{};    // a schema's
-		wxString             title;       // a schema's and a menu's — a command's is its own
+		ibProtocol::ibSchema::ibKind   schema{};    // a schema's
+		ibProtocol::ibSchema::ibCommand schemaCommand{};   // …and the schema's command it does (none: the schema shown)
+		ibString             title;       // a schema's and a menu's — a command's is its own
+		ibPictureID          picture = 0; // …the same, wx's SetBitmap on the item: an engine's, by its id — the client
+		                                  // keeps it (core/picturePredefined); 0: drawn without one
 		std::vector<Item>    items;       // a menu's
 	};
 
 	Item& Append(ibDocCommand command);
-	Item& Append(ibProtocolSchema schema, const wxString& title);
-	Item& AppendSubMenu(const ibClientMenu& menu, const wxString& title);
+	Item& Append(ibProtocol::ibSchema::ibKind schema, const ibString& title);
+	Item& Append(ibProtocol::ibSchema::ibKind schema, ibProtocol::ibSchema::ibCommand command, const ibString& title);
+	Item& AppendSubMenu(const ibClientMenu& menu, const ibString& title);
 	void  AppendSeparator();
 
 	const std::vector<Item>& GetItems() const { return m_items; }

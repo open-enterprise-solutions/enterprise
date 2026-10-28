@@ -2,7 +2,7 @@
 #define __PROPERTY_COMPOSITION_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/compositionDescription.h"
+#include "core/description/compositionDescription.h"
 
 // base property for "composition" — the shape ibPropertyType has over an ibTypeDescription.
 //
@@ -12,7 +12,7 @@
 // description, exactly as there is one ibPropertyType for every kind of typed field.
 class BACKEND_API ibPropertyComposition : public ibProperty {
 	// ONE maker with a default — ibPropertySpreadsheet's shape over its own description.
-	static wxVariantData* CreateVariantData(ibPropertyObject* property,
+	static ibVariant CreateVariantData(ibPropertyObject* property,
 	                                        const ibCompositionDescription& val = ibCompositionDescription());
 public:
 
@@ -23,13 +23,13 @@ public:
 	//  builds one from it and keeps it where it belongs. A live object in the cell would be a second
 	//  state beside the stored one — the one that goes stale.)
 
-	ibPropertyComposition(ibPropertyCategory* cat, const wxString& name)
+	ibPropertyComposition(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyComposition(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyComposition(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibCompositionDescription& desc)
+	ibPropertyComposition(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibCompositionDescription& desc)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), desc)) {}
 
 	virtual bool IsEmptyProperty() const { return !GetValueAsCompositionDesc().IsOk(); }

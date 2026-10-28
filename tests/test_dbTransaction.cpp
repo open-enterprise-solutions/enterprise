@@ -45,11 +45,11 @@ struct DbTxFix : ::testing::Test {
         ready = true;
     }
 
-    void Exec(const wxString& sql) { db->RunQuery(wxT("%s"), sql); }
+    void Exec(const ibString& sql) { db->RunQuery(wxT("%s"), sql); }
 
     int CountRows() {
         ibDatabaseResultSet* rs =
-            db->RunQueryWithResults(wxT("%s"), wxString(wxT("SELECT count(*) AS c FROM t")));
+            db->RunQueryWithResults(wxT("%s"), ibString(wxT("SELECT count(*) AS c FROM t")));
         const int n = (rs != nullptr && rs->Next()) ? rs->GetResultInt(wxT("c")) : -1;
         if (rs != nullptr) db->CloseResultSet(rs);
         return n;

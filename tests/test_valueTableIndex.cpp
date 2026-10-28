@@ -55,7 +55,7 @@ protected:
     }
 
     // Appends a row and writes both cells. Returns the row's item.
-    ibDataViewItem AddRow(const wxString& code, const wxString& name) {
+    ibDataViewItem AddRow(const ibString& code, const ibString& name) {
         const long row = m_table->AppendRow();
         const ibDataViewItem item = m_table->GetItem(row);
         ibValueModel::ibComposerNode* node =
@@ -87,14 +87,14 @@ TEST_F(ValueTableIndex, FindsTheSameRowAsAScan) {
     AddRow(wxT("C"), wxT("third"));
 
     // Indexed column and unindexed column answer the same shape of question.
-    EXPECT_EQ(m_table->FindRowValue(ibValue(wxString(wxT("B"))), wxT("Code")), wanted);
-    EXPECT_EQ(m_table->FindRowValue(ibValue(wxString(wxT("second"))), wxT("Name")), wanted);
+    EXPECT_EQ(m_table->FindRowValue(ibValue(ibString(wxT("B"))), wxT("Code")), wanted);
+    EXPECT_EQ(m_table->FindRowValue(ibValue(ibString(wxT("second"))), wxT("Name")), wanted);
 }
 
 TEST_F(ValueTableIndex, MissAnswersNoRow) {
     AddRow(wxT("A"), wxT("first"));
-    EXPECT_FALSE(m_table->FindRowValue(ibValue(wxString(wxT("Z"))), wxT("Code")).IsOk());
-    EXPECT_FALSE(m_table->FindRowValue(ibValue(wxString(wxT("Z"))), wxT("Name")).IsOk());
+    EXPECT_FALSE(m_table->FindRowValue(ibValue(ibString(wxT("Z"))), wxT("Code")).IsOk());
+    EXPECT_FALSE(m_table->FindRowValue(ibValue(ibString(wxT("Z"))), wxT("Name")).IsOk());
 }
 
 // A column is not a key: equal cells are ordinary, and the answer is the FIRST
@@ -102,39 +102,39 @@ TEST_F(ValueTableIndex, MissAnswersNoRow) {
 TEST_F(ValueTableIndex, DuplicateCellsAnswerTheFirstRow) {
     const ibDataViewItem first = AddRow(wxT("SAME"), wxT("one"));
     AddRow(wxT("SAME"), wxT("two"));
-    EXPECT_EQ(m_table->FindRowValue(ibValue(wxString(wxT("SAME"))), wxT("Code")), first);
+    EXPECT_EQ(m_table->FindRowValue(ibValue(ibString(wxT("SAME"))), wxT("Code")), first);
 }
 
 // The point of building the index against the model's change counter: nothing
 // has to remember to invalidate it.
 TEST_F(ValueTableIndex, SeesARowAddedAfterTheFirstLookup) {
     AddRow(wxT("A"), wxT("first"));
-    EXPECT_TRUE(m_table->FindRowValue(ibValue(wxString(wxT("A"))), wxT("Code")).IsOk());   // builds it
+    EXPECT_TRUE(m_table->FindRowValue(ibValue(ibString(wxT("A"))), wxT("Code")).IsOk());   // builds it
 
     const ibDataViewItem added = AddRow(wxT("B"), wxT("second"));
-    EXPECT_EQ(m_table->FindRowValue(ibValue(wxString(wxT("B"))), wxT("Code")), added);
+    EXPECT_EQ(m_table->FindRowValue(ibValue(ibString(wxT("B"))), wxT("Code")), added);
 }
 
 TEST_F(ValueTableIndex, SeesACellChangedAfterTheFirstLookup) {
     const ibDataViewItem row = AddRow(wxT("OLD"), wxT("first"));
-    EXPECT_TRUE(m_table->FindRowValue(ibValue(wxString(wxT("OLD"))), wxT("Code")).IsOk());
+    EXPECT_TRUE(m_table->FindRowValue(ibValue(ibString(wxT("OLD"))), wxT("Code")).IsOk());
 
     ibValueModel::ibComposerNode* node =
         m_table->GetViewData<ibValueModel::ibComposerNode>(row);
     ASSERT_NE(node, nullptr);
-    node->SetValue((ibMetaID)m_code->GetColumnID(), ibValue(wxString(wxT("NEW"))));
+    node->SetValue((ibMetaID)m_code->GetColumnID(), ibValue(ibString(wxT("NEW"))));
     m_table->RowValueChanged(node, m_code->GetColumnID());
 
-    EXPECT_EQ(m_table->FindRowValue(ibValue(wxString(wxT("NEW"))), wxT("Code")), row);
-    EXPECT_FALSE(m_table->FindRowValue(ibValue(wxString(wxT("OLD"))), wxT("Code")).IsOk());
+    EXPECT_EQ(m_table->FindRowValue(ibValue(ibString(wxT("NEW"))), wxT("Code")), row);
+    EXPECT_FALSE(m_table->FindRowValue(ibValue(ibString(wxT("OLD"))), wxT("Code")).IsOk());
 }
 
 TEST_F(ValueTableIndex, SeesRowsCleared) {
     AddRow(wxT("A"), wxT("first"));
-    EXPECT_TRUE(m_table->FindRowValue(ibValue(wxString(wxT("A"))), wxT("Code")).IsOk());
+    EXPECT_TRUE(m_table->FindRowValue(ibValue(ibString(wxT("A"))), wxT("Code")).IsOk());
 
     m_table->Clear();
-    EXPECT_FALSE(m_table->FindRowValue(ibValue(wxString(wxT("A"))), wxT("Code")).IsOk());
+    EXPECT_FALSE(m_table->FindRowValue(ibValue(ibString(wxT("A"))), wxT("Code")).IsOk());
 }
 
 // Turning the declaration off puts the column back on the scan, and the answer
@@ -144,9 +144,9 @@ TEST_F(ValueTableIndex, TheAnswerDoesNotDependOnBeingIndexed) {
     AddRow(wxT("A"), wxT("first"));
     const ibDataViewItem wanted = AddRow(wxT("B"), wxT("second"));
 
-    const ibDataViewItem indexed = m_table->FindRowValue(ibValue(wxString(wxT("B"))), wxT("Code"));
+    const ibDataViewItem indexed = m_table->FindRowValue(ibValue(ibString(wxT("B"))), wxT("Code"));
     m_code->SetColumnIndexed(false);
-    const ibDataViewItem scanned = m_table->FindRowValue(ibValue(wxString(wxT("B"))), wxT("Code"));
+    const ibDataViewItem scanned = m_table->FindRowValue(ibValue(ibString(wxT("B"))), wxT("Code"));
 
     EXPECT_EQ(indexed, wanted);
     EXPECT_EQ(scanned, wanted);

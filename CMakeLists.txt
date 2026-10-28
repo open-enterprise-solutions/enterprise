@@ -28,9 +28,18 @@ project(enterprise
 # C++ standard
 # ---------------------------------------------------------------------------
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+# No C++20 modules here — and without this every source is scanned for them first.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
+if(APPLE)
+    enable_language(OBJCXX)
+    set(CMAKE_OBJCXX_STANDARD 20)
+    set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
+    set(CMAKE_OBJCXX_EXTENSIONS OFF)
+endif()
 
 # ---------------------------------------------------------------------------
 # Export compile_commands.json for IDE / clangd support
@@ -59,12 +68,6 @@ endforeach()
 # ---------------------------------------------------------------------------
 
 option(BUILD_TESTING       "Build unit tests (Google Test)"     OFF)
-
-# The web pair — wfrontend (the OES_USE_WEB frontend) and wenterprise-server.
-# Off by default: until the three CI toolchains have all built them, the desktop
-# suite is what `cmake -B build` is expected to produce, and a web source that
-# stops compiling somewhere must not be able to take that down with it.
-option(OES_BUILD_WEB       "Build the web runtime (wfrontend + wenterprise-server)" OFF)
 
 option(OES_USE_FIREBIRD    "Enable Firebird database driver"    OFF)
 option(OES_USE_POSTGRESQL  "Enable PostgreSQL database driver"  OFF)
@@ -235,29 +238,26 @@ oes_require_submodule(nlohmann single_include/nlohmann/json.hpp)
 # Common to all platforms
 add_compile_definitions(_UNICODE UNICODE)
 
-# cpp-httplib, for every translation unit that includes it (the MCP server, the script's HTTP client,
-# the web server, the tests): its inline functions read these, and two units compiled under two values
-# of one macro are one definition too many - so the whole build says it once. ConfigurationDefs.props
-# says the same for the solution.
+# cpp-httplib, for every translation unit that includes it (the tests' reference servers and clients): its
+# inline functions read these, and two units compiled under two values of one macro are
+# one definition too many - so the whole build says it once. ConfigurationDefs.props says the same for the
+# solution.
 #   EXPECT_100_THRESHOLD=0 - the client does not add `Expect: 100-continue` to a body of 1 KB or more by
-#   itself: a server that does not speak it (an older proxy, a cash register's firmware) answers a second
-#   late or not at all, and a script has no header it may set to stop that.
+#   itself: a server that does not speak it answers a second late or not at all.
 #   SEND_FLAGS=MSG_NOSIGNAL - off Windows a write to a peer that hung up raises SIGPIPE, whose default
-#   ends the process; the flag keeps it an error the caller sees. macOS has no such flag and sets
-#   SO_NOSIGPIPE on the socket instead (backend/system/value/valueHttp.cpp).
+#   ends the process; the flag keeps it an error the caller sees.
 add_compile_definitions(CPPHTTPLIB_EXPECT_100_THRESHOLD=0)
 if(NOT WIN32 AND NOT APPLE)
     add_compile_definitions(CPPHTTPLIB_SEND_FLAGS=MSG_NOSIGNAL)
 endif()
 
-# TLS for cpp-httplib: Mbed TLS, a submodule built here - nothing installed, nothing from the system (the tree
+# MBED TLS - THE CORE'S (core/tls): a submodule built here - nothing installed, nothing from the system (the tree
 # holds OpenSSL only as a run-time client of PostgreSQL, without headers). Its tests and programs stay out; the
-# generated files are in the tag, so no Python is needed. One macro for the whole build, for the reason the
-# two above give; the library reads the platform's own trust store by itself (the Windows store, the macOS
-# keychain, /etc/ssl/certs on Linux). Everything that includes httplib.h links the three libraries through
-# backend, which carries them as PUBLIC.
+# generated files are in the tag, so no Python is needed. Linked by the core alone, PRIVATE: a cipher, a random
+# byte, TLS are asked of the core (core/crypto, core/net). The one other user is the test binary, whose
+# reference TLS servers are cpp-httplib's (tests/CMakeLists.txt).
 oes_require_submodule(mbedtls CMakeLists.txt)
-# ⚠ A STATIC LIBRARY THAT GOES INTO A SHARED ONE HAS TO BE POSITION-INDEPENDENT. backend is a shared
+# ⚠ A STATIC LIBRARY THAT GOES INTO A SHARED ONE HAS TO BE POSITION-INDEPENDENT. core is a shared
 # library and Mbed TLS builds static ones, which say nothing about -fPIC; on a Linux whose gcc defaults to
 # PIE that is a link error ("relocation R_X86_64_PC32 ... recompile with -fPIC") and nowhere else. It is the
 # DIRECTORY variable rather than a target property, because the targets do not exist until the subdirectory
@@ -266,12 +266,19 @@ oes_require_submodule(mbedtls CMakeLists.txt)
 # changes: wxWidgets and the executables are compiled exactly as they were.
 set(OES_PIC_WAS ${CMAKE_POSITION_INDEPENDENT_CODE})
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# ⚠ AND HIDDEN. A copy per module is the design (core/tls/oes_mbedtls_threading.h): the core and a test binary
+# each link their own. Compiled with the default visibility, on Linux every shared library also
+# EXPORTS its copy, and the loader binds the copies' globals to the first one loaded - one module's state read
+# through another's (ASan: odr-violation on mbedtls_ssl_tls13_labels, oes_protocol_test against libcore.so).
+# Hidden, each copy stays its module's, as Windows and macOS keep them anyway. Put back afterwards, as PIC is.
+set(OES_C_VISIBILITY_WAS ${CMAKE_C_VISIBILITY_PRESET})
+set(CMAKE_C_VISIBILITY_PRESET hidden)
 # What this build needs on top of Mbed TLS's own configuration - threads, above all (the file says why). The
 # directory goes on the include path for the whole build because Mbed TLS's OWN sources include
 # threading_alt.h by that name (library/threading.h), and so do the two translation units of ours that hand
 # the mutexes over.
-set(MBEDTLS_USER_CONFIG_FILE "${OES_ENGINE_DIR}/backend/tls/oes_mbedtls_config.h" CACHE FILEPATH "Mbed TLS: what this build adds to its configuration" FORCE)
-include_directories("${OES_ENGINE_DIR}/backend/tls")
+set(MBEDTLS_USER_CONFIG_FILE "${OES_ENGINE_DIR}/core/tls/oes_mbedtls_config.h" CACHE FILEPATH "Mbed TLS: what this build adds to its configuration" FORCE)
+include_directories("${OES_ENGINE_DIR}/core/tls")
 set(ENABLE_TESTING OFF CACHE BOOL "Mbed TLS: its own tests" FORCE)
 set(ENABLE_PROGRAMS OFF CACHE BOOL "Mbed TLS: its sample programs" FORCE)
 set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "Mbed TLS: -Werror" FORCE)
@@ -282,7 +289,45 @@ set(GEN_FILES OFF CACHE BOOL "Mbed TLS: regenerate its generated sources" FORCE)
 set(LINK_WITH_PTHREAD ON CACHE BOOL "Mbed TLS: link the thread library it takes its mutexes from" FORCE)
 add_subdirectory(src/3rdparty/mbedtls EXCLUDE_FROM_ALL)
 set(CMAKE_POSITION_INDEPENDENT_CODE ${OES_PIC_WAS})
-add_compile_definitions(CPPHTTPLIB_MBEDTLS_SUPPORT)
+set(CMAKE_C_VISIBILITY_PRESET ${OES_C_VISIBILITY_WAS})
+
+# THE CORE'S HTTP (core/net) — the engine's: llhttp parses the requests, Asio carries the sockets (both
+# the core's alone). llhttp is built here from the three C files of its release branch, as
+# core/net/llhttp/llhttp.vcxproj builds them: its own CMake writes into the submodule's tree and asks for CMake 3.25.
+# Asio is header-only, compiled once inside the core (core/net/asio.cpp).
+oes_require_submodule(llhttp include/llhttp.h)
+oes_require_submodule(asio asio/include/asio.hpp)
+add_library(llhttp STATIC
+    "${OES_3RDPARTY_DIR}/llhttp/src/llhttp.c"
+    "${OES_3RDPARTY_DIR}/llhttp/src/http.c"
+    "${OES_3RDPARTY_DIR}/llhttp/src/api.c"
+)
+target_include_directories(llhttp PUBLIC "${OES_3RDPARTY_DIR}/llhttp/include")
+set_target_properties(llhttp PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Another tree's generated C: its warnings are not ours to read.
+if(MSVC)
+    target_compile_options(llhttp PRIVATE /W0)
+else()
+    target_compile_options(llhttp PRIVATE -w)
+endif()
+
+# THE CORE'S PNG (core/graphics/picture.h) — a picture as data is read, scaled and written without a wx image, so the
+# server needs none. lodepng is one file with its own inflate and deflate, built here as
+# core/graphics/lodepng/lodepng.vcxproj builds it; a picture comes as bytes, never from lodepng's own file reading.
+oes_require_submodule(lodepng lodepng.h)
+add_library(lodepng STATIC "${OES_3RDPARTY_DIR}/lodepng/lodepng.cpp")
+target_include_directories(lodepng PUBLIC "${OES_3RDPARTY_DIR}/lodepng")
+target_compile_definitions(lodepng PRIVATE LODEPNG_NO_COMPILE_DISK)
+set_target_properties(lodepng PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(lodepng PRIVATE /W0)
+else()
+    target_compile_options(lodepng PRIVATE -w)
+endif()
+
+# THE CORE'S SVG (ibPicture::FromSvg) — NanoSVG, two headers, compiled in core/graphics/picture.cpp: an SVG read and
+# drawn into pixels the core writes as a PNG. Nothing to build here.
+oes_require_submodule(nanosvg src/nanosvg.h)
 
 if(WIN32)
     add_compile_definitions(
@@ -293,6 +338,9 @@ if(WIN32)
         _CRT_SECURE_NO_DEPRECATE=1
         _CRT_NON_CONFORMING_SWPRINTFS=1
         _SCL_SECURE_NO_WARNINGS=1
+        # C++20 deprecates atomic_load/store over shared_ptr for std::atomic<std::shared_ptr>, which Apple
+        # Clang's libc++ does not have yet: the free functions stay the one spelling all three compile.
+        _SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING
     )
 elseif(APPLE)
     add_compile_definitions(
@@ -393,6 +441,8 @@ include_directories(
 # Configure wxWidgets build options before add_subdirectory
 set(wxBUILD_SHARED   ON  CACHE BOOL "Build wxWidgets as shared libraries" FORCE)
 set(wxBUILD_MONOLITHIC OFF CACHE BOOL "Build wxWidgets as a single library" FORCE)
+# wx follows CMAKE_CXX_STANDARD only when its option is not cached yet; an existing build tree keeps the old one.
+set(wxBUILD_CXX_STANDARD ${CMAKE_CXX_STANDARD} CACHE STRING "C++ standard used to build wxWidgets targets" FORCE)
 
 # Disable wxWidgets components we do not need to speed up the build
 set(wxBUILD_TESTS    OFF CACHE BOOL "" FORCE)
@@ -564,39 +614,46 @@ endif()
 # The expected target names and types are:
 #
 #   backend       — SHARED library  (defines BACKEND_EXPORTS)
-#   frontend      — SHARED library  (defines FRONTEND_EXPORTS, links wx GUI)
 #   frmserver     — SHARED library  (defines FRMSERVER_EXPORTS; the server's frontend and the client protocol)
 #   frmclient      — SHARED library  (defines FRMCLIENT_EXPORTS; the thin client's core — the protocol's client half)
 #   fileserver     — SHARED library  (defines FILESERVER_EXPORTS; a file base for the thin client, loaded by frmclient)
 #   appserver     — executable      (console subsystem; the application server — `daemon` is its alias)
-#   enterprise    — executable      (GUI subsystem)
+#   appcluster    — executable      (console subsystem, or a service; a server per base of the folder — links core alone)
+#   appcluster-tray — executable    (GUI subsystem; the cluster's tray — links core alone)
+#   webserver     — executable      (console subsystem; the bases' transport for browsers — links protocol alone)
 #   enterprise-thin   — executable      (GUI subsystem; the thin runtime — links frmclient alone)
-#   designer      — executable      (GUI subsystem)
+#   designer-thin — executable      (GUI subsystem; the thin designer — links frmclient alone)
 #   launcher      — executable      (GUI subsystem)
 #   codeRunner    — executable      (GUI subsystem)
 #   simplePlugin  — SHARED library  (plugin example)
-#   wfrontend     — SHARED library  (the web frontend, OES_BUILD_WEB)
-#   wenterprise-server — executable (the web HTTP server, OES_BUILD_WEB)
 # ---------------------------------------------------------------------------
+
+# A REFERENCE TO A TEMPORARY IS AN ERROR, not a warning, in our code (here, so the third-party trees above keep
+# their own): `const ibString& GetBuffer() const` over a std::wstring member returned a string that died in the
+# getter, and 147 tests crashed at exit in the pool's drain (2026-10-27).
+if(MSVC)
+    add_compile_options(/we4172)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_compile_options(-Werror=return-stack-address)
+else()
+    add_compile_options(-Werror=return-local-addr)
+endif()
 
 add_subdirectory("${OES_ENGINE_DIR}/core")
 add_subdirectory("${OES_ENGINE_DIR}/backend")
-add_subdirectory("${OES_ENGINE_DIR}/frontend")
 add_subdirectory("${OES_ENGINE_DIR}/protocol")
 add_subdirectory("${OES_ENGINE_DIR}/frmserver")
 add_subdirectory("${OES_ENGINE_DIR}/fileserver")
 add_subdirectory("${OES_ENGINE_DIR}/frmclient")
 add_subdirectory("${OES_ENGINE_DIR}/appserver")
-add_subdirectory("${OES_ENGINE_DIR}/enterprise")
+add_subdirectory("${OES_ENGINE_DIR}/appcluster")
+add_subdirectory("${OES_ENGINE_DIR}/appcluster-tray")
+add_subdirectory("${OES_ENGINE_DIR}/webserver")
 add_subdirectory("${OES_ENGINE_DIR}/enterprise-thin")
-add_subdirectory("${OES_ENGINE_DIR}/designer")
+add_subdirectory("${OES_ENGINE_DIR}/designer-thin")
 add_subdirectory("${OES_ENGINE_DIR}/launcher")
 add_subdirectory("${OES_ENGINE_DIR}/codeRunner")
 add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
-
-if(OES_BUILD_WEB)
-    add_subdirectory("${OES_ENGINE_DIR}/wenterprise-server")
-endif()
 
 # ---------------------------------------------------------------------------
 # Unit tests (Google Test)

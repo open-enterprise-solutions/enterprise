@@ -10,22 +10,14 @@
 
 #include "core/build.h"   // GetBuildId / GetBuildStamp
 #include "core/guid.h"
-#include "core/types.h"   // the class ids, the ids of the configuration, the kinds of a value
+#include "core/core.h"    // the class ids, the ids of the configuration, the kinds of a value
+#include "core/fboolean.h"
 #include "core/fnumber.h"
 #include "core/fdatetime.h"
 #include "core/fstring.h"
-#include "typeconv.h"
+#include "core/graphics/picture.h"   // ibPicture — a picture as data: what an icon is on this side
+#include "core/memory/memoryBuffer.h"
 #include "core/stringUtils.h"
-
-//*******************************************************************************************
-
-#define oes_clipboard_metadata	wxT("oes_clipboard_metadata")
-#define oes_clipboard_frame		wxT("oes_clipboard_frame")
-#define oes_clipboard_interface	wxT("oes_clipboard_interface")
-#define oes_clipboard_role		wxT("oes_clipboard_role")
-#define oes_clipboard_template	wxT("oes_clipboard_template")
-#define oes_clipboard_attribute	wxT("oes_clipboard_attribute")
-#define oes_clipboard_command	wxT("oes_clipboard_command")
 
 //*******************************************************************************************
 //*                                 Special structures                                      *
@@ -100,13 +92,9 @@ typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
 //use dynamic linking 
 #define _USE_DYNAMIC_DATABASE_LAYER_LINKING 1
 
-//max precision 
-#define MAX_PRECISION_NUMBER 32
-//max precision 
-#define MAX_LENGTH_STRING 1024
-//stack guard
-#define MAX_OBJECTS_LEVEL 100
-//max record level 
+// (MAX_PRECISION_NUMBER / MAX_LENGTH_STRING are the core's: core/core.h — the query's parser reads them too.)
+// (The stack guard — MAX_OBJECTS_LEVEL — is the translator's, in the core: core/compiler/codeDef.h.)
+//max record level
 #define MAX_REC_COUNT 200
 
 #if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
@@ -117,10 +105,7 @@ typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
 
 // (The program's version — ibProgramVersion, version_oes_last — is the core's, beside its build: core/build.h.)
 
-enum ibProgramSyntax {
-	syntax_ves,    // Visual Basic-style ES, a legacy business-scripting dialect — keyword-fenced (Then/Do/EndIf/...).
-	syntax_ces,    // C-style ES — paren conditions, brace bodies, `;` terminators (default).
-};
+// (The program's syntax — ibProgramSyntax — is the core's, beside the language it chooses: core/compiler/codeDef.h.)
 
 // ⭐⭐ WHAT KIND OF EVALUATION IS RUNNING — one value rather than a flag per capability.
 //

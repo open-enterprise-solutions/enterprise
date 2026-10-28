@@ -12,7 +12,7 @@ public:
 		m_classType = characteristic_to_clsid(GetMetaObject()->GetMetaID(), clsid_metaclass(GetMetaObject()->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
+	virtual ibString GetClassName() const {
 		return prefixCharacteristic + m_metaObject->GetName();
 	}
 

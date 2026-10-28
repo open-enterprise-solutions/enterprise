@@ -10,7 +10,8 @@
 
 #include "dataComposerInternal.h"
 
-#include "backend/query/queryRender.h"             // ibQueryColumnFromPath — a dotted path becomes its hops, once
+#include "backend/backend_composition.h"           // ibStoredValue — a condition's literal and a rule's values, unpacked
+#include "core/query/queryRender.h"             // ibQueryColumnFromPath — a dotted path becomes its hops, once
 #include "backend/query/queryConstructorModel.h"   // ibQueryConstructorField — the leaf a path walks to (WalkPath)
 #include "backend/query/queryHierarchy.h"          // ibQueryHierarchyScope — what «in hierarchy» admits; how «in» lists
 // ibCompositionRulesOf — the ONE place an appearance becomes what a cell is drawn with, so the only one that knows
@@ -18,7 +19,7 @@
 #include "backend/system/value/valueColour.h"   // its colours
 #include "backend/system/value/valueFont.h"     // its font
 #include "backend/compiler/enumUnit.h"          // its alignment, an enumeration member…
-#include "backend/spreadsheetDescription.h"     // …in the sheet's own word, ibSpreadsheetAlignmentHorz
+#include "core/description/spreadsheetDescription.h"   // …in the sheet's own word, ibSpreadsheetAlignmentHorz
 #include "backend/backend_localization.h"       // its Text and Format, in every language
 #include "core/formatString.h"               // what its Format writes a value as
 
@@ -30,18 +31,18 @@
 // the engine
 //////////////////////////////////////////////////////////////////////
 
-bool ibCompositionCompare(const ibValue& cell, const wxString& op, const ibValue& value)
+bool ibCompositionCompare(const ibValue& cell, const ibString& op, const ibValue& value)
 {
-	if (op == wxT("="))                            return cell == value;
-	if (op == wxT("<>") || op == wxT("!="))        return cell != value;
-	if (op == wxT(">"))                            return cell >  value;
-	if (op == wxT(">="))                           return cell >= value;
-	if (op == wxT("<"))                            return cell <  value;
-	if (op == wxT("<="))                           return cell <= value;
-	if (op.CmpNoCase(wxT("LIKE")) == 0) {
-		wxString pattern = value.GetString();
-		pattern.Replace(wxT("%"), wxT("*"));
-		pattern.Replace(wxT("_"), wxT("?"));
+	if (op == ibT("="))                            return cell == value;
+	if (op == ibT("<>") || op == ibT("!="))        return cell != value;
+	if (op == ibT(">"))                            return cell >  value;
+	if (op == ibT(">="))                           return cell >= value;
+	if (op == ibT("<"))                            return cell <  value;
+	if (op == ibT("<="))                           return cell <= value;
+	if (op.CmpNoCase(ibT("LIKE")) == 0) {
+		ibString pattern = value.GetString();
+		pattern.Replace(ibT("%"), ibT("*"));
+		pattern.Replace(ibT("_"), ibT("?"));
 		return cell.GetString().Lower().Matches(pattern.Lower());
 	}
 	return true;   // unknown operator → do not hide anything over a line nobody can read
@@ -61,8 +62,8 @@ bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind, const ibVa
 	case ibComparisonKind_GreaterEqual: return cell >= value;
 	case ibComparisonKind_Less:         return cell <  value;
 	case ibComparisonKind_LessEqual:    return cell <= value;
-	case ibComparisonKind_Contains:     return ibCompositionCompare(cell, wxT("LIKE"),
-	                                        ibValue(wxT("%") + value.GetString() + wxT("%")));
+	case ibComparisonKind_Contains:     return ibCompositionCompare(cell, ibT("LIKE"),
+	                                        ibValue(ibT("%") + value.GetString() + ibT("%")));
 	// WHETHER THERE IS A VALUE — the cell alone; NULL, an empty reference, "", 0, an empty date and False are none.
 	case ibComparisonKind_Filled:       return !cell.IsEmpty();
 	case ibComparisonKind_NotFilled:    return cell.IsEmpty();
@@ -86,10 +87,12 @@ bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind, const ibVa
 namespace {
 enum class ibConditionReading { False, True, Unknown };
 
-// WHAT THE CALLER KNOWS, carried down the tree as one: the row's values, and the subtrees «in hierarchy» names.
+// WHAT THE CALLER KNOWS, carried down the tree as one: the row's values, the subtrees «in hierarchy» names, and the
+// configuration a literal is restored against.
 struct ibConditionRow {
 	const ibCompositionValueOf&   m_valueOf;
 	const ibCompositionSubtreeOf& m_subtreeOf;
+	const ibMetaData*             m_metaData;
 };
 
 ibConditionReading ReadCondition(const ibFilterNodeDescription& node, const ibConditionRow& row);
@@ -128,7 +131,7 @@ ibConditionReading ReadCondition(const ibFilterNodeDescription& node, const ibCo
 		return ReadGroup(node.m_groupKind, node.m_children, row);
 	// A CONDITION NAMES A FIELD of the row, compared with a VALUE — or with another field of the same row, read
 	// the same way (a table in memory has no server to have answered that one for it).
-	const auto valueOf = [&row](const wxString& path) { return row.m_valueOf ? row.m_valueOf(path) : nullptr; };
+	const auto valueOf = [&row](const ibString& path) { return row.m_valueOf ? row.m_valueOf(path) : nullptr; };
 	const ibValue* cell  = node.m_left.IsField() ? valueOf(node.m_left.m_path) : nullptr;
 	// «FILLED» ASKS THE CELL ALONE — no right side is read, and a NULL is its answer (not filled), not an unknown:
 	// that is the whole point of asking it (Max, 2026-09-30: a row with no supplier at all is told apart only this way).
@@ -138,7 +141,8 @@ ibConditionReading ReadCondition(const ibFilterNodeDescription& node, const ibCo
 		return ibCompositionCompare(*cell, node.m_comparison, ibValue())
 			? ibConditionReading::True : ibConditionReading::False;
 	}
-	const ibValue* value = node.m_right.IsField() ? valueOf(node.m_right.m_path) : &node.m_right.m_value;
+	const ibValue  literal = node.m_right.IsField() ? ibValue() : ibStoredValue(node.m_right.m_value, row.m_metaData);
+	const ibValue* value   = node.m_right.IsField() ? valueOf(node.m_right.m_path) : &literal;
 	if (cell == nullptr || value == nullptr)
 		return ibConditionReading::Unknown;
 	// ⭐ …AND A NULL IS A VALUE THE ROW DOES NOT CARRY — a record's field on a heading (the fold hands a column its
@@ -159,32 +163,34 @@ ibConditionReading ReadCondition(const ibFilterNodeDescription& node, const ibCo
 }
 }   // namespace
 
-bool ibCompositionFilterHolds(const ibFilterDescription& filter, const ibCompositionValueOf& valueOf,
-	const ibCompositionSubtreeOf& subtreeOf, bool whenUnknown)
+bool ibCompositionFilterHolds(const ibFilterDescription& filter, const ibMetaData* metaData,
+	const ibCompositionValueOf& valueOf, const ibCompositionSubtreeOf& subtreeOf, bool whenUnknown)
 {
-	const ibConditionReading reading = ReadGroup(filter.m_rootKind, filter.m_nodes, ibConditionRow{ valueOf, subtreeOf });
+	const ibConditionReading reading = ReadGroup(filter.m_rootKind, filter.m_nodes,
+		ibConditionRow{ valueOf, subtreeOf, metaData });
 	return reading == ibConditionReading::Unknown ? whenUnknown : reading == ibConditionReading::True;
 }
 
-bool ibCompositionSayRules(const std::vector<ibCompositionRule>& rules, const ibCompositionValueOf& valueOf,
-	const ibCompositionSubtreeOf& subtreeOf, ibCompositionAttr& line, const ibCompositionSayField& sayField)
+bool ibCompositionSayRules(const std::vector<ibCompositionRule>& rules, const ibMetaData* metaData,
+	const ibCompositionValueOf& valueOf, const ibCompositionSubtreeOf& subtreeOf, ibCompositionAttr& line,
+	const ibCompositionSayField& sayField)
 {
 	bool any = false;
 	for (const ibCompositionRule& rule : rules) {
 		// A condition this row cannot answer does not mark it: a highlight nobody can explain is noise.
-		if (!ibCompositionFilterHolds(rule.m_rule->m_condition, valueOf, subtreeOf, /*whenUnknown*/ false))
+		if (!ibCompositionFilterHolds(rule.m_rule->m_condition, metaData, valueOf, subtreeOf, /*whenUnknown*/ false))
 			continue;
 		any = true;
 		if (rule.m_rule->m_fields.empty())
 			line.Say(rule.m_attr);
-		for (const wxString& field : rule.m_rule->m_fields)
+		for (const ibString& field : rule.m_rule->m_fields)
 			sayField(field, rule.m_attr);
 	}
 	return any;
 }
 
 // (Out of line, beside the Format it applies: the contract names ibFormatString and does not include it.)
-bool ibCompositionAttr::TextOf(const ibValue& value, wxString& text) const
+bool ibCompositionAttr::TextOf(const ibValue& value, ibString& text) const
 {
 	if (m_text) {
 		text = *m_text;
@@ -242,12 +248,12 @@ ibCompositionAttr AttrOfAppearance(const ibAppearanceDescription& appearance)
 	}
 	// …AND WHAT THE CELL SAYS — its Text where one is ticked, else the Format its value is written in (applied by
 	// whoever writes the cell — ibCompositionAttr::TextOf), each read in the language in force.
-	const ibValue text = appearance.ValueInForce(ibAppearanceParameter::Text);
+	const ibValue text = ibStoredValue(appearance.ValueInForce(ibAppearanceParameter::Text), nullptr);
 	if (!text.IsEmpty())
-		attr.m_text = ibTranslateString(text.GetString().ToWxString()).GetString();
+		attr.m_text = ibTranslateString(text.GetString()).GetString();
 	else {
-		const wxString written = ibTranslateString(
-			appearance.ValueInForce(ibAppearanceParameter::Format).GetString().ToWxString()).GetString();
+		const ibString written = ibTranslateString(
+			ibStoredValue(appearance.ValueInForce(ibAppearanceParameter::Format), nullptr).GetString()).GetString();
 		std::shared_ptr<ibFormatString> format = std::make_shared<ibFormatString>();
 		if (!written.IsEmpty() && ibFormatString::Parse(written, *format))
 			attr.m_format = std::move(format);
@@ -282,7 +288,7 @@ ibCompositionValueOf ibComposerRowValueOf(const std::vector<ibQueryLowering::Out
 {
 	// ⚠ A PATH IS NOT SPELLED AS ITS COLUMN — `Recorder.Supplier` is read as `RecorderSupplier`; asked by the literal
 	// name, every field through a dot was "not in the row" and a rule on one never held (2026-09-30).
-	return [&schema, &row](const wxString& path) -> const ibValue* {
+	return [&schema, &row](const ibString& path) -> const ibValue* {
 		for (size_t i = 0; i < schema.size() && i < row.size(); ++i)
 			if (ibComposerColumnAnswersTo(schema[i], path))
 				return &row[i];
@@ -292,13 +298,13 @@ ibCompositionValueOf ibComposerRowValueOf(const std::vector<ibQueryLowering::Out
 
 ibCompositionSubtreeOf ibDataComposer::SubtreeOf() const
 {
-	return [this](const wxString& path, const ibValue& named) { return SubtreeAt(path, named); };
+	return [this](const ibString& path, const ibValue& named) { return SubtreeAt(path, named); };
 }
 
-const ibQueryHierarchyScope* ibDataComposer::SubtreeAt(const wxString& path, const ibValue& named) const
+const ibQueryHierarchyScope* ibDataComposer::SubtreeAt(const ibString& path, const ibValue& named) const
 {
 	// Keyed by what is NAMED, a list flattened as the operator flattens it — asked before in this run, answered.
-	std::pair<wxString, std::vector<ibValue>> key(path, ibQueryHierarchyNamedValues(named));
+	std::pair<ibString, std::vector<ibValue>> key(path, ibQueryHierarchyNamedValues(named));
 	const auto known = m_subtrees.find(key);
 	if (known != m_subtrees.end())
 		return known->second.get();
@@ -324,8 +330,10 @@ ibDataComposer::ConditionalAppearance ibDataComposer::ConditionalAppearanceFor(c
 			if (!own.empty())
 				ready.m_nodes.emplace(&level, std::move(own));
 		}
-	if (!ready.IsEmpty())
+	if (!ready.IsEmpty()) {
 		ready.m_subtreeOf = SubtreeOf();
+		ready.m_metaData  = m_metaData;
+	}
 	return ready;
 }
 
@@ -341,7 +349,7 @@ bool ibDataComposer::ConditionalAppearance::AttrFor(const GroupNode* node,
 	// A COLUMN'S OWN, said over what it already has — the column found among the schema's by the name a person picked
 	// it by; kept only for the columns a rule of their own held on.
 	const ibCompositionValueOf  valueOf  = ibComposerRowValueOf(schema, row);
-	const ibCompositionSayField sayField = [&schema, &attr](const wxString& field, const ibCompositionAttr& said) {
+	const ibCompositionSayField sayField = [&schema, &attr](const ibString& field, const ibCompositionAttr& said) {
 		for (size_t i = 0; i < schema.size(); ++i) {
 			if (!ibComposerColumnAnswersTo(schema[i], field))
 				continue;
@@ -354,10 +362,10 @@ bool ibDataComposer::ConditionalAppearance::AttrFor(const GroupNode* node,
 			own->second.Say(said);
 		}
 	};
-	bool any = ibCompositionSayRules(m_rules, valueOf, m_subtreeOf, attr.m_line, sayField);
+	bool any = ibCompositionSayRules(m_rules, m_metaData, valueOf, m_subtreeOf, attr.m_line, sayField);
 	const auto nodeRules = node != nullptr ? m_nodes.find(node) : m_nodes.end();
 	if (nodeRules != m_nodes.end())
-		any = ibCompositionSayRules(nodeRules->second, valueOf, m_subtreeOf, attr.m_line, sayField) || any;
+		any = ibCompositionSayRules(nodeRules->second, m_metaData, valueOf, m_subtreeOf, attr.m_line, sayField) || any;
 	if (!any)
 		return false;
 

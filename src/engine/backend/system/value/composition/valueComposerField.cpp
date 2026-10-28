@@ -13,7 +13,7 @@ ibValueCompositionField::ibValueCompositionField()
 	m_members.Bind(this, &ibValueCompositionField::FillMembers);
 }
 
-ibValueCompositionField::ibValueCompositionField(const wxString& path, const wxString& presentation)
+ibValueCompositionField::ibValueCompositionField(const ibString& path, const ibString& presentation)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, false),
 	  m_path(path), m_presentation(presentation) {
 	m_members.Bind(this, &ibValueCompositionField::FillMembers);
@@ -26,10 +26,10 @@ ibString ibValueCompositionField::GetString() const {
 }
 
 void ibValueCompositionField::FillMembers(ibMemberTable& helper) const {
-	helper.AppendConstructor(2, wxT("CompositionField(path : string, presentation? : string)"));
+	helper.AppendConstructor(2, ibT("CompositionField(path : string, presentation? : string)"));
 
-	helper.AppendProp(wxT("Path"));
-	helper.AppendProp(wxT("Presentation"));
+	helper.AppendProp(ibT("Path"));
+	helper.AppendProp(ibT("Presentation"));
 }
 
 bool ibValueCompositionField::Init(ibValue** paParams, const long lSizeArray) {
@@ -67,7 +67,7 @@ bool ibValueCompositionField::SetPropVal(const long lPropNum, const ibValue& var
 	return false;
 }
 
-bool ibValueCompositionField::CompareValueEQ(const ibValue& cParam) const {
+bool ibValueCompositionField::CompareValueEQ(const ibVariant& cParam) const {
 	// A field is never equal to a string that happens to spell the same path: a
 	// filter holding `"Amount"` as text is a different (and wrong) thing from one
 	// holding the field, and saying so is what makes that visible. Comparing
@@ -77,14 +77,14 @@ bool ibValueCompositionField::CompareValueEQ(const ibValue& cParam) const {
 	return cParam.ConvertToValue(rhs) && m_path.IsSameAs(rhs->m_path, false);
 }
 
-bool ibValueCompositionField::CompareValueNE(const ibValue& cParam) const {
+bool ibValueCompositionField::CompareValueNE(const ibVariant& cParam) const {
 	return !CompareValueEQ(cParam);
 }
 
 bool ibValueCompositionField::DoSerialize(ibDataNode& node) const {
-	node.SetValue(wxT("p"), m_path);
-	node.SetValue(wxT("n"), m_presentation);
-	node.SetValue(wxT("l"), (s32)m_leafId);
+	node.SetValue(ibT("p"), m_path);
+	node.SetValue(ibT("n"), m_presentation);
+	node.SetValue(ibT("l"), (std::int32_t)m_leafId);
 	// The TYPE is deliberately NOT packed. It is derived from the source the
 	// field is bound to, and a saved setting outlives the schema it was saved
 	// against — restoring a stale type would be worse than re-deriving the
@@ -93,9 +93,9 @@ bool ibValueCompositionField::DoSerialize(ibDataNode& node) const {
 }
 
 bool ibValueCompositionField::DoDeserialize(const ibDataNode& node) {
-	m_path = node.GetValue<wxString>(wxT("p"));
-	m_presentation = node.GetValue<wxString>(wxT("n"));
-	m_leafId = (ibMetaID)node.GetValue<s32>(wxT("l"));
+	m_path = node.GetValue<ibString>(ibT("p"));
+	m_presentation = node.GetValue<ibString>(ibT("n"));
+	m_leafId = (ibMetaID)node.GetValue<std::int32_t>(ibT("l"));
 	m_typeDescription = ibTypeDescription();
 	return true;
 }
@@ -105,14 +105,14 @@ bool ibValueCompositionField::DoDeserialize(const ibDataNode& node) {
 ////////////////////////////////////////////////////////////////////////////
 
 namespace {
-const wxString kPredefinedMetaId = wxT("m");    // the same two field names a reference packs itself
-const wxString kPredefinedGuid   = wxT("g");    // with — this IS that pair, held rather than resolved
-const wxString kPredefinedText   = wxT("t");
+const ibString kPredefinedMetaId = ibT("m");    // the same two field names a reference packs itself
+const ibString kPredefinedGuid   = ibT("g");    // with — this IS that pair, held rather than resolved
+const ibString kPredefinedText   = ibT("t");
 }
 
 bool ibValueCompositionPredefined::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(kPredefinedMetaId, (s32)m_metaId);
+	node.SetValue(kPredefinedMetaId, (std::int32_t)m_metaId);
 	node.SetValue(kPredefinedGuid, m_guid.str());
 	node.SetValue(kPredefinedText, m_written);
 	return true;
@@ -120,9 +120,9 @@ bool ibValueCompositionPredefined::DoSerialize(ibDataNode& node) const
 
 bool ibValueCompositionPredefined::DoDeserialize(const ibDataNode& node)
 {
-	m_metaId  = (ibMetaID)node.GetValue<s32>(kPredefinedMetaId);
-	m_guid    = ibGuid(node.GetValue<wxString>(kPredefinedGuid));
-	m_written = node.GetValue<wxString>(kPredefinedText);
+	m_metaId  = (ibMetaID)node.GetValue<std::int32_t>(kPredefinedMetaId);
+	m_guid    = ibGuid(node.GetValue<ibString>(kPredefinedGuid));
+	m_written = node.GetValue<ibString>(kPredefinedText);
 	return true;
 }
 

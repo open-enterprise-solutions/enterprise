@@ -46,7 +46,8 @@ void ibDatabaseResultSetSQLite::Close()
 		if (m_pStatement != nullptr)
 		{
 			m_pStatement->Close();
-			wxDELETE(m_pStatement);
+			delete m_pStatement;
+			m_pStatement = nullptr;
 		}
 	}
 }
@@ -63,14 +64,14 @@ bool ibDatabaseResultSetSQLite::Next()
 
 	if ((nReturn != SQLITE_ROW) && (nReturn != SQLITE_DONE))
 	{
-		SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
+		SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn), ibDatabaseLayerSQLite::ClassifyDatabaseError(nReturn));
 		if (GetErrorCode() != DATABASE_LAYER_QUERY_CANCELLED)   // a cancel is no error - see firebirdResultSet.cpp
-			ibJournalError(wxT("db.sqlite"),wxT("Error with RunQueryWithResults\n"));
+			ibJournalError(ibT("db.sqlite"),ibT("Error with RunQueryWithResults\n"));
 #if SQLITE_VERSION_NUMBER>=3002002
 		// sqlite3_db_handle wasn't added to the SQLite3 API until version 3.2.2
 		SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(sqlite3_db_handle(m_pSqliteStatement))));
 #else
-		SetErrorMessage(wxT("Unknown error advancing result set"));
+		SetErrorMessage(ibT("Unknown error advancing result set"));
 #endif
 		ThrowDatabaseException();
 		return false;
@@ -155,7 +156,7 @@ ibNumber ibDatabaseResultSetSQLite::GetResultNumber(int nField)
 	return dblValue;
 }
 
-void* ibDatabaseResultSetSQLite::GetResultBlob(int nField, wxMemoryBuffer& buffer)
+void* ibDatabaseResultSetSQLite::GetResultBlob(int nField, ibMemoryBuffer& buffer)
 {
 	int nLength = 0;
 	if (m_pSqliteStatement == nullptr)
@@ -163,7 +164,7 @@ void* ibDatabaseResultSetSQLite::GetResultBlob(int nField, wxMemoryBuffer& buffe
 	nLength = sqlite3_column_bytes(m_pSqliteStatement, nField - 1);
 	if (nLength < 1)
 	{
-		wxMemoryBuffer tempBuffer(0);
+		ibMemoryBuffer tempBuffer(0);
 		tempBuffer.SetDataLen(0);
 		tempBuffer.SetBufSize(0);
 		buffer = tempBuffer;
@@ -173,7 +174,7 @@ void* ibDatabaseResultSetSQLite::GetResultBlob(int nField, wxMemoryBuffer& buffe
 
 	const void* pBlob = sqlite3_column_blob(m_pSqliteStatement, nField - 1);
 
-	wxMemoryBuffer tempBuffer(nLength);
+	ibMemoryBuffer tempBuffer(nLength);
 	void* pBuffer = tempBuffer.GetWriteBuf(nLength);
 	memcpy(pBuffer, pBlob, nLength);
 	tempBuffer.UngetWriteBuf(nLength);
@@ -191,7 +192,7 @@ bool ibDatabaseResultSetSQLite::IsFieldNull(int nField)
 	return (nullptr == sqlite3_column_text(m_pSqliteStatement, nField - 1));
 }
 
-int ibDatabaseResultSetSQLite::LookupField(const wxString& strField)
+int ibDatabaseResultSetSQLite::LookupField(const ibString& strField)
 {
 	// Found, not walked — see firebirdResultSet.cpp.
 	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
@@ -207,8 +208,8 @@ int ibDatabaseResultSetSQLite::LookupField(const wxString& strField)
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
-			/*sqlState*/ wxEmptyString,
-			wxT("Field '") + strField + wxT("' not found in the resultset"));
+			/*sqlState*/ ibEmptyString,
+			ibT("Field '") + strField + ibT("' not found in the resultset"));
 	}
 	else
 	{
@@ -222,4 +223,3 @@ ibResultSetMetaData* ibDatabaseResultSetSQLite::GetMetaData()
 	LogMetaDataForCleanup(pMetaData);
 	return pMetaData;
 }
-

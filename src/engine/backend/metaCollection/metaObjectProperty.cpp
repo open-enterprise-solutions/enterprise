@@ -14,7 +14,7 @@ void ibValueMetaObject::OnPropertySelected(ibProperty* property)
 {
 }
 
-bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	// ⭐ ONE DOOR FOR THE RENAME. This used to ask the metadata for its tree and rename THROUGH it,
 	// falling back to the metadata when there was none — two roads to one state, and the tree's road
@@ -25,7 +25,7 @@ bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const wxVariant
 	return true;
 }
 
-void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	// THE RENAME IS COMPLETE AT THIS POINT — OnPropertyChanging ran before the value was applied,
 	// so from here every ctor of this metaobject computes a different name than before. Say so and
@@ -36,7 +36,7 @@ void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const wxVariant&
 	if (m_propertyName == property) {
 		if (m_metaData != nullptr)
 			m_metaData->InvalidateCtorNames();
-		m_propertySynonym->SetValue(stringUtils::GenerateSynonym(newValue));
+		m_propertySynonym->SetValue(stringUtils::GenerateSynonym(newValue.GetString()));
 	}
 	wxASSERT(m_metaData);
 

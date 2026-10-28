@@ -49,7 +49,7 @@ protected:
         ASSERT_NE(m_code, nullptr);
     }
 
-    void AddRow(const wxString& code) {
+    void AddRow(const ibString& code) {
         const long row = m_table->AppendRow();
         const ibDataViewItem item = m_table->GetItem(row);
         ibValueModel::ibComposerNode* node =
@@ -60,7 +60,7 @@ protected:
 
     // The one cell of a yielded row, read back by the column's own name — the
     // same way a script reads `row.Code`.
-    wxString CodeOf(ibValue& row) const {
+    ibString CodeOf(ibValue& row) const {
         ibValue cell;
         const long prop = row.FindProp(wxT("Code"));
         if (prop < 0)
@@ -83,7 +83,7 @@ TEST_F(ValueTableWalk, WalksEveryRowInStorageOrder) {
     const std::shared_ptr<ibValueIteratorState> walk = m_table->CreateIterator();
     ASSERT_TRUE(walk != nullptr);
 
-    std::vector<wxString> seen;
+    std::vector<ibString> seen;
     ibValue row;
     while (walk->MoveNext(row))
         seen.push_back(CodeOf(row));

@@ -9,11 +9,13 @@
 #include "frmserver/visualView/choiceRequest.h"                      // ibRequestChoice — "pick one of these"
 #include "backend/backend_mainFrame.h"                                    // the frame a request to the person goes through
 #include "core/serialize/dataBuilder.h"                                // the request and its answer
-#include "protocol/protocol.h"                                            // ibProtocolRequestKind::SimpleChoice
+#include "protocol/protocol.h"                                            // ibProtocol::ibRequest::ibKind::SimpleChoice
 #include "backend/session/session.h"
 #include "backend/system/value/valueType.h"          // ibValueTypeDescription / g_valueTypeDescriptionCLSID
 #include "backend/choiceLinkResolver.h"               // what narrows this choice — type and conditions
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // the bound attribute holds both
+#include "frmserver/win/dlgs/selectPredefined.h"   // ibShowPredefinedSelector — the designer's declared values
+#include "backend/appData.h"                        // DesignerMode — the two roads part here
 
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValueMetaObject* choiceForm)
 {
@@ -29,6 +31,13 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 	// (a filter's left side is always a field). Settled, the cell stands on it, and the value of that type is
 	// chosen right after, in the same press.
 	if (current.GetType() == ibValueTypes::TYPE_EMPTY) {
+		// THE DESIGNER'S OWN WINDOW asks both — the type and a declared value of it — so an empty cell reaches a value
+		// in one click, as the desktop's. Whether anything referenceable is admitted is the window's question: it
+		// answers `false` for a declaration with none, and the road below carries on unchanged.
+		if (appData->DesignerMode()
+			&& ibShowPredefinedSelector(ownerValue, factory->GetTypeDesc(), factory->GetMetaData()))
+			return true;
+
 		const ibClassID clsid = factory->GetDataType();
 		const ibMetaData* metaData = factory->GetMetaData();
 		if (clsid == 0 || metaData == nullptr || !metaData->IsRegisterCtor(clsid))
@@ -47,6 +56,15 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 		return false;
 
 	const ibMetaData* metaData = factory->GetMetaData();
+
+	// IN THE DESIGNER EVERY REFERENCE ASKS ITS DECLARED VALUES — a catalog, a document and an enumeration, one window,
+	// one habit (Max, 2026-08-28). A cell that declares nothing is standing on the type it already holds.
+	if (appData->DesignerMode()) {
+		const ibTypeDescription& declared = factory->GetTypeDesc();
+		if (ibShowPredefinedSelector(ownerValue,
+				declared.GetClsidList().empty() ? ibTypeDescription(clsid) : declared, metaData))
+			return true;
+	}
 
 	if (ibTypeControlFactory::QuickChoice(ownerValue, clsid))
 		return true;
@@ -67,7 +85,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 			// it — the choice. The condition goes in WHOLE, empty or not: "nothing narrows this" is a
 			// condition with nothing in it, and the list asks the same question of both.
 			const ibFormRequest request(
-				choiceForm != nullptr ? choiceForm->GetName() : wxString(),
+				choiceForm != nullptr ? choiceForm->GetName() : ibString(),
 				ibCreateRequest(factory->GetSelectMode(), condition));
 			return metaObject->ProcessChoice(ownerValue, request);
 		}
@@ -89,12 +107,12 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 	ownerValue->GetControlValue(current);
 
 	ibDataNode request;
-	request.SetValue(ibProtocolName::Kind, static_cast<s32>(ibProtocolRequestKind::SimpleChoice));
-	current.Serialize(request.Child(ibProtocolName::Value));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::SimpleChoice));
+	current.Serialize(request.Child(ibProtocol::ibRequest::ibSimpleChoice::Value));
 
 	ibDataNode response;
 	if (frame->Request(request, response)) {
-		if (const ibDataNode* const chosen = response.FindChild(ibProtocolName::Value)) {
+		if (const auto chosen = response.FindChild(ibProtocol::ibRequest::ibSimpleChoice::Value)) {
 			ibValue value = ibValue::FromNode(*chosen);
 			ownerValue->ChoiceProcessing(value);
 		}
@@ -115,20 +133,20 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClass
 	ownerValue->GetControlValue(current);
 
 	std::vector<ibValue> values;
-	if (!current.FindValue(wxEmptyString, values))
+	if (!current.FindValue(ibEmptyString, values))
 		return false;
 
 	std::vector<ibChoiceItem> items;
 	for (size_t idx = 0; idx < values.size(); idx++)
-		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), ibServerPicture(), values[idx] == current });
+		items.push_back(ibChoiceItem{ static_cast<std::int32_t>(idx), values[idx].GetString(), ibPictureDescription(), values[idx] == current });
 
-	s32 chosen = 0;
-	if (ibRequestChoice(wxString(), items, chosen))
+	std::int32_t chosen = 0;
+	if (ibRequestChoice(ibString(), items, chosen))
 		ownerValue->ChoiceProcessing(values[static_cast<size_t>(chosen)]);
 	return true;   // the type has a quick choice — offered, whatever the person did with it
 }
 
-void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const wxString& strData)
+void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const ibString& strData)
 {
 	if (controlValue == nullptr)
 		return;
@@ -149,7 +167,7 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 
 	std::vector<ibChoiceItem> items;
 	for (size_t idx = 0; idx < values.size(); idx++)
-		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), ibServerPicture(), values[idx] == newValue });
+		items.push_back(ibChoiceItem{ static_cast<std::int32_t>(idx), values[idx].GetString(), ibPictureDescription(), values[idx] == newValue });
 
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 	if (frame == nullptr)
@@ -158,13 +176,13 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 	// Several match what was typed: the person picks one — or, closing the list, is asked whether to give the
 	// typed text up (the field goes back to what it held) or to pick after all.
 	for (;;) {
-		s32 chosen = 0;
-		if (ibRequestChoice(wxString(), items, chosen)) {
+		std::int32_t chosen = 0;
+		if (ibRequestChoice(ibString(), items, chosen)) {
 			controlValue->ChoiceProcessing(values[static_cast<size_t>(chosen)]);
 			return;
 		}
 		const int answer = frame->ShowModalMessage(
-			_("Incorrect data entered into field. Do you want to cancel?"), wxString(),
+			_("Incorrect data entered into field. Do you want to cancel?"), ibString(),
 			wxYES_NO | wxICON_QUESTION);
 		if (answer != wxNO) {
 			ibValue retValue;
@@ -223,15 +241,15 @@ ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const
 	}
 	if (offered.size() < 2) return offered.empty() ? 0 : offered.front();
 
-	// Several: the person picks one — each type by the name and picture its constructor gives it.
+	// Several: the person picks one — each type by the name its constructor gives it, and its class's picture.
 	std::vector<ibChoiceItem> items;
 	for (size_t idx = 0; idx < offered.size(); idx++) {
 		const ibCtorAbstractType* ctor = metaData != nullptr ? metaData->GetAvailableCtor(offered[idx]) : nullptr;
-		items.push_back(ibChoiceItem{ static_cast<s32>(idx),
-			ctor != nullptr ? ctor->GetClassName() : wxString(),
-			ctor != nullptr ? ibServerPicture(wxBitmap(ctor->GetClassIcon()).ConvertToImage()) : ibServerPicture() });
+		items.push_back(ibChoiceItem{ static_cast<std::int32_t>(idx),
+			ctor != nullptr ? ctor->GetClassName() : ibString(),
+			ctor != nullptr ? ibPictureDescription(offered[idx]) : ibPictureDescription() });
 	}
 
-	s32 chosen = 0;
+	std::int32_t chosen = 0;
 	return ibRequestChoice(_("Select data type"), items, chosen) ? offered[static_cast<size_t>(chosen)] : 0;
 }

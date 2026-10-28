@@ -1,6 +1,6 @@
 #include "databaseQueryParser.h"
 
-bool IsEmptyQuery(const wxString& strQuery)
+bool IsEmptyQuery(const ibString& strQuery)
 {
 	if (strQuery.IsEmpty())
 		return false;
@@ -8,36 +8,36 @@ bool IsEmptyQuery(const wxString& strQuery)
 	for (auto& c : strQuery) {
 
 		// Remove all query delimiting semi-colons
-		if (c != wxT(' ') &&
-			c != wxT(';'))
+		if (c != ibT(' ') &&
+			c != ibT(';'))
 			return false;
 	}
 
 	return true;
 }
 
-wxArrayString ParseQueries(const wxString& strQuery)
+std::vector<ibString> ParseQueries(const ibString& strQuery)
 {
 	// thread_local instead of a lock: each thread reuses its own buffer
 	// allocations across calls, so there's nothing shared to serialise
 	// (was a wxCriticalSection over shared statics). bInQuote is a plain
 	// local now — it's per-parse state, and the old static leaked it
 	// across calls on an unbalanced quote.
-	thread_local wxArrayString arrString; arrString.Empty();
-	thread_local wxString strRaw; strRaw.Clear();
+	thread_local std::vector<ibString> arrString; arrString.clear();
+	thread_local ibString strRaw; strRaw.Clear();
 	bool bInQuote = false;
 
 	for (const auto& c : strQuery) {
 
 		strRaw += c;
 
-		if (c == wxT('\'')) {
+		if (c == ibT('\'')) {
 			bInQuote = !bInQuote;
 		}
-		else if (c == wxT(';') && !bInQuote)
+		else if (c == ibT(';') && !bInQuote)
 		{
 			if (!IsEmptyQuery(strRaw))
-				arrString.Add(strRaw);
+				arrString.push_back(strRaw);
 
 			strRaw.Clear();
 		}
@@ -45,10 +45,10 @@ wxArrayString ParseQueries(const wxString& strQuery)
 
 	if (!strRaw.IsEmpty()) {
 
-		thread_local wxString str; str.Clear();
-		str << strRaw << wxT(";");
+		thread_local ibString str; str.Clear();
+		str << strRaw << ibT(";");
 		if (!IsEmptyQuery(str))
-			arrString.Add(str);
+			arrString.push_back(str);
 
 		strRaw.Clear();
 	}

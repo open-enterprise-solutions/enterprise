@@ -2,7 +2,7 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
 #include "backend/choiceLinkResolver.h"   // ibChoiceHolder — where this column's link reads its neighbours
-#include "frmserver/visualView/visualHost.h"   // ibVisualHost::SendPicture — a header picture, by its id
+#include "backend/backend_picture.h"           // ibBackendPicture::SendPicture — a header picture, by its id
 #include "backend/composition/dataComposer.h"   // the composer's active sort — the header's arrow
 #include "core/formatString.h"         // ibFormatString — what a cell is shown through
 #include "backend/appData.h"
@@ -39,7 +39,7 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 				property->AppendItem(
 					form->GetSynonym(),
 					form->GetMetaID(),
-					form->GetIcon(),
+					form->GetClassType(),
 					form
 				);
 			}
@@ -93,7 +93,7 @@ const ibMetaData* ibValueModelTableBoxColumn::GetMetaData() const
 		m_formOwner->GetMetaData() : nullptr;
 }
 
-wxString ibValueModelTableBoxColumn::GetControlTitle() const
+ibString ibValueModelTableBoxColumn::GetControlTitle() const
 {
 	// Explicit Title wins; otherwise the binding's presentation synonym (field synonym | form-attribute
 	// Synonym/Name), resolved once via GetSourceAbstractColumn; else fall back to the control's own name.
@@ -161,22 +161,22 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	if (rep == ibRepresentation::ibRepresentation_Auto)
 		rep = ibRepresentation::ibRepresentation_PictureAndText;
 
-	state.SetValue(wxT("Caption"), GetControlTitle());
-	state.SetValue(wxT("FooterText"), m_propertyFooterText->GetValueAsTranslateString());
-	state.SetValue(wxT("Representation"), static_cast<s32>(rep));
+	state.SetValue(ibProtocol::ibForm::ibState::Caption, GetControlTitle());
+	state.SetValue(ibProtocol::ibForm::ibTable::FooterText, m_propertyFooterText->GetValueAsTranslateString());
+	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<std::int32_t>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text) {
-		const wxString header = host->SendPicture(m_propertyHeaderPicture->GetValueAsPictureDesc());
+		const ibDataValue header = ibBackendPicture::SendPicture(m_propertyHeaderPicture->GetValueAsPictureDesc(), GetMetaData());
 		if (!header.IsEmpty())
-			state.SetValue(wxT("HeaderPicture"), header);
-		const wxString footer = host->SendPicture(m_propertyFooterPicture->GetValueAsPictureDesc());
+			state.SetValue(ibProtocol::ibForm::ibTable::HeaderPicture, header);
+		const ibDataValue footer = ibBackendPicture::SendPicture(m_propertyFooterPicture->GetValueAsPictureDesc(), GetMetaData());
 		if (!footer.IsEmpty())
-			state.SetValue(wxT("FooterPicture"), footer);
+			state.SetValue(ibProtocol::ibForm::ibTable::FooterPicture, footer);
 	}
 
 	// Its own Visible, a binding, the functional options — the group above says its own (its Visible).
 	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == wxNOT_FOUND;
-	state.SetValue(wxT("Visible"), m_propertyVisible->GetValueAsBoolean() && !sourceMissing && IsAvailable());
-	state.SetValue(wxT("ReadOnly"), IsReadOnly());
+	state.SetValue(ibProtocol::ibForm::ibState::Visible, m_propertyVisible->GetValueAsBoolean() && !sourceMissing && IsAvailable());
+	state.SetValue(ibProtocol::ibForm::ibTable::ReadOnly, IsReadOnly());
 
 	// Sortability is gated by the model's Sorting FEATURE (when the flag is turned off, sorting cannot be
 	// used), and by a field to sort by. The ACTIVE sort + direction come from L5 — the composer — matched
@@ -185,17 +185,17 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// settings window shows on the header as surely as one set by a click.
 	const ibValueModelTableBox* owner = GetOwner();
 	ibValueModel* model = owner != nullptr ? owner->GetTableModel() : nullptr;
-	const wxString field = GetSourceFieldName();
+	const ibString field = GetSourceFieldName();
 	const bool sortable = model != nullptr && !appData->DesignerMode() && !field.IsEmpty()
 		&& model->GetFeatures().Has(ibValueModel::Features::Sorting);
-	state.SetValue(wxT("Sortable"), sortable);
+	state.SetValue(ibProtocol::ibForm::ibTable::Sortable, sortable);
 	if (sortable) {
 		const ibDataComposer& composer = model->GetModelComposer();
 		for (size_t i = 0; i < composer.SortCount(); ++i) {
-			wxString sortField; bool asc = true;
+			ibString sortField; bool asc = true;
 			if (composer.GetSortAt(i, sortField, asc) && sortField == field) {
-				const s32 sort = asc ? 1 : -1;
-				state.SetValue(wxT("Sort"), sort);
+				const std::int32_t sort = asc ? 1 : -1;
+				state.SetValue(ibProtocol::ibForm::ibTable::Sort, sort);
 				break;
 			}
 		}
@@ -233,25 +233,25 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 	ibDataViewItemAttr attr;
 	if (model->GetAttr(item, modelColumn, attr) && !attr.IsDefault()) {
 		if (attr.HasColour())
-			cell.SetValue(wxT("TextColour"), attr.GetColour().GetAsString(wxC2S_HTML_SYNTAX));
+			cell.SetValue(ibProtocol::ibForm::ibTable::TextColour, attr.GetColour().ToString());
 		if (attr.HasBackgroundColour())
-			cell.SetValue(wxT("BackgroundColour"), attr.GetBackgroundColour().GetAsString(wxC2S_HTML_SYNTAX));
+			cell.SetValue(ibProtocol::ibForm::ibTable::BackgroundColour, attr.GetBackgroundColour().ToString());
 		if (attr.GetBold())
-			cell.SetValue(wxT("Bold"), true);
+			cell.SetValue(ibProtocol::ibForm::ibTable::Bold, true);
 		if (attr.GetItalic())
-			cell.SetValue(wxT("Italic"), true);
+			cell.SetValue(ibProtocol::ibForm::ibTable::Italic, true);
 		if (attr.GetStrikethrough())
-			cell.SetValue(wxT("Strikethrough"), true);
+			cell.SetValue(ibProtocol::ibForm::ibTable::Strikethrough, true);
 		if (attr.GetUnderlined())
-			cell.SetValue(wxT("Underlined"), true);
+			cell.SetValue(ibProtocol::ibForm::ibTable::Underlined, true);
 		if (attr.GetPointSize() > 0)
-			cell.SetValue(wxT("Size"), static_cast<s32>(attr.GetPointSize()));
+			cell.SetValue(ibProtocol::ibForm::ibTable::Size, static_cast<std::int32_t>(attr.GetPointSize()));
 		if (!attr.GetFaceName().IsEmpty())
-			cell.SetValue(wxT("Face"), attr.GetFaceName());
+			cell.SetValue(ibProtocol::ibForm::ibTable::Face, attr.GetFaceName());
 		if (attr.HasAlignment()) {
 			const int align = attr.GetAlignment();
-			cell.SetValue(wxT("Align"), wxString((align & wxALIGN_RIGHT) ? wxT("Right")
-				: (align & wxALIGN_CENTER_HORIZONTAL) ? wxT("Center") : wxT("Left")));
+			cell.SetValue(ibProtocol::ibForm::ibTable::Align, ibString((align & wxALIGN_RIGHT) ? ibProtocol::ibForm::ibTable::ibAlign::Right
+				: (align & wxALIGN_CENTER_HORIZONTAL) ? ibProtocol::ibForm::ibTable::ibAlign::Center : ibProtocol::ibForm::ibTable::ibAlign::Left));
 		}
 	}
 
@@ -259,40 +259,33 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 	// or a header column is resolved by the table — first hop via the dumb model, deeper hops walk the
 	// reference; a plain column is the model's own. Whether the cell has one at all (a container's non-first
 	// columns) the fetch has asked already.
-	wxVariant value;
+	ibVariant value;
 	if (!owner->ResolveCellValue(item, this, value))
 		model->GetValue(value, item, modelColumn);
 
-	if (value.IsNull()) {
-		cell.SetValue(wxT("Text"), wxString());
-		return;
-	}
-
-	// A variant no table model made is shown as it is.
-	if (value.GetType() != wxT("value")) {
-		cell.SetValue(wxT("Text"), value.MakeString());
+	if (value.GetType() == ibValueTypes::TYPE_EMPTY) {
+		cell.SetValue(ibProtocol::ibForm::ibTable::Text, ibString());
 		return;
 	}
 
 	// Everything below is asked of the value itself, through the format of the column.
-	const ibValue& cellValue = static_cast<const ibVariantDataValue*>(value.GetData())->GetValue();
-	wxString text;
+	ibString text;
 	if (format != nullptr)
-		format->Apply(cellValue, text);
+		format->Apply(value, text);
 	else
-		text = cellValue.GetString();
-	cell.SetValue(wxT("Text"), text);
+		text = value.GetString();
+	cell.SetValue(ibProtocol::ibForm::ibTable::Text, text);
 	// …and, in a cell the client may edit, the value with its type (ibValue::Serialize) — the field's way. A list's
 	// cells, never edited, carry their text alone and stay as light as they were.
-	if (!readOnly && model->EditableLine(item, modelColumn) && cellValue.IsTransferable())
-		cellValue.Serialize(cell.Child(wxT("Value")));
+	if (!readOnly && model->EditableLine(item, modelColumn) && value.IsTransferable())
+		value.Serialize(cell.Child(ibProtocol::ibForm::ibTable::Value));
 
 	// A boolean is drawn as a tick, and whether it has one is the value's, not its text's; a number stands
 	// to the right.
-	if (cellValue.GetType() == ibValueTypes::TYPE_BOOLEAN)
-		cell.SetValue(wxT("Checked"), cellValue.GetBoolean());
-	else if (cellValue.GetType() == ibValueTypes::TYPE_NUMBER)
-		cell.SetValue(wxT("Number"), true);
+	if (value.GetType() == ibValueTypes::TYPE_BOOLEAN)
+		cell.SetValue(ibProtocol::ibForm::ibTable::Checked, value.GetBoolean());
+	else if (value.GetType() == ibValueTypes::TYPE_NUMBER)
+		cell.SetValue(ibProtocol::ibForm::ibTable::Number, true);
 }
 
 bool ibValueModelTableBoxColumn::IsCellEditable(const ibDataViewItem& item) const

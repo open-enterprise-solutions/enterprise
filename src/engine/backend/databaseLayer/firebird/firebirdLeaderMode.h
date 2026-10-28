@@ -44,8 +44,6 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
-
 class BACKEND_API ibFirebirdLeaderMode {
 public:
 	enum class Role {
@@ -56,8 +54,8 @@ public:
 
 	struct Status {
 		Role     role             = Role::Standalone;
-		wxString connectUrl;       // for fbclient.dll attach (`inet://host:port/path` or empty for Standalone)
-		wxString errorMessage;     // populated when ok=false
+		ibString connectUrl;       // for fbclient.dll attach (`inet://host:port/path` or empty for Standalone)
+		ibString errorMessage;     // populated when ok=false
 		bool     ok               = false;
 	};
 
@@ -70,7 +68,7 @@ public:
 	// Subsequent calls with the same `dbPath` return cached status.
 	// Calls with a different path while already initialised return
 	// failure (multi-database leader mode not supported yet).
-	static Status InitForDatabase(const wxString& dbPath);
+	static Status InitForDatabase(const ibString& dbPath);
 
 	// Stop background thread, release lease if leader. Called on
 	// graceful shutdown; idempotent.
@@ -81,7 +79,7 @@ public:
 	// drops — caller polls this until the orchestrator reports a
 	// new leader (generation bump detected), then retries Open.
 	static Role     CurrentRole();
-	static wxString CurrentConnectUrl();
+	static ibString CurrentConnectUrl();
 };
 
 #endif // __FIREBIRD_LEADER_MODE_H__

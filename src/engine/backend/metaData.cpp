@@ -31,19 +31,19 @@ void ibMetaData::Dispose(ibMetaData* metaData)
 	// A release never throws — it runs where the last reference drops, a destructor among them. A close that refused
 	// is said, and the metadata goes regardless.
 	const ibValueMetaObject* const root = metaData->GetCommonMetaObject();
-	const wxString name = root != nullptr ? root->GetName() : wxString();
+	const ibString name = root != nullptr ? root->GetName() : ibString();
 	try {
 		if (metaData->IsConfigOpen()) {
-			ibJournalInfo(wxT("metadata"), wxT("'%s' %s closed: its last holder let it go"), name,
+			ibJournalInfo(ibT("metadata"), ibT("'%s' %s closed: its last holder let it go"), name,
 				metaData->GetConfigMD5());
 			metaData->CloseDatabase(forceCloseFlag);
 		}
 	}
 	catch (const ibCoreException& err) {
-		ibJournalWarning(wxT("metadata"), wxT("'%s' did not close: %s"), name, err.GetErrorDescription());
+		ibJournalWarning(ibT("metadata"), ibT("'%s' did not close: %s"), name, err.GetErrorDescription());
 	}
 	catch (...) {
-		ibJournalWarning(wxT("metadata"), wxT("'%s' did not close"), name);
+		ibJournalWarning(ibT("metadata"), ibT("'%s' did not close"), name);
 	}
 	delete metaData;
 }
@@ -106,7 +106,7 @@ bool ibModuleStorage::AddCommonModule(ibValueMetaObjectCommonModule* commonModul
 	return true;
 }
 
-bool ibModuleStorage::RenameCommonModule(ibValueMetaObjectCommonModule* /*commonModule*/, const wxString& /*newName*/)
+bool ibModuleStorage::RenameCommonModule(ibValueMetaObjectCommonModule* /*commonModule*/, const ibString& /*newName*/)
 {
 	// Descriptor name is owned by the descriptor itself; storage indexes
 	// by raw pointer, so rename is a no-op. Kept on the API as a single
@@ -341,9 +341,10 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 
 	if (newMetaObject != nullptr) {
 
-		newMetaObject->SetName(
-			GetNewName(clsid, parent, newMetaObject->GetClassName())
-		);
+		ibNameRequest request;
+		request.m_clsid = clsid;
+		request.m_prefix = newMetaObject->GetClassName();
+		newMetaObject->SetName(GetNewName(parent, request));
 
 		//always create meta object
 		bool success = newMetaObject->OnCreateMetaObject(this, runObject ? newObjectFlag : pasteObjectFlag);
@@ -367,6 +368,12 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 			return nullptr;
 		}
 
+		// ⭐ THE INVALIDATION COUNTER MOVES FOR A CREATION TOO — RemoveMetaObject's twin: a source's explorer lists its
+		// object's fields at the version it was built at, and a FIELD made registers nothing, so the counter stood still
+		// and a form's attribute picker kept the fields it was first asked with (2026-10-19). A shell made for a paste
+		// moves it as well: the paste fills it in the same call, before anything reads it.
+		m_factoryCtorCountChanges++;
+
 		// ⭐ AND EVERYONE WATCHING IS TOLD — last, after every phase that could still undo the
 		// creation, because an object that did not survive its own initialisation was never
 		// created. A watcher may act on this (the designer's tree asks which kind of form it is
@@ -389,31 +396,32 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 	return newMetaObject;
 }
 
-wxString ibMetaData::GetNewName(const ibClassID& clsid, ibValueMetaObject* parent, const wxString& strPrefix, bool forConstructor)
+ibString ibMetaData::GetNewName(ibValueMetaObject* parent, const ibNameRequest& request)
 {
-	const wxString currPrefix = strPrefix.Length() > 0 ?
-		strPrefix : wxT("newItem");
+	const ibString currPrefix = request.m_prefix.Length() > 0 ?
+		request.m_prefix : ibString(ibT("newItem"));
 
-	// Normalise to upper case, matching stringUtils::CompareString's
+	// Normalise to upper case, matching stringUtils::IsSameAs's
 	// case-insensitive semantics, so set lookups are exact comparisons.
-	const auto toKey = [](const wxString& name) {
-		std::wstring key = name.ToStdWstring();
-		std::transform(key.begin(), key.end(), key.begin(), ::towupper);
-		return key;
+	const auto toKey = [](const ibString& name) {
+		return name.Upper();
 	};
 
 	// Collect the sibling names already taken by objects of this class
 	// once, so each candidate is probed in O(1). The old loop rescanned
 	// every child for each candidate suffix — O(children * candidates)
 	// per call. FilterChild(clsid) is invariant here (every surviving
-	// child has class == clsid), so it is hoisted out of the scan.
-	std::unordered_set<std::wstring> takenNames;
-	if (parent != nullptr && parent->FilterChild(clsid)) {
+	// child has class == clsid), so it is hoisted out of the scan. The
+	// object the name is for is skipped: its own entry is no collision.
+	std::unordered_set<ibString> takenNames;
+	if (parent != nullptr && parent->FilterChild(request.m_clsid)) {
 
 		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
 
 			auto child = parent->GetChild(idx);
-			if (clsid != child->GetClassType())
+			if (request.m_metaId != 0 && child->GetMetaID() == request.m_metaId)
+				continue;
+			if (request.m_clsid != child->GetClassType())
 				continue;
 			if (child->IsDeleted())
 				continue;
@@ -424,12 +432,12 @@ wxString ibMetaData::GetNewName(const ibClassID& clsid, ibValueMetaObject* paren
 
 	// forConstructor allows the bare prefix as the first candidate;
 	// otherwise numbering starts at 1.
-	unsigned int countRec = forConstructor ? 0 : 1;
-	wxString newName = forConstructor ?
-		currPrefix : wxString::Format(wxT("%s%d"), currPrefix, countRec);
+	unsigned int countRec = request.m_forConstructor ? 0 : 1;
+	ibString newName = request.m_forConstructor ?
+		currPrefix : ibString::Format(ibT("%s%d"), currPrefix, countRec);
 
 	while (takenNames.count(toKey(newName)) > 0)
-		newName = wxString::Format(wxT("%s%d"), currPrefix, ++countRec);
+		newName = ibString::Format(ibT("%s%d"), currPrefix, ++countRec);
 
 	return newName;
 }
@@ -633,7 +641,7 @@ ibValueMetaObject* ibMetaData::PasteMetaObject(const ibClassID& clsid,
 						// id to 32 bits — throwing away the KIND byte, which is the half that
 						// says WHAT it is — so the number identified nothing and matched nothing.
 						// The metadata knows the name; ask it.
-						ibJournalInfo(wxT("metadata"), wxT("PasteObject: '%s' is not hosted by '%s' - skipped"),
+						ibJournalInfo(ibT("metadata"), ibT("PasteObject: '%s' is not hosted by '%s' - skipped"),
 							metaData->GetNameObjectFromID(clsid).c_str(), pasteObject->GetClassName().c_str());
 					}
 				}
@@ -736,7 +744,7 @@ ibValueMetaObject* ibMetaData::PasteMetaObject(const ibClassID& clsid,
 	return pasted;
 }
 
-bool ibMetaData::RenameMetaObject(ibValueMetaObject* metaObject, const wxString& newName)
+bool ibMetaData::RenameMetaObject(ibValueMetaObject* metaObject, const ibString& newName)
 {
 	if (!IsEditable())   // see CreateMetaObject — the rule lives in the door
 		return false;
@@ -760,6 +768,9 @@ bool ibMetaData::RenameMetaObject(ibValueMetaObject* metaObject, const wxString&
 
 	metaObject->SetName(newName);
 	Modify(true);
+
+	// …and the invalidation counter moves, as for a creation: a source's explorer lists its fields by name.
+	m_factoryCtorCountChanges++;
 
 	// Announced with the new name already in place — unless the object is still being built: a
 	// pasted subtree is announced ONCE, at the end of the paste (Max, 2026-09-01: *"a lot of needless

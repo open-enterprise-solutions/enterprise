@@ -6,7 +6,7 @@
 
 //base property for "chart of characteristic types" selection
 class BACKEND_API ibPropertyChartOfCharacteristicTypes : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
@@ -16,9 +16,9 @@ public:
 	// is, not by a setting" — this is that same sentence in a form the gate can read.
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
-	ibPropertyChartOfCharacteristicTypes(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyChartOfCharacteristicTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyChartOfCharacteristicTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyChartOfCharacteristicTypes(ibPropertyCategory* cat, const ibString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyChartOfCharacteristicTypes(ibPropertyCategory* cat, const ibString& name, const ibString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyChartOfCharacteristicTypes(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
 	// THIS BINDING NAMES EXACTLY ONE CHART — always, by what it is, not by a setting.
 	//
@@ -41,9 +41,9 @@ public:
 protected:
 
 	// The family rule, kept here too: a relationship arrives in whichever wrapper the caller was
-	// handed - CreateValueList builds every candidate as ibVariantDataOwner - and a property that
+	// handed - CreateValueList builds every candidate as ibVariantOwner - and a property that
 	// stores a neighbour's wrapper raises on every later read. See propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 

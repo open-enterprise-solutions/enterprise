@@ -14,13 +14,13 @@
 #include "appData.h"                                        // db_query — the local channel the seed writes target
 #include "backend/system/value/valueGuid.h"                 // ibValueGuid — the row key bound as the guid it is
 
-ibSchemaMaterialize& ibSchemaMaterialize::Guard(const wxString& expr, const ibQueryPredicatePtr& regenExpr)
+ibSchemaMaterialize& ibSchemaMaterialize::Guard(const ibString& expr, const ibQueryPredicatePtr& regenExpr)
 {
 	// BOTH forms compose, and they must compose together: the trigger reads the text, the regeneration
 	// reads the predicate, and a rule kept by one and not the other is two bodies of numbers that
 	// disagree with nothing to show for it.
 	if (!expr.IsEmpty())
-		m_guard = m_guard.IsEmpty() ? expr : (wxT("(") + m_guard + wxT(") AND (") + expr + wxT(")"));
+		m_guard = m_guard.IsEmpty() ? expr : (ibT("(") + m_guard + ibT(") AND (") + expr + ibT(")"));
 	if (regenExpr)
 		m_guardExpr = m_guardExpr
 			? ibQueryPredicate::Compose(ibQueryPredicateKind::And, m_guardExpr, regenExpr)
@@ -28,12 +28,12 @@ ibSchemaMaterialize& ibSchemaMaterialize::Guard(const wxString& expr, const ibQu
 	return *this;
 }
 
-wxString ibSchemaMaterialize::SourceTable() const
+ibString ibSchemaMaterialize::SourceTable() const
 {
-	return m_source != nullptr ? m_source->GetQueryTableName() : wxString();
+	return m_source != nullptr ? m_source->GetQueryTableName() : ibString();
 }
 
-ibMaterializeSpec ibSchemaMaterialize::ToRenderSpec(const wxString& tableName) const
+ibMaterializeSpec ibSchemaMaterialize::ToRenderSpec(const ibString& tableName) const
 {
 	ibMaterializeSpec out;
 	out.m_table            = tableName;
@@ -51,23 +51,23 @@ ibMaterializeSpec ibSchemaMaterialize::ToRenderSpec(const wxString& tableName) c
 	// pair, not one column. Reading the layout tier instead of assuming one field per column is
 	// what keeps reference dimensions working in the totals key.
 	for (const ibBackendQueryColumn* k : m_keys)
-		for (const wxString& f : ColumnFieldNames(k))
+		for (const ibString& f : ColumnFieldNames(k))
 			out.m_keyColumns.push_back(f);
 
 	for (const ibSchemaDelta& d : m_deltas)
-		out.m_deltas.push_back({ d.m_column != nullptr ? d.m_column->GetPhysicalName() : wxString(), d.m_valueExpr });
+		out.m_deltas.push_back({ d.m_column != nullptr ? d.m_column->GetPhysicalName() : ibString(), d.m_valueExpr });
 
 	return out;
 }
 
-ibMaterializeSpec ibSchemaMaterialize::ToReadSpec(const wxString& tableName) const
+ibMaterializeSpec ibSchemaMaterialize::ToReadSpec(const ibString& tableName) const
 {
 	ibMaterializeSpec out = ToRenderSpec(tableName);
 	if (m_source == nullptr)
 		return out;
 
 	// Every column qualified by the source table's own name — what RenderMovementRows reads it as.
-	const wxString source = SourceTable();
+	const ibString source = SourceTable();
 
 	// Index for index: ToRenderSpec lays the deltas out in declaration order.
 	for (size_t i = 0; i < m_deltas.size() && i < out.m_deltas.size(); ++i)
@@ -119,14 +119,14 @@ static size_t ibIndexFieldByteWidth(const ibColumnType& t)
 	return 8;
 }
 
-void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
+void ibDeclareDerivedKey(ibSchemaTable& table, const ibString& tableName,
                          const std::vector<const ibBackendQueryColumn*>& keyCols,
                          ibMetaID hashColumnId)
 {
 	if (keyCols.empty())
 		return;
 
-	const wxString indexName = tableName + wxT("_PK");
+	const ibString indexName = tableName + ibT("_PK");
 
 	// How wide the key really is — in PHYSICAL fields, which is what an index counts. A reference
 	// column is three of them, so a key of seven columns can be an index of twenty-one segments.
@@ -175,7 +175,7 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
 	// the first dimensions, which is where the selectivity is. A key column is taken whole or not at
 	// all — half a reference is not a comparison anything can ride.
 	//
-	ibDeclareLookupIndex(table, tableName + wxT("_KL"), keyCols);
+	ibDeclareLookupIndex(table, tableName + ibT("_KL"), keyCols);
 }
 
 std::vector<const ibBackendQueryColumn*> ibFitLookupColumns(
@@ -218,7 +218,7 @@ std::vector<const ibBackendQueryColumn*> ibFitLookupColumns(
 	return lookup;
 }
 
-void ibDeclareLookupIndex(ibSchemaTable& table, const wxString& indexName,
+void ibDeclareLookupIndex(ibSchemaTable& table, const ibString& indexName,
                           const std::vector<const ibBackendQueryColumn*>& cols,
                           const ibBackendQueryColumn* closing)
 {
@@ -253,7 +253,7 @@ ibSchemaTable& ibSchemaSnapshot::CreateSchemaTable(const ibBackendQueryable* que
 	return m_tables.back();
 }
 
-ibSchemaTable& ibSchemaSnapshot::Shared(ibMetaID id, const wxString& name)
+ibSchemaTable& ibSchemaSnapshot::Shared(ibMetaID id, const ibString& name)
 {
 	for (ibSchemaTable& t : m_tables)
 		if (t.m_id == id) {
@@ -285,7 +285,7 @@ const ibSchemaColumn* FindColumn(const std::vector<ibSchemaColumn>& cols, ibMeta
 // (HasIndex removed with the index phases: both halves ask FindIndex now, because both need the
 // index ITSELF to compare shapes, not merely to know that the name is taken.)
 
-const ibSchemaIndex* FindIndex(const std::vector<ibSchemaIndex>& indexes, const wxString& name)
+const ibSchemaIndex* FindIndex(const std::vector<ibSchemaIndex>& indexes, const ibString& name)
 {
 	for (const ibSchemaIndex& i : indexes)
 		if (i.m_name == name)
@@ -293,24 +293,42 @@ const ibSchemaIndex* FindIndex(const std::vector<ibSchemaIndex>& indexes, const 
 	return nullptr;
 }
 
-// Two same-named indexes are the SAME shape iff their uniqueness and their column list (by model id,
-// stable across config instances) match. A mismatch (e.g. Index -> IndexWithAdditionalOrder adds the
-// order column, or a unique flip) means the index must be dropped and rebuilt, not left as-is.
+// Two same-named indexes are the SAME shape iff their uniqueness, their column list (by model id,
+// stable across config instances) and the PHYSICAL type of each column match. A mismatch (e.g.
+// Index -> IndexWithAdditionalOrder adds the order column, a unique flip, or a dimension retyped
+// from string to a reference) means the index must be dropped and rebuilt, not left as-is.
+//
+// The model id survives a type change. The index does not: it stands on the physical fields, and
+// no engine alters a column an index references — Firebird answers "column ... is referenced in
+// index" and rolls the apply back. A different layout is a different index, so the differ drops
+// it before the column and puts it back after.
 bool SameIndex(const ibSchemaIndex& a, const ibSchemaIndex& b)
 {
 	if (a.m_unique != b.m_unique)             return false;
 	if (a.m_descending != b.m_descending)     return false;
 	if (a.m_columns.size() != b.m_columns.size()) return false;
-	for (size_t k = 0; k < a.m_columns.size(); ++k)
-		if (a.m_columns[k]->GetColumnId() != b.m_columns[k]->GetColumnId())
+	for (size_t k = 0; k < a.m_columns.size(); ++k) {
+		const ibBackendQueryColumn* const left = a.m_columns[k];
+		const ibBackendQueryColumn* const right = b.m_columns[k];
+		if (left == nullptr || right == nullptr)
 			return false;
+		if (left->GetColumnId() != right->GetColumnId())
+			return false;
+		const std::vector<ibColumnSlot> was = DescribeColumnLayout(left);
+		const std::vector<ibColumnSlot> now = DescribeColumnLayout(right);
+		if (was.size() != now.size())
+			return false;
+		for (size_t f = 0; f < was.size(); ++f)
+			if (was[f].m_name != now[f].m_name || !ibSameFieldType(was[f].m_type, now[f].m_type))
+				return false;
+	}
 	return true;
 }
 
 // The USER-facing name of a table for the change ledger — the metaobject's name as it reads in the
 // metadata tree (e.g. "Enumeration3"), not the physical "ClassNNNN". The queryable vends it directly
 // (it already wraps the metaobject); the physical name is the fallback (a table with no queryable).
-wxString LedgerName(const ibSchemaTable& t)
+ibString LedgerName(const ibSchemaTable& t)
 {
 	return t.m_queryable != nullptr ? t.m_queryable->GetQueryName() : t.m_name;
 }
@@ -449,7 +467,7 @@ ibValue SeedKeyValue(const ibSchemaTable& t, const SeedKey& key, const ibSchemaS
 // after the ephemeral snapshot is gone). No metadata-specific code — the row is pure data.
 void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchemaSeedRow& row, ibDatabaseConnectionHolder* holder)
 {
-	const wxString    table    = t.m_name;
+	const ibString    table    = t.m_name;
 	const ibMetaData* metaData = t.m_queryable != nullptr ? t.m_queryable->GetMetaData() : nullptr;
 	ibDatabaseConnectionHolder* h = holder != nullptr ? holder : db_query->GetHolder();   // the builder's conn, or local
 
@@ -466,9 +484,9 @@ void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 	// same row - "UPDATE OR INSERT INTO … (fld1622, fld1622_TYPE, fld1622_RTRef, fld1622_RRRef, …)" -
 	// and Firebird answered about the one name that is not a column at all.
 	const SeedKey key = SeedKeyFor(t);
-	const std::vector<wxString> keyFields = key.IsOk()
+	const std::vector<ibString> keyFields = key.IsOk()
 		? ColumnFieldNames(key.m_col)
-		: std::vector<wxString>();
+		: std::vector<ibString>();
 	const ibValue keyValue = SeedKeyValue(t, key, row);
 
 	// Resolve each cell to the table's live column by id (a cell for a column the table lacks is dropped).
@@ -491,9 +509,9 @@ void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 		// column, so matching on it raised "FLDxxxx_TYPE does not belong"). Columns = the key + each
 		// cell's physical field spread; cell values bind through the column codec like a real row write.
 		const bool hasKey = !keyFields.empty();
-		std::vector<wxString> columns = keyFields;
+		std::vector<ibString> columns = keyFields;
 		for (const auto& cell : cells)
-			for (const wxString& f : ColumnFieldNames(cell.first))
+			for (const ibString& f : ColumnFieldNames(cell.first))
 				columns.push_back(f);
 
 		ibQueryStatement stmt(ibQueryStatement::Kind::Upsert, table, columns, keyFields, h);
@@ -521,7 +539,7 @@ void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 // leave a retired value in the table for good.
 void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchemaSeedRow& row, ibDatabaseConnectionHolder* holder)
 {
-	const wxString    table    = t.m_name;
+	const ibString    table    = t.m_name;
 	const ibMetaData* metaData = t.m_queryable != nullptr ? t.m_queryable->GetMetaData() : nullptr;
 	const SeedKey key = SeedKeyFor(t);            // carried the same way the write carries it
 	const ibValue keyValue = SeedKeyValue(t, key, row);   // and SPELLED the same way — see SeedKeyValue
@@ -588,10 +606,10 @@ std::vector<const ibBackendQueryColumn*> TableColumnsOf(const ibSchemaTable& t)
 }
 
 // A column's friendly name for the change ledger (falls back to the physical field if unnamed).
-wxString ColName(const ibBackendQueryColumn* col)
+ibString ColName(const ibBackendQueryColumn* col)
 {
-	if (col == nullptr) return wxEmptyString;
-	const wxString name = col->GetName();
+	if (col == nullptr) return ibEmptyString;
+	const ibString name = col->GetName();
 	return name.empty() ? col->GetPhysicalName() : name;
 }
 
@@ -669,12 +687,22 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 	for (const ibSchemaColumn& c : cur.m_columns) {
 		const ibSchemaColumn* o = FindColumn(old.m_columns, c.m_id);
 		const size_t before = batch.StepCount();
-		DiffColumnInto(batch, c.m_column, o != nullptr ? o->m_column : nullptr);   // errors THROW now
+		const long long cleared = DiffColumnInto(batch, c.m_column, o != nullptr ? o->m_column : nullptr);   // errors THROW now
 		if (report != nullptr && batch.StepCount() != before) {   // a step was emitted -> a real change
 			if (o == nullptr)
 				report->AppendInfo(_("Add ") + ColName(c.m_column) + _(" to ") + LedgerName(cur));
 			else
 				report->AppendInfo(_("Change ") + ColName(c.m_column) + _(" in ") + LedgerName(cur));
+		}
+		// What a removed type costs, said while the person can still refuse the apply: the values
+		// are counted before the batch clears them. A derived table loses nothing — its rows are a
+		// reading of the movements, which say their own loss.
+		if (report != nullptr && cleared > 0 && !cur.m_derived) {
+			ibNumber::Format grouped;
+			grouped.groupSep = ibT(' ');
+			grouped.groupSize = 3;
+			report->AppendWarning(ibString::Format(_("%s in %s: %s stored values will be cleared"),
+				ColName(c.m_column), LedgerName(cur), ibNumber(cleared).ToString(grouped)));
 		}
 	}
 	for (const ibSchemaColumn& o : old.m_columns) {
@@ -707,17 +735,17 @@ bool IndexKeyFitsOrSay(const ibDatabaseLayer& conn, const ibSchemaTable& t, cons
 {
 	size_t fieldCount = 0;
 	size_t keyBytes = 0;
-	wxString fields;
+	ibString fields;
 	for (const ibBackendQueryColumn* col : i.m_columns) {
 		fieldCount += ColumnFieldNames(col).size();
 		for (const ibColumnSlot& field : DescribeColumnLayout(col))
 			keyBytes += ibIndexFieldByteWidth(field.m_type);
-		fields += (fields.IsEmpty() ? wxString() : wxString(wxT(", "))) + ColName(col);
+		fields += (fields.IsEmpty() ? ibString() : ibString(ibT(", "))) + ColName(col);
 	}
 	if (ibIndexKeyFits(conn, fieldCount, keyBytes))
 		return true;
 	if (report != nullptr)
-		report->AppendError(wxString::Format(
+		report->AppendError(ibString::Format(
 			_("Index %s of %s is too wide for this base: %u fields and about %u bytes of key, where it holds %u and %u - shorten a field of it or take one out of the key (%s)"),
 			i.m_name, LedgerName(t), (unsigned)fieldCount, (unsigned)keyBytes,
 			ibIndexFieldCapacity(conn), conn.GetMaxIndexKeyBytes(), fields));
@@ -725,6 +753,11 @@ bool IndexKeyFitsOrSay(const ibDatabaseLayer& conn, const ibSchemaTable& t, cons
 }
 
 } // namespace
+
+bool ibSameSchemaIndex(const ibSchemaIndex& a, const ibSchemaIndex& b)
+{
+	return SameIndex(a, b);
+}
 
 // Apply a derived table's materialization bundle — drop the old triggers / view, create the new
 // ones. Runs AFTER the table's own structure is in place (a trigger references its columns).
@@ -779,7 +812,7 @@ static void ApplyMaterialization(ibSchemaBuilder& schema, ibDatabaseConnectionHo
 	// The declaration is COPIED into the closure: the snapshot is ephemeral and a deferred install
 	// runs after the caller has let go of it (same reason the L3-4 regeneration copies).
 	const ibMaterializeSpec spec = t.m_materialize.ToRenderSpec(t.m_name);
-	const wxString sourceTable = t.m_materialize.SourceTable();
+	const ibString sourceTable = t.m_materialize.SourceTable();
 
 	// The HOLDER travels, not the connection or the builder: a deferred install runs after this
 	// function — and after the ibSchemaBuilder that started it — has gone, so a captured reference
@@ -1098,7 +1131,7 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 			// and a deferred rebuild runs after the DDL commit, which is past the point the caller still
 			// holds it. The table declaration copies cheaply and safely: its owned columns are
 			// shared_ptr and everything else points at the live configuration, which outlives the save.
-			const wxString sourceTable = cur.m_materialize.SourceTable();
+			const ibString sourceTable = cur.m_materialize.SourceTable();
 			// The answer is READ. A deferred rebuild returns true here and reports for real in the
 			// post-commit drain (ibSchemaBuilder::Flush), where a failure is a data problem in tables
 			// that already exist. One that runs NOW is still inside the apply transaction, so its

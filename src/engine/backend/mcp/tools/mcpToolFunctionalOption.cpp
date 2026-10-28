@@ -27,7 +27,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 
 const ibArg& ArgId()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The object, field or table that belongs, as NodeId - the MEMBER, not the option. "
 			  "metadata_list and metadata_tree give it."), /*required*/ true);
 	return s_a;
@@ -35,7 +35,7 @@ const ibArg& ArgId()
 
 const ibArg& ArgInto()
 {
-	static const ibArg s_a(wxT("into"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("into"), ibArg::Kind::Whole,
 		ibMcpText("The functional option, as NodeId. Omit it to be TOLD instead: the answer is which "
 			  "options this object already belongs to."));
 	return s_a;
@@ -43,7 +43,7 @@ const ibArg& ArgInto()
 
 const ibArg& ArgRemove()
 {
-	static const ibArg s_a(wxT("remove"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("remove"), ibArg::Kind::Flag,
 		ibMcpText("Take it OUT of that option instead of putting it in."));
 	return s_a;
 }
@@ -51,14 +51,14 @@ const ibArg& ArgRemove()
 class ibMcpToolOptionInclude : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("option_include"); }
+	ibString GetName() const override { return ibT("option_include"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("putting an object into a functional option");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("PUT AN OBJECT, A FIELD OR A TABLE INTO A FUNCTIONAL OPTION - what is not shown while "
 			"the option is off: in forms, lists, sections, command bars and All functions. It stays in the "
@@ -70,7 +70,7 @@ public:
 			"on each other is their `Requires`). Omit `into` to READ what this object already belongs to.");
 	}
 
-	wxString GetSearchText() const override
+	ibString GetSearchText() const override
 	{
 		return ibMcpText("functional option member membership hide visibility part of the system not used "
 			"tick box include");
@@ -82,7 +82,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaDataConfigurationBase* metaData = activeMetaData;
 
@@ -95,33 +95,33 @@ public:
 		ibValueMetaObject* const member = ibFindMetaObjectById(metaData, memberId);
 
 		if (member == nullptr) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("Nothing in this configuration has the id %d."), (int)memberId);
 			return false;
 		}
 
 		// ⭐ ASKED OF THE OBJECT, NOT OF A LIST — the same question the designer's tree asks.
 		if (!member->IsFunctionalOptionAllowed()) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' cannot belong to a functional option - it says so itself. What may is what "
 					  "the interface shows: an object the command interface offers, a field, a table."),
 				member->GetName());
 			return false;
 		}
 
-		result.SetValue(wxT("object"), member->GetName());
+		result.SetValue(ibT("object"), member->GetName());
 
 		// READING - no `into` given. Which options this object belongs to, with the names beside the ids.
-		if (params.FindField(ArgInto().Name()) == nullptr) {
+		if (!params.FindField(ArgInto().Name())) {
 			std::vector<ibDataValue> in;
 			for (const ibMetaID& id : member->GetFunctionalOptions()) {
 				ibValueMetaObject* const option = ibFindMetaObjectById(metaData, id);
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-				entry->AddField(wxT("id"), ibDataValue::Int((s64)id));
-				entry->SetValue(wxT("name"), option != nullptr ? option->GetName() : wxString(wxT("?")));
+				entry->AddField(ibT("id"), ibDataValue::Int((std::int64_t)id));
+				entry->SetValue(ibT("name"), option != nullptr ? option->GetName() : ibString(ibT("?")));
 				in.push_back(ibDataValue::Child(entry));
 			}
-			result.AddField(wxT("in"), ibDataValue::Array(in));
+			result.AddField(ibT("in"), ibDataValue::Array(in));
 			return true;
 		}
 
@@ -129,7 +129,7 @@ public:
 		ibValueMetaObject* const option = ibFindMetaObjectById(metaData, optionId);
 
 		if (option == nullptr || option->GetClassType() != g_metaFunctionalOptionCLSID) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("%d is not a functional option of this configuration."), (int)optionId);
 			return false;
 		}
@@ -137,8 +137,8 @@ public:
 		const bool remove = ArgRemove().Flag(params);
 		member->SetFunctionalOption(optionId, !remove);
 
-		result.SetValue(wxT("option"), option->GetName());
-		result.SetValue(wxT("included"), !remove);
+		result.SetValue(ibT("option"), option->GetName());
+		result.SetValue(ibT("included"), !remove);
 		return true;
 	}
 };

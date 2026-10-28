@@ -60,8 +60,8 @@ ibMaterializeSpec CutSpec()
 	ibMaterializeView dressed;
 	dressed.m_name = wxT("Reg9_Turnovers");
 	dressed.m_columns = {
-		{ wxT("Qty_Receipt"),  wxT("qty_in"),  wxString(),     ibMaterializeAgg::Value },
-		{ wxT("Qty_Expense"),  wxT("qty_out"), wxString(),     ibMaterializeAgg::Value },
+		{ wxT("Qty_Receipt"),  wxT("qty_in"),  ibString(),     ibMaterializeAgg::Value },
+		{ wxT("Qty_Expense"),  wxT("qty_out"), ibString(),     ibMaterializeAgg::Value },
 		{ wxT("Qty_Turnover"), wxT("qty_in"),  wxT("qty_out"), ibMaterializeAgg::Difference },
 	};
 	dressed.m_withMovements = true;
@@ -73,7 +73,7 @@ ibMaterializeSpec CutSpec()
 
 const ibDialectDictionary& SqliteQ() { return ibDatabaseLayerSQLite::Dialect(); }
 
-wxString SqlOf(const ibQueryRelPtr& rel)
+ibString SqlOf(const ibQueryRelPtr& rel)
 {
 	return ibQueryRenderer(SqliteQ()).Render(ibQueryIR(ibProject(rel))).m_sql;
 }
@@ -99,12 +99,12 @@ ibMaterializeReadSpec BalanceRead(bool rows, const ibDateTime& moment, bool excl
 	r.m_floor        = ibValue(moment.BeginOfPeriod(ibTotalsPeriod::Day));
 	r.m_dropZeroRows = true;
 	r.m_columns = {
-		{ wxT("Qty_Balance"), wxT("Qty_Turnover"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true },
+		{ wxT("Qty_Balance"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true },
 	};
 	return r;
 }
 
-wxString ReadSql(const ibMaterializeReadSpec& spec)
+ibString ReadSql(const ibMaterializeReadSpec& spec)
 {
 	return SqlOf(RenderMaterializedRead(spec, wxT("b")));
 }
@@ -121,7 +121,7 @@ wxString ReadSql(const ibMaterializeReadSpec& spec)
 TEST(MaterializeRows, TheStoredRowsAreTheTotalsTableAsItStands) {
 	ibMaterializeSpec spec = CutSpec();
 	spec.m_shards = 4;   // split: the rows are still the rows, one per shard, for the reader to fold
-	const wxString sql = SqlOf(RenderStoredRows(spec, spec.m_views.front()));
+	const ibString sql = SqlOf(RenderStoredRows(spec, spec.m_views.front()));
 
 	EXPECT_TRUE(sql.Contains(wxT("Reg9_T"))) << sql;
 	EXPECT_TRUE(sql.Contains(wxT("period_"))) << sql;          // the period itself, as stored
@@ -137,7 +137,7 @@ TEST(MaterializeRows, TheStoredRowsAreTheTotalsTableAsItStands) {
 // and the condition that lets a floor ride the period index joins it rather than replacing it.
 TEST(MaterializeRows, TheMovementRowsAreTheMovementsUnderTheGuard) {
 	const ibMaterializeSpec spec = CutSpec();
-	const wxString sql = SqlOf(RenderMovementRows(spec, spec.m_views.front()));
+	const ibString sql = SqlOf(RenderMovementRows(spec, spec.m_views.front()));
 
 	EXPECT_TRUE(sql.Contains(wxT("Reg9.active_"))) << sql;
 	EXPECT_TRUE(sql.Contains(wxT("Reg9.period_ IS NOT NULL"))) << sql;
@@ -167,7 +167,7 @@ TEST(MaterializeRows, WithoutTheReadFormsThereAreNoMovementRows) {
 // WHERE, which is the whole point: under an OR neither could ride an index.
 TEST(MaterializeCutRead, ACutIsAUnionOfTwoNarrowedSelections) {
 	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
-	const wxString sql = ReadSql(BalanceRead(/*rows*/ true, moment, /*excluding*/ true));
+	const ibString sql = ReadSql(BalanceRead(/*rows*/ true, moment, /*excluding*/ true));
 
 	EXPECT_TRUE(sql.Contains(wxT("UNION ALL"))) << sql;
 	EXPECT_TRUE(sql.Contains(wxT("Reg9_T"))) << sql;
@@ -182,7 +182,7 @@ TEST(MaterializeCutRead, ACutIsAUnionOfTwoNarrowedSelections) {
 // index than the OR it replaced.
 TEST(MaterializeCutRead, OffANamedViewTheReadingStaysOneSelection) {
 	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
-	const wxString sql = ReadSql(BalanceRead(/*rows*/ false, moment, true));
+	const ibString sql = ReadSql(BalanceRead(/*rows*/ false, moment, true));
 	EXPECT_FALSE(sql.Contains(wxT("UNION ALL"))) << sql;
 	EXPECT_FALSE(sql.Contains(wxT("_cut"))) << sql;
 	EXPECT_TRUE(sql.Contains(wxT("FROM Reg9_Turnovers"))) << sql;
@@ -194,7 +194,7 @@ TEST(MaterializeCutRead, OffANamedViewTheReadingStaysOneSelection) {
 TEST(MaterializeCutRead, AtTheGrainOnlyTheStoredRowsAreRead) {
 	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, ibDateTime(2026, 3, 5), false);
 	r.m_floor = ibValue();   // what ibRegFillArmCut leaves when the bound does not reach inside a grain
-	const wxString sql = ReadSql(r);
+	const ibString sql = ReadSql(r);
 	EXPECT_FALSE(sql.Contains(wxT("UNION ALL"))) << sql;
 	EXPECT_FALSE(sql.Contains(wxT("FROM Reg9 "))) << sql;
 	EXPECT_TRUE(sql.Contains(wxT("Reg9_T"))) << sql;
@@ -214,11 +214,11 @@ TEST(MaterializeCutRead, StoredRowsWithoutTheMovementsAreNotCut) {
 TEST(MaterializeCutRead, FiltersNarrowEachHalf) {
 	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, moment, true);
-	r.m_filters = { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("b_rows"), wxT("wh")), ibConst(ibValue(wxString(wxT("kitchen"))))) };
-	const wxString sql = ReadSql(r);
+	r.m_filters = { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("b_rows"), wxT("wh")), ibConst(ibValue(ibString(wxT("kitchen"))))) };
+	const ibString sql = ReadSql(r);
 
 	int seen = 0;
-	for (size_t at = 0; (at = sql.find(wxT("b_rows.wh = "), at)) != wxString::npos; at += 5)
+	for (size_t at = 0; (at = sql.find(wxT("b_rows.wh = "), at)) != ibString::npos; at += 5)
 		++seen;
 	EXPECT_EQ(seen, 2) << sql;   // once in each half, and not around them
 }
@@ -231,21 +231,21 @@ TEST(MaterializeCutRead, ATurnoverBoundsItsStoredHalfBelow) {
 	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, to, false);
 	r.m_from = ibValue(from);
 	r.m_columns = {
-		{ wxT("Qty_Moved"), wxT("Qty_Turnover"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+		{ wxT("Qty_Moved"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
 	};
 	// The stored half: from the totals table up to the UNION — its rows' subquery, then its own WHERE.
-	const auto storedHalf = [](const wxString& sql) {
+	const auto storedHalf = [](const ibString& sql) {
 		const size_t fromAt = sql.find(wxT("Reg9_T"));
 		const size_t unionAt = sql.find(wxT("UNION ALL"));
-		return fromAt == wxString::npos || unionAt == wxString::npos || unionAt < fromAt
-			? wxString() : sql.Mid(fromAt, unionAt - fromAt);
+		return fromAt == ibString::npos || unionAt == ibString::npos || unionAt < fromAt
+			? ibString() : sql.Mid(fromAt, unionAt - fromAt);
 	};
-	const wxString turnover = storedHalf(ReadSql(r));
+	const ibString turnover = storedHalf(ReadSql(r));
 	ASSERT_FALSE(turnover.IsEmpty());
 	EXPECT_TRUE(turnover.Contains(wxT("period_ >= "))) << turnover;
 
 	// A balance reads the whole history — its stored half has no lower bound to be given.
-	const wxString balance = storedHalf(ReadSql(BalanceRead(/*rows*/ true, to, false)));
+	const ibString balance = storedHalf(ReadSql(BalanceRead(/*rows*/ true, to, false)));
 	ASSERT_FALSE(balance.IsEmpty());
 	EXPECT_FALSE(balance.Contains(wxT("period_ >= "))) << balance;
 }
@@ -288,13 +288,13 @@ struct CutReadFix : ::testing::Test {
 			ibApplicationInstance::DestroyAppDataEnv();
 	}
 
-	void Move(const wxString& rec, int line, const wxString& when, const wxString& wh, bool receipt, double qty, bool active = true) {
+	void Move(const ibString& rec, int line, const ibString& when, const ibString& wh, bool receipt, double qty, bool active = true) {
 		db->RunQuery(wxT("INSERT INTO Reg9 VALUES ('%s', %d, '%s', %d, '%s', %d, %s)"),
 			rec, line, when, active ? 1 : 0, wh, receipt ? 1 : 0, wxString::FromCDouble(qty));
 	}
 
 	// The balance of one warehouse through a rendered read; -1e9 when the warehouse has no row at all.
-	double Balance(const ibMaterializeReadSpec& spec, const wxString& wh) {
+	double Balance(const ibMaterializeReadSpec& spec, const ibString& wh) {
 		ibDatabaseQueryBuilder q(ibConnectionPool::ThreadHolder());
 		q.From(RenderMaterializedRead(spec, wxT("b")));
 		q.Project({ ibQueryProjItem{ ibCol(wxT("b"), wxT("wh")), wxT("wh") },
@@ -307,9 +307,9 @@ struct CutReadFix : ::testing::Test {
 	}
 
 	// The same figure summed straight off the movements — the oracle nothing above can disagree with.
-	double ByHand(const wxString& wh, const wxString& upTo, bool excluding) {
+	double ByHand(const ibString& wh, const ibString& upTo, bool excluding) {
 		double sum = 0.0;
-		ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"), wxString::Format(
+		ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"), ibString::Format(
 			wxT("SELECT COALESCE(SUM(CASE WHEN rectype_ = 1 THEN qty ELSE -qty END), 0) FROM Reg9 ")
 			wxT("WHERE active_ <> 0 AND wh = '%s' AND period_ %s '%s'"), wh, excluding ? wxT("<") : wxT("<="), upTo));
 		if (rs != nullptr) {
@@ -375,7 +375,7 @@ TEST_F(CutReadFix, AFilterOnTheKeyKeepsThatKeyWhole) {
 	Fill();
 	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, moment, true);
-	r.m_filters = { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("b_rows"), wxT("wh")), ibConst(ibValue(wxString(wxT("kitchen"))))) };
+	r.m_filters = { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("b_rows"), wxT("wh")), ibConst(ibValue(ibString(wxT("kitchen"))))) };
 
 	EXPECT_DOUBLE_EQ(Balance(r, wxT("kitchen")), 100.0);
 	EXPECT_DOUBLE_EQ(Balance(r, wxT("bar")), -1e9);   // filtered out — no row at all
@@ -391,9 +391,9 @@ TEST_F(CutReadFix, AFilterThatWalksFindsItsRowInEitherHalf) {
 	db->RunQuery(wxT("INSERT INTO Kinds VALUES ('kitchen', 'hot'), ('bar', 'cold')"));
 
 	ibDatabaseQueryBuilder kinds;
-	kinds.From(ibScan(wxT("Kinds"), wxT("k"))).Project({ ibQueryProjItem{ ibCol(wxT("k"), wxT("wh")), wxString() } });
+	kinds.From(ibScan(wxT("Kinds"), wxT("k"))).Project({ ibQueryProjItem{ ibCol(wxT("k"), wxT("wh")), ibString() } });
 	kinds.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("k"), wxT("wh")), ibCol(wxT("b_rows"), wxT("wh"))));
-	kinds.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("k"), wxT("kind")), ibConst(ibValue(wxString(wxT("hot"))))));
+	kinds.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("k"), wxT("kind")), ibConst(ibValue(ibString(wxT("hot"))))));
 
 	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 	for (const bool inside : { true, false }) {   // a cut (two halves) and a reading at the grain (one)
@@ -439,7 +439,7 @@ TEST_F(CutReadFix, ATurnoverBoundedBelowAnswersWhatTheMovementsSay) {
 		ibMaterializeReadSpec r = BalanceRead(rows, to, /*excluding*/ false);
 		r.m_from = ibValue(from);
 		r.m_columns = {
-			{ wxT("Qty_Balance"), wxT("Qty_Turnover"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+			{ wxT("Qty_Balance"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
 		};
 		return Balance(r, wxT("kitchen"));
 	};

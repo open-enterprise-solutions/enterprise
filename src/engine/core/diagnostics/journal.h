@@ -41,9 +41,7 @@
 // needed (the export macro) breaks it: this header can then be included from anywhere, including
 // from inside the core's own chain.
 #include "core/core.h"
-
-#include <wx/wx.h>          // WX_DEFINE_VARARG_FUNC + wxFormatString
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString — and its Format, the vararg door's
 #include <chrono>           // ibJournalStopwatch (Debug)
 
 // ⭐ THE KIND IN THE FIRST COLUMN — spelled out and bracketed, because it is what a person scans a
@@ -62,10 +60,10 @@
 // here is addressed to whoever opens the file, not to whoever is using the program. Only `Error`
 // reaches the screen, because that one says the thing the person asked for did not happen. See the
 // echo in journal.cpp for why the warning's dialog was taken away.
-enum class ibJournalMark : wxChar {
-	Info    = wxT('*'),
-	Warning = wxT('?'),
-	Error   = wxT('!'),
+enum class ibJournalMark : ibChar {
+	Info    = ibT('*'),
+	Warning = ibT('?'),
+	Error   = ibT('!'),
 };
 
 class CORE_API ibTechJournal {
@@ -86,8 +84,9 @@ public:
 	// process's first line and needs no database, no session and no configuration.
 	//
 	// Failures are silent by design: a machine with no writable directory beside the binary must
-	// still run. IsOpen() then answers false and every write is a no-op.
-	static void Open(const wxString& exeName);
+	// still run. IsOpen() then answers false and every write is a no-op — but for the console's echo
+	// (EchoToStderr), which a Release build, keeping no file, has as well.
+	static void Open(const ibString& exeName);
 
 	// Flush and close. Not required — the process may simply end — but a caller that wants the file
 	// complete before it does something drastic can ask.
@@ -104,7 +103,7 @@ public:
 	// when it goes. The answer is put in brackets before the source (`(trade) query.sql`); an empty answer — a
 	// line about no base — leaves the line as it always was. Must not throw, must not wait and must not write
 	// to the journal.
-	using ContextFn = wxString (*)();
+	using ContextFn = ibString (*)();
 	static void SetContext(ContextFn context);
 
 	// Is anything listening? One atomic read, and the gate every write tests BEFORE formatting, so
@@ -112,11 +111,19 @@ public:
 	static bool IsOpen();
 
 	// The run's file, absolute. Empty when the journal never opened.
-	static wxString Path();
+	static ibString Path();
 
 	// The write itself — the source (a subsystem name: "query", "query.compose", "session") and the
 	// line. Timestamped, thread-stamped and flushed here; echoed to the debugger by the same call.
-	static void Write(ibJournalMark mark, const wxString& source, const wxString& message);
+	static void Write(ibJournalMark mark, const ibString& source, const ibString& message);
+
+	// …AND A LINE READ BACK: the mark, the source and the message of a line Write made — another process's, taken off
+	// its console (the cluster reads its servers'). False for a line that is not one: a message's own second line.
+	static bool Read(const ibString& line, ibJournalMark& mark, ibString& source, ibString& message);
+
+	// THE FIRST ERROR'S DUMP IS NOT THIS RUN'S TO TAKE — a process started again after it fell (appserver --again, by
+	// the cluster): the run before it took one, and a dump at every start fills the disk while the fault stays.
+	static void SkipErrorDump();
 
 	// ⭐ A FAILURE THE OPERATING SYSTEM EXPLAINS. A COM HRESULT or a Win32 error code is a number
 	// nobody can read; the platform holds the sentence that goes with it, and this is the one verb
@@ -126,25 +133,15 @@ public:
 	// Kept as its own door rather than folded into ibJournalError because the CODE is not part of the
 	// message — a caller that has one must not have to render it itself, and a caller that has none
 	// must not have to invent one.
-	static void SysError(const wxString& source, long code, const wxString& message);
+	static void SysError(const ibString& source, long code, const ibString& message);
 
-	// …and the same with the message's OWN arguments, on wx's vararg machinery — the shape every
-	// raise in this codebase uses (`ibBackendQuerySyntaxException::ErrorAt`, `ibDatabaseLayer::
-	// RunQuery`). Two things a hand-rolled parameter pack does not give: the format string is
-	// CHECKED AGAINST ITS ARGUMENTS at compile time, and both wx builds (wchar and UTF-8) get the
-	// right implementation without the callsite knowing which one it is in.
-	//
-	// The gate is tested first, so with the journal off nothing is allocated or converted.
-	WX_DEFINE_VARARG_FUNC(static void, Print, 3, (ibJournalMark, const wxString&, const wxFormatString&),
-		DoPrintWchar, DoPrintUtf8);
-
-private:
-#if !wxUSE_UTF8_LOCALE_ONLY
-	static void DoPrintWchar(ibJournalMark mark, const wxString& source, const wxChar* format, ...);
-#endif
-#if wxUSE_UNICODE_UTF8
-	static void DoPrintUtf8(ibJournalMark mark, const wxString& source, const char* format, ...);
-#endif
+	// …and the same with the message's OWN arguments — ibString::Format's specifiers, read against the arguments
+	// given: a format they do not answer is refused there, not read past them. Write decides who hears it; a hot
+	// path asks IsOpen before the message is made, as the macros below do.
+	template <class... Args>
+	static void Print(ibJournalMark mark, const ibString& source, const ibString& format, const Args&... args) {
+		Write(mark, source, ibString::Format(format, args...));
+	}
 };
 
 // ⭐ THE ONE LINE A CALLSITE WRITES. Named the way the other process-wide handles are (`appData`,

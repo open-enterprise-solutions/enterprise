@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, Vadim Zeitlin, 2C-Team
+//	Author		: Maxim Kornienko, Vadim Zeitlin
 //	Description : OLE-supporter
 ////////////////////////////////////////////////////////////////////////////
 
@@ -25,7 +25,7 @@ public:
 	wxBasicString() : m_bstrBuf(nullptr) {}
 
 	// Constructs with the owned BSTR created from a wxString
-	wxBasicString(const wxString& str)
+	wxBasicString(const ibString& str)
 		: m_bstrBuf(SysAllocString(str.wc_str())) {
 	}
 
@@ -36,7 +36,7 @@ public:
 	~wxBasicString() { SysFreeString(m_bstrBuf); }
 
 	// Creates the owned BSTR from a wxString
-	void AssignFromString(const wxString& str)
+	void AssignFromString(const ibString& str)
 	{
 		SysFreeString(m_bstrBuf);
 		m_bstrBuf = SysAllocString(str.wc_str());
@@ -93,23 +93,23 @@ private:
 //*                                                      Converting BSTR and wxString                                 *
 //*********************************************************************************************************************
 
-BSTR wxConvertStringToOle(const wxString& str)
+BSTR wxConvertStringToOle(const ibString& str)
 {
 	return wxBasicString(str).Detach();
 }
 
-wxString wxConvertStringFromOle(const BSTR& bStr)
+ibString wxConvertStringFromOle(const BSTR& bStr)
 {
 	// nullptr BSTR is equivalent to an empty string (this is the convention used
 	// by VB and hence we must follow it)
-	if (!bStr) return wxString();
+	if (!bStr) return ibString();
 
 	const unsigned int len = SysStringLen(bStr);
 
 #if wxUSE_UNICODE
-	wxString str(bStr, len);
+	ibString str(bStr, len);
 #else
-	wxString str;
+	ibString str;
 	if (len)
 	{
 		wxStringBufferLength buf(str, len); // asserts if len == 0
@@ -385,7 +385,7 @@ VARIANT ibValueOLE::FromValue(const ibValue& varRetValue) const
 	{
 		ibNumber fData = varRetValue.GetNumber();
 		if (fData == fData.Round()) {
-			wxLongLong_t llVal; fData.ToInt(llVal);
+			long long llVal; fData.ToInt(llVal);
 			oleVariant.vt = VT_I8;
 			oleVariant.llVal = llVal;
 		}
@@ -458,8 +458,8 @@ IDispatch* ibValueOLE::DoCreateInstance()
 		IID_IDispatch, (void**)&pDispatch);
 
 	if (FAILED(hr)) {
-		ibJournalSysError(wxT("ole"), hr,
-			wxString::Format(_("Failed to create an instance of \"%s\""), m_objectName));
+		ibJournalSysError(ibT("ole"), hr,
+			ibString::Format(_("Failed to create an instance of \"%s\""), m_objectName));
 		return nullptr;
 	}
 
@@ -471,12 +471,12 @@ IDispatch* ibValueOLE::DoCreateInstance()
 #ifdef __WXMSW__
 ibValueOLE::ibValueOLE() : ibValueDynamicMembers(ibValueTypes::TYPE_OLE),
 m_clsId({ 0 }), m_dispatch(nullptr), m_currentDispatch(nullptr),
-m_objectName(wxEmptyString)
+m_objectName(ibEmptyString)
 {
 	m_members.Bind(this, &ibValueOLE::FillMembers);
 }
 
-ibValueOLE::ibValueOLE(const CLSID& clsId, IDispatch* dispatch, const wxString& objectName) : ibValueDynamicMembers(ibValueTypes::TYPE_OLE),
+ibValueOLE::ibValueOLE(const CLSID& clsId, IDispatch* dispatch, const ibString& objectName) : ibValueDynamicMembers(ibValueTypes::TYPE_OLE),
 m_clsId(clsId), m_dispatch(dispatch), m_currentDispatch(nullptr),
 m_objectName(objectName)
 {
@@ -503,7 +503,7 @@ m_objectName(objectName)
 	}
 }
 #else 
-ibValueOLE::ibValueOLE() : ibValueDynamicMembers(ibValueTypes::TYPE_OLE), m_objectName(wxEmptyString) {
+ibValueOLE::ibValueOLE() : ibValueDynamicMembers(ibValueTypes::TYPE_OLE), m_objectName(ibEmptyString) {
 	m_members.Bind(this, &ibValueOLE::FillMembers);
 }
 #endif
@@ -524,7 +524,7 @@ bool ibValueOLE::Init(ibValue** paParams, const long lSizeArray)
 	if (lSizeArray < 1)
 		return false;
 
-	const wxString& strOleName = paParams[0]->GetString();
+	const ibString& strOleName = paParams[0]->GetString();
 #ifdef __WXMSW__
 	if (!Create(strOleName)) {
 		ibBackendCoreException::Error(_("Failed to create an instance of '%s'"), strOleName);
@@ -535,7 +535,7 @@ bool ibValueOLE::Init(ibValue** paParams, const long lSizeArray)
 #endif
 }
 
-bool ibValueOLE::Create(const wxString& strOleName)
+bool ibValueOLE::Create(const ibString& strOleName)
 {
 	// THE CARET'S WALK FOR COMPLETION STARTS NO COM SERVER: it builds `New COMObject("…")` to list its members,
 	// and that must not launch the application named. Asked of the evaluation, not of the process — the
@@ -550,7 +550,7 @@ bool ibValueOLE::Create(const wxString& strOleName)
 
 #ifdef __WXMSW__
 
-	HRESULT hr = ::CLSIDFromProgID(strOleName, &m_clsId);
+	HRESULT hr = ::CLSIDFromProgID(strOleName.wc_str(), &m_clsId);
 	if (FAILED(hr))
 		return false;
 
@@ -629,10 +629,10 @@ void ibValueOLE::FillMembers(ibMemberTable& helper) const
 				typeInfo->GetDocumentation(funcInfo->memid, &strName,
 					nullptr, nullptr, nullptr);
 
-				const wxString& strMethodName = wxConvertStringFromOle(strName);
+				const ibString& strMethodName = wxConvertStringFromOle(strName);
 				SysFreeString(strName);
 
-				wxString methodHelper = strMethodName + wxT("(");
+				ibString methodHelper = strMethodName + ibT("(");
 
 				for (unsigned int k = 0; k < (UINT)funcInfo->cParams; k++) {
 					VARTYPE vt = funcInfo->lprgelemdescParam[k].tdesc.vt & ~0xF000;
@@ -641,7 +641,7 @@ void ibValueOLE::FillMembers(ibMemberTable& helper) const
 						switch (vt)
 						{
 						case VT_BOOL:
-							methodHelper += wxT("boolean");
+							methodHelper += ibT("boolean");
 							break;
 						case VT_UI1:
 						case VT_I2:
@@ -656,38 +656,38 @@ void ibValueOLE::FillMembers(ibMemberTable& helper) const
 						case VT_UI4:
 						case VT_INT:
 						case VT_UINT:
-							methodHelper += wxT("number");
+							methodHelper += ibT("number");
 							break;
 						case VT_BSTR:
-							methodHelper += wxT("string");
+							methodHelper += ibT("string");
 							break;
 						case VT_DATE:
-							methodHelper += wxT("date");
+							methodHelper += ibT("date");
 							break;
 						case VT_DISPATCH:
-							methodHelper += wxT("oleRef");
+							methodHelper += ibT("oleRef");
 							break;
 						case VT_PTR:
-							methodHelper += wxT("olePtr");
+							methodHelper += ibT("olePtr");
 							break;
 						case VT_SAFEARRAY:
-							methodHelper += wxT("oleArray");
+							methodHelper += ibT("oleArray");
 							break;
 						case VT_NULL:
-							methodHelper += wxT("null");
+							methodHelper += ibT("null");
 							break;
 						case VT_EMPTY:
-							methodHelper += wxT("empty");
+							methodHelper += ibT("empty");
 							break;
-						default: methodHelper += wxT("other"); break;
+						default: methodHelper += ibT("other"); break;
 						}
 					}
-					else methodHelper += wxT("badType");
+					else methodHelper += ibT("badType");
 					if (k < (UINT)funcInfo->cParams - 1) {
-						methodHelper += wxT(", ");
+						methodHelper += ibT(", ");
 					}
 				}
-				methodHelper += wxT(")");
+				methodHelper += ibT(")");
 				if (funcInfo->invkind == INVOKE_FUNC) {
 					helper.AppendFunc(
 						strMethodName,
@@ -843,7 +843,7 @@ bool ibValueOLE::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	);
 
 	if (hr != S_OK) {
-		ibBackendCoreException::Error(wxT("%s:\n%s"), ExcepInfo.bstrSource, ExcepInfo.bstrDescription);
+		ibBackendCoreException::Error(ibT("%s:\n%s"), ExcepInfo.bstrSource, ExcepInfo.bstrDescription);
 		return false;
 	}
 
@@ -888,7 +888,7 @@ bool ibValueOLE::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValu
 		switch (hr)
 		{
 		case DISP_E_EXCEPTION:
-			ibBackendCoreException::Error(wxT("%s:\n%s"), ExcepInfo.bstrSource, ExcepInfo.bstrDescription);
+			ibBackendCoreException::Error(ibT("%s:\n%s"), ExcepInfo.bstrSource, ExcepInfo.bstrDescription);
 			return false;
 		case DISP_E_BADPARAMCOUNT:
 			ibBackendCoreException::Error(_("The number of elements provided to DISPPARAMS is different from the number of arguments accepted by the method or property."));

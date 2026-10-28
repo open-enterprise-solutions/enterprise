@@ -6,11 +6,10 @@
 namespace {
 
 // How many bytes `w` takes in UTF-8, up to its first NUL — counted from its own code units, nothing
-// converted: below 0x80 one byte, below 0x800 two, a surrogate pair four (a character past the BMP where
-// wchar_t is sixteen bits), any other unit three, and a 32-bit wchar_t past 0xFFFF four. `false` for what
-// UTF-8 cannot carry as it is — a lone surrogate, a value past U+10FFFF — which is left to the converter,
-// as it always was.
-bool EncodedLength(const wchar_t* w, size_t& bytes)
+// converted: below 0x80 one byte, below 0x800 two, a surrogate pair four (a character past the BMP),
+// any other unit three. `false` for what UTF-8 cannot carry as it is — a lone surrogate — which is left to the
+// string's encoder.
+bool EncodedLength(const ibChar* w, size_t& bytes)
 {
 	bytes = 0;
 	for (size_t i = 0; w[i] != 0; ++i) {
@@ -21,7 +20,7 @@ bool EncodedLength(const wchar_t* w, size_t& bytes)
 			bytes += 2;
 		else if (u >= 0xD800 && u <= 0xDFFF) {
 			const unsigned long next = static_cast<unsigned long>(w[i + 1]);   // the NUL at worst
-			if (sizeof(wchar_t) != 2 || u > 0xDBFF || next < 0xDC00 || next > 0xDFFF)
+			if (u > 0xDBFF || next < 0xDC00 || next > 0xDFFF)
 				return false;
 			bytes += 4;
 			++i;
@@ -37,13 +36,13 @@ bool EncodedLength(const wchar_t* w, size_t& bytes)
 }
 
 // wide -> UTF-8 into a buffer of exactly the encoded length (and its NUL) - see ConvertToUnicodeStream.
-wxCharBuffer EncodeUtf8(const wchar_t* w)
+std::string EncodeUtf8(const ibChar* w)
 {
 	size_t bytes = 0;
 	if (!EncodedLength(w, bytes))
-		return wxConvUTF8.cWC2MB(w);   // not text UTF-8 carries as it is — the converter's road, as before
+		return ibString(w).ToUtf8();   // not text UTF-8 carries as it is — the string's encoder
 
-	wxCharBuffer out(bytes);
+	std::string out(bytes, '\0');
 	unsigned char* p = reinterpret_cast<unsigned char*>(out.data());
 	for (size_t i = 0; w[i] != 0; ++i) {
 		unsigned long u = static_cast<unsigned long>(w[i]);
@@ -70,7 +69,7 @@ wxCharBuffer EncodeUtf8(const wchar_t* w)
 	return out;
 }
 
-unsigned int EncodedStreamLength(const wchar_t* w)
+unsigned int EncodedStreamLength(const ibChar* w)
 {
 	size_t bytes = 0;
 	if (EncodedLength(w, bytes))
@@ -82,12 +81,12 @@ unsigned int EncodedStreamLength(const wchar_t* w)
 
 // UTF-8 -> wide units, in ONE PASS, into a buffer as long as the bytes (each byte yields at most one code
 // unit, a four-byte sequence two) - on the stack for a short field, which is the ordinary one. `m_wellFormed`
-// false: the bytes go down the converter's road instead (ConvertFromUnicodeStream, below).
+// false: the bytes go to the string's decoder instead (ConvertFromUnicodeStream, below).
 struct WideText
 {
-	wchar_t              m_onStack[256];   // (not called `small` — that is a macro for `char` in the Windows headers)
-	std::vector<wchar_t> m_onHeap;
-	const wchar_t*       m_chars = m_onStack;
+	ibChar              m_onStack[256];   // (not called `small` — that is a macro for `char` in the Windows headers)
+	std::vector<ibChar> m_onHeap;
+	const ibChar*       m_chars = m_onStack;
 	size_t               m_units = 0;
 	bool                 m_wellFormed = true;
 };
@@ -96,7 +95,7 @@ void DecodeUtf8(const char* inputBuffer, WideText& out)
 {
 	const unsigned char* const bytes = reinterpret_cast<const unsigned char*>(inputBuffer);
 	const size_t len = std::strlen(inputBuffer);
-	wchar_t* text = out.m_onStack;
+	ibChar* text = out.m_onStack;
 	if (len > sizeof(out.m_onStack) / sizeof(out.m_onStack[0])) {
 		out.m_onHeap.resize(len);
 		text = out.m_onHeap.data();
@@ -107,7 +106,7 @@ void DecodeUtf8(const char* inputBuffer, WideText& out)
 	for (size_t i = 0; i < len;) {
 		const unsigned char c = bytes[i];
 		if (c < 0x80) {
-			text[units++] = static_cast<wchar_t>(c);
+			text[units++] = static_cast<ibChar>(c);
 			++i;
 			continue;
 		}
@@ -128,81 +127,58 @@ void DecodeUtf8(const char* inputBuffer, WideText& out)
 			out.m_wellFormed = false;
 			return;
 		}
-		if (sizeof(wchar_t) == 2 && cp >= 0x10000) {
+		if (cp >= 0x10000) {
 			cp -= 0x10000;
-			text[units++] = static_cast<wchar_t>(0xD800 + (cp >> 10));
-			text[units++] = static_cast<wchar_t>(0xDC00 + (cp & 0x3FF));
+			text[units++] = static_cast<ibChar>(0xD800 + (cp >> 10));
+			text[units++] = static_cast<ibChar>(0xDC00 + (cp & 0x3FF));
 		}
 		else
-			text[units++] = static_cast<wchar_t>(cp);
+			text[units++] = static_cast<ibChar>(cp);
 		i += n;
 	}
 	out.m_units = units;
-}
-
-// The converter's road — and, if that answers nothing, the default conversion — as it always was.
-wxString DecodeByConverter(const char* inputBuffer)
-{
-	wxString strReturn(wxConvUTF8.cMB2WC(inputBuffer));
-	if (strReturn == wxEmptyString)
-		strReturn << wxString(inputBuffer);
-	return strReturn;
 }
 
 } // namespace
 
 // ⭐ THE LENGTH IS COUNTED, NOT PRODUCED. A string parameter used to be converted twice — once here only to
 // learn how long it would be, and once more by ConvertToUnicodeStream to have the bytes.
-unsigned int ibDatabaseStringConverter::GetEncodedStreamLength(const wxString& inputString)
-{
-	const wxWX2WCbuf wide = inputString.wc_str();
-	return EncodedStreamLength(wide);
-}
-
 unsigned int ibDatabaseStringConverter::GetEncodedStreamLength(const ibString& inputString)
 {
-	return EncodedStreamLength(inputString.wc_str());
+	return EncodedStreamLength(inputString.c_str());
 }
 
 // Text -> UTF-8, in ONE PASS into a buffer of exactly the encoded length (and its NUL). The converter it
 // replaces walked the string to size a buffer, walked it again to fill it, and was called once more by
 // GetEncodedStreamLength — for every statement's text and every string parameter bound.
-const wxCharBuffer ibDatabaseStringConverter::ConvertToUnicodeStream(const wxString& inputString)
+std::string ibDatabaseStringConverter::ConvertToUnicodeStream(const ibString& inputString)
 {
-	const wxWX2WCbuf wide = inputString.wc_str();
-	return EncodeUtf8(wide);
+	return EncodeUtf8(inputString.c_str());
 }
 
-// …and a value's text, straight from its own characters - no wxString made to reach them.
-const wxCharBuffer ibDatabaseStringConverter::ConvertToUnicodeStream(const ibString& inputString)
-{
-	return EncodeUtf8(inputString.wc_str());
-}
-
-// UTF-8 -> wxString, in ONE PASS straight into the characters, handed to the string whole. Every text
+// UTF-8 -> text, in ONE PASS straight into the characters, handed to the string whole. Every text
 // field of every row read comes through here, and the converter it replaces walked the bytes twice, built
 // a wide buffer, copied it into the string and compared the string with an empty one to see whether it
 // had worked — per field, forty thousand names in one batch of references (stack samples 2026-09-12).
 //
 // ⚠ STRICT, AND IT SAYS SO RATHER THAN GUESSING: a stray continuation byte, a cut-off tail, an overlong
-// form, a surrogate spelled in UTF-8 or a value past U+10FFFF sends the bytes down the converter's road,
-// exactly as before. So every string the converter accepted comes out the same — this is a shorter road
-// to the same answer, not a second opinion about the bytes.
-wxString ibDatabaseStringConverter::ConvertFromUnicodeStream(const char* inputBuffer)
+// form, a surrogate spelled in UTF-8 or a value past U+10FFFF sends the bytes to the string's decoder,
+// which puts U+FFFD where a character cannot be read. A well-formed string reads the same either way.
+ibString ibDatabaseStringConverter::ConvertFromUnicodeStream(const char* inputBuffer)
 {
 	// 🛑 A NULL FIELD HAS NO BYTES, AND IT READS AS THE EMPTY STRING. SQLite answers a NULL column with a null
 	// pointer (sqlite3_column_text), and the converter this replaced turned that into "" on both of its
 	// roads; this one went straight to strlen and took the process down — the audit log, reading its own
 	// SQLite journal beside a posting, 2026-09-12 (dump enterprise_25428_t28368).
 	if (inputBuffer == nullptr)
-		return wxString();
+		return ibString();
 	WideText text;
 	DecodeUtf8(inputBuffer, text);
-	return text.m_wellFormed ? wxString(text.m_chars, text.m_units) : DecodeByConverter(inputBuffer);
+	return text.m_wellFormed ? ibString(text.m_chars, text.m_units) : ibString::FromUTF8(inputBuffer);
 }
 
-// …and straight into a value's text, the same one pass handed to the ibString whole: a field read into a
-// value no longer builds a wxString to be copied out of.
+// …and straight into a value's text, the same one pass handed to the string whole: a field read into a
+// value no longer builds a string to be copied out of.
 void ibDatabaseStringConverter::ConvertFromUnicodeStream(const char* inputBuffer, ibString& outputString)
 {
 	if (inputBuffer == nullptr) {   // a NULL field reads as the empty string (above)
@@ -211,5 +187,5 @@ void ibDatabaseStringConverter::ConvertFromUnicodeStream(const char* inputBuffer
 	}
 	WideText text;
 	DecodeUtf8(inputBuffer, text);
-	outputString = text.m_wellFormed ? ibString(text.m_chars, text.m_units) : ibString(DecodeByConverter(inputBuffer));
+	outputString = text.m_wellFormed ? ibString(text.m_chars, text.m_units) : ibString::FromUTF8(inputBuffer);
 }

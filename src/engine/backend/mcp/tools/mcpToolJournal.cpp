@@ -41,16 +41,16 @@
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerReader.h"
 #include "backend/metadataConfiguration.h"   // activeMetaData - the door that knows configuration types
-#include "core/programFolder.h"          // the journal lives in the diagnostic folder
+#include "core/fdatetime.h"           // ibDateTime - a line's moment
+#include "core/fileSystem.h"          // the journal lives in the diagnostic folder
 #include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
 
-#include <wx/datetime.h>
-#include <wx/dir.h>
 #include <wx/ffile.h>
 #include <wx/filename.h>
-#include <wx/tokenzr.h>
+#include "core/stringTokenizer.h"
 
 #include <algorithm>
+#include <chrono>
 #include <map>
 #include <vector>
 
@@ -59,39 +59,39 @@ namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
 
 // The arguments, declared once and read through the same objects — see ibMcpTool::Arguments().
-const ibArg& ArgSinceMinutes() { static const ibArg a(wxT("sinceMinutes"), ibArg::Kind::Whole, ibMcpText("Only what happened in the last N minutes. This is usually the one to pass.")); return a; }
-const ibArg& ArgLevel() { static const ibArg a(wxT("level"), ibArg::Kind::Text, ibMcpText("Which rows to report, and the four words are not one scale. info, warn and error step up a SEVERITY ladder, so error means failures and nothing else. audit is not a severity at all - it is a KIND, the business trail: logins, document writes, schema applications, what an assistant did. Ask for it BY NAME and you get that trail alone; it never arrives mixed into a severity you asked for.")); return a; }
-const ibArg& ArgSource() { static const ibArg a(wxT("source"), ibArg::Kind::Text, ibMcpText("Only this subsystem. script = a running module, auth = logins, and so on.")); return a; }
-const ibArg& ArgEvent() { static const ibArg a(wxT("event"), ibArg::Kind::Text, ibMcpText("Only this event type, for example runtime.error.")); return a; }
-const ibArg& ArgUser() { static const ibArg a(wxT("user"), ibArg::Kind::Text, ibMcpText("Only this user's rows.")); return a; }
-const ibArg& ArgSession() { static const ibArg a(wxT("session"), ibArg::Kind::Text,
+const ibArg& ArgSinceMinutes() { static const ibArg a(ibT("sinceMinutes"), ibArg::Kind::Whole, ibMcpText("Only what happened in the last N minutes. This is usually the one to pass.")); return a; }
+const ibArg& ArgLevel() { static const ibArg a(ibT("level"), ibArg::Kind::Text, ibMcpText("Which rows to report, and the four words are not one scale. info, warn and error step up a SEVERITY ladder, so error means failures and nothing else. audit is not a severity at all - it is a KIND, the business trail: logins, document writes, schema applications, what an assistant did. Ask for it BY NAME and you get that trail alone; it never arrives mixed into a severity you asked for.")); return a; }
+const ibArg& ArgSource() { static const ibArg a(ibT("source"), ibArg::Kind::Text, ibMcpText("Only this subsystem. script = a running module, auth = logins, and so on.")); return a; }
+const ibArg& ArgEvent() { static const ibArg a(ibT("event"), ibArg::Kind::Text, ibMcpText("Only this event type, for example runtime.error.")); return a; }
+const ibArg& ArgUser() { static const ibArg a(ibT("user"), ibArg::Kind::Text, ibMcpText("Only this user's rows.")); return a; }
+const ibArg& ArgSession() { static const ibArg a(ibT("session"), ibArg::Kind::Text,
 	ibMcpText("Only ONE SESSION's rows, by the id in `session`. This is how you watch a background "
 		  "run: code_run answers with the session it runs as, and a background session cannot "
 		  "send anybody a message - it is tied to no one - so its rows here are the only account "
 		  "of what it is doing. Ask again as it goes.")); return a; }
-const ibArg& ArgContains() { static const ibArg a(wxT("contains"), ibArg::Kind::Text, ibMcpText("Only rows whose message contains this text - a module name, a field, a phrase.")); return a; }
-const ibArg& ArgLimit() { static const ibArg a(wxT("limit"), ibArg::Kind::Whole, ibMcpText("How many rows at most. Default 50.")); return a; }
+const ibArg& ArgContains() { static const ibArg a(ibT("contains"), ibArg::Kind::Text, ibMcpText("Only rows whose message contains this text - a module name, a field, a phrase.")); return a; }
+const ibArg& ArgLimit() { static const ibArg a(ibT("limit"), ibArg::Kind::Whole, ibMcpText("How many rows at most. Default 50.")); return a; }
 
 // Levels are stored as numbers and asked for as words. The word is the unit a
 // caller thinks in - "show me the errors" - and the number is the file's.
-wxString LevelName(int level)
+ibString LevelName(int level)
 {
 	switch (level) {
-		case 0: return wxT("info");
-		case 1: return wxT("warn");
-		case 2: return wxT("error");
-		case 3: return wxT("audit");
+		case 0: return ibT("info");
+		case 1: return ibT("warn");
+		case 2: return ibT("error");
+		case 3: return ibT("audit");
 	}
-	return wxT("info");
+	return ibT("info");
 }
 
-int LevelFromWord(const wxString& word)
+int LevelFromWord(const ibString& word)
 {
-	const wxString lowered = word.Lower();
-	if (lowered == wxT("info"))  return 0;
-	if (lowered == wxT("warn"))  return 1;
-	if (lowered == wxT("error")) return 2;
-	if (lowered == wxT("audit")) return 3;
+	const ibString lowered = word.Lower();
+	if (lowered == ibT("info"))  return 0;
+	if (lowered == ibT("warn"))  return 1;
+	if (lowered == ibT("error")) return 2;
+	if (lowered == ibT("audit")) return 3;
 	return -1;      // any
 }
 
@@ -110,20 +110,20 @@ int LevelFromWord(const wxString& word)
 // binary writes no file at all, which is a different answer from "nothing matched" and is reported
 // as one.
 
-const ibArg& ArgTraceApp() { static const ibArg a(wxT("app"), ibArg::Kind::Text, ibMcpText("Only this application's run: designer, enterprise, appserver, codeRunner. Leave it out to read every application at once - that is usually what is wanted, because the run being debugged is a different process from this one.")); return a; }
-const ibArg& ArgTraceSource() { static const ibArg a(wxT("source"), ibArg::Kind::Text, ibMcpText("Only this subsystem, matched by PREFIX: query catches query.sql, query.road, query.compose and query.stitch; db.firebird is the driver, exception is a raise with its site.")); return a; }
-const ibArg& ArgTraceLevel() { static const ibArg a(wxT("level"), ibArg::Kind::Text, ibMcpText("Lowest severity to report: info, warning, error. The engine's journal has no audit level - that one belongs to journal_read.")); return a; }
+const ibArg& ArgTraceApp() { static const ibArg a(ibT("app"), ibArg::Kind::Text, ibMcpText("Only this application's run: designer, enterprise, appserver, codeRunner. Leave it out to read every application at once - that is usually what is wanted, because the run being debugged is a different process from this one.")); return a; }
+const ibArg& ArgTraceSource() { static const ibArg a(ibT("source"), ibArg::Kind::Text, ibMcpText("Only this subsystem, matched by PREFIX: query catches query.sql, query.road, query.compose and query.stitch; db.firebird is the driver, exception is a raise with its site.")); return a; }
+const ibArg& ArgTraceLevel() { static const ibArg a(ibT("level"), ibArg::Kind::Text, ibMcpText("Lowest severity to report: info, warning, error. The engine's journal has no audit level - that one belongs to journal_read.")); return a; }
 
-int TraceLevelFromWord(const wxString& word)
+int TraceLevelFromWord(const ibString& word)
 {
-	const wxString lowered = word.Lower();
-	if (lowered == wxT("info"))    return 0;
-	if (lowered == wxT("warn") || lowered == wxT("warning")) return 1;
-	if (lowered == wxT("error"))   return 2;
+	const ibString lowered = word.Lower();
+	if (lowered == ibT("info"))    return 0;
+	if (lowered == ibT("warn") || lowered == ibT("warning")) return 1;
+	if (lowered == ibT("error"))   return 2;
 	return -1;
 }
 
-int TraceLevelOfName(const wxString& name)
+int TraceLevelOfName(const ibString& name)
 {
 	const int level = TraceLevelFromWord(name);
 	return level < 0 ? 0 : level;
@@ -132,70 +132,72 @@ int TraceLevelOfName(const wxString& name)
 // One parsed line. The app is not IN the file - it is the file's own name - and it is carried on
 // every row because the whole point of the tool is that two processes are being read at once.
 struct ibTraceRow {
-	wxDateTime m_when;
-	wxString   m_app;
-	wxString   m_level;
-	wxString   m_thread;
-	wxString   m_source;
-	wxString   m_message;
+	ibDateTime m_when;
+	ibString   m_app;
+	ibString   m_level;
+	ibString   m_thread;
+	ibString   m_source;
+	ibString   m_message;
 };
 
 // Where the files are. `Path()` is authoritative when this process journals - the directory is a
 // DECISION (beside the crash dumps) and reading it off the live path means the two can never drift
 // apart. Only when there is no journal here does the convention have to be spelled out again.
-wxString TraceDirectory()
+ibString TraceDirectory()
 {
-	const wxString own = ibTechJournal::Path();
+	const ibString own = ibTechJournal::Path();
 	if (!own.IsEmpty())
 		return wxFileName(own).GetPath();
 
 	// The journal's own rule (journal.cpp): beside the dumps, in the diagnostic folder - which, for a
 	// program inside a macOS bundle, is ~/Library/Logs/OES and not the folder that holds the .app.
-	return ibDiagnosticFolder() + wxFILE_SEP_PATH + wxT("journal");
+	return ibDiagnosticFolder() + wxFILE_SEP_PATH + ibT("journal");
 }
 
 // `<app>_<yyyymmddThhmmss>_<pid>.log` — the app is the head, the start time is the middle.
-wxString TraceAppOfFile(const wxString& fileName) { return fileName.BeforeFirst(wxT('_')); }
+ibString TraceAppOfFile(const ibString& fileName) { return fileName.BeforeFirst(ibT('_')); }
 
 // ⭐ THE FILE'S NAME CARRIES THE DATE THE LINES DO NOT. A line is stamped `03:01:57.450` and no
 // further — time of day is what a person compares — so the day comes from the start stamp, and a
 // run that crosses midnight is caught by the clock going BACKWARDS between two lines.
-wxDateTime TraceStartOfFile(const wxFileName& file)
+ibDateTime TraceStartOfFile(const wxFileName& file)
 {
-	const wxString middle = file.GetName().AfterFirst(wxT('_')).BeforeLast(wxT('_'));
+	// `yyyymmddThhmmss`: the fourteen digits without the T are one of the date's own forms.
+	const ibString middle = file.GetName().AfterFirst(ibT('_')).BeforeLast(ibT('_'));
 
-	wxDateTime stamp;
-	if (!middle.IsEmpty() && stamp.ParseFormat(middle, wxT("%Y%m%dT%H%M%S")))
+	ibDateTime stamp;
+	if (middle.length() == 15 && middle[8] == ibT('T') && stamp.FromString(middle.Left(8) + middle.Mid(9)))
 		return stamp;
 
 	// A name that does not follow the convention still has a file behind it, and its last write is
 	// a better day than no day at all.
-	return file.FileExists() ? file.GetModificationTime() : wxDateTime::Now();
+	const ibDateTime written = ibFileModificationTime(file.GetFullPath());
+	return written.IsEmpty() ? ibDateTime::Now() : written;
 }
 
-// The newest file of each application. ⚠ ONE wxDir DRIVES ONE TRAVERSAL - nothing here may open a
+// The newest file of each application. ⚠ ONE ibDir DRIVES ONE TRAVERSAL - nothing here may open a
 // second walk inside this loop.
-std::map<wxString, wxFileName> TraceNewestPerApp(const wxString& directory)
+std::map<ibString, wxFileName> TraceNewestPerApp(const ibString& directory)
 {
-	std::map<wxString, wxFileName> newest;
-	std::map<wxString, wxDateTime> newestTime;
+	std::map<ibString, wxFileName> newest;
+	std::map<ibString, ibDateTime> newestTime;
 
-	wxDir dir(directory);
+	ibDir dir(directory);
 	if (!dir.IsOpened())
 		return newest;
 
-	wxString name;
-	bool walking = dir.GetFirst(&name, wxT("*.log"), wxDIR_FILES);
+	ibString name;
+	bool walking = dir.GetFirst(&name, ibT("*.log"), ibDIR_FILES);
 	while (walking) {
 
 		const wxFileName file(directory, name);
 		if (file.FileExists()) {
 
-			const wxString app = TraceAppOfFile(name);
-			const wxDateTime when = file.GetModificationTime();
+			const ibString app = TraceAppOfFile(name);
+			const ibDateTime when = ibFileModificationTime(file.GetFullPath());
 
 			const auto it = newestTime.find(app);
-			if (it == newestTime.end() || when.IsLaterThan(it->second)) {
+			if (it == newestTime.end() || when > it->second) {
 				newest[app]     = file;
 				newestTime[app] = when;
 			}
@@ -211,46 +213,46 @@ std::map<wxString, wxFileName> TraceNewestPerApp(const wxString& directory)
 // crash guard writes its dump BESIDE the journal (`crashdumps/` next to `journal/`, one decision,
 // see crashGuard.cpp), and both file names carry the pid. So the two halves of one incident are
 // joined by the thing they already agree on, and nothing new has to be recorded to say "it died".
-wxString TracePidOfLog(const wxFileName& file) { return file.GetName().AfterLast(wxT('_')); }
+ibString TracePidOfLog(const wxFileName& file) { return file.GetName().AfterLast(ibT('_')); }
 
 // `<exe>_[<kind>]<pid>_t<tid>_<stamp>_<seq>.dmp` — the pid is the digits ending the token before
 // the thread's, which is where an optional kind suffix ("_error") leaves it.
-wxString TracePidOfDump(const wxString& fileName)
+ibString TracePidOfDump(const ibString& fileName)
 {
-	wxArrayString parts = wxStringTokenize(wxFileName(fileName).GetName(), wxT("_"));
+	std::vector<ibString> parts = ibStringTokenize(wxFileName(fileName).GetName(), ibT("_"));
 
-	for (size_t i = 1; i < parts.GetCount(); ++i) {
+	for (size_t i = 1; i < parts.size(); ++i) {
 
-		const wxString& token = parts[i];
-		if (token.length() < 2 || token[0] != wxT('t') || !token.Mid(1).IsNumber())
+		const ibString& token = parts[i];
+		if (token.length() < 2 || token[0] != ibT('t') || !token.Mid(1).IsNumber())
 			continue;
 
-		wxString digits;
-		const wxString& owner = parts[i - 1];
-		for (size_t c = owner.length(); c > 0 && wxIsdigit(owner[c - 1]); --c)
-			digits.Prepend(owner[c - 1]);
+		ibString digits;
+		const ibString& owner = parts[i - 1];
+		for (size_t c = owner.length(); c > 0 && ibIsDigit(owner[c - 1]); --c)
+			digits.Prepend(ibString(owner[c - 1]));
 
 		return digits;
 	}
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
-std::map<wxString, wxString> TraceDumpsByPid(const wxString& journalDirectory)
+std::map<ibString, ibString> TraceDumpsByPid(const ibString& journalDirectory)
 {
-	std::map<wxString, wxString> dumps;
+	std::map<ibString, ibString> dumps;
 
-	const wxString directory = wxFileName(journalDirectory).GetPath()
-		+ wxFILE_SEP_PATH + wxT("crashdumps");
+	const ibString directory = wxFileName(journalDirectory).GetPath()
+		+ wxFILE_SEP_PATH + ibT("crashdumps");
 
-	wxDir dir(directory);
+	ibDir dir(directory);
 	if (!dir.IsOpened())
 		return dumps;
 
-	wxString name;
-	bool walking = dir.GetFirst(&name, wxT("*.dmp"), wxDIR_FILES);
+	ibString name;
+	bool walking = dir.GetFirst(&name, ibT("*.dmp"), ibDIR_FILES);
 	while (walking) {
 
-		const wxString pid = TracePidOfDump(name);
+		const ibString pid = TracePidOfDump(name);
 		if (!pid.IsEmpty())
 			dumps[pid] = name;      // one per pid; a second fault in one run is the same incident
 
@@ -262,60 +264,58 @@ std::map<wxString, wxString> TraceDumpsByPid(const wxString& journalDirectory)
 // The tail of a file, as text. A journal grows without bound while a process runs, and the answer
 // is always about the END of it - so a very large file is read from its last megabytes rather than
 // refused or, worse, loaded whole.
-wxString TraceReadTail(const wxFileName& file, wxFileOffset maxBytes)
+ibString TraceReadTail(const wxFileName& file, wxFileOffset maxBytes)
 {
 	wxFFile handle(file.GetFullPath(), wxT("rb"));
 	if (!handle.IsOpened())
-		return wxEmptyString;
+		return ibEmptyString;
 
 	const wxFileOffset length = handle.Length();
 	const wxFileOffset from   = (length > maxBytes) ? (length - maxBytes) : 0;
 	if (from > 0 && !handle.Seek(from))
-		return wxEmptyString;
+		return ibEmptyString;
 
 	const size_t want = static_cast<size_t>(length - from);
 	std::vector<char> bytes(want + 1, '\0');
 
 	const size_t got = handle.Read(bytes.data(), want);
-	wxString text = wxString::FromUTF8(bytes.data(), got);
+	ibString text = ibString::FromUTF8(bytes.data(), got);
 
 	// A tail cuts a line in half. That half would parse as a continuation and glue itself onto
 	// nothing, so it goes.
 	if (from > 0) {
-		const int firstBreak = text.Find(wxT('\n'));
-		text = (firstBreak == wxNOT_FOUND) ? wxString() : text.Mid(firstBreak + 1);
+		const int firstBreak = text.Find(ibT('\n'));
+		text = (firstBreak == wxNOT_FOUND) ? ibString() : text.Mid(firstBreak + 1);
 	}
 	return text;
 }
 
 // `[info]    03:01:57.450  t11724  query.sql       SELECT ...` — and anything NOT starting a
 // bracket belongs to the line above it, which is how a call stack stays one entry.
-void TraceParseInto(const wxFileName& file, const wxString& app, std::vector<ibTraceRow>& rows)
+void TraceParseInto(const wxFileName& file, const ibString& app, std::vector<ibTraceRow>& rows)
 {
-	const wxString text = TraceReadTail(file, 16 * 1024 * 1024);
+	const ibString text = TraceReadTail(file, 16 * 1024 * 1024);
 	if (text.IsEmpty())
 		return;
 
-	wxDateTime day = TraceStartOfFile(file);
-	day.ResetTime();
-
-	wxDateTime previous = wxDefaultDateTime;
+	ibDateTime day = TraceStartOfFile(file).GetDayStart();
+	ibDateTime previous;
 	const size_t firstRow = rows.size();
 
-	wxStringTokenizer lines(text, wxT("\n"), wxTOKEN_RET_EMPTY);
+	ibStringTokenizer lines(text, ibT("\n"), ibTOKEN_RET_EMPTY);
 	while (lines.HasMoreTokens()) {
 
-		wxString line = lines.GetNextToken();
-		if (line.EndsWith(wxT("\r")))
+		ibString line = lines.GetNextToken();
+		if (line.EndsWith(ibT("\r")))
 			line.RemoveLast();
 
-		if (!line.StartsWith(wxT("["))) {
+		if (!line.StartsWith(ibT("["))) {
 			if (rows.size() > firstRow && !line.IsEmpty())
-				rows.back().m_message += wxT("\n") + line;
+				rows.back().m_message += ibT("\n") + line;
 			continue;
 		}
 
-		const int close = line.Find(wxT(']'));
+		const int close = line.Find(ibT(']'));
 		if (close == wxNOT_FOUND)
 			continue;
 
@@ -323,13 +323,13 @@ void TraceParseInto(const wxFileName& file, const wxString& app, std::vector<ibT
 		row.m_app   = app;
 		row.m_level = line.Mid(1, close - 1).Trim().Trim(false);
 
-		wxString rest = line.Mid(close + 1).Trim(false);
-		const wxString clock = rest.BeforeFirst(wxT(' '));
-		rest = rest.AfterFirst(wxT(' ')).Trim(false);
-		row.m_thread = rest.BeforeFirst(wxT(' '));
-		rest = rest.AfterFirst(wxT(' ')).Trim(false);
-		row.m_source = rest.BeforeFirst(wxT(' '));
-		row.m_message = rest.AfterFirst(wxT(' ')).Trim(false);
+		ibString rest = line.Mid(close + 1).Trim(false);
+		const ibString clock = rest.BeforeFirst(ibT(' '));
+		rest = rest.AfterFirst(ibT(' ')).Trim(false);
+		row.m_thread = rest.BeforeFirst(ibT(' '));
+		rest = rest.AfterFirst(ibT(' ')).Trim(false);
+		row.m_source = rest.BeforeFirst(ibT(' '));
+		row.m_message = rest.AfterFirst(ibT(' ')).Trim(false);
 
 		// `HH:MM:SS.mmm`, read by position rather than through ParseFormat: the millisecond field
 		// is the one part of it whose format specifier is not portable, and it is the part worth
@@ -344,19 +344,19 @@ void TraceParseInto(const wxFileName& file, const wxString& app, std::vector<ibT
 			clock.Mid(9, 3).ToLong(&milli);
 
 		if (clockRead) {
-			wxDateTime when = day + wxTimeSpan(hour, minute, second, milli);
+			ibDateTime when = day.AddMilliseconds(((hour * 60 + minute) * 60 + second) * 1000LL + milli);
 
 			// Midnight. The clock only ever moves forward inside one run, so a step backwards is
 			// the day turning over - not a line out of order.
-			if (previous.IsValid() && when.IsEarlierThan(previous)) {
-				day += wxTimeSpan::Day();
-				when += wxTimeSpan::Day();
+			if (!previous.IsEmpty() && when < previous) {
+				day = day.AddDays(1);
+				when = when.AddDays(1);
 			}
 			previous  = when;
 			row.m_when = when;
 		}
 		else {
-			row.m_when = previous.IsValid() ? previous : day;
+			row.m_when = !previous.IsEmpty() ? previous : day;
 		}
 
 		rows.push_back(row);
@@ -371,16 +371,16 @@ void TraceParseInto(const wxFileName& file, const wxString& app, std::vector<ibT
 class ibMcpToolJournalRead : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("journal_read"); }
+	ibString GetName() const override { return ibT("journal_read"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return ArgLevel().Text(params) == wxT("error")
-			? wxString(ibMcpText("looking for errors in the journal"))
-			: wxString(ibMcpText("reading the journal"));
+		return ArgLevel().Text(params) == ibT("error")
+			? ibString(ibMcpText("looking for errors in the journal"))
+			: ibString(ibMcpText("reading the journal"));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("The registration journal - what this installation did, newest first: logins, "
 			"document writes, schema applications, and every script that FAILED WHILE RUNNING "
@@ -415,7 +415,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (appData == nullptr || appData->GetLogger() == nullptr) {
 			refusal = ibMcpText("The logger is not running - there is no journal to read.");
@@ -424,13 +424,14 @@ public:
 
 		ibLogFilter filter;
 
-		const s32 sinceMinutes = (s32)ArgSinceMinutes().Whole(params);
+		const std::int32_t sinceMinutes = (std::int32_t)ArgSinceMinutes().Whole(params);
 		if (sinceMinutes > 0) {
-			const wxLongLong_t now = wxDateTime::UNow().GetValue().GetValue();
-			filter.from_ms = now - (wxLongLong_t)sinceMinutes * 60000;
+			const long long now = std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::system_clock::now().time_since_epoch()).count();
+			filter.from_ms = now - (long long)sinceMinutes * 60000;
 		}
 
-		const wxString level = ArgLevel().Text(params);
+		const ibString level = ArgLevel().Text(params);
 		if (!level.IsEmpty()) {
 			filter.min_level = LevelFromWord(level);
 
@@ -448,7 +449,7 @@ public:
 		filter.event_type = ArgEvent().Text(params);
 		filter.search     = ArgContains().Text(params);
 
-		const s32 limit = (s32)ArgLimit().Whole(params);
+		const std::int32_t limit = (std::int32_t)ArgLimit().Whole(params);
 		filter.limit = (limit > 0) ? (std::size_t)limit : 50;
 
 		ibLoggerReader reader(appData->GetLogger()->GetLogDir());
@@ -458,18 +459,17 @@ public:
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 
-			const wxDateTime stamp((wxLongLong)row.ts_ms);
-			entry->SetValue(wxT("time"), stamp.Format(ibMcpText("%Y-%m-%d %H:%M:%S")));
+			entry->SetValue(ibT("time"), ibDateTime::OfInstant(row.ts_ms).Format(ibT("%Y-%m-%d %H:%M:%S")));
 
 			// The level goes back as the WORD it was asked for by, never the number
 			// it is stored as - a reader should not have to hold the mapping.
-			entry->SetValue(wxT("level"), LevelName(row.level));
+			entry->SetValue(ibT("level"), LevelName(row.level));
 
-			if (!row.user_name.IsEmpty())  entry->SetValue(wxT("user"), row.user_name);
-			if (!row.source.IsEmpty())     entry->SetValue(wxT("source"), row.source);
-			if (!row.event_type.IsEmpty()) entry->SetValue(wxT("event"), row.event_type);
+			if (!row.user_name.IsEmpty())  entry->SetValue(ibT("user"), row.user_name);
+			if (!row.source.IsEmpty())     entry->SetValue(ibT("source"), row.source);
+			if (!row.event_type.IsEmpty()) entry->SetValue(ibT("event"), row.event_type);
 
-			entry->SetValue(wxT("message"), row.message);
+			entry->SetValue(ibT("message"), row.message);
 
 			// ⭐ AND WHAT THE ENTRY CARRIED, when it carried anything. The BLOB is a node written by
 			// ibBinaryProvider, so it is read back the same way and handed over as its FIELDS - a
@@ -507,36 +507,36 @@ public:
 						const ibValue rebuilt = activeMetaData != nullptr
 							? activeMetaData->Deserialize(payload)
 							: ibValue::FromNode(payload);
-						carried->SetValue(wxT("type"), rebuilt.GetClassName());
-						carried->SetValue(wxT("value"), rebuilt.GetString());
+						carried->SetValue(ibT("type"), rebuilt.GetClassName());
+						carried->SetValue(ibT("value"), rebuilt.GetString());
 					}
 					catch (...) {
 						// A payload written by a version that is no longer here, or a type this
 						// process does not have. The row is still worth showing; the bytes are not.
-						carried->SetValue(wxT("type"), wxString(wxT("unreadable")));
+						carried->SetValue(ibT("type"), ibString(ibT("unreadable")));
 					}
 
-					entry->AddField(wxT("details"), ibDataValue::Child(carried));
+					entry->AddField(ibT("details"), ibDataValue::Child(carried));
 				}
 			}
 
 			// A row about a business object carries the object. That is what makes
 			// the journal navigable rather than merely readable.
 			if (!row.ref_guid.IsEmpty()) {
-				entry->SetValue(wxT("refGuid"), row.ref_guid);
-				entry->AddField(wxT("refMetaId"), ibDataValue::Int((s64)row.ref_meta_id));
+				entry->SetValue(ibT("refGuid"), row.ref_guid);
+				entry->AddField(ibT("refMetaId"), ibDataValue::Int((std::int64_t)row.ref_meta_id));
 			}
 
 			rows.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)rows.size()));
-		result.AddField(wxT("rows"), ibDataValue::Array(rows));
+		result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)rows.size()));
+		result.AddField(ibT("rows"), ibDataValue::Array(rows));
 
 		// "Nothing matched" and "nothing happened" are different answers, and only
 		// the first one means the question should be asked differently.
 		if (rows.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("No rows matched. Widen the period, or drop the level filter."));
 
 		return true;
@@ -549,17 +549,17 @@ public:
 class ibMcpToolTraceRead : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("trace_read"); }
+	ibString GetName() const override { return ibT("trace_read"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString source = ArgTraceSource().Text(params);
+		const ibString source = ArgTraceSource().Text(params);
 		return source.IsEmpty()
-			? wxString(ibMcpText("reading the engine's journal"))
-			: wxString::Format(ibMcpText("reading the engine's journal for %s"), source);
+			? ibString(ibMcpText("reading the engine's journal"))
+			: ibString::Format(ibMcpText("reading the engine's journal for %s"), source);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("The TECHNOLOGY journal - what the ENGINE did, newest first: the SQL exactly "
 			"as it was sent with its parameter count, which road a query took, the keys a join was "
@@ -585,18 +585,18 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const wxString directory = TraceDirectory();
-		std::map<wxString, wxFileName> files = TraceNewestPerApp(directory);
+		const ibString directory = TraceDirectory();
+		std::map<ibString, wxFileName> files = TraceNewestPerApp(directory);
 
 		if (files.empty()) {
 			// ⭐ THE TWO EMPTIES ARE DIFFERENT ANSWERS, and only one of them means "ask again
 			// differently". No directory at all, in a build that journals, means nothing has run yet.
 			refusal = ibTechJournal::IsOpen()
-				? wxString::Format(ibMcpText("No journal files under %s yet - nothing has run since "
+				? ibString::Format(ibMcpText("No journal files under %s yet - nothing has run since "
 					"this installation was built."), directory)
-				: wxString::Format(ibMcpText("This build keeps no technology journal - it is written "
+				: ibString::Format(ibMcpText("This build keeps no technology journal - it is written "
 					"by Debug builds only (the switch is in crashGuard.cpp). Nothing was found under "
 					"%s. The accountant's journal, journal_read, works in every build."), directory);
 			return false;
@@ -604,19 +604,19 @@ public:
 
 		// One application, when asked for. An unknown name is refused WITH THE LIST rather than
 		// answered emptily - the caller cannot be expected to know what has run.
-		const wxString wantApp = ArgTraceApp().Text(params);
+		const ibString wantApp = ArgTraceApp().Text(params);
 		if (!wantApp.IsEmpty()) {
 
-			wxString known;
+			ibString known;
 			bool found = false;
 			for (const auto& entry : files) {
-				known += (known.IsEmpty() ? wxT("") : wxT(", ")) + entry.first;
+				known += (known.IsEmpty() ? ibT("") : ibT(", ")) + entry.first;
 				if (entry.first.IsSameAs(wantApp, /*caseSensitive=*/false))
 					found = true;
 			}
 
 			if (!found) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("No journal for '%s'. Applications that have run: %s."), wantApp, known);
 				return false;
 			}
@@ -627,7 +627,7 @@ public:
 			}
 		}
 
-		const wxString wantLevel = ArgTraceLevel().Text(params);
+		const ibString wantLevel = ArgTraceLevel().Text(params);
 		int minLevel = 0;
 		if (!wantLevel.IsEmpty()) {
 			minLevel = TraceLevelFromWord(wantLevel);
@@ -637,45 +637,45 @@ public:
 			}
 		}
 
-		const wxString wantSource   = ArgTraceSource().Text(params).Lower();
-		const wxString wantContains = ArgContains().Text(params);
-		const s32 sinceMinutes      = (s32)ArgSinceMinutes().Whole(params);
+		const ibString wantSource   = ArgTraceSource().Text(params).Lower();
+		const ibString wantContains = ArgContains().Text(params);
+		const std::int32_t sinceMinutes      = (std::int32_t)ArgSinceMinutes().Whole(params);
 
-		wxDateTime from = wxDefaultDateTime;
+		ibDateTime from;
 		if (sinceMinutes > 0)
-			from = wxDateTime::Now() - wxTimeSpan::Minutes(sinceMinutes);
+			from = ibDateTime::Now().AddMilliseconds(-(long long)sinceMinutes * 60000);
 
 		std::vector<ibTraceRow> rows;
 		std::vector<ibDataValue> read;
 
-		const wxString ownFile = ibTechJournal::Path();
-		const std::map<wxString, wxString> dumps = TraceDumpsByPid(directory);
+		const ibString ownFile = ibTechJournal::Path();
+		const std::map<ibString, ibString> dumps = TraceDumpsByPid(directory);
 		bool anyCrash = false;
 
 		for (const auto& entry : files) {
 
 			// A file untouched since before the window cannot hold a line inside it, and reading it
 			// is the difference between an answer and a wait when a dozen runs are on disk.
-			if (from.IsValid() && entry.second.GetModificationTime().IsEarlierThan(from))
+			if (!from.IsEmpty() && ibFileModificationTime(entry.second.GetFullPath()) < from)
 				continue;
 
 			const size_t before = rows.size();
 			TraceParseInto(entry.second, entry.first, rows);
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->SetValue(wxT("app"), entry.first);
-			node->SetValue(wxT("file"), entry.second.GetFullName());
-			node->AddField(wxT("lines"), ibDataValue::Int((s64)(rows.size() - before)));
+			node->SetValue(ibT("app"), entry.first);
+			node->SetValue(ibT("file"), ibString(entry.second.GetFullName()));
+			node->AddField(ibT("lines"), ibDataValue::Int((std::int64_t)(rows.size() - before)));
 
 			// Which of these is the process answering right now. Everything else is another run,
 			// and that distinction is the point of reading both.
 			if (!ownFile.IsEmpty() && entry.second.GetFullPath().IsSameAs(ownFile, false))
-				node->SetValue(wxT("note"), ibMcpText("this process"));
+				node->SetValue(ibT("note"), ibMcpText("this process"));
 
 			// …and whether it ENDED, rather than merely stopping saying anything.
 			const auto dump = dumps.find(TracePidOfLog(entry.second));
 			if (dump != dumps.end()) {
-				node->SetValue(wxT("crashDump"), dump->second);
+				node->SetValue(ibT("crashDump"), dump->second);
 				anyCrash = true;
 			}
 
@@ -685,9 +685,9 @@ public:
 		// Newest first, across every file at once - two processes' lines interleave by the clock,
 		// which is what makes "what did the engine do when I asked" answerable in one read.
 		std::stable_sort(rows.begin(), rows.end(),
-			[](const ibTraceRow& l, const ibTraceRow& r) { return r.m_when.IsEarlierThan(l.m_when); });
+			[](const ibTraceRow& l, const ibTraceRow& r) { return r.m_when < l.m_when; });
 
-		const s32 limitArg = (s32)ArgLimit().Whole(params);
+		const std::int32_t limitArg = (std::int32_t)ArgLimit().Whole(params);
 		const size_t limit = (limitArg > 0) ? (size_t)limitArg : 50;
 
 		std::vector<ibDataValue> out;
@@ -695,7 +695,7 @@ public:
 
 		for (const ibTraceRow& row : rows) {
 
-			if (from.IsValid() && row.m_when.IsEarlierThan(from))
+			if (!from.IsEmpty() && row.m_when < from)
 				continue;
 			if (TraceLevelOfName(row.m_level) < minLevel)
 				continue;
@@ -713,34 +713,34 @@ public:
 				continue;
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("time"), row.m_when.Format(wxT("%Y-%m-%d %H:%M:%S.%l")));
-			entry->SetValue(wxT("app"), row.m_app);
-			entry->SetValue(wxT("level"), row.m_level);
-			entry->SetValue(wxT("thread"), row.m_thread);
-			entry->SetValue(wxT("source"), row.m_source);
-			entry->SetValue(wxT("message"), row.m_message);
+			entry->SetValue(ibT("time"), row.m_when.Format(ibT("%Y-%m-%d %H:%M:%S.%l")));
+			entry->SetValue(ibT("app"), row.m_app);
+			entry->SetValue(ibT("level"), row.m_level);
+			entry->SetValue(ibT("thread"), row.m_thread);
+			entry->SetValue(ibT("source"), row.m_source);
+			entry->SetValue(ibT("message"), row.m_message);
 
 			out.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)out.size()));
-		result.AddField(wxT("matched"), ibDataValue::Int((s64)matched));
-		result.AddField(wxT("rows"), ibDataValue::Array(out));
-		result.AddField(wxT("files"), ibDataValue::Array(read));
+		result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)out.size()));
+		result.AddField(ibT("matched"), ibDataValue::Int((std::int64_t)matched));
+		result.AddField(ibT("rows"), ibDataValue::Array(out));
+		result.AddField(ibT("files"), ibDataValue::Array(read));
 
 		// ⭐ SAID EVEN WHEN NOTHING WAS ASKED ABOUT IT. A run that ended in a dump is the reason a
 		// journal stops mid-sentence, and it is the one fact a reader must not have to ask for -
 		// the alternative reading, "still going", is the one that makes somebody wait.
 		if (anyCrash)
-			result.AddField(wxT("crashed"), ibDataValue::Bool(true));
+			result.AddField(ibT("crashed"), ibDataValue::Bool(true));
 
 		if (matched > out.size())
-			result.SetValue(wxT("note"), wxString::Format(
+			result.SetValue(ibT("note"), ibString::Format(
 				ibMcpText("%u lines matched and the newest %u are here. Narrow it with source or "
 					"contains rather than raising the limit - the file is long by design."),
 				(unsigned)matched, (unsigned)out.size()));
 		else if (out.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("No lines matched. Widen the period, drop the source filter, or check that "
 					"the run you are asking about is one of the applications listed under files."));
 
@@ -771,7 +771,7 @@ public:
 
 const ibArg& ArgWriteMessage()
 {
-	static const ibArg a(wxT("message"), ibArg::Kind::Text,
+	static const ibArg a(ibT("message"), ibArg::Kind::Text,
 		ibMcpText("The line itself, written for whoever reads the journal later - which may be a "
 			  "person scrolling it in the designer, so a sentence beats a token."), /*required*/ true);
 	return a;
@@ -779,7 +779,7 @@ const ibArg& ArgWriteMessage()
 
 const ibArg& ArgWriteEvent()
 {
-	static const ibArg a(wxT("event"), ibArg::Kind::Text,
+	static const ibArg a(ibT("event"), ibArg::Kind::Text,
 		ibMcpText("What kind of line this is, in your own words - `probe`, `measurement`, `before "
 			  "restructure`. It is what the journal's Event column shows and what journal_read "
 			  "{event} filters on, so reuse a spelling rather than inventing one per call."));
@@ -788,7 +788,7 @@ const ibArg& ArgWriteEvent()
 
 const ibArg& ArgWriteLevel()
 {
-	static const ibArg a(wxT("level"), ibArg::Kind::Text,
+	static const ibArg a(ibT("level"), ibArg::Kind::Text,
 		ibMcpText("info (default), warn, error - or audit, which is not a severity but the BUSINESS "
 			  "TRAIL an auditor reads. A note about your own work is info; use audit only for "
 			  "something the installation actually did."));
@@ -797,7 +797,7 @@ const ibArg& ArgWriteLevel()
 
 const ibArg& ArgWriteDetails()
 {
-	static const ibArg a(wxT("details"), ibArg::Kind::Node,
+	static const ibArg a(ibT("details"), ibArg::Kind::Node,
 		ibMcpText("Anything structured worth keeping beside the line - numbers, ids, a before/after "
 			  "pair. Stored as a VALUE and read back as fields, so it does not have to be squeezed "
 			  "into the message and parsed out again later. A payload rides the audit road, which "
@@ -808,14 +808,14 @@ const ibArg& ArgWriteDetails()
 class ibMcpToolJournalWrite : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("journal_write"); }
+	ibString GetName() const override { return ibT("journal_write"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("writing a line into the registration journal");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("LEAVE A LINE IN THE REGISTRATION JOURNAL - the record this installation "
 			"keeps, and the one a person actually scrolls. Use it to fix something you will want "
@@ -827,7 +827,7 @@ public:
 			"back as fields, so numbers stay numbers.");
 	}
 
-	wxString GetSearchText() const override
+	ibString GetSearchText() const override
 	{
 		return ibMcpText("journal write note record log entry remember leave a line audit trail "
 			"measurement marker");
@@ -840,36 +840,36 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (appData == nullptr || appData->GetLogger() == nullptr) {
 			refusal = ibMcpText("There is no journal open to write into.");
 			return false;
 		}
 
-		const wxString message = ArgWriteMessage().Text(params);
+		const ibString message = ArgWriteMessage().Text(params);
 		if (message.IsEmpty()) {
 			refusal = ibMcpText("An empty line is not a record - say what happened.");
 			return false;
 		}
 
-		const wxString asked = ArgWriteEvent().Text(params);
-		const wxString event = asked.IsEmpty() ? wxString(wxT("note")) : asked;
+		const ibString asked = ArgWriteEvent().Text(params);
+		const ibString event = asked.IsEmpty() ? ibString(ibT("note")) : asked;
 
 		// ⚠ THE WORD IS CHECKED RATHER THAN MAPPED SILENTLY. A misspelled level that quietly became
 		// `info` would put the line somewhere the caller does not look for it afterwards - and a
 		// journal entry nobody finds is the one failure this verb exists to prevent.
-		const wxString levelWord = ArgWriteLevel().Text(params);
+		const ibString levelWord = ArgWriteLevel().Text(params);
 		const int level = levelWord.IsEmpty() ? 0 : LevelFromWord(levelWord);
 		if (level < 0) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' is not a level. It is info, warn or error - or audit, which is the "
 					  "business trail rather than a severity."), levelWord);
 			return false;
 		}
 
 		ibLogger* const logger = appData->GetLogger();
-		const wxString source = wxT("assistant");
+		const ibString source = ibT("assistant");
 
 		// 🛑 WHAT ARRIVES IS NOT A SERIALISED VALUE, and reading it as one fails silently. A caller
 		// sends an ordinary JSON object; `ibValue::Deserialize` expects a node with the TYPE HEADER
@@ -877,27 +877,21 @@ public:
 		// disappears while the line still lands (measured on the first run of this verb). What the
 		// caller means is a STRUCTURE, so one is built - which is also the value they would have
 		// written in script.
-		// ⚠ AND IT ARRIVES IN THE PROPERTY BAG, NOT AMONG THE FIELDS. `ibJsonProvider::Read` puts a
-		// nested object into the node's PROPERTIES - the two areas are one key set on the way in, and
-		// a Child lands on the property side. Reading only `FindField` found nothing and the payload
-		// vanished while the line still landed, twice, before the areas were checked (2026-09-09).
-		const ibDataValue* details = params.FindField(ArgWriteDetails().Name());
-		if (details == nullptr)
-			details = params.FindProperty(ArgWriteDetails().Name());
+		const auto details = params.FindField(ArgWriteDetails().Name());
 
 		ibValue carried;
 		bool hasPayload = false;
 
-		if (details != nullptr && details->Kind() == ibDataKind::Child) {
-			const std::shared_ptr<ibDataNode> sent = details->AsChild();
+		if (details && details->Kind() == ibDataKind::Child) {
+			const auto sent = details->AsChild();
 			ibValueStructure* const built = new ibValueStructure();
-			for (const std::pair<wxString, ibDataValue>& field : sent->Fields()) {
+			for (const std::pair<ibString, ibDataValue>& field : sent->Fields()) {
 				// Scalars only, and deliberately: a nested object in a journal line is a report, not
 				// a note, and quietly flattening one would store something the caller did not write.
 				switch (field.second.Kind()) {
-					case ibDataKind::Bool:   built->Insert(field.first, ibValue(field.second.AsBool())); break;
-					case ibDataKind::Number: built->Insert(field.first, ibValue(ibNumber(field.second.AsInt()))); break;
-					case ibDataKind::String: built->Insert(field.first, ibValue(field.second.AsString())); break;
+					case ibDataKind::Bool:   built->Insert(ibValue(field.first), ibValue(field.second.AsBool())); break;
+					case ibDataKind::Number: built->Insert(ibValue(field.first), ibValue(ibNumber(field.second.AsInt()))); break;
+					case ibDataKind::String: built->Insert(ibValue(field.first), ibValue(field.second.AsString())); break;
 					default: break;
 				}
 			}
@@ -910,9 +904,9 @@ public:
 			// for one argument, the row is said to be an audit row - and SAID SO in the answer, so a
 			// caller that asked for `info` and got the business trail is told why.
 			logger->Audit(source, event, message, carried);
-			result.SetValue(wxT("level"), wxString(wxT("audit")));
+			result.SetValue(ibT("level"), ibString(ibT("audit")));
 			if (level != 3)
-				result.SetValue(wxT("levelNote"), ibMcpText(
+				result.SetValue(ibT("levelNote"), ibMcpText(
 					"A payload travels on the audit road, so this line is an audit row whatever "
 					"level was asked for. Leave `details` off to write at a severity."));
 		}
@@ -923,16 +917,16 @@ public:
 				case 3:  logger->Audit(source, event, message); break;
 				default: logger->Info (source, event, message); break;
 			}
-			result.SetValue(wxT("level"), LevelName(level));
+			result.SetValue(ibT("level"), LevelName(level));
 		}
 
-		result.SetValue(wxT("written"), true);
-		result.SetValue(wxT("source"), source);
-		result.SetValue(wxT("event"), event);
+		result.SetValue(ibT("written"), true);
+		result.SetValue(ibT("source"), source);
+		result.SetValue(ibT("event"), event);
 		// ⚠ THE QUEUE IS ASYNCHRONOUS, so "written" means ACCEPTED rather than on disk. Saying which
 		// of the two this is costs one line and saves a caller reading an empty answer back a moment
 		// later and concluding the write was lost.
-		result.SetValue(wxT("note"), ibMcpText(
+		result.SetValue(ibT("note"), ibMcpText(
 			"Accepted into the journal's queue - a read a moment later finds it. journal_read "
 			"{event} or {contains} is how to get it back."));
 		return true;

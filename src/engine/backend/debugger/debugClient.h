@@ -1,14 +1,14 @@
 #ifndef __DEBUGGER_CLIENT_H__
 #define __DEBUGGER_CLIENT_H__
 
-#include <wx/thread.h>
-#include <atomic>   // std::atomic<short> m_number_connection_attempts (MSVC pulled it in transitively)
+#include <atomic>   // the flags a connection's thread sets and any thread reads
+#include <condition_variable>   // the client's end waits for its connections to go
 #include <functional>   // std::function — the deferred call the pack below is wrapped in
-#include <memory>   // the adapter owns its bridges
-#include <mutex>    // ibSocketLock
+#include <memory>   // the adapter owns its bridges; the client's adapter, watched by what is queued for it
+#include <mutex>    // the connection's socket slot, the client's lists
+#include <system_error>   // std::system_error — a thread the system would not start
+#include <thread>   // each connection's thread
 #include <vector>
-
-#include <wx/socket.h>
 
 // Lifecycle: owned by ibMetaDataConfigurationStorage as a unique_ptr
 // field (private ctor + friend). Same cache-pointer pattern as
@@ -18,77 +18,9 @@
 
 #include "debugClientBridge.h"
 #include "backend/session/sessionHolder.h"   // ibSessionWatch — whose worker a reply goes to, watched
+#include "core/net/ioThreads.h"              // the threads every connection's socket goes by
 
-// ⭐⭐ A SOCKET THAT MORE THAN ONE THREAD MAY WANT TO CLOSE — and wxSocketBase::Close() is not written
-// to be called twice at once.
-//
-// wxSocketImpl::Close() is `if (m_fd != INVALID_SOCKET) { DoClose(); m_fd = INVALID_SOCKET; }`: a check,
-// then the work, with nothing between them. Two threads that both pass the check both run DoClose().
-// On Windows and Linux that is a second closesocket() on a dead descriptor. On macOS DoClose() removes
-// the socket's source from the run loop and RELEASES it, so the second thread would hand
-// CFRunLoopRemoveSource a source that is already gone — which is the shape of the designer's crash in
-// #155 (`CFRunLoopRemoveSource -> CFSetContainsValue -> CFHash`, on the connection's own thread).
-//
-// ⚠ THAT IS AN INFERENCE FROM THE STACK, NOT A REPRODUCTION. Two threads calling Close() on one
-// loopback socket, 6000 rounds on macOS 15.6 / arm64, did not crash (tests/test_socketLock.cpp keeps the
-// control): the window is a few instructions wide. What is certain is that the debugger's client
-// connection DOES close one socket from two threads — the designer's main thread ends a session
-// (DetachConnection, from the Debug menu or `app_run restart`) while the connection's own thread,
-// having just watched the far end go away, closes it on its way out — and that closing twice at once
-// is not something wx promises to survive.
-//
-// The lock takes them in turn: the second Close finds the descriptor already invalid and does nothing.
-// Destroy takes the pointer OUT of its slot under the lock, so a Close that arrives after it finds the
-// slot empty instead of a socket that is being freed — and only one thread ever calls Destroy on it.
-//
-// ⚠ IT SERIALISES CLOSING, NOT USING. A thread that is blocked in WaitForRead on the socket while
-// another closes it is a separate hazard, and this does not remove it; the slot is what the owning
-// thread reads through, and only the owner should be doing anything but Close with it.
-//
-// It lives HERE, beside the one class that holds such a socket, rather than in a header of its own.
-class ibSocketLock {
-public:
-
-	// Close the socket in `slot`, if there is one. Any thread; two at once are taken in turn.
-	// `slot` is read UNDER the lock — take it by reference, never by value at the call site.
-	template <class Socket>
-	void Close(Socket* const& slot) {
-		const std::lock_guard<std::mutex> hold(m_mutex);
-		if (slot != nullptr)
-			slot->Close();
-	}
-
-	// Empty `slot` and destroy what was in it, once. Whoever gets here first destroys; everyone after
-	// finds it empty.
-	template <class Socket>
-	void Destroy(Socket*& slot) {
-		Socket* taken = nullptr;
-		{
-			const std::lock_guard<std::mutex> hold(m_mutex);
-			taken = slot;
-			slot = nullptr;
-		}
-		if (taken != nullptr)
-			taken->Destroy();
-	}
-
-	// Put a new socket into `slot`. Under the lock so a concurrent Close sees the old one or the new
-	// one, never a half-written pointer.
-	template <class Socket>
-	void Assign(Socket*& slot, Socket* socket) {
-		const std::lock_guard<std::mutex> hold(m_mutex);
-		slot = socket;
-	}
-
-	// For a reader that must look at the slot and the socket in one step (IsConnected) — the socket
-	// cannot be destroyed between the null check and the call while this is held.
-	std::unique_lock<std::mutex> Hold() const {
-		return std::unique_lock<std::mutex>(m_mutex);
-	}
-
-private:
-	mutable std::mutex m_mutex;
-};
+class ibWebSocketClient;
 
 class BACKEND_API ibDebuggerClient {
 
@@ -131,6 +63,7 @@ class BACKEND_API ibDebuggerClient {
 		// `new` and destroyed here, which is what the single-bridge version did
 		// and the only arrangement in which nobody has to outlive anybody.
 		void SetBridge(ibDebuggerClientBridge* bridge) {
+			std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);
 			m_debugBridges.clear();
 			AddBridge(bridge);
 		}
@@ -145,21 +78,22 @@ class BACKEND_API ibDebuggerClient {
 		// The first one installed — the IDE's, in the process that has one. Kept
 		// because callers ask "is anybody bridged", not "which".
 		ibDebuggerClientBridge* GetBridge() const {
+			std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);
 			return m_debugBridges.empty() ? nullptr : m_debugBridges.front().get();
 		}
 
 		virtual ~ibDebuggerClientAdapter() {}
 
-		//commands 
-		void OnSessionStart(wxSocketClient* sock);
-		void OnSessionEnd(wxSocketClient* sock);
+		//commands
+		void OnSessionStart();
+		void OnSessionEnd();
 
-		void OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data);
-		void OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data);
+		void OnEnterLoop(const ibDebugLineData& data);
+		void OnLeaveLoop(const ibDebugLineData& data);
 
 		void OnAutoComplete(const ibDebugAutoCompleteData& data);
-		void OnMessageFromServer(const ibDebugLineData& data, const wxString& message);
-		void OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr);
+		void OnMessageFromServer(const ibDebugLineData& data, const ibString& message);
+		void OnSetToolTip(const ibDebugExpressionData& data, const ibString& resultStr);
 		void OnSetStack(const ibStackData& data);
 
 		void OnSetLocalVariable(const ibLocalWindowData& data);
@@ -169,16 +103,16 @@ class BACKEND_API ibDebuggerClient {
 
 		// A line printed by EVALUATED code — a sandbox, a watch expression. Its own road, read by
 		// whoever asked for the evaluation and shown to nobody else.
-		void OnEvalMessage(const wxString& message, MessageType type);
+		void OnEvalMessage(const ibString& message, MessageType type);
 
 		// The picture the running application was asked for. Empty when its user declined, which is
 		// an answer and not a failure.
-		void OnScreenshot(const wxMemoryBuffer& png, const wxString& focus);
+		void OnScreenshot(const ibMemoryBuffer& png, const ibString& focus);
 
 		// What the sandbox did — ran or failed, what it answered with, and the RESULT VALUE as
 		// text when it could be written (empty when the value cannot travel, which is not a
 		// failure of the run).
-		void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, wxLongLong_t microseconds);
+		void OnSandboxResult(bool ran, const ibString& answer, const ibString& json, long long microseconds);
 
 		// The state of a filling run — one shape for all three requests, because starting one,
 		// asking after one and stopping one are the same question about the same thing. `which`
@@ -188,10 +122,15 @@ class BACKEND_API ibDebuggerClient {
 
 		// What a composition answered, still serialised — the tables, or a refusal saying why there
 		// are none. Left as bytes because only the asker knows what to do with them.
-		void OnComposed(bool answered, const wxString& refusal, const wxMemoryBuffer& result);
+		void OnComposed(bool answered, const ibString& refusal, const ibMemoryBuffer& result);
 
 	private:
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
+		// 🛑 THE LIST UNDER A LOCK — a listener is put in and taken out on its own thread (the assistant's, a thin
+		// designer's frame going with its client), while the fan-out walks the list on the worker: a listener taken out
+		// mid-walk was destroyed under the walk. Recursive: a listener told something may ask who is bridged (BridgeId),
+		// and SetBridge puts one in under it.
+		mutable std::recursive_mutex m_bridgesMutex;
 
 		// ⚠ WHOSE WORKER — one answer for the whole fan-out, not one per listener. Every bridge in a
 		// process is installed by the same person in the same session, so a session held per bridge
@@ -204,34 +143,20 @@ class BACKEND_API ibDebuggerClient {
 		bool           m_bound = false;   // there was a session to watch at all — see Defer
 	};
 
-	class BACKEND_API ibDebuggerClientConnection : public wxThread {
+	class BACKEND_API ibDebuggerClientConnection {
 	public:
 
 		bool IsVerifiedConnection() const {
 			return m_verifiedConnection && IsConnected();
 		}
 
-		bool IsConnected() const {
-			// The pointer and the socket behind it are read in ONE step: the connection's own thread
-			// destroys the socket on its way out, and a check that ran before that with a call that ran
-			// after it was a use of freed memory (see ibSocketLock).
-			const auto hold = m_socketLock.Hold();
-			if (m_socketClient == nullptr)
-				return false;
-			if (!m_socketClient->IsConnected())
-				return false;
-			if (!m_socketClient->IsOk())
-				return false;
-			wxSocketError error =
-				m_socketClient->LastError();
-			return error == wxSOCKET_NOERROR ||
-				error == wxSOCKET_WOULDBLOCK;
-		}
+		// A socket in the slot, and not gone.
+		bool IsConnected() const;
 
-		wxString GetHostName() const { return m_hostName; }
+		const ibString& GetHostName() const { return m_hostName; }
 		unsigned short GetPort() const { return m_port; }
-		wxString GetComputerName() const { return m_compName; }
-		wxString GetUserName() const { return m_userName; }
+		const ibString& GetComputerName() const { return m_compName; }
+		const ibString& GetUserName() const { return m_userName; }
 
 		// ⭐⭐ WHICH REVISION THE PROCESS OVER THERE IS RUNNING. The handshake has always carried
 		// both halves — the configuration's GUID and its digest — and only the GUID was ever asked:
@@ -244,43 +169,25 @@ class BACKEND_API ibDebuggerClient {
 		// That is the one failure this surface cannot show as a failure: the code runs, nothing
 		// raises, and the change simply does not appear. The digest was on the wire all along
 		// (debugClient.cpp, CommandId_VerifyConnection); it only needed asking.
-		wxString GetConfigMD5() const { return m_md5Hash; }
+		const ibString& GetConfigMD5() const { return m_md5Hash; }
 
 		ConnectionType GetConnectionType() const { return m_connectionType; }
 
 		void AttachConnection();
 		void DetachConnection(bool kill = false);
 
-		ibDebuggerClientConnection(ibDebuggerClient* client, const wxString& hostName, unsigned short port) :
-			wxThread(wxTHREAD_DETACHED),
+		ibDebuggerClientConnection(ibDebuggerClient* client, const ibString& hostName, unsigned short port) :
 			m_verifiedConnection(false),
 			m_hostName(hostName),
 			m_port(port),
-			m_socketClient(nullptr),
 			m_number_connection_attempts(-1),
 			m_connectionType(ConnectionType::ConnectionType_Scanner) {
 
 			if (debugClient != nullptr)
 				debugClient->AppendConnection(this);
-
-			wxThread::SetPriority(wxPRIORITY_MIN);
 		}
 
-		~ibDebuggerClientConnection() {
-
-			if (debugClient != nullptr)
-				debugClient->DeleteConnection(this);
-
-			m_socketLock.Destroy(m_socketClient);
-		}
-
-		// entry point for the thread - called by Run() and executes in the context
-		// of this thread.
-		virtual ExitCode Entry() override;
-
-		// This one is called by Kill() before killing the thread and is executed
-		// in the context of the thread that called Kill().
-		virtual void OnKill() override;
+		~ibDebuggerClientConnection();
 
 	protected:
 
@@ -292,6 +199,8 @@ class BACKEND_API ibDebuggerClient {
 			return m_number_connection_attempts != wxNOT_FOUND;
 		}
 
+		// The thread's own body — a thread of its own, detached: the connection goes with it — and the loop it runs.
+		void Entry();
 		void EntryClient();
 
 		void RecvCommand(void* pointer, unsigned int length);
@@ -299,35 +208,33 @@ class BACKEND_API ibDebuggerClient {
 
 	private:
 
+		// A socket to the port, in the slot, and the queue what it says goes to — this thread's, for one try.
+		std::shared_ptr<ibDebugCommandQueue> OpenConnection();
+		// The socket out of the slot, and closed. Any thread: the designer's main thread ends a session
+		// (DetachConnection) while this connection's own thread lets the socket go on its way out.
+		void CloseConnection();
+
 		bool			m_verifiedConnection;
 
-		wxString		m_hostName;
+		ibString		m_hostName;
 		unsigned short	m_port;
 
-		wxSocketClient* m_socketClient;
+		// ⭐ A MESSAGE IS WHOLE, so the socket needs no lock of its own: the reads that came back short while a
+		// write restored the blocking flags under them (2026-09-25) were wxSocketBase's. This lock only guards
+		// the slot — which socket is this connection's, and its queue.
+		mutable std::mutex                   m_socketMutex;
+		std::shared_ptr<ibWebSocketClient>   m_socketClient;
+		std::shared_ptr<ibDebugCommandQueue> m_commandQueue;
 
-		// Every Close / Destroy / assignment of m_socketClient goes through this: the designer's main
-		// thread ends a session while this connection's own thread closes the same socket.
-		mutable ibSocketLock m_socketLock;
-
-		// ⭐⭐ …AND ONE THREAD AT A TIME USES IT. A separate lock from the one above, deliberately: that
-		// one guards the SLOT and must never be held while waiting for bytes, or a Close would queue
-		// behind a read that is waiting for a frame nobody is sending. This one is held for exactly one
-		// frame in or out.
-		//
-		// 🛑 THERE WAS NONE. The window's thread sends a step while the connection's thread reads the
-		// answer to the last one, and wxSocketBase keeps its blocking FLAGS on the object — a read raises
-		// WAITALL for its own duration, a write does the same, and each restores what it found. Overlap
-		// them and a read obliged to wait for every byte comes back SHORT, on a socket that is connected
-		// and healthy. The far end has had this lock for its writes all along (debugServer.h).
-		std::mutex m_socketMutex;
-
-		wxString		m_confGuid;
-		wxString		m_md5Hash;
-		wxString		m_userName;
-		wxString		m_compName;
+		ibString		m_confGuid;
+		ibString		m_md5Hash;
+		ibString		m_userName;
+		ibString		m_compName;
 
 		std::atomic<short> m_number_connection_attempts;
+
+		// The word that the thread is to end (~ibDebuggerClient); it asks between reads.
+		std::atomic<bool> m_stop{ false };
 
 		ConnectionType	m_connectionType;
 		friend class ibDebuggerClient;
@@ -346,9 +253,9 @@ public:
 
 	// The identity a listener stamps on the questions it asks, so its answers come back to it and
 	// to nobody else. Empty when nothing is bridged, which is also when nothing can be asked.
-	wxString BridgeId() const {
+	ibString BridgeId() const {
 		const ibDebuggerClientBridge* bridge = m_adapter != nullptr ? m_adapter->GetBridge() : nullptr;
-		return bridge != nullptr ? bridge->GetBridgeId() : wxString();
+		return bridge != nullptr ? bridge->GetBridgeId() : ibString();
 	}
 
 	// Ride along on a session somebody else is driving — see the note on the
@@ -366,46 +273,43 @@ public:
 public:
 
 	void SearchServer(bool run_debug_server = false,
-		const wxString& hostName = defaultHost,
-		unsigned short startPort = defaultDebuggerPort, unsigned short endPort = defaultDebuggerPort + diapasonDebuggerPort)
+		const ibString& hostName = defaultHost,
+		unsigned short startPort = ibPort::Debugger.m_first, unsigned short endPort = ibPort::Debugger.Last() + 1)
 	{
-		if (run_debug_server)
+		if (run_debug_server) {
 			m_connectionSuccess = false;
+			m_numberOfConnectionAttempts = numberOfLaunchConnectionAttempts;
+		}
 
+		// A new connection puts itself in the list (AppendConnection) — under this same lock, on this thread.
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		for (unsigned short port = startPort; port < endPort; port++) {
 
 			auto iterator = std::find_if(m_listConnection.begin(), m_listConnection.end(),
 				[hostName, port](ibDebuggerClientConnection* client) { return client->m_hostName == hostName && client->m_port == port; }
 			);
 
-			if (iterator == m_listConnection.end()) {
+			// A connection to the port goes on scanning — unless it is on its way out (its counter is not reset).
+			if (iterator != m_listConnection.end() && (*iterator)->ResetConnectionCounter())
+				continue;
 
-				ibDebuggerClientConnection* createdConnection = new ibDebuggerClientConnection(this, hostName, port);
-				if (createdConnection->Run() == wxTHREAD_NO_ERROR) {
-					//if (run_debug_server)
-					//	break;
-					continue;
-				}
-				createdConnection->Delete();
+			// The connection is its thread's once the thread runs — it goes as the thread ends (Entry); one the system
+			// gives no thread goes with the pointer here.
+			std::unique_ptr<ibDebuggerClientConnection> createdConnection = std::make_unique<ibDebuggerClientConnection>(this, hostName, port);
+			try {
+				std::thread(&ibDebuggerClientConnection::Entry, createdConnection.get()).detach();
+				(void)createdConnection.release();
 			}
-			else {
-
-				bool create_new_connection = !(*iterator)->ResetConnectionCounter();
-				if (create_new_connection) {
-					ibDebuggerClientConnection* createdConnection = new ibDebuggerClientConnection(this, hostName, port);
-					if (createdConnection->Run() == wxTHREAD_NO_ERROR) {
-						//if (run_debug_server)
-						//	break;
-						continue;
-					}
-					createdConnection->Delete();
-				}
+			catch (const std::system_error& err) {
+				ibJournalWarning(ibT("debugger"), ibT("debug client: no thread to scan port %u: %s"),
+					static_cast<unsigned>(port), ibString::FromUTF8(err.what()));
 			}
 		}
 	}
 
-	void AttachConnection(const wxString& hostName, unsigned short port) const {
+	void AttachConnection(const ibString& hostName, unsigned short port) const {
 
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		auto iterator = std::find_if(m_listConnection.begin(), m_listConnection.end(),
 			[hostName, port](ibDebuggerClientConnection* client) { return client->m_hostName == hostName && client->m_port == port; }
 		);
@@ -414,20 +318,22 @@ public:
 	}
 
 	// Auto-attach every verified Scanner connection. Used by the web
-	// debug path (SpawnWebServerWithManifest): wes's debug server runs
+	// debug path (RunApplication, useManifest): the web server's debug server runs
 	// with wait=false so its connection-type is Scanner, which means
 	// designer's RecvCommand does NOT auto-promote to Debugger on verify.
 	// Manual UI attach works (ibDialogDebugItem → OnAvailableItemSelected
 	// → AttachConnection), this hook does the same for the
 	// programmatic spawn-then-attach flow.
 	void AttachAllVerified() const {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		for (auto* conn : m_listConnection) {
 			if (conn != nullptr) conn->AttachConnection();
 		}
 	}
 
-	void DetachConnection(const wxString& hostName, unsigned short port, bool kill = false) {
+	void DetachConnection(const ibString& hostName, unsigned short port, bool kill = false) {
 
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		auto iterator = std::find_if(m_listConnection.begin(), m_listConnection.end(),
 			[hostName, port](ibDebuggerClientConnection* client) { return client->m_hostName == hostName && client->m_port == port; }
 		);
@@ -435,14 +341,13 @@ public:
 		if (iterator != m_listConnection.end()) (*iterator)->DetachConnection(kill);
 	}
 
-	const std::vector<ibDebuggerClientConnection*>& GetListConnection() {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
-		return m_listConnection;
-	}
-
-	const unsigned int GetCountConnection() const {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
-		return m_listConnection.size();
+	// ⭐ EACH CONNECTION, VISITED UNDER THE LIST'S LOCK — a connection is a thread that deletes itself when it is done,
+	// and its going waits on this lock (DeleteConnection): a connection visited is one alive. It was the list itself,
+	// handed out by reference with the lock already let go, and walked on any thread while its entries died.
+	template <typename Fn> void ForEachConnection(Fn&& visit) const {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
+		for (const ibDebuggerClientConnection* connection : m_listConnection)
+			visit(*connection);
 	}
 
 	// ⭐⭐ A WATCH QUESTION CARRIES WHO ASKED IT, IN THE PACKET.
@@ -456,28 +361,28 @@ public:
 	// The runtime does not read it. It echoes it back exactly as it echoes the id.
 	//special public function:
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-	void AddExpression(const wxString& strExpression, unsigned long long id, const wxString& asker);
-	void ExpandExpression(const wxString& strExpression, unsigned long long id, const wxString& asker);
+	void AddExpression(const ibString& strExpression, unsigned long long id, const ibString& asker);
+	void ExpandExpression(const ibString& strExpression, unsigned long long id, const ibString& asker);
 	void RemoveExpression(unsigned long long id);
 #else
-	void AddExpression(wxString strExpression, unsigned int id, const wxString& asker);
-	void ExpandExpression(wxString strExpression, unsigned int id, const wxString& asker);
+	void AddExpression(ibString strExpression, unsigned int id, const ibString& asker);
+	void ExpandExpression(ibString strExpression, unsigned int id, const ibString& asker);
 	void RemoveExpression(unsigned int id);
 #endif 
 
 	void SetLevelStack(unsigned int level);
 
 	//evaluate for tooltip
-	void EvaluateToolTip(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression);
+	void EvaluateToolTip(const ibString& strFileName, const ibString& strModuleName, const ibString& strExpression);
 
 	// Arbitrary code, run in the stopped runtime inside a transaction the far end always rolls
 	// back. The answer arrives as OnSandboxResult.
-	void RunSandbox(const wxString& code);
+	void RunSandbox(const ibString& code);
 
 	// ⭐ ASK THE RUNNING APPLICATION FOR A PICTURE OF ITS WINDOW. `reason` is shown to the person on
 	// the other end, who decides — the answer arrives as OnScreenshot, empty when they declined.
 	// Unlike everything above it, this does not need the runtime to be stopped.
-	void RequestScreenshot(const wxString& reason, const wxString& area, const wxString& format);
+	void RequestScreenshot(const ibString& reason, const ibString& area, const ibString& format);
 
 	// ⭐⭐ PUTTING DATA IN — start a configuration procedure over there as a background job, then
 	// watch it and stop it by the token that comes back. All three answer as OnFillState.
@@ -489,8 +394,8 @@ public:
 	// ⚠ THE CODE GOES OVER AS TEXT and is compiled at the far end, against the configuration that
 	// will run it. This side compiles it too, but only to CHECK it — see jobRunByteCode.h.
 	void StartJob(const struct ibJobRunRequest& request);
-	void AskJobStatus(const wxString& token);
-	void CancelJob(const wxString& token);
+	void AskJobStatus(const ibString& token);
+	void CancelJob(const ibString& token);
 
 	// ⭐⭐ RUN A COMPOSITION over there and bring back what it answered. `request` is the whole schema
 	// — resolved from a report, or assembled by the caller out of nothing — with its settings and
@@ -499,13 +404,13 @@ public:
 	// ⚠ It carries a SCHEMA rather than the name of one, which is what lets a caller run a report
 	// that exists nowhere. And, like the fill, it needs no breakpoint: what happens over there is a
 	// rented read on a connection of its own.
-	void RequestCompose(const wxMemoryBuffer& request);
+	void RequestCompose(const ibMemoryBuffer& request);
 
 	//support calc strExpression in debugloop
-	void EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline);
+	void EvaluateAutocomplete(const ibString& strFileName, const ibString& strModuleName, const ibString& strExpression, const ibString& keyWord, int currline);
 
 	// The module's breakpoints as the editor draws them: editor line (from 0) -> condition (empty stops always).
-	std::map<unsigned int, wxString> GetDebugList(const wxString& strModuleName);
+	std::map<unsigned int, ibString> GetDebugList(const ibString& strModuleName);
 
 	//special functions:
 	void Continue();
@@ -516,12 +421,12 @@ public:
 	void Stop(bool kill);
 
 	//for breakpoints and offsets
-	void InitializeModule(const wxString& strModuleName, unsigned int line_count);
+	void InitializeModule(const ibString& strModuleName, unsigned int line_count);
 	// atLineStart: the edit was at column 0 of `line` (whole line moved), so an
 	// entry sitting ON `line` shifts too — fixes "Enter at line start" not moving a breakpoint.
-	void PatchModule(const wxString& strModuleName, unsigned int line, int line_offset, bool atLineStart);
-	bool SaveModule(const wxString& strModuleName, unsigned int line_count);
-	void RemoveModule(const wxString& strModuleName);
+	void PatchModule(const ibString& strModuleName, unsigned int line, int line_offset, bool atLineStart);
+	bool SaveModule(const ibString& strModuleName, unsigned int line_count);
+	void RemoveModule(const ibString& strModuleName);
 
 	bool SaveAllBreakpoints();
 
@@ -531,22 +436,22 @@ public:
 	// reaches the line, and the run stops only when it is true.
 	struct ibBreakpoint {
 		int      m_offset = 0;
-		wxString m_condition;
+		ibString m_condition;
 	};
 
 	// `refusal`, when given, comes back carrying WHY it was refused — the engine states the reason
 	// and the caller decides whether that is a dialog, a log line or an answer over a socket.
 	// Sets the breakpoint, or gives one already there the condition passed (an empty one stops always).
-	bool ToggleBreakpoint(const wxString& strModuleName, unsigned int line,
-		wxString* refusal = nullptr, const wxString& condition = wxEmptyString);
-	bool RemoveBreakpoint(const wxString& strModuleName, unsigned int line);
+	bool ToggleBreakpoint(const ibString& strModuleName, unsigned int line,
+		ibString* refusal = nullptr, const ibString& condition = ibEmptyString);
+	bool RemoveBreakpoint(const ibString& strModuleName, unsigned int line);
 	// Same shape as ToggleBreakpoint: the reason travels to whoever asked, or is said through the
 	// platform's own Message when nobody did.
-	bool RemoveAllBreakpoint(wxString* refusal = nullptr);
+	bool RemoveAllBreakpoint(ibString* refusal = nullptr);
 
 	bool HasConnections() const {
 
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 
 		// ANY of them. It answered for the FIRST debugger connection in the list, so with two applications
 		// attached the answer was whichever one happened to come first.
@@ -570,7 +475,7 @@ public:
 	// channel. The state was knowable the whole time and nothing offered it.
 	//
 	// (module guid -> (editor line -> condition)); the lines count from 0, as the editor's do.
-	std::map<wxString, std::map<unsigned int, wxString>> GetBreakpoints() const;
+	std::map<ibString, std::map<unsigned int, ibString>> GetBreakpoints() const;
 
 public:
 
@@ -596,23 +501,22 @@ public:
 	// queue it as a wx event at the adapter; now the adapter hands it to the WORKER. Everything else
 	// is where it was — one hop here, the fan-out on the far side of it — because everything else
 	// was right: the shape was never the problem, the transport knowing about a GUI was.
+	//
+	// 🛑 THE CLOSURE WATCHES THE ADAPTER, IT DOES NOT POINT AT IT. A connection's thread ends with OnSessionEnd, queued as
+	// the client goes; it ran after the destructor had deleted the adapter and waited on its freed lock — the designer
+	// hung on exit (2026-10-26). An adapter gone tells nobody.
 	template <typename T, typename... TArgs, typename... PArgs>
 	void CallAfter(void (T::* method)(TArgs...), PArgs... args) {
 		if (m_adapter != nullptr) {
-			T* const target = static_cast<T*>(m_adapter);
-			m_adapter->Defer([target, method, args...]() { (target->*method)(args...); });
+			const std::weak_ptr<ibDebuggerClientAdapter> watched = m_adapter;
+			m_adapter->Defer([watched, method, args...]() {
+				if (const std::shared_ptr<ibDebuggerClientAdapter> target = watched.lock())
+					(static_cast<T*>(target.get())->*method)(args...);
+			});
 		}
 	}
 
-	void SetConnectionSuccess(bool started) {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection3);
-		m_connectionSuccess = started;
-	}
-
-	bool GetConnectionSuccess() const {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection3);
-		return m_connectionSuccess;
-	}
+	bool GetConnectionSuccess() const { return m_connectionSuccess; }
 
 protected:
 
@@ -627,30 +531,32 @@ protected:
 		std::map<unsigned int, int>& list_module_offset, unsigned int line) const;
 
 	//db support
-	void LoadBreakpointCollection(const wxString& strModuleName);
+	void LoadBreakpointCollection(const ibString& strModuleName);
 
-	bool ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line, const wxString& condition);
-	bool RemoveBreakpointInDB(const wxString& strModuleName, unsigned int line);
-	bool OffsetBreakpointInDB(const wxString& strModuleName, unsigned int line, int offset, const wxString& condition);
+	bool ToggleBreakpointInDB(const ibString& strModuleName, unsigned int line, const ibString& condition);
+	bool RemoveBreakpointInDB(const ibString& strModuleName, unsigned int line);
+	bool OffsetBreakpointInDB(const ibString& strModuleName, unsigned int line, int offset, const ibString& condition);
 	bool RemoveAllBreakpointInDB();
 
 	//commands:
 	void AppendConnection(ibDebuggerClientConnection* client) {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		m_listConnection.push_back(client);
 	}
 
 	void DeleteConnection(ibDebuggerClientConnection* client) {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		if (m_activeSocket == client) m_activeSocket = nullptr;
 		m_listConnection.erase(
 			std::remove(m_listConnection.begin(), m_listConnection.end(), client), m_listConnection.end()
 		);
 		if (m_listConnection.size() == 0) m_enterLoop = false;
+		m_connectionsCv.notify_all();   // the client's end may be waiting for it (~ibDebuggerClient)
 	}
 
 	void RecvCommand(void* pointer, unsigned int length) {}
 	void SendCommand(void* pointer, unsigned int length) {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		if (m_activeSocket != nullptr) {
 			m_activeSocket->SendCommand(pointer, length);
 		}
@@ -663,15 +569,15 @@ protected:
 
 private:
 
-	int GetLineOffset(const wxString& strModuleName, const int current_line) const {
+	int GetLineOffset(const ibString& strModuleName, const int current_line) const {
 
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection2);
+		std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 
 		auto iterator_module_offset = std::find_if(
 			m_listOffsetBreakpoint.begin(),
 			m_listOffsetBreakpoint.end(),
 			[strModuleName](const auto pair) {
-				return stringUtils::CompareString(pair.first, strModuleName);
+				return stringUtils::IsSameAs(pair.first, strModuleName);
 			}
 		);
 
@@ -689,17 +595,33 @@ private:
 
 	class ibMetaDataConfigurationBase* const m_metaData;
 
-	ibDebuggerClientConnection* m_activeSocket = nullptr;
-	ibDebuggerClientAdapter* m_adapter = nullptr;
+	// Shared only to be watched: what is queued for it holds it weakly (CallAfter).
+	std::shared_ptr<ibDebuggerClientAdapter> m_adapter;
 
-	static wxCriticalSection ms_criticalSectionConnection1;
-	static wxCriticalSection ms_criticalSectionConnection2;
-	static wxCriticalSection ms_criticalSectionConnection3;
+	// THE THREAD EVERY CONNECTION'S SOCKET GOES BY — one, for the scanners of every port; a connection's own thread
+	// reads what arrived. Outlives them all: the destructor lets the connections go first.
+	ibIoThreads m_ioThreads;
 
-	std::vector<ibDebuggerClientConnection*>	m_listConnection;
+	// 🛑 THE CONNECTIONS AND THE STOP, UNDER ONE LOCK — the list, the connection a runtime is parked on and its session:
+	// each connection's thread puts itself in, takes itself out and parks the stop, while the designer, the assistant
+	// and the server's listeners walk the list. Taken on every touch of the three, the walk included. Recursive, as the
+	// bridges' lock is: a call made under it may tell a listener at once (Defer with no session), who asks
+	// HasConnections. Taken after m_breakpointsMutex, never before it.
+	mutable std::recursive_mutex             m_connectionsMutex;
+	std::condition_variable_any              m_connectionsCv;   // a connection took itself out of the list
+	std::vector<ibDebuggerClientConnection*> m_listConnection;
+	ibDebuggerClientConnection*              m_activeSocket = nullptr;   // the one a runtime is parked on
+	// Session guid of the runtime currently parked at a breakpoint.
+	// Updated on each CommandId_EnterLoop receive; tagged onto every
+	// outgoing Continue/Step/Pause/Detach so the server can route the
+	// command to the right ibSession in a multi-tab wes process.
+	ibString                                 m_currentSessionGuid;
 
-	std::map <wxString, std::map<unsigned int, ibBreakpoint>> m_listBreakpoint; //list of points: committed line -> offset + condition
-	std::map <wxString, std::map<unsigned int, int>> m_listOffsetBreakpoint; //list of changed transitions
+	// 🛑 THE BREAKPOINTS, THE LINES THE EDITS MOVED, WHAT IS WATCHED — set on the designer's thread, read on a
+	// connection's (a stop's line, everything told again on a reconnect). Recursive: a module saved is initialised under it.
+	mutable std::recursive_mutex m_breakpointsMutex;
+	std::map <ibString, std::map<unsigned int, ibBreakpoint>> m_listBreakpoint; //list of points: committed line -> offset + condition
+	std::map <ibString, std::map<unsigned int, int>> m_listOffsetBreakpoint; //list of changed transitions
 
 	// WHAT IS WATCHED, AND WHO ASKED FOR EACH — re-registered with the runtime after every reconnect
 	// (CommandId_GetArrayBreakpoint), which is the moment the name has to be said again and cannot be
@@ -710,13 +632,12 @@ private:
 	std::map <unsigned int, ibWatchedExpression> m_listExpression;
 #endif  
 
-	bool	m_enterLoop, m_connectionSuccess;
+	// Set by a connection's thread, read by any.
+	std::atomic<bool> m_enterLoop, m_connectionSuccess;
 
-	// Session guid of the runtime currently parked at a breakpoint.
-	// Updated on each CommandId_EnterLoop receive; tagged onto every
-	// outgoing Continue/Step/Pause/Detach so the server can route the
-	// command to the right ibSession in a multi-tab wes process.
-	wxString m_currentSessionGuid;
+	// How many times a connection tries a port before its thread ends — more while a launched child boots
+	// (SearchServer(true)), the usual again once a runtime is verified.
+	std::atomic<short> m_numberOfConnectionAttempts;
 };
 
 #endif

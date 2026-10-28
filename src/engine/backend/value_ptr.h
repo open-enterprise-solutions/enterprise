@@ -36,7 +36,7 @@ class ibValuePtr : public ibValue {
 		}
 	}
 
-	inline void OnSetValueU(ibValue* ptr) {
+	inline void OnSetValueU(ibVariant* ptr) {
 		if (ptr != nullptr)
 			OnSetValueT(dynamic_cast<T*>(ptr));
 	}
@@ -50,7 +50,7 @@ public:
 
 	// copy ctor
 	ibValuePtr(const ibValue& to_copy) : ibValue() { OnSetValueU(to_copy.m_pRef); }
-	ibValuePtr(const ibValuePtr<T>& to_copy) : ibValue() { OnSetValueT(to_copy.m_pRef); }
+	ibValuePtr(const ibValuePtr<T>& to_copy) : ibValue() { OnSetValueT(to_copy.Ptr()); }
 
 	// generalized copy ctor: U must be convertible to T	
 	template <typename U>
@@ -71,7 +71,7 @@ public:
 
 	template <typename U>
 	void operator = (const ibValuePtr<U>& other) { OnSetValueU(other.m_pRef); }
-	void operator = (const ibValuePtr& other) { OnSetValueT(other.m_pRef); }
+	void operator = (const ibValuePtr& other) { OnSetValueT(other.Ptr()); }
 
 private:
 

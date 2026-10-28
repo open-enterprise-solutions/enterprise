@@ -7,7 +7,7 @@
 #include "backend/appData.h"
 #include "backend/debugger/debugClient.h"
 #include "backend/mcp/mcpServer.h"
-#include "core/fileSystem/fs.h"   // ibWriterMemory / ibReaderMemory - the node on the wire
+#include "core/memory/memoryStream.h"   // ibWriterMemory / ibReaderMemory - the node on the wire
 
 #include <chrono>
 
@@ -77,15 +77,17 @@ ibMcpDebugBridge::Stop ibMcpDebugBridge::GetStop() const
 	// connections — went on answering "1 attached, ready" in the same breath, and `compose_run`
 	// refused with "no application is running" against an application that was running perfectly
 	// well (measured 2026-09-07 with two clients on one base).
+	//
+	// 🛑 AND A RUNTIME IS ONE THAT ANSWERED. IsConnected is a socket in the slot, which a scanner holds while
+	// it dials a port nobody listens on — about four seconds a try on Windows — so the runtime just stopped
+	// was still "connected" seconds after its process had gone (2026-10-21).
 	answer.m_connected = false;
 
 	if (debugClient != nullptr) {
-		for (const auto* connection : debugClient->GetListConnection()) {
-			if (connection != nullptr && connection->IsConnected()) {
+		debugClient->ForEachConnection([&answer](const auto& connection) {
+			if (connection.IsVerifiedConnection())
 				answer.m_connected = true;
-				break;
-			}
-		}
+		});
 	}
 
 	return answer;
@@ -106,7 +108,7 @@ void ibMcpDebugBridge::Running()
 	m_stop.m_line = 0;
 }
 
-bool ibMcpDebugBridge::Evaluate(const wxString& expression, wxString& answer, int timeoutMs)
+bool ibMcpDebugBridge::Evaluate(const ibString& expression, ibString& answer, int timeoutMs)
 {
 	const std::lock_guard<std::mutex> one(m_oneQuestion);   // see the member: one question on the wire
 	answer.Clear();
@@ -114,8 +116,8 @@ bool ibMcpDebugBridge::Evaluate(const wxString& expression, wxString& answer, in
 	if (debugClient == nullptr)
 		return false;
 
-	wxString module;
-	wxString fileName;
+	ibString module;
+	ibString fileName;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		if (!m_stop.m_stopped)
@@ -143,8 +145,8 @@ bool ibMcpDebugBridge::Evaluate(const wxString& expression, wxString& answer, in
 	return arrived;
 }
 
-bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer, wxString& json,
-	std::vector<wxString>& printed, wxLongLong_t& microseconds, int timeoutMs)
+bool ibMcpDebugBridge::Sandbox(const ibString& code, bool& ran, ibString& answer, ibString& json,
+	std::vector<ibString>& printed, long long& microseconds, int timeoutMs)
 {
 	const std::lock_guard<std::mutex> one(m_oneQuestion);
 	ran = false;
@@ -190,8 +192,8 @@ bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer
 	return arrived;
 }
 
-bool ibMcpDebugBridge::Screenshot(const wxString& reason, const wxString& area, const wxString& format,
-	bool& allowed, wxMemoryBuffer& png, wxString& focus, int timeoutMs)
+bool ibMcpDebugBridge::Screenshot(const ibString& reason, const ibString& area, const ibString& format,
+	bool& allowed, ibMemoryBuffer& png, ibString& focus, int timeoutMs)
 {
 	const std::lock_guard<std::mutex> one(m_oneQuestion);
 	allowed = false;
@@ -237,7 +239,7 @@ bool ibMcpDebugBridge::Screenshot(const wxString& reason, const wxString& area, 
 	return arrived;
 }
 
-void ibMcpDebugBridge::OnScreenshot(const wxMemoryBuffer& png, const wxString& focus)
+void ibMcpDebugBridge::OnScreenshot(const ibMemoryBuffer& png, const ibString& focus)
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -266,7 +268,7 @@ void ibMcpDebugBridge::OnScreenshot(const wxMemoryBuffer& png, const wxString& f
 // ⚠ NO STOP REQUIRED, as with the screenshot and unlike the sandbox: what is asked for is a
 // background job in a session of its own, and a running application can start one at any moment.
 // Connected is the whole precondition.
-bool ibMcpDebugBridge::SendJob(unsigned int which, const wxString& token,
+bool ibMcpDebugBridge::SendJob(unsigned int which, const ibString& token,
 	const ibJobRunRequest& request, ibJobRunByteCodeState& state, int timeoutMs)
 {
 	const std::lock_guard<std::mutex> one(m_oneQuestion);
@@ -307,15 +309,15 @@ bool ibMcpDebugBridge::SendJob(unsigned int which, const wxString& token,
 bool ibMcpDebugBridge::StartJob(const ibJobRunRequest& request, ibJobRunByteCodeState& state,
 	int timeoutMs)
 {
-	return SendJob((unsigned int)CommandId_JobStart, wxEmptyString, request, state, timeoutMs);
+	return SendJob((unsigned int)CommandId_JobStart, ibEmptyString, request, state, timeoutMs);
 }
 
-bool ibMcpDebugBridge::JobStatus(const wxString& token, ibJobRunByteCodeState& state, int timeoutMs)
+bool ibMcpDebugBridge::JobStatus(const ibString& token, ibJobRunByteCodeState& state, int timeoutMs)
 {
 	return SendJob((unsigned int)CommandId_JobStatus, token, ibJobRunRequest(), state, timeoutMs);
 }
 
-bool ibMcpDebugBridge::JobCancel(const wxString& token, ibJobRunByteCodeState& state, int timeoutMs)
+bool ibMcpDebugBridge::JobCancel(const ibString& token, ibJobRunByteCodeState& state, int timeoutMs)
 {
 	return SendJob((unsigned int)CommandId_JobCancel, token, ibJobRunRequest(), state, timeoutMs);
 }
@@ -348,7 +350,7 @@ void ibMcpDebugBridge::OnJobState(unsigned int which, const ibJobRunByteCodeStat
 // person at that application keeps working while it runs. The deadline is long for the same reason
 // the screenshot's is: what is being waited for is work, not a lookup.
 bool ibMcpDebugBridge::Compose(const ibDataNode& request, ibDataNode& result, bool& answered,
-	wxString& refusal, int timeoutMs)
+	ibString& refusal, int timeoutMs)
 {
 	const std::lock_guard<std::mutex> one(m_oneQuestion);
 	answered = false;
@@ -381,8 +383,6 @@ bool ibMcpDebugBridge::Compose(const ibDataNode& request, ibDataNode& result, bo
 		answered = m_composeAnswered;
 		refusal  = m_composeRefusal;
 		if (answered && m_composed.GetDataLen() > 0) {
-			// ⚠ A NAMED LOCAL, because a reader BORROWS its bytes: handing it a temporary leaves it
-			// reading freed memory, which is why fs.h deletes that overload outright.
 			ibReaderMemory reader(m_composed);
 			ibBinaryProvider().Read(reader, result);
 		}
@@ -392,7 +392,7 @@ bool ibMcpDebugBridge::Compose(const ibDataNode& request, ibDataNode& result, bo
 	return arrived;
 }
 
-void ibMcpDebugBridge::OnComposed(bool answered, const wxString& refusal, const wxMemoryBuffer& result)
+void ibMcpDebugBridge::OnComposed(bool answered, const ibString& refusal, const ibMemoryBuffer& result)
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -411,7 +411,7 @@ void ibMcpDebugBridge::OnComposed(bool answered, const wxString& refusal, const 
 	m_answered.notify_all();
 }
 
-bool ibMcpDebugBridge::Unfold(const wxString& expression, std::vector<Local>& members, int timeoutMs)
+bool ibMcpDebugBridge::Unfold(const ibString& expression, std::vector<Local>& members, int timeoutMs)
 {
 	const std::lock_guard<std::mutex> one(m_oneQuestion);
 	members.clear();
@@ -459,7 +459,7 @@ bool ibMcpDebugBridge::Unfold(const wxString& expression, std::vector<Local>& me
 	return arrived;
 }
 
-void ibMcpDebugBridge::Announce(const wxString& text) const
+void ibMcpDebugBridge::Announce(const ibString& text) const
 {
 	// The wake-up road already exists: this is the same one a chat message
 	// travels, so a stop reaches the assistant's window without a mechanism of
@@ -475,16 +475,16 @@ void ibMcpDebugBridge::Announce(const wxString& text) const
 // events
 //---------------------------------------------------------------------------
 
-void ibMcpDebugBridge::OnSessionStart(wxSocketClient* sock)
+void ibMcpDebugBridge::OnSessionStart()
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		m_stop.m_connected = true;
 	}
-	Announce(wxT("debugger: a runtime connected"));
+	Announce(ibT("debugger: a runtime connected"));
 }
 
-void ibMcpDebugBridge::OnSessionEnd(wxSocketClient* sock)
+void ibMcpDebugBridge::OnSessionEnd()
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -496,12 +496,12 @@ void ibMcpDebugBridge::OnSessionEnd(wxSocketClient* sock)
 		// set and this event arrives once per member of it.
 		m_stop = Stop();
 	}
-	Announce(wxT("debugger: the runtime disconnected"));
+	Announce(ibT("debugger: the runtime disconnected"));
 }
 
-void ibMcpDebugBridge::OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibMcpDebugBridge::OnEnterLoop(const ibDebugLineData& data)
 {
-	wxString where;
+	ibString where;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		m_stop.m_connected = true;
@@ -524,11 +524,11 @@ void ibMcpDebugBridge::OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& 
 
 	// THE WAKE-UP. Without it, stopping on a breakpoint is a state nobody is told
 	// about, and the assistant would have to poll to find out it had happened.
-	Announce(wxString::Format(wxT("debugger: stopped at %s line %u"),
+	Announce(ibString::Format(ibT("debugger: stopped at %s line %u"),
 		where, data.m_line));
 }
 
-void ibMcpDebugBridge::OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibMcpDebugBridge::OnLeaveLoop(const ibDebugLineData& data)
 {
 	Running();
 }
@@ -539,7 +539,7 @@ void ibMcpDebugBridge::OnAutoComplete(const ibDebugAutoCompleteData& data)
 	// needs it, and pretending to keep it would be state nobody reads.
 }
 
-void ibMcpDebugBridge::OnMessageFromServer(const ibDebugLineData& data, const wxString& message)
+void ibMcpDebugBridge::OnMessageFromServer(const ibDebugLineData& data, const ibString& message)
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -552,10 +552,10 @@ void ibMcpDebugBridge::OnMessageFromServer(const ibDebugLineData& data, const wx
 	}
 	// READ BY BOTH OF US. This road ends in the designer's output pane, where the person is; the
 	// assistant is told as well because it is usually the one that asked for the run.
-	Announce(wxT("the run reported a failure: ") + message);
+	Announce(ibT("the run reported a failure: ") + message);
 }
 
-void ibMcpDebugBridge::OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr)
+void ibMcpDebugBridge::OnSetToolTip(const ibDebugExpressionData& data, const ibString& resultStr)
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -571,7 +571,7 @@ void ibMcpDebugBridge::OnSetToolTip(const ibDebugExpressionData& data, const wxS
 // its own, so printing is how it hands anything back, and `Message(SerializeValue(x))` carries a
 // whole structure through here. Kept while a run is pending, so the answer to THAT run is what it
 // printed and not whatever else was said meanwhile.
-void ibMcpDebugBridge::OnEvalMessage(const wxString& message, MessageType type)
+void ibMcpDebugBridge::OnEvalMessage(const ibString& message, MessageType type)
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -617,8 +617,8 @@ std::vector<ibMcpDebugBridge::Printed> ibMcpDebugBridge::TakeOutput(bool clear)
 	return out;
 }
 
-void ibMcpDebugBridge::OnSandboxResult(bool ran, const wxString& answer, const wxString& json,
-	wxLongLong_t microseconds)
+void ibMcpDebugBridge::OnSandboxResult(bool ran, const ibString& answer, const ibString& json,
+	long long microseconds)
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -640,7 +640,7 @@ void ibMcpDebugBridge::OnSetStack(const ibStackData& stackData)
 	m_stop.m_stack.clear();
 	for (const ibStackData::ibStackRow& row : stackData.m_stackData) {
 		Frame frame;
-		frame.m_module = row.m_moduleName;
+		frame.m_module = row.m_fullName;
 		frame.m_line = row.m_moduleLine;
 		m_stop.m_stack.push_back(frame);
 	}

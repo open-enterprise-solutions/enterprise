@@ -42,12 +42,12 @@ namespace {
 //
 // ⭐ SO THE COUNT DECIDES, NOT A YES — and since 2026-09-11 not the count either, but what the words
 // found are WORTH (see Call): a word every tool carries tells no tool apart.
-wxString Haystack(const ibMcpTool* tool)
+ibString Haystack(const ibMcpTool* tool)
 {
 	// The name, the description and the corpus are searched as ONE text: all three answer "is this
 	// the tool", and a match in any is the same answer. Joined here rather than walked three
 	// times, so the one rule in ibMcpWordsFound has a single haystack to work on.
-	wxString haystack = tool->GetName() + wxT("\n") + tool->GetDescription();
+	ibString haystack = tool->GetName() + ibT("\n") + tool->GetDescription();
 
 	// ⭐⭐ AND WHAT ITS ARGUMENTS ARE CALLED, because half of what a verb does is said there and
 	// nowhere else. `report_select` takes a `variant`; its description never says the word, so a
@@ -59,11 +59,11 @@ wxString Haystack(const ibMcpTool* tool)
 	// A schema is what a caller reads before deciding; searching everything BUT the schema means
 	// the finder knows less about a tool than the answer it hands back does.
 	for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments())
-		haystack << wxT("\n") << argument.Name() << wxT(" ") << argument.Description();
+		haystack << ibT("\n") << argument.Name() << ibT(" ") << argument.Description();
 
-	const wxString carried = tool->GetSearchText();
+	const ibString carried = tool->GetSearchText();
 	if (!carried.IsEmpty())
-		haystack << wxT("\n") << carried;
+		haystack << ibT("\n") << carried;
 
 	return haystack;
 }
@@ -71,19 +71,19 @@ wxString Haystack(const ibMcpTool* tool)
 // WHAT THE TOOL SAYS IT IS: its name, and the first sentence of its description - the summary every
 // description here opens with ("Add a metadata object, ...", "Ask the RUNNING APPLICATION for a picture
 // of its window"). Read apart from the rest by the finder (see Call).
-wxString Identity(const ibMcpTool* tool)
+ibString Identity(const ibMcpTool* tool)
 {
-	const wxString description = tool->GetDescription();
+	const ibString description = tool->GetDescription();
 	size_t end = description.length();
 	for (size_t i = 0; i + 1 < description.length(); ++i) {
-		const wxChar c = description[i];
-		if (c == wxT('\n')
-			|| ((c == wxT('.') || c == wxT('?') || c == wxT('!')) && wxIsspace(description[i + 1]))) {
+		const ibChar c = description[i];
+		if (c == ibT('\n')
+			|| ((c == ibT('.') || c == ibT('?') || c == ibT('!')) && ibIsSpace(description[i + 1]))) {
 			end = i;
 			break;
 		}
 	}
-	return tool->GetName() + wxT("\n") + description.Left(end);
+	return tool->GetName() + ibT("\n") + description.Left(end);
 }
 
 using ibArg = ibMcpTool::ibMcpArgument;
@@ -92,7 +92,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgSchema()
 {
-	static const ibArg s_a(wxT("schema"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("schema"), ibArg::Kind::Flag,
 		ibMcpText("Include each tool's input schema. On by default, because the schema is what a call "
 		  "is built from; turn it off to survey what exists without paying for the detail."));
 	return s_a;
@@ -100,7 +100,7 @@ const ibArg& ArgSchema()
 
 const ibArg& ArgQuery()
 {
-	static const ibArg s_a(wxT("query"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("query"), ibArg::Kind::Text,
 		ibMcpText("What the job is, in words. Ranked by what the words that land in a tool's name, its "
 			  "description or the text it carries are WORTH: a word few tools carry counts for much, "
 			  "one nearly every tool carries for almost nothing - best first, and whatever comes close "
@@ -119,7 +119,7 @@ const ibArg& ArgQuery()
 
 const ibArg& ArgName()
 {
-	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("name"), ibArg::Kind::Text,
 		ibMcpText("One tool by its exact name, when it is already known - the shortest way to get a "
 			  "schema back."));
 	return s_a;
@@ -127,7 +127,7 @@ const ibArg& ArgName()
 
 const ibArg& ArgTool()
 {
-	static const ibArg s_a(wxT("tool"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("tool"), ibArg::Kind::Text,
 		ibMcpText("Which tool - the exact name, as mcp_search gives it."), /*required*/ true);
 	return s_a;
 }
@@ -144,7 +144,7 @@ const ibArg& ArgTool()
 // the envelope. Found by Claude Code on 2026-09-02, first minute of its first session here.
 const ibArg& ArgArguments()
 {
-	static const ibArg s_a(wxT("arguments"), ibArg::Kind::Node,
+	static const ibArg s_a(ibT("arguments"), ibArg::Kind::Node,
 		ibMcpText("What to pass it, shaped by that tool's own input schema - an OBJECT, the schema filled "
 			  "in, not a string containing one. An argument the tool does not declare is refused "
 			  "by name, so a guess is answered rather than swallowed."));
@@ -160,19 +160,19 @@ const ibArg& ArgArguments()
 class ibMcpToolSearch : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("mcp_search"); }
+	ibString GetName() const override { return ibT("mcp_search"); }
 
 	bool IsAlwaysListed() const override { return true; }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString query = ArgQuery().Text(params);
+		const ibString query = ArgQuery().Text(params);
 		return query.IsEmpty()
 			? ibMcpText("listing what it can do")
-			: wxString::Format(ibMcpText("looking for a way to %s"), query);
+			: ibString::Format(ibMcpText("looking for a way to %s"), query);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("FIND THE TOOL FOR A JOB, then call it through mcp_call. This platform exposes "
 			"far more verbs than are worth handing over at once - metadata and forms, queries and "
@@ -195,13 +195,13 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const wxString wanted = ArgName().Text(params);
-		const wxString query = ArgQuery().Text(params);
+		const ibString wanted = ArgName().Text(params);
+		const ibString query = ArgQuery().Text(params);
 
 		bool withSchema = true;
-		if (params.FindField(ArgSchema().Name()) != nullptr)
+		if (params.Has(ArgSchema().Name()))
 			withSchema = ArgSchema().Flag(params);
 
 		// SCORED FIRST, CHOSEN SECOND. Which tools are good enough cannot be known while they are
@@ -231,7 +231,7 @@ public:
 			std::vector<std::vector<bool>> met, named;
 			std::vector<double> length;
 			for (const ibMcpTool* tool : ibMcpTools()) {
-				const wxString haystack = Haystack(tool);
+				const ibString haystack = Haystack(tool);
 				tools.push_back(tool);
 				length.push_back((double)haystack.length());
 				met.emplace_back();
@@ -308,17 +308,17 @@ public:
 				break;   // best first, so nothing after this one is closer
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("name"), candidate.m_tool->GetName());
-			entry->SetValue(wxT("description"), candidate.m_tool->GetDescription());
+			entry->SetValue(ibT("name"), candidate.m_tool->GetName());
+			entry->SetValue(ibT("description"), candidate.m_tool->GetDescription());
 
 			// Said on the ENTRY and not only in a note, because a partial answer that looks like
 			// an exact one is worse than no answer: it is acted on.
 			if (!query.IsEmpty() && wanted.IsEmpty() && candidate.m_found < asked)
-				entry->SetValue(wxT("matched"), wxString::Format(
+				entry->SetValue(ibT("matched"), ibString::Format(
 					ibMcpText("%i of your %i words"), (int)candidate.m_found, (int)asked));
 
 			if (withSchema)
-				candidate.m_tool->DescribeInput(entry->Child(wxT("inputSchema")));
+				candidate.m_tool->DescribeInput(entry->Child(ibT("inputSchema")));
 
 			found.push_back(ibDataValue::Child(entry));
 		}
@@ -337,8 +337,8 @@ public:
 		// note_read's) is where the thing asked about is built HERE; a pattern says how such a thing is built
 		// anywhere. Both are worth reading, but the trim below must not cut the first for the second.
 		std::stable_partition(places.begin(), places.end(), [](const ibDataValue& place) {
-			const std::shared_ptr<ibDataNode>& node = place.AsChild();
-			return node && node->FindField(wxT("id")) != nullptr;
+			const auto node = place.AsChild();
+			return node && node->Has(ibT("id"));
 		});
 
 		// ⚠ A HANDFUL, BECAUSE THIS IS THE TOOL FINDER. The corpus can answer a common word from
@@ -349,12 +349,12 @@ public:
 		if (trimmed)
 			places.resize(8);
 
-		result.AddField(wxT("found"), ibDataValue::Int((s64)found.size()));
-		result.AddField(wxT("tools"), ibDataValue::Array(found));
+		result.AddField(ibT("found"), ibDataValue::Int((std::int64_t)found.size()));
+		result.AddField(ibT("tools"), ibDataValue::Array(found));
 
 		if (!places.empty()) {
-			result.AddField(wxT("places"), ibDataValue::Array(places));
-			result.SetValue(wxT("reading"), wxString(trimmed
+			result.AddField(ibT("places"), ibDataValue::Array(places));
+			result.SetValue(ibT("reading"), ibString(trimmed
 				? ibMcpText("`places` are passages that answer this in words, not verbs to call - the "
 				  "first few of more. Read one with pattern_read {name, topic}, quoting the topic "
 				  "given; pattern_read {query} with the same words lists them all.")
@@ -371,17 +371,17 @@ public:
 			// differently on each: one is a typo, the other is a job this platform has no verb
 			// for. Said apart rather than answered with the same empty list.
 			refusal = wanted.IsEmpty()
-				? wxString::Format(
+				? ibString::Format(
 					ibMcpText("Not one word of '%s' appears anywhere here - in a tool's name, its "
 					  "description, or the patterns. Say it in other words, or ask with none to "
 					  "see everything there is."), query)
-				: wxString::Format(
+				: ibString::Format(
 					ibMcpText("There is no tool called '%s'. Ask by what the job IS instead of by name."),
 					wanted);
 			return false;
 		}
 
-		result.SetValue(wxT("call"),
+		result.SetValue(ibT("call"),
 			ibMcpText("Invoke any of these through mcp_call: {tool: <name>, arguments: {...}}."));
 
 		return true;
@@ -410,18 +410,18 @@ MCP_TOOL_REGISTER(ibMcpToolSearch);
 class ibMcpToolCall : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("mcp_call"); }
+	ibString GetName() const override { return ibT("mcp_call"); }
 
 	bool IsAlwaysListed() const override { return true; }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		// Only ever seen if the envelope was malformed — a well-formed one is unwrapped before
 		// this is asked, and the ACTIVITY then comes from the real tool.
 		return ibMcpText("calling a tool");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Invoke any tool this platform has, by name: {tool: 'metadata_create', "
 			"arguments: {...}}. Use it for everything mcp_search finds - the search returns each "
@@ -435,7 +435,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		// Unreachable: ibMcpServer::Answer replaces the name and the arguments before the registry
 		// is consulted. Saying so beats a silent `return true` that would look like it worked.

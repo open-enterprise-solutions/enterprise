@@ -29,6 +29,7 @@
 #include "backend/uniqueKey.h"         // ibUniqueKey — GetItemKey returns one BY VALUE (default = empty)
 
 #include "queryable.h"                 // ibQueryPredicatePtr — a condition the source consumes itself
+#include "core/query/querySourceParameter.h"   // ibQuerySourceParameter — what DescribeParameters declares
 
 #include <wx/string.h>
 #include <algorithm>   // std::max — SameConditions
@@ -40,83 +41,6 @@ class ibBackendQueryableHolder;
 class ibBackendQueryColumn;
 class ibBackendValueForm;
 
-// A source DESCRIPTION, identified by (namespace, name): it CREATES the queryable from the
-// metadata it stores + the call-scoped params (count + pointer-to-pointer of ibValue — the
-// ibValue::Init idiom). No separate setup step — construction happens in CreateQueryable.
-// ONE PARAMETER OF A SOURCE CALL — `Balance(&Period, Warehouse = &Store)`.
-//
-// A virtual table takes its arguments IN ORDER and, until now, read them positionally out of
-// paParams[i] with nobody else knowing what `i` meant: not the constructor (which therefore had no
-// way to offer them), not the name check (which could not see a missing or surplus argument), not a
-// person reading the text. The source is the only one who knows; this is it saying so.
-//
-// EVERY ARGUMENT IS AN EXPRESSION — `&Period`, a literal, `BegOfMonth(&Date)`, `Warehouse = &Store`.
-// The kind does not say "expression or not"; it says WHERE ITS NAMES ARE LOOKED UP and WHAT SORT OF
-// ANSWER is expected:
-//
-//   * VALUE     — a scalar, and it is settled BEFORE THE QUERY RUNS. That is the whole reason no
-//                 column is in scope here — not this table's, and certainly not another table of the
-//                 query. The order is: the arguments are evaluated, THEN the virtual table produces
-//                 its rows from them, THEN the engine joins and filters. A parameter that named a
-//                 column would be asking for a value from rows that do not exist yet.
-//                 So what may stand here is a parameter, a literal, or a computation over them
-//                 (`BegOfMonth(&Date)`). `m_type` says what it holds, and that also decides how it
-//                 is edited: a date gets a date box, a registered enumeration (a turnover table's
-//                 periodicity: second … year) gets its own list. Deliberately NOT a separate
-//                 "periodicity" kind — that would restate the enumeration in a widget, and the next
-//                 member added to it would have to be added twice.
-//   * CONDITION — a predicate. Identifiers in it are THIS TABLE'S columns; `&name` is still an
-//                 ordinary query parameter, so the two cannot be confused (the ampersand is the
-//                 distinction). Which columns are admissible is a question of its own —
-//                 FillConditionExplorer below — because a balance may be filtered by its dimensions
-//                 but not by a resource it folded, while a slice admits every attribute it carries.
-struct ibQuerySourceParameter
-{
-	wxString          m_name;                 // Period / Begin / End / Periodicity / Condition
-	bool              m_condition = false;    // false = value expression, true = predicate
-	ibTypeDescription m_type;                 // VALUE only: what it holds — and therefore how it is edited
-	bool              m_required = false;
-
-	// ⭐ A CLOSED SET OF VALUES, WHEN THE ARGUMENT HAS ONE — the periodicity a turnover rolls up to,
-	// the way a balance-and-turnovers table is filled. Declared BY THE SOURCE, because the source is
-	// the only one that knows what it accepts; a window that carried the list would be holding a
-	// second copy of the source's own vocabulary, and the two would part company on the first change.
-	//
-	// Empty means "any expression the language can write" — a moment, a parameter, a computation.
-	// Non-empty makes the argument a CHOICE, and the editor shows exactly these and nothing else.
-	std::vector<wxString> m_choices;
-
-	// ⭐ WHAT THIS ARGUMENT DECIDES, in one line, when the name alone is not enough — declared by
-	// the source for the same reason the choices are: it is the only one that knows.
-	//
-	// 🛑 `Periodicity` is why this exists. The word names two different things one floor apart: the
-	// register's STORED grain (a metadata property, whose words are "Non periodic / Within second /
-	// Within day") and the granularity of a READING (this, whose words are Period / Recorder /
-	// Day / Month / …). A newcomer reads one list and writes it into the other, and both refusals
-	// are correct and neither says the two are different questions (measured over MCP, 2026-09-03).
-	// Empty for an argument whose name says it all.
-	wxString m_description;
-
-	// ⭐⭐ THE SOURCE CONSUMES THIS CONDITION ITSELF — it is not folded into the WHERE around it.
-	//
-	// An ordinary condition slot is sugar: the predicate written there is ANDed into the query's own
-	// WHERE, and the source never learns of it. That is right when the condition only SELECTS rows.
-	// It is wrong when the source has to ACT on it — an accounting register asked for accounts «in
-	// hierarchy» reports the subordinate accounts UNDER the one that was named, and a filter applied
-	// around the reading cannot fold anything: it can only remove rows the reading already produced.
-	//
-	// Set, the lowering resolves the predicate against `GetConditionScope()` and hands it to
-	// `CreateQueryable` by slot position instead of into the WHERE. Nothing else changes: the source
-	// is then the only place that condition exists, which is what makes the fold possible at all.
-	bool m_consumedBySource = false;
-
-	// AND WHAT THE SOURCE USES WHEN THE ARGUMENT IS LEFT OUT. Shown to the author rather than left to
-	// be guessed: an empty box that quietly means "Auto" teaches nothing, and the first surprise
-	// arrives when somebody sets it explicitly and the result changes.
-	wxString              m_default;
-
-};
-
 // ⭐⭐ WHICH COLUMNS OF A CALLED TABLE THE QUERY READS — by the names it writes them with.
 //
 // A virtual table groups by the columns it publishes, and one of them may cut every row finer than the
@@ -127,19 +51,22 @@ struct ibQuerySourceParameter
 struct ibQueryReadColumns
 {
 	bool                  m_all = true;
-	std::vector<wxString> m_names;
+	std::vector<ibString> m_names;
 
-	bool Reads(const wxString& name) const
+	bool Reads(const ibString& name) const
 	{
 		if (m_all)
 			return true;
-		for (const wxString& read : m_names)
+		for (const ibString& read : m_names)
 			if (read.IsSameAs(name, false))
 				return true;
 		return false;
 	}
 };
 
+// A source DESCRIPTION, identified by (namespace, name): it CREATES the queryable from the
+// metadata it stores + the call-scoped params (count + pointer-to-pointer of ibValue — the
+// ibValue::Init idiom). No separate setup step — construction happens in CreateQueryable.
 class BACKEND_API ibQueryableSourceDescriptor
 {
 public:
@@ -227,8 +154,8 @@ private:
 
 public:
 
-	virtual wxString GetNamespace() const = 0;
-	virtual wxString GetName() const = 0;
+	virtual ibString GetNamespace() const = 0;
+	virtual ibString GetName() const = 0;
 
 	// ⭐ THE COMPANIONS GO WHEN THE REGISTRATION GOES — said by the factory's Unregister, the door every
 	// source passes when its configuration closes. A companion holds the VALUES of its call: dates, a
@@ -372,7 +299,7 @@ public:
 	//
 	// `slot` empty = the general condition, which is what the plain overload above answers.
 	virtual void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
-	                                   const wxString& slot) const {
+	                                   const ibString& slot) const {
 		FillConditionExplorer(explorer);
 	}
 
@@ -435,12 +362,12 @@ public:
 	// Drop ALL references (config teardown). Does NOT delete — descriptors are owned elsewhere.
 	void Clear();
 
-	bool HasNamespace(const wxString& ns) const;
+	bool HasNamespace(const ibString& ns) const;
 
 	// Resolve <ns>.<objectName> (+ call-scoped params) -> queryable: find the (ns,name)
 	// descriptor and ask it to CREATE the queryable. Null when unknown. VIRTUAL — the per-config subclass
 	// descends to the global factory on a local miss.
-	virtual const ibBackendQueryable* Resolve(const wxString& ns, const wxString& objectName,
+	virtual const ibBackendQueryable* Resolve(const ibString& ns, const ibString& objectName,
 	                                  ibValue** paParams = nullptr, long lSizeArray = 0) const;
 
 	// Enumerate registered source descriptors — the dynamic-list source picker lists
@@ -450,7 +377,7 @@ public:
 	// THE DESCRIPTOR ITSELF, not the queryable it builds. The lowering needs it to ask what the
 	// source's arguments MEAN (DescribeParameters) before evaluating them — a condition argument
 	// must not be evaluated as a value at all. Null when nothing answers to that name.
-	virtual ibQueryableSourceDescriptor* FindDescriptor(const wxString& ns, const wxString& objectName) const;
+	virtual ibQueryableSourceDescriptor* FindDescriptor(const ibString& ns, const ibString& objectName) const;
 
 	// Resolve a source by its table id (queryable->GetQueryTableId()) — the stable id the
 	// dynamic-source property serializes. Null when none matches. VIRTUAL (see Resolve).
@@ -468,17 +395,17 @@ private:
 	ibQueryableFactory(const ibQueryableFactory&) = delete;
 	ibQueryableFactory& operator=(const ibQueryableFactory&) = delete;
 
-	static wxString Key(const wxString& ns, const wxString& name);   // upper("ns|name")
-	std::map<wxString, ibQueryableSourceDescriptor*> m_descriptors;  // non-owning
+	static ibString Key(const ibString& ns, const ibString& name);   // upper("ns|name")
+	std::map<ibString, ibQueryableSourceDescriptor*> m_descriptors;  // non-owning
 
 	// ⭐ THE SAME DESCRIPTORS, BY TABLE ID — so a lookup by id is a lookup and not a walk. Kept by Register /
 	// Unregister / Clear alongside m_descriptors: for each id, its descriptors in KEY order (the first one is what
 	// the walk found first), and for each key the id it was filed under — so a key is taken out of the index
 	// without asking the descriptor that stood under it, which may already be gone.
-	void IndexById(const wxString& key, ibQueryableSourceDescriptor* descriptor);
-	void UnindexById(const wxString& key);
-	std::map<ibMetaID, std::map<wxString, ibQueryableSourceDescriptor*>> m_byTableId;   // non-owning
-	std::map<wxString, ibMetaID> m_tableIdOfKey;
+	void IndexById(const ibString& key, ibQueryableSourceDescriptor* descriptor);
+	void UnindexById(const ibString& key);
+	std::map<ibMetaID, std::map<ibString, ibQueryableSourceDescriptor*>> m_byTableId;   // non-owning
+	std::map<ibString, ibMetaID> m_tableIdOfKey;
 };
 
 // The PER-CONFIG source factory — one per open snapshot (ibMetaImage), holding that config's OWN metadata-backed
@@ -490,13 +417,13 @@ class BACKEND_API ibMetaQueryableFactory : public ibQueryableFactory
 public:
 	ibMetaQueryableFactory() = default;   // owned by the snapshot; no appData token
 
-	const ibBackendQueryable* Resolve(const wxString& ns, const wxString& objectName,
+	const ibBackendQueryable* Resolve(const ibString& ns, const ibString& objectName,
 	                                  ibValue** paParams = nullptr, long lSizeArray = 0) const override;
 	const ibBackendQueryable* ResolveById(ibMetaID tableId) const override;
 	ibQueryableSourceDescriptor* ResolveDescriptorById(ibMetaID tableId) const override;
 	// Own registry first, then the global one — the same order Resolve keeps, for the same reason:
 	// a configuration's sources are its own, and a miss falls through to what the platform declares.
-	ibQueryableSourceDescriptor* FindDescriptor(const wxString& ns, const wxString& objectName) const override;
+	ibQueryableSourceDescriptor* FindDescriptor(const ibString& ns, const ibString& objectName) const override;
 };
 
 #endif

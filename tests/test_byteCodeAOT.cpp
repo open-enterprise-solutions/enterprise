@@ -22,7 +22,7 @@
 
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "core/guid.h"
 
 namespace {
@@ -33,7 +33,7 @@ namespace {
 bool RoundTrip(const ibByteCode& src, ibByteCode& dst) {
 	ibWriterMemory w;
 	if (!src.SerializeAOT(w)) return false;
-	wxMemoryBuffer blob = w.buffer();
+	ibMemoryBuffer blob = w.buffer();
 	ibReaderMemory r(blob);
 	return dst.DeserializeAOT(r);
 }
@@ -45,7 +45,7 @@ ibGuid MakeGuid(unsigned char seed) {
 	return ibGuid(bytes);
 }
 
-ibByteUnit MakeUnit(short oper, unsigned int line, const wxString& mod = wxEmptyString) {
+ibByteUnit MakeUnit(short oper, unsigned int line, const ibString& mod = wxEmptyString) {
 	ibByteUnit u;
 	u.m_numOper      = oper;
 	u.m_numString    = 1;
@@ -58,7 +58,7 @@ ibByteUnit MakeUnit(short oper, unsigned int line, const wxString& mod = wxEmpty
 	return u;
 }
 
-ibByteCode::ibByteCodeVarInfo MakeVar(const wxString& name, ibVarKind kind, long slot) {
+ibByteCode::ibByteCodeVarInfo MakeVar(const ibString& name, ibVarKind kind, long slot) {
 	ibByteCode::ibByteCodeVarInfo v;
 	v.m_slotIndex   = slot;
 	v.m_clsid       = 0;
@@ -179,8 +179,8 @@ TEST(ByteCodeAOT, ListConstAllPrimitives) {
 	{ ibValue v(false);                      src.m_listConst.push_back(v); }
 	{ ibValue v(42);                         src.m_listConst.push_back(v); }
 	{ ibValue v(-1234567);                   src.m_listConst.push_back(v); }
-	{ ibValue v(wxString(wxT("hello")));     src.m_listConst.push_back(v); }
-	{ ibValue v(wxString(wxT("")));          src.m_listConst.push_back(v); }
+	{ ibValue v(ibString(wxT("hello")));     src.m_listConst.push_back(v); }
+	{ ibValue v(ibString(wxT("")));          src.m_listConst.push_back(v); }
 	{
 		ibValue v(ibValueTypes::TYPE_DATE);
 		v.m_dData = ibDateTime(1714639200ll); // an arbitrary raw count - the cache stores the number
@@ -295,7 +295,7 @@ TEST(ByteCodeAOT, ConstTypeTagRoundTripsThroughAOT) {
 		v.m_dData = ibDateTime(1700000000ll);
 		src.m_listConst.push_back(v);
 	}
-	src.m_listConst.push_back(ibValue(wxString(wxT("ünïcödé"))));   // multibyte string payload
+	src.m_listConst.push_back(ibValue(ibString(wxT("ünïcödé"))));   // multibyte string payload
 
 	ibByteCode dst;
 	ASSERT_TRUE(RoundTrip(src, dst));
@@ -305,7 +305,7 @@ TEST(ByteCodeAOT, ConstTypeTagRoundTripsThroughAOT) {
 		EXPECT_EQ(dst.m_listConst[i].GetType(), src.m_listConst[i].GetType())
 			<< "const #" << i << " type tag changed across AOT round-trip";
 
-	EXPECT_EQ(dst.m_listConst[5].GetString(), wxString(wxT("ünïcödé")));
+	EXPECT_EQ(dst.m_listConst[5].GetString(), ibString(wxT("ünïcödé")));
 }
 
 // ===========================================================================
@@ -487,9 +487,8 @@ TEST(ByteCodeAOT, DependencyIdsAndVersions) {
 
 TEST(ByteCodeAOT, RejectBadMagic) {
 	// Garbage that doesn't start with our magic.
-	wxMemoryBuffer buf;
 	uint32_t junk[8] = { 0xDEADBEEF, 1, 2, 3, 4, 5, 6, 7 };
-	buf.AppendData(junk, sizeof(junk));
+	const ibMemoryBuffer buf(junk, sizeof(junk));
 
 	ibReaderMemory r(buf);
 	ibByteCode dst;
@@ -499,9 +498,8 @@ TEST(ByteCodeAOT, RejectBadMagic) {
 TEST(ByteCodeAOT, RejectShortBuffer) {
 	// Only 2 bytes — not even enough for the magic. Reader must fail
 	// without reading past end.
-	wxMemoryBuffer buf;
 	uint8_t two[2] = { 0xFF, 0xFF };
-	buf.AppendData(two, 2);
+	const ibMemoryBuffer buf(two, 2);
 
 	ibReaderMemory r(buf);
 	ibByteCode dst;
@@ -509,7 +507,7 @@ TEST(ByteCodeAOT, RejectShortBuffer) {
 }
 
 TEST(ByteCodeAOT, EmptyBufferRejected) {
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	ibReaderMemory r(buf);
 	ibByteCode dst;
 	EXPECT_FALSE(dst.DeserializeAOT(r));
@@ -560,14 +558,14 @@ TEST(ByteCodeAOT, LargeButRealisticBytecode) {
 		src.m_listCode.push_back(MakeUnit((short)(i % 60), (unsigned)i + 1));
 	for (int i = 0; i < 200; ++i)
 		src.m_listVar.push_back(
-			MakeVar(wxString::Format(wxT("v%d"), i),
+			MakeVar(ibString::Format(wxT("v%d"), i),
 			        i % 2 ? ibVarKind::Local : ibVarKind::Export, i));
 	for (int i = 0; i < 50; ++i) {
 		ibByteCode::ibByteFunction fn;
 		fn.m_lCodeLine    = 100 + i;
 		fn.m_bCodeRet     = (i % 2 == 0);
 		fn.m_kind         = ibFnKind::Export;
-		fn.m_strRealName  = wxString::Format(wxT("Fn%d"), i);
+		fn.m_strRealName  = ibString::Format(wxT("Fn%d"), i);
 		src.m_listFunc.push_back(fn);
 	}
 

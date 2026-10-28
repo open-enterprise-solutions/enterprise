@@ -38,7 +38,7 @@ class ibDatabaseConnectionHolder;   // sub-selection recipe holds it by pointer 
 // ("the biggest customer first"), are one question with two spellings of the key.
 struct ibSelectorSort {
 	const ibBackendQueryColumn* m_col   = nullptr;   // a source column…
-	wxString                    m_alias;             // …or an aggregate's alias
+	ibString                    m_alias;             // …or an aggregate's alias
 	bool                        m_ascending = true;
 };
 
@@ -81,7 +81,7 @@ public:
 	// node's child LEVEL, the columns that level materialises, AND the base FILTER (the original Where
 	// filter) — so a sub-selection shows the node's children WITH THE SAME filter. Inherited down.
 	ibSelector& WithSource(ibDatabaseConnectionHolder* holder, const ibBackendQueryable* queryable,
-		const std::vector<std::pair<const ibBackendQueryColumn*, wxString>>& selectCols,
+		const std::vector<std::pair<const ibBackendQueryColumn*, ibString>>& selectCols,
 		const std::vector<ibQueryCondition>& conditions = {})
 	{
 		m_holder = holder; m_queryable = queryable; m_selectCols = selectCols; m_conditions = conditions; return *this;
@@ -113,7 +113,7 @@ public:
 	// ⭐ WALK ONE BRANCH OF THE FORK — `SPLIT … ONTO <name>`. Said the same way OVERALL is, and for
 	// the same reason: nothing is folded differently, this only decides WHICH of what was folded
 	// this selection hands out. Empty (the default) walks every branch in order.
-	ibSelector& WalkBranch(const wxString& branch) { m_branch = branch; return *this; }
+	ibSelector& WalkBranch(const ibString& branch) { m_branch = branch; return *this; }
 
 	// EAGER fold: the whole snapshot → the node tree per the TRAVERSAL kind. Subtotals from THIS snapshot.
 	//   Direct            → flat: each row a leaf node;
@@ -263,7 +263,7 @@ public:
 		const ibValue* v = n->m_values.find_value(col->GetColumnId());
 		return v != nullptr ? *v : ibValue(ibValueTypes::TYPE_NULL);
 	}
-	ibValue GetColumn(const wxString& alias) const
+	ibValue GetColumn(const ibString& alias) const
 	{
 		const ibSelectorTree::Node* n = Current();
 		if (n == nullptr || !m_walk) return ibValue(ibValueTypes::TYPE_NULL);
@@ -300,7 +300,7 @@ public:
 		const auto it = WalkRoot().m_values.find(col->GetColumnId());
 		return it != WalkRoot().m_values.end() ? it->second : ibValue(ibValueTypes::TYPE_NULL);
 	}
-	ibValue GetTotalColumn(const wxString& alias) const
+	ibValue GetTotalColumn(const ibString& alias) const
 	{
 		EnsureWalk();
 		for (const ibQueryRamColumn& c : m_walk->Columns())
@@ -322,7 +322,7 @@ public:
 	// name. The SAME walk, narrowed to one fork: everything else about the descent is unchanged,
 	// which is why this is an argument and not a second kind of selection. Named nothing, the walk
 	// goes through every branch in order — see CollectVisits.
-	ibSelector Select(ibSelectKind kind, const wxString& branch) const;
+	ibSelector Select(ibSelectKind kind, const ibString& branch) const;
 
 	// ⭐ …OR INTO A SELECTION ALREADY IN HAND — the same descent as Select(kind), written over `into`. A
 	// report walks every heading it prints and descends into each, and every descent built a whole
@@ -560,7 +560,7 @@ private:
 	// sub-selection recipe (Select(kind) only)
 	ibDatabaseConnectionHolder* m_holder    = nullptr;
 	const ibBackendQueryable*   m_queryable = nullptr;
-	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> m_selectCols;
+	std::vector<std::pair<const ibBackendQueryColumn*, ibString>> m_selectCols;
 	std::vector<ibQueryCondition>                                 m_conditions;   // inherited filter
 	int                                                           m_baseLevel = 0;  // Level() offset
 
@@ -578,7 +578,7 @@ private:
 	// WHICH BRANCH THIS SELECTION WALKS — empty = all of them, in order, the forks walked through.
 	// It is state of the SELECTION and not of the tree: two readers may descend into one heading and
 	// take different branches of it, and the tree they share knows nothing about either.
-	wxString                                         m_branch;
+	ibString                                         m_branch;
 	mutable std::vector<const ibSelectorTree::Node*>  m_visits;  // pre-order visit order
 	mutable long                                      m_pos = -1;
 	// THE LEVEL'S OWN ORDER — empty = fold order, which is the order the rows arrived in. Not mutable
@@ -683,7 +683,7 @@ inline void ibSelector::SelectInto(ibSelector& into, ibSelectKind kind) const
 // ⚠ IT REACHES THE VIEW ROAD ONLY, and honestly so: a LAZY drill re-executes a query for a node's
 // children, and a query that has not been run has no branches to choose between yet. Branches come
 // out of a fold, so they are addressable exactly where a fold has happened.
-inline ibSelector ibSelector::Select(ibSelectKind kind, const wxString& branch) const
+inline ibSelector ibSelector::Select(ibSelectKind kind, const ibString& branch) const
 {
 	ibSelector child = Select(kind);
 	child.m_branch = branch;

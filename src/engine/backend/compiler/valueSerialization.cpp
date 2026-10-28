@@ -37,8 +37,8 @@
 // file writes into a packed node — an enumeration writes its member from the template that
 // defines it — and a value written under one spelling and read under another is a value lost.
 namespace {
-const wxChar* const kFieldClsid = kValueFieldClsid;
-const wxChar* const kFieldData  = kValueFieldData;
+const ibChar* const kFieldClsid = kValueFieldClsid;
+const ibChar* const kFieldData  = kValueFieldData;
 } // namespace
 
 //////////////////////////////////////////////////////////////////////
@@ -101,11 +101,11 @@ bool ibValue::Serialize(ibDataNode& node) const
 	if (!IsTransferable())
 		return false;
 
-	// THE TYPE AS TEXT. The node has codecs for wxString / bool / s32 / ibNumber /
+	// THE TYPE AS TEXT. The node has codecs for wxString / bool / std::int32_t / ibNumber /
 	// wxDateTime / guid / blob — and none for a 64-bit id. Text costs a few bytes
 	// in the binary provider and makes the JSON dump readable, which is half the
 	// reason the JSON provider exists.
-	node.SetValue(kFieldClsid, wxString::Format(wxT("%llu"), (unsigned long long)GetClassType()));
+	node.SetValue(kFieldClsid, ibString::Format(ibT("%llu"), (unsigned long long)GetClassType()));
 	return DoSerialize(node);
 }
 
@@ -121,7 +121,7 @@ bool ibValue::DoSerialize(ibDataNode& node) const
 	// A reference wrapper is an ALIAS — it hops to what it wraps, exactly as
 	// IsTransferable does, so the wrapper never appears in the packed form.
 	if (IsReference() && m_pRef != nullptr)
-		return m_pRef->DoSerialize(node);
+		return GetRef()->DoSerialize(node);
 
 	switch (m_typeClass) {
 	case ibValueTypes::TYPE_EMPTY:
@@ -129,7 +129,7 @@ bool ibValue::DoSerialize(ibDataNode& node) const
 		// Nothing to write: the type in the header is the whole value.
 		return true;
 	case ibValueTypes::TYPE_BOOLEAN:
-		node.SetValue(kFieldData, m_bData);
+		node.SetValue<bool>(kFieldData, m_bData);
 		return true;
 	case ibValueTypes::TYPE_NUMBER:
 		// Through the node's ibNumber codec — exact decimal, no double anywhere
@@ -156,7 +156,7 @@ bool ibValue::DoSerialize(ibDataNode& node) const
 bool ibValue::DoDeserialize(const ibDataNode& node)
 {
 	if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef != nullptr)
-		return m_pRef->DoDeserialize(node);
+		return GetRef()->DoDeserialize(node);
 
 	switch (m_typeClass) {
 	case ibValueTypes::TYPE_EMPTY:
@@ -169,7 +169,7 @@ bool ibValue::DoDeserialize(const ibDataNode& node)
 		m_fData = node.GetValue<ibNumber>(kFieldData);
 		return true;
 	case ibValueTypes::TYPE_STRING:
-		SetString(node.GetValue<wxString>(kFieldData));
+		SetString(node.GetValue<ibString>(kFieldData));
 		return true;
 	case ibValueTypes::TYPE_DATE: {
 		// Straight into the scalar where the format kept one: SetDate takes a STRING (the
@@ -188,8 +188,8 @@ bool ibValue::DoDeserialize(const ibDataNode& node)
 		// the reader: THIS value already knows it is a Date — m_typeClass says so, resolved by
 		// whoever created it from the type the node declares. Converting a stated type is an
 		// instruction; converting an unknown one is the table that never ends.
-		const ibDataValue* const stored = node.FindField(kFieldData);
-		if (stored != nullptr && stored->Kind() == ibDataKind::String) {
+		const auto stored = node.FindField(kFieldData);
+		if (stored && stored->Kind() == ibDataKind::String) {
 			ibValue text;
 			if (!text.SetDate(stored->AsString()))
 				return false;   // it says it is a date and the text is not one — that is a failure
@@ -229,7 +229,7 @@ ibClassID ibReadNodeType(const ibDataNode& node)
 	// saying so here means every caller downstream asks one question ("is this a
 	// type I have?") instead of two.
 	unsigned long long parsed = 0;
-	if (!node.GetValue<wxString>(kFieldClsid).ToULongLong(&parsed) || parsed == 0)
+	if (!node.GetValue<ibString>(kFieldClsid).ToULongLong(&parsed) || parsed == 0)
 		return g_valueUndefinedCLSID;
 	return static_cast<ibClassID>(parsed);
 }

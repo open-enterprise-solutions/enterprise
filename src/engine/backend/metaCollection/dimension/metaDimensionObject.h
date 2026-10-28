@@ -26,8 +26,8 @@ class BACKEND_API ibValueMetaObjectDimension : public ibValueMetaObjectAttribute
 	const class ibValueMetaObjectChartOfAccounts* GetChartOfAccounts() const;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	virtual void OnPropertyRefresh() override;
 	virtual bool OnDeleteMetaObject() override;
@@ -40,18 +40,18 @@ private:
 	// ⚠ DECLARED FOR EVERY DIMENSION, SHOWN WHERE IT MEANS SOMETHING. A dimension belongs to every
 	// register kind, and only an accounting register has two sides for a value to differ across — so
 	// both properties are hidden unless the owner is one. The same rule the resource's Balance follows.
-	ibPropertyCategory* m_categoryAccounting = ibPropertyObject::CreatePropertyCategory(wxT("Accounting"), _("Accounting"));
+	ibPropertyCategory* m_categoryAccounting = ibPropertyObject::CreatePropertyCategory(ibT("Accounting"), _("Accounting"));
 
 	// Default TRUE: one value per entry is what a dimension IS until somebody says the two sides differ.
 	ibPropertyBoolean* m_propertyBalance = ibPropertyObject::CreateProperty<ibPropertyBoolean>(
-		m_categoryAccounting, wxT("Balance"), _("Balance"),
+		m_categoryAccounting, ibT("Balance"), _("Balance"),
 		_("Accounting registers only: whether this dimension holds ONE value for the whole entry. Cleared, it is kept per side - a debit value and a credit value."),
 		true);
 
 	ibPropertyAccountingKind* m_propertyAccountingKind = ibPropertyObject::CreateProperty<ibPropertyAccountingKind>(
 		m_categoryAccounting, ibPropertyAccountingKind::Level::Account,
 		[this] { return GetChartOfAccounts(); },   // the chart is handed over, not looked for
-		wxT("AccountingKind"), _("Accounting kind"),
+		ibT("AccountingKind"), _("Accounting kind"),
 		_("Accounting registers only: the kind of accounting this dimension belongs to. Empty - filled for every account; named - filled only for accounts that keep that kind, and absent on the rest."));
 };
 

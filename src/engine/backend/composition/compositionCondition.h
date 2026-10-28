@@ -15,7 +15,7 @@
 
 #include "backend/backend_core.h"
 #include "backend/compiler/value.h"           // ibValue — what a row holds
-#include "backend/compositionDescription.h"   // the filter and the rules read here
+#include "core/description/compositionDescription.h"   // the filter and the rules read here
 #include "backend/composition/drivers/compositionDriver.h"   // ibCompositionAttr — what a rule draws a cell with
 
 #include <wx/string.h>
@@ -30,23 +30,24 @@ class ibQueryHierarchyScope;   // queryHierarchy.h — what «in hierarchy» adm
 //
 // One implementation, because there is one question. The RAM composer asks it per row, the walk
 // asks it per group, and a second copy of the spelling would answer one of them differently.
-BACKEND_API bool ibCompositionCompare(const ibValue& cell, const wxString& op, const ibValue& value);
+BACKEND_API bool ibCompositionCompare(const ibValue& cell, const ibString& op, const ibValue& value);
 // …AND ASKED WITH THE KIND A STORED CONDITION ACTUALLY HOLDS — see the definition.
 BACKEND_API bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind, const ibValue& value);
 
 // ⭐⭐ DOES A CONDITION HOLD FOR THE ROW IN HAND. A condition names fields; `valueOf` answers a field's value in this
 // row — either side of a comparison may be one — null where the row does not carry it. `subtreeOf` answers what
 // «in hierarchy» of a named value admits for a field (ibQueryHierarchyScope) — the caller's to answer, since it
-// knows the field's catalog and reads its tree once — null where it cannot.
+// knows the field's catalog and reads its tree once — null where it cannot. `metaData` is the configuration a
+// condition's literal is restored against (ibStoredValue) — the caller's, the one its rows are read in.
 //
 // `whenUnknown` — the answer where the condition cannot be read here: a field the row does not carry (absent, or
 // NULL — the fold's word for a column its level does not hold), a subtree nobody answered. A filter that HIDES
 // shows then (true); a rule that MARKS does not mark (false). Inside, the reading is three-valued — AND, OR and
 // NOT combine "unknown" honestly — and only the whole condition's unknown becomes the caller's answer.
-using ibCompositionValueOf = std::function<const ibValue*(const wxString& path)>;
-using ibCompositionSubtreeOf = std::function<const ibQueryHierarchyScope*(const wxString& path, const ibValue& named)>;
-BACKEND_API bool ibCompositionFilterHolds(const ibFilterDescription& filter, const ibCompositionValueOf& valueOf,
-	const ibCompositionSubtreeOf& subtreeOf, bool whenUnknown);
+using ibCompositionValueOf = std::function<const ibValue*(const ibString& path)>;
+using ibCompositionSubtreeOf = std::function<const ibQueryHierarchyScope*(const ibString& path, const ibValue& named)>;
+BACKEND_API bool ibCompositionFilterHolds(const ibFilterDescription& filter, const class ibMetaData* metaData,
+	const ibCompositionValueOf& valueOf, const ibCompositionSubtreeOf& subtreeOf, bool whenUnknown);
 
 // ⭐⭐ A RULE MADE READY — its appearance turned ONCE into what a cell is drawn with (ibCompositionAttr: its colours,
 // its font, its alignment, its Text in the language in force, its Format parsed): the ONE conversion from what a
@@ -63,8 +64,8 @@ BACKEND_API std::vector<ibCompositionRule> ibCompositionRulesOf(const ibConditio
 // ⭐ …AND WHAT THEY SAY OF ONE ROW — each rule whose condition holds on it (a condition it cannot read marks nothing)
 // said over the LINE where it names no field, else handed to `sayField` once per field it names: the caller knows
 // its own columns — the walk its schema, a list its model. True when any rule held.
-using ibCompositionSayField = std::function<void(const wxString& field, const ibCompositionAttr& attr)>;
-BACKEND_API bool ibCompositionSayRules(const std::vector<ibCompositionRule>& rules,
+using ibCompositionSayField = std::function<void(const ibString& field, const ibCompositionAttr& attr)>;
+BACKEND_API bool ibCompositionSayRules(const std::vector<ibCompositionRule>& rules, const class ibMetaData* metaData,
 	const ibCompositionValueOf& valueOf, const ibCompositionSubtreeOf& subtreeOf,
 	ibCompositionAttr& line, const ibCompositionSayField& sayField);
 

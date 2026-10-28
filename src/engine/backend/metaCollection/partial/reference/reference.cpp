@@ -208,9 +208,9 @@ ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibMetaID& id, const 
 				std::lock_guard<std::mutex> lock(own->m_mtx);
 				size = own->m_live.size();
 			}
-			ibJournalInfo(wxT("reference"), wxT("miss %s <%i> table=%s/%u"),
+			ibJournalInfo(ibT("reference"), ibT("miss %s <%i> table=%s/%u"),
 				ibGuid(objGuid).str(), static_cast<int>(id),
-				own ? wxT("yes") : wxT("no"), static_cast<unsigned>(size));
+				own ? ibT("yes") : ibT("no"), static_cast<unsigned>(size));
 		}
 		return nullptr;
 	}
@@ -224,7 +224,7 @@ ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibMetaID& id, const 
 	// flushes a line to disk on every hit — measuring the thing by making it slower than it was.
 	static const bool s_traceRefs = ibDebugTraceEnabled("OES_TRACE_REFS");
 	if (s_traceRefs)
-		ibJournalInfo(wxT("reference"), wxT("hit %s <%i>"), ibGuid(objGuid).str(), static_cast<int>(id));
+		ibJournalInfo(ibT("reference"), ibT("hit %s <%i>"), ibGuid(objGuid).str(), static_cast<int>(id));
 	return it;
 }
 
@@ -512,7 +512,7 @@ m_reference_impl(nullptr), m_foundedRef(false)
 	m_members.Bind(this, &ibValueReferenceDataObject::FillMembers);
 	// The stored key (_RRRef) is the pure object guid; the type is carried separately (metaObject / _RTRef).
 	// An unset reference is simply an empty guid — no normalization needed.
-	m_reference_impl = new ibReference(m_objGuid);
+	m_reference_impl = std::make_unique<ibReference>(m_objGuid);
 
 	// ⭐ REGISTERED HERE, not in the doors. Every reference is born through this constructor —
 	// all three Create overloads, and the value-ctor registry through them — so one line covers every
@@ -534,7 +534,7 @@ m_reference_impl(nullptr), m_foundedRef(false)
 // ⚠ THE INVARIANT THE WHOLE FUNCTION IS WRITTEN TO: `LS == 0` exactly when the two are THE SAME
 // reference. `ibValueEqual` is literally `CompareValueLS(b) == 0` (value.h), so every hash container in
 // the house — a grouping, a join, a fold's children — takes its notion of "same" from here.
-int ibValueReferenceDataObject::CompareValueLS(const ibValue& cParam) const
+int ibValueReferenceDataObject::CompareValueLS(const ibVariant& cParam) const
 {
 	// ⭐ THE VERY SAME OBJECT IS THE SAME REFERENCE — asked before anything else, because it is the
 	// commonest comparison there is: the rows of one department all hold ONE reference object (one per
@@ -614,7 +614,6 @@ int ibValueReferenceDataObject::CompareValueLS(const ibValue& cParam) const
 
 ibValueReferenceDataObject::~ibValueReferenceDataObject()
 {
-	wxDELETE(m_reference_impl);
 	ibReferenceRegistry::Forget(this);   // the last owner let go — see the note above the registry
 }
 
@@ -792,7 +791,7 @@ bool ibValueReferenceDataObject::CoerceHopType(const ibSourceHop& hop, ibValue& 
 // ⭐ AN "ANY" IS SEEN AS ITS FACADE — `CatalogRef` as every catalog's reference, `AnyRef` as every reference —
 // the way a characteristic is seen as its chart's types: a filter, a field tree, a picker offers what can be
 // CHOSEN, and nothing is ever "a CatalogRef". Read off its bits (clsid_admits), so a catalog added later is in
-// it. A field declared with one stores the same members (ibVariantDataAttribute::DoRefreshTypeDesc); this
+// it. A field declared with one stores the same members (ibVariantAttribute::DoRefreshTypeDesc); this
 // answers for a type handed in on its own.
 std::vector<ibMetaID> ibValueReferenceDataObject::ConvertToMetaIds(const std::vector<ibClassID>& clsids, const ibMetaData* metaData)
 {
@@ -842,8 +841,6 @@ ibValuePtr<ibValueRecordDataObjectRef> ibValueReferenceDataObject::GetObject() c
 	return nullptr;
 }
 
-#include "backend/objCtor.h"
-
 // ⭐⭐ A DYNAMIC VALUE'S CLSID IS CONSTRUCTIVE — kind, metaclass and metaID: `reference_to_clsid(metaID,
 // metaclass)` IS the id the registry would have handed back, by the same construction that put it there
 // (`make_clsid_dynamic`, clsid.h). So it is composed here, bit by bit, from the metaobject's metaID and the
@@ -882,7 +879,7 @@ const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
 	if (metaObject == nullptr)
 		return nullptr;   // unresolved / empty reference — no target type to describe, so the hop stops here
 	if (!m_sourceExplorer.Reset(metaObject->GetMetaData()->GetFactoryCountChanges(),
-		wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(), false, false))
+		ibT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(), false, false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 	for (const auto object : metaObject->GetGenericAttributeArrayObject())
 		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
@@ -897,16 +894,16 @@ ibString ibValueReferenceDataObject::GetString() const
 	// form the configuration declares it in. PrepareRef and the found / not-found answers below are
 	// statements about DATA, which is not what a reference stands for while one is being WRITTEN.
 	if (appData->DesignerMode()) {
-		wxString declared;
-		return m_metaObject->GenerateDataDesc(this, declared) ? std::move(declared) : wxString();
+		ibString declared;
+		return m_metaObject->GenerateDataDesc(this, declared) ? std::move(declared) : ibString();
 	}
 
 	// ⭐ …UNLESS ReadBatch ALREADY TOLD IT WHAT IT SAYS — the fields its kind is said by are in its values,
 	// and the kind says them by its own rule; the object behind it stays unread: a printed list needs
 	// names, not objects.
 	if (m_state == ibReferenceState::Presentation) {
-		wxString desc;
-		return m_metaObject->GenerateDataDesc(this, desc) ? std::move(desc) : wxString();
+		ibString desc;
+		return m_metaObject->GenerateDataDesc(this, desc) ? std::move(desc) : ibString();
 	}
 
 	// ⭐⭐ ASKING WHAT THIS REFERENCE IS *IS* THE ASKING — so the row is read here if nobody has read
@@ -919,16 +916,16 @@ ibString ibValueReferenceDataObject::GetString() const
 	const_cast<ibValueReferenceDataObject*>(this)->PrepareRef();
 
 	if (m_newObject)
-		return wxEmptyString;
+		return ibEmptyString;
 	else if (!m_foundedRef)   // deleted, or refused by access policy — the same answer on purpose
-		return wxString::Format(wxT("%s <%i:%s>"), _("Not found"), m_metaObject->GetMetaID(), m_objGuid.GetGuid().str());
+		return ibString::Format(ibT("%s <%i:%s>"), _("Not found"), m_metaObject->GetMetaID(), m_objGuid.GetGuid().str());
 
 	wxASSERT(m_metaObject);
-	wxString desc;
-	return m_metaObject->GenerateDataDesc(this, desc) ? std::move(desc) : wxString();
+	ibString desc;
+	return m_metaObject->GenerateDataDesc(this, desc) ? std::move(desc) : ibString();
 }
 
-wxString ibValueReferenceDataObject::GetClassName() const
+ibString ibValueReferenceDataObject::GetClassName() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
@@ -972,17 +969,17 @@ void ibValueReferenceDataObject::FillMembers(ibMemberTable& helper) const
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (m_metaObject->ConvertToValue(metaObject)) {
 
-		helper.AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
-		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-		helper.AppendFunc(wxT("GetObject"), wxT("GetObject()"));
-		helper.AppendFunc(wxT("GetGuid"), wxT("GetGuid()"));
+		helper.AppendFunc(ibT("IsEmpty"), ibT("IsEmpty()"));
+		helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
+		helper.AppendFunc(ibT("GetObject"), ibT("GetObject()"));
+		helper.AppendFunc(ibT("GetGuid"), ibT("GetGuid()"));
 		// ⭐ THE MOMENT COMES WITH THE REFERENCE, for the families that can HAVE one: a catalog
 		// element, a document, a chart. It arrives already assembled, so nobody writes
 		// `New PointInTime(doc.Date, doc.Ref)` by hand and gets the pair wrong. An enumeration value
 		// is not offered it at all — it has no place in the data's history to point at.
-		helper.AppendFunc(wxT("PointInTime"), wxT("PointInTime()"));
+		helper.AppendFunc(ibT("PointInTime"), ibT("PointInTime()"));
 
-		wxString objectName;
+		ibString objectName;
 
 		//fill custom attributes
 		for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
@@ -1015,8 +1012,8 @@ void ibValueReferenceDataObject::FillMembers(ibMemberTable& helper) const
 		}
 	}
 	else {
-		helper.AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
-		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+		helper.AppendFunc(ibT("IsEmpty"), ibT("IsEmpty()"));
+		helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 	}
 }
 
@@ -1139,11 +1136,11 @@ bool ibValueReferenceDataObject::DoSerialize(ibDataNode& node) const
 	// of this metaobject. The class id stays in the header for the fast path;
 	// this is what a reader consults when the fast path is not enough.
 	if (m_metaObject != nullptr)
-		node.SetValue(wxT("m"), (s32)m_metaObject->GetMetaID());
+		node.SetValue(ibT("m"), (std::int32_t)m_metaObject->GetMetaID());
 
-	node.SetValue(wxT("g"), m_reference_impl != nullptr
+	node.SetValue(ibT("g"), m_reference_impl != nullptr
 		? ibGuid(m_reference_impl->m_guid).str()
-		: wxString());
+		: ibString());
 	return true;
 }
 
@@ -1160,7 +1157,7 @@ bool ibValueReferenceDataObject::DoDeserialize(const ibDataNode& node)
 	//
 	// Absent (0) is not a mismatch: it is a value written before the metaID went
 	// into the payload, and the class id is all it ever had.
-	const ibMetaID storedMetaId = (ibMetaID)node.GetValue<s32>(wxT("m"));
+	const ibMetaID storedMetaId = (ibMetaID)node.GetValue<std::int32_t>(ibT("m"));
 	if (storedMetaId != 0 && m_metaObject != nullptr
 		&& storedMetaId != m_metaObject->GetMetaID())
 		return false;
@@ -1168,7 +1165,7 @@ bool ibValueReferenceDataObject::DoDeserialize(const ibDataNode& node)
 	// A malformed guid reads as the empty one rather than raising: the header
 	// was well formed, so this is data from a base that knew something we do
 	// not — degrade, do not fail the whole read.
-	const ibGuid restored(node.GetValue<wxString>(wxT("g")));
+	const ibGuid restored(node.GetValue<ibString>(ibT("g")));
 	m_reference_impl->m_guid = restored;
 
 	// AND THE IDENTITY THE REST OF THE CLASS READS. Writing only the impl left the object

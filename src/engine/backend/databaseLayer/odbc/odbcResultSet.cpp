@@ -8,10 +8,6 @@
 #include "backend/databaseLayer/databaseLayerException.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
-#include <wx/arrimpl.cpp> // this is a magic incantation which must be done!
-
-WX_DEFINE_OBJARRAY(ValuesArray);
-
 #define ODBC_FIELD_NAME_LEN 71
 
 // ctor
@@ -49,11 +45,7 @@ ibDatabaseResultSetODBC::ibDatabaseResultSetODBC(ibInterfaceODBC* pInterface, ib
 			return;
 		}
 
-#if wxUSE_UNICODE
-		wxString strField = ConvertFromUnicodeStream((const char*)(wxChar*)field_name);
-#else
-		wxString strField((wxChar*)field_name);
-#endif
+		ibString strField = ConvertFromUnicodeStream((const char*)(ibChar*)field_name);
 		m_FieldLookupMap[strField] = i;   // as written: the map is case-blind (StringToIntMap)
 	}
 }
@@ -64,7 +56,7 @@ ibDatabaseResultSetODBC::~ibDatabaseResultSetODBC()
 	Close();
 
 	m_FieldLookupMap.clear();
-	m_fieldValues.Clear();
+	m_fieldValues.clear();
 
 	m_RetrievedValues.clear();
 	m_NullValues.clear();
@@ -82,7 +74,8 @@ void ibDatabaseResultSetODBC::Close()
 		if (m_pStatement != nullptr)
 		{
 			//m_pStatement->Close();
-			wxDELETE(m_pStatement);
+			delete m_pStatement;
+			m_pStatement = nullptr;
 		}
 	}
 }
@@ -110,9 +103,7 @@ bool ibDatabaseResultSetODBC::Next()
 		return false;
 	}
 
-	m_fieldValues.Clear();
-	for (int i = 0; i < (int)m_FieldLookupMap.size(); i++)
-		m_fieldValues.push_back(wxVariant());
+	m_fieldValues.assign(m_FieldLookupMap.size(), ibVariant());   // every cell empty: not read yet
 
 	return true;
 }
@@ -124,11 +115,11 @@ bool ibDatabaseResultSetODBC::IsFieldNull(int nField)
 	// Some ODBC drivers (i.e. MS SQL SERVER) need the fields to be retrieved in order
 	for (int ctr = 1; ctr < nField; ctr++)
 	{
-		if (m_fieldValues[ctr - 1].IsNull())
+		if (m_fieldValues[ctr - 1].GetType() == ibValueTypes::TYPE_EMPTY)
 		{
 			if (IsBlob(ctr))
 			{
-				wxMemoryBuffer buffer;
+				ibMemoryBuffer buffer;
 				GetResultBlob(ctr, buffer);
 			}
 			else
@@ -147,7 +138,7 @@ bool ibDatabaseResultSetODBC::IsFieldNull(int nField)
 	}
 	else
 	{
-		wxMemoryBuffer buffer;
+		ibMemoryBuffer buffer;
 		void* pBlob = GetResultBlob(nField, buffer);
 		if (pBlob == nullptr)
 			m_NullValues.insert(nField);
@@ -161,7 +152,7 @@ int ibDatabaseResultSetODBC::GetFieldLength(int nField)
 	// Some ODBC drivers (i.e. MS SQL SERVER) need the fields to be retrieved in order
 	for (int ctr = 1; ctr <= nField; ctr++)
 	{
-		if (m_fieldValues[ctr - 1].IsNull())
+		if (m_fieldValues[ctr - 1].GetType() == ibValueTypes::TYPE_EMPTY)
 		{
 			if (!IsBlob(ctr))
 			{
@@ -169,17 +160,17 @@ int ibDatabaseResultSetODBC::GetFieldLength(int nField)
 			}
 			else
 			{
-				wxMemoryBuffer buffer;
+				ibMemoryBuffer buffer;
 				GetResultBlob(ctr, buffer);
 			}
 		}
 	}
 	/*
-	if (m_fieldValues[nField-1].IsNull())
+	if (m_fieldValues[nField-1].GetType() == ibValueTypes::TYPE_EMPTY)
 		RetrieveFieldData(nField);
 		*/
 
-	wxString strValue = m_fieldValues[nField - 1].GetString();
+	ibString strValue = m_fieldValues[nField - 1].GetString();
 
 	strValue = strValue.Trim();
 	unsigned int real_size = strValue.Length();
@@ -249,23 +240,18 @@ void ibDatabaseResultSetODBC::RetrieveFieldData(int nField)
 			if (sqlPtr == SQL_NULL_DATA)
 			{
 				m_NullValues.insert(nField);
-				//m_fieldValues[nField-1] = wxDefaultDateTime;
 			}
 			else
 			{
-				/*
-				wxPrintf(_T("day = %d, month = %d, year = %d, hour = %d, minute = %d, second = %d, fraction = %d\n"),
-				  ret.day, ret.month, ret.year, ret.hour, ret.minute, ret.second, ret.fraction);*/
 				// The struct's parts are the reading (fdatetime.h); fraction is in nanoseconds (ODBC), the
-				// milliseconds are its first three digits. Kept as the date's count - no wxDateTime,
-				// so no clock on the way.
-				m_fieldValues[nField - 1] = wxLongLong(ibDateTime(ret.year, ret.month, ret.day, ret.hour,
-					ret.minute, ret.second, static_cast<unsigned>(ret.fraction / 1000000u)).GetValue());
+				// milliseconds are its first three digits. Kept as a date, so no clock on the way.
+				m_fieldValues[nField - 1] = ibDateTime(ret.year, ret.month, ret.day, ret.hour,
+					ret.minute, ret.second, static_cast<unsigned>(ret.fraction / 1000000u));
 			}
 		}
 		else
 		{
-			wxString strValue;
+			ibString strValue;
 			SQLPOINTER buff[8192];
 
 			memset(buff, 0, 8192 * sizeof(SQLTCHAR));
@@ -317,7 +303,7 @@ void ibDatabaseResultSetODBC::RetrieveFieldData(int nField)
 	}
 }
 
-int ibDatabaseResultSetODBC::GetFieldLength(const wxString& strField)
+int ibDatabaseResultSetODBC::GetFieldLength(const ibString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex == -1)
@@ -328,70 +314,75 @@ int ibDatabaseResultSetODBC::GetFieldLength(const wxString& strField)
 
 int ibDatabaseResultSetODBC::GetResultInt(int nField)
 {
-	if (m_fieldValues[nField - 1].IsNull())
+	if (m_fieldValues[nField - 1].GetType() == ibValueTypes::TYPE_EMPTY)
 	{
 		if (GetFieldLength(nField) < 0)
 			return 0;
 	}
 
-	return m_fieldValues[nField - 1].GetLong();
+	return m_fieldValues[nField - 1].GetInteger();
 }
 
 ibString ibDatabaseResultSetODBC::GetResultString(int nField)
 {
-	if (m_fieldValues[nField - 1].IsNull())
+	if (m_fieldValues[nField - 1].GetType() == ibValueTypes::TYPE_EMPTY)
 	{
 		if (GetFieldLength(nField) < 0)
 			return ibString();
 	}
 
-	// A date is kept as its reading (the one field kind held as a long long here); read as text it is
-	// the reading's parts spelled the ISO way, as the text-keeping drivers hold a TIMESTAMP.
-	if (m_fieldValues[nField - 1].GetType() == wxT("longlong")) {
+	// A date read as text is its parts spelled the ISO way, as the text-keeping drivers hold a TIMESTAMP.
+	if (m_fieldValues[nField - 1].GetType() == ibValueTypes::TYPE_DATE) {
 		ibDateTimeParts p;
-		ibDateTime(m_fieldValues[nField - 1].GetLongLong().GetValue()).ToParts(p);
-		return wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second);
+		m_fieldValues[nField - 1].GetDate().ToParts(p);
+		return ibString::Format(ibT("%04d-%02u-%02u %02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second);
 	}
-	// The row is kept as wxVariants, so the text is a wxString already - it crosses once, here.
-	return ibString(m_fieldValues[nField - 1].GetString());
+	return m_fieldValues[nField - 1].GetString();
 }
 
 long long ibDatabaseResultSetODBC::GetResultLong(int nField)
 {
-	if (m_fieldValues[nField - 1].IsNull())
+	if (m_fieldValues[nField - 1].GetType() == ibValueTypes::TYPE_EMPTY)
 	{
 		if (GetFieldLength(nField) < 0)
 			return 0;
 	}
 
-	return m_fieldValues[nField - 1].GetLong();
+	long long whole = 0;
+	m_fieldValues[nField - 1].GetNumber().ToInt(whole);
+	return whole;
 }
 
 bool ibDatabaseResultSetODBC::GetResultBool(int nField)
 {
-	if (m_fieldValues[nField - 1].IsNull())
+	if (m_fieldValues[nField - 1].GetType() == ibValueTypes::TYPE_EMPTY)
 	{
 		if (GetFieldLength(nField) < 0)
 			return false;
 	}
 
-	return m_fieldValues[nField - 1].GetBool();
+	// A bit column comes as text, "1" or "0" (it is read as SQL_C_CHAR): a digit is read as a number, a word as a flag.
+	const ibVariant& cell = m_fieldValues[nField - 1];
+	ibNumber number;
+	if (cell.GetType() == ibValueTypes::TYPE_STRING && number.FromString(cell.GetString().TrimAll()))
+		return !number.IsZero();
+	return cell.GetBoolean();
 }
 
 ibDateTime ibDatabaseResultSetODBC::GetResultDate(int nField)
 {
-	if (m_fieldValues[nField - 1].IsNull())
+	if (m_fieldValues[nField - 1].GetType() == ibValueTypes::TYPE_EMPTY)
 	{
 		if (GetFieldLength(nField) <= 0)
 			return ibDateTime();
 	}
 
-	return ibDateTime(m_fieldValues[nField - 1].GetLongLong().GetValue());
+	return m_fieldValues[nField - 1].GetDate();
 }
 
 double ibDatabaseResultSetODBC::GetResultDouble(int nField)
 {
-	if (m_fieldValues[nField - 1].IsNull())
+	if (m_fieldValues[nField - 1].GetType() == ibValueTypes::TYPE_EMPTY)
 	{
 		if (GetFieldLength(nField) < 0)
 			return 0;
@@ -402,16 +393,16 @@ double ibDatabaseResultSetODBC::GetResultDouble(int nField)
 
 ibNumber ibDatabaseResultSetODBC::GetResultNumber(int nField)
 {
-	if (m_fieldValues[nField - 1].IsNull())
+	if (m_fieldValues[nField - 1].GetType() == ibValueTypes::TYPE_EMPTY)
 	{
 		if (GetFieldLength(nField) < 0)
 			return 0;
 	}
 
-	return m_fieldValues[nField - 1].GetDouble();
+	return m_fieldValues[nField - 1].GetNumber();
 }
 
-void* ibDatabaseResultSetODBC::GetResultBlob(int nField, wxMemoryBuffer& buffer)
+void* ibDatabaseResultSetODBC::GetResultBlob(int nField, ibMemoryBuffer& buffer)
 {
 	if (m_BlobMap.find(nField) == m_BlobMap.end())
 	{
@@ -446,7 +437,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 		nReturn = m_pInterface->GetSQLGetData()(m_pODBCStatement, nField, SQL_C_BINARY, &buff, iLength, &iSize);
 		if (nReturn != SQL_SUCCESS && nReturn != SQL_SUCCESS_WITH_INFO)
 		{
-			ibJournalError(wxT("db.odbc"),wxT("Error with RunQueryWithResults - 1\n"));
+			ibJournalError(ibT("db.odbc"),ibT("Error with RunQueryWithResults - 1\n"));
 			InterpretErrorCodes(nReturn, m_pODBCStatement);
 			ThrowDatabaseException();
 		}
@@ -454,7 +445,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 		// nullptr data
 		if (iSize < 0)
 		{
-			wxMemoryBuffer tempBuffer(0);
+			ibMemoryBuffer tempBuffer(0);
 			tempBuffer.SetDataLen(0);
 			tempBuffer.SetBufSize(0);
 			buffer = tempBuffer;
@@ -466,7 +457,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 
 		unsigned int dataLength = (iLength < iSize) ? iLength : iSize;
 		unsigned int bufferSize = dataLength;
-		wxMemoryBuffer tempBuffer(dataLength);
+		ibMemoryBuffer tempBuffer(dataLength);
 
 		tempBuffer.AppendData(buff, dataLength);
 
@@ -475,7 +466,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 			nReturn = m_pInterface->GetSQLGetData()(m_pODBCStatement, nField, SQL_C_BINARY, &buff, iLength, &iSize);
 			if (nReturn != SQL_SUCCESS && nReturn != SQL_SUCCESS_WITH_INFO)
 			{
-				ibJournalError(wxT("db.odbc"),wxT("Error with RunQueryWithResults - 2\n"));
+				ibJournalError(ibT("db.odbc"),ibT("Error with RunQueryWithResults - 2\n"));
 				InterpretErrorCodes(nReturn, m_pODBCStatement);
 				ThrowDatabaseException();
 			}
@@ -485,7 +476,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 			bufferSize += dataLength;
 		}
 
-		wxMemoryBuffer tempBufferExactSize(bufferSize);
+		ibMemoryBuffer tempBufferExactSize(bufferSize);
 		void* pData = tempBufferExactSize.GetWriteBuf(bufferSize);
 		memcpy(pData, tempBuffer.GetData(), bufferSize);
 		tempBufferExactSize.UngetWriteBuf(bufferSize);
@@ -493,7 +484,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 		tempBufferExactSize.SetBufSize(bufferSize);
 		buffer = tempBufferExactSize;
 
-		wxMemoryBuffer localCopy(buffer);
+		ibMemoryBuffer localCopy(buffer);
 		m_BlobMap[nField] = localCopy;
 
 		return buffer.GetData();
@@ -503,7 +494,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 		BlobMap::iterator it = m_BlobMap.find(nField);
 		if (it == m_BlobMap.end())
 		{
-			wxMemoryBuffer tempBuffer(0);
+			ibMemoryBuffer tempBuffer(0);
 			tempBuffer.SetDataLen(0);
 			tempBuffer.SetBufSize(0);
 			buffer = tempBuffer;
@@ -517,7 +508,7 @@ void* ibDatabaseResultSetODBC::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 	}
 }
 
-int ibDatabaseResultSetODBC::LookupField(const wxString& strField)
+int ibDatabaseResultSetODBC::LookupField(const ibString& strField)
 {
 	// Found, not walked — the names are kept as written and the map ignores case; see firebirdResultSet.cpp.
 	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
@@ -530,8 +521,8 @@ int ibDatabaseResultSetODBC::LookupField(const wxString& strField)
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
-			/*sqlState*/ wxEmptyString,
-			wxT("Field '") + strField + wxT("' not found in the resultset"));
+			/*sqlState*/ ibEmptyString,
+			ibT("Field '") + strField + ibT("' not found in the resultset"));
 	}
 	else
 	{
@@ -561,9 +552,11 @@ void ibDatabaseResultSetODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr
 		m_pInterface->GetSQLGetDiagRec()(SQL_HANDLE_STMT, stmth_ptr, 1, strState, &iNativeCode,
 			strBuffer, ERR_BUFFER_LEN, &iMsgLen);
 
-		SetErrorCode(ibDatabaseLayerODBC::TranslateErrorCode((int)iNativeCode, ConvertFromUnicodeStream((char*)strState)));
+		const ibString strSqlState = ConvertFromUnicodeStream((char*)strState);
+		SetErrorCode(ibDatabaseLayerODBC::TranslateErrorCode((int)iNativeCode, strSqlState),
+			ibDatabaseLayerODBC::ClassifySqlState(strSqlState, (int)iNativeCode));
 		//SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
-		SetErrorMessage(wxString((wxChar*)strBuffer));
+		SetErrorMessage(ibString((ibChar*)strBuffer));
 	}
 }
 

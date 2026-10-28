@@ -24,8 +24,8 @@
 class BACKEND_API ibSheetFormatXlsx : public ibSheetFormat {
 public:
 
-	virtual wxString GetName() const override { return _("Excel workbook"); }
-	virtual wxString GetExtension() const override { return wxT("xlsx"); }
+	virtual ibString GetName() const override { return _("Excel workbook"); }
+	virtual ibString GetExtension() const override { return ibT("xlsx"); }
 
 	// ⭐ EVERY SHEET OF THE WORKBOOK, ONE AFTER ANOTHER, with a page break between
 	// them — see ibSheetFormat for why that is the right shape for us rather than

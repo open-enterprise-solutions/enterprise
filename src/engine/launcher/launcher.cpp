@@ -1,13 +1,14 @@
 #include "launcher.h"
 #include "backend/appData.h"
-#include "core/programFolder.h"
+#include "core/launchTicket.h"
+#include "core/fileSystem.h"
+#include "core/startProcess.h"   // ibStartWebServer
 
-#include <wx/config.h>
-#include <wx/fileconf.h>
 #include <wx/filename.h>
 #include <wx/log.h>
 #include <wx/msgdlg.h>   // wxMessageBox — a start that failed is said
 #include <wx/stdpaths.h>
+#include <wx/utils.h>   // wxLaunchDefaultBrowser, wxYieldIfNeeded
 #include <wx/xml/xml.h>
 
 namespace {
@@ -34,9 +35,10 @@ wxString FindSiblingExecutable(const wxString& exeName) {
 	return flatPath;
 }
 
-wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info) {
+wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info, ibLaunchSecrets& secrets) {
 	wxString exePath = FindSiblingExecutable(exeName);
 	wxString cmd = wxT("\"") + exePath + wxT("\"");
+	secrets = ibLaunchSecrets();
 
 	if (info.m_bFileMode) {
 		if (!info.m_strFilePath.IsEmpty())
@@ -51,8 +53,8 @@ wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info) {
 			cmd += wxT(" -db ") + info.m_strDatabase;
 		if (!info.m_strUser.IsEmpty())
 			cmd += wxT(" -usr ") + info.m_strUser;
-		if (!info.m_strPassword.IsEmpty())
-			cmd += wxT(" -pwd ") + info.m_strPassword;
+		secrets.m_dbUser = info.m_strUser;
+		secrets.m_dbPassword = info.m_strPassword;
 	}
 
 	// Pass locale from appData singleton (already read from backend.conf)
@@ -281,13 +283,14 @@ void ibFrameLauncher::StartApplication(const wxString& appName) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
-	const wxString executeCmd = BuildLaunchCommand(appName, itSelection->second);
+	ibLaunchSecrets secrets;
+	const wxString executeCmd = BuildLaunchCommand(appName, itSelection->second, secrets);
 
-	// ⭐ A START THAT FAILED IS SAID, AND THE LAUNCHER STAYS. wxExecute answers 0 when nothing was started; the
+	// ⭐ A START THAT FAILED IS SAID, AND THE LAUNCHER STAYS. The spawn answers 0 when nothing was started; the
 	// launcher used to close regardless, so a missing executable looked exactly like a click that did nothing —
 	// which is how the designer "would not start" on a Mac with nothing on screen to say why.
-	if (wxExecute(executeCmd) == 0) {
-		wxMessageBox(wxString::Format(_("Could not start %s.\n\n%s"), appName, executeCmd),
+	if (ibStartProcess(executeCmd, secrets) == 0) {
+		wxMessageBox(ibString::Format(_("Could not start %s.\n\n%s"), appName, executeCmd),
 			_("Launch OES"), wxOK | wxICON_ERROR, this);
 		return;
 	}
@@ -295,15 +298,15 @@ void ibFrameLauncher::StartApplication(const wxString& appName) {
 }
 
 void ibFrameLauncher::OnSelectedDClickList(wxCommandEvent& event) {
-	StartApplication(wxT("enterprise"));
+	StartApplication(wxT("enterprise-thin"));
 }
 
 void ibFrameLauncher::OnButtonEnterprise(wxCommandEvent& event) {
-	StartApplication(wxT("enterprise"));
+	StartApplication(wxT("enterprise-thin"));
 }
 
 void ibFrameLauncher::OnButtonDesigner(wxCommandEvent& event) {
-	StartApplication(wxT("designer"));
+	StartApplication(wxT("designer-thin"));
 }
 
 void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
@@ -312,51 +315,29 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 	auto itSelection = m_listInfoBase.begin() + selection;
 	const CListInfo& info = itSelection->second;
 
-	// wenterprise-server uses `--name=value` double-dashed flags.
-	// URL prefix is derived by wes itself from --file basename (or --db),
-	// so CLI launch and designer-spawned launch produce the same URL.
-	// Port defaults to 0 (OS-picked); the actual bound port is read back
-	// from a manifest file the server writes after bind+init.
-	wxString exePath = FindSiblingExecutable(wxT("wenterprise-server"));
-	wxString cmd = wxT("\"") + exePath + wxT("\"");
-
-	if (info.m_bFileMode) {
-		if (!info.m_strFilePath.IsEmpty())
-			cmd += wxT(" --file=\"") + info.m_strFilePath + wxT("\"");
+	// THE WEB SERVER publishes a file base under its folder's name, and the browser opens its page; a login is the
+	// browser's. A base on a DBMS server is no publication of it (webserver/webServer.h).
+	if (!info.m_bFileMode) {
+		wxMessageBox(_("The web server publishes a file base, and this base is on a DBMS server."),
+			_("Launch OES"), wxOK | wxICON_ERROR, this);
+		return;
 	}
-	else {
-		if (!info.m_strServer.IsEmpty())
-			cmd += wxT(" --server=") + info.m_strServer;
-		if (!info.m_strPort.IsEmpty())
-			cmd += wxT(" --dbport=") + info.m_strPort;
-		if (!info.m_strDatabase.IsEmpty())
-			cmd += wxT(" --db=") + info.m_strDatabase;
-		if (!info.m_strUser.IsEmpty())
-			cmd += wxT(" --user=") + info.m_strUser;
-		if (!info.m_strPassword.IsEmpty())
-			cmd += wxT(" --password=") + info.m_strPassword;
-	}
-
-	// IB-side auth: reuse the launcher entry's user/password. Most
-	// embedded-Firebird configs don't need distinct DB vs IB creds.
-	if (!info.m_strUser.IsEmpty())
-		cmd += wxT(" --ibuser=") + info.m_strUser;
-	if (!info.m_strPassword.IsEmpty())
-		cmd += wxT(" --ibpwd=") + info.m_strPassword;
+	wxString cmd = wxT("\"") + FindSiblingExecutable(wxT("webserver")) + wxT("\" --file=\"") + info.m_strFilePath + wxT("\"");
 	if (appData != nullptr) {
 		wxString locale = appData->GetLocale();
 		if (!locale.IsEmpty())
 			cmd += wxT(" --locale=") + locale;
 	}
 
-	// Shared helper adds --port=0 --manifest=<tempfile>, spawns wes,
-	// polls the manifest and opens the browser at the reported URL.
-	// Any change to the spawn/handshake protocol lives in one place.
-	const long pid = ibApplicationInstance::SpawnWebServerWithManifest(cmd);
-	if (pid == 0) {
-		ibJournalError(wxT("launcher"), _("Failed to start wenterprise-server: %s"), cmd);
+	// The window keeps painting while the base opens, and the browser is launched before the launcher closes.
+	ibString url;
+	if (ibStartWebServer(cmd, url, []() { wxYieldIfNeeded(); }) == 0) {
+		wxMessageBox(ibString::Format(_("Could not start %s.\n\n%s"), wxT("webserver"), cmd),
+			_("Launch OES"), wxOK | wxICON_ERROR, this);
 		return;
 	}
+	if (!url.IsEmpty())
+		wxLaunchDefaultBrowser(url);
 	Close(true);
 }
 

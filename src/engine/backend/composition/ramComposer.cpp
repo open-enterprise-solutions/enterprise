@@ -14,7 +14,7 @@
 #include "backend/tabularModel.h"           // ibRamValueStorage — RowCount / SplitField / ResolveField
 #include "backend/composition/drivers/compositionDriver.h"   // ibCompositionDriver — a composition is printed through
 #include "backend/query/queryConstructorModel.h"            // WalkFrom — the hops of a path, a reference by its type
-#include "backend/query/queryRender.h"                      // ibQueryColumnFromPath — a dotted path becomes its hops, once
+#include "core/query/queryRender.h"                      // ibQueryColumnFromPath — a dotted path becomes its hops, once
 
 // ⚠ NAMED, NOT INHERITED — MSVC hands these over transitively and GCC / Clang do not.
 #include <algorithm>    // std::find / std::distance — the grouping paths are looked up by value
@@ -49,18 +49,18 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 	// author declared exactly as a list does.
 	const ibSettingsDescription settings = GetCurrentSettingsDesc();
 
-	struct RamFilter { ibMetaID m_col; std::vector<wxString> m_tail; wxString m_op; ibValue m_value; };
+	struct RamFilter { ibMetaID m_col; std::vector<ibString> m_tail; ibString m_op; ibValue m_value; };
 	std::vector<RamFilter> filters;
 	// WHAT THIS READ IS SCOPED TO — the engine's own, ANDed with the setting below. Never the
 	// reader's filter: that is a tree, and it comes through `settings.m_filter`.
 	for (size_t i = 0; i < ScopeCount(); ++i) {
-		wxString path, op; ibValue value;
+		ibString path, op; ibValue value;
 		if (!GetScopeAt(i, path, op, value)) continue;
-		ibMetaID col; std::vector<wxString> tail;
+		ibMetaID col; std::vector<ibString> tail;
 		if (!m_storage->SplitField(path, col, tail)) continue;
 		filters.push_back({ col, std::move(tail), op, value });
 	}
-	struct RamSort { ibMetaID m_col; std::vector<wxString> m_tail; bool m_ascending; };
+	struct RamSort { ibMetaID m_col; std::vector<ibString> m_tail; bool m_ascending; };
 	std::vector<RamSort> sorts;
 
 	// THE ORDER IN FORCE, and there is only one place it can come from. This had a SECOND road under
@@ -68,7 +68,7 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 	// imperative `Sort()` wrote went there, so a RAM table with a sort setting ignored being sorted
 	// (2026-08-24). One store now: `Sort()` writes the reader's section, which is what this reads.
 	for (const ibSortLineDescription& line : settings.m_sort.m_lines) {
-		ibMetaID col; std::vector<wxString> tail;
+		ibMetaID col; std::vector<ibString> tail;
 		if (line.m_path.IsEmpty() || !m_storage->SplitField(line.m_path, col, tail)) continue;
 		sorts.push_back({ col, std::move(tail), line.m_ascending });
 	}
@@ -78,15 +78,15 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 	// as they do in the rendered query. Each field it names is split ONCE — a switched-off line's too
 	// (AppendFilterFields) — and read once per row into a slot that stays where it is while the condition reads it.
 	const ibFilterDescription& filter = settings.m_filter;
-	std::vector<wxString> filterPaths;
+	std::vector<ibString> filterPaths;
 	for (const ibFilterNodeDescription& node : filter.m_nodes)
 		AppendFilterFields(filterPaths, node);
-	struct RamField { ibMetaID m_col = wxNOT_FOUND; std::vector<wxString> m_tail; bool m_resolved = false; };
+	struct RamField { ibMetaID m_col = wxNOT_FOUND; std::vector<ibString> m_tail; bool m_resolved = false; };
 	std::vector<RamField> filterFields(filterPaths.size());
 	for (size_t i = 0; i < filterPaths.size(); ++i)
 		filterFields[i].m_resolved = m_storage->SplitField(filterPaths[i], filterFields[i].m_col, filterFields[i].m_tail);
 	std::vector<ibValue> filterCells(filterPaths.size());
-	const ibCompositionValueOf valueOf = [&](const wxString& path) -> const ibValue* {
+	const ibCompositionValueOf valueOf = [&](const ibString& path) -> const ibValue* {
 		for (size_t i = 0; i < filterPaths.size(); ++i)
 			if (filterFields[i].m_resolved && filterPaths[i].IsSameAs(path, false))
 				return &filterCells[i];
@@ -110,7 +110,7 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 			for (size_t i = 0; i < filterFields.size(); ++i)
 				if (filterFields[i].m_resolved)
 					filterCells[i] = m_storage->ResolveField(r, filterFields[i].m_col, filterFields[i].m_tail);
-			if (!ibCompositionFilterHolds(filter, valueOf, subtreeOf, /*whenUnknown*/ true))
+			if (!ibCompositionFilterHolds(filter, m_metaData, valueOf, subtreeOf, /*whenUnknown*/ true))
 				continue;
 		}
 
@@ -153,7 +153,7 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 // storage names its columns singly), the rest are hops by TYPE through the query model's walk, one hidden hop
 // hiding the walk. A value table belongs to no configuration, so the door never walks for one. A name the
 // storage does not have is not this question. …And the leaf's TYPE comes off the same walk (SubtreeAt asks it).
-ibQueryConstructorField ibDataRamComposer::WalkPath(const std::vector<wxString>& hops) const
+ibQueryConstructorField ibDataRamComposer::WalkPath(const std::vector<ibString>& hops) const
 {
 	const ibValueModel::ibValueModelColumnCollection* columns = m_storage != nullptr ? m_storage->Columns() : nullptr;
 	if (columns == nullptr || hops.empty())
@@ -167,7 +167,7 @@ ibQueryConstructorField ibDataRamComposer::WalkPath(const std::vector<wxString>&
 	start.m_name      = head->GetColumnName();
 	start.m_type      = head->GetColumnTypeValue();
 	start.m_available = head->IsColumnAvailable();
-	return ibQueryConstructorModel(m_metaData).WalkFrom(start, std::vector<wxString>(hops.begin() + 1, hops.end()));
+	return ibQueryConstructorModel(m_metaData).WalkFrom(start, std::vector<ibString>(hops.begin() + 1, hops.end()));
 }
 
 // ---------------------------------------------------------------------------
@@ -196,8 +196,8 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 
 	// The fields to print — asked of the composition through the same accessor the DB side uses, so a
 	// reader's selected-fields table means the same thing on both.
-	std::vector<wxString> fields = m_outputs.empty()
-		? std::vector<wxString>() : SelectedFor(m_outputs.front());
+	std::vector<ibString> fields = m_outputs.empty()
+		? std::vector<ibString>() : SelectedFor(m_outputs.front());
 
 	if (fields.empty()) {
 		// Nothing chosen: every column the storage has, in its own order — but what this base does not use.
@@ -219,9 +219,9 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 	// A grouping FIELD is a field like any other: it is printed in its own column and it also opens a
 	// heading. So the grouping paths are folded into the printed set rather than kept beside it — a
 	// column a person grouped by is one they plainly want to see.
-	std::vector<wxString> groupPaths;
+	std::vector<ibString> groupPaths;
 	for (size_t i = 0; i < GroupCount(); ++i) {
-		wxString path; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
+		ibString path; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 		if (!GetGroupAt(i, path, kind) || path.IsEmpty())
 			continue;
 		groupPaths.push_back(path);
@@ -235,7 +235,7 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 	// The schema, said in the vocabulary every driver already reads.
 	ibCompositionOutputInfo info;
 	info.m_kind = ibCompositionOutputKind::Grouping;
-	for (const wxString& field : fields) {
+	for (const ibString& field : fields) {
 		// ⭐⭐ EVERY COLUMN IS AN ORDINARY ONE, the grouped ones included (Max, 2026-08-29: *"the same
 		// way they lie in the table now"*). A LIST IS A TABLE, and a table's columns are its columns:
 		// the sheet shows what the grid shows, in the order the grid shows it.
@@ -271,11 +271,11 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 	driver.OnOutputBegin(info);
 
 	// Split each field ONCE — the walk is per row, and the split is per field.
-	struct RamField { ibMetaID m_col; std::vector<wxString> m_tail; bool m_resolved; };
+	struct RamField { ibMetaID m_col; std::vector<ibString> m_tail; bool m_resolved; };
 	std::vector<RamField> resolved;
 	resolved.reserve(fields.size());
-	for (const wxString& field : fields) {
-		ibMetaID col = wxNOT_FOUND; std::vector<wxString> tail;
+	for (const ibString& field : fields) {
+		ibMetaID col = wxNOT_FOUND; std::vector<ibString> tail;
 		const bool ok = m_storage->SplitField(field, col, tail);
 		resolved.push_back({ col, std::move(tail), ok });
 	}
@@ -291,8 +291,8 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 	// out of step with the printed set again.
 	std::vector<RamField> keys;
 	keys.reserve(groupPaths.size());
-	for (const wxString& path : groupPaths) {
-		ibMetaID col = wxNOT_FOUND; std::vector<wxString> tail;
+	for (const ibString& path : groupPaths) {
+		ibMetaID col = wxNOT_FOUND; std::vector<ibString> tail;
 		const bool ok = m_storage->SplitField(path, col, tail);
 		keys.push_back({ col, std::move(tail), ok });
 	}

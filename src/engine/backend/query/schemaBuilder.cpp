@@ -134,11 +134,11 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 	case ibDdlKind::DropColumn:
 		if (!onCreatedTable && !ddl.m_columns.empty()) {
 			const ibDdlStatement undo = ibAddColumn(ddl.m_table, ddl.m_columns.front());
-			const wxString table = ddl.m_table, column = ddl.m_columns.front().m_name;
+			const ibString table = ddl.m_table, column = ddl.m_columns.front().m_name;
 			h->DdlUndoActions().push_back([undo, table, column](ibDatabaseLayer* c) {
 				ibExecuteDdl(c, undo);
-				ibLog->Warn(wxT("restructure"), wxT("compensation"), wxString::Format(
-					wxT("column %s.%s re-added EMPTY - its data died with the first commit"), table, column));
+				ibLog->Warn(ibT("restructure"), ibT("compensation"), ibString::Format(
+					ibT("column %s.%s re-added EMPTY - its data died with the first commit"), table, column));
 			});
 		}
 		break;
@@ -177,19 +177,19 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 			// a derived one is left absent on purpose and rebuilt by the differ from the movements
 			// (schemaSnapshot.cpp), because an empty totals table under live maintenance is wrong numbers.
 			const ibDdlStatement undo = ibCreateTable(ddl.m_table, ddl.m_columns);
-			const wxString table = ddl.m_table;
+			const ibString table = ddl.m_table;
 			h->DdlUndoActions().push_back([undo, table](ibDatabaseLayer* c) {
 				ibExecuteDdl(c, undo);
-				ibLog->Warn(wxT("restructure"), wxT("compensation"), wxString::Format(
-					wxT("table %s re-created EMPTY - its rows died with the first commit"), table));
+				ibLog->Warn(ibT("restructure"), ibT("compensation"), ibString::Format(
+					ibT("table %s re-created EMPTY - its rows died with the first commit"), table));
 			});
 		}
 		else if (!onCreatedTable) {
 			// A drop that did not say what it dropped — nothing to rebuild it from. Said, never swallowed.
-			const wxString table = ddl.m_table;
+			const ibString table = ddl.m_table;
 			h->DdlUndoActions().push_back([table](ibDatabaseLayer*) {
-				ibLog->Warn(wxT("restructure"), wxT("compensation"), wxString::Format(
-					wxT("cannot restore dropped table %s - the next apply may refuse against the old baseline"), table));
+				ibLog->Warn(ibT("restructure"), ibT("compensation"), ibString::Format(
+					ibT("cannot restore dropped table %s - the next apply may refuse against the old baseline"), table));
 			});
 		}
 		break;
@@ -202,10 +202,10 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
 		}
 		else if (!onCreatedTable) {
-			const wxString index = ddl.m_indexName;
+			const ibString index = ddl.m_indexName;
 			h->DdlUndoActions().push_back([index](ibDatabaseLayer*) {
-				ibLog->Warn(wxT("restructure"), wxT("compensation"), wxString::Format(
-					wxT("cannot restore dropped index %s - the next apply may refuse against the old baseline"), index));
+				ibLog->Warn(ibT("restructure"), ibT("compensation"), ibString::Format(
+					ibT("cannot restore dropped index %s - the next apply may refuse against the old baseline"), index));
 			});
 		}
 		break;
@@ -220,7 +220,7 @@ ibDatabaseLayer& ibSchemaBuilder::Connection() const
 	return *conn();
 }
 
-bool ibSchemaBuilder::RunOrDefer(const wxString& table, std::function<bool()> work)
+bool ibSchemaBuilder::RunOrDefer(const ibString& table, std::function<bool()> work)
 {
 	// The deferral asks the WIDE question — "did this save change what the table looks like" — which
 	// is DdlShapedTables, not the created list (see connectionHolder.h on why they are two sets).
@@ -232,7 +232,7 @@ bool ibSchemaBuilder::RunOrDefer(const wxString& table, std::function<bool()> wo
 	return work();                 // run now, report its success
 }
 
-bool ibSchemaBuilder::RunOrDefer(const wxString& tableA, const wxString& tableB, std::function<bool()> work)
+bool ibSchemaBuilder::RunOrDefer(const ibString& tableA, const ibString& tableB, std::function<bool()> work)
 {
 	ibDatabaseConnectionHolder* h = BarrierHolder();
 	if (BarrierActive() && h != nullptr
@@ -243,10 +243,10 @@ bool ibSchemaBuilder::RunOrDefer(const wxString& tableA, const wxString& tableB,
 	return work();
 }
 
-std::set<wxString> ibSchemaBuilder::CreatedTables() const
+std::set<ibString> ibSchemaBuilder::CreatedTables() const
 {
 	ibDatabaseConnectionHolder* h = BarrierHolder();
-	return h != nullptr ? h->DdlCreatedTables() : std::set<wxString>();
+	return h != nullptr ? h->DdlCreatedTables() : std::set<ibString>();
 }
 
 std::vector<std::function<void(ibDatabaseLayer*)>> ibSchemaBuilder::UndoActions() const

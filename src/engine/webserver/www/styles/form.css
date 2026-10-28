@@ -1,0 +1,642 @@
+/* THE FORM — its controls laid as the desktop's sizers lay them: a box is a flex row or column, an item takes its share
+   of the free space and stretches across or keeps its own size. The form is the container a narrow screen is measured
+   on: below 40rem of it, a row folds into a column, every item stretches across, and a caption stands over its field
+   instead of beside it — a form drawn for a desktop still reads on a phone. */
+
+/* The form is its view's height: its command bar on top, still, and under it the window its controls scroll in — the
+   thin client's (ibVisualHostClient). The controls fill that window while they fit, what grows sharing what is left,
+   and keep their own size and scroll when they do not. */
+oes-clientform {
+	container: form / inline-size;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+oes-clientform > .command-bar {
+	flex: 0 0 auto;
+	padding: 0.25rem 0.5rem 0.125rem;
+}
+
+oes-clientform > .content {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	box-sizing: border-box;
+	padding: 0.25rem 0.5rem 0.5rem;
+}
+
+oes-clientform > .content > * {
+	flex-shrink: 0;
+}
+
+oes-clientform[orient="horizontal"] > .content,
+oes-boxsizer[orient="horizontal"],
+oes-wrapsizer[orient="horizontal"],
+oes-staticboxsizer[orient="horizontal"],
+oes-notebookpage[orient="horizontal"] {
+	flex-direction: row;
+}
+
+oes-boxsizer,
+oes-wrapsizer,
+oes-staticboxsizer,
+oes-notebookpage {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+oes-wrapsizer {
+	flex-wrap: wrap;
+}
+
+oes-gridsizer {
+	display: grid;
+	gap: 0.25rem;
+}
+
+oes-staticboxsizer {
+	border: 1px solid var(--oes-border);
+	border-radius: 6px;
+	padding: 0.25rem 0.5rem 0.5rem;
+}
+
+oes-staticboxsizer > .legend {
+	font-weight: 600;
+	padding: 0 0.25rem 0.25rem;
+}
+
+oes-sizeritem {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+}
+
+oes-sizeritem > * {
+	flex: 1 1 auto;
+}
+
+[hidden] {
+	display: none !important;
+}
+
+oes-clientform [disabled] {
+	opacity: 0.55;
+}
+
+/* A command bar: a strip of buttons on one line, what does not fit under its » — a strip of its own, as the thin
+   client's (its toolbar art, wxAuiLunaToolBarArt): its background lighter at the top and darker at the bottom than
+   whatever it stands on, edged above and below, so it does not melt into the form. */
+.command-bar {
+	display: flex;
+	flex-wrap: nowrap;
+	overflow: hidden;
+	align-items: center;
+	gap: 2px;
+	padding: 0.125rem 0.25rem;
+	background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.5), rgb(0 0 0 / 0.05));
+	border-block: 1px solid var(--oes-border);
+}
+
+/* A button keeps its width — squeezed, its caption ran over the next one — and one past the end is hidden, a
+   component's own display notwithstanding. */
+.command-bar > * {
+	flex-shrink: 0;
+}
+
+.command-bar > [hidden] {
+	display: none !important;
+}
+
+.command-bar wa-button img,
+oes-button wa-button img,
+wa-tab img {
+	width: 16px;
+	height: 16px;
+}
+
+.command-bar .separator {
+	width: 1px;
+	align-self: stretch;
+	margin: 0.25rem 0.25rem;
+	background: var(--oes-border);
+}
+
+/* A tool's own padding, not the page button's: the thin client's bar is a strip of tools close together. */
+.command-bar wa-button::part(base) {
+	min-height: var(--oes-touch);
+	min-width: var(--oes-touch);
+	padding-inline: 0.375rem;
+}
+
+/* A field: its caption beside it, its buttons inside its frame. */
+oes-textctrl {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-width: 0;
+}
+
+oes-textctrl .caption {
+	flex: 0 0 auto;
+	/* The label column's width, given by the form's pass (src/controls/labels.js). */
+	min-width: var(--oes-caption-width, 0);
+	color: var(--oes-muted);
+}
+
+/* One width for every field, its buttons inside it: a field with Select and Clear is as wide as one with none, as the
+   desktop's (ibControlTextEditor: "button presence must not change the default size"). A stretched item still fills. */
+oes-textctrl wa-input,
+oes-textctrl wa-textarea {
+	flex: 1 1 auto;
+	width: var(--oes-field-width);
+	min-width: 6rem;
+}
+
+oes-textctrl .side-button {
+	min-width: var(--oes-touch);
+	align-self: stretch;
+	border: none;
+	background: none;
+	color: var(--oes-muted);
+	cursor: pointer;
+	font: inherit;
+}
+
+oes-textctrl .side-button:hover {
+	color: var(--oes-accent);
+}
+
+/* A caption breaks its lines where its text does, as the desktop's does. */
+oes-statictext {
+	white-space: pre-line;
+}
+
+oes-statictext.link {
+	color: var(--oes-accent);
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+oes-staticline {
+	display: block;
+	background: var(--oes-border);
+	min-height: 1px;
+	min-width: 1px;
+}
+
+oes-staticline[orient="horizontal"] {
+	height: 1px;
+}
+
+oes-staticline[orient="vertical"] {
+	width: 1px;
+}
+
+oes-htmlbox iframe {
+	width: 100%;
+	height: 100%;
+	min-height: 8rem;
+	border: 1px solid var(--oes-border);
+}
+
+oes-notebook.no-tabs wa-tab-group::part(nav) {
+	display: none;
+}
+
+/* A table: its command bar over the grid, the grid taking the rest of its height. Its height is the form's to give, not
+   its rows' (size containment): a thousand rows scroll inside it, as the thin client's do, rather than push the form. */
+oes-tablebox {
+	display: flex;
+	flex-direction: column;
+	min-height: 12rem;
+	min-width: 0;
+}
+
+oes-tablebox .grid-frame {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 8rem;
+}
+
+/* Laid in its frame, not flowing in it: what the grid holds never makes the frame taller. */
+oes-tablebox .grid {
+	position: absolute;
+	inset: 0;
+}
+
+oes-tablebox .grid-frame.paged .grid {
+	right: var(--oes-pager);
+}
+
+/* The scrollbar over the window of rows the grid holds (src/tablebox/tablebox.js, updatePager) — the grid's own measures
+   only what is held, so it is not shown; a row too wide still scrolls sideways under its own. */
+oes-tablebox .pager {
+	display: none;
+	position: absolute;
+	right: 0;
+	width: var(--oes-pager);
+	background: var(--oes-table-header-bg);
+	border-left: 1px solid var(--oes-table-border);
+	box-sizing: border-box;
+	touch-action: none;
+}
+
+oes-tablebox .grid-frame.paged .pager {
+	display: block;
+}
+
+oes-tablebox .pager .thumb {
+	position: absolute;
+	left: 2px;
+	right: 2px;
+	border-radius: 4px;
+	background: var(--oes-muted);
+	opacity: 0.55;
+	cursor: grab;
+}
+
+oes-tablebox .pager .thumb:hover,
+oes-tablebox .pager .thumb:active {
+	opacity: 0.8;
+}
+
+oes-tablebox .pager[data-thumb="top"] .thumb {
+	top: 0;
+	height: 50%;
+}
+
+oes-tablebox .pager[data-thumb="bottom"] .thumb {
+	bottom: 0;
+	height: 50%;
+}
+
+oes-tablebox .pager[data-thumb="middle"] .thumb {
+	top: 33.333%;
+	height: 33.333%;
+}
+
+oes-tablebox .tabulator .tabulator-tableholder::-webkit-scrollbar {
+	width: 0;
+	height: 10px;
+}
+
+oes-tablebox .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb {
+	border-radius: 5px;
+	background: var(--oes-border);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+	oes-tablebox .tabulator .tabulator-tableholder {
+		scrollbar-width: none;
+	}
+}
+
+oes-tablebox .tabulator {
+	font-size: inherit;
+	background: var(--oes-table-bg);
+	color: var(--oes-table-text);
+	border-color: var(--oes-table-border);
+}
+
+oes-tablebox .tabulator .tabulator-header,
+oes-tablebox .tabulator .tabulator-header .tabulator-col {
+	background: var(--oes-table-header-bg);
+	color: var(--oes-table-header-text);
+}
+
+oes-tablebox .tabulator .tabulator-row {
+	background: var(--oes-table-bg);
+	min-height: var(--oes-touch);
+}
+
+oes-tablebox .tabulator .tabulator-row.tabulator-row-even {
+	background: var(--oes-table-row-alt-bg);
+}
+
+oes-tablebox .tabulator .tabulator-row:hover {
+	background: var(--oes-table-row-hover-bg);
+}
+
+oes-tablebox .tabulator .tabulator-row.tabulator-selected,
+oes-tablebox .tabulator .tabulator-row.tabulator-selected:hover {
+	background: var(--oes-table-row-selected-bg);
+	box-shadow: inset 3px 0 0 var(--oes-table-row-selected-accent);
+}
+
+oes-tablebox .tabulator .tabulator-cell img {
+	width: 16px;
+	height: 16px;
+	vertical-align: middle;
+}
+
+/* A table whose header is switched off (its Header). */
+oes-tablebox .grid.no-header .tabulator-header {
+	display: none;
+}
+
+/* A column's header: its picture, its caption, the arrow of the server's sort; one that sorts takes a click. */
+oes-tablebox .column-header {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+oes-tablebox .column-header img {
+	width: 16px;
+	height: 16px;
+}
+
+oes-tablebox .column-header .sort-arrow {
+	font-size: 0.7em;
+	color: var(--oes-muted);
+}
+
+oes-tablebox .tabulator-col:has(.column-header.sortable) {
+	cursor: pointer;
+}
+
+/* A group drawn as one column: its columns' captions and texts one under the other, or side by side in one cell. */
+oes-tablebox .column-header.joined {
+	white-space: pre-line;
+}
+
+oes-tablebox .joined.in-cell {
+	display: flex;
+	gap: 0.5em;
+}
+
+/* A column's footer: its picture and text, where its alignment puts them. */
+oes-tablebox .column-footer {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+oes-tablebox .column-footer img {
+	width: 16px;
+	height: 16px;
+}
+
+/* A cell's editor: the text, its buttons inside the cell as a field has them. */
+oes-tablebox .cell-editor {
+	display: flex;
+	align-items: stretch;
+	width: 100%;
+	height: 100%;
+}
+
+oes-tablebox .cell-editor input {
+	flex: 1 1 auto;
+	min-width: 0;
+	padding: 0 3px;
+	border: none;
+	outline: none;
+	font: inherit;
+	color: inherit;
+	background: transparent;
+}
+
+oes-tablebox .cell-editor button {
+	flex: 0 0 auto;
+	height: auto;
+	padding: 0 0.375rem;
+	border: none;
+	border-radius: 0;
+	background: none;
+	color: var(--oes-muted);
+	font: inherit;
+	cursor: pointer;
+}
+
+oes-tablebox .cell-editor button:hover {
+	color: var(--oes-accent);
+}
+
+/* A spreadsheet: its command bar over the sheet, the sheet scrolling inside its own frame — sideways too, never the
+   page; the rows and columns frozen stay in view. The word "composing" stands over the sheet, a third of the way down,
+   and leaves the command bar free. */
+oes-gridbox {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	min-height: 12rem;
+	min-width: 0;
+}
+
+oes-gridbox .sheet-host {
+	flex: 1 1 auto;
+	min-height: 8rem;
+	contain: size;   /* its height is the form's, as a table's is */
+	overflow: auto;
+	background: var(--oes-table-bg);
+	border: 1px solid var(--oes-table-border);
+}
+
+/* It takes the keys; where they go is the current cell's frame, not a ring round the sheet. */
+oes-gridbox .sheet-host:focus {
+	outline: none;
+}
+
+oes-gridbox .compose-state {
+	position: absolute;
+	top: 33%;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	max-width: 90%;
+	padding: 0.5rem 0.75rem;
+	background: var(--oes-window-bg);
+	border: 1px solid var(--oes-border);
+	border-radius: 6px;
+	box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+}
+
+/* The figures taken, summed over the sheet's lower corner, clear of its scrollbars — as a spreadsheet program's status
+   line says them. */
+oes-gridbox .selection-summary {
+	position: absolute;
+	right: 1.25rem;
+	bottom: 1.25rem;
+	padding: 0.125rem 0.5rem;
+	font-size: 0.8rem;
+	white-space: pre;
+	color: var(--oes-text);
+	background: var(--oes-window-bg);
+	border: 1px solid var(--oes-border);
+	border-radius: 4px;
+	pointer-events: none;
+}
+
+/* A cell with no font of its own is in the desktop grid's — 9pt — and its row the font's height and 8px. A drag takes
+   cells, not the text in them (selection.js). */
+.sheet {
+	table-layout: fixed;
+	border-collapse: separate;   /* collapsed, the rows scrolled under a frozen head paint over it; see linesOf */
+	border-spacing: 0;
+	font-size: 9pt;
+	line-height: 1.25;
+	color: var(--oes-table-text);
+	background: var(--oes-table-bg);
+	user-select: none;
+}
+
+.sheet td {
+	padding: 4px 3px;
+	overflow: hidden;
+	white-space: pre;
+	vertical-align: top;
+	background-clip: padding-box;
+}
+
+/* A text runs on over the empty cell beside it, as the desktop's grid draws it — a report's title is one cell. */
+.sheet td.spills {
+	overflow: visible;
+}
+
+.sheet td.decoded {
+	cursor: pointer;
+}
+
+/* The cells taken tinted over their own fill; the current one framed. */
+.sheet td.selected {
+	background-image: linear-gradient(var(--oes-sheet-cell-selected), var(--oes-sheet-cell-selected));
+}
+
+.sheet td.current {
+	outline: 2px solid var(--oes-accent);
+	outline-offset: -2px;
+}
+
+.sheet thead {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+}
+
+/* …and covers what scrolls under it: a cell with no fill of its own — the title, the empty lines under it — would let
+   the rows beneath show through. */
+.sheet thead td {
+	background-color: var(--oes-table-bg);
+}
+
+.sheet td.frozen {
+	position: sticky;
+	z-index: 1;
+	background-color: var(--oes-table-bg);
+}
+
+.sheet td.fold {
+	padding: 0;
+	text-align: center;
+	vertical-align: middle;
+}
+
+.sheet td.fold button {
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	border: 1px solid var(--oes-border);
+	background: var(--oes-panel-bg);
+	color: var(--oes-muted);
+	font: 12px/1 var(--oes-font-ui);
+	cursor: pointer;
+}
+
+/* A sheet on paper: its frozen rows are its head, so they come again on every page; a row is not cut across two; a
+   row's print break ends its page; the fold buttons and the cells taken are the screen's. */
+@media print {
+	.sheet td.fold button {
+		visibility: hidden;
+	}
+
+	.sheet td.selected {
+		background-image: none;
+	}
+
+	.sheet td.current {
+		outline: none;
+	}
+
+	oes-gridbox .selection-summary {
+		display: none;
+	}
+
+	/* On paper the form is as long as what it holds, and so is its sheet. */
+	oes-clientform {
+		height: auto;
+	}
+
+	oes-clientform > .content {
+		overflow: visible;
+	}
+
+	oes-gridbox .sheet-host {
+		contain: none;
+	}
+
+	oes-tablebox .grid {
+		position: relative;
+		inset: auto;
+	}
+
+	oes-tablebox .pager {
+		display: none !important;
+	}
+
+	.sheet thead,
+	.sheet td.frozen {
+		position: static;
+	}
+
+	.sheet tr {
+		break-inside: avoid;
+	}
+
+	.sheet tr.page-break {
+		break-after: page;
+	}
+}
+
+/* THE FORM FOLDED — a narrow form: rows become columns, items stretch across, captions stand over their fields. */
+@container form (max-width: 40rem) {
+	oes-clientform[orient="horizontal"] > .content,
+	oes-boxsizer[orient="horizontal"],
+	oes-wrapsizer[orient="horizontal"],
+	oes-staticboxsizer[orient="horizontal"],
+	oes-notebookpage[orient="horizontal"] {
+		flex-direction: column;
+	}
+
+	oes-sizeritem {
+		align-self: stretch !important;
+		margin-left: 0 !important;
+		margin-right: 0 !important;
+	}
+
+	oes-textctrl {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.125rem;
+	}
+
+	oes-textctrl .caption {
+		min-width: 0;
+	}
+
+	oes-textctrl wa-input,
+	oes-textctrl wa-textarea {
+		width: auto;
+	}
+
+	oes-tablebox,
+	oes-gridbox {
+		min-height: 60dvh;
+	}
+}

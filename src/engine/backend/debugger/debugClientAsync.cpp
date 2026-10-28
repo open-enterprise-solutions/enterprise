@@ -14,8 +14,10 @@
 // ⚠ IT RUNS AFTER THE HOP, not before it: CallAfter defers ONE call, and the list is walked here, on
 // the delivery thread. So a listener that RemoveBridge destroyed while a reply was in flight is
 // simply not in the list — where deferring per listener would have had to capture a pointer to one.
+// …and walked under the list's lock, so one taken out on another thread goes after the walk, not under it.
 #define IB_DEBUG_FANOUT(call)                                                   \
 	do {                                                                        \
+		std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);             \
 		for (const std::unique_ptr<ibDebuggerClientBridge>& bridge : m_debugBridges) \
 			if (bridge) bridge->call;                                           \
 	} while (false)
@@ -24,6 +26,8 @@ void ibDebuggerClient::ibDebuggerClientAdapter::AddBridge(ibDebuggerClientBridge
 {
 	if (bridge == nullptr)
 		return;
+
+	std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);
 
 	// Adding the same bridge twice would deliver every event twice, which reads
 	// downstream as the runtime having stopped twice.
@@ -82,7 +86,7 @@ ibDebuggerClient::ibDebuggerClientAdapter::ibDebuggerClientAdapter()
 //
 // The point of that is ahead of it (Max, 2026-09-06): to get this off the main thread, and to have
 // it already be off it the day there is a COMPUTE SERVER. workerPool.h names that host — the
-// headless pool serves "wenterprise-server.exe and the future oes-server.exe compute server" — and
+// headless pool serves "every host but the launcher, and the future oes-server.exe compute server" — and
 // on the day a session answers with one, debug replies stop touching the main loop and NOTHING HERE
 // CHANGES. That is the whole return on a change that is behaviour-neutral now, and it is invisible
 // from the code: whoever finds this later and sees a hop that lands where it started will be right
@@ -113,10 +117,10 @@ void ibDebuggerClient::ibDebuggerClientAdapter::Defer(std::function<void()> call
 				call();
 			}
 			catch (const std::exception& err) {
-				ibJournalWarning(wxT("debugger"), wxT("a debugger's reply ended with an exception: %s"), wxString::FromUTF8(err.what()));
+				ibJournalWarning(ibT("debugger"), ibT("a debugger's reply ended with an exception: %s"), ibString::FromUTF8(err.what()));
 			}
 			catch (...) {
-				ibJournalWarning(wxT("debugger"), wxT("a debugger's reply ended with an exception"));
+				ibJournalWarning(ibT("debugger"), ibT("a debugger's reply ended with an exception"));
 			}
 		});
 }
@@ -124,6 +128,7 @@ void ibDebuggerClient::ibDebuggerClientAdapter::Defer(std::function<void()> call
 void ibDebuggerClient::ibDebuggerClientAdapter::RemoveBridge(ibDebuggerClientBridge* bridge)
 {
 	// Erasing destroys it — the list owns what it holds.
+	std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);
 	m_debugBridges.erase(
 		std::remove_if(m_debugBridges.begin(), m_debugBridges.end(),
 			[bridge](const std::unique_ptr<ibDebuggerClientBridge>& held) {
@@ -132,24 +137,24 @@ void ibDebuggerClient::ibDebuggerClientAdapter::RemoveBridge(ibDebuggerClientBri
 		m_debugBridges.end());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart(wxSocketClient* sock)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart()
 {
-	IB_DEBUG_FANOUT(OnSessionStart(sock));
+	IB_DEBUG_FANOUT(OnSessionStart());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd(wxSocketClient* sock)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd()
 {
-	IB_DEBUG_FANOUT(OnSessionEnd(sock));
+	IB_DEBUG_FANOUT(OnSessionEnd());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnEnterLoop(const ibDebugLineData& data)
 {
-	IB_DEBUG_FANOUT(OnEnterLoop(sock, data));
+	IB_DEBUG_FANOUT(OnEnterLoop(data));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnLeaveLoop(const ibDebugLineData& data)
 {
-	IB_DEBUG_FANOUT(OnLeaveLoop(sock, data));
+	IB_DEBUG_FANOUT(OnLeaveLoop(data));
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::OnAutoComplete(const ibDebugAutoCompleteData& data)
@@ -157,12 +162,12 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnAutoComplete(const ibDebugAuto
 	IB_DEBUG_FANOUT(OnAutoComplete(data));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnMessageFromServer(const ibDebugLineData& data, const wxString& message)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnMessageFromServer(const ibDebugLineData& data, const ibString& message)
 {
 	IB_DEBUG_FANOUT(OnMessageFromServer(data, message));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSetToolTip(const ibDebugExpressionData& data, const wxString& strResult)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSetToolTip(const ibDebugExpressionData& data, const ibString& strResult)
 {
 	IB_DEBUG_FANOUT(OnSetToolTip(data, strResult));
 }
@@ -172,18 +177,18 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnSetStack(const ibStackData& da
 	IB_DEBUG_FANOUT(OnSetStack(data));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnScreenshot(const wxMemoryBuffer& png, const wxString& focus)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnScreenshot(const ibMemoryBuffer& png, const ibString& focus)
 {
 	IB_DEBUG_FANOUT(OnScreenshot(png, focus));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage(const wxString& message, MessageType type)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage(const ibString& message, MessageType type)
 {
 	IB_DEBUG_FANOUT(OnEvalMessage(message, type));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult(bool ran, const wxString& answer,
-	const wxString& json, wxLongLong_t microseconds)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult(bool ran, const ibString& answer,
+	const ibString& json, long long microseconds)
 {
 	IB_DEBUG_FANOUT(OnSandboxResult(ran, answer, json, microseconds));
 }
@@ -194,8 +199,8 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnJobState(unsigned int which,
 	IB_DEBUG_FANOUT(OnJobState(which, state));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnComposed(bool answered, const wxString& refusal,
-	const wxMemoryBuffer& result)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnComposed(bool answered, const ibString& refusal,
+	const ibMemoryBuffer& result)
 {
 	IB_DEBUG_FANOUT(OnComposed(answered, refusal, result));
 }

@@ -1,0 +1,8 @@
+// fileserver.dll - its version (core/version.rc2).
+
+#include <windows.h>
+
+#define OES_FILE_DESCRIPTION "OES file server library"
+#define OES_FILE_NAME        "fileserver.dll"
+#define OES_FILE_TYPE        VFT_DLL
+#include "../core/version.rc2"

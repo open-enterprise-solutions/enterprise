@@ -69,29 +69,29 @@ void ibValueArray::Remove(unsigned int index)
 // Type-invariant contributor (Shared<>). Build() Clear()s first; ctx unused.
 void ibValueArray_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(1, wxT("Array(num : number)"));
+	helper.AppendConstructor(1, ibT("Array(num : number)"));
 
-	helper.AppendFunc(wxT("Add"), 1, wxT("Add(value : any)"));
-	helper.AppendFunc(wxT("Insert"), 2, wxT("Insert(index, value : any)"));
+	helper.AppendFunc(ibT("Add"), 1, ibT("Add(value : any)"));
+	helper.AppendFunc(ibT("Insert"), 2, ibT("Insert(index, value : any)"));
 
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
-	helper.AppendFunc(wxT("Find"), 1, wxT("Find(value : any)"));
-	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
-	helper.AppendFunc(wxT("Get"), 1, wxT("Get(index)"));
-	helper.AppendFunc(wxT("Set"), 2, wxT("Set(index, value : any)"));
-	helper.AppendFunc(wxT("Remove"), 1, wxT("Remove(index : number)"));
-	helper.AppendFunc(wxT("Contains"), 1, wxT("Contains(value : any)"));
-	helper.AppendFunc(wxT("Sort"), 1, wxT("Sort(descending : bool)"));
-	helper.AppendFunc(wxT("SortByKeys"), 2, wxT("SortByKeys(keys : Array, descending : bool)"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Find"), 1, ibT("Find(value : any)"));
+	helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
+	helper.AppendFunc(ibT("Get"), 1, ibT("Get(index)"));
+	helper.AppendFunc(ibT("Set"), 2, ibT("Set(index, value : any)"));
+	helper.AppendFunc(ibT("Remove"), 1, ibT("Remove(index : number)"));
+	helper.AppendFunc(ibT("Contains"), 1, ibT("Contains(value : any)"));
+	helper.AppendFunc(ibT("Sort"), 1, ibT("Sort(descending : bool)"));
+	helper.AppendFunc(ibT("SortByKeys"), 2, ibT("SortByKeys(keys : Array, descending : bool)"));
 
 	// Aggregations — no-arg form operates element-wise via ibValue
 	// arithmetic / comparison; optional selector lambda projects
 	// each element through λ(x) → numeric before accumulation.
 	// Empty array returns TYPE_EMPTY.
-	helper.AppendFunc(wxT("Sum"),     1, wxT("Sum(selector? : Function)"));
-	helper.AppendFunc(wxT("Min"),     1, wxT("Min(selector? : Function)"));
-	helper.AppendFunc(wxT("Max"),     1, wxT("Max(selector? : Function)"));
-	helper.AppendFunc(wxT("Average"), 1, wxT("Average(selector? : Function)"));
+	helper.AppendFunc(ibT("Sum"),     1, ibT("Sum(selector? : Function)"));
+	helper.AppendFunc(ibT("Min"),     1, ibT("Min(selector? : Function)"));
+	helper.AppendFunc(ibT("Max"),     1, ibT("Max(selector? : Function)"));
+	helper.AppendFunc(ibT("Average"), 1, ibT("Average(selector? : Function)"));
 }
 
 bool ibValueArray::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -359,7 +359,7 @@ bool ibValueArray::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//a
 
 bool ibValueArray::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(wxT("n"), (s32)m_listValue.size());
+	node.SetValue(ibT("n"), (std::int32_t)m_listValue.size());
 
 	for (const ibValue& element : m_listValue) {
 		ibDataNode& child = node.AddChild(element.GetClassType(), 0);
@@ -380,12 +380,12 @@ bool ibValueArray::DoDeserialize(const ibDataNode& node)
 	// The declared count is a CROSS-CHECK, not the loop bound: the children are
 	// what actually exist, and trusting a number over the structure is how a
 	// truncated blob turns into a silently shorter array.
-	const s32 declared = node.GetValue<s32>(wxT("n"));
+	const std::int32_t declared = node.GetValue<std::int32_t>(ibT("n"));
 
 	for (const ibDataNode& child : node.Children())
 		m_listValue.push_back(ibValue::FromNode(child));
 
-	return (s32)m_listValue.size() == declared;
+	return (std::int32_t)m_listValue.size() == declared;
 }
 
 //**********************************************************************
@@ -403,7 +403,7 @@ bool ibValueArray::DoDeserialize(const ibDataNode& node)
 // id walks a registry. Both comparators below sit on the per-row path of a join
 // or a sort — and on the per-ELEMENT path for a nested array — so this is the
 // difference between a check that disappears and one that dominates.
-const ibValueArray* ibValueArray::AsArray(const ibValue& cParam) const
+const ibValueArray* ibValueArray::AsArray(const ibVariant& cParam) const
 {
 	return dynamic_cast<const ibValueArray*>(cParam.GetRef());
 }
@@ -414,7 +414,7 @@ const ibValueArray* ibValueArray::AsArray(const ibValue& cParam) const
 // vector's own comparison, handed the element comparator to use. Writing the
 // loop by hand would restate what those already say (common prefix first, then
 // length) and give the off-by-one somewhere to hide.
-int ibValueArray::CompareValueLS(const ibValue& cParam) const
+int ibValueArray::CompareValueLS(const ibVariant& cParam) const
 {
 	const ibValueArray* rhs = AsArray(cParam);
 	if (rhs == nullptr)
@@ -446,7 +446,7 @@ size_t ibValueArray::GetValueHash() const
 // Equality asks the elements for EQUALITY, not for order-equal: the EQ family is
 // type-strict where the order family is not, and an array must not quietly
 // upgrade its elements to the looser rule.
-bool ibValueArray::CompareValueEQ(const ibValue& cParam) const
+bool ibValueArray::CompareValueEQ(const ibVariant& cParam) const
 {
 	const ibValueArray* rhs = AsArray(cParam);
 	if (rhs == nullptr)

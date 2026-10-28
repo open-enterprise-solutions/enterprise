@@ -19,7 +19,7 @@
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
 
-// ACTIVE USERS — the desktop's dialog (frontend/win/dlgs/activeUser) as it is: its sessions and its locks read from
+// ACTIVE USERS — the old desktop's dialog as it was: its sessions and its locks read from
 // the server's schema (frmserver/schema/activeUser.cpp) where it read the registry and the lock manager itself, asked
 // again every second as it read them.
 class FRMCLIENT_API ibDialogActiveUser : public wxDialog {
@@ -27,7 +27,7 @@ class FRMCLIENT_API ibDialogActiveUser : public wxDialog {
 	wxListCtrl* m_activeTable;
 	wxListCtrl* m_locksTable;
 	std::shared_ptr<wxTimer> m_activeTableScanner;
-	std::string m_sessionArray;   // the sessions shown, as they came — the desktop's hash of them
+	ibString    m_sessionArray;   // the sessions shown, as they came — the desktop's hash of them
 	size_t  m_lastLockRowCount = 0;
 public:
 
@@ -39,6 +39,19 @@ public:
 
 protected:
 	void OnIdleHandler(wxTimerEvent& event);
+	// Right-click on a row → context menu with Kick / Reload. Both are the
+	// schema's commands; the server writes them to sys_session.signal via
+	// ibSessionRegistry, and the owning process picks the directive up on
+	// its next JobCheckSignal tick.
+	void OnContextMenu(wxListEvent& event);
+	void OnKickSelected(wxCommandEvent& event);
+	void OnReloadSelected(wxCommandEvent& event);
+
+	// Locks tab: right-click → force-release. Designer-only admin path,
+	// drops the named sys_lock row regardless of owner. Use when a
+	// zombie session left a lock behind.
+	void OnLocksContextMenu(wxListEvent& event);
+	void OnForceReleaseSelected(wxCommandEvent& event);
 };
 
 #endif

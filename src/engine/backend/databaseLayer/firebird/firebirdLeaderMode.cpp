@@ -4,10 +4,7 @@
 #include "firebirdLease.h"
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 #include "firebirdLocalServer.h"
-
-#include <wx/file.h>
-#include <wx/log.h>
-#include <wx/utils.h>
+#include "core/startProcess.h"   // ibHostName
 
 #include <atomic>
 #include <chrono>
@@ -23,9 +20,9 @@ namespace {
 struct LeaderModeState {
 	std::mutex                       mu;
 	std::unique_ptr<ibFirebirdLease> lease;
-	wxString                         dbPath;
+	ibString                         dbPath;
 	ibFirebirdLeaderMode::Role       role        = ibFirebirdLeaderMode::Role::Standalone;
-	wxString                         connectUrl;
+	ibString                         connectUrl;
 	uint64_t                         lastGeneration = 0;
 
 	std::atomic<bool>                stopRequested{false};
@@ -68,7 +65,7 @@ void HeartbeatLoop(LeaderModeState* st) {
 		ibFirebirdLeaderMode::Role role;
 		ibFirebirdLease* lease;
 		uint64_t lastGeneration;
-		wxString dbPath;
+		ibString dbPath;
 		{
 			std::lock_guard<std::mutex> g(st->mu);
 			if (!st->lease) continue;
@@ -80,9 +77,9 @@ void HeartbeatLoop(LeaderModeState* st) {
 
 		if (role == ibFirebirdLeaderMode::Role::Leader) {
 			if (!lease->RefreshHeartbeat()) {
-				ibFb::LogThreadSafe(wxT("ibFirebirdLeaderMode: heartbeat refresh ")
-				                    wxT("failed; lease file may be on a ")
-				                    wxT("disconnected share"));
+				ibFb::LogThreadSafe(ibT("ibFirebirdLeaderMode: heartbeat refresh ")
+				                    ibT("failed; lease file may be on a ")
+				                    ibT("disconnected share"));
 			}
 		} else if (role == ibFirebirdLeaderMode::Role::Follower) {
 			const auto cur = lease->ReadCurrentState();
@@ -92,22 +89,22 @@ void HeartbeatLoop(LeaderModeState* st) {
 				// Leader handoff — connect URL is stale; refresh
 				// cached URL so the driver's reconnect loop picks
 				// up the new leader on next CurrentConnectUrl().
-				ibFb::LogThreadSafe(wxString::Format(
-					wxT("ibFirebirdLeaderMode: leader generation ")
-					wxT("bumped %llu -> %llu; updating to %s:%u"),
+				ibFb::LogThreadSafe(ibString::Format(
+					ibT("ibFirebirdLeaderMode: leader generation ")
+					ibT("bumped %llu -> %llu; updating to %s:%u"),
 					(unsigned long long)lastGeneration,
 					(unsigned long long)cur.generation,
 					cur.leaderHost,
 					(unsigned)cur.leaderPort));
 
-				const wxString hostForConnect =
-					(cur.leaderHost == ::wxGetHostName())
-						? wxT("localhost")
+				const ibString hostForConnect =
+					(cur.leaderHost == ibHostName())
+						? ibString(ibT("localhost"))
 						: cur.leaderHost;
-				const wxString newUrl = (cur.leaderPort > 0)
-					? wxString::Format(wxT("inet://%s:%u/%s"),
+				const ibString newUrl = (cur.leaderPort > 0)
+					? ibString::Format(ibT("inet://%s:%u/%s"),
 						hostForConnect, (unsigned)cur.leaderPort, dbPath)
-					: wxString();
+					: ibString();
 
 				std::lock_guard<std::mutex> g(st->mu);
 				st->lastGeneration = cur.generation;
@@ -123,8 +120,8 @@ void HeartbeatLoop(LeaderModeState* st) {
 			//      OS-killed, no chance to write the sentinel.
 			//      Falls back to kHeartbeatStaleMs (20 s) wait.
 			if (cur.leaderPid == 0) {
-				ibFb::LogThreadSafe(wxT("ibFirebirdLeaderMode: leader vacated ")
-				                    wxT("gracefully (pid sentinel); promoting"));
+				ibFb::LogThreadSafe(ibT("ibFirebirdLeaderMode: leader vacated ")
+				                    ibT("gracefully (pid sentinel); promoting"));
 				PromoteSelfToLeader(st);
 				continue;
 			}
@@ -133,9 +130,9 @@ void HeartbeatLoop(LeaderModeState* st) {
 			const uint64_t age = (now > cur.heartbeatUnixMs)
 				? (now - cur.heartbeatUnixMs) : 0;
 			if (age >= ibFirebirdLease::kHeartbeatStaleMs) {
-				ibFb::LogThreadSafe(wxString::Format(
-					wxT("ibFirebirdLeaderMode: leader heartbeat ")
-					wxT("stale (%llu ms old); attempting self-promote"),
+				ibFb::LogThreadSafe(ibString::Format(
+					ibT("ibFirebirdLeaderMode: leader heartbeat ")
+					ibT("stale (%llu ms old); attempting self-promote"),
 					(unsigned long long)age));
 				PromoteSelfToLeader(st);
 			}
@@ -152,7 +149,7 @@ void HeartbeatLoop(LeaderModeState* st) {
 void PromoteSelfToLeader(LeaderModeState* st) {
 	// Snapshot what we need under lock so the rest can run lock-free.
 	ibFirebirdLease* lease;
-	wxString dbPath;
+	ibString dbPath;
 	{
 		std::lock_guard<std::mutex> g(st->mu);
 		if (!st->lease) return;
@@ -166,21 +163,21 @@ void PromoteSelfToLeader(LeaderModeState* st) {
 		// Someone beat us. Re-read state and update cached URL.
 		const auto cur = lease->ReadCurrentState();
 		if (cur.valid && cur.leaderPort > 0) {
-			const wxString hostForConnect =
-				(cur.leaderHost == ::wxGetHostName())
-					? wxT("localhost")
+			const ibString hostForConnect =
+				(cur.leaderHost == ibHostName())
+					? ibString(ibT("localhost"))
 					: cur.leaderHost;
-			const wxString newUrl = wxString::Format(
-				wxT("inet://%s:%u/%s"),
+			const ibString newUrl = ibString::Format(
+				ibT("inet://%s:%u/%s"),
 				hostForConnect, (unsigned)cur.leaderPort, dbPath);
 			{
 				std::lock_guard<std::mutex> g(st->mu);
 				st->lastGeneration = cur.generation;
 				st->connectUrl     = newUrl;
 			}
-			ibFb::LogThreadSafe(wxString::Format(
-				wxT("ibFirebirdLeaderMode: another node promoted ")
-				wxT("first (generation %llu); following %s:%u"),
+			ibFb::LogThreadSafe(ibString::Format(
+				ibT("ibFirebirdLeaderMode: another node promoted ")
+				ibT("first (generation %llu); following %s:%u"),
 				(unsigned long long)cur.generation,
 				cur.leaderHost,
 				(unsigned)cur.leaderPort));
@@ -189,8 +186,8 @@ void PromoteSelfToLeader(LeaderModeState* st) {
 	}
 
 	if (acq == ibFirebirdLease::AcquireResult::IOError) {
-		ibFb::LogThreadSafe(wxT("ibFirebirdLeaderMode: I/O error during ")
-		                    wxT("self-promote; will retry on next heartbeat"));
+		ibFb::LogThreadSafe(ibT("ibFirebirdLeaderMode: I/O error during ")
+		                    ibT("self-promote; will retry on next heartbeat"));
 		return;
 	}
 
@@ -199,16 +196,16 @@ void PromoteSelfToLeader(LeaderModeState* st) {
 	// spawn run lock-free; the resulting role/URL get committed
 	// under mu at the end.
 	const int serverPort = ibFirebirdLocalServer::EnsureStarted();
-	wxString newConnectUrl;
+	ibString newConnectUrl;
 	if (serverPort == 0) {
-		ibFb::LogThreadSafe(wxT("ibFirebirdLeaderMode: self-promote succeeded ")
-		                    wxT("but local server can't start; running in ")
-		                    wxT("degraded embedded-only mode (followers ")
-		                    wxT("cannot connect)"));
-		lease->WriteSelfAsLeader(::wxGetHostName(), /*port=*/0);
+		ibFb::LogThreadSafe(ibT("ibFirebirdLeaderMode: self-promote succeeded ")
+		                    ibT("but local server can't start; running in ")
+		                    ibT("degraded embedded-only mode (followers ")
+		                    ibT("cannot connect)"));
+		lease->WriteSelfAsLeader(ibHostName(), /*port=*/0);
 		newConnectUrl = dbPath;
 	} else {
-		lease->WriteSelfAsLeader(::wxGetHostName(), (uint16_t)serverPort);
+		lease->WriteSelfAsLeader(ibHostName(), (uint16_t)serverPort);
 		newConnectUrl = ibFirebirdLocalServer::MakeConnectUrl(dbPath);
 	}
 
@@ -224,8 +221,8 @@ void PromoteSelfToLeader(LeaderModeState* st) {
 			st->lastGeneration = cur.generation;
 	}
 
-	ibFb::LogThreadSafe(wxString::Format(
-		wxT("ibFirebirdLeaderMode: self-promoted to leader at %s"),
+	ibFb::LogThreadSafe(ibString::Format(
+		ibT("ibFirebirdLeaderMode: self-promoted to leader at %s"),
 		newConnectUrl));
 }
 
@@ -236,13 +233,13 @@ void PromoteSelfToLeader(LeaderModeState* st) {
 // scenarios where the share is on a known subnet, the hostname is
 // usually resolvable. Production deployments that need a specific
 // IP can override via mesh.conf eventually.
-wxString DiscoverHostName() {
-	return ::wxGetHostName();
+ibString DiscoverHostName() {
+	return ibHostName();
 }
 
 } // namespace
 
-ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxString& dbPath) {
+ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const ibString& dbPath) {
 	auto& st = GS();
 
 	// First Init in this process — register atexit to ensure Shutdown
@@ -270,8 +267,8 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 	// shut down the existing orchestrator before opening another DB.
 	if (!st.dbPath.IsEmpty() && st.dbPath != dbPath) {
 		Status s;
-		s.errorMessage = wxString::Format(
-			wxT("Leader mode already active for %s; cannot init for %s"),
+		s.errorMessage = ibString::Format(
+			ibT("Leader mode already active for %s; cannot init for %s"),
 			st.dbPath, dbPath);
 		return s;
 	}
@@ -289,15 +286,15 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 	// every such copy would spuriously spawn firebird.exe + write the
 	// lease — surprising and slow. Path inspection is the only signal
 	// that survives the copy.
-	const bool isUncPath = dbPath.StartsWith(wxT("\\\\"))
-	                    || dbPath.StartsWith(wxT("//"));
+	const bool isUncPath = dbPath.StartsWith(ibT("\\\\"))
+	                    || dbPath.StartsWith(ibT("//"));
 	if (!isUncPath) {
 		// Debugger-only log — surfacing "I'm running standalone" in the
 		// user's Output Window adds startup noise without anything they
 		// can act on.
-		ibFb::LogThreadSafe(wxString::Format(
-			wxT("ibFirebirdLeaderMode: local path %s - running ")
-			wxT("STANDALONE (single-process embedded)"),
+		ibFb::LogThreadSafe(ibString::Format(
+			ibT("ibFirebirdLeaderMode: local path %s - running ")
+			ibT("STANDALONE (single-process embedded)"),
 			dbPath));
 		Status s;
 		s.role = Role::Standalone;
@@ -305,7 +302,7 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 		return s;
 	}
 
-	const wxString leasePath = dbPath + wxT(".lease");
+	const ibString leasePath = dbPath + ibT(".lease");
 
 	st.dbPath = dbPath;
 	st.lease  = std::make_unique<ibFirebirdLease>(dbPath);
@@ -332,19 +329,14 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 	// current workaround.
 	bool preferLeader = false;
 	{
-		wxString rest = dbPath.Mid(2);   // strip "\\" / "//"
-		const int s1 = (int)rest.Find('\\');
-		const int s2 = (int)rest.Find('/');
-		int slashIdx = -1;
-		if (s1 != wxNOT_FOUND && s2 != wxNOT_FOUND) slashIdx = std::min(s1, s2);
-		else if (s1 != wxNOT_FOUND) slashIdx = s1;
-		else if (s2 != wxNOT_FOUND) slashIdx = s2;
-		const wxString uncHost = (slashIdx >= 0) ? rest.Left(slashIdx) : rest;
-		preferLeader = uncHost.IsSameAs(::wxGetHostName(), /*caseSensitive*/ false);
-		ibFb::LogThreadSafe(wxString::Format(
-			wxT("ibFirebirdLeaderMode: dbPath host '%s' vs local '%s' - ")
-			wxT("preferLeader=%d"),
-			uncHost, ::wxGetHostName(), (int)preferLeader));
+		ibString rest = dbPath.Mid(2);   // strip "\\" / "//"
+		const size_t slash = rest.find_first_of(ibT("\\/"));
+		const ibString uncHost = slash != ibString::npos ? rest.Left(slash) : rest;
+		preferLeader = uncHost.IsSameAs(ibHostName(), /*caseSensitive*/ false);
+		ibFb::LogThreadSafe(ibString::Format(
+			ibT("ibFirebirdLeaderMode: dbPath host '%s' vs local '%s' - ")
+			ibT("preferLeader=%d"),
+			uncHost, ibHostName(), (int)preferLeader));
 	}
 	if (!preferLeader) {
 		// 150 ms head start for preferred peers. Short enough that
@@ -361,8 +353,8 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 		st.lease.reset();
 		st.dbPath.Clear();
 		Status s;
-		s.errorMessage = wxT("Cannot open lease file (I/O error). ")
-		                 wxT("Check share availability and permissions.");
+		s.errorMessage = ibT("Cannot open lease file (I/O error). ")
+		                 ibT("Check share availability and permissions.");
 		return s;
 	}
 
@@ -376,10 +368,10 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 			// firebird.exe missing or spawn failed — degrade to
 			// embedded-only. Write port=0 into lease so followers
 			// know they can't connect; surface a warning.
-			ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLeaderMode: leader role acquired ")
-			             wxT("but local server can't start (firebird.exe ")
-			             wxT("missing from _fb/?). Falling back to embedded ")
-			             wxT("attach; remote followers will fail to connect."));
+			ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLeaderMode: leader role acquired ")
+			             ibT("but local server can't start (firebird.exe ")
+			             ibT("missing from _fb/?). Falling back to embedded ")
+			             ibT("attach; remote followers will fail to connect."));
 			st.lease->WriteSelfAsLeader(DiscoverHostName(), /*port=*/0);
 			st.role = Role::Leader;
 			st.connectUrl = dbPath;  // local file path — embedded attach
@@ -416,10 +408,10 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 			st.dbPath.Clear();
 			Status s;
 			s.errorMessage = cur.valid
-				? wxT("Leader holds the lease but reports no TCP port - ")
-				  wxT("leader is in degraded embedded-only mode and cannot ")
-				  wxT("accept follower connections.")
-				: wxT("Lease file unreadable or empty after retry.");
+				? ibT("Leader holds the lease but reports no TCP port - ")
+				  ibT("leader is in degraded embedded-only mode and cannot ")
+				  ibT("accept follower connections.")
+				: ibT("Lease file unreadable or empty after retry.");
 			return s;
 		}
 		st.role            = Role::Follower;
@@ -430,12 +422,12 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 		// tries to connect to its own machine by hostname. The
 		// in-process leader path already uses `localhost`; this
 		// keeps the follower-on-same-host path symmetric.
-		const wxString hostForConnect =
-			(cur.leaderHost == ::wxGetHostName())
-				? wxT("localhost")
+		const ibString hostForConnect =
+			(cur.leaderHost == ibHostName())
+				? ibString(ibT("localhost"))
 				: cur.leaderHost;
-		st.connectUrl      = wxString::Format(
-			wxT("inet://%s:%u/%s"),
+		st.connectUrl      = ibString::Format(
+			ibT("inet://%s:%u/%s"),
 			hostForConnect,
 			(unsigned)cur.leaderPort,
 			dbPath);
@@ -445,14 +437,14 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 	st.stopRequested.store(false);
 	st.heartbeatThread = std::thread(HeartbeatLoop, &st);
 
-	const wxString roleStr =
-		(st.role == ibFirebirdLeaderMode::Role::Leader)   ? wxT("LEADER")   :
-		(st.role == ibFirebirdLeaderMode::Role::Follower) ? wxT("FOLLOWER") :
-		                                                    wxT("STANDALONE");
+	const ibString roleStr =
+		(st.role == ibFirebirdLeaderMode::Role::Leader)   ? ibT("LEADER")   :
+		(st.role == ibFirebirdLeaderMode::Role::Follower) ? ibT("FOLLOWER") :
+		                                                    ibT("STANDALONE");
 	// Debugger-only — startup banner for postmortem; not user-actionable.
-	ibFb::LogThreadSafe(wxString::Format(
-		wxT("ibFirebirdLeaderMode: role=%s connect=%s ")
-		wxT("(lease=%s, heartbeat thread started)"),
+	ibFb::LogThreadSafe(ibString::Format(
+		ibT("ibFirebirdLeaderMode: role=%s connect=%s ")
+		ibT("(lease=%s, heartbeat thread started)"),
 		roleStr, st.connectUrl, leasePath));
 
 	Status s;
@@ -513,7 +505,7 @@ ibFirebirdLeaderMode::Role ibFirebirdLeaderMode::CurrentRole() {
 	return st.role;
 }
 
-wxString ibFirebirdLeaderMode::CurrentConnectUrl() {
+ibString ibFirebirdLeaderMode::CurrentConnectUrl() {
 	auto& st = GS();
 	std::lock_guard<std::mutex> g(st.mu);
 	return st.connectUrl;

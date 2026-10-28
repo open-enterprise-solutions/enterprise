@@ -18,8 +18,9 @@ ibValueType::ibValueType(const ibClassID& clsid) :
 }
 
 #include "backend/metadataConfiguration.h"
+#include "core/stringTokenizer.h"   // ibSplit — the type names a call lists
 
-ibValueType::ibValueType(const wxString& typeName) :
+ibValueType::ibValueType(const ibString& typeName) :
 	ibValue(ibValueTypes::TYPE_VALUE, true)
 {
 	m_clsid = activeMetaData->GetIDObjectFromString(typeName);
@@ -46,10 +47,10 @@ ibString ibValueType::GetString() const
 // configuration-specific reference reads as "CatalogRef.Goods" rather than a number.
 ibString ibValueTypeDescription::GetString() const
 {
-	wxString presentation;
+	ibString presentation;
 	for (const ibClassID& clsid : m_typeDesc.GetClsidList()) {
 		if (!presentation.IsEmpty())
-			presentation << wxT(", ");
+			presentation << ibT(", ");
 		presentation << activeMetaData->GetNameObjectFromID(clsid);
 	}
 	return presentation;
@@ -304,22 +305,36 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 	m_typeDesc.m_typeData = Unqualified();
 
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
-		wxString classType = paParams[0]->GetString();
-		if (activeMetaData->IsRegisterCtor(classType)) {
-			ibValueQualifierNumber* qNumber = nullptr;
-			if (lSizeArray > 1 && paParams[1]->ConvertToValue(qNumber))
-				m_typeDesc.m_typeData.m_number = *qNumber;
-			ibValueQualifierDate* qDate = nullptr;
-			if (lSizeArray > 2 && paParams[2]->ConvertToValue(qDate))
-				m_typeDesc.m_typeData.m_date = *qDate;
-			ibValueQualifierString* qString = nullptr;
-			if (lSizeArray > 3 && paParams[3]->ConvertToValue(qString))
-				m_typeDesc.m_typeData.m_string = *qString;
-			m_typeDesc.m_listTypeClass.emplace_back(
-				activeMetaData->GetIDObjectFromString(classType)
-			);
-			return true;
+		// "Number, String" is several types, not one constructor name. A single name is the
+		// one-element case of the same list. A name that is not a type fails the whole description.
+		//
+		// A name is asked of the configuration, which answers its own and the value registry's behind
+		// them (ibMetaData::IsRegisterCtor). A process with no base has the registry alone.
+		const ibMetaData* const metaData = ibApplicationInstance::GetActiveMetaData(ibApplicationInstance::Get(/*required*/ false));
+		std::vector<ibClassID> types;
+		for (ibString name : ibSplit(paParams[0]->GetString(), ibT(','), ibT('\0'))) {
+			name.Trim(true).Trim(false);
+			if (name.IsEmpty())
+				continue;
+			if (metaData != nullptr ? !metaData->IsRegisterCtor(name) : !ibValue::IsRegisterCtor(name))
+				return false;
+			types.push_back(metaData != nullptr ? metaData->GetIDObjectFromString(name) : ibValue::GetIDObjectFromString(name));
 		}
+		if (types.empty())
+			return false;
+
+		ibValueQualifierNumber* qNumber = nullptr;
+		if (lSizeArray > 1 && paParams[1]->ConvertToValue(qNumber))
+			m_typeDesc.m_typeData.m_number = *qNumber;
+		ibValueQualifierDate* qDate = nullptr;
+		if (lSizeArray > 2 && paParams[2]->ConvertToValue(qDate))
+			m_typeDesc.m_typeData.m_date = *qDate;
+		ibValueQualifierString* qString = nullptr;
+		if (lSizeArray > 3 && paParams[3]->ConvertToValue(qString))
+			m_typeDesc.m_typeData.m_string = *qString;
+		for (const ibClassID clsid : types)
+			m_typeDesc.m_listTypeClass.push_back(clsid);
+		return true;
 	}
 
 	ibValueArray* valArray = nullptr;
@@ -428,11 +443,11 @@ enum Func {
 // ClearHelper() here. Type-invariant — ctx unused.
 void ibValueTypeDescription_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(4, wxT("typeDescription(type, qNumber, qDate, qString)"));
+	helper.AppendConstructor(4, ibT("typeDescription(type, qNumber, qDate, qString)"));
 
-	helper.AppendFunc(wxT("ContainType"), 1, wxT("containsType(type : type)"));
-	helper.AppendFunc(wxT("AdjustValue"), 1, wxT("AdjustValue(value = undefined : any"));
-	helper.AppendFunc(wxT("Types"), wxT("Types()"));
+	helper.AppendFunc(ibT("ContainType"), 1, ibT("containsType(type : type)"));
+	helper.AppendFunc(ibT("AdjustValue"), 1, ibT("AdjustValue(value = undefined : any"));
+	helper.AppendFunc(ibT("Types"), ibT("Types()"));
 }
 
 // Population lives in ibValueTypeDescription_BindNames above, run lazily by
@@ -477,9 +492,9 @@ class ibValueEnumDateFractions : public ibValueEnumeration<ibDateFractions> {
 public:
 	ibValueEnumDateFractions() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibDateFractions::ibDateFractions_Date,     wxT("Date"),     _("Date"));
-		AddEnumeration(ibDateFractions::ibDateFractions_Time,     wxT("Time"),     _("Time"));
-		AddEnumeration(ibDateFractions::ibDateFractions_DateTime, wxT("DateTime"), _("Date and time"));
+		AddEnumeration(ibDateFractions::ibDateFractions_Date,     ibT("Date"),     _("Date"));
+		AddEnumeration(ibDateFractions::ibDateFractions_Time,     ibT("Time"),     _("Time"));
+		AddEnumeration(ibDateFractions::ibDateFractions_DateTime, ibT("DateTime"), _("Date and time"));
 	}
 };
 
@@ -487,8 +502,8 @@ class ibValueEnumAllowedLength : public ibValueEnumeration<ibAllowedLength> {
 public:
 	ibValueEnumAllowedLength() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibAllowedLength::ibAllowedLength_Variable, wxT("Variable"), _("Variable"));
-		AddEnumeration(ibAllowedLength::ibAllowedLength_Fixed,    wxT("Fixed"),    _("Fixed"));
+		AddEnumeration(ibAllowedLength::ibAllowedLength_Variable, ibT("Variable"), _("Variable"));
+		AddEnumeration(ibAllowedLength::ibAllowedLength_Fixed,    ibT("Fixed"),    _("Fixed"));
 	}
 };
 

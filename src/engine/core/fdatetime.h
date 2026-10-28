@@ -4,7 +4,6 @@
 #include "core/core.h"    // CORE_API
 
 class ibString;                          // core/fstring.h - the date's text; the family meets in backend_core.h
-class WXDLLIMPEXP_FWD_BASE wxDateTime;   // the bridge at the edges, below - <wx/datetime.h> stays with its callers
 
 // ibDateTime — a date and a time of day, 8 bytes: a WALL-CLOCK READING. The engine's own date, as
 // ibNumber is its number and ibString its text: the server works with dates in it, and wxDateTime is
@@ -33,14 +32,11 @@ class WXDLLIMPEXP_FWD_BASE wxDateTime;   // the bridge at the edges, below - <wx
 // node, the AOT cache, a job's schedule, a dump - through GetValue and the explicit constructor;
 // everything else asks the date itself: its parts, its text, a shift, a span, an order.
 //
-// ⭐ THE BRIDGE TO wxDateTime, and where it stands. wx keeps an INSTANT - milliseconds of real time,
-// read through the machine's zone - and the server holds none: its jobs, sessions, locks and settings
-// keep this date. What still meets one is a WINDOW (a picker, a list that prints a time), wx's free-form
-// reader of a text no digit door knows, and a stored form written before this class. The date crosses
-// by its LOCAL PARTS and by nothing else: the reading 10:30 is the wxDateTime whose local time is 10:30,
-// on whichever machine, and back. The one place the bridge is not an identity is a local time that does not exist on the
-// machine (02:30 on the morning its clocks go forward): wx moves that instant an hour on, and a
-// reading carried across and back has moved with it. Nothing of the value's goes over it.
+// ⭐ wxDateTime IS THE WINDOWS', and the core does not know it. wx keeps an INSTANT - milliseconds of real time,
+// read through the machine's zone - and the server holds none: its jobs, sessions, locks and settings keep
+// this date. A picker or a list that prints a time crosses at the client's border, by the LOCAL PARTS
+// (frmclient/win/typeconv.h: DateTimeToWxDateTime / WxDateTimeToDateTime). An instant the engine is handed -
+// a file's time, a stored form written before this class - is read through OfInstant.
 
 // The parts of a reading, with the day's place in the week and the year.
 struct ibDateTimeParts {
@@ -145,11 +141,9 @@ public:
 	// day "now" becomes the base's clock it changes here and nowhere else.
 	static ibDateTime Now();
 
-	// The bridge (above): the reading of an instant's LOCAL parts, and the wxDateTime whose local parts
-	// are this reading's. The empty date and an invalid wxDateTime are each other's - "no date" on
-	// either side - so a NULL column, an unset bound or a cleared picker crosses both ways as itself.
-	static ibDateTime OfWxDateTime(const wxDateTime& moment);
-	wxDateTime ToWxDateTime() const;
+	// AN INSTANT'S READING on this machine's clock: milliseconds of real time since 1970-01-01 UTC, read by the
+	// machine's zone into its parts - what Now does with the clock's own instant.
+	static ibDateTime OfInstant(long long unixMilliseconds);
 
 	constexpr bool IsEmpty() const noexcept { return m_value == 0; }
 
@@ -166,6 +160,13 @@ public:
 			: (month == 4 || month == 6 || month == 9 || month == 11) ? 30u
 			: (month >= 1 && month <= 12) ? 31u : 0u;
 	}
+
+	// The calendar's names, in the language of the thread (core/localization/dictionary.h) - not the machine's:
+	// a base speaks its own. Empty outside the range. A month 1..12; a weekday 1..7, Monday first.
+	static ibString MonthName(unsigned month);
+	static ibString MonthShortName(unsigned month);
+	static ibString WeekDayName(unsigned weekDay);
+	static ibString WeekDayShortName(unsigned weekDay);
 
 	// The parts. Defined for any count: a reading before year 1 or past 9999 gets the year the calendar
 	// gives it (0, -1, 10000), so a caller printing it sees where it is.
@@ -246,18 +247,24 @@ public:
 	// (one or two digits a piece, four for the year), `yyyymmdd`, `yyyymmddhhmmss`, and ISO 8601 as the engines
 	// write a TIMESTAMP - `yyyy-mm-dd[ hh:mm[:ss[.fraction]]]`, a `T` allowed for the space - with no clock
 	// consulted, so 02:30 on the morning a machine's clocks go forward reads as 02:30, and a day the calendar
-	// does not have is refused, never guessed. A text in none of these forms goes to wx's free-form reader
-	// and comes back by its local parts (the bridge). Refused: the date is left alone. The one door for "this
+	// does not have is refused, never guessed. A text in none of these forms is read free-form,
+	// as a person writes it (FromFreeForm, fdatetimeParse.cpp). Refused: the date is left alone. The one door for "this
 	// text as a date" - a value's string, a driver's TIMESTAMP text, a script's Date("…").
 	bool FromString(const ibString& text);
 
 	// `dd.mm.yyyy hh:mm:ss` - the text a date value gives.
 	ibString ToString() const;
+	// …and the text a FORMAT asks for, as wxDateTime::Format writes it: strftime's specifiers (`%Y-%m-%d %H:%M:%S`),
+	// and `%l` for the milliseconds. A stamp the program writes for itself (a file's name, a journal's line) - the
+	// text a person's date is shown in is the value's (ToString) or the script's Format.
+	ibString Format(const ibString& format) const;
 
 private:
 	// The digit forms of FromString: read, refused (the text IS one of them and names no date), or not theirs.
 	enum class DigitForm { Read, Refused, NotAForm };
 	DigitForm FromDigits(const ibString& text) noexcept;
+	// Words and numbers in any order wx's reader guessed them in - "27 Oct 2026 10:30", "tomorrow", "noon".
+	bool FromFreeForm(const ibString& text);
 
 	static constexpr long long s_msPerDay = 86400000ll;
 

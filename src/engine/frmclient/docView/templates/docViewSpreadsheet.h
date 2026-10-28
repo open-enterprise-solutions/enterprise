@@ -3,9 +3,12 @@
 
 #include <functional>
 
+#include <wx/choice.h>
+#include <wx/weakref.h>   // the zoom choice — the toolbar's, gone with its tools
+
 #include "frmclient/docView/docView.h"
 #include "frmclient/win/editor/gridEditor/gridEditor.h"
-#include "frmclient/backend/sheetFormat/sheetFormat.h"   // which formats this document can be saved as
+#include "core/spreadsheet/sheetFormat.h"   // which formats this document can be saved as
 
 // ----------------------------------------------------------------------------
 // Edit form classes
@@ -39,9 +42,18 @@ private:
 
 	void OnMenuEvent(wxCommandEvent& event);
 
+	// The toolbar's own zoom percentage choice, and the grid's own zoom (Ctrl+wheel) keep each other
+	// in sync — #484: a preview had no visible way to change scale, so the grid's existing zoom
+	// (SetGridZoom, already wired to Ctrl+wheel) gets a toolbar face.
+	void OnZoomChoice(wxCommandEvent& event);
+	void OnGridZoomChanged(ibGridEvent& event);
+	void SyncZoomChoice();
+
 protected:
 
 	ibGridEditor* m_gridEditor;
+	// The choice it put on the toolbar — the toolbar's: destroyed with its tools when another view's are put up.
+	wxWeakRef<wxChoice> m_zoomChoice;
 
 	wxDECLARE_EVENT_TABLE();
 	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetEditView);
@@ -77,7 +89,7 @@ private:
 class FRMCLIENT_API ibSpreadsheetFileDocument : public ibSpreadsheetDocument {
 public:
 
-	ibSpreadsheetFileDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument = wxObjectDataPtr<ibBackendSpreadsheetObject>(new ibBackendSpreadsheetObject)) : ibSpreadsheetDocument(), m_spreadSheetDocument(spreadSheetDocument) { m_childDoc = false; }
+	ibSpreadsheetFileDocument(const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument = std::make_shared<ibSpreadsheetObject>()) : ibSpreadsheetDocument(), m_spreadSheetDocument(spreadSheetDocument) { m_childDoc = false; }
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 
@@ -112,7 +124,7 @@ protected:
 	virtual bool DoSaveDocument(const wxString& filename) override;
 	virtual bool DoOpenDocument(const wxString& filename) override;
 
-	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadSheetDocument;
+	std::shared_ptr<ibSpreadsheetObject> m_spreadSheetDocument;
 
 private:
 
@@ -150,7 +162,7 @@ public:
 	ibSpreadsheetGridBoxDocument();
 
 	// The one door a sheet is shown through: held here, and loaded into the editor while there is one.
-	void SetSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument);
+	void SetSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument);
 
 	// SAVE AS OF ITS OWN. Made from no template and kept in no manager's list, it asks no manager: the
 	// formats are its own answer (GetSaveFilter — the sheet format registry), and the file joins no

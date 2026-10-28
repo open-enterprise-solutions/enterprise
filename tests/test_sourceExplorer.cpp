@@ -122,7 +122,7 @@ public:
     const ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return nullptr; }
     const ibMetaData* GetSourceMetaData() const override { return nullptr; }
     ibClassID GetSourceClassType() const override { return 0; }
-    wxString GetSourceCaption() const override { return wxEmptyString; }
+    ibString GetSourceCaption() const override { return wxEmptyString; }
 };
 
 } // namespace
@@ -135,7 +135,7 @@ public:
 TEST(SourceExplorer, WalkColumnsStepsDotPath) {
     MockSource src;
     const ibBackendSourceColumn* leaf = nullptr;
-    wxString text;
+    ibString text;
 
     EXPECT_TRUE(src.WalkColumns(std::vector<ibSourceHop>{ {20}, {22} }, 0, leaf, &text));
     EXPECT_TRUE(text == wxT(".Line.Price"));

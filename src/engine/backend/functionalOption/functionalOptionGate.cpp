@@ -58,7 +58,7 @@ namespace {
 // at its next start. No timer: a rule that depends on when a minute happened to tick cannot be reproduced,
 // and a switch that is rare and deliberate is better answered by a moment everyone can name.
 struct ibFunctionalOptionValues {
-	wxString m_configMD5;
+	ibString m_configMD5;
 	std::map<ibMetaID, bool> m_values;
 	bool m_anyOff = false;
 };
@@ -91,7 +91,7 @@ bool IsRuntime()
 // The values of this configuration's options — read once and kept. Called under s_valuesLock.
 const ibFunctionalOptionValues& ValuesOf(const ibMetaData* metaData)
 {
-	const wxString configMD5 = metaData->GetConfigMD5();
+	const ibString configMD5 = metaData->GetConfigMD5();
 
 	auto found = s_values.find(metaData);
 	if (found != s_values.end() && found->second.m_configMD5 == configMD5)

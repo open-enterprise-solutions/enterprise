@@ -58,15 +58,15 @@ int ibDatabaseResultSetMetaDataFirebird::GetColumnSize(int i)
 	return -1;
 }
 
-wxString ibDatabaseResultSetMetaDataFirebird::GetColumnName(int i)
+ibString ibDatabaseResultSetMetaDataFirebird::GetColumnName(int i)
 {
 	XSQLVAR* pVar = GetVariable(i);
 	if (pVar)
 	{
-		wxString columnName = ConvertFromUnicodeStream(pVar->synonymname);
+		ibString columnName = ConvertFromUnicodeStream(pVar->synonymname);
 		return columnName;
 	}
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 int ibDatabaseResultSetMetaDataFirebird::GetColumnCount()

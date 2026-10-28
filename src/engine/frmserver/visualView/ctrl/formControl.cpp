@@ -92,11 +92,11 @@ bool ibValueForm::ibValueFormCollectionControl::GetAt(const ibValue& varKeyValue
 
 bool ibValueForm::ibValueFormCollectionControl::Property(const ibValue& varKeyValue, ibValue& cValueFound)
 {
-	const wxString& key = varKeyValue.GetString();
+	const ibString& key = varKeyValue.GetString();
 	const std::vector<ibValueControl*> list = m_formOwner->GetControlList();
 	auto it = std::find_if(list.begin(), list.end(),
 		[key](ibValueControl* control) {
-			return stringUtils::CompareString(key, control->GetControlName());
+			return stringUtils::IsSameAs(key, control->GetControlName());
 		}
 	);
 
@@ -119,13 +119,13 @@ enum
 
 void ibValueForm::ibValueFormCollectionControl::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("CreateControl"), 2, wxT("CreateControl(typeControl : type, parentElement : frame)"));
-	helper.AppendFunc(wxT("FindControl"), 1, wxT("FindControl(controlName : string)"));
-	helper.AppendProc(wxT("RemoveControl"), 1, wxT("RemoveControl(controlElement : frame)"));
-	helper.AppendFunc(wxT("Property"), 2, wxT("Property(key : string, valueFound : frame)"));
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(ibT("CreateControl"), 2, ibT("CreateControl(typeControl : type, parentElement : frame)"));
+	helper.AppendFunc(ibT("FindControl"), 1, ibT("FindControl(controlName : string)"));
+	helper.AppendProc(ibT("RemoveControl"), 1, ibT("RemoveControl(controlElement : frame)"));
+	helper.AppendFunc(ibT("Property"), 2, ibT("Property(key : string, valueFound : frame)"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
 
-	wxString controlName;
+	ibString controlName;
 
 	for (auto control : m_formOwner->GetControlList()) {
 

@@ -4,7 +4,7 @@
 #include "backend/compiler/value.h"
 #include "backend/system/systemEnum.h"
 
-#include <wx/buffer.h>
+#include "core/memory/memoryBuffer.h"
 
 #include <memory>
 #include <vector>
@@ -36,7 +36,7 @@ BACKEND_API std::unique_ptr<wxMBConv> ibCreateTextConv(ibTextEncoding encoding);
 // a mark and never handed over. False when bytes that are not empty spell nothing: what that means - a file
 // that cannot be read, an answer that is not text - is the caller's sentence. The one door for a file's
 // content and for a body that came over the wire.
-BACKEND_API bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding encoding, wxString& text);
+BACKEND_API bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding encoding, ibString& text);
 
 void ibValueTextReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
@@ -62,9 +62,9 @@ public:
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 	// The same verbs for a caller in C++ (and for the tests).
-	void Open(const wxString& fileName, ibTextEncoding encoding = ibTextEncoding_UTF8);
-	bool ReadLine(wxString& line);     // false at the end of the file
-	wxString ReadRest();
+	void Open(const ibString& fileName, ibTextEncoding encoding = ibTextEncoding_UTF8);
+	bool ReadLine(ibString& line);     // false at the end of the file
+	ibString ReadRest();
 	void Close();
 	bool IsOpen() const { return m_loaded; }
 
@@ -73,15 +73,15 @@ public:
 	// very end of the file ENDS the last line rather than opening an empty one after it: "a" + LF is ONE line
 	// here, where StrLineCount, which counts a TEXT, says two. Neither moves where ReadLine is.
 	size_t LineCount() const;
-	bool GetLine(size_t number, wxString& line) const;   // false when there is no such line
+	bool GetLine(size_t number, ibString& line) const;   // false when there is no such line
 
 private:
-	wxString LineAt(size_t index) const;
+	ibString LineAt(size_t index) const;
 
 	// The whole file is decoded once, when it is opened: a text file a script reads line by line is an
 	// exchange file, not a log of gigabytes, and one decode is what makes every encoding — a UTF-16 pair, a
 	// multi-byte sequence split across a buffer's edge — come out whole.
-	wxString m_text;
+	ibString m_text;
 	std::vector<size_t> m_lineStarts;   // where each line begins in m_text — ONE cut, for every verb
 	size_t   m_next = 0;                // the line ReadLine hands over next
 	bool     m_loaded = false;
@@ -108,15 +108,15 @@ public:
 
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
-	void Open(const wxString& fileName, ibTextEncoding encoding = ibTextEncoding_UTF8, bool append = false);
-	void Write(const wxString& text);
+	void Open(const ibString& fileName, ibTextEncoding encoding = ibTextEncoding_UTF8, bool append = false);
+	void Write(const ibString& text);
 	void Close();
 	bool IsOpen() const;
 
 private:
 	std::unique_ptr<wxFFile>  m_file;
 	std::unique_ptr<wxMBConv> m_conv;
-	wxString                  m_fileName;
+	ibString                  m_fileName;
 };
 
 #endif // !__VALUE_TEXT_FILE_H__

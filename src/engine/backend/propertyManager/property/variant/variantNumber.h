@@ -2,37 +2,26 @@
 #define __NUMBER_VARIANT_H__
 
 #include "backend/backend_core.h"
+#include "core/variant.h"
 
-class BACKEND_API ibVariantDataNumber : public wxVariantData {
-	wxString MakeString() const;
+class BACKEND_API ibVariantNumber : public ibVariant {
 public:
 
 	void SetNumber(const ibNumber& number) { m_number = number; }
 	ibNumber& GetNumber() { return m_number; }
 
-	ibVariantDataNumber(const ibNumber& number = 0.0f) : m_number(number) {}
+	ibVariantNumber(const ibNumber& number = 0.0f) : ibVariant(ibValueTypes::TYPE_VALUE), m_number(number) {}
+	ibVariantNumber(const ibVariantNumber& src) : ibVariant(ibValueTypes::TYPE_VALUE), m_number(src.m_number) {}
 
-	virtual bool Eq(wxVariantData& data) const {
-		ibVariantDataNumber* srcData = dynamic_cast<ibVariantDataNumber*>(&data);
+	virtual bool CompareValueEQ(const ibVariant& data) const override {
+		const ibVariantNumber* srcData = dynamic_cast<const ibVariantNumber*>(data.GetRef());
 		if (srcData != nullptr) {
-			return m_number == srcData->GetNumber();
+			return m_number == srcData->m_number;
 		}
 		return false;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const { return wxT("ibVariantDataNumber"); }
+	virtual ibString GetString() const override;
 
 private:
 	ibNumber m_number;

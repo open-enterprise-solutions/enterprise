@@ -27,17 +27,17 @@
 class ibMcpToolPlatformState : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("platform_state"); }
+	ibString GetName() const override { return ibT("platform_state"); }
 
 	// Asking what state the platform is in must work in every state it can be in, including this one.
 	bool RunsWhileBusy() const override { return true; }
 
-	wxString GetActivity(const ibDataNode& WXUNUSED(params)) const override
+	ibString GetActivity(const ibDataNode& /*params*/) const override
 	{
 		return ibMcpText("checking how this configuration is written");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("What decides how anything here must be written, RIGHT NOW: WHICH BASE this is "
 			"(its path, and how it is connected), the script dialect "
@@ -54,8 +54,8 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& WXUNUSED(params), ibDataNode& result,
-		wxString& WXUNUSED(refusal)) const override
+	bool Call(const ibDataNode& /*params*/, ibDataNode& result,
+		ibString& /*refusal*/) const override
 	{
 		// ⚠ NO REFUSAL PATH. With no configuration open this still answers - the build and the
 		// account are facts either way, and `configurationOpen: false` is the answer to "what

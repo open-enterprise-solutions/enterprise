@@ -33,7 +33,7 @@
 #include "backend/compiler/value.h"           // ibValue / ibNumber
 #include "backend/compiler/compileCode.h"     // ibCompileCode — the script lexer feeding the recorder
 #include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
-#include "backend/query/queryAST.h"           // ibQueryAstExpr
+#include "core/query/queryAST.h"           // ibQueryAstExpr
 
 #include "lambdaRecordFix.h"                  // ibTestRecordLambda — body -> compiled lambda -> AST
 #include "backend/query/queryLowering.h"      // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
@@ -51,13 +51,13 @@ const ibTypeDescription kNoType;
 // Minimal metadata-free column (name + model id read key). Mirrors TestCol elsewhere.
 class TestCol : public ibBackendQueryColumn {
 public:
-	TestCol(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	TestCol(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
@@ -66,18 +66,18 @@ private:
 // lambda's member paths through. (Same shape as test_queryComposer's mock queryable.)
 class TestQueryable : public ibBackendQueryable {
 public:
-	TestQueryable(const wxString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {
+	TestQueryable(const ibString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {
 		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(metaId); m_key = ibGuid(impl);
 	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 
-	wxString GetQueryTableName() const override { return m_table; }
+	ibString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()   const override { return m_metaId; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	bool     IsComputedInRam()   const override { return false; }   // physical source (dot-walk allowed; unused here)
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
@@ -86,7 +86,7 @@ public:
 		return false;
 	}
 private:
-	wxString m_table;
+	ibString m_table;
 	ibMetaID m_metaId;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<const ibBackendQueryColumn*> m_cols;
@@ -102,7 +102,7 @@ ibQueryRamTable MakeRamFixture()
 	ibQueryRamTable t;
 	t.AddColumn(REGION, wxT("region"), kNoType);
 	t.AddColumn(QTY,    wxT("qty"),    kNoType);
-	auto row = [&](const wxString& reg, long q, bool regNull) {
+	auto row = [&](const ibString& reg, long q, bool regNull) {
 		const long r = t.AppendRow();
 		// A DB NULL materialises as ibValue(TYPE_NULL) (the driver), not an unset/Undefined cell.
 		t.SetCell(r, REGION, regNull ? ibValue(ibValueTypes::TYPE_NULL) : ibValue(reg));
@@ -111,7 +111,7 @@ ibQueryRamTable MakeRamFixture()
 	row(wxT("North"), 10, false);
 	row(wxT("South"),  5, false);
 	row(wxT("East"),   7, false);
-	row(wxString(),    3, true);   // region IS NULL
+	row(ibString(),    3, true);   // region IS NULL
 	return t;
 }
 
@@ -127,9 +127,9 @@ bool MakeSqlFixture(ibDatabaseLayerSQLite& db)
 	return true;
 }
 
-int SqlCount(ibDatabaseLayerSQLite& db, const wxString& where)
+int SqlCount(ibDatabaseLayerSQLite& db, const ibString& where)
 {
-	const wxString q = wxT("SELECT COUNT(*) AS cnt FROM t WHERE ") + where;
+	const ibString q = wxT("SELECT COUNT(*) AS cnt FROM t WHERE ") + where;
 	// Pass the query as a %s ARGUMENT, not the format string (a literal '%' in a LIKE would fuse).
 	ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), q);
 	if (rs == nullptr)
@@ -141,8 +141,8 @@ int SqlCount(ibDatabaseLayerSQLite& db, const wxString& where)
 
 // Record a lambda BODY into the L4-2 query AST (as test_lambdaRecorder does): the body is compiled
 // as a real lambda and the recorder reads its instructions — no metadata, no database.
-std::shared_ptr<ibQueryAstExpr> Record(const wxString& body, const wxString& rowParam = wxT("x"),
-	const wxString& outerNames = wxEmptyString)
+std::shared_ptr<ibQueryAstExpr> Record(const ibString& body, const ibString& rowParam = wxT("x"),
+	const ibString& outerNames = wxEmptyString)
 {
 	return ibTestRecordLambda(body, rowParam, outerNames);
 }
@@ -165,12 +165,12 @@ struct LinqExecFix : ::testing::Test {
 	}
 
 	// The full L4-2 chain: lambda body text -> recorded AST -> lowered predicate (null on bail).
-	ibQueryPredicatePtr Lower(const wxString& body, const std::map<wxString, ibValue>& captured = {}) {
+	ibQueryPredicatePtr Lower(const ibString& body, const std::map<ibString, ibValue>& captured = {}) {
 		// The captured map's KEYS are the names the body reads from outside it, so they are also
 		// exactly what has to be declared around the lambda for it to compile at all. One list,
 		// used for both — a second one written by hand would drift from this the first time a test
 		// captured something new.
-		wxString outerNames;
+		ibString outerNames;
 		for (const auto& one : captured)
 			outerNames << (outerNames.IsEmpty() ? wxT("") : wxT(", ")) << one.first;
 
@@ -230,7 +230,7 @@ TEST_F(LinqExecFix, AndLogic_ParityWithSql)
 // A captured outer local -> a Param node, resolved from the captured map (the &parameter analogy).
 TEST_F(LinqExecFix, CapturedParam_ParityWithSql)
 {
-	std::map<wxString, ibValue> captured{ { wxT("minQty"), ibValue(ibNumber(6)) } };
+	std::map<ibString, ibValue> captured{ { wxT("minQty"), ibValue(ibNumber(6)) } };
 	auto p = Lower(wxT("{ return x.qty > minQty; }"), captured);
 	ASSERT_TRUE(p != nullptr) << "a captured identifier must lower via the captured map";
 	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("qty > 6")));   // 2 == 2
@@ -257,13 +257,13 @@ TEST_F(LinqExecFix, Bail_UnresolvableColumn)
 // =============================================================================
 namespace {
 
-std::shared_ptr<ibQueryAstExpr> InList(const wxString& column, const std::vector<ibValue>& values, bool negated = false)
+std::shared_ptr<ibQueryAstExpr> InList(const ibString& column, const std::vector<ibVariant>& values, bool negated = false)
 {
 	auto in = ibQueryAstExpr::Make(ibQueryAstExprKind::In);
 	in->m_negated = negated;
 	in->m_lhs = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
 	in->m_lhs->m_path = { column };
-	for (const ibValue& v : values) {
+	for (const ibVariant& v : values) {
 		auto literal = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
 		literal->m_literal = v;
 		in->m_list.push_back(literal);
@@ -286,9 +286,9 @@ int DepthOf(const ibQueryPredicatePtr& p)
 // engine's own IN — however long it is.
 TEST_F(LinqExecFix, In_AThousandValuesAreOneLeaf)
 {
-	std::vector<ibValue> values{ ibValue(wxString(wxT("North"))), ibValue(wxString(wxT("East"))) };
+	std::vector<ibVariant> values{ ibVariant(ibT("North")), ibVariant(ibT("East")) };
 	for (int i = 0; i < 1000; ++i)
-		values.push_back(ibValue(wxString::Format(wxT("Nowhere%d"), i)));
+		values.push_back(ibVariant(ibString::Format(wxT("Nowhere%d"), i)));
 
 	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), values), {});
 	ASSERT_TRUE(p != nullptr);
@@ -302,7 +302,7 @@ TEST_F(LinqExecFix, In_AThousandValuesAreOneLeaf)
 TEST_F(LinqExecFix, NotIn_ParityWithSql)
 {
 	const auto p = ibQueryLowering::LowerLambdaPredicate(&src,
-		*InList(wxT("region"), { ibValue(wxString(wxT("North"))), ibValue(wxString(wxT("East"))) }, /*negated*/ true), {});
+		*InList(wxT("region"), { ibVariant(ibT("North")), ibVariant(ibT("East")) }, /*negated*/ true), {});
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Not);
 	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region NOT IN ('North', 'East')")));   // South alone
@@ -311,7 +311,7 @@ TEST_F(LinqExecFix, NotIn_ParityWithSql)
 // One value is an equality, as it always was — nothing that rides an Equal leaf loses it to a set of one.
 TEST_F(LinqExecFix, In_ASingleValueStaysAnEquality)
 {
-	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), { ibValue(wxString(wxT("North"))) }), {});
+	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), { ibVariant(ibT("North")) }), {});
 	ASSERT_TRUE(p != nullptr);
 	ASSERT_EQ(p->m_kind, ibQueryPredicateKind::Leaf);
 	EXPECT_EQ(p->m_leaf.m_op, ibQueryFilterOp::Equal);
@@ -323,9 +323,9 @@ TEST_F(LinqExecFix, In_ASingleValueStaysAnEquality)
 // chain comes back.
 TEST_F(LinqExecFix, In_APairwiseFoldIsBalancedNotChained)
 {
-	std::vector<ibValue> values{ ibValue(wxString(wxT("North"))), ibValue(ibValueTypes::TYPE_NULL) };
+	std::vector<ibVariant> values{ ibVariant(ibT("North")), ibVariant(ibValueTypes::TYPE_NULL) };
 	for (int i = 0; i < 1000; ++i)
-		values.push_back(ibValue(wxString::Format(wxT("Nowhere%d"), i)));
+		values.push_back(ibVariant(ibString::Format(wxT("Nowhere%d"), i)));
 
 	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), values), {});
 	ASSERT_TRUE(p != nullptr);

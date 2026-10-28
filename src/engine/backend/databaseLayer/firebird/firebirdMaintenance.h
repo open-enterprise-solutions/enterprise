@@ -27,8 +27,6 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
-
 #include <functional>
 
 class ibInterfaceFirebird;
@@ -39,9 +37,9 @@ public:
 	// as a normal `isc_attach_database` — typically SYSDBA/masterkey
 	// for embedded / single-instance deployments.
 	struct ServiceConnection {
-		wxString server;     // empty = service_mgr on local host
-		wxString username;   // default SYSDBA
-		wxString password;   // default masterkey
+		ibString server;     // empty = service_mgr on local host
+		ibString username;   // default SYSDBA
+		ibString password;   // default masterkey
 	};
 
 	enum class Status {
@@ -69,7 +67,7 @@ public:
 	// driver has freed it → 0xdddddddd vtable read.
 	static Status RunSweep(
 		ibInterfaceFirebird* iface,
-		const wxString& databasePath,
+		const ibString& databasePath,
 		const ServiceConnection& conn,
 		const std::function<bool()>& cancelled = {});
 
@@ -106,12 +104,12 @@ public:
 	// a maintenance window.
 	static Status RunBackupRestoreCycle(
 		ibInterfaceFirebird* iface,
-		const wxString& databasePath,
+		const ibString& databasePath,
 		const ServiceConnection& conn,
 		const std::function<bool()>& cancelled = {});
 
 	// Human-readable error string for a status.
-	static wxString StatusToString(Status s);
+	static ibString StatusToString(Status s);
 };
 
 #endif // __FIREBIRD_MAINTENANCE_H__

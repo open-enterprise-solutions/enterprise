@@ -4,10 +4,31 @@
 #include "protocol/protocol.h"
 #include "frmclient/win/picture.h"
 #include "frmclient/visualView/ctrl/frame.h"   // wxDefaultStypeFGColour — the desktop's dialog took it from there
+#include "frmclient/backend/appData.h"        // DesignerMode — whose the context menus are
+
+#include <wx/menu.h>
+
+namespace {
+
+// One of the schema's commands, with its one argument. False — refused, and the person told why.
+bool ActiveUserCommand(ibProtocol::ibSchema::ibCommand command, const char* name, const wxString& value)
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr)
+		return false;
+
+	ibProtocolNode params, answer;
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::ActiveUser));
+	params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(command));
+	params.Child(ibProtocol::ibSchema::Args).SetValue(name, value);
+	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
+}
+
+}
 
 void ibDialogActiveUser::RefreshActiveUserTable(const ibProtocolNode& shown)
 {
-	const ibProtocolNode arr = shown.FindChild(ibProtocolName::Sessions);
+	const ibProtocolNode arr = shown.FindChild(ibProtocol::ibSchema::ibActiveUser::Sessions);
 
 	if (m_sessionArray != arr.Write()) {
 
@@ -28,24 +49,26 @@ void ibDialogActiveUser::RefreshActiveUserTable(const ibProtocolNode& shown)
 		m_activeTable->AppendColumn(_("Started"), wxLIST_FORMAT_LEFT, 120);
 		m_activeTable->AppendColumn(_("Computer"), wxLIST_FORMAT_LEFT, 145);
 		m_activeTable->AppendColumn(_("Session"), wxLIST_FORMAT_LEFT, 0); //hide
+		m_activeTable->AppendColumn(_("State"), wxLIST_FORMAT_LEFT, 160);
 
 		m_activeTable->AssignImageList(imageList, wxIMAGE_LIST_SMALL);
 
 		const int imageUser =
-			imageList->Add(ibProtocolPicture(shown.GetString(ibProtocolName::Picture)));
+			imageList->Add(ibProtocolPicture(shown, ibProtocol::ibSchema::ibActiveUser::Picture));
 
 		for (const ibProtocolNode& row : arr.Children()) {
 
-			const long index = m_activeTable->InsertItem(m_activeTable->GetItemCount(), row.GetString(ibProtocolName::User));
+			const long index = m_activeTable->InsertItem(m_activeTable->GetItemCount(), row.GetString(ibProtocol::ibSchema::ibActiveUser::User));
 
-			m_activeTable->SetItem(index, 0, row.GetString(ibProtocolName::User), imageUser);
-			m_activeTable->SetItem(index, 1, row.GetString(ibProtocolName::Application));
-			m_activeTable->SetItem(index, 2, row.GetString(ibProtocolName::Type));
-			m_activeTable->SetItem(index, 3, row.GetString(ibProtocolName::Started));
-			m_activeTable->SetItem(index, 4, row.GetString(ibProtocolName::Computer));
-			m_activeTable->SetItem(index, 5, row.GetString(ibProtocolName::Session));
+			m_activeTable->SetItem(index, 0, row.GetString(ibProtocol::ibSchema::ibActiveUser::User), imageUser);
+			m_activeTable->SetItem(index, 1, row.GetString(ibProtocol::ibSchema::ibActiveUser::Application));
+			m_activeTable->SetItem(index, 2, row.GetString(ibProtocol::ibSchema::ibActiveUser::Type));
+			m_activeTable->SetItem(index, 3, row.GetString(ibProtocol::ibSchema::ibActiveUser::Started));
+			m_activeTable->SetItem(index, 4, row.GetString(ibProtocol::ibSchema::ibActiveUser::Computer));
+			m_activeTable->SetItem(index, 5, row.GetString(ibProtocol::ibSchema::ibActiveUser::Session));
+			m_activeTable->SetItem(index, 6, row.GetString(ibProtocol::ibSchema::ibActiveUser::Activity));
 
-			if (current_session == row.GetString(ibProtocolName::Session))
+			if (current_session == row.GetString(ibProtocol::ibSchema::ibActiveUser::Session))
 				m_activeTable->SetItemState(index, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
 
 		}
@@ -59,7 +82,7 @@ void ibDialogActiveUser::RefreshLocksTable(const ibProtocolNode& shown)
 {
 	if (m_locksTable == nullptr) return;
 
-	const std::vector<ibProtocolNode> rows = shown.FindChild(ibProtocolName::Locks).Children();
+	const std::vector<ibProtocolNode> rows = shown.FindChild(ibProtocol::ibSchema::ibActiveUser::Locks).Children();
 
 	// Only rebuild when the row count actually changed — RefreshActiveUserTable
 	// gates on a content hash; sys_lock has no equivalent hash yet, so use the
@@ -85,15 +108,15 @@ void ibDialogActiveUser::RefreshLocksTable(const ibProtocolNode& shown)
 
 	for (const auto& r : rows) {
 		const long index = m_locksTable->InsertItem(
-			m_locksTable->GetItemCount(), r.GetString(ibProtocolName::Namespace));
-		m_locksTable->SetItem(index, 0, r.GetString(ibProtocolName::Namespace));
-		m_locksTable->SetItem(index, 1, r.GetString(ibProtocolName::Key));
-		m_locksTable->SetItem(index, 2, r.GetString(ibProtocolName::Mode));
-		m_locksTable->SetItem(index, 3, r.GetString(ibProtocolName::User));
-		m_locksTable->SetItem(index, 4, r.GetString(ibProtocolName::Acquired));
-		m_locksTable->SetItem(index, 5, r.GetString(ibProtocolName::Lock));
+			m_locksTable->GetItemCount(), r.GetString(ibProtocol::ibSchema::ibActiveUser::Namespace));
+		m_locksTable->SetItem(index, 0, r.GetString(ibProtocol::ibSchema::ibActiveUser::Namespace));
+		m_locksTable->SetItem(index, 1, r.GetString(ibProtocol::ibSchema::ibActiveUser::Key));
+		m_locksTable->SetItem(index, 2, r.GetString(ibProtocol::ibSchema::ibActiveUser::Mode));
+		m_locksTable->SetItem(index, 3, r.GetString(ibProtocol::ibSchema::ibActiveUser::User));
+		m_locksTable->SetItem(index, 4, r.GetString(ibProtocol::ibSchema::ibActiveUser::Acquired));
+		m_locksTable->SetItem(index, 5, r.GetString(ibProtocol::ibSchema::ibActiveUser::Lock));
 
-		if (!selectedGuid.IsEmpty() && r.GetString(ibProtocolName::Lock) == selectedGuid)
+		if (!selectedGuid.IsEmpty() && r.GetString(ibProtocol::ibSchema::ibActiveUser::Lock) == selectedGuid)
 			m_locksTable->SetItemState(index,
 				wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
 				wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
@@ -126,7 +149,7 @@ ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, const ibProtocolNode& s
 	wxDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibProtocolPicture(shown.GetString(ibProtocolName::Icon)));
+	dlg_icon.CopyFromBitmap(ibProtocolPicture(shown, ibProtocol::ibSchema::ibActiveUser::Icon));
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();
@@ -139,12 +162,24 @@ ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, const ibProtocolNode& s
 
 	m_activeTableScanner->Bind(wxEVT_TIMER, &ibDialogActiveUser::OnIdleHandler, this);
 	m_activeTableScanner->Start(1000);
+
+	// Right-click context menus — bound after lists exist.
+	m_activeTable->Bind(wxEVT_LIST_ITEM_RIGHT_CLICK,
+		&ibDialogActiveUser::OnContextMenu, this);
+	m_locksTable->Bind(wxEVT_LIST_ITEM_RIGHT_CLICK,
+		&ibDialogActiveUser::OnLocksContextMenu, this);
 }
 
 ibDialogActiveUser::~ibDialogActiveUser()
 {
 	if (m_activeTableScanner->IsRunning())  m_activeTableScanner->Stop();
 	m_activeTableScanner->Unbind(wxEVT_TIMER, &ibDialogActiveUser::OnIdleHandler, this);
+	m_activeTable->Unbind(wxEVT_LIST_ITEM_RIGHT_CLICK,
+		&ibDialogActiveUser::OnContextMenu, this);
+	if (m_locksTable != nullptr) {
+		m_locksTable->Unbind(wxEVT_LIST_ITEM_RIGHT_CLICK,
+			&ibDialogActiveUser::OnLocksContextMenu, this);
+	}
 }
 
 void ibDialogActiveUser::OnIdleHandler(wxTimerEvent& WXUNUSED(event))
@@ -152,10 +187,123 @@ void ibDialogActiveUser::OnIdleHandler(wxTimerEvent& WXUNUSED(event))
 	// Asked of the server again, as the desktop's read its registry again.
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	ibProtocolNode params, shown;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::ActiveUser));
-	if (frame == nullptr || !frame->Call(ibProtocolMethod::Schema, params, shown))
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::ActiveUser));
+	if (frame == nullptr || !frame->Call(ibProtocol::ibMethod::Schema, params, shown))
 		return;
 
 	RefreshActiveUserTable(shown);
 	RefreshLocksTable(shown);
+}
+
+namespace {
+enum {
+	ID_ActiveUser_Kick           = wxID_HIGHEST + 1001,
+	ID_ActiveUser_Reload         = wxID_HIGHEST + 1002,
+	ID_ActiveUser_ForceReleaseLock = wxID_HIGHEST + 1003,
+};
+} // namespace
+
+void ibDialogActiveUser::OnContextMenu(wxListEvent& event)
+{
+	const long row = event.GetIndex();
+	if (row < 0) return;
+	// Session guid lives in the hidden last column (index 5 after the
+	// "Type" column was inserted).
+	const wxString guid = m_activeTable->GetItemText(row, 5);
+	if (guid.IsEmpty()) return;
+
+	// Kick / Reload are designer-only admin actions. Runtime
+	// users see the dialog read-only — runtime operators don't get to
+	// boot peers off. (The server refuses them to any other session too.)
+	if (!appData->DesignerMode()) return;
+
+	wxMenu menu;
+	menu.Append(ID_ActiveUser_Kick,   _("Kick session"));
+	menu.Append(ID_ActiveUser_Reload, _("Reload clients"));
+	menu.Bind(wxEVT_MENU, &ibDialogActiveUser::OnKickSelected,   this,
+		ID_ActiveUser_Kick);
+	menu.Bind(wxEVT_MENU, &ibDialogActiveUser::OnReloadSelected, this,
+		ID_ActiveUser_Reload);
+	PopupMenu(&menu);
+}
+
+void ibDialogActiveUser::OnKickSelected(wxCommandEvent&)
+{
+	const long row = m_activeTable->GetNextItem(-1, wxLIST_NEXT_ALL,
+		wxLIST_STATE_SELECTED);
+	if (row < 0) return;
+	const wxString guid = m_activeTable->GetItemText(row, 5);
+	if (guid.IsEmpty()) return;
+
+	// The self-kick guard is the server's: it knows which session asks.
+
+	const wxString user = m_activeTable->GetItemText(row, 0);
+	const wxString userLabel = user.IsEmpty()
+		? wxString(_("(user not specified)"))
+		: user;
+	const int answer = wxMessageBox(
+		ibString::Format(_("Kick session of '%s'?"), userLabel),
+		wxTheApp->GetAppDisplayName(), wxYES_NO | wxICON_QUESTION, this);
+	if (answer != wxYES) return;
+
+	ActiveUserCommand(ibProtocol::ibSchema::ibCommand::Kick, ibProtocol::ibSchema::ibActiveUser::Session, guid);
+}
+
+void ibDialogActiveUser::OnReloadSelected(wxCommandEvent&)
+{
+	const long row = m_activeTable->GetNextItem(-1, wxLIST_NEXT_ALL,
+		wxLIST_STATE_SELECTED);
+	if (row < 0) return;
+	const wxString guid = m_activeTable->GetItemText(row, 5);
+	if (guid.IsEmpty()) return;
+
+	// Same self-guard as kick — the server's.
+
+	ActiveUserCommand(ibProtocol::ibSchema::ibCommand::Reload, ibProtocol::ibSchema::ibActiveUser::Session, guid);
+}
+
+void ibDialogActiveUser::OnLocksContextMenu(wxListEvent& event)
+{
+	const long row = event.GetIndex();
+	if (row < 0) return;
+
+	// Same admin-only gate as kick/reload — runtime users get read-only view.
+	if (!appData->DesignerMode()) return;
+
+	const wxString lockGuid = m_locksTable->GetItemText(row, 5);
+	if (lockGuid.IsEmpty()) return;
+
+	wxMenu menu;
+	menu.Append(ID_ActiveUser_ForceReleaseLock, _("Force release"));
+	menu.Bind(wxEVT_MENU, &ibDialogActiveUser::OnForceReleaseSelected, this,
+		ID_ActiveUser_ForceReleaseLock);
+	PopupMenu(&menu);
+}
+
+void ibDialogActiveUser::OnForceReleaseSelected(wxCommandEvent&)
+{
+	const long row = m_locksTable->GetNextItem(-1, wxLIST_NEXT_ALL,
+		wxLIST_STATE_SELECTED);
+	if (row < 0) return;
+
+	const wxString lockGuid = m_locksTable->GetItemText(row, 5);
+	if (lockGuid.IsEmpty()) return;
+
+	const wxString ns   = m_locksTable->GetItemText(row, 0);
+	const wxString user = m_locksTable->GetItemText(row, 3);
+
+	const int answer = wxMessageBox(
+		ibString::Format(_("Force-release lock on '%s' held by '%s'?"),
+			ns, user.IsEmpty() ? wxString(_("(unknown)")) : user),
+		wxTheApp->GetAppDisplayName(), wxYES_NO | wxICON_QUESTION, this);
+	if (answer != wxYES) return;
+
+	if (!ActiveUserCommand(ibProtocol::ibSchema::ibCommand::Release, ibProtocol::ibSchema::ibActiveUser::Lock, lockGuid))
+		return;
+
+	// Force immediate refresh — the 1s timer would catch this anyway,
+	// but the operator just clicked, give instant feedback.
+	m_lastLockRowCount = static_cast<size_t>(-1);
+	wxTimerEvent tick(*m_activeTableScanner);
+	OnIdleHandler(tick);
 }

@@ -85,7 +85,7 @@ struct ibHeaderCell {
 // device context.
 // ----------------------------------------------------------------------------
 
-class ibDataViewColumnLayout {
+class FRMCLIENT_API ibDataViewColumnLayout {
 public:
 
 	ibDataViewColumnLayout() = default;

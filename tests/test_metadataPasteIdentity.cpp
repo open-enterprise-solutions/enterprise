@@ -42,7 +42,7 @@ namespace {
 // The property both a copy and a paste travel through, reached BY NAME — the way
 // PasteProperty reaches it (a paste is a merge by name).
 ibProperty* ModuleProperty(ibValueMetaObject* object) {
-	return object != nullptr ? object->GetProperty(wxT("ObjectModule")) : nullptr;
+	return object != nullptr ? object->GetProperty(ibT("ObjectModule")) : nullptr;
 }
 
 // The module metaobject itself, reached as the CHILD it is (a predefined child,
@@ -134,15 +134,15 @@ TEST(PropertyInnerModule, PasteNodeValue_ModuleCopiedFromAnotherObject_TakesAFre
 	ASSERT_NE(nullptr, sourceModule);
 	ASSERT_NE(nullptr, targetModule);
 
-	const wxString sourceGuid = sourceModule->GetGuid().GetGuid().str();
-	const wxString targetGuidBefore = targetModule->GetGuid().GetGuid().str();
+	const ibString sourceGuid = sourceModule->GetGuid().GetGuid().str();
+	const ibString targetGuidBefore = targetModule->GetGuid().GetGuid().str();
 	ASSERT_NE(sourceGuid, targetGuidBefore);
 
 	ibDataValue payload;
 	ASSERT_TRUE(ModuleProperty(f.source)->CopyNodeValue(payload));
 	ASSERT_TRUE(ModuleProperty(f.target)->PasteNodeValue(payload));
 
-	const wxString targetGuidAfter = ObjectModuleOf(f.target)->GetGuid().GetGuid().str();
+	const ibString targetGuidAfter = ObjectModuleOf(f.target)->GetGuid().GetGuid().str();
 
 	EXPECT_NE(sourceGuid, targetGuidAfter);
 	EXPECT_NE(targetGuidBefore, targetGuidAfter);
@@ -160,7 +160,7 @@ TEST(PropertyInnerModule, PasteNodeValue_ModuleCopiedFromAnotherObject_CarriesTh
 	ibValueMetaObjectModule* sourceModule = ObjectModuleOf(f.source);
 	ASSERT_NE(nullptr, sourceModule);
 
-	const wxString code = wxT("Procedure OnWrite(Cancel)\n\t// written by the test\nEndProcedure");
+	const ibString code = wxT("Procedure OnWrite(Cancel)\n\t// written by the test\nEndProcedure");
 	sourceModule->SetModuleText(code);
 	ASSERT_EQ(code, sourceModule->GetModuleText());
 
@@ -189,8 +189,8 @@ TEST(PropertyInnerModule, PasteNodeValue_APlainProperty_CarriesOnlyItsValue)
 	// The owner's own metaID is not touched by pasting one of its properties.
 	const ibMetaID targetOwnId = f.target->GetMetaID();
 
-	ibProperty* fromComment = f.source->GetProperty(wxT("Comment"));
-	ibProperty* toComment = f.target->GetProperty(wxT("Comment"));
+	ibProperty* fromComment = f.source->GetProperty(ibT("Comment"));
+	ibProperty* toComment = f.target->GetProperty(ibT("Comment"));
 	ASSERT_NE(nullptr, fromComment);
 	ASSERT_NE(nullptr, toComment);
 

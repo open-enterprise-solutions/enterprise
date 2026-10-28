@@ -60,17 +60,17 @@ public:
 	// much as to the configuration, so the row is keyed by BOTH — see CacheKey, and the day it
 	// cost to find out (2026-09-02). Callers pass the configuration's digest and nothing else:
 	// which engine this is, the cache knows for itself.
-	static bool Save(const ibByteCode& bc, const wxString& configMd5);
+	static bool Save(const ibByteCode& bc, const ibString& configMd5);
 
 	// The row key, digested to the 32 characters `config_md5` holds:
 	// kAOTFormatVersion, the build-time engine hash, then the configuration
 	// digest. Two engines that disagree on either half do not find each
 	// other's rows.
-	static wxString CacheKey(const wxString& configDigest);
+	static ibString CacheKey(const ibString& configDigest);
 
 	// The engine hash this build wrote into the key. A test compares it with
 	// the script, including after a built-in source has been substituted.
-	static wxString EngineFingerprint();
+	static ibString EngineFingerprint();
 
 	// Try to populate `outBc` from cache. Returns:
 	//   true  — row found, blob deserialized successfully. outBc is
@@ -79,7 +79,7 @@ public:
 	//   false — no row, or DeserializeAOT rejected the blob (magic /
 	//           format-version mismatch). Caller treats as miss and
 	//           recompiles from source.
-	static bool Load(ibByteCode& outBc, const ibGuid& descId, const wxString& configMd5);
+	static bool Load(ibByteCode& outBc, const ibGuid& descId, const ibString& configMd5);
 
 	// DELETE the cache row for one descriptor. Used by Designer's
 	// OnSaveMetaObject / OnDeleteMetaObject hooks to keep the cache

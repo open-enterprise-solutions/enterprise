@@ -15,8 +15,8 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: descriptor pilot
-#include "core/fileSystem/fs.h"
-#include "backend/utils/md5.hpp"   // the key is digested to the width its column declares
+#include "core/memory/memoryStream.h"
+#include "core/utils/md5.hpp"      // the key is digested to the width its column declares
 #include "backend/compiler/byteCodeFormat.h"   // kAOTFormatVersion — one half of the engine key
 #include "engineFingerprintBuild.h"            // kEngineFingerprint — the other, generated at build
 
@@ -59,18 +59,18 @@
 // Returning the raw spelling made the key longer than 32 and every statement touching it died
 // with a string truncation; the misses looked like a cold cache (found 2026-09-04). A wider
 // column would be a schema change for a table whose contents are disposable.
-wxString ibByteCodeCache::EngineFingerprint()
+ibString ibByteCodeCache::EngineFingerprint()
 {
-	return wxString::FromUTF8(kEngineFingerprint);
+	return ibString::FromUTF8(kEngineFingerprint);
 }
 
-wxString ibByteCodeCache::CacheKey(const wxString& configDigest)
+ibString ibByteCodeCache::CacheKey(const ibString& configDigest)
 {
-	return ibMD5::ComputeMd5(wxString::Format(wxT("%u.%s.%s"),
+	return ibMD5::ComputeMd5(ibString::Format(ibT("%u.%s.%s"),
 		(unsigned)kAOTFormatVersion, EngineFingerprint(), configDigest));
 }
 
-bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
+bool ibByteCodeCache::Save(const ibByteCode& bc, const ibString& configDigest)
 {
 	if (db_query == nullptr) return false;
 
@@ -79,12 +79,12 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
 	// want to leave the previous row deleted.
 	ibWriterMemory writer;
 	if (!bc.SerializeAOT(writer)) return false;
-	const wxMemoryBuffer blob = writer.buffer();
+	const ibMemoryBuffer blob = writer.buffer();
 
-	const wxString descIdStr = bc.m_id;
-	const wxString bcVerStr  = bc.m_version;
+	const ibString descIdStr = bc.m_id;
+	const ibString bcVerStr  = bc.m_version;
 
-	const wxString configMd5 = CacheKey(configDigest);
+	const ibString configMd5 = CacheKey(configDigest);
 
 	// UPSERT via DELETE-then-INSERT (uniform across drivers; FB has no ON
 	// CONFLICT). Both statements run on one builder = one connection.
@@ -123,7 +123,7 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
 		// outside the lock — it is a database round-trip, and correctness only needs
 		// "exactly one thread wins the digest".
 		static std::mutex s_weedMutex;
-		static wxString s_weededFor;
+		static ibString s_weededFor;
 
 		bool bWeedNow = false;
 		{
@@ -141,16 +141,16 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
 			if (bWeedNow) {
 				try {
 					q.Execute(ibDelete(bytecode_cache_table,
-						ibBinOp(ibQueryBinOp::Ne, ibCol(wxT("config_md5")), ibConst(ibValue(configMd5)))));
+						ibBinOp(ibQueryBinOp::Ne, ibCol(ibT("config_md5")), ibConst(ibValue(configMd5)))));
 				} catch (...) { /* hygiene, not correctness — a stale row is unreachable either way */ }
 			}
 			q.Execute(ibDelete(bytecode_cache_table,
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")), ibConst(ibValue(descIdStr)))));
+				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("descriptor_id")), ibConst(ibValue(descIdStr)))));
 			q.Execute(ibInsert(bytecode_cache_table, {
-				{ wxT("descriptor_id"),    ibConst(ibValue(descIdStr)) },
-				{ wxT("bytecode_version"), ibConst(ibValue(bcVerStr)) },
-				{ wxT("config_md5"),       ibConst(ibValue(configMd5)) },
-				{ wxT("bc_blob"),          ibConstBlob(blob.GetData(),
+				{ ibT("descriptor_id"),    ibConst(ibValue(descIdStr)) },
+				{ ibT("bytecode_version"), ibConst(ibValue(bcVerStr)) },
+				{ ibT("config_md5"),       ibConst(ibValue(configMd5)) },
+				{ ibT("bc_blob"),          ibConstBlob(blob.GetData(),
 				                                       static_cast<size_t>(blob.GetDataLen())) },
 			}));
 			q.Commit();
@@ -165,21 +165,21 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
 		// under, and the bytecode's own version guid, so a row that is later TAKEN can be traced back
 		// to the moment it was made. One line per save: a cache whose contents cannot be accounted for
 		// is where "it ran the previous text" hides, and that costs a crash rather than a wrong answer.
-		ibJournalInfo(wxT("bytecode.cache"), wxT("save %s md5=%s ver=%s bytes=%u"),
+		ibJournalInfo(ibT("bytecode.cache"), ibT("save %s md5=%s ver=%s bytes=%u"),
 			descIdStr, configMd5, bcVerStr, (unsigned)blob.GetDataLen());
 	}
 	catch (...) { return false; }
 	return true;
 }
 
-bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxString& configDigest)
+bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const ibString& configDigest)
 {
 	if (db_query == nullptr) return false;
 
 	wxASSERT(descId.isValid());
 
 	// The same key the row was written under — the platform AND the configuration (see CacheKey).
-	const wxString configMd5 = CacheKey(configDigest);
+	const ibString configMd5 = CacheKey(configDigest);
 
 	try {
 		// SELECT bc_blob FROM <t> WHERE descriptor_id = <descId> AND config_md5 = <configMd5>
@@ -212,11 +212,11 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxStri
 				ibFilter(
 					ibScan(bytecode_cache_table),
 					ibBinOp(ibQueryBinOp::And,
-					        ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")),
-					                ibConst(ibValue(wxString(descId)))),
-					        ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("config_md5")),
+					        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("descriptor_id")),
+					                ibConst(ibValue(ibString(descId)))),
+					        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("config_md5")),
 					                ibConst(ibValue(configMd5))))),
-				{ { ibCol(wxT("bc_blob")), wxEmptyString } }));
+				{ { ibCol(ibT("bc_blob")), ibEmptyString } }));
 
 		ibQueryResult res = q.ExecuteIR(ir);   // RAII: closes cursor + statement
 
@@ -231,8 +231,8 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxStri
 		// disagree about it, or a stale blob was written under a fresh one.
 		const bool hit = res.Next();
 
-		ibJournalInfo(wxT("bytecode.cache"), wxT("load %s md5=%s -> %s"),
-			wxString(descId), configMd5, hit ? wxT("HIT") : wxT("miss"));
+		ibJournalInfo(ibT("bytecode.cache"), ibT("load %s md5=%s -> %s"),
+			ibString(descId), configMd5, hit ? ibT("HIT") : ibT("miss"));
 
 		if (hit) {
 			// The blob is read through the RESULT's own typed accessor, BY NAME. It used to borrow the
@@ -240,8 +240,8 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxStri
 			// caller of it, so the hatch is gone with this line. By name rather than by position for
 			// the ordinary reason: the projection above is what decides which column that is, and a
 			// number here would go on compiling after somebody adds a second one.
-			wxMemoryBuffer blob;
-			res.GetResultBlob(wxT("bc_blob"), blob);
+			ibMemoryBuffer blob;
+			res.GetResultBlob(ibT("bc_blob"), blob);
 			if (blob.GetDataLen() > 0) {
 				ibReaderMemory reader(blob);
 				return outBc.DeserializeAOT(reader);
@@ -269,8 +269,8 @@ void ibByteCodeCache::Invalidate(const ibGuid& descId)
 	// silent no-op look acceptable. Whether the key alone is enough is a question one has to be able
 	// to ASK, and nobody could: this was the only place that knew, and it said nothing.
 	if (db_query == nullptr) {
-		ibJournalWarning(wxT("bytecode.cache"),
-			wxT("invalidate skipped for '%s': no database connection"), wxString(descId));
+		ibJournalWarning(ibT("bytecode.cache"),
+			ibT("invalidate skipped for '%s': no database connection"), ibString(descId));
 		return;
 	}
 
@@ -283,16 +283,16 @@ void ibByteCodeCache::Invalidate(const ibGuid& descId)
 			return;   // nothing cached yet, nothing stale; asked on THIS connection (see Load)
 
 		q.Execute(ibDelete(bytecode_cache_table,
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")),
-			        ibConst(ibValue(wxString(descId))))));
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("descriptor_id")),
+			        ibConst(ibValue(ibString(descId))))));
 	}
 	catch (const ibCoreException& err) {
-		ibJournalWarning(wxT("bytecode.cache"),
-			wxT("invalidate failed for '%s': %s"), wxString(descId), err.GetErrorDescription());
+		ibJournalWarning(ibT("bytecode.cache"),
+			ibT("invalidate failed for '%s': %s"), ibString(descId), err.GetErrorDescription());
 	}
 	catch (...) {
-		ibJournalWarning(wxT("bytecode.cache"),
-			wxT("invalidate failed for '%s'"), wxString(descId));
+		ibJournalWarning(ibT("bytecode.cache"),
+			ibT("invalidate failed for '%s'"), ibString(descId));
 	}
 }
 

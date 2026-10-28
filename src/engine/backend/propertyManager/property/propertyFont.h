@@ -2,30 +2,34 @@
 #define __PROPERTY_FONT_H__
 
 #include "backend/propertyManager/propertyObject.h"
+#include "core/graphics/font.h"   // ibFont — the font, as data
 
 //base property for "font"
 class BACKEND_API ibPropertyFont : public ibProperty {
 public:
 
-	wxFont GetValueAsFont() const { return typeConv::StringToFont(m_propValue); }
-	wxString GetValueAsString() const { return m_propValue; }
-	void SetValue(const wxFont& val) { m_propValue = typeConv::FontToString(val); }
-	void SetValue(const wxString& val) { m_propValue = val; }
+	ibFont GetValueAsFont() const { ibFont font; font.FromString(m_propValue.GetString()); return font; }
+	ibString GetValueAsString() const { return m_propValue.GetString(); }
+	void SetValue(const ibFont& val) { m_propValue = ibVariant(ibString(val.ToString())); }
+	void SetValue(const ibString& val) { m_propValue = ibVariant(val); }
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, typeConv::FontToString(f))
+	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibFont& f = ibFont())
+		: ibProperty(cat, name, ibVariant(ibString(f.ToString())))
 	{
 	}
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, label, typeConv::FontToString(f))
+	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibFont& f = ibFont())
+		: ibProperty(cat, name, label, ibVariant(ibString(f.ToString())))
 	{
 	}
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, label, helpString, typeConv::FontToString(f))
+	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibFont& f = ibFont())
+		: ibProperty(cat, name, label, helpString, ibVariant(ibString(f.ToString())))
 	{
 	}
+
+	// Unset — no text, or a stored one with no size.
+	virtual bool IsEmptyProperty() const override { return !GetValueAsFont().IsOk(); }
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);

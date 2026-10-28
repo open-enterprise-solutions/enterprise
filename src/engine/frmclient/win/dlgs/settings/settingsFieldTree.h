@@ -26,7 +26,8 @@
 #include <functional>
 
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"   // ibValueCompositionField — a field IS a value
-#include "frmclient/backend/typeDescription.h"                // ibTypeDescription
+#include "core/description/typeDescription.h"                // ibTypeDescription
+#include "core/serialize/dataBuilder.h"                      // ibDataValue — a field's picture, as the wire said it
 
 class ibSourceDataObject;
 class ibMetaData;
@@ -44,10 +45,14 @@ struct ibSettingsPlainField {
 	// WHAT A PERSON READS — the title the host gives the field (a composition: its title in force, the
 	// one printed over its column). Empty reads as the name. What a pick STORES stays the name above.
 	wxString          m_presentation;
+	// HOW IT IS DRAWN — the column's picture as the server names it (ibBackendPicture::SendPicture: its id, or a file's
+	// PNG), where the desktop's tree walks a source's explorer; none on a flat list, drawn with the attribute picture.
+	ibDataValue       m_picture;
 };
 
-// THE FIELDS AS THE SERVER DESCRIBES THEM — children Name, Presentation, Id, Type, Available (ibDialogListSettings on the
-// server): a list's columns, or the fields of the targets a reference field opened on.
+// THE FIELDS AS THE SERVER DESCRIBES THEM — children Name, Presentation, Id, Type, Available, Picture (ibDialogListSettings
+// on the server): a list's columns, or the fields of the targets a reference field opened on. Their pictures are asked
+// before any is drawn, in one call.
 std::vector<ibSettingsPlainField> ibReadSettingsFields(const class ibProtocolNode& fields);
 
 class ibSettingsFieldTree {

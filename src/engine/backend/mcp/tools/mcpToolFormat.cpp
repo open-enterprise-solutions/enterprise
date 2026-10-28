@@ -28,7 +28,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 
 const ibArg& ArgFormat()
 {
-	static const ibArg s_a(wxT("format"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("format"), ibArg::Kind::Text,
 		ibMcpText("The format string to start from, exactly as Format takes it - 'NFD=2; NGS= '. Omit it "
 			  "to start from nothing, which formats every value as its plain string."));
 	return s_a;
@@ -36,7 +36,7 @@ const ibArg& ArgFormat()
 
 const ibArg& ArgSet()
 {
-	static const ibArg s_a(wxT("set"), ibArg::Kind::Node,
+	static const ibArg s_a(ibT("set"), ibArg::Kind::Node,
 		ibMcpText("Codes to write over it, as an object of code to value: {\"NFD\": 2, \"NGS\": \" \", "
 			  "\"DF\": \"dd.mm.yyyy\"}. A number or a string each. An EMPTY string is a value, not a "
 			  "removal - {\"NZ\": \"\"} prints a zero as nothing; take a code out with `clear`. Only the "
@@ -46,49 +46,43 @@ const ibArg& ArgSet()
 
 const ibArg& ArgClear()
 {
-	static const ibArg s_a(wxT("clear"), ibArg::Kind::Many,
+	static const ibArg s_a(ibT("clear"), ibArg::Kind::Many,
 		ibMcpText("Codes to take out, by name: [\"NZ\", \"DE\"]. Applied before `set`."));
 	return s_a;
 }
 
 const ibArg& ArgSample()
 {
-	static const ibArg s_a(wxT("sample"), ibArg::Kind::Any,
+	static const ibArg s_a(ibT("sample"), ibArg::Kind::Any,
 		ibMcpText("One more value to format besides the standard samples: a number or a flag as itself, "
 			  "or a DATE written as text with its time - '2026-12-31 00:00:00'. A string is read as a "
 			  "date because a string is never formatted: Format prints it as it is."));
 	return s_a;
 }
 
-const wxChar* KindWord(ibFormatKind kind)
+const ibChar* KindWord(ibFormatKind kind)
 {
 	switch (kind) {
-	case ibFormatKind::Number:  return wxT("number");
-	case ibFormatKind::Date:    return wxT("date");
-	case ibFormatKind::Boolean: return wxT("boolean");
+	case ibFormatKind::Number:  return ibT("number");
+	case ibFormatKind::Date:    return ibT("date");
+	case ibFormatKind::Boolean: return ibT("boolean");
 	}
-	return wxT("number");
+	return ibT("number");
 }
 
 // One printed sample: what went in, in words, and what Format made of it.
-ibDataValue Sample(const ibFormatString& format, const wxString& shown, const ibValue& value)
+ibDataValue Sample(const ibFormatString& format, const ibString& shown, const ibValue& value)
 {
 	std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-	entry->SetValue(wxT("value"), shown);
-	entry->SetValue(wxT("prints"), format.Apply(value));
+	entry->SetValue(ibT("value"), shown);
+	entry->SetValue(ibT("prints"), format.Apply(value));
 	return ibDataValue::Child(entry);
 }
 
-// The object a caller sent under `set` - as a child, or as a value carrying one.
-const ibDataNode* NodeArgument(const ibDataNode& params, const wxString& name)
+// The object a caller sent under `set` — a field and a property are one set, and a child is a field of its own kind.
+std::optional<ibDataNode> NodeArgument(const ibDataNode& params, const ibString& name)
 {
-	if (const ibDataNode* child = params.FindChild(name))
-		return child;
-	for (const ibDataValue* value : { params.FindField(name), params.FindProperty(name) }) {
-		if (value != nullptr && value->Kind() == ibDataKind::Child)
-			return value->AsChild().get();
-	}
-	return nullptr;
+	return params.FindChild(name);
 }
 
 //---------------------------------------------------------------------------
@@ -97,16 +91,16 @@ const ibDataNode* NodeArgument(const ibDataNode& params, const wxString& name)
 class ibMcpToolFormatString : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("format_string"); }
+	ibString GetName() const override { return ibT("format_string"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString format = ArgFormat().Text(params);
+		const ibString format = ArgFormat().Text(params);
 		return format.IsEmpty() ? ibMcpText("building a format string")
-			: wxString::Format(ibMcpText("reading the format string '%s'"), format);
+			: ibString::Format(ibMcpText("reading the format string '%s'"), format);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("BUILD OR CHECK A FORMAT STRING - the second argument of Format(value, format) - with "
 			"the code that runs it. Hand it a string, codes to set or clear, or both; it answers the "
@@ -141,12 +135,12 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibFormatString format = ibFormatString::Parse(ArgFormat().Text(params));
 
 		// CLEAR first, then SET - so a call that does both says "instead of", not "and then nothing".
-		if (const ibDataValue* clear = params.FindField(ArgClear().Name())) {
+		if (auto clear = params.FindField(ArgClear().Name())) {
 			if (clear->Kind() == ibDataKind::Array) {
 				for (const ibDataValue& item : clear->AsArray()) {
 					ibFormatCode code = ibFormatCode::NumberDigits;
@@ -160,26 +154,26 @@ public:
 			}
 		}
 
-		if (const ibDataNode* set = NodeArgument(params, ArgSet().Name())) {
-			for (const std::pair<wxString, ibDataValue>& field : set->Fields()) {
+		if (const auto set = NodeArgument(params, ArgSet().Name())) {
+			for (const std::pair<ibString, ibDataValue>& field : set->Fields()) {
 				ibFormatCode code = ibFormatCode::NumberDigits;
 				if (!ibFormatString::FindCode(field.first, code)) {
-					refusal = wxString::Format(ibMcpText("'%s' is not a code Format reads, so setting it would "
+					refusal = ibString::Format(ibMcpText("'%s' is not a code Format reads, so setting it would "
 						"change nothing a module prints. The codes are ND, NFD, NDS, NGS, NG, NZ, DF, DE, "
 						"BT and BF, spelled in capitals."), field.first);
 					return false;
 				}
-				wxString value;
+				ibString value;
 				switch (field.second.Kind()) {
 				case ibDataKind::String: value = field.second.AsString(); break;
 				case ibDataKind::Number: value = field.second.AsNumber().ToString(); break;
 				default:
-					refusal = wxString::Format(ibMcpText("'%s' takes a number or a string. To take it out, "
+					refusal = ibString::Format(ibMcpText("'%s' takes a number or a string. To take it out, "
 						"name it in `clear`."), field.first);
 					return false;
 				}
 				if (!ibFormatString::IsWritable(value)) {
-					refusal = wxString::Format(ibMcpText("'%s' cannot hold ';' or '=': a format string has no "
+					refusal = ibString::Format(ibMcpText("'%s' cannot hold ';' or '=': a format string has no "
 						"way to write them - ';' ends a pair and '=' is not kept in one."), field.first);
 					return false;
 				}
@@ -190,60 +184,60 @@ public:
 		// ⭐ WHAT IS ANSWERED IS WHAT THE ENGINE READ BACK - written, and read again by the one reader, so
 		// a space trimmed or a separator dropped shows up here and not in a printed report.
 		format = ibFormatString::Parse(format.Render());
-		result.SetValue(wxT("format"), format.Render());
+		result.SetValue(ibT("format"), format.Render());
 
 		std::vector<ibDataValue> codes;
 		for (const ibFormatCode code : ibFormatString::Codes()) {
-			const std::optional<wxString> value = format.Get(code);
+			const std::optional<ibString> value = format.Get(code);
 			if (!value)
 				continue;
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("code"), wxString(ibFormatString::CodeName(code)));
-			entry->SetValue(wxT("kind"), wxString(KindWord(ibFormatString::KindOf(code))));
-			entry->SetValue(wxT("value"), *value);
+			entry->SetValue(ibT("code"), ibString(ibFormatString::CodeName(code)));
+			entry->SetValue(ibT("kind"), ibString(KindWord(ibFormatString::KindOf(code))));
+			entry->SetValue(ibT("value"), *value);
 			codes.push_back(ibDataValue::Child(entry));
 		}
-		result.AddField(wxT("codes"), ibDataValue::Array(codes));
+		result.AddField(ibT("codes"), ibDataValue::Array(codes));
 
 		if (!format.m_other.empty()) {
 			std::vector<ibDataValue> kept;
 			for (const auto& pair : format.m_other) {
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-				entry->SetValue(wxT("code"), pair.first);
-				entry->SetValue(wxT("value"), pair.second);
+				entry->SetValue(ibT("code"), pair.first);
+				entry->SetValue(ibT("value"), pair.second);
 				kept.push_back(ibDataValue::Child(entry));
 			}
-			result.AddField(wxT("kept"), ibDataValue::Array(kept));
+			result.AddField(ibT("kept"), ibDataValue::Array(kept));
 		}
 
 		// THE SAMPLES - one of each kind, so a caller sees every tab's effect in one answer.
 		std::shared_ptr<ibDataNode> samples = std::make_shared<ibDataNode>();
 		{
 			ibValue big, negative;
-			big.SetNumber(wxT("1234567.891"));
-			negative.SetNumber(wxT("-42.5"));
-			samples->AddField(wxT("number"), ibDataValue::Array({
-				Sample(format, wxT("1234567.891"), big),
-				Sample(format, wxT("-42.5"), negative),
-				Sample(format, wxT("0"), ibValue(0)) }));
-			samples->AddField(wxT("date"), ibDataValue::Array({
-				Sample(format, wxT("2026-09-15 14:05:07"), ibValue(2026, 9, 15, 14, 5, 7)),
-				Sample(format, wxT("empty date"), ibValue(ibValueTypes::TYPE_DATE)) }));
-			samples->AddField(wxT("boolean"), ibDataValue::Array({
-				Sample(format, wxT("True"), ibValue(true)),
-				Sample(format, wxT("False"), ibValue(false)) }));
+			big.SetNumber(ibT("1234567.891"));
+			negative.SetNumber(ibT("-42.5"));
+			samples->AddField(ibT("number"), ibDataValue::Array({
+				Sample(format, ibT("1234567.891"), big),
+				Sample(format, ibT("-42.5"), negative),
+				Sample(format, ibT("0"), ibValue(0)) }));
+			samples->AddField(ibT("date"), ibDataValue::Array({
+				Sample(format, ibT("2026-09-15 14:05:07"), ibValue(2026, 9, 15, 14, 5, 7)),
+				Sample(format, ibT("empty date"), ibValue(ibValueTypes::TYPE_DATE)) }));
+			samples->AddField(ibT("boolean"), ibDataValue::Array({
+				Sample(format, g_booleanTrue, ibValue(true)),
+				Sample(format, g_booleanFalse, ibValue(false)) }));
 		}
-		result.AddField(wxT("samples"), ibDataValue::Child(samples));
+		result.AddField(ibT("samples"), ibDataValue::Child(samples));
 
 		// …and the caller's own, when one came.
-		if (const ibDataValue* given = params.FindField(ArgSample().Name())) {
+		if (auto given = params.FindField(ArgSample().Name())) {
 			ibValue value;
 			switch (given->Kind()) {
 			case ibDataKind::Number: value = ibValue(given->AsNumber()); break;
 			case ibDataKind::Bool:   value = ibValue(given->AsBool());   break;
 			case ibDataKind::String:
 				if (!value.SetDate(given->AsString()) || value.IsEmpty()) {
-					refusal = wxString::Format(ibMcpText("`sample` '%s' is not a date this platform reads. A "
+					refusal = ibString::Format(ibMcpText("`sample` '%s' is not a date this platform reads. A "
 						"string here is a DATE, written with its time: '2026-12-31 00:00:00', '31.12.2026 "
 						"00:00:00' or '20261231000000'."), given->AsString());
 					return false;
@@ -253,7 +247,7 @@ public:
 				refusal = ibMcpText("`sample` is a number, a flag, or a date written as text with its time.");
 				return false;
 			}
-			result.AddField(wxT("sample"), Sample(format, value.GetString(), value));
+			result.AddField(ibT("sample"), Sample(format, value.GetString(), value));
 		}
 		return true;
 	}

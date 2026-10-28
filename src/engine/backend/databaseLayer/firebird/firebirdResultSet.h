@@ -1,17 +1,6 @@
 #ifndef __FIREBIRD_RESULT_SET_H__
 #define __FIREBIRD_RESULT_SET_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
 #include "engine/ibase.h"
 
 #include "backend/databaseLayer/databaseResultSet.h"
@@ -42,7 +31,7 @@ public:
 	void DetachTransaction() { m_pTransaction = 0; m_bManageTransaction = false; }
 
 
-	virtual int LookupField(const wxString& strField);
+	virtual int LookupField(const ibString& strField);
 
 	// get field
 	virtual int GetResultInt(int nField);
@@ -50,7 +39,7 @@ public:
 	virtual long long GetResultLong(int nField);
 	virtual bool GetResultBool(int nField);
 	virtual ibDateTime GetResultDate(int nField);
-	virtual void* GetResultBlob(int nField, wxMemoryBuffer& buffer);
+	virtual void* GetResultBlob(int nField, ibMemoryBuffer& buffer);
 	virtual double GetResultDouble(int nField);
 	virtual ibNumber GetResultNumber(int nField);
 	virtual bool IsFieldNull(int nField);

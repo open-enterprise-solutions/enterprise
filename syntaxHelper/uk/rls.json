@@ -17,7 +17,7 @@
       "return_descr": "",
       "example": "// відбір за поточним користувачем через регістр доступу\nProcedure OnAccessRead(Source, Operation, Allowed)\n{\n    if (Source = \"Catalog.Товари\") {\n        Source = restrict s in Source\n                     join a in Data.Registers.ДоступДоСкладів.Where(Function(a) { Return a.Користувач = CurrentUser(); })\n                         on s.Склад = a.Склад;\n    }\n    Allowed = True;\n}",
       "example_ves": "// відбір за поточним користувачем через регістр доступу\nProcedure OnAccessRead(Source, Operation, Allowed)\n    If Source = \"Catalog.Товари\" Then\n        Source = restrict s in Source\n                     join a in Data.Registers.ДоступДоСкладів.Where(Function(a) Return a.Користувач = CurrentUser(); EndFunction)\n                         on s.Склад = a.Склад;\n    EndIf;\n    Allowed = True;\nEndProcedure",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["ev.Role.OnAccessRead", "ev.Role.OnAccessWrite", "cls.QueryDecorator", "kw.Restrict", "guide.query"],
       "reviewed": true
     },
@@ -34,7 +34,7 @@
       "parameters": "Source — джерело як запитуваний об'єкт (див. QueryDecorator); порівнюється з повним іменем джерела (`\"Catalog.Товари\"`).\nOperation — рядок операції; для читання завжди `\"Read\"`.\nAllowed — вердикт за посиланням (усталено Хиба): `True` дозволяє доступ за складеного обмеження.",
       "return_descr": "",
       "example": "// розіменування через крапку працює: платформа сама побудує з'єднання\nProcedure OnAccessRead(Source, Operation, Allowed)\n{\n    if (Source = \"Document.Видаткова\") {\n        Source = Source.Where(Function(x) { Return x.Договір.Організація = ПоточнаОрганізація(); });\n    }\n    Allowed = True;\n}",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["guide.rls", "ev.Role.OnAccessWrite", "cls.QueryDecorator", "kw.Restrict"],
       "reviewed": true
     },
@@ -51,7 +51,7 @@
       "parameters": "Source — джерело як запитуваний об'єкт; порівнюється з повним іменем.\nOperation — `\"Create\"` | `\"Write\"` | `\"Delete\"`.\nAllowed — вердикт за посиланням (усталено Хиба).",
       "return_descr": "",
       "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["guide.rls", "ev.Role.OnAccessRead", "cls.QueryDecorator"],
       "reviewed": true
     },
@@ -68,7 +68,7 @@
       "parameters": "",
       "return_descr": "Повертають те саме джерело зі вкладеним обмеженням — присвоюйте результат назад у Source.",
       "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["guide.rls", "kw.Restrict", "ev.Role.OnAccessRead"],
       "reviewed": true
     }

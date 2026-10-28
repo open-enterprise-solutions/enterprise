@@ -3,8 +3,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueQuery.h"
+#include "backend/query/queryException.h"   // ibBackendQuerySyntaxException::Raise — the engine's door for the core parser
 
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 #include "core/diagnostics/crashGuard.h"  // ibJournal — the technology journal
 #include "valueArray.h"                  // ibValueArray — a package answers with results BY POSITION
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER
@@ -46,8 +47,8 @@ static const ibMetaData* ibQuerySessionConfig()
 
 void ibValueQueryExec_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(1, wxT("Query(text : string)"));
-	helper.AppendProc(wxT("SetParameter"), 2, wxT("SetParameter(name : string, value)"));
+	helper.AppendConstructor(1, ibT("Query(text : string)"));
+	helper.AppendProc(ibT("SetParameter"), 2, ibT("SetParameter(name : string, value)"));
 	// TWO VERBS OVER ONE MECHANISM. Every query runs as a package — an ordinary query is a package
 	// of one — so Execute() is simply "the first result", and ExecuteBatch() hands back the whole
 	// array to be indexed. No branch about which kind of text this is, and no verb that sometimes
@@ -60,11 +61,11 @@ void ibValueQueryExec_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	// — `ExecuteBatch()`. Two ways to say the same thing is how the pair drifts (Max, 2026-09-04:
 	// *"execute — no name needed there, just execute and that is all, drive the rest into the batch"*).
 	// ONTO still names a selection; what reads that name is LINK, inside the package text.
-	helper.AppendFunc(wxT("Execute"), wxT("Execute()"));
-	helper.AppendFunc(wxT("ExecuteBatch"), wxT("ExecuteBatch()"));
+	helper.AppendFunc(ibT("Execute"), ibT("Execute()"));
+	helper.AppendFunc(ibT("ExecuteBatch"), ibT("ExecuteBatch()"));
 	// WHERE this query's temp tables live. Left unset they die with the execution; set to a
 	// TempTablesManager they outlive it and other queries attached to the same manager read them.
-	helper.AppendProp(wxT("TempTablesManager"), true, true, ibValueQueryExec::enPropTempTablesManager);
+	helper.AppendProp(ibT("TempTablesManager"), true, true, ibValueQueryExec::enPropTempTablesManager);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -73,10 +74,10 @@ void ibValueQueryExec_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 
 void ibValueTempTablesManager_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(0, wxT("TempTablesManager()"));
+	helper.AppendConstructor(0, ibT("TempTablesManager()"));
 	// ONE VERB, because there is one decision to make about a set of temp tables: keep them, or
 	// let them go. Everything else about them is said in the query text.
-	helper.AppendProc(wxT("Close"), wxT("Close()"));
+	helper.AppendProc(ibT("Close"), ibT("Close()"));
 }
 
 bool ibValueTempTablesManager::CallAsProc(const long lMethodNum, ibValue** /*paParams*/, const long /*lSizeArray*/)
@@ -107,7 +108,9 @@ bool ibValueQueryExec::Init(ibValue** paParams, const long lSizeArray)
 		return true;
 	}
 
-	m_package = ibQueryParser().ParsePackage(m_text);
+	// The engine's door: the core parser's refusal is raised as the engine's (ibBackendQuerySyntaxException).
+	try { m_package = ibQueryParser().ParsePackage(m_text); }
+	catch (const ibQueryRefusal& refusal) { ibBackendQuerySyntaxException::Raise(refusal); }
 	return !m_package.m_statements.empty();
 }
 
@@ -130,7 +133,7 @@ bool ibValueQueryExec::CallAsProc(const long lMethodNum, ibValue** paParams, con
 // table a result of ONE column and ONE row holding the number of records placed there; a drop the
 // UNDEFINED value, because a drop produces no result. The statements see each other's temp tables;
 // that is what makes a package worth writing rather than merely tidy.
-bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out, std::vector<wxString>* names)
+bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out, std::vector<ibString>* names)
 {
 	if (m_package.m_statements.empty())
 		return false;
@@ -291,14 +294,14 @@ void ibValueQueryResult::FillMembers(ibMemberTable& helper) const
 	// The door has taken it all along (ibDataQueryResult::Select(kind, branch)); the verb declared one
 	// argument, so a second was swallowed in silence and the walk quietly returned every branch
 	// (measured 2026-09-04: a branch name nobody answers to still walked all of them).
-	helper.AppendFunc(wxT("Select"), 2, wxT("Select(method?, branch?)"));   // -> a QuerySelect (consumes the result)
+	helper.AppendFunc(ibT("Select"), 2, ibT("Select(method?, branch?)"));   // -> a QuerySelect (consumes the result)
 	// ⭐ …OR THE ROWS THEMSELVES, as a value table: `Table = Query.Execute().Unload()`. Same reading as Select()
 	// (it consumes the result), for the script that wants to count, index, sort or pass the rows on rather
 	// than walk them once. The order of the two lines is the order of the enum above.
-	helper.AppendFunc(wxT("Unload"), 1, wxT("Unload(method?)"));            // -> a value table (consumes the result)
+	helper.AppendFunc(ibT("Unload"), 1, ibT("Unload(method?)"));            // -> a value table (consumes the result)
 }
 
-std::unique_ptr<ibValueQuerySelect> ibValueQueryResult::MakeSelection(ibSelectKind kind, const wxString& branch)
+std::unique_ptr<ibValueQuerySelect> ibValueQueryResult::MakeSelection(ibSelectKind kind, const ibString& branch)
 {
 	if (kind == ibSelectKind::ibSelectKind_Direct && !m_hasTotals)
 		return std::make_unique<ibValueQuerySelect>(std::move(m_result), m_schema, m_snapshot, m_temps);
@@ -307,9 +310,9 @@ std::unique_ptr<ibValueQuerySelect> ibValueQueryResult::MakeSelection(ibSelectKi
 	// yields an empty walk rather than falling back to all of them: asking for a branch that is
 	// not there is a mistake worth seeing (ibSelector::CollectVisits says the same).
 	ibSelector top = branch.IsEmpty() ? m_result->Select(kind) : m_result->Select(kind, branch);
-	ibJournalInfo(wxT("query.walk"), wxT("select(%d)%s: %ld node(s) at the first level"),
+	ibJournalInfo(ibT("query.walk"), ibT("select(%d)%s: %ld node(s) at the first level"),
 		static_cast<int>(kind),
-		branch.IsEmpty() ? wxString() : (wxT(" branch '") + branch + wxT("'")), top.NodeCount());
+		branch.IsEmpty() ? ibString() : (ibT(" branch '") + branch + ibT("'")), top.NodeCount());
 	return std::make_unique<ibValueQuerySelect>(std::move(top), m_schema, m_snapshot, m_temps);
 }
 
@@ -344,11 +347,11 @@ bool ibValueQueryResult::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		// where it is asked for, before the cursor is touched (the result stays readable).
 		if (kind != ibSelectKind::ibSelectKind_Direct)
 			ibBackendCoreException::Error(_("Unload() gives the records as a table: only the Direct traversal can be unloaded; use Select(...) to walk grouped results"));
-		pvarRetValue = MakeSelection(kind, wxString())->ToTable();
+		pvarRetValue = MakeSelection(kind, ibString())->ToTable();
 		return true;
 	}
 
-	const wxString branch = (lSizeArray >= 2 && paParams[1] != nullptr && !paParams[1]->IsEmpty())
+	const ibString branch = (lSizeArray >= 2 && paParams[1] != nullptr && !paParams[1]->IsEmpty())
 		? paParams[1]->GetString() : ibString();
 	pvarRetValue = MakeSelection(kind, branch).release();
 	return true;
@@ -424,14 +427,14 @@ ibValue ibValueQuerySelect::ToTable()
 
 void ibValueQuerySelect::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Next"),        wxT("Next()"));                    // advance the cursor
-	helper.AppendFunc(wxT("Reset"),       wxT("Reset()"));                   // rewind (grouped selection)
-	helper.AppendFunc(wxT("HasChildren"), wxT("HasChildren()"));             // current node is an expandable folder
+	helper.AppendFunc(ibT("Next"),        ibT("Next()"));                    // advance the cursor
+	helper.AppendFunc(ibT("Reset"),       ibT("Reset()"));                   // rewind (grouped selection)
+	helper.AppendFunc(ibT("HasChildren"), ibT("HasChildren()"));             // current node is an expandable folder
 	// …and WHICH BRANCH, where the totals forked (SPLIT). Both optional: no method is a flat walk, no
 	// branch is every branch in order.
-	helper.AppendFunc(wxT("Select"),   2, wxT("Select(method?, branch?)")); // descend into the node's child sub-selection
-	helper.AppendFunc(wxT("Total"),    1, wxT("Total(name : string)"));      // grand total over the whole result
-	helper.AppendFunc(wxT("Level"),       wxT("Level()"));                   // node depth (0 = grand total / flat row)
+	helper.AppendFunc(ibT("Select"),   2, ibT("Select(method?, branch?)")); // descend into the node's child sub-selection
+	helper.AppendFunc(ibT("Total"),    1, ibT("Total(name : string)"));      // grand total over the whole result
+	helper.AppendFunc(ibT("Level"),       ibT("Level()"));                   // node depth (0 = grand total / flat row)
 
 	// Output columns are read DIRECTLY as attributes (s.ColumnName) — no Field() accessor.
 	for (size_t i = 0; i < m_schema.size(); ++i)
@@ -466,14 +469,14 @@ bool ibValueQuerySelect::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		// ⭐⭐ …AND WHICH BRANCH OF IT — `Select(ByGroups, "ByCharacteristic")`, where the totals
 		// forked (`SPLIT`). Named nothing, the walk goes THROUGH the forks in order and hands back
 		// every group there is, which is what every script written before branches asks for and gets.
-		const wxString branch = (lSizeArray >= 2 && paParams[1] != nullptr)
+		const ibString branch = (lSizeArray >= 2 && paParams[1] != nullptr)
 			? paParams[1]->GetString() : ibString();
 		// ⭐ THE SHAPE OF THE WALK, in the journal: which level was descended from and how many rows
 		// came back. "It shows one value" and "it shows the last of sixty-three" look identical in a
 		// watch window, and this is the line that tells them apart without anyone guessing.
 		ibSelector sub = branch.IsEmpty() ? m_tree->Select(kind) : m_tree->Select(kind, branch);
-		const wxString into = branch.IsEmpty() ? wxString() : wxT(" into branch '") + branch + wxT("'");
-		ibJournalInfo(wxT("query.walk"), wxT("descend from level %d%s: %ld node(s)"),
+		const ibString into = branch.IsEmpty() ? ibString() : ibT(" into branch '") + branch + ibT("'");
+		ibJournalInfo(ibT("query.walk"), ibT("descend from level %d%s: %ld node(s)"),
 			m_tree->Level(), into, sub.NodeCount());
 		pvarRetValue = new ibValueQuerySelect(std::move(sub), m_schema, m_snapshot, m_temps);
 		return true;
@@ -481,7 +484,7 @@ bool ibValueQuerySelect::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 
 	case enTotal: {
 		if (lSizeArray < 1 || m_tree == nullptr) { pvarRetValue = ibValue(); return true; }
-		const wxString name = paParams[0]->GetString();
+		const ibString name = paParams[0]->GetString();
 		for (const ibQueryLowering::OutputColumn& oc : m_schema)
 			if (oc.m_name.CmpNoCase(name) == 0) {
 				pvarRetValue = oc.m_byAlias ? m_tree->GetTotalColumn(oc.m_alias) : m_tree->GetTotal(oc.m_col);

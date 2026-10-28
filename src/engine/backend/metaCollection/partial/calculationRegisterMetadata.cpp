@@ -76,12 +76,12 @@ void ibValueMetaObjectCalculationRegister::ApplyChartBinding()
 ibValueMetaObjectCalculationRegister::ibValueMetaObjectCalculationRegister() : ibValueMetaObjectRegisterData()
 {
 	//set default proc
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel"), ibT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel"), ibT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
 	
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("Form"), ibT("Cancel") });
 }
 
 ibValueMetaObjectCalculationRegister::~ibValueMetaObjectCalculationRegister()
@@ -144,7 +144,7 @@ bool ibValueMetaObjectCalculationRegister::WriteData(ibDataNode& node) const
 
 bool ibValueMetaObjectCalculationRegister::ReadData(const ibDataNode& node)
 {
-	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormList->GetName())));
 
 	m_propertyChartOfCalculationTypes->SetNodeValue(node.GetProperty(m_propertyChartOfCalculationTypes->GetName()));
 	m_propertySchedule->SetNodeValue(node.GetProperty(m_propertySchedule->GetName()));
@@ -162,7 +162,7 @@ bool ibValueMetaObjectCalculationRegister::ReadData(const ibDataNode& node)
 	m_propertyAttributeCalculationType->SetNodeValue(node.GetProperty(m_propertyAttributeCalculationType->GetName()));
 
 	m_propertyUseRecalculation->SetNodeValue(node.GetProperty(m_propertyUseRecalculation->GetName()));
-	if (const ibDataNode* saved = node.FindChild(m_recalculation->GetName()))
+	if (auto saved = node.FindChild(m_recalculation->GetName()))
 		m_recalculation->LoadNode(*saved);
 
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
@@ -219,8 +219,8 @@ bool ibValueMetaObjectCalculationRegister::OnLoadMetaObject(ibMetaData* metaData
 	std::vector<ibValueMetaObjectRecalculation*> saved;
 	FillArrayObjectByFilter<ibValueMetaObjectRecalculation>(saved, { g_metaRecalculationCLSID });
 	for (ibValueMetaObjectRecalculation* recalculation : saved) {
-		ibJournalInfo(wxT("metadata"), wxT("%s: the recalculation '%s' saved as an object of its own is let go - the register ")
-			wxT("keeps its marks itself now; switch 'Use recalculation' on, and drop the table it had"), GetName(), recalculation->GetName());
+		ibJournalInfo(ibT("metadata"), ibT("%s: the recalculation '%s' saved as an object of its own is let go - the register ")
+			ibT("keeps its marks itself now; switch 'Use recalculation' on, and drop the table it had"), GetName(), recalculation->GetName());
 		RemoveChild(recalculation);
 	}
 
@@ -238,7 +238,7 @@ bool ibValueMetaObjectCalculationRegister::OnSaveMetaObject(int flags)
 	// ledger and a false return, with no exception leaving this function — so the configuration write
 	// transaction closes normally and the next save is not met by a deadlock.
 	if (m_propertyChartOfCalculationTypes->IsEmptyProperty()) {
-		RestructureError(wxString::Format(
+		RestructureError(ibString::Format(
 			_("%s: a chart of calculation types is required - the calculation type, the displacement relation and every priority derived from it all come from it"), GetName()));
 		return false;
 	}
@@ -249,7 +249,7 @@ bool ibValueMetaObjectCalculationRegister::OnSaveMetaObject(int flags)
 	if (IsUseActionPeriod()) {
 		const ibValueMetaObjectChartOfCalculationTypes* chart = GetChartOfCalculationTypes();
 		if (chart != nullptr && !chart->IsUseActionPeriod()) {
-			RestructureError(wxString::Format(
+			RestructureError(ibString::Format(
 				_("%s keeps action periods, but its chart of calculation types %s does not use them - turn 'Use action period' on for the chart, or off for the register"),
 				GetName(), chart->GetName()));
 			return false;
@@ -264,7 +264,7 @@ bool ibValueMetaObjectCalculationRegister::OnSaveMetaObject(int flags)
 		// register, the value and the date were asked: a schedule with a link left empty saved (Max, 2026-09-17).
 		const ibCalcScheduleDescription& scheduleDesc = GetScheduleDesc();
 		if (!scheduleDesc.IsOk()) {
-			RestructureError(wxString::Format(
+			RestructureError(ibString::Format(
 				_("%s keeps action periods, so it needs a schedule - choose the schedule register, its value and its date, or turn 'Use action period' off"),
 				GetName()));
 			return false;
@@ -275,35 +275,35 @@ bool ibValueMetaObjectCalculationRegister::OnSaveMetaObject(int flags)
 					return true;
 			return false;
 		};
-		wxArrayString missing;
+		std::vector<ibString> missing;
 		ibPropertyChoiceList values, dates, links;
 		m_propertySchedule->GetScheduleValueList(scheduleDesc, values);
 		m_propertySchedule->GetScheduleDateList(scheduleDesc, dates);
 		m_propertySchedule->GetScheduleLinkList(scheduleDesc, links);
 		if (values.GetCount() == 0 && dates.GetCount() == 0 && links.GetCount() == 0)
-			missing.Add(_("the schedule register"));   // it has gone: nothing of it can be offered
+			missing.push_back(_("the schedule register"));   // it has gone: nothing of it can be offered
 		else {
 			if (!offers(values, scheduleDesc.GetValue()))
-				missing.Add(_("the schedule value"));
+				missing.push_back(_("the schedule value"));
 			// The links are the dimensions left once the date is taken — so they are asked only when it is.
 			if (!offers(dates, scheduleDesc.GetDate()))
-				missing.Add(_("the schedule date"));
+				missing.push_back(_("the schedule date"));
 			else
 				for (unsigned int idx = 0; idx < links.GetCount(); idx++) {
 					ibPropertyChoiceList fields;
 					m_propertySchedule->GetScheduleFieldList(links.GetId(idx), fields);
 					if (fields.GetCount() == 0)   // nothing of this register can answer for it: say so, there is nothing to choose
-						missing.Add(wxString::Format(_("a schedule whose dimensions this register can link ('%s' has no dimension of its type here - add one)"),
+						missing.push_back(ibString::Format(_("a schedule whose dimensions this register can link ('%s' has no dimension of its type here - add one)"),
 							links.GetName(idx)));
 					else if (!offers(fields, scheduleDesc.GetLinkedField(links.GetId(idx))))
-						missing.Add(wxString::Format(_("the schedule link for '%s'"), links.GetName(idx)));
+						missing.push_back(ibString::Format(_("the schedule link for '%s'"), links.GetName(idx)));
 				}
 		}
-		if (!missing.IsEmpty()) {
-			wxString parts;
-			for (const wxString& part : missing)
-				parts << (parts.IsEmpty() ? wxT("") : wxT(", ")) << part;
-			RestructureError(wxString::Format(
+		if (!missing.empty()) {
+			ibString parts;
+			for (const ibString& part : missing)
+				parts << (parts.IsEmpty() ? ibT("") : ibT(", ")) << part;
+			RestructureError(ibString::Format(
 				_("%s keeps action periods, and its schedule is not complete - choose %s, or turn 'Use action period' off"),
 				GetName(), parts));
 			return false;
@@ -403,6 +403,11 @@ bool ibValueMetaObjectCalculationRegister::OnAfterRunMetaObject(int flags)
 		m_metaData->RegisterSource(&m_scheduleDataSource);
 	if (HasRecalculation())
 		m_metaData->RegisterSource(&m_recalculationSource);
+	// The base, a table a register this one takes it from, where its chart takes a base at all.
+	const ibValueMetaObjectChartOfCalculationTypes* chart = GetChartOfCalculationTypes();
+	if (chart != nullptr && chart->GetBaseDependence() != ibBaseDependence::eBaseNone)
+		for (const ibValueMetaObjectCalculationRegister* base : GetRelatedRegisters())
+			m_metaData->RegisterSource(&m_baseSources.emplace_back(this, base));
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -421,7 +426,11 @@ bool ibValueMetaObjectCalculationRegister::OnAfterRunMetaObject(int flags)
 bool ibValueMetaObjectCalculationRegister::OnBeforeCloseMetaObject()
 {
 	m_metaData->UnregisterSource(&m_factSource);   // mirror of the run's RegisterSource
+	m_metaData->UnregisterSource(&m_scheduleDataSource);
 	m_metaData->UnregisterSource(&m_recalculationSource);
+	for (ibCalcBaseSourceDescriptor& source : m_baseSources)
+		m_metaData->UnregisterSource(&source);
+	m_baseSources.clear();
 
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject())
 		return false;

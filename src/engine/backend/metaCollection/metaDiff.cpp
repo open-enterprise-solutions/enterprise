@@ -11,45 +11,33 @@
 #include <unordered_set>
 #include <vector>
 
-#include <wx/translation.h>
-
 namespace {
-// Convert a property's wxVariant value to a display string. wxVariant::
-// MakeString() returns raw bytes for non-string variant types (object
-// refs, binary blobs, custom types), which the dataview renders as
-// garbled characters in the left/right columns. Branch on the variant
-// type for the safe cases; for everything else, strip control
-// characters and cap the length so the row stays readable.
-wxString StringifyPropertyValue(const ibProperty* prop) {
-	if (prop == nullptr) return wxString();
+// Convert a property's value to a display string. A live value's text
+// (a module, a binary blob) can carry control characters, which render as
+// garbage in the left/right columns: strip them and cap the length so the
+// row stays readable.
+ibString StringifyPropertyValue(const ibProperty* prop) {
+	if (prop == nullptr) return ibString();
 
-	const wxVariant& val = prop->GetValue();
-	if (val.IsNull()) return wxString();
+	const ibVariant& val = prop->GetValue();
+	if (val.GetType() == ibValueTypes::TYPE_EMPTY) return ibString();
+	if (val.GetType() == ibValueTypes::TYPE_STRING) return val.GetString();
 
-	const wxString type = val.GetType();
-	if (type == wxT("string"))     return val.GetString();
-	if (type == wxT("long"))       return wxString::Format(wxT("%ld"), val.GetLong());
-	if (type == wxT("longlong"))   return wxString::Format(wxT("%lld"),
-		static_cast<long long>(val.GetLongLong().GetValue()));
-	if (type == wxT("double"))     return wxString::Format(wxT("%g"), val.GetDouble());
-	if (type == wxT("bool"))       return val.GetBool() ? wxT("true") : wxT("false");
-	if (type == wxT("datetime"))   return val.GetDateTime().FormatISOCombined();
-
-	// Unknown variant type — try MakeString and strip control bytes
-	// so the row stays printable. Truncate so a runaway blob doesn't
-	// push the right-side columns off-screen.
-	wxString raw = val.MakeString();
-	wxString clean;
+	// Anything else — its text, control bytes stripped so the row stays
+	// printable, truncated so a runaway blob does not push the right-side
+	// columns off-screen.
+	ibString raw = val.GetString();
+	ibString clean;
 	clean.reserve(raw.length());
-	for (wxString::const_iterator it = raw.begin(); it != raw.end(); ++it) {
-		const wxUniChar ch = *it;
+	for (ibString::const_iterator it = raw.begin(); it != raw.end(); ++it) {
+		const ibChar ch = *it;
 		const int code = static_cast<int>(ch);
 		if (code >= 0x20 || code == 0x09 /* tab */)
 			clean += ch;
 	}
 	const size_t kMaxLen = 200;
 	if (clean.length() > kMaxLen)
-		clean = clean.Left(kMaxLen) + wxT("...");
+		clean = clean.Left(kMaxLen) + ibT("...");
 	return clean;
 }
 
@@ -85,17 +73,17 @@ bool IsStructuralProperty(const ibProperty* prop) {
 // rows it inserts itself.
 
 // static
-wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
+ibString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 {
 	if (clsid == g_diffCommonUmbrellaClsid)             return _("Common");
 	if (clsid == g_diffPropertiesGroupClsid)            return _("Properties");
 
-	const wxString caption = ibMetaGroupCaption(clsid);
+	const ibString caption = ibMetaGroupCaption(clsid);
 	if (!caption.IsEmpty())
 		return caption;
 
 	// Unknown CLSID — show its raw symbol so the UI never blanks.
-	return wxString::Format(wxT("[%llu]"),
+	return ibString::Format(ibT("[%llu]"),
 		static_cast<unsigned long long>(clsid));
 }
 
@@ -204,14 +192,13 @@ void ibMetaDiffWalker::WalkPair(
 				if (IsStructuralProperty(propLeft))
 					continue;
 
-				const wxString& propName = propLeft->GetName();
+				const ibString& propName = propLeft->GetName();
 				const ibProperty* propRight = right->GetProperty(propName);
 
-				// Safe stringifier — wxVariant::MakeString() on non-
-				// string types produces binary garbage that renders as
-				// kr akozyabry in the value columns.
-				const wxString leftStr = StringifyPropertyValue(propLeft);
-				const wxString rightStr = StringifyPropertyValue(propRight);
+				// Safe stringifier — a live value's text can carry control
+				// bytes that render as garbage in the value columns.
+				const ibString leftStr = StringifyPropertyValue(propLeft);
+				const ibString rightStr = StringifyPropertyValue(propRight);
 
 				ibMetaDiffRecord propRec;
 				propRec.m_propertyName = propLeft->GetLabel().IsEmpty()

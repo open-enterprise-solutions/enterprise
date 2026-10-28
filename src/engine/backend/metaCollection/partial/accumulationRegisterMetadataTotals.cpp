@@ -49,13 +49,13 @@ static void SeedRamTableFromView(ibQueryRamTable& table, const ibBackendQueryabl
 		return;
 
 	const ibValueMetaObjectAttributeBase* period = reg != nullptr ? reg->GetRegisterPeriod() : nullptr;
-	const wxString periodName = period != nullptr ? period->GetName() : wxString();
+	const ibString periodName = period != nullptr ? period->GetName() : ibString();
 
 	// The movement's own identity travels with the same rule the field tree uses — a row that covers
 	// a whole interval was written by no one document, so it carries neither.
 	const bool subordinate = reg != nullptr && reg->HasRecorder();
-	const wxString recorderName = subordinate && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : wxString();
-	const wxString lineName     = subordinate && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : wxString();
+	const ibString recorderName = subordinate && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : ibString();
+	const ibString lineName     = subordinate && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : ibString();
 	for (const ibBackendQueryColumn* col : view->GetColumns()) {
 		if (col == nullptr)
 			continue;
@@ -113,7 +113,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 	if (source == nullptr)
 		return retTable;
 
-	const wxString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : wxString();
+	const ibString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : ibString();
 	const ibBackendQueryColumn* periodCol = source->ResolveColumnByName(periodName);
 
 	ibDataQueryBuilder b;
@@ -138,7 +138,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 
 	// `<Resource>Turnover` summed up to the moment IS `<Resource>Balance` — read under the turnover
 	// name, published under the balance one.
-	std::vector<std::pair<wxString, wxString>> figures;   // read-as, publish-as
+	std::vector<std::pair<ibString, ibString>> figures;   // read-as, publish-as
 	for (const auto res : GetResourceArrayObject())
 		if (res != nullptr)
 			figures.push_back({ res->GetName() + ibRegFigure::Turnover, res->GetName() + ibRegFigure::Balance });
@@ -171,7 +171,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 	// rows gathered before the fault — figures under a register's name that reconcile to nothing,
 	// with nothing said anywhere. The reading says what happened; the caller decides what it means.
 	catch (const ibCoreException& err) {
-		ibJournalError(wxT("register.totals"), wxT("balance read failed: %s"), err.GetErrorDescription());
+		ibJournalError(ibT("register.totals"), ibT("balance read failed: %s"), err.GetErrorDescription());
 		throw;
 	}
 
@@ -302,7 +302,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	if (source == nullptr)
 		return retTable;
 
-	const wxString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : wxString();
+	const ibString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : ibString();
 	const ibBackendQueryColumn* periodCol = source->ResolveColumnByName(periodName);
 
 	ibDataQueryBuilder b;
@@ -370,7 +370,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	// SUM every figure the view reports. Which ones exist is the view's business — a turnover-only
 	// register simply has no receipt or expense column, and nothing here needs to know that rule.
 	const bool withSign = (GetRegisterType() == ibRegisterType::eBalances);
-	std::vector<wxString> figures;
+	std::vector<ibString> figures;
 	for (const auto res : GetResourceArrayObject()) {
 		if (res == nullptr)
 			continue;
@@ -382,7 +382,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	}
 	if (!atMovementGrain) {
 		// The surface already holds each figure, computed and stored. Reading is all that is left.
-		for (const wxString& figure : figures)
+		for (const ibString& figure : figures)
 			if (const ibBackendQueryColumn* col = view->ResolveColumnByName(figure))
 				b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, figure);
 	}
@@ -454,7 +454,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 			// rows out, one clause fewer in the SQL.
 			std::vector<ibValue> values;
 			bool anyNonZero = false;
-			for (const wxString& figure : figures) {
+			for (const ibString& figure : figures) {
 				ibValue v = sel.GetColumn(figure);
 				if (!(v.GetNumber() == ibNumber())) anyNonZero = true;
 				values.push_back(v);
@@ -475,7 +475,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	// materialised road against this one, so a fault read as "no turnovers" would report the two
 	// roads as disagreeing about the figures rather than as one of them being unable to answer.
 	catch (const ibCoreException& err) {
-		ibJournalError(wxT("register.totals"), wxT("turnover read failed: %s"), err.GetErrorDescription());
+		ibJournalError(ibT("register.totals"), ibT("turnover read failed: %s"), err.GetErrorDescription());
 		throw;
 	}
 
@@ -515,7 +515,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 
 	// The period column is named after the register's OWN period attribute — the view names it that
 	// way, so every reader must ask rather than assume the word.
-	const wxString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : wxString();
+	const ibString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : ibString();
 	const ibMetaID periodId   = retTable.ColumnIdByName(periodName);
 
 	std::vector<ibBalanceFoldSlot> slots;
@@ -559,12 +559,14 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	// its key and the report would look like a fresh start.
 
 	// --- 1. OPENING — the turnovers strictly before the interval, per key ----------------------
+	// No beginning given, nothing stands before it: the reading starts at the first movement. Read anyway,
+	// with no bound, the whole history came back as the seed - every key opened at today's balance and
+	// rolled its own movements on top of it (2026-10-28, a report by recorder with no period given).
 	ibBalanceOpening opening;
-	if (withSign) {
+	if (withSign && periodCol != nullptr && !cBegin.IsEmpty()) {
 		ibDataQueryBuilder b;
 		openRead(b);
-		if (periodCol != nullptr && !cBegin.IsEmpty())
-			b.WhereCompare(periodCol, ibQueryFilterOp::Less, cBegin);
+		b.WhereCompare(periodCol, ibQueryFilterOp::Less, cBegin);
 		for (const auto res : resources)
 			if (const ibBackendQueryColumn* col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Turnover))
 				b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, res->GetName() + ibRegFigure::Turnover);
@@ -589,7 +591,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		// complete one in which every key starts at zero. Every period after it is then wrong by the
 		// same amount, and the report still adds up.
 		catch (const ibCoreException& err) {
-			ibJournalError(wxT("register.totals"), wxT("opening balances failed: %s"), err.GetErrorDescription());
+			ibJournalError(ibT("register.totals"), ibT("opening balances failed: %s"), err.GetErrorDescription());
 			throw;
 		}
 	}
@@ -621,8 +623,8 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	// battery: `Period`, `Recorder` and `LineNumber` empty on every row).
 	const bool atMovementGrain = cFold.FromMovements();
 	const ibBackendQueryable* const reading = atMovementGrain ? GetQueryable() : source;
-	const wxString recorderName = GetRegisterRecorder()   != nullptr ? GetRegisterRecorder()->GetName()   : wxString();
-	const wxString lineName     = GetRegisterLineNumber() != nullptr ? GetRegisterLineNumber()->GetName() : wxString();
+	const ibString recorderName = GetRegisterRecorder()   != nullptr ? GetRegisterRecorder()->GetName()   : ibString();
+	const ibString lineName     = GetRegisterLineNumber() != nullptr ? GetRegisterLineNumber()->GetName() : ibString();
 	if (reading != nullptr) {
 		ibDataQueryBuilder b;
 		const ibBackendQueryColumn* readPeriod = atMovementGrain ? reading->ResolveColumnByName(periodName) : periodCol;
@@ -715,7 +717,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		// The movement inside the interval. Read as nothing, it says every period was quiet — and the
 		// balances still roll forward through them, so the answer looks like a register nobody wrote to.
 		catch (const ibCoreException& err) {
-			ibJournalError(wxT("register.totals"), wxT("period figures failed: %s"), err.GetErrorDescription());
+			ibJournalError(ibT("register.totals"), ibT("period figures failed: %s"), err.GetErrorDescription());
 			throw;
 		}
 	}
@@ -916,7 +918,7 @@ namespace {
 // given, which named a relation the reading no longer selects from: `Item.Kind = &K` asked for
 // `<register>_Turnovers.fld…` inside a statement that reads the rows as they stand, and failed on every engine.
 std::vector<ibQueryExprPtr> ReadFilters(
-	const ibValueMetaObjectAccumulationRegister* reg, const ibQueryPredicatePtr& filter, const wxString& rows)
+	const ibValueMetaObjectAccumulationRegister* reg, const ibQueryPredicatePtr& filter, const ibString& rows)
 {
 	std::vector<ibQueryExprPtr> out;
 	if (reg == nullptr || !filter)
@@ -934,21 +936,21 @@ std::vector<ibQueryExprPtr> ReadFilters(
 // under the one name both are read by. False when the register declares no totals — the reading then has no
 // surface to be composed over, and answers as the live road does.
 bool ReadRowsAsTheyStand(const ibValueMetaObjectAccumulationRegister* reg, const ibQueryPredicatePtr& filter,
-                         const wxString& alias, ibMaterializeReadSpec& r)
+                         const ibString& alias, ibMaterializeReadSpec& r)
 {
 	if (!reg->GetTotalsRows(r.m_storedRows, r.m_movedRows))
 		return false;
-	r.m_rowsAlias = alias + wxT("_rows");
+	r.m_rowsAlias = alias + ibT("_rows");
 	r.m_filters   = ReadFilters(reg, filter, r.m_rowsAlias);
 	return true;
 }
 
 // Every dimension's physical fields — the key of any read over the surface.
-std::vector<wxString> ReadKeys(const ibValueMetaObjectAccumulationRegister* reg)
+std::vector<ibString> ReadKeys(const ibValueMetaObjectAccumulationRegister* reg)
 {
-	std::vector<wxString> out;
+	std::vector<ibString> out;
 	for (const auto dimension : reg->GetDimensionArrayObject())
-		for (const wxString& f : ibRegFieldsOf(dimension))
+		for (const ibString& f : ibRegFieldsOf(dimension))
 			out.push_back(f);
 	return out;
 }
@@ -971,7 +973,7 @@ std::vector<wxString> ReadKeys(const ibValueMetaObjectAccumulationRegister* reg)
 // the truncation the trigger renders, because a floor that disagreed with the stored key by one
 // second would drop or duplicate a whole grain.
 
-ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const wxString& alias) const
+ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const ibString& alias) const
 {
 	if (IsComputedInRam())
 		return nullptr;
@@ -1006,12 +1008,12 @@ ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const wxString& alias) const
 		if (res != nullptr)
 			r.m_columns.push_back({ ibRegPhysicalOf(outView, res->GetName() + ibRegFigure::Balance),
 			                        ibRegPhysicalOf(srcView, res->GetName() + ibRegFigure::Turnover),
-			                        wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true });
+			                        ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true });
 
 	return RenderMaterializedRead(r, alias);
 }
 
-ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) const
+ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const ibString& alias) const
 {
 	if (IsComputedInRam())
 		return nullptr;
@@ -1071,15 +1073,15 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) cons
 	// decides which rows each half of the union contributes; the bound belongs to the FIGURE, and a
 	// row that falls outside adds a zero to its group rather than removing the group. Whatever is
 	// then all zeros is dropped by m_dropZeroRows, which needs the aggregate to exist at all.
-	auto passThrough = [&](const wxString& logical) {
-		const wxString field = ibRegPhysicalOf(view, logical);
+	auto passThrough = [&](const ibString& logical) {
+		const ibString field = ibRegPhysicalOf(view, logical);
 		if (!field.IsEmpty())
-			r.m_columns.push_back({ field, field, wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
+			r.m_columns.push_back({ field, field, ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
 	};
 	for (const auto res : m_reg->GetResourceArrayObject()) {
 		if (res == nullptr)
 			continue;
-		const wxString base = res->GetName();
+		const ibString base = res->GetName();
 		passThrough(base + ibRegFigure::Receipt);
 		if (withSign)
 			passThrough(base + ibRegFigure::Expense);
@@ -1089,7 +1091,7 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) cons
 	return RenderMaterializedRead(r, alias);
 }
 
-ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& alias) const
+ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const ibString& alias) const
 {
 	if (IsComputedInRam())
 		return nullptr;
@@ -1170,29 +1172,29 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 		o.m_fromGrain    = ibValue();
 		o.m_dropZeroRows = false;
 
-		std::vector<wxString> passThrough, published;
+		std::vector<ibString> passThrough, published;
 		std::vector<ibRegRunningFigure> running;
 		for (const auto res : m_reg->GetResourceArrayObject()) {
 			if (res == nullptr)
 				continue;
-			const wxString base = res->GetName();
-			const wxString turn = ibRegPhysicalOf(src, base + ibRegFigure::Turnover);
-			const wxString receipt  = ibRegPhysicalOf(out, base + ibRegFigure::Receipt);
-			const wxString expense  = ibRegPhysicalOf(out, base + ibRegFigure::Expense);
-			const wxString turnover = ibRegPhysicalOf(out, base + ibRegFigure::Turnover);
-			const wxString opening  = ibRegPhysicalOf(out, base + ibRegFigure::OpeningBalance);
-			const wxString closing  = ibRegPhysicalOf(out, base + ibRegFigure::ClosingBalance);
-			t.m_columns.push_back({ receipt,  ibRegPhysicalOf(src, base + ibRegFigure::Receipt), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
-			t.m_columns.push_back({ expense,  ibRegPhysicalOf(src, base + ibRegFigure::Expense), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
-			t.m_columns.push_back({ turnover, turn, wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
-			o.m_columns.push_back({ opening,  turn, wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true });
+			const ibString base = res->GetName();
+			const ibString turn = ibRegPhysicalOf(src, base + ibRegFigure::Turnover);
+			const ibString receipt  = ibRegPhysicalOf(out, base + ibRegFigure::Receipt);
+			const ibString expense  = ibRegPhysicalOf(out, base + ibRegFigure::Expense);
+			const ibString turnover = ibRegPhysicalOf(out, base + ibRegFigure::Turnover);
+			const ibString opening  = ibRegPhysicalOf(out, base + ibRegFigure::OpeningBalance);
+			const ibString closing  = ibRegPhysicalOf(out, base + ibRegFigure::ClosingBalance);
+			t.m_columns.push_back({ receipt,  ibRegPhysicalOf(src, base + ibRegFigure::Receipt), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
+			t.m_columns.push_back({ expense,  ibRegPhysicalOf(src, base + ibRegFigure::Expense), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
+			t.m_columns.push_back({ turnover, turn, ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
+			o.m_columns.push_back({ opening,  turn, ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true });
 			passThrough.insert(passThrough.end(), { receipt, expense, turnover });
 			running.push_back({ turnover, opening, opening, closing });
 			published.insert(published.end(), { opening, receipt, expense, turnover, closing });
 		}
 
-		const wxString aG = alias + wxT("_g");
-		const ibQueryRelPtr grid = ibRegRunningGrid(RenderMaterializedRead(o, alias + wxT("_or")), RenderMaterializedRead(t, alias + wxT("_tr")),
+		const ibString aG = alias + ibT("_g");
+		const ibQueryRelPtr grid = ibRegRunningGrid(RenderMaterializedRead(o, alias + ibT("_or")), RenderMaterializedRead(t, alias + ibT("_tr")),
 			calendar, r.m_periodColumn, r.m_keyColumns, passThrough, running, alias);
 		if (grid == nullptr)
 			return nullptr;
@@ -1201,10 +1203,10 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 		// non-zero" the window read prunes by.
 		ibQueryExprPtr anyFigure;
 		std::vector<ibQueryProjItem> projection;
-		for (const wxString& key : r.m_keyColumns)
+		for (const ibString& key : r.m_keyColumns)
 			projection.push_back({ ibCol(aG, key), key });
 		projection.push_back({ ibCol(aG, r.m_periodColumn), r.m_periodColumn });
-		for (const wxString& name : published) {
+		for (const ibString& name : published) {
 			const ibQueryExprPtr one = ibBinOp(ibQueryBinOp::Ne, ibCol(aG, name), ibRegTypedZero());
 			anyFigure = anyFigure ? ibBinOp(ibQueryBinOp::Or, anyFigure, one) : one;
 			projection.push_back({ ibCol(aG, name), name });
@@ -1218,10 +1220,10 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 	for (const auto res : m_reg->GetResourceArrayObject()) {
 		if (res == nullptr)
 			continue;
-		const wxString base = res->GetName();
-		const wxString turn = ibRegPhysicalOf(src, base + ibRegFigure::Turnover);
-		const wxString rec  = ibRegPhysicalOf(src, base + ibRegFigure::Receipt);
-		const wxString exp  = ibRegPhysicalOf(src, base + ibRegFigure::Expense);
+		const ibString base = res->GetName();
+		const ibString turn = ibRegPhysicalOf(src, base + ibRegFigure::Turnover);
+		const ibString rec  = ibRegPhysicalOf(src, base + ibRegFigure::Receipt);
+		const ibString exp  = ibRegPhysicalOf(src, base + ibRegFigure::Expense);
 
 		if (periodised) {
 			// Rows are grouped by the period, so each figure of a period is a sum of that period's rows.
@@ -1230,19 +1232,19 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 			// ⚠ …AND THE MOVEMENTS ARE STILL CONDITIONED TO THE INTERVAL. The read carries the history
 			// the balances are made of, the morning before an interval that starts at noon among it, and
 			// a period's receipt summed over everything it holds would count that morning.
-			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::OpeningBalance), turn, wxString(), ibMaterializeAgg::RunningSumExcludingCurrent, ibMaterializeWhen::Always, true });
-			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Receipt),        rec,  wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::InRange, true });
-			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Expense),        exp,  wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::InRange, true });
-			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Turnover),       turn, wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::InRange, true });
-			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::ClosingBalance), turn, wxString(), ibMaterializeAgg::RunningSum,                 ibMaterializeWhen::Always, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::OpeningBalance), turn, ibString(), ibMaterializeAgg::RunningSumExcludingCurrent, ibMaterializeWhen::Always, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Receipt),        rec,  ibString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::InRange, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Expense),        exp,  ibString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::InRange, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Turnover),       turn, ibString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::InRange, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::ClosingBalance), turn, ibString(), ibMaterializeAgg::RunningSum,                 ibMaterializeWhen::Always, true });
 			continue;
 		}
 
-		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::OpeningBalance), turn, wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true });
-		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Receipt),        rec,  wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true });
-		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Expense),        exp,  wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true });
-		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Turnover),       turn, wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true });
-		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::ClosingBalance), turn, wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo,     true });
+		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::OpeningBalance), turn, ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true });
+		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Receipt),        rec,  ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true });
+		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Expense),        exp,  ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true });
+		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Turnover),       turn, ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true });
+		r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::ClosingBalance), turn, ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo,     true });
 	}
 
 	return RenderMaterializedRead(r, alias);

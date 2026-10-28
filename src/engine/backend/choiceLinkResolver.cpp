@@ -122,7 +122,7 @@ const ibValueMetaObjectAttributeBase* ibChoiceLinkResolver::FieldOf(const ibChoi
 	//
 	// The leaf of a one-hop path IS its head, and it stands among the HOLDER's own fields — which is
 	// the SAME question a link's path asks, so it is the same lookup and not a second spelling of it.
-	// The tree already answers this pair both ways in one breath: ibVariantDataSource::
+	// The tree already answers this pair both ways in one breath: ibVariantSource::
 	// RefreshTypeFromSource takes the walked leaf's type, or the head's when there is no leaf.
 	return FieldOfPath(holder, bound->GetSourceDesc());
 }
@@ -183,7 +183,7 @@ bool ibChoiceLinkResolver::ResolveParameters(const ibChoiceParametersDescription
 		if (parameter == nullptr || parameter->IsDeleted()) {
 			// A row naming a field the configuration no longer holds narrows nothing — and said nothing,
 			// which is how this arc spent an afternoon opening unnarrowed lists with no refusal anywhere.
-			ibJournalWarning(wxT("choice.param"), wxT("row names #%d, which this configuration has not - skipped"),
+			ibJournalWarning(ibT("choice.param"), ibT("row names #%d, which this configuration has not - skipped"),
 				row.m_parameter);
 			continue;
 		}
@@ -197,12 +197,12 @@ bool ibChoiceLinkResolver::ResolveParameters(const ibChoiceParametersDescription
 		// (2026-09-24, on a copy of the owner demo).
 		ibValue value;
 		if (!holder.GetValue(row.m_source, value)) {
-			ibJournalWarning(wxT("choice.param"), wxT("'%s' takes its value from #%d, which this holder does not answer - skipped"),
+			ibJournalWarning(ibT("choice.param"), ibT("'%s' takes its value from #%d, which this holder does not answer - skipped"),
 				parameter->GetName(), row.m_source.GetLeaf());
 			continue;
 		}
 
-		ibJournalInfo(wxT("choice.param"), wxT("'%s' = %s [%s] (from #%d)"),
+		ibJournalInfo(ibT("choice.param"), ibT("'%s' = %s [%s] (from #%d)"),
 			parameter->GetName(), value.GetString(), value.GetClassName(), row.m_source.GetLeaf());
 
 		condition.m_parameters[parameter->GetName()] = value;
@@ -225,7 +225,7 @@ void ibChoiceLinkResolver::Fill(ibChoiceHolder& holder, const ibCreateRequest& r
 	// "never called" and is not the same thing as "called with an empty request". It was the second,
 	// and the line that would have separated them did not exist because it only ever printed per
 	// parameter. A decision with nothing in it is still a decision.
-	ibJournalInfo(wxT("choice.fill"), wxT("'%s': %d parameter(s) to write in"),
+	ibJournalInfo(ibT("choice.fill"), ibT("'%s': %d parameter(s) to write in"),
 		fields->GetName(), static_cast<int>(request.m_condition.m_parameters.size()));
 
 	// 🛑⭐ THE SAME LIST THE REST OF THIS FILE ASKS, and it has to be. `FindAnyObjectByFilter` searches
@@ -238,7 +238,7 @@ void ibChoiceLinkResolver::Fill(ibChoiceHolder& holder, const ibCreateRequest& r
 	// know about a field the other does not.
 	const std::vector<ibValueMetaObjectAttributeBase*> declared = fields->GetGenericAttributeArrayObject();
 
-	for (const std::pair<const wxString, ibValue>& parameter : request.m_condition.m_parameters) {
+	for (const std::pair<const ibString, ibValue>& parameter : request.m_condition.m_parameters) {
 		const ibValueMetaObjectAttributeBase* field = nullptr;
 		for (const ibValueMetaObjectAttributeBase* candidate : declared) {
 			if (candidate != nullptr && !candidate->IsDeleted() && candidate->GetName() == parameter.first) {
@@ -250,12 +250,12 @@ void ibChoiceLinkResolver::Fill(ibChoiceHolder& holder, const ibCreateRequest& r
 		if (field == nullptr) {
 			// The list was narrowed by a field of what is being SHOWN, and the thing being MADE has no
 			// field of that name — so the new record cannot be born matching the list, and says so.
-			ibJournalInfo(wxT("choice.fill"), wxT("'%s' names no field of '%s' - not filled"),
+			ibJournalInfo(ibT("choice.fill"), ibT("'%s' names no field of '%s' - not filled"),
 				parameter.first, fields->GetName());
 			continue;
 		}
 
-		ibJournalInfo(wxT("choice.fill"), wxT("'%s' = %s"), parameter.first, parameter.second.GetString());
+		ibJournalInfo(ibT("choice.fill"), ibT("'%s' = %s"), parameter.first, parameter.second.GetString());
 		holder.SetValue(field->GetMetaID(), parameter.second);
 	}
 }
@@ -314,7 +314,7 @@ ibValue ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder,
 	// reading code that looks right — hence a WARNING, with what was lost in it.
 	ibJournalIf {
 		if (!value.IsEmpty() && adjusted.IsEmpty())
-			ibJournalWarning(wxT("choice.adjust"), wxT("'%s' (#%d): %s was not admitted here - written empty"),
+			ibJournalWarning(ibT("choice.adjust"), ibT("'%s' (#%d): %s was not admitted here - written empty"),
 				field->GetName(), field->GetMetaID(), value.GetString());
 	}
 
@@ -382,7 +382,7 @@ void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& e
 		// it is a new row typed, and in a posting pass that is every row: the line alone was 3 s of 7 on
 		// twenty thousand register lines given a kind (2026-09-24, the write bench, Debug).
 		if (!current.IsEmpty())
-			ibJournalInfo(wxT("choice.clear"), wxT("'%s' (#%d) emptied - #%d changed under it"),
+			ibJournalInfo(ibT("choice.clear"), ibT("'%s' (#%d) emptied - #%d changed under it"),
 				field->GetName(), field->GetMetaID(), edited);
 
 		// Written through the source's own hop gate — the door every kind of source answers, so a

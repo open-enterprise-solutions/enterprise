@@ -1,7 +1,7 @@
 #include "clientChildFrame.h"
 #include "clientFrame.h"
 
-ibClientChildFrame::ibClientChildFrame(ibClientFrame* frame, s32 id, ibDocument* doc, ibView* view, const wxString& title)
+ibClientChildFrame::ibClientChildFrame(ibClientFrame* frame, std::int32_t id, ibDocument* doc, ibView* view, const ibString& title)
 	: ibDocChildFrameAnyBase(doc, view), m_frame(frame), m_id(id), m_title(title)
 {
 }
@@ -14,14 +14,14 @@ ibClientChildFrame::~ibClientChildFrame()
 	m_childDocument = nullptr;
 }
 
-wxString ibClientChildFrame::GetTitle() const
+ibString ibClientChildFrame::GetTitle() const
 {
 	const ibDocument* const document = GetDocument();
-	wxString title = document != nullptr && !document->GetTitle().IsEmpty() ? document->GetTitle() : m_title;
+	ibString title = document != nullptr && !document->GetTitle().IsEmpty() ? document->GetTitle() : m_title;
 	// …and "*" while its document is modified — what the desktop's view put into its frame's label
 	// (ibView::OnChangeFilename); the client shows the title as it is given.
 	if (document != nullptr && document->IsModified())
-		title += wxT("*");
+		title += ibT("*");
 	return title;
 }
 

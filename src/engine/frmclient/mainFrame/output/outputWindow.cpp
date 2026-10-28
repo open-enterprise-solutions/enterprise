@@ -41,9 +41,9 @@ ibOutputWindow::ibOutputWindow(ibFrontendMainFrame* parent, wxWindowID winid)
 
 	// The level of a message is the picture in the margin - the provider's (artProvider/service/output*.svg).
 	const wxSize markerSize = FromDIP(wxSize(12, 12));
-	MarkerDefineBitmap(static_cast<int>(ibProtocolMessageLevel::Information), wxArtProvider::GetBitmap(wxART_OUTPUT_INFORMATION, wxART_SERVICE, markerSize));
-	MarkerDefineBitmap(static_cast<int>(ibProtocolMessageLevel::Warning), wxArtProvider::GetBitmap(wxART_OUTPUT_WARNING, wxART_SERVICE, markerSize));
-	MarkerDefineBitmap(static_cast<int>(ibProtocolMessageLevel::Error), wxArtProvider::GetBitmap(wxART_OUTPUT_ERROR, wxART_SERVICE, markerSize));
+	MarkerDefineBitmap(static_cast<int>(ibProtocol::ibFrame::ibMessage::ibLevel::Information), wxArtProvider::GetBitmap(wxART_OUTPUT_INFORMATION, wxART_SERVICE, markerSize));
+	MarkerDefineBitmap(static_cast<int>(ibProtocol::ibFrame::ibMessage::ibLevel::Warning), wxArtProvider::GetBitmap(wxART_OUTPUT_WARNING, wxART_SERVICE, markerSize));
+	MarkerDefineBitmap(static_cast<int>(ibProtocol::ibFrame::ibMessage::ibLevel::Error), wxArtProvider::GetBitmap(wxART_OUTPUT_ERROR, wxART_SERVICE, markerSize));
 
 	wxAcceleratorEntry entries[2];
 	entries[0].Set(wxACCEL_CTRL, (int)'A', idcmdSelectAll);
@@ -58,20 +58,15 @@ ibOutputWindow::ibOutputWindow(ibFrontendMainFrame* parent, wxWindowID winid)
 
 void ibOutputWindow::SetFontColorSettings(const ibFontColorSettings& settings)
 {
-	// For some reason StyleSetFont takes a (non-const) reference, so we need to make
-	// a copy before passing it in.
-	wxFont font = settings.GetFont();
-
+	// The messages in the code's font, selected in the selection's colours; the paper stays the window's own.
 	StyleClearAll();
-	StyleSetFont(wxSTC_STYLE_DEFAULT, font);
+	StyleSetFont(wxSTC_STYLE_DEFAULT, settings.GetFont());
+	StyleSetFont(wxSTC_C_DEFAULT, settings.GetFont(ibFontColorSettings::DisplayItem_Default));
+	StyleSetFont(wxSTC_C_IDENTIFIER, settings.GetFont(ibFontColorSettings::DisplayItem_Default));
 
-	SetSelForeground(true, settings.GetColors(ibFontColorSettings::DisplayItem_Selection).foreColor);
-	SetSelBackground(true, settings.GetColors(ibFontColorSettings::DisplayItem_Selection).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Default);
-
-	StyleSetFont(wxSTC_C_DEFAULT, font);
-	StyleSetFont(wxSTC_C_IDENTIFIER, font);
+	const ibFontColorSettings::Colors& selection = settings.GetColors(ibFontColorSettings::DisplayItem_Selection);
+	SetSelForeground(true, selection.foreColor);
+	SetSelBackground(true, selection.backColor);
 
 	SetMarginType(DEF_LINENUMBER_ID, wxSTC_MARGIN_NUMBER);
 	SetMarginWidth(DEF_LINENUMBER_ID, 0);
@@ -87,7 +82,7 @@ void ibOutputWindow::SetFontColorSettings(const ibFontColorSettings& settings)
 	SetEditable(false);
 }
 
-void ibOutputWindow::Output(const wxString& message, ibProtocolMessageLevel level)
+void ibOutputWindow::Output(const wxString& message, ibProtocol::ibFrame::ibMessage::ibLevel level)
 {
 	const int beforeAppendPosition = GetInsertionPoint();
 	const int beforeAppendLastPosition = GetLastPosition();

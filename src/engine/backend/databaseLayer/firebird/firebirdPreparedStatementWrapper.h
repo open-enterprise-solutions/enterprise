@@ -1,18 +1,9 @@
 #ifndef __FIREBIRD_PREPARED_STATEMENT_WRAPPER_H__
 #define __FIREBIRD_PREPARED_STATEMENT_WRAPPER_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
 #include "engine/ibase.h"
+
+#include <memory>
 
 #include "backend/databaseLayer/databaseErrorReporter.h"
 #include "backend/databaseLayer/databaseStringConverter.h"
@@ -26,12 +17,12 @@ class ibPreparedStatementFirebirdWrapper : public ibDatabaseErrorReporter, publi
 {
 public:
 	// ctor
-	ibPreparedStatementFirebirdWrapper(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL);
+	ibPreparedStatementFirebirdWrapper(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const ibString& strSQL);
 
 	// dtor
 	virtual ~ibPreparedStatementFirebirdWrapper();
 
-	bool Prepare(const wxString& strSQL);
+	bool Prepare(const ibString& strSQL);
 	bool Prepare();
 
 	// set field
@@ -54,13 +45,13 @@ public:
 private:
 	void InterpretErrorCodes();
 
-	wxString m_strSQL;
+	ibString m_strSQL;
 	isc_stmt_handle m_pStatement;
 	XSQLDA* m_pParameters;
 	isc_db_handle m_pDatabase;
 	isc_tr_handle m_pTransaction;
 
-	ibDatabaseParameterFirebirdCollection* m_pParameterCollection;
+	std::unique_ptr<ibDatabaseParameterFirebirdCollection> m_pParameterCollection;
 
 	ISC_STATUS_ARRAY m_Status;
 	ibInterfaceFirebird* m_pInterface;

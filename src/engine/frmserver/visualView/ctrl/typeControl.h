@@ -7,7 +7,7 @@
 
 ///////////////////////////////////////////////////////////////////////////
 #include "backend/backend_type.h"
-#include "backend/sourceDescription.h"   // ibSourceDescription::GetPath (GetSourceAbstractColumn inline)
+#include "core/description/sourceDescription.h"   // ibSourceDescription::GetPath (GetSourceAbstractColumn inline)
 #include "backend/compiler/value.h"
 #include "backend/createRequest.h"   // ibSelectMode (GetSelectMode's return type)
 #include "backend/choiceLinkResolver.h"             // ibChoiceHolder — who holds this control's field
@@ -52,7 +52,7 @@ public:
 	static bool ChooseValue(ibControlFrame* ownerValue, const class ibValueMetaObject* choiceForm = nullptr);
 
 	// A NUMBER ON ITS CALCULATOR, A DATE ON ITS CALENDAR — the desktop's SimpleChoice, drawn by the client under the
-	// field pressed (ibProtocolRequestKind::SimpleChoice); the value chosen is handed to the field. False when the type
+	// field pressed (ibProtocol::ibRequest::ibKind::SimpleChoice); the value chosen is handed to the field. False when the type
 	// is neither.
 	static bool SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid);
 
@@ -61,7 +61,7 @@ public:
 	static bool QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid);
 	// …and the same list NARROWED BY WHAT WAS TYPED: one match is taken at once, several are put
 	// to the person; typed text that matches nothing changes nothing.
-	static void QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const wxString& strData);
+	static void QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const ibString& strData);
 
 	static ibClassID ShowSelectType(const ibMetaData* metadata, const ibTypeDescription& typeDescription);
 

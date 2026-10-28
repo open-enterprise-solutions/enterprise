@@ -22,7 +22,7 @@ ibValueMetaObjectReport::ibValueMetaObjectReport() : ibValueMetaObjectRecordData
 	// box showing that composer runs it. Declaring a handler nothing raises is worse than none: the
 	// designer would list it, an author would write into it, and it would never be called.
 
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("Form"), ibT("Cancel") });
 }
 
 ibValueMetaObjectReport::~ibValueMetaObjectReport()
@@ -118,8 +118,8 @@ bool ibValueMetaObjectReport::ReadData(const ibDataNode& node)
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
 	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
-	m_propertyDefComposer->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefComposer->GetName())));
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefComposer->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefComposer->GetName())));
 
 	return true;
 }

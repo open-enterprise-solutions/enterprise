@@ -14,7 +14,7 @@ namespace {
 // (a tree's children, count 0) asks for as many.
 constexpr int kMaxFetchCount = 500;
 
-// A picture's id as the wire writes it — a decimal string: a u64 is past what a JSON number keeps.
+// A picture's id as the wire writes it — a decimal string: a std::uint64_t is past what a JSON number keeps.
 ibPictureID PictureIdOf(const wxString& text)
 {
 	unsigned long long id = 0;
@@ -34,7 +34,7 @@ bool ibViewTableRow::IsEqualTo(const ibDataViewObject& other) const
 	return row != nullptr && row->m_handle == m_handle;
 }
 
-bool ibViewTableRow::GetGroupCaption(wxString& caption) const
+bool ibViewTableRow::GetGroupCaption(ibString& caption) const
 {
 	if (m_group.IsEmpty())
 		return false;
@@ -50,34 +50,35 @@ const ibViewCell* ibViewTableRow::FindCell(long long column) const
 
 void ibViewTableRow::Read(const ibProtocolNode& row)
 {
-	m_container = row.GetBool(ibProtocolName::Container);
-	m_group = row.GetString(ibProtocolName::Group);
-	m_picture = PictureIdOf(row.GetString(ibProtocolName::Picture));
+	m_container = row.GetBool(ibProtocol::ibForm::ibTable::Container);
+	m_group = row.GetString(ibProtocol::ibForm::ibTable::Group);
+	m_picture = PictureIdOf(row.GetString(ibProtocol::ibForm::ibTable::Picture));
 
 	for (const ibProtocolNode& node : row.Children()) {
 		ibViewCell& cell = m_cells[node.GetId()];
-		cell.text = node.GetString(ibProtocolName::Text);
-		if (node.Has(ibProtocolName::Checked))
-			cell.checked = node.GetBool(ibProtocolName::Checked);
-		cell.number = node.GetBool(ibProtocolName::Number);
-		cell.editable = node.Has(ibProtocolName::Value);
+		cell.text = node.GetString(ibProtocol::ibForm::ibTable::Text);
+		if (node.Has(ibProtocol::ibForm::ibTable::Checked))
+			cell.checked = node.GetBool(ibProtocol::ibForm::ibTable::Checked);
+		cell.number = node.GetBool(ibProtocol::ibForm::ibTable::Number);
+		cell.editable = node.Has(ibProtocol::ibForm::ibTable::Value);
 
-		// Its look — what of it the server set (wxColour is a plain value here: this row is no one's yet).
-		const wxString colour = node.GetString(ibProtocolName::TextColour);
-		if (!colour.IsEmpty())
-			cell.look.SetColour(wxColour(colour));
-		const wxString background = node.GetString(ibProtocolName::BackgroundColour);
-		if (!background.IsEmpty())
-			cell.look.SetBackgroundColour(wxColour(background));
-		cell.look.SetBold(node.GetBool(ibProtocolName::Bold));
-		cell.look.SetItalic(node.GetBool(ibProtocolName::Italic));
-		cell.look.SetStrikethrough(node.GetBool(ibProtocolName::Strikethrough));
-		cell.look.SetUnderlined(node.GetBool(ibProtocolName::Underlined));
-		cell.look.SetPointSize(static_cast<int>(node.GetInt(ibProtocolName::Size)));
-		cell.look.SetFaceName(node.GetString(ibProtocolName::Face));
-		const wxString align = node.GetString(ibProtocolName::Align);
+		// Its look — what of it the server set, its colours in the engine's text of a colour (ibColour, as a form's).
+		ibColour colour;
+		if (colour.FromString(node.GetString(ibProtocol::ibForm::ibTable::TextColour)))
+			cell.look.SetColour(colour);
+		ibColour background;
+		if (background.FromString(node.GetString(ibProtocol::ibForm::ibTable::BackgroundColour)))
+			cell.look.SetBackgroundColour(background);
+		cell.look.SetBold(node.GetBool(ibProtocol::ibForm::ibTable::Bold));
+		cell.look.SetItalic(node.GetBool(ibProtocol::ibForm::ibTable::Italic));
+		cell.look.SetStrikethrough(node.GetBool(ibProtocol::ibForm::ibTable::Strikethrough));
+		cell.look.SetUnderlined(node.GetBool(ibProtocol::ibForm::ibTable::Underlined));
+		cell.look.SetPointSize(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibTable::Size)));
+		cell.look.SetFaceName(node.GetString(ibProtocol::ibForm::ibTable::Face));
+		const wxString align = node.GetString(ibProtocol::ibForm::ibTable::Align);
 		if (!align.IsEmpty())
-			cell.look.SetAlignment(align == wxT("Right") ? wxALIGN_RIGHT : align == wxT("Center") ? wxALIGN_CENTER_HORIZONTAL : wxALIGN_LEFT);
+			cell.look.SetAlignment(align == ibProtocol::ibForm::ibTable::ibAlign::Right ? wxALIGN_RIGHT
+				: align == ibProtocol::ibForm::ibTable::ibAlign::Center ? wxALIGN_CENTER_HORIZONTAL : wxALIGN_LEFT);
 	}
 }
 
@@ -108,12 +109,12 @@ bool ibViewTableModel::IsCellEditable(const ibDataViewItem& item, long long colu
 	return cell != nullptr && cell->editable;
 }
 
-void ibViewTableModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
+void ibViewTableModel::GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const
 {
 	const ibViewTableRow* const row = RowOf(item);
 	const ibViewCell* const cell = row != nullptr ? row->FindCell(col) : nullptr;
 	if (cell != nullptr)
-		variant = cell->checked.has_value() ? wxVariant(*cell->checked) : wxVariant(cell->text);
+		variant = cell->checked.has_value() ? ibVariant(*cell->checked) : ibVariant(cell->text);
 }
 
 bool ibViewTableModel::HasValue(const ibDataViewItem& item, unsigned col) const
@@ -139,7 +140,7 @@ bool ibViewTableModel::GetAttr(const ibDataViewItem& item, unsigned int col, ibD
 	return true;
 }
 
-bool ibViewTableModel::SetValue(const wxVariant& /*variant*/, const ibDataViewItem& /*item*/, unsigned int /*col*/)
+bool ibViewTableModel::SetValue(const ibVariant& /*variant*/, const ibDataViewItem& /*item*/, unsigned int /*col*/)
 {
 	// A cell is written by the server — a Change sent, the rows read again.
 	return false;
@@ -153,19 +154,27 @@ ibDataViewItem ibViewTableModel::GetParent(const ibDataViewItem& item) const
 unsigned int ibViewTableModel::GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
 	ibDataViewItemArray& out) const
 {
-	return Fetch(0, parent, anchor, count, out);
+	return Fetch(ibProtocol::ibForm::ibTable::ibDirection::Reset, parent, anchor, count, out);
 }
 
 unsigned int ibViewTableModel::GetNextFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
 	ibDataViewItemArray& out) const
 {
-	return Fetch(1, parent, anchor, count, out);
+	return Fetch(ibProtocol::ibForm::ibTable::ibDirection::Forward, parent, anchor, count, out);
 }
 
 unsigned int ibViewTableModel::GetPrevFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
 	ibDataViewItemArray& out) const
 {
-	return Fetch(-1, parent, anchor, count, out);
+	return Fetch(ibProtocol::ibForm::ibTable::ibDirection::Backward, parent, anchor, count, out);
+}
+
+unsigned int ibViewTableModel::GetAroundFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
+	int before, ibDataViewItemArray& out, unsigned int& above) const
+{
+	const unsigned int read = Fetch(ibProtocol::ibForm::ibTable::ibDirection::Reset, parent, anchor, count, before, out,
+		above);
+	return read - above;
 }
 
 ibPictureID ibViewTableModel::GetRowPicture(const ibDataViewItem& item) const
@@ -174,19 +183,30 @@ ibPictureID ibViewTableModel::GetRowPicture(const ibDataViewItem& item) const
 	return row != nullptr ? row->GetPicture() : 0;
 }
 
-unsigned int ibViewTableModel::Fetch(int direction, const ibDataViewItem& parent, const ibDataViewItem& anchor,
-	int count, ibDataViewItemArray& out) const
+unsigned int ibViewTableModel::Fetch(ibProtocol::ibForm::ibTable::ibDirection direction, const ibDataViewItem& parent,
+	const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const
 {
+	unsigned int above = 0;
+	return Fetch(direction, parent, anchor, count, 0, out, above);
+}
+
+unsigned int ibViewTableModel::Fetch(ibProtocol::ibForm::ibTable::ibDirection direction, const ibDataViewItem& parent,
+	const ibDataViewItem& anchor, int count, int before, ibDataViewItemArray& out, unsigned int& above) const
+{
+	above = 0;
+
 	// The level read: a row opened or entered — none at the top, the flat list's marker included (the server knows
 	// its own view mode).
 	const ibDataViewItem level = parent == s_constIgnoreParent ? ibDataViewItem() : parent;
 	const int asked = count > 0 ? std::min(count, kMaxFetchCount) : kMaxFetchCount;
 
 	ibProtocolNode request, answer;
-	request.SetValue(ibProtocolName::Direction, direction)
-		.SetValue(ibProtocolName::Anchor, HandleOf(anchor))
-		.SetValue(ibProtocolName::Parent, HandleOf(level))
-		.SetValue(ibProtocolName::Count, asked);
+	request.SetValue(ibProtocol::ibForm::ibTable::Direction, static_cast<int>(direction))
+		.SetValue(ibProtocol::ibForm::ibTable::Anchor, HandleOf(anchor))
+		.SetValue(ibProtocol::ibForm::ibTable::Parent, HandleOf(level))
+		.SetValue(ibProtocol::ibForm::ibTable::Count, asked);
+	if (before > 0)
+		request.SetValue(ibProtocol::ibForm::ibTable::Before, std::min(before, kMaxFetchCount));
 	if (!m_fetcher(request, answer))
 		return 0;
 
@@ -197,18 +217,17 @@ unsigned int ibViewTableModel::Fetch(int direction, const ibDataViewItem& parent
 		out.Add(ibDataViewItem(row));
 		++read;
 	}
+	above = std::min(static_cast<unsigned int>(answer.GetInt(ibProtocol::ibForm::ibTable::Before)), read);
 
 	// What the UI does with it — after the read, on its own thread. Handles only: a row's count of owners is no
 	// atomic, and the rows are the data view's to hand to the UI.
 	ibAnswer done;
-	done.currentRow = answer.GetInt(ibProtocolName::CurrentRow);
-	for (const ibProtocolNode& picture : answer.FindChild(ibProtocolName::Pictures).Children())
-		done.pictures.emplace_back(PictureIdOf(picture.GetString(ibProtocolName::Id)), picture.GetString(ibProtocolName::Picture));
+	done.currentRow = answer.GetInt(ibProtocol::ibForm::ibTable::CurrentRow);
 
-	ibJournalInfo(wxT("table"), wxT("read %d from %lld under %lld, %d asked: %u rows%s, current %lld, %u pictures"),
-		direction, HandleOf(anchor), HandleOf(level), asked, read, answer.GetBool(ibProtocolName::End) ? wxT(", the end") : wxT(""),
-		done.currentRow, static_cast<unsigned>(done.pictures.size()));
-	if (done.currentRow != 0 || !done.pictures.empty())
+	ibJournalInfo(wxT("table"), wxT("read %d from %lld under %lld, %d asked: %u rows%s, current %lld"),
+		static_cast<int>(direction), HandleOf(anchor), HandleOf(level), asked, read, answer.GetBool(ibProtocol::ibForm::ibTable::End) ? wxT(", the end") : wxT(""),
+		done.currentRow);
+	if (done.currentRow != 0)
 		m_answered(done);
 
 	// As many as the server's model read — fewer than asked is the end that way, for the data view as for it.

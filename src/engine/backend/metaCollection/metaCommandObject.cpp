@@ -11,13 +11,13 @@
 //*                            Command object                          *
 //***********************************************************************
 
-ibValueMetaObjectCommand::ibValueMetaObjectCommand(const wxString& name, const wxString& synonym, const wxString& comment)
+ibValueMetaObjectCommand::ibValueMetaObjectCommand(const ibString& name, const ibString& synonym, const ibString& comment)
 	: ibValueMetaObject(name, synonym, comment)
 {
 	// One handler shape for object and general commands (docs/private/command-arc.md §6):
 	//   Procedure CommandProcessing(CommandParameter, ExecuteParameters)
-	(*m_propertyCommandModule)->SetDefaultProcedure(wxT("CommandProcessing"), ibContentHelper::eProcedureHelper,
-		{ wxT("CommandParameter"), wxT("ExecuteParameters") });
+	(*m_propertyCommandModule)->SetDefaultProcedure(ibT("CommandProcessing"), ibContentHelper::eProcedureHelper,
+		{ ibT("CommandParameter"), ibT("ExecuteParameters") });
 }
 
 //***********************************************************************
@@ -170,7 +170,7 @@ const ibValueMetaObjectCommandGroup* ibValueMetaObjectCommand::GetCommandGroup()
 {
 	if (m_metaData == nullptr)
 		return nullptr;
-	const long key = m_propertyGroup->GetValue();
+	const long key = m_propertyGroup->GetValue().GetInteger();
 	// A platform group — the usual case — is answered without looking anything up.
 	for (const ibInterfaceCommandSection area : g_platformCommandGroups)
 		if (key == area)
@@ -182,7 +182,7 @@ const ibValueMetaObjectCommandGroup* ibValueMetaObjectCommand::GetCommandGroup()
 
 ibInterfaceCommandSection ibValueMetaObjectCommand::GetCommandSection() const
 {
-	const long key = m_propertyGroup->GetValue();
+	const long key = m_propertyGroup->GetValue().GetInteger();
 	for (const ibInterfaceCommandSection area : g_platformCommandGroups)
 		if (key == area)
 			return area;
@@ -203,7 +203,7 @@ bool ibValueMetaObjectCommand::FillGroupList(ibPropertyList* prop)
 			continue;
 		// The group's own picture when it has one — the one it will stand with; otherwise the kind's.
 		prop->AppendItem(group->GetName(), group->GetLabel(), group->GetMetaID(),
-			group->IsEmptyPicture() ? wxBitmap(group->GetIcon()) : group->GetPictureAsBitmap(), group);
+			group->IsEmptyPicture() ? ibPictureDescription(group->GetClassType()) : group->GetPictureDesc(), group);
 	}
 	return true;
 }
@@ -221,7 +221,7 @@ bool ibValueMetaObjectCommand::ReadData(const ibDataNode& node)
 	// A configuration written before command groups keeps the platform area under "InterfaceArea" — the same
 	// number Group holds for a platform group, so it is read into Group as it stands.
 	if (!m_propertyGroup->SetNodeValue(node.GetProperty(m_propertyGroup->GetName())))
-		m_propertyGroup->SetNodeValue(node.GetProperty(wxT("InterfaceArea")));
+		m_propertyGroup->SetNodeValue(node.GetProperty(ibT("InterfaceArea")));
 	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
 	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
 	m_propertyModifiesData->SetNodeValue(node.GetProperty(m_propertyModifiesData->GetName()));
@@ -285,7 +285,7 @@ bool ibValueCommandDataObject::RunHandler(ibValue& commandParameter, ibValue& ex
 {
 	// idiomatic fixed-N handler call (mirrors ExecAsProc(wxT("BeforeWrite"), cancel)):
 	// the variadic packs the two ibValue& into the ProcUnit's ibValue*[] form itself.
-	ExecAsProc(wxT("CommandProcessing"), commandParameter, executeParameters);
+	ExecAsProc(ibT("CommandProcessing"), commandParameter, executeParameters);
 	return true;
 }
 

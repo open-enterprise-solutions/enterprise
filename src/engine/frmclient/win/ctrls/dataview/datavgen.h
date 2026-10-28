@@ -47,14 +47,14 @@ class ibDataViewFooterWindow;
 struct ibPagedFetch;
 
 #if wxUSE_ACCESSIBILITY
-class ibDataViewCtrlAccessible;
+class FRMCLIENT_API ibDataViewCtrlAccessible;
 #endif // wxUSE_ACCESSIBILITY
 
 // ---------------------------------------------------------
 // ibDataViewColumn
 // ---------------------------------------------------------
 
-class ibDataViewColumn : public ibDataViewColumnBase
+class FRMCLIENT_API ibDataViewColumn : public ibDataViewColumnBase
 {
 	class ibDataViewFooterColumn : public wxSettableHeaderColumn
 	{
@@ -401,7 +401,7 @@ enum ibDataViewTreeNodeViewMode
 // ibDataViewTreeNode
 //-----------------------------------------------------------------------------
 
-class ibDataViewCtrl;
+class FRMCLIENT_API ibDataViewCtrl;
 class ibDataViewTreeNode;
 
 typedef wxVector<ibDataViewTreeNode*> ibDataViewTreeNodes;
@@ -689,7 +689,7 @@ private:
 // ibDataViewCtrl
 // ---------------------------------------------------------
 
-class ibDataViewCtrl
+class FRMCLIENT_API ibDataViewCtrl
 	: 
 	public wxCompositeWindow<ibDataViewCtrlBase>,
 	public wxScrollHelper
@@ -1851,7 +1851,7 @@ private:
 // ibDataViewCtrlAccessible
 //-----------------------------------------------------------------------------
 
-class ibDataViewCtrlAccessible : public wxWindowAccessible
+class FRMCLIENT_API ibDataViewCtrlAccessible : public wxWindowAccessible
 {
 public:
 	ibDataViewCtrlAccessible(ibDataViewCtrl* win);

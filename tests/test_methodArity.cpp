@@ -24,7 +24,7 @@ namespace {
 
 // Runs a module body. Returns true if it completed, false if it raised —
 // both are acceptable outcomes here. A crash is not, and is what this catches.
-bool RunModule(const wxString& src) {
+bool RunModule(const ibString& src) {
 	ibCompileCode cc(wxT("arity"), wxT("memory"), false);
 	if (!cc.Compile(src))
 		return false;

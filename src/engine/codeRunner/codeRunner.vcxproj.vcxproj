@@ -96,7 +96,7 @@
       <PreprocessorDefinitions>Win32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_WINDOWS;NOPCH;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)\core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
@@ -104,7 +104,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxregexud.lib;wxexpatd.lib;backend.lib;core.lib;frontend.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33ud_qa.lib;wxmsw33ud_core.lib;wxmsw33ud_stc.lib;wxbase33ud.lib;wxbase33ud_xml.lib;backend.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <ResourceCompile>
       <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\include</AdditionalIncludeDirectories>
@@ -118,14 +118,14 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;_WINDOWS;WXUSINGDLL;NOPCH;SMALL_TRANSLATE;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;TIXML_USE_TICPP;DONT_USE_DATABASE_LAYER_EXCEPTIONS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine)\core;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxregexud.lib;wxexpatd.lib;backend.lib;core.lib;frontend.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33ud_qa.lib;wxmsw33ud_core.lib;wxmsw33ud_stc.lib;wxbase33ud.lib;wxbase33ud_xml.lib;backend.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <ResourceCompile>
       <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\include</AdditionalIncludeDirectories>
@@ -145,7 +145,7 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -153,7 +153,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;backend.lib;core.lib;frontend.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33u_qa.lib;wxmsw33u_core.lib;wxmsw33u_stc.lib;wxbase33u.lib;wxbase33u_xml.lib;backend.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <ResourceCompile>
       <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\include</AdditionalIncludeDirectories>
@@ -173,14 +173,14 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
-      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;backend.lib;core.lib;frontend.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33u_qa.lib;wxmsw33u_core.lib;wxmsw33u_stc.lib;wxbase33u.lib;wxbase33u_xml.lib;backend.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <ResourceCompile>
@@ -191,18 +191,49 @@
     <ClCompile Include="codeRunner.cpp" />
     <ClCompile Include="mainApp.cpp" />
     <ClCompile Include="outputMessage.cpp" />
+    <ClCompile Include="artProvider\artProvider.cpp" />
+    <ClCompile Include="mainFrame\settings\editorsettings.cpp" />
+    <ClCompile Include="mainFrame\settings\fontcolorsettings.cpp" />
+    <ClCompile Include="win\dlgs\functionSearcher\functionSearcher.cpp" />
+    <ClCompile Include="win\dlgs\lineInput\lineInput.cpp" />
+    <ClCompile Include="win\editor\codeEditor\codeEditor.cpp" />
+    <ClCompile Include="win\editor\codeEditor\codeEditorLoader.cpp" />
+    <ClCompile Include="win\editor\codeEditor\components\autoComplete.cpp" />
+    <ClCompile Include="win\editor\codeEditor\components\callTip.cpp" />
+    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxVisualData.cpp" />
+    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxWnd.cpp" />
+    <ClCompile Include="win\editor\codeEditor\components\helpers\popupWnd.cpp" />
+    <ClCompile Include="win\picture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="codeRunner.h" />
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="outputMessage.h" />
-    <ClInclude Include="resource.h" />
+    <ClInclude Include="artProvider\artProvider.h" />
+    <ClInclude Include="artProvider\private\picturePredefined.h" />
+    <ClInclude Include="mainFrame\settings\editorsettings.h" />
+    <ClInclude Include="mainFrame\settings\fontcolorsettings.h" />
+    <ClInclude Include="mainFrame\settings\settingsxml.h" />
+    <ClInclude Include="win\dlgs\functionSearcher\functionSearcher.h" />
+    <ClInclude Include="win\dlgs\lineInput\lineInput.h" />
+    <ClInclude Include="win\editor\codeEditor\codeEditor.h" />
+    <ClInclude Include="win\editor\codeEditor\components\autoComplete.h" />
+    <ClInclude Include="win\editor\codeEditor\components\callTip.h" />
+    <ClInclude Include="win\editor\codeEditor\components\helpers\fontAscent.h" />
+    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxVisualData.h" />
+    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxWnd.h" />
+    <ClInclude Include="win\editor\codeEditor\components\helpers\popupWnd.h" />
+    <ClInclude Include="win\editor\codeEditor\res\bitmaps_res.h" />
+    <ClInclude Include="win\picture.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="codeRunner.ico" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="codeRunner.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

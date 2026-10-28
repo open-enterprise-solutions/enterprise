@@ -25,9 +25,9 @@
 #include "backend/appData.h"
 #include "backend/metaCollection/metaIntrospect.h"   // ibConfigurationWritesInWords — the dialect this configuration uses
 #include "backend/metadataConfiguration.h"
-#include "backend/syntaxHelper/helpCorpus.h"
-#include "backend/syntaxHelper/helpEntry.h"
-#include "backend/syntaxHelper/helpService.h"
+#include "core/syntaxHelper/helpCorpus.h"
+#include "core/syntaxHelper/helpEntry.h"
+#include "core/syntaxHelper/helpService.h"
 
 namespace {
 
@@ -40,36 +40,36 @@ bool WritesInWords() { return ibConfigurationWritesInWords(activeMetaData); }
 // The id grammar already carries the kind as a prefix ("fn.Message"), but a
 // caller should not have to parse an id to learn what it is holding: the
 // classification is answered outright.
-wxString KindWord(ibHelpKind kind)
+ibString KindWord(ibHelpKind kind)
 {
 	switch (kind) {
-	case ibHelpKind::kKeyword:             return wxT("keyword");
-	case ibHelpKind::kSystemFunction:      return wxT("function");
-	case ibHelpKind::kSystemConstant:      return wxT("constant");
-	case ibHelpKind::kSystemEnum:          return wxT("enumValue");
-	case ibHelpKind::kMetaObjectType:      return wxT("metaObject");
-	case ibHelpKind::kMetaObjectAttribute: return wxT("attribute");
-	case ibHelpKind::kMetaObjectMethod:    return wxT("method");
-	case ibHelpKind::kPrimitiveType:       return wxT("primitiveType");
-	case ibHelpKind::kCollection:          return wxT("collection");
-	case ibHelpKind::kEvent:               return wxT("event");
-	case ibHelpKind::kOperator:            return wxT("operator");
+	case ibHelpKind::kKeyword:             return ibT("keyword");
+	case ibHelpKind::kSystemFunction:      return ibT("function");
+	case ibHelpKind::kSystemConstant:      return ibT("constant");
+	case ibHelpKind::kSystemEnum:          return ibT("enumValue");
+	case ibHelpKind::kMetaObjectType:      return ibT("metaObject");
+	case ibHelpKind::kMetaObjectAttribute: return ibT("attribute");
+	case ibHelpKind::kMetaObjectMethod:    return ibT("method");
+	case ibHelpKind::kPrimitiveType:       return ibT("primitiveType");
+	case ibHelpKind::kCollection:          return ibT("collection");
+	case ibHelpKind::kEvent:               return ibT("event");
+	case ibHelpKind::kOperator:            return ibT("operator");
 	// The member kinds, and the two globals beside them. Until 2026-09-22 the loader had no word
 	// for any of these and handed them over as kKeyword, so every property and method of every
 	// class answered `help_read` with "keyword" — the one classification that is never true of a
 	// member. The words differ from the metaobject ones on purpose: "attribute" and "method"
 	// there are about a CONFIGURATION's object, these are about a platform class.
-	case ibHelpKind::kProperty:            return wxT("property");
-	case ibHelpKind::kMethod:              return wxT("classMethod");
-	case ibHelpKind::kProcedure:           return wxT("classProcedure");
-	case ibHelpKind::kSystemProcedure:     return wxT("procedure");
-	case ibHelpKind::kEnumType:            return wxT("enumType");
+	case ibHelpKind::kProperty:            return ibT("property");
+	case ibHelpKind::kMethod:              return ibT("classMethod");
+	case ibHelpKind::kProcedure:           return ibT("classProcedure");
+	case ibHelpKind::kSystemProcedure:     return ibT("procedure");
+	case ibHelpKind::kEnumType:            return ibT("enumType");
 	}
 
-	return wxT("unknown");
+	return ibT("unknown");
 }
 
-std::shared_ptr<const ibHelpCorpus> Corpus(wxString& refusal)
+std::shared_ptr<const ibHelpCorpus> Corpus(ibString& refusal)
 {
 	ibHelpService* service = ibApplicationInstance::GetHelpService();
 	if (service == nullptr) {
@@ -94,18 +94,18 @@ ibDataValue Brief(const ibHelpEntry& entry)
 {
 	std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 
-	node->SetValue(wxT("id"), entry.id);
-	node->SetValue(wxT("name"), entry.nameLocal);
-	node->SetValue(wxT("nameEn"), entry.nameEn);
-	node->SetValue(wxT("kind"), KindWord(entry.kind));
+	node->SetValue(ibT("id"), entry.id);
+	node->SetValue(ibT("name"), entry.nameLocal);
+	node->SetValue(ibT("nameEn"), entry.nameEn);
+	node->SetValue(ibT("kind"), KindWord(entry.kind));
 
 	if (!entry.signature.IsEmpty())
-		node->SetValue(wxT("signature"), entry.signature);
+		node->SetValue(ibT("signature"), entry.signature);
 
 	// Whose documentation this is. A platform entry describes the engine; one
 	// from the configuration describes what somebody built here, and a caller
 	// weighing an answer wants to know which.
-	node->AddField(wxT("fromConfiguration"), ibDataValue::Bool(entry.fromConfiguration));
+	node->AddField(ibT("fromConfiguration"), ibDataValue::Bool(entry.fromConfiguration));
 
 	return ibDataValue::Child(node);
 }
@@ -116,7 +116,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgQuery()
 {
-	static const ibArg s_a(wxT("query"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("query"), ibArg::Kind::Text,
 		ibMcpText("What to look for. Matched as a name prefix first; if nothing starts with it, "
 			  "as a token across names and signatures."), /*required*/ true);
 	return s_a;
@@ -124,7 +124,7 @@ const ibArg& ArgQuery()
 
 const ibArg& ArgLimit()
 {
-	static const ibArg s_a(wxT("limit"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("limit"), ibArg::Kind::Whole,
 		ibMcpText("How many at most. Defaults to 40 - a search that answers more than that is a "
 			  "search that should have been narrower."));
 	return s_a;
@@ -132,7 +132,7 @@ const ibArg& ArgLimit()
 
 const ibArg& ArgId()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Text,
 		ibMcpText("The entry's id, as syntax_search returned it - for example 'fn.Message' or "
 			  "'meth.Catalog.Goods.Write'."), /*required*/ true);
 	return s_a;
@@ -146,15 +146,15 @@ const ibArg& ArgId()
 class ibMcpToolHelpSearch : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("syntax_search"); }
+	ibString GetName() const override { return ibT("syntax_search"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("looking up '%s' in the help"),
+		return ibString::Format(ibMcpText("looking up '%s' in the help"),
 			ArgQuery().Text(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("THE SYNTAX HELPER, asked by name instead of by cursor: the LANGUAGE - built-in "
 			"functions, keywords, types, collections, events, operators - with one line each; "
@@ -181,12 +181,12 @@ public:
 	// creatable types outside the Query family, and the platform enumerations - so a hint about
 	// them still comes back empty. That is a gap in the CORPUS, not in this road, and it is stated
 	// where a caller meets it (the `nothing` line of a search).
-	void FindInside(const wxString& query, std::vector<ibDataValue>& places) const override
+	void FindInside(const ibString& query, std::vector<ibDataValue>& places) const override
 	{
 		if (query.IsEmpty())
 			return;
 
-		wxString unused;
+		ibString unused;
 		std::shared_ptr<const ibHelpCorpus> corpus = Corpus(unused);
 		if (!corpus)
 			return;
@@ -209,12 +209,12 @@ public:
 				break;
 
 			std::shared_ptr<ibDataNode> hit = std::make_shared<ibDataNode>();
-			hit->SetValue(wxT("syntax"), entry->id);
-			hit->SetValue(wxT("name"), entry->nameLocal);
-			hit->SetValue(wxT("kind"), KindWord(entry->kind));
+			hit->SetValue(ibT("syntax"), entry->id);
+			hit->SetValue(ibT("name"), entry->nameLocal);
+			hit->SetValue(ibT("kind"), KindWord(entry->kind));
 
 			if (!entry->signature.IsEmpty())
-				hit->SetValue(wxT("signature"), entry->signature);
+				hit->SetValue(ibT("signature"), entry->signature);
 
 			places.push_back(ibDataValue::Child(hit));
 		}
@@ -226,20 +226,20 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		std::shared_ptr<const ibHelpCorpus> corpus = Corpus(refusal);
 		if (!corpus)
 			return false;
 
-		const wxString query = ArgQuery().Text(params);
+		const ibString query = ArgQuery().Text(params);
 		if (query.IsEmpty()) {
 			refusal = ibMcpText("Nothing to look for.");
 			return false;
 		}
 
-		s32 limit = 40;
-		params.GetValue(wxT("limit"), limit);
+		std::int32_t limit = 40;
+		params.GetValue(ibT("limit"), limit);
 		if (limit <= 0)
 			limit = 40;
 
@@ -252,14 +252,14 @@ public:
 
 		std::vector<ibDataValue> entries;
 		for (const ibHelpEntry* entry : found) {
-			if ((s32)entries.size() >= limit)
+			if ((std::int32_t)entries.size() >= limit)
 				break;
 			if (entry != nullptr)
 				entries.push_back(Brief(*entry));
 		}
 
-		result.AddField(wxT("found"), ibDataValue::Int((s64)found.size()));
-		result.AddField(wxT("entries"), ibDataValue::Array(entries));
+		result.AddField(ibT("found"), ibDataValue::Int((std::int64_t)found.size()));
+		result.AddField(ibT("entries"), ibDataValue::Array(entries));
 
 		// ⭐ THIS IS THE SYNTAX HELPER, AND ONLY THAT — the same corpus the designer shows beside the
 		// editor: how the LANGUAGE is written. It briefly also answered names out of the open
@@ -276,7 +276,7 @@ public:
 		// the part a caller can act on, and a number would only stop being true the day the issue
 		// closes. See open-enterprise-solutions/enterprise#83.
 		if (entries.empty())
-			result.SetValue(wxT("nothing"),
+			result.SetValue(ibT("nothing"),
 				ibMcpText("Nothing in the syntax helper by that name. This is the LANGUAGE reference - "
 				  "functions, keywords, types. For what THIS configuration holds ask metadata_tree / "
 				  "metadata_get / query_fields; for how such a thing is usually built, pattern_read.\n"
@@ -291,12 +291,12 @@ public:
 
 		// The corpus's own digest. A caller that caches answers can tell whether
 		// what it remembers is still what the platform would say.
-		result.SetValue(wxT("corpus"), corpus->Fingerprint());
+		result.SetValue(ibT("corpus"), corpus->Fingerprint());
 
 		// Answered on the FIRST call, not only in syntax_get: a caller that is
 		// about to write code needs to know which dialect it is writing in
 		// before it has looked anything up in full.
-		result.SetValue(wxT("syntaxMode"), wxString(WritesInWords() ? wxT("words") : wxT("braces")));
+		result.SetValue(ibT("syntaxMode"), ibString(WritesInWords() ? ibT("words") : ibT("braces")));
 
 		// THE SAME REASON, ONE STEP FURTHER — and it is a different question from
 		// the one asked. A search answers "what is this called"; it cannot answer
@@ -307,15 +307,15 @@ public:
 		// would have had to already know in order to ask.
 		std::vector<ibDataValue> guides;
 		for (const ibHelpEntry* entry : corpus->AllEntries()) {
-			if (entry == nullptr || !entry->id.StartsWith(wxT("guide.")))
+			if (entry == nullptr || !entry->id.StartsWith(ibT("guide.")))
 				continue;
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->SetValue(wxT("id"), entry->id);
-			node->SetValue(wxT("name"), entry->nameLocal);
+			node->SetValue(ibT("id"), entry->id);
+			node->SetValue(ibT("name"), entry->nameLocal);
 			guides.push_back(ibDataValue::Child(node));
 		}
 		if (!guides.empty())
-			result.AddField(wxT("guides"), ibDataValue::Array(guides));
+			result.AddField(ibT("guides"), ibDataValue::Array(guides));
 
 		return true;
 	}
@@ -329,14 +329,14 @@ MCP_TOOL_REGISTER(ibMcpToolHelpSearch);
 class ibMcpToolHelpGet : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("syntax_get"); }
+	ibString GetName() const override { return ibT("syntax_get"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("reading a help article");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("One entry of the SYNTAX HELPER in full: signature, parameters, what it returns, "
 			"both syntax forms, worked examples, and which runtimes it is valid in. Ids come from "
@@ -350,13 +350,13 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		std::shared_ptr<const ibHelpCorpus> corpus = Corpus(refusal);
 		if (!corpus)
 			return false;
 
-		const wxString id = ArgId().Text(params);
+		const ibString id = ArgId().Text(params);
 		const ibHelpEntry* entry = corpus->FindById(id);
 		if (entry == nullptr) {
 
@@ -366,13 +366,13 @@ public:
 			// beside it. There is no article to fetch — objects are read with the metadata verbs —
 			// so say that, with the id those verbs take, instead of sending them back to the search
 			// that already answered.
-			const wxString objectName = id.AfterLast(wxT('.'));
+			const ibString objectName = id.AfterLast(ibT('.'));
 
 			if (!objectName.IsEmpty() && activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
 				if (const ibValueMetaObject* object =
 						activeMetaData->FindAnyObjectByFilter<ibValueMetaObject>(objectName)) {
 
-					refusal = wxString::Format(
+					refusal = ibString::Format(
 						ibMcpText("'%s' is an object of this configuration, not an article - it has no "
 						  "help text of its own. Read it with metadata_get {id: %i}, its fields with "
 						  "query_fields."), id, (int)object->GetMetaID());
@@ -380,25 +380,25 @@ public:
 				}
 			}
 
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("No help entry has the id '%s'. Use syntax_search to find one."), id);
 			return false;
 		}
 
-		result.SetValue(wxT("id"), entry->id);
-		result.SetValue(wxT("name"), entry->nameLocal);
-		result.SetValue(wxT("nameEn"), entry->nameEn);
-		result.SetValue(wxT("kind"), KindWord(entry->kind));
+		result.SetValue(ibT("id"), entry->id);
+		result.SetValue(ibT("name"), entry->nameLocal);
+		result.SetValue(ibT("nameEn"), entry->nameEn);
+		result.SetValue(ibT("kind"), KindWord(entry->kind));
 
 		// The runtime class the article is about, named by the REGISTRY from the article's hidden class id
 		// (helpEntry.h) - the name `New` takes, whatever the article is called in this locale.
 		if (entry->classId != 0)
-			result.SetValue(wxT("class"), ibValue::GetNameObjectFromID(entry->classId));
+			result.SetValue(ibT("class"), ibValue::GetNameObjectFromID(entry->classId));
 
-		if (!entry->signature.IsEmpty())   result.SetValue(wxT("signature"), entry->signature);
-		if (!entry->description.IsEmpty()) result.SetValue(wxT("description"), entry->description);
-		if (!entry->parameters.IsEmpty())  result.SetValue(wxT("parameters"), entry->parameters);
-		if (!entry->returnDescr.IsEmpty()) result.SetValue(wxT("returns"), entry->returnDescr);
+		if (!entry->signature.IsEmpty())   result.SetValue(ibT("signature"), entry->signature);
+		if (!entry->description.IsEmpty()) result.SetValue(ibT("description"), entry->description);
+		if (!entry->parameters.IsEmpty())  result.SetValue(ibT("parameters"), entry->parameters);
+		if (!entry->returnDescr.IsEmpty()) result.SetValue(ibT("returns"), entry->returnDescr);
 
 		// ⚠ TWO SYNTAX FORMS, AND THE CONFIGURATION DECIDES WHICH IS RIGHT. The
 		// same entry carries a C-style spelling and a word-style one; handing
@@ -408,43 +408,43 @@ public:
 		// caller that is reading someone else's module rather than writing.
 		const bool words = WritesInWords();
 
-		const wxString& syntaxHere  = words ? entry->syntaxBlockVes : entry->syntaxBlock;
-		const wxString& syntaxOther = words ? entry->syntaxBlock    : entry->syntaxBlockVes;
-		const wxString& exampleHere  = words ? entry->exampleVes : entry->example;
-		const wxString& exampleOther = words ? entry->example    : entry->exampleVes;
+		const ibString& syntaxHere  = words ? entry->syntaxBlockVes : entry->syntaxBlock;
+		const ibString& syntaxOther = words ? entry->syntaxBlock    : entry->syntaxBlockVes;
+		const ibString& exampleHere  = words ? entry->exampleVes : entry->example;
+		const ibString& exampleOther = words ? entry->example    : entry->exampleVes;
 
-		result.SetValue(wxT("syntaxMode"), wxString(words ? wxT("words") : wxT("braces")));
+		result.SetValue(ibT("syntaxMode"), ibString(words ? ibT("words") : ibT("braces")));
 
-		if (!syntaxHere.IsEmpty())   result.SetValue(wxT("syntax"), syntaxHere);
-		if (!exampleHere.IsEmpty())  result.SetValue(wxT("example"), exampleHere);
-		if (!syntaxOther.IsEmpty())  result.SetValue(wxT("syntaxOtherMode"), syntaxOther);
-		if (!exampleOther.IsEmpty()) result.SetValue(wxT("exampleOtherMode"), exampleOther);
+		if (!syntaxHere.IsEmpty())   result.SetValue(ibT("syntax"), syntaxHere);
+		if (!exampleHere.IsEmpty())  result.SetValue(ibT("example"), exampleHere);
+		if (!syntaxOther.IsEmpty())  result.SetValue(ibT("syntaxOtherMode"), syntaxOther);
+		if (!exampleOther.IsEmpty()) result.SetValue(ibT("exampleOtherMode"), exampleOther);
 
 		// ⚠ An entry with only ONE form (operators, directives) leaves `syntax`
 		// empty when that one form belongs to the other dialect — said here
 		// rather than left for a caller to notice, because an absent field reads
 		// as "nothing to say" and this means the opposite.
 		if (syntaxHere.IsEmpty() && !syntaxOther.IsEmpty())
-			result.SetValue(wxT("syntaxNote"),
+			result.SetValue(ibT("syntaxNote"),
 				ibMcpText("This entry is written down only in the other syntax form."));
 
 		// WHERE IT IS VALID AT ALL. "Works in appserver, not in the designer" is
 		// the class of mistake that costs a run to discover.
 		if (!entry->availability.IsEmpty())
-			result.SetValue(wxT("availability"), entry->availability);
+			result.SetValue(ibT("availability"), entry->availability);
 
 		std::vector<ibDataValue> related;
-		for (const wxString& seeAlso : entry->seeAlso)
+		for (const ibString& seeAlso : entry->seeAlso)
 			related.push_back(ibDataValue::String(seeAlso));
 		if (!related.empty())
-			result.AddField(wxT("seeAlso"), ibDataValue::Array(related));
+			result.AddField(ibT("seeAlso"), ibDataValue::Array(related));
 
-		result.AddField(wxT("fromConfiguration"), ibDataValue::Bool(entry->fromConfiguration));
+		result.AddField(ibT("fromConfiguration"), ibDataValue::Bool(entry->fromConfiguration));
 
 		// ⚠ SAID PLAINLY: a draft was written by a machine and has not been
 		// through a person. Passing it on as settled documentation is how a wrong
 		// answer acquires authority it never earned.
-		result.AddField(wxT("reviewed"), ibDataValue::Bool(entry->reviewed));
+		result.AddField(ibT("reviewed"), ibDataValue::Bool(entry->reviewed));
 		return true;
 	}
 };

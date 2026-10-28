@@ -17,7 +17,6 @@
 // the attribute header (metaAttributeObject.h), only on the shared L3 column vocabulary.
 
 
-#include <algorithm>  // std::max — the longest field suffix a bounded label leaves room for
 #include <map>
 #include <optional>   // ibColumnCodec::WriteValue — a blob buffer only for the value that has one
 
@@ -25,12 +24,12 @@
 // (only Raw) yields the empty suffix.
 // ⚠ A SWITCH, NOT A MAP: every field of every cell is spelled through here, and a tree lookup per
 // spelling stood in the stack samples of a report's read (2026-09-12).
-const wxString& ibFieldSuffix(ibColumnRole role)
+const ibString& ibFieldSuffix(ibColumnRole role)
 {
-	static const wxString s_empty;
-	static const wxString s_type(wxT("_TYPE")), s_bool(wxT("_B")), s_number(wxT("_N")), s_date(wxT("_D")),
-		s_string(wxT("_S")), s_enum(wxT("_E")), s_refType(wxT("_RTRef")), s_refId(wxT("_RRRef")),
-		s_schedule(wxT("_SCH")), s_typeDesc(wxT("_TD"));
+	static const ibString s_empty;
+	static const ibString s_type(ibT("_TYPE")), s_bool(ibT("_B")), s_number(ibT("_N")), s_date(ibT("_D")),
+		s_string(ibT("_S")), s_enum(ibT("_E")), s_refType(ibT("_RTRef")), s_refId(ibT("_RRRef")),
+		s_schedule(ibT("_SCH")), s_typeDesc(ibT("_TD"));
 	switch (role) {
 	case ibColumnRole::Discriminator:   return s_type;
 	case ibColumnRole::Boolean:         return s_bool;
@@ -46,7 +45,7 @@ const wxString& ibFieldSuffix(ibColumnRole role)
 	}
 }
 
-wxString ibSqlAliasOf(const wxString& outputName)
+ibString ibSqlAliasOf(const ibString& outputName)
 {
 	// THE PREFIX IS A NAMESPACE, NOT AN ESCAPE.
 	//
@@ -64,47 +63,28 @@ wxString ibSqlAliasOf(const wxString& outputName)
 	//     SILENTLY there — an empty value, not a refusal. Prefixing everything makes the same
 	//     mistake break loudly, on the first query anyone runs.
 	//
-	// ⭐ INJECTIVE, so distinct outputs stay distinct: `Date` -> `out_Date`, and an output actually
-	// named `out_Date` -> `out_out_Date`. Stable, so the writer and the reader agree by computing it
-	// rather than by passing the spelling between them.
+	// ⭐ ONE SPELLING FOR EVERY NAME: `out_` and the FNV-1a hash of the author's whole name, Latin or not
+	// (a Cyrillic alias is a token Firebird does not know, and quoting is off). Stable, so the writer and
+	// the reader agree by computing it rather than by passing the spelling between them. Distinct outputs
+	// stay distinct as far as a 32-bit hash keeps them apart.
 	// An unnamed output has nothing to qualify — it is read by position, not by name.
 	if (outputName.IsEmpty())
 		return outputName;
 
 	// 🛑 …AND IT HAS TO COME BACK. A result is read by its labels, and the Firebird driver keeps 31 characters
 	// of a label (XSQLDA): `out_CurrencyAmountCorrTurnoverCr` is 32, came back cut, was found by no reader and
-	// read as an EMPTY sum — while `out_QuantityCorrTurnoverCr`, the same figure of a shorter resource, was
-	// right (measured 2026-09-16, the corresponding turnovers of the ledger). Bounded here, where writer and
-	// reader both ask, the label stays one spelling (ibDialectDictionary::BoundedName).
+	// read as an EMPTY sum (measured 2026-09-16, the corresponding turnovers of the ledger). The label is
+	// twelve characters whatever the name.
 	//
-	// ⚠ …WITH ROOM FOR A FIELD SUFFIX. An object-valued output is spread under this name as a PREFIX
-	// (`<label>_RTRef`, `<label>_RRRef` — dbTableProvider, the grouped walk), so the name is bounded short of
-	// the driver's limit by the longest suffix the role table spells, and every field of it fits too.
-	static const size_t kResultLabelLimit = 31;   // the Firebird driver's XSQLDA label
-	static const std::initializer_list<ibColumnRole> kFieldRoles = {
-		ibColumnRole::Discriminator, ibColumnRole::Boolean, ibColumnRole::Number,
-		ibColumnRole::Date, ibColumnRole::String, ibColumnRole::Enum,
-		ibColumnRole::ReferenceType, ibColumnRole::ReferenceId,
-		ibColumnRole::Schedule, ibColumnRole::TypeDescription };
-	static const size_t kLongestSuffix = [] {
-		size_t longest = 0;
-		for (const ibColumnRole role : kFieldRoles)
-			longest = std::max(longest, ibFieldSuffix(role).length());
-		return longest;
-	}();
-
-	// ⚠ A FIELD NAMED ON ITS OWN IS STILL ITS OUTPUT'S FIELD. A value is read back as the prefix's label plus
-	// the suffix (dbTableProvider, `Column(prefix, col)`), and a writer that spells each field as an output of
-	// its own — the breakdown by kind, `AccountDimension1_TYPE` — has to land on that same label. Bounded
-	// whole, `out_AccountDimension1_TYPE` became a hash no reader asked for, every breakdown value read empty
-	// and a balance by kind folded into one row (2026-09-17).
-	for (const ibColumnRole role : kFieldRoles) {
-		const wxString& suffix = ibFieldSuffix(role);
-		if (!suffix.IsEmpty() && outputName.length() > suffix.length() && outputName.EndsWith(suffix))
-			return ibSqlAliasOf(outputName.Left(outputName.length() - suffix.length())) + suffix;
+	// ⚠ A FIELD OF AN OUTPUT IS THE OUTPUT'S LABEL AND THE FIELD'S SUFFIX (`<label>_RTRef`, `<label>_RRRef`),
+	// composed by whoever spreads it or reads it (dbTableProvider, `Column(prefix, col)`) — never asked here as
+	// a name of its own: `AccountDimension1_TYPE` hashed whole is a label no reader asks for (2026-09-17).
+	unsigned long hash = 2166136261UL;
+	for (const ibChar ch : outputName) {
+		hash ^= static_cast<unsigned long>(ch);
+		hash = (hash * 16777619UL) & 0xFFFFFFFFUL;
 	}
-
-	return ibDialectDictionary::BoundedName(wxT("out_") + outputName, kResultLabelLimit - kLongestSuffix);
+	return ibString::Format(ibT("out_%08lx"), hash);
 }
 
 bool ibIsPlainScalarType(const ibTypeDescription& type)
@@ -119,11 +99,11 @@ bool ibReadsBackAsItself(const ibTypeDescription& type)
 	return ibIsPlainScalarType(type) && !type.ContainType(ibValueTypes::TYPE_BOOLEAN);
 }
 
-const wxString& ibOwnerRefField()
+const ibString& ibOwnerRefField()
 {
 	// Built from the ONE suffix table rather than written out: this column and a reference key hold
 	// the same sixteen bytes, and they stay spelled alike because they are spelled from one place.
-	static const wxString s_field = wxT("Row") + ibFieldSuffix(ibColumnRole::ReferenceId);
+	static const ibString s_field = ibT("Row") + ibFieldSuffix(ibColumnRole::ReferenceId);
 	return s_field;
 }
 
@@ -202,17 +182,17 @@ ibColumnSlot FirstValueSlot(const ibBackendQueryColumn* col)
 	return slots.empty() ? ibColumnSlot() : std::move(slots.front());
 }
 
-std::vector<wxString> ColumnValueFields(const ibBackendQueryColumn* col)
+std::vector<ibString> ColumnValueFields(const ibBackendQueryColumn* col)
 {
-	std::vector<wxString> out;
+	std::vector<ibString> out;
 	for (const ibColumnSlot& slot : ColumnValueSlots(col))
 		out.push_back(slot.m_name);
 	return out;
 }
 
-std::vector<wxString> ColumnSortFields(const ibBackendQueryColumn* col)
+std::vector<ibString> ColumnSortFields(const ibBackendQueryColumn* col)
 {
-	std::vector<wxString> out = ColumnValueFields(col);
+	std::vector<ibString> out = ColumnValueFields(col);
 	if (FirstValueSlot(col).m_role == ibColumnRole::ReferenceId)
 		out.push_back(col->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType));
 	return out;
@@ -225,7 +205,7 @@ std::vector<wxString> ColumnSortFields(const ibBackendQueryColumn* col)
 // ==========================================================================
 
 ibValue ReadSingleTargetReference(const ibMetaData* metaData, const ibClassID& target,
-                                  const wxMemoryBuffer& keyBytes)
+                                  const ibMemoryBuffer& keyBytes)
 {
 	if (metaData == nullptr || target == 0 || keyBytes.GetDataLen() < sizeof(ibReference))
 		return ibValue();
@@ -256,7 +236,7 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 	// Schedule payload — serialised once, bound at the _SCH slot. Read off the value itself, like
 	// the reference blob below: no metadata, no session. The buffer exists only for a schedule: made for
 	// every value, it was a kilobyte allocated and freed per cell written (wxMemoryBuffer's default size).
-	std::optional<wxMemoryBuffer> scheduleBlob;
+	std::optional<ibMemoryBuffer> scheduleBlob;
 	if (tag == ibFieldTypes_Schedule) {
 		scheduleBlob.emplace();
 		ibValueSchedule* schedule = nullptr;
@@ -266,7 +246,7 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 
 	// Type-description payload — the same arrangement one line up: serialised once here, bound at
 	// the _TD slot below. The value knows its own description; the codec only moves bytes.
-	std::optional<wxMemoryBuffer> typeDescBlob;
+	std::optional<ibMemoryBuffer> typeDescBlob;
 	if (tag == ibFieldTypes_TypeDescription) {
 		typeDescBlob.emplace();
 		ibValueTypeDescription* typeValue = nullptr;
@@ -337,7 +317,7 @@ namespace {
 class ibCellFields
 {
 public:
-	ibCellFields(ibQueryResult& result, const wxString& base)
+	ibCellFields(ibQueryResult& result, const ibString& base)
 		: m_result(result), m_base(base), m_slots(result.FieldsOf(base)) {}
 
 	int Field(ibColumnRole role) {
@@ -365,7 +345,7 @@ public:
 
 private:
 	ibQueryResult&             m_result;
-	const wxString&            m_base;
+	const ibString&            m_base;
 	ibQueryResult::FieldSlots& m_slots;
 };
 
@@ -398,7 +378,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 		// The blob IS the value. An empty or unreadable one yields a DEFAULT schedule rather than
 		// an empty value: a row whose cell was never written must still answer "when am I due",
 		// and the description's own defaults are that answer (every one of them = "not restricted").
-		wxMemoryBuffer bufferData;
+		ibMemoryBuffer bufferData;
 		result.GetResultBlob(cell.Field(valueRole), bufferData);
 
 		ibJobScheduleDescription schedule;
@@ -414,7 +394,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 		// description rather than the column's own type: a characteristic that names no type is a
 		// defect the write refuses, so reading one back must not manufacture a plausible answer —
 		// it would look like the narrowing worked while admitting everything.
-		wxMemoryBuffer bufferData;
+		ibMemoryBuffer bufferData;
 		result.GetResultBlob(cell.Field(valueRole), bufferData);
 
 		ibTypeDescription typeDesc;
@@ -462,7 +442,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 
 		// EMPTY, NOT DEFAULT: the driver hands its bytes over by assignment, and a default buffer
 		// allocates a kilobyte first only to drop it — once per reference cell of every row read.
-		wxMemoryBuffer bufferData(0);
+		ibMemoryBuffer bufferData(0);
 		result.GetResultBlob(cell.Field(ibColumnRole::ReferenceId), bufferData);
 		if (!bufferData.IsEmpty()) {
 
@@ -509,7 +489,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 
 // The leaf, for a caller that names the field WHOLE (a primitive's `fld12_D`) or, for a reference, the
 // base its type and key hang off — the Raw role is the name as given.
-bool ibColumnCodec::ReadField(const wxString& fieldName, int fieldType,
+bool ibColumnCodec::ReadField(const ibString& fieldName, int fieldType,
 	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
 {
 	ibCellFields cell(result, fieldName);
@@ -559,7 +539,7 @@ static bool TagFitsColumn(const ibBackendQueryColumn* col, ibFieldTypes tag)
 //
 // ONLY this fault. A dropped connection or a driver failure is a fault of the READ, not of the cell,
 // and still travels: degrading those would paint blank rows over a database that stopped answering.
-bool ibColumnCodec::ReadValue(const wxString& fieldName,
+bool ibColumnCodec::ReadValue(const ibString& fieldName,
 	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
 {
 	try {
@@ -573,7 +553,7 @@ bool ibColumnCodec::ReadValue(const wxString& fieldName,
 	}
 }
 
-bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
+bool ibColumnCodec::ReadTaggedValue(const ibString& fieldName,
 	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
 {
 	// ⭐ A COMPUTED OUTPUT HAS ONE FIELD AND NO TAG BESIDE IT.
@@ -685,38 +665,38 @@ bool ibSameFieldType(const ibColumnType& a, const ibColumnType& b)
 	    && a.m_scale == b.m_scale && a.m_datePrec == b.m_datePrec && a.m_fixed == b.m_fixed;
 }
 
-std::vector<wxString> ColumnFieldNames(const ibBackendQueryColumn* col)
+std::vector<ibString> ColumnFieldNames(const ibBackendQueryColumn* col)
 {
-	std::vector<wxString> out;
+	std::vector<ibString> out;
 	for (const ibColumnSlot& slot : DescribeColumnLayout(col))
 		out.push_back(slot.m_name);
 	return out;
 }
 
-wxString ColumnFieldList(const ibBackendQueryColumn* col, const wxString& aggr)
+ibString ColumnFieldList(const ibBackendQueryColumn* col, const ibString& aggr)
 {
-	wxString out;
+	ibString out;
 	for (const ibColumnSlot& slot : DescribeColumnLayout(col)) {
 		// The numeric / date MEASURES carry the aggregate wrapper (SUM(f_N) AS f_N); the tag /
 		// dimension fields stay bare — mirrors the former GetSQLFieldName.
 		const bool measure = (slot.m_role == ibColumnRole::Number || slot.m_role == ibColumnRole::Date);
-		const wxString f = (!aggr.empty() && measure)
-		                 ? aggr + wxT("(") + slot.m_name + wxT(") AS ") + slot.m_name
+		const ibString f = (!aggr.empty() && measure)
+		                 ? aggr + ibT("(") + slot.m_name + ibT(") AS ") + slot.m_name
 		                 : slot.m_name;
-		out += out.empty() ? f : (wxT(",") + f);
+		out += out.empty() ? f : (ibT(",") + f);
 	}
 	return out;
 }
 
-wxString ColumnComparePredicate(const ibBackendQueryColumn* col, const wxString& cmp)
+ibString ColumnComparePredicate(const ibBackendQueryColumn* col, const ibString& cmp)
 {
-	wxString out;
+	ibString out;
 	for (const ibColumnSlot& slot : DescribeColumnLayout(col)) {
 		// The discriminator and the reference TYPE id always match by equality; the value fields
 		// (and the reference blob) use the caller's comparator — mirrors GetCompositeSQLFieldName.
 		const bool eq = (slot.m_role == ibColumnRole::Discriminator || slot.m_role == ibColumnRole::ReferenceType);
-		const wxString term = slot.m_name + wxT(" ") + (eq ? wxString(wxT("=")) : cmp) + wxT(" ?");
-		out += out.empty() ? term : (wxT(" AND ") + term);
+		const ibString term = slot.m_name + ibT(" ") + (eq ? ibString(ibT("=")) : cmp) + ibT(" ?");
+		out += out.empty() ? term : (ibT(" AND ") + term);
 	}
 	return out;
 }

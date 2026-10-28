@@ -1,11 +1,13 @@
 #ifndef __COMPOSITION_VARIANT_H__
 #define __COMPOSITION_VARIANT_H__
 
-#include "backend/compositionDescription.h"
+#include "backend/backend_core.h"
+#include "core/variant.h"
+#include "core/description/compositionDescription.h"
 
 class BACKEND_API ibPropertyObject;
 
-// The cell that holds a COMPOSITION DESCRIPTION — the Type side's shape (ibVariantDataAttribute),
+// The cell that holds a COMPOSITION DESCRIPTION — the Type side's shape (ibVariantAttribute),
 // and nothing more than that: a description, and the owner it belongs to.
 //
 // ⭐⭐ NO LIVE COMPOSITION LIVES HERE. A cell stores what a property STORES, and what a property
@@ -13,7 +15,7 @@ class BACKEND_API ibPropertyObject;
 // table id. Whoever needs a running composition builds one from this and keeps it where it belongs;
 // a live object in the cell would be a second state beside the stored one, which is exactly what
 // holding the description by reference is meant to prevent.
-class BACKEND_API ibVariantDataComposition : public wxVariantData {
+class BACKEND_API ibVariantComposition : public ibVariant {
 public:
 
 	/////////////////////////////////////////////////////////////////////////////////////////
@@ -31,32 +33,23 @@ public:
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 
-	explicit ibVariantDataComposition(const ibPropertyObject* prop,
+	explicit ibVariantComposition(const ibPropertyObject* prop,
 	                                  const ibCompositionDescription& desc = ibCompositionDescription())
-		: wxVariantData(), m_ownerProperty(prop), m_description(desc) {}
-	ibVariantDataComposition(const ibVariantDataComposition& src)
-		: wxVariantData(), m_ownerProperty(src.m_ownerProperty), m_description(src.m_description) {}
-
-	virtual ibVariantDataComposition* Clone() const { return new ibVariantDataComposition(*this); }
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_description(desc) {}
+	ibVariantComposition(const ibVariantComposition& src)
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(src.m_ownerProperty), m_description(src.m_description) {}
 
 	// EQUAL WHEN THEY DESCRIBE THE SAME THING — the family's own comparison (a type compares its
 	// clsid list, a source its id path). What a property is worth is what it stores.
-	virtual bool Eq(wxVariantData& data) const {
-		ibVariantDataComposition* src = dynamic_cast<ibVariantDataComposition*>(&data);
+	virtual bool CompareValueEQ(const ibVariant& data) const override {
+		const ibVariantComposition* src = dynamic_cast<const ibVariantComposition*>(data.GetRef());
 		return src != nullptr && src->m_description == m_description;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const { str << MakeString(); return true; }
-#endif
-	virtual bool Write(wxString& str) const { str = MakeString(); return true; }
-
-	virtual wxString GetType() const { return wxT("ibVariantDataComposition"); }
+	// The query is what a composition is FOR, so it is also what it shows.
+	virtual ibString GetString() const override { return m_description.m_query; }
 
 private:
-
-	// The query is what a composition is FOR, so it is also what it shows.
-	wxString MakeString() const { return m_description.m_query; }
 
 	const ibPropertyObject*  m_ownerProperty;
 	ibCompositionDescription m_description;

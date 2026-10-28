@@ -20,7 +20,7 @@
 // The constant HAS one column, and it answers to the name that column reports — `Value`. Asking the
 // column itself (rather than repeating the literal here) is what keeps the resolver and the catalogue
 // from ever disagreeing about what the field is called.
-const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxString& name) const
+const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const ibString& name) const
 {
 	const ibValueMetaObjectStoredValue::ibValueMetaObjectConstantColumn* column = m_meta->GetValueColumn();
 	return column != nullptr && name.IsSameAs(column->GetName(), false) ? column->GetQueryColumn() : nullptr;
@@ -29,11 +29,11 @@ const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxStr
 // ibBackendQueryable::GetQueryTableGuid), not answered a second time here.
 const ibValueMetaObjectGenericData* ibConstantQueryable::GetSourceMetaObject() const { return m_meta; }
 
-wxString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+ibString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
 const ibMetaData* ibConstantQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
 std::vector<const ibBackendQueryColumn*> ibConstantQueryable::GetPrimaryKeyColumns() const {
 	// The single-row sys_const key (UPSERT match) — a RAW column, no metadata translation.
-	static const ibBackendColumnRawDB s_recordKey(wxT("RECORD_KEY"), ibBackendColumnRawDB::RawType::String);
+	static const ibBackendColumnRawDB s_recordKey(ibT("RECORD_KEY"), ibBackendColumnRawDB::RawType::String);
 	return { &s_recordKey };
 }
 // (value materialisation moved to ibDbTableProvider — the queryable names no attribute / L1.)
@@ -70,13 +70,13 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 	// InitializeRuntime picks up the parent on lazy creation, no
 	// after-fact cascade needed.
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
-	BindContextVariable(wxT("ThisObject"), this);
+	BindContextVariable(ibT("ThisObject"), this);
 	// Constant's Value is the module's own writable local — the
 	// binder seeds the frame slot with &m_constValue, so `Value` / `Value = …`
 	// inside the constant module read/write the backing member directly. No
 	// AppendProp + eSystem GetPropVal/SetPropVal round-trip. The address is
 	// stable (member); the value is filled by GetConstValue() just below.
-	BindLocalVariable(wxT("Value"), &m_constValue);
+	BindLocalVariable(ibT("Value"), &m_constValue);
 
 	try {
 		m_constValue = GetConstValue();
@@ -144,7 +144,7 @@ ibClassID ibValueRecordDataObjectConstant::GetClassType() const
 	return clsFactory->GetClassType();
 }
 
-wxString ibValueRecordDataObjectConstant::GetClassName() const
+ibString ibValueRecordDataObjectConstant::GetClassName() const
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
 	wxASSERT(metaData);
@@ -200,7 +200,7 @@ ibFormPtr<ibBackendValueForm> ibValueRecordDataObjectConstant::GetFormValue()
 	ibBackendValueForm* const foundedForm = GetForm();
 
 	if (foundedForm == nullptr)
-		return ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(wxString(), m_metaObject->GetGuid()), nullptr, nullptr, this);
+		return ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(ibString(), m_metaObject->GetGuid()), nullptr, nullptr, this);
 
 	return ibFormPtr<ibBackendValueForm>(foundedForm);   // the open one — its window holds it
 }
@@ -275,7 +275,7 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 			ibBackendCoreException::Error(_("Database is not open!"));
 
 		if (!m_metaObject->AccessRight_Read()) {
-			ibBackendAccessException::Error(wxString::Format(_("reading constant '%s'"),
+			ibBackendAccessException::Error(ibString::Format(_("reading constant '%s'"),
 				m_metaObject->GetSynonym()));
 			return false;
 		}
@@ -348,7 +348,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 		return true;
 
 	if (!m_metaObject->AccessRight_Write()) {
-		ibBackendAccessException::Error(wxString::Format(_("writing constant '%s'"),
+		ibBackendAccessException::Error(ibString::Format(_("writing constant '%s'"),
 			m_metaObject->GetSynonym()));
 		return false;
 	}
@@ -361,7 +361,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 	if (!scope || !scope->IsOpen())
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	const wxString& tableName = m_metaObject->GetPhysicalTableName();
+	const ibString& tableName = m_metaObject->GetPhysicalTableName();
 	// Told afterwards if there is anybody to tell — see ibFormToNotify (backend_form.h).
 	ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 
@@ -376,8 +376,8 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 		ibDatabaseQueryBuilder q(ibSession::Current()->Holder());
 		ibQueryIR ir(ibProject(
 			ibFilter(ibScan(tableName),
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("RECORD_KEY")), ibConst(ibValue(wxString(wxT("6")))))),
-			{ { ibCol(wxT("RECORD_KEY")), wxEmptyString } }));   // project the TYPED key column, not a bare const (SELECT ? = FB -804); only the row lock matters
+				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("RECORD_KEY")), ibConst(ibValue(ibString(ibT("6")))))),
+			{ { ibCol(ibT("RECORD_KEY")), ibEmptyString } }));   // project the TYPED key column, not a bare const (SELECT ? = FB -804); only the row lock matters
 		ir.m_lockForUpdate = true;
 		ibQueryResult lockRs = q.ExecuteIR(ir);
 		while (lockRs.Next()) {}   // drain — only the lock side effect matters
@@ -390,7 +390,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("BeforeWrite"), cancel);
+		ExecAsEvent(ibT("BeforeWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			rollback();
 			ibBackendCoreException::Error(_("Constant '%s': writing cancelled by the BeforeWrite handler"),
@@ -402,8 +402,8 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 	m_constValue = m_metaObject->AdjustValue(cValue);
 
 	if (m_metaObject->FillCheck() && m_constValue.IsEmpty()) {
-		const wxString fillError =
-			wxString::Format(_("""%s"" is a required field"), m_metaObject->GetSynonym());
+		const ibString fillError =
+			ibString::Format(_("""%s"" is a required field"), m_metaObject->GetSynonym());
 		ibValueSystemFunction::Message(fillError, ibStatusMessage::ibStatusMessage_Information);
 		rollback();
 		return false;
@@ -416,7 +416,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 	// the session holder, so it joins the TX that already holds this row's lock.
 	if (!ibDataQueryBuilder()
 		.From(m_metaObject->GetQueryable())
-		.SetValue(ibBackendColumnRawDB::String(wxT("RECORD_KEY")), ibValue(wxT("6")))   // raw primary -> MATCHING
+		.SetValue(ibBackendColumnRawDB::String(ibT("RECORD_KEY")), ibValue(ibT("6")))   // raw primary -> MATCHING
 		.SetValue(m_metaObject->GetValueColumn()->GetQueryColumn(), m_constValue)                        // the value column
 		.Upsert()) {
 		rollback();
@@ -427,7 +427,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("OnWrite"), cancel);
+		ExecAsEvent(ibT("OnWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			rollback();
 			ibBackendCoreException::Error(_("Constant '%s': writing cancelled by the OnWrite handler"),

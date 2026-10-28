@@ -54,7 +54,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::CreateObjectForm(con
 
 	const ibSourcePtr<ibSourceDataObject> source = CreateSourceObject(ibCreateRequest(), form_id);   // held across the build
 	return CreateAndBuildForm(
-		ibFormRequest(metaForm != nullptr ? metaForm->GetName() : wxString(), formGuid),
+		ibFormRequest(metaForm != nullptr ? metaForm->GetName() : ibString(), formGuid),
 		form_id,
 		nullptr,
 		source
@@ -83,7 +83,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::CreateAndBuildForm(c
 	}
 
 	if (!AccessRight_Show()) {
-		ibBackendAccessException::Error(wxString::Format(_("opening '%s'"), GetSynonym()));
+		ibBackendAccessException::Error(ibString::Format(_("opening '%s'"), GetSynonym()));
 		return nullptr;
 	}
 
@@ -102,7 +102,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::CreateAndBuildForm(c
 #pragma endregion
 #pragma region _template_builder_h_
 
-ibValueSpreadsheetDocument* ibValueMetaObjectGenericData::GetTemplate(const wxString& strTemplateName) const
+ibValueSpreadsheetDocument* ibValueMetaObjectGenericData::GetTemplate(const ibString& strTemplateName) const
 {
 	ibValueMetaObjectSpreadsheetBase* creator = nullptr;
 
@@ -132,7 +132,6 @@ ibValueSpreadsheetDocument* ibValueMetaObjectGenericData::GetTemplate(const wxSt
 //*                           ibValueMetaObjectRecordData				*
 //***********************************************************************
 
-#include "core/fileSystem/fs.h"
 
 //***********************************************************************
 //*                           read & save events                        *
@@ -297,7 +296,7 @@ bool ibValueMetaObjectRecordDataRef::ReadData(const ibDataNode& node)
 	// migrates it, saving it settles the migration, and nobody is asked to do anything.
 	ibDataValue reference = node.GetProperty(m_propertyAttributeReference->GetName());
 	if (reference.IsEmpty())
-		reference = node.GetProperty(wxT("Reference"));   // saved before the rename
+		reference = node.GetProperty(ibT("Reference"));   // saved before the rename
 	m_propertyAttributeReference->SetNodeValue(reference);
 	return true;
 }
@@ -437,7 +436,7 @@ ibValueReferenceDataObject* ibValueMetaObjectRecordDataRef::FindObjectValue(cons
 // in turn — a string written onto a string keeps its buffer (ibValue::Copy) — and its text is taken from
 // there as it lies (GetString(scratch)): only a field that is not text yet, a number or a date, is made
 // into the scratch. Each text is laid down before the next field is written over it.
-bool ibValueMetaObjectRecordDataRef::GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const
+bool ibValueMetaObjectRecordDataRef::GenerateDataDesc(const ibValueDataObject* objValue, ibString& out) const
 {
 	if (objValue == nullptr)
 		return false;
@@ -448,8 +447,9 @@ bool ibValueMetaObjectRecordDataRef::GenerateDataDesc(const ibValueDataObject* o
 	if (!objValue->GetValueByMetaID(parameter.m_first->GetMetaID(), field))
 		return false;
 	const ibString& first = field.GetString();
+	out = parameter.m_prefix;
 	out.reserve(parameter.m_prefix.length() + first.Len() + parameter.m_separator.length());
-	out.assign(parameter.m_prefix).append(first.wc_str(), first.Len());
+	out.append(first.c_str(), first.Len());
 	if (parameter.m_second == nullptr)
 		return true;
 	if (!objValue->GetValueByMetaID(parameter.m_second->GetMetaID(), field)) {
@@ -457,7 +457,7 @@ bool ibValueMetaObjectRecordDataRef::GenerateDataDesc(const ibValueDataObject* o
 		return false;
 	}
 	const ibString& second = field.GetString();
-	out.append(parameter.m_separator).append(second.wc_str(), second.Len());
+	out.append(parameter.m_separator).append(second.c_str(), second.Len());
 	return true;
 }
 
@@ -562,14 +562,14 @@ bool ibValueMetaObjectRecordDataEnumRef::OnAfterCloseMetaObject()
 // `EnumRef.Kinds.Retail`, and at run time as the synonym a person put on it. A guid that names no
 // member is `false`: there is nothing to read, which is not the same as reading as nothing.
 bool ibValueMetaObjectRecordDataEnumRef::GenerateDataDesc(const ibValueDataObject* objValue,
-	wxString& out) const
+	ibString& out) const
 {
 	if (objValue == nullptr)
 		return false;
 
 	const bool designer = appData->DesignerMode();
 	if (designer) {
-		const wxString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
+		const ibString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
 		if (!empty.IsEmpty()) {
 			out = empty;
 			return true;
@@ -579,7 +579,7 @@ bool ibValueMetaObjectRecordDataEnumRef::GenerateDataDesc(const ibValueDataObjec
 	for (auto obj : GetEnumObjectArray()) {
 		if (obj != nullptr && objValue->GetGuid() == obj->GetGuid()) {
 			out = designer
-				? ibDeclaredTypeName(this) + wxT(".") + obj->GetName()
+				? ibDeclaredTypeName(this) + ibT(".") + obj->GetName()
 				: obj->GetSynonym();
 			return true;
 		}
@@ -951,13 +951,13 @@ bool ibValueMetaObjectRecordDataRecorderRef::OnAfterCloseMetaObject()
 // legitimate thing to write in a setting ("documents open too — a document just has only the
 // reference"). Anything else names a row, and a row reads as number + date.
 bool ibValueMetaObjectRecordDataRecorderRef::GenerateDataDesc(const ibValueDataObject* objValue,
-	wxString& out) const
+	ibString& out) const
 {
 	if (objValue == nullptr)
 		return false;
 
 	if (appData->DesignerMode()) {
-		const wxString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
+		const ibString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
 		if (!empty.IsEmpty()) {
 			out = empty;
 			return true;
@@ -1036,7 +1036,7 @@ ibValueMetaObjectRecordDataHierarchyMutableRef::~ibValueMetaObjectRecordDataHier
 
 // HOW A ROW OF THIS FAMILY READS — see the declaration for why it lives here and not three times over.
 bool ibValueMetaObjectRecordDataHierarchyMutableRef::GenerateDataDesc(const ibValueDataObject* objValue,
-	wxString& out) const
+	ibString& out) const
 {
 	if (objValue == nullptr)
 		return false;
@@ -1045,14 +1045,14 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::GenerateDataDesc(const ibVa
 	// what the configuration declares: the empty reference, or one of the predefined values, written as
 	// `CatalogRef.Goods.Chair`.
 	if (appData->DesignerMode()) {
-		const wxString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
+		const ibString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
 		if (!empty.IsEmpty()) {
 			out = empty;
 			return true;
 		}
 		for (const auto& item : GetPredefinedValueArray())
 			if (item != nullptr && item->GetPredefinedGuid() == objValue->GetGuid()) {
-				out = ibDeclaredTypeName(this) + wxT(".") + item->GetPredefinedName();
+				out = ibDeclaredTypeName(this) + ibT(".") + item->GetPredefinedName();
 				return true;
 			}
 	}
@@ -1112,8 +1112,8 @@ ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectRecordDataHiera
 #define predefinedBlock 0x1234532
 
 //append predefined value
-void ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(const wxString& strPredefinedName,
-	const wxString& strCode, const wxString& strDescription,
+void ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(const ibString& strPredefinedName,
+	const ibString& strCode, const ibString& strDescription,
 	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent)
 {
 	m_predefinedObjectVector.emplace_back(
@@ -1124,8 +1124,8 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(const
 }
 
 void ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedValue(const ibGuid& predefinedGuid,
-	const wxString& strPredefinedName,
-	const wxString& strCode, const wxString& strDescription,
+	const ibString& strPredefinedName,
+	const ibString& strCode, const ibString& strDescription,
 	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent)
 {
 	wxObjectDataPtr<ibPredefinedValueObject> foundedPredefinedValue = FindPredefinedValue(predefinedGuid);
@@ -1164,18 +1164,20 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::DeletePredefinedValue(const
 
 bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node) const
 {
-	// predefined values -> an Array of Child{ guid, name, code, description, isFolder }
+	// predefined values -> an Array of Child{ guid, name, code, description, isFolder, parent — its guid, absent at the top }
 	std::vector<ibDataValue> predefined;
 	for (const auto& value : m_predefinedObjectVector) {
 		auto pv = std::make_shared<ibDataNode>();
-		pv->SetValue(wxT("Guid"), value->GetPredefinedGuid());
-		pv->SetValue(wxT("Name"), value->GetPredefinedName());
-		pv->SetValue(wxT("Code"), value->GetPredefinedCode());
-		pv->SetValue(wxT("Description"), value->GetPredefinedDescription());
-		pv->SetValue(wxT("IsFolder"), (bool)value->IsPredefinedFolder());
+		pv->SetValue(ibT("Guid"), value->GetPredefinedGuid());
+		pv->SetValue(ibT("Name"), value->GetPredefinedName());
+		pv->SetValue(ibT("Code"), value->GetPredefinedCode());
+		pv->SetValue(ibT("Description"), value->GetPredefinedDescription());
+		pv->SetValue(ibT("IsFolder"), (bool)value->IsPredefinedFolder());
+		if (value->GetPredefinedParent() != nullptr)
+			pv->SetValue(ibT("Parent"), value->GetPredefinedParent()->GetPredefinedGuid());
 		predefined.push_back(ibDataValue::Child(pv));
 	}
-	node.SetProperty(wxT("Predefined"), ibDataValue::Array(predefined));
+	node.SetProperty(ibT("Predefined"), ibDataValue::Array(predefined));
 
 	node.SetProperty(m_propertyAttributePredefined->GetName(), m_propertyAttributePredefined->GetNodeValue());
 	node.SetProperty(m_propertyAttributeCode->GetName(), m_propertyAttributeCode->GetNodeValue());
@@ -1192,19 +1194,26 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 
 bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& node)
 {
-	const ibDataValue predefinedVal = node.GetProperty(wxT("Predefined"));
+	const ibDataValue predefinedVal = node.GetProperty(ibT("Predefined"));
 	if (predefinedVal.Kind() == ibDataKind::Array) {
+		// The parent is linked once every item is read: an item edited to sit under a later one stands before it.
+		std::vector<std::pair<wxObjectDataPtr<ibPredefinedValueObject>, ibGuid>> parents;
 		for (const ibDataValue& item : predefinedVal.AsArray()) {
-			const std::shared_ptr<ibDataNode>& pv = item.AsChild();
+			const auto pv = item.AsChild();
 			if (!pv)
 				continue;
-			const ibGuid valueGuid = pv->GetValue<ibGuid>(wxT("Guid"));
-			wxString valueName = pv->GetValue<wxString>(wxT("Name"));
-			wxString valueCode = pv->GetValue<wxString>(wxT("Code"));
-			wxString valueDescription = pv->GetValue<wxString>(wxT("Description"));
+			const ibGuid valueGuid = pv->GetValue<ibGuid>(ibT("Guid"));
+			ibString valueName = pv->GetValue<ibString>(ibT("Name"));
+			ibString valueCode = pv->GetValue<ibString>(ibT("Code"));
+			ibString valueDescription = pv->GetValue<ibString>(ibT("Description"));
+			const bool valueIsFolder = pv->GetValue<bool>(ibT("IsFolder"));
 			m_predefinedObjectVector.emplace_back(
-				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription));
+				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription, valueIsFolder));
+			if (pv->Has(ibT("Parent")))
+				parents.emplace_back(m_predefinedObjectVector.back(), pv->GetValue<ibGuid>(ibT("Parent")));
 		}
+		for (const auto& parent : parents)
+			parent.first->m_valueParent = FindPredefinedValue(parent.second);
 	}
 
 	m_propertyAttributePredefined->SetNodeValue(node.GetProperty(m_propertyAttributePredefined->GetName()));
@@ -1503,26 +1512,21 @@ bool ibValueMetaObjectRegisterData::OnLoadMetaObject(ibMetaData* metaData)
 
 bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 {
-	// ⭐⭐ A REGISTER WITH NOTHING IN IT IS NOT A REGISTER — and it is the one shape that cannot
-	// reach the database at all.
-	//
-	// Dimensions say what a record is ABOUT, resources say what it MEASURES, attributes say what
-	// else it carries. With none of the three there is no fact to record: the predefined columns
-	// alone describe an occurrence that states nothing.
-	//
-	// ⚠ AND A TABLE NEEDS AT LEAST ONE COLUMN. An independent register with nothing declared has
-	// none, so the differ correctly computed "every column of this table is gone" and emitted
+	// ⭐⭐ A TABLE NEEDS AT LEAST ONE COLUMN. An independent register with nothing declared has none,
+	// so the differ correctly computed "every column of this table is gone" and emitted
 	// `ALTER TABLE … DROP <all of them>` — which Firebird answers with "last column in a table
 	// cannot be deleted". That refusal aborts the WHOLE apply, so one half-built register blocked
 	// every other change in the configuration, and the message named neither the register nor the
 	// reason. Refusing at the door turns a dead end into one sentence naming the object.
 	//
+	// The question is the table's: any column of the record, the predefined ones (period, recorder,
+	// line number) included. A sequence always has its recorder, so no dimensions is just one border.
+	//
 	// Same door and same shape as the enumeration with no values
 	// (`ibValueMetaObjectEnumeration::OnSaveMetaObject`): an empty metaobject is refused where it is
 	// SAVED, by the restructure report, so the message lands in the pane under the editor and no
 	// exception leaves the configuration write transaction open.
-	if (GetDimensionArrayObject().empty() && GetResourceArrayObject().empty()
-		&& GetAttributeArrayObject().empty()) {
+	if (GetAnyAttributeArrayObject().empty()) {
 		RestructureError(_("! Doesn't have any dimension, resource or attribute ") + GetFullName());
 		return false;
 	}
@@ -1541,7 +1545,7 @@ bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 	if (HasRecorder() && (*m_propertyAttributeRecorder)->IsEmptyTypeDesc()) {
 		// Into the LEDGER — see the note in metaComposerObject.cpp: one road for a refusal, read by
 		// whoever asked. Printed here it also stayed on the screen after a probe that only asked.
-		RestructureError(wxString::Format(
+		RestructureError(ibString::Format(
 			_("%s: no recorder - declare a document that posts into this register, or it can never be written to"), GetName()));
 		return false;
 	}
@@ -1761,7 +1765,7 @@ void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 // ⚠ AND A NAME THE MODULE DOES NOT HAVE IS SAID OUT LOUD. The runtime reads neither answer of a call
 // (procUnit ignores CallAsFunc's bool), so a lookup that found nothing was the same silent Undefined
 // the numbering gave — the one symptom that hid this defect for the whole life of the manager.
-static long ibModuleMethodNum(const ibValue& unit, const wxString& methodName)
+static long ibModuleMethodNum(const ibValue& unit, const ibString& methodName)
 {
 	const long found = unit.FindMethod(methodName);
 	if (found == wxNOT_FOUND)
@@ -1809,6 +1813,26 @@ bool ibValueManagerDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRe
 	return false;
 }
 
+bool ibValueManagerDataObject::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
+	wxASSERT(valueMetaObject);
+
+	const ibMetaData* metaData = valueMetaObject->GetMetaData();
+	wxASSERT(metaData);
+
+	if (m_members.GetMethodAlias(lMethodNum) != g_aliasExport)
+		return false;
+
+	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
+	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
+
+	if (pRefData != nullptr)
+		return pRefData->GetParamDefValue(ibModuleMethodNum(*pRefData, m_members.GetMethodName(lMethodNum)), lParamNum, pvarParamDefValue);
+
+	return false;
+}
+
 ibClassID ibValueManagerDataObject::GetClassType() const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
@@ -1820,7 +1844,7 @@ ibClassID ibValueManagerDataObject::GetClassType() const
 	return clsFactory->GetClassType();
 }
 
-wxString ibValueManagerDataObject::GetClassName() const
+ibString ibValueManagerDataObject::GetClassName() const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
 	wxASSERT(valueMetaObject);
@@ -1996,7 +2020,7 @@ ibClassID ibValueRecordDataObject::GetClassType() const
 	return clsFactory->GetClassType();
 }
 
-wxString ibValueRecordDataObject::GetClassName() const
+ibString ibValueRecordDataObject::GetClassName() const
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 	wxASSERT(metaObject);
@@ -2022,7 +2046,7 @@ const ibSourceExplorer* ibValueRecordDataObject::GetSourceExplorer() const
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 
 	if (!m_sourceExplorer.Reset(metaObject->GetMetaData()->GetFactoryCountChanges(),
-		wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(),
+		ibT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(),
 		false, false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
@@ -2131,7 +2155,7 @@ ibValueModel* ibValueRecordDataObject::GetTableByMetaID(const ibMetaID& id) cons
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define thisObject wxT("ThisObject")
+#define thisObject ibT("ThisObject")
 
 void ibValueRecordDataObject::PrepareEmptyObject()
 {
@@ -2161,9 +2185,9 @@ void ibValueRecordDataObject::PrepareEmptyObject()
 // bind this. Leaves with their own method set bind their own FillMethods instead.
 void ibValueRecordDataObject::FillBaseMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("GetFormObject"), 2, wxT("GetFormObject(name : string, owner : any)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendFunc(ibT("GetFormObject"), 2, ibT("GetFormObject(name : string, owner : any)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 }
 
 // Shared data surface bound by the base ctor: the metaobject's attributes
@@ -2178,7 +2202,7 @@ void ibValueRecordDataObject::FillDataMembers(ibMemberTable& helper) const
 	if (metaObject == nullptr)
 		return;
 
-	wxString objectName;
+	ibString objectName;
 
 	//fill custom attributes
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
@@ -2289,6 +2313,17 @@ bool ibValueRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRet
 	return false;
 }
 
+bool ibValueRecordDataObject::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	if (m_members.GetMethodAlias(lMethodNum) == eProcUnit) {
+		return ibRuntimeModuleDataObject::GetParamDefValue(
+			GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
+		);
+	}
+
+	return false;
+}
+
 //***********************************************************************
 //*                        ibValueRecordDataObjectExt							*           
 //***********************************************************************
@@ -2317,7 +2352,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 	if (!m_metaObject->IsExternalCreate()) {
 
 		if (!m_metaObject->AccessRight_Use()) {
-			ibBackendAccessException::Error(wxString::Format(_("using '%s'"), m_metaObject->GetSynonym()));
+			ibBackendAccessException::Error(ibString::Format(_("using '%s'"), m_metaObject->GetSynonym()));
 			return false;
 		}
 
@@ -2346,6 +2381,11 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 		Run();
 
 	InvalidateNames();
+	// ⭐ …AND ITS FIELDS DESCRIBED ANEW. The metaobject's reload is what re-initialises this object (OnReloadMetaObject),
+	// and a field's TYPE changed is one of what it reloads for: the description is stamped by the metadata version,
+	// which a type moves no more than a field's number, so the form's attribute picker kept the type it was first asked
+	// with — on both designers, since the stamp (2026-10-19). Cleared, it is built again when next read.
+	m_sourceExplorer.Clear();
 
 	//is Ok
 	return true;
@@ -2402,7 +2442,7 @@ ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueMetaObjectRe
 	m_reference_impl(nullptr)
 {
 	if (m_metaObject != nullptr)
-		m_reference_impl = new ibReference(m_objGuid);   // pure guid; type is the metaObject / _RTRef
+		m_reference_impl = std::make_unique<ibReference>(m_objGuid);   // pure guid; type is the metaObject / _RTRef
 }
 
 ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueRecordDataObjectRef& src) :
@@ -2412,18 +2452,17 @@ ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueRecordDataOb
 	m_reference_impl(nullptr)
 {
 	if (m_metaObject != nullptr)
-		m_reference_impl = new ibReference(m_objGuid);   // pure guid; type is the metaObject / _RTRef
+		m_reference_impl = std::make_unique<ibReference>(m_objGuid);   // pure guid; type is the metaObject / _RTRef
 }
 
 ibValueRecordDataObjectRef::~ibValueRecordDataObjectRef()
 {
-	wxDELETE(m_reference_impl);
 }
 
 bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 {
 	if (!m_metaObject->AccessRight_Read()) {
-		ibBackendAccessException::Error(wxString::Format(_("reading '%s'"), m_metaObject->GetSynonym()));
+		ibBackendAccessException::Error(ibString::Format(_("reading '%s'"), m_metaObject->GetSynonym()));
 		return false;
 	}
 
@@ -2476,6 +2515,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 	}
 
 	InvalidateNames();
+	m_sourceExplorer.Clear();   // …and its fields described anew, as the external object's (InitializeObject above)
 
 	//is Ok
 	return succes;
@@ -2522,7 +2562,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 		// thing. Watches still skip, which is what this guard was written for.
 		if (!ibBackendException::IsEvalMode() || ibBackendException::IsEvalSandbox()) {
 			if (m_newObject && source != nullptr && !generate) {
-				ExecAsEvent(wxT("OnCopy"), source->GetValue());
+				ExecAsEvent(ibT("OnCopy"), source->GetValue());
 			}
 			else if (m_newObject && source == nullptr) {
 				succes = Filling();
@@ -2546,7 +2586,7 @@ ibClassID ibValueRecordDataObjectRef::GetClassType() const
 	return ibValueRecordDataObject::GetClassType();
 }
 
-wxString ibValueRecordDataObjectRef::GetClassName() const
+ibString ibValueRecordDataObjectRef::GetClassName() const
 {
 	return ibValueRecordDataObject::GetClassName();
 }
@@ -2554,7 +2594,7 @@ wxString ibValueRecordDataObjectRef::GetClassName() const
 ibString ibValueRecordDataObjectRef::GetString() const
 {
 	// …and a metatype that has nothing to say leaves the string empty, which is its own answer.
-	wxString desc;
+	ibString desc;
 	m_metaObject->GenerateDataDesc(this, desc);
 	return desc;
 }
@@ -2562,7 +2602,7 @@ ibString ibValueRecordDataObjectRef::GetString() const
 const ibSourceExplorer* ibValueRecordDataObjectRef::GetSourceExplorer() const
 {
 	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
-		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+		ibT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false, false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
@@ -2621,7 +2661,7 @@ bool ibValueRecordDataObjectRef::Generate()
 bool ibValueRecordDataObjectRef::Filling(ibValue cValue) const
 {
 	ibValue standartProcessing = true;
-	ExecAsEvent(wxT("Filling"), cValue, standartProcessing);
+	ExecAsEvent(ibT("Filling"), cValue, standartProcessing);
 	return standartProcessing.GetBoolean();
 }
 
@@ -2702,7 +2742,7 @@ void ibValueRecordDataObjectRef::PrepareEmptyObject(const ibValueRecordDataObjec
 		if (tableSection->LoadDataFromTable(source->GetTableByMetaID(object->GetMetaID())))
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), tableSection);
 		else
-			wxDELETE(tableSection);
+			delete tableSection;
 	}
 	m_objModified = true;
 }
@@ -2741,7 +2781,7 @@ ibValueRecordDataObjectHierarchyRef::~ibValueRecordDataObjectHierarchyRef()
 const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 {
 	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
-		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+		ibT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false, false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 	ibValueMetaObjectAttributeBase* attribute = m_metaObject->GetAttributeForCode();
@@ -2920,7 +2960,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 		if (tableSection->LoadDataFromTable(source->GetTableByMetaID(object->GetMetaID())))
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), tableSection);
 		else
-			wxDELETE(tableSection);
+			delete tableSection;
 	}
 	m_objModified = true;
 }
@@ -2949,21 +2989,21 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 	// Stage-named failures — same rule as the recorder path: the message says which stage
 	// stopped the write and on which object, and a script cancel reads as a cancel. A refusal is the
 	// exception and nothing else: the connection scope rolls back, the object scope puts the object back.
-	const auto refuse = [this](const wxString& stage) -> bool {
+	const auto refuse = [this](const ibString& stage) -> bool {
 		ibBackendCoreException::Error(stage, GetSourceCaption());
 		return false;
 	};
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("BeforeWrite"), cancel);
+		ExecAsEvent(ibT("BeforeWrite"), cancel);
 		if (cancel.GetBoolean())
 			return refuse(_("%s: writing cancelled by the BeforeWrite handler"));
 	}
 
 	if (!IsSetUniqueIdentifier()) {
-		ibValue prefix = wxEmptyString, standartProcessing = true;
-		ExecAsEvent(wxT("SetNewCode"), prefix, standartProcessing);
+		ibValue prefix = ibEmptyString, standartProcessing = true;
+		ExecAsEvent(ibT("SetNewCode"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
 			GenerateUniqueIdentifier(prefix.GetString());
 	}
@@ -2973,7 +3013,7 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("OnWrite"), cancel);
+		ExecAsEvent(ibT("OnWrite"), cancel);
 		if (cancel.GetBoolean())
 			return refuse(_("%s: writing cancelled by the OnWrite handler"));
 	}
@@ -3007,7 +3047,7 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("BeforeDelete"), cancel);
+		ExecAsEvent(ibT("BeforeDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: deletion cancelled by the BeforeDelete handler"),
@@ -3024,7 +3064,7 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("OnDelete"), cancel);
+		ExecAsEvent(ibT("OnDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: deletion cancelled by the OnDelete handler"),
@@ -3181,7 +3221,7 @@ namespace { enum { enWriteRegister = 0 }; }
 
 void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Write"), wxT("Write()"));
+	helper.AppendFunc(ibT("Write"), ibT("Write()"));
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
 		wxASSERT(record);
@@ -3257,10 +3297,10 @@ bool ibValueRecordDataObjectRecorderRef::InitializeObject(const ibGuid& copyGuid
 {
 	ibRuntimeModuleDataObject::SetParent(ibSession::EditModuleManagerFor(m_metaObject->GetMetaData()));
 	ibRecorderRegister* recordSet = m_registerRecords;
-	BindExportVariable(wxT("RegisterRecords"), recordSet);
+	BindExportVariable(ibT("RegisterRecords"), recordSet);
 	// …and the other list, bound beside it: the sets of registrations this document writes.
 	ibRecorderRegister* sequenceSet = m_sequenceRecords;
-	BindExportVariable(wxT("Sequences"), sequenceSet);
+	BindExportVariable(ibT("Sequences"), sequenceSet);
 	return ibValueRecordDataObjectRef::InitializeObject(copyGuid);
 }
 
@@ -3268,9 +3308,9 @@ bool ibValueRecordDataObjectRecorderRef::InitializeObject(ibValueRecordDataObjec
 {
 	ibRuntimeModuleDataObject::SetParent(ibSession::EditModuleManagerFor(m_metaObject->GetMetaData()));
 	ibRecorderRegister* recordSet = m_registerRecords;
-	BindExportVariable(wxT("RegisterRecords"), recordSet);
+	BindExportVariable(ibT("RegisterRecords"), recordSet);
 	ibRecorderRegister* sequenceSet = m_sequenceRecords;
-	BindExportVariable(wxT("Sequences"), sequenceSet);
+	BindExportVariable(ibT("Sequences"), sequenceSet);
 	return ibValueRecordDataObjectRef::InitializeObject(source, generate);
 }
 
@@ -3310,14 +3350,14 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	// A refusal is the exception and nothing else: the connection scope rolls the transaction back as it
 	// unwinds, and the object scope puts the object back. (Each branch used to reset the number and roll back by hand
 	// before raising - twelve copies, and every road that left by an exception of its own missed both.)
-	const auto refuse = [this](const wxString& stage) -> bool {
+	const auto refuse = [this](const ibString& stage) -> bool {
 		ibBackendCoreException::Error(stage, GetSourceCaption());
 		return false;
 	};
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("BeforeWrite"), cancel,
+		ExecAsEvent(ibT("BeforeWrite"), cancel,
 			ibValue::CreateEnumObject<ibValueEnumDocumentWriteMode>(writeMode),
 			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode)
 		);
@@ -3328,19 +3368,20 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 			SetPosted(writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting);
 	}
 
-	if (!IsSetUniqueIdentifier()) {
-		ibValue prefix = wxEmptyString, standartProcessing = true;
-		ExecAsEvent(wxT("SetNewNumber"), prefix, standartProcessing);
-		if (standartProcessing.GetBoolean())
-			GenerateUniqueIdentifier(prefix.GetString());
-	}
-
-	// A new recorder written without a date is dated by the write. The date is the recorder's own
-	// (its metaobject declares it beside the number), so no leaf is asked.
+	// One dating, before the number. The series and the stored date are the same period, for a
+	// periodic document and for one that is not. The date is the recorder's own (its metaobject
+	// declares it beside the number), so no leaf is asked.
 	if (newObject) {
 		ibValueMetaObjectAttributePredefined* const date = GetMetaObject()->GetDocumentDate();
 		if (GetValueByMetaID(*date).IsEmpty())
 			SetValueByMetaID(*date, ibValueSystemFunction::CurrentDate());
+	}
+
+	if (!IsSetUniqueIdentifier()) {
+		ibValue prefix = ibEmptyString, standartProcessing = true;
+		ExecAsEvent(ibT("SetNewNumber"), prefix, standartProcessing);
+		if (standartProcessing.GetBoolean())
+			GenerateUniqueIdentifier(prefix.GetString());
 	}
 
 	if (!SaveData())
@@ -3372,7 +3413,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 			return refuse(_("%s: failed to clear the registrations of the previous posting"));
 
 		ibValue cancel = false;
-		ExecAsEvent(wxT("Posting"), cancel,
+		ExecAsEvent(ibT("Posting"), cancel,
 			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode));
 		if (cancel.GetBoolean())
 			return refuse(_("%s: posting cancelled by the Posting handler"));
@@ -3388,7 +3429,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	}
 	else if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting) {
 		ibValue cancel = false;
-		ExecAsEvent(wxT("UndoPosting"), cancel);
+		ExecAsEvent(ibT("UndoPosting"), cancel);
 		if (cancel.GetBoolean())
 			return refuse(_("%s: undo posting cancelled by the UndoPosting handler"));
 		if (!m_registerRecords->DeleteRecordSet(writeMode))
@@ -3399,7 +3440,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("OnWrite"), cancel);
+		ExecAsEvent(ibT("OnWrite"), cancel);
 		if (cancel.GetBoolean())
 			return refuse(_("%s: writing cancelled by the OnWrite handler"));
 	}
@@ -3412,13 +3453,13 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	if (ibLog && ibLog->IsEnabled(ibLogLevel::Audit)
 	    && writeMode != ibDocumentWriteMode::ibDocumentWriteMode_Write)
 	{
-		const wxString refGuid = m_reference_impl
-			? ibGuid(m_reference_impl->m_guid).str() : wxString();
+		const ibString refGuid = m_reference_impl
+			? ibGuid(m_reference_impl->m_guid).str() : ibString();
 		const int refMetaId = m_metaObject != nullptr
 			? static_cast<int>(m_metaObject->GetMetaID()) : 0;   // type from the metaObject, not the key bytes
-		const wxString evt = (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting)
-			? wxT("posted") : wxT("unposted");
-		ibLog->Audit(wxT("document"), evt, GetSourceCaption(), refGuid, refMetaId);
+		const ibString evt = (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting)
+			? ibT("posted") : ibT("unposted");
+		ibLog->Audit(ibT("document"), evt, GetSourceCaption(), refGuid, refMetaId);
 	}
 
 	CommitWriteScope(scope, objectScope, valueForm, newObject);
@@ -3465,7 +3506,7 @@ bool ibValueRecordDataObjectRecorderRef::DeleteObject()
 	// Stage-named failures, as on the write path: a delete that stops has a reason and a place.
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("BeforeDelete"), cancel);
+		ExecAsEvent(ibT("BeforeDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: deletion cancelled by the BeforeDelete handler"),
@@ -3491,7 +3532,7 @@ bool ibValueRecordDataObjectRecorderRef::DeleteObject()
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("OnDelete"), cancel);
+		ExecAsEvent(ibT("OnDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: deletion cancelled by the OnDelete handler"),
@@ -3571,7 +3612,7 @@ ibClassID ibValueRecordKeyObject::GetClassType() const
 	return clsFactory->GetClassType();
 }
 
-wxString ibValueRecordKeyObject::GetClassName() const
+ibString ibValueRecordKeyObject::GetClassName() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordKey);
@@ -3614,6 +3655,7 @@ bool ibValueRecordManagerObject::InitializeObject(const ibValueRecordManagerObje
 	}
 
 	InvalidateNames();
+	m_sourceExplorer.Clear();   // …and its fields described anew, as the external object's (InitializeObject above)
 
 	//is Ok
 	return true;
@@ -3684,7 +3726,7 @@ bool ibValueRecordManagerObject::IsEmpty() const
 const ibSourceExplorer* ibValueRecordManagerObject::GetSourceExplorer() const
 {
 	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
-		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false, false))
+		ibT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false, false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -3744,7 +3786,7 @@ ibClassID ibValueRecordManagerObject::GetClassType() const
 	return clsFactory->GetClassType();
 }
 
-wxString ibValueRecordManagerObject::GetClassName() const
+ibString ibValueRecordManagerObject::GetClassName() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordManager);
@@ -3800,10 +3842,8 @@ bool ibValueRecordSetObject::GetPropVal(const long lPropNum, ibValue& pvarPropVa
 	if (m_procUnit != nullptr && m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
 		return true;
 
-	if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
-		pvarPropVal = bound;
+	if (GetBoundValue(GetPropName(lPropNum), pvarPropVal))
 		return true;
-	}
 
 	return false;
 }
@@ -3823,7 +3863,7 @@ void ibValueRecordSetObject::CreateEmptyKey()
 bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* source, bool newRecord)
 {
 	if (!m_metaObject->AccessRight_Read()) {
-		ibBackendAccessException::Error(wxString::Format(_("reading register '%s'"), m_metaObject->GetSynonym()));
+		ibBackendAccessException::Error(ibString::Format(_("reading register '%s'"), m_metaObject->GetSynonym()));
 		return false;
 	}
 
@@ -3832,7 +3872,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);                   // contextual
-	BindExportVariable(wxT("Filter"), m_recordSetKeyValue);  // exported — register filter/key
+	BindExportVariable(ibT("Filter"), m_recordSetKeyValue);  // exported — register filter/key
 
 	try {
 		Compile();
@@ -3938,7 +3978,7 @@ bool ibValueRecordSetObject::WriteRecordSet(bool replace, bool clearTable)
 	ibValue replacing = replace;
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("BeforeWrite"), cancel, replacing);
+		ExecAsEvent(ibT("BeforeWrite"), cancel, replacing);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("Register '%s': writing cancelled by the BeforeWrite handler"),
@@ -3958,7 +3998,7 @@ bool ibValueRecordSetObject::WriteRecordSet(bool replace, bool clearTable)
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("OnWrite"), cancel, replacing);
+		ExecAsEvent(ibT("OnWrite"), cancel, replacing);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("Register '%s': writing cancelled by the OnWrite handler"),
@@ -3978,7 +4018,7 @@ bool ibValueRecordSetObject::DeleteRecordSet()
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("BeforeDelete"), cancel);
+		ExecAsEvent(ibT("BeforeDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("Register '%s': deletion cancelled by the BeforeDelete handler"),
@@ -3996,7 +4036,7 @@ bool ibValueRecordSetObject::DeleteRecordSet()
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("OnDelete"), cancel);
+		ExecAsEvent(ibT("OnDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("Register '%s': deletion cancelled by the OnDelete handler"),
@@ -4028,7 +4068,7 @@ ibClassID ibValueRecordSetObject::GetClassType() const
 	return clsFactory->GetClassType();
 }
 
-wxString ibValueRecordSetObject::GetClassName() const
+ibString ibValueRecordSetObject::GetClassName() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet);
@@ -4052,7 +4092,7 @@ bool ibValueRecordSetObject::LoadDataFromTable(ibValueModel* srcTable)
 
 	if (colData == nullptr)
 		return false;
-	wxArrayString columnName;
+	std::vector<ibString> columnName;
 	for (unsigned int idx = 0; idx < colData->GetColumnCount() - 1; idx++) {
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colData->GetColumnInfo(idx);
 		wxASSERT(colInfo);
@@ -4259,7 +4299,7 @@ void ibValueRecordSetObject::DescribeReturnLine(ibMemberTable& helper) const
 {
 	const ibValueMetaObjectGenericData* metaObject = GetMetaObject();
 	if (metaObject != nullptr) {
-		wxString objectName;
+		ibString objectName;
 		for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 			if (object->IsDeleted())
 				continue;
@@ -4410,7 +4450,7 @@ ibClassID ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetC
 	return clsFactory->GetClassType();
 }
 
-wxString ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetClassName() const
+ibString ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetClassName() const
 {
 	const ibValueMetaObject* metaTable = m_ownerTable->GetMetaObject();
 	const ibMetaData* metaData = metaTable->GetMetaData();
@@ -4455,10 +4495,10 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::GetPropVal(
 
 void ibValueRecordKeyObject::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
-	helper.AppendFunc(wxT("Metadata"), wxT("Metadata()"));
+	helper.AppendFunc(ibT("IsEmpty"), ibT("IsEmpty()"));
+	helper.AppendFunc(ibT("Metadata"), ibT("Metadata()"));
 
-	wxString objectName;
+	ibString objectName;
 
 	//fill custom attributes
 	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
@@ -4479,7 +4519,7 @@ void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::FillMembers
 {
 	const ibValueMetaObjectRegisterData* metaObject = m_recordSet->GetMetaObject();
 	if (metaObject != nullptr) {
-		wxString objectName;
+		ibString objectName;
 		for (const auto object : metaObject->GetGenericDimensionArrayObject()) {
 			if (object->IsDeleted())
 				continue;
@@ -4497,10 +4537,10 @@ void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::FillMembers
 
 void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Set"), 1, wxT("Set(value: any)"));
+	helper.AppendFunc(ibT("Set"), 1, ibT("Set(value: any)"));
 
-	helper.AppendProp(wxT("Value"), m_metaId);
-	helper.AppendProp(wxT("Use"));
+	helper.AppendProp(ibT("Value"), m_metaId);
+	helper.AppendProp(ibT("Use"));
 }
 
 enum Prop

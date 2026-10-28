@@ -17,11 +17,11 @@ namespace {
 class ibTempStoreColumn : public ibBackendQueryColumn
 {
 public:
-	ibTempStoreColumn(const wxString& name, const ibTypeDescription& type, ibMetaID id, bool available)
+	ibTempStoreColumn(const ibString& name, const ibTypeDescription& type, ibMetaID id, bool available)
 		: m_name(name), m_type(type), m_id(id), m_available(available) {}
 
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
 	// ⭐ WHETHER WHAT IT WAS MADE FROM MAY BE SHOWN (functional options) — the select that made the table
@@ -30,7 +30,7 @@ public:
 	bool               IsAvailable()     const override { return m_available; }
 
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	mutable ibTypeDescription m_type;   // mutable: GetTypeDesc() is const but the interface returns a non-const ref
 	ibMetaID                  m_id;
 	bool                      m_available;
@@ -43,7 +43,7 @@ private:
 class ibTempStoreQueryable : public ibBackendQueryable
 {
 public:
-	ibTempStoreQueryable(ibQueryRamTable&& rows, const std::vector<wxString>& indexedColumns, const ibMetaData* metaData)
+	ibTempStoreQueryable(ibQueryRamTable&& rows, const std::vector<ibString>& indexedColumns, const ibMetaData* metaData)
 		: m_rows(std::move(rows)), m_metaData(metaData)
 	{
 		for (const ibQueryRamColumn& c : m_rows.Columns())
@@ -63,7 +63,7 @@ public:
 		// ibValueHash / ibValueEqual (value.h) key by the value itself — a reference compares by
 		// guid there, which is the property this needs. It used to render GetHashKey() into a
 		// string per row and index THAT; same identity, one text conversion per row cheaper.
-		for (const wxString& name : indexedColumns) {
+		for (const ibString& name : indexedColumns) {
 			for (const ibQueryRamColumn& c : m_rows.Columns()) {
 				if (!c.m_name.IsSameAs(name, false))
 					continue;
@@ -75,7 +75,7 @@ public:
 		}
 	}
 
-	const ibBackendQueryColumn* Column(const wxString& name) const
+	const ibBackendQueryColumn* Column(const ibString& name) const
 	{
 		for (const auto& c : m_columns)
 			if (c->GetName().IsSameAs(name, false)) return c.get();
@@ -89,7 +89,7 @@ public:
 		return false;
 	}
 
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return Column(name); }
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return Column(name); }
 
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override
 	{
@@ -149,7 +149,7 @@ public:
 		return t;
 	}
 
-	wxString GetQueryTableName() const override { return wxEmptyString; }
+	ibString GetQueryTableName() const override { return ibEmptyString; }
 	ibMetaID GetQueryTableId()   const override { return 0; }
 
 	// ⭐ THE CONFIGURATION ITS REFERENCES BELONG TO — the query's, handed in when the table is stored, as the
@@ -176,20 +176,20 @@ ibQueryTempTableStore::~ibQueryTempTableStore()
 	Close();
 }
 
-bool ibQueryTempTableStore::Has(const wxString& name) const
+bool ibQueryTempTableStore::Has(const ibString& name) const
 {
 	return m_sources.find(name) != m_sources.end();
 }
 
-void ibQueryTempTableStore::Put(const wxString& name, ibQueryRamTable&& rows,
-                                const std::vector<wxString>& indexedColumns, const ibMetaData* metaData)
+void ibQueryTempTableStore::Put(const ibString& name, ibQueryRamTable&& rows,
+                                const std::vector<ibString>& indexedColumns, const ibMetaData* metaData)
 {
 	auto table = std::make_unique<ibTempStoreQueryable>(std::move(rows), indexedColumns, metaData);
 	m_sources[name] = table.get();
 	m_owned.push_back(std::move(table));
 }
 
-bool ibQueryTempTableStore::Drop(const wxString& name)
+bool ibQueryTempTableStore::Drop(const ibString& name)
 {
 	const auto it = m_sources.find(name);
 	if (it == m_sources.end())

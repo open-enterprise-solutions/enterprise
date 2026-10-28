@@ -6,26 +6,26 @@
 
 //base property for "picture"
 class BACKEND_API ibPropertyPicture : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibPictureDescription& id);
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibPictureDescription& id);
 public:
 
 #pragma region _value_
-	wxBitmap GetValueAsBitmap() const;
+	ibPicture GetValueAsPicture() const;
 	ibPictureDescription& GetValueAsPictureDesc() const;
 	void SetValue(const ibPictureDescription& val);
 #pragma endregion 
 
-	ibPropertyPicture(ibPropertyCategory* cat, const wxString& name, const ibPictureDescription& id = ibPictureDescription())
+	ibPropertyPicture(ibPropertyCategory* cat, const ibString& name, const ibPictureDescription& id = ibPictureDescription())
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), id))
 	{
 	}
 
-	ibPropertyPicture(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibPictureDescription& id = ibPictureDescription())
+	ibPropertyPicture(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibPictureDescription& id = ibPictureDescription())
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), id))
 	{
 	}
 
-	ibPropertyPicture(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibPictureDescription& id = ibPictureDescription())
+	ibPropertyPicture(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibPictureDescription& id = ibPictureDescription())
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), id))
 	{
 	}
@@ -36,9 +36,14 @@ public:
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
-	//load & save object in control 
+	//load & save object in control
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// …and the configuration's pictures it may be loaded from, as the desktop's cell listed them (advpropPicture.cpp):
+	// Pictures — the picture metaobjects of the owner's configuration, or of the one it extends, each by its Name, its
+	// Guid and the Id it is drawn by, not as a Picture: a picture named in an answer is fetched before the answer is drawn.
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 
 public:
 
@@ -46,26 +51,27 @@ public:
 
 //base property for "external picture"
 class BACKEND_API ibPropertyExternalPicture : public ibProperty {
-	static wxVariantData* CreateVariantData(const ibExternalPictureDescription& pictureDesc);
+	static ibVariant CreateVariantData(const ibExternalPictureDescription& pictureDesc);
 public:
 
 #pragma region _value_
-	wxBitmap GetValueAsBitmap() const;
-	ibExternalPictureDescription& GetValueAsPictureDesc() const;
+	ibPicture GetValueAsPicture() const;
+	const ibExternalPictureDescription& GetValueAsPictureDesc() const;
+	ibGuid GetValueAsVersion() const;
 	void SetValue(const ibExternalPictureDescription& val);
 #pragma endregion 
 
-	ibPropertyExternalPicture(ibPropertyCategory* cat, const wxString& name, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
+	ibPropertyExternalPicture(ibPropertyCategory* cat, const ibString& name, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
 		: ibProperty(cat, name, CreateVariantData(pictureDesc))
 	{
 	}
 
-	ibPropertyExternalPicture(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
+	ibPropertyExternalPicture(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
 		: ibProperty(cat, name, label, CreateVariantData(pictureDesc))
 	{
 	}
 
-	ibPropertyExternalPicture(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
+	ibPropertyExternalPicture(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibExternalPictureDescription& pictureDesc = ibExternalPictureDescription())
 		: ibProperty(cat, name, label, helpString, CreateVariantData(pictureDesc))
 	{
 	}

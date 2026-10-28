@@ -3,7 +3,7 @@
 
 #include "frmserver/docView/docView.h"
 
-// THE RUNTIME'S DOC MANAGER — the application, as enterprise.exe ran it (ibDocManagerEnterprise on the desktop). The
+// THE RUNTIME'S DOC MANAGER — the application, as the runtime runs it (ibDocManagerEnterprise on the old desktop). The
 // base set is the base's (ibDocManager's ctor); this ctor adds what only the runtime has. The runtime client's frame
 // makes it (ibClientFrameRuntime).
 class FRMSERVER_API ibDocManagerRuntime : public ibDocManager {
@@ -12,7 +12,8 @@ public:
 
 protected:
 	wxDECLARE_DYNAMIC_CLASS(ibDocManagerRuntime);
-	wxDECLARE_NO_COPY_CLASS(ibDocManagerRuntime);
+	ibDocManagerRuntime(const ibDocManagerRuntime&) = delete;
+	ibDocManagerRuntime& operator=(const ibDocManagerRuntime&) = delete;
 };
 
 #endif

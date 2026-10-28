@@ -9,7 +9,7 @@
 bool ibValueMetaObjectCommand::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
 	if (ibValueMetaObjectModule* module = m_propertyCommandModule->GetMetaObject())
-		items.emplace_back(ibMetaMenuKind::Module, wxT("CommandModule"), _("Open command module"), module);
+		items.emplace_back(ibMetaMenuKind::Module, ibT("CommandModule"), _("Open command module"), module);
 	return false;
 }
 

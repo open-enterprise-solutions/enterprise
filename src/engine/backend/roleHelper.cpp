@@ -16,7 +16,7 @@ void ibRole::InitRole(ibAccessObject* obj, const bool& value)
 
 ibAccessObject::~ibAccessObject()
 {
-	for (auto& role : m_roles) { wxDELETE(role.second); }
+	for (auto& role : m_roles) { delete role.second; }
 	m_roles.clear();
 }
 
@@ -47,7 +47,7 @@ bool ibAccessObject::AccessRight(const ibRole* role, const ibRoleUserInfo& roleI
 		if (iterator_role == m_valRoles.end())
 			return false;
 		const auto iterator = std::find_if(iterator_role->second.begin(), iterator_role->second.end(),
-			[role](const auto& pair) { return stringUtils::CompareString(role->GetName(), pair.first); });
+			[role](const auto& pair) { return stringUtils::IsSameAs(role->GetName(), pair.first); });
 		if (iterator == iterator_role->second.end())
 			return false;
 		stated = true;
@@ -97,10 +97,10 @@ bool ibAccessObject::SetRight(const ibRole* role, const ibRoleID& id, const bool
 	return true;
 }
 
-ibRole* ibAccessObject::GetRole(const wxString& nameParam) const
+ibRole* ibAccessObject::GetRole(const ibString& nameParam) const
 {
 	auto iterator = std::find_if(m_roles.begin(), m_roles.end(),
-		[nameParam](const std::pair<wxString, ibRole*>& pair) { return stringUtils::CompareString(nameParam, pair.first); });
+		[nameParam](const std::pair<ibString, ibRole*>& pair) { return stringUtils::IsSameAs(nameParam, pair.first); });
 
 	if (iterator != m_roles.end())
 		return &(*iterator->second);
@@ -127,7 +127,7 @@ ibRole* ibAccessObject::GetRole(unsigned int idx) const
 
 bool ibAccessObject::LoadRole(ibReaderMemory& dataReader)
 {
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	if (dataReader.r_chunk(roleBlock, buf)) {
 		std::shared_ptr<ibReaderMemory> dataRoleReader(new ibReaderMemory(buf));
 		unsigned int countRole = dataRoleReader->r_u32(); m_valRoles.clear();
@@ -135,7 +135,7 @@ bool ibAccessObject::LoadRole(ibReaderMemory& dataReader)
 			unsigned int countData = dataRoleReader->r_u32();
 			ibRoleID id = dataRoleReader->r_s32();
 			for (unsigned int idc = 0; idc < countData; idc++) {
-				wxString roleName = dataRoleReader->r_stringZ();
+				ibString roleName = dataRoleReader->r_stringZ();
 				bool roleValue = dataRoleReader->r_u8();
 				m_valRoles[id].insert_or_assign(roleName, roleValue);
 			}

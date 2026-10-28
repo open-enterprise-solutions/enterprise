@@ -1,0 +1,58 @@
+/* THE PALETTE, in one place — the window, the form and the grid read it. The grid's own stylesheet paints a component
+   for a page that brings nothing with it: a grey slab, a strong blue selection; these replace it, so a table reads like
+   the rest of the window. */
+:root {
+	/* What stands behind a control's stored face: a form names a Windows one — Segoe UI — and a machine without it
+	   would fall back to a serif. */
+	--oes-font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+	--oes-window-bg: #f4f5f7;
+	--oes-panel-bg: #ffffff;
+	--oes-border: #d9d9d9;
+	--oes-text: #222222;
+	--oes-muted: #6b7280;
+	--oes-accent: #3b50a0;
+
+	--oes-table-bg: #ffffff;
+	--oes-table-text: #222222;
+	--oes-table-border: #d9d9d9;
+	--oes-table-header-bg: #f2f3f4;
+	--oes-table-header-text: #222222;
+	--oes-table-row-alt-bg: #f7f8f9;
+	--oes-table-row-hover-bg: #eaecee;
+	--oes-table-row-selected-bg: #e5f2fb;
+	/* The leading bar on the selected row: the fill alone is a shade off the row beside it, and the selected row is
+	   the one the server stands on — it has to be read at a glance. */
+	--oes-table-row-selected-accent: var(--oes-accent);
+	/* The cells taken on a sheet: a tint laid over a cell's own fill, which stays readable under it. */
+	--oes-sheet-cell-selected: rgb(59 80 160 / 0.15);
+
+	/* The section panel, as the thin client paints it: a light dusty column, the sections all but white on it, the open
+	   one white; its page's links in the forms' ink. */
+	--oes-sections-bg: #c8d6df;
+	--oes-section-bg: #eef3f6;
+	--oes-section-border: #b8c9d4;
+	--oes-section-text: #343a40;
+	--oes-section-ink: #3f5c77;
+
+	/* A message's level, the mark beside it. */
+	--oes-message-information: #3b82c4;
+	--oes-message-warning: #d99a00;
+	--oes-message-error: #c0392b;
+
+	/* A field's width when nothing stretches it. */
+	--oes-field-width: 16rem;
+
+	/* Something to press is at least this tall — a finger, not a pointer, on a touch screen. */
+	--oes-touch: 2rem;
+
+	/* A table's scrollbar over the window of rows it holds. */
+	--oes-pager: 12px;
+}
+
+@media (pointer: coarse) {
+	:root {
+		--oes-touch: 44px;
+		--oes-pager: 16px;
+	}
+}

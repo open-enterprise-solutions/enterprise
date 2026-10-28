@@ -40,20 +40,20 @@ constexpr long kMaxExponent = 1000;
 constexpr size_t kMaxNumberLength = 1000;
 
 // What the parser says about a text, as something a person can read. Its message quotes the bytes it stopped
-// on, and stopped in the MIDDLE of a character (`{"name": Борщ}`) those are not UTF-8 - decoded strictly the
+// on, and stopped in the MIDDLE of a character (`{"name": Café}`) those are not UTF-8 - decoded strictly the
 // whole sentence, line and column included, came out EMPTY. The sentence is ASCII; what is not becomes `?`.
-wxString ibJsonParserText(const char* what)
+ibString ibJsonParserText(const char* what)
 {
 	if (what == nullptr)
-		return wxString();
-	const wxString strict = wxString::FromUTF8(what);
+		return ibString();
+	const ibString strict = ibString::FromUTF8(what);
 	if (!strict.empty() || *what == '\0')
 		return strict;
 	std::string ascii(what);
 	for (char& c : ascii)
 		if (static_cast<unsigned char>(c) >= 0x80)
 			c = '?';
-	return wxString::FromAscii(ascii.c_str());
+	return ibString::FromUTF8(ascii.c_str());
 }
 
 // ⭐ THE PARSER'S EVENTS BECOME THE READER'S TOKENS. nlohmann's SAX interface pushes; a script pulls - so the
@@ -106,7 +106,7 @@ public:
 		return false;
 	}
 
-	const wxString& GetError() const { return m_error; }
+	const ibString& GetError() const { return m_error; }
 
 private:
 	bool Push(ibJsonValueType type, ibValue&& value) {
@@ -117,15 +117,15 @@ private:
 	}
 
 	std::vector<ibValueJsonReader::ibToken>& m_tokens;
-	wxString m_error;
+	ibString m_error;
 };
 
 } // namespace
 
-bool ibJsonNumberFromToken(const std::string& token, ibNumber& number, wxString& refusal)
+bool ibJsonNumberFromToken(const std::string& token, ibNumber& number, ibString& refusal)
 {
 	if (token.size() > kMaxNumberLength) {
-		refusal = wxString::Format(_("a number of %lu characters - more than %lu is refused"),
+		refusal = ibString::Format(_("a number of %lu characters - more than %lu is refused"),
 			static_cast<unsigned long>(token.size()), static_cast<unsigned long>(kMaxNumberLength));
 		return false;
 	}
@@ -142,12 +142,12 @@ bool ibJsonNumberFromToken(const std::string& token, ibNumber& number, wxString&
 			plain[i] = '.';   // the locale's decimal point, whatever it is: nothing else can stand here
 	}
 	if (exponent > kMaxExponent || exponent < -kMaxExponent) {
-		refusal = wxString::Format(_("a number's exponent is beyond %ld: %s"), kMaxExponent, wxString::FromAscii(plain.c_str()));
+		refusal = ibString::Format(_("a number's exponent is beyond %ld: %s"), kMaxExponent, ibString::FromUTF8(plain.c_str()));
 		return false;
 	}
 
-	if (!number.FromString(wxString::FromAscii(plain.c_str()))) {
-		refusal = wxString::Format(_("a number that cannot be read exactly: %s"), wxString::FromAscii(plain.c_str()));
+	if (!number.FromString(ibString(plain.c_str()))) {
+		refusal = ibString::Format(_("a number that cannot be read exactly: %s"), ibString::FromUTF8(plain.c_str()));
 		return false;
 	}
 	return true;
@@ -160,17 +160,17 @@ bool ibJsonNumberFromToken(const std::string& token, ibNumber& number, wxString&
 // Order MUST match ibValueJsonReader::Prop and ::Func - the number is the index into each table.
 void ibValueJsonReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(0, wxT("JSONReader()"));
-	helper.AppendConstructor(1, wxT("JSONReader(text : string)"));
+	helper.AppendConstructor(0, ibT("JSONReader()"));
+	helper.AppendConstructor(1, ibT("JSONReader(text : string)"));
 
-	helper.AppendProp(wxT("CurrentValueType"), true, false, wxNOT_FOUND);
-	helper.AppendProp(wxT("CurrentValue"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("CurrentValueType"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("CurrentValue"), true, false, wxNOT_FOUND);
 
-	helper.AppendFunc(wxT("SetString"), 1, wxT("SetString(text : string)"));
-	helper.AppendFunc(wxT("Read"), wxT("Read()"));
-	helper.AppendFunc(wxT("Skip"), wxT("Skip()"));
-	helper.AppendFunc(wxT("ReadValue"), wxT("ReadValue()"));
-	helper.AppendFunc(wxT("Close"), wxT("Close()"));
+	helper.AppendFunc(ibT("SetString"), 1, ibT("SetString(text : string)"));
+	helper.AppendFunc(ibT("Read"), ibT("Read()"));
+	helper.AppendFunc(ibT("Skip"), ibT("Skip()"));
+	helper.AppendFunc(ibT("ReadValue"), ibT("ReadValue()"));
+	helper.AppendFunc(ibT("Close"), ibT("Close()"));
 }
 
 ibValueJsonReader::ibValueJsonReader() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true) {}
@@ -195,13 +195,13 @@ void ibValueJsonReader::SetText(const ibString& text)
 	// build than ibString::ToUtf8, which appends a character at a time. A text it cannot convert is an empty
 	// buffer, as before - and an empty text is not JSON.
 	size_t length = 0;
-	const wxCharBuffer converted = wxMBConvUTF8().cWC2MB(text.wc_str(), text.length(), &length);
+	const wxCharBuffer converted = wxMBConvUTF8().cWC2MB(text.wc_str(), wxNO_LEN, &length);
 	const char* const utf8 = converted.data() != nullptr ? converted.data() : "";
 
 	std::vector<ibToken> tokens;
 	ibJsonTokenSink sink(tokens);
 	bool parsed = false;
-	wxString failure;
+	ibString failure;
 	try {
 		// Room for the first tokens at once - and NO MORE than that on the text's word: a 30 MB message that is
 		// one base64 string is ten tokens, and a reserve by its length was 360 MB committed before a byte was
@@ -434,16 +434,16 @@ bool ibValueJsonReader::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 // Order MUST match ibValueJsonWriter::Func.
 void ibValueJsonWriter_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(0, wxT("JSONWriter()"));
-	helper.AppendConstructor(1, wxT("JSONWriter(formatting : JSONFormatting)"));
+	helper.AppendConstructor(0, ibT("JSONWriter()"));
+	helper.AppendConstructor(1, ibT("JSONWriter(formatting : JSONFormatting)"));
 
-	helper.AppendFunc(wxT("WriteStartObject"), wxT("WriteStartObject()"));
-	helper.AppendFunc(wxT("WriteEndObject"), wxT("WriteEndObject()"));
-	helper.AppendFunc(wxT("WriteStartArray"), wxT("WriteStartArray()"));
-	helper.AppendFunc(wxT("WriteEndArray"), wxT("WriteEndArray()"));
-	helper.AppendFunc(wxT("WritePropertyName"), 1, wxT("WritePropertyName(name : string)"));
-	helper.AppendFunc(wxT("WriteValue"), 1, wxT("WriteValue(value : any)"));
-	helper.AppendFunc(wxT("Close"), wxT("Close()"));
+	helper.AppendFunc(ibT("WriteStartObject"), ibT("WriteStartObject()"));
+	helper.AppendFunc(ibT("WriteEndObject"), ibT("WriteEndObject()"));
+	helper.AppendFunc(ibT("WriteStartArray"), ibT("WriteStartArray()"));
+	helper.AppendFunc(ibT("WriteEndArray"), ibT("WriteEndArray()"));
+	helper.AppendFunc(ibT("WritePropertyName"), 1, ibT("WritePropertyName(name : string)"));
+	helper.AppendFunc(ibT("WriteValue"), 1, ibT("WriteValue(value : any)"));
+	helper.AppendFunc(ibT("Close"), ibT("Close()"));
 }
 
 ibValueJsonWriter::ibValueJsonWriter() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true) {}
@@ -469,8 +469,8 @@ void ibValueJsonWriter::NewLine(size_t depth)
 {
 	if (m_formatting != ibJsonFormatting_Indented)
 		return;
-	m_text += wxT('\n');
-	m_text.append(depth, wxT('\t'));
+	m_text += ibT('\n');
+	m_text.append(depth, ibT('\t'));
 }
 
 void ibValueJsonWriter::BeginValue()
@@ -491,7 +491,7 @@ void ibValueJsonWriter::BeginValue()
 	}
 
 	if (top.m_hasMembers)
-		m_text += wxT(',');
+		m_text += ibT(',');
 	top.m_hasMembers = true;
 	NewLine(m_open.size());
 }
@@ -499,7 +499,7 @@ void ibValueJsonWriter::BeginValue()
 void ibValueJsonWriter::WriteStartObject()
 {
 	BeginValue();
-	m_text += wxT('{');
+	m_text += ibT('{');
 	ibFrame frame;
 	frame.m_object = true;
 	m_open.push_back(frame);
@@ -508,7 +508,7 @@ void ibValueJsonWriter::WriteStartObject()
 void ibValueJsonWriter::WriteStartArray()
 {
 	BeginValue();
-	m_text += wxT('[');
+	m_text += ibT('[');
 	m_open.push_back(ibFrame());
 }
 
@@ -526,7 +526,7 @@ void ibValueJsonWriter::EndContainer(bool object)
 	m_open.pop_back();
 	if (hadMembers)
 		NewLine(m_open.size());
-	m_text += object ? wxT('}') : wxT(']');
+	m_text += object ? ibT('}') : ibT(']');
 }
 
 void ibValueJsonWriter::WriteEndObject() { EndContainer(true); }
@@ -542,11 +542,11 @@ void ibValueJsonWriter::WritePropertyName(const ibString& name)
 		ibBackendCoreException::Error(_("JSONWriter: a property name is written and its value is not"));
 
 	if (top.m_hasMembers)
-		m_text += wxT(',');
+		m_text += ibT(',');
 	top.m_hasMembers = true;
 	NewLine(m_open.size());
-	ibJsonText::AppendQuoted(m_text, name.wc_str(), name.length());
-	m_text += m_formatting == ibJsonFormatting_Indented ? wxT(": ") : wxT(":");
+	ibJsonText::AppendQuoted(m_text, name);
+	m_text += m_formatting == ibJsonFormatting_Indented ? ibT(": ") : ibT(":");
 	top.m_nameWritten = true;
 }
 
@@ -612,11 +612,11 @@ void ibValueJsonWriter::WriteAny(const ibValue& value, int depth)
 	case ibValueTypes::TYPE_EMPTY:
 	case ibValueTypes::TYPE_NULL:
 		BeginValue();
-		m_text += wxT("null");
+		m_text += ibT("null");
 		return;
 	case ibValueTypes::TYPE_BOOLEAN:
 		BeginValue();
-		m_text += target->GetBoolean() ? wxT("true") : wxT("false");
+		m_text += target->GetBoolean() ? ibT("true") : ibT("false");
 		return;
 	case ibValueTypes::TYPE_NUMBER:
 		// The number's own text: exact, a point for the fraction whatever the locale, never through a double.
@@ -630,17 +630,17 @@ void ibValueJsonWriter::WriteAny(const ibValue& value, int depth)
 		if (!target->IsEmpty()) {
 			ibDateTimeParts p;
 			target->GetDate().ToParts(p);
-			ibJsonText::AppendQuoted(m_text, wxString::Format(wxT("%04d-%02u-%02uT%02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second));
+			ibJsonText::AppendQuoted(m_text, ibString::Format(ibT("%04d-%02u-%02uT%02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second));
 		}
 		else
-			m_text += wxT("null");
+			m_text += ibT("null");
 		return;
 	}
 	case ibValueTypes::TYPE_STRING:
 		BeginValue();
 		{
 			const ibString text = target->GetString();   // escaped where it lies, not copied into a wxString
-			ibJsonText::AppendQuoted(m_text, text.wc_str(), text.length());
+			ibJsonText::AppendQuoted(m_text, text);
 		}
 		return;
 	default:
@@ -653,7 +653,7 @@ void ibValueJsonWriter::WriteAny(const ibValue& value, int depth)
 		target->GetClassName());
 }
 
-wxString ibValueJsonWriter::Close()
+ibString ibValueJsonWriter::Close()
 {
 	if (!m_open.empty())
 		ibBackendCoreException::Error(_("JSONWriter: %u object(s) or array(s) are still open"), static_cast<unsigned>(m_open.size()));
@@ -662,7 +662,7 @@ wxString ibValueJsonWriter::Close()
 	if (!m_rootWritten)
 		ibBackendCoreException::Error(_("JSONWriter: nothing is written - a document holds one value"));
 
-	wxString text;
+	ibString text;
 	text.swap(m_text);
 	m_open.clear();
 	m_rootWritten = false;

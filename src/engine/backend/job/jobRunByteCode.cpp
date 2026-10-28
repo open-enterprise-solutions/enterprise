@@ -16,8 +16,8 @@
 #include "backend/compiler/compileCode.h"   // the code is COMPILED here, against this application
 #include "backend/compiler/compileModule.h" // ...parented to the root, which is what it must see
 #include "backend/moduleInfo.h"             // GetCompileModule - which is how the root is asked for
-#include "core/stringUtils.h"            // CompareString - how this tree compares a NAME
-#include "core/fileSystem/fs.h"          // ibWriterMemory / ibReaderMemory - the wire format below
+#include "core/stringUtils.h"            // IsSameAs - how this tree compares a NAME
+#include "core/memory/memoryStream.h"          // ibWriterMemory / ibReaderMemory - the wire format below
 
 #include <wx/app.h>                         // wxTheApp - the thread that may touch a window
 
@@ -46,17 +46,17 @@ namespace {
 // else started. Keeping the map at the caller would have made an id mean "a run I personally
 // launched during this connection", which is not what it is for.
 std::mutex                                           g_runsMutex;
-std::map<wxString, std::shared_ptr<ibBackgroundRun>> g_runs;
+std::map<ibString, std::shared_ptr<ibBackgroundRun>> g_runs;
 
-wxString Remember(const std::shared_ptr<ibBackgroundRun>& run)
+ibString Remember(const std::shared_ptr<ibBackgroundRun>& run)
 {
-	const wxString session = run->SessionGuid();
+	const ibString session = run->SessionGuid();
 	std::lock_guard<std::mutex> lock(g_runsMutex);
 	g_runs[session] = run;
 	return session;
 }
 
-std::shared_ptr<ibBackgroundRun> Recall(const wxString& session)
+std::shared_ptr<ibBackgroundRun> Recall(const ibString& session)
 {
 	std::lock_guard<std::mutex> lock(g_runsMutex);
 	const auto it = g_runs.find(session);
@@ -67,7 +67,7 @@ std::shared_ptr<ibBackgroundRun> Recall(const wxString& session)
 //
 // ⚠ THE SESSION COMES FROM THE REGISTRY, not from the live run: a finished run has let its session
 // go and would answer nothing, and "the run you asked about has no name" is not a true sentence.
-void Describe(const ibBackgroundRun& run, const wxString& session, ibJobRunByteCodeState& state)
+void Describe(const ibBackgroundRun& run, const ibString& session, ibJobRunByteCodeState& state)
 {
 	state.m_session  = session;
 	state.m_known    = true;
@@ -89,7 +89,7 @@ void Describe(const ibBackgroundRun& run, const wxString& session, ibJobRunByteC
 // reaches the frame, and a desktop frame draws — touching a window from a thread that does not own
 // it hangs where it does not crash. Handed over and forgotten: the person is being told something,
 // not asked.
-void Tell(const wxString& text, ibStatusMessage status)
+void Tell(const ibString& text, ibStatusMessage status)
 {
 	if (wxTheApp != nullptr)
 		wxTheApp->CallAfter([text, status]() { ibValueSystemFunction::Message(text, status); });
@@ -129,10 +129,10 @@ void ibJobRunByteCodeState::Write(ibWriterMemory& to) const
 	to.w_stringZ(m_result);
 	to.w_u8(m_complete ? 1 : 0);
 	to.w_u8(m_known ? 1 : 0);
-	to.w_u32((u32)m_output.size());
+	to.w_u32((std::uint32_t)m_output.size());
 	for (const ibLine& line : m_output) {
 		to.w_stringZ(line.m_text);
-		to.w_u8((u8)line.m_status);
+		to.w_u8((std::uint8_t)line.m_status);
 	}
 }
 
@@ -157,7 +157,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 {
 	state = ibJobRunByteCodeState();
 
-	if (request.m_text.Strip(wxString::both).IsEmpty()) {
+	if (request.m_text.Strip(ibString::both).IsEmpty()) {
 		state.m_refusal = _("Running code: nothing to run - no code came with the request");
 		return false;
 	}
@@ -188,7 +188,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 	//
 	// ⚠ COPIED OUT OF THE REQUEST, not captured by reference: the job outlives this call by
 	// definition — Start answers as soon as the run is accepted, and the run is still going.
-	const wxString text = request.m_text;
+	const ibString text = request.m_text;
 	const bool     commit = request.m_commit;
 
 	auto body = [text, commit](ibSession* session) -> ibValue
@@ -242,7 +242,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 
 		// ⚠ PARENTED BEFORE THE COMPILE, because that is what resolves the names, and RE-PARENTED
 		// after it — see below.
-		ibCompileCode compiler(wxT("JobCode"), wxT("JobCode"));
+		ibCompileCode compiler(ibT("JobCode"), ibT("JobCode"));
 		compiler.SetParent(root);
 		if (!compiler.Compile(text))
 			ibBackendCoreException::Error(
@@ -313,7 +313,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 				if (!declared.IsLocal() && !declared.IsExport())
 					continue;
 
-				if (!stringUtils::CompareString(wxT("Result"), declared.m_strRealName))
+				if (!stringUtils::IsSameAs(ibT("Result"), declared.m_strRealName))
 					continue;
 
 				ibValue produced;
@@ -352,12 +352,12 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 	// the account of what is about to be done arrive together and in the caller's own words - which
 	// is what makes a wrong one catchable.
 	Tell(commit
-		? wxString::Format(
+		? ibString::Format(
 			_("An assistant is about to WRITE DATA into this base. Existing data can be overwritten "
 			  "or deleted and nothing undoes it. What it says it will do: %s"),
-			request.m_understood.IsEmpty() ? _("(nothing said)") : request.m_understood)
-		: _("An assistant is running code here as a TRIAL - everything it writes will be undone, "
-		    "and the base is not changed."),
+			request.m_understood.IsEmpty() ? ibString(_("(nothing said)")) : request.m_understood)
+		: ibString(_("An assistant is running code here as a TRIAL - everything it writes will be undone, "
+		    "and the base is not changed.")),
 		commit ? ibStatusMessage_Warning : ibStatusMessage_Information);
 
 	// ⭐⭐ WHAT THE PERSON READS IS WHAT THE CALLER SAID IT WOULD DO. Ad-hoc code has no name to show
@@ -370,12 +370,12 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 	// opened last), and then carrying a name along the wire purely as a caption (Max, 2026-09-06:
 	// *"you pulled the active metadata somewhere it has no business being"*). The third answer was to
 	// stop needing a name at all.
-	const wxString shown = request.m_said.IsEmpty()
-		? _("code sent by an assistant") : request.m_said;
+	const ibString shown = request.m_said.IsEmpty()
+		? ibString(_("code sent by an assistant")) : request.m_said;
 
-	const wxString activity = commit
-		? wxString::Format(_("running code (writing): %s"), shown)
-		: wxString::Format(_("running code (trial, will be undone): %s"), shown);
+	const ibString activity = commit
+		? ibString::Format(_("running code (writing): %s"), shown)
+		: ibString::Format(_("running code (trial, will be undone): %s"), shown);
 
 	// ⭐ STANDALONE, NOT TENANT, and the reasons stack. A tenant borrows its parent's policy and
 	// builds NO runtime - right for reading on somebody's behalf, useless here, since this runs the
@@ -398,13 +398,13 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 	return true;
 }
 
-bool ibJobRunByteCode::Status(const wxString& session, ibJobRunByteCodeState& state)
+bool ibJobRunByteCode::Status(const ibString& session, ibJobRunByteCodeState& state)
 {
 	state = ibJobRunByteCodeState();
 
 	const std::shared_ptr<ibBackgroundRun> run = Recall(session);
 	if (!run) {
-		state.m_refusal = wxString::Format(
+		state.m_refusal = ibString::Format(
 			_("Running code: no run called '%s' - it was started by another application, or this one "
 			  "has been restarted since"), session);
 		return false;
@@ -414,13 +414,13 @@ bool ibJobRunByteCode::Status(const wxString& session, ibJobRunByteCodeState& st
 	return true;
 }
 
-bool ibJobRunByteCode::Cancel(const wxString& session, ibJobRunByteCodeState& state)
+bool ibJobRunByteCode::Cancel(const ibString& session, ibJobRunByteCodeState& state)
 {
 	state = ibJobRunByteCodeState();
 
 	const std::shared_ptr<ibBackgroundRun> run = Recall(session);
 	if (!run) {
-		state.m_refusal = wxString::Format(
+		state.m_refusal = ibString::Format(
 			_("Running code: no run called '%s' - it was started by another application, or this one "
 			  "has been restarted since"), session);
 		return false;

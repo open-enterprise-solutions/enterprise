@@ -27,9 +27,9 @@ ibValueDatabaseLayer::~ibValueDatabaseLayer()
 
 void ibValueDatabaseLayer_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendFunc(wxT("PrepareStatement"), 1, wxT("PrepareStatement(string: query, ...)"));
-	helper.AppendFunc(wxT("RunQuery"), 1, wxT("RunQuery(string: query, ...)"));
-	helper.AppendFunc(wxT("RunQueryWithResults"), 1, wxT("RunQueryWithResults(string: query, ...)"));
+	helper.AppendFunc(ibT("PrepareStatement"), 1, ibT("PrepareStatement(string: query, ...)"));
+	helper.AppendFunc(ibT("RunQuery"), 1, ibT("RunQuery(string: query, ...)"));
+	helper.AppendFunc(ibT("RunQueryWithResults"), 1, ibT("RunQueryWithResults(string: query, ...)"));
 }
 
 #include "backend/backend_exception.h"
@@ -60,7 +60,7 @@ bool ibValueDatabaseLayer::CallAsFunc(const long lMethodNum, ibValue& pvarRetVal
 	{
 		if (!completing)
 		{
-			ibPreparedStatement* preparedStatement = ses_query->PrepareStatement(wxT("%s"), paParams[0]->GetString());
+			ibPreparedStatement* preparedStatement = ses_query->PrepareStatement(ibT("%s"), paParams[0]->GetString());
 			if (preparedStatement == nullptr) {
 				ibBackendCoreException::Error(ibBackendCoreException::GetLastError());
 				return false;
@@ -75,14 +75,14 @@ bool ibValueDatabaseLayer::CallAsFunc(const long lMethodNum, ibValue& pvarRetVal
 	else if (lMethodNum == eRunQuery)
 	{
 		if (!completing)
-			pvarRetValue = ses_query->RunQuery(wxT("%s"), paParams[0]->GetString());
+			pvarRetValue = ses_query->RunQuery(ibT("%s"), paParams[0]->GetString());
 		return true;
 	}
 	else if (lMethodNum == eRunQueryWithResults)
 	{
 		if (!completing)
 		{
-			ibDatabaseResultSet* resultSet = ses_query->RunQueryWithResults(wxT("%s"), paParams[0]->GetString());
+			ibDatabaseResultSet* resultSet = ses_query->RunQueryWithResults(ibT("%s"), paParams[0]->GetString());
 			if (resultSet == nullptr) {
 				ibBackendCoreException::Error(ses_query->GetErrorMessage());
 				return false;

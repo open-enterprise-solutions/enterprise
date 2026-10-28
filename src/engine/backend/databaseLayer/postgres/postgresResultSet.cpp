@@ -84,8 +84,8 @@ ibString ibDatabaseResultSetPostgres::GetResultString(int nField)
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			DATABASE_LAYER_ERROR,
-			/*sqlState*/ wxEmptyString,
-			wxT("PostgreSQL: binary result decoding is not implemented"));
+			/*sqlState*/ ibEmptyString,
+			ibT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -117,8 +117,8 @@ long long ibDatabaseResultSetPostgres::GetResultLong(int nField)
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			DATABASE_LAYER_ERROR,
-			/*sqlState*/ wxEmptyString,
-			wxT("PostgreSQL: binary result decoding is not implemented"));
+			/*sqlState*/ ibEmptyString,
+			ibT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -126,7 +126,7 @@ long long ibDatabaseResultSetPostgres::GetResultLong(int nField)
 		{
 			if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
 			{
-				wxString strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
+				ibString strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
 				strValue.ToLongLong(&nValue);
 			}
 		}
@@ -151,8 +151,8 @@ bool ibDatabaseResultSetPostgres::GetResultBool(int nField)
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			DATABASE_LAYER_ERROR,
-			/*sqlState*/ wxEmptyString,
-			wxT("PostgreSQL: binary result decoding is not implemented"));
+			/*sqlState*/ ibEmptyString,
+			ibT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -160,8 +160,8 @@ bool ibDatabaseResultSetPostgres::GetResultBool(int nField)
 		{
 			if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
 			{
-				wxString strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-				bValue = (strValue != wxT("0"));
+				ibString strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
+				bValue = (strValue != ibT("0"));
 			}
 		}
 	}
@@ -183,7 +183,7 @@ ibDateTime ibDatabaseResultSetPostgres::GetResultDate(int nField)
 	return date;
 }
 
-void* ibDatabaseResultSetPostgres::GetResultBlob(int nField, wxMemoryBuffer& buffer)
+void* ibDatabaseResultSetPostgres::GetResultBlob(int nField, ibMemoryBuffer& buffer)
 {
 	//int nLength = m_pInterface->GetPQgetlength()(m_pResult, m_nCurrentRow, nIndex);
 	unsigned char* pBlob = (unsigned char*)m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1);
@@ -194,7 +194,7 @@ void* ibDatabaseResultSetPostgres::GetResultBlob(int nField, wxMemoryBuffer& buf
 #endif
 	unsigned char* pUnescapedBlob = m_pInterface->GetPQunescapeBytea()(pBlob, &nUnescapedLength);
 
-	wxMemoryBuffer tempBuffer(nUnescapedLength);
+	ibMemoryBuffer tempBuffer(nUnescapedLength);
 	void* pUnescapedBuffer = tempBuffer.GetWriteBuf(nUnescapedLength);
 	memcpy(pUnescapedBuffer, pUnescapedBlob, nUnescapedLength);
 	m_pInterface->GetPQfreemem()(pUnescapedBlob);
@@ -228,14 +228,14 @@ double ibDatabaseResultSetPostgres::GetResultDouble(int nField)
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			DATABASE_LAYER_ERROR,
-			/*sqlState*/ wxEmptyString,
-			wxT("PostgreSQL: binary result decoding is not implemented"));
+			/*sqlState*/ ibEmptyString,
+			ibT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
 		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
 		{
-			wxString strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
+			ibString strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
 			strValue.ToDouble(&dblValue);
 		}
 	}
@@ -259,15 +259,15 @@ ibNumber ibDatabaseResultSetPostgres::GetResultNumber(int nField)
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			DATABASE_LAYER_ERROR,
-			/*sqlState*/ wxEmptyString,
-			wxT("PostgreSQL: binary result decoding is not implemented"));
+			/*sqlState*/ ibEmptyString,
+			ibT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
 		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
 		{
-			wxString strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-			dblValue.FromString(strValue.wchar_str());
+			ibString strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
+			dblValue.FromString(strValue);
 		}
 	}
 
@@ -279,7 +279,7 @@ bool ibDatabaseResultSetPostgres::IsFieldNull(int nField)
 	return (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) == 1);
 }
 
-int ibDatabaseResultSetPostgres::LookupField(const wxString& strField)
+int ibDatabaseResultSetPostgres::LookupField(const ibString& strField)
 {
 	// Found, not walked — the names are kept as written (constructor) and the map ignores case; see firebirdResultSet.cpp.
 	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
@@ -292,8 +292,8 @@ int ibDatabaseResultSetPostgres::LookupField(const wxString& strField)
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
-			/*sqlState*/ wxEmptyString,
-			wxT("Field '") + strField + wxT("' not found in the resultset"));
+			/*sqlState*/ ibEmptyString,
+			ibT("Field '") + strField + ibT("' not found in the resultset"));
 	}
 	else
 	{

@@ -36,7 +36,7 @@ ibBackendQueryProvider& ibBackendQueryable::GetProvider() const
 // Default: the base has no metadata to resolve a name against, so it owns no columns.
 // Every concrete source (record / register / constant / tabular = attribute-by-name;
 // temp / subquery = own column lookup) OVERRIDES this; the base is a null fallback.
-const ibBackendQueryColumn* ibBackendQueryable::ResolveColumnByName(const wxString& /*name*/) const
+const ibBackendQueryColumn* ibBackendQueryable::ResolveColumnByName(const ibString& /*name*/) const
 {
 	return nullptr;
 }
@@ -82,7 +82,7 @@ ibMetaID ibBackendQueryable::GetQueryTableId() const
 // bands in the positive space: bands have to be read before every addition, and nothing makes anyone
 // read them — I walked into an occupied one adding a sixth (2026-09-06).
 //
-ibAliasQueryable::ibAliasQueryable(const ibBackendQueryable* origin, const wxString& sqlAlias)
+ibAliasQueryable::ibAliasQueryable(const ibBackendQueryable* origin, const ibString& sqlAlias)
 	: m_origin(origin), m_sqlAlias(sqlAlias)
 {
 	for (const ibBackendQueryColumn* c : origin->GetColumns()) {
@@ -97,7 +97,7 @@ ibAliasQueryable::ibAliasQueryable(const ibBackendQueryable* origin, const wxStr
 // object rather than by the name a second time: two names could reach one column (a synonym, a
 // case difference), and minting a second twin for it would put the same field in the result twice
 // under two identities.
-const ibBackendQueryColumn* ibAliasQueryable::ResolveColumnByName(const wxString& name) const
+const ibBackendQueryColumn* ibAliasQueryable::ResolveColumnByName(const ibString& name) const
 {
 	for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
 		if (c->GetName().IsSameAs(name, false)) return c.get();

@@ -15,7 +15,7 @@
 
 ## 1. What this project is
 
-**Open Enterprise Solutions (OES)** — a C++17 cross-platform low-code
+**Open Enterprise Solutions (OES)** — a C++20 cross-platform low-code
 enterprise application platform. Developers define business
 applications through **metadata** (object types, forms, modules) and a
 built-in **scripting language**, not by writing low-level code. The
@@ -46,7 +46,7 @@ embedded by default; PostgreSQL also supported for production, ODBC as the MSSQL
                        merges to develop
             │
             ▼
-   End user — runs enterprise.exe / web client
+   End user — runs enterprise-thin.exe / web client
 ```
 
 Your job is to translate the analyst's intent into **valid OES
@@ -219,9 +219,9 @@ re-deploy. There is no `SetSynonym(...)` in script.
 
 A caption (a synonym, a template cell's text, a report variant's name) is written in
 **every language the configuration declares**, as one string:
-`en = 'Employee'; ru = 'Сотрудник'; uk = 'Працівник';` — an apostrophe inside a text is
+`en = 'Employee'; de = 'Mitarbeiter'; fr = 'Employé';` — an apostrophe inside a text is
 doubled (`en = 'the document''s date';`). A caption sent bare fills only the configuration's
-own language, and a Russian word sent that way is stored as the English caption; the MCP tools
+own language, and a word of another language sent that way is stored as the English caption; the MCP tools
 refuse it while more than one language is declared. What a module builds — a message, a sheet
 title, a month name — goes through `Tstr` with the same form (`Tstr(text)` reads the user's
 language). Data (a person's name, a predefined item's description) is data, not a caption.
@@ -242,7 +242,7 @@ The 13 metaobject types and their script-side namespace:
 | `AccumulationRegister` | `AccumulationRegisters.<Name>` | Quantitative balances (inventory, AR / AP) |
 | `AccountingRegister` | `AccountingRegisters.<Name>` | Double-entry bookkeeping (see `docs/register-totals-strategy.md`) |
 | `ChartOfAccounts` | `ChartsOfAccounts.<Name>` | Account hierarchy for AccountingRegister |
-| `ChartOfCharacteristicTypes` | `ChartsOfCharacteristicTypes.<Name>` | The KINDS an account dimension can be («Вид аналитики»), each narrowing what values it admits |
+| `ChartOfCharacteristicTypes` | `ChartsOfCharacteristicTypes.<Name>` | The KINDS an account dimension can be, each narrowing what values it admits |
 | `ChartOfCalculationTypes` | `ChartsOfCalculationTypes.<Name>` | The calculation TYPES a calculation register records (salary, bonus, sick leave, income tax) and how they interact — three relation sections on every type: `Displacing`, `Base`, `Leading` |
 | `CalculationRegister` | `CalculationRegisters.<Name>` | Calculation RESULTS (payroll accruals, deductions): records in force over days, cut by the types that displace them, computed on a base of other types, marked for recalculation when what they were computed from changes. Bound to exactly one chart of calculation types; always subordinate to a recorder |
 | `DataProcessor` | `DataProcessors.<Name>` | Interactive tooling (utilities, batch operations) |
@@ -343,12 +343,13 @@ narrow everything, on the type, the month, the recorder, and date ranges narrow 
 | `CalculationRegister.<Register>` | the records as written |
 | `CalculationRegister.<Register>.ActualActionPeriod` | one row per piece of a RECORD left after displacement, as the register lays a record out: `RegistrationPeriod`, `Recorder`, `LineNumber`, `CalculationType`, `ActionPeriod`, `ActionPeriodStart` / `ActionPeriodEnd` (the piece's bounds), the base period, `Active`, `Storno`, the dimensions and resources; `PositionStart` / `PositionEnd` the record's own action period. A storno is a row of its own with the pieces of the record it reverses and its figures turned round, so a sum nets out. `ActualActionPeriod(, &MonthStart, &MonthEnd, Employee = &Employee)` |
 | `CalculationRegister.<Register>.ScheduleData` | where a `Schedule` is bound — one row per active RECORD: its own fields (as the register lays a record out, attributes included) and, for every resource of the schedule holding a number, four sums of it: `<Resource>ActionPeriod` (over the record's days), `<Resource>ActualActionPeriod` (over the pieces displacement leaves — the same pieces `ActualActionPeriod` reads), `<Resource>BasePeriod` (with a base period) and `<Resource>RegistrationPeriod` (over the whole registration period). The same four arguments as the fact: `ScheduleData(&Month, , , Employee = &Employee)`; the condition names the record's fields, a sum is refused there — put it in the WHERE around |
+| `CalculationRegister.<Register>.Base<BaseRegister>` | where the chart's `BaseDependence` is not `None` — one table per register the chart names (`GetRelatedRegisters`: the register itself, and every register bound to its chart or to one of its `BaseCharts`). One row per active RECORD — or per record and section: its own fields (as `ScheduleData` lays them out), every numeric resource of the base register summed into `<Resource>Base` (what `GetBase` sums), and every field of the base register the base can be broken down by as `<Field>Section` (its registration period, recorder, line, type, month, dimensions, attributes), filled for the ones `Sections` names. Arguments: `Period`, `BeginOfActionPeriod`, `EndOfActionPeriod` (as the fact's; the two days only where the register keeps action periods), `Dimensions` (this register's), `BaseDimensions` (the base register's, paired with `Dimensions` in order; left out — the same names), `Sections`, `Condition` — each list an array of names or one comma-separated string: `BaseAccruals(&Month, , , "Employee", , "CalculationType")` |
 | `CalculationRegister.<Register>.Recalculation` | where `UseRecalculation` is on — the marks: the records to compute again. Columns: `Recorder` (the recorder of the stale record), `CalculationType`, `ActionPeriod` — the month the stale record is for, where the register keeps action periods — and every dimension of the register. The platform writes a mark whenever a set is written whose records lead the record: the Leading section of the chart, the dimensions two registers share matched by name, meeting in time. The platform also answers the marks: when the stale recorder is posted again, or when a storno of the position is written. Never clear marks by hand. A run corrects the marks plus the positions its own stornos already correct, and writes the difference as a storno and a new record of its own period |
 
 **Manager verbs** (`CalculationRegisters.<Name>.…`): `CreateRecordSet()`, `CreateRecordKey()`,
 `Get(Filter)` / `Get(Period, Filter)` (a value table of records; the second form narrows to one
-registration period), `GetBase(Filter, Resources, Dimensions, Sections)` (the base of the records the
-filter selects — the filter names the recorder at least), `Select()`, `GetForm`, `GetListForm`,
+registration period), `GetBase(Filter, Resources, Dimensions, Sections)` (the base of the active records
+the filter selects, in the order of their lines — the filter names the recorder at least), `Select()`, `GetForm`, `GetListForm`,
 `GetTemplate`. A filter is a `Structure` and may name any field of the records —
 `new Structure("Recorder", Ref)`; a key that names no field is refused by name.
 
@@ -498,7 +499,7 @@ Mapping common ERP / business-application concepts to their OES form:
 | "Records to recompute" list | `UseRecalculation` on the CalculationRegister | Kept by the register's write; read it as `CalculationRegister.<Reg>.Recalculation` and correct the positions it names |
 | Days a record is actually in force after displacement | `CalculationRegister.<Reg>.ActualActionPeriod` | One row per piece |
 | Hours / work days of a schedule over a record's periods (the norm, what displacement leaves of it, the month's) | `CalculationRegister.<Reg>.ScheduleData` | One row per record; bind the `Schedule` first |
-| Base of a dependent calculation (e.g. bonus on salary) | `line.GetBase(Resources, Dimensions, Sections)` / `CalculationRegisters.<Reg>.GetBase(Filter, Resources, Dimensions, Sections)` | Stored records only; types from the chart's `Base` section only |
+| Base of a dependent calculation (e.g. bonus on salary) | `line.GetBase(Resources, Dimensions, Sections)` / `CalculationRegisters.<Reg>.GetBase(Filter, Resources, Dimensions, Sections)`; in a query `CalculationRegister.<Reg>.Base<BaseReg>` | Stored records only; types from the chart's `Base` section only |
 | Fixed-value enum | Enumeration | Closed set; no runtime add |
 | Singleton config value | Constant | One row, one value, typed |
 | Interactive utility / batch tool | DataProcessor | Forms + script, no persisted business data |
@@ -510,8 +511,8 @@ Mapping common ERP / business-application concepts to their OES form:
 | What becomes of a document's movements when it is posted again or its posting undone | the document's property `RegisterRecordsDeletion` | `Automatically` (default) — cleared before the posting handler runs and when the posting is undone; `OnUndoPosting` — kept when posted again (a set the handler fills replaces its own), cleared on undo; `Never` — the platform clears nothing on either, the configuration does. A deleted document takes its movements with it whatever the property says. A write is a clearing and a writing: nothing compares the old movements with the new |
 | Document date | `document.Date` | `ibDateTime` type |
 | Data-composition / pivot system | L5 data composer | Declarative filter/sort/grouping rendered into a query; see `docs/data-composer.md` |
-| Form model | Form / VisualHost | Single form layer; same form runs in Desktop and Web |
-| Client tier | Desktop frontend / Web frontend | Two parallel DLLs (`frontend.dll` / `wfrontend.dll`) |
+| Form model | Form / VisualHost | Single form layer, on the server (`frmserver.dll`); the same form is drawn by the thin client and the browser |
+| Client tier | Thin client / browser client | `frmclient.dll` under `enterprise-thin` / `designer-thin`; the browser client served by `webserver` — both over the client protocol |
 
 ---
 
@@ -537,7 +538,7 @@ Drill into these only when the task touches the specific area.
 | Lists / trees / paging | `docs/paging-design.md`, `docs/dynamic-list.md` |
 | Forms architecture | `docs/backend-frontend-split.md`, `docs/ARCHITECTURE.md` §Form System |
 | Form attribute binding (dot-path sources) | `docs/form-attribute-binding.md` |
-| Doc/View subsystem (desktop + web fork) | `docs/docview-fork.md` |
+| Doc/View subsystem (wx fork, client + server) | `docs/docview-fork.md` |
 | Copy / paste across the object model | `docs/copy-paste.md` |
 | UI palette / colours | `docs/ui-palette.md` |
 | Web frontend | `docs/web/` |
@@ -552,7 +553,7 @@ Drill into these only when the task touches the specific area.
 Before declaring "done", verify your generated configuration:
 
 ```
-1. Load the config (designer.exe / enterprise.exe)
+1. Load the config (designer-thin.exe / enterprise-thin.exe)
      — metadata consistency: bindings resolve, no orphan refs,
        attribute types valid, predefined-attribute subclass lists
        are additive.
@@ -563,9 +564,9 @@ Before declaring "done", verify your generated configuration:
        computations / language constructs. It cannot reference your
        config's metaobjects.
 
-3. designer.exe <config-path>
+3. designer-thin.exe --file=<config-path>
      — open in Designer for visual review and live debugging.
-       Press F5 to launch Enterprise mode against the same DB; run
+       Press F5 to start the thin client (enterprise-thin.exe) against the same DB; run
        postings / reports there against test data.
 
 4. (If accounting touched) — verify Balance / Turnovers in

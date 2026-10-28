@@ -8,7 +8,8 @@
 
 #include "frmclient/frmclient.h"
 #include "core/guid.h"
-#include "core/types.h"
+#include "core/core.h"
+#include "core/fboolean.h"
 #include "core/fnumber.h"
 #include "core/fdatetime.h"
 #include "core/fstring.h"
@@ -16,7 +17,7 @@
 #include "core/stringUtils.h"
 #include "core/diagnostics/journal.h"
 
-#define oes_clipboard_template	wxT("oes_clipboard_template")
+// (MAX_PRECISION_NUMBER / MAX_LENGTH_STRING are the core's: core/core.h — the query's parser reads them too.)
 
 class ibValue;   // frmclient/backend/compiler/value.h
 

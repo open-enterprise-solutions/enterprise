@@ -11,7 +11,7 @@ bool ibReportEditView::OnCreate(ibDocument *doc, long flags)
 	return ibView::OnCreate(doc, flags);
 }
 
-void ibReportEditView::OnDraw(ibDataNode& WXUNUSED(frame))
+void ibReportEditView::OnDraw(ibDataNode& /*frame*/)
 {
 	// nothing to do here, wxTextCtrl draws itself
 }
@@ -28,7 +28,7 @@ bool ibReportEditView::OnClose(bool deleteWindow)
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibReportFileDocument, ibMetaDocument);
 
-bool ibReportFileDocument::OnCreate(const wxString& path, long flags)
+bool ibReportFileDocument::OnCreate(const ibString& path, long flags)
 {
 	/*if (!ibMetaDocument::OnCreate(path, flags))
 		return false;*/
@@ -49,7 +49,7 @@ bool ibReportFileDocument::OnCloseDocument()
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibReportFileDocument::DoOpenDocument(const wxString& filename)
+bool ibReportFileDocument::DoOpenDocument(const ibString& filename)
 {
 	if (!m_metaData->LoadFromTempFile(filename))
 		return false;
@@ -58,7 +58,7 @@ bool ibReportFileDocument::DoOpenDocument(const wxString& filename)
 	return false;
 }
 
-bool ibReportFileDocument::DoSaveDocument(const wxString& filename)
+bool ibReportFileDocument::DoSaveDocument(const ibString& filename)
 {
 	/*if (!m_metaData->SaveToFile(filename))
 		return false;*/

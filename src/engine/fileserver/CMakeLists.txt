@@ -23,7 +23,7 @@ target_compile_definitions(fileserver
         NOPCH
 )
 
-# FILESERVER_API resolves to dllexport only when FILESERVER_EXPORTS is defined (fileserver.h) — frontend's rule.
+# FILESERVER_API resolves to dllexport only when FILESERVER_EXPORTS is defined (fileserver.h).
 if(WIN32)
     target_compile_definitions(fileserver PRIVATE FILESERVER_EXPORTS)
 endif()
@@ -32,12 +32,11 @@ target_link_libraries(fileserver
     PRIVATE
         frmserver
         backend
-        wx::core
         wx::base
 )
 
 set_target_properties(fileserver PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON
     OUTPUT_NAME "fileserver"

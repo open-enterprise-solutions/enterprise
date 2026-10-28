@@ -22,16 +22,16 @@ ibValueMetaObjectChartOfAccounts::ibValueMetaObjectChartOfAccounts() : ibValueMe
 	// …and an account is NAMED BY ITS NUMBER: an accountant writes 361, not "Settlements with customers".
 	SetReferencePresentation(ibDataPresentation_Code);
 
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"),  ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"),      ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"),     ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"),      ibContentHelper::eProcedureHelper, { wxT("FillingData"), wxT("StandardProcessing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"),       ibContentHelper::eProcedureHelper, { wxT("CopiedObject") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewCode"),   ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandardProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeWrite"),  ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnWrite"),      ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnDelete"),     ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("Filling"),      ibContentHelper::eProcedureHelper, { ibT("FillingData"), ibT("StandardProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnCopy"),       ibContentHelper::eProcedureHelper, { ibT("CopiedObject") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("SetNewCode"),   ibContentHelper::eProcedureHelper, { ibT("Prefix"), ibT("StandardProcessing") });
 	
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("ChoiceData"), wxT("Parameters"), wxT("StandardProcessing") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("Form"), ibT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("ChoiceData"), ibT("Parameters"), ibT("StandardProcessing") });
 }
 
 ibValueMetaObjectChartOfAccounts::~ibValueMetaObjectChartOfAccounts()
@@ -158,11 +158,11 @@ bool ibValueMetaObjectChartOfAccounts::ReadData(const ibDataNode& node)
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
 	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
-	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolder->GetName())));
-	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
-	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolderSelect->GetName())));
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormFolder->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormSelect->GetName())));
+	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormFolderSelect->GetName())));
 
 	m_propertyAttributeAccountType->SetNodeValue(node.GetProperty(m_propertyAttributeAccountType->GetName()));
 	m_propertyAttributeOffBalance->SetNodeValue(node.GetProperty(m_propertyAttributeOffBalance->GetName()));
@@ -178,16 +178,16 @@ bool ibValueMetaObjectChartOfAccounts::ReadData(const ibDataNode& node)
 	// Sync (at run) is what then activates or deactivates them.
 	m_accountDimensionKindColumns.clear();
 	for (unsigned int no = 1; ; no++) {
-		const wxString columnName = wxString::Format(wxT("AccountDimensionKind%u"), no);
-		const ibDataValue* saved = node.FindProperty(columnName);
-		if (saved == nullptr)
+		const ibString columnName = ibString::Format(ibT("AccountDimensionKind%u"), no);
+		auto saved = node.FindProperty(columnName);
+		if (!saved)
 			break;
 
 		ibValueMetaObjectAttributePredefined* column = CreateEmptyType(
-			columnName, wxString::Format(_("Account dimension kind %u"), no),
-			wxEmptyString, false, ibItemMode::ibItemMode_Item);
+			columnName, ibString::Format(_("Account dimension kind %u"), no),
+			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 
-		const std::shared_ptr<ibDataNode>& child = saved->AsChild();
+		const auto child = saved->AsChild();
 		if (child)
 			column->LoadNode(*child);
 
@@ -250,7 +250,7 @@ bool ibValueMetaObjectChartOfAccounts::OnSaveMetaObject(int flags)
 	// found while saving interrupts the work instead of describing it. The save still refuses.
 	if (m_propertyChartOfCharacteristicTypes->IsEmptyProperty()) {
 		// Into the LEDGER — see metaComposerObject.cpp.
-		RestructureError(wxString::Format(
+		RestructureError(ibString::Format(
 			_("%s: a chart of characteristic types is required - the account dimension kinds are elements of it"), GetName()));
 		return false;
 	}
@@ -392,9 +392,9 @@ void ibValueMetaObjectChartOfAccounts::SyncAccountDimensionKindColumns()
 		// account and an item on another, so a meaningful name would be a lie. What it means on a
 		// given account is the value standing in it.
 		ibValueMetaObjectAttributePredefined* column = CreateEmptyType(
-			wxString::Format(wxT("AccountDimensionKind%u"), no),
-			wxString::Format(_("Account dimension kind %u"), no),
-			wxEmptyString, false, ibItemMode::ibItemMode_Item);
+			ibString::Format(ibT("AccountDimensionKind%u"), no),
+			ibString::Format(_("Account dimension kind %u"), no),
+			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 
 		// The id is handed out by the create event — a column born after the chart's own creation has
 		// to ask for one itself. GenerateNewID is monotonic, so it can never reuse a dropped column's.

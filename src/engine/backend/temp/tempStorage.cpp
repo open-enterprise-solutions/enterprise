@@ -21,16 +21,16 @@ namespace {
 constexpr int kHeaderPart = 0;
 
 // The row of the file's part — its own key in the table.
-wxString PartKey(const wxString& id, int partIndex)
+ibString PartKey(const ibString& id, int partIndex)
 {
-	return wxString::Format(wxT("%s:%d"), id, partIndex);
+	return ibString::Format(ibT("%s:%d"), id, partIndex);
 }
 
-ibQueryExprPtr IsSessionsFile(const wxString& id, const ibGuid& session)
+ibQueryExprPtr IsSessionsFile(const ibString& id, const ibGuid& session)
 {
 	return ibBinOp(ibQueryBinOp::And,
-		ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("fileKey")), ibConst(ibValue(id))),
-		ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("sessionGuid")), ibConst(ibValue(session.str()))));
+		ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("fileKey")), ibConst(ibValue(id))),
+		ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("sessionGuid")), ibConst(ibValue(session.str()))));
 }
 
 } // namespace
@@ -43,53 +43,53 @@ ibTempStorage::ibTempStorage(ib::AppDataCtorToken owner)
 
 ibTempStorage::~ibTempStorage() = default;
 
-wxString ibTempStorage::Create(const ibGuid& session, const wxString& name)
+ibString ibTempStorage::Create(const ibGuid& session, const ibString& name)
 {
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
-	const wxString fileName = wxFileNameFromPath(name);
+	const ibString fileName = wxFileNameFromPath(name);
 	if (fileName.IsEmpty() || !session.isValid())
-		return wxString();
+		return ibString();
 
-	const wxString id = ibGuid(ibGuid::newGuid()).str();
+	const ibString id = ibGuid(ibGuid::newGuid()).str();
 	try {
 		ibDatabaseQueryBuilder q(&m_holder);
 		q.Execute(ibInsert(file_table, {
-			{ wxT("partKey"),     ibConst(ibValue(PartKey(id, kHeaderPart))) },
-			{ wxT("fileKey"),     ibConst(ibValue(id)) },
-			{ wxT("partIndex"),   ibConst(ibValue(kHeaderPart)) },
-			{ wxT("sessionGuid"), ibConst(ibValue(session.str())) },
-			{ wxT("fileName"),    ibConst(ibValue(fileName)) },
-			{ wxT("changed"),     ibConst(ibValue(ibDateTime::Now())) },
-			{ wxT("dataSize"),    ibConst(ibValue(0)) },
+			{ ibT("partKey"),     ibConst(ibValue(PartKey(id, kHeaderPart))) },
+			{ ibT("fileKey"),     ibConst(ibValue(id)) },
+			{ ibT("partIndex"),   ibConst(ibValue(kHeaderPart)) },
+			{ ibT("sessionGuid"), ibConst(ibValue(session.str())) },
+			{ ibT("fileName"),    ibConst(ibValue(fileName)) },
+			{ ibT("changed"),     ibConst(ibValue(ibDateTime::Now())) },
+			{ ibT("dataSize"),    ibConst(ibValue(0)) },
 		}));
 		return id;
 	}
 	catch (...) {
-		ibJournalWarning(wxT("file"), wxT("the temporary file '%s' was not made"), fileName);
-		return wxString();
+		ibJournalWarning(ibT("file"), ibT("the temporary file '%s' was not made"), fileName);
+		return ibString();
 	}
 }
 
-wxString ibTempStorage::GetName(const ibGuid& session, const wxString& id) const
+ibString ibTempStorage::GetName(const ibGuid& session, const ibString& id) const
 {
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
 	try {
 		ibDatabaseQueryBuilder q(&m_holder);
 		ibQueryResult rs = q.From(file_table)
-			.Select({ wxT("fileName") })
+			.Select({ ibT("fileName") })
 			.Where(ibBinOp(ibQueryBinOp::And, IsSessionsFile(id, session),
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("partIndex")), ibParam(0))))
+				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("partIndex")), ibParam(0))))
 			.Execute({ ibValue(kHeaderPart) });
-		return rs.Next() ? wxString(rs.GetResultString(wxT("fileName"))) : wxString();
+		return rs.Next() ? ibString(rs.GetResultString(ibT("fileName"))) : ibString();
 	}
 	catch (...) {
-		return wxString();
+		return ibString();
 	}
 }
 
-bool ibTempStorage::WritePart(const ibGuid& session, const wxString& id, int index, const void* data,
+bool ibTempStorage::WritePart(const ibGuid& session, const ibString& id, int index, const void* data,
 	std::size_t size)
 {
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
@@ -101,23 +101,23 @@ bool ibTempStorage::WritePart(const ibGuid& session, const wxString& id, int ind
 		ibDatabaseQueryBuilder q(&m_holder);
 		// The part's key is the primary key: a part written twice is refused by the table, not overwritten.
 		q.Execute(ibInsert(file_table, {
-			{ wxT("partKey"),     ibConst(ibValue(PartKey(id, index + 1))) },
-			{ wxT("fileKey"),     ibConst(ibValue(id)) },
-			{ wxT("partIndex"),   ibConst(ibValue(index + 1)) },
-			{ wxT("sessionGuid"), ibConst(ibValue(session.str())) },
-			{ wxT("changed"),     ibConst(ibValue(ibDateTime::Now())) },
-			{ wxT("dataSize"),    ibConst(ibValue(static_cast<unsigned int>(size))) },
-			{ wxT("binaryData"),  ibConstBlob(data, size) },
+			{ ibT("partKey"),     ibConst(ibValue(PartKey(id, index + 1))) },
+			{ ibT("fileKey"),     ibConst(ibValue(id)) },
+			{ ibT("partIndex"),   ibConst(ibValue(index + 1)) },
+			{ ibT("sessionGuid"), ibConst(ibValue(session.str())) },
+			{ ibT("changed"),     ibConst(ibValue(ibDateTime::Now())) },
+			{ ibT("dataSize"),    ibConst(ibValue(static_cast<unsigned int>(size))) },
+			{ ibT("binaryData"),  ibConstBlob(data, size) },
 		}));
 		return true;
 	}
 	catch (...) {
-		ibJournalWarning(wxT("file"), wxT("part %d of the temporary file %s was not written"), index, id);
+		ibJournalWarning(ibT("file"), ibT("part %d of the temporary file %s was not written"), index, id);
 		return false;
 	}
 }
 
-bool ibTempStorage::ReadPart(const ibGuid& session, const wxString& id, int index, wxMemoryBuffer& data) const
+bool ibTempStorage::ReadPart(const ibGuid& session, const ibString& id, int index, ibMemoryBuffer& data) const
 {
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
@@ -128,13 +128,13 @@ bool ibTempStorage::ReadPart(const ibGuid& session, const wxString& id, int inde
 	try {
 		ibDatabaseQueryBuilder q(&m_holder);
 		ibQueryResult rs = q.From(file_table)
-			.Select({ wxT("binaryData") })
+			.Select({ ibT("binaryData") })
 			.Where(ibBinOp(ibQueryBinOp::And, IsSessionsFile(id, session),
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("partIndex")), ibParam(0))))
+				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("partIndex")), ibParam(0))))
 			.Execute({ ibValue(index + 1) });
 		if (!rs.Next())
 			return false;
-		rs.GetResultBlob(wxT("binaryData"), data);
+		rs.GetResultBlob(ibT("binaryData"), data);
 		return true;
 	}
 	catch (...) {
@@ -142,7 +142,7 @@ bool ibTempStorage::ReadPart(const ibGuid& session, const wxString& id, int inde
 	}
 }
 
-int ibTempStorage::PartCount(const ibGuid& session, const wxString& id) const
+int ibTempStorage::PartCount(const ibGuid& session, const ibString& id) const
 {
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
@@ -150,26 +150,26 @@ int ibTempStorage::PartCount(const ibGuid& session, const wxString& id) const
 		// The last part's number — the content parts are 1…n after the header.
 		ibDatabaseQueryBuilder q(&m_holder);
 		ibQueryResult rs = q.From(file_table)
-			.Select({ wxT("partIndex") })
+			.Select({ ibT("partIndex") })
 			.Where(IsSessionsFile(id, session))
-			.OrderBy(wxT("partIndex"), ibQuerySortDir::Desc)
+			.OrderBy(ibT("partIndex"), ibQuerySortDir::Desc)
 			.Limit(1)
 			.Execute();
-		return rs.Next() ? rs.GetResultInt(wxT("partIndex")) : 0;
+		return rs.Next() ? rs.GetResultInt(ibT("partIndex")) : 0;
 	}
 	catch (...) {
 		return 0;
 	}
 }
 
-bool ibTempStorage::Clear(const ibGuid& session, const wxString& id)
+bool ibTempStorage::Clear(const ibGuid& session, const ibString& id)
 {
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
 	try {
 		ibDatabaseQueryBuilder q(&m_holder);
 		q.Execute(ibDelete(file_table, ibBinOp(ibQueryBinOp::And, IsSessionsFile(id, session),
-			ibBinOp(ibQueryBinOp::Gt, ibCol(wxT("partIndex")), ibConst(ibValue(kHeaderPart))))));
+			ibBinOp(ibQueryBinOp::Gt, ibCol(ibT("partIndex")), ibConst(ibValue(kHeaderPart))))));
 		return true;   // clearing what has no content (0 rows) is success; a real failure THROWS
 	}
 	catch (...) {
@@ -186,8 +186,15 @@ void ibTempStorage::OnSessionEnd(const ibGuid& session)
 
 	try {
 		ibDatabaseQueryBuilder q(&m_holder);
+		if (!q.IsOpen())
+			return;
+		// Called from the registry thread. A waiting delete sits in front of Add.
+		ibDbTxOptions opts;
+		opts.noWait = true;
+		q.BeginTransaction(opts);
 		q.Execute(ibDelete(file_table,
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("sessionGuid")), ibConst(ibValue(session.str())))));
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("sessionGuid")), ibConst(ibValue(session.str())))));
+		q.Commit();
 	}
 	catch (...) {
 		// Left for the sweep, which hands over who is alive and takes the rest.
@@ -198,29 +205,38 @@ void ibTempStorage::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 {
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
-	std::set<wxString> live;
+	std::set<ibString> live;
 	for (const ibGuid& guid : liveSessionGuids)
 		live.insert(guid.str());
 
 	// The owners first, the deletes after — one per owner, through OnSessionEnd, as the lock manager does.
-	std::set<wxString> orphans;
+	std::set<ibString> orphans;
 	try {
 		ibDatabaseQueryBuilder q(&m_holder);
-		ibQueryResult rs = q.From(file_table)
-			.Select({ wxT("sessionGuid") })
-			.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("partIndex")), ibParam(0)))
-			.Execute({ ibValue(kHeaderPart) });
-		while (rs.Next()) {
-			const wxString owner = rs.GetResultString(wxT("sessionGuid"));
-			if (!owner.IsEmpty() && live.find(owner) == live.end())
-				orphans.insert(owner);
+		if (!q.IsOpen())
+			return;
+		// The read is on the registry thread. noWait so it cannot sit out a metadata lock.
+		ibDbTxOptions opts;
+		opts.noWait = true;
+		q.BeginTransaction(opts);
+		{
+			ibQueryResult rs = q.From(file_table)
+				.Select({ ibT("sessionGuid") })
+				.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("partIndex")), ibParam(0)))
+				.Execute({ ibValue(kHeaderPart) });
+			while (rs.Next()) {
+				const ibString owner = rs.GetResultString(ibT("sessionGuid"));
+				if (!owner.IsEmpty() && live.find(owner) == live.end())
+					orphans.insert(owner);
+			}
 		}
+		q.Commit();
 	}
 	catch (...) {
-		return;   // transient DB error — the next sweep retries
+		return;   // transient DB error, or the table is locked — the next sweep retries
 	}
 
-	for (const wxString& owner : orphans)
+	for (const ibString& owner : orphans)
 		OnSessionEnd(ibGuid(owner));
 }
 
@@ -228,7 +244,7 @@ void ibTempStorage::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 //								ibTempFile
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibTempFile::Open(const wxString& id)
+bool ibTempFile::Open(const ibString& id)
 {
 	m_storage = nullptr;
 	ibSession* const session = ibSession::Current();
@@ -244,7 +260,7 @@ bool ibTempFile::Open(const wxString& id)
 	return true;
 }
 
-bool ibTempFile::Create(const wxString& id, bool overwrite)
+bool ibTempFile::Create(const ibString& id, bool overwrite)
 {
 	if (!Open(id))
 		return false;
@@ -259,22 +275,22 @@ bool ibTempFile::Create(const wxString& id, bool overwrite)
 	return true;
 }
 
-wxString ibTempFile::GetName() const
+ibString ibTempFile::GetName() const
 {
-	return m_storage != nullptr ? m_storage->GetName(m_session, m_id) : wxString();
+	return m_storage != nullptr ? m_storage->GetName(m_session, m_id) : ibString();
 }
 
-bool ibTempFile::ReadPart(int index, wxMemoryBuffer& data) const
+bool ibTempFile::ReadPart(int index, ibMemoryBuffer& data) const
 {
 	return m_storage != nullptr && m_storage->ReadPart(m_session, m_id, index, data);
 }
 
-bool ibTempFile::ReadAll(wxString* str, const wxMBConv& conv)
+bool ibTempFile::ReadAll(ibString* str, const wxMBConv& conv)
 {
 	if (m_storage == nullptr || str == nullptr)
 		return false;
 
-	wxMemoryBuffer content, part;
+	ibMemoryBuffer content, part;
 	for (int index = 0; ReadPart(index, part); ++index)
 		content.AppendData(part.GetData(), part.GetDataLen());
 
@@ -283,12 +299,15 @@ bool ibTempFile::ReadAll(wxString* str, const wxMBConv& conv)
 	return content.GetDataLen() == 0 || !str->IsEmpty();
 }
 
-bool ibTempFile::Write(const wxString& str, const wxMBConv& conv)
+bool ibTempFile::Write(const ibString& str, const wxMBConv& conv)
 {
-	const wxScopedCharBuffer bytes = str.mb_str(conv);
-	if (!str.IsEmpty() && bytes.length() == 0)
+	// The converter's own buffer: a wxString's mb_str() points into that string, here a temporary (valueHttp.cpp,
+	// ibHttpEncode, says what it cost).
+	size_t length = 0;
+	const wxCharBuffer bytes = conv.cWC2MB(str.wc_str(), wxNO_LEN, &length);
+	if (length == wxCONV_FAILED || (!str.IsEmpty() && length == 0))
 		return false;   // `str` cannot be said in `conv`
-	return Write(bytes.data(), bytes.length());
+	return Write(bytes.data(), length);
 }
 
 bool ibTempFile::Write(const void* data, std::size_t size)

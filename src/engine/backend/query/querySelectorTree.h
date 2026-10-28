@@ -65,7 +65,7 @@ public:
 		// WHAT THIS BRANCH IS CALLED — `SPLIT … ONTO ByCharacteristic`, and empty on every other kind
 		// of node. A branch written without a name is read by position, so the absence is an answer
 		// rather than a gap: there is nothing to ask for it by.
-		wxString                           m_branch;
+		ibString                           m_branch;
 
 		// Room for a few is made with the first child: a heading of a table has a cell per column key, and
 		// growing the list one at a time reallocated it twice for every employee of a payroll sheet.
@@ -140,7 +140,7 @@ public:
 
 	// The columns the nodes carry (names/types for rendering) — the source snapshot's columns plus
 	// the aggregate columns the fold adds.
-	void AddColumn(ibMetaID id, const wxString& name, const ibTypeDescription& type) { m_columns.push_back({ id, name, type }); }
+	void AddColumn(ibMetaID id, const ibString& name, const ibTypeDescription& type) { m_columns.push_back({ id, name, type }); }
 	const std::vector<ibQueryRamColumn>& Columns() const { return m_columns; }
 
 private:

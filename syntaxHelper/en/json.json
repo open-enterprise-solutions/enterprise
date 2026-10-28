@@ -21,7 +21,7 @@
       "parameters": "text - the JSON document, whole. Left out (`New JSONReader()`), the reader has no text until `SetString` gives it one.",
       "return_descr": "JSONReader.",
       "example": "var Text = \"{\"\"number\"\":\"\"A-17\"\",\"\"lines\"\":[{\"\"item\"\":\"\"Paper\"\",\"\"qty\"\":2}]}\";\nvar Reader = New JSONReader(Text);\nvar Order = Reader.ReadValue();\nMessage(Order.number + \": \" + Order.lines.Count());\nforeach (Line In Order.lines) {\n    Message(Line.item + \" x \" + Line.qty);\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONReader.ReadValue",
         "cls.JSONReader.Read",
@@ -48,7 +48,7 @@
       "parameters": "",
       "return_descr": "JSONValueType - one of None, Null, Boolean, Number, String, PropertyName, ObjectStart, ObjectEnd, ArrayStart, ArrayEnd.",
       "example": "var Reader = New JSONReader(\"{\"\"a\"\":1,\"\"b\"\":2}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        Message(Reader.CurrentValue);      // a, then b\n    }\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONReader.CurrentValue",
         "cls.JSONReader.Read",
@@ -72,7 +72,7 @@
       "parameters": "",
       "return_descr": "String, Number, Boolean or Null - and Undefined where the token carries nothing.",
       "example": "var Reader = New JSONReader(\"{\"\"qty\"\":0.1}\");\nReader.Read();                             // {\nReader.Read();                             // the name\nMessage(Reader.CurrentValue);              // qty\nReader.Read();                             // the number\nMessage(Reader.CurrentValue + 0.2);        // 0.3 exactly",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONReader.CurrentValueType",
         "cls.JSONReader.Read"
@@ -95,7 +95,7 @@
       "parameters": "text - the JSON document, whole.",
       "return_descr": "",
       "example": "var Reader = New JSONReader();\nReader.SetString(Answer);\nvar Result = Reader.ReadValue();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONReader",
         "cls.JSONReader.Close",
@@ -119,7 +119,7 @@
       "parameters": "None.",
       "return_descr": "Boolean - False when nothing is left.",
       "example": "var Reader = New JSONReader(\"[1,2,3]\");\nReader.Read();                             // [\nvar Sum = 0;\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) {\n    Sum = Sum + Reader.ReadValue();\n}\nMessage(Sum);                              // 6",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONReader.CurrentValueType",
         "cls.JSONReader.ReadValue",
@@ -143,7 +143,7 @@
       "parameters": "None.",
       "return_descr": "",
       "example": "var Reader = New JSONReader(Text);\nvar Lines = Undefined;\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        if (Reader.CurrentValue = \"lines\") {\n            Lines = Reader.ReadValue();\n        } elseif (Reader.CurrentValue = \"meta\") {\n            Reader.Skip();                 // the name and its value, in one step\n        }\n    }\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONReader.Read",
         "cls.JSONReader.ReadValue"
@@ -166,7 +166,7 @@
       "parameters": "None.",
       "return_descr": "Structure, Array, String, Number, Boolean or Null.",
       "example": "var Reader = New JSONReader(\"{\"\"total\"\":0.1,\"\"paid\"\":true,\"\"note\"\":null}\");\nvar Order = Reader.ReadValue();\nMessage(Order.total + 0.2);                // 0.3 exactly\nMessage(Order.paid);\nMessage(Order.note = Null);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONReader",
         "cls.JSONReader.Read",
@@ -191,7 +191,7 @@
       "parameters": "None.",
       "return_descr": "",
       "example": "var Reader = New JSONReader(Text);\nvar Order = Reader.ReadValue();\nReader.Close();      // a 30 MB message is not held any longer than it is needed",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONReader.SetString",
         "cls.JSONWriter.Close"
@@ -216,7 +216,7 @@
       "parameters": "formatting - `JSONFormatting.Compact` (the default) or `JSONFormatting.Indented`.",
       "return_descr": "JSONWriter - empty, with nothing written.",
       "example": "var Line = New Structure();\nLine.Insert(\"item\", \"Paper\");\nLine.Insert(\"qty\", 1.25);\nvar Items = New Array();\nItems.Add(Line);\n\nvar Writer = New JSONWriter();\nWriter.WriteValue(Items);\nMessage(Writer.Close());      // [{\"item\":\"Paper\",\"qty\":1.25}]",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONWriter.WriteValue",
         "cls.JSONWriter.WritePropertyName",
@@ -243,7 +243,7 @@
       "parameters": "None.",
       "return_descr": "",
       "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"number\");\nWriter.WriteValue(\"A-17\");\nWriter.WriteEndObject();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONWriter.WriteEndObject",
         "cls.JSONWriter.WritePropertyName"
@@ -266,7 +266,7 @@
       "parameters": "None.",
       "return_descr": "",
       "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"ok\");\nWriter.WriteValue(True);\nWriter.WriteEndObject();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONWriter.WriteStartObject",
         "cls.JSONWriter.Close"
@@ -289,7 +289,7 @@
       "parameters": "None.",
       "return_descr": "",
       "example": "Writer.WriteStartArray();\nWriter.WriteValue(1);\nWriter.WriteValue(2);\nWriter.WriteEndArray();      // [1,2]",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONWriter.WriteEndArray",
         "cls.JSONWriter.WriteValue"
@@ -312,7 +312,7 @@
       "parameters": "None.",
       "return_descr": "",
       "example": "Writer.WriteStartArray();\nWriter.WriteValue(\"a\");\nWriter.WriteEndArray();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONWriter.WriteStartArray",
         "cls.JSONWriter.Close"
@@ -335,7 +335,7 @@
       "parameters": "name - the member's name; any text.",
       "return_descr": "",
       "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"odd name\");\nWriter.WriteValue(1);\nWriter.WriteEndObject();      // {\"odd name\":1}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONWriter.WriteValue",
         "cls.JSONWriter.WriteStartObject"
@@ -358,7 +358,7 @@
       "parameters": "value - a String, Number, Boolean, Date, Null or Undefined, or a Structure / Container / Array of those.",
       "return_descr": "",
       "example": "var Line = New Structure();\nLine.Insert(\"item\", \"Paper\");\nLine.Insert(\"qty\", 1.25);\n\nvar Writer = New JSONWriter();\nWriter.WriteValue(Line);\nMessage(Writer.Close());      // {\"item\":\"Paper\",\"qty\":1.25}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONWriter",
         "cls.JSONWriter.WritePropertyName",
@@ -383,7 +383,7 @@
       "parameters": "None.",
       "return_descr": "String - the JSON text.",
       "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"ok\");\nWriter.WriteValue(True);\nWriter.WriteEndObject();\nMessage(Writer.Close());",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONWriter",
         "cls.JSONReader.Close"
@@ -408,7 +408,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New JSONReader(\"{\"\"item\"\":\"\"Paper\"\",\"\"qty\"\":2}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        Message(Reader.CurrentValue);          // item, qty\n    }\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONReader.CurrentValueType",
         "cls.JSONReader.Read",
@@ -436,7 +436,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New JSONReader(\"[1,2,3]\");\nMessage(Reader.CurrentValueType = JSONValueType.None);   // True — Read() has not been called yet",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONValueType",
         "cls.JSONReader.CurrentValueType",
@@ -461,7 +461,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New JSONReader(\"{\"\"paid\"\":null}\");\nReader.Read();                                           // {\nReader.Read();                                           // paid\nReader.Read();                                           // null\nMessage(Reader.CurrentValueType = JSONValueType.Null);   // True",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONValueType",
         "cls.JSONReader.CurrentValue",
@@ -486,7 +486,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New JSONReader(\"{\"\"paid\"\":true}\");\nReader.Read();  Reader.Read();  Reader.Read();           // {, paid, true\nMessage(Reader.CurrentValueType = JSONValueType.Boolean);   // True\nMessage(Reader.CurrentValue);                               // True",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONValueType",
         "cls.JSONReader.CurrentValue"
@@ -510,7 +510,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New JSONReader(\"[0.1,0.2]\");\nReader.Read();                                 // [\nReader.Read();  var First = Reader.CurrentValue;\nReader.Read();  var Second = Reader.CurrentValue;\nMessage(First + Second);                       // 0.3 — exactly, not 0.30000000000000004",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONValueType",
         "cls.JSONReader.CurrentValue",
@@ -535,7 +535,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New JSONReader(\"[\"\"Paper\"\"]\");\nReader.Read();                                          // [\nReader.Read();                                          // \"Paper\"\nMessage(Reader.CurrentValueType = JSONValueType.String);   // True\nMessage(Reader.CurrentValue);                              // Paper",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONValueType",
         "cls.JSONReader.CurrentValue",
@@ -560,7 +560,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New JSONReader(\"{\"\"number\"\":\"\"A-17\"\",\"\"lines\"\":[1,2,3]}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName And Reader.CurrentValue = \"lines\") {\n        var Lines = Reader.ReadValue();        // the whole array, from its name\n        Message(Lines.Count());                // 3\n    }\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONValueType",
         "cls.JSONReader.ReadValue",
@@ -586,7 +586,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New JSONReader(\"[{\"\"item\"\":\"\"Paper\"\"},{\"\"item\"\":\"\"Ink\"\"}]\");\nReader.Read();                                    // [\nwhile (Reader.Read() And Reader.CurrentValueType = JSONValueType.ObjectStart) {\n    var Row = Reader.ReadValue();\n    Message(Row.item);                            // Paper, Ink\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONValueType",
         "enum.JSONValueType.ObjectEnd",
@@ -612,7 +612,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New JSONReader(\"{\"\"item\"\":\"\"Paper\"\",\"\"qty\"\":2}\");\nReader.Read();                                    // {\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd) {\n    Message(Reader.CurrentValue);                 // item, qty — the names\n    Reader.ReadValue();                           // and their values, stepped over\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONValueType",
         "enum.JSONValueType.ObjectStart",
@@ -637,7 +637,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New JSONReader(\"{\"\"lines\"\":[1,2,3]}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.ArrayStart) {\n        var Lines = Reader.ReadValue();\n        Message(Lines.Count());                   // 3\n    }\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONValueType",
         "enum.JSONValueType.ArrayEnd",
@@ -663,7 +663,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New JSONReader(\"[1,2,3]\");\nReader.Read();                                    // [\nvar Sum = 0;\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) {\n    Sum = Sum + Reader.ReadValue();\n}\nMessage(Sum);                                     // 6",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONValueType",
         "enum.JSONValueType.ArrayStart",
@@ -689,7 +689,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"item\");  Writer.WriteValue(\"Paper\");\nWriter.WriteEndObject();\nMessage(Writer.Close());\n// {\n//     \"item\": \"Paper\"\n// }",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.JSONWriter",
         "cls.JSONWriter.Close",
@@ -714,7 +714,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Writer = New JSONWriter();                    // Compact, without saying so\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"item\");  Writer.WriteValue(\"Paper\");\nWriter.WritePropertyName(\"qty\");   Writer.WriteValue(2);\nWriter.WriteEndObject();\nMessage(Writer.Close());                          // {\"item\":\"Paper\",\"qty\":2}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONFormatting",
         "cls.JSONWriter",
@@ -738,7 +738,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartArray();\nWriter.WriteValue(1);\nWriter.WriteValue(2);\nWriter.WriteEndArray();\nMessage(Writer.Close());\n// [\n//     1,\n//     2\n// ]",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.JSONFormatting",
         "cls.JSONWriter",

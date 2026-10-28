@@ -39,7 +39,7 @@ ibDataQueryBuilder::ibDataQueryBuilder(ibDatabaseConnectionHolder* holder)
 {
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::From(const ibBackendQueryable* queryable, const wxString& alias)
+ibDataQueryBuilder& ibDataQueryBuilder::From(const ibBackendQueryable* queryable, const ibString& alias)
 {
 	m_queryable = queryable;                              // primary source (single-source fast path)
 	m_root      = ibQueryNode::Source(queryable, alias); // the relational tree root
@@ -48,7 +48,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::From(const ibBackendQueryable* queryable
 
 // A NAMED QUERY this statement declares. The inner door is copied whole — it is an ordinary door,
 // and what makes it a CTE is being declared here rather than executed on its own.
-ibDataQueryBuilder& ibDataQueryBuilder::With(const wxString& name, const ibDataQueryBuilder& inner)
+ibDataQueryBuilder& ibDataQueryBuilder::With(const ibString& name, const ibDataQueryBuilder& inner)
 {
 	if (name.IsEmpty())
 		return *this;   // a nameless declaration cannot be read back — nothing to say
@@ -63,14 +63,14 @@ ibDataQueryBuilder& ibDataQueryBuilder::With(const wxString& name, const ibDataQ
 
 ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
 	const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
-	ibQueryJoinKind kind, const wxString& alias)
+	ibQueryJoinKind kind, const ibString& alias)
 {
 	return Join(queryable, onLeft, onRight, ibJoinCompareOp::Eq, kind, alias);   // equality -> hash-join fast path
 }
 
 // The single point that appends a left-deep JOIN node (new source on the right) carrying the ON condition.
 ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const ibBackendQueryable* queryable, ibQueryJoinKind kind,
-	const wxString& alias, const ibJoinOn& on)
+	const ibString& alias, const ibJoinOn& on)
 {
 	auto node = std::make_shared<ibQueryNode>();   // left-deep accumulation: (prior tree) joined with the new source
 	node->m_kind     = ibQueryNode::Kind::Join;
@@ -125,7 +125,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const ibBackendQueryable* query
 
 ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
 	const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
-	ibJoinCompareOp onOp, ibQueryJoinKind kind, const wxString& alias,
+	ibJoinCompareOp onOp, ibQueryJoinKind kind, const ibString& alias,
 	const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn)
 {
 	ibJoinOn on; on.m_colL = onLeft; on.m_colR = onRight; on.m_op = onOp;   // onOp != Eq -> theta (RAM nested-loop)
@@ -135,21 +135,21 @@ ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable
 
 ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
 	const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
-	ibJoinCompareOp onOp, ibQueryJoinKind kind, const wxString& alias)
+	ibJoinCompareOp onOp, ibQueryJoinKind kind, const ibString& alias)
 {
 	// Computed ON (a.x+1 <op> b.y): no key columns -- both sides are exprs evaluated per pair (RAM theta).
 	ibJoinOn on; on.m_exprL = onExprL; on.m_exprR = onExprR; on.m_op = onOp;
 	return JoinNode(queryable, kind, alias, on);
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::CrossJoin(const ibBackendQueryable* queryable, ibQueryJoinKind kind, const wxString& alias)
+ibDataQueryBuilder& ibDataQueryBuilder::CrossJoin(const ibBackendQueryable* queryable, ibQueryJoinKind kind, const ibString& alias)
 {
 	// CROSS / ON TRUE -- keyless cartesian; the composer's RAM stitch does the product on a null key.
 	ibJoinOn on; on.m_cross = true;
 	return JoinNode(queryable, kind, alias, on);
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Union(const ibBackendQueryable* queryable, const wxString& alias,
+ibDataQueryBuilder& ibDataQueryBuilder::Union(const ibBackendQueryable* queryable, const ibString& alias,
                                               bool keepDuplicates)
 {
 	// Stack vertically: extend an existing Union, else wrap the prior root + the new part.
@@ -398,7 +398,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderByExpr(const ibQueryColumnExprPtr& 
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::OrderByOutput(const wxString& alias, bool ascending)
+ibDataQueryBuilder& ibDataQueryBuilder::OrderByOutput(const ibString& alias, bool ascending)
 {
 	if (alias.IsEmpty())
 		return *this;   // an unnamed output cannot be sorted by name — the caller names it or does not sort
@@ -440,7 +440,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<const ibBacken
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias)
+ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<const ibBackendQueryColumn*>& path, const ibString& alias)
 {
 	if (path.size() < 2 || alias.IsEmpty())
 		return GroupBy(path);
@@ -454,7 +454,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<const ibBacken
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::GroupByExpr(const ibQueryColumnExprPtr& expr, const wxString& alias)
+ibDataQueryBuilder& ibDataQueryBuilder::GroupByExpr(const ibQueryColumnExprPtr& expr, const ibString& alias)
 {
 	if (!expr || alias.IsEmpty())
 		return *this;   // an unnamed computed key could not be read back — refuse it rather than group blind
@@ -466,7 +466,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupByExpr(const ibQueryColumnExprPtr& 
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
-	const ibBackendQueryColumn* col, const wxString& alias, bool distinct)
+	const ibBackendQueryColumn* col, const ibString& alias, bool distinct)
 {
 	// Route to the current context: Totals() → the TotalBy common set, else the GroupBy set.
 	AggregateItem item{ fn, col, alias, {} };
@@ -479,7 +479,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 // a parameter of the three Aggregate overloads. Applied to the LAST aggregate answering to this
 // alias, which is the one just declared; an alias nobody claimed is left alone rather than raising,
 // because the caller that resolves the name has already refused what it could not resolve.
-ibDataQueryBuilder& ibDataQueryBuilder::AggregateOver(const wxString& alias,
+ibDataQueryBuilder& ibDataQueryBuilder::AggregateOver(const ibString& alias,
 	std::shared_ptr<ibTotalBranch> branch, int depth)
 {
 	std::vector<AggregateItem>& into = m_aggInTotals ? m_totalAggregates : m_aggregates;
@@ -492,7 +492,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::AggregateOver(const wxString& alias,
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::AggregateAsBalance(const wxString& alias, ibBalanceRole edge,
+ibDataQueryBuilder& ibDataQueryBuilder::AggregateAsBalance(const ibString& alias, ibBalanceRole edge,
 	std::vector<const ibBackendQueryColumn*> moments, std::vector<const ibBackendQueryColumn*> keys)
 {
 	std::vector<AggregateItem>& into = m_aggInTotals ? m_totalAggregates : m_aggregates;
@@ -506,7 +506,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::AggregateAsBalance(const wxString& alias
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::AggregateReceiver(const wxString& alias,
+ibDataQueryBuilder& ibDataQueryBuilder::AggregateReceiver(const ibString& alias,
 	std::shared_ptr<ibBackendQueryColumn> receiver)
 {
 	std::vector<AggregateItem>& into = m_aggInTotals ? m_totalAggregates : m_aggregates;
@@ -533,7 +533,7 @@ bool ibDataQueryBuilder::CanPushWindow() const
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
-	const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias, bool distinct)
+	const std::vector<const ibBackendQueryColumn*>& path, const ibString& alias, bool distinct)
 {
 	if (path.empty()) return *this;
 	if (path.size() == 1) return Aggregate(fn, path.front(), alias, distinct);   // not a dot-walk — plain input
@@ -544,7 +544,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
-	const ibQueryColumnExprPtr& expr, const wxString& alias, bool distinct)
+	const ibQueryColumnExprPtr& expr, const ibString& alias, bool distinct)
 {
 	// COMPUTED aggregate input — SUM(Qty * Price). The provider lowers m_expr via BuildColumnExpr.
 	if (!expr) return *this;
@@ -610,7 +610,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const std::vector<const ibBacken
 }
 
 ibTotalField ibDataQueryBuilder::DeclareDimDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
-	const ibBackendQueryColumn* dimCol, const wxString& alias, ibDimensionKind dim)
+	const ibBackendQueryColumn* dimCol, const ibString& alias, ibDimensionKind dim)
 {
 	if (path.size() < 2 || dimCol == nullptr) return ibTotalField{ nullptr, dim };
 	m_dimWalks.push_back(ibDotWalkColumn{ path, alias });    // provider projects the leaf under `alias`
@@ -624,7 +624,7 @@ ibTotalField ibDataQueryBuilder::DeclareDimDotWalk(const std::vector<const ibBac
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::TotalByDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
-	const ibBackendQueryColumn* dimCol, const wxString& alias, ibDimensionKind dim)
+	const ibBackendQueryColumn* dimCol, const ibString& alias, ibDimensionKind dim)
 {
 	const ibTotalField field = DeclareDimDotWalk(path, dimCol, alias, dim);
 	ibTotalLevel level; level.m_fields.push_back(field);
@@ -639,21 +639,21 @@ ibDataQueryBuilder& ibDataQueryBuilder::Having(AggregateFn fn,
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::SelectPath(
-	const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias)
+	const std::vector<const ibBackendQueryColumn*>& path, const ibString& alias)
 {
 	if (!path.empty())
 		m_dotWalks.push_back(ibDotWalkColumn{ path, alias });
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Select(const ibBackendQueryColumn* col, const wxString& alias)
+ibDataQueryBuilder& ibDataQueryBuilder::Select(const ibBackendQueryColumn* col, const ibString& alias)
 {
 	if (col != nullptr)
 		m_selectCols.emplace_back(col, alias);
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::SelectExpr(const ibQueryColumnExprPtr& expr, const wxString& alias)
+ibDataQueryBuilder& ibDataQueryBuilder::SelectExpr(const ibQueryColumnExprPtr& expr, const ibString& alias)
 {
 	if (expr != nullptr)
 		m_selectExprs.push_back(ibQueryColumnSelect{ expr, alias });
@@ -664,14 +664,14 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereKey(const ibGuid& rowGuid)
 {
 	// Row-key equality — m_col == nullptr means the row-key column in the IR builder.
 	m_conditions.push_back(ibQueryCondition{
-		nullptr, ibQueryFilterOp::Equal, ibValue(wxString(rowGuid)) });
+		nullptr, ibQueryFilterOp::Equal, ibValue(ibString(rowGuid)) });
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::WhereKeyIn(const std::vector<ibGuid>& rowGuids)
 {
 	for (const ibGuid& g : rowGuids)
-		m_keyIn.push_back(ibValue(wxString(g)));
+		m_keyIn.push_back(ibValue(ibString(g)));
 	return *this;
 }
 
@@ -1104,13 +1104,13 @@ void ibDataQueryBuilder::RaiseIfKeyedRewriteMissed(long affected) const
 	// missing from the only place that had it in hand (2026-09-01 — a document whose row had just
 	// been inserted in the same session refused its own rewrite, and nothing on either side could
 	// say whether the two keys were the same key).
-	wxString strKey;
+	ibString strKey;
 	if (m_queryable != nullptr && !m_writeRows.empty()) {
 		for (const ibBackendQueryColumn* keyCol : m_queryable->GetPrimaryKeyColumns()) {
 			if (keyCol == nullptr) continue;
 			for (const auto& assigned : m_writeRows.front()) {
 				if (assigned.first != keyCol) continue;
-				if (!strKey.IsEmpty()) strKey += wxT(", ");
+				if (!strKey.IsEmpty()) strKey += ibT(", ");
 				strKey += assigned.second.GetString();
 			}
 		}
@@ -1118,8 +1118,8 @@ void ibDataQueryBuilder::RaiseIfKeyedRewriteMissed(long affected) const
 
 	ibBackendCoreException::Error(
 		_("'%s': the row to rewrite was not found by its key%s - nothing was written"),
-		m_queryable != nullptr ? m_queryable->GetQueryName() : wxString(wxT("?")),
-		strKey.IsEmpty() ? wxString() : wxT(" ") + strKey);
+		m_queryable != nullptr ? m_queryable->GetQueryName() : ibString(ibT("?")),
+		strKey.IsEmpty() ? ibString() : ibT(" ") + strKey);
 }
 
 bool ibDataQueryBuilder::Update() const

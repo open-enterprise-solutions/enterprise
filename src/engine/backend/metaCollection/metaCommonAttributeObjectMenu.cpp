@@ -15,7 +15,7 @@
 
 bool ibValueMetaObjectCommonAttribute::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	items.emplace_back(ibMetaMenuKind::Object, wxT("Composition"), _("Open common attributes composition"), this);
+	items.emplace_back(ibMetaMenuKind::Object, ibT("Composition"), _("Open common attributes composition"), this);
 	return false;
 }
 
@@ -27,7 +27,7 @@ bool ibValueMetaObjectCommonAttribute::CollectContextMenu(std::vector<ibMetaMenu
 bool ibValueMetaObjectCommonAttributeColumn::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
 	if (ibValueMetaObject* source = GetSource())
-		items.emplace_back(ibMetaMenuKind::Object, wxT("Declaration"), _("Go to common attribute"), source);
+		items.emplace_back(ibMetaMenuKind::Object, ibT("Declaration"), _("Go to common attribute"), source);
 	return true;
 }
 

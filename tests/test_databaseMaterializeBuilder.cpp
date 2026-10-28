@@ -51,8 +51,8 @@ struct Fixture
         v.m_withPeriod    = true;
         v.m_dropZeroRows  = false;
         v.m_columns = {
-            { wxT("Qty_Receipt"),        wxT("qty_in"),  wxString(),      ibMaterializeAgg::Value },
-            { wxT("Qty_Expense"),        wxT("qty_out"), wxString(),      ibMaterializeAgg::Value },
+            { wxT("Qty_Receipt"),        wxT("qty_in"),  ibString(),      ibMaterializeAgg::Value },
+            { wxT("Qty_Expense"),        wxT("qty_out"), ibString(),      ibMaterializeAgg::Value },
             { wxT("Qty_Turnover"),       wxT("qty_in"),  wxT("qty_out"),  ibMaterializeAgg::Difference },
             { wxT("Qty_ClosingBalance"), wxT("qty_in"),  wxT("qty_out"),  ibMaterializeAgg::RunningSum },
             { wxT("Qty_OpeningBalance"), wxT("qty_in"),  wxT("qty_out"),  ibMaterializeAgg::RunningSumExcludingCurrent },
@@ -79,13 +79,13 @@ ibMaterializeSql RenderSqlite(const ibMaterializeSpec& spec)
 
 // Concatenate the CREATE statements — most assertions are about what the bundle as a whole
 // does or never does, and the split between trigger objects is not the interesting part.
-wxString CreateText(const ibMaterializeSql& sql) { return sql.CreateText(); }
+ibString CreateText(const ibMaterializeSql& sql) { return sql.CreateText(); }
 
-int CountOf(const wxString& haystack, const wxString& needle)
+int CountOf(const ibString& haystack, const ibString& needle)
 {
     int n = 0;
     size_t at = 0;
-    while ((at = haystack.find(needle, at)) != wxString::npos) { n++; at += needle.length(); }
+    while ((at = haystack.find(needle, at)) != ibString::npos) { n++; at += needle.length(); }
     return n;
 }
 
@@ -100,7 +100,7 @@ int CountOf(const wxString& haystack, const wxString& needle)
 TEST(MaterializeRenderer, BuildsThreeTriggersAndAView) {
     Fixture f;
     const ibMaterializeSql sql = RenderSqlite(f.spec);
-    const wxString text = CreateText(sql);
+    const ibString text = CreateText(sql);
     EXPECT_EQ(CountOf(text, wxT("CREATE TRIGGER")), 3);
     EXPECT_EQ(CountOf(text, wxT("CREATE VIEW")), 1);
     EXPECT_TRUE(text.Contains(wxT("AFTER INSERT")));
@@ -114,7 +114,7 @@ TEST(MaterializeRenderer, BuildsThreeTriggersAndAView) {
 TEST(MaterializeRenderer, DropsEverythingItCreates) {
     Fixture f;
     const ibMaterializeSql sql = RenderSqlite(f.spec);
-    const wxString drops = sql.DropText();
+    const ibString drops = sql.DropText();
     EXPECT_EQ(CountOf(drops, wxT("DROP TRIGGER")), 3);
     EXPECT_TRUE(drops.Contains(wxT("DROP VIEW")));
 }
@@ -139,7 +139,7 @@ TEST(MaterializeRenderer, DropsAreNamedAfterTheSpecTable) {
     Fixture f;
     f.spec.m_table = wxT("reg1_Tn");
     f.spec.m_views[0].m_name = wxT("reg1_Tn_Turnovers");
-    const wxString drops = RenderSqlite(f.spec).DropText();
+    const ibString drops = RenderSqlite(f.spec).DropText();
     EXPECT_TRUE(drops.Contains(wxT("reg1_Tn_AI")));
     EXPECT_TRUE(drops.Contains(wxT("reg1_Tn_AU")));
     EXPECT_TRUE(drops.Contains(wxT("reg1_Tn_AD")));
@@ -163,7 +163,7 @@ TEST(MaterializeRenderer, NoDialectYieldsAnEmptyBundle) {
 // the last movement's value ends up standing for the whole period.
 TEST(MaterializeRenderer, AccumulatesRatherThanReplaces) {
     Fixture f;
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
     EXPECT_TRUE(text.Contains(wxT("qty_in = COALESCE(Reg7_T.qty_in, 0) + excluded.qty_in")));
     EXPECT_TRUE(text.Contains(wxT("qty_out = COALESCE(Reg7_T.qty_out, 0) + excluded.qty_out")));
 }
@@ -174,7 +174,7 @@ TEST(MaterializeRenderer, AccumulatesRatherThanReplaces) {
 // value is rendered — so a new row is never born NULL either.
 TEST(MaterializeRenderer, ANullFigureNeitherAbsorbsNorIsInserted) {
     Fixture f;
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
     EXPECT_TRUE(text.Contains(wxT("COALESCE(Reg7_T.qty_in, 0)")));
     EXPECT_TRUE(text.Contains(wxT("COALESCE(CASE WHEN NEW.rectype_ = 0 THEN NEW.qty ELSE 0 END, 0)")));   // the incoming value, NULL-safe where it is rendered
 }
@@ -187,7 +187,7 @@ TEST(MaterializeRenderer, DeleteContributesTheNegatedValue) {
     Fixture f;
     const ibMaterializeSql sql = RenderSqlite(f.spec);
     // The delete trigger is the third created object (insert, update, delete).
-    const wxString del = sql.CreateAt(2);
+    const ibString del = sql.CreateAt(2);
     EXPECT_TRUE(del.Contains(wxT("AFTER DELETE")));
     EXPECT_TRUE(del.Contains(wxT("-(")));            // negated contribution
     EXPECT_TRUE(del.Contains(wxT("OLD.")));          // read from the row being removed
@@ -198,7 +198,7 @@ TEST(MaterializeRenderer, DeleteContributesTheNegatedValue) {
 // the subtle version of the delete bug: edits leak value into the totals.
 TEST(MaterializeRenderer, UpdateReversesOldThenAppliesNew) {
     Fixture f;
-    const wxString upd = RenderSqlite(f.spec).CreateAt(1);
+    const ibString upd = RenderSqlite(f.spec).CreateAt(1);
     EXPECT_TRUE(upd.Contains(wxT("AFTER UPDATE")));
     EXPECT_TRUE(upd.Contains(wxT("OLD.")));
     EXPECT_TRUE(upd.Contains(wxT("NEW.")));
@@ -210,7 +210,7 @@ TEST(MaterializeRenderer, UpdateReversesOldThenAppliesNew) {
 // every read still "correct", and the entire point of the table gone.
 TEST(MaterializeRenderer, TruncatesThePeriodIntoTheKey) {
     Fixture f;
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
     EXPECT_TRUE(text.Contains(wxT("strftime('%Y-%m-01 00:00:00', NEW.period_)")));
     EXPECT_FALSE(text.Contains(wxT("(NEW.period_,")));   // never the bare column as the key value
 }
@@ -220,7 +220,7 @@ TEST(MaterializeRenderer, TruncatesThePeriodIntoTheKey) {
 TEST(MaterializeRenderer, GuardBecomesAWhereOnTheDelta) {
     Fixture f;
     f.spec.m_guard = wxT("{row}.wh IS NOT NULL");
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
     EXPECT_TRUE(text.Contains(wxT("WHERE NEW.wh IS NOT NULL")));
     EXPECT_TRUE(text.Contains(wxT("WHERE OLD.wh IS NOT NULL")));
 }
@@ -230,7 +230,7 @@ TEST(MaterializeRenderer, GuardBecomesAWhereOnTheDelta) {
 TEST(MaterializeRenderer, ABinaryInAGuardIsSpelledByTheEngine) {
     Fixture f;
     f.spec.m_guard = wxT("{row}.wh_RRRef <> {binary:00ff}");
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
     EXPECT_TRUE(text.Contains(wxT("WHERE NEW.wh_RRRef <> X'00ff'")));
     EXPECT_FALSE(text.Contains(wxT("{binary:")));
 }
@@ -250,7 +250,7 @@ TEST(MaterializeRenderer, NoGuardEmitsNoWhere) {
 // the scale ceiling exactly where it was — the failure would be invisible until volume.
 TEST(MaterializeRenderer, ViewReadsTheTotalsTableNotTheMovements) {
     Fixture f;
-    const wxString view = RenderSqlite(f.spec).LastCreate();
+    const ibString view = RenderSqlite(f.spec).LastCreate();
     EXPECT_TRUE(view.Contains(wxT("CREATE VIEW")));
     EXPECT_TRUE(view.Contains(wxT("FROM Reg7_T")));
     EXPECT_FALSE(view.Contains(wxT("FROM Reg7 ")));   // never the movement table
@@ -262,7 +262,7 @@ TEST(MaterializeRenderer, ViewReadsTheTotalsTableNotTheMovements) {
 // name "day" would be worse than its absence.
 TEST(MaterializeRenderer, ViewProjectsCoarserPeriodsOnly) {
     Fixture f;
-    const wxString view = RenderSqlite(f.spec).LastCreate();
+    const ibString view = RenderSqlite(f.spec).LastCreate();
     EXPECT_TRUE(view.Contains(wxT("AS period__Quarter")));
     EXPECT_TRUE(view.Contains(wxT("AS period__HalfYear")));
     EXPECT_TRUE(view.Contains(wxT("AS period__Year")));
@@ -282,7 +282,7 @@ TEST(MaterializeRenderer, ViewProjectsCoarserPeriodsOnly) {
 // in this sense: a window adds a column without collapsing rows.
 TEST(MaterializeRenderer, UnsplitViewDoesNotCollapseRows) {
     Fixture f;
-    const wxString view = RenderSqlite(f.spec).LastCreate();
+    const ibString view = RenderSqlite(f.spec).LastCreate();
     EXPECT_FALSE(view.Contains(wxT("GROUP BY")));
     EXPECT_FALSE(view.Contains(ShardColumnName()));
     EXPECT_TRUE(view.Contains(wxT("OVER (PARTITION BY")));   // the window still runs
@@ -301,7 +301,7 @@ TEST(MaterializeRenderer, PeriodlessViewCollapsesAndSums) {
     v.m_columns = { { wxT("Qty_Balance"), wxT("qty_in"), wxT("qty_out"), ibMaterializeAgg::Difference } };
     f.spec.m_views = { v };
 
-    const wxString view = RenderSqlite(f.spec).LastCreate();
+    const ibString view = RenderSqlite(f.spec).LastCreate();
     EXPECT_TRUE(view.Contains(wxT("SUM(qty_in)")));
     EXPECT_TRUE(view.Contains(wxT("SUM(qty_out)")));
     EXPECT_TRUE(view.Contains(wxT("GROUP BY")));
@@ -313,7 +313,7 @@ TEST(MaterializeRenderer, PeriodlessViewCollapsesAndSums) {
 // client to accumulate there turns a report into a transfer, and the cost grows with history.
 TEST(MaterializeRenderer, RunningBalanceUsesAWindow) {
     Fixture f;
-    const wxString view = RenderSqlite(f.spec).LastCreate();
+    const ibString view = RenderSqlite(f.spec).LastCreate();
     EXPECT_TRUE(view.Contains(wxT("AS Qty_ClosingBalance")));
     EXPECT_TRUE(view.Contains(wxT("AS Qty_OpeningBalance")));
     EXPECT_TRUE(view.Contains(wxT("ORDER BY period_")));      // ordered within the partition
@@ -328,7 +328,7 @@ TEST(MaterializeRenderer, SplitCollapsesWhereItIsMeaningless) {
     Fixture f;
     f.spec.m_shards = 8;
     EXPECT_EQ(EffectiveShardCount(f.spec, &Sqlite()), 1u);
-    const wxString view = RenderSqlite(f.spec).LastCreate();
+    const ibString view = RenderSqlite(f.spec).LastCreate();
     EXPECT_FALSE(view.Contains(wxT("GROUP BY")));
 }
 
@@ -346,7 +346,7 @@ TEST(MaterializeRenderer, SplitIsAbsorbedByTheView) {
 
     const ibMaterializeSql sql = RenderMaterialization(
         f.spec, &pg, ibDatabaseLayerPostgres::Dialect());
-    const wxString view = sql.LastCreate();
+    const ibString view = sql.LastCreate();
     EXPECT_TRUE(view.Contains(wxT("SUM(qty_in) AS Qty_Receipt")));    // shards folded away
     EXPECT_TRUE(view.Contains(wxT("GROUP BY")));
     EXPECT_FALSE(view.Contains(ShardColumnName()));   // never projected — grouping by it would expose partial sums
@@ -364,7 +364,7 @@ TEST(MaterializeRenderer, PostgresEmitsAndDropsItsFunctions) {
     const ibMaterializeSql sql = RenderMaterialization(
         f.spec, &ibDatabaseLayerPostgres::MaterializationDialect(), ibDatabaseLayerPostgres::Dialect());
     EXPECT_EQ(CountOf(CreateText(sql), wxT("CREATE OR REPLACE FUNCTION")), 3);
-    const wxString drops = sql.DropText();
+    const ibString drops = sql.DropText();
     EXPECT_EQ(CountOf(drops, wxT("DROP FUNCTION")), 3);
 }
 
@@ -386,7 +386,7 @@ TEST(MaterializeRenderer, PostgresSpellsABinaryAsBytea) {
 // no Firebird server accepts — and rendering UPDATE OR INSERT would be accepted and wrong.
 TEST(MaterializeRenderer, FirebirdRendersAMergeDelta) {
     Fixture f;
-    const wxString text = CreateText(RenderMaterialization(
+    const ibString text = CreateText(RenderMaterialization(
         f.spec, &ibDatabaseLayerFirebird::MaterializationDialect(), ibDatabaseLayerFirebird::Dialect()));
     EXPECT_TRUE(text.Contains(wxT("MERGE INTO Reg7_T t")));
     EXPECT_TRUE(text.Contains(wxT("WHEN MATCHED THEN UPDATE SET")));
@@ -404,7 +404,7 @@ TEST(MaterializeRenderer, LeavesNoPlaceholdersBehind) {
     Fixture f;
     f.spec.m_guard = wxT("{row}.wh IS NOT NULL");
     const ibMaterializeSql sql = RenderSqlite(f.spec);
-    const wxString all = CreateText(sql) + sql.DropText();
+    const ibString all = CreateText(sql) + sql.DropText();
     EXPECT_FALSE(all.Contains(wxT("{")));
     EXPECT_FALSE(all.Contains(wxT("}")));
 }
@@ -421,14 +421,14 @@ TEST(MaterializeRenderer, LeavesNoPlaceholdersBehind) {
 
 TEST(MaterializeRenderer, WithoutTheArmTheViewReadsOnlyTheStoredTable) {
     Fixture f;
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
     EXPECT_FALSE(text.Contains(wxT("UNION ALL")));
 }
 
 TEST(MaterializeRenderer, TheMovementArmIsAUnionOverTheSourceTable) {
     Fixture f;
     f.spec.m_views[0].m_withMovements = true;
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
 
     EXPECT_TRUE(text.Contains(wxT("UNION ALL")));
     EXPECT_TRUE(text.Contains(wxT(" FROM Reg7")));      // the movements
@@ -441,7 +441,7 @@ TEST(MaterializeRenderer, TheMovementArmIsAUnionOverTheSourceTable) {
 TEST(MaterializeRenderer, TheArmComputesFiguresFromTheDeltaExpressions) {
     Fixture f;
     f.spec.m_views[0].m_withMovements = true;
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
 
     // The delta's own CASE, now over the source table rather than over {row}.
     EXPECT_TRUE(text.Contains(wxT("CASE WHEN Reg7.rectype_ = 0 THEN Reg7.qty ELSE 0 END")));
@@ -454,7 +454,7 @@ TEST(MaterializeRenderer, TheArmComputesFiguresFromTheDeltaExpressions) {
 TEST(MaterializeRenderer, TheArmKeepsTheRawInstantAsItsPeriod) {
     Fixture f;
     f.spec.m_views[0].m_withMovements = true;
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
     EXPECT_TRUE(text.Contains(wxT("Reg7.period_ AS period_")));
 }
 
@@ -466,7 +466,7 @@ TEST(MaterializeRenderer, AMovementOnlyColumnIsNullOnTheStoredArm) {
     // The type travels with the name: the stored arm stands a CAST null in its place, because a bare
     // NULL has no type for the engine to reconcile the two arms with (see ibMaterializeView).
     f.spec.m_views[0].m_movementColumns = { { wxT("recorder_RRRef"), ibTypeBinary(16) } };
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
 
     EXPECT_TRUE(text.Contains(wxT("CAST(NULL AS BLOB) AS recorder_RRRef")));
     EXPECT_TRUE(text.Contains(wxT("Reg7.recorder_RRRef")));
@@ -488,7 +488,7 @@ TEST(MaterializeRenderer, AMovementOnlyColumnIsNullOnTheStoredArm) {
 TEST(MaterializeRenderer, ARowSurvivesIfAnyFigureIsNonZero) {
     Fixture f;
     f.spec.m_views[0].m_dropZeroRows = true;
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
 
     // OR, never AND: an item with quantity 0 and amount 5 still reports.
     EXPECT_TRUE(text.Contains(wxT(" OR ")));
@@ -499,7 +499,7 @@ TEST(MaterializeRenderer, ARowSurvivesIfAnyFigureIsNonZero) {
 
 TEST(MaterializeRenderer, NoZeroRowTestIsEmittedWhenNotAskedFor) {
     Fixture f;   // m_dropZeroRows is false in the fixture
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
     EXPECT_FALSE(text.Contains(wxT("<> 0")));
 }
 
@@ -508,7 +508,7 @@ TEST(MaterializeRenderer, NoZeroRowTestIsEmittedWhenNotAskedFor) {
 TEST(MaterializeRenderer, TheRunningBalanceIsLeftOutOfTheZeroRowTest) {
     Fixture f;
     f.spec.m_views[0].m_dropZeroRows = true;
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
 
     const int windows = CountOf(text, wxT("OVER ("));
     EXPECT_GT(windows, 0);                        // the running sums are there...
@@ -524,7 +524,7 @@ TEST(MaterializeRenderer, TheRunningBalanceIsLeftOutOfTheZeroRowTest) {
 // stock, so the closing figure must not depend on the order they come back in.
 TEST(MaterializeRenderer, TheRunningBalanceNamesItsFrame) {
     Fixture f;
-    const wxString text = CreateText(RenderSqlite(f.spec));
+    const ibString text = CreateText(RenderSqlite(f.spec));
 
     EXPECT_TRUE(text.Contains(wxT("RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW")));
     EXPECT_FALSE(text.Contains(wxT("ROWS BETWEEN")));
@@ -540,7 +540,7 @@ TEST(MaterializeRenderer, TheZeroRowTestGoesWhereTheGroupingPutIt) {
 
     Fixture flat;
     flat.spec.m_views[0].m_dropZeroRows = true;       // unsplit + per period: nothing merges
-    const wxString text = CreateText(RenderSqlite(flat.spec));
+    const ibString text = CreateText(RenderSqlite(flat.spec));
     EXPECT_TRUE (text.Contains(wxT("WHERE ")));
     EXPECT_FALSE(text.Contains(wxT("HAVING ")));
 }
@@ -608,7 +608,7 @@ ibMaterializeReadSpec ReadFixture()
     return r;
 }
 
-wxString ReadSql(const ibMaterializeReadSpec& spec)
+ibString ReadSql(const ibMaterializeReadSpec& spec)
 {
     // Wrapped in a Project so the subquery renders where a caller would actually put it — in a FROM.
     const ibQueryRelPtr rel = RenderMaterializedRead(spec, wxT("src"));
@@ -622,11 +622,11 @@ wxString ReadSql(const ibMaterializeReadSpec& spec)
 TEST(MaterializeRead, WholeIntervalStaysConditionalSums) {
     ibMaterializeReadSpec r = ReadFixture();
     r.m_columns = {
-        { wxT("Qty_OpeningBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true },
-        { wxT("Qty_Turnover"),       wxT("qty_turn"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true },
-        { wxT("Qty_ClosingBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo,     true },
+        { wxT("Qty_OpeningBalance"), wxT("qty_turn"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true },
+        { wxT("Qty_Turnover"),       wxT("qty_turn"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true },
+        { wxT("Qty_ClosingBalance"), wxT("qty_turn"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo,     true },
     };
-    const wxString sql = ReadSql(r);
+    const ibString sql = ReadSql(r);
 
     EXPECT_TRUE(sql.Contains(wxT("CASE")));           // the conditions
     EXPECT_TRUE(sql.Contains(wxT("GROUP BY wh")));    // one row per key
@@ -641,11 +641,11 @@ TEST(MaterializeRead, PeriodisedBalanceAccumulatesOnTheServer) {
     r.m_periodUnit = ibTotalsPeriod::Month;
     r.m_fromGrain  = ibValue(2026, 1, 1);
     r.m_columns = {
-        { wxT("Qty_OpeningBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::RunningSumExcludingCurrent, ibMaterializeWhen::Always, true },
-        { wxT("Qty_Turnover"),       wxT("qty_turn"), wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::Always, true },
-        { wxT("Qty_ClosingBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::RunningSum,                 ibMaterializeWhen::Always, true },
+        { wxT("Qty_OpeningBalance"), wxT("qty_turn"), ibString(), ibMaterializeAgg::RunningSumExcludingCurrent, ibMaterializeWhen::Always, true },
+        { wxT("Qty_Turnover"),       wxT("qty_turn"), ibString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::Always, true },
+        { wxT("Qty_ClosingBalance"), wxT("qty_turn"), ibString(), ibMaterializeAgg::RunningSum,                 ibMaterializeWhen::Always, true },
     };
-    const wxString sql = ReadSql(r);
+    const ibString sql = ReadSql(r);
 
     // The accumulation: a sum of the period sums, partitioned by the key, ordered by the grain.
     EXPECT_TRUE(sql.Contains(wxT("SUM(CAST(SUM(")));
@@ -667,15 +667,15 @@ TEST(MaterializeRead, PeriodisedLowerBoundIsAppliedOutsideTheWindow) {
     r.m_periodUnit = ibTotalsPeriod::Month;
     r.m_fromGrain  = ibValue(2026, 1, 1);
     r.m_columns = {
-        { wxT("Qty_ClosingBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::RunningSum, ibMaterializeWhen::Always, true },
+        { wxT("Qty_ClosingBalance"), wxT("qty_turn"), ibString(), ibMaterializeAgg::RunningSum, ibMaterializeWhen::Always, true },
     };
-    const wxString sql = ReadSql(r);
+    const ibString sql = ReadSql(r);
 
     // An outer layer exists, and the >= test lives in it — after the aggregation, not in its WHERE.
     const size_t window = sql.find(wxT("OVER ("));
     const size_t lower  = sql.rfind(wxT("period_ >="));
-    ASSERT_NE(window, wxString::npos);
-    ASSERT_NE(lower,  wxString::npos);
+    ASSERT_NE(window, ibString::npos);
+    ASSERT_NE(lower,  ibString::npos);
     EXPECT_GT(lower, window);
 }
 
@@ -690,11 +690,11 @@ TEST(MaterializeRead, PeriodisedTurnoverIsAGroupByAndNoWindow) {
     r.m_periodUnit   = ibTotalsPeriod::Month;
     r.m_dropZeroRows = true;
     r.m_columns = {
-        { wxT("Qty_Receipt"),  wxT("qty_in"),   wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
-        { wxT("Qty_Expense"),  wxT("qty_out"),  wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
-        { wxT("Qty_Turnover"), wxT("qty_turn"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+        { wxT("Qty_Receipt"),  wxT("qty_in"),   ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+        { wxT("Qty_Expense"),  wxT("qty_out"),  ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+        { wxT("Qty_Turnover"), wxT("qty_turn"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
     };
-    const wxString sql = ReadSql(r);
+    const ibString sql = ReadSql(r);
 
     // The SQL travels with every failure: a shape test that only says "false" makes the reader
     // guess which of the four clauses moved.
@@ -722,9 +722,9 @@ TEST(MaterializeRead, PeriodisedTurnoverIsAGroupByAndNoWindow) {
 TEST(MaterializeRead, AnUnperiodisedTurnoverFoldsTheWholeInterval) {
     ibMaterializeReadSpec r = ReadFixture();   // m_grain stays Whole
     r.m_columns = {
-        { wxT("Qty_Turnover"), wxT("qty_turn"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+        { wxT("Qty_Turnover"), wxT("qty_turn"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
     };
-    const wxString sql = ReadSql(r);
+    const ibString sql = ReadSql(r);
 
     EXPECT_TRUE(sql.Contains(wxT("SUM(")));
     EXPECT_TRUE(sql.Contains(wxT("GROUP BY wh")));
@@ -739,7 +739,7 @@ TEST(MaterializeRead, AnUnperiodisedTurnoverFoldsTheWholeInterval) {
 TEST(MaterializeRead, RunningFormWithoutAGrainIsRefused) {
     ibMaterializeReadSpec r = ReadFixture();   // m_grain stays Whole
     r.m_columns = {
-        { wxT("Qty_OpeningBalance"), wxT("qty_turn"), wxString(), ibMaterializeAgg::RunningSum, ibMaterializeWhen::Always, true },
+        { wxT("Qty_OpeningBalance"), wxT("qty_turn"), ibString(), ibMaterializeAgg::RunningSum, ibMaterializeWhen::Always, true },
     };
     EXPECT_THROW(ReadSql(r), ibBackendQueryException);
 }

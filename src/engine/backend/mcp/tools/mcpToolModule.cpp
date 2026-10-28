@@ -42,8 +42,8 @@ namespace {
 // function existed anywhere in the tree — which stood only because the file it lives in was never
 // listed in backend.vcxproj and therefore never compiled (found 2026-09-01, the same day the file
 // was added to the project). Adding it to the build is what asked the question.
-bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const wxString& text,
-	ibDataNode& result, wxString& refusal)
+bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const ibString& text,
+	ibDataNode& result, ibString& refusal)
 {
 	if (module == nullptr) {
 		refusal = ibMcpText("There is no module to write to.");
@@ -58,15 +58,15 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const wxString& text,
 	// control gives.
 	const ibScriptCheckAnswer checked = ibCheckModule(module);
 
-	result.AddField(wxT("written"), ibDataValue::Bool(true));
+	result.AddField(ibT("written"), ibDataValue::Bool(true));
 
 	// ⭐ HOW MUCH IS ACTUALLY IN THERE, read back from the module rather than counted off the
 	// argument. "Checked and clean" is true of an EMPTY module too, so on its own it cannot tell a
 	// caller whether their text arrived — this is the field that can, and it costs a getter.
-	result.AddField(wxT("characters"),
-		ibDataValue::Int((s64)module->GetModuleText().Length()));
+	result.AddField(ibT("characters"),
+		ibDataValue::Int((std::int64_t)module->GetModuleText().Length()));
 
-	result.AddField(wxT("checked"),
+	result.AddField(ibT("checked"),
 		ibDataValue::Bool(checked.m_outcome == ibScriptCheckOutcome::Checked));
 
 	// 🛑 `checked: false` IS NOT `diagnostics: []` — AND A BARE FLAG LETS IT BE READ AS ONE. Nothing
@@ -79,7 +79,7 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const wxString& text,
 	// RUN. That is a fact about the object, not about the text, and it is what the caller needs to
 	// hear — the text IS stored either way.
 	if (checked.m_outcome != ibScriptCheckOutcome::Checked)
-		result.SetValue(wxT("checkedNote"),
+		result.SetValue(ibT("checkedNote"),
 			ibMcpText("The text is written, and NOTHING WAS COMPILED - so the empty `diagnostics` "
 			  "means nobody looked, not that the module is clean. A module is compiled where it "
 			  "lives, and it gets there when its owner is run; an object created but never run has "
@@ -90,20 +90,20 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const wxString& text,
 	for (const ibDiagnostic& diagnostic : checked.m_diagnostics) {
 
 		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-		entry->AddField(wxT("line"), ibDataValue::Int((s64)diagnostic.m_line));
-		entry->SetValue(wxT("message"), diagnostic.m_message);
+		entry->AddField(ibT("line"), ibDataValue::Int((std::int64_t)diagnostic.m_line));
+		entry->SetValue(ibT("message"), diagnostic.m_message);
 		if (!diagnostic.m_codeLine.IsEmpty())
-			entry->SetValue(wxT("codeLine"), diagnostic.m_codeLine);
+			entry->SetValue(ibT("codeLine"), diagnostic.m_codeLine);
 
 		diagnostics.push_back(ibDataValue::Child(entry));
 	}
 
-	result.AddField(wxT("diagnostics"), ibDataValue::Array(diagnostics));
+	result.AddField(ibT("diagnostics"), ibDataValue::Array(diagnostics));
 
 	// ⭐ WHAT IT TAKES FOR THE TEXT TO RUN, said where the text was written. An application runs what the
 	// base holds and keeps the bytecode it came up with, so a module written here runs nowhere yet — and a
 	// restart alone brought the OLD text up with nothing said (measured 2026-09-11). The path is two calls.
-	result.SetValue(wxT("toRun"),
+	result.SetValue(ibT("toRun"),
 		ibMcpText("Written into the configuration here, not into the base: the application runs it after "
 		  "config_apply (a module's text needs no exclusive mode) and a restart - app_run restart: true."));
 	return true;
@@ -115,7 +115,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgId()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		// ⚠ THE MODULE'S, NOT ITS OWNER'S — the one question a caller actually has here, and the
 		// sentence used to answer it with "the same one module_write takes", inside module_write.
 		// metadata_properties on the object names it: ObjectModule / ManagerModule carry their own id.
@@ -126,7 +126,7 @@ const ibArg& ArgId()
 
 const ibArg& ArgFind()
 {
-	static const ibArg s_a(wxT("find"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("find"), ibArg::Kind::Text,
 		ibMcpText("The exact text to replace, whitespace and all. Include enough of the surrounding "
 			  "lines to make it occur only once."), /*required*/ true);
 	return s_a;
@@ -134,14 +134,14 @@ const ibArg& ArgFind()
 
 const ibArg& ArgReplace()
 {
-	static const ibArg s_a(wxT("replace"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("replace"), ibArg::Kind::Text,
 		ibMcpText("What to put there. Empty deletes the fragment."));
 	return s_a;
 }
 
 const ibArg& ArgText()
 {
-	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("text"), ibArg::Kind::Text,
 		ibMcpText("The whole module text - this REPLACES what is there, it does not add to it "
 			  "(module_patch edits a part, module_read shows what is there now). Write it in "
 			  "the syntax form this configuration uses - syntax_search answers which one that is."),
@@ -151,7 +151,7 @@ const ibArg& ArgText()
 
 const ibArg& ArgClear()
 {
-	static const ibArg s_a(wxT("clear"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("clear"), ibArg::Kind::Flag,
 		ibMcpText("Yes, erase this module's code - required when `text` is empty, so that emptying a "
 			  "module is something asked for rather than something that happens."));
 	return s_a;
@@ -166,21 +166,21 @@ const ibArg& ArgClear()
 class ibMcpToolModulePatch : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("module_patch"); }
+	ibString GetName() const override { return ibT("module_patch"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("patching the module '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("patching the module '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDetail(const ibDataNode& params) const override
+	ibString GetDetail(const ibDataNode& params) const override
 	{
 		// WHAT IS GOING IN, shown the way the whole-write shows its text — a person watching should
 		// see the change, not just that one happened.
-		return ibMcpFencedExcerpt(ArgReplace().Text(params), wxT("oes"));
+		return ibMcpFencedExcerpt(ArgReplace().Text(params), ibT("oes"));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Replace ONE exact fragment of a module's text, leaving the rest untouched. Prefer "
 			"this to module_write for anything short of a rewrite: a whole-module write silently "
@@ -196,7 +196,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
 		if (object == nullptr)
@@ -206,14 +206,14 @@ public:
 		if (module == nullptr)
 			return false;
 
-		const wxString find = ArgFind().Text(params);
+		const ibString find = ArgFind().Text(params);
 
 		if (find.IsEmpty()) {
 			refusal = ibMcpText("Say what to replace - an empty `find` matches everywhere and nowhere.");
 			return false;
 		}
 
-		const wxString before = module->GetModuleText();
+		const ibString before = module->GetModuleText();
 
 		// ⭐ COUNTED, NOT JUST FOUND. "Is it there" and "is there exactly one" are different
 		// questions, and only the second one licenses an edit.
@@ -221,7 +221,7 @@ public:
 		size_t at = before.find(find);
 		const size_t first = at;
 
-		while (at != wxString::npos) {
+		while (at != ibString::npos) {
 			occurrences++;
 			at = before.find(find, at + 1);
 		}
@@ -233,13 +233,13 @@ public:
 		}
 
 		if (occurrences > 1) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("That text appears %u times, so there is no single place it means. Include more "
 				  "of the surrounding lines."), (unsigned)occurrences);
 			return false;
 		}
 
-		wxString after = before;
+		ibString after = before;
 		after.replace(first, find.length(), ArgReplace().Text(params));
 
 		// THE SAME DOOR THE WHOLE WRITE USES, so a patched module is compiled, stored and reported
@@ -248,8 +248,8 @@ public:
 		if (!ibMcpWriteModule(module, after, result, refusal))
 			return false;
 
-		result.SetValue(wxT("module"), module->GetName());
-		result.AddField(wxT("replaced"), ibDataValue::Int(1));
+		result.SetValue(ibT("module"), module->GetName());
+		result.AddField(ibT("replaced"), ibDataValue::Int(1));
 
 		return true;
 	}
@@ -277,14 +277,14 @@ MCP_TOOL_REGISTER(ibMcpToolModulePatch);
 class ibMcpToolModuleRead : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("module_read"); }
+	ibString GetName() const override { return ibT("module_read"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("reading the module '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("reading the module '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("The text of a module, as it stands - an object module, a manager module, a "
 			"common module. Line numbers are the ones the editor and debug_breakpoint count "
@@ -299,7 +299,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
 		if (object == nullptr)
@@ -307,16 +307,16 @@ public:
 
 		const ibValueMetaObjectModuleBase* module = nullptr;
 		if (!object->ConvertToValue(module)) {
-			refusal = wxString::Format(ibMcpText("'%s' is not a module."), object->GetName());
+			refusal = ibString::Format(ibMcpText("'%s' is not a module."), object->GetName());
 			return false;
 		}
 
-		const wxString text = module->GetModuleText();
+		const ibString text = module->GetModuleText();
 
 		ibMcpSayObject(object, result);
-		result.SetValue(wxT("text"), text);
-		result.AddField(wxT("lines"), ibDataValue::Int(
-			(s64)(text.IsEmpty() ? 0 : text.Freq('\n') + 1)));
+		result.SetValue(ibT("text"), text);
+		result.AddField(ibT("lines"), ibDataValue::Int(
+			(std::int64_t)(text.IsEmpty() ? 0 : text.Freq('\n') + 1)));
 
 		// 🛑⭐ WHAT THE PLATFORM WILL CALL IN HERE, which it has always known and never said. A
 		// module is not a free-form file: the platform calls handlers in it BY NAME, with a fixed
@@ -336,36 +336,36 @@ public:
 
 		for (size_t idx = 0; idx < module->GetDefaultProcedureCount(); ++idx) {
 
-			const wxString name = module->GetDefaultProcedureName(idx);
+			const ibString name = module->GetDefaultProcedureName(idx);
 			if (name.IsEmpty())
 				continue;
 
-			const std::vector<wxString> args = module->GetDefaultProcedureArgs(idx);
+			const std::vector<ibString> args = module->GetDefaultProcedureArgs(idx);
 			const bool isFunction =
 				module->GetDefaultProcedureType(idx) == ibContentHelper::eFunctionHelper;
 
 			// The CALL FORM, not the name alone: the argument list is part of the contract, and a
 			// handler declared with the wrong arity is as unreachable as one misnamed.
-			wxString signature = name + wxT("(");
+			ibString signature = name + ibT("(");
 			for (size_t argIdx = 0; argIdx < args.size(); ++argIdx) {
 				if (argIdx > 0)
-					signature += wxT(", ");
+					signature += ibT(", ");
 				signature += args[argIdx];
 			}
-			signature += wxT(")");
+			signature += ibT(")");
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("name"), name);
-			entry->SetValue(wxT("declare"),
-				(isFunction ? wxT("Function ") : wxT("Procedure ")) + signature);
-			entry->AddField(wxT("returnsValue"), ibDataValue::Bool(isFunction));
+			entry->SetValue(ibT("name"), name);
+			entry->SetValue(ibT("declare"),
+				(isFunction ? ibT("Function ") : ibT("Procedure ")) + signature);
+			entry->AddField(ibT("returnsValue"), ibDataValue::Bool(isFunction));
 
 			handlers.push_back(ibDataValue::Child(entry));
 		}
 
 		if (!handlers.empty()) {
-			result.AddField(wxT("handlers"), ibDataValue::Array(handlers));
-			result.SetValue(wxT("handlersNote"),
+			result.AddField(ibT("handlers"), ibDataValue::Array(handlers));
+			result.SetValue(ibT("handlersNote"),
 				ibMcpText("The platform calls these in this module, by these names and with these "
 				  "arguments. A handler spelled otherwise is never reached - it is not an error, "
 				  "it simply never runs. Declaring one is optional; declaring it wrongly is the "
@@ -375,7 +375,7 @@ public:
 		// ⭐ AN EMPTY MODULE IS AN ANSWER, and one worth spelling out: it looks exactly like a
 		// module whose code failed to arrive, and the difference decides what to do next.
 		if (text.IsEmpty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("This module is empty - it has no code at all. If something was expected to "
 				  "happen here (a document posting, a form event), that is why it does not."));
 
@@ -391,31 +391,31 @@ MCP_TOOL_REGISTER(ibMcpToolModuleRead);
 class ibMcpToolModuleWrite : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("module_write"); }
+	ibString GetName() const override { return ibT("module_write"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		// ⭐ HOW MUCH CODE, not just which module. "Writing the module 'ObjectModule'" is the same
 		// sentence for a one-line fix and for a rewrite of the whole thing — and those are the two
 		// cases a person watching most wants to tell apart. The text is right here in the
 		// arguments, so the size costs nothing to say.
-		const wxString text = ArgText().Text(params);
+		const ibString text = ArgText().Text(params);
 
 		if (text.IsEmpty())
-			return wxString::Format(ibMcpText("emptying the module '%s'"), ibMcpNameOf(params));
+			return ibString::Format(ibMcpText("emptying the module '%s'"), ibMcpNameOf(params));
 
-		return wxString::Format(ibMcpText("writing %u lines into the module '%s'"),
+		return ibString::Format(ibMcpText("writing %u lines into the module '%s'"),
 			(unsigned)(text.Freq('\n') + 1), ibMcpNameOf(params));
 	}
 
 	// THE CODE ITSELF, under that headline. This is the one a developer most wants to see without
 	// going to the editor: what was actually put in their module, in their own language.
-	wxString GetDetail(const ibDataNode& params) const override
+	ibString GetDetail(const ibDataNode& params) const override
 	{
-		return ibMcpFencedExcerpt(ArgText().Text(params), wxT("oes"));
+		return ibMcpFencedExcerpt(ArgText().Text(params), ibT("oes"));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("REPLACE the text of a module - a document's object module, a common module, a "
 			"manager module. The whole text, not an addition: module_patch edits a part and "
@@ -439,7 +439,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		// The shared door, as module_patch beside it uses — one lookup, one refusal, and the
 		// open-configuration test comes with it.
@@ -462,9 +462,9 @@ public:
 		//
 		// Emptiness itself stays legal — clearing a module is a real thing to ask for. The KIND is
 		// what is checked, which is the same rule ibMcpSetProperty already applies to properties.
-		const ibDataValue* incoming = params.FindField(ArgText().Name());
+		auto incoming = params.FindField(ArgText().Name());
 
-		if (incoming == nullptr || incoming->Kind() != ibDataKind::String) {
+		if (!incoming || incoming->Kind() != ibDataKind::String) {
 			refusal = ibMcpText("'text' must be a string holding the module's source. Nothing was written.");
 			return false;
 		}

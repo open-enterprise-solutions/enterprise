@@ -17,7 +17,7 @@
       "return_descr": "",
       "example": "// отбор по текущему пользователю через регистр доступа\nProcedure OnAccessRead(Source, Operation, Allowed)\n{\n    if (Source = \"Catalog.Товары\") {\n        Source = restrict s in Source\n                     join a in Data.Registers.ДоступКСкладам.Where(Function(a) { Return a.Пользователь = CurrentUser(); })\n                         on s.Склад = a.Склад;\n    }\n    Allowed = True;\n}",
       "example_ves": "// отбор по текущему пользователю через регистр доступа\nProcedure OnAccessRead(Source, Operation, Allowed)\n    If Source = \"Catalog.Товары\" Then\n        Source = restrict s in Source\n                     join a in Data.Registers.ДоступКСкладам.Where(Function(a) Return a.Пользователь = CurrentUser(); EndFunction)\n                         on s.Склад = a.Склад;\n    EndIf;\n    Allowed = True;\nEndProcedure",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": ["ev.Role.OnAccessRead", "ev.Role.OnAccessWrite", "cls.QueryDecorator", "kw.Restrict", "guide.query"],
       "reviewed": true
     },
@@ -34,7 +34,7 @@
       "parameters": "Source — источник как запрашиваемый объект (см. QueryDecorator); сравнивается с полным именем источника (`\"Catalog.Товары\"`).\nOperation — строка операции; для чтения всегда `\"Read\"`.\nAllowed — вердикт по ссылке (по умолчанию Ложь): `True` разрешает доступ при сложенном ограничении.",
       "return_descr": "",
       "example": "// разыменование через точку работает: платформа сама построит соединение\nProcedure OnAccessRead(Source, Operation, Allowed)\n{\n    if (Source = \"Document.Расходная\") {\n        Source = Source.Where(Function(x) { Return x.Договор.Организация = ТекущаяОрганизация(); });\n    }\n    Allowed = True;\n}",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": ["guide.rls", "ev.Role.OnAccessWrite", "cls.QueryDecorator", "kw.Restrict"],
       "reviewed": true
     },
@@ -51,7 +51,7 @@
       "parameters": "Source — источник как запрашиваемый объект; сравнивается с полным именем.\nOperation — `\"Create\"` | `\"Write\"` | `\"Delete\"`.\nAllowed — вердикт по ссылке (по умолчанию Ложь).",
       "return_descr": "",
       "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": ["guide.rls", "ev.Role.OnAccessRead", "cls.QueryDecorator"],
       "reviewed": true
     },
@@ -68,7 +68,7 @@
       "parameters": "",
       "return_descr": "Возвращают тот же источник с вложенным ограничением — присваивайте результат обратно в Source.",
       "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": ["guide.rls", "kw.Restrict", "ev.Role.OnAccessRead"],
       "reviewed": true
     }

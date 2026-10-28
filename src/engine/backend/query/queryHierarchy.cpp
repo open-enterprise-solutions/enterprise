@@ -36,8 +36,8 @@ void ReadChildrenMap(const ibBackendQueryable* target, std::unordered_map<ibValu
 	// filter would report a subtree missing its branches and look like a correct total.
 	ibDataQueryBuilder q;
 	q.From(target);
-	q.Select(rowKey, wxEmptyString);
-	q.Select(parent, wxEmptyString);
+	q.Select(rowKey, ibEmptyString);
+	q.Select(parent, ibEmptyString);
 
 	ibDataQueryResult rows = q.Execute(ibReadPageRequest{});
 	while (rows.Next()) {
@@ -72,7 +72,7 @@ std::vector<const ibBackendQueryable*> TargetsOfColumn(const ibBackendQueryable*
 	if (targets.empty())
 		for (const ibValue& value : named)
 			if (!value.IsEmpty())
-				ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure, wxString::Format(
+				ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure, ibString::Format(
 					_("IN HIERARCHY over '%s', which names no catalog - give the column a type: declare it on the table, "
 					  "or select CAST(%s AS Catalog.<Name>)"),
 					column->GetName(), column->GetName()));

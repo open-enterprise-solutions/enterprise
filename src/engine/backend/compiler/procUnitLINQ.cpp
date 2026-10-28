@@ -31,6 +31,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "procUnitLambda.h"   // ibValueFunction full def + AsFunction / AsIterator
+#include "core/fiber/fiber.h"  // StackLow — a pipeline entered with no stack left refuses, it does not fault
 
 #include "backend/query/queryException.h"   // ibBackendQueryLinqException — the pipeline refuses in its own variety
 #include "backend/query/queryRamTable.h"   // ibQueryRamTable — …filled first, then loaded into it (TableOfRows)
@@ -64,30 +65,15 @@ IB_NOINLINE static void RefuseLambdaCall(const ibByteCode::ibByteFunction* bfn, 
 	ibBackendQueryLinqException::Error(_("Lambda must accept at least %ld argument(s)"), argCount);
 }
 
-// The parameters the caller did not pass, from their compile-time defaults — refused for one that has none.
-IB_NOINLINE static void FillLambdaDefaults(ibValueFunction& fn, const ibByteCode::ibByteFunction* bfn,
-                                           ibRunContext& frame, long from)
-{
-	const ibByteCode* const pLocalByteCode = fn.GetParentBc();
-	for (long i = from; i < (long)bfn->m_listParam.size(); i++) {
-		const ibParamRunUnit& puDef = bfn->m_listParam[i].m_defaultValue;
-		if (puDef.m_numArray == DEF_VAR_SKIP) {
-			ibBackendQueryLinqException::Error(
-				_("Lambda missing required argument '%s'"), bfn->m_listParam[i].m_strName);
-		}
-		CopyValue(frame.m_pLocVars[i], pLocalByteCode->m_listConst[puDef.m_numIndex]);
-	}
-}
-
 // Lambda invocation with N bound-by-ref args from host (C++) code.
 // Mirrors Phase 1+2 of OPER_CALL_LAMBDA minus the OPER_SET/SETCONST
 // tape walk — args come from C++ pointers, not bytecode operands.
 // argPtrs[0..argCount-1] are bound to param slots 0..argCount-1 by
 // reference; trailing lambda params (argCount..paramCount-1) are
-// filled from compile-time defaults and throw if required-without-
-// default. Used by both the single-arg LINQ thin wrappers below
-// (Where/Select/SkipWhile/...) and the two-arg Join projection +
-// Aggregate reducer.
+// filled from compile-time defaults by ibRunContext::Enter, which
+// refuses one declared without a default. Used by both the
+// single-arg LINQ thin wrappers below (Where/Select/SkipWhile/...)
+// and the two-arg Join projection + Aggregate reducer.
 static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
                                 long argCount, ibValue& retVal)
 {
@@ -147,7 +133,6 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 
 	cRunContext.m_lStart          = bfn->m_lCodeLine + 1;
 	cRunContext.m_lParamCount     = lambdaParamCount;
-	cRunContext.m_currentFunction = bfn;
 
 	for (long i = 0; i < argCount; ++i) {
 		if (bHeapFrame)
@@ -156,9 +141,13 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 			cRunContext.m_pRefLocVars[i] = argPtrs[i];
 	}
 
-	// Missing tail params from compile-time defaults.
-	if (argCount < lambdaParamCount)
-		FillLambdaDefaults(fn, bfn, cRunContext, argCount);
+	// The tail the pipeline does not pass is left out, and the frame enters the lambda the way
+	// every body is entered — the defaults from the lambda's own module (ibRunContext::Enter).
+	for (long i = argCount; i < lambdaParamCount; ++i)
+		cRunContext.m_pRefLocVars[i] = nullptr;
+	// Its outside, as OPER_CALL_LAMBDA wires it: a lambda made in this body walks out from here (OPER_LFUNC).
+	cRunContext.m_parentRunContext = fn.GetCaptured() != nullptr ? fn.GetCaptured() : fn.m_moduleFrame;
+	cRunContext.Enter(bfn, fn.GetParentBc());
 
 	fn.Execute(&cRunContext, &retVal, /*bDelta*/false);
 
@@ -186,6 +175,13 @@ bool ibValueFunction::Dispatch(ibProcUnit* /*runtime*/, ibValue** args, long arg
 {
 	std::vector<ibValue*> params(args, args + argc);
 	params.push_back(&outCancel);
+	// ⭐ …AS MANY OF THEM AS THE LAMBDA DECLARES — the rule a named handler is called by (ibProcUnit::CallAsProc binds
+	// the lesser of given and declared). The trailing cancel is the dispatch's, not the event's: OnActivateRow declares
+	// (Control), and `Function(Control) {…}` was refused "must accept at least 2" where the procedure ran (2026-10-28).
+	// The pipelines keep the strict count: a projection given two values and declaring one is a mistake there.
+	if (const ibByteCode::ibByteFunction* const bfn = GetFunction())
+		if (params.size() > bfn->m_listParam.size())
+			params.resize(bfn->m_listParam.size());
 	ibValue ret;
 	CallLambdaWithArgs(*this, params.data(), (long)params.size(), ret);
 	return outCancel.GetBoolean();
@@ -575,8 +571,8 @@ inline T* LinqCast(ibValue* held, ibClassID clsid)
 // The two members of a group — declared ONCE, which is exactly what makes them ordinals.
 inline void ibBindLinqGroupMembers(ibValue::ibMemberTable& helper, const ibValue*)
 {
-	helper.AppendProp(wxT("Key"),    true, false, 0);
-	helper.AppendProp(wxT("Values"), true, false, 1);
+	helper.AppendProp(ibT("Key"),    true, false, 0);
+	helper.AppendProp(ibT("Values"), true, false, 1);
 }
 
 class ibValueLinqRows;
@@ -597,8 +593,8 @@ public:
 	// question two names can answer outright, without the virtual hop into the general machinery.
 	// It is asked once per `g.Key` and once per `g.Values`, i.e. per group of every grouped loop.
 	virtual long FindProp(const ibString& name) const override {
-		if (stringUtils::CompareString(name, wxT("Key")))    return 0;
-		if (stringUtils::CompareString(name, wxT("Values"))) return 1;
+		if (stringUtils::IsSameAs(name, ibT("Key")))    return 0;
+		if (stringUtils::IsSameAs(name, ibT("Values"))) return 1;
 		return wxNOT_FOUND;
 	}
 
@@ -634,7 +630,7 @@ public:
 		// One constant, split once. `\n` separates the fields — an identifier cannot contain it.
 		ibString rest = names;
 		while (!rest.IsEmpty()) {
-			const int at = rest.Find(wxT('\n'));
+			const int at = rest.Find(ibT('\n'));
 			if (at == wxNOT_FOUND) { m_fields.push_back(rest); break; }
 			m_fields.push_back(rest.Left(at));
 			rest = rest.Mid(at + 1);
@@ -644,7 +640,7 @@ public:
 	virtual ibClassID GetClassType() const override { return g_valueLinqShape; }
 
 	virtual bool     IsEmpty()   const override { return m_fields.empty(); }
-	virtual ibString GetString() const override { return wxT("<row shape>"); }
+	virtual ibString GetString() const override { return ibT("<row shape>"); }
 
 	long Count() const { return (long)m_fields.size(); }
 	const ibString& NameAt(long i) const { return m_fields[(size_t)i]; }   // by reference — GetPropName lends it
@@ -654,7 +650,7 @@ public:
 	// a contiguous vector — no map, no member table, nothing built to answer it.
 	long Ordinal(const ibString& name) const {
 		for (size_t i = 0; i < m_fields.size(); ++i)
-			if (stringUtils::CompareString(m_fields[i], name))
+			if (stringUtils::IsSameAs(m_fields[i], name))
 				return (long)i;
 		return wxNOT_FOUND;
 	}
@@ -724,8 +720,8 @@ public:
 		// What a watch shows. Names included — the person reading it did not write the ordinals.
 		ibString text;
 		for (size_t i = 0; i < m_count; ++i) {
-			if (i != 0) text << wxT(", ");
-			if (m_shape != nullptr && (long)i < m_shape->Count()) text << m_shape->NameAt((long)i) << wxT("=");
+			if (i != 0) text << ibT(", ");
+			if (m_shape != nullptr && (long)i < m_shape->Count()) text << m_shape->NameAt((long)i) << ibT("=");
 			text << Values()[i].GetString();
 		}
 		return text;
@@ -868,7 +864,7 @@ public:
 			? m_view->Rows().empty()
 			: (m_rows.empty() && (m_index == nullptr || (m_index->m_buckets.empty() && m_index->m_seen.empty())));
 	}
-	virtual ibString GetString() const override { return wxT("<linq>"); }   // watch-safe, and dull
+	virtual ibString GetString() const override { return ibT("<linq>"); }   // watch-safe, and dull
 
 	// ⭐ FIRST TIME? — `Distinct`, entire. ORDERED rather than hashed, and see the note on the
 	// buckets below for the measurement that says to keep it that way.
@@ -1609,6 +1605,9 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 	using M = ibValue::ibLinqMethod;
 	const long realNum = static_cast<long>(method);
 
+	if (ibFiber::StackLow())
+		ibBackendQueryLinqException::Error(_("the query is nested deeper than the stack allows"));
+
 	if (self == nullptr) {
 		ibBackendQueryLinqException::Error(_("Cannot dispatch on null value"));
 	}
@@ -2069,7 +2068,7 @@ void ibValue::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
                                   ibValue** args, long n)
 {
 	if (IsReference() && m_pRef != nullptr && m_pRef != this) {
-		m_pRef->DispatchLinqMethod(method, ret, args, n);
+		GetRef()->DispatchLinqMethod(method, ret, args, n);
 		return;
 	}
 	ibValueLinqDispatchImpl(this, method, ret, args, n);
@@ -2090,44 +2089,44 @@ void ibValue::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
 	using M = ibValue::ibLinqMethod;
 	static const std::vector<ibLinqMethodInfo> table = {
-		{ M::Where,              L"Where",              L"Filter elements by a predicate fn(elem) -> bool" },
-		{ M::Select,             L"Select",             L"Project each element through fn(elem) -> newElem" },
-		{ M::Count,              L"Count",              L"Return total element count (drains the sequence)" },
-		{ M::ToArray,            L"ToArray",            L"Materialise the pipeline into an Array" },
-		{ M::First,              L"First",              L"Return the first element; throws if empty" },
-		{ M::Any,                L"Any",                L"True iff the sequence has at least one element" },
-		{ M::Distinct,           L"Distinct",           L"Filter duplicates (uses ibValue equality)" },
-		{ M::OrderBy,            L"OrderBy",            L"Sort ascending by fn(elem) -> key" },
-		{ M::OrderByDescending,  L"OrderByDescending",  L"Sort descending by fn(elem) -> key" },
-		{ M::GroupBy,            L"GroupBy",            L"Group by fn(elem) -> key; yields one group per key, with Key and Values" },
-		{ M::Join,               L"Join",               L"Inner equi-join: Join(inner, leftKey, rightKey, projection)" },
-		{ M::Skip,               L"Skip",               L"Skip the first n elements" },
-		{ M::Take,               L"Take",               L"Take at most n elements from the front" },
-		{ M::SkipWhile,          L"SkipWhile",          L"Skip leading elements while fn(elem) holds" },
-		{ M::TakeWhile,          L"TakeWhile",          L"Take leading elements while fn(elem) holds" },
-		{ M::Reverse,            L"Reverse",            L"Reverse the sequence (materialises upstream)" },
-		{ M::Concat,             L"Concat",             L"Concatenate with another iterable" },
-		{ M::Union,              L"Union",              L"Concat + Distinct" },
-		{ M::Intersect,          L"Intersect",          L"Elements present in both sequences" },
-		{ M::Except,             L"Except",             L"Elements present in this but not in the other" },
-		{ M::Last,                L"Last",                L"Return the last element; throws if empty" },
-		{ M::LastOrDefault,       L"LastOrDefault",       L"Return the last element or Empty" },
-		{ M::Single,              L"Single",              L"Return the only element; throws if 0 or >1" },
-		{ M::SingleOrDefault,     L"SingleOrDefault",     L"Return the only element; throws if >1" },
-		{ M::FirstOrDefault,      L"FirstOrDefault",      L"Return the first element or Empty" },
-		{ M::ElementAt,           L"ElementAt",           L"Return the n-th element; throws on out-of-range" },
-		{ M::ElementAtOrDefault,  L"ElementAtOrDefault",  L"Return the n-th element or Empty" },
-		{ M::Contains,            L"Contains",            L"True iff the sequence contains the given value" },
-		{ M::SequenceEqual,       L"SequenceEqual",       L"Element-wise equality vs another iterable" },
-		{ M::Aggregate,           L"Aggregate",           L"Fold via Aggregate(seed, fn(acc, elem) -> acc)" },
-		{ M::WhereIndexed,        L"WhereIndexed",        L"Filter with index - fn(elem, index) -> bool" },
-		{ M::SelectIndexed,       L"SelectIndexed",       L"Project with index - fn(elem, index) -> newElem" },
-		{ M::ToTable,             L"ToTable",             L"Materialise a data source into a value table (Queryable)" },
-		{ M::SelectMany,          L"SelectMany",          L"Flatten - fn(elem) -> a source, whose elements are yielded in turn" },
-		{ M::Sum,                 L"Sum",                 L"Total of the sequence; Sum(selector?) projects each element first" },
-		{ M::Min,                 L"Min",                 L"Smallest element; Min(selector?) compares the projection" },
-		{ M::Max,                 L"Max",                 L"Largest element; Max(selector?) compares the projection" },
-		{ M::Average,             L"Average",             L"Arithmetic mean; Average(selector?) averages the projection" },
+		{ M::Where,              ibT("Where"),              ibT("Filter elements by a predicate fn(elem) -> bool") },
+		{ M::Select,             ibT("Select"),             ibT("Project each element through fn(elem) -> newElem") },
+		{ M::Count,              ibT("Count"),              ibT("Return total element count (drains the sequence)") },
+		{ M::ToArray,            ibT("ToArray"),            ibT("Materialise the pipeline into an Array") },
+		{ M::First,              ibT("First"),              ibT("Return the first element; throws if empty") },
+		{ M::Any,                ibT("Any"),                ibT("True iff the sequence has at least one element") },
+		{ M::Distinct,           ibT("Distinct"),           ibT("Filter duplicates (uses ibValue equality)") },
+		{ M::OrderBy,            ibT("OrderBy"),            ibT("Sort ascending by fn(elem) -> key") },
+		{ M::OrderByDescending,  ibT("OrderByDescending"),  ibT("Sort descending by fn(elem) -> key") },
+		{ M::GroupBy,            ibT("GroupBy"),            ibT("Group by fn(elem) -> key; yields one group per key, with Key and Values") },
+		{ M::Join,               ibT("Join"),               ibT("Inner equi-join: Join(inner, leftKey, rightKey, projection)") },
+		{ M::Skip,               ibT("Skip"),               ibT("Skip the first n elements") },
+		{ M::Take,               ibT("Take"),               ibT("Take at most n elements from the front") },
+		{ M::SkipWhile,          ibT("SkipWhile"),          ibT("Skip leading elements while fn(elem) holds") },
+		{ M::TakeWhile,          ibT("TakeWhile"),          ibT("Take leading elements while fn(elem) holds") },
+		{ M::Reverse,            ibT("Reverse"),            ibT("Reverse the sequence (materialises upstream)") },
+		{ M::Concat,             ibT("Concat"),             ibT("Concatenate with another iterable") },
+		{ M::Union,              ibT("Union"),              ibT("Concat + Distinct") },
+		{ M::Intersect,          ibT("Intersect"),          ibT("Elements present in both sequences") },
+		{ M::Except,             ibT("Except"),             ibT("Elements present in this but not in the other") },
+		{ M::Last,                ibT("Last"),                ibT("Return the last element; throws if empty") },
+		{ M::LastOrDefault,       ibT("LastOrDefault"),       ibT("Return the last element or Empty") },
+		{ M::Single,              ibT("Single"),              ibT("Return the only element; throws if 0 or >1") },
+		{ M::SingleOrDefault,     ibT("SingleOrDefault"),     ibT("Return the only element; throws if >1") },
+		{ M::FirstOrDefault,      ibT("FirstOrDefault"),      ibT("Return the first element or Empty") },
+		{ M::ElementAt,           ibT("ElementAt"),           ibT("Return the n-th element; throws on out-of-range") },
+		{ M::ElementAtOrDefault,  ibT("ElementAtOrDefault"),  ibT("Return the n-th element or Empty") },
+		{ M::Contains,            ibT("Contains"),            ibT("True iff the sequence contains the given value") },
+		{ M::SequenceEqual,       ibT("SequenceEqual"),       ibT("Element-wise equality vs another iterable") },
+		{ M::Aggregate,           ibT("Aggregate"),           ibT("Fold via Aggregate(seed, fn(acc, elem) -> acc)") },
+		{ M::WhereIndexed,        ibT("WhereIndexed"),        ibT("Filter with index - fn(elem, index) -> bool") },
+		{ M::SelectIndexed,       ibT("SelectIndexed"),       ibT("Project with index - fn(elem, index) -> newElem") },
+		{ M::ToTable,             ibT("ToTable"),             ibT("Materialise a data source into a value table (Queryable)") },
+		{ M::SelectMany,          ibT("SelectMany"),          ibT("Flatten - fn(elem) -> a source, whose elements are yielded in turn") },
+		{ M::Sum,                 ibT("Sum"),                 ibT("Total of the sequence; Sum(selector?) projects each element first") },
+		{ M::Min,                 ibT("Min"),                 ibT("Smallest element; Min(selector?) compares the projection") },
+		{ M::Max,                 ibT("Max"),                 ibT("Largest element; Max(selector?) compares the projection") },
+		{ M::Average,             ibT("Average"),             ibT("Arithmetic mean; Average(selector?) averages the projection") },
 	};
 	return table;
 }
@@ -2137,7 +2136,7 @@ const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
 // emit, runtime never. Case-insensitive match per OES convention.
 long ibValue::FindLinqMethodByName(const ibString& name) {
 	for (const auto& info : GetLinqMethodTable()) {
-		if (stringUtils::CompareString(name, info.name))
+		if (stringUtils::IsSameAs(name, info.name))
 			return (long)info.id;
 	}
 	return -1;
@@ -2210,7 +2209,7 @@ ibRowColumns ColumnsOfRowItself(const ibValueLinqRows& kept)
 
 	if (answer.m_names.empty()) {
 		// `Value` is what this house calls the one column of a table it had to invent a name for.
-		answer.m_names.push_back(wxT("Value"));
+		answer.m_names.push_back(ibT("Value"));
 		answer.m_rowIsTheCell = true;
 	}
 	return answer;
@@ -2431,8 +2430,8 @@ bool ibLinqNamedColumns(const ibValue& row, std::vector<ibString>& outNames)
 
 	// A group is two columns and names them itself — the same two ordinals its members answer by.
 	if (LinqCast<ibValueLinqGroup>(held, g_valueLinqGroup) != nullptr) {
-		outNames.push_back(wxT("Key"));
-		outNames.push_back(wxT("Values"));
+		outNames.push_back(ibT("Key"));
+		outNames.push_back(ibT("Values"));
 		return true;
 	}
 

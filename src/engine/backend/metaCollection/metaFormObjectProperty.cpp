@@ -18,7 +18,7 @@ void ibValueMetaObjectForm::OnPropertySelected(ibProperty* property)
 	ibValueMetaObjectFormBase::OnPropertySelected(property);
 }
 
-void ibValueMetaObjectForm::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObjectForm::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	if (property == m_properyFormType) {
 		if (auto* cc = m_metaData->GetCompileCache()) {

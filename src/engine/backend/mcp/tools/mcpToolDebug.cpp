@@ -40,7 +40,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgStop()
 {
-	static const ibArg s_a(wxT("stop"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("stop"), ibArg::Kind::Flag,
 		ibMcpText("Detach AND end the application - the menu's Stop debugging program. Whatever it "
 		  "was doing does not finish, so this is not the polite way to close it: it is for a "
 		  "runtime that is stuck or that must not go on."));
@@ -56,28 +56,28 @@ const ibArg& ArgStop()
 // half of the same rule — `id` is a number, a name is a name.)
 const ibArg& ArgModule()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The module's NodeId - metadata_tree and metadata_get give it."));
 	return s_a;
 }
 
 const ibArg& ArgLine()
 {
-	static const ibArg s_a(wxT("line"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("line"), ibArg::Kind::Whole,
 		ibMcpText("Line number, 1-based - the number the journal and the editor both show."));
 	return s_a;
 }
 
 const ibArg& ArgRemove()
 {
-	static const ibArg s_a(wxT("remove"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("remove"), ibArg::Kind::Flag,
 		ibMcpText("Take the breakpoint off instead of putting it on."));
 	return s_a;
 }
 
 const ibArg& ArgCondition()
 {
-	static const ibArg s_a(wxT("condition"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("condition"), ibArg::Kind::Text,
 		ibMcpText("Stop only when this is true - an expression in the module's own dialect, evaluated in "
 			  "the frame that reaches the line, with its locals (`Employee.Code = \"0042\"`, `i > 500`). "
 			  "Leave it out to stop every time. Setting a breakpoint that is already there gives it the "
@@ -88,7 +88,7 @@ const ibArg& ArgCondition()
 
 const ibArg& ArgAll()
 {
-	static const ibArg s_a(wxT("all"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("all"), ibArg::Kind::Flag,
 		ibMcpText("Clear EVERY breakpoint, in every module - then module and line are not used. "
 			  "Breakpoints outlive the run that needed them, and a forgotten one stops somebody "
 			  "else's."));
@@ -97,7 +97,7 @@ const ibArg& ArgAll()
 
 const ibArg& ArgExpression()
 {
-	static const ibArg s_a(wxT("expression"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("expression"), ibArg::Kind::Text,
 		ibMcpText("The expression, exactly as it would be written in the module."), /*required*/ true);
 	return s_a;
 }
@@ -108,7 +108,7 @@ const ibArg& ArgText()
 	// else it arrives — module_write, script_check, a report's query — while `code` in this platform
 	// is a BUSINESS FIELD: the Code of a catalog item, which is what predefined_* means by it. Two
 	// meanings under one name cost a step every time somebody guesses which one this is.
-	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("text"), ibArg::Kind::Text,
 		ibMcpText("Whole statements, in the configuration's own dialect - platform_state says which. "
 			  "Everything it writes is rolled back, so read what you need INSIDE it: the last "
 			  "value, or `Result`, comes back as the answer - along with `microseconds`, how long "
@@ -118,31 +118,31 @@ const ibArg& ArgText()
 
 const ibArg& ArgMembers()
 {
-	static const ibArg s_a(wxT("members"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("members"), ibArg::Kind::Flag,
 		ibMcpText("Unfold the value into its parts instead of printing it."));
 	return s_a;
 }
 
 const ibArg& ArgAction()
 {
-	static const ibArg s_a(wxT("action"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("action"), ibArg::Kind::Text,
 		ibMcpText("What to do with the stopped runtime: continue it, step over the line, step into "
 			  "the call, step out to the line after the call that entered this procedure, or pause "
 			  "a runtime that is running."),
-			/*required*/ true, { wxT("continue"), wxT("over"), wxT("into"), wxT("out"), wxT("pause") });
+			/*required*/ true, { ibT("continue"), ibT("over"), ibT("into"), ibT("out"), ibT("pause") });
 	return s_a;
 }
 
 const ibArg& ArgHost()
 {
-	static const ibArg s_a(wxT("host"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("host"), ibArg::Kind::Text,
 		ibMcpText("Which runtime, as debug_sessions reports it. Omit to take every ready one."));
 	return s_a;
 }
 
 const ibArg& ArgPort()
 {
-	static const ibArg s_a(wxT("port"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("port"), ibArg::Kind::Whole,
 		ibMcpText("Its port, as debug_sessions reports it. Required when host is given - a host alone "
 			  "does not name a runtime, since two can run on one machine."));
 	return s_a;
@@ -150,7 +150,7 @@ const ibArg& ArgPort()
 
 const ibArg& ArgDetach()
 {
-	static const ibArg s_a(wxT("detach"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("detach"), ibArg::Kind::Flag,
 		ibMcpText("Let it go instead of taking it. The runtime keeps running; it simply stops "
 			  "stopping. This is the Debug menu's Stop debugging."));
 	return s_a;
@@ -158,7 +158,7 @@ const ibArg& ArgDetach()
 
 // Every tool here needs the same two things, and both refuse in words rather
 // than in silence: a debugger to talk to, and a bridge that has been listening.
-ibMcpDebugBridge* Bridge(wxString& refusal)
+ibMcpDebugBridge* Bridge(ibString& refusal)
 {
 	if (debugClient == nullptr) {
 		refusal = ibMcpText("This process has no debugger client.");
@@ -178,28 +178,28 @@ ibMcpDebugBridge* Bridge(wxString& refusal)
 // the same key the editor uses when a developer clicks the margin - the document
 // is literally named by it - and it is the one identifier that survives the
 // object being renamed.
-wxString ModuleDocPath(const ibDataNode& params, wxString& moduleName, wxString& refusal)
+ibString ModuleDocPath(const ibDataNode& params, ibString& moduleName, ibString& refusal)
 {
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 		refusal = ibMcpText("No configuration is open.");
-		return wxEmptyString;
+		return ibEmptyString;
 	}
 
-	const s32 id = (s32)ArgModule().Whole(params);
+	const std::int32_t id = (std::int32_t)ArgModule().Whole(params);
 	if (id <= 0) {
 		refusal = ibMcpText("Pass the module's NodeId - metadata_get on the owning object lists it.");
-		return wxEmptyString;
+		return ibEmptyString;
 	}
 
 	ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id);
 	if (object == nullptr) {
-		refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id);
-		return wxEmptyString;
+		refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id);
+		return ibEmptyString;
 	}
 
 	ibValueMetaObjectModuleBase* module = ibMcpModuleOf(object, refusal);
 	if (module == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	moduleName = module->GetName();
 	return module->GetDocPath();
@@ -208,15 +208,15 @@ wxString ModuleDocPath(const ibDataNode& params, wxString& moduleName, wxString&
 ibDataValue MemberEntry(const ibMcpDebugBridge::Local& member)
 {
 	std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-	node->SetValue(wxT("name"), member.m_name);
-	node->SetValue(wxT("value"), member.m_value);
+	node->SetValue(ibT("name"), member.m_name);
+	node->SetValue(ibT("value"), member.m_value);
 	if (!member.m_type.IsEmpty())
-		node->SetValue(wxT("type"), member.m_type);
+		node->SetValue(ibT("type"), member.m_type);
 
 	// WHETHER IT OPENS FURTHER. Without it a caller cannot tell a value that has
 	// no parts from one whose parts were simply not asked for.
 	if (member.m_hasAttributes)
-		node->AddField(wxT("hasMembers"), ibDataValue::Bool(true));
+		node->AddField(ibT("hasMembers"), ibDataValue::Bool(true));
 
 	return ibDataValue::Child(node);
 }
@@ -230,9 +230,9 @@ ibDataValue MemberEntry(const ibMcpDebugBridge::Local& member)
 class ibMcpToolDebugBreakpoint : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("debug_breakpoint"); }
+	ibString GetName() const override { return ibT("debug_breakpoint"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		// ⚠ THE SWEEPING CASE SAYS SO. `all` takes every breakpoint out of every module and uses
 		// neither module nor line — so the ordinary sentence rendered it as "taking the breakpoint
@@ -242,14 +242,14 @@ public:
 		if (ArgAll().Flag(params))
 			return ibMcpText("taking every breakpoint off, in every module");
 
-		return wxString::Format(ArgRemove().Flag(params)
+		return ibString::Format(ArgRemove().Flag(params)
 				? ibMcpText("taking the breakpoint off '%s' line %i")
 				: ibMcpText("putting a breakpoint on '%s' line %i"),
 			ibMcpNameOf(params, ArgModule().Name()),
-			(int)(s32)ArgLine().Whole(params));
+			(int)(std::int32_t)ArgLine().Whole(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Put a breakpoint on a line of a module, or take one off - the line where the "
 			"program stops, so its variables can be read (debug_evaluate) and stepped on from (debug_run: "
@@ -270,7 +270,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (debugClient == nullptr) {
 			refusal = ibMcpText("This process has no debugger client.");
@@ -283,33 +283,33 @@ public:
 
 			debugClient->RemoveAllBreakpoint();
 
-			result.AddField(wxT("done"), ibDataValue::Bool(true));
-			result.SetValue(wxT("action"), wxString(ibMcpText("removed all")));
-			result.SetValue(wxT("note"),
+			result.AddField(ibT("done"), ibDataValue::Bool(true));
+			result.SetValue(ibT("action"), ibString(ibMcpText("removed all")));
+			result.SetValue(ibT("note"),
 				ibMcpText("Every breakpoint is gone, in every module. Nothing will stop until one is set "
 				  "again."));
 			return true;
 		}
 
-		wxString moduleName;
-		const wxString docPath = ModuleDocPath(params, moduleName, refusal);
+		ibString moduleName;
+		const ibString docPath = ModuleDocPath(params, moduleName, refusal);
 		if (docPath.IsEmpty())
 			return false;
 
-		const s32 line = (s32)ArgLine().Whole(params);
+		const std::int32_t line = (std::int32_t)ArgLine().Whole(params);
 		if (line <= 0) {
 			refusal = ibMcpText("A line number is 1 or more.");
 			return false;
 		}
 
 		const bool remove = ArgRemove().Flag(params);
-		const wxString condition = ArgCondition().Text(params).Strip(wxString::both);
+		const ibString condition = ArgCondition().Text(params).Strip(ibString::both);
 
 		// ⭐ THE REASON IS ASKED FOR. Without the out-parameter the engine states it through the
 		// window the session owns — right for a person at the designer, useless to a caller on a
 		// socket, who then reads a bare "not accepted" and guesses (2026-09-02: the sentence went
 		// to a modal box in front of Max, and this tool answered "the debugger did not accept it").
-		wxString said;
+		ibString said;
 
 		// 🛑 THE CLIENT COUNTS LINES FROM 0, as the editor's margin does (LineFromPosition); this tool is
 		// told them from 1. It used to pass the number straight on, so every breakpoint set here landed on
@@ -322,15 +322,15 @@ public:
 
 		// WHAT HAPPENED, ALWAYS. A breakpoint that was refused and a breakpoint
 		// that was set look identical from outside unless the answer says which.
-		result.AddField(wxT("done"), ibDataValue::Bool(done));
-		result.SetValue(wxT("module"), moduleName);
-		result.AddField(wxT("line"), ibDataValue::Int((s64)line));
-		result.SetValue(wxT("action"), wxString(remove ? wxT("removed") : wxT("set")));
+		result.AddField(ibT("done"), ibDataValue::Bool(done));
+		result.SetValue(ibT("module"), moduleName);
+		result.AddField(ibT("line"), ibDataValue::Int((std::int64_t)line));
+		result.SetValue(ibT("action"), ibString(remove ? ibT("removed") : ibT("set")));
 		if (!remove && !condition.IsEmpty())
-			result.SetValue(wxT("condition"), condition);
+			result.SetValue(ibT("condition"), condition);
 
 		if (!done)
-			result.SetValue(wxT("note"), said.IsEmpty()
+			result.SetValue(ibT("note"), said.IsEmpty()
 				? ibMcpText("The debugger did not accept it. There may be no line there, "
 				  "or the module may not be known to a running application yet.")
 				: said);
@@ -347,19 +347,19 @@ MCP_TOOL_REGISTER(ibMcpToolDebugBreakpoint);
 class ibMcpToolDebugState : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("debug_state"); }
+	ibString GetName() const override { return ibT("debug_state"); }
 
 	// A stopped runtime is a state to be able to READ while the designer waits on a dialog — the
 	// two are independent, and knowing where the runtime stands is often what decides what to say
 	// about the dialog.
 	bool RunsWhileBusy() const override { return true; }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("looking at where the runtime is stopped");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Where the runtime is right now: whether an application is connected, whether "
 			"it is stopped, and if it is - the module and line it stopped on, the whole call "
@@ -373,7 +373,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMcpDebugBridge* bridge = Bridge(refusal);
 		if (bridge == nullptr)
@@ -381,11 +381,11 @@ public:
 
 		const ibMcpDebugBridge::Stop stop = bridge->GetStop();
 
-		result.AddField(wxT("connected"), ibDataValue::Bool(stop.m_connected));
-		result.AddField(wxT("stopped"), ibDataValue::Bool(stop.m_stopped));
+		result.AddField(ibT("connected"), ibDataValue::Bool(stop.m_connected));
+		result.AddField(ibT("stopped"), ibDataValue::Bool(stop.m_stopped));
 
 		if (!stop.m_message.IsEmpty())
-			result.SetValue(wxT("message"), stop.m_message);
+			result.SetValue(ibT("message"), stop.m_message);
 
 		// ⭐⭐ WHAT THE RUN SAID — its output buffer, emptied into this answer. The application's own
 		// window has these lines and the designer deliberately does not: a person reading their
@@ -399,16 +399,16 @@ public:
 		for (const ibMcpDebugBridge::Printed& line : bridge->TakeOutput(/*clear*/ true)) {
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->SetValue(wxT("text"), line.m_text);
-			node->SetValue(wxT("level"), wxString(
-				  line.m_level == MessageType_Error   ? wxT("error")
-				: line.m_level == MessageType_Warning ? wxT("warning")
-				                                      : wxT("info")));
+			node->SetValue(ibT("text"), line.m_text);
+			node->SetValue(ibT("level"), ibString(
+				  line.m_level == MessageType_Error   ? ibT("error")
+				: line.m_level == MessageType_Warning ? ibT("warning")
+				                                      : ibT("info")));
 			said.push_back(ibDataValue::Child(node));
 		}
 
 		if (!said.empty())
-			result.AddField(wxT("output"), ibDataValue::Array(said));
+			result.AddField(ibT("output"), ibDataValue::Array(said));
 
 		// ⭐⭐ WHAT IS SET TO STOP IT — reported whether or not anything is stopped right now, because
 		// the question it answers ("why did it park HERE?") is asked when something already looks
@@ -429,7 +429,7 @@ public:
 				// stable guid — what the debugger addresses code by — so it is resolved back into
 				// the name a person reads, and the guid is kept beside it for anything that has to
 				// address the module again.
-				node->SetValue(wxT("module"), module.first);
+				node->SetValue(ibT("module"), module.first);
 
 				if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
 					const ibMetaID id = activeMetaData->MetaIdByGuid(ibGuid(module.first));
@@ -441,18 +441,18 @@ public:
 							// lookup to make sense of — which is exactly the errand this field
 							// exists to save (Max, 2026-09-04: *"decode it right there, so you do
 							// not spend time searching"*).
-							wxString path = object->GetName();
+							ibString path = object->GetName();
 							for (const ibValueMetaObject* owner = object->GetParent();
 							     owner != nullptr; owner = owner->GetParent()) {
 
-								const wxString step = owner->GetName();
+								const ibString step = owner->GetName();
 								if (step.IsEmpty())
 									break;               // the configuration root names nothing useful
-								path = step + wxT(".") + path;
+								path = step + ibT(".") + path;
 							}
 
-							node->SetValue(wxT("name"), path);
-							node->AddField(wxT("id"), ibDataValue::Int((s64)id));
+							node->SetValue(ibT("name"), path);
+							node->AddField(ibT("id"), ibDataValue::Int((std::int64_t)id));
 						}
 					}
 				}
@@ -460,24 +460,24 @@ public:
 				// From 1, as the editor shows them and as debug_breakpoint takes them (the client keeps them from 0).
 				std::vector<ibDataValue> lines, conditions;
 				for (const auto& line : module.second) {
-					lines.push_back(ibDataValue::Int((s64)line.first + 1));
+					lines.push_back(ibDataValue::Int((std::int64_t)line.first + 1));
 					if (!line.second.IsEmpty()) {
 						std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-						entry->AddField(wxT("line"), ibDataValue::Int((s64)line.first + 1));
-						entry->SetValue(wxT("condition"), line.second);
+						entry->AddField(ibT("line"), ibDataValue::Int((std::int64_t)line.first + 1));
+						entry->SetValue(ibT("condition"), line.second);
 						conditions.push_back(ibDataValue::Child(entry));
 					}
 				}
 
-				node->AddField(wxT("lines"), ibDataValue::Array(lines));
+				node->AddField(ibT("lines"), ibDataValue::Array(lines));
 				if (!conditions.empty())
-					node->AddField(wxT("conditions"), ibDataValue::Array(conditions));
+					node->AddField(ibT("conditions"), ibDataValue::Array(conditions));
 				set.push_back(ibDataValue::Child(node));
 			}
 
 			if (!set.empty()) {
-				result.AddField(wxT("breakpoints"), ibDataValue::Array(set));
-				result.SetValue(wxT("breakpointsNote"),
+				result.AddField(ibT("breakpoints"), ibDataValue::Array(set));
+				result.SetValue(ibT("breakpointsNote"),
 					ibMcpText("These stop the run wherever it reaches them, including runs set going "
 					  "for something else entirely. debug_breakpoint with all + remove clears them."));
 			}
@@ -486,36 +486,36 @@ public:
 		if (!stop.m_stopped) {
 			// NOT AN ERROR. A running application is an ordinary state, and the
 			// answer to "where is it" is "it has not stopped".
-			result.SetValue(wxT("note"), stop.m_connected
+			result.SetValue(ibT("note"), stop.m_connected
 				? ibMcpText("An application is connected but running. Set a breakpoint and ask for it "
 				    "to reach that code.")
 				: ibMcpText("No application is connected. Ask for it to be started with debugging on."));
 			return true;
 		}
 
-		result.SetValue(wxT("module"),
+		result.SetValue(ibT("module"),
 			stop.m_where.IsEmpty() ? stop.m_module : stop.m_where);
-		result.AddField(wxT("line"), ibDataValue::Int((s64)stop.m_line));
+		result.AddField(ibT("line"), ibDataValue::Int((std::int64_t)stop.m_line));
 
 		std::vector<ibDataValue> frames;
 		for (const ibMcpDebugBridge::Frame& frame : stop.m_stack) {
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->SetValue(wxT("module"), frame.m_module);
-			node->AddField(wxT("line"), ibDataValue::Int((s64)frame.m_line));
+			node->SetValue(ibT("module"), frame.m_module);
+			node->AddField(ibT("line"), ibDataValue::Int((std::int64_t)frame.m_line));
 			frames.push_back(ibDataValue::Child(node));
 		}
-		result.AddField(wxT("stack"), ibDataValue::Array(frames));
+		result.AddField(ibT("stack"), ibDataValue::Array(frames));
 
 		std::vector<ibDataValue> locals;
 		for (const ibMcpDebugBridge::Local& local : stop.m_locals)
 			locals.push_back(MemberEntry(local));
-		result.AddField(wxT("locals"), ibDataValue::Array(locals));
+		result.AddField(ibT("locals"), ibDataValue::Array(locals));
 
 		// The stack and the locals arrive as their own messages just behind the
 		// stop. Empty here usually means "ask again in a moment", not "there are
 		// none", and saying so costs one line.
 		if (frames.empty() && locals.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("Stopped, but the stack and locals have not arrived yet. Ask again."));
 
 		return true;
@@ -530,7 +530,7 @@ MCP_TOOL_REGISTER(ibMcpToolDebugState);
 class ibMcpToolDebugEvaluate : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("debug_evaluate"); }
+	ibString GetName() const override { return ibT("debug_evaluate"); }
 
 	// 🛑 NOT ON THE MAIN THREAD — see ibMcpTool::NeedsMainThread. This asks the runtime and WAITS,
 	// and the answer comes back through wxTheApp::CallAfter: run here and the wait blocks the only
@@ -538,13 +538,13 @@ public:
 	// a condition variable, both of which are indifferent to where they are called from.
 	bool NeedsMainThread() const override { return false; }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("working out '%s' in the stopped runtime"),
+		return ibString::Format(ibMcpText("working out '%s' in the stopped runtime"),
 			ArgExpression().Text(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Work out an expression IN THE STOPPED RUNTIME - anything the code at that "
 			"line could have written, in the same scope. Pass members:true to get what the "
@@ -558,13 +558,13 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMcpDebugBridge* bridge = Bridge(refusal);
 		if (bridge == nullptr)
 			return false;
 
-		const wxString expression = ArgExpression().Text(params);
+		const ibString expression = ArgExpression().Text(params);
 		if (expression.IsEmpty()) {
 			refusal = ibMcpText("Nothing to work out - pass an expression.");
 			return false;
@@ -576,7 +576,7 @@ public:
 			return false;
 		}
 
-		result.SetValue(wxT("expression"), expression);
+		result.SetValue(ibT("expression"), expression);
 
 		if (ArgMembers().Flag(params)) {
 
@@ -586,7 +586,7 @@ public:
 				// this used to be a flat "not supported" because the watch channel identified a
 				// request by a pointer into the asking window's own row and nothing without a
 				// window could use it. The question now carries who asked, so it can.
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("'%s' did not answer with its parts. It may have none - debug_state says "
 					  "which locals do - or the runtime did not answer in time."), expression);
 				return false;
@@ -596,23 +596,23 @@ public:
 			for (const ibMcpDebugBridge::Local& member : members)
 				out.push_back(MemberEntry(member));
 
-			result.AddField(wxT("members"), ibDataValue::Array(out));
+			result.AddField(ibT("members"), ibDataValue::Array(out));
 
 			// A value with no parts is an answer; silence is not.
 			if (out.empty())
-				result.SetValue(wxT("note"),
+				result.SetValue(ibT("note"),
 					ibMcpText("That value has no parts to show. Ask without members for its printed form."));
 
 			return true;
 		}
 
-		wxString answer;
+		ibString answer;
 		if (!bridge->Evaluate(expression, answer)) {
 			refusal = ibMcpNoAnswer(ibMcpText("The runtime did not answer in time."));
 			return false;
 		}
 
-		result.SetValue(wxT("value"), answer);
+		result.SetValue(ibT("value"), answer);
 		return true;
 	}
 };
@@ -625,19 +625,19 @@ MCP_TOOL_REGISTER(ibMcpToolDebugEvaluate);
 class ibMcpToolDebugRun : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("debug_run"); }
+	ibString GetName() const override { return ibT("debug_run"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString action = ArgAction().Text(params).Lower();
-		if (action == wxT("over"))  return ibMcpText("stepping over a line");
-		if (action == wxT("into"))  return ibMcpText("stepping into a call");
-		if (action == wxT("out"))   return ibMcpText("stepping out to the caller");
-		if (action == wxT("pause")) return ibMcpText("pausing the runtime");
+		const ibString action = ArgAction().Text(params).Lower();
+		if (action == ibT("over"))  return ibMcpText("stepping over a line");
+		if (action == ibT("into"))  return ibMcpText("stepping into a call");
+		if (action == ibT("out"))   return ibMcpText("stepping out to the caller");
+		if (action == ibT("pause")) return ibMcpText("pausing the runtime");
 		return ibMcpText("letting the runtime carry on");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Let the stopped runtime carry on: continue to the next breakpoint, step over "
 			"the current line, step into the call on it, step out of the current procedure to "
@@ -652,18 +652,18 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMcpDebugBridge* bridge = Bridge(refusal);
 		if (bridge == nullptr)
 			return false;
 
-		const wxString action = ArgAction().Text(params).Lower();
+		const ibString action = ArgAction().Text(params).Lower();
 		const bool stopped = bridge->GetStop().m_stopped;
 
-		if (action == wxT("pause")) {
+		if (action == ibT("pause")) {
 			debugClient->Pause();
-			result.SetValue(wxT("action"), wxString(wxT("pause")));
+			result.SetValue(ibT("action"), ibString(ibT("pause")));
 			return true;
 		}
 
@@ -672,10 +672,10 @@ public:
 			return false;
 		}
 
-		if (action == wxT("continue"))   debugClient->Continue();
-		else if (action == wxT("over"))  debugClient->StepOver();
-		else if (action == wxT("into"))  debugClient->StepInto();
-		else if (action == wxT("out"))   debugClient->StepOut();
+		if (action == ibT("continue"))   debugClient->Continue();
+		else if (action == ibT("over"))  debugClient->StepOver();
+		else if (action == ibT("into"))  debugClient->StepInto();
+		else if (action == ibT("out"))   debugClient->StepOut();
 		else {
 			// An unknown word must not fall through to a default action - a
 			// misspelling would then silently do something else.
@@ -687,8 +687,8 @@ public:
 		// the stack that belonged to it must not read as current.
 		bridge->Running();
 
-		result.SetValue(wxT("action"), action);
-		result.SetValue(wxT("note"),
+		result.SetValue(ibT("action"), action);
+		result.SetValue(ibT("note"),
 			ibMcpText("The runtime is going. Ask debug_state after the next stop is announced."));
 		return true;
 	}
@@ -715,13 +715,13 @@ namespace {
 
 // The word for what a connection currently IS. The enum spells the mechanism; a caller acts on
 // the state.
-wxString ConnectionWord(ConnectionType type)
+ibString ConnectionWord(ConnectionType type)
 {
 	switch (type) {
-	case ConnectionType_Debugger: return wxT("attached");
-	case ConnectionType_Waiter:   return wxT("waiting");
-	case ConnectionType_Scanner:  return wxT("seen");
-	default:                      return wxT("unknown");
+	case ConnectionType_Debugger: return ibT("attached");
+	case ConnectionType_Waiter:   return ibT("waiting");
+	case ConnectionType_Scanner:  return ibT("seen");
+	default:                      return ibT("unknown");
 	}
 }
 
@@ -730,14 +730,14 @@ wxString ConnectionWord(ConnectionType type)
 class ibMcpToolDebugSessions : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("debug_sessions"); }
+	ibString GetName() const override { return ibT("debug_sessions"); }
 
-	wxString GetActivity(const ibDataNode& WXUNUSED(params)) const override
+	ibString GetActivity(const ibDataNode& /*params*/) const override
 	{
 		return ibMcpText("looking at what can be debugged");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Every runtime this designer can see, and whether the debugger is attached to it. "
 			"A session is 'seen' (found by the scanner), 'waiting' (started with the debugger and "
@@ -752,7 +752,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& WXUNUSED(params), ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& /*params*/, ibDataNode& result, ibString& refusal) const override
 	{
 		if (debugClient == nullptr) {
 			refusal = ibMcpText("There is no debugger in this process.");
@@ -762,47 +762,45 @@ public:
 		std::vector<ibDataValue> sessions;
 		int attached = 0;
 
-		// ⚠ `auto`, NOT THE TYPE'S NAME. GetListConnection is public and hands the list out, but
+		// ⚠ `auto`, NOT THE TYPE'S NAME. ForEachConnection is public and shows each connection, but
 		// the connection class itself is private to ibDebuggerClient - so the name cannot be
 		// written here even though the objects can be read. Deducing the type asks nothing of the
 		// name, and the alternative was widening a debugger header for a spelling.
-		for (const auto* connection : debugClient->GetListConnection()) {
+		//
+		// 🛑 A SESSION IS A RUNTIME THAT ANSWERED, as this configuration's (ibMcpDebugBridge::GetStop): a scanner's
+		// socket dialling a port nobody listens on was listed as one, "seen", with nothing behind it.
+		debugClient->ForEachConnection([&sessions, &attached](const auto& connection) {
 
-			if (connection == nullptr || !connection->IsConnected())
-				continue;
+			if (!connection.IsVerifiedConnection())
+				return;
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 
-			entry->SetValue(wxT("host"), connection->GetHostName());
-			entry->AddField(wxT("port"), ibDataValue::Int((s64)connection->GetPort()));
-			entry->SetValue(wxT("state"), ConnectionWord(connection->GetConnectionType()));
+			entry->SetValue(ibT("host"), connection.GetHostName());
+			entry->AddField(ibT("port"), ibDataValue::Int((std::int64_t)connection.GetPort()));
+			entry->SetValue(ibT("state"), ConnectionWord(connection.GetConnectionType()));
 
 			// WHOSE RUN THIS IS. On one machine it is noise; the moment two developers debug the
 			// same base it is the only thing telling their runtimes apart.
-			entry->SetValue(wxT("computer"), connection->GetComputerName());
-			entry->SetValue(wxT("user"), connection->GetUserName());
+			entry->SetValue(ibT("computer"), connection.GetComputerName());
+			entry->SetValue(ibT("user"), connection.GetUserName());
 
-			// ⚠ VERIFIED is not the same as connected: a socket that answered is not yet a
-			// runtime that proved it speaks this protocol, and only a verified one can be
-			// attached to.
-			entry->AddField(wxT("ready"), ibDataValue::Bool(connection->IsVerifiedConnection()));
-
-			if (connection->GetConnectionType() == ConnectionType_Debugger)
+			if (connection.GetConnectionType() == ConnectionType_Debugger)
 				attached++;
 
 			sessions.push_back(ibDataValue::Child(entry));
-		}
+		});
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)sessions.size()));
-		result.AddField(wxT("attached"), ibDataValue::Int((s64)attached));
-		result.AddField(wxT("sessions"), ibDataValue::Array(sessions));
+		result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)sessions.size()));
+		result.AddField(ibT("attached"), ibDataValue::Int((std::int64_t)attached));
+		result.AddField(ibT("sessions"), ibDataValue::Array(sessions));
 
 		if (sessions.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("Nothing is running to debug. app_run with debug: true starts one, and it "
 				  "appears here a moment later - the scanner has to find it first."));
 		else if (attached == 0)
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("Nothing is attached yet, so breakpoints will not be reached. debug_attach "
 				  "takes one of these."));
 
@@ -819,16 +817,16 @@ MCP_TOOL_REGISTER(ibMcpToolDebugSessions);
 class ibMcpToolDebugAttach : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("debug_attach"); }
+	ibString GetName() const override { return ibT("debug_attach"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ArgDetach().Flag(params)
 			? ibMcpText("letting a runtime go")
 			: ibMcpText("attaching the debugger to a runtime");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Attach the debugger to a running application, or let one go - the same thing as "
 			"picking a row in the designer's debug dialog. With no host and port it attaches to "
@@ -842,25 +840,25 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (debugClient == nullptr) {
 			refusal = ibMcpText("There is no debugger in this process.");
 			return false;
 		}
 
-		const wxString host = ArgHost().Text(params);
+		const ibString host = ArgHost().Text(params);
 		const bool stop = ArgStop().Flag(params);
 
 		// ⭐ STOPPING IS A DETACH THAT ALSO KILLS — one flag downstream, so `stop` cannot be asked
 		// for while the connection is somehow left attached.
 		const bool detach = stop || ArgDetach().Flag(params);
 
-		const ibDataValue* portGiven = params.FindField(ArgPort().Name());
+		auto portGiven = params.FindField(ArgPort().Name());
 
 		// ⚠ HALF AN ADDRESS IS NOT AN ADDRESS. A host with no port would silently match nothing,
 		// and the tool would report success over having done exactly nothing.
-		if (!host.IsEmpty() && (portGiven == nullptr || portGiven->Kind() != ibDataKind::Number)) {
+		if (!host.IsEmpty() && (!portGiven || portGiven->Kind() != ibDataKind::Number)) {
 			refusal = ibMcpText("A host needs its port too - debug_sessions reports both. Omit both to "
 				"take every ready runtime.");
 			return false;
@@ -882,8 +880,8 @@ public:
 			// the same act would drift.
 			debugClient->AttachAllVerified();
 
-			result.AddField(wxT("attached"), ibDataValue::Bool(true));
-			result.SetValue(wxT("note"),
+			result.AddField(ibT("attached"), ibDataValue::Bool(true));
+			result.SetValue(ibT("note"),
 				ibMcpText("Every ready runtime was taken. debug_sessions says which are now attached - "
 				  "one that was not verified yet is simply not among them, and appears once it "
 				  "is."));
@@ -897,18 +895,18 @@ public:
 		else
 			debugClient->AttachConnection(host, port);
 
-		result.SetValue(wxT("host"), host);
-		result.AddField(wxT("port"), ibDataValue::Int((s64)port));
-		result.AddField(wxT("attached"), ibDataValue::Bool(!detach));
+		result.SetValue(ibT("host"), host);
+		result.AddField(ibT("port"), ibDataValue::Int((std::int64_t)port));
+		result.AddField(ibT("attached"), ibDataValue::Bool(!detach));
 
 		if (stop)
-			result.AddField(wxT("stopped"), ibDataValue::Bool(true));
+			result.AddField(ibT("stopped"), ibDataValue::Bool(true));
 
 		// ⚠ ASKED FOR, NOT CONFIRMED. Both of those calls find the connection by address and say
 		// nothing when there is none, so this reports the REQUEST and points at the reading that
 		// settles it. Claiming a state the call never returned would be the writer without a
 		// reader all over again.
-		result.SetValue(wxT("note"),
+		result.SetValue(ibT("note"),
 			ibMcpText("Asked. debug_sessions says whether it took - a runtime that had gone, or was not "
 			  "verified yet, is not attached and does not say so here."));
 
@@ -951,19 +949,19 @@ MCP_TOOL_REGISTER(ibMcpToolDebugAttach);
 class ibMcpToolDebugSandbox : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("debug_sandbox"); }
+	ibString GetName() const override { return ibT("debug_sandbox"); }
 
 	// 🛑 NOT ON THE MAIN THREAD — the same reason debug_evaluate is not: this WAITS for an answer
 	// that arrives through wxTheApp::CallAfter, and waiting on the thread that delivers it is a
 	// deadlock rather than a slow call.
 	bool NeedsMainThread() const override { return false; }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("running code in a sandbox - everything it writes is rolled back");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("RUN CODE IN THE STOPPED RUNTIME AND UNDO IT. Whole statements, not an "
 			"expression: build a query and set its parameters, walk what it returns, create a "
@@ -998,13 +996,13 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMcpDebugBridge* bridge = Bridge(refusal);
 		if (bridge == nullptr)
 			return false;
 
-		const wxString code = ArgText().Text(params);
+		const ibString code = ArgText().Text(params);
 		if (code.IsEmpty()) {
 			refusal = ibMcpText("Nothing to run - pass the code.");
 			return false;
@@ -1026,9 +1024,9 @@ public:
 		}
 
 		bool ran = false;
-		wxString answer, json;
-		std::vector<wxString> printed;
-		wxLongLong_t microseconds = 0;
+		ibString answer, json;
+		std::vector<ibString> printed;
+		long long microseconds = 0;
 
 		if (!bridge->Sandbox(code, ran, answer, json, printed, microseconds)) {
 			refusal = ibMcpNoAnswer(ibMcpText("The runtime did not answer in time. Whatever the code did "
@@ -1037,7 +1035,7 @@ public:
 			return false;
 		}
 
-		result.AddField(wxT("ran"), ibDataValue::Bool(ran));
+		result.AddField(ibT("ran"), ibDataValue::Bool(ran));
 
 		// ⭐⭐ HOW LONG IT TOOK — measured in the process that ran it, not around this call, which
 		// would time the socket and the wait as well. This is the platform's only stopwatch: the
@@ -1047,10 +1045,10 @@ public:
 		//
 		// Microseconds, because single queries and single postings are the things worth timing and
 		// milliseconds report most of them as 0 or 1.
-		result.AddField(wxT("microseconds"), ibDataValue::Int((s64)microseconds));
+		result.AddField(ibT("microseconds"), ibDataValue::Int((std::int64_t)microseconds));
 
 		if (!answer.IsEmpty())
-			result.SetValue(wxT("answer"), answer);
+			result.SetValue(ibT("answer"), answer);
 
 		// ⭐⭐ THE RESULT AS A VALUE, beside the way it prints. `answer` is what a person would read;
 		// this is what it is MADE OF — a selection's columns, a structure's fields — written by the
@@ -1060,7 +1058,7 @@ public:
 		// Absent when the value cannot travel, which is not a failure of the run: plenty of live
 		// objects are not transferable by design, and `ran` already said what happened.
 		if (!json.IsEmpty())
-			result.SetValue(wxT("value"), json);
+			result.SetValue(ibT("value"), json);
 
 		// ⭐⭐ WHAT THE CODE PRINTED, WHICH IS HOW A BLOCK HANDS ANYTHING BACK. A block yields no
 		// value by construction — the compiler puts no return in one — so `Message` is the way out,
@@ -1070,10 +1068,10 @@ public:
 		if (!printed.empty()) {
 
 			std::vector<ibDataValue> lines;
-			for (const wxString& line : printed)
+			for (const ibString& line : printed)
 				lines.push_back(ibDataValue::String(line));
 
-			result.AddField(wxT("printed"), ibDataValue::Array(lines));
+			result.AddField(ibT("printed"), ibDataValue::Array(lines));
 		}
 
 		// (⛔ THE FRAME'S LOCALS ARE NOT REPEATED HERE. They arrive with the stop and debug_state
@@ -1085,12 +1083,12 @@ public:
 		// reads an empty register back as a defect in the code it just tested - the write DID
 		// happen, and then it was undone, which is the one thing that makes the reading different
 		// from every other reading in this server.
-		result.SetValue(wxT("rolledBack"),
+		result.SetValue(ibT("rolledBack"),
 			ibMcpText("Everything this wrote has been undone. Read anything you need INSIDE the same "
 			  "code - a second call starts from the base as it was."));
 
 		if (!ran)
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("The code did not run to the end - `answer` carries what the platform said "
 				  "about it. messages_read has anything it printed before it stopped."));
 

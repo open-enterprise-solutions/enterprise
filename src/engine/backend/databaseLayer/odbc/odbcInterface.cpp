@@ -5,22 +5,22 @@ bool ibInterfaceODBC::Init()
 	// If Windows, then default to odbc32 and try odbc second
 	// Otherwise try odbc first and try odbc32 second
 #ifdef __WIN32__
-	bool bLoaded = m_ODBCDLL.Load(wxDynamicLibrary::CanonicalizeName(wxT("odbc32")));
+	bool bLoaded = m_ODBCDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("odbc32")));
 #else
-	bool bLoaded = m_ODBCDLL.Load(wxDynamicLibrary::CanonicalizeName(wxT("odbc")));
+	bool bLoaded = m_ODBCDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("odbc")));
 #endif
 	if (!bLoaded)
 	{
 #ifdef __WIN32__
-		bLoaded = m_ODBCDLL.Load(wxDynamicLibrary::CanonicalizeName(wxT("odbc")));
+		bLoaded = m_ODBCDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("odbc")));
 #else
-		bLoaded = m_ODBCDLL.Load(wxDynamicLibrary::CanonicalizeName(wxT("odbc32")));
+		bLoaded = m_ODBCDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("odbc32")));
 #endif
 		if (!bLoaded)
 			return false;
 	}
 
-	wxString symbol = wxT("SQLAllocHandle");
+	ibString symbol = ibT("SQLAllocHandle");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLAllocHandle = (SQLAllocHandleType)m_ODBCDLL.GetSymbol(symbol);
@@ -30,7 +30,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLSetEnvAttr");
+	symbol = ibT("SQLSetEnvAttr");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLSetEnvAttr = (SQLSetEnvAttrType)m_ODBCDLL.GetSymbol(symbol);
@@ -40,7 +40,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLFreeHandle");
+	symbol = ibT("SQLFreeHandle");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLFreeHandle = (SQLFreeHandleType)m_ODBCDLL.GetSymbol(symbol);
@@ -50,7 +50,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLConnect");
+	symbol = ibT("SQLConnect");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLConnect = (SQLConnectType)m_ODBCDLL.GetSymbol(symbol);
@@ -60,7 +60,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLDriverConnect");
+	symbol = ibT("SQLDriverConnect");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLDriverConnect = (SQLDriverConnectType)m_ODBCDLL.GetSymbol(symbol);
@@ -70,7 +70,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLDisconnect");
+	symbol = ibT("SQLDisconnect");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLDisconnect = (SQLDisconnectType)m_ODBCDLL.GetSymbol(symbol);
@@ -80,7 +80,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLSetConnectAttr");
+	symbol = ibT("SQLSetConnectAttr");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLSetConnectAttr = (SQLSetConnectAttrType)m_ODBCDLL.GetSymbol(symbol);
@@ -90,7 +90,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLEndTran");
+	symbol = ibT("SQLEndTran");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLEndTran = (SQLEndTranType)m_ODBCDLL.GetSymbol(symbol);
@@ -100,7 +100,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLPrepare");
+	symbol = ibT("SQLPrepare");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLPrepare = (SQLPrepareType)m_ODBCDLL.GetSymbol(symbol);
@@ -110,7 +110,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLFreeStmt");
+	symbol = ibT("SQLFreeStmt");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLFreeStmt = (SQLFreeStmtType)m_ODBCDLL.GetSymbol(symbol);
@@ -120,7 +120,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLTables");
+	symbol = ibT("SQLTables");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLTables = (SQLTablesType)m_ODBCDLL.GetSymbol(symbol);
@@ -130,7 +130,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLFetch");
+	symbol = ibT("SQLFetch");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLFetch = (SQLFetchType)m_ODBCDLL.GetSymbol(symbol);
@@ -140,7 +140,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLGetData");
+	symbol = ibT("SQLGetData");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLGetData = (SQLGetDataType)m_ODBCDLL.GetSymbol(symbol);
@@ -150,7 +150,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLColumns");
+	symbol = ibT("SQLColumns");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLColumns = (SQLColumnsType)m_ODBCDLL.GetSymbol(symbol);
@@ -160,7 +160,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLGetDiagRec");
+	symbol = ibT("SQLGetDiagRec");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLGetDiagRec = (SQLGetDiagRecType)m_ODBCDLL.GetSymbol(symbol);
@@ -170,7 +170,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLNumParams");
+	symbol = ibT("SQLNumParams");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLNumParams = (SQLNumParamsType)m_ODBCDLL.GetSymbol(symbol);
@@ -180,7 +180,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLExecute");
+	symbol = ibT("SQLExecute");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLExecute = (SQLExecuteType)m_ODBCDLL.GetSymbol(symbol);
@@ -190,7 +190,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLParamData");
+	symbol = ibT("SQLParamData");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLParamData = (SQLParamDataType)m_ODBCDLL.GetSymbol(symbol);
@@ -200,7 +200,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLPutData");
+	symbol = ibT("SQLPutData");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLPutData = (SQLPutDataType)m_ODBCDLL.GetSymbol(symbol);
@@ -210,7 +210,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLRowCount");
+	symbol = ibT("SQLRowCount");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLRowCount = (SQLRowCountType)m_ODBCDLL.GetSymbol(symbol);
@@ -220,7 +220,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLNumResultCols");
+	symbol = ibT("SQLNumResultCols");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLNumResultCols = (SQLNumResultColsType)m_ODBCDLL.GetSymbol(symbol);
@@ -230,7 +230,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLDescribeParam");
+	symbol = ibT("SQLDescribeParam");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLDescribeParam = (SQLDescribeParamType)m_ODBCDLL.GetSymbol(symbol);
@@ -240,7 +240,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLBindParameter");
+	symbol = ibT("SQLBindParameter");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLBindParameter = (SQLBindParameterType)m_ODBCDLL.GetSymbol(symbol);
@@ -250,7 +250,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLColAttributes");
+	symbol = ibT("SQLColAttributes");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLColAttributes = (SQLColAttributesType)m_ODBCDLL.GetSymbol(symbol);
@@ -260,7 +260,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLColAttribute");
+	symbol = ibT("SQLColAttribute");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLColAttribute = (SQLColAttributeType)m_ODBCDLL.GetSymbol(symbol);
@@ -270,7 +270,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLDescribeCol");
+	symbol = ibT("SQLDescribeCol");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLDescribeCol = (SQLDescribeColType)m_ODBCDLL.GetSymbol(symbol);
@@ -280,7 +280,7 @@ bool ibInterfaceODBC::Init()
 		return false;
 	}
 
-	symbol = wxT("SQLCancel");
+	symbol = ibT("SQLCancel");
 	if (m_ODBCDLL.HasSymbol(symbol))
 	{
 		m_pSQLCancel = (SQLCancelType)m_ODBCDLL.GetSymbol(symbol);

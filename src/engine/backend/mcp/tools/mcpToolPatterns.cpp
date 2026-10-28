@@ -48,11 +48,11 @@
 namespace {
 
 using ibArg = ibMcpTool::ibMcpArgument;
-const ibArg& ArgName() { static const ibArg a(wxT("name"), ibArg::Kind::Text, ibMcpText("Which pattern to read. Alone it answers the summary and the list of topics inside; with `topic` it answers that part in full. Omit it to list what there is.")); return a; }
+const ibArg& ArgName() { static const ibArg a(ibT("name"), ibArg::Kind::Text, ibMcpText("Which pattern to read. Alone it answers the summary and the list of topics inside; with `topic` it answers that part in full. Omit it to list what there is.")); return a; }
 
 const ibArg& ArgTopic()
 {
-	static const ibArg a(wxT("topic"), ibArg::Kind::Text,
+	static const ibArg a(ibT("topic"), ibArg::Kind::Text,
 		ibMcpText("Which part of that pattern, by any words of its heading as the listing shows them. "
 		  "Omit for the table of contents; pass `all` for the whole entry."));
 	return a;
@@ -67,7 +67,7 @@ const ibArg& ArgTopic()
 // does not match is never opened - which is the whole point at a hundred kilobytes.
 const ibArg& ArgQuery()
 {
-	static const ibArg a(wxT("query"), ibArg::Kind::Text,
+	static const ibArg a(ibT("query"), ibArg::Kind::Text,
 		ibMcpText("Words of the problem - 'will not write off', 'close the month', 'column per "
 		  "warehouse'. THE CORPUS IS WRITTEN IN ENGLISH, so ask in English: if the person put it in "
 		  "another language, say it here in the words the trade uses in English rather than passing "
@@ -81,9 +81,9 @@ const ibArg& ArgQuery()
 
 // ONE ENTRY. `name` is the address, `summary` is what the listing shows, `text` is the whole of it.
 struct ibMcpPattern {
-	const wxChar* m_name;
-	wxString      m_summary;
-	wxString      m_text;
+	const ibChar* m_name;
+	ibString      m_summary;
+	ibString      m_text;
 };
 
 // ⚠ HELD AS A FUNCTION, not a file-scope table: a static built before the locale is set would
@@ -117,7 +117,7 @@ const std::vector<ibMcpPattern>& Patterns()
 {
 	static const std::vector<ibMcpPattern> s_patterns = {
 
-	{ wxT("shapes"),
+	{ ibT("shapes"),
 	  ibMcpText("Which metatype a described need asks for - and the words that give it away."),
 	  ibMcpText("READING A REQUEST FOR ITS SHAPE.\n"
 		"\n"
@@ -335,7 +335,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"(`query-craft`, `derived-registers`), and picking only one because they \"say the same thing\"\n"
 		"is how a monthly calculation ends up recomputing intervals on every line.") },
 
-	{ wxT("combining"),
+	{ ibT("combining"),
 	  ibMcpText("The handful of primitives every entry here is made of - and how a real request is assembled from several."),
 	  ibMcpText("THE SAME DOZEN MOVES, UNDER DIFFERENT NAMES.\n"
 		"\n"
@@ -602,7 +602,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"quietly ignoring it. It is also how a genuine improvement gets found - almost every one\n"
 		"begins as somebody asking why a step is there.") },
 
-	{ wxT("intake"),
+	{ ibT("intake"),
 	  ibMcpText("Taking a request: which questions to ask, in what order, and how to offer the options back."),
 	  ibMcpText("TAKING A REQUEST FROM SOMEBODY WHO KNOWS THE TRADE AND NOT THE SYSTEM.\n"
 		"\n"
@@ -703,7 +703,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"version of the feature - it is a system that cannot recompute a corrected month, and nobody\n"
 		"is told until the first correction. Say the limit, offer the honest smaller thing, and let\n"
 		"somebody decide.") },
-	{ wxT("choice-links"),
+	{ ibT("choice-links"),
 	  ibMcpText("Fields filled in terms of their neighbours - a list narrowed by what stands beside it, and a value whose TYPE is decided by a kind chosen next to it."),
 	  ibMcpText("TWO THINGS A FIELD CAN SAY ABOUT ITS NEIGHBOURS, AND THEY ARE DIFFERENT QUESTIONS.\n"
 		"\n"
@@ -780,7 +780,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"the list, and what a new item added there is born with.") },
 
 
-	{ wxT("where-behaviour-lives"),
+	{ ibT("where-behaviour-lives"),
 	  ibMcpText("\"Make it do X in the sales document\" - and X lives in a mechanism shared by twenty documents."),
 	  ibMcpText("THEY NAME THE DOCUMENT THEY SEE; THE BEHAVIOUR IS SOMEWHERE ELSE.\n"
 		"\n"
@@ -853,7 +853,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"actually belongs, who else it will affect if put there, and - when the answer is the close\n"
 		"rather than the document - when the figure they want becomes knowable at all.") },
 
-	{ wxT("document-chains"),
+	{ ibT("document-chains"),
 	  ibMcpText("Intention, fact, reversal - the one chain behind every \"order, delivery, return\", whatever it is called."),
 	  ibMcpText("EVERY AREA IS THE SAME CHAIN OF THREE LINKS.\n"
 		"\n"
@@ -918,7 +918,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"Lending: a facility, a drawdown, a repayment. Whenever three documents in a row are\n"
 		"described, check whether they are these three - they usually are.") },
 
-	{ wxT("unfamiliar-domain"),
+	{ ibT("unfamiliar-domain"),
 	  ibMcpText("A trade nobody here knows - logging, catering, haulage - is almost always a known pattern plus small differences."),
 	  ibMcpText("A TRADE YOU HAVE NEVER SEEN IS USUALLY ONE YOU HAVE.\n"
 		"\n"
@@ -1002,7 +1002,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"where your trade genuinely differs - the conversions, the norms, the limits. Asking for THAT\n"
 		"rather than for a description of the business gets a usable design in one conversation.") },
 
-	{ wxT("predefined"),
+	{ ibT("predefined"),
 	  ibMcpText("A particular item named in conversation has to exist as a predefined one."),
 	  ibMcpText("A NAMED INSTANCE IS A PREDEFINED ITEM.\n"
 		"\n"
@@ -1059,7 +1059,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"exemption is deliberate, and it is also how items reach a branch that was never supposed to\n"
 		"see them.") },
 
-	{ wxT("recipes"),
+	{ ibT("recipes"),
 	  ibMcpText("Building a whole area from nothing: what to create, in what order, for each classic subsystem."),
 	  ibMcpText("RECIPES FOR THE AREAS THAT ARE SOLD ELSEWHERE AS SEPARATE PRODUCTS.\n"
 		"\n"
@@ -1238,7 +1238,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"finished when its metaobjects exist, it is finished when a question it was built for gets\n"
 		"the right answer twice.") },
 
-	{ wxT("where-to-start"),
+	{ ibT("where-to-start"),
 	  ibMcpText("The order configurations actually grow in - useful for knowing what comes next."),
 	  ibMcpText("WHAT APPEARS, AND ROUGHLY IN WHAT ORDER.\n"
 		"\n"
@@ -1291,7 +1291,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"because everything hangs off it, not because it is where the work is. Anyone reading a build\n"
 		"order as an estimate gets both ends wrong.") },
 
-	{ wxT("building-an-erp"),
+	{ ibT("building-an-erp"),
 	  ibMcpText("The whole route: what is decided once at the start, what is built in what order, and what proves each step."),
 	  ibMcpText("HOW A WHOLE SYSTEM IS ASSEMBLED OUT OF THESE PATTERNS.\n"
 		"\n"
@@ -1377,7 +1377,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"and the bulk is breadth - which is exactly the part that can be built incrementally, by\n"
 		"area, with each area proved by its own DONE WHEN before the next begins.") },
 
-	{ wxT("proportions"),
+	{ ibT("proportions"),
 	  ibMcpText("How much of what a full ERP actually contains - counted, not guessed."),
 	  ibMcpText("THE SHAPE OF A FINISHED SYSTEM, BY THE NUMBERS.\n"
 		"\n"
@@ -1438,7 +1438,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"own a module or a form, and silently loses every simple one - which understated the\n"
 		"constants here by a factor of five and reported the functional options as zero.") },
 
-	{ wxT("planning"),
+	{ ibT("planning"),
 	  ibMcpText("Plans against facts, what is still needed, and covering a requirement from somewhere."),
 	  ibMcpText("PLANNING, AND THE THREE THINGS PEOPLE MEAN BY IT.\n"
 		"\n"
@@ -1538,7 +1538,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"into next year's plan, and which of the two it is doing is a setting rather than a second\n"
 		"mechanism.") },
 
-	{ wxT("bill-of-materials"),
+	{ ibT("bill-of-materials"),
 	  ibMcpText("What a product is made of: exploding it into requirements, and the traps in doing so."),
 	  ibMcpText("DESCRIBING WHAT A PRODUCT IS MADE OF, AND EXPLODING IT.\n"
 		"\n"
@@ -1663,7 +1663,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"route point participates in choosing WHICH specification applies, so the route decides whose\n"
 		"composition is used.") },
 
-	{ wxT("production"),
+	{ ibT("production"),
 	  ibMcpText("Costs, month-end close and work in progress - and why the close is several documents."),
 	  ibMcpText("PRODUCTION, COSTS AND CLOSING THE MONTH.\n"
 		"\n"
@@ -2051,7 +2051,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"differ only by fields and table names, DECLARE the differences and assemble the text\n"
 		"(`posting`) rather than hiding them in comments.") },
 
-	{ wxT("user-formulas"),
+	{ ibT("user-formulas"),
 	  ibMcpText("Letting people write the rule: indicators as data, expression evaluated at run time."),
 	  ibMcpText("WHEN THE RULE BELONGS TO THE PERSON, NOT TO THE PROGRAMMER.\n"
 		"\n"
@@ -2133,7 +2133,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"this much and 5 above it\" out of code, and it is the single most-asked-for shape after plain\n"
 		"arithmetic.") },
 
-	{ wxT("payroll"),
+	{ ibT("payroll"),
 	  ibMcpText("What payroll needs from a platform - and what it costs when those two metatypes are absent."),
 	  ibMcpText("PAYROLL IS ITS OWN WORLD, and the first honest thing to say is what it needs.\n"
 		"\n"
@@ -2348,7 +2348,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"the children; the income tax is 18 %. A full-time minimum wage is above the limit, so in\n"
 		"practice it reaches part-timers and parents - say that when asked \"why nobody gets it\".") },
 
-	{ wxT("vat"),
+	{ ibT("vat"),
 	  ibMcpText("Indirect tax: the designation that follows every line, and the earlier of two events."),
 	  ibMcpText("VAT IS TWO MECHANISMS, AND BOTH ARE EASY TO MISS UNTIL AN AUDIT.\n"
 		"\n"
@@ -2425,7 +2425,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"* THE FAILURE WITHOUT IT IS SILENT AND ONE-SIDED: the posting check refuses a value the form\n"
 		"was still offering, and the person reads it as the system contradicting itself.") },
 
-	{ wxT("cash-flow"),
+	{ ibT("cash-flow"),
 	  ibMcpText("Money: what is planned, what is promised and what actually moved."),
 	  ibMcpText("PLANNED MONEY AND REAL MONEY ARE DIFFERENT REGISTERS.\n"
 		"\n"
@@ -2500,7 +2500,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"payment\", \"we must not pay more than we planned\". None of them is answered by a balance of\n"
 		"cash, and all of them are cheap while the money registers are being designed.") },
 
-	{ wxT("roles"),
+	{ ibT("roles"),
 	  ibMcpText("Cutting roles: a job is not a role, and rights combine rather than nest."),
 	  ibMcpText("HOW RIGHTS ARE ACTUALLY CUT UP.\n"
 		"\n"
@@ -2631,7 +2631,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"deserves a check that reports the divergence rather than a session that silently gets the\n"
 		"wrong person's rights.") },
 
-	{ wxT("row-level-access"),
+	{ ibT("row-level-access"),
 	  ibMcpText("\"Only their own customers\": restricting which ROWS a person sees, and what it costs."),
 	  ibMcpText("SEEING ONLY YOUR OWN.\n"
 		"\n"
@@ -2755,7 +2755,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"hole nobody sees. Without the second, the restriction is decoration. The DATA side - access\n"
 		"groups, membership, inheritance down a hierarchy - is yours to build either way.") },
 
-	{ wxT("closing-a-period"),
+	{ ibT("closing-a-period"),
 	  ibMcpText("Freezing what has been reported: who may still edit, and what the guard must cover."),
 	  ibMcpText("CLOSING A PERIOD SO IT STOPS MOVING.\n"
 		"\n"
@@ -2799,7 +2799,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"under a background job and an external connection; there it refuses silently and logs. A\n"
 		"refusal announced to an empty room is a refusal nobody can act on.") },
 
-	{ wxT("pricing"),
+	{ ibT("pricing"),
 	  ibMcpText("Prices, discounts and the four things a price is measured in."),
 	  ibMcpText("A PRICE IS NEVER JUST A NUMBER.\n"
 		"\n"
@@ -2974,7 +2974,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"inserted or deleted. A small integer issued on insertion is enough; the identity never\n"
 		"leaves the document.") },
 
-	{ wxT("promotions"),
+	{ ibT("promotions"),
 	  ibMcpText("Offers, gifts and kits: conditions, \"two plus one\", and splitting a set into its parts."),
 	  ibMcpText("OFFERS, GIFTS AND SETS - WHERE A DISCOUNT STOPS BEING A PERCENTAGE.\n"
 		"\n"
@@ -3051,7 +3051,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"given the extra working columns a document does not have, so ONE routine serves documents\n"
 		"with different attributes.") },
 
-	{ wxT("stock-control"),
+	{ ibT("stock-control"),
 	  ibMcpText("Refusing to go negative: free balance, reserves, and who may override it."),
 	  ibMcpText("CHECKING THERE IS ENOUGH BEFORE WRITING THE MOVEMENT.\n"
 		"\n"
@@ -3131,7 +3131,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"stay correct and only the printed price is wrong - which is precisely why a defect of this\n"
 		"shape survives for years.") },
 
-	{ wxT("derived-registers"),
+	{ ibT("derived-registers"),
 	  ibMcpText("A register kept only to make a question fast - and what owning one costs."),
 	  ibMcpText("A REGISTER THAT HOLDS NO NEW FACT, ONLY A FASTER ANSWER.\n"
 		"\n"
@@ -3260,7 +3260,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"width; reach for folding only when a measurement says the width is the problem, and only\n"
 		"when something else owns the interning.") },
 
-	{ wxT("not-mine"),
+	{ ibT("not-mine"),
 	  ibMcpText("Goods that are not yours, and yours that are not with you - commission and safekeeping."),
 	  ibMcpText("SOMEBODY ELSE'S GOODS IN YOUR WAREHOUSE, AND YOURS IN THEIRS.\n"
 		"\n"
@@ -3417,7 +3417,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"parallel. That is the honest cost of the symmetry, and it is worth knowing before promising\n"
 		"the second direction as \"the same thing mirrored\".") },
 
-	{ wxT("posting"),
+	{ ibT("posting"),
 	  ibMcpText("Writing a document's movements: sets, partial replacement, locks and refusals."),
 	  ibMcpText("HOW MOVEMENTS ARE ACTUALLY WRITTEN.\n"
 		"\n"
@@ -3656,7 +3656,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"routine. The same document posts different keys in a base that keeps lots per warehouse and\n"
 		"in one that does not, and both are correct.") },
 
-	{ wxT("deferred-posting"),
+	{ ibT("deferred-posting"),
 	  ibMcpText("When posting is too slow: doing the urgent part now and the heavy part in a batch."),
 	  ibMcpText("SPLITTING A POSTING IN TWO WHEN IT HAS BECOME TOO SLOW.\n"
 		"\n"
@@ -3700,7 +3700,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"what failed and why, how far it has got - a person has to be able to look. See\n"
 		"`scheduled-documents` for the shape of the job that drives it.") },
 
-	{ wxT("entered-from"),
+	{ ibT("entered-from"),
 	  ibMcpText("Making one document out of another: what carries over, what must not, and what wins."),
 	  ibMcpText("ENTERING ONE DOCUMENT FROM ANOTHER.\n"
 		"\n"
@@ -3754,7 +3754,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"`StandardProcessing = False` refusing the entry - and code asks the same with\n"
 		"`doc.Fill(source)`. The syntax helper's guide.basedOn has the handler written out.") },
 
-	{ wxT("traceability"),
+	{ ibT("traceability"),
 	  ibMcpText("Tracking an individual thing: serial numbers, certificates, shelf life, issued items."),
 	  ibMcpText("FOLLOWING ONE PARTICULAR THING, NOT A QUANTITY OF THEM.\n"
 		"\n"
@@ -3879,7 +3879,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"* THE COST IS THAT THE SENTINEL IS A LITERAL REPEATED IN EVERY QUERY THAT SORTS. Name it\n"
 		"once.") },
 
-	{ wxT("lot-accounting"),
+	{ ibT("lot-accounting"),
 	  ibMcpText("Lots and cost: one shared write-off, and cost resolved over a graph of movements."),
 	  ibMcpText("LOT ACCOUNTING.\n"
 		"\n"
@@ -4025,7 +4025,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"held on commission against goods owned outright. One fact, kept once, rather than a flag\n"
 		"beside it that can disagree.") },
 
-	{ wxT("sequences"),
+	{ ibT("sequences"),
 	  ibMcpText("The boundary of what is still true, once a document can be entered backdated."),
 	  ibMcpText("A BACKDATED DOCUMENT INVALIDATES EVERYTHING AFTER IT - THE BOUNDARY SAYS HOW MUCH.\n"
 		"\n"
@@ -4110,7 +4110,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"today\", and it needs its tolerance, its iteration cap and its acceptable deviation to be\n"
 		"settings a person can see rather than constants.") },
 
-	{ wxT("orders"),
+	{ ibT("orders"),
 	  ibMcpText("An order as a live obligation: both directions, closing it, changing it, where its state lives."),
 	  ibMcpText("AN ORDER IS AN OBLIGATION THAT STAYS OPEN UNTIL SOMETHING CLOSES IT.\n"
 		"\n"
@@ -4215,7 +4215,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"TWO CASES in the message - the order is fully covered, or the order was never posted. They\n"
 		"look identical and mean opposite things (`entered-from`).") },
 
-	{ wxT("settlements"),
+	{ ibT("settlements"),
 	  ibMcpText("Settlements with counterparties: contracts, and which currency the balance is in."),
 	  ibMcpText("MUTUAL SETTLEMENTS.\n"
 		"\n"
@@ -4383,7 +4383,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"promise the system knows nothing about. General form: a computed field that a person is\n"
 		"allowed to override must ask, not decide.") },
 
-	{ wxT("currency"),
+	{ ibT("currency"),
 	  ibMcpText("Currencies, rates with multiplicity, and why a document keeps its own copy."),
 	  ibMcpText("KEEPING ACCOUNTS IN MORE THAN ONE CURRENCY.\n"
 		"\n"
@@ -4433,7 +4433,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"when a debt meets a payment, not when a rate changes. A revaluation of open balances at a\n"
 		"period end is a separate, scheduled act.") },
 
-	{ wxT("fixed-assets"),
+	{ ibT("fixed-assets"),
 	  ibMcpText("Long-lived property: what is a register, how depreciation is shaped, recomputing the past."),
 	  ibMcpText("PROPERTY THAT IS USED FOR YEARS AND WRITTEN OFF A MONTH AT A TIME.\n"
 		"\n"
@@ -4631,7 +4631,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"company does not keep. This is the general form of a useful refusal in any system where one\n"
 		"subject lives in many places.") },
 
-	{ wxT("parallel-accounting"),
+	{ ibT("parallel-accounting"),
 	  ibMcpText("A second set of books - IFRS, budgeting - and the forks worth knowing before choosing."),
 	  ibMcpText("KEEPING A SECOND SET OF BOOKS.\n"
 		"\n"
@@ -4880,7 +4880,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"idempotent - running it twice doubles what it wrote - which is the same argument as the\n"
 		"period-owning document above, lost.") },
 
-	{ wxT("org-structure"),
+	{ ibT("org-structure"),
 	  ibMcpText("The company as it sees itself and as its papers see it - two trees, not one."),
 	  ibMcpText("THE COMPANY HAS TWO STRUCTURES, AND THEY ARE NOT THE SAME TREE.\n"
 		"\n"
@@ -4925,7 +4925,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"whose they are ON PAPER, are separate questions kept in separate registers. See\n"
 		"`stock-control`. It is the same distinction one floor down.") },
 
-	{ wxT("constants"),
+	{ ibT("constants"),
 	  ibMcpText("One value for the whole application, the same for everyone - and when it is not."),
 	  ibMcpText("WHAT A CONSTANT IS FOR.\n"
 		"\n"
@@ -5016,7 +5016,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"you can actually build, so the reading side has to be walked deliberately\n"
 		"(`where-behaviour-lives`).") },
 
-	{ wxT("numbering"),
+	{ ibT("numbering"),
 	  ibMcpText("Numbers and codes: prefixes as series, who may edit them, and what a blank number means."),
 	  ibMcpText("NUMBERING DOCUMENTS AND CODING ITEMS.\n"
 		"\n"
@@ -5086,7 +5086,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"is empty - the number is assigned when the object is saved - because a blank required-looking\n"
 		"field reads as a defect to everyone who has not been told.") },
 
-	{ wxT("object-history"),
+	{ ibT("object-history"),
 	  ibMcpText("Keeping who changed what: snapshots, when to write one, and reading a difference."),
 	  ibMcpText("KEEPING A HISTORY OF CHANGES.\n"
 		"\n"
@@ -5157,7 +5157,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"way round: the STORAGE is an afternoon, and the DIFFERENCE SHOWN SIDE BY SIDE - two versions\n"
 		"aligned, added, removed and changed rows coloured - is the week.") },
 
-	{ wxT("allocation"),
+	{ ibT("allocation"),
 	  ibMcpText("Spreading an amount over lines so the parts still add up to the whole."),
 	  ibMcpText("DISTRIBUTING AN AMOUNT ACROSS LINES - AND THE LEFTOVER PENNIES.\n"
 		"\n"
@@ -5256,7 +5256,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"the reconciliation that never converges. See `printing` for the two VAT schemes\n"
 		"themselves, which is a separate choice on top of this one.") },
 
-	{ wxT("printing"),
+	{ ibT("printing"),
 	  ibMcpText("Where a print command belongs, and what a commercial blank is made of."),
 	  ibMcpText("BUILDING A PRINTED FORM.\n"
 		"\n"
@@ -5517,7 +5517,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"rather than a page ending early, and `sheet_band` refuses it instead of placing something\n"
 		"that prints as nothing.") },
 
-	{ wxT("batch-printing"),
+	{ ibT("batch-printing"),
 	  ibMcpText("Printing fifty documents at once: sets, copies, going straight to the printer."),
 	  ibMcpText("PRINTING MANY DOCUMENTS IN ONE GO.\n"
 		"\n"
@@ -5658,7 +5658,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"attributes with a short table and a commission's several signatures. Recognise which one\n"
 		"is being asked for and the proportions follow; the skeleton does not move.") },
 
-	{ wxT("query-craft"),
+	{ ibT("query-craft"),
 	  ibMcpText("How accounting queries are actually written - the constructs and why those and not others."),
 	  ibMcpText("THE HABITS OF A WORKING QUERY, counted in a real configuration rather than guessed.\n"
 		"\n"
@@ -6002,7 +6002,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"and quietly matches nothing: the same silent-empty failure the untyped-column note above\n"
 		"describes for SQL, arriving by the other road.") },
 
-	{ wxT("query-by-name"),
+	{ ibT("query-by-name"),
 	  ibMcpText("Assembling a query text so one routine serves many kinds - and where that stops."),
 	  ibMcpText("ONE QUERY INSTEAD OF TEN NEARLY IDENTICAL ONES.\n"
 		"\n"
@@ -6339,7 +6339,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"query before the loop beats a hundred lookups inside it, and the difference is invisible\n"
 		"until the document has two hundred lines.") },
 
-	{ wxT("cross-cutting-hooks"),
+	{ ibT("cross-cutting-hooks"),
 	  ibMcpText("The mechanisms that must apply to every object - and why none of them lives inside one."),
 	  ibMcpText("WHAT MUST APPLY TO EVERYTHING, AND THEREFORE TO NOTHING IN PARTICULAR.\n"
 		"\n"
@@ -6401,7 +6401,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"raised when a KIND is registered gets you most of the way and covers the kind, not the\n"
 		"object.") },
 
-	{ wxT("look-first"),
+	{ ibT("look-first"),
 	  ibMcpText("Before building a mechanism, find out whether this base already has one."),
 	  ibMcpText("A REQUEST FOR A MECHANISM IS NOT EVIDENCE THAT IT IS MISSING.\n"
 		"\n"
@@ -6439,7 +6439,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"A rule that is written down but never read does not refuse; IT SILENTLY PERMITS, which is\n"
 		"the worst of the three possible failures.") },
 
-	{ wxT("naming"),
+	{ ibT("naming"),
 	  ibMcpText("Forming a name: say the whole thing, and only what is not already known."),
 	  ibMcpText("NAMING WHAT YOU CREATE.\n"
 		"\n"
@@ -6555,7 +6555,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"English, run together, technical - and that is what a user reads on the screen. It is the\n"
 		"cheapest visible defect in a configuration and the most common.") },
 
-	{ wxT("scheduled-documents"),
+	{ ibT("scheduled-documents"),
 	  ibMcpText("Documents the system creates by itself on a schedule - and how it avoids duplicates."),
 	  ibMcpText("WORK THAT HAPPENS WITHOUT ANYBODY ASKING.\n"
 		"\n"
@@ -6639,7 +6639,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"what it is supposed to be doing - which is the state in which \"it did not run last night\"\n"
 		"takes a day to diagnose.") },
 
-	{ wxT("external-data"),
+	{ ibT("external-data"),
 	  ibMcpText("Getting data out of another base or system - the door that already exists."),
 	  ibMcpText("DATA FROM SOMEWHERE ELSE.\n"
 		"\n"
@@ -6990,7 +6990,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"corrections will survive, which is worse than either rule applied consistently. Decide it\n"
 		"per field and say it on the screen.") },
 
-	{ wxT("data-exchange"),
+	{ ibT("data-exchange"),
 	  ibMcpText("Several bases that have to agree: what travels, who wins, and in what order."),
 	  ibMcpText("DATA THAT HAS TO AGREE ACROSS SEVERAL BASES.\n"
 		"\n"
@@ -7155,7 +7155,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"(`external-data`), or ONE base divided by row-level access (`row-level-access`). Both answer\n"
 		"most of what is asked for under the word \"exchange\", and neither needs any of the above.") },
 
-	{ wxT("showing-a-value"),
+	{ ibT("showing-a-value"),
 	  ibMcpText("Asked for a column: look for a path to it before adding a field."),
 	  ibMcpText("A COLUMN ASKED FOR IS NOT AUTOMATICALLY A FIELD TO ADD.\n"
 		"\n"
@@ -7187,7 +7187,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"changes, should this line change with it? Yes - walk the dot. No - store it, and say in\n"
 		"the object's notes that it is deliberately a snapshot.") },
 
-	{ wxT("form-to-areas"),
+	{ ibT("form-to-areas"),
 	  ibMcpText("Taking a paper form apart: which parts repeat, which are said once."),
 	  ibMcpText("READING A PRINTED FORM INTO AREAS.\n"
 		"\n"
@@ -7584,7 +7584,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"the footer and the optional column block - in that order, before a single cell is\n"
 		"touched.") },
 
-	{ wxT("long-operations"),
+	{ ibT("long-operations"),
 	  ibMcpText("Work that takes minutes: running it in the background and telling the person about it."),
 	  ibMcpText("WORK THAT TAKES LONGER THAN A PERSON WILL SIT STILL FOR.\n"
 		"\n"
@@ -7651,7 +7651,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"* The wider habit to watch: a routine whose signature promises it depends only on its\n"
 		"arguments, reading the current user, the current date or a session switch from inside.") },
 
-	{ wxT("filling-a-base"),
+	{ ibT("filling-a-base"),
 	  ibMcpText("Writing data through code - a load, test data, a repost: whether it is kept, and how to know."),
 	  ibMcpText("CODE THAT WRITES DATA - A LOAD FROM A FILE, TEST DATA, A PERIOD REPOSTED.\n"
 		"\n"
@@ -7680,7 +7680,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"salary lines with it - and the run reported success (`payroll`: the passes are written\n"
 		"between, and this is the price of that).") },
 
-	{ wxT("user-settings"),
+	{ ibT("user-settings"),
 	  ibMcpText("Storing what a person set up for themselves: the address, who sees it, surviving a release."),
 	  ibMcpText("KEEPING WHAT A PERSON SET UP FOR THEMSELVES.\n"
 		"\n"
@@ -7756,7 +7756,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"renamed, removed, or the interface is translated. Storing a name instead of an identity buys\n"
 		"portability between bases and pays with a silent reset.") },
 
-	{ wxT("extensions"),
+	{ ibT("extensions"),
 	  ibMcpText("Adding a printed form or a fill button to a live system without editing the configuration."),
 	  ibMcpText("SOMEBODY ELSE'S CODE ATTACHED TO OUR OBJECTS.\n"
 		"\n"
@@ -7799,7 +7799,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"validating one was missing three kinds of object, so a name the executor would happily run\n"
 		"was reported as invalid in advance. One list, one place, and the validator calls it.") },
 
-	{ wxT("sections"),
+	{ ibT("sections"),
 	  ibMcpText("The command interface: how a person reaches anything at all."),
 	  ibMcpText("SECTIONS ARE THE APPLICATION AS A PERSON MEETS IT.\n"
 		"\n"
@@ -7916,7 +7916,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"gets stricter, not looser: build it where somebody genuinely works across kinds in date\n"
 		"order, never merely to gather related documents in one place.") },
 
-	{ wxT("picking"),
+	{ ibT("picking"),
 	  ibMcpText("The dialogue that fills a document: what it hands back, what it must subtract, when not to ask."),
 	  ibMcpText("THE SCREEN WHERE A DOCUMENT ACTUALLY GETS FILLED IN.\n"
 		"\n"
@@ -8048,7 +8048,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"attribute of the line unless it must be FROZEN (`showing-a-value`). Everything else is read\n"
 		"again when it is next needed.") },
 
-	{ wxT("form-layout"),
+	{ ibT("form-layout"),
 	  ibMcpText("Laying a document form out: where things go, and why that order."),
 	  ibMcpText("ARRANGING A FORM SOMEBODY WORKS IN ALL DAY.\n"
 		"\n"
@@ -8393,7 +8393,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"resets quantity is not a service; whatever a routine touches beyond its own subject has to\n"
 		"be deliberate and stated.") },
 
-	{ wxT("ledger-reports"),
+	{ ibT("ledger-reports"),
 	  ibMcpText("What an accountant expects over a ledger, and why it is one family and not ten reports."),
 	  ibMcpText("THE STANDARD REPORTS OVER AN ACCOUNTING REGISTER.\n"
 		"\n"
@@ -8480,7 +8480,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"sides that make it. The receiving report opens showing the same thing the reader was looking\n"
 		"at, which is the whole point of the family.") },
 
-	{ wxT("report-shapes"),
+	{ ibT("report-shapes"),
 	  ibMcpText("The four shapes a report takes on screen, and what each one is made of."),
 	  ibMcpText("WHAT A REPORT LOOKS LIKE WHEN IT IS RUN.\n"
 		"\n"
@@ -8726,7 +8726,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"new, and one that wants none simply does not implement it. An arrangement where the\n"
 		"framework drew the chrome ITSELF would make both of those a flag.") },
 
-	{ wxT("regulated-forms"),
+	{ ibT("regulated-forms"),
 	  ibMcpText("A statutory blank that is filled in rather than built: rules per cell, and edits that survive."),
 	  ibMcpText("A BLANK THAT IS FILLED IN, NOT BUILT.\n"
 		"\n"
@@ -8887,7 +8887,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"that could work, and it is paid for exactly as `query-by-name` says: nothing checks the names\n"
 		"until the run.") },
 
-	{ wxT("report-common-settings"),
+	{ ibT("report-common-settings"),
 	  ibMcpText("The few fields a reader sets before every run - period, company, which books."),
 	  ibMcpText("THE PANEL OF SETTINGS THAT SITS ABOVE THE RESULT.\n"
 		"\n"
@@ -8953,7 +8953,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"NOTE: A PAGE HEADER AND FOOTER ARE ONE SETTING FOR THE WHOLE BASE, with substitutions for\n"
 		"the report name and the person printing. Individual reports do not own it; they apply it.") },
 
-	{ wxT("report-variants"),
+	{ ibT("report-variants"),
 	  ibMcpText("One report, several named views - and why that beats three reports."),
 	  ibMcpText("SEVERAL QUESTIONS, ONE REPORT.\n"
 		"\n"
@@ -9032,7 +9032,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"receiving report's own fields rather than copy them as filters. Recognising them by\n"
 		"comparing caption text works until somebody translates the interface.") },
 
-	{ wxT("same-shape-elsewhere"),
+	{ ibT("same-shape-elsewhere"),
 	  ibMcpText("The multiplier: a task in one trade answered by a mechanism already solved in another."),
 	  ibMcpText("THE SAME SHAPE, SOLVED SOMEWHERE ELSE ALREADY.\n"
 		"\n"
@@ -9198,7 +9198,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"is worked through, ask what it just taught the entries it borrowed from, and write that back\n"
 		"- that is what makes the corpus grow by more than one entry at a time.") },
 
-	{ wxT("body-map"),
+	{ ibT("body-map"),
 	  ibMcpText("The body of an ERP: which organs exist, how big each is, what it joins to, and where to look."),
 	  ibMcpText("THE BODY OF AN ERP - THE MAP TO NAVIGATE BY.\n"
 		"\n"
@@ -9327,16 +9327,16 @@ const std::vector<ibMcpPattern>& Patterns()
 // so the split follows the author's own emphasis - and a paragraph that is not marked stays with
 // the topic above it, which is the correct reading of an unmarked continuation.
 struct ibMcpTopic {
-	wxString m_title;
-	wxString m_body;
+	ibString m_title;
+	ibString m_body;
 };
 
-bool LooksLikeHeading(const wxString& line)
+bool LooksLikeHeading(const ibString& line)
 {
 	size_t at = 0;
 
 	// Past the indent and past whatever marker opens the line - a star, a stop sign, a bullet.
-	while (at < line.length() && !wxIsalpha(line[at]))
+	while (at < line.length() && !ibIsAlpha(line[at]))
 		at++;
 
 	int capitalised = 0;
@@ -9344,7 +9344,7 @@ bool LooksLikeHeading(const wxString& line)
 	while (at < line.length()) {
 
 		size_t start = at;
-		while (at < line.length() && wxIsalpha(line[at]))
+		while (at < line.length() && ibIsAlpha(line[at]))
 			at++;
 
 		const size_t length = at - start;
@@ -9371,27 +9371,27 @@ bool LooksLikeHeading(const wxString& line)
 		// most (caught by reading a live answer, 2026-09-02: the contents came back holding the
 		// ordinary paragraphs and none of the marked ones). So anything that is not a letter is
 		// stepped over between words; the run ends when a word is not in capitals.
-		while (at < line.length() && !wxIsalpha(line[at]))
+		while (at < line.length() && !ibIsAlpha(line[at]))
 			at++;
 	}
 
 	return capitalised >= 2;
 }
 
-std::vector<ibMcpTopic> TopicsOf(const wxString& text)
+std::vector<ibMcpTopic> TopicsOf(const ibString& text)
 {
 	std::vector<ibMcpTopic> topics;
 
-	wxString current;
-	wxString title = wxT("Overview");   // whatever stands before the first heading
+	ibString current;
+	ibString title = ibT("Overview");   // whatever stands before the first heading
 	bool paragraphStart = true;
 
 	size_t at = 0;
 
 	while (at <= text.length()) {
 
-		const size_t end = text.find(wxT('\n'), at);
-		const wxString line = text.Mid(at, (end == wxString::npos ? text.length() : end) - at);
+		const size_t end = text.find(ibT('\n'), at);
+		const ibString line = text.Mid(at, (end == ibString::npos ? text.length() : end) - at);
 
 		if (line.IsEmpty()) {
 			paragraphStart = true;
@@ -9408,9 +9408,9 @@ std::vector<ibMcpTopic> TopicsOf(const wxString& text)
 			paragraphStart = false;
 		}
 
-		current << line << wxT("\n");
+		current << line << ibT("\n");
 
-		if (end == wxString::npos)
+		if (end == ibString::npos)
 			break;
 		at = end + 1;
 	}
@@ -9424,12 +9424,12 @@ std::vector<ibMcpTopic> TopicsOf(const wxString& text)
 // How many lines a topic is - so a table of contents says the SIZE of what it offers and not only
 // its name. Without it, "WHAT A FULL CLOSE ACTUALLY CONTAINS" and a two-line aside look alike from
 // outside, and the only way to find out is to fetch one and see.
-size_t LinesIn(const wxString& body)
+size_t LinesIn(const ibString& body)
 {
 	size_t lines = 0;
 
 	for (size_t at = 0; at < body.length(); at++)
-		if (body[at] == wxT('\n'))
+		if (body[at] == ibT('\n'))
 			lines++;
 
 	return lines;
@@ -9439,13 +9439,13 @@ size_t LinesIn(const wxString& body)
 // searched the same way, so the rule lives where both reach it.)
 
 // The heading as a LABEL - the sentence a reader picks from, not the paragraph it opens.
-wxString TopicLabel(const wxString& title)
+ibString TopicLabel(const ibString& title)
 {
-	wxString label = title;
+	ibString label = title;
 	label.Trim(true).Trim(false);
 
 	// Cut at the first full stop or dash: the heading states its subject and then explains it.
-	for (const wxChar* stop : { wxT(". "), wxT(" - "), wxT(", ") }) {
+	for (const ibChar* stop : { ibT(". "), ibT(" - "), ibT(", ") }) {
 		const int at = label.Find(stop);
 		if (at != wxNOT_FOUND && at > 12) {
 			label = label.Left(at);
@@ -9454,12 +9454,12 @@ wxString TopicLabel(const wxString& title)
 	}
 
 	if (label.length() > 96)
-		label = label.Left(93) + wxT("...");
+		label = label.Left(93) + ibT("...");
 
 	return label;
 }
 
-const ibMcpPattern* FindPattern(const wxString& name)
+const ibMcpPattern* FindPattern(const ibString& name)
 {
 	for (const ibMcpPattern& pattern : Patterns())
 		if (name.IsSameAs(pattern.m_name, false))
@@ -9477,20 +9477,20 @@ const ibMcpPattern* FindPattern(const wxString& name)
 // build a menu) and ONE ENTRY BY NAME (to answer a choice from it). Handing out the vector would
 // let the next surface re-derive summaries, headings and search of its own, which is how the
 // corpus would end up with two readers disagreeing about what it says.
-std::vector<std::pair<wxString, wxString>> ibMcpPatternIndex()
+std::vector<std::pair<ibString, ibString>> ibMcpPatternIndex()
 {
-	std::vector<std::pair<wxString, wxString>> index;
+	std::vector<std::pair<ibString, ibString>> index;
 
 	for (const ibMcpPattern& pattern : Patterns())
-		index.emplace_back(wxString(pattern.m_name), pattern.m_summary);
+		index.emplace_back(ibString(pattern.m_name), pattern.m_summary);
 
 	return index;
 }
 
-wxString ibMcpPatternText(const wxString& name)
+ibString ibMcpPatternText(const ibString& name)
 {
 	const ibMcpPattern* found = FindPattern(name);
-	return found != nullptr ? found->m_text : wxString();
+	return found != nullptr ? found->m_text : ibString();
 }
 
 //---------------------------------------------------------------------------
@@ -9500,17 +9500,17 @@ wxString ibMcpPatternText(const wxString& name)
 class ibMcpToolPatternRead : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("pattern_read"); }
+	ibString GetName() const override { return ibT("pattern_read"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString name = ArgName().Text(params);
+		const ibString name = ArgName().Text(params);
 		return name.IsEmpty()
 			? ibMcpText("listing the patterns")
-			: wxString::Format(ibMcpText("reading the '%s' pattern"), name);
+			: ibString::Format(ibMcpText("reading the '%s' pattern"), name);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("A translator from the language of the people who ask - accountants, warehouse "
 			"managers, anyone describing their work - into the shapes this platform has. They do "
@@ -9569,7 +9569,7 @@ public:
 	// there was, said as "3 of your 5 words" so a partial answer is never mistaken for a complete
 	// one. That is the difference between a search that fails politely and one that says "there is
 	// nothing about this" - which, about a corpus this size, is never true and always acted on.
-	void FindInside(const wxString& query, std::vector<ibDataValue>& places) const override
+	void FindInside(const ibString& query, std::vector<ibDataValue>& places) const override
 	{
 		if (query.IsEmpty())
 			return;
@@ -9586,8 +9586,8 @@ public:
 				// The pattern's NAME and SUMMARY count towards the topic's score: a caller asking
 				// "lots" should reach every part of the lots entry, not only the paragraphs that
 				// happen to repeat the word.
-				const wxString haystack = wxString(pattern.m_name) + wxT("\n")
-					+ pattern.m_summary + wxT("\n") + topic.m_body;
+				const ibString haystack = ibString(pattern.m_name) + ibT("\n")
+					+ pattern.m_summary + ibT("\n") + topic.m_body;
 
 				const size_t score = ibMcpWordsFound(haystack, query, &asked);
 				if (score == 0)
@@ -9612,17 +9612,17 @@ public:
 				break;
 
 			std::shared_ptr<ibDataNode> hit = std::make_shared<ibDataNode>();
-			hit->SetValue(wxT("pattern"), wxString(place.m_pattern->m_name));
-			hit->SetValue(wxT("topic"), TopicLabel(place.m_topic.m_title));
+			hit->SetValue(ibT("pattern"), ibString(place.m_pattern->m_name));
+			hit->SetValue(ibT("topic"), TopicLabel(place.m_topic.m_title));
 
 			if (partial)
-				hit->SetValue(wxT("matched"), wxString::Format(
+				hit->SetValue(ibT("matched"), ibString::Format(
 					ibMcpText("%i of your %i words"), (int)place.m_score, (int)asked));
 
 			// The line that matched, so a caller can judge the hit without fetching it.
-			const wxString line = ibMcpMatchingLine(place.m_topic.m_body, query);
+			const ibString line = ibMcpMatchingLine(place.m_topic.m_body, query);
 			if (!line.IsEmpty())
-				hit->SetValue(wxT("line"), line);
+				hit->SetValue(ibT("line"), line);
 
 			places.push_back(ibDataValue::Child(hit));
 		}
@@ -9634,10 +9634,10 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const wxString name = ArgName().Text(params);
-		const wxString query = ArgQuery().Text(params);
+		const ibString name = ArgName().Text(params);
+		const ibString query = ArgQuery().Text(params);
 
 		// ⭐ SEARCH FIRST, IF THERE IS ONE. A caller with words and no name gets addresses back -
 		// pattern, topic, and the line that matched - and reads exactly the part that answered.
@@ -9647,7 +9647,7 @@ public:
 			FindInside(query, hits);
 
 			if (hits.empty()) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("Not one word of '%s' appears in the patterns. THE CORPUS IS IN ENGLISH - "
 					  "if that query is in another language, ask again with the English words the "
 					  "trade uses for it. Otherwise say it in other words, or ask with no argument "
@@ -9656,9 +9656,9 @@ public:
 				return false;
 			}
 
-			result.AddField(wxT("found"), ibDataValue::Int((s64)hits.size()));
-			result.AddField(wxT("hits"), ibDataValue::Array(hits));
-			result.SetValue(wxT("note"), hits.size() >= 24
+			result.AddField(ibT("found"), ibDataValue::Int((std::int64_t)hits.size()));
+			result.AddField(ibT("hits"), ibDataValue::Array(hits));
+			result.SetValue(ibT("note"), hits.size() >= 24
 				? ibMcpText("Read one with {name, topic} - quoting the topic line above. This many "
 				  "addresses means the words are common ones: add a word to narrow it.")
 				: ibMcpText("Read one with {name, topic} - quoting the topic line above."));
@@ -9673,12 +9673,12 @@ public:
 
 			for (const ibMcpPattern& pattern : Patterns()) {
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-				entry->SetValue(wxT("name"), wxString(pattern.m_name));
-				entry->SetValue(wxT("summary"), pattern.m_summary);
+				entry->SetValue(ibT("name"), ibString(pattern.m_name));
+				entry->SetValue(ibT("summary"), pattern.m_summary);
 				out.push_back(ibDataValue::Child(entry));
 			}
 
-			result.AddField(wxT("patterns"), ibDataValue::Array(out));
+			result.AddField(ibT("patterns"), ibDataValue::Array(out));
 
 			// ⭐⭐ A STRANGER SEES THE COUNT AND THE SHAPE BEFORE THE LIST. Sixty-odd name-and-summary
 			// pairs read as an undifferentiated heap: nothing in them says that seven are about
@@ -9686,22 +9686,22 @@ public:
 			// a trade can never reach. Naming them here, above the list, is what turns a first
 			// contact into a path — and the count is what tells the reader this is a body of work
 			// rather than a handful of notes.
-			result.AddField(wxT("count"), ibDataValue::Int((s64)out.size()));
+			result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)out.size()));
 			{
-				static const wxChar* const s_start[] = {
-					wxT("intake"), wxT("combining"), wxT("same-shape-elsewhere"),
-					wxT("unfamiliar-domain"), wxT("document-chains"),
-					wxT("where-behaviour-lives"), wxT("building-an-erp"), wxT("body-map")
+				static const ibChar* const s_start[] = {
+					ibT("intake"), ibT("combining"), ibT("same-shape-elsewhere"),
+					ibT("unfamiliar-domain"), ibT("document-chains"),
+					ibT("where-behaviour-lives"), ibT("building-an-erp"), ibT("body-map")
 				};
 
 				std::vector<ibDataValue> start;
-				for (const wxChar* const nm : s_start)
-					start.push_back(ibDataValue::String(wxString(nm)));
+				for (const ibChar* const nm : s_start)
+					start.push_back(ibDataValue::String(ibString(nm)));
 
-				result.AddField(wxT("start_here"), ibDataValue::Array(start));
+				result.AddField(ibT("start_here"), ibDataValue::Array(start));
 			}
 
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("`count` is how many there are; `start_here` names the few that are about USING "
 				  "the rest, and a search by the words of a trade will never land on them - so when "
 				  "what arrived is a whole task rather than a term, read those first. Everything "
@@ -9724,7 +9724,7 @@ public:
 			// the same failure as writing another language's syntax, one floor up: it looks right
 			// and does not fit. Named because it was observed, repeatedly (Max, 2026-08-31: "you
 			// keep telling me about currency accounting out of the SAP world").
-			result.SetValue(wxT("beware"),
+			result.SetValue(ibT("beware"),
 				ibMcpText("If you know other ERP systems, notice when an answer is coming from one of "
 				  "them. Their concepts have familiar names here and different edges, and a "
 				  "design imported wholesale looks reasonable until it meets the platform it is "
@@ -9740,28 +9740,28 @@ public:
 		// ⚠ NAMED AND NOT FOUND IS A REFUSAL, not an empty answer. A caller who mistyped a name
 		// and got `{}` back reads it as "there is no advice about this" and proceeds.
 		if (found == nullptr) {
-			wxString known;
+			ibString known;
 			for (const ibMcpPattern& pattern : Patterns()) {
 				if (!known.IsEmpty())
-					known += wxT(", ");
+					known += ibT(", ");
 				known += pattern.m_name;
 			}
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("There is no pattern called '%s'. There is: %s."), name, known);
 			return false;
 		}
 
-		result.SetValue(wxT("name"), wxString(found->m_name));
-		result.SetValue(wxT("summary"), found->m_summary);
+		result.SetValue(ibT("name"), ibString(found->m_name));
+		result.SetValue(ibT("summary"), found->m_summary);
 
 		const std::vector<ibMcpTopic> topics = TopicsOf(found->m_text);
-		const wxString wanted = ArgTopic().Text(params);
+		const ibString wanted = ArgTopic().Text(params);
 
 		// EVERYTHING, when asked for it - or when the entry is short enough that a table of
 		// contents would cost more than the text it describes.
-		if (wanted.IsSameAs(wxT("all"), false) || topics.size() < 3
+		if (wanted.IsSameAs(ibT("all"), false) || topics.size() < 3
 			|| found->m_text.length() < 2500) {
-			result.SetValue(wxT("text"), found->m_text);
+			result.SetValue(ibT("text"), found->m_text);
 			return true;
 		}
 
@@ -9778,17 +9778,17 @@ public:
 					continue;
 
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-				entry->SetValue(wxT("topic"), TopicLabel(topic.m_title));
-				entry->SetValue(wxT("text"), topic.m_body);
+				entry->SetValue(ibT("topic"), TopicLabel(topic.m_title));
+				entry->SetValue(ibT("text"), topic.m_body);
 				parts.push_back(ibDataValue::Child(entry));
 			}
 
 			if (!parts.empty()) {
-				result.AddField(wxT("parts"), ibDataValue::Array(parts));
+				result.AddField(ibT("parts"), ibDataValue::Array(parts));
 				return true;
 			}
 
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' has no topic matching '%s'. Ask it without a topic to see what is in it, "
 				  "or with topic 'all'."), name, wanted);
 			return false;
@@ -9805,14 +9805,14 @@ public:
 			// which is which is to fetch them - which is precisely the cost this listing exists to
 			// avoid. The weight makes the next call a decision rather than a probe.
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("topic"), TopicLabel(topic.m_title));
-			entry->AddField(wxT("lines"), ibDataValue::Int((s64)LinesIn(topic.m_body)));
+			entry->SetValue(ibT("topic"), TopicLabel(topic.m_title));
+			entry->AddField(ibT("lines"), ibDataValue::Int((std::int64_t)LinesIn(topic.m_body)));
 
 			contents.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("topics"), ibDataValue::Array(contents));
-		result.SetValue(wxT("note"),
+		result.AddField(ibT("topics"), ibDataValue::Array(contents));
+		result.SetValue(ibT("note"),
 			ibMcpText("Read one with `topic`, quoting any words of its line above; `topic: \"all\"` gives "
 			  "the whole entry. `lines` is how long each part is."));
 		return true;

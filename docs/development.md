@@ -9,7 +9,8 @@ Two neighbours hold what is not repeated here:
 [CONTRIBUTING.md](../CONTRIBUTING.md) (what sending a pull request means legally, and the four
 comment markers) and [CLAUDE.md](../CLAUDE.md) (layout, naming table, key decisions, what not to
 do). Portability has its own file, [portability.md](portability.md), and so does the build,
-[BUILD.md](BUILD.md).
+[BUILD.md](BUILD.md). How the code itself is written — names, class layout, holders, refusals,
+the diff — is the companion of this file, [writing-code.md](writing-code.md).
 
 ---
 
@@ -64,14 +65,16 @@ them, and CI refuses a header that brings `#pragma once`.
 
 **A picture is a PNG in Base64, in the source file that reads it; never XPM.** It is a string
 (`static const wxString s_<name>_png = "..."`) beside the code that uses it — the art provider's in
-`frontend/artProvider/private/picturePredefined.h`, a control's in its `_res.cpp`, a metatype's in its
+`frmclient/artProvider/private/picturePredefined.h` (codeRunner keeps a copy of its own), the engine's own in `core/picturePredefined.cpp`, a control's in its `_res.cpp`, a metatype's in its
 `_res.cpp` — kept as a MASTER four times the size it is drawn at, and scaled down by whoever reads it to
 the size it shows it at. Its source is an SVG in `tools/pictures/render.js`, which draws the PNG and
 writes the string: to change a picture, change its SVG there and run the script; to add one, add the SVG,
 a line in its `TARGETS` and a placeholder string. One act has one drawing everywhere it appears, and the
 manner is the one that file describes. XPM renders poorly at any size but its own, and no new one goes in.
 
-**The backend stays GUI-free and never shows a modal window.** Its callers include the application server,
+**The backend stays GUI-free and never shows a modal window.** core, protocol, backend and frmserver are compiled
+with `wxUSE_GUI=0` and link wx base only, so a window, an image or a font there does not compile; a picture, a
+colour and a font are the core's data (`core/graphics`). Its callers include the application server,
 the web server, background jobs and an assistant over MCP, and none of them can click a box.
 Say it with `ibValueSystemFunction::Message`, or hand the reason back to the caller
 (`bool Verb(…, wxString* refusal)`).
@@ -239,10 +242,19 @@ into one question before the join, not after.
 **Hot paths carry `ibString`.** The engine's own string (`core/fstring.h`) is a shared handle:
 copying it copies a reference, not the characters. A name that reaches the runtime is taken as
 `const ibString&` — `ibProcUnit::CallAsProc` / `CallAsFunc`, `ibRuntimeModuleDataObject::ExecAsProc` /
-`ExecAsFunc` / `ExecAsEvent` / `ExecAsManagerEvent`. `wxString` stays where speed is not the question
-(the interface, serialisation, metadata edits). Both conversions are implicit, and each one makes a new
+`ExecAsFunc` / `ExecAsEvent` / `ExecAsManagerEvent`. `wxString` stays only at the boundary with wx (a
+control, a wx out-parameter, `wxConfigBase`). Both conversions are implicit, and each one makes a new
 text, so convert at the boundary, once. `ib_clsid_hash(const wxString&)` converts to UTF-8 and allocates
 on every call, so hash once per event, not once per handler.
+
+- **A getter of an `ibString` member returns `const ibString&`** — not even the reference count is
+  touched. Only when the member IS an `ibString`: over any other type the reference is to a temporary
+  (`ibTranslateCode::GetBuffer` over a `std::wstring`, 147 crashing tests, 2026-10-27), which the build
+  now refuses (C4172 is an error, see [portability.md](portability.md) §1.9).
+- **A `wxString`'s `mb_str()` is not a buffer of its own** — it points into the string it came from. Over
+  a temporary (`wxString(text).mb_str(conv)`) it is gone before it is read. Text into bytes goes
+  through the converter itself: `conv.cWC2MB(text.wc_str(), wxNO_LEN, &length)` — the wide text's
+  own length, which is not `Len()` where `wchar_t` is four bytes ([portability.md](portability.md) §1.5b′).
 
 ---
 

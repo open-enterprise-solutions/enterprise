@@ -1,0 +1,335 @@
+#ifndef __OES_APP_H__
+#define __OES_APP_H__
+
+// ibWxApp — wxApp subclass with crash plumbing pre-wired.
+//
+// Header-only, in the core beside the guard it wires: what it catches is
+// the core's refusal (ibCoreException — the engine's among them), so it
+// knows nothing above the core. It is wx-aware (wxApp / wxDebugReport /
+// wxMessageBox / wxLog), but every method body is inline: the core never
+// includes it, so the core does not link wx's GUI for it — the program
+// that derives from it does (launcher, codeRunner).
+//
+// What the base wires for you:
+//   OnInit              → ibCrashGuard::Install(GetExeName()) + DoOnInit()
+//   OnRun               → headless WrapStartup around DoOnRun()
+//   OnExceptionInMainLoop → ibCoreException = show + continue;
+//                            anything else = unwind into OnUnhandled
+//   OnUnhandledException  → log + wxDebugReport
+//   OnFatalException      → wxDebugReport (main thread) /
+//                            native MessageBox + TerminateProcess (bg)
+//   OnAssertFailure       → journal + stderr, once per site, NO dialog
+//
+// Subclass contract:
+//   - GetExeName() — pure virtual, e.g. "launcher" / "codeRunner".
+//   - DoOnInit()   — replaces OnInit body. Default returns true.
+//   - DoOnRun()    — replaces OnRun body. Default delegates to
+//                    wxApp::OnRun() (plain main event loop).
+//
+// Anything outside the wxApp pipeline (ReportStartupError, etc.) goes
+// through ibCrashGuard directly — core symbols, no wrapper needed.
+
+#include "core/diagnostics/crashGuard.h"
+#include "core/diagnostics/journal.h"   // ibJournalError — what the loop says of a refusal
+#include "core/exception.h"             // ibCoreException — the refusal it says and goes on
+
+#include <wx/app.h>
+#include <wx/cmdline.h>   // the usage text an unparsed command line is answered with
+#include <wx/debugrpt.h>
+#include <wx/log.h>
+#include <wx/msgdlg.h>
+#include <wx/string.h>
+#include <wx/thread.h>
+
+#include <cstdio>    // stderr, for an assertion raised before the journal is open
+#include <cstdlib>   // EXIT_FAILURE
+#include <exception>
+#include <functional>
+#include <mutex>
+#include <set>
+#include <utility>
+
+class ibWxApp : public wxApp {
+public:
+
+	// "enterprise" / "designer" / "codeRunner" / "launcher" — used as
+	// dump-file prefix and dialog caption. Override on the concrete app.
+	virtual wxString GetExeName() const = 0;
+
+	// Subclass entry points. The default is `wxApp::OnInit()` (the wx
+	// side of init: cmd-line parse, image handler registration). Override
+	// only if the exe needs extra steps (codeRunner / launcher construct
+	// a frame here; enterprise / designer keep the default).
+	virtual bool DoOnInit() { return wxApp::OnInit(); }
+
+	virtual int DoOnRun() { return wxApp::OnRun(); }
+
+	// ⭐⭐ A COMMAND LINE IT DOES NOT UNDERSTAND IS SAID OUT LOUD — because the default is to say it
+	// on a stream a windowed application does not have. wx prints the usage to stderr and returns
+	// false; the process then ends with NOTHING anywhere: no window, no dump, and a journal holding
+	// six start-up lines and an abrupt stop.
+	//
+	// 🛑 MEASURED, AND IT COST A TURN (2026-09-04): `designer.exe /F"…\fb_test301"` — a plausible
+	// spelling, and wrong. The exe vanished, and the only way to learn that the option is `--file=`
+	// was to open the source. Whoever arrives here NEXT — a person on a first run, an assistant on
+	// its first launch — must be told by the platform rather than have to read it.
+	//
+	// The journal is the right ear: it is written whether or not anyone is watching, it survives the
+	// process, and it is now readable from outside (`trace_read`). The usage text is the parser's
+	// own, so it cannot drift from the options actually declared.
+	// ⚠ INFO, AND BOTH LOUDER LEVELS WERE TRIED ON A LIVE RUN FIRST — each brought a cost that has
+	// nothing to do with saying the sentence:
+	//
+	//   `ibJournalError`   takes a CRASH DUMP with it (once per run, by design — an error is a fault
+	//                      worth a snapshot). A mistyped option is not a fault of the program, and a
+	//                      dump per typo is litter in the directory somebody digs through when
+	//                      something really did break.
+	//   `ibJournalWarning` echoes to the SCREEN, so the process stopped at a modal box instead of
+	//                      stopping — worse than the silence it replaced, because a launch from a
+	//                      script now hangs where it used to exit.
+	//
+	// So it is written where it can always be read and never blocks: the file. The line names the
+	// options verbatim, and `trace_read` reaches it from outside the process.
+	bool OnCmdLineError(wxCmdLineParser& parser) override
+	{
+		ibJournalInfo(wxT("start"), wxT("this command line was not understood, so %s is stopping. "
+			"It accepts:\n%s"), GetExeName(), parser.GetUsageString());
+
+		return wxApp::OnCmdLineError(parser);
+	}
+
+	// …and the same courtesy for `--help`, which otherwise answers into the same missing stream.
+	bool OnCmdLineHelp(wxCmdLineParser& parser) override
+	{
+		ibJournalInfo(wxT("start"), wxT("%s accepts:\n%s"), GetExeName(), parser.GetUsageString());
+
+		return wxApp::OnCmdLineHelp(parser);
+	}
+
+	bool OnInit() override
+	{
+		// Headless crash plumbing first — before any wx subsystem so
+		// faults during wxApp::OnInit / image-handler registry / locale
+		// init also land in a dump.
+		ibCrashGuard::Install(GetExeName());
+
+		// ⭐ THE APPLICATION IS LIGHT, AND NOW IT SAYS SO — because the half that answers to the
+		// system was contradicting the half that does not.
+		//
+		// Every surface this platform draws is painted from a fixed LIGHT palette, in code:
+		// #FAF7F0 for the metadata tree, #B8C9D4 for the panels around it, and so on through
+		// docs/private/ui-palette.md. What is NOT set anywhere is the text colour — no SetForegroundColour
+		// accompanies those backgrounds — so glyphs come from the system.
+		//
+		// Under a dark system appearance the system duly hands back white. White on #FAF7F0 is
+		// invisible: the metadata tree renders as a column of blank rows (macOS 15, 2026-09-04).
+		// Nothing is broken, nothing is logged, and the window is simply unreadable.
+		//
+		// Declaring the appearance is the honest fix, not a workaround: an application whose
+		// palette cannot follow the system should not claim to. It costs one call and makes every
+		// system-derived colour — label text, disabled states, focus rings, native scrollbars —
+		// agree with the palette they are drawn against.
+		//
+		// A real dark theme is a different piece of work: it means a second palette and a
+		// theme-aware source for every hard-coded colour, not a switch. Until that exists, this is
+		// what keeps the window legible.
+		//
+		// Called before DoOnInit() so it lands ahead of every window: wx wants it at the very start
+		// of OnInit, and MSW in particular can only apply it before controls exist. The result is
+		// deliberately ignored — CannotChange is the correct answer on a platform with no such
+		// concept, and it is not a startup failure anywhere.
+		SetAppearance(Appearance::Light);
+
+		return DoOnInit();
+	}
+
+	int OnRun() override
+	{
+		const wxString exe = GetExeName();
+		try {
+			return DoOnRun();
+		}
+		catch (const ibCoreException& e) {
+			ReportStartupFault(exe,
+				wxT("ibCoreException during startup: ") + e.GetErrorDescription());
+			return 1;
+		}
+		catch (const std::exception& e) {
+			ReportStartupFault(exe,
+				wxT("std::exception during startup: ") + wxString::FromUTF8(e.what()));
+			return 1;
+		}
+		catch (...) {
+			ReportStartupFault(exe,
+				wxT("Unknown exception during startup (non-std, non-ibCore)"));
+			return 1;
+		}
+	}
+
+#if wxUSE_EXCEPTIONS
+	bool OnExceptionInMainLoop() override
+	{
+		// wx delegates here when a C++ exception escapes from an event
+		// handler back into the main loop. Returning true keeps the loop
+		// running (recoverable); false escalates to OnUnhandledException.
+		// A refusal (ibCoreException — the engine's among them) is the only "show and
+		// continue" class — known business / DB error. Everything else lets the loop unwind.
+		//
+		// (A script failure the engine had already reported — ProcessError names the module and the line,
+		//  then lets it propagate — was told apart here by ibBackendException::IsErrorHandled, so its window
+		//  was not shown twice. In the core that type is not known; the two programs on this base catch
+		//  a script's refusal themselves, and none reaches the loop.)
+		try {
+			throw;
+		}
+		catch (const ibCoreException& e) {
+			ibJournalError(wxT("app"), wxT("%s"), e.GetErrorDescription());
+			return true;
+		}
+		catch (const std::exception& e) {
+			ibJournalError(wxT("app"), wxT("std::exception in main loop: %s"),
+				wxString::FromUTF8(e.what()));
+			return false;
+		}
+		catch (...) {
+			ibJournalError(wxT("app"), wxT("Unknown exception in main loop"));
+			return false;
+		}
+	}
+
+	void OnUnhandledException() override
+	{
+		// Reached when a C++ exception escapes the event loop. Identify
+		// the in-flight type before wxDebugReport — the throw site is
+		// already unwound, so the type-aware diagnostic is the last
+		// chance to see what actually went wrong.
+		wxString diag = wxT("Unhandled exception: <unknown>");
+		try {
+			auto p = std::current_exception();
+			if (p) std::rethrow_exception(p);
+		}
+		catch (const ibCoreException& e) {
+			diag = wxT("Unhandled ibCoreException: ") + e.GetErrorDescription();
+		}
+		catch (const std::exception& e) {
+			diag = wxT("Unhandled std::exception: ") + wxString::FromUTF8(e.what());
+		}
+		catch (...) {
+		}
+
+		ibCrashGuard::LogUnhandledException(GetExeName(), diag);
+		ibJournalError(wxT("app"), "%s", diag);
+
+		wxDebugReportCompress report;
+		report.AddAll(wxDebugReport::Context_Current);
+		wxDebugReportPreviewStd preview;
+		if (preview.Show(report)) report.Process();
+	}
+#endif // wxUSE_EXCEPTIONS
+
+#if wxDEBUG_LEVEL
+	// A FAILED ASSERTION IS A RECORD, NOT A WINDOW. wx answers one with a modal
+	// message box, and it does that wherever the assertion happened to fire —
+	// including inside a paint handler, which is where this was found on
+	// 2026-09-07: a `wxAuiToolBar` painted before layout had given it a size
+	// asserted in `wxGCDC::DoDrawBitmap` ("invalid bitmap"), the dialog opened
+	// from inside the paint, and the client stopped with no window a person
+	// could see and no line anyone could read. Opening a document looked like a
+	// hang. It was worse than a plain modal, too: AppKit logs a call stack when
+	// a modal session starts nested like that, and the process spent every cycle
+	// it had symbolicating it, so the box never finished drawing either.
+	//
+	// The same rule the engine already follows (CLAUDE.md: do not raise a modal
+	// from a caller that may not be a person) applies here for the same reason.
+	// The assertion still gets said, in the place things are said: the journal,
+	// at Info, which reaches the file and not the screen — plus stderr, because
+	// an assertion during startup fires before the journal is open.
+	//
+	// ONCE PER SITE. An assertion in a paint handler fires on every paint; the
+	// hundredth copy of a line carries nothing the first did not, and the flood
+	// is what would make the journal unreadable at the moment it matters.
+	void OnAssertFailure(const wxChar* file, int line, const wxChar* func,
+		const wxChar* cond, const wxChar* msg) override
+	{
+		static std::mutex          s_mutex;
+		static std::set<std::pair<wxString, int>> s_seen;
+		{
+			std::lock_guard<std::mutex> lock(s_mutex);
+			if (!s_seen.emplace(wxString(file != nullptr ? file : wxT("?")), line).second)
+				return;
+		}
+
+		const wxString where = wxString::Format(wxT("%s:%d"),
+			file != nullptr ? file : wxT("?"), line);
+		wxString what = cond != nullptr ? wxString(cond) : wxString(wxT("(no condition)"));
+		if (msg != nullptr && *msg != wxT('\0'))
+			what += wxT(" -- ") + wxString(msg);
+		if (func != nullptr && *func != wxT('\0'))
+			what += wxT(" [in ") + wxString(func) + wxT("]");
+
+		ibJournalInfo(wxT("assert"), wxT("%s: %s"), where, what);
+		std::fprintf(stderr, "OES assert %s: %s\n",
+			static_cast<const char*>(where.utf8_str()),
+			static_cast<const char*>(what.utf8_str()));
+	}
+#endif // wxDEBUG_LEVEL
+
+#if wxUSE_ON_FATAL_EXCEPTION && wxUSE_STACKWALKER
+	void OnFatalException() override
+	{
+		// wxDebugReport / wxDebugReportPreviewStd are main-thread-only
+		// — they assert wxIsMainThread() inside. A
+		// background-thread fault going through the wx path double-faults.
+		// Surface a platform-native message + TerminateProcess.
+		if (!wxIsMainThread()) {
+			const wxString exe = GetExeName();
+			const wxString caption = wxT("OES ") + exe + wxT(" - fatal error");
+			const wxString msg = wxString::Format(
+				wxT("A fatal error occurred on a background thread (tid=%lu).\n\n")
+				wxT("A crash dump has been saved to:\n%s\n\n")
+				wxT("The application will now close."),
+				ibCrashGuard::CurrentTidPortable(),
+				ibCrashGuard::GetCrashDir());
+			ibCrashGuard::PlatformNativeMessage(caption, msg);
+			ibCrashGuard::TerminateProcessFast(EXIT_FAILURE);
+			return;
+		}
+
+		// Main thread — full wx debug-report flow. AddAll(Context_Exception)
+		// captures register/stack state at the fault site.
+		wxDebugReportCompress report;
+		report.AddAll(wxDebugReport::Context_Exception);
+		wxDebugReportPreviewStd preview;
+		if (preview.Show(report)) report.Process();
+		// The persistent minidump is already on disk via the core's
+		// SEH filter (it runs before wx's chained handler). A second
+		// fault during OnExit cleanup is OK — the dump survives.
+	}
+#endif // wxUSE_ON_FATAL_EXCEPTION
+
+protected:
+
+	// Startup-error surface. Logs to file + prefers wxMessageBox if the
+	// app has reached an UI-ready state, otherwise falls back to
+	// platform-native (MessageBoxW on Win, stderr on POSIX). Use from
+	// DoOnRun when bailing out before the main loop starts.
+	static void ReportStartupFault(const wxString& exeName, const wxString& message)
+	{
+		ibCrashGuard::LogStartupError(exeName, message);
+
+		const wxString caption = wxT("OES ") + exeName + wxT(" - startup error");
+#ifdef __WXMSW__
+		// Always platform-native during startup — wx state may be
+		// half-initialised and wxMessageBox can re-enter the broken
+		// path. The fallback is intentional and consistent.
+		ibCrashGuard::PlatformNativeMessage(caption, message);
+#else
+		if (wxTheApp != nullptr)
+			wxMessageBox(message, caption, wxOK | wxICON_ERROR);
+		else
+			ibCrashGuard::PlatformNativeMessage(caption, message);
+#endif
+	}
+};
+
+#endif // __OES_APP_H__

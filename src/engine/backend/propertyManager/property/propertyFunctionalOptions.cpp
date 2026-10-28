@@ -4,13 +4,13 @@
 #include "backend/metaCollection/metaObject.h"   // g_metaFunctionalOptionCLSID — the candidates' kind
 #include "backend/functionalOption/functionalOptionGate.h"   // IsAvailable — the rule a member is available by
 
-wxVariantData* ibPropertyFunctionalOptions::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& metaDesc)
+ibVariant ibPropertyFunctionalOptions::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& metaDesc)
 {
-	return new ibVariantDataOwner(property, metaDesc);
+	return ibVariant(new ibVariantOwner(property, metaDesc));
 }
 
 ibMetaDescription& ibPropertyFunctionalOptions::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
+	return get_cell_variant<ibVariantMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyFunctionalOptions::SetValue(const ibMetaDescription& val)
@@ -19,9 +19,9 @@ void ibPropertyFunctionalOptions::SetValue(const ibMetaDescription& val)
 }
 
 // The family rule — see propertyRecord.cpp.
-void ibPropertyFunctionalOptions::DoSetValue(const wxVariant& val)
+void ibPropertyFunctionalOptions::DoSetValue(const ibVariant& val)
 {
-	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+	if (const ibVariantMetaDesc* carried = find_cell_variant<ibVariantMetaDesc>(val)) {
 		SetValue(carried->GetMetaDesc());
 		return;
 	}
@@ -50,7 +50,7 @@ bool ibPropertyFunctionalOptions::SetDataValue(const ibValue& varPropVal) { retu
 
 bool ibPropertyFunctionalOptions::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibVariantDataOwner* owner = get_cell_variant<ibVariantDataOwner>();
+	const ibVariantOwner* owner = get_cell_variant<ibVariantOwner>();
 	wxASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;
@@ -58,12 +58,12 @@ bool ibPropertyFunctionalOptions::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyFunctionalOptions::ReadNodeValue(const ibDataValue& value)
 {
-	ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
+	ibBackendMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
 	return true;
 }
 
 bool ibPropertyFunctionalOptions::WriteNodeValue(ibDataValue& value) const
 {
 	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
-	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
+	return ibBackendMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

@@ -38,7 +38,7 @@ public:
     // The ctor stays public only so unit tests (tests/test_logger.cpp)
     // can construct standalone instances against scratch directories;
     // application code MUST NOT instantiate it directly.
-    explicit ibLogger(const wxString& dir,
+    explicit ibLogger(const ibString& dir,
                       std::size_t maxQueue = 100000,
                       std::size_t maxBatch = 256,
                       int         maxWaitMs = 100);
@@ -59,12 +59,12 @@ public:
 
     // Audit — business events (login / document write / DDL apply / ...).
     // This is the activity-log surface.
-    void Audit(const wxString& source,
-               const wxString& event_type,
-               const wxString& message);
-    void Audit(const wxString& source,
-               const wxString& event_type,
-               const wxString& message,
+    void Audit(const ibString& source,
+               const ibString& event_type,
+               const ibString& message);
+    void Audit(const ibString& source,
+               const ibString& event_type,
+               const ibString& message,
                const ibValue&  details);
 
     // Object-bound audit: viewer uses (refMetaId, refGuid) to drill
@@ -73,18 +73,18 @@ public:
     // ibMetaID of the catalog/document type. Empty refGuid degrades
     // to the non-ref overload — admins still see the row, just
     // without drill-down.
-    void Audit(const wxString& source,
-               const wxString& event_type,
-               const wxString& message,
-               const wxString& refGuid,
+    void Audit(const ibString& source,
+               const ibString& event_type,
+               const ibString& message,
+               const ibString& refGuid,
                int             refMetaId);
 
     // Trace — technical events for the developer.
-    void Info (const wxString& source, const wxString& event_type, const wxString& message);
-    void Warn (const wxString& source, const wxString& event_type, const wxString& message);
-    void Error(const wxString& source, const wxString& event_type, const wxString& message);
+    void Info (const ibString& source, const ibString& event_type, const ibString& message);
+    void Warn (const ibString& source, const ibString& event_type, const ibString& message);
+    void Error(const ibString& source, const ibString& event_type, const ibString& message);
 
-    const wxString& GetLogDir() const { return m_dir; }
+    const ibString& GetLogDir() const { return m_dir; }
 
     // Start a background thread that runs ibLoggerSweep::RunOnce every
     // ~24h. retentionDays = how old .olg files must be before deletion.
@@ -97,19 +97,19 @@ public:
 
 private:
     void Emit(ibLogLevel level,
-              const wxString& source,
-              const wxString& event_type,
-              const wxString& message,
+              const ibString& source,
+              const ibString& event_type,
+              const ibString& message,
               const ibValue*  details,
-              const wxString* refGuid   = nullptr,
+              const ibString* refGuid   = nullptr,
               int             refMetaId = 0);
 
-    static wxLongLong_t NowMillis();
-    static wxString     HostName();
+    static long long NowMillis();
+    static ibString     HostName();
 
     void SweepLoop();
 
-    wxString                          m_dir;
+    ibString                          m_dir;
     std::shared_ptr<ibLoggerQueue>    m_queue;
     std::shared_ptr<ibLoggerSink>     m_sink;
     std::unique_ptr<ibLoggerWriter>   m_writer;

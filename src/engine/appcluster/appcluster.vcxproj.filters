@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="appCluster.cpp" />
+    <ClCompile Include="clusterRoute.cpp" />
+    <ClCompile Include="clusterService.cpp" />
+    <ClCompile Include="clusterWorker.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="appCluster.h" />
+    <ClInclude Include="clusterRoute.h" />
+    <ClInclude Include="clusterService.h" />
+    <ClInclude Include="clusterWorker.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="appcluster.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
+  </ItemGroup>
+</Project>

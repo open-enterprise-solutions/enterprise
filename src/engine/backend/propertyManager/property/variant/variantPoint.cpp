@@ -1,6 +1,6 @@
 #include "variantPoint.h"
 
-wxString ibVariantDataPoint::MakeString() const
+ibString ibVariantPoint::GetString() const
 {
-	return typeConv::PointToString(m_point);
+	return m_point.ToString();
 }

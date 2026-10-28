@@ -8,13 +8,10 @@
 //                             writer / std::set_terminate / log files /
 //                             platform-native message-box. Linkable
 //                             from any binary regardless of frontend.
-//   - frontend/diagnostics/oesApp.h: header-only ibWxApp base. wxApp +
+//   - backend/oesApp.h:       header-only ibWxApp base. wxApp +
 //                             wxDebugReport + wxMessageBox pre-wired
 //                             pipeline on top of this guard. Inherited
-//                             by enterprise, designer, codeRunner,
-//                             launcher.
-//   - wfrontend (web): cpp-httplib JSON-500 exception handler bolted on
-//                      top of this guard. Used by wenterprise-server.
+//                             by codeRunner and launcher.
 //   - console (daemon-class): this guard alone — no wx UI, just dumps
 //                             and log files.
 //
@@ -34,7 +31,6 @@
 //   - wxTheApp->CallAfter marshalling.
 
 #include "core/core.h"
-#include <wx/string.h>
 #include <functional>
 #include <utility>      // std::forward — the journal's parameter pack
 
@@ -46,17 +42,32 @@ namespace ibCrashGuard {
 //
 // Idempotent — second Install with a different exeName updates the
 // label but does not re-register handlers.
-CORE_API void Install(const wxString& exeName);
+CORE_API void Install(const ibString& exeName);
+
+// The POSIX handlers run on an alternate stack, so a stack overflow —
+// a fiber's guard page arrives as SIGSEGV — can still be written down.
+// The stack is per thread. Install arms the calling thread; a thread
+// that switches fibers arms itself from ibFiber::ConvertThread.
+// On Windows the unhandled filter writes the dump from a helper thread.
+// The guard page is not restored there: that belongs after an unwind.
+CORE_API void ArmCurrentThread();
+
+// The process's id as the system numbers it — what the dumps and the journal's file are named with.
+CORE_API unsigned int CurrentPidPortable();
+
+// The calling thread's id as the system numbers it — what a debugger, a profiler and the dumps show; the journal's
+// lines carry it too. Windows: GetCurrentThreadId; Linux: gettid; macOS: pthread_threadid_np.
+CORE_API unsigned long CurrentTidPortable();
 
 
 // Append `message` to `<exeName>_startup.log` next to the binary. No UI.
 // Frontend / web / console wrappers add their own user-visible surface.
-CORE_API void LogStartupError(const wxString& exeName,
-                                  const wxString& message);
+CORE_API void LogStartupError(const ibString& exeName,
+                                  const ibString& message);
 
 // Append `diag` to `<exeName>_unhandled.log`. No UI.
-CORE_API void LogUnhandledException(const wxString& exeName,
-                                        const wxString& diag);
+CORE_API void LogUnhandledException(const ibString& exeName,
+                                        const ibString& diag);
 
 // Platform-native message box that does NOT depend on wx state. Safe
 // from any thread; safe before wxApp construction and after wxApp
@@ -66,8 +77,8 @@ CORE_API void LogUnhandledException(const wxString& exeName,
 // Frontend / web layers should still prefer wxMessageBox or HTTP-500
 // responses while the higher-level state is alive; this is the bottom
 // fallback for startup failure / background-thread faults / post-exit.
-CORE_API void PlatformNativeMessage(const wxString& caption,
-                                       const wxString& message);
+CORE_API void PlatformNativeMessage(const ibString& caption,
+                                       const ibString& message);
 
 // Force-terminate the current process without running destructors or
 // atexit handlers. Use only after a fault has already torn diagnostic
@@ -81,7 +92,7 @@ CORE_API void TerminateProcessFast(int exitCode);
 // wraps DoOnRun with a wx-aware variant that prefers wxMessageBox
 // over PlatformNativeMessage; for console / appserver / wes, this is the
 // direct path.
-CORE_API int WrapStartup(const wxString& exeName,
+CORE_API int WrapStartup(const ibString& exeName,
                              std::function<int()> body);
 
 // ⭐ A DUMP RIGHT NOW, with nothing wrong yet — the process keeps running. Written when something
@@ -91,12 +102,12 @@ CORE_API int WrapStartup(const wxString& exeName,
 // `kindSuffix` goes into the file name beside the pid and the stamp, so a deliberate dump is
 // distinguishable from a crash one at a glance. No-op off Windows for now — the POSIX side writes a
 // backtrace from its signal handler and has no equivalent "snapshot me" call.
-CORE_API void WriteDumpNow(const wxString& kindSuffix);
+CORE_API void WriteDumpNow(const ibString& kindSuffix);
 
 // Where this process writes its dump files. Resolved on first Install,
 // stable for the rest of the process. ibWxApp::OnFatalException quotes
 // this path in its background-thread "we crashed, look here" message.
-CORE_API wxString GetCrashDir();
+CORE_API ibString GetCrashDir();
 
 } // namespace ibCrashGuard
 

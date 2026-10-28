@@ -13,8 +13,11 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/job/jobSchedule.h"
+#include "core/job/jobSchedule.h"
+#include "frmclient/win/dateconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "core/serialize/dataBuilder.h"
+
+#include <wx/datetime.h>   // wxDateTime::Month, the months the cases are written with
 
 namespace {
 
@@ -72,7 +75,7 @@ TEST(JobSchedule, StopAfter_BeforeWindowStartIsRefusedAtValidation)
 {
 	ibJobScheduleDescription s = ibJobScheduleDescription::Nightly(2, 6);
 	s.m_stopAfterMinute = ibJobScheduleDescription::AtTime(1);   // would gate the job forever
-	EXPECT_FALSE(s.IsValid());
+	EXPECT_FALSE(ibJobScheduleRules::IsValid(s));
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +150,7 @@ TEST(JobSchedule, WeekdayOrdinal_NeedsExactlyOneWeekday)
 	ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(7 * 24 * 3600);
 	s.m_daysOfWeek     = ibJobWeekDay_Tuesday | ibJobWeekDay_Friday;
 	s.m_weekdayOrdinal = ibJobOrdinal_Second;
-	EXPECT_FALSE(s.IsValid());
+	EXPECT_FALSE(ibJobScheduleRules::IsValid(s));
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +282,7 @@ TEST(JobSchedule, Serialization_AbsentFieldsKeepTheirDefaults)
 	// existed must read back as "not restricted" — never as "restricted to
 	// nothing", which would be a job that silently never runs.
 	auto root = std::make_shared<ibDataNode>();
-	root->SetValue(wxT("IntervalSeconds"), (s32)3600);   // an old blob knowing one field
+	root->SetValue(wxT("IntervalSeconds"), (std::int32_t)3600);   // an old blob knowing one field
 	const ibDataValue value = ibDataValue::Child(root);
 
 	ibJobScheduleDescription s;
@@ -294,6 +297,27 @@ TEST(JobSchedule, Serialization_AbsentFieldsKeepTheirDefaults)
 	EXPECT_EQ(s.m_daysOfMonthFromEnd,   0u);
 	EXPECT_EQ(s.m_weekdayOrdinal,       ibJobOrdinal_None);
 	EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, At(2026, wxDateTime::Aug, 3, 14, 0)));   // "any" really means any
+}
+
+TEST(JobSchedule, Serialization_ReadsDatesThatCrossedTheWireAsText)
+{
+	// A NODE THAT CROSSED THE WIRE: JSON writes a Date as its ISO text and reads it back as a String
+	// (jsonProvider.h), the empty date as "". The thin designer's schedule cell reads such a node and
+	// writes one back, so the reader takes either kind; a text that names no date leaves the default.
+	auto root = std::make_shared<ibDataNode>();
+	root->SetValue(wxT("IntervalSeconds"), (std::int32_t)7200);
+	root->SetValue(wxT("PeriodAnchor"), ibString(wxT("2026-01-05 12:00:00")));
+	root->SetValue(wxT("ActiveFrom"),   ibString());
+	root->SetValue(wxT("ActiveTo"),     ibString(wxT("not a date")));
+	const ibDataValue value = ibDataValue::Child(root);
+
+	ibJobScheduleDescription s;
+	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadNode(value, s));
+
+	EXPECT_EQ(s.m_intervalSeconds, 7200);
+	EXPECT_EQ(s.m_periodAnchor, At(2026, wxDateTime::Jan, 5, 12, 0));
+	EXPECT_TRUE(s.m_activeFrom.IsEmpty());
+	EXPECT_TRUE(s.m_activeTo.IsEmpty());
 }
 
 // ---------------------------------------------------------------------------
@@ -322,7 +346,7 @@ TEST(JobSchedule, Buffer_RoundTripsEveryField)
 	src.m_activeFrom         = At(2026, wxDateTime::Jan, 1);
 	src.m_activeTo           = At(2027, wxDateTime::Jan, 1);
 
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
 	ASSERT_GT(blob.GetDataLen(), 0u);
 
@@ -346,7 +370,7 @@ TEST(JobSchedule, Buffer_ReadsAVersionOneBlobsDatesAsInstants)
 	src.m_activeFrom   = At(2026, wxDateTime::Jan, 1);
 	ASSERT_TRUE(src.m_activeTo.IsEmpty());
 
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
 	ASSERT_GT(blob.GetDataLen(), 0u);
 	unsigned char* bytes = static_cast<unsigned char*>(blob.GetData());
@@ -357,8 +381,8 @@ TEST(JobSchedule, Buffer_ReadsAVersionOneBlobsDatesAsInstants)
 	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst));
 	// The stored number is the count of the anchor's reading; under version 1 it is an instant, read
 	// back as the reading of its local parts.
-	EXPECT_EQ(ibDateTime::OfWxDateTime(wxDateTime(wxLongLong(src.m_periodAnchor.GetValue()))), dst.m_periodAnchor);
-	EXPECT_EQ(ibDateTime::OfWxDateTime(wxDateTime(wxLongLong(src.m_activeFrom.GetValue()))), dst.m_activeFrom);
+	EXPECT_EQ(typeConv::WxDateTimeToDateTime(wxDateTime(wxLongLong(src.m_periodAnchor.GetValue()))), dst.m_periodAnchor);
+	EXPECT_EQ(typeConv::WxDateTimeToDateTime(wxDateTime(wxLongLong(src.m_activeFrom.GetValue()))), dst.m_activeFrom);
 	EXPECT_TRUE(dst.m_activeTo.IsEmpty());
 	EXPECT_EQ(src.m_intervalSeconds, dst.m_intervalSeconds);
 
@@ -372,7 +396,7 @@ TEST(JobSchedule, Buffer_ReadsAVersionTwoBlobsDatesFrom1970)
 	src.m_periodAnchor = At(2026, wxDateTime::Jan, 5, 12, 0);
 	ASSERT_TRUE(src.m_activeTo.IsEmpty());
 
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
 	unsigned char* bytes = static_cast<unsigned char*>(blob.GetData());
 	ASSERT_EQ(3u, bytes[0]) << "written under version 3";
@@ -393,7 +417,7 @@ TEST(JobSchedule, Buffer_KeepsAnInvalidDateInvalid)
 	ibJobScheduleDescription src = ibJobScheduleDescription::EverySeconds(600);
 	ASSERT_TRUE(src.m_activeFrom.IsEmpty());
 
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
 
 	ibJobScheduleDescription dst;
@@ -421,7 +445,7 @@ TEST(JobSchedule, Buffer_RefusesWhatItCannotRead)
 	EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(future, sizeof(future), dst));
 
 	// Right version, truncated body.
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, ibJobScheduleDescription::Nightly(2, 5));
 	ASSERT_GT(blob.GetDataLen(), 4u);
 	EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), 3, dst));

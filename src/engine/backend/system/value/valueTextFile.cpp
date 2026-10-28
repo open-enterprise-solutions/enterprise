@@ -60,7 +60,7 @@ private:
 
 // ANSI and OEM are asked of the SYSTEM, not assumed: a base moved from one machine to another reads the
 // files of the machine it runs on. Elsewhere than Windows there is one such encoding - the locale's.
-bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding encoding, wxString& text)
+bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding encoding, ibString& text)
 {
 	const unsigned char* const bytes = static_cast<const unsigned char*>(data);
 	size_t skip = 0;
@@ -137,15 +137,15 @@ ibTextEncoding EncodingOf(ibValue** paParams, const long lSizeArray, long at)
 // Order MUST match ibValueTextReader::Func - the method number is the index into this table.
 void ibValueTextReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(1, wxT("TextReader(path : string)"));
-	helper.AppendConstructor(2, wxT("TextReader(path : string, encoding : TextEncoding)"));
+	helper.AppendConstructor(1, ibT("TextReader(path : string)"));
+	helper.AppendConstructor(2, ibT("TextReader(path : string, encoding : TextEncoding)"));
 
-	helper.AppendFunc(wxT("Open"), 2, wxT("Open(path : string, encoding : TextEncoding)"));
-	helper.AppendFunc(wxT("ReadLine"), wxT("ReadLine()"));
-	helper.AppendFunc(wxT("Read"), wxT("Read()"));
-	helper.AppendFunc(wxT("Close"), wxT("Close()"));
-	helper.AppendFunc(wxT("LineCount"), wxT("LineCount()"));
-	helper.AppendFunc(wxT("GetLine"), 1, wxT("GetLine(line : number)"));
+	helper.AppendFunc(ibT("Open"), 2, ibT("Open(path : string, encoding : TextEncoding)"));
+	helper.AppendFunc(ibT("ReadLine"), ibT("ReadLine()"));
+	helper.AppendFunc(ibT("Read"), ibT("Read()"));
+	helper.AppendFunc(ibT("Close"), ibT("Close()"));
+	helper.AppendFunc(ibT("LineCount"), ibT("LineCount()"));
+	helper.AppendFunc(ibT("GetLine"), 1, ibT("GetLine(line : number)"));
 }
 
 ibValueTextReader::ibValueTextReader() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true) {}
@@ -160,13 +160,13 @@ bool ibValueTextReader::Init(ibValue** paParams, const long lSizeArray)
 	return true;
 }
 
-void ibValueTextReader::Open(const wxString& fileName, ibTextEncoding encoding)
+void ibValueTextReader::Open(const ibString& fileName, ibTextEncoding encoding)
 {
 	Close();
 
 	// The bytes come whole, by the one road a file is read into memory (it refuses a file that does not fit).
-	wxMemoryBuffer bytes;
-	ibValueBinaryData::ReadWholeFile(fileName, wxT("TextReader"), bytes);
+	ibMemoryBuffer bytes;
+	ibValueBinaryData::ReadWholeFile(fileName, ibT("TextReader"), bytes);
 
 	// Bytes that do not spell text in this encoding decode to NOTHING - and an empty text out of a file that
 	// is not empty would read as "the file has no lines", which is a different thing.
@@ -177,8 +177,8 @@ void ibValueTextReader::Open(const wxString& fileName, ibTextEncoding encoding)
 	// cannot disagree about what a line is. A break at the very end ENDS the last line - it opens none after it.
 	for (size_t start = 0; start < m_text.length(); ) {
 		m_lineStarts.push_back(start);
-		const size_t brk = m_text.find(wxT('\n'), start);
-		if (brk == wxString::npos)
+		const size_t brk = m_text.find(ibT('\n'), start);
+		if (brk == ibString::npos)
 			break;
 		start = brk + 1;
 	}
@@ -186,17 +186,17 @@ void ibValueTextReader::Open(const wxString& fileName, ibTextEncoding encoding)
 	m_loaded = true;
 }
 
-wxString ibValueTextReader::LineAt(size_t index) const
+ibString ibValueTextReader::LineAt(size_t index) const
 {
 	const size_t start = m_lineStarts[index];
-	const size_t brk = m_text.find(wxT('\n'), start);
-	wxString line = (brk == wxString::npos) ? m_text.Mid(start) : m_text.Mid(start, brk - start);
-	if (!line.empty() && line.Last() == wxT('\r'))
+	const size_t brk = m_text.find(ibT('\n'), start);
+	ibString line = (brk == ibString::npos) ? m_text.Mid(start) : m_text.Mid(start, brk - start);
+	if (!line.empty() && line.Last() == ibT('\r'))
 		line.RemoveLast();   // a line ends the way its file says - CRLF as readily as LF
 	return line;
 }
 
-bool ibValueTextReader::ReadLine(wxString& line)
+bool ibValueTextReader::ReadLine(ibString& line)
 {
 	if (!m_loaded)
 		ibBackendCoreException::Error(_("TextReader: no file is open"));
@@ -206,11 +206,11 @@ bool ibValueTextReader::ReadLine(wxString& line)
 	return true;
 }
 
-wxString ibValueTextReader::ReadRest()
+ibString ibValueTextReader::ReadRest()
 {
 	if (!m_loaded)
 		ibBackendCoreException::Error(_("TextReader: no file is open"));
-	const wxString rest = m_next < m_lineStarts.size() ? m_text.Mid(m_lineStarts[m_next]) : wxString();
+	const ibString rest = m_next < m_lineStarts.size() ? m_text.Mid(m_lineStarts[m_next]) : ibString();
 	m_next = m_lineStarts.size();
 	return rest;
 }
@@ -222,7 +222,7 @@ size_t ibValueTextReader::LineCount() const
 	return m_lineStarts.size();
 }
 
-bool ibValueTextReader::GetLine(size_t number, wxString& line) const
+bool ibValueTextReader::GetLine(size_t number, ibString& line) const
 {
 	if (!m_loaded)
 		ibBackendCoreException::Error(_("TextReader: no file is open"));
@@ -250,7 +250,7 @@ bool ibValueTextReader::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		return true;
 	case enReadLine: {
 		// THE END OF THE FILE IS Undefined - an empty line is a line.
-		wxString line;
+		ibString line;
 		if (ReadLine(line))
 			pvarRetValue = line;
 		else
@@ -271,7 +271,7 @@ bool ibValueTextReader::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 			return false;
 		// NO SUCH LINE IS Undefined, as the end of the file is for ReadLine - an empty line is a line.
 		const int number = paParams[0]->GetInteger();
-		wxString line;
+		ibString line;
 		if (number > 0 && GetLine(static_cast<size_t>(number), line))
 			pvarRetValue = line;
 		else
@@ -289,14 +289,14 @@ bool ibValueTextReader::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 // Order MUST match ibValueTextWriter::Func.
 void ibValueTextWriter_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(1, wxT("TextWriter(path : string)"));
-	helper.AppendConstructor(2, wxT("TextWriter(path : string, encoding : TextEncoding)"));
-	helper.AppendConstructor(3, wxT("TextWriter(path : string, encoding : TextEncoding, append : boolean)"));
+	helper.AppendConstructor(1, ibT("TextWriter(path : string)"));
+	helper.AppendConstructor(2, ibT("TextWriter(path : string, encoding : TextEncoding)"));
+	helper.AppendConstructor(3, ibT("TextWriter(path : string, encoding : TextEncoding, append : boolean)"));
 
-	helper.AppendFunc(wxT("Open"), 3, wxT("Open(path : string, encoding : TextEncoding, append : boolean)"));
-	helper.AppendFunc(wxT("Write"), 1, wxT("Write(text : string)"));
-	helper.AppendFunc(wxT("WriteLine"), 1, wxT("WriteLine(text : string)"));
-	helper.AppendFunc(wxT("Close"), wxT("Close()"));
+	helper.AppendFunc(ibT("Open"), 3, ibT("Open(path : string, encoding : TextEncoding, append : boolean)"));
+	helper.AppendFunc(ibT("Write"), 1, ibT("Write(text : string)"));
+	helper.AppendFunc(ibT("WriteLine"), 1, ibT("WriteLine(text : string)"));
+	helper.AppendFunc(ibT("Close"), ibT("Close()"));
 }
 
 ibValueTextWriter::ibValueTextWriter() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true) {}
@@ -321,7 +321,7 @@ bool ibValueTextWriter::Init(ibValue** paParams, const long lSizeArray)
 	return true;
 }
 
-void ibValueTextWriter::Open(const wxString& fileName, ibTextEncoding encoding, bool append)
+void ibValueTextWriter::Open(const ibString& fileName, ibTextEncoding encoding, bool append)
 {
 	Close();
 
@@ -346,7 +346,7 @@ void ibValueTextWriter::Open(const wxString& fileName, ibTextEncoding encoding, 
 	}
 }
 
-void ibValueTextWriter::Write(const wxString& text)
+void ibValueTextWriter::Write(const ibString& text)
 {
 	if (!IsOpen())
 		ibBackendCoreException::Error(_("TextWriter: no file is open"));
@@ -354,7 +354,7 @@ void ibValueTextWriter::Write(const wxString& text)
 		return;
 
 	size_t length = 0;
-	const wxCharBuffer bytes = m_conv->cWC2MB(text.wc_str(), text.length(), &length);
+	const wxCharBuffer bytes = m_conv->cWC2MB(text.wc_str(), wxNO_LEN, &length);
 	if (length == 0 || length == wxCONV_FAILED)
 		ibBackendCoreException::Error(_("TextWriter: the text cannot be written to '%s' in the encoding given"), m_fileName);
 	if (m_file->Write(bytes.data(), length) != length)
@@ -400,7 +400,7 @@ bool ibValueTextWriter::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		return true;
 	case enWriteLine:
 		// One line ending, the same on every platform: a file written here reads the same there.
-		Write((lSizeArray > 0 ? paParams[0]->GetString() : ibString()) + wxT("\n"));
+		Write((lSizeArray > 0 ? paParams[0]->GetString() : ibString()) + ibT("\n"));
 		return true;
 	case enClose:
 		Close();

@@ -52,7 +52,7 @@ enum
 // vends a queryable (ibBackendQueryableHolder). The source name mirrors the
 // canonical script path ("Catalogs.Goods") for watch / diagnostics.
 ibValueStructure* BuildKindNamespace(ibMetaData* metaData, const ibClassID& clsid,
-                                     const wxString& kindName)
+                                     const ibString& kindName)
 {
 	ibValueStructure* names = new ibValueStructure();
 	if (metaData == nullptr)
@@ -66,7 +66,7 @@ ibValueStructure* BuildKindNamespace(ibMetaData* metaData, const ibClassID& clsi
 			continue;   // the kind member exists but this object vends no source
 		// A name repeated while the configuration is edited is put, not inserted (globalContextManager.cpp).
 		names->SetAt(object->GetName(),
-			new ibValueQueryable(queryable, kindName + wxT(".") + object->GetName()));
+			new ibValueQueryable(queryable, kindName + ibT(".") + object->GetName()));
 	}
 	return names;
 }
@@ -86,7 +86,7 @@ void ibValueModuleManager::ibValueDataUnit::FillMembers(ibMemberTable& helper) c
 	// The QUERYABLE kinds only — mirrors the query language's source coverage
 	// (queryableFactory): data-reference records, registers, constants.
 	// clsid narrowed into the (long) tag slot on purpose — GetPropVal keys by ordinal and re-supplies
-	// the clsid, so only the tag identity matters; static_cast makes the u64->long explicit (no C4305/C4309).
+	// the clsid, so only the tag identity matters; static_cast makes the std::uint64_t->long explicit (no C4305/C4309).
 	helper.AppendProp("Constants", true, false, static_cast<long>(g_metaConstantCLSID));
 	helper.AppendProp("Catalogs", true, false, static_cast<long>(g_metaCatalogCLSID));
 	helper.AppendProp("Documents", true, false, static_cast<long>(g_metaDocumentCLSID));
@@ -120,7 +120,7 @@ bool ibValueModuleManager::ibValueDataUnit::CallAsFunc(const long lMethodNum, ib
 		// The wrapper copies the table reference (the held ibValue keeps it alive);
 		// the Queryable OWNS the wrapper and shares it across chain links.
 		pvarRetValue = new ibValueQueryable(
-			std::make_shared<ibTempTableQueryable>(*paParams[0], m_metaData), wxT("From"));
+			std::make_shared<ibTempTableQueryable>(*paParams[0], m_metaData), ibT("From"));
 		return true;
 	}
 	}
@@ -132,40 +132,40 @@ bool ibValueModuleManager::ibValueDataUnit::GetPropVal(const long lPropNum, ibVa
 	switch (lPropNum)
 	{
 	case enDataConstants:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaConstantCLSID, wxT("Constants"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaConstantCLSID, ibT("Constants"));
 		return true;
 	case enDataCatalogs:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaCatalogCLSID, wxT("Catalogs"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaCatalogCLSID, ibT("Catalogs"));
 		return true;
 	case enDataDocuments:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaDocumentCLSID, wxT("Documents"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaDocumentCLSID, ibT("Documents"));
 		return true;
 	case enDataEnumerations:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaEnumerationCLSID, wxT("Enumerations"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaEnumerationCLSID, ibT("Enumerations"));
 		return true;
 	case enDataInformationRegisters:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaInformationRegisterCLSID, wxT("InformationRegisters"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaInformationRegisterCLSID, ibT("InformationRegisters"));
 		return true;
 	case enDataAccumulationRegisters:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaAccumulationRegisterCLSID, wxT("AccumulationRegisters"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaAccumulationRegisterCLSID, ibT("AccumulationRegisters"));
 		return true;
 	case enDataChartsOfCharacteristicTypes:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaChartOfCharacteristicTypesCLSID, wxT("ChartsOfCharacteristicTypes"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaChartOfCharacteristicTypesCLSID, ibT("ChartsOfCharacteristicTypes"));
 		return true;
 	case enDataChartsOfAccounts:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaChartOfAccountsCLSID, wxT("ChartsOfAccounts"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaChartOfAccountsCLSID, ibT("ChartsOfAccounts"));
 		return true;
 	case enDataAccountingRegisters:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaAccountingRegisterCLSID, wxT("AccountingRegisters"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaAccountingRegisterCLSID, ibT("AccountingRegisters"));
 		return true;
 	case enDataChartsOfCalculationTypes:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaChartOfCalculationTypesCLSID, wxT("ChartsOfCalculationTypes"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaChartOfCalculationTypesCLSID, ibT("ChartsOfCalculationTypes"));
 		return true;
 	case enDataCalculationRegisters:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaCalculationRegisterCLSID, wxT("CalculationRegisters"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaCalculationRegisterCLSID, ibT("CalculationRegisters"));
 		return true;
 	case enDataSequences:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaSequenceCLSID, wxT("Sequences"));
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaSequenceCLSID, ibT("Sequences"));
 		return true;
 	}
 	return false;

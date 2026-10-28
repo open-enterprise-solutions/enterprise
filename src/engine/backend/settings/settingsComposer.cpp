@@ -2,7 +2,7 @@
 
 #include "backend/appData.h"                        // the session's user + GetSettingsStorage
 #include "backend/composition/dataComposer.h"       // the settings themselves
-#include "backend/compositionDescription.h"         // ibSettingsDescriptionMemory — the pair that writes them
+#include "backend/backend_composition.h"         // ibBackendSettingsDescriptionMemory — the pair that writes them
 #include "core/serialize/dataBuilder.h"          // ibDataNode
 
 #include <algorithm>
@@ -10,9 +10,9 @@
 namespace {
 // THE NODE'S OWN FIELD NAMES — spelled once. A setting written under one spelling
 // and read under another is a setting lost.
-const wxChar* const kFieldId       = wxT("id");
-const wxChar* const kFieldName     = wxT("name");
-const wxChar* const kChildSettings = wxT("settings");
+const ibChar* const kFieldId       = ibT("id");
+const ibChar* const kFieldName     = ibT("name");
+const ibChar* const kChildSettings = ibT("settings");
 
 // NOBODY — what "there is no session and none was named" resolves to. Its guid is invalid, which
 // the storage reads as the shared row: a base with no users has exactly one person's settings.
@@ -39,7 +39,7 @@ ibSettingsKey ibUserSettingsKey(ibSettingsCategory category, const ibGuid& objec
 }
 
 ibGuid ibSaveComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,
-                                const ibGuid& id, const wxString& name, const ibDataComposer& composer, const ibUserInfo* user)
+                                const ibGuid& id, const ibString& name, const ibDataComposer& composer, const ibUserInfo* user)
 {
 	ibSettingsStorage* storage = ibApplicationInstance::GetSettingsStorage();
 	if (storage == nullptr || !objectKey.isValid())
@@ -76,12 +76,12 @@ bool ibRestoreComposerSettings(ibSettingsCategory category, const ibGuid& object
 	if (!storage->Restore(ibUserSettingsKey(category, objectKey, id, user), node))
 		return false;
 
-	const ibDataNode* settingsNode = node.FindChild(kChildSettings);
-	if (settingsNode == nullptr)
+	auto settingsNode = node.FindChild(kChildSettings);
+	if (!settingsNode)
 		return false;
 
 	ibSettingsDescription settings;
-	if (!ibSettingsDescriptionMemory::ReadNode(*settingsNode, settings, metaData))
+	if (!ibBackendSettingsDescriptionMemory::ReadNode(*settingsNode, settings, metaData))
 		return false;
 
 	// …AND THAT IS THE WHOLE ACT — the one door there is, the same one the variant picker and the
@@ -109,7 +109,7 @@ std::vector<ibComposerSettingsEntry> ibListComposerSettings(ibSettingsCategory c
 		// disagree with the node it was copied from.
 		ibDataNode node;
 		if (storage->Restore(ibUserSettingsKey(category, objectKey, row.m_settingKey, user), node))
-			entry.m_name = node.GetValue<wxString>(kFieldName);
+			entry.m_name = node.GetValue<ibString>(kFieldName);
 
 		// A NAMELESS ENTRY IS STILL PICKABLE — an id is not a caption a person can read, so it says
 		// what it honestly is rather than showing a blank line nobody dares click.
@@ -122,7 +122,7 @@ std::vector<ibComposerSettingsEntry> ibListComposerSettings(ibSettingsCategory c
 }
 
 bool ibRenameComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,
-                              const ibGuid& id, const wxString& newName, const ibUserInfo* user)
+                              const ibGuid& id, const ibString& newName, const ibUserInfo* user)
 {
 	ibSettingsStorage* storage = ibApplicationInstance::GetSettingsStorage();
 	if (storage == nullptr || !objectKey.isValid() || !id.isValid() || newName.IsEmpty())
@@ -140,7 +140,7 @@ bool ibRenameComposerSettings(ibSettingsCategory category, const ibGuid& objectK
 	ibDataNode renamed;
 	renamed.SetValue(kFieldId,   id);
 	renamed.SetValue(kFieldName, newName);
-	if (const ibDataNode* settingsNode = node.FindChild(kChildSettings))
+	if (auto settingsNode = node.FindChild(kChildSettings))
 		renamed.Child(kChildSettings) = *settingsNode;
 	else
 		return false;   // an entry with no settings inside is not one this can rewrite
@@ -216,7 +216,7 @@ ibDefaultSettingsOutcome ibRestoreDefaultComposerSettings(ibSettingsCategory cat
 	// A MARK WITH NOTHING BEHIND IT. The row was dropped by another session, or its settings name a
 	// type this configuration no longer has — either way the person asked for something on open and
 	// did not get it, so the caller says so instead of composing on something else in silence.
-	ibJournalWarning(wxT("settings"), wxT("default settings missing: category %d, object %s, id %s"),
+	ibJournalWarning(ibT("settings"), ibT("default settings missing: category %d, object %s, id %s"),
 		static_cast<int>(category), objectKey.str(), id.str());
 	return ibDefaultSettingsOutcome::Missing;
 }

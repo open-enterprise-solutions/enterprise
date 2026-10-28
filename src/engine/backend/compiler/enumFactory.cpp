@@ -28,7 +28,7 @@ void ibValueEnumFactory::FillMembers(ibMemberTable& helper) const
 
 bool ibValueEnumFactory::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const wxString &strEnumeration = GetPropName(lPropNum);
+	const ibString &strEnumeration = GetPropName(lPropNum);
 	if (!ibValue::IsRegisterCtor(strEnumeration))
 		return false;
 	pvarPropVal = ibValue::CreateObject(strEnumeration);

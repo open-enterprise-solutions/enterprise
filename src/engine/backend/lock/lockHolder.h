@@ -46,12 +46,12 @@ public:
 	// ("locked by user X") and admin UI rows. For session holders =
 	// the user name; for custom holders = whatever the caller picks
 	// (e.g. "Designer apply", "Maintenance job 42").
-	virtual wxString DisplayName() const = 0;
+	virtual ibString DisplayName() const = 0;
 
 	// Machine hint surfaced in admin UI alongside DisplayName. For
 	// session holders = the session's computer field; for custom
 	// holders = caller-chosen (typically wxGetHostName()).
-	virtual wxString Computer() const = 0;
+	virtual ibString Computer() const = 0;
 };
 
 // Standalone holder — generates its own GUID on construction and
@@ -63,18 +63,18 @@ public:
 	// displayName surfaces in conflict messages / admin UI. computer
 	// defaults to wxGetHostName() when empty so callers don't have to
 	// figure out the right hostname themselves.
-	explicit ibSingleLockHolder(const wxString& displayName,
-	                             const wxString& computer = wxEmptyString);
+	explicit ibSingleLockHolder(const ibString& displayName,
+	                             const ibString& computer = ibEmptyString);
 	~ibSingleLockHolder() override = default;
 
 	ibGuid   Identity()    const override { return m_identity; }
-	wxString DisplayName() const override { return m_displayName; }
-	wxString Computer()    const override { return m_computer; }
+	ibString DisplayName() const override { return m_displayName; }
+	ibString Computer()    const override { return m_computer; }
 
 private:
 	ibGuid   m_identity;
-	wxString m_displayName;
-	wxString m_computer;
+	ibString m_displayName;
+	ibString m_computer;
 };
 
 #endif // _IB_LOCK_HOLDER_H_

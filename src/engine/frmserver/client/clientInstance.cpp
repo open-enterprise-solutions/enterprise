@@ -21,8 +21,8 @@ std::int64_t NowMs()
 
 } // namespace
 
-ibClientInstance::ibClientInstance(ibApplicationInstance* applicationInstance, const wxString& id, const wxString& address,
-	ibProtocolMode mode)
+ibClientInstance::ibClientInstance(ibApplicationInstance* applicationInstance, const ibString& id, const ibString& address,
+	ibProtocol::ibLogin::ibMode mode)
 	: m_applicationInstance(applicationInstance), m_id(id), m_address(address), m_mode(mode), m_lastActiveMs(NowMs())
 {
 }
@@ -37,7 +37,7 @@ ibClientSession* ibClientInstance::Session() const
 	return m_frame != nullptr ? m_frame->Session() : nullptr;
 }
 
-bool ibClientInstance::Login(const wxString& user, const wxString& password)
+bool ibClientInstance::Login(const ibString& user, const ibString& password)
 {
 	std::lock_guard<std::recursive_mutex> lifeLock(m_lifecycleMutex);
 
@@ -51,14 +51,11 @@ bool ibClientInstance::Login(const wxString& user, const wxString& password)
 	// session and the row. A wrong password just lets the holder die here, which removes the row.
 	// ITS KIND IS THE CLIENT'S MODE: the runtime's a thin client; the designer's a thin designer — a designer as the
 	// desktop's is (no runtime, the one designer of the base), whatever process hosts it.
-	const ibSessionKind kind = m_mode == ibProtocolMode::Designer ? ibSessionKind::ThinDesigner : ibSessionKind::ThinClient;
-	ibSessionHolder holder;
-	try {
-		holder = m_applicationInstance->CreateSession<ibClientSession>(kind, m_id, m_address);
-	}
-	catch (const ibCoreException&) {
-		holder.Reset();
-	}
+	const ibSessionKind kind = m_mode == ibProtocol::ibLogin::ibMode::Designer ? ibSessionKind::ThinDesigner : ibSessionKind::ThinClient;
+	// …REFUSED BEFORE ANY LOGIN — another designer at work (ibDesignerExclusivePolicy): thrown on, its reason the person's
+	// to read. Turned into false here, it reached the client as a wrong password, and the login window asked for a name
+	// that was never the question (2026-10-20).
+	ibSessionHolder holder = m_applicationInstance->CreateSession<ibClientSession>(kind, m_id, m_address);
 	if (!holder)
 		return false;
 	ibSession* const session = holder.Get();
@@ -66,20 +63,25 @@ bool ibClientInstance::Login(const wxString& user, const wxString& password)
 	// ⭐ ON THE SESSION'S OWN WORKER — the open runs the configuration's script, and everything else of this
 	// session runs there: on the caller's thread it would run BESIDE the worker serving this session's requests,
 	// two threads in one session.
+	ibSession::OpenResult opened = ibSession::OpenResult::Failed;
 	try {
-		bool opened = false;
 		session->Submit([&]() {
-			opened = holder->Open(user, password) == ibSession::OpenResult::Authenticated;
+			opened = holder->Open(user, password);
 		}).get();
-		if (!opened)
-			return false;
 	}
 	catch (const ibCoreException& err) {
 		// A configuration that does not start refuses the login too (ibSession::CompileRoot throws). The client can
 		// be told only "refused"; the reason goes where an administrator reads it.
-		ibJournalError(wxT("client"), wxT("login of '%s' refused: %s"), user, err.GetErrorDescription());
+		ibJournalError(ibT("client"), ibT("login of '%s' refused: %s"), user, err.GetErrorDescription());
 		return false;
 	}
+	// …A REGISTRY THAT DID NOT ANSWER is a busy server, not a wrong name: thrown on as the registry's silence at Add
+	// is, and said as it is. Read as a wrong password, it sent people under load back to the login window to type
+	// a password nobody had questioned (2026-10-23, 300 people at once).
+	if (opened == ibSession::OpenResult::Timeout)
+		ibBackendException::Error(_("registry did not answer to Attach"));
+	if (opened != ibSession::OpenResult::Authenticated)
+		return false;
 
 	m_user = user;
 	m_session = ibSessionWatch(holder);
@@ -98,7 +100,7 @@ bool ibClientInstance::Start()
 	// request to the person, and the client reaches both through the frame.
 	m_frame = ibClientFrame::Create(m_mode, std::move(m_holder), this);
 	if (m_frame == nullptr) {
-		ibJournalWarning(wxT("client"), wxT("client %s refused: no mode %d"), m_id, static_cast<int>(m_mode));
+		ibJournalWarning(ibT("client"), ibT("client %s refused: no mode %d"), m_id, static_cast<int>(m_mode));
 		m_holder.Reset();   // nobody took it — the session ends here
 		m_session.Reset();
 		return false;

@@ -18,7 +18,7 @@
 #define THEME_COLOUR_MAIN    wxColour(0xB8, 0xC9, 0xD4)  // #B8C9D4 powder blue
 #define THEME_COLOUR_BORDER  wxColour(0xA8, 0xBA, 0xC8)  // #A8BAC8 light dusty
 
-// The text of the panel's pages — the forms' own ink (frontend/visualView/ctrl/frame.h).
+// The text of the panel's pages — the forms' own ink (frmclient/visualView/ctrl/frame.h).
 #define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
 
 #include "frmclient/win/picture.h"   // the pictures, as they travel
@@ -28,11 +28,11 @@
 // (frmserver/schema/runtime/sections.cpp) instead of the configuration read here, and a link opens its item through
 // the schema's command — the window's call (ibFrontendMainFrameEnterprise::CreateSubSystem).
 
-// A picture of the wire as an icon — what a link draws.
-static wxIcon IconOf(const wxString& base64)
+// A link's picture as an icon — what a link draws.
+static wxIcon IconOf(const ibProtocolNode& item)
 {
 	wxIcon icon;
-	const wxBitmap picture = ibProtocolPicture(base64);
+	const wxBitmap picture = ibProtocolPicture(item, ibProtocol::ibSchema::ibSections::Icon);
 	if (picture.IsOk())
 		icon.CopyFromBitmap(picture);
 	return icon;
@@ -104,12 +104,12 @@ class ibSubSystemWindow : public wxWindow {
 		ibSubSystemButton(ibSubSystemWindow* mainWindow, wxWindowID id, const ibProtocolNode& section)
 			: wxControl(mainWindow, id, wxDefaultPosition, wxDefaultSize, wxNO_BORDER),
 			m_section(section), m_popupWindow(nullptr),
-			m_mainWindow(mainWindow), m_bitmap(ibProtocolPicture(section.GetString(ibProtocolName::Picture))), m_eventType(wxEVT_BUTTON) {
+			m_mainWindow(mainWindow), m_bitmap(ibProtocolPicture(section, ibProtocol::ibSchema::ibSections::Picture)), m_eventType(wxEVT_BUTTON) {
 
 			m_baseColour = wxSystemSettings::GetColour(wxSYS_COLOUR_3DFACE);
 			m_highlightColour = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
 
-			SetLabel(section.GetString(ibProtocolName::Title));
+			SetLabel(section.GetString(ibProtocol::ibSchema::ibSections::Title));
 
 			m_normalFont = *wxNORMAL_FONT;
 			m_selectedFont = *wxNORMAL_FONT;
@@ -638,11 +638,11 @@ class ibSubSystemWindow : public wxWindow {
 				// left column: the section's own items at the top under no heading (Important first), the navigation
 				// groups the configuration declares, each subsection with what it and its own hold. The right column —
 				// THE ACTIONS PANEL: the platform's groups (Create, Reports, Service), then the declared ones.
-				for (const ibProtocolNode& block : m_popupWindow->GetSection().FindChild(ibProtocolName::Blocks).Children()) {
-					const wxString title = block.GetString(ibProtocolName::Title);
-					if (block.GetInt(ibProtocolName::Column, 1) == 2) {
-						sizerRight->Add(CreateCaptionedBlock(title, block, ibProtocolPicture(block.GetString(ibProtocolName::Picture)),
-							block.GetString(ibProtocolName::Tooltip)), 0, wxEXPAND, FromDIP(5));
+				for (const ibProtocolNode& block : m_popupWindow->GetSection().FindChild(ibProtocol::ibSchema::ibSections::Blocks).Children()) {
+					const wxString title = block.GetString(ibProtocol::ibSchema::ibSections::Title);
+					if (block.GetInt(ibProtocol::ibSchema::ibSections::Column) == static_cast<int>(ibProtocol::ibSchema::ibSections::ibColumn::Right)) {
+						sizerRight->Add(CreateCaptionedBlock(title, block, ibProtocolPicture(block, ibProtocol::ibSchema::ibSections::Picture),
+							block.GetString(ibProtocol::ibSchema::ibSections::Tooltip)), 0, wxEXPAND, FromDIP(5));
 						continue;
 					}
 					if (title.IsEmpty()) {
@@ -656,8 +656,8 @@ class ibSubSystemWindow : public wxWindow {
 						sizerLeft->Add(sizerSubCommonSpacer, 0, wxEXPAND, FromDIP(5));
 						continue;
 					}
-					sizerLeft->Add(CreateCaptionedBlock(title, block, ibProtocolPicture(block.GetString(ibProtocolName::Picture)),
-						block.GetString(ibProtocolName::Tooltip)), 0, wxEXPAND, FromDIP(5));
+					sizerLeft->Add(CreateCaptionedBlock(title, block, ibProtocolPicture(block, ibProtocol::ibSchema::ibSections::Picture),
+						block.GetString(ibProtocol::ibSchema::ibSections::Tooltip)), 0, wxEXPAND, FromDIP(5));
 				}
 
 				sizerMain->Add(sizerLeft, 0, 0, 0);
@@ -678,8 +678,8 @@ class ibSubSystemWindow : public wxWindow {
 
 				for (const ibProtocolNode& item : block.Children()) {
 
-					ibCommandLink* df = new ibCommandLink(this, wxID_ANY, item.GetString(ibProtocolName::Title), IconOf(item.GetString(ibProtocolName::Icon)));
-					df->SetClientObject(new ibScrolledSubWindowItemRefData(item.GetInt(ibProtocolName::Item), static_cast<int>(item.GetInt(ibProtocolName::Type))));
+					ibCommandLink* df = new ibCommandLink(this, wxID_ANY, item.GetString(ibProtocol::ibSchema::ibSections::Title), IconOf(item));
+					df->SetClientObject(new ibScrolledSubWindowItemRefData(item.GetInt(ibProtocol::ibSchema::ibSections::Item), static_cast<int>(item.GetInt(ibProtocol::ibSchema::ibSections::Type))));
 
 					df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
 
@@ -867,8 +867,10 @@ public:
 		const wxString& name = wxASCII_STR(wxPanelNameStr)) : wxWindow(parent, id, pos, size, style, name), m_activeButton(nullptr),
 		m_open(std::move(open))
 	{
-		// The sections the server shows this person — only those they may use come.
-		for (const ibProtocolNode& section : shown.FindChild(ibProtocolName::Sections).Children())
+		// The sections the server shows this person — only those they may use come; the pictures they name — each
+		// section's, its blocks', their items' — asked of the server at once, not a call per link drawn.
+		ibProtocolPictureReceive(shown);
+		for (const ibProtocolNode& section : shown.FindChild(ibProtocol::ibSchema::ibSections::Sections).Children())
 			CreateSubMenu(section);
 
 		// Interior palette — light dusty (one tier between powder chrome
@@ -951,19 +953,19 @@ void ibFrontendMainFrameEnterprise::CreateSubSystem()
 	// The sections are the server's: asked of the schema when the application offers it (the frame's Schemas) — a
 	// server that does not is not asked, and the window goes without the panel.
 	bool offered = false;
-	for (const ibProtocolNode& schema : GetCommunicator().GetFrame().GetList(ibProtocolName::Schemas)) {
-		if (schema.AsInt() == static_cast<long long>(ibProtocolSchema::Sections))
+	for (const ibProtocolNode& schema : GetCommunicator().GetFrame().GetList(ibProtocol::ibFrame::Schemas)) {
+		if (schema.AsInt() == static_cast<long long>(ibProtocol::ibSchema::ibKind::Sections))
 			offered = true;
 	}
 	if (!offered)
 		return;
 
 	ibProtocolNode params, shown;
-	params.SetValue(ibProtocolName::Schema, static_cast<int>(ibProtocolSchema::Sections));
-	if (!Call(ibProtocolMethod::Schema, params, shown))
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<int>(ibProtocol::ibSchema::ibKind::Sections));
+	if (!Call(ibProtocol::ibMethod::Schema, params, shown))
 		return;
 
-	const bool hasInterface = !shown.FindChild(ibProtocolName::Sections).Children().empty();
+	const bool hasInterface = !shown.FindChild(ibProtocol::ibSchema::ibSections::Sections).Children().empty();
 
 	if (hasInterface) {
 
@@ -980,10 +982,10 @@ void ibFrontendMainFrameEnterprise::CreateSubSystem()
 		m_mgr.AddPane(
 			new ibSubSystemWindow(this, wxID_ANY, shown, [this](long long item, int type) {
 				ibProtocolNode open, answer;
-				open.SetValue(ibProtocolName::Schema, static_cast<int>(ibProtocolSchema::Sections))
-					.SetValue(ibProtocolName::Command, static_cast<int>(ibProtocolSchemaCommand::Open));
-				open.Child(ibProtocolName::Args).SetValue(ibProtocolName::Item, item).SetValue(ibProtocolName::Type, type);
-				return Call(ibProtocolMethod::Schema, open, answer);
+				open.SetValue(ibProtocol::ibSchema::Schema, static_cast<int>(ibProtocol::ibSchema::ibKind::Sections))
+					.SetValue(ibProtocol::ibSchema::Command, static_cast<int>(ibProtocol::ibSchema::ibCommand::Open));
+				open.Child(ibProtocol::ibSchema::Args).SetValue(ibProtocol::ibSchema::ibSections::Item, item).SetValue(ibProtocol::ibSchema::ibSections::Type, type);
+				return Call(ibProtocol::ibMethod::Schema, open, answer);
 			}), m_infoSection);
 		m_mgr.Update();
 	}

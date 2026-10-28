@@ -1,0 +1,655 @@
+/* THE WINDOW — the title and the menu, the section panel down the left side, the tabs, the active tab's view, the
+   messages, the status line: the height of the screen, the view taking what is left. A narrow window is one column,
+   the sections a strip under the title. */
+
+html, body {
+	margin: 0;
+	height: 100%;
+	background: var(--oes-window-bg);
+	color: var(--oes-text);
+	font-family: var(--oes-font-ui);
+}
+
+#client {
+	height: 100dvh;
+}
+
+.client-window {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	grid-template-rows: auto auto 1fr auto auto;
+	grid-template-areas:
+		"header   header"
+		"sections tabs"
+		"sections views"
+		"sections messages"
+		"status   status";
+	height: 100%;
+	min-width: 0;
+}
+
+.client-window > header { grid-area: header; }
+.client-window > .sections { grid-area: sections; }
+.client-window > .tabs { grid-area: tabs; }
+.client-window > .views { grid-area: views; }
+.client-window > .messages { grid-area: messages; }
+.client-window > .status { grid-area: status; }
+
+.client-window header {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	padding: 0.25rem 1rem;
+	background: var(--oes-panel-bg);
+	border-bottom: 1px solid var(--oes-border);
+	min-width: 0;
+}
+
+.client-window h1 {
+	flex: 0 1 auto;
+	min-width: 3ch;
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* The menu keeps one line and scrolls sideways when the window is narrower than it. */
+.client-window .menu {
+	display: flex;
+	flex: 1 1 auto;
+	min-width: 0;
+	gap: 0.25rem;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+/* THE SECTION PANEL — the thin client's: a column 200px wide, a section 35px tall, its picture and title from the left,
+   lined above and at its sides; the open one white and bold, its face ringed with dots. A section and a link are
+   buttons, and Web Awesome's native styles give every button a control's height, centred content and round corners:
+   these take them back. */
+.sections {
+	display: flex;
+	flex-direction: column;
+	width: 200px;
+	overflow-y: auto;
+	background: var(--oes-sections-bg);
+}
+
+.section {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	flex: 0 0 auto;
+	height: auto;
+	min-height: max(35px, var(--oes-touch));
+	padding: 0 8px;
+	border: 1px solid var(--oes-section-border);
+	border-bottom: none;
+	border-radius: 0;
+	background: var(--oes-section-bg);
+	color: var(--oes-section-text);
+	font: 0.875rem var(--oes-font-ui);
+	text-align: left;
+	cursor: pointer;
+}
+
+.section .face {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	min-width: 0;
+}
+
+.section img {
+	flex: 0 0 auto;
+	width: 16px;
+	height: 16px;
+}
+
+.section .title {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.section[aria-expanded="true"] {
+	background: var(--oes-panel-bg);
+	color: var(--oes-text);
+	font-weight: 700;
+}
+
+.section[aria-expanded="true"] .face {
+	outline: 1px dotted currentColor;
+	outline-offset: 2px;
+}
+
+/* A section's page — beside the panel, over the rest of the window, where the script places it; it scrolls both
+   ways. The navigation's column, 50px, the actions'. It shows in a moment and goes the same way, as the thin client's
+   fades. A closed one keeps the popover's own display: none. */
+.section-page {
+	position: fixed;
+	inset: auto;
+	margin: 0;
+	box-sizing: border-box;
+	padding: 0.25rem 0.5rem;
+	overflow: auto;
+	border: none;
+	border-left: 1px solid var(--oes-section-border);
+	background: var(--oes-panel-bg);
+	color: var(--oes-section-ink);
+	opacity: 0;
+	transition: opacity 80ms, overlay 80ms allow-discrete, display 80ms allow-discrete;
+}
+
+.section-page:popover-open {
+	display: flex;
+	align-items: flex-start;
+	gap: 50px;
+	opacity: 1;
+}
+
+@starting-style {
+	.section-page:popover-open {
+		opacity: 0;
+	}
+}
+
+.section-page .column {
+	display: flex;
+	flex-direction: column;
+	flex: 0 0 auto;
+}
+
+.section-page h3 {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	margin: 5px;
+	font-size: 1rem;
+	font-weight: 700;
+}
+
+.section-page .links {
+	display: flex;
+	flex-direction: column;
+	padding-left: 20px;
+}
+
+/* A link is its icon and caption and nothing to the right of them; the caption four points over the window's text. */
+.section-page .link {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 8px;
+	width: fit-content;
+	height: auto;
+	padding: 2px;
+	border: none;
+	border-radius: 0;
+	background: none;
+	color: inherit;
+	font: 1.0625rem var(--oes-font-ui);
+	text-align: left;
+	cursor: pointer;
+}
+
+.section-page .link:hover span {
+	text-decoration: underline;
+}
+
+.section-page img {
+	width: 16px;
+	height: 16px;
+}
+
+@media (pointer: coarse) {
+	.section-page .link {
+		min-height: var(--oes-touch);
+	}
+}
+
+/* A narrow window: one column — the sections a strip under the title that scrolls sideways, a page's columns one under
+   the other. */
+@media (max-width: 40rem) {
+	.client-window {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto auto auto 1fr auto auto;
+		grid-template-areas: "header" "sections" "tabs" "views" "messages" "status";
+	}
+
+	.sections {
+		flex-direction: row;
+		width: auto;
+		overflow-x: auto;
+		overflow-y: hidden;
+		scrollbar-width: none;
+	}
+
+	.section {
+		max-width: 12rem;
+		border-bottom: 1px solid var(--oes-section-border);
+		border-right: none;
+	}
+
+	.section-page {
+		border-left: none;
+		border-top: 1px solid var(--oes-section-border);
+	}
+
+	.section-page:popover-open {
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+}
+
+/* The tabs scroll sideways on their own strip; the page never does. */
+.tabs {
+	display: flex;
+	gap: 2px;
+	overflow-x: auto;
+	padding: 0.25rem 0.5rem 0;
+	border-bottom: 1px solid var(--oes-border);
+	scrollbar-width: thin;
+}
+
+.tab {
+	display: flex;
+	align-items: center;
+	gap: 0.375rem;
+	min-height: var(--oes-touch);
+	padding: 0 0.5rem 0 0.75rem;
+	border: 1px solid var(--oes-border);
+	border-bottom: none;
+	border-radius: 6px 6px 0 0;
+	background: var(--oes-window-bg);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+	background: var(--oes-panel-bg);
+	box-shadow: inset 0 2px 0 var(--oes-accent);
+}
+
+.tab img {
+	width: 16px;
+	height: 16px;
+}
+
+/* A long title is cut short; the whole of it is the tab's tooltip. */
+.tab span {
+	max-width: 20rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tab .close {
+	min-width: var(--oes-touch);
+	min-height: var(--oes-touch);
+	border: none;
+	background: none;
+	color: var(--oes-muted);
+	font-size: 1rem;
+	cursor: pointer;
+}
+
+.views {
+	position: relative;
+	overflow: auto;
+	min-height: 0;
+	background: var(--oes-panel-bg);
+}
+
+.view-placeholder {
+	padding: 2rem;
+	color: var(--oes-muted);
+}
+
+/* The messages: their lines scroll under the edge their height is dragged by; the × clears them, and the pane goes. */
+.messages {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	max-height: 25dvh;
+	border-top: 1px solid var(--oes-border);
+	background: var(--oes-panel-bg);
+}
+
+.messages .lines {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	padding-right: var(--oes-touch);
+}
+
+.messages .grip {
+	flex: 0 0 auto;
+	height: 6px;
+	margin-top: -3px;
+	cursor: ns-resize;
+	touch-action: none;
+}
+
+.messages .clear {
+	position: absolute;
+	top: 2px;
+	right: 0.75rem;
+	z-index: 1;
+	min-width: var(--oes-touch);
+	height: auto;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: none;
+	color: var(--oes-muted);
+	font-size: 1rem;
+	cursor: pointer;
+}
+
+/* A message, as the thin client's output window has it: in the code's font, its level a mark in the margin — an
+   information's blue, a warning's amber, an error's red. */
+.message {
+	display: flex;
+	align-items: baseline;
+	gap: 0.5rem;
+	padding: 0.125rem 1rem 0.125rem 0.5rem;
+	border-bottom: 1px solid var(--oes-window-bg);
+	font: 0.8125rem/1.4 ui-monospace, Consolas, "SF Mono", Menlo, monospace;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.message::before {
+	content: 'i';
+	flex: 0 0 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--oes-message-information);
+	color: #fff;
+	font: 700 9px/12px var(--oes-font-ui);
+	text-align: center;
+	transform: translateY(1px);
+}
+
+.message.warning::before {
+	content: '!';
+	background: var(--oes-message-warning);
+}
+
+.message.error::before {
+	content: '×';
+	background: var(--oes-message-error);
+}
+
+.status {
+	padding: 0.125rem 1rem;
+	font-size: 0.8rem;
+	color: var(--oes-muted);
+	border-top: 1px solid var(--oes-border);
+}
+
+.status:empty {
+	display: none;
+}
+
+.login {
+	display: grid;
+	gap: 1rem;
+	width: min(22rem, 100% - 2rem);
+	margin: 15dvh auto 0;
+	padding: 1.5rem;
+	background: var(--oes-panel-bg);
+	border: 1px solid var(--oes-border);
+	border-radius: 8px;
+}
+
+.login h1 {
+	margin: 0;
+	font-size: 1.25rem;
+}
+
+.login .refusal {
+	margin: 0;
+	color: var(--wa-color-danger-fill-loud, #c0392b);
+}
+
+.login .refusal:empty {
+	display: none;
+}
+
+/* The server waited on: a spinner over the window that takes no click — the old client's, after 800 ms. */
+.busy {
+	position: fixed;
+	inset: 0;
+	display: grid;
+	place-content: center;
+	pointer-events: none;
+	font-size: 2rem;
+	z-index: 9;
+}
+
+/* The connection lost: a strip over the top of the window until it is back. */
+.offline {
+	position: fixed;
+	top: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	padding: 0.375rem 1rem;
+	border-radius: 0 0 6px 6px;
+	background: var(--oes-message-warning);
+	color: #fff;
+	font-weight: 600;
+	z-index: 9;
+}
+
+.ended {
+	position: fixed;
+	inset: 0;
+	display: grid;
+	place-content: center;
+	gap: 1rem;
+	padding: 1rem;
+	background: rgb(255 255 255 / 0.9);
+	text-align: center;
+	z-index: 10;
+}
+
+/* A question that only its buttons answer — a Yes/No with no Cancel — has no ×. */
+wa-dialog.answered-only::part(close-button) {
+	display: none;
+}
+
+.choice-list {
+	display: grid;
+	gap: 0.25rem;
+}
+
+/* A popup menu the server asks — where the person pressed; a submenu opens in place, indented. */
+.popup-menu {
+	position: fixed;
+	inset: auto;
+	margin: 0;
+	min-width: 12rem;
+	max-height: 80dvh;
+	overflow: auto;
+	padding: 0.25rem 0;
+	background: var(--oes-panel-bg);
+	color: var(--oes-text);
+	border: 1px solid var(--oes-border);
+	border-radius: 6px;
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+	font: 0.875rem var(--oes-font-ui);
+}
+
+.popup-menu button,
+.popup-menu summary {
+	display: block;
+	width: 100%;
+	min-height: var(--oes-touch);
+	padding: 0 0.75rem 0 1.5rem;
+	border: none;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.popup-menu summary {
+	display: flex;
+	align-items: center;
+	list-style: none;
+}
+
+.popup-menu summary::after {
+	content: '▸';
+	margin-left: auto;
+	color: var(--oes-muted);
+}
+
+.popup-menu details[open] > summary::after {
+	content: '▾';
+}
+
+.popup-menu button:hover:not(:disabled),
+.popup-menu summary:hover {
+	background: var(--oes-table-row-hover-bg);
+}
+
+.popup-menu img {
+	width: 16px;
+	height: 16px;
+	margin-right: 0.375rem;
+	vertical-align: middle;
+}
+
+.popup-menu button:disabled {
+	color: var(--oes-muted);
+	cursor: default;
+}
+
+.popup-menu button.checked::before {
+	content: '✓';
+	margin-left: -1rem;
+	width: 1rem;
+	display: inline-block;
+}
+
+.popup-menu details > :not(summary) {
+	padding-left: 2.25rem;
+}
+
+/* A number's calculator and a date's calendar — dropped under the field pressed, the keys a finger's size. */
+.simple-choice {
+	position: fixed;
+	inset: auto;
+	margin: 0;
+	padding: 0.5rem;
+	background: var(--oes-panel-bg);
+	color: var(--oes-text);
+	border: 1px solid var(--oes-border);
+	border-radius: 6px;
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+	font: 0.875rem var(--oes-font-ui);
+}
+
+.simple-choice .calendar {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+}
+
+.simple-choice .calendar input {
+	min-height: var(--oes-touch);
+	font: inherit;
+}
+
+.simple-choice .calculator:focus {
+	outline: none;
+}
+
+.simple-choice .calculator .operation {
+	min-height: 1.25em;
+	text-align: right;
+	color: var(--oes-muted);
+}
+
+.simple-choice .calculator .display {
+	display: block;
+	padding-bottom: 0.5rem;
+	text-align: right;
+	font-size: 1.5rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.simple-choice .calculator .keys {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(3rem, 1fr));
+	gap: 0.25rem;
+}
+
+.simple-choice .calculator .keys button {
+	min-height: var(--oes-touch);
+}
+
+.simple-choice .calculator .keys .ok {
+	grid-column: span 4;
+}
+
+/* All functions: the search over the tree, and the line that says it found nothing. */
+.functions wa-input {
+	margin-bottom: 0.5rem;
+}
+
+.functions .nothing-found {
+	margin: 0.5rem 0;
+	color: var(--oes-muted);
+}
+
+.functions wa-tree-item img {
+	width: 16px;
+	height: 16px;
+	margin-inline-end: 0.375rem;
+}
+
+/* PRINTED — what the active tab shows, or the sheet a script asked to print (question 15), and nothing around it: the
+   window's chrome is the screen's. (A sheet on paper: form.css.) */
+.print-sheet {
+	display: none;
+}
+
+@media print {
+	html, body, #client {
+		height: auto;
+		background: #fff;
+	}
+
+	.client-window {
+		display: block;
+		height: auto;
+	}
+
+	.client-window > :not(.views),
+	.command-bar,
+	.popup-menu,
+	.simple-choice,
+	wa-dialog {
+		display: none !important;
+	}
+
+	.views,
+	oes-gridbox .sheet-host {
+		overflow: visible;
+	}
+
+	body.printing > :not(.print-sheet) {
+		display: none !important;
+	}
+
+	body.printing > .print-sheet {
+		display: block;
+	}
+}

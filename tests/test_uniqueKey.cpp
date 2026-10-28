@@ -48,7 +48,7 @@ TEST(UniqueKey, UnequalForDifferentGuid) {
 TEST(UniqueKey, ConvertsToGuidStringForm) {
     const ibGuid g = ibGuid::newGuid();
     ibUniqueKey k(g);
-    EXPECT_EQ(static_cast<wxString>(k), g.str());
+    EXPECT_EQ(static_cast<ibString>(k), g.str());
 }
 
 TEST(UniqueKey, ResetMakesInvalid) {

@@ -3,10 +3,11 @@
 
 #include "core/core.h"
 
-#include <wx/string.h>
 
 #include <cstddef>
 #include <string>
+
+class ibString;   // core/fstring.h — the engine's text, written into
 
 // ⭐ HOW A STRING IS SPELLED IN JSON - said ONCE. There were two escapers, the configuration's JSON view
 // (jsonProvider.cpp) and the script's JSONWriter, each private to its file and already escaping different
@@ -19,12 +20,20 @@
 class CORE_API ibJsonText {
 public:
 	// `text` quoted and escaped, appended to `out`. The characters themselves are all it reads, so a runtime
-	// string (ibString) is escaped where it lies rather than copied into a wxString first.
-	static void AppendQuoted(wxString& out, const wchar_t* text, size_t length);
-	static void AppendQuoted(wxString& out, const wxString& text) { AppendQuoted(out, text.wc_str(), text.length()); }
+	// string is escaped where it lies rather than copied first.
+	static void AppendQuoted(ibString& out, const ibChar* text, size_t length);
+	static void AppendQuoted(ibString& out, const ibString& text) { AppendQuoted(out, text.c_str(), text.length()); }
 
-	// The same as UTF-8 bytes - for a writer that builds its document in bytes.
-	static std::string QuotedUtf8(const wxString& text);
+	// The same as UTF-8 bytes - for a writer that builds its document in bytes: encoded as it is escaped, straight
+	// into `out`, with no text of its own in between. A surrogate with no pair goes out as U+FFFD.
+	static void AppendQuoted(std::string& out, const ibChar* text, size_t length);
+
+	// …AND READ BACK — the quoted text `at` points to (its opening quote), `at` left past its closing one; false when
+	// it is not one or does not end. Unescaped is what the writers escape, and \/ \b \f besides, which a hand-edited
+	// text may carry; \uXXXX is a UTF-16 unit, a surrogate pair joined. A text with no escape — nearly every one — is
+	// taken whole where it lies: characters copied once, bytes decoded once.
+	static bool ReadQuoted(const ibChar*& at, const ibChar* end, ibString& text);
+	static bool ReadQuoted(const char*& at, const char* end, ibString& text);
 };
 
 #endif // !__JSON_TEXT_H__

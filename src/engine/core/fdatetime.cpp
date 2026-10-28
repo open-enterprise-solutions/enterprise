@@ -9,7 +9,6 @@
 #include <chrono>      // Now - the machine's clock
 #include <cwchar>      // std::swprintf - the text of a date outside years 1..9999
 #include <ctime>       // Now - the clock's reading in the machine's zone
-#include <wx/datetime.h>
 
 // ⭐ ASKED FOR ONE THING, A DATE WORKS OUT ONE THING. Most questions a date is asked - the month a report
 // folds by, the day a year's period begins on, its hour - need either the calendar day or the time of day,
@@ -100,14 +99,14 @@ ibDateTime AddMonths(const ibDateTime& date, long months) noexcept
 }
 
 // Two digits, and four, into a text being written.
-wchar_t* PutTwo(wchar_t* at, unsigned value) noexcept
+ibChar* PutTwo(ibChar* at, unsigned value) noexcept
 {
-	*at++ = static_cast<wchar_t>(L'0' + value / 10 % 10);
-	*at++ = static_cast<wchar_t>(L'0' + value % 10);
+	*at++ = static_cast<ibChar>(ibT('0') + value / 10 % 10);
+	*at++ = static_cast<ibChar>(ibT('0') + value % 10);
 	return at;
 }
 
-wchar_t* PutFour(wchar_t* at, unsigned value) noexcept
+ibChar* PutFour(ibChar* at, unsigned value) noexcept
 {
 	return PutTwo(PutTwo(at, value / 100), value % 100);
 }
@@ -116,20 +115,43 @@ wchar_t* PutFour(wchar_t* at, unsigned value) noexcept
 
 ibDateTime ibDateTime::Now()
 {
-	// The clock's reading in the machine's zone, by its parts: what the clock on the wall shows here.
-	const auto now = std::chrono::system_clock::now();
-	const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
-	const long long milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
-	std::tm local{};
-#if defined(_WIN32)
-	localtime_s(&local, &seconds);
+	// The clock's own instant, read as any instant is: by the machine's zone, into its parts.
+	return OfInstant(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+}
+
+ibDateTime ibDateTime::OfInstant(long long unixMilliseconds)
+{
+	// What the clock on the wall shows here at that instant.
+	const long long remainder = unixMilliseconds % 1000;
+	const long long milliseconds = remainder < 0 ? remainder + 1000 : remainder;
+	const std::time_t seconds = static_cast<std::time_t>((unixMilliseconds - milliseconds) / 1000);
+	const auto localOf = [](std::time_t at, std::tm& local) {
+#if defined(__IBMSW__)
+		return localtime_s(&local, &at) == 0;
 #else
-	localtime_r(&seconds, &local);
+		return localtime_r(&at, &local) != nullptr;
 #endif
+	};
+	std::tm local{};
+	if (!localOf(seconds, local)) {
+		// Before what the C library reads (1970 on Windows): the zone's standard distance from UTC, as wx read
+		// such an instant - the zone's rule for summer time is not known that far back. The distance of the
+		// half of 1970 that is not in summer time.
+		long long distance = 0;
+		for (const std::time_t probe : { std::time_t(0), std::time_t(182 * 86400) }) {
+			std::tm at{};
+			if (localOf(probe, at) && at.tm_isdst == 0) {
+				distance = ((static_cast<long long>(at.tm_yday) + (at.tm_year - 70) * 365) * 86400
+					+ at.tm_hour * 3600 + at.tm_min * 60 + at.tm_sec) - static_cast<long long>(probe);
+				break;
+			}
+		}
+		return ibDateTime(1970, 1, 1).AddMilliseconds(unixMilliseconds + distance * 1000);
+	}
 	return ibDateTime(local.tm_year + 1900, static_cast<unsigned>(local.tm_mon) + 1, static_cast<unsigned>(local.tm_mday),
 		static_cast<unsigned>(local.tm_hour), static_cast<unsigned>(local.tm_min),
 		static_cast<unsigned>(std::min(local.tm_sec, 59)),   // a leap second's 60 is the minute's last second on the wall
-		static_cast<unsigned>(milliseconds < 0 ? milliseconds + 1000 : milliseconds));
+		static_cast<unsigned>(milliseconds));
 }
 
 long long ibDateTime::ElapsedSince(const ibDateTime& earlier) const noexcept
@@ -159,24 +181,75 @@ long long ibDateTime::ElapsedSince(const ibDateTime& earlier) const noexcept
 	return (static_cast<long long>(later) - static_cast<long long>(before)) * s_msPerSecond + (laterMs - earlierMs);
 }
 
-ibDateTime ibDateTime::OfWxDateTime(const wxDateTime& moment)
+// The names as the catalog keeps them - marked for it here, translated where they are said. A context each, since
+// the same word is two names: May the month and May its short form.
+namespace {
+const char* const s_monthNames[12] = {
+	ibTRANSLATE_IN_CONTEXT("month", "January"),
+	ibTRANSLATE_IN_CONTEXT("month", "February"),
+	ibTRANSLATE_IN_CONTEXT("month", "March"),
+	ibTRANSLATE_IN_CONTEXT("month", "April"),
+	ibTRANSLATE_IN_CONTEXT("month", "May"),
+	ibTRANSLATE_IN_CONTEXT("month", "June"),
+	ibTRANSLATE_IN_CONTEXT("month", "July"),
+	ibTRANSLATE_IN_CONTEXT("month", "August"),
+	ibTRANSLATE_IN_CONTEXT("month", "September"),
+	ibTRANSLATE_IN_CONTEXT("month", "October"),
+	ibTRANSLATE_IN_CONTEXT("month", "November"),
+	ibTRANSLATE_IN_CONTEXT("month", "December")
+};
+const char* const s_monthShortNames[12] = {
+	ibTRANSLATE_IN_CONTEXT("month, short", "Jan"),
+	ibTRANSLATE_IN_CONTEXT("month, short", "Feb"),
+	ibTRANSLATE_IN_CONTEXT("month, short", "Mar"),
+	ibTRANSLATE_IN_CONTEXT("month, short", "Apr"),
+	ibTRANSLATE_IN_CONTEXT("month, short", "May"),
+	ibTRANSLATE_IN_CONTEXT("month, short", "Jun"),
+	ibTRANSLATE_IN_CONTEXT("month, short", "Jul"),
+	ibTRANSLATE_IN_CONTEXT("month, short", "Aug"),
+	ibTRANSLATE_IN_CONTEXT("month, short", "Sep"),
+	ibTRANSLATE_IN_CONTEXT("month, short", "Oct"),
+	ibTRANSLATE_IN_CONTEXT("month, short", "Nov"),
+	ibTRANSLATE_IN_CONTEXT("month, short", "Dec")
+};
+const char* const s_weekDayNames[7] = {
+	ibTRANSLATE_IN_CONTEXT("weekday", "Monday"),
+	ibTRANSLATE_IN_CONTEXT("weekday", "Tuesday"),
+	ibTRANSLATE_IN_CONTEXT("weekday", "Wednesday"),
+	ibTRANSLATE_IN_CONTEXT("weekday", "Thursday"),
+	ibTRANSLATE_IN_CONTEXT("weekday", "Friday"),
+	ibTRANSLATE_IN_CONTEXT("weekday", "Saturday"),
+	ibTRANSLATE_IN_CONTEXT("weekday", "Sunday")
+};
+const char* const s_weekDayShortNames[7] = {
+	ibTRANSLATE_IN_CONTEXT("weekday, short", "Mon"),
+	ibTRANSLATE_IN_CONTEXT("weekday, short", "Tue"),
+	ibTRANSLATE_IN_CONTEXT("weekday, short", "Wed"),
+	ibTRANSLATE_IN_CONTEXT("weekday, short", "Thu"),
+	ibTRANSLATE_IN_CONTEXT("weekday, short", "Fri"),
+	ibTRANSLATE_IN_CONTEXT("weekday, short", "Sat"),
+	ibTRANSLATE_IN_CONTEXT("weekday, short", "Sun")
+};
+} // namespace
+
+ibString ibDateTime::MonthName(unsigned month)
 {
-	if (!moment.IsValid())
-		return ibDateTime();
-	const wxDateTime::Tm tm = moment.GetTm();
-	return ibDateTime(tm.year, static_cast<unsigned>(tm.mon) + 1, tm.mday, tm.hour, tm.min, tm.sec, tm.msec);
+	return month >= 1 && month <= 12 ? ibGetTranslation(ibString(s_monthNames[month - 1]), ibT("month")) : ibString();
 }
 
-wxDateTime ibDateTime::ToWxDateTime() const
+ibString ibDateTime::MonthShortName(unsigned month)
 {
-	if (IsEmpty())
-		return wxDateTime();
-	const CivilDay day = CivilOf(*this);
-	unsigned hour, minute, second, millisecond;
-	TimeOf(*this, hour, minute, second, millisecond);
-	return wxDateTime(static_cast<wxDateTime::wxDateTime_t>(day.m_day), static_cast<wxDateTime::Month>(day.m_month - 1), day.m_year,
-		static_cast<wxDateTime::wxDateTime_t>(hour), static_cast<wxDateTime::wxDateTime_t>(minute),
-		static_cast<wxDateTime::wxDateTime_t>(second), static_cast<wxDateTime::wxDateTime_t>(millisecond));
+	return month >= 1 && month <= 12 ? ibGetTranslation(ibString(s_monthShortNames[month - 1]), ibT("month, short")) : ibString();
+}
+
+ibString ibDateTime::WeekDayName(unsigned weekDay)
+{
+	return weekDay >= 1 && weekDay <= 7 ? ibGetTranslation(ibString(s_weekDayNames[weekDay - 1]), ibT("weekday")) : ibString();
+}
+
+ibString ibDateTime::WeekDayShortName(unsigned weekDay)
+{
+	return weekDay >= 1 && weekDay <= 7 ? ibGetTranslation(ibString(s_weekDayShortNames[weekDay - 1]), ibT("weekday, short")) : ibString();
 }
 
 void ibDateTime::ToParts(ibDateTimeParts& parts) const noexcept
@@ -352,30 +425,20 @@ bool ibDateTime::FromString(const ibString& text)
 {
 	switch (FromDigits(text)) {
 	case DigitForm::Read:     return true;
-	case DigitForm::Refused:  return false;   // one of the engine's forms naming no date — not a guess for wx
+	case DigitForm::Refused:  return false;   // one of the engine's forms naming no date — not a guess for the free-form reader
 	case DigitForm::NotAForm: break;
 	}
-	// Not one of the digit forms: wx's free-form reader, by the local parts of what it read.
-	const wxString freeForm = text.ToWxString();
-	wxDateTime parsed;
-	if (parsed.ParseDateTime(freeForm)) {
-		*this = OfWxDateTime(parsed);
-		return true;
-	}
-	if (parsed.ParseDate(freeForm)) {
-		*this = OfWxDateTime(parsed.GetDateOnly());
-		return true;
-	}
-	return false;
+	// Not one of the digit forms: as a person writes it.
+	return FromFreeForm(text);
 }
 
 ibDateTime::DigitForm ibDateTime::FromDigits(const ibString& text) noexcept
 {
-	const wchar_t* const chars = text.wc_str();
+	const ibChar* const chars = text.c_str();
 	const size_t length = text.Len();
 	size_t at = 0;
-	const auto isDigit = [&](size_t i) { return i < length && chars[i] >= L'0' && chars[i] <= L'9'; };
-	const auto digitAt = [&](size_t i) { return static_cast<long long>(chars[i] - L'0'); };
+	const auto isDigit = [&](size_t i) { return i < length && chars[i] >= ibT('0') && chars[i] <= ibT('9'); };
+	const auto digitAt = [&](size_t i) { return static_cast<long long>(chars[i] - ibT('0')); };
 	// Up to `most` digits, at least `least`; the value read, the cursor past them.
 	const auto digits = [&](size_t least, size_t most, long long& value) -> bool {
 		size_t n = 0; value = 0;
@@ -385,7 +448,7 @@ ibDateTime::DigitForm ibDateTime::FromDigits(const ibString& text) noexcept
 		}
 		return n >= least;
 	};
-	const auto take = [&](wchar_t c) -> bool {
+	const auto take = [&](ibChar c) -> bool {
 		if (at < length && chars[at] == c) { ++at; return true; }
 		return false;
 	};
@@ -413,28 +476,28 @@ ibDateTime::DigitForm ibDateTime::FromDigits(const ibString& text) noexcept
 
 	// dd.mm.yyyy[ hh:mm:ss]
 	at = 0;
-	if (digits(1, 2, day) && take(L'.') && digits(1, 2, month) && take(L'.') && digits(4, 4, year)) {
+	if (digits(1, 2, day) && take(ibT('.')) && digits(1, 2, month) && take(ibT('.')) && digits(4, 4, year)) {
 		if (at == length)
 			return settle(year, month, day, 0, 0, 0, 0);
-		while (take(L' ')) {}
-		if (digits(1, 2, hour) && take(L':') && digits(1, 2, minute) && take(L':') && digits(1, 2, second) && at == length)
+		while (take(ibT(' '))) {}
+		if (digits(1, 2, hour) && take(ibT(':')) && digits(1, 2, minute) && take(ibT(':')) && digits(1, 2, second) && at == length)
 			return settle(year, month, day, hour, minute, second, 0);
 		return DigitForm::Refused;
 	}
 
 	// yyyy-mm-dd[ hh:mm[:ss[.fraction]]]  (ISO 8601, `T` or a space between the halves)
 	at = 0;
-	if (digits(4, 4, year) && take(L'-') && digits(2, 2, month) && take(L'-') && digits(2, 2, day)) {
+	if (digits(4, 4, year) && take(ibT('-')) && digits(2, 2, month) && take(ibT('-')) && digits(2, 2, day)) {
 		if (at == length)
 			return settle(year, month, day, 0, 0, 0, 0);
-		if (!(take(L' ') || take(L'T')))
+		if (!(take(ibT(' ')) || take(ibT('T'))))
 			return DigitForm::Refused;
-		if (!(digits(2, 2, hour) && take(L':') && digits(2, 2, minute)))
+		if (!(digits(2, 2, hour) && take(ibT(':')) && digits(2, 2, minute)))
 			return DigitForm::Refused;
-		if (take(L':')) {
+		if (take(ibT(':'))) {
 			if (!digits(2, 2, second))
 				return DigitForm::Refused;
-			if (take(L'.')) {
+			if (take(ibT('.'))) {
 				// The first three digits of the fraction are the milliseconds; the rest is finer than the reading.
 				size_t n = 0; long long fraction = 0;
 				while (isDigit(at)) { if (n < 3) fraction = fraction * 10 + digitAt(at); ++at; ++n; }
@@ -456,18 +519,45 @@ ibString ibDateTime::ToString() const
 	const CivilDay day = CivilOf(*this);
 	unsigned hour, minute, second, millisecond;
 	TimeOf(*this, hour, minute, second, millisecond);
-	wchar_t text[48];
 	if (day.m_year < 1 || day.m_year > 9999) {
-		const int length = std::swprintf(text, sizeof(text) / sizeof(text[0]), L"%02u.%02u.%04d %02u:%02u:%02u",
+		wchar_t wide[48];
+		const int length = std::swprintf(wide, sizeof(wide) / sizeof(wide[0]), L"%02u.%02u.%04d %02u:%02u:%02u",
 			day.m_day, day.m_month, day.m_year, hour, minute, second);
-		return length > 0 ? ibString(text, static_cast<size_t>(length)) : ibString();
+		return length > 0 ? ibString(wide, static_cast<size_t>(length)) : ibString();
 	}
-	wchar_t* at = text;
-	at = PutTwo(at, day.m_day);    *at++ = L'.';
-	at = PutTwo(at, day.m_month);  *at++ = L'.';
-	at = PutFour(at, static_cast<unsigned>(day.m_year)); *at++ = L' ';
-	at = PutTwo(at, hour);         *at++ = L':';
-	at = PutTwo(at, minute);       *at++ = L':';
+	// In the text's own characters: written as wchar_t, the date was converted once more where wchar_t is four bytes.
+	ibChar text[20];
+	ibChar* at = text;
+	at = PutTwo(at, day.m_day);    *at++ = ibT('.');
+	at = PutTwo(at, day.m_month);  *at++ = ibT('.');
+	at = PutFour(at, static_cast<unsigned>(day.m_year)); *at++ = ibT(' ');
+	at = PutTwo(at, hour);         *at++ = ibT(':');
+	at = PutTwo(at, minute);       *at++ = ibT(':');
 	at = PutTwo(at, second);
 	return ibString(text, static_cast<size_t>(at - text));
+}
+
+ibString ibDateTime::Format(const ibString& format) const
+{
+	// The parts in a calendar record, and the record through wcsftime. `%l` is wx's and not C's: the milliseconds
+	// are put in before.
+	const CivilDay day = CivilOf(*this);
+	unsigned hour, minute, second, millisecond;
+	TimeOf(*this, hour, minute, second, millisecond);
+	std::tm parts{};
+	parts.tm_year = day.m_year - 1900;
+	parts.tm_mon = static_cast<int>(day.m_month) - 1;
+	parts.tm_mday = static_cast<int>(day.m_day);
+	parts.tm_hour = static_cast<int>(hour);
+	parts.tm_min = static_cast<int>(minute);
+	parts.tm_sec = static_cast<int>(second);
+	parts.tm_wday = static_cast<int>(GetPart(ibDatePart::WeekDay) % 7);   // Monday 1 … Sunday 7, and C's Sunday is 0
+	parts.tm_yday = static_cast<int>(GetPart(ibDatePart::DayOfYear)) - 1;
+	parts.tm_isdst = -1;
+
+	ibString spec = format;
+	spec.Replace(ibT("%l"), ibString::Format(ibT("%03u"), millisecond));
+	wchar_t text[256];
+	const size_t length = std::wcsftime(text, sizeof(text) / sizeof(text[0]), spec.wc_str(), &parts);
+	return ibString(text, length);
 }

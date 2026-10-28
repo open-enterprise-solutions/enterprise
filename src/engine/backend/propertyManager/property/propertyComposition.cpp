@@ -3,18 +3,19 @@
 #include "backend/propertyManager/property/variant/variantComposition.h"
 #include "backend/system/value/valueDataComposition.h"   // the running composition a script is handed
 #include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child)
+#include "backend/backend_composition.h"   // ibBackendCompositionDescriptionMemory — read against the configuration
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyComposition::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& val)
+ibVariant ibPropertyComposition::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& val)
 {
-	return new ibVariantDataComposition(property, val);
+	return ibVariant(new ibVariantComposition(property, val));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibCompositionDescription& ibPropertyComposition::GetValueAsCompositionDesc() const {
-	return get_cell_variant<ibVariantDataComposition>()->GetCompositionDesc();
+	return get_cell_variant<ibVariantComposition>()->GetCompositionDesc();
 }
 
 // A NEW CELL, WHICH IS WHAT A VARIANT IS FOR. The data is reference-counted, so whoever is looking
@@ -62,11 +63,11 @@ bool ibPropertyComposition::ReadNodeValue(const ibDataValue& value)
 	// other asserts and returns null (propertyObject.h) — so from a non-const method like this one
 	// the door came back empty and the read failed exactly as if it had never been handed in.
 	const ibPropertyObject* owner = m_owner;
-	return ibCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
+	return ibBackendCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
 		owner != nullptr ? owner->GetMetaData() : nullptr);
 }
 
 bool ibPropertyComposition::WriteNodeValue(ibDataValue& value) const
 {
-	return ibCompositionDescriptionMemory::WriteNode(value, GetValueAsCompositionDesc());
+	return ibBackendCompositionDescriptionMemory::WriteNode(value, GetValueAsCompositionDesc());
 }

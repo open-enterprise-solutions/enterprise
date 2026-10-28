@@ -33,13 +33,13 @@
 
 #include "backend/backend_core.h"
 #include "backend/compiler/value.h"        // ibValue — driver rows / parameters
-#include "backend/query/queryAST.h"        // ibQuerySelectPtr — the cached parse
+#include "core/query/queryAST.h"        // ibQuerySelectPtr — the cached parse
 #include "backend/query/queryLowering.h"   // ibQueryLowering::OutputColumn (+ ibBackendQueryColumn)
 #include "backend/query/queryTempStore.h"  // ibQueryTempTableStore — what the preparing statements made
 #include "drivers/compositionDriver.h"             // ibCompositionDriver / ibCompositionOutputInfo — the contract, cut out on 2026-08-28
 #include "compositionCondition.h"                  // the evaluator — how a row in hand is read against a condition (SubtreeOf feeds it)
-#include "backend/compositionDescription.h"   // ibFilterDescription — a level's filter is the stored one
-#include "compositionTheme.h"                 // ibCompositionTheme — the palette a run hands its driver
+#include "backend/backend_composition.h"   // ibFilterDescription — a level's filter is the stored one; ibStoredValue
+#include "core/composition/compositionTheme.h"   // ibCompositionTheme — the palette a run hands its driver
 #include "backend/functionalOption/functionalOptionGate.h"   // AsApplication — a run shows what the base uses
 
 // A LEVEL'S ORDER IS THE SELECTION'S — declared, not included: querySelector.h drags the whole query
@@ -104,7 +104,7 @@ public:
 
 	// The projection (no Select = ALL the first source's columns). A name may be a dot-walk path; the typed
 	// overload pulls the name out of the column object.
-	ibDataComposer& Select(const wxString& nameOrPath);
+	ibDataComposer& Select(const ibString& nameOrPath);
 	ibDataComposer& Select(const ibBackendQueryColumn* col) {
 		return col != nullptr ? Select(col->GetName()) : *this;
 	}
@@ -118,14 +118,14 @@ public:
 	// saved into the user setting"). There is no separate store for a filter a script or a metaobject
 	// declares — a declared filter and a chosen one are the same fact, and one of them being
 	// invisible to the settings window is how they came to disagree.
-	ibDataComposer& Filter(const wxString& path, const wxString& op, const ibValue& value);
+	ibDataComposer& Filter(const ibString& path, const ibString& op, const ibValue& value);
 
 	// ⭐ …AND THE ONE THING THAT IS NOT A SETTING: what a single READ is scoped to. The drilled
 	// parent's path, the primary key of a point query — the engine's own, pushed before the read and
 	// popped after it (MarkScope / RestoreScope). It is ANDed with whatever setting is in force, so
 	// drilling into a folder cannot cost the reader their filter, and it is never shown, saved or
 	// edited anywhere: nobody chose it.
-	ibDataComposer& ScopeTo(const wxString& path, const wxString& op, const ibValue& value);
+	ibDataComposer& ScopeTo(const ibString& path, const ibString& op, const ibValue& value);
 
 	// A FILTER DESCRIPTION, TURNED INTO THE CONDITION IT MEANS — the composer's own job: the lines
 	// mention VALUES, and a value reaches a query as a named &parameter, which is this object's
@@ -291,10 +291,10 @@ public:
 	// caller answers with the platform's own. `node` may be null — the output itself is asked.
 	ibValue OutputParameterFor(const Output& output, const GroupNode* node, ibOutputParameter parameter) const {
 		if (node != nullptr && node->m_settings.m_outputParameters.Says(parameter))
-			return node->m_settings.m_outputParameters.ValueInForce(parameter);
+			return ibStoredValue(node->m_settings.m_outputParameters.ValueInForce(parameter), nullptr);
 		if (output.m_settings.m_outputParameters.Says(parameter))
-			return output.m_settings.m_outputParameters.ValueInForce(parameter);
-		return GetCurrentOutputParametersDesc().ValueInForce(parameter);
+			return ibStoredValue(output.m_settings.m_outputParameters.ValueInForce(parameter), nullptr);
+		return ibStoredValue(GetCurrentOutputParametersDesc().ValueInForce(parameter), nullptr);
 	}
 	// …and the one a painter asks: the THEME in force there — the platform's first when nobody named one.
 	const ibCompositionTheme& ThemeFor(const Output& output, const GroupNode* node) const {
@@ -333,10 +333,10 @@ public:
 	// Register a value and get the &parameter NAME that carries it (without the
 	// leading &). Public because the one who BUILDS the condition is the one who
 	// knows which values it mentions — a filter tree names them as it goes.
-	wxString AddParam(const ibValue& value);
+	ibString AddParam(const ibValue& value);
 
 	// A sort line — DB → ORDER BY; RAM → an in-place multi-key compare, in call order.
-	ibDataComposer& Sort(const wxString& path, bool ascending = true);
+	ibDataComposer& Sort(const ibString& path, bool ascending = true);
 
 	// ⭐ A RESOURCE — what the composition aggregates. Rendered into the query's `TOTALS agg… BY dim…`
 	// clause, which is where the word *total* belongs: it is the QUERY LANGUAGE's keyword, not this
@@ -351,7 +351,7 @@ public:
 	//
 	// (`TotalExpr(expr)` DELETED — a one-line convenience for the empty-function form, with no
 	//  caller. RAM grouping is still a deferred follow-up: the RAM composer reads filter and sort.)
-	ibDataComposer& Resource(const wxString& func, const wxString& path);
+	ibDataComposer& Resource(const ibString& func, const ibString& path);
 	// …AND A DECLARED ONE, WHOLE — its name (`AS People`) and its area (`OVER Item`) with it. The two
 	// runs of a stored report (the report form's, compose_run's) filled the composer through the pair
 	// above, so every resource arrived nameless and arealess: a head count declared as People was
@@ -360,10 +360,10 @@ public:
 	ibDataComposer& Resource(const ibResourceDescription& resource);
 	// The grouping VID (kind): Elements / Hierarchy / HierarchyOnly — the ONE switch between a flat and a
 	// hierarchical view (lifted to L5 — the list settings carry it).
-	ibDataComposer& TotalBy(const wxString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements);
+	ibDataComposer& TotalBy(const ibString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements);
 
 	// An explicit &parameter (DB: a filter mapped INTO an author's text — virtual-table args included).
-	ibDataComposer& Parameter(const wxString& name, const ibValue& value);
+	ibDataComposer& Parameter(const ibString& name, const ibValue& value);
 
 	ibDataComposer& ClearSettings();   // drop select/filter/sort/totals (the source stays)
 
@@ -392,7 +392,7 @@ public:
 	// The reading of one — path, operator, value. A scope condition has no tree: it is one comparison
 	// the engine made up for this read, and a caller that wants the reader's FILTER reads the filter
 	// description instead.
-	bool   GetScopeAt(size_t i, wxString& path, wxString& op, ibValue& value) const {
+	bool   GetScopeAt(size_t i, ibString& path, ibString& op, ibValue& value) const {
 		if (i >= m_scopeConditions.size()) return false;
 		path = m_scopeConditions[i].m_path; op = m_scopeConditions[i].m_op;
 		const auto it = m_params.find(m_scopeConditions[i].m_param);
@@ -424,7 +424,7 @@ public:
 	// included. Only a reader with no setting at all still composes on the author's.
 	void   ClearSorts() { UserSettings().m_sort.Clear(); }
 	size_t SortCount() const { return GetCurrentSortDesc().m_lines.size(); }
-	bool   GetSortAt(size_t i, wxString& path, bool& ascending) const {
+	bool   GetSortAt(size_t i, ibString& path, bool& ascending) const {
 		const ibSortDescription& sort = GetCurrentSortDesc();
 		if (i >= sort.m_lines.size()) return false;
 		path = sort.m_lines[i].m_path; ascending = sort.m_lines[i].m_ascending; return true;
@@ -457,7 +457,7 @@ public:
 		const ibGroupDescription group = GetAvailableGroupDesc();   // the render's answer — see there
 		return group.IsOk() ? group.m_lines.size() : LevelChain().size();
 	}
-	bool   GetGroupAt(size_t i, wxString& path, ibQueryDimUnfold& kind) const {
+	bool   GetGroupAt(size_t i, ibString& path, ibQueryDimUnfold& kind) const {
 		// A READER'S GROUPING IS A FLAT LIST — one field per level, which is exactly what a LIST
 		// means by grouping. (A report's level may weld several fields into one heading; that is the
 		// ladder's shape, read below.)
@@ -492,7 +492,7 @@ public:
 	// smaller: a field nobody named is not fetched and not rendered.
 	void   ClearSelected() { m_commonSelected.clear(); }
 	size_t SelectCount() const { return m_commonSelected.size(); }
-	bool   GetSelectAt(size_t i, wxString& path) const {
+	bool   GetSelectAt(size_t i, ibString& path) const {
 		if (i >= m_commonSelected.size()) return false;
 		path = m_commonSelected[i].m_path;
 		return true;
@@ -525,13 +525,13 @@ public:
 	//
 	// ⚠ And the same promise: what cannot be VERIFIED is left alone. A host that cannot answer must
 	// return true, because "we do not know" must never delete somebody's work.
-	int PruneUnresolvedSettings(const std::function<bool(const wxString& path)>& resolves);
+	int PruneUnresolvedSettings(const std::function<bool(const ibString& path)>& resolves);
 
 	// ⭐ ONE SECTION, PRUNED — the filter tree, the sort lines and the grouping lines. Both sections
 	// go through it (the reader's and the author's), because a field that stopped existing stopped
 	// existing for whoever named it. Returns how many lines went, the way the caller counts.
 	static int PruneSettingsDesc(ibSettingsDescription& settings,
-		const std::function<bool(const wxString& path)>& resolves);
+		const std::function<bool(const ibString& path)>& resolves);
 
 	// --- transient scope (per-fetch drill overlay) ---------------------------------
 	// The ONE genuinely per-fetch thing is the drill of the browsed parent (each expand fetches ITS children,
@@ -607,7 +607,7 @@ public:
 
 	// APPEND A LEVEL to the ladder — the ordinary "group by this, then by that". The first one fills
 	// the root output (which until then produced detail rows); each next becomes a child of the last.
-	void AppendLevel(const wxString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements) {
+	void AppendLevel(const ibString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements) {
 		if (path.IsEmpty()) return;
 		GroupNode level;
 		level.m_settings.m_group.Append(path, kind);   // what a level folds by IS its grouping
@@ -766,9 +766,9 @@ public:
 	// every caller through `auto` and made the types unnameable where they are written to a file.
 	struct FilterItem
 	{
-		wxString m_path;
-		wxString m_op;
-		wxString m_param;       // the auto-named &parameter carrying the value
+		ibString m_path;
+		ibString m_op;
+		ibString m_param;       // the auto-named &parameter carrying the value
 	};
 	// ⭐ A SORT LINE HAS ONE TYPE. This was `struct SortItem { path; ascending; }` — the same pair
 	// `ibSortLineDescription` already was, under a second name, so every crossing between a stored
@@ -869,9 +869,9 @@ public:
 
 	// THE TITLE IN FORCE FOR A PATH — through the SAME function the description answers with, so the
 	// two cannot drift (ibTitleForPath) — generated from what the SOURCE calls the field, where it says.
-	wxString TitleForPath(const wxString& path) const { return ibTitleForPath(m_selects, path, SourceCaptionOf(path)); }
+	ibString TitleForPath(const ibString& path) const { return ibTitleForPath(m_selects, path, SourceCaptionOf(path)); }
 	// …AND HOW IT IS SHOWN — the field's appearance, what a person set (ibAppearanceForPath).
-	ibAppearanceDescription AppearanceForPath(const wxString& path) const { return ibAppearanceForPath(m_selects, path); }
+	ibAppearanceDescription AppearanceForPath(const ibString& path) const { return ibAppearanceForPath(m_selects, path); }
 
 	// ⚠ THE OUTPUTS AND THEIR LEVELS ARE EDITED WHERE THEY ARE HELD — `Outputs()` hands over the
 	// vector, and the settings window builds a node whole (several fields, a kind, its own filter
@@ -987,6 +987,7 @@ public:
 		std::vector<ibCompositionRule>                             m_rules;       // the setting's, then the output's
 		std::map<const GroupNode*, std::vector<ibCompositionRule>> m_nodes;       // each node's own
 		ibCompositionSubtreeOf                                     m_subtreeOf;   // «in hierarchy», as the composer reads it
+		const class ibMetaData*                                    m_metaData = nullptr;   // …and the configuration it reads in
 
 		bool IsEmpty() const { return m_rules.empty() && m_nodes.empty(); }
 
@@ -1105,8 +1106,8 @@ public:
 	// keeps `Ref`. Asking the query tier would mean holding its select; accepting both spellings of
 	// one name costs nothing and cannot say yes to a different field — the segments are the same
 	// words in the same order either way.
-	static void AppendFields(std::vector<wxString>& into, const std::vector<wxString>& added) {
-		for (const wxString& field : added)
+	static void AppendFields(std::vector<ibString>& into, const std::vector<ibString>& added) {
+		for (const ibString& field : added)
 			if (std::find(into.begin(), into.end(), field) == into.end())
 				into.push_back(field);
 	}
@@ -1125,11 +1126,11 @@ public:
 
 	// The four storeys resolved down to this output: composition (the AUTHOR) → the setting in force
 	// (the READER) → output. A node's own table is not here — that is what SelectedUnder answers.
-	std::vector<wxString> SelectedFor(const Output& output) const;
+	std::vector<ibString> SelectedFor(const Output& output) const;
 	// ⚠ ONE STOREY DOWN FROM THE OUTPUT — right for a node standing on an axis, and NOT a general
 	// answer for a node deeper in the tree: that one's chain runs through its parents, and the walk
 	// carries it (SelectedUnder). Kept for the callers that hold an output and a top-level node.
-	std::vector<wxString> SelectedFor(const Output& output, const GroupNode& level) const;
+	std::vector<ibString> SelectedFor(const Output& output, const GroupNode& level) const;
 
 	// ⭐⭐ WHAT THE READ OWES — every name anything above it will ask for BY NAME, which is NOT the
 	// same list as what the report shows. A level hides on a field, orders on a field and selects
@@ -1148,7 +1149,7 @@ public:
 	// ⭐ BOTH AXES, because a level is the same thing on either one — a cross-table's columns hide,
 	// order and select exactly as its rows do. A projection that knew only about rows would be a
 	// second place to remember when the other axis lands, and it would be remembered late.
-	static void AppendFilterFields(std::vector<wxString>& into, const ibFilterNodeDescription& node) {
+	static void AppendFilterFields(std::vector<ibString>& into, const ibFilterNodeDescription& node) {
 		if (node.m_kind == ibFilterNodeKind_Group) {
 			for (const ibFilterNodeDescription& child : node.m_children)
 				AppendFilterFields(into, child);
@@ -1170,11 +1171,11 @@ public:
 	//  functions of the module too: they need no object and no caller outside it.)
 
 	// WHAT THE READ OWES — asked by the tests, so it is stated here; the body is in the module.
-	std::vector<wxString> ProjectionFor(const Output& output) const;
+	std::vector<ibString> ProjectionFor(const Output& output) const;
 
 	// …and what is SHOWN out of it: the same walk without the fields a filter and a sort merely need.
 	// The read is the union, the print is what somebody chose — see the driver's `m_shown`.
-	std::vector<wxString> ShownFor(const Output& output) const;
+	std::vector<ibString> ShownFor(const Output& output) const;
 
 protected:
 	// Always non-empty (see Outputs) — the one output every composition starts with.
@@ -1273,7 +1274,7 @@ protected:
 	// query REGISTERS values — `AddParam`, `BuildFilterAst`, `EnsureAst`, `Execute`. Every one of
 	// them was const, and every one of them wrote; `mutable` was not a cache here, it was the cover
 	// over a signature that said the opposite of what the code did.
-	std::map<wxString, ibValue> m_params;   // the rendered query's own values — filled while a query is being made
+	std::map<ibString, ibValue> m_params;   // the rendered query's own values — filled while a query is being made
 	int                         m_autoParam = 0;   // auto-name counter for filter values (see m_params)
 
 	const class ibMetaData* m_metaData = nullptr;   // config the query resolves by-name sources against (SetMetaData)
@@ -1284,14 +1285,14 @@ protected:
 	// Dropped wherever an answer can change: a new source or configuration (RefreshSourceFields, SetMetaData,
 	// the RAM composer's FromStorage) and a run starting (ApplyAvailableStructure, the RAM composer's ComputeOrder
 	// and Run).
-	mutable std::map<wxString, bool> m_availablePaths;
+	mutable std::map<ibString, bool> m_availablePaths;
 	// …and SubtreeAt's, on the same terms: what «in hierarchy» of the named values admits for a field — its
 	// catalog's tree, read once per run however many rows ask. Null = the path resolves to no type.
-	mutable std::map<std::pair<wxString, std::vector<ibValue>>, std::shared_ptr<const ibQueryHierarchyScope>> m_subtrees;
+	mutable std::map<std::pair<ibString, std::vector<ibValue>>, std::shared_ptr<const ibQueryHierarchyScope>> m_subtrees;
 	// WHAT «IN HIERARCHY» OF `named` ADMITS FOR A FIELD — the field's catalog found by the leaf's type (WalkPath), its
 	// tree read once (ibQueryHierarchyScope) and kept (m_subtrees). Null where the path resolves to no type: the
 	// condition is then unknown, not guessed. What SubtreeOf hands the engine.
-	const ibQueryHierarchyScope* SubtreeAt(const wxString& path, const ibValue& named) const;
+	const ibQueryHierarchyScope* SubtreeAt(const ibString& path, const ibValue& named) const;
 	// …both dropped at once, since both answer "as the source and the base stand now".
 	void DropMemos() const { m_availablePaths.clear(); m_subtrees.clear(); }
 
@@ -1307,12 +1308,12 @@ public:
 	// The door takes the path as the settings keep it, a dotted line, and lays it out as HOPS once
 	// (ibQueryColumnFromPath); a composer answers for the hops, from the source's own field on. Last in the
 	// class, so no slot moves.
-	bool IsAvailable(const wxString& path) const;
+	bool IsAvailable(const ibString& path) const;
 	// ⭐ THE FIELD THE HOPS END IN — walked from the source's own field, each hop by its type, as every holder of
 	// fields walks a path (ibQueryConstructorModel::WalkPath). One walk, read for two answers: whether every hop may
 	// be shown (IsAvailable), and what the leaf holds (SubtreeAt). A composer with no source to walk answers an
 	// empty field — available, of no known type.
-	virtual ibQueryConstructorField WalkPath(const std::vector<wxString>& hops) const;
+	virtual ibQueryConstructorField WalkPath(const std::vector<ibString>& hops) const;
 	// ⭐ WHAT «IN HIERARCHY» ADMITS, handed to the engine as it asks it (ibCompositionSubtreeOf) — by every reader of
 	// rows in memory this composer feeds: the walk, the printed list, a table's filter, a list's appearance.
 	ibCompositionSubtreeOf SubtreeOf() const;
@@ -1321,7 +1322,7 @@ public:
 	// fields, and one whose source says nothing (a RAM model's column) answers nothing. Read by the title a
 	// column is printed under (TitleForPath). (What a field IS in a balance needs no such door: it travels with
 	// the column into the totals.)
-	virtual wxString SourceCaptionOf(const wxString& /*path*/) const { return wxString(); }
+	virtual ibString SourceCaptionOf(const ibString& /*path*/) const { return ibString(); }
 };
 
 // The DB composer — the schema verbs render into L4-1 query TEXT, then the standard parse → lower → walk
@@ -1334,14 +1335,14 @@ public:
 
 	// A registered source family (the factory's namespace.name — a metaobject, a virtual table, an external
 	// source). A SECOND FromSource adds a joined source: the render emits `JOIN ns.name`.
-	ibDataDBComposer& FromSource(const wxString& ns, const wxString& name);
+	ibDataDBComposer& FromSource(const ibString& ns, const ibString& name);
 
 	// The queryable itself — registered through the auxiliary per-query temp registry, rendered as "FROM
 	// Temp.t0"; the lowering resolves the name straight back to the live queryable (NO metadata round-trip).
 	ibDataDBComposer& FromSource(const ibBackendQueryable* queryable);
 
 	// The author's verbatim L4-1 query — used as is, never edited. Mutually exclusive with FromSource.
-	ibDataDBComposer& FromText(const wxString& text);
+	ibDataDBComposer& FromText(const ibString& text);
 
 	// True iff a verbatim author query was installed via FromText. The dynamic list reads this to advertise
 	// the CustomQuery feature.
@@ -1350,25 +1351,25 @@ public:
 	// THE NAME AN AUTHOR'S QUERY ANSWERS TO once the settings are written over it — the alias of the
 	// nested source in `SELECT * FROM (<their query>) AS AuthorQuery WHERE …`. Exposed because a host
 	// that qualifies a filter path has to spell the same word the render does.
-	static const wxChar* AuthorQuerySourceName();
+	static const ibChar* AuthorQuerySourceName();
 
 	bool HasSource() const override { return !m_sourceText.IsEmpty() || !m_sources.empty(); }
 
 	// The source's own answer — see m_sourceFields — walked the way every holder of fields walks a path
 	// (ibQueryConstructorModel::WalkPath: where it starts, then each hop by its type).
-	ibQueryConstructorField WalkPath(const std::vector<wxString>& hops) const override;
+	ibQueryConstructorField WalkPath(const std::vector<ibString>& hops) const override;
 	// …and what it calls a field, from the same list.
-	wxString SourceCaptionOf(const wxString& path) const override;
+	ibString SourceCaptionOf(const ibString& path) const override;
 
 	// Render the schema into L4-1 text (the debug view / the AI seam). Throws when it does not render.
-	wxString RenderText() const;
+	ibString RenderText() const;
 	// The same rendering for ONE output — its levels, its filter, its sort, its selected fields.
 	// RenderText is this over the first output, which is the only one a list has.
 	// ⭐ ONE OUTPUT OR SEVERAL — the same render either way. Several are written as BRANCHES of one
 	// query, so what a report with three tables sends to the engine is one text, and what a list
 	// sends is that text with a single ladder in it. There is no second renderer for the shared case.
-	wxString RenderTextFor(const std::vector<const Output*>& outputs) const;
-	wxString RenderTextFor(const Output& output) const { return RenderTextFor(std::vector<const Output*>{ &output }); }
+	ibString RenderTextFor(const std::vector<const Output*>& outputs) const;
+	ibString RenderTextFor(const Output& output) const { return RenderTextFor(std::vector<const Output*>{ &output }); }
 
 	// ⭐⭐ A SETTING REACHES THE READ BY ONE OF TWO ROADS, and this is the second one. A sort and the
 	// composition's scope are WRITTEN INTO THE TEXT (AppendSettingsClauses); a FILTER is built as an
@@ -1420,7 +1421,7 @@ private:
 	// render writes it, the walk repeats it. So an unnamed output gets `Output<n>` derived from where
 	// it stands, and both sides derive it the same way — nothing is stored, nothing is migrated, and
 	// a report saved last year folds like one made today.
-	wxString BranchNameFor(const Output& output, size_t at) const;
+	ibString BranchNameFor(const Output& output, size_t at) const;
 	// …and where it stands among the shared read's branches, which is what that name is made from.
 	size_t BranchIndexOf(const Output& output) const;
 	// The read this output should walk — built on first ask, null when it reads for itself.
@@ -1457,7 +1458,7 @@ private:
 	// several write `BY SPLIT … ONTO <name>` apiece. The settings that are not a ladder — the scope
 	// filter, the order — come off the first, which is sound precisely because outputs share a read
 	// only when they agree about them.
-	void AppendSettingsClauses(wxString& text, const std::vector<const Output*>& outputs) const;
+	void AppendSettingsClauses(ibString& text, const std::vector<const Output*>& outputs) const;
 
 	// DOES THE LEVEL AT `depth` SHOW THIS HEADING? `depth` is the walk's own (1 = the first
 	// grouping), and only THAT level's filter is asked — the ones above have already had their say.
@@ -1555,7 +1556,7 @@ private:
 
 	// The SELECT list when the output has chosen no fields — see the definition. A list reads
 	// everything; a report reads what it folds by.
-	wxString WhenNothingChosen(const Output& output) const;
+	ibString WhenNothingChosen(const Output& output) const;
 
 	// ⭐⭐ RUN WHAT PREPARES — the package's `INTO` statements, once per source text, into a store
 	// this composer owns for the whole of that text's life.
@@ -1575,8 +1576,8 @@ private:
 	// TEXT -> THE STATEMENT THAT CARRIES THE SETTINGS, with the package's own named results beside
 	// it. All three execution roads write text the same way, so they read it back the same way too.
 	// `package` owns the statements `named` points into — both must outlive the lowering call.
-	ibQuerySelectPtr ParseComposed(const wxString& text, ibQueryPackage& package,
-	                               std::map<wxString, const ibQuerySelect*>& named) const;
+	ibQuerySelectPtr ParseComposed(const ibString& text, ibQueryPackage& package,
+	                               std::map<ibString, const ibQuerySelect*>& named) const;
 
 	// ⭐⭐ THREE CACHES, AND EACH CARRIES ITS OWN KEY (Max, 2026-08-28: *"a great many mutables, which
 	// is worrying"*). There were SEVENTEEN `mutable` members here, and they were not seventeen
@@ -1594,16 +1595,16 @@ private:
 	// EVERYTHING A SOURCE TEXT RESOLVES TO — worked out once per text (SplitSourceText).
 	struct SourceResolution
 	{
-		wxString       m_ofText;      // THE KEY: the text this was worked out from, and nothing else
+		ibString       m_ofText;      // THE KEY: the text this was worked out from, and nothing else
 		ibQueryPackage m_package;     // …parsed, which is where the preparing statements are found
-		wxString       m_preamble;    // the statements that prepare (empty for a plain query)
-		wxString       m_from;        // what the composer's own SELECT reads FROM
+		ibString       m_preamble;    // the statements that prepare (empty for a plain query)
+		ibString       m_from;        // what the composer's own SELECT reads FROM
 		// ⭐ WHAT IT SELECTS WHEN NOBODY HAS CHOSEN ANYTHING. Empty means `*`, which is right over ONE
 		// source and wrong over a JOIN: a star there publishes both sides' columns under their BARE
 		// names, so two `Attribute2` answer to one name and a read by name lands on whichever came
 		// first. The engine's own package assembly refuses to rely on it and qualifies instead
 		// (ExecutePackage); so does this. Filled on the link road only.
-		wxString       m_allFields;
+		ibString       m_allFields;
 	};
 	mutable SourceResolution m_resolved;
 
@@ -1615,14 +1616,14 @@ private:
 	// text alone would say "nothing changed" after somebody rewrote the whole filter.
 	struct RenderedQuery
 	{
-		wxString            m_text;
+		ibString            m_text;
 		ibFilterDescription m_filter;
 		// The LAST statement of what this composer wrote — the one carrying the settings — plus the
 		// package that holds the statements before it (which is what keeps the selects `m_named`
 		// points at alive) and the scope the lowering resolves `FROM Sales` through.
 		ibQuerySelectPtr    m_ast;
 		ibQueryPackage      m_package;
-		std::map<wxString, const ibQuerySelect*> m_named;
+		std::map<ibString, const ibQuerySelect*> m_named;
 	};
 	mutable RenderedQuery m_rendered;
 
@@ -1636,7 +1637,7 @@ private:
 	{
 		bool                  m_ready = false;
 		ibQueryTempTableStore m_store;
-		std::map<wxString, const ibBackendQueryable*> m_sources;
+		std::map<ibString, const ibBackendQueryable*> m_sources;
 
 		// ⭐ ONE ACT, ONE NAME. "Let go of what was prepared" was written out as three lines in four
 		// places — and three lines repeated four times is a verb nobody named, which is how the day
@@ -1658,16 +1659,16 @@ private:
 	//  where an answer goes to outlive its question. It is returned now.)
 	struct Source
 	{
-		wxString m_namespace;
-		wxString m_name;        // composite for a virtual table (`Goods.Balance`)
+		ibString m_namespace;
+		ibString m_name;        // composite for a virtual table (`Goods.Balance`)
 	};
 
-	wxString            m_sourceText;   // the author's verbatim query — wins when set
+	ibString            m_sourceText;   // the author's verbatim query — wins when set
 	std::vector<Source> m_sources;      // factory sources (first = FROM, rest = JOIN)
 
 	// Transient (RAM / temp) sources registered via FromSource(queryable) without a metaobject identity —
 	// keyed by the unique local name rendered into the text (t0, t1, …). NON-OWNING.
-	std::map<wxString, const ibBackendQueryable*> m_directSources;
+	std::map<ibString, const ibBackendQueryable*> m_directSources;
 
 	// ⭐ WHAT THE SOURCE'S FIELDS ARE, and what the source says of each — whether this base's functional options
 	// leave it available, what it is called, what it is in a balance. Worked out when the source is bound
@@ -1676,9 +1677,9 @@ private:
 	// (48 headers to 121); a copy reads the same list, which is replaced, never changed.
 	std::shared_ptr<const std::vector<ibQueryConstructorField>> m_sourceFields;
 	void RefreshSourceFields();
-	const ibQueryConstructorField* SourceField(const wxString& path) const;
+	const ibQueryConstructorField* SourceField(const ibString& path) const;
 	// ` ROLE <word>` for a field a person gave a role in the composition — written into the composer's select.
-	wxString RoleSaidFor(const wxString& path) const;
+	ibString RoleSaidFor(const ibString& path) const;
 };
 
 

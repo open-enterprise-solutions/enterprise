@@ -2,8 +2,6 @@
 
 #include <iterator>
 
-#include <wx/intl.h>
-
 // ----------------------------------------------------------------------------
 // ibCommandProcessor — the bodies of wx's, the list of nodes made a list of owned commands
 // ----------------------------------------------------------------------------
@@ -11,10 +9,10 @@
 namespace {
 
 // A command's name, or what an unnamed one is called.
-wxString CommandName(const ibCommand& command)
+ibString CommandName(const ibCommand& command)
 {
-	const wxString name = command.GetName();
-	return !name.empty() ? name : wxString(_("Unnamed command"));
+	const ibString name = command.GetName();
+	return !name.empty() ? name : ibString(_("Unnamed command"));
 }
 
 } // namespace
@@ -136,18 +134,18 @@ void ibCommandProcessor::Initialize()
 	m_currentCommand = !m_commands.empty() ? std::prev(m_commands.end()) : m_commands.end();
 }
 
-wxString ibCommandProcessor::GetUndoLabel() const
+ibString ibCommandProcessor::GetUndoLabel() const
 {
 	const ibCommand* const command = GetCurrentCommand();
 	if (command == nullptr)
 		return _("Undo");
 
 	return command->CanUndo()
-		? wxString::Format(_("Undo %s"), CommandName(*command))
-		: wxString::Format(_("Can't Undo %s"), CommandName(*command));
+		? ibString::Format(_("Undo %s"), CommandName(*command))
+		: ibString::Format(_("Can't Undo %s"), CommandName(*command));
 }
 
-wxString ibCommandProcessor::GetRedoLabel() const
+ibString ibCommandProcessor::GetRedoLabel() const
 {
 	// We can redo, if we're not at the end of the history — or, undone to the start of the list, the first.
 	const ibCommandList::const_iterator redoNode = m_currentCommand != m_commands.end()
@@ -155,7 +153,7 @@ wxString ibCommandProcessor::GetRedoLabel() const
 	if (redoNode == m_commands.end())
 		return _("Redo");
 
-	return wxString::Format(_("Redo %s"), CommandName(**redoNode));
+	return ibString::Format(_("Redo %s"), CommandName(**redoNode));
 }
 
 void ibCommandProcessor::ClearCommands()

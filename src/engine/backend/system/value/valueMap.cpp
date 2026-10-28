@@ -56,7 +56,7 @@ size_t ibValueContainer::HashOf(const ibValue& key) const
 		ibString held;
 		const ibString& text = KeyText(key, held);
 		std::uint64_t h = kIbHashBasis;
-		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
+		for (const ibChar* p = text.c_str(); *p != ibT('\0'); ++p)
 			h = ibHashCombine(h, FoldChar(*p));
 		return (size_t)h;                                    // folded once, per lookup — not per candidate
 	}
@@ -72,9 +72,9 @@ static bool FoldedEquals(const ibString& a, const ibString& b)
 {
 	if (a.Len() != b.Len())
 		return false;
-	const wchar_t* pa = a.wc_str();
-	const wchar_t* pb = b.wc_str();
-	for (; *pa != L'\0'; ++pa, ++pb) {
+	const ibChar* pa = a.c_str();
+	const ibChar* pb = b.c_str();
+	for (; *pa != ibT('\0'); ++pa, ++pb) {
 		if (*pa == *pb)
 			continue;
 		if (FoldChar(*pa) != FoldChar(*pb))
@@ -155,7 +155,7 @@ void ibValueContainer::IndexNewEntry(const bool wasIndexed)
 // holding the same pairs hold the same data. If the two are ever required to
 // compare unequal, that is a rule about the TYPES and belongs in an override on
 // ibValueStructure, not in a cheaper-looking cast here.
-const ibValueContainer* ibValueContainer::AsContainer(const ibValue& cParam) const
+const ibValueContainer* ibValueContainer::AsContainer(const ibVariant& cParam) const
 {
 	return dynamic_cast<const ibValueContainer*>(cParam.GetRef());
 }
@@ -163,7 +163,7 @@ const ibValueContainer* ibValueContainer::AsContainer(const ibValue& cParam) con
 // An entry orders as a PAIR: key first, value only as the tiebreak (its hash is the
 // key's, so it says nothing more). Same element walk as the array — the vector's own
 // comparison, handed the comparator for what it holds.
-int ibValueContainer::CompareValueLS(const ibValue& cParam) const
+int ibValueContainer::CompareValueLS(const ibVariant& cParam) const
 {
 	const ibValueContainer* rhs = AsContainer(cParam);
 	if (rhs == nullptr)
@@ -198,7 +198,7 @@ size_t ibValueContainer::GetValueHash() const
 
 // Equality asks the entries for EQUALITY — the type-strict rule — rather than
 // for order-equal, exactly as the array does.
-bool ibValueContainer::CompareValueEQ(const ibValue& cParam) const
+bool ibValueContainer::CompareValueEQ(const ibVariant& cParam) const
 {
 	const ibValueContainer* rhs = AsContainer(cParam);
 	if (rhs == nullptr)
@@ -218,8 +218,8 @@ bool ibValueContainer::CompareValueEQ(const ibValue& cParam) const
 
 void ibValueContainer::ibValueReturnContainer::BindNames(ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(wxT("Key"));
-	helper.AppendProp(wxT("Value"));
+	helper.AppendProp(ibT("Key"));
+	helper.AppendProp(ibT("Value"));
 }
 
 bool ibValueContainer::ibValueReturnContainer::SetPropVal(const long lPropNum, const ibValue& cValue)
@@ -281,20 +281,20 @@ ibValue::ibMemberTable* ibValueContainer::DoGetPMethods() const
 // the store's job (FindProp / GetPropName).
 void ibValueContainer::BindContainerNames(ibMemberTable& helper, const bool readOnly)
 {
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
-	helper.AppendFunc(wxT("Property"), 2, wxT("Property(key : any, valueFound : any)"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Property"), 2, ibT("Property(key : any, valueFound : any)"));
 	// READ WITHOUT ASKING FIRST. Property answers whether a key is there and hands the value
 	// back through its second argument; [key] answers the value and raises when the key is not
 	// there. Get is the third question, the one the reference system's Map answers: the value,
 	// or Undefined -- which is what "nothing is bound to this key" looks like everywhere else
 	// in the language. A Structure gets it too: the member table is one table, a position in it
 	// is a method number, and a field that is not there is the same question.
-	helper.AppendFunc(wxT("Get"), 1, wxT("Get(key : any)"));
+	helper.AppendFunc(ibT("Get"), 1, ibT("Get(key : any)"));
 
 	if (!readOnly) {
-		helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
-		helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(key : any)"));
-		helper.AppendFunc(wxT("Insert"), 2, wxT("Insert(key : any, value : any)"));
+		helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
+		helper.AppendFunc(ibT("Delete"), 1, ibT("Delete(key : any)"));
+		helper.AppendFunc(ibT("Insert"), 2, ibT("Insert(key : any, value : any)"));
 	}
 }
 
@@ -513,7 +513,7 @@ bool ibValueStructure::Init(ibValue** paParams, const long lSizeArray)
 		return false;
 	}
 
-	const wxString fieldsStr = fieldsArg->GetString();
+	const ibString fieldsStr = fieldsArg->GetString();
 
 	// Single-pass scan: split on ',' and trim whitespace. wxStringTokenizer
 	// would also work but the manual form keeps trimming inline + avoids
@@ -521,23 +521,23 @@ bool ibValueStructure::Init(ibValue** paParams, const long lSizeArray)
 	size_t cursor = 0;
 	long valueIdx = 1;   // index into paParams for the value of the next field
 	while (cursor <= fieldsStr.size()) {
-		size_t comma = fieldsStr.find(wxT(','), cursor);
-		if (comma == wxString::npos) comma = fieldsStr.size();
+		size_t comma = fieldsStr.find(ibT(','), cursor);
+		if (comma == ibString::npos) comma = fieldsStr.size();
 
 		// Trim leading whitespace.
 		size_t start = cursor;
 		while (start < comma
-			&& (fieldsStr[start] == wxT(' ') || fieldsStr[start] == wxT('\t')))
+			&& (fieldsStr[start] == ibT(' ') || fieldsStr[start] == ibT('\t')))
 			++start;
 
 		// Trim trailing whitespace.
 		size_t end = comma;
 		while (end > start
-			&& (fieldsStr[end - 1] == wxT(' ') || fieldsStr[end - 1] == wxT('\t')))
+			&& (fieldsStr[end - 1] == ibT(' ') || fieldsStr[end - 1] == ibT('\t')))
 			--end;
 
 		if (end > start) {
-			const wxString fieldName = fieldsStr.Mid(start, end - start);
+			const ibString fieldName = fieldsStr.Mid(start, end - start);
 			ibValue value;
 			if (valueIdx < lSizeArray && paParams[valueIdx] != nullptr)
 				value = *paParams[valueIdx];
@@ -619,7 +619,7 @@ bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound
 
 bool ibValueContainer::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(wxT("n"), (s32)m_entries.size());
+	node.SetValue(ibT("n"), (std::int32_t)m_entries.size());
 
 	for (const auto& entry : m_entries) {
 		ibDataNode& keyNode = node.AddChild(entry.key.GetClassType(), 0);
@@ -637,19 +637,19 @@ bool ibValueContainer::DoDeserialize(const ibDataNode& node)
 {
 	Clear();
 
-	const std::vector<ibDataNode>& children = node.Children();
+	const ibDataRange<ibDataNode> children = node.Children();
 	// Pairs, so an ODD number of children means the blob was cut between a key
 	// and its value — refuse rather than drop the dangling one.
 	if ((children.size() % 2) != 0)
 		return false;
 
-	for (std::size_t i = 0; i + 1 < children.size(); i += 2) {
-		const ibValue key = ibValue::FromNode(children[i]);
-		const ibValue value = ibValue::FromNode(children[i + 1]);
+	for (auto at = children.begin(); at != children.end(); ) {
+		const ibValue key = ibValue::FromNode(*at++);
+		const ibValue value = ibValue::FromNode(*at++);
 		Insert(key, value);
 	}
 
-	return (s32)m_entries.size() == node.GetValue<s32>(wxT("n"));
+	return (std::int32_t)m_entries.size() == node.GetValue<std::int32_t>(ibT("n"));
 }
 
 //**********************************************************************

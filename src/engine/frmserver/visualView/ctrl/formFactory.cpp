@@ -16,50 +16,50 @@
 // no `class` reached here with an empty one and took the designer with it (dump designer_25968,
 // 2026-09-01). Outside names are validated at the door they arrive through; here they only have to
 // not be fatal.
-inline wxString GetClassType(const wxString& className)
+inline ibString GetClassType(const ibString& className)
 {
 	const ibCtorControlTypeBase* objectSingle =
 		dynamic_cast<const ibCtorControlTypeBase*>(ibValue::GetAvailableCtor(className));
 	wxASSERT(objectSingle);
-	return objectSingle != nullptr ? objectSingle->GetTypeControlName() : wxString(wxEmptyString);
+	return objectSingle != nullptr ? objectSingle->GetTypeControlName() : ibString(ibEmptyString);
 }
 
 inline void SetDefaultLayoutProperties(ibValueSizerItem* sizerItem)
 {
 	ibValueFrame* child = sizerItem->GetChild(0);
-	const wxString& obj_type = child->GetObjectTypeName();
+	const ibString& obj_type = child->GetObjectTypeName();
 
-	if (obj_type == wxT("Sizer")) {
+	if (obj_type == ibT("Sizer")) {
 		sizerItem->SetBorder(0);
 		sizerItem->SetFlagBorder(wxALL);
 		sizerItem->SetFlagState(wxEXPAND);
 	}
-	else if (child->GetClassName() == wxT("Splitter") ||
-		child->GetClassName() == wxT("Spacer")) {
+	else if (child->GetClassName() == ibT("Splitter") ||
+		child->GetClassName() == ibT("Spacer")) {
 		sizerItem->SetProportion(1);
 		sizerItem->SetFlagState(wxEXPAND);
 	}
-	else if (child->GetClassName() == wxT("Staticline")) {
+	else if (child->GetClassName() == ibT("Staticline")) {
 		sizerItem->SetFlagBorder(wxALL);
 		sizerItem->SetFlagState(wxEXPAND);
 	}
-	else if (child->GetClassName() == wxT("Toolbar")) {
+	else if (child->GetClassName() == ibT("Toolbar")) {
 		sizerItem->SetBorder(0);
 		sizerItem->SetFlagBorder(wxALL);
 		sizerItem->SetFlagState(wxEXPAND);
 	}
-	else if (child->GetClassName() == wxT("Notebook")) {
+	else if (child->GetClassName() == ibT("Notebook")) {
 		sizerItem->SetProportion(1);
 		sizerItem->SetFlagBorder(wxALL);
 		sizerItem->SetFlagState(wxEXPAND);
 	}
-	else if (obj_type == wxT("Widget") ||
-		obj_type == wxT("Statusbar")) {
+	else if (obj_type == ibT("Widget") ||
+		obj_type == ibT("Statusbar")) {
 		sizerItem->SetProportion(0);
 		sizerItem->SetFlagBorder(wxALL);
 		sizerItem->SetFlagState(wxSHRINK);
 	}
-	else if (obj_type == wxT("Container")) {
+	else if (obj_type == ibT("Container")) {
 		sizerItem->SetProportion(1);
 		sizerItem->SetFlagBorder(wxALL);
 		sizerItem->SetFlagState(wxEXPAND);
@@ -75,7 +75,7 @@ ibValueFrame* ibValueForm::NewObject(const ibClassID& clsid, ibValueFrame* contr
 			newControl = ibValue::CreateObject(clsid, ppParams, 3);
 			if (newControl == nullptr) {
 				// Built, but not an element of a form — the class id names something else. Said, as below.
-				ibJournalError(wxT("ui.form"), _("Class id %lld is not a form element"), (long long)clsid);
+				ibJournalError(ibT("ui.form"), _("Class id %lld is not a form element"), (long long)clsid);
 				return nullptr;
 			}
 			// A parented control is owned by the parent's vector (AddChild inside
@@ -90,11 +90,11 @@ ibValueFrame* ibValueForm::NewObject(const ibClassID& clsid, ibValueFrame* contr
 		// nullptr contract stays (an old file may name a control this build does not have, and that
 		// must not cost the whole form); what changes is that the engine's own words survive it.
 		catch (const ibCoreException& err) {
-			ibJournalError(wxT("ui.form"), wxT("%s"), err.GetErrorDescription());
+			ibJournalError(ibT("ui.form"), ibT("%s"), err.GetErrorDescription());
 			return nullptr;
 		}
 		catch (...) {
-			ibJournalError(wxT("ui.form"), _("Failed to create form element (class id %lld)"), (long long)clsid);
+			ibJournalError(ibT("ui.form"), _("Failed to create form element (class id %lld)"), (long long)clsid);
 			return nullptr;
 		}
 		return newControl;
@@ -109,7 +109,7 @@ void ibValueForm::ResolveNameConflict(ibValueFrame* control)
 
 	// Derive the base name: the original control name with any trailing
 	// digits stripped, so "Button3" reuses the base "Button".
-	wxString strOriginalName;
+	ibString strOriginalName;
 
 	if (control->GetControlNameAsString(strOriginalName)) {
 
@@ -124,20 +124,18 @@ void ibValueForm::ResolveNameConflict(ibValueFrame* control)
 		}
 	}
 
-	// Normalise to upper case, matching stringUtils::CompareString's
+	// Normalise to upper case, matching stringUtils::IsSameAs's
 	// case-insensitive semantics, so set lookups are exact comparisons.
-	const auto toKey = [](const wxString& name) {
-		std::wstring key = name.ToStdWstring();
-		std::transform(key.begin(), key.end(), key.begin(), ::towupper);
-		return key;
+	const auto toKey = [](const ibString& name) {
+		return name.Upper();
 	};
 
 	// Collect the names already taken by the other controls once, so each
 	// candidate is probed in O(1). The old do/while rescanned the whole
 	// control list for every candidate index — O(controls * candidates)
 	// per call and O(N^3) when laying out N like-named controls.
-	std::unordered_set<std::wstring> takenNames;
-	wxString strControlName;
+	std::unordered_set<ibString> takenNames;
+	ibString strControlName;
 	for (const auto valueControl : control->GetOwnerForm()->GetControlList()) {
 
 		if (0 == valueControl->GetControlID())
@@ -152,14 +150,14 @@ void ibValueForm::ResolveNameConflict(ibValueFrame* control)
 
 	// the name cannot be repeated within the same form: bump the
 	// numeric suffix until the candidate is free.
-	wxString strGenerateName = strOriginalName;
+	ibString strGenerateName = strOriginalName;
 	for (unsigned int index = 0; takenNames.count(toKey(strGenerateName)) > 0; )
-		strGenerateName = wxString::Format(wxT("%s%i"), strOriginalName, ++index);
+		strGenerateName = ibString::Format(ibT("%s%i"), strOriginalName, ++index);
 
 	control->SetControlName(strGenerateName);
 }
 
-ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame* controlParent)
+ibValueFrame* ibValueForm::CreateObject(const ibString& className, ibValueFrame* controlParent)
 {
 	ibValueFrame* object = nullptr;
 
@@ -168,7 +166,7 @@ ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame*
 	if (className.IsEmpty())
 		return nullptr;
 
-	wxString classType = ::GetClassType(className);
+	ibString classType = ::GetClassType(className);
 	if (classType.IsEmpty())
 		return nullptr;
 
@@ -179,47 +177,47 @@ ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame*
 		//of forms (like childType of project), but there is a lot of code that is invalid
 		//for forms that are not of type "form". In other words, there is
 		//code that depends on the type name, which must be avoided.
-		if (controlParent->GetObjectTypeName() == wxT("Form") && controlParent->GetClassName() != wxT("ClientForm") &&
-			(classType == wxT("Statusbar") ||
-				classType == wxT("Menubar") ||
-				classType == wxT("Ribbonbar") ||
-				classType == wxT("Toolbar")))
+		if (controlParent->GetObjectTypeName() == ibT("Form") && controlParent->GetClassName() != ibT("ClientForm") &&
+			(classType == ibT("Statusbar") ||
+				classType == ibT("Menubar") ||
+				classType == ibT("Ribbonbar") ||
+				classType == ibT("Toolbar")))
 
 			return nullptr; // not a valid type
 
 		// No menu dropdown for wxToolBar until wx 2.9 :(
-		if (controlParent->GetObjectTypeName() == wxT("Tool"))
+		if (controlParent->GetObjectTypeName() == ibT("Tool"))
 		{
 			ibValueFrame* gParent = controlParent->GetParent();
 
 			if (
-				(gParent->GetClassName() == wxT("Toolbar")) &&
-				(className == wxT("Menu"))
+				(gParent->GetClassName() == ibT("Toolbar")) &&
+				(className == ibT("Menu"))
 				)
 				return nullptr; // not a valid type
 		}
 
-		if (controlParent->GetObjectTypeName() == wxT("Toolbar"))
+		if (controlParent->GetObjectTypeName() == ibT("Toolbar"))
 		{
-			if (classType == wxT("Tool") /*|| classType == wxT("widget")*/)
+			if (classType == ibT("Tool") /*|| classType == wxT("widget")*/)
 			{
 				object = NewObject(className, controlParent);
 				//set enabled item
 				//object->SetReadOnly(controlParent->IsEditable());
 			}
 		}
-		else if (controlParent->GetObjectTypeName() == wxT("Notebook"))
+		else if (controlParent->GetObjectTypeName() == ibT("Notebook"))
 		{
-			if (classType == wxT("NotebookPage")) {
+			if (classType == ibT("NotebookPage")) {
 				object = NewObject(className, controlParent);
 				//set enabled item
 				//object->SetReadOnly(controlParent->IsEditable());
 			}
 		}
-		else if (controlParent->GetObjectTypeName() == wxT("Container")
-			&& controlParent->GetClassName() == wxT("Tablebox"))
+		else if (controlParent->GetObjectTypeName() == ibT("Container")
+			&& controlParent->GetClassName() == ibT("Tablebox"))
 		{
-			if (classType == wxT("TableboxColumn"))
+			if (classType == ibT("TableboxColumn"))
 			{
 				object = NewObject(className, controlParent);
 				//set enabled item
@@ -229,14 +227,14 @@ ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame*
 		// A column GROUP takes exactly what a table takes — columns, and groups of
 		// their own. Its own kind IS "TableboxColumn", which is what lets the branch
 		// above accept it into a table without a second rule for it.
-		else if (controlParent->GetClassName() == wxT("TableboxColumnGroup"))
+		else if (controlParent->GetClassName() == ibT("TableboxColumnGroup"))
 		{
-			if (classType == wxT("TableboxColumn"))
+			if (classType == ibT("TableboxColumn"))
 			{
 				object = NewObject(className, controlParent);
 			}
 		}
-		else if (controlParent->GetObjectTypeName() == wxT("NotebookPage"))
+		else if (controlParent->GetObjectTypeName() == ibT("NotebookPage"))
 		{
 			ibValueSizerItem* sizerItem = NewObject<ibValueSizerItem>("SizerItem", controlParent);
 			ibValueFrame* obj = NewObject(className, sizerItem);
@@ -253,7 +251,7 @@ ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame*
 
 				// sizerItem is a reserved object type; for convenience it gets default
 				// values assigned according to the type of object created
-				if (sizerItem->IsSubclassOf(wxT("SizerItem"))) {
+				if (sizerItem->IsSubclassOf(ibT("SizerItem"))) {
 					SetDefaultLayoutProperties(sizerItem);
 				}
 
@@ -278,7 +276,7 @@ ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame*
 				//obj->SetReadOnly(sizerItem->IsEditable());
 				// sizerItem is a reserved object type; for convenience it gets default
 				// values assigned according to the type of object created
-				if (sizerItem->IsSubclassOf(wxT("sizerItem"))) {
+				if (sizerItem->IsSubclassOf(ibT("sizerItem"))) {
 					SetDefaultLayoutProperties(sizerItem);
 				}
 

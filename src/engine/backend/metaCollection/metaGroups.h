@@ -55,7 +55,7 @@ enum class ibMetaGroupBand { Common, Metadata, Inner };
 
 // The caption of the group `clsid` is listed under, translated for the session's language.
 // Empty for a metatype this table does not name.
-BACKEND_API wxString ibMetaGroupCaption(const ibClassID& clsid);
+BACKEND_API ibString ibMetaGroupCaption(const ibClassID& clsid);
 
 // The band that group stands in. A kind this table does not name answers Inner — it is not put in
 // either of the configuration's two top bands by guesswork.

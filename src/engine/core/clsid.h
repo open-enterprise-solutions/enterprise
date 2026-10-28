@@ -2,19 +2,19 @@
 #define __CLSID_H__
 
 // uint64_t, not `unsigned wxLongLong_t`. Same width everywhere, so nothing serialised
-// changes — but the same TYPE as the u64 the reader/writer layer speaks in. Those two
+// changes — but the same TYPE as the std::uint64_t the reader/writer layer speaks in. Those two
 // spellings are identical on Windows (both unsigned __int64) and DIFFERENT on LP64, where
 // uint64_t is `unsigned long` and wxLongLong_t is `long long`; a chunk id could then not
-// bind to `u64&` and every such call failed to compile. One base for every 64-bit id.
+// bind to `std::uint64_t&` and every such call failed to compile. One base for every 64-bit id.
 #include <cstdint>
 typedef uint64_t ibClassID;
 
-// SELF-CONTAINED: this header's own declarations use wxString (ib_clsid_hash, clsid_to_string,
+// SELF-CONTAINED: this header's own declarations use ibString (ib_clsid_hash, clsid_to_string,
 // the make_clsid family), so it includes it rather than relying on whoever includes it first
-// having pulled wx in already. It always had that dependency and never declared it — invisible
-// while every includer happened to be a .cpp that included wx earlier, and a hard error the
-// moment a translation unit (a test) reached for it directly. Clang says so; MSVC did not.
-#include <wx/string.h>
+// having pulled the string in already. It once had that dependency on wxString and never
+// declared it — invisible while every includer happened to be a .cpp that included wx earlier,
+// and a hard error the moment a translation unit (a test) reached for it directly.
+#include "core/fstring.h"
 
 //*******************************************************************************************
 //*                       FNV-1a 64 hash — encoding for ibClassID                           *
@@ -43,7 +43,7 @@ constexpr ibClassID ib_clsid_hash(const char* s) {
 // (make_clsid(const wxString&, kind), below) for callsites that pass wxT("XX") or a runtime
 // string. utf8_str() returns a scoped buffer valid through the end of the full expression;
 // ib_clsid_hash(const char*) reads it and returns by value.
-inline ibClassID ib_clsid_hash(const wxString& s) {
+inline ibClassID ib_clsid_hash(const ibString& s) {
 	if (s.IsEmpty()) return 0;
 	return ib_clsid_hash(static_cast<const char*>(s.utf8_str().data()));
 }
@@ -68,9 +68,9 @@ static_assert(ib_clsid_hash("M_100")    == 0x2CDB7E80AB98A55CULL, "ib_clsid_hash
 // clsid_to_string previously unpacked 8-byte ASCII. With FNV hashing there is
 // no inverse — return a hex representation for debug logs. For class-name
 // lookup, callers should query the type registry via valueFactory.
-inline wxString clsid_to_string(const ibClassID& clsid) {
-	if (clsid == 0) return wxEmptyString;
-	return wxString::Format(wxT("0x%016llX"), static_cast<uint64_t>(clsid));
+inline ibString clsid_to_string(const ibClassID& clsid) {
+	if (clsid == 0) return ibEmptyString;
+	return ibString::Format(ibT("0x%016llX"), static_cast<uint64_t>(clsid));
 }
 
 // string_to_clsid is GONE — every callsite now uses a per-kind generator below
@@ -149,7 +149,7 @@ constexpr ibClassID kIbClsidBodyMask = (ibClassID(1) << 56) - 1;   // low 56 bit
 constexpr ibClassID make_clsid(const char* name, ibClassKind kind) {
 	return (ibClassID(static_cast<unsigned char>(kind)) << 56) | (ib_clsid_hash(name) & kIbClsidBodyMask);
 }
-inline ibClassID make_clsid(const wxString& name, ibClassKind kind) {
+inline ibClassID make_clsid(const ibString& name, ibClassKind kind) {
 	return (ibClassID(static_cast<unsigned char>(kind)) << 56) | (ib_clsid_hash(name) & kIbClsidBodyMask);
 }
 
@@ -193,14 +193,14 @@ constexpr ibClassID context_to_clsid  (const char* n) { return make_clsid(n, ibC
 constexpr ibClassID metadata_to_clsid (const char* n) { return make_clsid_metaclass(ib_clsid_hash(n)); }
 constexpr ibClassID picture_to_clsid  (const char* n) { return make_clsid(n, ibClassKind_Picture); }
 // wxString overloads — for callsites passing wxT("XX") (wide literal) or a runtime string.
-inline ibClassID primitive_to_clsid(const wxString& n) { return make_clsid(n, ibClassKind_Primitive); }
-inline ibClassID value_to_clsid    (const wxString& n) { return make_clsid(n, ibClassKind_Value); }
-inline ibClassID control_to_clsid  (const wxString& n) { return make_clsid(n, ibClassKind_Control); }
-inline ibClassID system_to_clsid   (const wxString& n) { return make_clsid(n, ibClassKind_System); }
-inline ibClassID enum_to_clsid     (const wxString& n) { return make_clsid(n, ibClassKind_Enum); }
-inline ibClassID context_to_clsid  (const wxString& n) { return make_clsid(n, ibClassKind_Context); }
-inline ibClassID metadata_to_clsid (const wxString& n) { return make_clsid_metaclass(ib_clsid_hash(n)); }
-inline ibClassID picture_to_clsid  (const wxString& n) { return make_clsid(n, ibClassKind_Picture); }
+inline ibClassID primitive_to_clsid(const ibString& n) { return make_clsid(n, ibClassKind_Primitive); }
+inline ibClassID value_to_clsid    (const ibString& n) { return make_clsid(n, ibClassKind_Value); }
+inline ibClassID control_to_clsid  (const ibString& n) { return make_clsid(n, ibClassKind_Control); }
+inline ibClassID system_to_clsid   (const ibString& n) { return make_clsid(n, ibClassKind_System); }
+inline ibClassID enum_to_clsid     (const ibString& n) { return make_clsid(n, ibClassKind_Enum); }
+inline ibClassID context_to_clsid  (const ibString& n) { return make_clsid(n, ibClassKind_Context); }
+inline ibClassID metadata_to_clsid (const ibString& n) { return make_clsid_metaclass(ib_clsid_hash(n)); }
+inline ibClassID picture_to_clsid  (const ibString& n) { return make_clsid(n, ibClassKind_Picture); }
 
 // --- dynamic metaID→id wrappers (constructive body) — one per metaobject runtime value ---
 constexpr ibClassID reference_to_clsid           (ibClassID metaID, ibClassMetaclass metaclass = ibClassMetaclass_None) { return make_clsid_dynamic(metaID,ibClassKind_Reference, metaclass); }

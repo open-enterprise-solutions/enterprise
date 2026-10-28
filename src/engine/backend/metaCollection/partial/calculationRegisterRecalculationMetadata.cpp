@@ -34,7 +34,7 @@ std::vector<const ibBackendQueryColumn*> ibRecalculationQueryable::GetColumns() 
 	return columns;
 }
 
-const ibBackendQueryColumn* ibRecalculationQueryable::ResolveColumnByName(const wxString& name) const
+const ibBackendQueryColumn* ibRecalculationQueryable::ResolveColumnByName(const ibString& name) const
 {
 	for (const ibBackendQueryColumn* column : GetColumns())
 		if (column->GetName().IsSameAs(name, false))
@@ -42,9 +42,9 @@ const ibBackendQueryColumn* ibRecalculationQueryable::ResolveColumnByName(const 
 	return nullptr;
 }
 
-wxString ibRecalculationQueryable::GetQueryTableName() const { return m_reg->GetRecalculationTableName(); }
+ibString ibRecalculationQueryable::GetQueryTableName() const { return m_reg->GetRecalculationTableName(); }
 const ibUniqueKey& ibRecalculationQueryable::GetQueryTableGuid() const { return m_reg->GetRecalculationObject()->GetGuid(); }
-wxString ibRecalculationQueryable::GetQueryName() const { return m_reg->GetRecalculationObject()->GetName(); }
+ibString ibRecalculationQueryable::GetQueryName() const { return m_reg->GetRecalculationObject()->GetName(); }
 ibMetaID ibRecalculationQueryable::GetQueryTableId() const { return m_reg->GetRecalculationObject()->GetMetaID(); }
 const ibMetaData* ibRecalculationQueryable::GetMetaData() const { return m_reg->GetMetaData(); }
 
@@ -52,14 +52,14 @@ const ibMetaData* ibRecalculationQueryable::GetMetaData() const { return m_reg->
 //*                 ibRecalculationSourceDescriptor                     *
 //***********************************************************************
 
-wxString ibRecalculationSourceDescriptor::GetNamespace() const
+ibString ibRecalculationSourceDescriptor::GetNamespace() const
 {
 	return ibValue::GetNameObjectFromID(m_meta->GetClassType());
 }
 
-wxString ibRecalculationSourceDescriptor::GetName() const
+ibString ibRecalculationSourceDescriptor::GetName() const
 {
-	return m_meta->GetName() + wxT(".") + m_meta->GetRecalculationObject()->GetName();
+	return m_meta->GetName() + ibT(".") + m_meta->GetRecalculationObject()->GetName();
 }
 
 // A table: whatever it is called with, it is the register's own member.
@@ -81,7 +81,7 @@ void ibRecalculationSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibS
 
 namespace {
 
-ibQueryExprPtr Day(const wxString& q, const wxString& field)
+ibQueryExprPtr Day(const ibString& q, const ibString& field)
 {
 	return ibPeriodTrunc(ibCol(q, field), ibTotalsPeriod::Day);
 }
@@ -107,7 +107,7 @@ ibQueryExprPtr Eq(const ibQueryExprPtr& a, const ibQueryExprPtr& b) { return ibB
 ibQueryExprPtr Le(const ibQueryExprPtr& a, const ibQueryExprPtr& b) { return ibBinOp(ibQueryBinOp::Le, a, b); }
 
 // Paired fields of two tables, equal pair by pair.
-ibQueryExprPtr SamePairs(const wxString& first, const std::vector<std::pair<wxString, wxString>>& pairs, const wxString& second)
+ibQueryExprPtr SamePairs(const ibString& first, const std::vector<std::pair<ibString, ibString>>& pairs, const ibString& second)
 {
 	ibQueryExprPtr out;
 	for (const auto& pair : pairs)
@@ -115,23 +115,23 @@ ibQueryExprPtr SamePairs(const wxString& first, const std::vector<std::pair<wxSt
 	return out;
 }
 
-ibQueryExprPtr Narrowed(const ibRecalculationNarrowing& narrowing, const wxString& alias, int source)
+ibQueryExprPtr Narrowed(const ibRecalculationNarrowing& narrowing, const ibString& alias, int source)
 {
 	return narrowing ? narrowing(alias, source) : nullptr;
 }
 
 // A record that counts: Active, as every register's totals are guarded.
-ibQueryExprPtr Active(const wxString& q, const wxString& field)
+ibQueryExprPtr Active(const ibString& q, const ibString& field)
 {
 	return ibBinOp(ibQueryBinOp::Ne, ibCol(q, field), Int(0));
 }
 
 // `fields` once each, under their own names — what a derived table carries out.
-std::vector<ibQueryProjItem> Carried(const wxString& q, const std::vector<wxString>& fields)
+std::vector<ibQueryProjItem> Carried(const ibString& q, const std::vector<ibString>& fields)
 {
 	std::vector<ibQueryProjItem> out;
-	std::set<wxString> seen;
-	for (const wxString& field : fields)
+	std::set<ibString> seen;
+	for (const ibString& field : fields)
 		if (!field.IsEmpty() && seen.insert(field).second)
 			out.push_back(ibQueryProjItem{ ibCol(q, field), field });
 	return out;
@@ -139,9 +139,9 @@ std::vector<ibQueryProjItem> Carried(const wxString& q, const std::vector<wxStri
 
 // Every field of `a` with the field of `b` laid out for the same role — the pairing ibRegSameValueIR makes, kept
 // here as names: a leading register's fields are joined under aliases this file chooses.
-std::vector<std::pair<wxString, wxString>> PairedByRole(const ibBackendQueryColumn* a, const ibBackendQueryColumn* b)
+std::vector<std::pair<ibString, ibString>> PairedByRole(const ibBackendQueryColumn* a, const ibBackendQueryColumn* b)
 {
-	std::vector<std::pair<wxString, wxString>> out;
+	std::vector<std::pair<ibString, ibString>> out;
 	const std::vector<ibColumnSlot> right = DescribeColumnLayout(b);
 	for (const ibColumnSlot& x : DescribeColumnLayout(a))
 		for (const ibColumnSlot& y : right)
@@ -186,7 +186,7 @@ ibRecalculationSpec ibRecalculationSpecOf(const ibValueMetaObjectCalculationRegi
 	// The marks' own columns, which are the register's (ibRecalculationQueryable), in their order.
 	v.m_table = reg->GetPhysicalTableName();
 	for (const ibBackendQueryColumn* column : reg->GetRecalculationQueryable()->GetColumns())
-		for (const wxString& field : ColumnFieldNames(column))
+		for (const ibString& field : ColumnFieldNames(column))
 			v.m_mark.push_back(field);
 
 	if (reg->IsUseActionPeriod()) {
@@ -237,12 +237,12 @@ ibQueryRelPtr ibRecalculationRelation(const ibRecalculationSpec& v, const ibReca
 	const bool acts = !v.m_start.IsEmpty(), based = !v.m_baseStart.IsEmpty();
 
 	// The led record: in force and not a storno.
-	const ibQueryExprPtr led = And(Active(wxT("d"), v.m_active), Eq(ibCol(wxT("d"), v.m_storno), Int(0)));
-	const ibQueryExprPtr owned = Eq(ibCol(wxT("r"), v.m_owner), ibCol(wxT("d"), v.m_typeId));
+	const ibQueryExprPtr led = And(Active(ibT("d"), v.m_active), Eq(ibCol(ibT("d"), v.m_storno), Int(0)));
+	const ibQueryExprPtr owned = Eq(ibCol(ibT("r"), v.m_owner), ibCol(ibT("d"), v.m_typeId));
 
 	std::vector<ibQueryProjItem> mark;
-	for (const wxString& field : v.m_mark)
-		mark.push_back(ibQueryProjItem{ ibCol(wxT("d"), field), field });
+	for (const ibString& field : v.m_mark)
+		mark.push_back(ibQueryProjItem{ ibCol(ibT("d"), field), field });
 
 	ibQueryRelPtr all;
 	size_t parts = 0;
@@ -259,28 +259,28 @@ ibQueryRelPtr ibRecalculationRelation(const ibRecalculationSpec& v, const ibReca
 			byRegistration = based && v.m_baseByRegistration;
 		ibQueryExprPtr meets;
 		if (byAction)
-			meets = Or(meets, And(Le(Day(wxT("l"), s.m_start), Day(wxT("d"), v.m_end)), Le(Day(wxT("d"), v.m_start), Day(wxT("l"), s.m_end))));
+			meets = Or(meets, And(Le(Day(ibT("l"), s.m_start), Day(ibT("d"), v.m_end)), Le(Day(ibT("d"), v.m_start), Day(ibT("l"), s.m_end))));
 		if (byBase)
-			meets = Or(meets, And(Le(Day(wxT("l"), s.m_start), Day(wxT("d"), v.m_baseEnd)), Le(Day(wxT("d"), v.m_baseStart), Day(wxT("l"), s.m_end))));
+			meets = Or(meets, And(Le(Day(ibT("l"), s.m_start), Day(ibT("d"), v.m_baseEnd)), Le(Day(ibT("d"), v.m_baseStart), Day(ibT("l"), s.m_end))));
 		if (byRegistration)
-			meets = Or(meets, And(Le(Day(wxT("d"), v.m_baseStart), Day(wxT("l"), s.m_registration)), Le(Day(wxT("l"), s.m_registration), Day(wxT("d"), v.m_baseEnd))));
+			meets = Or(meets, And(Le(Day(ibT("d"), v.m_baseStart), Day(ibT("l"), s.m_registration)), Le(Day(ibT("l"), s.m_registration), Day(ibT("d"), v.m_baseEnd))));
 		if (!meets)
-			meets = Eq(Day(wxT("l"), s.m_registration), Day(wxT("d"), v.m_registration));
+			meets = Eq(Day(ibT("l"), s.m_registration), Day(ibT("d"), v.m_registration));
 
 		// The chosen records, each once by what the meeting asks of it.
-		std::vector<wxString> leading;
+		std::vector<ibString> leading;
 		for (const auto& pair : s.m_named)
 			leading.push_back(pair.first);
 		for (const auto& pair : s.m_dimensions)
 			leading.push_back(pair.second);
-		for (const wxString& field : { s.m_registration, s.m_start, s.m_end })
+		for (const ibString& field : { s.m_registration, s.m_start, s.m_end })
 			leading.push_back(field);
-		const ibQueryExprPtr chosen = And(Active(wxT("l"), s.m_active), Narrowed(narrowing, wxT("l"), source));
+		const ibQueryExprPtr chosen = And(Active(ibT("l"), s.m_active), Narrowed(narrowing, ibT("l"), source));
 		const ibQueryRelPtr joined = ibJoin(ibJoin(
-			ibSubquery(ibDistinct(ibProject(ibFilter(ibScan(s.m_table, wxT("l")), chosen), Carried(wxT("l"), leading))), wxT("l")),
-			ibScan(v.m_leading, wxT("r")), SamePairs(wxT("l"), s.m_named, wxT("r"))),
-			ibScan(v.m_table, wxT("d")), And(owned, SamePairs(wxT("d"), s.m_dimensions, wxT("l"))));
-		const ibQueryRelPtr part = ibProject(ibFilter(joined, And(And(led, meets), Narrowed(narrowing, wxT("d"), -1))), mark);
+			ibSubquery(ibDistinct(ibProject(ibFilter(ibScan(s.m_table, ibT("l")), chosen), Carried(ibT("l"), leading))), ibT("l")),
+			ibScan(v.m_leading, ibT("r")), SamePairs(ibT("l"), s.m_named, ibT("r"))),
+			ibScan(v.m_table, ibT("d")), And(owned, SamePairs(ibT("d"), s.m_dimensions, ibT("l"))));
+		const ibQueryRelPtr part = ibProject(ibFilter(joined, And(And(led, meets), Narrowed(narrowing, ibT("d"), -1))), mark);
 		all = all ? ibUnion(all, part) : part;
 		++parts;
 	}
@@ -291,20 +291,20 @@ ibQueryRelPtr ibRecalculationRelation(const ibRecalculationSpec& v, const ibReca
 
 // INSERT … SELECT the marks `rows` name that are not there yet — `rows` under the register's field names, which are
 // the marks' own (`fields`).
-static void InsertMarks(const ibValueMetaObjectCalculationRegister* reg, const std::vector<wxString>& fields,
+static void InsertMarks(const ibValueMetaObjectCalculationRegister* reg, const std::vector<ibString>& fields,
 	const ibQueryRelPtr& rows)
 {
-	const wxString table = reg->GetRecalculationTableName();
+	const ibString table = reg->GetRecalculationTableName();
 	std::vector<ibQueryProjItem> projection;
 	ibQueryExprPtr same;
-	for (const wxString& field : fields) {
-		projection.push_back(ibQueryProjItem{ ibCol(wxT("v"), field), field });
-		same = And(same, Eq(ibCol(wxT("t"), field), ibCol(wxT("v"), field)));
+	for (const ibString& field : fields) {
+		projection.push_back(ibQueryProjItem{ ibCol(ibT("v"), field), field });
+		same = And(same, Eq(ibCol(ibT("t"), field), ibCol(ibT("v"), field)));
 	}
-	const ibQueryExprPtr absent = ibExists(ibProject(ibFilter(ibScan(table, wxT("t")), same),
-		{ ibQueryProjItem{ ibCol(wxT("t"), fields.front()), fields.front() } }), /*negated*/ true);
+	const ibQueryExprPtr absent = ibExists(ibProject(ibFilter(ibScan(table, ibT("t")), same),
+		{ ibQueryProjItem{ ibCol(ibT("t"), fields.front()), fields.front() } }), /*negated*/ true);
 	ibDatabaseQueryBuilder insert;
-	if (insert.Execute(ibInsertSelect(table, fields, ibProject(ibFilter(ibSubquery(rows, wxT("v")), absent), projection))) < 0)
+	if (insert.Execute(ibInsertSelect(table, fields, ibProject(ibFilter(ibSubquery(rows, ibT("v")), absent), projection))) < 0)
 		ibBackendCoreException::Error(_("Register '%s': failed to mark records for the recalculation"), reg->GetSynonym());
 }
 
@@ -316,7 +316,7 @@ static std::vector<std::pair<const ibValueMetaObjectCalculationRegister*, ibReca
 	const ibMetaData* metaData = written != nullptr ? written->GetMetaData() : nullptr;
 	if (metaData == nullptr)
 		return out;
-	const wxString writtenTable = written->GetPhysicalTableName();
+	const ibString writtenTable = written->GetPhysicalTableName();
 	for (const ibValueMetaObjectCalculationRegister* reg :
 		metaData->GetAnyArrayObject<ibValueMetaObjectCalculationRegister>(g_metaCalculationRegisterCLSID)) {
 		ibRecalculationSpec spec = ibRecalculationSpecOf(reg);
@@ -336,7 +336,7 @@ void ibRecalculationMarkLedBy(const ibValueMetaObjectCalculationRegister* writte
 	for (const auto& led : LedBy(written)) {
 		const ibValueMetaObjectCalculationRegister* reg = led.first;
 		// The recorder's records lead; its own records are never led — whichever register holds them.
-		const ibRecalculationNarrowing narrowing = [written, reg, metaData, &recorder](const wxString& alias, int source) {
+		const ibRecalculationNarrowing narrowing = [written, reg, metaData, &recorder](const ibString& alias, int source) {
 			const ibValueMetaObjectCalculationRegister* holder = source < 0 ? reg : written;
 			const ibQueryExprPtr own = ibRegCompositeIR(holder->GetRegisterRecorder()->GetQueryColumn(), metaData,
 				recorder, ibQueryBinOp::Eq, alias);
@@ -358,15 +358,15 @@ void ibRecalculationAnswerBy(const ibValueMetaObjectCalculationRegister* reg, co
 		return;
 	// The mark's fields past the recorder — the type, the month, the dimensions — against the storno's. The marks
 	// carry the register's own field names, so the mark's side is qualified by its table: bare, it would read `s`'s.
-	const wxString marks = reg->GetRecalculationTableName();
+	const ibString marks = reg->GetRecalculationTableName();
 	const size_t objectFields = ColumnFieldNames(reg->GetRegisterRecorder()->GetQueryColumn()).size();
 	ibQueryExprPtr answering = And(And(ibRegCompositeIR(reg->GetRegisterRecorder()->GetQueryColumn(), metaData, recorder,
-		ibQueryBinOp::Eq, wxT("s")), ibBinOp(ibQueryBinOp::Ne, ibCol(wxT("s"), ibRegValueField(reg->GetStorno())), Int(0))),
-		Active(wxT("s"), ibRegValueField(reg->GetRegisterActive())));
+		ibQueryBinOp::Eq, ibT("s")), ibBinOp(ibQueryBinOp::Ne, ibCol(ibT("s"), ibRegValueField(reg->GetStorno())), Int(0))),
+		Active(ibT("s"), ibRegValueField(reg->GetRegisterActive())));
 	for (size_t f = objectFields; f < spec.m_mark.size(); ++f)
-		answering = And(answering, Eq(ibCol(wxT("s"), spec.m_mark[f]), ibCol(marks, spec.m_mark[f])));
-	const ibQueryExprPtr answered = ibExists(ibProject(ibFilter(ibScan(reg->GetPhysicalTableName(), wxT("s")), answering),
-		{ ibQueryProjItem{ ibCol(wxT("s"), spec.m_mark.front()), spec.m_mark.front() } }));
+		answering = And(answering, Eq(ibCol(ibT("s"), spec.m_mark[f]), ibCol(marks, spec.m_mark[f])));
+	const ibQueryExprPtr answered = ibExists(ibProject(ibFilter(ibScan(reg->GetPhysicalTableName(), ibT("s")), answering),
+		{ ibQueryProjItem{ ibCol(ibT("s"), spec.m_mark.front()), spec.m_mark.front() } }));
 	ibDatabaseQueryBuilder clear;
 	if (clear.Execute(ibDelete(marks, answered)) < 0)
 		ibBackendCoreException::Error(_("Register '%s': failed to clear the recalculation of what this recorder corrects"),
@@ -391,9 +391,9 @@ void ibRecalculationMarkReversed(const ibValueMetaObjectCalculationRegister* reg
 	const ibMetaData* metaData = reg != nullptr ? reg->GetMetaData() : nullptr;
 	if (metaData == nullptr || recorder.IsEmpty() || reg->GetStorno() == nullptr)
 		return;
-	const wxString records = reg->GetPhysicalTableName();
-	const wxString storno = ibRegValueField(reg->GetStorno()), active = ibRegValueField(reg->GetRegisterActive());
-	const wxString registration = ibRegFieldOfRole(reg->GetRegistrationPeriod()->GetQueryColumn(), ibColumnRole::Date);
+	const ibString records = reg->GetPhysicalTableName();
+	const ibString storno = ibRegValueField(reg->GetStorno()), active = ibRegValueField(reg->GetRegisterActive());
+	const ibString registration = ibRegFieldOfRole(reg->GetRegistrationPeriod()->GetQueryColumn(), ibColumnRole::Date);
 
 	// `s` a storno of the recorder, `d` a record of its position registered before it, of another recorder, in force.
 	ibQueryExprPtr position;
@@ -406,19 +406,19 @@ void ibRecalculationMarkReversed(const ibValueMetaObjectCalculationRegister* reg
 				static_cast<const ibValueMetaObjectAttributeBase*>(reg->GetActionPeriodEnd()) })
 			parts.push_back(part);
 	for (const ibValueMetaObjectAttributeBase* part : parts)
-		for (const wxString& field : ibRegFieldsOf(part))
-			position = And(position, Eq(ibCol(wxT("d"), field), ibCol(wxT("s"), field)));
+		for (const ibString& field : ibRegFieldsOf(part))
+			position = And(position, Eq(ibCol(ibT("d"), field), ibCol(ibT("s"), field)));
 	const ibQueryExprPtr ownStorno = And(And(ibRegCompositeIR(reg->GetRegisterRecorder()->GetQueryColumn(), metaData, recorder,
-		ibQueryBinOp::Eq, wxT("s")), ibBinOp(ibQueryBinOp::Ne, ibCol(wxT("s"), storno), Int(0))), Active(wxT("s"), active));
+		ibQueryBinOp::Eq, ibT("s")), ibBinOp(ibQueryBinOp::Ne, ibCol(ibT("s"), storno), Int(0))), Active(ibT("s"), active));
 	const ibQueryExprPtr reversed = And(And(ibNot(ibRegCompositeIR(reg->GetRegisterRecorder()->GetQueryColumn(), metaData, recorder,
-		ibQueryBinOp::Eq, wxT("d"))), And(Eq(ibCol(wxT("d"), storno), Int(0)), Active(wxT("d"), active))),
-		ibBinOp(ibQueryBinOp::Lt, ibCol(wxT("d"), registration), ibCol(wxT("s"), registration)));
+		ibQueryBinOp::Eq, ibT("d"))), And(Eq(ibCol(ibT("d"), storno), Int(0)), Active(ibT("d"), active))),
+		ibBinOp(ibQueryBinOp::Lt, ibCol(ibT("d"), registration), ibCol(ibT("s"), registration)));
 
 	const ibRecalculationSpec spec = ibRecalculationSpecOf(reg);
 	if (spec.m_mark.empty())
 		return;
-	InsertMarks(reg, spec.m_mark, ibDistinct(ibProject(ibFilter(ibJoin(ibScan(records, wxT("s")),
-		ibScan(records, wxT("d")), position), And(ownStorno, reversed)), Carried(wxT("d"), spec.m_mark))));
+	InsertMarks(reg, spec.m_mark, ibDistinct(ibProject(ibFilter(ibJoin(ibScan(records, ibT("s")),
+		ibScan(records, ibT("d")), position), And(ownStorno, reversed)), Carried(ibT("d"), spec.m_mark))));
 }
 
 //***********************************************************************

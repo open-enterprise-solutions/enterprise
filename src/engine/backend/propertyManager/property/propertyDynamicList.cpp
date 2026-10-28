@@ -2,18 +2,19 @@
 
 
 #include "backend/propertyManager/property/variant/variantComposition.h"
+#include "backend/backend_composition.h"   // ibBackendCompositionDescriptionMemory — read against the configuration
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyDynamicList::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc)
+ibVariant ibPropertyDynamicList::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc)
 {
-	return new ibVariantDataComposition(property, desc);
+	return ibVariant(new ibVariantComposition(property, desc));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibCompositionDescription& ibPropertyDynamicList::GetValueAsCompositionDesc() const {
-	return get_cell_variant<ibVariantDataComposition>()->GetCompositionDesc();
+	return get_cell_variant<ibVariantComposition>()->GetCompositionDesc();
 }
 
 void ibPropertyDynamicList::SetValue(const ibCompositionDescription& val) {
@@ -29,11 +30,11 @@ bool ibPropertyDynamicList::ReadNodeValue(const ibDataValue& value)
 	// …and the same door, for the same reason: a list's saved filter compares against references.
 	// CONST owner — the non-const GetMetaData overload answers null (see ibPropertyComposition).
 	const ibPropertyObject* owner = m_owner;
-	return ibCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
+	return ibBackendCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
 		owner != nullptr ? owner->GetMetaData() : nullptr);
 }
 
 bool ibPropertyDynamicList::WriteNodeValue(ibDataValue& value) const
 {
-	return ibCompositionDescriptionMemory::WriteNode(value, GetValueAsCompositionDesc());
+	return ibBackendCompositionDescriptionMemory::WriteNode(value, GetValueAsCompositionDesc());
 }

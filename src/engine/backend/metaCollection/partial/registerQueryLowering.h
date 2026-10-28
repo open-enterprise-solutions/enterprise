@@ -29,7 +29,7 @@
 #include <vector>
 #include "backend/system/value/valuePointInTime.h"   // ibValuePointInTime — a boundary that names a document
 #include "backend/system/value/valueBoundary.h"       // ibValueBoundary — the position AND which side of it
-#include "core/stringUtils.h"             // CompareString — the one case-insensitive name comparison
+#include "core/stringUtils.h"             // IsSameAs — the one case-insensitive name comparison
 #include "backend/query/queryableFactory.h"  // ibQuerySourceParameter — what a virtual table DECLARES it takes
 #include "backend/session/session.h"         // ses_query — the session's channel; ibRequireOpenBase asks it
 
@@ -97,11 +97,11 @@ inline ibRegBound ibReadRegisterBound(const ibValue& given)
 // Shared rather than accumulation-only: an accounting register reports turnovers by month by the
 // same words, and a second copy is how two registers come to disagree about what "Quarter" means.
 // ⭐ THE TABLE MOVED, THE NAMES STAYED. It lives beside the expression that truncates by these
-// units now (ibPeriodUnits, query/queryable.h), because a TOTALS level says a periodicity too —
+// units now (ibPeriodUnits, core/query/queryPeriodUnits.h), because a TOTALS level says a periodicity too —
 // `BY Period PERIODS(Month, …)` — and the register was never the only one asking. These two remain
 // as the register's own spelling of the same question.
-inline const std::vector<std::pair<ibTotalsPeriod, wxString>>& ibRegisterUnits() { return ibPeriodUnits(); }
-inline wxString ibRegisterUnitWord(ibTotalsPeriod unit) { return ibPeriodUnitWord(unit); }
+inline const std::vector<std::pair<ibTotalsPeriod, ibString>>& ibRegisterUnits() { return ibPeriodUnits(); }
+inline ibString ibRegisterUnitWord(ibTotalsPeriod unit) { return ibPeriodUnitWord(unit); }
 
 // ⭐⭐ WHAT THE READING WAS ASKED TO FOLD BY — the WORD's MEANING, decided once.
 //
@@ -148,7 +148,7 @@ struct ibRegFold {
 };
 
 // The word -> the fold. CASE-INSENSITIVE THROUGH THE ONE HELPER THE ENGINE ALREADY USES —
-// `stringUtils::CompareString`, the same one the bytecode resolver and the value system compare
+// `stringUtils::IsSameAs`, the same one the bytecode resolver and the value system compare
 // names by. A second spelling of "the same word" is how two parts of a program start disagreeing
 // about what a name is. A number is accepted as the unit's ordinal (the composer's own form).
 inline ibRegFold ibReadRegisterFold(const ibValue& given)
@@ -167,16 +167,16 @@ inline ibRegFold ibReadRegisterFold(const ibValue& given)
 	if (given.GetType() != TYPE_STRING)
 		return fold;   // absent, or something this argument does not take: the interval whole
 
-	const wxString word = given.GetString();
+	const ibString word = given.GetString();
 	if (word.IsEmpty())
 		return fold;
-	if (stringUtils::CompareString(word, wxT("Auto")))     { fold.m_kind = ibRegGranularity::Auto;     return fold; }
-	if (stringUtils::CompareString(word, wxT("Period")))   { fold.m_kind = ibRegGranularity::Period;   return fold; }
-	if (stringUtils::CompareString(word, wxT("Recorder"))) { fold.m_kind = ibRegGranularity::Recorder; return fold; }
-	if (stringUtils::CompareString(word, wxT("Record")))   { fold.m_kind = ibRegGranularity::Record;   return fold; }
+	if (stringUtils::IsSameAs(word, ibT("Auto")))     { fold.m_kind = ibRegGranularity::Auto;     return fold; }
+	if (stringUtils::IsSameAs(word, ibT("Period")))   { fold.m_kind = ibRegGranularity::Period;   return fold; }
+	if (stringUtils::IsSameAs(word, ibT("Recorder"))) { fold.m_kind = ibRegGranularity::Recorder; return fold; }
+	if (stringUtils::IsSameAs(word, ibT("Record")))   { fold.m_kind = ibRegGranularity::Record;   return fold; }
 
-	for (const std::pair<ibTotalsPeriod, wxString>& u : ibRegisterUnits()) {
-		if (stringUtils::CompareString(word, u.second)) {
+	for (const std::pair<ibTotalsPeriod, ibString>& u : ibRegisterUnits()) {
+		if (stringUtils::IsSameAs(word, u.second)) {
 			fold.m_kind = ibRegGranularity::Calendar;
 			fold.m_unit = u.first;
 			return fold;
@@ -205,8 +205,8 @@ inline ibRegFold ibReadRegisterFold(const ibValue& given)
 // come to differ in a detail nobody meant to change.
 class BACKEND_API ibValueMetaObjectRegisterTotals : public ibValueMetaObject {
 public:
-	ibValueMetaObjectRegisterTotals(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString,
-		const wxString& comment = wxEmptyString) : ibValueMetaObject(name, synonym, comment) {
+	ibValueMetaObjectRegisterTotals(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString,
+		const ibString& comment = ibEmptyString) : ibValueMetaObject(name, synonym, comment) {
 	}
 	virtual ~ibValueMetaObjectRegisterTotals() {}
 };
@@ -228,12 +228,12 @@ public:
 // ⚠ The PERIOD is deliberately not here: its column is named after the register's own period
 // attribute, so the name belongs to the metadata rather than to this list.
 namespace ibRegFigure {
-	inline constexpr const wxChar* Turnover       = wxT("Turnover");
-	inline constexpr const wxChar* Receipt        = wxT("Receipt");        // accumulation's two sides
-	inline constexpr const wxChar* Expense        = wxT("Expense");
-	inline constexpr const wxChar* Balance        = wxT("Balance");
-	inline constexpr const wxChar* OpeningBalance = wxT("OpeningBalance");
-	inline constexpr const wxChar* ClosingBalance = wxT("ClosingBalance");
+	inline constexpr const ibChar* Turnover       = ibT("Turnover");
+	inline constexpr const ibChar* Receipt        = ibT("Receipt");        // accumulation's two sides
+	inline constexpr const ibChar* Expense        = ibT("Expense");
+	inline constexpr const ibChar* Balance        = ibT("Balance");
+	inline constexpr const ibChar* OpeningBalance = ibT("OpeningBalance");
+	inline constexpr const ibChar* ClosingBalance = ibT("ClosingBalance");
 
 	// ⭐⭐ THE SAME BALANCE, NOT NETTED BETWEEN THE SIDES. An accounting balance is reported FOLDED: an
 	// active account carries what is left on the debit and nothing on the credit, and the two sides of
@@ -245,26 +245,26 @@ namespace ibRegFigure {
 	// GROSS / NET are the accounting words for the pair (the reference calls them the expanded and
 	// the collapsed balance); the ordinary `Balance` above stays the folded one, because that is what every
 	// reading of it has always meant.
-	inline constexpr const wxChar* GrossBalance        = wxT("GrossBalance");
-	inline constexpr const wxChar* OpeningGrossBalance = wxT("OpeningGrossBalance");
-	inline constexpr const wxChar* ClosingGrossBalance = wxT("ClosingGrossBalance");
+	inline constexpr const ibChar* GrossBalance        = ibT("GrossBalance");
+	inline constexpr const ibChar* OpeningGrossBalance = ibT("OpeningGrossBalance");
+	inline constexpr const ibChar* ClosingGrossBalance = ibT("ClosingGrossBalance");
 
 	// ⭐ WHAT THE CORRESPONDENT MOVED, beside what the account moved. A figure the two sides of an entry
 	// do not agree on (a quantity, a currency amount — `Balance` cleared) is two numbers on one line: what
 	// reached the debit account and what left the credit one. A turnover row about one account reports its
 	// own under `Turnover` and the other side's under this word, the way the reference does.
-	inline constexpr const wxChar* CorrTurnover = wxT("CorrTurnover");
+	inline constexpr const ibChar* CorrTurnover = ibT("CorrTurnover");
 }
 
 // The SIDE an accounting figure stands on. Not a third and fourth figure name — the same figures, said
 // of one side of an entry, which is exactly why the suffix is separate from the word.
 namespace ibRegSide {
-	inline constexpr const wxChar* Debit  = wxT("Dr");
-	inline constexpr const wxChar* Credit = wxT("Cr");
+	inline constexpr const ibChar* Debit  = ibT("Dr");
+	inline constexpr const ibChar* Credit = ibT("Cr");
 }
 
 // `<figure><side>` — built rather than written out, so a figure and its sided spelling cannot drift.
-inline wxString ibRegSidedFigure(const wxString& figure, bool credit)
+inline ibString ibRegSidedFigure(const ibString& figure, bool credit)
 {
 	return figure + (credit ? ibRegSide::Credit : ibRegSide::Debit);
 }
@@ -277,7 +277,7 @@ inline wxString ibRegSidedFigure(const wxString& figure, bool credit)
 // the two managers each built their own captions (`_("Balance")` spelled at the callsite), so the
 // figure had a presentation through the script door and none at all through the query door. One
 // list, and a figure added to it is captioned wherever it appears.
-inline wxString ibRegFigureCaption(const wxString& figure)
+inline ibString ibRegFigureCaption(const ibString& figure)
 {
 	if (figure == ibRegFigure::Turnover)       return _("Turnover");
 	if (figure == ibRegFigure::Receipt)        return _("Receipt");
@@ -295,7 +295,7 @@ inline wxString ibRegFigureCaption(const wxString& figure)
 // ⭐ …AND WHAT THE FIGURE IS IN A BALANCE — its two edges, beside the words, for the same reason the
 // caption is here: a figure added to the list is known everywhere it appears. A gross balance is an edge
 // too; a movement, and the balance a register reports at one moment, are ordinary values.
-inline ibBalanceRole ibRegFigureBalanceRole(const wxString& figure)
+inline ibBalanceRole ibRegFigureBalanceRole(const ibString& figure)
 {
 	if (figure == ibRegFigure::OpeningBalance || figure == ibRegFigure::OpeningGrossBalance) return ibBalanceRole::Opening;
 	if (figure == ibRegFigure::ClosingBalance || figure == ibRegFigure::ClosingGrossBalance) return ibBalanceRole::Closing;
@@ -305,23 +305,23 @@ inline ibBalanceRole ibRegFigureBalanceRole(const wxString& figure)
 // The side, said to a PERSON — the caption twin of ibRegSide, and the one place the two words are
 // spelled. A FIELD held per side is captioned with it too ("Currency Dr"), so it stands on its own
 // rather than inside the figure's caption below.
-inline wxString ibRegSideCaption(bool credit)
+inline ibString ibRegSideCaption(bool credit)
 {
 	return credit ? _("Cr") : _("Dr");
 }
 
 // The sided caption — the same pairing as ibRegSidedFigure, one tier up. Kept beside it so a side
 // that gains a spelling gains a caption in the same edit.
-inline wxString ibRegSidedCaption(const wxString& figure, bool credit)
+inline ibString ibRegSidedCaption(const ibString& figure, bool credit)
 {
-	return ibRegFigureCaption(figure) + wxT(" ") + ibRegSideCaption(credit);
+	return ibRegFigureCaption(figure) + ibT(" ") + ibRegSideCaption(credit);
 }
 
 // A published column's full caption: what it is OF, then what it is. `<resource synonym> <figure>` —
 // "Amount Closing balance", "Currency Dr" — in the reader's language, whichever door produced the row.
-inline wxString ibRegColumnCaptionOf(const wxString& ofWhat, const wxString& caption)
+inline ibString ibRegColumnCaptionOf(const ibString& ofWhat, const ibString& caption)
 {
-	return ofWhat.IsEmpty() ? caption : ofWhat + wxT(" ") + caption;
+	return ofWhat.IsEmpty() ? caption : ofWhat + ibT(" ") + caption;
 }
 
 // --- the GRAIN: where a union view is cut between its two arms ------------------------------------
@@ -344,16 +344,16 @@ inline wxString ibRegColumnCaptionOf(const wxString& ofWhat, const wxString& cap
 // built on. The discriminator is dropped: it says what KIND of value this is, which is the same for
 // every recorder and would only make the tuple one constant longer.
 template <typename TReg>
-inline std::vector<std::pair<wxString, ibQueryExprPtr>> ibRegRecorderTuple(
+inline std::vector<std::pair<ibString, ibQueryExprPtr>> ibRegRecorderTuple(
 	const TReg* reg, const std::vector<ibColumnSlot>& slots, const ibValue& recorder)
 {
-	std::vector<std::pair<wxString, ibQueryExprPtr>> tuple;
+	std::vector<std::pair<ibString, ibQueryExprPtr>> tuple;
 
-	std::vector<wxString> fields;
+	std::vector<ibString> fields;
 	for (const ibColumnSlot& slot : slots)
 		fields.push_back(slot.m_name);
 
-	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 	int pos = 1;
 	ibColumnCodec::WriteValue(reg->GetRegisterRecorder()->GetQueryColumn(), reg->GetMetaData(), recorder, &capture, pos);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
@@ -510,7 +510,7 @@ inline std::vector<ibDateTime> ibRegCalendarOf(const ibValue& from, const ibValu
 // The calendar as a RELATION — one row per period under `periodField`, laid one under the other; a one-row
 // select needs no table (the dialect supplies its own, RDB$DATABASE on Firebird). Joined to every key of a
 // reading, it is the grid a running balance walks.
-inline ibQueryRelPtr ibRegCalendarRelation(const std::vector<ibDateTime>& periods, const wxString& periodField)
+inline ibQueryRelPtr ibRegCalendarRelation(const std::vector<ibDateTime>& periods, const ibString& periodField)
 {
 	ibQueryRelPtr calendar;
 	for (const ibDateTime& start : periods) {
@@ -531,10 +531,10 @@ inline ibQueryExprPtr ibRegTypedZero()
 // turnover read), the balance entering the interval (a column of the opening read), and the two names the
 // grid publishes the period's opening and closing under.
 struct ibRegRunningFigure {
-	wxString m_turnover;
-	wxString m_opening;
-	wxString m_openingOut;
-	wxString m_closingOut;
+	ibString m_turnover;
+	ibString m_opening;
+	ibString m_openingOut;
+	ibString m_closingOut;
 };
 
 // ⭐⭐ THE GRID OF A PERIODISED BALANCE READING — every key, every period of the calendar, and the balances
@@ -562,26 +562,26 @@ struct ibRegRunningFigure {
 // 🛑 The key set is the opening read and not a DISTINCT over a union of both reads: rendered on Firebird, that
 // DISTINCT merged into the union's first arm and the statement failed at BLR level (measured 2026-09-16).
 inline ibQueryRelPtr ibRegRunningGrid(const ibQueryRelPtr& openRead, const ibQueryRelPtr& turnRead,
-                                      const std::vector<ibDateTime>& periods, const wxString& periodField,
-                                      const std::vector<wxString>& keyNames, const std::vector<wxString>& passThrough,
-                                      const std::vector<ibRegRunningFigure>& running, const wxString& alias)
+                                      const std::vector<ibDateTime>& periods, const ibString& periodField,
+                                      const std::vector<ibString>& keyNames, const std::vector<ibString>& passThrough,
+                                      const std::vector<ibRegRunningFigure>& running, const ibString& alias)
 {
 	if (openRead == nullptr || turnRead == nullptr || periods.empty())
 		return nullptr;
-	const wxString aO = alias + wxT("_po"), aT = alias + wxT("_pt"), aC = alias + wxT("_pc");
-	const wxString aU = alias + wxT("_pu"), aS = alias + wxT("_ps");
+	const ibString aO = alias + ibT("_po"), aT = alias + ibT("_pt"), aC = alias + ibT("_pc");
+	const ibString aU = alias + ibT("_pu"), aS = alias + ibT("_ps");
 	const auto orZero = [](const ibQueryExprPtr& e) {
-		return ibCast(ibFunc(wxT("COALESCE"), { e, ibRegTypedZero() }), ibTypeNumber(18, 6));
+		return ibCast(ibFunc(ibT("COALESCE"), { e, ibRegTypedZero() }), ibTypeNumber(18, 6));
 	};
 
 	// The figures each arm carries: what the turnover read moves (the pass-through columns and each running
 	// figure's movement, once each) and what the opening read holds. An arm answers the other's with a zero.
-	std::vector<wxString> moved, held;
-	const auto once = [](std::vector<wxString>& names, const wxString& name) {
+	std::vector<ibString> moved, held;
+	const auto once = [](std::vector<ibString>& names, const ibString& name) {
 		if (std::find(names.begin(), names.end(), name) == names.end())
 			names.push_back(name);
 	};
-	for (const wxString& name : passThrough)
+	for (const ibString& name : passThrough)
 		once(moved, name);
 	for (const ibRegRunningFigure& figure : running) {
 		once(moved, figure.m_turnover);
@@ -590,14 +590,14 @@ inline ibQueryRelPtr ibRegRunningGrid(const ibQueryRelPtr& openRead, const ibQue
 
 	// The period is cast on both arms: the calendar's constant and the read's truncated column meet in one
 	// UNION column, and a union takes one type.
-	const auto arm = [&](const wxString& from, bool balances, const ibQueryExprPtr& period) {
+	const auto arm = [&](const ibString& from, bool balances, const ibQueryExprPtr& period) {
 		std::vector<ibQueryProjItem> items;
-		for (const wxString& name : keyNames)
+		for (const ibString& name : keyNames)
 			items.push_back({ ibCol(from, name), name });
 		items.push_back({ ibCast(period, ibTypeDate()), periodField });
-		for (const wxString& name : moved)
+		for (const ibString& name : moved)
 			items.push_back({ balances ? ibRegTypedZero() : orZero(ibCol(from, name)), name });
-		for (const wxString& name : held)
+		for (const ibString& name : held)
 			items.push_back({ balances ? orZero(ibCol(from, name)) : ibRegTypedZero(), name });
 		return items;
 	};
@@ -613,31 +613,31 @@ inline ibQueryRelPtr ibRegRunningGrid(const ibQueryRelPtr& openRead, const ibQue
 	// Summed by key and period: one row per key per period, its movement if it moved and its entering balance.
 	std::vector<ibQueryProjItem> sums;
 	std::vector<ibQueryExprPtr> groupKeys;
-	for (const wxString& name : keyNames) {
+	for (const ibString& name : keyNames) {
 		sums.push_back({ ibCol(aU, name), name });
 		groupKeys.push_back(ibCol(aU, name));
 	}
 	sums.push_back({ ibCol(aU, periodField), periodField });
 	groupKeys.push_back(ibCol(aU, periodField));
-	for (const wxString& name : moved)
-		sums.push_back({ ibCast(ibFunc(wxT("SUM"), { ibCol(aU, name) }), ibTypeNumber(18, 6)), name });
-	for (const wxString& name : held)
-		sums.push_back({ ibCast(ibFunc(wxT("SUM"), { ibCol(aU, name) }), ibTypeNumber(18, 6)), name });
+	for (const ibString& name : moved)
+		sums.push_back({ ibCast(ibFunc(ibT("SUM"), { ibCol(aU, name) }), ibTypeNumber(18, 6)), name });
+	for (const ibString& name : held)
+		sums.push_back({ ibCast(ibFunc(ibT("SUM"), { ibCol(aU, name) }), ibTypeNumber(18, 6)), name });
 	const ibQueryRelPtr summed = ibAggregate(ibSubquery(ibUnionAll(everyPeriod, moves), aU), std::move(sums), std::move(groupKeys));
 
 	std::vector<ibQueryExprPtr> partition;
 	std::vector<ibQueryProjItem> projection;
-	for (const wxString& name : keyNames) {
+	for (const ibString& name : keyNames) {
 		partition.push_back(ibCol(aS, name));
 		projection.push_back({ ibCol(aS, name), name });
 	}
 	projection.push_back({ ibCol(aS, periodField), periodField });
-	for (const wxString& name : passThrough)
+	for (const ibString& name : passThrough)
 		projection.push_back({ ibCol(aS, name), name });
 	for (const ibRegRunningFigure& figure : running) {
 		const ibQueryExprPtr turn = ibCol(aS, figure.m_turnover);
 		const ibQueryExprPtr closing = ibBinOp(ibQueryBinOp::Add, ibCol(aS, figure.m_opening),
-			ibWindowed(ibFunc(wxT("SUM"), { turn }),
+			ibWindowed(ibFunc(ibT("SUM"), { turn }),
 				ibQueryWindow{ partition, { ibQuerySortKey{ ibCol(aS, periodField), ibQuerySortDir::Asc } }, ibQueryFrame::RangeThroughPeers }));
 		projection.push_back({ ibBinOp(ibQueryBinOp::Sub, closing, turn), figure.m_openingOut });
 		projection.push_back({ closing, figure.m_closingOut });
@@ -650,90 +650,90 @@ inline ibQueryRelPtr ibRegRunningGrid(const ibQueryRelPtr& openRead, const ibQue
 // wrappers derive the metadata from the attribute so register lowering reads cleanly — the SQL-field
 // machinery lives in the tier, NOT on the attribute. The structured ibSQLField is GONE: a register
 // builds the comma-joined field list with ibRegFieldList, or picks the _TYPE tag / first value field.
-inline wxString       ibRegFieldList (const ibValueMetaObjectAttributeBase* a, const wxString& aggr = wxEmptyString) { return ColumnFieldList(a->GetQueryColumn(), aggr); }
-inline wxString       ibRegComposite (const ibValueMetaObjectAttributeBase* a, const wxString& cmp = wxT("=")) { return ColumnComparePredicate(a->GetQueryColumn(), cmp); }
+inline ibString       ibRegFieldList (const ibValueMetaObjectAttributeBase* a, const ibString& aggr = ibEmptyString) { return ColumnFieldList(a->GetQueryColumn(), aggr); }
+inline ibString       ibRegComposite (const ibValueMetaObjectAttributeBase* a, const ibString& cmp = ibT("=")) { return ColumnComparePredicate(a->GetQueryColumn(), cmp); }
 
 // All physical fields of an attribute (the TYPE tag + per-type fields; a reference
 // expands to _RTRef + _RRRef), in the order SetValueAttribute binds them.
-inline std::vector<wxString> ibRegFieldsOf(const ibValueMetaObjectAttributeBase* a)
+inline std::vector<ibString> ibRegFieldsOf(const ibValueMetaObjectAttributeBase* a)
 {
 	return ColumnFieldNames(a->GetQueryColumn());
 }
 
 // The _TYPE discriminator field name (the first physical field of a composite column).
-inline wxString ibRegTypeField(const ibValueMetaObjectAttributeBase* a)
+inline ibString ibRegTypeField(const ibValueMetaObjectAttributeBase* a)
 {
-	const std::vector<wxString> fields = ColumnFieldNames(a->GetQueryColumn());
-	return fields.empty() ? wxString() : fields[0];   // [0] is always the _TYPE tag
+	const std::vector<ibString> fields = ColumnFieldNames(a->GetQueryColumn());
+	return fields.empty() ? ibString() : fields[0];   // [0] is always the _TYPE tag
 }
 
 // The first VALUE field of an attribute (the field after the TYPE tag) — the column a
 // register resource / record-type aggregate operates on (res_N, recordType_N / _E).
-inline wxString ibRegValueField(const ibValueMetaObjectAttributeBase* a)
+inline ibString ibRegValueField(const ibValueMetaObjectAttributeBase* a)
 {
-	const std::vector<wxString> fields = ColumnFieldNames(a->GetQueryColumn());
-	return fields.size() > 1 ? fields[1] : wxString();   // [0] is the _TYPE tag; [1] is the first value field
+	const std::vector<ibString> fields = ColumnFieldNames(a->GetQueryColumn());
+	return fields.size() > 1 ? fields[1] : ibString();   // [0] is the _TYPE tag; [1] is the first value field
 }
 
 // ⭐ THE SAME QUESTIONS ASKED OF A COLUMN, for a caller that holds a column rather than an attribute. The
 // bodies are the attribute's own, minus the one hop it makes first.
 // The same signature a surface is cached by, taken from a COLUMN — see ibRegSignAttribute below, whose
 // body this is with the one hop removed.
-inline void ibRegSignColumn(wxString& signature, const ibBackendQueryColumn* c)
+inline void ibRegSignColumn(ibString& signature, const ibBackendQueryColumn* c)
 {
 	if (c == nullptr)
 		return;
-	signature += c->GetName() + wxT(":");
+	signature += c->GetName() + ibT(":");
 	const ibTypeDescription& type = c->GetTypeDesc();
 	for (unsigned int i = 0; i < type.GetClsidCount(); ++i)
-		signature += wxString::Format(wxT("%llu,"), static_cast<unsigned long long>(type.GetByIdx(i)));
-	signature += wxT(";");
+		signature += ibString::Format(ibT("%llu,"), static_cast<unsigned long long>(type.GetByIdx(i)));
+	signature += ibT(";");
 }
 
-inline wxString ibRegValueField(const ibBackendQueryColumn* c)
+inline ibString ibRegValueField(const ibBackendQueryColumn* c)
 {
-	const std::vector<wxString> fields = ColumnFieldNames(c);
-	return fields.size() > 1 ? fields[1] : wxString();
+	const std::vector<ibString> fields = ColumnFieldNames(c);
+	return fields.size() > 1 ? fields[1] : ibString();
 }
 
 // "q.f1, q.f2, …" — the attribute's field list qualified by a table alias (the SELECT/GROUP BY form
 // used in the dr/cr join queries). Replaces the hand-rolled qualified walks over ibSQLField.
-inline wxString ibRegQualifiedList(const ibValueMetaObjectAttributeBase* a, const wxString& q)
+inline ibString ibRegQualifiedList(const ibValueMetaObjectAttributeBase* a, const ibString& q)
 {
-	wxString out;
-	for (const wxString& f : ibRegFieldsOf(a))
-		out += (out.empty() ? wxString() : wxString(",")) + q + wxT(".") + f;
+	ibString out;
+	for (const ibString& f : ibRegFieldsOf(a))
+		out += (out.empty() ? ibString() : ibString(",")) + q + ibT(".") + f;
 	return out;
 }
 
 // "q.f1 AS <alias><suffix>, …" — qualified + aliased (dr.fld_N AS AccountDr_N). The suffix is the
 // field's tail past the base name (_TYPE / _N / _RTRef …), so the alias mirrors the physical layout.
-inline wxString ibRegAliasedList(const ibValueMetaObjectAttributeBase* a, const wxString& q, const wxString& alias)
+inline ibString ibRegAliasedList(const ibValueMetaObjectAttributeBase* a, const ibString& q, const ibString& alias)
 {
-	const wxString base = a->GetPhysicalName();
-	wxString out;
-	for (const wxString& f : ibRegFieldsOf(a)) {
-		const wxString suffix = f.length() > base.length() ? f.Mid(base.length()) : wxString();
-		out += (out.empty() ? wxString() : wxString(", ")) + q + wxT(".") + f + wxT(" AS ") + alias + suffix;
+	const ibString base = a->GetPhysicalName();
+	ibString out;
+	for (const ibString& f : ibRegFieldsOf(a)) {
+		const ibString suffix = f.length() > base.length() ? f.Mid(base.length()) : ibString();
+		out += (out.empty() ? ibString() : ibString(", ")) + q + ibT(".") + f + ibT(" AS ") + alias + suffix;
 	}
 	return out;
 }
 
 // "lq.f1 = rq.f1 AND …" — an all-fields equality join between two qualifiers (the dr/cr recorder join).
-inline wxString ibRegJoinEq(const ibValueMetaObjectAttributeBase* a, const wxString& lq, const wxString& rq)
+inline ibString ibRegJoinEq(const ibValueMetaObjectAttributeBase* a, const ibString& lq, const ibString& rq)
 {
-	wxString out;
-	for (const wxString& f : ibRegFieldsOf(a))
-		out += (out.empty() ? wxString() : wxString(" AND ")) + lq + wxT(".") + f + wxT(" = ") + rq + wxT(".") + f;
+	ibString out;
+	for (const ibString& f : ibRegFieldsOf(a))
+		out += (out.empty() ? ibString() : ibString(" AND ")) + lq + ibT(".") + f + ibT(" = ") + rq + ibT(".") + f;
 	return out;
 }
 
 // "q.f1 = ? AND …" — an all-fields equality against bound params (a qualified composite filter).
-inline wxString ibRegQualifiedEqParams(const ibValueMetaObjectAttributeBase* a, const wxString& q)
+inline ibString ibRegQualifiedEqParams(const ibValueMetaObjectAttributeBase* a, const ibString& q)
 {
-	wxString out;
-	for (const wxString& f : ibRegFieldsOf(a))
-		out += (out.empty() ? wxString() : wxString(" AND ")) + q + wxT(".") + f + wxT(" = ?");
+	ibString out;
+	for (const ibString& f : ibRegFieldsOf(a))
+		out += (out.empty() ? ibString() : ibString(" AND ")) + q + ibT(".") + f + ibT(" = ?");
 	return out;
 }
 
@@ -787,7 +787,7 @@ inline ibQueryPredicatePtr ibRegFilterPredicate(const TRegister* reg, const ibVa
 	const ibBackendQueryable* const source = reg->GetQueryable();
 	ibQueryPredicatePtr folded;
 	for (long key = 0; key < structure->GetNProps(); ++key) {
-		const wxString name = structure->GetPropName(key);
+		const ibString name = structure->GetPropName(key);
 
 		const ibBackendQueryColumn* col = nullptr;
 		if (over == ibRegFilterOver::Records) {
@@ -795,7 +795,7 @@ inline ibQueryPredicatePtr ibRegFilterPredicate(const TRegister* reg, const ibVa
 		}
 		else {
 			for (const auto dimension : reg->GetDimensionArrayObject()) {
-				if (dimension != nullptr && stringUtils::CompareString(name, dimension->GetName())) {
+				if (dimension != nullptr && stringUtils::IsSameAs(name, dimension->GetName())) {
 					col = dimension->GetQueryColumn();
 					break;
 				}
@@ -880,7 +880,7 @@ inline void ibRegFlatLeaves(const ibQueryPredicatePtr& predicate,
 // passed, the column is enough, and nothing casts.
 inline ibQueryExprPtr ibRegCompositeIR(const ibBackendQueryColumn* a, const ibMetaData* metaData,
                                        const ibValue& v,
-                                       ibQueryBinOp op, const wxString& qualifier = wxEmptyString)
+                                       ibQueryBinOp op, const ibString& qualifier = ibEmptyString)
 {
 	// ⭐ THE SLOTS, NOT JUST THE NAMES. Which fields TAG the value (_TYPE, a reference's _RTRef) and
 	// which CARRY it is a question about the field's ROLE, and the layout tier answers it — this used
@@ -888,12 +888,12 @@ inline ibQueryExprPtr ibRegCompositeIR(const ibBackendQueryColumn* a, const ibMe
 	// layout here, where a change to the lettering would never arrive.
 	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(a);
 
-	std::vector<wxString> fields;
+	std::vector<ibString> fields;
 	fields.reserve(slots.size());
 	for (const ibColumnSlot& slot : slots)
 		fields.push_back(slot.m_name);
 
-	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 	int pos = 1;
 	ibColumnCodec::WriteValue(a, metaData, v, &capture, pos);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
@@ -911,12 +911,12 @@ inline ibQueryExprPtr ibRegCompositeIR(const ibBackendQueryColumn* a, const ibMe
 
 // The physical field of a column that plays `role` — empty when the column lays out no such field. The
 // question a join asks of a column it compares by one part only (a reference's id, a date's value).
-inline wxString ibRegFieldOfRole(const ibBackendQueryColumn* col, ibColumnRole role)
+inline ibString ibRegFieldOfRole(const ibBackendQueryColumn* col, ibColumnRole role)
 {
 	for (const ibColumnSlot& slot : DescribeColumnLayout(col))
 		if (slot.m_role == role)
 			return slot.m_name;
-	return wxString();
+	return ibString();
 }
 
 // The same VALUE in two columns of two qualified tables: every field both columns lay out, paired by role
@@ -927,8 +927,8 @@ inline wxString ibRegFieldOfRole(const ibBackendQueryColumn* col, ibColumnRole r
 // was written `a = b OR (a IS NULL AND b IS NULL)` first — and an OR in each field is a condition no
 // compound index can ride: a calculation register's lookup index (employee, type) was there and the base
 // read walked the pieces anyway (MEASURED 2026-09-10 at 1000 employees, debug: 4 s for one statement).
-inline ibQueryExprPtr ibRegSameValueIR(const ibBackendQueryColumn* a, const wxString& qa,
-	const ibBackendQueryColumn* b, const wxString& qb)
+inline ibQueryExprPtr ibRegSameValueIR(const ibBackendQueryColumn* a, const ibString& qa,
+	const ibBackendQueryColumn* b, const ibString& qb)
 {
 	ibQueryExprPtr pred;
 	const std::vector<ibColumnSlot> right = DescribeColumnLayout(b);
@@ -1007,7 +1007,7 @@ inline void ibRegRefuseConditionColumn(const ibBackendQueryColumn* named)
 		  "folded, so it may name what the rows are kept by - the dimensions, and on an accounting register "
 		  "the accounts and their breakdown. A figure is known only after the fold and a period is the "
 		  "reading's own boundaries - put those into the query's WHERE"),
-		named != nullptr ? named->GetName() : wxString());
+		named != nullptr ? named->GetName() : ibString());
 }
 
 // ⭐⭐ A READING'S CONDITION, FOUND AGAIN ON THE SURFACE IT READS.
@@ -1123,10 +1123,10 @@ inline ibQueryPredicatePtr ibRegConditionOn(const ibBackendQueryable* source, co
 // storage spelling out again at a reading is a second writing of one name, and this one drifts
 // SILENTLY: a read spec naming a column the view does not have returns NULLs, not an error. So the
 // reading asks the surface it stands on, and neither side spells the other's name.
-inline wxString ibRegPhysicalOf(const ibBackendQueryable* view, const wxString& logical)
+inline ibString ibRegPhysicalOf(const ibBackendQueryable* view, const ibString& logical)
 {
 	const ibBackendQueryColumn* col = view != nullptr ? view->ResolveColumnByName(logical) : nullptr;
-	return col != nullptr ? col->GetPhysicalName() : wxString();
+	return col != nullptr ? col->GetPhysicalName() : ibString();
 }
 
 // ⭐ IS THERE A DATABASE TO READ AT ALL — one sentence, asked by every register's manager.
@@ -1186,14 +1186,14 @@ inline void ibFillRegisterIntervalParameters(const ibTypeDescription& periodType
 	std::vector<ibQuerySourceParameter>& out)
 {
 	ibQuerySourceParameter begin;
-	begin.m_name = wxT("BeginOfPeriod");
+	begin.m_name = ibT("BeginOfPeriod");
 	begin.m_description = _("The first moment counted, inclusive. Left out, the reading starts at the "
 	                 "register's first movement - not at some default date.");
 	begin.m_type = periodType;
 	out.push_back(begin);
 
 	ibQuerySourceParameter end;
-	end.m_name = wxT("EndOfPeriod");
+	end.m_name = ibT("EndOfPeriod");
 	end.m_description = _("The last moment counted, inclusive - and it may name a DOCUMENT rather than a "
 	               "date, which is how \"the turnovers up to this receipt\" is asked. Left out, "
 	               "the reading runs to the last movement there is.");
@@ -1212,7 +1212,7 @@ inline void ibFillRegisterIntervalParameters(const ibTypeDescription& periodType
 inline void ibAppendRegisterConditionParameter(std::vector<ibQuerySourceParameter>& out)
 {
 	ibQuerySourceParameter condition;
-	condition.m_name      = wxT("Condition");
+	condition.m_name      = ibT("Condition");
 	condition.m_description      = _("A condition on the DIMENSIONS, applied inside the reading - so it "
 	                          "selects the rows BEFORE they are folded, and the table arrives already "
 	                          "narrowed. Written as a predicate (Warehouse = &Warehouse), and any predicate "
@@ -1240,14 +1240,14 @@ inline void ibAppendRegisterConditionParameter(std::vector<ibQuerySourceParamete
 inline void ibAppendRegisterPeriodicityParameter(std::vector<ibQuerySourceParameter>& out)
 {
 	ibQuerySourceParameter periodicity;
-	periodicity.m_name    = wxT("Periodicity");
+	periodicity.m_name    = ibT("Periodicity");
 	periodicity.m_description    = _("How finely this READING is cut, which decides what a row is and "
 	                          "therefore which columns it has: none of them read whole, the period "
 	                          "with a period, the recorder with both, a record with the line number "
 	                          "too. Not the register's stored Periodicity property, which is the "
 	                          "grain the totals are KEPT at and takes different words.");
-	periodicity.m_choices = { wxT("Period"), wxT("Record"), wxT("Recorder"), wxT("Auto") };
-	for (const std::pair<ibTotalsPeriod, wxString>& unit : ibRegisterUnits())
+	periodicity.m_choices = { ibT("Period"), ibT("Record"), ibT("Recorder"), ibT("Auto") };
+	for (const std::pair<ibTotalsPeriod, ibString>& unit : ibRegisterUnits())
 		periodicity.m_choices.push_back(unit.second);
 	periodicity.m_default.clear();   // empty is its own answer: the interval read WHOLE
 	out.push_back(periodicity);
@@ -1281,16 +1281,16 @@ inline void ibAppendRegisterPeriodicityParameter(std::vector<ibQuerySourceParame
 // only when the reading is AT a movement's own identity — Recorder, Record, or the undecided Auto.
 // Offering it beside a monthly turnover promises a document per row where the row is a month's
 // worth of them.
-inline bool ibRegisterViewColumnFits(const wxString& columnName, const wxString& periodName,
-	const ibRegFold& fold, const wxString& recorderName = wxEmptyString,
-	const wxString& lineName = wxEmptyString)
+inline bool ibRegisterViewColumnFits(const ibString& columnName, const ibString& periodName,
+	const ibRegFold& fold, const ibString& recorderName = ibEmptyString,
+	const ibString& lineName = ibEmptyString)
 {
 	// The movement's own identity — present only where a row IS a movement (or a document's worth).
-	if (!recorderName.IsEmpty() && stringUtils::CompareString(columnName, recorderName))
+	if (!recorderName.IsEmpty() && stringUtils::IsSameAs(columnName, recorderName))
 		return fold.m_kind == ibRegGranularity::Auto
 		    || fold.m_kind == ibRegGranularity::Recorder
 		    || fold.m_kind == ibRegGranularity::Record;
-	if (!lineName.IsEmpty() && stringUtils::CompareString(columnName, lineName))
+	if (!lineName.IsEmpty() && stringUtils::IsSameAs(columnName, lineName))
 		return fold.m_kind == ibRegGranularity::Auto
 		    || fold.m_kind == ibRegGranularity::Record;
 
@@ -1313,7 +1313,7 @@ inline bool ibRegisterViewColumnFits(const wxString& columnName, const wxString&
 
 	// Anything else names ONE granularity, and the reading then has ONE period column — `Period`,
 	// rolled to it. The coarser projections are not part of that reading.
-	return stringUtils::CompareString(columnName, periodName);
+	return stringUtils::IsSameAs(columnName, periodName);
 }
 
 // ⭐⭐ DOES THIS READING PRODUCE THAT COLUMN? The same rule the field tree offers by, asked with the
@@ -1321,15 +1321,15 @@ inline bool ibRegisterViewColumnFits(const wxString& columnName, const wxString&
 // a chosen granularity has.
 template <typename TReg>
 inline bool ibRegisterFoldOffersColumn(const TReg* reg,
-	const wxString& columnName, const ibRegFold& fold)
+	const ibString& columnName, const ibRegFold& fold)
 {
 	if (reg == nullptr || reg->GetRegisterPeriod() == nullptr)
 		return true;
 
 	const bool subordinate = reg->HasRecorder();
 	return ibRegisterViewColumnFits(columnName, reg->GetRegisterPeriod()->GetName(), fold,
-		subordinate && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : wxString(),
-		subordinate && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : wxString());
+		subordinate && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : ibString(),
+		subordinate && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : ibString());
 }
 
 
@@ -1374,15 +1374,15 @@ inline ibMetaID ibRegDerivedColumnId(ibMetaID owner, unsigned int no = 0)
 // catalogue would not unfold it. Names and types in order is what a surface IS, and a mismatch is
 // what makes the cache rebuild instead of handing out something built before the register had been
 // read at all (which is how `Turnovers` once showed as period-only for a whole session).
-inline void ibRegSignAttribute(wxString& signature, const ibValueMetaObjectAttributeBase* attribute)
+inline void ibRegSignAttribute(ibString& signature, const ibValueMetaObjectAttributeBase* attribute)
 {
 	if (attribute == nullptr)
 		return;
-	signature += attribute->GetName() + wxT(":");
+	signature += attribute->GetName() + ibT(":");
 	const ibTypeDescription& type = attribute->GetTypeDesc();
 	for (unsigned int i = 0; i < type.GetClsidCount(); ++i)
-		signature += wxString::Format(wxT("%llu,"), static_cast<unsigned long long>(type.GetByIdx(i)));
-	signature += wxT(";");
+		signature += ibString::Format(ibT("%llu,"), static_cast<unsigned long long>(type.GetByIdx(i)));
+	signature += ibT(";");
 }
 
 // ⭐⭐ A DERIVED SURFACE, KEPT — the cache, the signature check and the retirement rule, once.
@@ -1398,8 +1398,8 @@ inline void ibRegSignAttribute(wxString& signature, const ibValueMetaObjectAttri
 class ibRegSurfaceCache
 {
 public:
-	const ibBackendQueryable* Obtain(const wxString& key, const wxString& builtFrom,
-	                                 const wxString& table, const ibMetaData* metaData,
+	const ibBackendQueryable* Obtain(const ibString& key, const ibString& builtFrom,
+	                                 const ibString& table, const ibMetaData* metaData,
 	                                 const std::function<void(std::vector<ibTempColumn>&)>& build) const
 	{
 		// ⭐ ONE REGISTER, EVERY SESSION OF THE BASE. The register is metadata, read by all the sessions of a
@@ -1440,12 +1440,12 @@ private:
 	struct Entry
 	{
 		std::unique_ptr<ibDbTempTableQueryable> m_surface;
-		wxString                                m_builtFrom;   // names + types, in order
+		ibString                                m_builtFrom;   // names + types, in order
 	};
 
 	// Mutable: a surface is DERIVED from metadata, so a const read may fill the cache without the
 	// register being logically modified.
-	mutable std::map<wxString, Entry>                            m_sources;
+	mutable std::map<ibString, Entry>                            m_sources;
 	mutable std::vector<std::unique_ptr<ibDbTempTableQueryable>> m_retired;
 	mutable std::mutex                                           m_mutex;   // both of the above
 };
@@ -1484,14 +1484,14 @@ private:
 // composes (a turnover's corresponding account is the credit account on one pass and the debit one on the
 // other). Such a column is not the attribute, and says so with an id of its own (ibRegDerivedColumnId).
 inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* attribute,
-                                         const wxString& published = wxString(), const wxString& publishedSynonym = wxString(),
+                                         const ibString& published = ibString(), const ibString& publishedSynonym = ibString(),
                                          ibMetaID columnId = 0)
 {
-	const wxString name    = published.IsEmpty() ? attribute->GetName() : published;
-	const wxString synonym = publishedSynonym.IsEmpty() ? attribute->GetSynonym() : publishedSynonym;
+	const ibString name    = published.IsEmpty() ? attribute->GetName() : published;
+	const ibString synonym = publishedSynonym.IsEmpty() ? attribute->GetSynonym() : publishedSynonym;
 	const ibMetaID id      = columnId != 0 ? columnId : attribute->GetMetaID();
 	// [0] is the _TYPE tag; anything past [1] means the value itself needs more than one field.
-	const std::vector<wxString> fields = ColumnFieldNames(attribute->GetQueryColumn());
+	const std::vector<ibString> fields = ColumnFieldNames(attribute->GetQueryColumn());
 	const bool spreads = fields.size() > 2;
 
 	// ⭐ THE TYPE A STORED COLUMN HOLDS, NOT THE ONE THE AUTHOR DECLARED (GetTypeValueDesc). They differ for
@@ -1503,10 +1503,10 @@ inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* a
 	return spreads
 		? ibTempColumn(name, attribute->GetPhysicalName(),
 		               stored, id, synonym,
-		               ibBackendQueryColumn::Kind::Composite, attribute->GetColumnIcon()).StandsFor(attribute)
+		               ibBackendQueryColumn::Kind::Composite, attribute->GetColumnPicture()).StandsFor(attribute)
 		: ibTempColumn(name, ibRegValueField(attribute),
 		               stored, id, synonym,
-		               ibBackendQueryColumn::Kind::Computed, attribute->GetColumnIcon()).StandsFor(attribute);
+		               ibBackendQueryColumn::Kind::Computed, attribute->GetColumnPicture()).StandsFor(attribute);
 }
 
 // ============================================================================
@@ -1540,7 +1540,7 @@ inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* a
 //
 // Two conditions for one fact is the defect; this returns the fact so there can only be one.
 inline bool ibRegSplitIntoKey(ibSchemaTable& t, const ibValueMetaObjectRegisterTotals* totals,
-                              const wxString& shardColumnName, bool split,
+                              const ibString& shardColumnName, bool split,
                               std::vector<const ibBackendQueryColumn*>& keyCols)
 {
 	if (!split || totals == nullptr)
@@ -1556,15 +1556,17 @@ inline bool ibRegSplitIntoKey(ibSchemaTable& t, const ibValueMetaObjectRegisterT
 // and the day one forgot, an inactive entry would show up in exactly one report.
 //
 // ⚠ IT IS AN EXPRESSION, AND IT HAS TO BE A BOOLEAN ONE. A "boolean" attribute is stored as a
-// SMALLINT, so `WHERE NEW.fld…_B` is a field where a condition is required — Firebird answers
-// "invalid usage of boolean expression" and the whole CREATE TRIGGER fails, taking the restructuring
-// that emitted it down with it. The cost is asymmetric: nothing READS wrong, the APPLY does not
-// finish. This was written twice and one copy shipped without the ` <> 0`.
+// SMALLINT on Firebird and SQLite, and as a real BOOLEAN on PostgreSQL. A bare `WHERE NEW.fld…_B`
+// is a field where a condition is required — Firebird answers "invalid usage of boolean expression"
+// and the whole CREATE TRIGGER fails. `<> 0` is that condition for a SMALLINT, and PostgreSQL
+// refuses it: boolean <> integer. CAST to INTEGER is the same test on every engine (a BOOLEAN
+// becomes 1 or 0, a SMALLINT stays a number). The cost is asymmetric: nothing READS wrong, the
+// APPLY does not finish.
 inline void ibRegGuardInForce(ibSchemaMaterialize& m, const ibValueMetaObjectAttributeBase* active)
 {
 	if (active == nullptr)
 		return;
-	m.Guard(wxT("{row}.") + ibRegValueField(active) + wxT(" <> 0"),
+	m.Guard(ibT("CAST({row}.") + ibRegValueField(active) + ibT(" AS INTEGER) <> 0"),
 		ibQueryPredicate::Leaf(ibQueryCondition{ active->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(true) }));
 }
 
@@ -1573,9 +1575,9 @@ inline void ibRegGuardInForce(ibSchemaMaterialize& m, const ibValueMetaObjectAtt
 // totals, whatever the movements held. The digits come from the DECLARATION; only the word
 // (NUMERIC / DECIMAL) is the dialect's. Three sites had this arithmetic, and one of them was wrong.
 //
-// The id is the caller's: the columns of one resource have to be told apart, and how (a high bit for
-// the second) is the caller's own arrangement.
-inline const ibBackendQueryColumn* ibRegAccumulatorColumn(ibSchemaTable& t, const wxString& name, ibMetaID id,
+// The id is the caller's: the columns of one resource have to be told apart — the first takes the
+// resource's metaID, the second a virtual column's (ibRegDerivedColumnId).
+inline const ibBackendQueryColumn* ibRegAccumulatorColumn(ibSchemaTable& t, const ibString& name, ibMetaID id,
                                                           const ibValueMetaObjectAttributeBase* resource)
 {
 	const ibTypeDescription& type = resource->GetTypeDesc();

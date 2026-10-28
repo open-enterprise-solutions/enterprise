@@ -1,0 +1,41 @@
+<!doctype html>
+<!--
+  THE PAGE OF A PUBLICATION - served at /<publication>/ from this folder, or from its pack (www.wpk) in a release
+  (webserver/webServer.h). The base is the address's first segment; its socket stands beside the page,
+  <publication>/client, and speaks the client protocol (docs/public/client-protocol.md). The page names its own files
+  relative to itself, so one site serves every publication:
+
+    src/main.js        the page: the login, then the window
+    src/protocol/      the socket, the session, the frame's patches, the pictures
+    src/window/        the client's window: menu, tabs, messages, questions
+    src/controls/      a form's controls, one file each, each its <oes-…> element
+    src/tablebox/      the table, over the grid in vendor/
+    src/gridbox/       the spreadsheet, drawn as a table
+    styles/            the palette, the window, the form - and the form folded for a narrow screen
+    vendor/            what the page is built on, each at its version, with its licence:
+                       Web Awesome (the standard controls), Tabulator (the grid)
+
+  No build: the browser loads these modules as they are.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OES</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="vendor/webawesome/3.14.0/styles/webawesome.css">
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/window.css">
+<link rel="stylesheet" href="styles/form.css">
+<script type="importmap">
+{ "imports": { "tabulator": "./vendor/tabulator/6.6.1/tabulator_esm.min.mjs" } }
+</script>
+<!-- data-webawesome: where its components load from, resolved against the page's address - named from the script's
+     own src it would be taken relative to its chunks, and every component would miss. -->
+<script type="module" src="vendor/webawesome/3.14.0/webawesome.loader.js" data-webawesome="vendor/webawesome/3.14.0"></script>
+<script type="module" src="src/main.js"></script>
+</head>
+<body>
+<div id="client"></div>
+</body>
+</html>

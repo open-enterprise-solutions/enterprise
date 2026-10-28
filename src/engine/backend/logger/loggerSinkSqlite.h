@@ -17,7 +17,7 @@ class ibDatabaseLayerSQLite;
 // (admin viewer running while writer thread appends).
 class BACKEND_API ibLoggerSinkSqlite : public ibLoggerSink {
 public:
-    explicit ibLoggerSinkSqlite(const wxString& dir);
+    explicit ibLoggerSinkSqlite(const ibString& dir);
     ~ibLoggerSinkSqlite() override;
 
     void WriteBatch(const std::vector<ibLogEntry>& batch) override;
@@ -27,9 +27,9 @@ private:
     bool     EnsureOpenForMonth(int year, int month);
     void     CloseCurrent();
     bool     EnsureSchema();
-    wxString BuildPath(int year, int month) const;
+    ibString BuildPath(int year, int month) const;
 
-    wxString m_dir;
+    ibString m_dir;
     int      m_currentYear  = 0;
     int      m_currentMonth = 0;
     std::shared_ptr<ibDatabaseLayerSQLite> m_db;

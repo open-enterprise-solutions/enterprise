@@ -7,7 +7,7 @@ void ibValueCheckbox::OnPropertyCreated(ibProperty* property)
 	//}
 }
 
-bool ibValueCheckbox::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueCheckbox::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	//if (m_propertySource == property && !ibValueCheckbox::LoadFromVariant(newValue))
 	//	return false;

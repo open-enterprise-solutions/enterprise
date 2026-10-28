@@ -35,7 +35,7 @@ long ibValueTabularSectionDataObjectBase::DisplayNumberOf(const ibDataViewItem& 
 	return 0;   // filtered out — shown nowhere, so numbered nowhere
 }
 
-void ibValueTabularSectionDataObjectBase::GetValueByRow(wxVariant& variant,
+void ibValueTabularSectionDataObjectBase::GetValueByRow(ibVariant& variant,
 	const ibDataViewItem& row, unsigned int col) const
 {
 	ibComposerNode* node = GetViewData<ibComposerNode>(row);
@@ -55,7 +55,7 @@ void ibValueTabularSectionDataObjectBase::GetValueByRow(wxVariant& variant,
 		const long number = DisplayNumberOf(row);
 		if (number <= 0)
 			return;   // nothing to number — leave the cell empty
-		variant = new ibVariantDataValueNumberLine(number);
+		variant = static_cast<signed int>(number);
 	}
 	else if (node->HasColumnValue(col))
 		node->GetValue(col, variant);
@@ -63,7 +63,7 @@ void ibValueTabularSectionDataObjectBase::GetValueByRow(wxVariant& variant,
 
 #include "backend/metaData.h"
 
-bool ibValueTabularSectionDataObjectBase::SetValueByRow(const wxVariant& variant,
+bool ibValueTabularSectionDataObjectBase::SetValueByRow(const ibVariant& variant,
 	const ibDataViewItem& row, unsigned int col)
 {
 	ibComposerNode* node = GetViewData<ibComposerNode>(row);
@@ -77,7 +77,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByRow(const wxVariant& variant
 		
 		if (hasCol) {
 
-			const wxString& strData = variant.GetString();
+			const ibString& strData = variant.GetString();
 
 			const ibValue& selValue = node->GetTableValue(col);
 			const ibValue& newValue = metaData->CreateObject(selValue.GetClassType());

@@ -13,6 +13,15 @@ enum ibRepresentation {
 	ibRepresentation_PictureAndText
 };
 
+// Where a notebook's tabs are (its OrientPage) - none: the notebook is a panel, the active page alone. The numbers are
+// the ones a saved form holds (Top and Bottom were wx's flags) and the ones the client reads
+// (ibProtocol::ibForm::ibNotebook::ibTabLocation).
+enum ibTabLocation {
+	ibTabLocation_None = 0,
+	ibTabLocation_Top = 1,
+	ibTabLocation_Bottom = 8
+};
+
 #include "frmserver/frmserver.h"
 
 #pragma region enumeration
@@ -22,8 +31,8 @@ class FRMSERVER_API ibValueEnumOrient :
 	public:
 	ibValueEnumOrient() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxHORIZONTAL, wxT("Horizontal"), _("Horizontal"));
-		AddEnumeration(wxVERTICAL, wxT("Vertical"), _("Vertical"));
+		AddEnumeration(wxHORIZONTAL, ibT("Horizontal"), _("Horizontal"));
+		AddEnumeration(wxVERTICAL, ibT("Vertical"), _("Vertical"));
 	}
 private:
 };
@@ -33,21 +42,20 @@ class FRMSERVER_API ibValueEnumStretch :
 	public:
 	ibValueEnumStretch() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxStretch::wxSHRINK, wxT("Shrink"), wxGETTEXT_IN_CONTEXT("sizer flag", "Shrink"));
-		AddEnumeration(wxStretch::wxEXPAND, wxT("Expand"), wxGETTEXT_IN_CONTEXT("sizer flag", "Expand"));
+		AddEnumeration(wxStretch::wxSHRINK, ibT("Shrink"), ibGETTEXT_IN_CONTEXT("sizer flag", "Shrink"));
+		AddEnumeration(wxStretch::wxEXPAND, ibT("Expand"), ibGETTEXT_IN_CONTEXT("sizer flag", "Expand"));
 	}
 private:
 };
 
-#include <wx/aui/auibook.h>
-
 class FRMSERVER_API ibValueEnumOrientNotebookPage :
-	public ibValueEnumeration<wxAuiNotebookOption> {
+	public ibValueEnumeration<ibTabLocation> {
 	public:
 	ibValueEnumOrientNotebookPage() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxAuiNotebookOption::wxAUI_NB_TOP, wxT("Top"), _("Top"));
-		AddEnumeration(wxAuiNotebookOption::wxAUI_NB_BOTTOM, wxT("Bottom"), _("Bottom"));
+		AddEnumeration(ibTabLocation::ibTabLocation_Top, ibT("Top"), _("Top"));
+		AddEnumeration(ibTabLocation::ibTabLocation_Bottom, ibT("Bottom"), _("Bottom"));
+		AddEnumeration(ibTabLocation::ibTabLocation_None, ibT("None"), _("None"));
 	}
 private:
 };
@@ -57,9 +65,9 @@ class FRMSERVER_API ibValueEnumHorizontalAlignment :
 	public:
 	ibValueEnumHorizontalAlignment() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxAlignment::wxALIGN_LEFT, wxT("Left"), _("Left"));
-		AddEnumeration(wxAlignment::wxALIGN_CENTER, wxT("Center"), _("Center"));
-		AddEnumeration(wxAlignment::wxALIGN_RIGHT, wxT("Right"), _("Right"));
+		AddEnumeration(wxAlignment::wxALIGN_LEFT, ibT("Left"), _("Left"));
+		AddEnumeration(wxAlignment::wxALIGN_CENTER, ibT("Center"), _("Center"));
+		AddEnumeration(wxAlignment::wxALIGN_RIGHT, ibT("Right"), _("Right"));
 	}
 private:
 };
@@ -69,9 +77,9 @@ class FRMSERVER_API ibValueEnumVerticalAlignment :
 	public:
 	ibValueEnumVerticalAlignment() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxAlignment::wxALIGN_TOP, wxT("Top"), _("Top"));
-		AddEnumeration(wxAlignment::wxALIGN_CENTER, wxT("Center"), _("Center"));
-		AddEnumeration(wxAlignment::wxALIGN_BOTTOM, wxT("Bottom"), _("Bottom"));
+		AddEnumeration(wxAlignment::wxALIGN_TOP, ibT("Top"), _("Top"));
+		AddEnumeration(wxAlignment::wxALIGN_CENTER, ibT("Center"), _("Center"));
+		AddEnumeration(wxAlignment::wxALIGN_BOTTOM, ibT("Bottom"), _("Bottom"));
 	}
 private:
 };
@@ -81,8 +89,8 @@ class FRMSERVER_API ibValueEnumTitleLocation :
 	public:
 	ibValueEnumTitleLocation() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibTitleLocation::eLeft, wxT("Left"), _("Left"));
-		AddEnumeration(ibTitleLocation::eRight, wxT("Right"), _("Right"));
+		AddEnumeration(ibTitleLocation::eLeft, ibT("Left"), _("Left"));
+		AddEnumeration(ibTitleLocation::eRight, ibT("Right"), _("Right"));
 	}
 private:
 };
@@ -92,10 +100,10 @@ class FRMSERVER_API ibValueEnumRepresentation :
 	public:
 	ibValueEnumRepresentation() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibRepresentation::ibRepresentation_Auto, wxT("Auto"), _("Auto"));
-		AddEnumeration(ibRepresentation::ibRepresentation_Text, wxT("Text"), _("Text"));
-		AddEnumeration(ibRepresentation::ibRepresentation_Picture, wxT("Picture"), _("Picture"));
-		AddEnumeration(ibRepresentation::ibRepresentation_PictureAndText, wxT("PictureAndText"), _("Picture and text"));
+		AddEnumeration(ibRepresentation::ibRepresentation_Auto, ibT("Auto"), _("Auto"));
+		AddEnumeration(ibRepresentation::ibRepresentation_Text, ibT("Text"), _("Text"));
+		AddEnumeration(ibRepresentation::ibRepresentation_Picture, ibT("Picture"), _("Picture"));
+		AddEnumeration(ibRepresentation::ibRepresentation_PictureAndText, ibT("PictureAndText"), _("Picture and text"));
 	}
 private:
 };

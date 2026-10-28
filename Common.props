@@ -146,10 +146,14 @@
         4245 : signed/unsigned conversion             (same)
       -->
       <DisableSpecificWarnings>4251;4275;4458;4100;4127;4018;4389;4245</DisableSpecificWarnings>
+      <!-- 4172 : returning address of local variable or temporary - an error, see CMakeLists.txt (/we4172) -->
+      <TreatSpecificWarningsAsErrors>4172</TreatSpecificWarningsAsErrors>
       <!--
         LUABIND_DYNAMIC_LINK : self-explanatory
         MSVC;dSINGLE;WIN32 : for ODE
         _SECURE_SCL=0;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE : temporary workaround for deprecated API
+        _SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING : C++20 deprecates atomic_load/store over
+          shared_ptr for std::atomic<std::shared_ptr>, which Apple Clang's libc++ does not have yet
       -->
       <PreprocessorDefinitions>
         LUABIND_DYNAMIC_LINK;
@@ -160,6 +164,7 @@
         _CRT_SECURE_NO_WARNINGS;
 	_CRT_SECURE_NO_DEPRECATE;
 	USE_TBB_PARALLEL;
+        _SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING;
         %(PreprocessorDefinitions)
       </PreprocessorDefinitions>
       <FloatingPointModel>Fast</FloatingPointModel>

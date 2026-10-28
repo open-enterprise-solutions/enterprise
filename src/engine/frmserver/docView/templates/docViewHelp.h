@@ -16,6 +16,8 @@ public:
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnDraw(ibDataNode& frame) override;
 
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Text; }
+
 private:
 
 	bool m_readOnly = false;
@@ -35,20 +37,28 @@ class FRMSERVER_API ibHelpDocument : public ibDocument
 {
 public:
 
-	virtual ibServerPicture GetIcon() const {
-		return ibBackendPicture::GetServerPicture(g_metaCommonModuleCLSID);
+	virtual ibPictureDescription GetIcon() const {
+		return ibPictureDescription(g_metaCommonModuleCLSID);
 	}
 
 	ibHelpDocument() : ibDocument() {}
 
 	// The text — the document's own: it is what the desktop's editor held.
-	const wxString& GetText() const { return m_text; }
+	const ibString& GetText() const { return m_text; }
+	// …changed: modified, when it is another text.
+	void SetText(const ibString& text) {
+		if (text == m_text)
+			return;
+		m_text = text;
+		Modify(true);
+	}
 
 protected:
 
-	wxString m_text;
+	ibString m_text;
 
-	wxDECLARE_NO_COPY_CLASS(ibHelpDocument);
+	ibHelpDocument(const ibHelpDocument&) = delete;
+	ibHelpDocument& operator=(const ibHelpDocument&) = delete;
 	wxDECLARE_ABSTRACT_CLASS(ibHelpDocument);
 };
 
@@ -62,7 +72,7 @@ public:
 
 	ibHelpFileDocument() : ibHelpDocument() {}
 
-	virtual bool OnCreate(const wxString& path, long flags) override;
+	virtual bool OnCreate(const ibString& path, long flags) override;
 	virtual bool OnNewDocument() override {
 
 		// notice that there is no need to either reset nor even check the
@@ -74,7 +84,7 @@ public:
 
 		SetDocumentSaved(false);
 
-		const wxString name = GetDocumentManager()->MakeNewDocumentName();
+		const ibString name = GetDocumentManager()->MakeNewDocumentName();
 
 		SetTitle(name);
 		SetFilename(name, true);
@@ -85,10 +95,11 @@ public:
 
 protected:
 
-	virtual bool DoSaveDocument(const wxString& filename) override;
-	virtual bool DoOpenDocument(const wxString& filename) override;
+	virtual bool DoSaveDocument(const ibString& filename) override;
+	virtual bool DoOpenDocument(const ibString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibHelpFileDocument);
+	ibHelpFileDocument(const ibHelpFileDocument&) = delete;
+	ibHelpFileDocument& operator=(const ibHelpFileDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibHelpFileDocument);
 };
 

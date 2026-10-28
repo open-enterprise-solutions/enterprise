@@ -3,11 +3,11 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode — an event's arguments
 #include "backend/appData.h"
 
-bool ibValueNotebook::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibValueNotebook::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	switch (event) {
-	case ibProtocolEvent::Page: OnPageChanged((ibFormID)args.GetValue<s32>(wxT("Page"))); return true;
-	case ibProtocolEvent::Move: OnEndDrag((unsigned int)args.GetValue<s32>(wxT("Position"))); return true;
+	case ibProtocol::ibEvent::ibKind::Page: OnPageChanged((ibFormID)args.GetValue<std::int32_t>(ibProtocol::ibEvent::Page)); return true;
+	case ibProtocol::ibEvent::ibKind::Move: OnEndDrag((unsigned int)args.GetValue<std::int32_t>(ibProtocol::ibEvent::Position)); return true;
 	default:                  return ibValueWindow::OnClientEvent(event, args);
 	}
 }

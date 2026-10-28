@@ -20,9 +20,9 @@ void ibValueStaticBoxSizer::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// Orientation, size, font, colours and the tooltip are the schema's: the client reads them off the
 	// properties as saved. The caption is resolved here into the user's language; a frame the functional
 	// options of this base make unavailable is not shown, whatever its own Visible says.
-	state.SetValue(wxT("Title"), m_propertyTitle->GetValueAsTranslateString());
-	state.SetValue(wxT("Enabled"), m_propertyEnabled->GetValueAsBoolean());
-	state.SetValue(wxT("Visible"), m_propertyVisible->GetValueAsBoolean() && IsAvailable());
+	state.SetValue(ibProtocol::ibForm::ibState::Title, m_propertyTitle->GetValueAsTranslateString());
+	state.SetValue(ibProtocol::ibForm::ibState::Enabled, m_propertyEnabled->GetValueAsBoolean());
+	state.SetValue(ibProtocol::ibForm::ibState::Visible, m_propertyVisible->GetValueAsBoolean() && IsAvailable());
 }
 
 //**********************************************************************************

@@ -36,7 +36,7 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeStart()
 		ibValue bCancel = false;
 		std::lock_guard<std::mutex> lock(m_runtimeMutex);
 		if (auto pu = GetProcUnit())
-			pu->CallAsProc(wxT("beforeStart"), bCancel);
+			pu->CallAsProc(ibT("beforeStart"), bCancel);
 		return !bCancel.GetBoolean();
 	}
 	catch (const ibBackendInterruptException&) {
@@ -46,15 +46,15 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeStart()
 		return false;
 	}
 	catch (const ibCoreException& err) {
-		ibJournalWarning(wxT("module.event"),_("BeforeStart: %s"), err.GetErrorDescription());
+		ibJournalWarning(ibT("module.event"),_("BeforeStart: %s"), err.GetErrorDescription());
 		return false;
 	}
 	catch (const std::exception& err) {
-		ibJournalWarning(wxT("module.event"),wxT("BeforeStart: %s"), err.what());
+		ibJournalWarning(ibT("module.event"),ibT("BeforeStart: %s"), err.what());
 		return false;
 	}
 	catch (...) {
-		ibJournalWarning(wxT("module.event"),wxT("BeforeStart: unknown exception"));
+		ibJournalWarning(ibT("module.event"),ibT("BeforeStart: unknown exception"));
 		return false;
 	}
 }
@@ -67,20 +67,20 @@ void ibValueModuleManagerRuntimeConfiguration::OnStart()
 	try {
 		std::lock_guard<std::mutex> lock(m_runtimeMutex);
 		if (auto pu = GetProcUnit()) {
-			pu->CallAsProc(wxT("onStart"));
+			pu->CallAsProc(ibT("onStart"));
 		}
 	}
 	catch (const ibBackendInterruptException&) {
 		// Stopped, not failed — as BeforeStart.
 	}
 	catch (const ibCoreException& err) {
-		ibJournalWarning(wxT("module.event"), _("OnStart: %s"), err.GetErrorDescription());
+		ibJournalWarning(ibT("module.event"), _("OnStart: %s"), err.GetErrorDescription());
 	}
 	catch (const std::exception& err) {
-		ibJournalWarning(wxT("module.event"), wxT("OnStart: %s"), err.what());
+		ibJournalWarning(ibT("module.event"), ibT("OnStart: %s"), err.what());
 	}
 	catch (...) {
-		ibJournalWarning(wxT("module.event"), wxT("OnStart: unknown exception"));
+		ibJournalWarning(ibT("module.event"), ibT("OnStart: unknown exception"));
 	}
 }
 
@@ -93,7 +93,7 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeExit()
 		ibValue bCancel = false;
 		std::lock_guard<std::mutex> lock(m_runtimeMutex);
 		if (auto pu = GetProcUnit()) {
-			pu->CallAsProc(wxT("beforeExit"), bCancel);
+			pu->CallAsProc(ibT("beforeExit"), bCancel);
 		}
 		return !bCancel.GetBoolean();
 	}
@@ -102,15 +102,15 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeExit()
 		return false;
 	}
 	catch (const ibCoreException& err) {
-		ibJournalWarning(wxT("module.event"), _("BeforeExit: %s"), err.GetErrorDescription());
+		ibJournalWarning(ibT("module.event"), _("BeforeExit: %s"), err.GetErrorDescription());
 		return false;
 	}
 	catch (const std::exception& err) {
-		ibJournalWarning(wxT("module.event"), wxT("BeforeExit: %s"), err.what());
+		ibJournalWarning(ibT("module.event"), ibT("BeforeExit: %s"), err.what());
 		return false;
 	}
 	catch (...) {
-		ibJournalWarning(wxT("module.event"), wxT("BeforeExit: unknown exception"));
+		ibJournalWarning(ibT("module.event"), ibT("BeforeExit: unknown exception"));
 		return false;
 	}
 }
@@ -123,19 +123,19 @@ void ibValueModuleManagerRuntimeConfiguration::OnExit()
 	try {
 		std::lock_guard<std::mutex> lock(m_runtimeMutex);
 		if (auto pu = GetProcUnit()) {
-			pu->CallAsProc(wxT("onExit"));
+			pu->CallAsProc(ibT("onExit"));
 		}
 	}
 	catch (const ibBackendInterruptException&) {
 		// Stopped, not failed — as BeforeStart.
 	}
 	catch (const ibCoreException& err) {
-		ibJournalWarning(wxT("module.event"), _("OnExit: %s"), err.GetErrorDescription());
+		ibJournalWarning(ibT("module.event"), _("OnExit: %s"), err.GetErrorDescription());
 	}
 	catch (const std::exception& err) {
-		ibJournalWarning(wxT("module.event"), wxT("OnExit: %s"), err.what());
+		ibJournalWarning(ibT("module.event"), ibT("OnExit: %s"), err.what());
 	}
 	catch (...) {
-		ibJournalWarning(wxT("module.event"), wxT("OnExit: unknown exception"));
+		ibJournalWarning(ibT("module.event"), ibT("OnExit: unknown exception"));
 	}
 }

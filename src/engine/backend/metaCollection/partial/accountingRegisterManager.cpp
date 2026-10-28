@@ -44,26 +44,26 @@ void ibValueManagerDataObjectAccountingRegister::FillManagerMethods(ibMemberTabl
 		return static_cast<long>(ibAcctArgs::For(shape, correspondence).m_count);
 	};
 
-	helper.AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
-	helper.AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
-	helper.AppendFunc(wxT("Balance"), arity(ibAcctShape::Balance), correspondence
-		? wxT("Balance(period, accountDr, accountCr, accountDimensions, condition)")
-		: wxT("Balance(period, account, accountDimensions, condition)"));
-	helper.AppendFunc(wxT("Turnovers"), arity(ibAcctShape::Turnovers), correspondence
-		? wxT("Turnovers(beginOfPeriod, endOfPeriod, accountDr, accountCr, accountDimensions, condition, periodicity)")
-		: wxT("Turnovers(beginOfPeriod, endOfPeriod, account, accountDimensions, condition, periodicity)"));
-	helper.AppendFunc(wxT("DrCrTurnovers"), arity(ibAcctShape::DrCrTurnovers),
-		wxT("DrCrTurnovers(beginOfPeriod, endOfPeriod, accountDr, accountCr, accountDimensionsDr, accountDimensionsCr, condition)"));
-	helper.AppendFunc(wxT("BalanceAndTurnovers"), arity(ibAcctShape::BalanceAndTurnovers), correspondence
-		? wxT("BalanceAndTurnovers(beginOfPeriod, endOfPeriod, accountDr, accountCr, accountDimensions, condition, periodicity)")
-		: wxT("BalanceAndTurnovers(beginOfPeriod, endOfPeriod, account, accountDimensions, condition, periodicity)"));
-	helper.AppendFunc(wxT("RecordsWithAccountDimensions"), arity(ibAcctShape::Records), correspondence
-		? wxT("RecordsWithAccountDimensions(beginOfPeriod, endOfPeriod, accountDimensionsDr, accountDimensionsCr, condition)")
-		: wxT("RecordsWithAccountDimensions(beginOfPeriod, endOfPeriod, accountDimensions, condition)"));
-	helper.AppendFunc(wxT("Select"), wxT("Select()"));
-	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
-	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(string)"));
+	helper.AppendFunc(ibT("CreateRecordSet"), ibT("CreateRecordSet()"));
+	helper.AppendFunc(ibT("CreateRecordKey"), ibT("CreateRecordKey()"));
+	helper.AppendFunc(ibT("Balance"), arity(ibAcctShape::Balance), correspondence
+		? ibT("Balance(period, accountDr, accountCr, accountDimensions, condition)")
+		: ibT("Balance(period, account, accountDimensions, condition)"));
+	helper.AppendFunc(ibT("Turnovers"), arity(ibAcctShape::Turnovers), correspondence
+		? ibT("Turnovers(beginOfPeriod, endOfPeriod, accountDr, accountCr, accountDimensions, condition, periodicity)")
+		: ibT("Turnovers(beginOfPeriod, endOfPeriod, account, accountDimensions, condition, periodicity)"));
+	helper.AppendFunc(ibT("DrCrTurnovers"), arity(ibAcctShape::DrCrTurnovers),
+		ibT("DrCrTurnovers(beginOfPeriod, endOfPeriod, accountDr, accountCr, accountDimensionsDr, accountDimensionsCr, condition)"));
+	helper.AppendFunc(ibT("BalanceAndTurnovers"), arity(ibAcctShape::BalanceAndTurnovers), correspondence
+		? ibT("BalanceAndTurnovers(beginOfPeriod, endOfPeriod, accountDr, accountCr, accountDimensions, condition, periodicity)")
+		: ibT("BalanceAndTurnovers(beginOfPeriod, endOfPeriod, account, accountDimensions, condition, periodicity)"));
+	helper.AppendFunc(ibT("RecordsWithAccountDimensions"), arity(ibAcctShape::Records), correspondence
+		? ibT("RecordsWithAccountDimensions(beginOfPeriod, endOfPeriod, accountDimensionsDr, accountDimensionsCr, condition)")
+		: ibT("RecordsWithAccountDimensions(beginOfPeriod, endOfPeriod, accountDimensions, condition)"));
+	helper.AppendFunc(ibT("Select"), ibT("Select()"));
+	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(string, owner, guid)"));
+	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(string, owner, guid)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(string)"));
 }
 
 #include "selector/objectSelector.h"

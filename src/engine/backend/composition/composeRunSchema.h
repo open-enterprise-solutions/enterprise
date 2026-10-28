@@ -23,9 +23,9 @@
 
 // THE REQUEST'S FIELDS, declared once because two processes read them. A name that drifts here is a
 // field that silently stops arriving - which is not a compile error anywhere.
-constexpr const wxChar* kComposeSchema     = wxT("schema");
-constexpr const wxChar* kComposeSettings   = wxT("settings");
-constexpr const wxChar* kComposeParameters = wxT("parameters");
+constexpr const ibChar* kComposeSchema     = ibT("schema");
+constexpr const ibChar* kComposeSettings   = ibT("settings");
+constexpr const ibChar* kComposeParameters = ibT("parameters");
 
 class BACKEND_API ibComposeRunSchema {
 public:
@@ -35,7 +35,7 @@ public:
 	//
 	// ⚠ A refusal is words for whoever asked. This layer knows why a compose produced nothing (a
 	// parameter nobody set, a source that is not there); a caller across a socket cannot work it out.
-	static bool Run(const ibDataNode& request, ibDataNode& result, wxString& refusal);
+	static bool Run(const ibDataNode& request, ibDataNode& result, ibString& refusal);
 };
 
 #endif

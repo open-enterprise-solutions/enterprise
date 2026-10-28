@@ -1,21 +1,6 @@
 #ifndef __FIREBIRD_PARAMETER_H__
 #define __FIREBIRD_PARAMETER_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/datetime.h>
-
-
-
 #include "backend/databaseLayer/databaseStringConverter.h"
 #include "firebirdInterface.h"
 
@@ -89,7 +74,7 @@ private:
 
 	ISC_TIMESTAMP m_Date;
 	bool m_bValue;
-	wxMemoryBuffer m_BufferValue;
+	ibMemoryBuffer m_BufferValue;
 	long unsigned int m_nBufferLength;
 	short m_nNullFlag;
 	ISC_QUAD m_BlobId;
