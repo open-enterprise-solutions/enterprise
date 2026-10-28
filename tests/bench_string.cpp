@@ -92,11 +92,13 @@ TEST(IbStringBench, DISABLED_Compare) {
         const double wx  = TimeNsPerOp(N, [&](int){ wxString     s(kLong); g_sink += s.length(); });
         const double stl = TimeNsPerOp(N, [&](int){ std::wstring s(kLong); g_sink += s.size(); });
         Row("ctor+dtor (heap)", ib, wx, stl);
-        // The same characters as an ibT literal — the engine's road. The row above is the road from wx: where
-        // wchar_t is four bytes its text is narrowed to UTF-16 on the way in.
+        // The same characters as an ibT literal — the engine's road — against std::u16string from the same
+        // literal: one character width on both sides, so the row is the copy and the allocator alone. The row
+        // above is the road from wx: where wchar_t is four bytes its text is narrowed to UTF-16 on the way in.
         const ibChar kLongIb[] = ibT("the quick brown fox jumps over the lazy dog 0123456789");
-        const double lit = TimeNsPerOp(N, [&](int){ ibString s(kLongIb); g_sink += s.Len(); });
-        Row("ctor+dtor (heap,ibT)", lit, wx, stl);
+        const double lit = TimeNsPerOp(N, [&](int){ ibString       s(kLongIb); g_sink += s.Len(); });
+        const double u16 = TimeNsPerOp(N, [&](int){ std::u16string s(kLongIb); g_sink += s.size(); });
+        Row("ctor+dtor (heap,ibT)", lit, wx, u16);
     }
     // 2) construct + destruct a short string — 4 wchar: std::wstring keeps it inside itself (SSO), ibString takes a
     //    block of the pool
@@ -107,8 +109,9 @@ TEST(IbStringBench, DISABLED_Compare) {
         const double stl = TimeNsPerOp(N, [&](int){ std::wstring s(kShort); g_sink += s.size(); });
         Row("ctor+dtor (short)", ib, wx, stl);
         const ibChar kShortIb[] = ibT("Name");
-        const double lit = TimeNsPerOp(N, [&](int){ ibString s(kShortIb); g_sink += s.Len(); });
-        Row("ctor+dtor(short,ibT)", lit, wx, stl);
+        const double lit = TimeNsPerOp(N, [&](int){ ibString       s(kShortIb); g_sink += s.Len(); });
+        const double u16 = TimeNsPerOp(N, [&](int){ std::u16string s(kShortIb); g_sink += s.size(); });
+        Row("ctor+dtor(short,ibT)", lit, wx, u16);
     }
     // 3) copy a heap string
     {
