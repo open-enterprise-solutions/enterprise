@@ -226,9 +226,9 @@ ibString FormatMonthDays(std::uint32_t mask)
 
 ibString ibJobScheduleRules::Describe(const ibJobScheduleDescription& self)
 {
-	// A validity bound is a day: printed the way a script's Format(date, "DF=dd.mm.yyyy") prints one.
+	// A validity bound is a day: printed the way a script's Format(date, "DF=dd.MM.yyyy") prints one.
 	ibFormatString asDay;
-	asDay.m_date.m_pattern = ibT("dd.mm.yyyy");
+	asDay.m_date.m_pattern = ibT("dd.MM.yyyy");
 
 	ibString out = FormatInterval(self.m_intervalSeconds);
 

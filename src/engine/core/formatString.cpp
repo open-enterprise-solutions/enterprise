@@ -4,9 +4,9 @@
 
 #include "core/formatString.h"
 #include "core/variant.h"   // ibVariant — what Apply asks of a value
-
-#include <algorithm>   // std::max / std::min — the spelling of a date letter
 #include <cwchar>      // std::wcstol — a code's number read
+
+#include <algorithm>   // std::max / std::min — a month and a weekday kept to their names
 
 namespace {
 
@@ -28,6 +28,9 @@ const ibFormatCodeInfo s_codes[] = {
 	{ ibFormatCode::DateEmpty,              ibT("DE"),  ibFormatKind::Date    },
 	{ ibFormatCode::BooleanTrue,            ibT("BT"),  ibFormatKind::Boolean },
 	{ ibFormatCode::BooleanFalse,           ibT("BF"),  ibFormatKind::Boolean },
+	{ ibFormatCode::NumberLeadingZero,      ibT("NLZ"), ibFormatKind::Number  },
+	{ ibFormatCode::DateLocalFormat,        ibT("DLF"), ibFormatKind::Date    },
+	{ ibFormatCode::Language,               ibT("L"),   ibFormatKind::Date    },
 };
 
 struct ibDatePresetInfo {
@@ -36,13 +39,13 @@ struct ibDatePresetInfo {
 };
 
 const ibDatePresetInfo s_presets[] = {
-	{ ibDatePreset::Date,         ibT("dd.mm.yyyy")          },
-	{ ibDatePreset::DateTime,     ibT("dd.mm.yyyy HH:MM:SS") },
-	{ ibDatePreset::Time,         ibT("HH:MM:SS")            },
-	{ ibDatePreset::HoursMinutes, ibT("HH:MM")               },
-	{ ibDatePreset::MonthYear,    ibT("mm.yyyy")             },
+	{ ibDatePreset::Date,         ibT("dd.MM.yyyy")          },
+	{ ibDatePreset::DateTime,     ibT("dd.MM.yyyy HH:mm:ss") },
+	{ ibDatePreset::Time,         ibT("HH:mm:ss")            },
+	{ ibDatePreset::HoursMinutes, ibT("HH:mm")               },
+	{ ibDatePreset::MonthYear,    ibT("MM.yyyy")             },
 	{ ibDatePreset::Year,         ibT("yyyy")                },
-	{ ibDatePreset::Sortable,     ibT("yyyy-mm-dd")          },
+	{ ibDatePreset::Sortable,     ibT("yyyy-MM-dd")          },
 };
 
 std::optional<ibChar> FirstChar(const ibString& value)
@@ -58,19 +61,59 @@ int FirstNumber(const ibString& value)
 	return static_cast<int>(std::wcstol(value.wc_str(), nullptr, 10));
 }
 
-// The letters of a date pattern: year, month, day, hours, minutes, seconds. ⚠ `mm` IS THE MONTH and `MM`
-// the minutes.
-int DateLetter(ibChar c)
+// The names a pattern spells out (MMMM, MMM, dddd, ddd), per language. Non-ASCII text is escaped so the
+// source stays ASCII. MMMM after a day is the genitive in ru/uk ("13 октября"), on its own the nominative.
+struct ibDateNames {
+	const ibChar* const* m_month;        // nominative
+	const ibChar* const* m_monthOf;      // genitive
+	const ibChar* const* m_monthShort;
+	const ibChar* const* m_day;
+	const ibChar* const* m_dayShort;
+	const ibChar*        m_yearSuffix;   // after the year of a long date
+};
+const ibChar* const s_enMonth[] = { ibT("January"), ibT("February"), ibT("March"), ibT("April"), ibT("May"), ibT("June"), ibT("July"), ibT("August"), ibT("September"), ibT("October"), ibT("November"), ibT("December") };
+const ibChar* const s_enMonthShort[] = { ibT("Jan"), ibT("Feb"), ibT("Mar"), ibT("Apr"), ibT("May"), ibT("Jun"), ibT("Jul"), ibT("Aug"), ibT("Sep"), ibT("Oct"), ibT("Nov"), ibT("Dec") };
+const ibChar* const s_enDay[] = { ibT("Monday"), ibT("Tuesday"), ibT("Wednesday"), ibT("Thursday"), ibT("Friday"), ibT("Saturday"), ibT("Sunday") };
+const ibChar* const s_enDayShort[] = { ibT("Mon"), ibT("Tue"), ibT("Wed"), ibT("Thu"), ibT("Fri"), ibT("Sat"), ibT("Sun") };
+const ibChar* const s_ruMonth[] = { ibT("\u044F\u043D\u0432\u0430\u0440\u044C"), ibT("\u0444\u0435\u0432\u0440\u0430\u043B\u044C"), ibT("\u043C\u0430\u0440\u0442"), ibT("\u0430\u043F\u0440\u0435\u043B\u044C"), ibT("\u043C\u0430\u0439"), ibT("\u0438\u044E\u043D\u044C"), ibT("\u0438\u044E\u043B\u044C"), ibT("\u0430\u0432\u0433\u0443\u0441\u0442"), ibT("\u0441\u0435\u043D\u0442\u044F\u0431\u0440\u044C"), ibT("\u043E\u043A\u0442\u044F\u0431\u0440\u044C"), ibT("\u043D\u043E\u044F\u0431\u0440\u044C"), ibT("\u0434\u0435\u043A\u0430\u0431\u0440\u044C") };
+const ibChar* const s_ruMonthOf[] = { ibT("\u044F\u043D\u0432\u0430\u0440\u044F"), ibT("\u0444\u0435\u0432\u0440\u0430\u043B\u044F"), ibT("\u043C\u0430\u0440\u0442\u0430"), ibT("\u0430\u043F\u0440\u0435\u043B\u044F"), ibT("\u043C\u0430\u044F"), ibT("\u0438\u044E\u043D\u044F"), ibT("\u0438\u044E\u043B\u044F"), ibT("\u0430\u0432\u0433\u0443\u0441\u0442\u0430"), ibT("\u0441\u0435\u043D\u0442\u044F\u0431\u0440\u044F"), ibT("\u043E\u043A\u0442\u044F\u0431\u0440\u044F"), ibT("\u043D\u043E\u044F\u0431\u0440\u044F"), ibT("\u0434\u0435\u043A\u0430\u0431\u0440\u044F") };
+const ibChar* const s_ruMonthShort[] = { ibT("\u044F\u043D\u0432"), ibT("\u0444\u0435\u0432"), ibT("\u043C\u0430\u0440"), ibT("\u0430\u043F\u0440"), ibT("\u043C\u0430\u044F"), ibT("\u0438\u044E\u043D"), ibT("\u0438\u044E\u043B"), ibT("\u0430\u0432\u0433"), ibT("\u0441\u0435\u043D"), ibT("\u043E\u043A\u0442"), ibT("\u043D\u043E\u044F"), ibT("\u0434\u0435\u043A") };
+const ibChar* const s_ruDay[] = { ibT("\u043F\u043E\u043D\u0435\u0434\u0435\u043B\u044C\u043D\u0438\u043A"), ibT("\u0432\u0442\u043E\u0440\u043D\u0438\u043A"), ibT("\u0441\u0440\u0435\u0434\u0430"), ibT("\u0447\u0435\u0442\u0432\u0435\u0440\u0433"), ibT("\u043F\u044F\u0442\u043D\u0438\u0446\u0430"), ibT("\u0441\u0443\u0431\u0431\u043E\u0442\u0430"), ibT("\u0432\u043E\u0441\u043A\u0440\u0435\u0441\u0435\u043D\u044C\u0435") };
+const ibChar* const s_ruDayShort[] = { ibT("\u041F\u043D"), ibT("\u0412\u0442"), ibT("\u0421\u0440"), ibT("\u0427\u0442"), ibT("\u041F\u0442"), ibT("\u0421\u0431"), ibT("\u0412\u0441") };
+const ibChar* const s_ukMonth[] = { ibT("\u0441\u0456\u0447\u0435\u043D\u044C"), ibT("\u043B\u044E\u0442\u0438\u0439"), ibT("\u0431\u0435\u0440\u0435\u0437\u0435\u043D\u044C"), ibT("\u043A\u0432\u0456\u0442\u0435\u043D\u044C"), ibT("\u0442\u0440\u0430\u0432\u0435\u043D\u044C"), ibT("\u0447\u0435\u0440\u0432\u0435\u043D\u044C"), ibT("\u043B\u0438\u043F\u0435\u043D\u044C"), ibT("\u0441\u0435\u0440\u043F\u0435\u043D\u044C"), ibT("\u0432\u0435\u0440\u0435\u0441\u0435\u043D\u044C"), ibT("\u0436\u043E\u0432\u0442\u0435\u043D\u044C"), ibT("\u043B\u0438\u0441\u0442\u043E\u043F\u0430\u0434"), ibT("\u0433\u0440\u0443\u0434\u0435\u043D\u044C") };
+const ibChar* const s_ukMonthOf[] = { ibT("\u0441\u0456\u0447\u043D\u044F"), ibT("\u043B\u044E\u0442\u043E\u0433\u043E"), ibT("\u0431\u0435\u0440\u0435\u0437\u043D\u044F"), ibT("\u043A\u0432\u0456\u0442\u043D\u044F"), ibT("\u0442\u0440\u0430\u0432\u043D\u044F"), ibT("\u0447\u0435\u0440\u0432\u043D\u044F"), ibT("\u043B\u0438\u043F\u043D\u044F"), ibT("\u0441\u0435\u0440\u043F\u043D\u044F"), ibT("\u0432\u0435\u0440\u0435\u0441\u043D\u044F"), ibT("\u0436\u043E\u0432\u0442\u043D\u044F"), ibT("\u043B\u0438\u0441\u0442\u043E\u043F\u0430\u0434\u0430"), ibT("\u0433\u0440\u0443\u0434\u043D\u044F") };
+const ibChar* const s_ukMonthShort[] = { ibT("\u0441\u0456\u0447"), ibT("\u043B\u044E\u0442"), ibT("\u0431\u0435\u0440"), ibT("\u043A\u0432\u0456"), ibT("\u0442\u0440\u0430"), ibT("\u0447\u0435\u0440"), ibT("\u043B\u0438\u043F"), ibT("\u0441\u0435\u0440"), ibT("\u0432\u0435\u0440"), ibT("\u0436\u043E\u0432"), ibT("\u043B\u0438\u0441"), ibT("\u0433\u0440\u0443") };
+const ibChar* const s_ukDay[] = { ibT("\u043F\u043E\u043D\u0435\u0434\u0456\u043B\u043E\u043A"), ibT("\u0432\u0456\u0432\u0442\u043E\u0440\u043E\u043A"), ibT("\u0441\u0435\u0440\u0435\u0434\u0430"), ibT("\u0447\u0435\u0442\u0432\u0435\u0440"), ibT("\u043F'\u044F\u0442\u043D\u0438\u0446\u044F"), ibT("\u0441\u0443\u0431\u043E\u0442\u0430"), ibT("\u043D\u0435\u0434\u0456\u043B\u044F") };
+const ibChar* const s_ukDayShort[] = { ibT("\u041F\u043D"), ibT("\u0412\u0442"), ibT("\u0421\u0440"), ibT("\u0427\u0442"), ibT("\u041F\u0442"), ibT("\u0421\u0431"), ibT("\u041D\u0434") };
+const ibDateNames s_en = { s_enMonth, s_enMonth, s_enMonthShort, s_enDay, s_enDayShort, ibT("") };
+const ibDateNames s_ru = { s_ruMonth, s_ruMonthOf, s_ruMonthShort, s_ruDay, s_ruDayShort, ibT(" \u0433.") };
+const ibDateNames s_uk = { s_ukMonth, s_ukMonthOf, s_ukMonthShort, s_ukDay, s_ukDayShort, ibT(" \u0440.") };
+
+// `L=ru`, `L=uk_UA`, `L=en`: the language part decides; anything else is English.
+const ibDateNames& NamesFor(const std::optional<ibString>& language)
+{
+	if (!language) return s_en;
+	const ibString code = language->Left(2).Lower();
+	if (code == ibT("ru")) return s_ru;
+	if (code == ibT("uk")) return s_uk;
+	return s_en;
+}
+
+// The letters of a date pattern. ⚠ `MM` IS THE MONTH and `mm` the minutes, as everywhere else they are written.
+enum ibDateLetter { eYear, eMonth, eDay, eHour24, eHour12, eMinute, eSecond, eAmPm, eNone };
+ibDateLetter DateLetter(ibChar c)
 {
 	switch (c) {
-	case L'y': return 0;
-	case L'm': return 1;
-	case L'd': return 2;
-	case L'H': return 3;
-	case L'M': return 4;
-	case L'S': return 5;
+	case L'y': return eYear;
+	case L'M': return eMonth;
+	case L'd': return eDay;
+	case L'H': return eHour24;
+	case L'h': return eHour12;
+	case L'm': return eMinute;
+	case L's': return eSecond;
+	case L't': return eAmPm;
 	}
-	return -1;
+	return eNone;
 }
 
 void AppendTwoDigits(int value, ibString& out)
@@ -79,62 +122,93 @@ void AppendTwoDigits(int value, ibString& out)
 	out += static_cast<ibChar>(L'0' + value % 10);
 }
 
-// ⭐ THE DATE PATTERN WRITTEN STRAIGHT INTO `out` — no strftime pattern is built and wxDateTime::Format is
-// not called, because both allocate once per date and a report prints a date per row.
-//
-// The reading is the one the strftime translation gave (yyyy the full year, yyy / yy / y two digits,
-// mm / m, dd / d, HH / H, MM / M, SS / S two digits each): a letter is taken by the LONGEST spelling the
-// pattern uses anywhere, every run of it is read in pieces of that length, and what is left over stands as
-// the letter — `yyyyy` is the year and a `y`. Every other character stands as it is.
-void WriteDate(const ibString& pattern, const ibDateTimeParts& tm, ibString& out)
+// A field of a date: below 100 always (a year comes as its last two digits), one digit when one is asked and
+// one is enough.
+void AppendNumber(int value, size_t width, ibString& out)
 {
-	static const int s_longest[6] = { 4, 2, 2, 2, 2, 2 };
-	const size_t length = pattern.length();
+	if (width >= 2 || value >= 10) AppendTwoDigits(value, out);
+	else out += static_cast<ibChar>(L'0' + value);
+}
 
-	int spelling[6] = { 0, 0, 0, 0, 0, 0 };
-	for (size_t i = 0; i < length;) {
-		size_t run = 1;
-		while (i + run < length && pattern[i + run] == pattern[i]) ++run;
-		const int letter = DateLetter(pattern[i]);
-		if (letter >= 0)
-			spelling[letter] = std::max(spelling[letter], std::min(static_cast<int>(run), s_longest[letter]));
-		i += run;
-	}
+// ⭐ THE DATE PATTERN WRITTEN STRAIGHT INTO `out`: a run of one letter is one field, its length picking the form - `d` 1, `dd` 01, `ddd` Mon, `dddd` Monday; `M` 1, `MM` 01, `MMM` Oct,
+// `MMMM` October; `y` 6, `yy` 26, `yyyy` 2026; `H`/`HH` hours, `h`/`hh` on a 12-hour clock, `m`/`mm`
+// minutes, `s`/`ss` seconds, `tt` AM/PM. Text in single quotes stands as written; every other character
+// stands as it is. No strftime pattern is built: a report prints a date per row.
+void WriteDate(const ibString& pattern, const ibDateTimeParts& tm, const ibDateNames& names, ibString& out)
+{
+	const size_t length = pattern.length();
+	bool hasDay = false;
+	for (size_t i = 0; i < length; i++)
+		if (DateLetter(pattern[i]) == eDay) { hasDay = true; break; }
 
 	out.clear();
-	out.reserve(length + 4);
+	out.reserve(length + 8);
 	for (size_t i = 0; i < length;) {
 		const ibChar c = pattern[i];
+		if (c == L'\'') {
+			size_t close = i + 1;
+			while (close < length && pattern[close] != L'\'') ++close;
+			out += pattern.Mid(i + 1, close - i - 1);
+			i = close < length ? close + 1 : close;
+			continue;
+		}
 		size_t run = 1;
 		while (i + run < length && pattern[i + run] == c) ++run;
-		const int letter = DateLetter(c);
-		size_t at = 0;
-		if (letter >= 0) {
-			const size_t piece = static_cast<size_t>(spelling[letter]);
-			for (; at + piece <= run; at += piece) {
-				switch (letter) {
-				case 0:
-					if (piece == 4 && tm.m_year >= 0 && tm.m_year <= 9999) {
-						AppendTwoDigits(tm.m_year / 100, out);
-						AppendTwoDigits(tm.m_year % 100, out);
-					}
-					else if (piece == 4)
-						out << tm.m_year;
-					else
-						AppendTwoDigits((tm.m_year % 100 + 100) % 100, out);
-					break;
-				case 1: AppendTwoDigits(static_cast<int>(tm.m_month), out);  break;
-				case 2: AppendTwoDigits(static_cast<int>(tm.m_day), out);    break;
-				case 3: AppendTwoDigits(static_cast<int>(tm.m_hour), out);   break;
-				case 4: AppendTwoDigits(static_cast<int>(tm.m_minute), out); break;
-				case 5: AppendTwoDigits(static_cast<int>(tm.m_second), out); break;
-				}
+		const unsigned month = std::min(std::max(tm.m_month, 1u), 12u) - 1;
+		const unsigned weekDay = std::min(std::max(tm.m_weekDay, 1u), 7u) - 1;
+		switch (DateLetter(c)) {
+		case eYear:
+			if (run >= 3) {
+				if (tm.m_year >= 0 && tm.m_year <= 9999) { AppendTwoDigits(tm.m_year / 100, out); AppendTwoDigits(tm.m_year % 100, out); }
+				else out += ibString::Format(ibT("%d"), tm.m_year);
 			}
+			else AppendNumber((tm.m_year % 100 + 100) % 100, run, out);
+			break;
+		case eMonth:
+			if (run >= 4)      out += hasDay ? names.m_monthOf[month] : names.m_month[month];
+			else if (run == 3) out += names.m_monthShort[month];
+			else               AppendNumber(static_cast<int>(tm.m_month), run, out);
+			break;
+		case eDay:
+			if (run >= 4)      out += names.m_day[weekDay];
+			else if (run == 3) out += names.m_dayShort[weekDay];
+			else               AppendNumber(static_cast<int>(tm.m_day), run, out);
+			break;
+		case eHour24: AppendNumber(static_cast<int>(tm.m_hour), run, out); break;
+		case eHour12: AppendNumber(static_cast<int>(tm.m_hour % 12 == 0 ? 12 : tm.m_hour % 12), run, out); break;
+		case eMinute: AppendNumber(static_cast<int>(tm.m_minute), run, out); break;
+		case eSecond: AppendNumber(static_cast<int>(tm.m_second), run, out); break;
+		case eAmPm:   out += tm.m_hour < 12 ? ibT("AM") : ibT("PM"); break;
+		case eNone:   out.append(run, c); break;
 		}
-		if (at < run)
-			out.append(run - at, c);
 		i += run;
 	}
+}
+
+// DLF: the presets named by letter - D, DD, T, DT, DDT. Empty when the value is none of them.
+ibString LocalFormatPattern(const ibString& preset, const ibDateNames& names)
+{
+	ibString key = preset.Upper();
+	key.Trim(true).Trim(false);
+	// The long date: `13 October 2026`, and in ru/uk with the year suffix - the suffix quoted so its letters are text.
+	const ibString suffix = names.m_yearSuffix;
+	const ibString longDate = ibT("d MMMM yyyy") + (suffix.IsEmpty() ? ibString() : ibT("'") + suffix + ibT("'"));
+	if (key == ibT("D"))   return ibT("dd.MM.yyyy");
+	if (key == ibT("DD"))  return longDate;
+	if (key == ibT("T"))   return ibT("H:mm:ss");
+	if (key == ibT("DT"))  return ibT("dd.MM.yyyy H:mm:ss");
+	if (key == ibT("DDT")) return longDate + ibT(" H:mm:ss");
+	return ibString();
+}
+
+void PadWholePart(ibString& text, int width)
+{
+	size_t start = (!text.IsEmpty() && text[0] == L'-') ? 1 : 0;
+	size_t end = start;
+	while (end < text.length() && text[end] >= L'0' && text[end] <= L'9') ++end;
+	const int digits = static_cast<int>(end - start);
+	if (digits < width)
+		text.insert(start, static_cast<size_t>(width - digits), L'0');
 }
 
 } // namespace
@@ -143,12 +217,13 @@ bool ibNumberFormat::operator == (const ibNumberFormat& other) const
 {
 	return m_digits == other.m_digits && m_fractionDigits == other.m_fractionDigits
 		&& m_decimalSeparator == other.m_decimalSeparator && m_groupSeparator == other.m_groupSeparator
-		&& m_groupSize == other.m_groupSize && m_zero == other.m_zero;
+		&& m_groupSize == other.m_groupSize && m_zero == other.m_zero && m_leadingZero == other.m_leadingZero;
 }
 
 bool ibDateFormat::operator == (const ibDateFormat& other) const
 {
-	return m_pattern == other.m_pattern && m_empty == other.m_empty;
+	return m_pattern == other.m_pattern && m_empty == other.m_empty && m_localFormat == other.m_localFormat
+		&& m_language == other.m_language;
 }
 
 bool ibBooleanFormat::operator == (const ibBooleanFormat& other) const
@@ -201,6 +276,9 @@ std::optional<ibString> ibFormatString::Get(ibFormatCode code) const
 	case ibFormatCode::DateEmpty:              return m_date.m_empty;
 	case ibFormatCode::BooleanTrue:            return m_boolean.m_true;
 	case ibFormatCode::BooleanFalse:           return m_boolean.m_false;
+	case ibFormatCode::NumberLeadingZero:      return m_number.m_leadingZero;
+	case ibFormatCode::DateLocalFormat:        return m_date.m_localFormat;
+	case ibFormatCode::Language:               return m_date.m_language;
 	}
 	return std::nullopt;
 }
@@ -218,6 +296,9 @@ void ibFormatString::Set(ibFormatCode code, const ibString& value)
 	case ibFormatCode::DateEmpty:              m_date.m_empty = value; break;
 	case ibFormatCode::BooleanTrue:            m_boolean.m_true = value; break;
 	case ibFormatCode::BooleanFalse:           m_boolean.m_false = value; break;
+	case ibFormatCode::NumberLeadingZero:      m_number.m_leadingZero = value; break;
+	case ibFormatCode::DateLocalFormat:        m_date.m_localFormat = value; break;
+	case ibFormatCode::Language:               m_date.m_language = value; break;
 	}
 }
 
@@ -234,6 +315,9 @@ void ibFormatString::Clear(ibFormatCode code)
 	case ibFormatCode::DateEmpty:              m_date.m_empty.reset(); break;
 	case ibFormatCode::BooleanTrue:            m_boolean.m_true.reset(); break;
 	case ibFormatCode::BooleanFalse:           m_boolean.m_false.reset(); break;
+	case ibFormatCode::NumberLeadingZero:      m_number.m_leadingZero.reset(); break;
+	case ibFormatCode::DateLocalFormat:        m_date.m_localFormat.reset(); break;
+	case ibFormatCode::Language:               m_date.m_language.reset(); break;
 	}
 }
 
@@ -393,18 +477,30 @@ bool ibFormatString::Apply(const ibVariant& value, ibString& result) const
 		if (m_number.m_groupSize)        numFmt.groupSize  = *m_number.m_groupSize;
 
 		number.ToString(numFmt, result);
+		// NLZ: the whole part padded with zeros to the digits ND leaves it (ND - NFD).
+		if (m_number.m_leadingZero && m_number.m_digits)
+			PadWholePart(result, *m_number.m_digits - m_number.m_fractionDigits.value_or(0));
 		return !result.IsEmpty();
 	}
 	case ibValueTypes::TYPE_DATE:
 		if (value.IsEmpty() && m_date.m_empty)
 			result = *m_date.m_empty;
-		else if (m_date.m_pattern) {
+		else {
+			// DF first; DLF when there is no DF - a pattern written out wins over a preset named.
+			const ibDateNames& names = NamesFor(m_date.m_language);
+			ibString pattern;
+			if (m_date.m_pattern)
+				pattern = *m_date.m_pattern;
+			else if (m_date.m_localFormat)
+				pattern = LocalFormatPattern(*m_date.m_localFormat, names);
+			if (pattern.IsEmpty()) {
+				result = value.GetString();
+				return !result.IsEmpty();
+			}
 			ibDateTimeParts parts;
 			value.GetDate().ToParts(parts);
-			WriteDate(*m_date.m_pattern, parts, result);
+			WriteDate(pattern, parts, names, result);
 		}
-		else
-			result = value.GetString();
 		return !result.IsEmpty();
 	default:
 		result = value.GetString();   // every other type formats as its plain string

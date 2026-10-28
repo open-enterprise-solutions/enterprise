@@ -2,12 +2,25 @@
 
 Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
+## Breaking changes
+
+- **In a date pattern `MM` is the month and `mm` the minutes**, as everywhere else they are written;
+  the seconds are `ss`. It was the other way round. A stored format such as `DF=dd.mm.yyyy` now
+  prints the minutes where the month was, and nothing reports it: change `mm` to `MM` (and `MM` to
+  `mm`, `SS` to `ss`) in the formats of attributes, form items and report fields. The built-in
+  presets are already written the new way.
+
 ## Script language
 
 - **XML: `XMLReader`, `XMLWriter`, `XMLNamespaceContext`, `XMLNodeType`.** A script reads a document
   node by node and writes one, to a file or to a string, in UTF-8, UTF-16, windows-1251 or cp866.
   The parser is expat, built into the engine; an external entity is refused, not read. A file the
   writer could not write is raised at `Close`.
+- **`Format` spells a date out and pads a number.** A date pattern takes `d`/`dd`, `ddd`/`dddd`
+  (the weekday), `M`/`MM`, `MMM`/`MMMM` (the month's name, after a day in the genitive in ru and
+  uk), `h`/`hh` and `tt` (a 12-hour clock) and text in single quotes. New codes: `DLF` (a preset —
+  `D`, `DD`, `T`, `DT`, `DDT` — used when there is no `DF`), `L` (the language of the names: en,
+  ru, uk) and `NLZ` (the whole part padded with zeros to `ND − NFD` digits).
 
 ## Fixes
 
