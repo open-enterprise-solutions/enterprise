@@ -81,6 +81,7 @@ add_executable(oes_tests
     test_pointInTime.cpp
     test_jsonProvider.cpp
     test_valueJson.cpp
+    test_valueXml.cpp
     test_xmlEncoding.cpp
     test_queryRenderer.cpp
     test_queryStringConcat.cpp
