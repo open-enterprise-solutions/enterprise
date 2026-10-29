@@ -35,8 +35,6 @@ public:
 	void Delete(unsigned int index);
 	// An item removes that item. A number is an index. Anything else is refused.
 	void Delete(const ibValue& item);
-	// Where this item sits, or -1 when it is not one of this list's items.
-	long IndexOf(const ibValue& item) const;
 	void Clear() { m_items.clear(); }
 	ibValue FindByValue(const ibValue& value) const;
 	ibValue UnloadValues() const;
@@ -44,8 +42,10 @@ public:
 	void AppendValues(std::vector<ibValue>& out) const;
 private:
 	void CheckIndex(unsigned int index) const;
-	ibValue MakeItem(const ibValue& value, const ibString& presentation, bool check) const;
-	std::vector<ibValue> m_items;
+	// Where this item sits, or -1 when it is not one of this list's items.
+	long IndexOf(const ibValueValueListItem* item) const;
+	ibValuePtr<ibValueValueListItem> MakeItem(const ibValue& value, const ibString& presentation, bool check) const;
+	std::vector<ibValuePtr<ibValueValueListItem>> m_items;
 };
 
 #endif

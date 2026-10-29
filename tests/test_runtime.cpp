@@ -3650,37 +3650,31 @@ TEST(RuntimeTest, ValueListHoldsItemsAndWalksThem) {
 }
 
 // Delete(item) used to read the item as an index, and that read is 0, so the first
-// element went and the one that was passed stayed. IndexOf says where the item sits.
+// element went and the one that was passed stayed.
 TEST(RuntimeTest, ValueListDeleteRemovesTheItemThatWasPassed)
 {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc,
-		wxT("var at public; var first public; var second public; var n public; var gone public;\n")
+		wxT("var first public; var second public; var n public;\n")
 		wxT("var list; list = New ValueList();\n")
 		wxT("list.Add(\"a\"); list.Add(\"b\"); list.Add(\"c\");\n")
 		wxT("var item; item = list.Get(1);\n")
-		wxT("at = list.IndexOf(item);\n")
 		wxT("list.Delete(item);\n")
 		wxT("first = list.Get(0).Value;\n")
 		wxT("second = list.Get(1).Value;\n")
-		wxT("n = list.Count();\n")
-		wxT("gone = list.IndexOf(item);\n")));
+		wxT("n = list.Count();\n")));
 
 	ibProcUnit pu;
 	ibString strError;
 	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
 
 	ibValue v;
-	ASSERT_TRUE(pu.GetPropVal(wxT("at"), v));
-	EXPECT_EQ(1, v.GetInteger());
 	ASSERT_TRUE(pu.GetPropVal(wxT("first"), v));
 	EXPECT_EQ(wxT("a"), v.GetString());
 	ASSERT_TRUE(pu.GetPropVal(wxT("second"), v));
 	EXPECT_EQ(wxT("c"), v.GetString());
 	ASSERT_TRUE(pu.GetPropVal(wxT("n"), v));
 	EXPECT_EQ(2, v.GetInteger());
-	ASSERT_TRUE(pu.GetPropVal(wxT("gone"), v));
-	EXPECT_EQ(-1, v.GetInteger());
 
 	ibCompileCode byIndex(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(byIndex,

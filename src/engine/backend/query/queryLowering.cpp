@@ -2148,7 +2148,8 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			for (const ibQueryAstExprPtr& item : e.m_list) {
 				ibValue v = EvalValue(*item, params);
 				// A value list walks as its items. IN wants the values those items hold.
-				if (const ibValueValueList* const list = dynamic_cast<const ibValueValueList*>(v.GetRef())) {
+				ibValueValueList* list = nullptr;
+				if (v.ConvertToValue(list)) {
 					list->AppendValues(values);
 					continue;
 				}

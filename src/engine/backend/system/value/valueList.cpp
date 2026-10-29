@@ -32,7 +32,7 @@ bool ibValueValueListItem::SetPropVal(const long lPropNum, const ibValue& varPro
 	return false;
 }
 
-enum { enAdd = 0, enInsert, enCount, enGet, enDelete, enIndexOf, enClear, enFindByValue,
+enum { enAdd = 0, enInsert, enCount, enGet, enDelete, enClear, enFindByValue,
 	enUnloadValues, enLoadValues };
 
 void ibValueValueList_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -44,7 +44,6 @@ void ibValueValueList_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	helper.AppendFunc(wxT("Count"), wxT("Count()"));
 	helper.AppendFunc(wxT("Get"), 1, wxT("Get(index)"));
 	helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(item)"));
-	helper.AppendFunc(wxT("IndexOf"), 1, wxT("IndexOf(item)"));
 	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
 	helper.AppendFunc(wxT("FindByValue"), 1, wxT("FindByValue(value)"));
 	helper.AppendFunc(wxT("UnloadValues"), wxT("UnloadValues()"));
@@ -57,9 +56,9 @@ void ibValueValueList::CheckIndex(unsigned int index) const
 		ibBackendCoreException::Error(_("Index goes beyond the list"));
 }
 
-ibValue ibValueValueList::MakeItem(const ibValue& value, const ibString& presentation, bool check) const
+ibValuePtr<ibValueValueListItem> ibValueValueList::MakeItem(const ibValue& value, const ibString& presentation, bool check) const
 {
-	ibValueValueListItem* const item = new ibValueValueListItem();
+	ibValuePtr<ibValueValueListItem> item(new ibValueValueListItem());
 	item->m_value = value;
 	item->m_presentation = presentation;
 	item->m_check = check;
@@ -92,13 +91,10 @@ void ibValueValueList::Delete(unsigned int index)
 	m_items.erase(m_items.begin() + index);
 }
 
-long ibValueValueList::IndexOf(const ibValue& item) const
+long ibValueValueList::IndexOf(const ibValueValueListItem* item) const
 {
-	ibValueValueListItem* wanted = nullptr;
-	if (!item.ConvertToValue(wanted) || wanted == nullptr)
-		return -1;
 	for (size_t at = 0; at < m_items.size(); ++at)
-		if (m_items[at].GetRef() == wanted)
+		if (m_items[at] == item)
 			return static_cast<long>(at);
 	return -1;
 }
@@ -110,7 +106,7 @@ void ibValueValueList::Delete(const ibValue& item)
 	// only an item or a number is accepted.
 	ibValueValueListItem* held = nullptr;
 	if (item.ConvertToValue(held)) {
-		const long at = IndexOf(item);
+		const long at = IndexOf(held);
 		if (at < 0)
 			ibBackendCoreException::Error(_("The item is not in the list"));
 		Delete(static_cast<unsigned int>(at));
@@ -123,29 +119,24 @@ void ibValueValueList::Delete(const ibValue& item)
 
 ibValue ibValueValueList::FindByValue(const ibValue& value) const
 {
-	for (const ibValue& held : m_items) {
-		const ibValueValueListItem* const item = dynamic_cast<const ibValueValueListItem*>(held.GetRef());
-		if (item != nullptr && item->m_value.CompareValueEQ(value))
-			return held;
-	}
+	for (const ibValuePtr<ibValueValueListItem>& item : m_items)
+		if (item->m_value.CompareValueEQ(value))
+			return item;
 	return ibValue();
 }
 
 ibValue ibValueValueList::UnloadValues() const
 {
 	ibValueArray* const values = new ibValueArray();
-	for (const ibValue& held : m_items) {
-		const ibValueValueListItem* const item = dynamic_cast<const ibValueValueListItem*>(held.GetRef());
-		if (item != nullptr)
-			values->Add(item->m_value);
-	}
+	for (const ibValuePtr<ibValueValueListItem>& item : m_items)
+		values->Add(item->m_value);
 	return values;
 }
 
 void ibValueValueList::LoadValues(const ibValue& source)
 {
-	const ibValueArray* const values = dynamic_cast<const ibValueArray*>(source.GetRef());
-	if (values == nullptr)
+	ibValueArray* values = nullptr;
+	if (!source.ConvertToValue(values))
 		ibBackendCoreException::Error(_("LoadValues: the argument is not an array"));
 	Clear();
 	for (const ibValue& value : values->Values())
@@ -154,11 +145,8 @@ void ibValueValueList::LoadValues(const ibValue& source)
 
 void ibValueValueList::AppendValues(std::vector<ibValue>& out) const
 {
-	for (const ibValue& held : m_items) {
-		const ibValueValueListItem* const item = dynamic_cast<const ibValueValueListItem*>(held.GetRef());
-		if (item != nullptr)
-			out.push_back(item->m_value);
-	}
+	for (const ibValuePtr<ibValueValueListItem>& item : m_items)
+		out.push_back(item->m_value);
 }
 
 bool ibValueValueList::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -177,7 +165,6 @@ bool ibValueValueList::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, 
 	case enCount: pvarRetValue = Count(); return true;
 	case enGet: pvarRetValue = Get(paParams[0]->GetUInteger()); return true;
 	case enDelete: Delete(*paParams[0]); return true;
-	case enIndexOf: pvarRetValue = static_cast<signed int>(IndexOf(*paParams[0])); return true;
 	case enClear: Clear(); return true;
 	case enFindByValue: pvarRetValue = FindByValue(*paParams[0]); return true;
 	case enUnloadValues: pvarRetValue = UnloadValues(); return true;
