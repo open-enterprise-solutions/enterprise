@@ -34,8 +34,11 @@ public:
 	using ibPropertyMaker = std::function<wxPGProperty* (ibBackendProperty* property)>;
 
 	static void Register(const wxString& type, ibPropertyMaker maker);
+	// A type that is NOT SHOWN, by design — its property is edited elsewhere (the composer's composition, in the composer's
+	// own tab), so the inspector has no row for it, as the desktop's RegisterNoEditor had none.
+	static void RegisterNoEditor(const wxString& type);
 
-	// The widget for the property — its help and its read-only already said.
+	// The widget for the property — its help and its read-only already said; null — a type not shown (RegisterNoEditor).
 	static wxPGProperty* Create(ibBackendProperty* property);
 	// The choices it offers, as the grid lists them: label, id.
 	static wxPGChoices GetChoices(ibBackendProperty* property);

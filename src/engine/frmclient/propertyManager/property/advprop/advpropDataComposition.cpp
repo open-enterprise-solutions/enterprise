@@ -61,6 +61,11 @@ public:
 		registerCell(wxT("ibPropertyDynamicList"), [](ibCompositionDescription& edited, const ibMetaData* metaData) {
 			return ibDialogListSettings::ShowListSettings(edited, metaData);
 		});
+
+		// …and NO ROW for the composer's own composition (ibPropertyComposition — the other one of the pair): it is
+		// edited in the composer's tab, never in a cell, and the desktop's inspector showed none. Unregistered, it was a
+		// read-only string — "Composition data: SELECT".
+		ibPropertyRegistry::RegisterNoEditor(wxT("ibPropertyComposition"));
 	}
 } g_dataCompositionLoader;
 

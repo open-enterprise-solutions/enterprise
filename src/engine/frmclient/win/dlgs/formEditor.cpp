@@ -426,6 +426,8 @@ void ibDialogFormEditor::OnSelChanged(wxTreeEvent& event)
 							continue;
 
 						wxPGProperty* pg = ibPropertyRegistry::Create(prop);
+						if (pg == nullptr)
+							continue;   // a property not shown (ibPropertyRegistry::RegisterNoEditor)
 						propertyGridPage->Append(pg);
 						pg->RefreshChildren();
 
