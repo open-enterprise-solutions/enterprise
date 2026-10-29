@@ -136,6 +136,26 @@ void ibMetaTreeBase::OnItemMenu(wxTreeEvent& event)
 	ShowContextMenu(item, event.GetPoint());
 }
 
+// A ROW DRAGGED ONTO ANOTHER IS COPIED THERE — the desktop's tree (ibMetaTreeCtrl::OnBeginDrag / OnEndDrag): an object's
+// row, not the root's or a group's, and not in a read-only configuration — refused at the start, so the row does not
+// follow the cursor as if it would land.
+void ibMetaTreeBase::OnBeginDrag(wxTreeEvent& event)
+{
+	const wxTreeItemId item = event.GetItem();
+	if (m_readOnly || !item.IsOk() || item == m_metaTreeCtrl->GetRootItem() || GetObject(item) == 0)
+		return;
+	m_draggedItem = item;
+	event.Allow();
+}
+
+void ibMetaTreeBase::OnEndDrag(wxTreeEvent& event)
+{
+	const wxTreeItemId item = m_draggedItem;
+	m_draggedItem = wxTreeItemId();
+	if (item.IsOk() && event.GetItem().IsOk())
+		DuplicateItem(item, event.GetItem());
+}
+
 #include "designer-thin/win/dlg/textEditor.h"
 
 // The two texts a metaobject carries. One dialog serves both — the caption is what differs, and

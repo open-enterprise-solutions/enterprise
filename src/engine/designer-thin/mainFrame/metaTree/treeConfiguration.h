@@ -136,6 +136,9 @@ private:
 	void SortItem();
 	void CopyItem();
 	void PasteItem();
+	// …the object of `item` copied where `target` stands — the desktop's drag: its Copy and its Paste in one, the bytes
+	// never leaving the server.
+	void DuplicateItem(const wxTreeItemId& item, const wxTreeItemId& target);
 	// …a data processor or a report as the file of that extension it is kept in (its menu's Load, Unload).
 	void LoadItem(const wxString& extension);
 	void UnloadItem(const wxString& extension);
@@ -161,6 +164,8 @@ private:
 	void OnExpanded(wxTreeEvent& event);
 	void OnCollapsed(wxTreeEvent& event);
 	void OnItemMenu(wxTreeEvent& event);
+	void OnBeginDrag(wxTreeEvent& event);
+	void OnEndDrag(wxTreeEvent& event);
 	void OnEditHelp(wxCommandEvent& event);
 	void OnEditNotes(wxCommandEvent& event);
 	void OnStartSearch(wxCommandEvent& event);
@@ -168,6 +173,8 @@ private:
 
 	bool m_readOnly = false;
 	const long long m_tab;
+	// The row being dragged — between the drag's start and its drop.
+	wxTreeItemId m_draggedItem;
 
 	// THE OBJECT THE INSPECTOR SHOWS — made when a row is selected, of the server's rows for it, and linked to this tree's
 	// tab (an edit goes to the configuration it came from); the next row selected makes the next. Shared: an editor opened

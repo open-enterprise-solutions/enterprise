@@ -691,6 +691,43 @@ void ibMetaTreeBase::PasteItem()
 	wxRemoveFile(local);
 }
 
+// THE SERVER'S COPY AND THE SERVER'S PASTE OVER ONE FILE — uploaded empty, written by the Copy, read by the Paste where
+// `target` says (the class and the object New would make there); the row it made selected, as the Paste leaves it.
+void ibMetaTreeBase::DuplicateItem(const wxTreeItemId& item, const wxTreeItemId& target)
+{
+	if (m_readOnly)
+		return;
+
+	wxString type;
+	long long parent = 0;
+	const long long id = GetObject(item);
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (id == 0 || frame == nullptr || !GetPlace(target, type, parent))
+		return;
+
+	const wxString local = wxFileName::CreateTempFileName(wxT("oes"));
+	if (local.IsEmpty())
+		return;
+
+	wxString file;
+	if (frame->UploadFile(local, file)) {
+		ibProtocolNode copy;
+		copy.SetValue(ibProtocol::ibSchema::ibMetaData::Id, id);
+		copy.SetValue(ibProtocol::ibSchema::ibMetaData::File, file);
+		if (Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Copy, copy)) {
+			ibProtocolNode paste;
+			paste.SetValue(ibProtocol::ibSchema::ibMetaData::Type, type);
+			paste.SetValue(ibProtocol::ibSchema::ibMetaData::Parent, parent);
+			paste.SetValue(ibProtocol::ibSchema::ibMetaData::File, file);
+			std::set<long long> drawn;
+			ibObjectIds(m_root, drawn);
+			if (Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Paste, paste))
+				SelectCreated(drawn);
+		}
+	}
+	wxRemoveFile(local);
+}
+
 // A DATA PROCESSOR OR A REPORT FROM THE FILE IT IS KEPT IN — the desktop's Replace and Insert: the file the person picks,
 // uploaded, read by the server over the selected object (Id), or into the selected group (Type, Parent); the row it made
 // selected.
