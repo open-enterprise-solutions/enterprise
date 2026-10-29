@@ -1566,6 +1566,10 @@ namespace ibProtocol {
 			inline constexpr const char* Id          = "Id";
 			inline constexpr const char* Targets     = "Targets";
 			inline constexpr const char* Expanded    = "Expanded";
+			// The classes a type cell may name — the fields', the parameters' and the primitive kinds — each once, as the
+			// inspector names its choices' (ibSchema::ibProperties: Type, Name, Picture): the client has no configuration
+			// to name a kind by.
+			inline constexpr const char* Classes     = "Classes";
 
 			// WHAT A COMPOSER'S TAB IS ASKED — `fetch {Tab, Request: {Kind, …}}`, numbered past the form's
 			// (ibFormDesigner::ibRequest).

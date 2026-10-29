@@ -10,6 +10,8 @@
 #include "core/guid.h"                // a configuration picture's name
 #include "core/serialize/dataBuilder.h"   // a type, as the server wrote it
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode — …read off the answer
+#include "frmclient/backend/compiler/value.h"           // ibValue::RegisterCtor — a class, as the server named it
+#include "frmclient/win/picture.h"                      // ibProtocolPicture — …and drew it
 
 #include <map>
 
@@ -58,10 +60,33 @@ std::vector<ibQueryConstructorField> ReadQueryFields(const ibProtocolNode& descr
 	return fields;
 }
 
+// THE CLASSES A TYPE CELL MAY NAME, as the server named them (Classes: Type, Name, Picture) — registered where every
+// window reads a class by (ibValue::GetAvailableCtor). One held under the same name is not made again: its picture is a
+// GDI icon each time (the inspector's lesson, ibPropertySerializable).
+void RegisterClasses(const ibProtocolNode& classes)
+{
+	for (const ibProtocolNode& entry : classes.Children()) {
+		unsigned long long clsid = 0;
+		if (!entry.GetString(ibProtocol::ibSchema::ibProperties::Type).ToULongLong(&clsid) || clsid == 0)
+			continue;
+		const ibString name = entry.GetString(ibProtocol::ibSchema::ibProperties::Name);
+		const ibCtorAbstractType* const held = ibValue::GetAvailableCtor(clsid);
+		if (held != nullptr && held->GetClassName() == name)
+			continue;
+		const wxBitmap picture = ibProtocolPicture(entry, ibProtocol::ibSchema::ibProperties::Picture);
+		wxIcon icon;
+		if (picture.IsOk())
+			icon.CopyFromBitmap(picture);
+		ibValue::RegisterCtor(static_cast<ibClassID>(clsid), name, icon);
+	}
+}
+
 } // namespace
 
 void ibQueryFieldsKnown(long long tabId, const ibString& text, const ibProtocolNode& answer)
 {
+	// The view's answer and each fetched one come through here: the classes they name, registered as they arrive.
+	RegisterClasses(answer.FindChild(ibProtocol::ibView::ibComposer::Classes));
 	KnownQueryFields()[tabId] = ibKnownQueryFields{ text, answer };
 }
 

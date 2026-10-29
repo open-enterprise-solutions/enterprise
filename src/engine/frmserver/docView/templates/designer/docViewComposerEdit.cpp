@@ -1,5 +1,6 @@
 #include "docViewComposerEdit.h"
 
+#include "backend/backend_picture.h"                     // ibBackendPicture::SendPicture — a class's picture, by its id
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaComposerObject.h"   // the composer — its description, its configuration
 #include "backend/query/queryConstructorModel.h"         // ibQueryFieldsOfText — the fields its query offers
@@ -10,13 +11,46 @@
 #include "frmserver/win/dlgs/settings/settingsRequest.h" // ibWriteSettingsField / References — a field as the windows read it
 #include "queryConstructorRequest.h"                      // ibFetchQueryConstructorRequest — the query constructor over its query
 
+#include <set>
 #include <vector>
 
 namespace {
 
+// THE NAMES A TYPE CELL READS — the panel's Type columns (the fields', the parameters') name each class as the
+// configuration does (the desktop's ibDescribeTypes, over its own configuration). The client has none: every class the
+// cells may show is named here, each once — the primitive kinds always, a new parameter being a String before anybody
+// chose its type (2026-10-29: every cell read <any>).
+void WriteTypeClasses(ibDataNode& into, std::vector<ibTypeDescription> types, const ibMetaData* metaData)
+{
+	ibTypeDescription primitives;
+	for (const ibValueTypes kind : { ibValueTypes::TYPE_BOOLEAN, ibValueTypes::TYPE_NUMBER, ibValueTypes::TYPE_DATE,
+			ibValueTypes::TYPE_STRING })
+		primitives.AppendMetaType(kind);
+	types.push_back(primitives);
+
+	ibDataNode& named = into.Child(ibProtocol::ibView::ibComposer::Classes);
+	std::set<ibClassID> seen;
+	for (const ibTypeDescription& type : types) {
+		for (const ibClassID& clsid : type.GetClsidList()) {
+			if (!seen.insert(clsid).second)
+				continue;
+			const ibCtorAbstractType* const ctor = metaData != nullptr ? metaData->GetAvailableCtor(clsid)
+				: ibValue::GetAvailableCtor(clsid);
+			if (ctor == nullptr)
+				continue;
+			ibDataNode& entry = named.AddChild(0, static_cast<ibMetaID>(named.Children().size() + 1));
+			entry.SetValue(ibProtocol::ibSchema::ibProperties::Type, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(clsid)));
+			entry.SetValue(ibProtocol::ibSchema::ibProperties::Name, ctor->GetClassName());
+			entry.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(clsid));
+		}
+	}
+}
+
 // WHAT A QUERY TEXT OFFERS — written as the settings windows' questions write it (ComposerSettings: no Id, a field of a
-// parsed text stands behind no attribute), with the parser's complaint when it offers none.
-void WriteQueryFields(ibDataNode& into, const ibString& text, const ibMetaData* metaData)
+// parsed text stands behind no attribute), with the parser's complaint when it offers none — and the names of the
+// classes its fields and the composition's parameters hold.
+void WriteQueryFields(ibDataNode& into, const ibString& text, const ibMetaData* metaData,
+	const std::vector<ibParameterDescription>& parameters = {})
 {
 	ibString error;
 	ibDataNode& fields = into.Child(ibProtocol::ibView::ibComposer::Fields);
@@ -29,6 +63,10 @@ void WriteQueryFields(ibDataNode& into, const ibString& text, const ibMetaData* 
 	ibWriteSettingsReferences(into.Child(ibProtocol::ibView::ibComposer::References), types, metaData);
 	if (!error.IsEmpty())
 		into.SetValue(ibProtocol::ibView::ibComposer::Error, error);
+
+	for (const ibParameterDescription& parameter : parameters)
+		types.push_back(parameter.m_type);
+	WriteTypeClasses(into, std::move(types), metaData);
 }
 
 
@@ -96,7 +134,7 @@ void ibComposerCompositionView::OnDraw(ibDataNode& frame)
 
 	const ibCompositionDescription& composition = metaComposer->GetCompositionDesc();
 	ibCompositionDescriptionMemory::WriteNode(frame.Child(ibProtocol::ibView::ibComposer::Composition), composition);
-	WriteQueryFields(frame, composition.m_query, metaComposer->GetMetaData());
+	WriteQueryFields(frame, composition.m_query, metaComposer->GetMetaData(), composition.m_parameters);
 }
 
 bool ibComposerCompositionView::Fetch(const ibDataNode& request, ibDataNode& response)

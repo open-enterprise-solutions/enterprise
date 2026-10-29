@@ -24,7 +24,9 @@ public:
 
 	void GetOwner(ibMetaData*& owner) const { owner = nullptr; }
 
-	ibCtorAbstractType* GetAvailableCtor(const ibClassID& WXUNUSED(clsid)) const { return nullptr; }
+	// A class as the server named it (ibValue::GetAvailableCtor) — the configuration's names are the server's, said with
+	// what shows them (a property's choices, a composer's Classes); one never said answers null.
+	ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid) const;
 
 	// Whether what the tab shows may be changed — the server's word, said with the tab (ibFrame::ibTab::ReadOnly: its
 	// document's IsEditable); read off the frame as it stands, so it answers the tab's state now. No tab, or none said:
