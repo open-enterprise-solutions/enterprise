@@ -12,7 +12,6 @@
 #include "frmclient/backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — what a reference points at
 #include "frmclient/backend/metaCollection/resource/metaResourceObject.h"   // the RESOURCE metatype — its own class icon
 #include "frmclient/backend/metaData.h"                                      // a tab's configuration — its tab
-#include "frmclient/docView/tabDocument.h"                                   // a tab's fetch — a composer's, its targets' fields
 #include "frmclient/mainFrame/mainFrame.h"                                  // ibFrontendMainFrame::Respond — a target's fields asked
 #include "frmclient/win/picture.h"                                          // ibProtocolPicture — a field's picture, as it names it
 #include "protocol/protocol.h"
@@ -95,14 +94,11 @@ static std::vector<ibSettingsPlainField> AskTargetFields(const std::vector<ibMet
 	// ⭐ A TAB'S CONFIGURATION ASKS ITS TAB — a composer's panel is no window the server asked, so there is no question
 	// to answer on the way: the tab is fetched (Request: {Kind: Expand, Targets}) and answers as the window is asked again.
 	if (metaData != nullptr && metaData->GetTabId() != 0) {
-		const ibTabDocument* const document = frame->FindDocument(metaData->GetTabId());
-		if (document == nullptr)
-			return {};
 		ibProtocolNode request, answer;
 		request.SetValue(ibProtocol::ibRequest::Kind, static_cast<long long>(ibProtocol::ibView::ibComposer::ibRequest::Expand));
 		for (const ibMetaID& target : targets)
 			request.AddItem(ibProtocol::ibRequest::ibListSettings::Targets, static_cast<long long>(target));
-		if (!document->Fetch(request, answer))
+		if (!metaData->Fetch(request, answer))
 			return {};
 		ibValueReferenceDataObject::ReadReferences(answer.FindChild(ibProtocol::ibRequest::ibListSettings::References));
 		return ibReadSettingsFields(answer.FindChild(ibProtocol::ibRequest::ibListSettings::Expanded));

@@ -64,6 +64,39 @@ std::vector<ibDiagnostic> CollectFrom(Compile compile)
 	return std::move(collector.m_found);
 }
 
+// ⭐ …BUT NOT IN A VACUUM, when a configuration was named. The module manager this configuration compiles against IS the
+// context every module of it is parented to — the globals among them — so a text judged without it is judged against a
+// language that has no Message, no Query and no ValueTable. See the note in the header.
+//
+// ⚠ NULL IS ORDINARY: a plugin checking a text with no configuration open gets the old behaviour, which is the most that
+// can honestly be said about a text with no home.
+void ParentToModuleManager(ibCompileCode& compiler, const ibMetaData* metaData)
+{
+	if (metaData == nullptr)
+		return;
+	ibValueModuleManager* const manager = ibSession::EditModuleManagerFor(metaData);
+	ibCompileModule* const context = manager != nullptr ? manager->GetCompileModule() : nullptr;
+	if (context == nullptr)
+		return;
+
+	// 🛑 …AND IT HAS TO HAVE BEEN COMPILED. A manager nobody compiled carries an EMPTY bytecode, so parenting to it buys
+	// nothing: `CurrentDate()` comes back as "procedure or function not detected" — a true statement about an empty
+	// world. The desktop's composer window learned this the hard way and did exactly this as it opened, before it checked
+	// anything; Max pointed here: *"that is where we hunted a bug for a very long time"*.
+	//
+	// ⚠ SWALLOWED. A configuration whose own modules do not compile is not this checker's complaint to make — it was
+	// asked about the TEXT. The reason is written down instead, because "the check knows fewer names than it should" is
+	// invisible otherwise.
+	try { context->Compile(); }
+	catch (const ibCoreException& error) {
+		ibJournalInfo(ibT("compiler"),
+			ibT("script check: the module manager did not compile - %s"),
+			error.GetErrorDescription());
+	}
+
+	compiler.SetParent(context);
+}
+
 } // namespace
 
 std::vector<ibDiagnostic> ibCheckScript(const ibString& text, const ibString& moduleName,
@@ -84,43 +117,55 @@ std::vector<ibDiagnostic> ibCheckScript(const ibString& text, const ibString& mo
 		// compile that both reports AND continues, and continuing is precisely what a raise cannot
 		// do: it leaves the loop that has to keep going (Max, 2026-09-07: *"any publication is an
 		// exception — an exit from the loop, and you need to continue it"*).
-
-		// ⭐ …BUT NOT IN A VACUUM, when a configuration was named. The module manager this
-		// configuration compiles against IS the context every module of it is parented to — the
-		// globals among them — so a snippet judged without it is judged against a language that
-		// has no Message, no Query and no ValueTable. See the note in the header.
-		//
-		// ⚠ NULL IS ORDINARY: a plugin checking a text with no configuration open gets the old
-		// behaviour, which is the most that can honestly be said about a text with no home.
-		if (metaData != nullptr) {
-			if (ibValueModuleManager* manager = ibSession::EditModuleManagerFor(metaData)) {
-				if (ibCompileModule* context = manager->GetCompileModule()) {
-
-					// 🛑 …AND IT HAS TO HAVE BEEN COMPILED. A manager nobody compiled carries an
-					// EMPTY bytecode, so parenting to it buys nothing: `CurrentDate()` comes back as
-					// "procedure or function not detected" — a true statement about an empty world.
-					// The designer's composer window learned this the hard way and does exactly this
-					// before it checks anything (PrepareModuleContext, composerSettings.cpp); Max
-					// pointed here: *"that is where we hunted a bug for a very long time"*.
-					//
-					// ⚠ SWALLOWED. A configuration whose own modules do not compile is not this
-					// checker's complaint to make — it was asked about the SNIPPET. The reason is
-					// written down instead, because "the check knows fewer names than it should" is
-					// invisible otherwise.
-					try { context->Compile(); }
-					catch (const ibCoreException& error) {
-						ibJournalInfo(ibT("compiler"),
-							ibT("script check: the module manager did not compile - %s"),
-							error.GetErrorDescription());
-					}
-
-					compiler.SetParent(context);
-				}
-			}
-		}
+		ParentToModuleManager(compiler, metaData);
 
 		compiler.Compile(text);
 	});
+}
+
+std::vector<ibDiagnostic> ibCheckExpression(const ibString& expression, const ibMetaData* metaData)
+{
+	if (expression.IsEmpty())
+		return {};   // no expression is not an error
+
+	// Named once: the wrapper is written with it and its locals are read back by it.
+	static const ibString kCheckFunctionName = ibT("__checkExpression");
+	static const ibString kModuleName = ibT("expression");
+
+	ibString unknown;
+	std::vector<ibDiagnostic> found = CollectFrom([&] {
+		const bool braces = ibCompileCode::GetCodeStyle() == CODE_CES;
+		const ibString wrapped = braces
+			? ibT("function ") + kCheckFunctionName + ibT("() { return ") + expression + ibT("; }")
+			: ibT("Function ") + kCheckFunctionName + ibT("() Return ") + expression + ibT("; EndFunction");
+
+		ibCompileCode compiler(kModuleName, ibT("check"), false);
+		ParentToModuleManager(compiler, metaData);
+		compiler.Compile(wrapped);
+
+		// ⭐⭐ COMPILING IS NOT ENOUGH — the wrapper declares nothing and takes no parameters, so EVERY named local in it is a
+		// name that resolved to nothing. Temps never reach this list (byteCode.h: "Temps are filtered out at the mirror
+		// site"), so the list is exactly the unknown names.
+		for (const auto& function : compiler.m_cByteCode.m_listFunc) {
+			if (!function.m_strRealName.IsSameAs(kCheckFunctionName, false))
+				continue;
+			for (const ibByteCode::ibByteCodeVarInfo& local : function.m_listLocals) {
+				if (local.IsLocal()) {
+					unknown = local.m_strRealName;
+					return;
+				}
+			}
+		}
+	});
+
+	if (found.empty() && !unknown.IsEmpty()) {
+		ibDiagnostic diagnostic;
+		diagnostic.m_kind = ibDiagnosticKind::Compile;
+		diagnostic.m_moduleName = kModuleName;
+		diagnostic.m_message = ibString::Format(_("Unknown name: %s"), unknown);
+		found.push_back(std::move(diagnostic));
+	}
+	return found;
 }
 
 ibScriptCheckAnswer ibCheckModule(const ibValueMetaObject* metaObject)

@@ -8,6 +8,7 @@
 #include "frmclient/frmclient.h"   // FRMCLIENT_API
 
 class ibCtorAbstractType;
+class ibProtocolNode;
 class ibValueMetaObject;
 
 // THE CONFIGURATION — the engine's ibMetaData: the server's, which the client reaches through the tab that shows it
@@ -32,6 +33,9 @@ public:
 	// document's IsEditable); read off the frame as it stands, so it answers the tab's state now. No tab, or none said:
 	// editable — the desktop's answer for a configuration nobody restricted.
 	bool IsEditable() const;
+	// …and a question to it — fetch {Tab, Request} (ibTabDocument::Fetch): what the desktop asked its configuration, a
+	// panel asks the tab it is on. No tab, or none open: false — nobody to ask.
+	bool Fetch(const ibProtocolNode& request, ibProtocolNode& answer) const;
 
 	std::vector<const ibValueMetaObject*> GetAnyArrayObject(const std::initializer_list<ibClassID> WXUNUSED(classes)) const { return {}; }
 	template <class T>

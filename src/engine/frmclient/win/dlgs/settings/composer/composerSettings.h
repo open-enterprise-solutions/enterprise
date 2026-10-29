@@ -294,10 +294,6 @@ private:
 	bool EditParameterExpression(wxString& text);
 	// The "..." behind the Type cell: the product.s type picker over this parameter.s declaration.
 	bool EditParameterType(wxString& text);
-	// ⭐ MAKE THE NAMES AN EXPRESSION MAY CALL EXIST — compile the module manager of the config this
-	// composition belongs to, ONCE, as the window opens. Not during a check: compiling rebuilds the
-	// module chain, and from inside a cell editor that rebuild destroys the renderer mid-call.
-	void PrepareModuleContext();
 	// COMPILE-time check of one expression, and of every parameter.s — the window asks before closing.
 	static bool CheckExpression(const wxString& expression, wxString& complaint,
 	                            const class ibMetaData* metaData);

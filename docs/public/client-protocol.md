@@ -123,7 +123,8 @@ The client edits the description itself and sends it back whole: event
 composition now has. The fields of another text are fetched by the tab: `fetch {Tab, Request: {Kind: 21, Text}}` —
 `Fields`, `References`, `Error`, `Classes`; the fields of a reference's targets — `fetch {Tab, Request: {Kind: 22,
 Targets}}` — `Expanded` and `References`, as a ListSettings window asked again has them; the types a parameter may be
-given — `fetch {Tab, Request: {Kind: 28}}` — `Types` (class ids) and `Classes`. A cell's "..." is a ListSettings
+given — `fetch {Tab, Request: {Kind: 28}}` — `Types` (class ids) and `Classes`; what is wrong with a parameter's
+expression — `fetch {Tab, Request: {Kind: 29, Text}}` — `Error`, none when it compiles. A cell's "..." is a ListSettings
 window's `Act Choose` said to the tab: event `Select {Type, Value, Choice}`; the value chosen comes back in the view's
 `State` as `Chosen`, as the window's question carries it.
 A form designer tab answers the same two requests for an attribute of type DataComposition: its inspector row

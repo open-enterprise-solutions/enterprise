@@ -49,6 +49,14 @@ BACKEND_API std::vector<ibDiagnostic> ibCheckScript(const ibString& text,
 	const ibString& moduleName = ibT("module"),
 	const class ibMetaData* metaData = nullptr);
 
+// …AN EXPRESSION — a composer parameter's: judged as the value it is meant to be, against the same module manager. It is
+// compiled as the body of a function, so a stray assignment does not pass for a statement. A name nobody declares is
+// refused too: the language compiles one to a local slot, right for a script that goes on to assign it, wrong for an
+// expression, which then reads as an empty value (Max, 2026-08-28: "the expression is not checked here"). Empty means
+// it holds; no expression is no error.
+BACKEND_API std::vector<ibDiagnostic> ibCheckExpression(const ibString& expression,
+	const class ibMetaData* metaData);
+
 // WHY A SECOND DOOR. The designer's *Syntax control* button does NOT compile a
 // bare text: it resolves the module through the configuration's compile cache
 // and compiles it against the metaobject that owns it, so the object's own

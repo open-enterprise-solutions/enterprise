@@ -49,7 +49,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   "..." of a parameter's type, of its value and of a condition's value opened nothing. The cells name the
   configuration's types, and the "..." opens the type picker and the declared-value window, as the desktop's did.
   A condition's value chosen there is the reference chosen, a predefined element too; the desktop's made every one
-  of them the empty reference.
+  of them the empty reference. A parameter's expression is checked again, as the desktop checked it: `1 + (` or a
+  name nobody declares is said when the editor or the window is closed, where it went into the cell without a word.
 - **A value declared in the designer reads as it was chosen when the composition is opened again**, where a
   parameter set to `CatalogRef.Goods.EmptyRef` or to a predefined element read as a number: its text was written
   under the name the value's type is written under, and the type was read in its place. A composition saved before
