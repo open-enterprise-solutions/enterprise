@@ -1304,10 +1304,69 @@ void ibFrontendMainFrame::TakeChosen(const ibProtocolNode& request)
 	owner->ChoiceProcessing(value);
 }
 
+bool ibFrontendMainFrame::ChooseValueOnTab(ibControlFrame* owner, const ibValue& current)
+{
+	// The tab the cell is on — its configuration's, else the one the person is standing in (a condition's cell answers
+	// with no tab of its own: it is pressed there all the same).
+	const ibTypeControlFactory* const factory = dynamic_cast<const ibTypeControlFactory*>(owner);
+	const ibMetaData* const metaData = factory != nullptr ? factory->GetMetaData() : nullptr;
+	const long long tabId = metaData != nullptr && metaData->GetTabId() != 0 ? metaData->GetTabId()
+		: m_communicator->GetFrame().GetInt(ibProtocol::ibFrame::ActiveTab);
+	if (owner == nullptr || tabId == 0)
+		return false;
+
+	// What it may hold — what the cell declares, else the type the value in it stands on.
+	wxString types;
+	const ibTypeDescription declared = factory != nullptr ? factory->GetTypeDesc() : ibTypeDescription();
+	for (const ibClassID& clsid : declared.GetClsidCount() > 0 ? declared.GetClsidList()
+			: std::vector<ibClassID>{ current.GetClassType() }) {
+		if (clsid == 0)
+			continue;
+		if (!types.IsEmpty())
+			types << wxT(',');
+		types << static_cast<unsigned long long>(clsid);
+	}
+	if (types.IsEmpty())
+		return false;
+
+	m_tabChoosing = ibChoosing{ owner, ++m_choice, 0 };
+	ibProtocolNode args;
+	args.SetValue(ibProtocol::ibView::ibComposer::Type, types)
+		.SetValue(ibProtocol::ibView::ibComposer::Choice, m_choice);
+	if (!current.IsEmpty()) {
+		ibDataNode node;
+		current.Serialize(node);
+		ibWriteProtocolNode(node, args.Child(ibProtocol::ibView::ibComposer::Value));
+	}
+	ibProtocolNode params, answer;
+	params.SetValue(ibProtocol::ibEvent::Tab, tabId)
+		.SetValue(ibProtocol::ibEvent::Event, static_cast<int>(ibProtocol::ibEvent::ibKind::Select))
+		.SetValue(ibProtocol::ibEvent::Args, args);
+	return Call(ibProtocol::ibMethod::Event, params, answer);
+}
+
+void ibFrontendMainFrame::TakeTabChosen(const ibProtocolNode& state)
+{
+	const ibProtocolNode chosen = state.FindChild(ibProtocol::ibView::ibComposer::Chosen);
+	if (m_tabChoosing.owner == nullptr || !chosen.IsNode()
+			|| chosen.GetInt(ibProtocol::ibView::ibComposer::Choice) != m_tabChoosing.choice)
+		return;
+	ibControlFrame* const owner = m_tabChoosing.owner;
+	m_tabChoosing = ibChoosing();
+	ibDataNode node;
+	ibReadProtocolNode(chosen.FindChild(ibProtocol::ibView::ibComposer::Value), node);
+	ibValue value = ibValue::FromNode(node);
+	owner->ChoiceProcessing(value);
+}
+
 bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibValue& current)
 {
+	// ⭐ NO WINDOW ASKS — the cell is on a designer's tab (a composer's panel): the tab's view chooses it, through the
+	// configuration that is there (2026-10-29: a parameter's "..." and a condition's opened nothing).
 	const ibProtocolNode request = GetRequest();
-	if (owner == nullptr || m_asking.empty() || !IsSettingsRequest(request))
+	if (owner != nullptr && (m_asking.empty() || !IsSettingsRequest(request)))
+		return ChooseValueOnTab(owner, current);
+	if (owner == nullptr)
 		return false;
 
 	m_choosing = ibChoosing{ owner, ++m_choice, m_asking.size() };

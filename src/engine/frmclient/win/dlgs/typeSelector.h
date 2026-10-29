@@ -8,8 +8,8 @@
 // the desktop asked its configuration for what a field of the shape `kind` may hold (GetTypesByFilter), and the client
 // has none to ask. A type the value already holds is offered either way. `single` — one type, not several.
 //
-// ⚠ A caller with no offer of the server's (`filter` empty) is answered Cancel, the picker not shown — the composer's
-// parameter picker is such, until its request carries one.
+// ⚠ A caller with no offer of the server's (`filter` empty) is answered Cancel, the picker not shown. (The composer's
+// parameter picker reads its offer off the tab's view: ibComposerOfferedTypes.)
 
 #include "core/description/typeDescription.h"
 #include "frmclient/backend/backend_type.h"   // ibSelectorDataType — which shape the picker renders

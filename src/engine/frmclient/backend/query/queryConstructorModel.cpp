@@ -81,19 +81,43 @@ void RegisterClasses(const ibProtocolNode& classes)
 	}
 }
 
+// …and the types a tab's view offered a parameter (Types), by the tab's id — said with the view alone, so a fetch of the
+// fields, which does not say them, leaves them as they were.
+std::map<long long, std::vector<ibClassID>>& OfferedTypes()
+{
+	static std::map<long long, std::vector<ibClassID>> s_offered;
+	return s_offered;
+}
+
 } // namespace
 
 void ibQueryFieldsKnown(long long tabId, const ibString& text, const ibProtocolNode& answer)
 {
 	// The view's answer and each fetched one come through here: the classes they name, registered as they arrive.
 	RegisterClasses(answer.FindChild(ibProtocol::ibView::ibComposer::Classes));
+	if (answer.Has(ibProtocol::ibView::ibComposer::Types)) {
+		std::vector<ibClassID> offered;
+		for (const ibProtocolNode& type : answer.GetList(ibProtocol::ibView::ibComposer::Types)) {
+			unsigned long long clsid = 0;
+			if (type.AsString().ToULongLong(&clsid) && clsid != 0)
+				offered.push_back(static_cast<ibClassID>(clsid));
+		}
+		OfferedTypes()[tabId] = std::move(offered);
+	}
 	KnownQueryFields()[tabId] = ibKnownQueryFields{ text, answer };
+}
+
+std::vector<ibClassID> ibComposerOfferedTypes(long long tabId)
+{
+	const auto found = OfferedTypes().find(tabId);
+	return found != OfferedTypes().end() ? found->second : std::vector<ibClassID>();
 }
 
 void ibQueryFieldsForget(long long tabId)
 {
 	KnownQueryFields().erase(tabId);
 	KnownListFields().erase(tabId);
+	OfferedTypes().erase(tabId);
 }
 
 std::vector<ibSettingsPlainField> ibListSourceFields(ibMetaID mainTable, const ibString& text, const ibMetaData* metaData,

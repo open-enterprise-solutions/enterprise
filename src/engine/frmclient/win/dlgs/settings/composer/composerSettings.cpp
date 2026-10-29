@@ -13,6 +13,7 @@
 #include "frmclient/win/dlgs/queryConstructor/queryConstructor.h" // the Query tab's constructor button
 #include "frmclient/win/dlgs/queryConstructor/queryExpressionDialog.h" // the resource expression editor
 #include "frmclient/win/dlgs/typeSelector.h"              // the product.s type picker — a parameter declares its type
+#include "frmclient/backend/query/queryConstructorModel.h"   // ibComposerOfferedTypes — …from what the tab's view offered
 #include "frmclient/win/dlgs/translateConstructor/translateConstructor.h"   // a field's title, every language of it
 #include "frmclient/win/dlgs/queryConstructor/queryConstructorInternal.h" // ibExpressionCellRenderer — the Totals tab's own cell
 #include "core/query/queryPeriodUnits.h"                     // ibPeriodUnits — the engine's own list of period words
@@ -3786,10 +3787,13 @@ bool ibComposerSettingsPanel::EditParameterType(wxString& text)
 
 	if ((size_t)idx >= m_edited.m_parameters.size())
 		return false;
-	// ⭐ THE REFERENCE FILTER, as asked (Max, 2026-08-28).
+	// ⭐ THE REFERENCE FILTER, as asked (Max, 2026-08-28) — what the tab's view offered under it: the client has no
+	// configuration to ask (ibComposerOfferedTypes; offered nothing, the picker answers Cancel).
+	const ibMetaData* const metaData = GetEditedMetaData();
 	ibTypeDescription declared = m_edited.m_parameters[idx].m_type;
-	if (!ibShowTypeSelector(this, ibSelectorDataType::ibSelectorDataType_reference, std::vector<ibClassID>(),
-			declared, GetEditedMetaData(), /*allowEdit*/true, /*single*/false))
+	if (!ibShowTypeSelector(this, ibSelectorDataType::ibSelectorDataType_reference,
+			ibComposerOfferedTypes(metaData != nullptr ? metaData->GetTabId() : 0),
+			declared, metaData, /*allowEdit*/true, /*single*/false))
 		return false;
 
 	// ⭐ A NEW TYPE BRINGS ITS OWN EMPTY VALUE. What a parameter holds is a value OF its declared type,
