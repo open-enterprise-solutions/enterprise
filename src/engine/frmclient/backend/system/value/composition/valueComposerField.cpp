@@ -53,7 +53,7 @@ bool ibValueCompositionField::DoDeserialize(const ibDataNode& node) {
 namespace {
 const ibString kPredefinedMetaId = ibT("m");    // the same two field names a reference packs itself
 const ibString kPredefinedGuid   = ibT("g");    // with — this IS that pair, held rather than resolved
-const ibString kPredefinedText   = ibT("t");
+const ibString kPredefinedText   = ibT("n");    // how it reads — the engine's: not `t`, the header's name for the type
 }
 
 bool ibValueCompositionPredefined::DoSerialize(ibDataNode& node) const

@@ -15,6 +15,7 @@
 
 template <class T> class ibValuePtr;
 class ibCtorAbstractType;
+class ibProtocolNode;
 
 // THE VALUE — the engine's ibValue (backend/compiler/value.h) as the client holds one, and lighter: THE VALUE ITSELF IS
 // THE VARIANT'S (core/variant.h) — a primitive, or an object held by its count. What this class adds is the client's
@@ -69,6 +70,9 @@ public:
 	// type is offered by (the type picker). The client has no registry of types.
 	static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
 	static void RegisterCtor(const ibClassID& clsid, const ibString& className, const wxIcon& classIcon = wxNullIcon);
+	// …a list of them as the server writes it (Classes: Type, Name, Picture — a composer's view and its answers), each
+	// under its name; one held under that name already is not made again: its picture is a GDI icon each time.
+	static void ReadClasses(const ibProtocolNode& classes);
 
 	// The registered types of a kind — the engine's registry; the client's are the ones the server's question named (a
 	// form editor's Classes: the controls' names and pictures). Held until the next ask.

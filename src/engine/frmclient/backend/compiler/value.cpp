@@ -43,9 +43,12 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 		return ibValue(ibVariant::FromNode(node));
 
 	// A FIELD OF A COMPOSITION — the client's own object (a condition's other side may be one): made and read, as the
-	// engine's registry makes it. …and an appearance's colour and font, the same way.
+	// engine's registry makes it. …a value the designer declared (a parameter's, a condition's), as the engine's store
+	// makes it; and an appearance's colour and font, the same way.
 	if (clsid == g_compositionFieldCLSID)
 		return ReadObject<ibValueCompositionField>(node);
+	if (clsid == g_compositionPredefinedCLSID)
+		return ReadObject<ibValueCompositionPredefined>(node);
 	if (clsid == ibValueColour().GetClassType())
 		return ReadObject<ibValueColour>(node);
 	if (clsid == ibValueFont().GetClassType())
@@ -113,6 +116,24 @@ void ibValue::RegisterCtor(const ibClassID& clsid, const ibString& className, co
 	// A type the server drew no picture of wears a value's own (value_res.cpp): a list of types puts up a picture for
 	// each, and an empty one is refused.
 	NamedTypes()[clsid] = std::make_unique<ibCtorAbstractType>(className, classIcon.IsOk() ? classIcon : GetIconGroup());
+}
+
+void ibValue::ReadClasses(const ibProtocolNode& classes)
+{
+	for (const ibProtocolNode& entry : classes.Children()) {
+		unsigned long long clsid = 0;
+		if (!entry.GetString(ibProtocol::ibSchema::ibProperties::Type).ToULongLong(&clsid) || clsid == 0)
+			continue;
+		const ibString name = entry.GetString(ibProtocol::ibSchema::ibProperties::Name);
+		const ibCtorAbstractType* const held = GetAvailableCtor(clsid);
+		if (held != nullptr && held->GetClassName() == name)
+			continue;
+		const wxBitmap picture = ibProtocolPicture(entry, ibProtocol::ibSchema::ibProperties::Picture);
+		wxIcon icon;
+		if (picture.IsOk())
+			icon.CopyFromBitmap(picture);
+		RegisterCtor(static_cast<ibClassID>(clsid), name, icon);
+	}
 }
 
 std::vector<ibCtorAbstractType*> ibValue::GetListCtorsByType(ibCtorObjectType objectType)

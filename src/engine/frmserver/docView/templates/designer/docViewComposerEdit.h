@@ -9,30 +9,33 @@
 // Not the desktop's names — see docViewModuleEdit.h.
 
 #include "frmserver/docView/docView.h"
-#include "backend/compiler/value.h"   // ibValue — the value last chosen for a cell of the panel
+
+class ibListSettingsChoice;
 
 class FRMSERVER_API ibComposerCompositionView : public ibMetaView {
 public:
 	ibComposerCompositionView() : ibMetaView() {}
+	virtual ~ibComposerCompositionView();
 
-	// View.State {ReadOnly}, View.Composition — the composer's description, View.Fields and View.References — what its
-	// query offers, as the settings windows have them; View.Error — why the query offers none.
+	// View.State {ReadOnly, Chosen — a value chosen for a cell}, View.Composition — the composer's description,
+	// View.Fields and View.References — what its query offers, as the settings windows have them; View.Error — why the
+	// query offers none; View.Classes — what its type cells name.
 	virtual void OnDraw(ibDataNode& frame) override;
 	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Composer; }
 
 	// fetch {Tab, Request: {Kind: Fields, Text}} — the fields a query text offers, while it is being edited on the
-	// panel's Query tab (the desktop's panel read them of the text and the configuration, which are here).
+	// panel's Query tab (the desktop's panel read them of the text and the configuration, which are here); the rest of
+	// what the panel asks — ibFetchComposerRequest.
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;
 
 	// Input — the panel was edited: the configuration is modified; Change {Composition} — what the panel holds, put on
-	// the composer (the desktop's panel edited the metaobject's description in place); Select {Type, Value, Choice} — a
-	// cell's "...": its value chosen through the configuration, said back with the view (State Chosen {Choice, Value}).
+	// the composer (the desktop's panel edited the metaobject's description in place); Select — a cell's "...", a
+	// settings window's Act Choose: chosen through the configuration, said back with the view (State Chosen).
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 private:
 
-	std::int32_t m_choice = 0;   // the number the last value chosen was asked under — none: 0
-	ibValue      m_chosen;       // …and that value
+	ibListSettingsChoice* m_choosing = nullptr;   // the cell a value is being chosen for (Select), counted
 
 	wxDECLARE_DYNAMIC_CLASS(ibComposerCompositionView);
 };
@@ -51,7 +54,8 @@ public:
 
 // WHAT A COMPOSITION'S PANEL ASKS OF THE CONFIGURATION, on whichever designer tab it is — a composer's own, or a form's
 // whose attribute holds a composition (ibPropertyDataComposition): the fields of a query text (Kind Fields {Text}) and
-// of a reference's targets (Kind Expand {Targets}), and a dynamic list's (Kind Source {Id, Text}). False: not one of these.
+// of a reference's targets (Kind Expand {Targets}), a dynamic list's (Kind Source {Id, Text}), and what a parameter may
+// be given (Kind Types). False: not one of these.
 FRMSERVER_API bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, const ibMetaData* metaData);
 
 #endif

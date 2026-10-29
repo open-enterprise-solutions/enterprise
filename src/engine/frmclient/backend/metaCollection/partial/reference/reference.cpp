@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "frmclient/backend/compiler/value.h"          // the empty reference, made of the node it came as
+#include "frmclient/backend/serialize/dataProtocol.h"  // …read off the wire as it lies
 #include "protocol/protocol.h"
 
 std::map<ibClassID, std::vector<ibMetaID>>& ibValueReferenceDataObject::Targets()
@@ -25,6 +27,18 @@ std::vector<ibMetaID> ibValueReferenceDataObject::ConvertToMetaIds(const std::ve
 	return ids;
 }
 
+std::map<ibClassID, ibDataNode>& ibValueReferenceDataObject::EmptyRefs()
+{
+	static std::map<ibClassID, ibDataNode> s_empty;
+	return s_empty;
+}
+
+ibValue ibValueReferenceDataObject::EmptyRef(const ibClassID& clsid)
+{
+	const auto found = EmptyRefs().find(clsid);
+	return found != EmptyRefs().end() ? ibValue::FromNode(found->second) : ibValue();
+}
+
 void ibValueReferenceDataObject::ReadReferences(const ibProtocolNode& references)
 {
 	for (const ibProtocolNode& reference : references.Children()) {
@@ -35,5 +49,8 @@ void ibValueReferenceDataObject::ReadReferences(const ibProtocolNode& references
 		for (const ibProtocolNode& target : reference.GetList(ibProtocol::ibRequest::ibListSettings::Targets))
 			ids.push_back(static_cast<ibMetaID>(target.AsInt()));
 		Targets()[static_cast<ibClassID>(clsid)] = std::move(ids);
+		const ibProtocolNode empty = reference.FindChild(ibProtocol::ibRequest::ibListSettings::Value);
+		if (empty.IsNode())
+			ibReadProtocolNode(empty, EmptyRefs()[static_cast<ibClassID>(clsid)]);
 	}
 }

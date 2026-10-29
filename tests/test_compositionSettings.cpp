@@ -44,6 +44,7 @@
 #include "backend/system/value/valueArray.h"      // …and the list an «in» condition reads
 #include "backend/query/queryHierarchy.h"         // …and the subtree an «in hierarchy» one is handed
 #include "backend/backend_composition.h"         // the description + its Memory (read/write) pair, its values packed
+#include "backend/system/value/composition/valueComposerField.h"   // …a value the designer declared among them
 #include "core/serialize/dataBuilder.h"        // ibDataNode — what a description is written into
 
 namespace {
@@ -1010,6 +1011,21 @@ TEST(CompositionOtherSettings, ANodeSaysItsOwnElseTheOutputElseTheSetting)
 
 	// A THEME NOBODY KNOWS PAINTS IN THE FIRST — the way a field that has gone still prints under its name.
 	EXPECT_EQ(ibCompositionThemes().front(), &ibCompositionThemeById(wxT("NoSuchTheme")));
+}
+
+// ⭐ A VALUE THE DESIGNER DECLARED READS BACK AS IT WAS WRITTEN — its text was written under `t`, the name the header
+// gives the type, and a read finds the first field of a name: it came back reading as its type's id (2026-10-29).
+TEST(CompositionParameters, ADeclaredValueIsKeptThroughTheStore)
+{
+	const ibGuid element(ibString(wxT("6f9619ff-8b86-d011-b42d-00cf4fc964ff")));
+	const ibValue back = ibStoredValue(
+		ibStoreValue(ibValue(new ibValueCompositionPredefined(1005, element, wxT("CatalogRef.Goods.Chair")))), nullptr);
+
+	ibValueCompositionPredefined* declared = nullptr;
+	ASSERT_TRUE(back.ConvertToValue(declared));
+	EXPECT_EQ(wxT("CatalogRef.Goods.Chair"), back.GetString());
+	EXPECT_EQ(static_cast<ibMetaID>(1005), declared->GetMetaId());
+	EXPECT_TRUE(element == declared->GetGuid());
 }
 
 // ⭐⭐ A CONDITIONAL APPEARANCE TRAVELS WITH THE SETTING — its condition, its fields and its appearance, a

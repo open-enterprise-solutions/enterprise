@@ -3,10 +3,14 @@
 #include <algorithm>
 
 #include "core/serialize/dataBuilder.h"   // the empty value of a server's type, written as the engine writes one
+#include "frmclient/backend/metaCollection/partial/reference/reference.h"   // which metaobject a type points at
+#include "frmclient/backend/system/value/composition/valueComposerField.h"   // a declared value, the reference it names
+#include "protocol/protocol.h"                 // …read as it was written (Presentation)
 
 namespace {
 
-// The empty value of one class — a primitive's own, a server's type as the engine writes an empty one ({t}).
+// The empty value of one class — a primitive's own, a reference's as the server wrote it and reads it (References: in the
+// designer `CatalogRef.Goods.EmptyRef`), any other type of the server's as the engine writes an empty one ({t}).
 ibValue EmptyOf(const ibClassID& clsid)
 {
 	switch (ibValue::GetVTByID(clsid)) {
@@ -18,6 +22,9 @@ ibValue EmptyOf(const ibClassID& clsid)
 	default:
 		break;
 	}
+	const ibValue empty = ibValueReferenceDataObject::EmptyRef(clsid);
+	if (empty.GetClassType() == clsid)
+		return empty;
 	ibDataNode written;
 	written.SetValue(kValueFieldClsid, ibString::Format(ibT("%llu"), (unsigned long long)clsid));
 	return ibValue::FromNode(written);
@@ -59,6 +66,24 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 			return ibValue(ibString(varValue.GetString()).Left(data.GetLength()));
 		default:
 			return varValue;
+		}
+	}
+
+	// ⭐ A DECLARED VALUE IS THE REFERENCE IT NAMES — the designer's choice in its window of declared values
+	// (`CatalogRef.Goods.EmptyRef`, a predefined element), for the type that points at its metaobject and at nothing else
+	// (the server's answer, References). Its metaobject and guid are the pair a reference packs itself with: the same node
+	// under the type's header, read as it was written. Made the type's empty value below, the element chosen was lost and
+	// the cell read as nothing — the client has no name of its own for a reference (2026-10-29).
+	ibValueCompositionPredefined* declared = nullptr;
+	if (varValue.ConvertToValue(declared)) {
+		for (const ibClassID& type : listed) {
+			if (ibValueReferenceDataObject::ConvertToMetaIds({ type }, metaData) != std::vector<ibMetaID>{ declared->GetMetaId() })
+				continue;
+			ibDataNode named;
+			declared->Serialize(named);
+			named.SetField(kValueFieldClsid, ibDataValue::String(ibString::Format(ibT("%llu"), (unsigned long long)type)));
+			named.SetValue(ibProtocol::ibRequest::ibListSettings::Presentation, declared->GetString());
+			return ibValue::FromNode(named);
 		}
 	}
 

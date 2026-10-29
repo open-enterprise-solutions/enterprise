@@ -107,7 +107,9 @@ bool ibValueCompositionField::DoDeserialize(const ibDataNode& node) {
 namespace {
 const ibString kPredefinedMetaId = ibT("m");    // the same two field names a reference packs itself
 const ibString kPredefinedGuid   = ibT("g");    // with — this IS that pair, held rather than resolved
-const ibString kPredefinedText   = ibT("t");
+// How it reads — `n`, as a field's. It was `t`, the name the header gives the type (kValueFieldClsid): a read finds the
+// first field of a name, so a declaration read back read as its type's id (2026-10-29).
+const ibString kPredefinedText   = ibT("n");
 }
 
 bool ibValueCompositionPredefined::DoSerialize(ibDataNode& node) const

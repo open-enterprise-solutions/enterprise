@@ -30,8 +30,6 @@ FRMCLIENT_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibS
 class ibProtocolNode;
 FRMCLIENT_API void ibQueryFieldsKnown(long long tabId, const ibString& text, const ibProtocolNode& answer);
 FRMCLIENT_API void ibQueryFieldsForget(long long tabId);
-// …and the types its view offered a parameter (the desktop's type picker asked its configuration): none said — empty.
-FRMCLIENT_API std::vector<ibClassID> ibComposerOfferedTypes(long long tabId);
 
 // A DYNAMIC LIST'S FIELDS on a tab — those of its main table (wxNOT_FOUND: none) and what its query adds, as the desktop's
 // list settings window reads them; asked of the tab (fetch {Tab, Request: {Kind: Source, Id, Text}}) once per main table

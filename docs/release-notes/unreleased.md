@@ -45,3 +45,12 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **An Excel workbook with a part that does not parse is refused, the part named**, where it was read
   with that part left out: shared strings that did not parse left every string cell of the book empty,
   and nobody was told. The workbook's XML is read by the engine's own parser, no longer by wx's.
+- **The thin designer's composer names its types and chooses its values.** Every Type cell read `<any>`, and the
+  "..." of a parameter's type, of its value and of a condition's value opened nothing. The cells name the
+  configuration's types, and the "..." opens the type picker and the declared-value window, as the desktop's did.
+  A condition's value chosen there is the reference chosen, a predefined element too; the desktop's made every one
+  of them the empty reference.
+- **A value declared in the designer reads as it was chosen when the composition is opened again**, where a
+  parameter set to `CatalogRef.Goods.EmptyRef` or to a predefined element read as a number: its text was written
+  under the name the value's type is written under, and the type was read in its place. A composition saved before
+  reads such a value as nothing until it is chosen again; what it refers to is unchanged.

@@ -1,5 +1,6 @@
 #include "docViewComposer.h"
 
+#include "frmclient/backend/compiler/value.h"                 // ibValue::ReadClasses — the classes the view named
 #include "frmclient/backend/query/queryConstructorModel.h"   // ibQueryFieldsKnown — the fields the view said of its text
 #include "frmclient/backend/serialize/dataProtocol.h"         // the composition, as the view carries it
 #include "frmclient/mainFrame/mainFrame.h"
@@ -145,13 +146,15 @@ void ibComposerEditDocument::DrawView(const ibProtocolNode& view, const ibProtoc
 	ibCompositionDescription composition;
 	ibCompositionDescriptionMemory::ReadNode(node, composition);
 	ibQueryFieldsKnown(GetTabId(), composition.m_query, view);
+	// …and the classes its type cells name — a parameter's too, which no field read brings.
+	ibValue::ReadClasses(view.FindChild(ibProtocol::ibView::ibComposer::Classes));
 
 	if (ibComposerEditView* const composerView = dynamic_cast<ibComposerEditView*>(GetFirstView()))
 		composerView->Build(view);
 
-	// …and a value chosen for a cell of the panel (its "..."), handed to the cell that asked.
+	// …and a value chosen for a cell of the panel (its "...", ChooseValue), handed to the cell that asked.
 	if (ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame())
-		frame->TakeTabChosen(view.FindChild(ibProtocol::ibView::State));
+		frame->TakeChosen(view.FindChild(ibProtocol::ibView::State));
 }
 
 bool ibComposerEditDocument::Save()

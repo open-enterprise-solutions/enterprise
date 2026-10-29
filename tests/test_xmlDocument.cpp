@@ -148,7 +148,7 @@ TEST(XmlDocument, BytesAreReadInTheEncodingTheirDeclarationNames)
 	ibXmlDocument xml;
 	xml.Load(bytes.data(), bytes.size());
 	ASSERT_NE(xml.GetRoot(), nullptr);
-	EXPECT_EQ(xml.GetRoot()->GetNodeContent(), ibString(L"При"));
+	EXPECT_EQ(xml.GetRoot()->GetNodeContent(), ibString(ibT("\x041F\x0440\x0438")));
 }
 
 TEST(XmlDocument, ANodeKnowsTheLineItBeginsOn)

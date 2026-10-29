@@ -10,8 +10,7 @@
 #include "core/guid.h"                // a configuration picture's name
 #include "core/serialize/dataBuilder.h"   // a type, as the server wrote it
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode — …read off the answer
-#include "frmclient/backend/compiler/value.h"           // ibValue::RegisterCtor — a class, as the server named it
-#include "frmclient/win/picture.h"                      // ibProtocolPicture — …and drew it
+#include "frmclient/backend/compiler/value.h"           // ibValue::ReadClasses — the classes the answer names
 
 #include <map>
 
@@ -60,64 +59,17 @@ std::vector<ibQueryConstructorField> ReadQueryFields(const ibProtocolNode& descr
 	return fields;
 }
 
-// THE CLASSES A TYPE CELL MAY NAME, as the server named them (Classes: Type, Name, Picture) — registered where every
-// window reads a class by (ibValue::GetAvailableCtor). One held under the same name is not made again: its picture is a
-// GDI icon each time (the inspector's lesson, ibPropertySerializable).
-void RegisterClasses(const ibProtocolNode& classes)
-{
-	for (const ibProtocolNode& entry : classes.Children()) {
-		unsigned long long clsid = 0;
-		if (!entry.GetString(ibProtocol::ibSchema::ibProperties::Type).ToULongLong(&clsid) || clsid == 0)
-			continue;
-		const ibString name = entry.GetString(ibProtocol::ibSchema::ibProperties::Name);
-		const ibCtorAbstractType* const held = ibValue::GetAvailableCtor(clsid);
-		if (held != nullptr && held->GetClassName() == name)
-			continue;
-		const wxBitmap picture = ibProtocolPicture(entry, ibProtocol::ibSchema::ibProperties::Picture);
-		wxIcon icon;
-		if (picture.IsOk())
-			icon.CopyFromBitmap(picture);
-		ibValue::RegisterCtor(static_cast<ibClassID>(clsid), name, icon);
-	}
-}
-
-// …and the types a tab's view offered a parameter (Types), by the tab's id — said with the view alone, so a fetch of the
-// fields, which does not say them, leaves them as they were.
-std::map<long long, std::vector<ibClassID>>& OfferedTypes()
-{
-	static std::map<long long, std::vector<ibClassID>> s_offered;
-	return s_offered;
-}
-
 } // namespace
 
 void ibQueryFieldsKnown(long long tabId, const ibString& text, const ibProtocolNode& answer)
 {
-	// The view's answer and each fetched one come through here: the classes they name, registered as they arrive.
-	RegisterClasses(answer.FindChild(ibProtocol::ibView::ibComposer::Classes));
-	if (answer.Has(ibProtocol::ibView::ibComposer::Types)) {
-		std::vector<ibClassID> offered;
-		for (const ibProtocolNode& type : answer.GetList(ibProtocol::ibView::ibComposer::Types)) {
-			unsigned long long clsid = 0;
-			if (type.AsString().ToULongLong(&clsid) && clsid != 0)
-				offered.push_back(static_cast<ibClassID>(clsid));
-		}
-		OfferedTypes()[tabId] = std::move(offered);
-	}
 	KnownQueryFields()[tabId] = ibKnownQueryFields{ text, answer };
-}
-
-std::vector<ibClassID> ibComposerOfferedTypes(long long tabId)
-{
-	const auto found = OfferedTypes().find(tabId);
-	return found != OfferedTypes().end() ? found->second : std::vector<ibClassID>();
 }
 
 void ibQueryFieldsForget(long long tabId)
 {
 	KnownQueryFields().erase(tabId);
 	KnownListFields().erase(tabId);
-	OfferedTypes().erase(tabId);
 }
 
 std::vector<ibSettingsPlainField> ibListSourceFields(ibMetaID mainTable, const ibString& text, const ibMetaData* metaData,
@@ -191,6 +143,7 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text, c
 			ibQueryFieldsKnown(tabId, text, answer);
 		}
 		ibValueReferenceDataObject::ReadReferences(answer.FindChild(ibProtocol::ibView::ibComposer::References));
+		ibValue::ReadClasses(answer.FindChild(ibProtocol::ibView::ibComposer::Classes));
 		if (error != nullptr)
 			*error = answer.GetString(ibProtocol::ibView::ibComposer::Error);
 		return ReadQueryFields(answer.FindChild(ibProtocol::ibView::ibComposer::Fields));

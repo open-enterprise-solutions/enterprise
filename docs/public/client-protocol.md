@@ -117,11 +117,15 @@ the link opens, by its id.
 
 In the designer a report's composer is a tab of `Kind` 14. Its `View` holds `State` (`ReadOnly`), `Composition` —
 the composer's description in its node form — and `Fields`, `References`, `Error` — what its query offers, as the
-ComposerSettings question has them. The client edits the description itself and sends it back whole: event
+ComposerSettings question has them — and `Classes`, rows `{Type, Name, Picture}`: the classes its type cells name.
+The client edits the description itself and sends it back whole: event
 `Change {Composition}`; the configuration is modified, and the answer's `View` carries the fields of the query the
 composition now has. The fields of another text are fetched by the tab: `fetch {Tab, Request: {Kind: 21, Text}}` —
-`Fields`, `References`, `Error`; the fields of a reference's targets — `fetch {Tab, Request: {Kind: 22, Targets}}` —
-`Expanded` and `References`, as a ListSettings window asked again has them.
+`Fields`, `References`, `Error`, `Classes`; the fields of a reference's targets — `fetch {Tab, Request: {Kind: 22,
+Targets}}` — `Expanded` and `References`, as a ListSettings window asked again has them; the types a parameter may be
+given — `fetch {Tab, Request: {Kind: 28}}` — `Types` (class ids) and `Classes`. A cell's "..." is a ListSettings
+window's `Act Choose` said to the tab: event `Select {Type, Value, Choice}`; the value chosen comes back in the view's
+`State` as `Chosen`, as the window's question carries it.
 A form designer tab answers the same two requests for an attribute of type DataComposition: its inspector row
 `ibPropertyDataComposition` carries the composition as its `Value`, the client opens the settings window over it,
 asks the form's tab for the fields (`Kind` 21, 22) and sends the edited composition back through the attribute's `Set`.
@@ -335,7 +339,7 @@ while the number stays: clicking an object again, or walking back to it, before 
 | 9 Menu | items: `Id`, `Caption`, `Checked`, `Enabled` (false — greyed) and their own items — a submenu; a popup menu where the mouse is | `Id` — the item picked; none — dismissed |
 | 8 SavedSettings | `Mode` (0 save, 1 restore), `Key`, `Default` and items: `Id`, `Caption` — the person's saved settings | `Act` (1 save, 2 restore, 3 default, 4 rename, 5 remove), `Id`, `Name`; none — closed |
 | 10 FormEditor | the active tab's form, as the frame has it: `Picture`, `HasSetting`, `Result` (the act before's: 0 done, 1 no storage, 2 no address, 3 refused), `Classes` (`Name`, `Picture`) | `Act` (1 apply — with `Controls`: each `Control`, its `Position`, the properties a person may arrange; 2 save; 3 reset); none — closed |
-| 11 ListSettings | a table's settings: `Settings` (the setting in force, in the node form the settings schema writes), `Fields` (`Name`, `Presentation`, `Id`, `Type`, `Available`, `Picture` — the column's, by its id, where the source describes itself; none — the attribute picture), `References` (`Type` — a class id as text, `Targets` — the metaobjects it points at), `Error` | `Settings` — the setting edited; none — cancelled |
+| 11 ListSettings | a table's settings: `Settings` (the setting in force, in the node form the settings schema writes), `Fields` (`Name`, `Presentation`, `Id`, `Type`, `Available`, `Picture` — the column's, by its id, where the source describes itself; none — the attribute picture), `References` (`Type` — a class id as text, `Targets` — the metaobjects it points at, `Value` — its empty value as a value is written, read as the server reads it: `CatalogRef.Goods.EmptyRef` in the designer; none for a family), `Error` | `Settings` — the setting edited; none — cancelled |
 | 12 SimpleChoice | `Value` — a field's number or date, with its type | `Value` — the one chosen; none — dismissed |
 | 13 ComposerSettings | a report's settings: `Settings` (the setting in force), `Composition` (what the report arranges, in its node form), `Fields` and `References` as ListSettings has them — the fields its query offers, no `Id`; `Error` | `Settings` — the setting edited; none — cancelled |
 | 14 Error | a script's failure: `Picture`, `Text` — the error with its call stack | `Act`: 1 close the window, 2 and send it to the designer debugging the base, 3 and close the client — each does the one before it too; none — 1 |

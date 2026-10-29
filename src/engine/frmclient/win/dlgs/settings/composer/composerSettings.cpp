@@ -13,7 +13,8 @@
 #include "frmclient/win/dlgs/queryConstructor/queryConstructor.h" // the Query tab's constructor button
 #include "frmclient/win/dlgs/queryConstructor/queryExpressionDialog.h" // the resource expression editor
 #include "frmclient/win/dlgs/typeSelector.h"              // the product.s type picker — a parameter declares its type
-#include "frmclient/backend/query/queryConstructorModel.h"   // ibComposerOfferedTypes — …from what the tab's view offered
+#include "frmclient/docView/tabDocument.h"                 // …offered what the tab answers (Kind Types)
+#include "frmclient/backend/compiler/value.h"             // ibValue::ReadClasses — …named as it named them
 #include "frmclient/win/dlgs/translateConstructor/translateConstructor.h"   // a field's title, every language of it
 #include "frmclient/win/dlgs/queryConstructor/queryConstructorInternal.h" // ibExpressionCellRenderer — the Totals tab's own cell
 #include "core/query/queryPeriodUnits.h"                     // ibPeriodUnits — the engine's own list of period words
@@ -3787,12 +3788,26 @@ bool ibComposerSettingsPanel::EditParameterType(wxString& text)
 
 	if ((size_t)idx >= m_edited.m_parameters.size())
 		return false;
-	// ⭐ THE REFERENCE FILTER, as asked (Max, 2026-08-28) — what the tab's view offered under it: the client has no
-	// configuration to ask (ibComposerOfferedTypes; offered nothing, the picker answers Cancel).
+	// ⭐ THE REFERENCE FILTER, as asked (Max, 2026-08-28) — what may stand under it is the tab's to say: the desktop's
+	// picker asked its configuration, and the client has none (fetch {Tab, Request: {Kind: Types}}). Offered nothing,
+	// the picker answers Cancel.
+	std::vector<ibClassID> offered;
 	const ibMetaData* const metaData = GetEditedMetaData();
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	const ibTabDocument* const document = frame != nullptr && metaData != nullptr && metaData->GetTabId() != 0
+		? frame->FindDocument(metaData->GetTabId()) : nullptr;
+	ibProtocolNode request, answer;
+	request.SetValue(ibProtocol::ibView::ibComposer::Kind, static_cast<long long>(ibProtocol::ibView::ibComposer::ibRequest::Types));
+	if (document != nullptr && document->Fetch(request, answer)) {
+		ibValue::ReadClasses(answer.FindChild(ibProtocol::ibView::ibComposer::Classes));
+		for (const ibProtocolNode& type : answer.GetList(ibProtocol::ibView::ibComposer::Types)) {
+			unsigned long long clsid = 0;
+			if (type.AsString().ToULongLong(&clsid) && clsid != 0)
+				offered.push_back(static_cast<ibClassID>(clsid));
+		}
+	}
 	ibTypeDescription declared = m_edited.m_parameters[idx].m_type;
-	if (!ibShowTypeSelector(this, ibSelectorDataType::ibSelectorDataType_reference,
-			ibComposerOfferedTypes(metaData != nullptr ? metaData->GetTabId() : 0),
+	if (!ibShowTypeSelector(this, ibSelectorDataType::ibSelectorDataType_reference, offered,
 			declared, metaData, /*allowEdit*/true, /*single*/false))
 		return false;
 
