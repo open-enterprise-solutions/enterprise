@@ -1,17 +1,19 @@
 # OES Enterprise — nightly release
 #
-# Every night, if `develop` moved since the last nightly, build Release on the three platforms and
+# Every night, if `develop` moved since the last nightly, build Release on every platform and
 # publish them as ONE pre-release under the tag `nightly`, replaced each time:
 #   Windows x64   oes-nightly-windows-x64.zip
 #   Linux x64     oes-nightly-linux-x64.tar.gz
+#   Linux arm64   oes-nightly-linux-arm64.tar.gz
 #   macOS arm64   oes-nightly-macos-arm64.dmg
+#   the bases     oes-nightly-bases.tar.gz     (examples/*/ with an infobase.conf - for the demo server)
 #
 # ⚠ A SCHEDULE RUNS FROM THE DEFAULT BRANCH. GitHub reads `on: schedule` only from the workflow file on
 # the repository's default branch (`master`), so this file has to be there for the night to start; what
 # it BUILDS is `develop`, named below. `workflow_dispatch` runs it by hand from any branch.
 #
 # ⚠ ONE REPOSITORY PUBLISHES. The tree is pushed to more than one remote; the release belongs to the
-# organisation's, and a fork running this would build three platforms every night for nobody.
+# organisation's, and a fork running this would build four platforms every night for nobody.
 #
 # No build-directory cache, for the reason ci.yml gives at its top: a restored tree lies to Ninja.
 
@@ -114,13 +116,22 @@ jobs:
           retention-days: 3
 
   # ---------------------------------------------------------------------------
-  # Linux x64
+  # Linux x64 and arm64 — the same steps on GitHub's runner of each machine (the arm64 one is free for a public
+  # repository). The core's fiber switch and the Firebird kit both pick the machine they are built on.
   # ---------------------------------------------------------------------------
   linux:
-    name: Linux x64
+    name: Linux ${{ matrix.arch }}
     needs: changes
     if: needs.changes.outputs.build == 'true'
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
@@ -153,12 +164,20 @@ jobs:
         run: bash .github/firebird-kit-linux.sh
 
       - name: Package
-        run: bash .github/nightly/package-linux.sh build/linux-release/bin oes-nightly-linux-x64.tar.gz
+        run: bash .github/nightly/package-linux.sh build/linux-release/bin oes-nightly-linux-${{ matrix.arch }}.tar.gz
+
+      # The example bases, from the same commit as the programs: the demo server takes both from this release
+      # (tools/demo-server). Packed once, by one leg - they are files, not a platform's build.
+      - name: Bases
+        if: matrix.arch == 'x64'
+        run: bash .github/nightly/package-bases.sh examples oes-nightly-bases.tar.gz
 
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-x64
-          path: oes-nightly-linux-x64.tar.gz
+          name: linux-${{ matrix.arch }}
+          path: |
+            oes-nightly-linux-${{ matrix.arch }}.tar.gz
+            oes-nightly-bases.tar.gz
           retention-days: 3
 
   # ---------------------------------------------------------------------------
@@ -253,7 +272,9 @@ jobs:
           |---|---|---|
           | Windows 10/11 x64 | \`oes-nightly-windows-x64.zip\` | Unpack, run \`designer-thin.exe\` or \`enterprise-thin.exe\` from the \`oes\` folder. Firebird and the PostgreSQL client are inside. |
           | Linux x64 (Ubuntu 22.04 / Debian 12 or newer) | \`oes-nightly-linux-x64.tar.gz\` | \`tar xzf\`, run \`./designer-thin\` or \`./enterprise-thin\` in \`oes/\`. Firebird 5 is inside (\`_fb\`). Needs GTK 3 (\`libgtk-3-0\`); a PostgreSQL base needs \`libpq\`. |
+          | Linux arm64 (the same systems) | \`oes-nightly-linux-arm64.tar.gz\` | As Linux x64: the same programs and Firebird 5, built on an arm64 machine. |
           | macOS 14+ on Apple Silicon | \`oes-nightly-macos-arm64.dmg\` | Drag the \`OES\` folder to Applications — the applications in it need each other, so move the folder, not one app. Firebird 5 is inside (\`_fb\`). The build is signed ad hoc, not with a Developer ID, so macOS quarantines every file that came with it: once, after dragging, run \`find /Applications/OES -exec xattr -d com.apple.quarantine {} \; 2>/dev/null\` in Terminal. Right-click → Open lets one app through while the launcher starts the others, and macOS 15 no longer offers it. |
+          | The example bases | \`oes-nightly-bases.tar.gz\` | The bases of \`examples/\` at the same commit, as \`bases/<name>/\`. The demo server publishes them (\`tools/demo-server\`); a base opens in the designer or the client of this nightly. |
           EOF
           gh release delete "$TAG" --cleanup-tag --yes || true
           gh release create "$TAG" assets/* \

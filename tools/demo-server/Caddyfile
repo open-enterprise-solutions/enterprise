@@ -1,0 +1,14 @@
+# The demo's front: HTTPS with a certificate Caddy obtains and renews itself, the list of bases at /, everything
+# else to the web server on the loopback (its page, its files, its socket /<base>/client).
+# setup.sh writes this to /etc/caddy/Caddyfile with DEMO_HOST replaced by the demo's name.
+
+DEMO_HOST {
+	@list path /
+	handle @list {
+		root * /opt/oes-demo/site
+		file_server
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8080
+	}
+}

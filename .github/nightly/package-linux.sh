@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pack a CMake Release tree for Linux x64 into the nightly tarball.
+# Pack a CMake Release tree for Linux (x64 or arm64, whichever it was built on) into the nightly tarball.
 #
 # Usage: package-linux.sh <build>/bin <out.tar.gz>
 #
