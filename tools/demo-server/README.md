@@ -36,7 +36,7 @@ A folder in `examples/` with an `infobase.conf` and its database. The nightly pa
 
    ```sh
    sudo apt-get install -y git
-   git clone --depth 1 https://github.com/open-enterprise-solutions/enterprise.git
+   git clone --depth 1 --branch develop https://github.com/open-enterprise-solutions/enterprise.git
    sudo bash enterprise/tools/demo-server/setup.sh 34.82.10.7.sslip.io
    ```
 
