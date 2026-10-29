@@ -916,13 +916,10 @@ void ibFrontendMainFrame::ShowSchema(ibProtocol::ibSchema::ibKind schema, const 
 bool ibFrontendMainFrame::AllowClose()
 {
 	// The road the menu's Exit takes — the server closes each tab but the start page, asking about what is unsaved, and
-	// says Exit when every one closed (Draw). Marked WHO is asking: a refusal said while the window is closing does not
-	// close it a second time. A session already gone has nothing to keep.
-	m_closingWindow = true;
+	// says Exit when every one closed (Draw). A session already gone has nothing to keep.
 	ibProtocolNode params, answer;
 	params.SetValue(ibProtocol::ibFrame::Command, static_cast<long long>(ibProtocol::ibFrame::ibCommand::Exit));
 	Call(ibProtocol::ibMethod::Command, params, answer);
-	m_closingWindow = false;
 	return m_exitGranted || !m_communicator->IsLoggedIn();
 }
 
@@ -1920,9 +1917,16 @@ void ibFrontendMainFrame::OnCloseWindow(wxCloseEvent& event)
 		return;
 	}
 
-	if (!force && !AllowClose()) {
-		event.Veto();
-		return;
+	// Marked WHO is asking, for the whole of AllowClose — a mode's own questions before the base's too (the designer's
+	// Save?): a refusal said while the window is closing does not close it a second time.
+	if (!force) {
+		m_closingWindow = true;
+		const bool allowed = AllowClose();
+		m_closingWindow = false;
+		if (!allowed) {
+			event.Veto();
+			return;
+		}
 	}
 
 	// Deliberately NOT event.Skip(): the base would run a second closing policy over the tabs (CloseAll) — the tabs
