@@ -624,8 +624,8 @@ public:
 	// ----------------------------------------------------------------
 	// Process-wide bytecode registry — keyed by descriptor GUID
 	// (m_id). Populated by ibRuntimeModuleDataObject::Compile after
-	// every successful compile or cache load; cleared by descriptor
-	// teardown. Lookup is shared-locked, mutation is unique-locked.
+	// every successful compile or cache load; cleared where the
+	// compile module holding the bytecode dies (~ibCompileModule). Lookup is shared-locked, mutation is unique-locked.
 	//
 	// Used by ResolveAndVerifyDependencies (below) to walk
 	// m_dependencyIds and reach the live target ibByteCode for each
@@ -633,7 +633,7 @@ public:
 	// matches the dep's current m_version.
 	// ----------------------------------------------------------------
 	static void Register(ibByteCode* bc);
-	static void Unregister(const ibGuid& descId);
+	static void Unregister(const ibByteCode* bc);
 	static ibByteCode* Find(const ibGuid& descId);
 
 	// Walk m_dependencyIds, look each up via Find, populate

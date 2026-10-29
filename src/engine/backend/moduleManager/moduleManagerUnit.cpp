@@ -21,7 +21,7 @@
 // name in any common module while the runtime compiled the same text without a word.
 ibValueModuleManager::ibValueModuleUnit::ibValueModuleUnit(ibValueModuleManager *moduleManager, ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :
 	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
-	ibRuntimeModuleDataObject(m_members, this, new ibCompileCommonModule(moduleObject)),
+	ibRuntimeModuleDataObject(m_members, this, std::make_shared<ibCompileCommonModule>(moduleObject)),
 	m_moduleObject(moduleObject)
 {
 	SetParent(moduleManager);

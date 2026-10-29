@@ -148,8 +148,8 @@ public:
 	// descriptor", and after the value's own fixed methods (stable CallAsFunc indices).
 	// No default / compile-module-only ctor: those would silently skip the export wiring.
 	ibRuntimeModuleDataObject(ibValue::ibMemberTable& helper, const ibValue* owner,
-		ibCompileModule* compileCode = nullptr)
-		: m_compileModule(compileCode) { helper.BindTail(&ExportThunk, owner); }
+		std::shared_ptr<ibCompileModule> compileCode = nullptr)
+		: m_compileModule(std::move(compileCode)) { helper.BindTail(&ExportThunk, owner); }
 	virtual ~ibRuntimeModuleDataObject();
 
 	// Module-object currently wired in m_compileModule. Thin post-
@@ -179,7 +179,7 @@ public:
 		return m_compileModule ? m_compileModule->GetObjectModule() : nullptr;
 	}
 
-	virtual ibCompileModule* GetCompileModule() const { return m_compileModule; }
+	virtual ibCompileModule* GetCompileModule() const { return m_compileModule.get(); }
 	// Session-aware: when a ibSessionScope is active, first checks the
 	// session's ProcUnit map. Falls back to the descriptor-owned
 	// m_procUnit (legacy path, still in use on desktop until sessions
@@ -346,7 +346,11 @@ protected:
 	// Returns nullptr when GetMetaForCompile() has nothing to compile against.
 	ibCompileModule* EnsureCompileModule();
 
-	ibCompileModule* m_compileModule;
+	// The descriptor's OWN compile module, shared as m_procUnit is: whoever compiles a module holds it, and
+	// it dies once, with its last holder (~ibCompileModule takes it off the bytecode registry). A descriptor
+	// that only borrows another's — an external object, its manager's — leaves this empty and answers
+	// GetCompileModule() / GetProcUnit() from weak pointers instead (ibExternalOwnerHelper).
+	std::shared_ptr<ibCompileModule> m_compileModule;
 	// Descriptor owns its runtime slot. shared_ptr so a long-running
 	// CallAsProc can pin the ProcUnit alive even if concurrent teardown
 	// drops the descriptor (project_refresh_execute_crash.md).

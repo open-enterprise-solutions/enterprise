@@ -61,16 +61,15 @@ ibValueModuleRuntimeManagerExternalDataProcessor::ibValueModuleRuntimeManagerExt
 {
 	// metadata is the container the object works in — LoadFromFile creates this manager and passes
 	// itself, and at runtime the object holds it. In designer the document holds it, never the object.
-	m_objectValue = new ibValueRecordDataObjectExternalDataProcessor(
+	ibValueRecordDataObjectExternalDataProcessor* const objectValue = new ibValueRecordDataObjectExternalDataProcessor(
 		metaObject, appData->DesignerMode() ? nullptr : std::move(metadata));
-	//set complile module
-	//set proc unit
-	m_objectValue->m_compileModule = m_compileModule;
-	m_objectValue->m_procUnit = m_procUnit;
+	// Not owned: known by a weak pointer, and lent what this manager compiles and runs (ibExternalOwnerHelper).
+	m_objectValue = objectValue->GetWeakObject();
+	objectValue->BorrowRuntime(m_compileModule, m_procUnit);
 
 	if (appData->DesignerMode()) {
-		//incrRef
-		m_objectValue->IncrRef();
+		//incrRef — in designer this manager is the object's holder
+		objectValue->IncrRef();
 	}
 
 	// Surface = the external object value's methods/props (copied below), then module
@@ -84,19 +83,10 @@ ibValueModuleRuntimeManagerExternalDataProcessor::~ibValueModuleRuntimeManagerEx
 	// on m_initialized, so it's a no-op if DestroyMainModule already ran and a
 	// cleanup if a caller (e.g. an ibValuePtr auto-release) skipped it.
 	DestroyMainModule();
-	if (m_objectValue) {
-		// m_objectValue BORROWS m_compileModule / m_procUnit from this manager (shared
-		// in the ctor, raw pointer). This manager's base dtor is about to wxDELETE
-		// m_compileModule, so the borrow must be cleared first or m_objectValue's dtor
-		// double-frees it. DestroyMainModule only clears it when m_initialized — a
-		// never-run manager (released by a detached-root swap) would skip that → the
-		// double free. Clear unconditionally here.
-		m_objectValue->m_compileModule = nullptr;
-		m_objectValue->m_procUnit = nullptr;
-	}
-	if (appData->DesignerMode() && m_objectValue != nullptr) {
-		//decrRef
-		m_objectValue->DecrRef();
+	// The object's borrow needs no clearing: it is weak, and empties as this manager lets go.
+	if (appData->DesignerMode()) {
+		//decrRef — the holder's reference taken in the ctor, so the object is still there
+		GetObjectValue()->DecrRef();
 	}
 }
 
@@ -105,8 +95,9 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 	if (m_initialized)
 		return true;
 
-	// The object is gone (ForgetObject): there is nothing left for the module to be the module of.
-	if (m_objectValue == nullptr)
+	// The object this module is the module of; empty once it is gone, and then there is nothing to create.
+	ibValueRecordDataObjectExternalDataProcessor* const objectValue = GetExternalObject();
+	if (objectValue == nullptr)
 		return false;
 
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
@@ -118,28 +109,26 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 	// in it loads the object into a temporary — zero, one, zero, and the object went with its container and this
 	// manager in the middle of the run (issue #154). A load that fails before StartMainModule leaves it held, as
 	// it used to leave it at zero — never let go, so the opener's own delete of the container stays the only one.
-	m_objectValue->IncrRef();
+	objectValue->IncrRef();
 
 
 	// Imperative pipeline — SetParent cascades compile+procUnit parents
 	// to configuration root's; BindContextVariable wires thisObject;
 	// InitializeRuntime / Compile / Run drive the top-level.
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
-	BindContextVariable(thisObject, m_objectValue);
+	BindContextVariable(thisObject, objectValue);
 
-	// m_objectValue (the external DP's script-visible object) shares the
-	// same compile module — it's the script-side wrapper around the
-	// same source. Set before InitializeObject so the object sees it.
-	m_objectValue->m_compileModule = m_compileModule;
+	// The external DP's script-visible object borrows the same compile module — it's the script-side
+	// wrapper around the same source. Lent before InitializeObject so the object sees it.
+	objectValue->BorrowRuntime(m_compileModule, m_procUnit);
 
-	m_objectValue->InitializeObject();
+	objectValue->InitializeObject();
 
 	if (!appData->DesignerMode()) {
 		InitializeRuntime();
-		// Share procUnit with m_objectValue — both descriptors reach
-		// the same runtime; shared_ptr co-ownership keeps the unit
-		// alive until the last of them drops.
-		m_objectValue->m_procUnit = m_procUnit;
+		// Lend the procUnit to the object — both descriptors reach the
+		// same runtime; this manager owns it, the object's is weak.
+		objectValue->BorrowRuntime(m_compileModule, m_procUnit);
 
 		try {
 			Compile();
@@ -156,8 +145,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 			//
 			// The METAOBJECT's name needs no registry — it is plain metadata, and it is the name a
 			// person recognises anyway.
-			const ibValueMetaObjectRecordData* metaObject =
-				m_objectValue != nullptr ? m_objectValue->GetMetaObject() : nullptr;
+			const ibValueMetaObjectRecordData* metaObject = objectValue->GetMetaObject();
 			ibJournalWarning(ibT("module"),_("External module '%s' init failed: %s"),
 				metaObject != nullptr ? metaObject->GetName() : ibString(ibEmptyString),
 				err.GetErrorDescription());
@@ -183,14 +171,8 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::DestroyMainModule()
 		return true;
 
 	m_compileModule->Reset();
+	// The object's borrowed proc unit empties with this — it was weak.
 	m_procUnit.reset();
-
-	//set complile module 
-	//set proc unit
-	if (m_objectValue != nullptr) {
-		m_objectValue->m_compileModule = nullptr;
-		m_objectValue->m_procUnit = nullptr;
-	}
 
 	//Setup common modules — best-effort: destroy every module even if one
 	//fails, so teardown never leaks the remainder; report the aggregate.
@@ -204,35 +186,19 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::DestroyMainModule()
 	return ok;
 }
 
-// ⭐ THE OBJECT MAY GO BEFORE ITS CONTAINER. On the ordinary road it does not: the form takes the object, the document
-// lets go of the container once the open is over, and when the form closes the object is the container's last holder —
-// the container, and this manager with it, die INSIDE the object's dtor, and the manager's dtor takes the borrow back.
-// But the open is not over while the form's own run is: a form whose module fails there asks its Error, the answer
-// closes the form, and the object's last reference goes with it while the document still holds the container. Its base
-// dtor then deleted the compile module it borrowed from this manager, and this manager kept pointing at the freed
-// object — so the document's release of the container reset and deleted the compile module a second time (the
-// webserver SIGSEGV on answering that Error, 2026-10-28).
-//
-// So the object says it is going (its dtor, before its bases run): the borrow comes back, and the manager forgets it.
-// The runtime stays this manager's until the container goes — nothing that may still be on the stack is torn down here.
-void ibValueModuleRuntimeManagerExternalDataProcessor::ForgetObject(ibValueRecordDataObjectDataProcessor* objectValue)
-{
-	if (objectValue == nullptr || objectValue != m_objectValue)
-		return;
-	m_objectValue->m_compileModule = nullptr;
-	m_objectValue->m_procUnit = nullptr;
-	m_objectValue = nullptr;
-}
-
 //main module - initialize
 bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(bool force)
 {
 	if (!m_initialized)
 		return false;
 
+	ibValueRecordDataObjectExternalDataProcessor* const objectValue = GetExternalObject();
+	if (objectValue == nullptr)
+		return false;
+
 	// (incrRef - for control delete: taken in CreateMainModule, before the module ran)
 
-	const ibValueMetaObjectRecordData* commonObject = m_objectValue->GetMetaObject();
+	const ibValueMetaObjectRecordData* commonObject = objectValue->GetMetaObject();
 	wxASSERT(commonObject);
 	ibValueMetaObjectFormBase* defFormObject = commonObject->GetDefaultFormByID
 	(
@@ -249,21 +215,21 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(bool forc
 
 		if (!cc || !cc->FindCompileModule(defFormObject, cached)) {
 
-			const ibFormPtr<ibBackendValueForm> result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, m_objectValue);
+			const ibFormPtr<ibBackendValueForm> result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, objectValue);
 
 			if (result) {
 				result->ShowForm();
 			}
 			else if (!appData->DesignerMode()) {
 				//decrRef - for control delete
-				m_objectValue->DecrRef();
+				objectValue->DecrRef();
 				return false;
 			}
 
 		}
 	}
 	//else {
-	//	ibBackendValueForm* valueForm = ibBackendValueForm::CreateNewForm(nullptr, nullptr, m_objectValue, ibGuid::newGuid());
+	//	ibBackendValueForm* valueForm = ibBackendValueForm::CreateNewForm(nullptr, nullptr, objectValue, ibGuid::newGuid());
 	//	valueForm->BuildForm(ibValueMetaObjectDataProcessor::eFormDataProcessor);
 	//	try {
 	//		valueForm->ShowForm();
@@ -273,14 +239,14 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(bool forc
 	//		if (appData->EnterpriseMode() ||
 	//			appData->ServiceMode()) {
 	//			//decrRef - for control delete 
-	//			m_objectValue->DecrRef();
+	//			objectValue->DecrRef();
 	//			return false;
 	//		}
 	//	}
 	//}
 
 	//decrRef - for control delete 
-	m_objectValue->DecrRef();
+	objectValue->DecrRef();
 
 	return true;
 }
@@ -347,16 +313,15 @@ ibValueModuleRuntimeManagerExternalReport::ibValueModuleRuntimeManagerExternalRe
 {
 	// See the data-processor manager above: metadata is the container (passed by LoadFromFile),
 	// held by the object at runtime, never in designer.
-	m_objectValue = new ibValueRecordDataObjectExternalReport(
+	ibValueRecordDataObjectExternalReport* const objectValue = new ibValueRecordDataObjectExternalReport(
 		metaObject, appData->DesignerMode() ? nullptr : std::move(metadata));
-	//set complile module
-	//set proc unit
-	m_objectValue->m_compileModule = m_compileModule;
-	m_objectValue->m_procUnit = m_procUnit;
+	// Not owned: known by a weak pointer, and lent what this manager compiles and runs (ibExternalOwnerHelper).
+	m_objectValue = objectValue->GetWeakObject();
+	objectValue->BorrowRuntime(m_compileModule, m_procUnit);
 
 	if (appData->DesignerMode()) {
-		//incrRef
-		m_objectValue->IncrRef();
+		//incrRef — in designer this manager is the object's holder
+		objectValue->IncrRef();
 	}
 
 	// Surface = the external object value's methods/props (copied below), then module
@@ -370,18 +335,10 @@ ibValueModuleRuntimeManagerExternalReport::~ibValueModuleRuntimeManagerExternalR
 	// on m_initialized (init sets it, DestroyMainModule clears it), so it's a no-op
 	// if already destroyed and a cleanup if a caller skipped it.
 	DestroyMainModule();
-	if (m_objectValue) {
-		// m_objectValue BORROWS m_compileModule / m_procUnit from this manager (shared
-		// in the ctor, raw pointer). The base dtor is about to wxDELETE m_compileModule,
-		// so clear the borrow first or m_objectValue's dtor double-frees it. A never-run
-		// manager (released by a detached-root swap) skips this in DestroyMainModule
-		// (m_initialized false) → the double free. Clear unconditionally here.
-		m_objectValue->m_compileModule = nullptr;
-		m_objectValue->m_procUnit = nullptr;
-	}
-	if (appData->DesignerMode() && m_objectValue != nullptr) {
-		//decrRef
-		m_objectValue->DecrRef();
+	// The object's borrow needs no clearing: it is weak, and empties as this manager lets go.
+	if (appData->DesignerMode()) {
+		//decrRef — the holder's reference taken in the ctor, so the object is still there
+		GetObjectValue()->DecrRef();
 	}
 }
 
@@ -390,28 +347,29 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 	if (m_initialized)
 		return true;
 
-	// The object is gone (ForgetObject): there is nothing left for the module to be the module of.
-	if (m_objectValue == nullptr)
+	// The object this module is the module of; empty once it is gone, and then there is nothing to create.
+	ibValueRecordDataObjectExternalReport* const objectValue = GetExternalObject();
+	if (objectValue == nullptr)
 		return false;
 
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
 
 	// incrRef - for control delete — before the module's first line, as the data processor's twin says.
-	m_objectValue->IncrRef();
+	objectValue->IncrRef();
 
 	// Imperative pipeline — see ExternalDataProcessor::CreateMainModule
-	// for the same shape; parent cascade, context var, shared procUnit
-	// with m_objectValue.
+	// for the same shape; parent cascade, context var, compile module and
+	// procUnit lent to the object.
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
-	BindContextVariable(thisObject, m_objectValue);
+	BindContextVariable(thisObject, objectValue);
 
-	m_objectValue->m_compileModule = m_compileModule;
-	m_objectValue->InitializeObject();
+	objectValue->BorrowRuntime(m_compileModule, m_procUnit);
+	objectValue->InitializeObject();
 
 	if (!appData->DesignerMode()) {
 		InitializeRuntime();
-		m_objectValue->m_procUnit = m_procUnit;
+		objectValue->BorrowRuntime(m_compileModule, m_procUnit);
 
 		try {
 			Compile();
@@ -422,8 +380,7 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 			// name, because a value's class name is a registry lookup and the registry entry may
 			// already be gone on this very path — a reporting call that throws replaces the fault
 			// with a complaint about itself.
-			const ibValueMetaObjectRecordData* metaObject =
-				m_objectValue != nullptr ? m_objectValue->GetMetaObject() : nullptr;
+			const ibValueMetaObjectRecordData* metaObject = objectValue->GetMetaObject();
 			ibJournalWarning(ibT("module"),_("External module '%s' re-init failed: %s"),
 				metaObject != nullptr ? metaObject->GetName() : ibString(ibEmptyString),
 				err.GetErrorDescription());
@@ -449,14 +406,8 @@ bool ibValueModuleRuntimeManagerExternalReport::DestroyMainModule()
 		return true;
 
 	m_compileModule->Reset();
+	// The object's borrowed proc unit empties with this — it was weak.
 	m_procUnit.reset();
-
-	//set complile module 
-	//set proc unit 
-	if (m_objectValue != nullptr) {
-		m_objectValue->m_compileModule = nullptr;
-		m_objectValue->m_procUnit = nullptr;
-	}
 
 	//Setup common modules — best-effort: destroy every module even if one
 	//fails, so teardown never leaks the remainder; report the aggregate.
@@ -470,27 +421,21 @@ bool ibValueModuleRuntimeManagerExternalReport::DestroyMainModule()
 	return ok;
 }
 
-// The data processor's twin — see there.
-void ibValueModuleRuntimeManagerExternalReport::ForgetObject(ibValueRecordDataObjectReport* objectValue)
-{
-	if (objectValue == nullptr || objectValue != m_objectValue)
-		return;
-	m_objectValue->m_compileModule = nullptr;
-	m_objectValue->m_procUnit = nullptr;
-	m_objectValue = nullptr;
-}
-
 //main module - initialize
 bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 {
 	if (!m_initialized)
 		return false;
 
+	ibValueRecordDataObjectExternalReport* const objectValue = GetExternalObject();
+	if (objectValue == nullptr)
+		return false;
+
 	// (incrRef - for control delete: taken in CreateMainModule, before the module ran)
 
 	// THE METAOBJECT IS A REPORT'S, and it says so — so both questions below are asked of it
 	// directly: which form is the default one, and which composer is.
-	const ibValueMetaObjectReport* commonObject = m_objectValue->GetMetaObject();
+	const ibValueMetaObjectReport* commonObject = objectValue->GetMetaObject();
 	wxASSERT(commonObject);
 	ibValueMetaObjectFormBase* defFormObject = commonObject->GetDefaultFormByID
 	(
@@ -504,14 +449,14 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 		ibCompileValueCache* cc = defFormObject->GetMetaData()->GetCompileCache();
 		if (!cc || !cc->FindCompileModule(defFormObject, cached)) {
 
-			const ibFormPtr<ibBackendValueForm> result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, m_objectValue);
+			const ibFormPtr<ibBackendValueForm> result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, objectValue);
 
 			if (result) {
 				result->ShowForm();
 			}
 			else if (!appData->DesignerMode()) {
 				//decrRef - for control delete
-				m_objectValue->DecrRef();
+				objectValue->DecrRef();
 				return false;
 			}
 		}
@@ -526,7 +471,7 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 	else if (commonObject->GetDefComposer() != wxNOT_FOUND) {
 		// No key in the request — the form is generated, so it takes a fresh key of its own.
 		const ibFormPtr<ibBackendValueForm> valueForm =
-			ibBackendValueForm::CreateNewForm(ibFormRequest(), nullptr, nullptr, m_objectValue);
+			ibBackendValueForm::CreateNewForm(ibFormRequest(), nullptr, nullptr, objectValue);
 		valueForm->BuildForm(ibValueMetaObjectReport::eFormReport);
 		try {
 			valueForm->ShowForm();
@@ -535,14 +480,14 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 			// A form that failed to show goes with its holder — nobody else took it.
 			if (appData->EnterpriseMode() || appData->ServiceMode()) {
 				//decrRef - for control delete
-				m_objectValue->DecrRef();
+				objectValue->DecrRef();
 				return false;
 			}
 		}
 	}
 
 	//decrRef - for control delete 
-	m_objectValue->DecrRef();
+	objectValue->DecrRef();
 
 	return true;
 }
@@ -565,10 +510,11 @@ bool ibValueModuleRuntimeManagerExternalReport::ExitMainModule(bool force)
 
 void ibValueModuleRuntimeManagerExternalDataProcessor::FillMembers(ibMemberTable& helper) const
 {
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
 	// Copy the external object value's surface; the module exports are appended after
 	// these (the helper's tail, autobound by the ibRuntimeModuleDataObject ctor).
-	if (m_objectValue != nullptr) {
-		ibMemberTable* methodHelper = m_objectValue->GetPMethods();
+	if (objectValue != nullptr) {
+		ibMemberTable* methodHelper = objectValue->GetPMethods();
 		wxASSERT(methodHelper);
 		for (long idx = 0; idx < methodHelper->GetNMethods(); idx++) {
 			helper.CopyMethod(methodHelper, idx);
@@ -581,9 +527,10 @@ void ibValueModuleRuntimeManagerExternalDataProcessor::FillMembers(ibMemberTable
 
 bool ibValueModuleRuntimeManagerExternalDataProcessor::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
-		return m_objectValue->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
+	if (objectValue &&
+		objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		return objectValue->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 	}
 
 	return ibRuntimeModuleDataObject::ExecAsFunc(
@@ -593,9 +540,10 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CallAsFunc(const long lMe
 
 bool ibValueModuleRuntimeManagerExternalDataProcessor::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
 {
-	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
-		return m_objectValue->GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
+	if (objectValue &&
+		objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		return objectValue->GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
 	}
 
 	return ibRuntimeModuleDataObject::GetParamDefValue(
@@ -605,9 +553,10 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::GetParamDefValue(const lo
 
 bool ibValueModuleRuntimeManagerExternalDataProcessor::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
-		return m_objectValue->SetPropVal(lPropNum, varPropVal);
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
+	if (objectValue &&
+		objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		return objectValue->SetPropVal(lPropNum, varPropVal);
 	}
 
 	if (m_procUnit != nullptr) {
@@ -619,9 +568,10 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::SetPropVal(const long lPr
 
 bool ibValueModuleRuntimeManagerExternalDataProcessor::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
-		return m_objectValue->GetPropVal(lPropNum, pvarPropVal);
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
+	if (objectValue &&
+		objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		return objectValue->GetPropVal(lPropNum, pvarPropVal);
 	}
 
 	if (m_procUnit != nullptr) {
@@ -633,9 +583,10 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::GetPropVal(const long lPr
 
 long ibValueModuleRuntimeManagerExternalDataProcessor::FindProp(const ibString& strName) const
 {
-	if (m_objectValue &&
-		m_objectValue->FindProp(strName) != wxNOT_FOUND) {
-		return m_objectValue->FindProp(strName);
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
+	if (objectValue &&
+		objectValue->FindProp(strName) != wxNOT_FOUND) {
+		return objectValue->FindProp(strName);
 	}
 
 	if (m_procUnit != nullptr) {
@@ -651,10 +602,11 @@ long ibValueModuleRuntimeManagerExternalDataProcessor::FindProp(const ibString& 
 
 void ibValueModuleRuntimeManagerExternalReport::FillMembers(ibMemberTable& helper) const
 {
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
 	// Copy the external object value's surface; the module exports are appended after
 	// these (the helper's tail, autobound by the ibRuntimeModuleDataObject ctor).
-	if (m_objectValue != nullptr) {
-		ibMemberTable* methodHelper = m_objectValue->GetPMethods();
+	if (objectValue != nullptr) {
+		ibMemberTable* methodHelper = objectValue->GetPMethods();
 		wxASSERT(methodHelper);
 		for (long idx = 0; idx < methodHelper->GetNMethods(); idx++) {
 			helper.CopyMethod(methodHelper, idx);
@@ -667,9 +619,10 @@ void ibValueModuleRuntimeManagerExternalReport::FillMembers(ibMemberTable& helpe
 
 bool ibValueModuleRuntimeManagerExternalReport::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
-		return m_objectValue->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
+	if (objectValue &&
+		objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		return objectValue->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 	}
 
 	return ibRuntimeModuleDataObject::ExecAsFunc(
@@ -679,9 +632,10 @@ bool ibValueModuleRuntimeManagerExternalReport::CallAsFunc(const long lMethodNum
 
 bool ibValueModuleRuntimeManagerExternalReport::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
 {
-	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
-		return m_objectValue->GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
+	if (objectValue &&
+		objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		return objectValue->GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
 	}
 
 	return ibRuntimeModuleDataObject::GetParamDefValue(
@@ -691,9 +645,10 @@ bool ibValueModuleRuntimeManagerExternalReport::GetParamDefValue(const long lMet
 
 bool ibValueModuleRuntimeManagerExternalReport::SetPropVal(const long lPropNum, const ibValue& varPropVal)        //setting attribute
 {
-	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
-		return m_objectValue->SetPropVal(lPropNum, varPropVal);
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
+	if (objectValue &&
+		objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		return objectValue->SetPropVal(lPropNum, varPropVal);
 	}
 
 	if (m_procUnit != nullptr) {
@@ -705,9 +660,10 @@ bool ibValueModuleRuntimeManagerExternalReport::SetPropVal(const long lPropNum, 
 
 bool ibValueModuleRuntimeManagerExternalReport::GetPropVal(const long lPropNum, ibValue& pvarPropVal)                   //attribute value
 {
-	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
-		return m_objectValue->GetPropVal(lPropNum, pvarPropVal);
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
+	if (objectValue &&
+		objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		return objectValue->GetPropVal(lPropNum, pvarPropVal);
 	}
 
 	if (m_procUnit != nullptr) {
@@ -719,9 +675,10 @@ bool ibValueModuleRuntimeManagerExternalReport::GetPropVal(const long lPropNum, 
 
 long ibValueModuleRuntimeManagerExternalReport::FindProp(const ibString& strName) const
 {
-	if (m_objectValue &&
-		m_objectValue->FindProp(strName) != wxNOT_FOUND) {
-		return m_objectValue->FindProp(strName);
+	ibValueRecordDataObjectExt* const objectValue = GetObjectValue();
+	if (objectValue &&
+		objectValue->FindProp(strName) != wxNOT_FOUND) {
+		return objectValue->FindProp(strName);
 	}
 
 	if (m_procUnit != nullptr) {

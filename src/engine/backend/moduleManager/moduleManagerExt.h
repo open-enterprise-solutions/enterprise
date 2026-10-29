@@ -18,12 +18,8 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibVa
 	ibValueModuleRuntimeManagerExternalDataProcessor(std::shared_ptr<ibMetaData> metaData = nullptr, ibValueMetaObjectDataProcessor* metaObject = nullptr);
 	virtual ~ibValueModuleRuntimeManagerExternalDataProcessor();
 
-	//return external module
-	virtual ibValueRecordDataObjectExt* GetObjectValue() const { return m_objectValue; }
-
-	// The object is going (its dtor says so): the compile module and proc unit it borrowed come back, and this
-	// manager stops pointing at it. A no-op for any other object.
-	void ForgetObject(ibValueRecordDataObjectDataProcessor* objectValue);
+	//return external module — empty once the object is gone
+	virtual ibValueRecordDataObjectExt* GetObjectValue() const { return m_objectValue.lock().get(); }
 
 	//Create common module
 	virtual bool CreateMainModule();
@@ -51,7 +47,12 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibVa
 	virtual long FindProp(const ibString& strName) const override;
 
 private:
-	ibValueRecordDataObjectDataProcessor* m_objectValue;
+	ibValueRecordDataObjectExternalDataProcessor* GetExternalObject() const {
+		return static_cast<ibValueRecordDataObjectExternalDataProcessor*>(GetObjectValue());
+	}
+
+	// Not owned — at runtime the object holds the container this manager lives in (ibExternalOwnerHelper says why).
+	std::weak_ptr<ibValueRecordDataObjectExt> m_objectValue;
 };
 
 class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModuleRuntimeManager {
@@ -67,12 +68,8 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModu
 	ibValueModuleRuntimeManagerExternalReport(std::shared_ptr<ibMetaData> metaData = nullptr, ibValueMetaObjectReport* metaObject = nullptr);
 	virtual ~ibValueModuleRuntimeManagerExternalReport();
 
-	//return external module
-	virtual ibValueRecordDataObjectExt* GetObjectValue() const { return m_objectValue; }
-
-	// The object is going (its dtor says so): the compile module and proc unit it borrowed come back, and this
-	// manager stops pointing at it. A no-op for any other object.
-	void ForgetObject(ibValueRecordDataObjectReport* objectValue);
+	//return external module — empty once the object is gone
+	virtual ibValueRecordDataObjectExt* GetObjectValue() const { return m_objectValue.lock().get(); }
 
 	//Create common module
 	virtual bool CreateMainModule();
@@ -99,7 +96,12 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModu
 	virtual long FindProp(const ibString& strName) const override;
 
 private:
-	ibValueRecordDataObjectReport* m_objectValue;
+	ibValueRecordDataObjectExternalReport* GetExternalObject() const {
+		return static_cast<ibValueRecordDataObjectExternalReport*>(GetObjectValue());
+	}
+
+	// Not owned — at runtime the object holds the container this manager lives in (ibExternalOwnerHelper says why).
+	std::weak_ptr<ibValueRecordDataObjectExt> m_objectValue;
 };
 
 #endif

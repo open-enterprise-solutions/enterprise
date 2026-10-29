@@ -33,11 +33,25 @@ void ibByteCode::Register(ibByteCode* bc)
 	g_byteCodeRegistry[ibString(bc->m_id)] = bc;
 }
 
-void ibByteCode::Unregister(const ibGuid& descId)
+void ibByteCode::Unregister(const ibByteCode* bc)
 {
-	if (!descId.isValid()) return;
+	if (bc == nullptr) return;
 	std::unique_lock<std::shared_mutex> lk(g_byteCodeRegistryMutex);
-	g_byteCodeRegistry.erase(ibString(descId));
+	// ONLY ITS OWN SLOT. Every descriptor compiling the same module stamps the same id (the module's guid), so
+	// the slot may hold a later compile of it by now — that one stays. And a Reset() before the module died
+	// cleared the id, which is why the slot is found by the pointer when the id says nothing.
+	if (bc->m_id.isValid()) {
+		const auto it = g_byteCodeRegistry.find(ibString(bc->m_id));
+		if (it != g_byteCodeRegistry.end() && it->second == bc)
+			g_byteCodeRegistry.erase(it);
+		return;
+	}
+	for (auto it = g_byteCodeRegistry.begin(); it != g_byteCodeRegistry.end(); ++it) {
+		if (it->second == bc) {
+			g_byteCodeRegistry.erase(it);
+			return;
+		}
+	}
 }
 
 ibByteCode* ibByteCode::Find(const ibGuid& descId)

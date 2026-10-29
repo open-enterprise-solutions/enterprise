@@ -20,17 +20,8 @@
 // BindTail). Only the dtor lives out-of-line.
 ibRuntimeModuleDataObject::~ibRuntimeModuleDataObject()
 {
-	// Drop this descriptor's bytecode from the process-wide registry
-	// before destroying the compile module. Dependents resolving by
-	// m_id mustn't see a dangling pointer.
-	if (m_compileModule != nullptr) {
-		const ibGuid& descId = m_compileModule->m_cByteCode.m_id;
-		if (descId.isValid())
-			ibByteCode::Unregister(descId);
-	}
-	delete m_compileModule;
-	// m_procUnit auto-destructs via shared_ptr when the last reference
-	// drops.
+	// Nothing to give back by hand: m_compileModule and m_procUnit are shared, and each dies with its
+	// last holder — the module takes its bytecode off the registry as it goes (~ibCompileModule).
 }
 
 std::shared_ptr<ibProcUnit> ibRuntimeModuleDataObject::GetProcUnit() const
@@ -155,7 +146,7 @@ ibCompileModule* ibRuntimeModuleDataObject::EnsureCompileModule()
 	// meta-object via GetMetaForCompile() override.
 	if (m_compileModule == nullptr) {
 		if (const ibValueMetaObjectModuleBase* meta = GetMetaForCompile()) {
-			m_compileModule = new ibCompileModule(meta);
+			m_compileModule = std::make_shared<ibCompileModule>(meta);
 			// Propagate parent's compile scope chain — SetParent can be
 			// called before the first Bind…; pick up parent compile here.
 			if (m_parent != nullptr) {
@@ -164,7 +155,7 @@ ibCompileModule* ibRuntimeModuleDataObject::EnsureCompileModule()
 			}
 		}
 	}
-	return m_compileModule;
+	return m_compileModule.get();
 }
 
 // See header. Append the EXPORT bindings as eProcUnit-aliased props so member

@@ -2350,12 +2350,47 @@ protected:
 // Mix-in for external DP/Report value objects: HOLDS the external metadata container the object works in, as every
 // metadata is held (ibMetaData::MakeShared) — at runtime the object's life keeps the container, and its last holder
 // closes it. Mixed into ibValueRecordDataObjectExternal* alongside the regular DP/Report value class; embedded /
-// config value objects don't inherit it. A copy holds it too.
+// config value objects don't inherit it.
+//
+// ⭐ OWNERSHIP IS IN THE TYPES. The container's manager compiles the object's module and runs it, so the compile
+// module and the proc unit are the MANAGER's (shared_ptr there). The object only BORROWS them — weak here: it cannot
+// keep them alive or delete them, and reads them empty once the manager let go. Nor does the manager own the object
+// (at runtime the object holds the container, the container the manager), so it knows it by a weak pointer as well,
+// which reads empty once the object is gone. Whichever of the two goes first, nothing is freed twice and nothing is
+// left pointing at freed memory — the webserver SIGSEGV of 2026-10-28 was the object going first while the
+// manager still pointed at it and they both deleted one module.
 class BACKEND_API ibExternalOwnerHelper {
 public:
-	ibExternalOwnerHelper(std::shared_ptr<ibMetaData> externalMetadata = nullptr) : m_externalMetadata(std::move(externalMetadata)) {}
+	ibExternalOwnerHelper(ibValueRecordDataObjectExt* object, std::shared_ptr<ibMetaData> externalMetadata = nullptr)
+		: m_externalMetadata(std::move(externalMetadata)), m_self(object, [](ibValueRecordDataObjectExt*) {}) {}
+	// m_self is this object's own: a copy would hand out a weak pointer to the original.
+	ibExternalOwnerHelper(const ibExternalOwnerHelper&) = delete;
+	ibExternalOwnerHelper& operator=(const ibExternalOwnerHelper&) = delete;
+
+	// The object for whoever must not own it — its manager. The object's life is its reference count; this only
+	// tells whether it is still there.
+	std::weak_ptr<ibValueRecordDataObjectExt> GetWeakObject() const { return m_self; }
+
+	// The manager lends what it compiles and runs. Called again whenever it makes a new proc unit.
+	void BorrowRuntime(const std::shared_ptr<ibCompileModule>& compileModule, const std::shared_ptr<ibProcUnit>& procUnit) {
+		m_compileModule = compileModule;
+		m_procUnit = procUnit;
+	}
+
 protected:
+	// The answers to GetCompileModule() / GetProcUnit() of the object this is mixed into.
+	ibCompileModule* GetBorrowedCompileModule() const { return m_compileModule.lock().get(); }
+	std::shared_ptr<ibProcUnit> GetBorrowedProcUnit() const { return m_procUnit.lock(); }
+
 	std::shared_ptr<ibMetaData> m_externalMetadata;
+
+private:
+	std::weak_ptr<ibCompileModule> m_compileModule;
+	std::weak_ptr<ibProcUnit> m_procUnit;
+	// No-op deleter: not an owner, only the thing a weak pointer to the object expires with. Declared last, so it
+	// goes before m_externalMetadata — the manager's weak pointer is empty before the container, and the manager
+	// with it, can die.
+	std::shared_ptr<ibValueRecordDataObjectExt> m_self;
 };
 
 class BACKEND_API ibValueRecordDataObjectExt : public ibValueRecordDataObject {

@@ -21,6 +21,13 @@ ibCompileModule::ibCompileModule(const ibValueMetaObjectModuleBase* moduleObject
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
+// Where the module dies, once — whoever held it last. Dependents resolving by id must not find a freed bytecode.
+// Before the base's Reset, which clears the id.
+ibCompileModule::~ibCompileModule()
+{
+	ibByteCode::Unregister(&m_cByteCode);
+}
+
 /**
  * Compile
  * Purpose:

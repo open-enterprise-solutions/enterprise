@@ -278,9 +278,11 @@ class ibValueRecordDataObjectExternalReport :
 	public ibExternalOwnerHelper {
 public:
 	ibValueRecordDataObjectExternalReport(const ibValueMetaObjectReport* metaObject, std::shared_ptr<ibMetaData> externalMetadata = nullptr)
-		: ibValueRecordDataObjectReport(metaObject), ibExternalOwnerHelper(std::move(externalMetadata)) {}
-	// Gives its manager back what it borrowed while the container still stands (ForgetObject).
-	virtual ~ibValueRecordDataObjectExternalReport();
+		: ibValueRecordDataObjectReport(metaObject), ibExternalOwnerHelper(this, std::move(externalMetadata)) {}
+
+	// The manager's, borrowed — empty once it let go (ibExternalOwnerHelper).
+	virtual ibCompileModule* GetCompileModule() const override { return GetBorrowedCompileModule(); }
+	virtual std::shared_ptr<ibProcUnit> GetProcUnit() const override { return GetBorrowedProcUnit(); }
 };
 
 #endif

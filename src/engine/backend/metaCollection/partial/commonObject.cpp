@@ -2240,8 +2240,9 @@ bool ibValueRecordDataObject::SetPropVal(const long lPropNum, const ibValue& var
 {
 	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->SetPropVal(
+		// Through the virtual: an external object's proc unit is its manager's, borrowed (ibExternalOwnerHelper).
+		if (const std::shared_ptr<ibProcUnit> procUnit = GetProcUnit()) {
+			return procUnit->SetPropVal(
 				GetPropName(lPropNum), varPropVal
 			);
 		}
@@ -2259,8 +2260,8 @@ bool ibValueRecordDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropV
 {
 	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->GetPropVal(
+		if (const std::shared_ptr<ibProcUnit> procUnit = GetProcUnit()) {
+			return procUnit->GetPropVal(
 				GetPropName(lPropNum), pvarPropVal
 			);
 		}

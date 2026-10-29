@@ -21,7 +21,7 @@
 
 ibValueModuleManager::ibValueModuleManager(ibMetaData* metadata, const ibValueMetaObjectModule* obj) :
 	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
-	ibRuntimeModuleDataObject(m_members, this, new ibCompileModule(obj)),
+	ibRuntimeModuleDataObject(m_members, this, std::make_shared<ibCompileModule>(obj)),
 	m_objectManager(new ibValueGlobalContextManager(metadata)),
 	m_metaManager(new ibValueMetadataUnit(metadata)),
 	m_dataManager(new ibValueDataUnit(metadata))
