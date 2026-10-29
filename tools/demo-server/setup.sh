@@ -12,6 +12,10 @@
 set -euo pipefail
 
 name="${1:?usage: setup.sh <name the demo is reached by, e.g. 34.82.10.7.sslip.io>}"
+# An empty variable in front of the domain gives ".sslip.io" - refused here, not by Caddy after the install.
+case "$name" in
+  .* | *..* | *' '*) echo "setup.sh: '$name' is not a name - was the address in front of it empty?"; exit 1 ;;
+esac
 here="$(cd "$(dirname "$0")" && pwd)"
 root=/opt/oes-demo
 
