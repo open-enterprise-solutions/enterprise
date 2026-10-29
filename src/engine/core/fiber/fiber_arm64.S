@@ -26,12 +26,6 @@
 #  define SYM(name) name
 #endif
 
-#if defined(__ELF__)
-#  define PLT(name) name@PLT
-#else
-#  define PLT(name) SYM(name)
-#endif
-
 /* Global for the linker, not exported: core shows what CORE_API names and nothing else (CMakeLists.txt), and the
  * switch is called from fiber.cpp alone. */
 #if defined(__APPLE__)
@@ -108,7 +102,9 @@ SYM(ibFiberTrampoline):
 #if defined(__ARM_FEATURE_BTI_DEFAULT)
     bti c
 #endif
-    bl PLT(ibFiberEnter)
+    /* A plain bl on ELF too: `@PLT` is x86's spelling, the AArch64 assembler refuses it, and the linker routes a
+     * bl through the PLT by itself when the target is not local. */
+    bl SYM(ibFiberEnter)
     brk #1
     .cfi_endproc
 #if defined(__ELF__)
