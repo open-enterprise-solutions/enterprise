@@ -692,6 +692,9 @@
     <ClInclude Include="metaCollection\metaScheduledJobObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\metaHttpServiceObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\metaEventHandlerObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
@@ -1901,6 +1904,9 @@
     <ClCompile Include="metaCollection\metaScheduledJobObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaHttpServiceObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaSessionParameterObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -1949,7 +1955,13 @@
     <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaHttpServiceObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaScheduledJobObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaHttpServiceObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaEventHandlerObject.cpp">

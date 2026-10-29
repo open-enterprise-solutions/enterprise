@@ -9,6 +9,11 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
+
+struct ibHttpRequest;    // core/net/httpServer.h — what an HTTP service is asked, and what it answers
+struct ibHttpResponse;
 
 // ⭐⭐ HTTP, ASKED BY A SCRIPT - a connection, a request, a response.
 //
@@ -50,6 +55,9 @@
 //
 // The encoding of an answer is the script's to say: GetBodyAsString reads UTF-8 unless given a
 // TextEncoding, and does not read the charset a Content-Type may carry.
+
+// A method's word on the wire — GET, POST; null for Any, which has none.
+BACKEND_API const char* ibHttpMethodName(ibHttpMethod method);
 
 void ibValueHttpRequest_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
@@ -178,6 +186,95 @@ private:
 	bool     m_portGiven = true;
 	int      m_timeout = 30;
 	ibValuePtr<ibValueSecureConnection> m_secure;            // empty: plain http://
+};
+
+// ⭐⭐ HTTP, ANSWERED BY A SCRIPT - the request an HTTP service's handler is given, and the response it returns
+// (metaCollection/metaHttpServiceObject.h).
+//
+//     Function TransferReset(Request) {
+//         var id = Request.URLParameters.id;
+//         var response = New HTTPServiceResponse(200);
+//         response.Headers.Insert("Content-Type", "application/json");
+//         response.SetBodyFromString("{\"id\": \"" + id + "\"}");
+//         return response;
+//     }
+//
+// The same words as the client's where the meaning is the same: Headers is a Structure, a body is text in a
+// TextEncoding or BinaryData. The headers a request came with are named in lower case, as the server reads them -
+// a Structure's keys fold case, so Request.Headers["Content-Type"] finds them all the same. The words after a
+// status code (OK, Not Found) are the server's, said by the code: a response says only the code.
+
+void ibValueHttpServiceRequest_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+// Made by the service, never by a script.
+class BACKEND_API ibValueHttpServiceRequest : public ibValueStaticMembers<&ibValueHttpServiceRequest_BindNames> {
+	enum Prop {
+		enHttpMethod,
+		enBaseUrl,
+		enRelativeUrl,
+		enHeaders,
+		enQueryOptions,
+		enUrlParameters,
+	};
+	enum Func {
+		enGetBodyAsString,
+		enGetBodyAsBinaryData,
+	};
+public:
+
+	ibValueHttpServiceRequest();
+	// What the server read, as a handler is given it: `baseUrl` - the address up to the service's root
+	// (/trade/hs/desk); `relativeUrl` - the rest (/Transfer/12); `urlParameters` - its template's parameters.
+	ibValueHttpServiceRequest(const ibHttpRequest& request, const ibString& baseUrl, const ibString& relativeUrl,
+		const std::vector<std::pair<ibString, ibString>>& urlParameters);
+	virtual ~ibValueHttpServiceRequest();
+
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
+
+private:
+	ibString                     m_method, m_baseUrl, m_relativeUrl;
+	ibValuePtr<ibValueStructure> m_headers, m_queryOptions, m_urlParameters;
+	std::string                  m_body;
+};
+
+void ibValueHttpServiceResponse_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValueHttpServiceResponse : public ibValueStaticMembers<&ibValueHttpServiceResponse_BindNames> {
+	enum Prop {
+		enStatusCode,
+		enHeaders,
+	};
+	enum Func {
+		enSetBodyFromString,
+		enSetBodyFromBinaryData,
+		enGetBodyAsString,
+		enGetBodyAsBinaryData,
+	};
+public:
+
+	ibValueHttpServiceResponse();
+	virtual ~ibValueHttpServiceResponse();
+
+	virtual bool Init() { return false; }                                   // a response says its status
+	virtual bool Init(ibValue** paParams, const long lSizeArray);           // New HTTPServiceResponse(statusCode, headers)
+
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
+	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
+
+	// The same for a caller in C++ (and for the tests).
+	int StatusCode() const { return m_status; }
+	void SetStatusCode(long status);                         // 100 to 599, or raises
+	const ibValueStructure& Headers() const { return *m_headers; }
+	const std::string& Body() const { return m_body; }
+	// …and as the server sends it - raises on a header that cannot stand in it, naming the header.
+	ibHttpResponse ToResponse() const;
+
+private:
+	int                          m_status = 200;
+	ibValuePtr<ibValueStructure> m_headers;
+	std::string                  m_body;
 };
 
 #endif // !__VALUE_HTTP_H__
