@@ -98,6 +98,7 @@ void ibValueTypeDescription_BindNames(ibValue::ibMemberTable& helper, const ibVa
 // not have to spell the string (the same arrangement as g_valueScheduleCLSID in valueJob.h). A
 // second place that knows the spelling is a second place to get it wrong.
 constexpr ibClassID g_valueTypeDescriptionCLSID = value_to_clsid("VL_TYPED");
+constexpr ibClassID g_valueTypeCLSID = value_to_clsid("VL_TYPE");   // a Type value — what Type() and TypeOf() answer
 
 class BACKEND_API ibValueTypeDescription : public ibValueStaticMembers<&ibValueTypeDescription_BindNames> {
 public:

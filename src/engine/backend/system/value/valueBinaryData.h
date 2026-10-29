@@ -71,6 +71,10 @@ public:
 	//operator '!='
 	virtual bool CompareValueNE(const ibVariant& cParam) const;
 
+	// ⭐ A PACKED FORM — the bytes as they are.
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
+
 private:
 	ibMemoryBuffer m_data;
 };

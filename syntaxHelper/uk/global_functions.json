@@ -1951,6 +1951,50 @@
       "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.SerializeValue"],
       "reviewed": true
+    },
+    {
+      "id": "fn.XMLString",
+      "name_local": "XMLString",
+      "name_en": "XMLString",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "XMLString(value : any)",
+      "description": "Значення у вигляді XML - близнюк `SerializeValue`, лише з XML замість JSON. Значення пакується так, як його зберігає платформа (тип, далі вміст: число - точно, дата - до мілісекунд, рядок, посилання - своїм GUID, значення переліку, Guid, BinaryData, структура чи масив - разом із вмістом), і цей пакунок пишеться XML-документом. На відміну від JSON зберігається вид кожного значення, і `XMLValue` читає значення назад таким, яким воно було, - окрім, поки що, посилання чи значення переліку конфігурації всередині структури чи масиву: їх конфігурація читає лише на верхньому рівні.\n\nТекст - цілий документ, а не вміст одного елемента. Значення, яке не можна запакувати (форма, відкритий об'єкт, тип), відхиляється: `The value 'Type' cannot be serialized`. Потрібна відкрита конфігурація.",
+      "syntax_block": "XMLString(value : any)",
+      "parameters": "value - значення, яке треба записати.",
+      "return_descr": "Рядок.",
+      "example": "text = XMLString(doc.Ref);\nsame = XMLValue(TypeOf(doc.Ref), text);",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "fn.XMLValue",
+        "cls.XMLWriter"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "fn.XMLValue",
+      "name_local": "XMLValue",
+      "name_en": "XMLValue",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "XMLValue(type : Type, text : string)",
+      "description": "Значення, записане `XMLString`, прочитане назад - за чинною конфігурацією. Текст читається як XML у пакунок, а пакунок - у значення; значення має бути заданого типу, інакше текст відхиляється: `XMLValue: the text holds a value of the type 'Number', not of the type 'String'`. Текст, що не є XML, або XML, що не є запакованим значенням, теж відхиляється, як і тип, що не є тим, що повертають `Type()` або `TypeOf()`. Тип, який називає текст, порівнюється до того, як із нього створюється значення.",
+      "syntax_block": "XMLValue(type : Type, text : string)",
+      "parameters": "type - те, що повертають `Type(\"Number\")` або `TypeOf(value)`.\ntext - рядок, який треба прочитати.",
+      "return_descr": "Значення заданого типу.",
+      "example": "text = XMLString(doc.Ref);\nsame = XMLValue(TypeOf(doc.Ref), text);",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "fn.XMLString",
+        "cls.XMLReader"
+      ],
+      "reviewed": false
     }
   ]
 }

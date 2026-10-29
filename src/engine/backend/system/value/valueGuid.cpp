@@ -6,6 +6,7 @@
 #include "valueGuid.h"
 
 #include "backend/backend_exception.h"
+#include "core/serialize/dataBuilder.h"   // ibDataNode — the packed form
 
 ibValueGuid::ibValueGuid() : ibValue(ibValueTypes::TYPE_VALUE, true), m_guid() {}
 
@@ -50,6 +51,18 @@ ibGuid GuidOf(const ibValue& value)
 	wxASSERT_MSG(parsed.isValid() || text.IsEmpty(), wxT("GuidOf: the value carries no guid"));
 
 	return parsed;
+}
+
+bool ibValueGuid::DoSerialize(ibDataNode& node) const
+{
+	node.SetValue(kValueFieldData, m_guid.str());
+	return true;
+}
+
+bool ibValueGuid::DoDeserialize(const ibDataNode& node)
+{
+	const auto stored = node.FindField(kValueFieldData);
+	return stored && stored->Kind() == ibDataKind::String && ibGuid::parse(stored->AsString(), m_guid);
 }
 
 //**********************************************************************

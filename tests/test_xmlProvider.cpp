@@ -120,6 +120,34 @@ TEST(XmlProvider, Write_TheLayout)
 	EXPECT_TRUE(text.Contains(ibT("<Node Type=\"7\" Id=\"1\"/>")));      // a type with no name — by its number
 }
 
+// The text each kind is written as - a number with a point and every digit, a date to the millisecond with four digits
+// of a year, a yes-or-no, bytes as base64 - written here as literals, not produced by the writer under test.
+TEST(XmlProvider, Write_TheFormsOfAValue)
+{
+	ibMemoryBuffer bytes;
+	bytes.AppendData("OES", 3);
+	ibDataNode root(1, 5);
+	root.SetValue("big", ibNumber(ibString("1518500.10")));
+	root.SetValue("long", ibNumber(ibString("-123456789012345678901234567890.0000000001")));
+	root.SetValue("yes", true);
+	root.SetValue("no", false);
+	root.SetValue("date", ibDateTime(2026, 3, 29, 2, 30, 59, 7));
+	root.SetValue("year", ibDateTime(1, 1, 2, 0, 0, 0, 0));
+	root.SetValue("nodate", ibDateTime());
+	root.SetValue("bytes", bytes);
+	root.SetValue("nobytes", ibMemoryBuffer());
+	const ibString text = Written(root);
+	EXPECT_TRUE(text.Contains(ibT("<Field Name=\"big\" Kind=\"Number\">1518500.1</Field>")));
+	EXPECT_TRUE(text.Contains(ibT("<Field Name=\"long\" Kind=\"Number\">-123456789012345678901234567890.0000000001</Field>")));
+	EXPECT_TRUE(text.Contains(ibT("<Field Name=\"yes\" Kind=\"Bool\">true</Field>")));
+	EXPECT_TRUE(text.Contains(ibT("<Field Name=\"no\" Kind=\"Bool\">false</Field>")));
+	EXPECT_TRUE(text.Contains(ibT("<Field Name=\"date\" Kind=\"Date\">2026-03-29 02:30:59.007</Field>")));
+	EXPECT_TRUE(text.Contains(ibT("<Field Name=\"year\" Kind=\"Date\">0001-01-02 00:00:00.000</Field>")));
+	EXPECT_TRUE(text.Contains(ibT("<Field Name=\"nodate\" Kind=\"Date\"/>")));
+	EXPECT_TRUE(text.Contains(ibT("<Field Name=\"bytes\" Kind=\"Binary\">T0VT</Field>")));   // base64 of "OES"
+	EXPECT_TRUE(text.Contains(ibT("<Field Name=\"nobytes\" Kind=\"Binary\"></Field>")));
+}
+
 TEST(XmlProvider, Write_Bytes_ReadBackTheSame)
 {
 	ibDataNode root(2, 3);

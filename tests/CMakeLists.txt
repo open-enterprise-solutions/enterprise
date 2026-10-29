@@ -86,6 +86,7 @@ add_executable(oes_tests
     test_sheetFormatXlsxRead.cpp
     test_xmlDocument.cpp
     test_xmlEncoding.cpp
+    test_xmlValue.cpp
     test_xmlProvider.cpp
     test_queryRenderer.cpp
     test_queryStringConcat.cpp
