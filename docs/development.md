@@ -58,7 +58,8 @@ user interface is translated; a `_()` message id stays ASCII ([portability.md §
 
 **Our own vocabulary.** Name a thing by what it is in this platform. Terms borrowed from other
 products do not go into identifiers; a comparison, if a design needs one at all, is a footnote
-in its document.
+in its document. The words the engine's own design is spoken in are listed in
+[public/vocabulary.md](public/vocabulary.md).
 
 **Header guards are `#ifndef __NAME_H__` / `#define __NAME_H__`.** Every header of ours uses
 them, and CI refuses a header that brings `#pragma once`.
