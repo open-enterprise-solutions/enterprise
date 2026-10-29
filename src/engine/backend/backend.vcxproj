@@ -54,6 +54,7 @@
     <ClInclude Include="lock\lockManager.h" />
     <ClInclude Include="job\jobManager.h" />
     <ClInclude Include="job\jobRunByteCode.h" />
+    <ClInclude Include="httpService\httpServiceCall.h" />
     <ClInclude Include="rpc\rpcMessage.h" />
     <ClInclude Include="job\platformJobs.h" />
     <ClInclude Include="settings\settingsStorage.h" />
@@ -438,6 +439,7 @@
     <ClCompile Include="rpc\rpcMessage.cpp" />
     <ClCompile Include="job\jobBackground.cpp" />
     <ClCompile Include="job\jobRunByteCode.cpp" />
+    <ClCompile Include="httpService\httpServiceCall.cpp" />
     <ClCompile Include="job\jobRegister.cpp" />
     <ClCompile Include="job\platformJobs.cpp" />
     <ClCompile Include="query\queryable.cpp" />

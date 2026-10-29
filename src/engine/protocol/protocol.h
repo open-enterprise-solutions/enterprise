@@ -63,6 +63,8 @@ namespace ibProtocol {
 		Picture,        // ibPicture
 		Debug,          // ibDebug — answered at once, never the frame
 		Mcp,            // ibMcp — never the frame
+		Http,           // ibHttp — a request to an HTTP service of the configuration, on no client: answered at once,
+		                // never the frame
 	};
 
 	// The name a method goes by on the wire.
@@ -89,6 +91,7 @@ namespace ibProtocol {
 		case ibMethod::Picture:      return "picture";
 		case ibMethod::Debug:        return "debug";
 		case ibMethod::Mcp:          return "mcp";
+		case ibMethod::Http:         return "http";
 		}
 		return "";
 	}
@@ -96,7 +99,7 @@ namespace ibProtocol {
 	// …and the method a name means; Unknown for a name the protocol does not have.
 	inline ibMethod MethodFromName(const char* name)
 	{
-		for (int method = static_cast<int>(ibMethod::Login); method <= static_cast<int>(ibMethod::Mcp); ++method) {
+		for (int method = static_cast<int>(ibMethod::Login); method <= static_cast<int>(ibMethod::Http); ++method) {
 			if (std::strcmp(name, MethodName(static_cast<ibMethod>(method))) == 0)
 				return static_cast<ibMethod>(method);
 		}
@@ -144,6 +147,26 @@ namespace ibProtocol {
 		inline constexpr const char* Debug   = "debug";
 		// …and what the assistant's server says unasked, to the client's MCP connection (params: Client, Message — ibMcp).
 		inline constexpr const char* Mcp     = "mcp";
+
+	}
+
+	// A REQUEST TO AN HTTP SERVICE — http {Method, Path, Query, Prefix, Headers, Body} → {Status, Headers, Body}: what
+	// the web server is asked at <publication>/hs/…, carried to the base as it is. It names no Client: each request is
+	// a session of its own, logged in by its own Authorization header (backend/httpService/httpServiceCall.h). Path —
+	// what follows /hs, decoded (/desk/Transfer/12); Query — as written, after the '?'; Prefix — the address up to
+	// /hs, included (/trade/hs); Headers — a node per header, {Name, Value}, in their order, the names lower-cased;
+	// Body — the bytes. A refusal is the answer's Status (401, 404, 405, 500), not the call's.
+	namespace ibHttp {
+
+		inline constexpr const char* Method  = "Method";
+		inline constexpr const char* Path    = "Path";
+		inline constexpr const char* Query   = "Query";
+		inline constexpr const char* Prefix  = "Prefix";
+		inline constexpr const char* Headers = "Headers";
+		inline constexpr const char* Name    = "Name";
+		inline constexpr const char* Value   = "Value";
+		inline constexpr const char* Body    = "Body";
+		inline constexpr const char* Status  = "Status";
 
 	}
 

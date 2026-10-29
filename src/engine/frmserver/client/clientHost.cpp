@@ -14,6 +14,7 @@
 #include "backend/backend_exception.h"   // ibBackendException — a value the configuration cannot make
 #include "backend/backend_localization.h"   // the session's language — said with the frame
 #include "backend/backend_picture.h"   // ibBackendPicture::GetServerPicture — a picture asked for by its id
+#include "backend/httpService/httpServiceCall.h"   // http — a request to an HTTP service, answered by the base
 #include "core/exception.h"
 #include "core/fdatetime.h"           // ibDateTime — a detached session's end, as this clock reads it
 #include "core/formatString.h"        // ibFormatString — a value presented through Format()'s codes
@@ -1088,6 +1089,34 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				done = true;
 			}
 		}
+	}
+	else if (method == ibProtocol::ibMethod::Http) {
+		// ⭐ ON NO CLIENT — a request to an HTTP service is a session of its own, logged in by the request's own
+		// Authorization and ended once it is answered (ibHttpServiceCall): a frame, a token and a slot are a client's.
+		ibHttpRequest request;
+		request.m_method = params.GetValue<ibString>(ibProtocol::ibHttp::Method).ToUtf8();
+		request.m_path = params.GetValue<ibString>(ibProtocol::ibHttp::Path).ToUtf8();
+		request.m_query = params.GetValue<ibString>(ibProtocol::ibHttp::Query).ToUtf8();
+		if (const std::optional<ibDataNode> headers = params.FindChild(ibProtocol::ibHttp::Headers)) {
+			for (const ibDataNode& header : headers->Children())
+				request.m_headers.emplace_back(header.GetValue<ibString>(ibProtocol::ibHttp::Name).ToUtf8(),
+					header.GetValue<ibString>(ibProtocol::ibHttp::Value).ToUtf8());
+		}
+		const ibMemoryBuffer body = params.GetValue<ibMemoryBuffer>(ibProtocol::ibHttp::Body);
+		request.m_body.assign(static_cast<const char*>(body.GetData()), body.GetDataLen());
+		request.m_address = address;
+
+		const ibHttpResponse response = ibHttpServiceCall::Answer(m_applicationInstance, request,
+			params.GetValue<ibString>(ibProtocol::ibHttp::Prefix));
+		result.SetValue(ibProtocol::ibHttp::Status, static_cast<std::int32_t>(response.m_status));
+		ibDataNode& headers = result.Child(ibProtocol::ibHttp::Headers);
+		for (const auto& header : response.m_headers) {
+			ibDataNode& written = headers.AddChild(0, static_cast<ibMetaID>(headers.Children().size() + 1));
+			written.SetValue(ibProtocol::ibHttp::Name, ibString::FromUTF8(header.first));
+			written.SetValue(ibProtocol::ibHttp::Value, ibString::FromUTF8(header.second));
+		}
+		result.SetValue(ibProtocol::ibHttp::Body, ibMemoryBuffer(response.m_body.data(), response.m_body.size()));
+		done = true;
 	}
 	else if (method == ibProtocol::ibMethod::Debug) {
 		// ⭐ BESIDE THE CLIENT'S CALLS, NOT AFTER THEM (protocol 6): not under the client's lock and with no frame — a step

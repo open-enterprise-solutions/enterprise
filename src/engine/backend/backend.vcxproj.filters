@@ -888,6 +888,9 @@
     <ClInclude Include="job\jobRunByteCode.h">
       <Filter>job</Filter>
     </ClInclude>
+    <ClInclude Include="httpService\httpServiceCall.h">
+      <Filter>httpService</Filter>
+    </ClInclude>
     <ClInclude Include="job\platformJobs.h">
       <Filter>job</Filter>
     </ClInclude>
@@ -2171,6 +2174,9 @@
     <ClCompile Include="job\jobRunByteCode.cpp">
       <Filter>job</Filter>
     </ClCompile>
+    <ClCompile Include="httpService\httpServiceCall.cpp">
+      <Filter>httpService</Filter>
+    </ClCompile>
     <ClCompile Include="job\jobRegister.cpp">
       <Filter>job</Filter>
     </ClCompile>
@@ -2352,6 +2358,9 @@
     </Filter>
     <Filter Include="lock">
       <UniqueIdentifier>{6c0f1d2a-7b3e-4d8a-9f1c-2e3b5a6c7d8e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="httpService">
+      <UniqueIdentifier>{50b669a8-8b7c-4448-ab0c-15c9457be7ea}</UniqueIdentifier>
     </Filter>
     <Filter Include="job">
       <UniqueIdentifier>{9a1e4c7b-2d6f-4a3e-b8c5-7d1f2a4e6b9c}</UniqueIdentifier>
