@@ -51,6 +51,7 @@ LPTOP_LEVEL_EXCEPTION_FILTER s_prevSehFilter = nullptr;
 #endif
 std::terminate_handler       s_prevTerminate = nullptr;
 std::atomic<bool>            s_installed{ false };
+std::atomic<bool>            s_stopRequested{ false };   // MarkStopRequested — lock-free, so a signal handler may set it
 
 void EnsureCrashDir()
 {
@@ -440,6 +441,16 @@ void TerminateProcessFast(int exitCode)
 #else
 	std::_Exit(exitCode);
 #endif
+}
+
+void MarkStopRequested() noexcept
+{
+	s_stopRequested.store(true, std::memory_order_release);
+}
+
+bool IsStopRequested() noexcept
+{
+	return s_stopRequested.load(std::memory_order_acquire);
 }
 
 int WrapStartup(const ibString& exeName, std::function<int()> body)
