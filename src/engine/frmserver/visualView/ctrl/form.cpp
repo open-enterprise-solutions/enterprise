@@ -8,6 +8,8 @@
 #include "frmserver/visualView/visualHost.h"   // ibFormVisualEditView — the host an event's form is held by
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/metaCollection/partial/commonObject.h"
+#include "backend/system/value/valueType.h"   // ibValueTypeDescription — what AddAttribute is told the type in
+#include "backend/backend_exception.h"
 
 //****************************************************************************
 //*                              Frame                                       *
@@ -295,6 +297,8 @@ enum Func
 	// ⚠ APPENDED AT THE END, and that is not a style choice: these are INDEXES into the order the
 	// members are registered in below. Inserting one in the middle renumbers every method after it.
 	enCheckFilling,
+	enAddAttribute,
+	enRemoveAttribute,
 };
 
 void ibValueForm::FillFormMembers(ibMemberTable& helper) const
@@ -324,6 +328,10 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 	// ⭐ IS EVERY REQUIRED ATTRIBUTE FILLED — see ibValueForm::CheckFilling. A FUNCTION, because the
 	// answer is the point: it reports what is missing and lets the caller decide to stop.
 	helper.AppendFunc(ibT("CheckFilling"), ibT("CheckFilling()"));
+	// ⭐ AN ATTRIBUTE MADE AT RUN TIME — see ibValueForm::AddScriptAttribute. A FUNCTION: what it answers is the new
+	// attribute's value, so a value table is given its columns, or a flag its value, in the next line.
+	helper.AppendFunc(ibT("AddAttribute"), 2, ibT("AddAttribute(name : string, type : TypeDescription)"));
+	helper.AppendProc(ibT("RemoveAttribute"), 1, ibT("RemoveAttribute(name : string)"));
 
 	// Module exports AND the context binds (ThisForm.Controls / DataSource) are
 	// surfaced as the helper's tail by the descriptor's ExportThunk (autobind under
@@ -501,6 +509,9 @@ bool ibValueForm::CallAsProc(const long lMethodNum, ibValue** paParams, const lo
 	case enNotifyChoice:
 		NotifyChoice(*paParams[0]);
 		return true;
+	case enRemoveAttribute:
+		RemoveScriptAttribute(paParams[0]->GetString());
+		return true;
 	}
 
 	return ibRuntimeModuleDataObject::ExecAsProc(
@@ -521,6 +532,17 @@ bool ibValueForm::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVal
 	case enCheckFilling:
 		pvarRetValue = CheckFilling();
 		return true;
+	case enAddAttribute: {
+		// Asked of the value, not cast blind: anything but a TypeDescription is named as what it is.
+		ibValueTypeDescription* type = nullptr;
+		if (!paParams[1]->ConvertToValue(type) || type == nullptr) {
+			ibBackendCoreException::Error(_("AddAttribute takes the type as a TypeDescription, not as %s"),
+				paParams[1]->GetClassName());
+			return false;
+		}
+		ibFormAttributeValue* entry = AddScriptAttribute(paParams[0]->GetString(), type->GetTypeDesc());
+		return entry != nullptr && entry->GetValue(pvarRetValue);
+	}
 	}
 
 	return ibRuntimeModuleDataObject::ExecAsFunc(

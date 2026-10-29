@@ -299,6 +299,17 @@ public:
 	// it does NOT raise, because a form is somebody standing in front of a window and the caller
 	// decides what an empty field costs. Reachable from a script as `ThisForm.CheckFilling()`.
 	bool CheckFilling() const;
+
+	// ⭐ AN ATTRIBUTE THE MODULE MAKES ITSELF, while the form is open — `ThisForm.AddAttribute(name, type)`:
+	// a value table of columns only known at run time, a flag a loaded file decides. The form builds the entry,
+	// as it builds every attribute (never a bare description handed in), and answers its value, so the caller
+	// fills it at once; afterwards it is `ThisForm.<name>`. Not stored: it lives as long as this form does.
+	// Refused, by raising, for a name that is not a name or that another attribute already has.
+	ibFormAttributeValue* AddScriptAttribute(const ibString& name, const ibTypeDescription& typeDesc);
+	// …and takes one of THOSE away again. Only one the module made: an attribute the form was designed with is
+	// what the compiled module and the controls are bound to, and pulling it from under them is not a script's
+	// call — refused by raising, as is a name the form has no attribute for.
+	void RemoveScriptAttribute(const ibString& name);
 	// Next free attribute id (max existing + 1) — PUBLIC so the holder's nested description can
 	// stamp itself on construction (a nested class does not inherit the enclosing class's friends).
 	ibMetaID NextAttributeId() const;
@@ -575,6 +586,8 @@ private:
 	// one whose attribute carries the Main flag — no separate pointer (single source of
 	// truth = the flag).
 	std::vector<ibValuePtr<ibFormAttributeValue>> m_attributes;
+	// The ids of the attributes the module added (AddScriptAttribute) — the only ones RemoveScriptAttribute takes.
+	std::vector<ibMetaID> m_scriptAttributes;
 
 	// FORM COMMANDS — form-local events (NOT metaobjects), managed like m_attributes: each is an ibFormCommandValue
 	// property object, held ref-counted, serialized with the form data, listed in the navigator's "Form commands".
