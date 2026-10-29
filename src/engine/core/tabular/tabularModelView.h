@@ -525,7 +525,9 @@ public:
 	// The first page and up to `before` rows ahead of it, in that order — what a reset that keeps
 	// its row mid-view reads. `above` is how many of `out` stand before the page; the return is the
 	// page's own count, as GetFirstFetch's. Here the two reads it is made of; a model whose source is
-	// across a wire answers both in one.
+	// across a wire answers both in one. A source that stands on a row of its own (a table's current
+	// row on the server) reads around it when `anchor` names none, and then answers rows ahead unasked:
+	// as many as `count`, or `before` when that is more — fewer than that, the top was reached.
 	virtual unsigned int GetAroundFetch(const ibDataViewItem& parent,
 		const ibDataViewItem& anchor, int count, int before, ibDataViewItemArray& out,
 		unsigned int& above) const {

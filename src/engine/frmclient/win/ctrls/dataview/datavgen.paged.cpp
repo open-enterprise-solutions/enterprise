@@ -405,6 +405,11 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 	// costs a backward portion that comes back empty, one more frame for nothing.
 	if (req.m_backfill > 0 && (int)req.m_backfilled < req.m_backfill)
 		m_pagedHasMoreBwd = false;
+	// ROWS CAME AHEAD OF A PAGE THAT NAMED NO CURSOR — the model's source stood on a row of its own and read around
+	// it (a table's current row on the server, ibValueModelTableBox::Fetch), as many rows ahead as the batch
+	// (GetAroundFetch): fewer came, the top. Without this the rows above the ones that came were never read.
+	if (!restore.IsOk() && req.m_backfilled > 0)
+		m_pagedHasMoreBwd = (int)req.m_backfilled >= batch;
 	m_pagedFwdAnchor        = (n > 0) ? items[n - 1] : ibDataViewItem();
 	m_pagedBwdAnchor        = (n > 0) ? items[0]     : ibDataViewItem();
 	m_pagedRestoreAnchor    = ibDataViewItem();
@@ -751,6 +756,14 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 			// would consume a sort's answer and scroll for no reason.
 			m_pagedRestoreFocusOffset = -1;
 		}
+	}
+	else if (req.m_backfilled > 0) {
+		// READ AROUND A ROW THIS READ NAMED NONE OF — the source's own (see m_pagedHasMoreBwd above): the page
+		// starts `backfilled` rows deep, and its first row stands mid-view with its context above it, as a
+		// selection's does — not at the head of the buffer, which is wherever the rows ahead happened to begin.
+		const int crumbCount = static_cast<int>(m_topParentChain.GetCount());
+		const int viewport   = GetCountPerPage();
+		scrollToRow(crumbCount + wxMax(0, static_cast<int>(req.m_backfilled) - (viewport > 1 ? viewport / 2 : 0)));
 	}
 	else {
 		// NOTHING TO POSITION ON — no saved top, no selection to centre. The
