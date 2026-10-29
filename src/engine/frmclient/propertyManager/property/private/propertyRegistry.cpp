@@ -29,12 +29,21 @@ void ibPropertyRegistry::Register(const wxString& type, ibPropertyMaker maker)
 	GetEntries()[type] = std::move(maker);
 }
 
+void ibPropertyRegistry::RegisterNoEditor(const wxString& type)
+{
+	// A maker that makes nothing — known, and not a string.
+	Register(type, nullptr);
+}
+
 wxPGProperty* ibPropertyRegistry::Create(ibBackendProperty* property)
 {
 	wxPGProperty* result = nullptr;
 	const auto found = GetEntries().find(property->GetType());
-	if (found != GetEntries().end())
+	if (found != GetEntries().end()) {
+		if (!found->second)
+			return nullptr;   // not shown, by design (RegisterNoEditor)
 		result = found->second(property);
+	}
 	if (result == nullptr)
 		result = CreateAsString(property);
 
