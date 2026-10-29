@@ -3726,6 +3726,75 @@ TEST(RuntimeTest, ValueListDeleteRemovesTheItemThatWasPassed)
 	EXPECT_TRUE(strError.Contains(wxT("item or an index")));
 }
 
+// The rest of what ported code asks of a value list: a copy that does not share items, the two sorts,
+// marking every item, moving one, list[i] as the item at i, and Index(item) as Table.Index answers it.
+TEST(RuntimeTest, ValueListCopiesSortsMovesAndIndexes) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var copied public; var kept public; var byValue public; var byValueDown public;\n")
+		wxT("var byShown public; var marked public; var moved public; var indexed public; var at public; var away public;\n")
+		wxT("Function Spell(l)\n")
+		wxT("  var s; s = \"\";\n")
+		wxT("  Foreach it In l Do s = s + it.Value; EndDo;\n")
+		wxT("  Return s;\n")
+		wxT("EndFunction\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(\"b\", \"2\"); list.Add(\"c\", \"1\"); list.Add(\"a\", \"3\");\n")
+		wxT("var copy; copy = list.Copy();\n")
+		wxT("copy.Get(0).Value = \"z\";\n")
+		wxT("copied = Spell(copy); kept = Spell(list);\n")
+		wxT("list.SortByValue(); byValue = Spell(list);\n")
+		wxT("list.SortByValue(true); byValueDown = Spell(list);\n")
+		wxT("list.SortByPresentation(); byShown = Spell(list);\n")
+		wxT("list.FillChecks(true);\n")
+		wxT("marked = list.Get(0).Check and list.Get(1).Check and list.Get(2).Check;\n")
+		wxT("list.Move(list.Get(0), 2); list.Move(1, -1); moved = Spell(list);\n")
+		wxT("indexed = list[2].Value;\n")
+		wxT("at = list.Index(list[1]); away = list.Index(copy.Get(0));\n")));
+
+	ibProcUnit pu;
+	ibString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("copied"), v));
+	EXPECT_EQ(wxT("zca"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("kept"), v));
+	EXPECT_EQ(wxT("bca"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("byValue"), v));
+	EXPECT_EQ(wxT("abc"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("byValueDown"), v));
+	EXPECT_EQ(wxT("cba"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("byShown"), v));
+	EXPECT_EQ(wxT("cba"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("marked"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	// c b a -> Move(c, 2) -> b a c -> Move(1, -1) -> a b c
+	ASSERT_TRUE(pu.GetPropVal(wxT("moved"), v));
+	EXPECT_EQ(wxT("abc"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("indexed"), v));
+	EXPECT_EQ(wxT("c"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("at"), v));
+	EXPECT_EQ(1, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("away"), v));
+	EXPECT_EQ(-1, v.GetInteger());
+
+	// A move past either end, and a value that is neither an item nor an index, are refused.
+	const wxChar* const refusals[] = {
+		wxT("var l; l = New ValueList(); l.Add(1); l.Add(2); l.Move(0, 2);\n"),
+		wxT("var l; l = New ValueList(); l.Add(1); l.Add(2); l.Move(l.Get(0), -1);\n"),
+		wxT("var l; l = New ValueList(); l.Add(1); l.Move(\"1\", 0);\n"),
+		wxT("var l; l = New ValueList(); l.Add(1); var x; x = l[1];\n"),
+	};
+	for (const wxChar* const code : refusals) {
+		ibCompileCode refused(wxT("test"), wxT("memory"), false);
+		ASSERT_TRUE(TryCompile(refused, code));
+		ibProcUnit refusedUnit;
+		ibString refusedError;
+		EXPECT_FALSE(RunBound(refused, refusedUnit, refusedError)) << code;
+	}
+}
+
 TEST(RuntimeTest, ValueListUnloadsAndLoadsValues) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc,

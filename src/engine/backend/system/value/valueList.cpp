@@ -3,6 +3,8 @@
 #include "backend/backend_exception.h"
 #include "backend/system/value/valueArray.h"
 
+#include <algorithm>
+
 enum { enItemValue = 0, enItemPresentation, enItemCheck };
 
 void ibValueValueListItem_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -33,7 +35,7 @@ bool ibValueValueListItem::SetPropVal(const long lPropNum, const ibValue& varPro
 }
 
 enum { enAdd = 0, enInsert, enCount, enGet, enDelete, enClear, enFindByValue,
-	enUnloadValues, enLoadValues };
+	enUnloadValues, enLoadValues, enCopy, enSortByValue, enSortByPresentation, enFillChecks, enMove, enIndex };
 
 void ibValueValueList_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
@@ -48,6 +50,12 @@ void ibValueValueList_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	helper.AppendFunc(wxT("FindByValue"), 1, wxT("FindByValue(value)"));
 	helper.AppendFunc(wxT("UnloadValues"), wxT("UnloadValues()"));
 	helper.AppendFunc(wxT("LoadValues"), 1, wxT("LoadValues(array)"));
+	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
+	helper.AppendFunc(wxT("SortByValue"), 1, wxT("SortByValue(descending = false)"));
+	helper.AppendFunc(wxT("SortByPresentation"), 1, wxT("SortByPresentation(descending = false)"));
+	helper.AppendFunc(wxT("FillChecks"), 1, wxT("FillChecks(check)"));
+	helper.AppendFunc(wxT("Move"), 2, wxT("Move(item, offset)"));
+	helper.AppendFunc(wxT("Index"), 1, wxT("Index(item) : number"));
 }
 
 void ibValueValueList::CheckIndex(unsigned int index) const
@@ -91,30 +99,28 @@ void ibValueValueList::Delete(unsigned int index)
 	m_items.erase(m_items.begin() + index);
 }
 
-long ibValueValueList::IndexOf(const ibValueValueListItem* item) const
-{
-	for (size_t at = 0; at < m_items.size(); ++at)
-		if (m_items[at] == item)
-			return static_cast<long>(at);
-	return -1;
-}
-
-void ibValueValueList::Delete(const ibValue& item)
+unsigned int ibValueValueList::Position(const ibValue& item) const
 {
 	// An item is not a number. Reading it as an index answered 0, so Delete(item)
 	// always removed the first element. A string or Undefined does the same, so
 	// only an item or a number is accepted.
 	ibValueValueListItem* held = nullptr;
 	if (item.ConvertToValue(held)) {
-		const long at = IndexOf(held);
+		const long at = Index(item);
 		if (at < 0)
 			ibBackendCoreException::Error(_("The item is not in the list"));
-		Delete(static_cast<unsigned int>(at));
-		return;
+		return static_cast<unsigned int>(at);
 	}
 	if (item.GetType() != ibValueTypes::TYPE_NUMBER)
-		ibBackendCoreException::Error(_("Delete expects an item or an index"));
-	Delete(item.GetUInteger());
+		ibBackendCoreException::Error(_("Expected an item or an index"));
+	const unsigned int index = item.GetUInteger();
+	CheckIndex(index);
+	return index;
+}
+
+void ibValueValueList::Delete(const ibValue& item)
+{
+	Delete(Position(item));
 }
 
 ibValue ibValueValueList::FindByValue(const ibValue& value) const
@@ -143,6 +149,59 @@ void ibValueValueList::LoadValues(const ibValue& source)
 		Add(value, ibString(), false);
 }
 
+ibValue ibValueValueList::Copy() const
+{
+	ibValuePtr<ibValueValueList> copy(new ibValueValueList());
+	for (const ibValuePtr<ibValueValueListItem>& item : m_items)
+		copy->Add(item->m_value, item->m_presentation, item->m_check);
+	return copy;
+}
+
+void ibValueValueList::SortByValue(bool descending)
+{
+	std::stable_sort(m_items.begin(), m_items.end(),
+		[descending](const ibValuePtr<ibValueValueListItem>& a, const ibValuePtr<ibValueValueListItem>& b) {
+			return descending ? b->m_value < a->m_value : a->m_value < b->m_value;
+		});
+}
+
+void ibValueValueList::SortByPresentation(bool descending)
+{
+	std::stable_sort(m_items.begin(), m_items.end(),
+		[descending](const ibValuePtr<ibValueValueListItem>& a, const ibValuePtr<ibValueValueListItem>& b) {
+			// Compared as values are, so a list sorts its presentations as Array.Sort sorts strings.
+			const ibValue left(a->m_presentation), right(b->m_presentation);
+			return descending ? right < left : left < right;
+		});
+}
+
+void ibValueValueList::FillChecks(bool check)
+{
+	for (const ibValuePtr<ibValueValueListItem>& item : m_items)
+		item->m_check = check;
+}
+
+void ibValueValueList::Move(const ibValue& item, long offset)
+{
+	const long from = static_cast<long>(Position(item));
+	const long to = from + offset;
+	if (to < 0 || to >= static_cast<long>(m_items.size()))
+		ibBackendCoreException::Error(_("Index goes beyond the list"));
+	ibValuePtr<ibValueValueListItem> moved = m_items[from];
+	m_items.erase(m_items.begin() + from);
+	m_items.insert(m_items.begin() + to, moved);
+}
+
+long ibValueValueList::Index(const ibValue& item) const
+{
+	ibValueValueListItem* held = nullptr;
+	if (item.ConvertToValue(held))
+		for (size_t at = 0; at < m_items.size(); ++at)
+			if (m_items[at] == held)
+				return static_cast<long>(at);
+	return -1;
+}
+
 void ibValueValueList::AppendValues(std::vector<ibValue>& out) const
 {
 	for (const ibValuePtr<ibValueValueListItem>& item : m_items)
@@ -169,8 +228,20 @@ bool ibValueValueList::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, 
 	case enFindByValue: pvarRetValue = FindByValue(*paParams[0]); return true;
 	case enUnloadValues: pvarRetValue = UnloadValues(); return true;
 	case enLoadValues: LoadValues(*paParams[0]); return true;
+	case enCopy: pvarRetValue = Copy(); return true;
+	case enSortByValue: SortByValue(lSizeArray > 0 && paParams[0]->GetBoolean()); return true;
+	case enSortByPresentation: SortByPresentation(lSizeArray > 0 && paParams[0]->GetBoolean()); return true;
+	case enFillChecks: FillChecks(paParams[0]->GetBoolean()); return true;
+	case enMove: Move(*paParams[0], paParams[1]->GetInteger()); return true;
+	case enIndex: pvarRetValue = static_cast<int>(Index(*paParams[0])); return true;
 	}
 	return false;
+}
+
+bool ibValueValueList::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
+{
+	pvarValue = Get(varKeyValue.GetUInteger());
+	return true;
 }
 
 std::shared_ptr<ibValueIteratorState> ibValueValueList::CreateIterator()

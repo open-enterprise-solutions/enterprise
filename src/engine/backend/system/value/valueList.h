@@ -28,6 +28,8 @@ public:
 	virtual ibClassID GetClassType() const override { return g_valueListCLSID; }
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
+	// list[index] reads the item there, as Get does. An item is changed through its properties.
+	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue) override;
 	ibValue Add(const ibValue& value, const ibString& presentation, bool check);
 	ibValue Insert(unsigned int index, const ibValue& value, const ibString& presentation, bool check);
 	unsigned int Count() const { return static_cast<unsigned int>(m_items.size()); }
@@ -39,11 +41,21 @@ public:
 	ibValue FindByValue(const ibValue& value) const;
 	ibValue UnloadValues() const;
 	void LoadValues(const ibValue& source);
+	// A new list with new items holding the same value, presentation and check.
+	ibValue Copy() const;
+	// A stable sort: items that compare equal keep their order.
+	void SortByValue(bool descending);
+	void SortByPresentation(bool descending);
+	void FillChecks(bool check);
+	// The item (or the item at that index) moves by offset places; a negative offset moves it up.
+	void Move(const ibValue& item, long offset);
+	// The position of an item (0-based), as Table.Index answers it for a row; -1 for anything else.
+	long Index(const ibValue& item) const;
 	void AppendValues(std::vector<ibValue>& out) const;
 private:
 	void CheckIndex(unsigned int index) const;
-	// Where this item sits, or -1 when it is not one of this list's items.
-	long IndexOf(const ibValueValueListItem* item) const;
+	// Where an item of this list sits, or the index a number names. Anything else is refused.
+	unsigned int Position(const ibValue& item) const;
 	ibValuePtr<ibValueValueListItem> MakeItem(const ibValue& value, const ibString& presentation, bool check) const;
 	std::vector<ibValuePtr<ibValueValueListItem>> m_items;
 };
