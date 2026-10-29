@@ -19,8 +19,8 @@ public:
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
 	// Load — restored from a file the person is asked for, every session of the base closed after; Save — dumped into a
-	// file of the session's, taken down where the person chooses; Clear — asked first. Each the desktop handler's work,
-	// said to the person as it said it.
+	// file of the session's, taken down where the person chooses; Clear — asked first, the open tabs closed (one that
+	// refuses — nothing cleared). Each the desktop handler's work, said to the person as it said it.
 	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const override;
 };
