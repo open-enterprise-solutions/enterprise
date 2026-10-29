@@ -1151,6 +1151,9 @@ namespace ibProtocol {
 			inline constexpr const char* Targets      = "Targets";
 			inline constexpr const char* Pictures     = "Pictures";       // a picture's: those it may be (Guid, Name; Id —
 			                                                              // the id it is drawn by)
+			inline constexpr const char* ClassPictures = "ClassPictures"; // a picture's: the engine's class icons it may be
+			                                                              // besides the core's (Name; Id — the class id it
+			                                                              // is drawn and stored by)
 			inline constexpr const char* Guid         = "Guid";
 			inline constexpr const char* Object       = "Object";         // a link's: the metaobject it opens, by its id —
 			                                                              // an inner module's module, else its own object

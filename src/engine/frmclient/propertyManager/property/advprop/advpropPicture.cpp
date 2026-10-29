@@ -79,7 +79,8 @@ public:
 			ibDataNode row;
 			property->GetProtocolValue(row);
 			return new wxPGPictureProperty(property->GetLabel(), property->GetName(), property->GetValue(),
-				row.GetProperty(ibProtocol::ibSchema::ibProperties::Pictures).AsChild());
+				row.GetProperty(ibProtocol::ibSchema::ibProperties::Pictures).AsChild(),
+				row.GetProperty(ibProtocol::ibSchema::ibProperties::ClassPictures).AsChild());
 		});
 		ibPropertyRegistry::Register(wxT("ibPropertyExternalPicture"), [](ibBackendProperty* property) -> wxPGProperty* {
 			return new ibPGExternalImageProperty(property->GetLabel(), property->GetName(), property->GetValue());
@@ -92,7 +93,8 @@ static int s_indFilter = -1;
 wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 	const wxString& strName,
 	const wxVariant& value,
-	const std::optional<ibDataNode>& pictures) : wxPGProperty(label, strName),
+	const std::optional<ibDataNode>& pictures,
+	const std::optional<ibDataNode>& classes) : wxPGProperty(label, strName),
 	m_propertySource(nullptr),
 	m_propertyBackend(nullptr), m_propertyConfiguration(nullptr), m_propertyFile(nullptr)
 {
@@ -115,6 +117,25 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 		m_valChoices.insert_or_assign(
 			entry.GetValue(), so.m_id
 		);
+	}
+
+	// …and the engine's class icons, the server's (a metadata class's, a control's): named by the row, each drawn by its
+	// class id, asked for all at once.
+	if (classes) {
+		std::vector<wxString> ids;
+		for (const ibDataNode& item : classes->Children())
+			ids.push_back(item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Id));
+		ibProtocolPictureReceive(ids);
+		for (const ibDataNode& item : classes->Children()) {
+			const wxString id = item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Id);
+			unsigned long long clsid = 0;
+			if (!id.ToULongLong(&clsid) || clsid == 0)
+				continue;
+			wxPGChoiceEntry& entry = systemChoices.AddAsSorted(
+				item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Name), system_value++);
+			entry.SetBitmap(ibProtocolPicture(id));
+			m_valChoices.insert_or_assign(entry.GetValue(), static_cast<ibPictureID>(clsid));
+		}
 	}
 
 	// …and the configuration's — a server's property always has an owner, the object its row is of.

@@ -64,7 +64,8 @@ public:
 	wxPGPictureProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
 		const wxVariant& value = wxVariant(),
-		const std::optional<ibDataNode>& pictures = std::nullopt);
+		const std::optional<ibDataNode>& pictures = std::nullopt,
+		const std::optional<ibDataNode>& classes = std::nullopt);
 
 	virtual ~wxPGPictureProperty() override {}
 
