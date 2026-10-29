@@ -14,6 +14,12 @@
 #include <iterator>
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject + g_meta*CLSID
+#include "backend/metaCollection/partial/selector/objectSelector.h"
+#include "backend/appData.h"
+
+#include <wx/init.h>
+#include <wx/image.h>
+#include <wx/log.h>
 
 TEST(MetadataTree, FreshConfigHasNoBusinessObjects) {
     ibMetaDataConfigurationFile cfg;
@@ -168,4 +174,72 @@ TEST(MetadataTree, CreatingEveryHostedKindTwiceKeepsBothAndNamesThemApart) {
 			<< "two " << candidate.name
 			<< " objects were created with the same name";
 	}
+}
+
+namespace {
+
+// The selector's constructor asks whether this is the designer, which reads
+// appData. A host always has it; a bare test has to bring it up.
+bool EnsureAppData()
+{
+	if (ibApplicationInstance::Get() != nullptr)
+		return true;
+	wxInitAllImageHandlers();
+	if (wxLog::GetActiveTarget() != nullptr)
+		delete wxLog::SetActiveTarget(new wxLogStderr());
+	return ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE);
+}
+
+void ExpectSelectionMember(ibValueMetaObjectRecordDataMutableRef* meta, const wxString& name, bool present)
+{
+	ibValueSelectorRecordDataObject selection(meta);
+	const long prop = selection.FindProp(name);
+	if (!present) {
+		EXPECT_EQ(prop, wxNOT_FOUND) << name;
+		return;
+	}
+	ASSERT_NE(prop, wxNOT_FOUND) << name;
+	ibValue value;
+	ASSERT_TRUE(selection.GetPropVal(prop, value)) << name;
+	EXPECT_FALSE(selection.SetPropVal(prop, ibValue(wxT("x")))) << name << " is read-only";
+}
+
+} // namespace
+
+// Catalogs.X.Select() and ChartsOfCharacteristicTypes.X.Select() published
+// only Ref. Code, Description, DeletionMark and IsFolder are attributes of
+// the row, the same ones a reference already exposes, and a script read was
+// "field not found". A custom attribute stays, and the cells stay read-only.
+TEST(RecordSelection, StandardAttributesAreMembers) {
+	wxInitializer wx;
+	if (ibApplicationInstance::Get() == nullptr && !wx.IsOk())
+		GTEST_SKIP() << "wxBase init failed";
+	if (!EnsureAppData())
+		GTEST_SKIP() << "appData env unavailable";
+
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	auto* catalog = dynamic_cast<ibValueMetaObjectRecordDataMutableRef*>(
+		cfg.CreateMetaObject(g_metaCatalogCLSID, root, false));
+	ASSERT_NE(catalog, nullptr);
+	ibValueMetaObject* note = cfg.CreateMetaObject(g_metaAttributeCLSID, catalog, false);
+	ASSERT_NE(note, nullptr);
+	note->SetName(wxT("Note"));
+
+	const wxString catalogNames[] = {
+		wxT("Code"), wxT("Description"), wxT("DeletionMark"),
+		wxT("IsFolder"), wxT("Parent"), wxT("Ref"), wxT("Note")
+	};
+	for (const wxString& name : catalogNames)
+		ExpectSelectionMember(catalog, name, true);
+	ExpectSelectionMember(catalog, wxT("NoSuch"), false);
+
+	auto* chart = dynamic_cast<ibValueMetaObjectRecordDataMutableRef*>(
+		cfg.CreateMetaObject(g_metaChartOfCharacteristicTypesCLSID, root, false));
+	ASSERT_NE(chart, nullptr);
+	const wxString chartNames[] = { wxT("Code"), wxT("Description"), wxT("DeletionMark"), wxT("Ref") };
+	for (const wxString& name : chartNames)
+		ExpectSelectionMember(chart, name, true);
 }
