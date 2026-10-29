@@ -148,6 +148,10 @@ void ibComposerEditDocument::DrawView(const ibProtocolNode& view, const ibProtoc
 
 	if (ibComposerEditView* const composerView = dynamic_cast<ibComposerEditView*>(GetFirstView()))
 		composerView->Build(view);
+
+	// …and a value chosen for a cell of the panel (its "..."), handed to the cell that asked.
+	if (ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame())
+		frame->TakeTabChosen(view.FindChild(ibProtocol::ibView::State));
 }
 
 bool ibComposerEditDocument::Save()

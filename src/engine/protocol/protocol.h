@@ -1566,6 +1566,20 @@ namespace ibProtocol {
 			inline constexpr const char* Id          = "Id";
 			inline constexpr const char* Targets     = "Targets";
 			inline constexpr const char* Expanded    = "Expanded";
+			// The classes a type cell may name — the fields', the parameters' and the primitive kinds — each once, as the
+			// inspector names its choices' (ibSchema::ibProperties: Type, Name, Picture): the client has no configuration
+			// to name a kind by.
+			inline constexpr const char* Classes     = "Classes";
+			// …and with the view, the types a parameter may be given (each a decimal class id, named in Classes) — the
+			// offer the client's type picker shows.
+			inline constexpr const char* Types       = "Types";
+			// A cell's "..." — event {Tab, Event: Select, Args: {Type — its declared class ids, comma-separated; Value — what
+			// it holds; Choice — the number the choice is asked under}}; the value chosen comes back with the view: State
+			// Chosen {Choice, Value}.
+			inline constexpr const char* Type        = "Type";
+			inline constexpr const char* Value       = "Value";
+			inline constexpr const char* Choice      = "Choice";
+			inline constexpr const char* Chosen      = "Chosen";
 
 			// WHAT A COMPOSER'S TAB IS ASKED — `fetch {Tab, Request: {Kind, …}}`, numbered past the form's
 			// (ibFormDesigner::ibRequest).

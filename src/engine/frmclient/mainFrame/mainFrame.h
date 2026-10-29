@@ -146,6 +146,10 @@ public:
 	// modal: CreateChildFrame), and the value chosen comes back with the window's question asked again (Chosen), to
 	// the cell's ChoiceProcessing. False — no window asks.
 	bool ChooseValue(class ibControlFrame* owner, const class ibValue& current);
+	// …AND ON A TAB, when no window asks: the cell's "..." said to the tab it is on (event Select {Type, Value, Choice}),
+	// whose view chooses the value through its configuration and says it back with the view (State Chosen) — handed to
+	// the cell once, by TakeTabChosen, as its tab's view is drawn.
+	void TakeTabChosen(const ibProtocolNode& state);
 	// A tab closed — by the server, which asks about what is unsaved; the tab goes when the frame says so. Whatever
 	// closes it comes here: its button, its window closed (Escape, the application's), the window menu, File → Close.
 	void CloseTab(long long tabId);
@@ -313,6 +317,8 @@ private:
 	void Ask();
 	// A value chosen for the cell of the window asking (ChooseValue), when the question says one was — handed to it once.
 	void TakeChosen(const ibProtocolNode& request);
+	// A cell's "..." on a tab no window asks over — see TakeTabChosen.
+	bool ChooseValueOnTab(class ibControlFrame* owner, const class ibValue& current);
 	// A call refused, said to the person — and a client whose session is gone, closed.
 	void Refused(ibProtocol::ibRefusal refusal, const wxString& error);
 	// …and once a call has settled: the client gone when the server's Exit was done, the calls posted made.
@@ -368,6 +374,7 @@ private:
 		std::size_t           depth = 0;
 	};
 	ibChoosing                            m_choosing;
+	ibChoosing                            m_tabChoosing;             // …and the one being chosen on a tab (ChooseValueOnTab)
 	long long                             m_choice = 0;              // the last number a choice was asked under
 	bool                                  m_drawing = false;         // a tab event the drawing raises is not the person's
 	bool                                  m_closingWindow = false;   // see IsClosingWindow()

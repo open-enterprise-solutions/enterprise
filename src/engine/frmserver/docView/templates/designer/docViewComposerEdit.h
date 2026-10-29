@@ -9,6 +9,7 @@
 // Not the desktop's names — see docViewModuleEdit.h.
 
 #include "frmserver/docView/docView.h"
+#include "backend/compiler/value.h"   // ibValue — the value last chosen for a cell of the panel
 
 class FRMSERVER_API ibComposerCompositionView : public ibMetaView {
 public:
@@ -24,8 +25,14 @@ public:
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;
 
 	// Input — the panel was edited: the configuration is modified; Change {Composition} — what the panel holds, put on
-	// the composer (the desktop's panel edited the metaobject's description in place).
+	// the composer (the desktop's panel edited the metaobject's description in place); Select {Type, Value, Choice} — a
+	// cell's "...": its value chosen through the configuration, said back with the view (State Chosen {Choice, Value}).
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
+
+private:
+
+	std::int32_t m_choice = 0;   // the number the last value chosen was asked under — none: 0
+	ibValue      m_chosen;       // …and that value
 
 	wxDECLARE_DYNAMIC_CLASS(ibComposerCompositionView);
 };
