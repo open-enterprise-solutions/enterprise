@@ -1590,6 +1590,9 @@ namespace ibProtocol {
 				Types  = 28,   // {} — what a parameter may be given: Types, named in Classes — what the desktop's type picker
 				               // asked its configuration for a reference-shaped field (GetTypesByFilter). Past the query
 				               // constructor's, which a composer's tab answers too
+				Check  = 29,   // {Text} — a parameter's expression compiled, not run: Error — why it does not compile;
+				               // none — it does (the desktop panel's CheckExpression). Past the query constructor's
+				               // (ibQueryConstructor::ibRequest, 24–27): the same tab answers both
 			};
 
 		}

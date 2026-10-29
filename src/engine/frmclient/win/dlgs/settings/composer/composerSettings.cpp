@@ -22,6 +22,7 @@
 #include "frmclient/backend/system/value/valueDataComposition.h"       // ibSyncParameters — the parameters follow the texts
 #include "frmclient/win/editor/codeEditor/codeEditor.h"  // the script editor behind a parameter expression
 #include "frmclient/mainFrame/mainFrame.h"                // the shared editor / font-colour settings
+#include "frmclient/docView/tabDocument.h"                // a tab's fetch — an expression checked where the translator is
 #include "frmclient/docView/docView.h"                    // ibMetaDocument — the composer editor's document mode
 #include "frmclient/backend/metaCollection/metaComposerObject.h"   // ibValueMetaObjectComposer — what a composer document was opened ON
 #include "frmclient/backend/appData.h"                              // the ACTIVE configuration, when the composition names none
@@ -3749,13 +3750,25 @@ void ibComposerSettingsPanel::PrepareModuleContext()
 }
 
 // COMPILE AN EXPRESSION AND SAY WHY NOT — the ONE check, used by the editor's OK and by the window's. The translator is
-// the server's: a parameter's expression is the designer's to write (the Parameters tab), and the client is not the
-// designer yet — so nothing is said against one here.
-bool ibComposerSettingsPanel::CheckExpression(const wxString& WXUNUSED(expression), wxString& complaint,
-	const ibMetaData* WXUNUSED(metaData))
+// the server's: the tab the configuration is on is asked (fetch {Tab, Request: {Kind: Check, Text}}), and its Error is
+// the complaint (2026-10-29: `1 + (` was accepted without a word). No tab to ask — nothing is said against it.
+bool ibComposerSettingsPanel::CheckExpression(const wxString& expression, wxString& complaint,
+	const ibMetaData* metaData)
 {
 	complaint.clear();
-	return true;
+	if (expression.IsEmpty() || metaData == nullptr || metaData->GetTabId() == 0)
+		return true;
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	const ibTabDocument* const document = frame != nullptr ? frame->FindDocument(metaData->GetTabId()) : nullptr;
+	if (document == nullptr)
+		return true;
+	ibProtocolNode request, answer;
+	request.SetValue(ibProtocol::ibView::ibComposer::Kind, static_cast<long long>(ibProtocol::ibView::ibComposer::ibRequest::Check))
+		.SetValue(ibProtocol::ibView::ibComposer::Text, ibString(expression));
+	if (!document->Fetch(request, answer))
+		return true;
+	complaint = answer.GetString(ibProtocol::ibView::ibComposer::Error).ToWxString();
+	return complaint.IsEmpty();
 }
 
 // EVERY PARAMETER'S EXPRESSION, checked at once — what the window asks before it closes.

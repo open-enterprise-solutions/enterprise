@@ -1,7 +1,12 @@
 #include "docViewComposerEdit.h"
 
 #include "backend/backend_type.h"                        // GetTypesByFilter — what a parameter may be given
+#include "backend/compiler/compileCode.h"                // a parameter's expression — compiled, not run
+#include "backend/compiler/compileModule.h"              // ibCompileModule — the parent the check attaches to
 #include "backend/metaData.h"
+#include "backend/moduleManager/moduleManager.h"         // the module manager: the built-ins, the common modules
+#include "backend/session/session.h"                     // EditModuleManagerFor — the configuration's manager
+#include "core/diagnostics/journal.h"                    // a manager that does not compile, written down
 #include "backend/metaCollection/metaComposerObject.h"   // the composer — its description, its configuration
 #include "backend/query/queryConstructorModel.h"         // ibQueryFieldsOfText — the fields its query offers
 #include "backend/query/queryableFactory.h"              // a list's main table — its descriptor
@@ -14,6 +19,64 @@
 #include <vector>
 
 namespace {
+
+// A PARAMETER'S EXPRESSION, COMPILED AND NOT RUN — the desktop panel's CheckExpression, here where the translator is:
+// what is wrong with it, or nothing. The text is compiled as the body of a function, so it is judged as an expression
+// (compiled loose, a stray assignment passes for a statement), against the module manager of the configuration it
+// belongs to — the one that knows the built-ins and the common modules.
+ibString CheckExpression(const ibString& expression, const ibMetaData* metaData)
+{
+	if (expression.IsEmpty())
+		return ibString();   // no expression is not an error
+
+	try {
+		// Named once: the wrapper is written with it and its locals are read back by it.
+		static const ibString kCheckFunctionName = ibT("__checkExpression");
+
+		const bool braces = ibCompileCode::GetCodeStyle() == CODE_CES;
+		const ibString wrapped = braces
+			? ibT("function ") + kCheckFunctionName + ibT("() { return ") + expression + ibT("; }")
+			: ibT("Function ") + kCheckFunctionName + ibT("() Return ") + expression + ibT("; EndFunction");
+
+		ibCompileCode check;
+
+		// THE MODULE MANAGER IS THE PARENT — the built-ins (`CurrentDate()`) are its context's methods, and the common
+		// modules hang under it. The desktop compiled it as its panel opened (a compile from inside a cell's editor rebuilt
+		// the grid under the renderer mid-call); here no window of the client's is rebuilt by it, so it is compiled for
+		// the check. A configuration whose own modules do not compile is not the expression's fault: written down, and
+		// the check goes on with the names there are.
+		if (ibValueModuleManager* const manager = ibSession::EditModuleManagerFor(metaData)) {
+			if (ibCompileModule* const context = manager->GetCompileModule()) {
+				try {
+					context->Compile();
+				}
+				catch (const ibCoreException& error) {
+					ibJournalInfo(wxT("ui"), wxT("composer: module manager did not compile - %s"),
+						error.GetErrorDescription());
+				}
+				check.SetParent(context);
+			}
+		}
+
+		check.Compile(wrapped);
+
+		// COMPILING IS NOT ENOUGH — a name nobody declares compiles to a LOCAL slot, which is right for a script that goes
+		// on to assign it and wrong for a one-line expression. The wrapper declares nothing, so every named local in it
+		// is a name that resolved to nothing (temps never reach the list).
+		for (const auto& function : check.m_cByteCode.m_listFunc) {
+			if (!function.m_strRealName.IsSameAs(kCheckFunctionName, false))
+				continue;
+			for (const ibByteCode::ibByteCodeVarInfo& local : function.m_listLocals) {
+				if (local.IsLocal())
+					return ibString::Format(_("Unknown name: %s"), local.m_strRealName);
+			}
+		}
+	}
+	catch (const ibCoreException& error) {
+		return error.GetErrorDescription();
+	}
+	return ibString();
+}
 
 // WHAT A QUERY TEXT OFFERS — written as the settings windows' questions write it (ComposerSettings: no Id, a field of a
 // parsed text stands behind no attribute), with the parser's complaint when it offers none — and the classes its type
@@ -212,6 +275,12 @@ bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, con
 		}
 		response.AddField(ibProtocol::ibView::ibComposer::Types, ibDataValue::Array(ids));
 		ibWriteSettingsClasses(response.Child(ibProtocol::ibView::ibComposer::Classes), { types }, metaData);
+		return true;
+	}
+	case ibProtocol::ibView::ibComposer::ibRequest::Check: {
+		const ibString complaint = CheckExpression(request.GetValue<ibString>(ibProtocol::ibView::ibComposer::Text), metaData);
+		if (!complaint.IsEmpty())
+			response.SetValue(ibProtocol::ibView::ibComposer::Error, complaint);
 		return true;
 	}
 	default:
