@@ -626,11 +626,14 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			// ladder, so `grouping` is true whenever a catalog shows its tree — and read the old way that turned
 			// every folder in every catalog into a leaf. What decides is which rung produced this row: a TREE
 			// rung's rows are folders and items, a grouping's are leaves.
+			//
+			// ⭐ …AND NO RUNG AT ALL IS NO TREE: a flat List view takes no rungs, and neither does a list with no tree.
+			// A folder of such a read was a container all the same, and opening it read the whole table again — the
+			// folder in it, opened in itself without end (a List view of a catalog, 2026-10-29).
 			bool isFolderRow = false;
 			if (folderCol != nullptr)
 				isFolderRow = r.GetValue(folderCol->GetColumnId()).GetBoolean();
-			const bool isContainer = (hierarchy || !grouping)
-				? (isFolderRow || itemHierarchy || r.m_expandable) : false;
+			const bool isContainer = hierarchy && (isFolderRow || itemHierarchy || r.m_expandable);
 			// ⭐ AND IT CARRIES WHERE IT STANDS. A row fetched inside a group belongs to that group, and
 			// drilling it must re-enter at the rung it was found on — not at the top. Without the scope the
 			// drill came back with an empty path, depth 0, and the whole grouping tree re-grew under the folder.

@@ -33,7 +33,7 @@
 #include <map>                                                        // dot-walk join dedup + col->attr cache
 #include <functional>                                                 // std::function — reference-hierarchy parent chain-up
 #include <stdexcept>                                                  // guard for the not-yet-built multi-source composition path
-#include <algorithm>                                                  // stable_sort — RAM ORDER BY over a composed result
+#include <algorithm>                                                  // stable_sort, rotate — RAM ORDER BY over a composed result, a page from its anchor
 #include <set>                                                        // DedupeRows — seen-row identity keys (plain UNION)
 #include <unordered_set>                                              // DISTINCT folds — keyed by value, see ibValueHash
 #include <unordered_map>                                              // RAM hash-join index
@@ -291,6 +291,22 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& given, 
 	filter.Resume();
 	if (spec.m_predicate)
 		rows = ibQueryComposer::FilterRows(rows, spec.m_predicate.get());
+	// ⭐ …AND ONE LEVEL OF A TREE, as the database provider reads it (the page's parent scope): a folder's children
+	// when a folder is browsed, the rows with no parent at the top. Not taken, a list of a query read in memory
+	// answered every folder with the whole list — the folder in it, opened in itself without end (2026-10-29).
+	if (req.m_hierarchyFilter && !req.m_flatScan && req.m_hierarchyCol != nullptr && spec.m_queryable != nullptr) {
+		const ibBackendQueryColumn* const parentCol = spec.m_queryable->OwnsColumn(req.m_hierarchyCol)
+			? req.m_hierarchyCol : spec.m_queryable->ResolveColumnByName(req.m_hierarchyCol->GetName());
+		if (parentCol != nullptr) {
+			ibQueryRamTable level = RamTableOf(cols);
+			for (long i = 0; i < rows.RowCount(); ++i) {
+				const ibValue parent = rows.GetCell(i, parentCol->GetColumnId());
+				if (req.m_isTopLevel ? (parent.IsNull() || parent.IsEmpty()) : ibValueEqual()(parent, req.m_hierarchyKey))
+					level.AppendRowFrom(rows, i);
+			}
+			rows = std::move(level);
+		}
+	}
 	filter.Pause();
 
 	// The stages after the read, said once whichever return this read leaves by.
@@ -338,7 +354,17 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& given, 
 	}
 	distinct.Pause();
 
-	if (spec.m_sorts != nullptr && !spec.m_sorts->empty()) {
+	// ⭐ A PAGE IS READ FROM ITS ANCHOR, as the database provider keysets it: in the cursor's total order (EffectiveSort —
+	// the sort and the key after it, the order the anchor's values come in), turned round for a page read backwards
+	// (m_reverseSort), and only the rows past the anchor. Not taken, every page of a list read in memory was the whole
+	// list: the rows read ahead of a page came again before it, turned round (2026-10-29).
+	std::vector<ibQuerySortItem> sorting;
+	if (spec.m_sorts != nullptr)
+		sorting = *spec.m_sorts;
+	if (req.m_hasAnchor && spec.m_queryable != nullptr)
+		sorting = ibDataQueryBuilder::EffectiveSort(spec.m_queryable, sorting);
+
+	if (!sorting.empty()) {
 		sort.Resume();
 		// ⭐ THE KEYS ARE TAKEN OUT OF THE ROWS ONCE, not once per comparison. The comparator used to ask
 		// the table for both cells of every key on every call — a lookup in the row's map and a COPY of
@@ -346,9 +372,12 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& given, 
 		// three keys did that some thirteen million times. Read into one flat array first, the comparator
 		// only looks at what is already there.
 		std::vector<const ibQuerySortItem*> by;
-		for (const ibQuerySortItem& s : *spec.m_sorts)
-			if (s.m_col != nullptr)
-				by.push_back(&s);
+		std::vector<size_t> anchorAt;   // where each key's anchor value stands — the anchor has one per sort item
+		for (size_t i = 0; i < sorting.size(); ++i)
+			if (sorting[i].m_col != nullptr) {
+				by.push_back(&sorting[i]);
+				anchorAt.push_back(i);
+			}
 		const size_t width = by.size();
 		std::vector<ibValue> keys(static_cast<size_t>(rows.RowCount()) * width);
 		for (long i = 0; i < rows.RowCount(); ++i)
@@ -360,18 +389,35 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& given, 
 			const ibValue* const ka = keys.data() + static_cast<size_t>(a) * width;
 			const ibValue* const kb = keys.data() + static_cast<size_t>(b) * width;
 			for (size_t k = 0; k < width; ++k) {
-				const int c = ibQueryComposer::RamSortCompareKey(ka[k], kb[k], by[k]->m_ascending);
+				const int c = ibQueryComposer::RamSortCompareKey(ka[k], kb[k], by[k]->m_ascending != req.m_reverseSort);
 				if (c != 0) return c < 0;
 			}
 			return false;
 		});
+		// …and the page starts at the first row past the anchor — turned to the front, the rows before it after the page.
+		size_t from = 0;
+		if (req.m_hasAnchor && width != 0) {
+			while (from < order.size()) {
+				const ibValue* const key = keys.data() + static_cast<size_t>(order[from]) * width;
+				int c = 0;
+				for (size_t k = 0; k < width && c == 0; ++k)
+					if (anchorAt[k] < req.m_anchorSortValues.size())
+						c = ibQueryComposer::RamSortCompareKey(key[k], req.m_anchorSortValues[anchorAt[k]],
+							by[k]->m_ascending != req.m_reverseSort);
+				if (c > 0)
+					break;
+				++from;
+			}
+			std::rotate(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(from), order.end());
+		}
 		sort.Pause();
 		rebuild.Resume();
 		// ⚠ THE ROWS ARE PUT IN THE NEW ORDER WHERE THEY STAND, NOT COPIED — `rows` is not read again, and
 		// a copy was every cell of the list made and freed once more (1.6 s of the payroll sheet, 2026-09-12,
 		// Debug). Reordered in place (ReorderRows) and handed to the result whole.
 		ibQueryRamTable sorted = RamTableOf(cols);
-		const long limit = (req.m_count > 0 && req.m_count < rows.RowCount()) ? req.m_count : rows.RowCount();
+		const long past = rows.RowCount() - static_cast<long>(from);
+		const long limit = (req.m_count > 0 && req.m_count < past) ? req.m_count : past;
 		rows.ReorderRows(order, limit);
 		sorted.AppendRowsFrom(rows);
 		rebuild.Pause();

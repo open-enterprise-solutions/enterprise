@@ -224,7 +224,8 @@ page read from the top says `Begin` and no `Anchor`; one read around a row the c
 page's, a row just added) names no `Anchor` either. The client answers its own read anew from it when the read names
 the same `Anchor` and asks no more, or — when the page is the whole level, `Begin` and `End` — around any row of it,
 cut out as the server would read it. Any other read is a `fetch`, as before. The fields are those of a `fetch` answer,
-so a client that does not look at them takes the page only for a read that matches it.
+so a client that does not look at them takes the page only for a read that matches it. A hierarchical view whose last
+level read named a `Parent` is given no `Rows`: the page would be of the top, and the client reads its own level.
 A designer's module tab (its `View` `State`: `Syntax`, `Module`, `Modified`, `ReadOnly`) carries the module's `Text`
 in the frame that opens the tab, once; the client draws it without a `fetch`. A server that puts no `Text` there is
 asked with `fetch`, as before. A form's tab reads its module's text as it did.

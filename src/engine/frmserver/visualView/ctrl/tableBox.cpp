@@ -702,6 +702,14 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// the client's own opening read is — a reset with no anchor, Fetch's: from the top when the table stands on no row,
 	// else around the row it stands on with as many rows ahead as the page, the page saying how many came (Before) and
 	// whether it is the top (Begin). No Anchor on such a page: the client named none, and matches its own read by that.
+	//
+	// …AND NONE WHILE THE CLIENT STANDS IN A FOLDER — the Hierarchical view drilled into (m_drillItem): the page is of
+	// the top, which the client does not read there, it reads its own level anew. And the top read anew forgot every row
+	// handed out, the folder's too: the client's read of its folder was refused, the list showed it empty, and the drill
+	// went back to the top, so the next element was created there (an element added in a folder, 2026-10-29). The
+	// version is answered by the client's own read.
+	if (m_rowsSentVersion != m_rowsVersion && m_drillItem.IsOk())
+		m_rowsSentVersion = m_rowsVersion;
 	if (m_rowsSentVersion != m_rowsVersion) {
 		std::int32_t anchor = 0;
 		if (m_rowsSentVersion != -1 && m_tableCurrentLine != nullptr)
@@ -1367,7 +1375,10 @@ void ibValueModelTableBox::OnViewModeChanged(ibDataViewViewMode viewMode)
 	if (appData->DesignerMode())
 		return;
 
-	m_propertyViewMode->SetValue(viewMode);
+	// …THROUGH THE PROPERTY'S DOOR, as the inspector writes it: the table hears it, and the next frame draws it with its
+	// mode. Set past the door, the frame answering the switch drew nothing, and the client read its rows in the new mode
+	// only when something else was drawn (2026-10-29).
+	ibPropertyGate::SetValue(this, m_propertyViewMode, ibVariant(ibNumber(static_cast<long>(viewMode))));
 	// A drill is the Hierarchical view's own; the client reads the top again in whichever it now is.
 	m_drillItem = ibDataViewItem();
 }

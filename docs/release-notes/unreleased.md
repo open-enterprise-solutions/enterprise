@@ -54,6 +54,18 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **The browser client's table reads nothing while it has no height** (a notebook page behind another),
   where every page fell short of the window and the whole list was read; and when the rows held fall
   short of the window with nothing after them, it reads back, not on.
+- **A folder opened in the hierarchical view shows the element just added to it.** A list read anew
+  inside a folder (an element added, the list refreshed) showed the folder empty, and the next element
+  went to the top: the server read the top for that frame and lost the folder the client stood in. In a
+  folder the client now reads its own level, and the server keeps the folder.
+- **A list in the List view is flat.** A folder in it could be opened, and showed the whole list again,
+  the folder among it. A folder opens only where the tree is read.
+- **A custom list (one with a query of its own) shows its tree level by level.** Its query is computed in
+  memory, and that road read the whole list for every folder, so a folder opened into itself without end.
+  Every page was the whole list too, so the rows came twice, the ones above a page turned round. It now
+  reads one level and one page from where the last ended, as a list read from the base does.
+- **Switching the view mode reads the list at once**, where the rows came in the new mode only after the
+  next click.
 - **An Excel workbook with a part that does not parse is refused, the part named**, where it was read
   with that part left out: shared strings that did not parse left every string cell of the book empty,
   and nobody was told. The workbook's XML is read by the engine's own parser, no longer by wx's.
