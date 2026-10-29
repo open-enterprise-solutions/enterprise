@@ -341,14 +341,22 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 			// A file that is not one leaves the configuration as it was, and the person is told.
 			const ibString file = args.GetValue<ibString>(ibProtocol::ibSchema::ibMetaData::File);
 			return [metaData, clsid, replaced, file]() {
-				if (ReadExternal(metaData, clsid, file) == nullptr) {
+				ibValueMetaObject* const read = ReadExternal(metaData, clsid, file);
+				if (read == nullptr) {
 					if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
 						frame->ShowModalMessage(BackendErrorChain(_("The data processor or report could not be read from the file.")),
 							ibString(), wxOK | wxCENTRE | wxICON_ERROR);
 					return;
 				}
-				if (replaced != nullptr)
-					metaData->RemoveMetaObject(replaced);
+				if (replaced == nullptr)
+					return;
+				// THE ONE READ TAKES THE REPLACED ONE'S PLACE — the reader puts it in last, and the desktop's tree kept the
+				// row where it stood (ReplaceItem repointed it): moved there before the old one goes, so the order of the
+				// configuration's objects is the one it was.
+				ibValueMetaObject* const parent = replaced->GetParent();
+				if (parent != nullptr && read->GetParent() == parent)
+					parent->ChangeChildPosition(read, parent->GetChildPosition(replaced));
+				metaData->RemoveMetaObject(replaced);
 			};
 		}
 		ibMetaDataConfigurationBase* const configuration = FindConfiguration(session, metaData, refusal, error);
