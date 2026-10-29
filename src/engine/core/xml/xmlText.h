@@ -75,6 +75,11 @@ public:
 	typedef std::vector<std::pair<ibString, ibString>> ibNamespaceArray;
 
 	enum ibInput { kBytes, kCharacters };
+	// kNamespaces: a name is resolved — its URI, local part and prefix beside it, the declarations in scope (XMLReader's);
+	// kAsWritten: a name is what the document wrote (`r:id`) and nothing else is made of it — no URI, local part or
+	// prefix, no scope, `xmlns` an attribute like any other, a prefix nobody declared not refused. A reader that keeps
+	// the names alone (ibXmlDocument) then pays for no URI on every element and attribute.
+	enum ibNames { kNamespaces, kAsWritten };
 
 	struct ibAttribute { ibString m_name, m_local, m_prefix, m_uri, m_value; };
 	struct ibNode {
@@ -101,8 +106,8 @@ public:
 
 	// `who` begins every refusal ("XMLReader: ... at line N, column M"). kCharacters: the input is a string's,
 	// handed over as UTF-8 - an `encoding=` in its declaration is then not applied; kBytes: a file's, read in the
-	// encoding its mark or its declaration names.
-	ibXmlParser(const ibString& who, ibInput input);
+	// encoding its mark or its declaration names. `names` - see ibNames.
+	ibXmlParser(const ibString& who, ibInput input, ibNames names = kNamespaces);
 	~ibXmlParser();
 
 	// `last` on the final chunk; `source` (a file's name, or empty) is named in a refusal. May leave the parser

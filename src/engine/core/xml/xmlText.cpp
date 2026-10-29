@@ -282,24 +282,28 @@ std::shared_ptr<const ibXmlParser::ibNamespaceArray> ibXmlParser::Resolve(const 
 // handler that fails writes down why and stops the parser; Settle raises once expat has returned.
 class ibXmlParser::ibExpat {
 public:
-	ibExpat(ibXmlParser& owner, const ibString& who, ibInput input) : m_owner(owner), m_who(who)
+	ibExpat(ibXmlParser& owner, const ibString& who, ibInput input, ibNames names)
+		: m_owner(owner), m_who(who), m_names(names)
 	{
 		// From a string the text is characters already, handed over as UTF-8: saying so here is what makes expat
 		// ignore an `encoding=` in the declaration, which would read those bytes a second time.
-		m_parser = XML_ParserCreateNS(input == kCharacters ? "UTF-8" : nullptr, kNsSeparator);
+		const XML_Char* const encoding = input == kCharacters ? "UTF-8" : nullptr;
+		m_parser = names == kNamespaces ? XML_ParserCreateNS(encoding, kNsSeparator) : XML_ParserCreate(encoding);
 		if (m_parser == nullptr)
 			ibCoreException::Error(_("%s: no memory for the parser"), m_who);
 
 		XML_Parser p = m_parser;
 		XML_SetUserData(p, this);
-		XML_SetReturnNSTriplet(p, 1);
+		if (names == kNamespaces) {
+			XML_SetReturnNSTriplet(p, 1);
+			XML_SetNamespaceDeclHandler(p, OnNsStart, OnNsEnd);
+		}
 		XML_SetElementHandler(p, OnStart, OnEnd);
 		XML_SetCharacterDataHandler(p, OnText);
 		XML_SetCommentHandler(p, OnComment);
 		XML_SetProcessingInstructionHandler(p, OnPi);
 		XML_SetCdataSectionHandler(p, OnCdataStart, OnCdataEnd);
 		XML_SetXmlDeclHandler(p, OnXmlDecl);
-		XML_SetNamespaceDeclHandler(p, OnNsStart, OnNsEnd);
 		XML_SetDoctypeDeclHandler(p, OnDoctypeStart, OnDoctypeEnd);
 		XML_SetUnknownEncodingHandler(p, OnUnknownEncoding, this);
 
@@ -400,6 +404,16 @@ private:
 		return node;
 	}
 
+	// An element's or an attribute's name, as the parser was made to read names (ibNames): split into its URI, local
+	// part and prefix, or only as written.
+	void ReadName(const XML_Char* raw, ibString& uri, ibString& local, ibString& prefix, ibString& name) const
+	{
+		if (m_names == kAsWritten)
+			name = FromUtf8(raw);
+		else
+			SplitName(raw, uri, local, prefix, name);
+	}
+
 	// The text gathered so far becomes its node: Whitespace when it is nothing else, Text otherwise.
 	void FlushText()
 	{
@@ -426,7 +440,7 @@ private:
 		Guard(self, [&](ibExpat& parser) {
 			parser.FlushText();
 			ibNode node = parser.Begin(ibXmlNodeType_StartElement);
-			SplitName(name, node.m_uri, node.m_local, node.m_prefix, node.m_name);
+			parser.ReadName(name, node.m_uri, node.m_local, node.m_prefix, node.m_name);
 
 			// The declarations first: in namespace mode expat takes them out of `atts`, before this handler - their
 			// place among the other attributes is not said. They are the innermost links of the scope, the last
@@ -452,7 +466,7 @@ private:
 
 			for (const XML_Char** at = atts; at[0] != nullptr; at += 2) {
 				ibAttribute attribute;
-				SplitName(at[0], attribute.m_uri, attribute.m_local, attribute.m_prefix, attribute.m_name);
+				parser.ReadName(at[0], attribute.m_uri, attribute.m_local, attribute.m_prefix, attribute.m_name);
 				attribute.m_value = FromUtf8(at[1]);
 				node.m_attributeArray.push_back(std::move(attribute));
 			}
@@ -470,7 +484,7 @@ private:
 			parser.FlushText();
 			--parser.m_depth;
 			ibNode node = parser.Begin(ibXmlNodeType_EndElement);
-			SplitName(name, node.m_uri, node.m_local, node.m_prefix, node.m_name);
+			parser.ReadName(name, node.m_uri, node.m_local, node.m_prefix, node.m_name);
 
 			// `<a/>` and `<a></a>` both come as start-then-end; only the first has no bytes of its own for the end.
 			// ⚠ Inside an entity's replacement text expat reports every event at the entity REFERENCE, so there
@@ -656,6 +670,7 @@ private:
 
 	ibXmlParser&  m_owner;
 	ibString      m_who;
+	ibNames       m_names;
 	XML_Parser    m_parser = nullptr;
 
 	std::string   m_pending;                    // text so far, as the parser handed it over (UTF-8)
@@ -670,8 +685,8 @@ private:
 	ibString      m_refusal;
 };
 
-ibXmlParser::ibXmlParser(const ibString& who, ibInput input)
-	: m_expat(std::make_unique<ibExpat>(*this, who, input))
+ibXmlParser::ibXmlParser(const ibString& who, ibInput input, ibNames names)
+	: m_expat(std::make_unique<ibExpat>(*this, who, input, names))
 {
 }
 

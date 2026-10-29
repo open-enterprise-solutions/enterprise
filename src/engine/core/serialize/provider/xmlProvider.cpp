@@ -1,5 +1,6 @@
 #include "core/serialize/provider/xmlProvider.h"
-#include "core/xml/xmlText.h"                // ibXmlParser / ibXmlWriter — the engine's XML, read and written
+#include "core/xml/xmlText.h"                // ibXmlWriter / ibXmlCodePage — the engine's XML, written
+#include "core/xml/xmlDocument.h"            // ibXmlDocument — …and read, whole
 #include "core/utils/base64.h"               // ibBase64 — a binary's text and a string XML cannot hold
 #include "core/exception.h"                  // ibCoreException — the refusals
 #include "core/localization/dictionary.h"    // _() — their words
@@ -170,85 +171,56 @@ private:
 	const std::function<ibString(ibClassID)>& m_resolveType;
 };
 
-// …AND READ BACK — pulled from the parser a node at a time; what is not of the layout is refused where it stands.
+// …AND READ BACK — walked over the document the core's parser read whole (ibXmlDocument: one road from XML text to a
+// tree, the workbook reader's too); what is not of the layout is refused where it stands, by its line. An element left
+// open is the parser's to refuse — the tree holds none.
 class ibXmlTreeReading {
 public:
-	ibXmlTreeReading(ibXmlParser& parser, const std::function<ibClassID(const ibString&)>& lookupType)
-		: m_parser(parser), m_lookupType(lookupType) {}
+	explicit ibXmlTreeReading(const std::function<ibClassID(const ibString&)>& lookupType) : m_lookupType(lookupType) {}
 
-	ibDataNode ReadRoot()
+	ibDataNode ReadRoot(const ibXmlDocument& xml)
 	{
-		ibXmlParser::ibNode start;
-		do {
-			start = Next();
-			if (start.m_type == ibXmlNodeType_None)
-				ibCoreException::Error(_("ibXmlProvider: the document holds no Node"));
-		} while (start.m_type != ibXmlNodeType_StartElement);
-		if (start.m_name != ibT("Node"))
-			Misplaced(start, ibT("the document"));
-		ibDataNode root = ReadNode(start, 1);
-		// What follows the root is the parser's to refuse (a second root); the rest — comments, blank lines — is read out.
-		while (Next().m_type != ibXmlNodeType_None) {}
-		return root;
+		const ibXmlNode* const start = xml.GetRoot();
+		if (start == nullptr)
+			ibCoreException::Error(_("ibXmlProvider: the document holds no Node"));
+		if (start->GetName() != ibT("Node"))
+			Misplaced(*start, ibT("the document"));
+		return ReadNode(*start, 1);
 	}
 
 private:
-	// The next node that matters — a comment, an instruction, the declaration passed over; None at the end.
-	ibXmlParser::ibNode Next()
+	// The node that matters from this one on — a comment, an instruction passed over; null at the end.
+	static const ibXmlNode* Next(const ibXmlNode* node)
 	{
-		for (;;) {
-			std::deque<ibXmlParser::ibNode>& queue = m_parser.Queue();
-			if (!queue.empty()) {
-				ibXmlParser::ibNode node = std::move(queue.front());
-				queue.pop_front();
-				switch (node.m_type) {
-				case ibXmlNodeType_Comment:
-				case ibXmlNodeType_ProcessingInstruction:
-				case ibXmlNodeType_XMLDeclaration:
-				case ibXmlNodeType_DocumentTypeDefinition:
-					continue;
-				default:
-					return node;
-				}
-			}
-			if (!m_parser.Paused())
-				return ibXmlParser::ibNode();
-			m_parser.Resume(ibString());
-		}
+		while (node != nullptr && (node->GetType() == ibXmlNodeType_Comment
+			|| node->GetType() == ibXmlNodeType_ProcessingInstruction))
+			node = node->GetNext();
+		return node;
 	}
 
-	static bool IsText(const ibXmlParser::ibNode& node)
+	static bool IsText(const ibXmlNode& node)
 	{
-		return node.m_type == ibXmlNodeType_Text || node.m_type == ibXmlNodeType_Whitespace
-			|| node.m_type == ibXmlNodeType_CDATASection;
+		return node.GetType() == ibXmlNodeType_Text || node.GetType() == ibXmlNodeType_Whitespace
+			|| node.GetType() == ibXmlNodeType_CDATASection;
 	}
 
-	static bool AttributeOf(const ibXmlParser::ibNode& node, const ibChar* name, ibString& value)
+	static bool AttributeOf(const ibXmlNode& node, const ibChar* name, ibString& value)
 	{
-		for (const ibXmlParser::ibAttribute& attribute : node.m_attributeArray) {
-			if (attribute.m_name == name) {
-				value = attribute.m_value;
-				return true;
-			}
-		}
-		return false;
+		if (!node.HasAttribute(name))
+			return false;
+		value = node.GetAttribute(name);
+		return true;
 	}
 
-	[[noreturn]] static void Misplaced(const ibXmlParser::ibNode& node, const ibString& where)
+	[[noreturn]] static void Misplaced(const ibXmlNode& node, const ibString& where)
 	{
 		ibCoreException::Error(_("ibXmlProvider: '%s' does not belong in %s, line %llu"),
-			node.m_type == ibXmlNodeType_StartElement ? node.m_name : node.m_value, where, node.m_line);
+			node.GetType() == ibXmlNodeType_StartElement ? node.GetName() : node.GetContent(), where, node.GetLine());
 	}
 
-	// The end of an element whose content was not finished: the document ends inside it.
-	[[noreturn]] static void Unfinished(const ibXmlParser::ibNode& start)
+	ibDataNode ReadNode(const ibXmlNode& start, int depth)
 	{
-		ibCoreException::Error(_("ibXmlProvider: the '%s' of line %llu is not closed"), start.m_name, start.m_line);
-	}
-
-	ibDataNode ReadNode(const ibXmlParser::ibNode& start, int depth)
-	{
-		CheckDepth(depth, start.m_line);
+		CheckDepth(depth, start.GetLine());
 		ibClassID clsid = 0;
 		ibMetaID metaId = 0;
 		ibString type, id;
@@ -263,7 +235,7 @@ private:
 		if (AttributeOf(start, ibT("Id"), id)) {
 			long long number = 0;
 			if (!id.ToLongLong(&number))
-				ibCoreException::Error(_("ibXmlProvider: Id '%s' is no number, line %llu"), id, start.m_line);
+				ibCoreException::Error(_("ibXmlProvider: Id '%s' is no number, line %llu"), id, start.GetLine());
 			metaId = static_cast<ibMetaID>(number);
 		}
 		ibDataNode node(clsid, metaId);
@@ -272,75 +244,61 @@ private:
 			node.AddField(ibT("NodeType"), ibDataValue::String(type));
 
 		bool children = false;
-		for (;;) {
-			const ibXmlParser::ibNode item = Next();
-			if (item.m_type == ibXmlNodeType_EndElement)
-				break;
-			if (item.m_type == ibXmlNodeType_None)
-				Unfinished(start);
-			if (IsText(item)) {
-				if (!IsBlank(item.m_value))
-					Misplaced(item, ibT("a Node"));
+		for (const ibXmlNode* item = Next(start.GetChildren()); item != nullptr; item = Next(item->GetNext())) {
+			if (IsText(*item)) {
+				if (!IsBlank(item->GetContent()))
+					Misplaced(*item, ibT("a Node"));
 				continue;
 			}
-			if (item.m_name == ibT("Field")) {
+			if (item->GetName() == ibT("Field")) {
 				ibString name;
-				if (!AttributeOf(item, ibT("Name"), name))
-					ibCoreException::Error(_("ibXmlProvider: a Field with no Name, line %llu"), item.m_line);
-				node.AddField(name, ReadValue(item, depth + 1));
+				if (!AttributeOf(*item, ibT("Name"), name))
+					ibCoreException::Error(_("ibXmlProvider: a Field with no Name, line %llu"), item->GetLine());
+				node.AddField(name, ReadValue(*item, depth + 1));
 			}
-			else if (item.m_name == ibT("Raw")) {
+			else if (item->GetName() == ibT("Raw")) {
 				ibMemoryBuffer raw;
-				if (!ibBase64::Read(ReadText(item), raw))
-					ibCoreException::Error(_("ibXmlProvider: Raw is no base64, line %llu"), item.m_line);
+				if (!ibBase64::Read(ReadText(*item), raw))
+					ibCoreException::Error(_("ibXmlProvider: Raw is no base64, line %llu"), item->GetLine());
 				node.SetRawData(raw);
 			}
-			else if (item.m_name == ibT("Children") && !children) {
+			else if (item->GetName() == ibT("Children") && !children) {
 				children = true;
-				ReadChildren(item, node, depth);
+				ReadChildren(*item, node, depth);
 			}
 			else
-				Misplaced(item, ibT("a Node"));
+				Misplaced(*item, ibT("a Node"));
 		}
 		return node;
 	}
 
-	void ReadChildren(const ibXmlParser::ibNode& start, ibDataNode& node, int depth)
+	void ReadChildren(const ibXmlNode& start, ibDataNode& node, int depth)
 	{
-		for (;;) {
-			const ibXmlParser::ibNode item = Next();
-			if (item.m_type == ibXmlNodeType_EndElement)
-				return;
-			if (item.m_type == ibXmlNodeType_None)
-				Unfinished(start);
-			if (IsText(item) && IsBlank(item.m_value))
+		for (const ibXmlNode* item = Next(start.GetChildren()); item != nullptr; item = Next(item->GetNext())) {
+			if (IsText(*item) && IsBlank(item->GetContent()))
 				continue;
-			if (item.m_type != ibXmlNodeType_StartElement || item.m_name != ibT("Node"))
-				Misplaced(item, ibT("Children"));
-			node.AddChild(ReadNode(item, depth + 1));
+			if (item->GetType() != ibXmlNodeType_StartElement || item->GetName() != ibT("Node"))
+				Misplaced(*item, ibT("Children"));
+			node.AddChild(ReadNode(*item, depth + 1));
 		}
 	}
 
 	// An element that holds text alone.
-	ibString ReadText(const ibXmlParser::ibNode& start)
+	ibString ReadText(const ibXmlNode& start)
 	{
 		ibString text;
-		for (;;) {
-			const ibXmlParser::ibNode item = Next();
-			if (item.m_type == ibXmlNodeType_EndElement)
-				return text;
-			if (item.m_type == ibXmlNodeType_None)
-				Unfinished(start);
-			if (!IsText(item))
-				Misplaced(item, start.m_name);
-			text += item.m_value;
+		for (const ibXmlNode* item = Next(start.GetChildren()); item != nullptr; item = Next(item->GetNext())) {
+			if (!IsText(*item))
+				Misplaced(*item, start.GetName());
+			text += item->GetContent();
 		}
+		return text;
 	}
 
 	// A Field's or an Item's value, by its kind; no kind — a string, or the sub-node it holds.
-	ibDataValue ReadValue(const ibXmlParser::ibNode& start, int depth)
+	ibDataValue ReadValue(const ibXmlNode& start, int depth)
 	{
-		CheckDepth(depth, start.m_line);
+		CheckDepth(depth, start.GetLine());
 		ibString kind, encoding;
 		AttributeOf(start, ibT("Kind"), kind);
 		AttributeOf(start, ibT("Encoding"), encoding);
@@ -349,26 +307,21 @@ private:
 		ibString text;
 		std::vector<ibDataValue> items;
 		std::shared_ptr<ibDataNode> child;
-		for (;;) {
-			const ibXmlParser::ibNode item = Next();
-			if (item.m_type == ibXmlNodeType_EndElement)
-				break;
-			if (item.m_type == ibXmlNodeType_None)
-				Unfinished(start);
-			if (IsText(item)) {
-				text += item.m_value;
+		for (const ibXmlNode* item = Next(start.GetChildren()); item != nullptr; item = Next(item->GetNext())) {
+			if (IsText(*item)) {
+				text += item->GetContent();
 				continue;
 			}
-			if (list && item.m_name == ibT("Item"))
-				items.push_back(ReadValue(item, depth + 1));
-			else if (kind.IsEmpty() && child == nullptr && item.m_name == ibT("Node"))
-				child = std::make_shared<ibDataNode>(ReadNode(item, depth + 1));
+			if (list && item->GetName() == ibT("Item"))
+				items.push_back(ReadValue(*item, depth + 1));
+			else if (kind.IsEmpty() && child == nullptr && item->GetName() == ibT("Node"))
+				child = std::make_shared<ibDataNode>(ReadNode(*item, depth + 1));
 			else
-				Misplaced(item, start.m_name);
+				Misplaced(*item, start.GetName());
 		}
 
 		const auto refuse = [&](const ibString& what) {
-			ibCoreException::Error(_("ibXmlProvider: '%s' is no %s, line %llu"), text, what, start.m_line);
+			ibCoreException::Error(_("ibXmlProvider: '%s' is no %s, line %llu"), text, what, start.GetLine());
 		};
 		if (list || child != nullptr) {
 			if (!IsBlank(text))
@@ -410,10 +363,9 @@ private:
 				refuse(ibT("base64"));
 			return ibDataValue::Binary(bytes);
 		}
-		ibCoreException::Error(_("ibXmlProvider: no kind is called '%s', line %llu"), kind, start.m_line);
+		ibCoreException::Error(_("ibXmlProvider: no kind is called '%s', line %llu"), kind, start.GetLine());
 	}
 
-	ibXmlParser& m_parser;
 	const std::function<ibClassID(const ibString&)>& m_lookupType;
 };
 
@@ -442,10 +394,9 @@ bool ibXmlProvider::Write(const ibDataNode& root, ibWriterMemory& writer) const
 
 bool ibXmlProvider::Read(const ibString& text, ibDataNode& root) const
 {
-	const std::string utf8 = text.ToUTF8();
-	ibXmlParser parser(kWho, ibXmlParser::kCharacters);
-	parser.Feed(utf8.data(), utf8.size(), true, ibString());
-	root = ibXmlTreeReading(parser, m_lookupType).ReadRoot();
+	ibXmlDocument xml;
+	xml.Load(text);
+	root = ibXmlTreeReading(m_lookupType).ReadRoot(xml);
 	return true;
 }
 
@@ -454,9 +405,9 @@ bool ibXmlProvider::Read(ibReaderMemory& reader, ibDataNode& root) const
 	const int size = reader.elapsed();
 	if (size <= 0)
 		return false;
-	ibXmlParser parser(kWho, ibXmlParser::kBytes);
-	parser.Feed(static_cast<const char*>(reader.pointer()), static_cast<size_t>(size), true, ibString());
-	root = ibXmlTreeReading(parser, m_lookupType).ReadRoot();
+	ibXmlDocument xml;
+	xml.Load(static_cast<const char*>(reader.pointer()), static_cast<size_t>(size));
+	root = ibXmlTreeReading(m_lookupType).ReadRoot(xml);
 	reader.advance(size);
 	return true;
 }

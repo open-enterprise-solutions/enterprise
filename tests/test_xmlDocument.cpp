@@ -60,6 +60,16 @@ TEST(XmlDocument, AnAttributeIsFoundByItsNameAsWrittenOrAnswersTheAbsentValue)
 	EXPECT_EQ(sheet->GetAttribute(ibT("missing")), ibString());
 }
 
+TEST(XmlDocument, APrefixNobodyDeclaredIsPartOfTheNameAsWritten)
+{
+	// The tree resolves no namespace (ibXmlParser::kAsWritten): `x:` is two letters of the name, not a refusal.
+	ibXmlDocument xml;
+	xml.Load(ibT("<x:a y:b=\"1\"/>"));
+	ASSERT_NE(xml.GetRoot(), nullptr);
+	EXPECT_EQ(xml.GetRoot()->GetName(), ibString(ibT("x:a")));
+	EXPECT_EQ(xml.GetRoot()->GetAttribute(ibT("y:b")), ibString(ibT("1")));
+}
+
 TEST(XmlDocument, TextIsOneNodeAcrossReferencesAndASpaceOnlyTextIsKept)
 {
 	ibXmlDocument xml;
@@ -129,6 +139,28 @@ TEST(XmlDocument, ATextThatIsNotWellFormedIsRefusedAndLeavesNoTree)
 	EXPECT_EQ(xml.GetRoot(), nullptr);
 	EXPECT_THROW(xml.Load(ibT("<!DOCTYPE a SYSTEM \"file:///etc/passwd\"><a/>")), ibCoreException);
 	EXPECT_EQ(xml.GetRoot(), nullptr);
+}
+
+TEST(XmlDocument, BytesAreReadInTheEncodingTheirDeclarationNames)
+{
+	// "При" in windows-1251: no string of the whole document is made, the parser decodes the bytes themselves.
+	const std::string bytes = "<?xml version=\"1.0\" encoding=\"windows-1251\"?><a>\xCF\xF0\xE8</a>";
+	ibXmlDocument xml;
+	xml.Load(bytes.data(), bytes.size());
+	ASSERT_NE(xml.GetRoot(), nullptr);
+	EXPECT_EQ(xml.GetRoot()->GetNodeContent(), ibString(L"При"));
+}
+
+TEST(XmlDocument, ANodeKnowsTheLineItBeginsOn)
+{
+	ibXmlDocument xml;
+	xml.Load(ibT("<a>\n\n<b\nc=\"1\"/></a>"));
+	ASSERT_NE(xml.GetRoot(), nullptr);
+	EXPECT_EQ(xml.GetRoot()->GetLine(), 1ull);
+	const ibXmlNode* b = xml.GetRoot()->GetChildren()->GetNext();
+	ASSERT_NE(b, nullptr);
+	EXPECT_EQ(b->GetName(), ibString(ibT("b")));
+	EXPECT_EQ(b->GetLine(), 3ull);
 }
 
 TEST(XmlDocument, ASecondLoadReplacesTheFirstTree)

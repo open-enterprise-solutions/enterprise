@@ -66,8 +66,9 @@ public:
 	virtual bool CanRead()  const { return true; }
 	virtual bool CanWrite() const { return true; }
 
-	// False on a stream that is not this format, or is damaged in a way that leaves nothing to show. ⚠ NEVER a
-	// half-filled document: a caller that gets false must be free to keep what it had.
+	// False on a stream that is not this format, or is damaged in a way that leaves nothing to show; a part its parser
+	// refuses is refused in the parser's words (ibCoreException — the workbook's XML). ⚠ NEVER a half-filled document:
+	// a caller that gets false, or the refusal, must be free to keep what it had.
 	//
 	// ⭐ A STREAM, NOT A PATH: the bytes come from a file on disk or from the session's temporary storage by its id,
 	// and the format does not care which — the server works with ids, not with files.

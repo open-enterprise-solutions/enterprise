@@ -42,3 +42,6 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **The browser client's table reads nothing while it has no height** (a notebook page behind another),
   where every page fell short of the window and the whole list was read; and when the rows held fall
   short of the window with nothing after them, it reads back, not on.
+- **An Excel workbook with a part that does not parse is refused, the part named**, where it was read
+  with that part left out: shared strings that did not parse left every string cell of the book empty,
+  and nobody was told. The workbook's XML is read by the engine's own parser, no longer by wx's.

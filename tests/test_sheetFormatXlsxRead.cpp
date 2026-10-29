@@ -14,6 +14,7 @@
 
 #include "backend/sheetFormat/sheetFormatXlsx.h"
 #include "core/description/spreadsheetDescription.h"
+#include "core/exception.h"
 
 namespace {
 
@@ -125,22 +126,26 @@ TEST(SheetFormatXlsxRead, AWorkbookIsReadInTheWorkbooksOrderWithItsStringsStyles
 	EXPECT_EQ(CellText(sheet, 2, 0), ibString(ibT("42")));
 }
 
-TEST(SheetFormatXlsxRead, APartThatIsNotXmlIsSkippedAndAWorkbookThatNamesNoSheetIsRefused)
+TEST(SheetFormatXlsxRead, APartThatIsNotXmlRefusesTheFileAndAWorkbookThatNamesNoSheetIsRefused)
 {
 	ibSpreadsheetDescription sheet;
 	sheet.SetCellValue(5, 5, ibT("kept"));
-	// The shared strings do not parse: the sheet is read, its string cell is empty.
-	ASSERT_TRUE(Read({
-		{ "xl/_rels/workbook.xml.rels", kRels },
-		{ "xl/workbook.xml", kWorkbook },
-		{ "xl/sharedStrings.xml", "<sst><si><t>broken</si>" },
-		{ "xl/worksheets/sheet1.xml", kData },
-		{ "xl/worksheets/sheet2.xml", "<worksheet><sheetData><row r=\"1\"><c r=\"A1\" t=\"s\"><v>0</v></c><c r=\"B1\"><v>7</v></c></row></sheetData></worksheet>" },
-	}, sheet));
-	EXPECT_EQ(CellText(sheet, 0, 0), ibString());
-	EXPECT_EQ(CellText(sheet, 0, 1), ibString(ibT("7")));
-	EXPECT_EQ(CellText(sheet, 1, 0), ibString(ibT("42")));
-	EXPECT_EQ(CellText(sheet, 5, 5), ibString());
+	// The shared strings do not parse: the file is refused in the parser's words, naming the part — not read with its
+	// string cells empty — and the document it was handed stays as it was.
+	ibString refusal;
+	try {
+		Read({
+			{ "xl/_rels/workbook.xml.rels", kRels },
+			{ "xl/workbook.xml", kWorkbook },
+			{ "xl/sharedStrings.xml", "<sst><si><t>broken</si>" },
+			{ "xl/worksheets/sheet1.xml", kData },
+		}, sheet);
+	}
+	catch (const ibCoreException& err) {
+		refusal = err.GetErrorDescription();
+	}
+	EXPECT_TRUE(refusal.Contains(ibT("xl/sharedstrings.xml"))) << refusal.ToStdString();
+	EXPECT_EQ(CellText(sheet, 5, 5), ibString(ibT("kept")));
 
 	// A well-formed workbook that lists no sheet, and no sheet1 to fall back on: nothing to read, and the document
 	// it was handed stays as it was.

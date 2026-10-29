@@ -47,15 +47,29 @@ ibXmlNode& ibXmlDocument::Append(ibXmlNode* parent, ibXmlNodeType type)
 	return node;
 }
 
+// ⭐ THE NAMES AS WRITTEN (ibXmlParser::kAsWritten): the tree keeps a name and nothing else of it, and a parser that
+// resolved namespaces made a URI, a local part and a prefix for every element and attribute — a workbook's cell paid
+// for its namespace's URI twice over, at its start and at its end.
+void ibXmlDocument::Load(const ibString& text, const ibString& source)
+{
+	const std::string utf8 = text.ToUtf8();
+	ibXmlParser parser(ibT("XML"), ibXmlParser::kCharacters, ibXmlParser::kAsWritten);
+	Load(parser, utf8.data(), utf8.size(), source);
+}
+
+void ibXmlDocument::Load(const char* data, size_t size, const ibString& source)
+{
+	ibXmlParser parser(ibT("XML"), ibXmlParser::kBytes, ibXmlParser::kAsWritten);
+	Load(parser, data, size, source);
+}
+
 // The parser hands its nodes over a queue at a time; the tree is built as they come - an element opens a level,
 // its end closes it. What stands outside the root (a comment before it, the whitespace after it) is not kept.
-void ibXmlDocument::Load(const ibString& text)
+void ibXmlDocument::Load(ibXmlParser& parser, const char* data, size_t size, const ibString& source)
 {
 	m_nodeArray.clear();
 	m_root = nullptr;
 
-	const std::string utf8 = text.ToUtf8();
-	ibXmlParser parser(ibT("XML"), ibXmlParser::kCharacters);
 	std::vector<ibXmlNode*> open;   // the elements not ended, innermost last
 
 	const auto take = [&]() {
@@ -68,6 +82,7 @@ void ibXmlDocument::Load(const ibString& text)
 					break;   // expat refuses a second root before it gets here
 				ibXmlNode& element = Append(parent, ibXmlNodeType_StartElement);
 				element.m_name = std::move(parsed.m_name);
+				element.m_line = parsed.m_line;
 				element.m_attributeArray = std::move(parsed.m_attributeArray);
 				if (parent == nullptr)
 					m_root = &element;
@@ -88,6 +103,7 @@ void ibXmlDocument::Load(const ibString& text)
 				ibXmlNode& node = Append(parent, parsed.m_type);
 				node.m_name = std::move(parsed.m_name);
 				node.m_content = std::move(parsed.m_value);
+				node.m_line = parsed.m_line;
 				break;
 			}
 			default:
@@ -100,15 +116,15 @@ void ibXmlDocument::Load(const ibString& text)
 	try {
 		size_t at = 0;
 		do {
-			const size_t size = std::min(ibXmlParser::kChunk, utf8.size() - at);
-			parser.Feed(utf8.data() + at, size, at + size == utf8.size(), ibString());
-			at += size;
+			const size_t chunk = std::min(ibXmlParser::kChunk, size - at);
+			parser.Feed(data + at, chunk, at + chunk == size, source);
+			at += chunk;
 			take();
 			while (parser.Paused()) {
-				parser.Resume(ibString());
+				parser.Resume(source);
 				take();
 			}
-		} while (at < utf8.size());
+		} while (at < size);
 	}
 	catch (...) {
 		m_nodeArray.clear();

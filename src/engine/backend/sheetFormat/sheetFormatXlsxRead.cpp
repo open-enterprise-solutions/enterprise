@@ -19,9 +19,9 @@
 #include "core/diagnostics/journal.h"   // ibJournalStopwatch / ibJournalInfo — what a read of a book cost, step by step
 
 #include <wx/zipstrm.h>
-#include <wx/sstream.h>
 
 #include <map>
+#include <string>
 #include <vector>
 
 namespace {
@@ -46,8 +46,9 @@ bool CellAt(const ibString& ref, int& row, int& col)
 	return true;
 }
 
-// Every part of the package, by name. Read in one forward pass.
-using ibPackage = std::map<ibString, ibString>;
+// Every part of the package, by name, as the bytes the zip holds — read in one forward pass and handed to the parser
+// as they are (ibXmlDocument's bytes): a part made a string first was decoded whole, then encoded back for the parser.
+using ibPackage = std::map<ibString, std::string>;
 
 // ⭐⭐ A PART NAME IS CASE-INSENSITIVE, so there is ONE spelling of it in this file and the entry is
 // folded onto it the moment it is read — never compared as it happened to be stored.
@@ -218,29 +219,22 @@ bool Underlined(const ibXmlNode* font)
 	return value.IsEmpty() || !value.IsSameAs(ibT("none"), false);
 }
 
-// A part that does not parse is not our error to report per part - the caller is told the file could not be
-// read, once.
-bool ParseXml(const ibString& text, ibXmlDocument& xml)
+// ⭐ A PART THAT DOES NOT PARSE REFUSES THE FILE — in the parser's words, naming the part (ibXmlDocument::Load).
+// Swallowed here, a workbook whose shared strings did not parse was read with every string cell empty, and nobody was
+// told (wx's Load under wxLogNull did the same): a half-read workbook is worse than none. An empty part is no document.
+bool ParseXml(const std::string& bytes, const ibString& source, ibXmlDocument& xml)
 {
-	if (text.IsEmpty())
+	if (bytes.empty())
 		return false;
-	try {
-		xml.Load(text);
-	}
-	catch (const ibCoreException&) {
-		return false;
-	}
+	xml.Load(bytes.data(), bytes.size(), source);
 	return xml.GetRoot() != nullptr;
 }
 
-std::vector<XlsxStyle> ReadStyles(const ibString& xmlText)
+std::vector<XlsxStyle> ReadStyles(const std::string& bytes, const ibString& source)
 {
 	std::vector<XlsxStyle> byIndex;
-	if (xmlText.IsEmpty())
-		return byIndex;
-
 	ibXmlDocument xml;
-	if (!ParseXml(xmlText, xml))
+	if (!ParseXml(bytes, source, xml))
 		return byIndex;
 
 	struct Fill  { ibColour m_colour; };
@@ -401,9 +395,13 @@ bool ReadPackage(wxInputStream& input, ibPackage& parts)
 		if (!IsPartWeRead(name))
 			continue;
 
-		wxStringOutputStream out;
-		zip.Read(out);
-		parts[name] = out.GetString();
+		// Straight into the part's bytes, sized by the entry when the zip says it (a writer that streams says -1).
+		std::string& bytes = parts[name];
+		if (entry->GetSize() > 0)
+			bytes.reserve(static_cast<size_t>(entry->GetSize()));
+		char chunk[16384];
+		while (zip.Read(chunk, sizeof(chunk)).LastRead() > 0)
+			bytes.append(chunk, zip.LastRead());
 	}
 
 	return !parts.empty();
@@ -422,7 +420,7 @@ void ReadSharedStrings(const ibPackage& parts, std::vector<ibString>& strings)
 		return;
 
 	ibXmlDocument xml;
-	if (!ParseXml(found->second, xml) || xml.GetRoot() == nullptr)
+	if (!ParseXml(found->second, found->first, xml))
 		return;
 
 	for (ibXmlNode* si = xml.GetRoot()->GetChildren(); si != nullptr; si = si->GetNext()) {
@@ -452,7 +450,7 @@ void ReadSheetOrder(const ibPackage& parts, std::vector<ibString>& sheetParts)
 
 	ibXmlDocument rels;
 	const auto relsPart = parts.find(ibT("xl/_rels/workbook.xml.rels"));
-	if (relsPart != parts.end() && ParseXml(relsPart->second, rels) && rels.GetRoot() != nullptr) {
+	if (relsPart != parts.end() && ParseXml(relsPart->second, relsPart->first, rels)) {
 		for (ibXmlNode* rel = rels.GetRoot()->GetChildren(); rel != nullptr; rel = rel->GetNext()) {
 			const ibString id = rel->GetAttribute(wxT("Id"));
 			ibString target = rel->GetAttribute(wxT("Target"));
@@ -466,7 +464,7 @@ void ReadSheetOrder(const ibPackage& parts, std::vector<ibString>& sheetParts)
 
 	ibXmlDocument workbook;
 	const auto workbookPart = parts.find(ibT("xl/workbook.xml"));
-	if (workbookPart != parts.end() && ParseXml(workbookPart->second, workbook) && workbook.GetRoot() != nullptr) {
+	if (workbookPart != parts.end() && ParseXml(workbookPart->second, workbookPart->first, workbook)) {
 		for (ibXmlNode* node = workbook.GetRoot()->GetChildren(); node != nullptr; node = node->GetNext()) {
 			if (node->GetName() != ibT("sheets"))
 				continue;
@@ -533,14 +531,14 @@ void GroupsFromLevels(const std::map<int, int>& level, const std::map<int, bool>
 	}
 }
 
-int ReadSheet(const ibString& partText, const std::vector<ibString>& strings,
+int ReadSheet(const std::string& bytes, const ibString& source, const std::vector<ibString>& strings,
               const std::vector<XlsxStyle>& styles, ibSpreadsheetDescription& document, int topRow, ibJournalStopwatch& parsed)
 {
 	ibXmlDocument xml;
 	parsed.Resume();
-	const bool read = ParseXml(partText, xml);
+	const bool read = ParseXml(bytes, source, xml);
 	parsed.Pause();
-	if (!read || xml.GetRoot() == nullptr)
+	if (!read)
 		return 0;
 
 	int usedRows = 0;
@@ -803,8 +801,8 @@ bool ibSheetFormatXlsx::Read(wxInputStream& input, ibSpreadsheetDescription& she
 
 	styled.Resume();
 	const auto stylePart = parts.find(ibT("xl/styles.xml"));
-	const std::vector<XlsxStyle> styles =
-		ReadStyles(stylePart != parts.end() ? stylePart->second : ibString());
+	const std::vector<XlsxStyle> styles = stylePart != parts.end()
+		? ReadStyles(stylePart->second, stylePart->first) : std::vector<XlsxStyle>();
 	styled.Pause();
 
 	// ⚠ FILLED INTO A DOCUMENT OF ITS OWN and handed over only once it is whole: a
@@ -824,7 +822,7 @@ bool ibSheetFormatXlsx::Read(wxInputStream& input, ibSpreadsheetDescription& she
 		if (at > 0 && topRow > 0)
 			read.AddRowBrake(topRow - 1);
 
-		const int used = ReadSheet(part->second, strings, styles, read, topRow, parsed);
+		const int used = ReadSheet(part->second, part->first, strings, styles, read, topRow, parsed);
 		topRow += std::max(used, 1);
 	}
 
