@@ -336,7 +336,7 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 ### macOS-specific Notes
 
 - wxWidgets is built from the submodule via `add_subdirectory()` — no system wxWidgets needed
-- Core, protocol, backend and frmserver link against `wx::base` (and the backend `wx::xml`) only, compiled with
+- Core, protocol, backend and frmserver link against `wx::base` only, compiled with
   `wxUSE_GUI=0` — a GUI type there is a compile error; not `wx::net` either: every socket is the core's (`core/net`)
 - Firebird embedded is not available via Homebrew; use SQLite for local development
 - App bundles (`designer-thin.app`, `enterprise-thin.app`, `launcher.app`) are created automatically

@@ -165,7 +165,6 @@ target_link_libraries(backend
         # the engine's headers speaks them too.
         core
         wx::base
-        wx::xml
         # No Mbed TLS: a cipher, a random byte, TLS are the core's (core/crypto, core/net).
 )
 

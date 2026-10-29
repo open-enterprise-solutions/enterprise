@@ -37,8 +37,8 @@ TEST(SpreadsheetDocumentBench, DISABLED_FillCost)
 //   oes_tests --gtest_also_run_disabled_tests --gtest_filter=*SheetFormatBench*
 //
 // WHY IT EXISTS. A person opened a real workbook of tens of thousands of rows and
-// it read slower than it should; the profiler pointed at wxXmlDocument::Load, i.e.
-// at building a DOM for the whole sheet. This bench is the number behind that
+// it read slower than it should; the profiler pointed at wxXmlDocument::Load (the
+// reader then), i.e. at building a DOM for the whole sheet. This bench is the number behind that
 // sentence: how long each format takes to write and to read the same sheet, at
 // sizes that grow, so the SHAPE of the curve is visible and not just one figure.
 //
