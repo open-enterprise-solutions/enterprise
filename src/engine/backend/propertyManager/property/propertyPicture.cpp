@@ -65,6 +65,7 @@ bool ibPropertyPicture::WriteNodeValue(ibDataValue& value) const
 #include "protocol/protocol.h"                          // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaPictureObject.h"   // ibValueMetaObjectPicture — its Guid
+#include "core/pictureRegistry.h"                        // the core's pictures — the client has its own
 
 bool ibPropertyPicture::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
@@ -87,5 +88,17 @@ bool ibPropertyPicture::GetProtocolValue(ibDataNode& row, ibReader reader)
 		item.SetValue(ibProtocol::ibSchema::ibProperties::Id, ibBackendPicture::SendPicture(guid, source));
 	}
 	row.SetProperty(ibProtocol::ibSchema::ibProperties::Pictures, ibDataValue::Child(pictures));
+
+	// …and the engine's class icons — the metadata's and the controls' constructors', which the desktop's System list
+	// began with (ibBackendPicture::GetArrayPicture) and the client has none of: named here, drawn by their class id.
+	auto classes = std::make_shared<ibDataNode>();
+	for (const ibPictureEntry& entry : ibBackendPicture::GetArrayPicture()) {
+		if (ibPictureRegistry::IsRegisterPicture(entry.m_id))
+			continue;   // the core's — the client registers those itself
+		ibDataNode& item = classes->AddChild(0, static_cast<ibMetaID>(classes->Children().size() + 1));
+		item.SetValue(ibProtocol::ibSchema::ibProperties::Name, entry.m_name);
+		item.SetValue(ibProtocol::ibSchema::ibProperties::Id, ibBackendPicture::SendPicture(entry.m_id));
+	}
+	row.SetProperty(ibProtocol::ibSchema::ibProperties::ClassPictures, ibDataValue::Child(classes));
 	return true;
-}
+}
