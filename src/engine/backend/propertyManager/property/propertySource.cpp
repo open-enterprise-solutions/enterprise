@@ -368,12 +368,13 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 					continue;   // a table box — only table sections; a field — only fields
 				std::vector<ibSourceHop> childPath = basePrefix;
 				childPath.push_back({ col->GetSourceId() });
-				// The row is the field's identity — its NAME, as the attribute tree's (AppendComposition), not its synonym.
+				// The row says the field as the desktop's window said it (ProcessAttribute) — its SYNONYM, the type beside it;
+				// what is chosen is its path, never its label.
 				if (tableBox) {
-					AppendSource(root, col->GetSourceName(), childPath, {}, true);
+					AppendSource(root, col->GetSourceSynonym(), childPath, {}, true);
 				}
 				else {
-					const ibString label = col->GetSourceName() + ibT(" (") + MakeTypeString(metaData, col->GetTypeDesc()) + ibT(")");
+					const ibString label = col->GetSourceSynonym() + ibT(" (") + MakeTypeString(metaData, col->GetTypeDesc()) + ibT(")");
 					AppendSource(root, label, childPath, ibValueReferenceDataObject::ConvertToMetaIds(col->GetClsidList(), metaData), false);
 				}
 			}
@@ -395,7 +396,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 			for (size_t i = 1; i < parentPath.size() && boundNode != nullptr; ++i)
 				boundNode = boundNode->FindById(parentPath[i].m_id);
 			if (boundNode != nullptr)
-				AppendExplorerColumns(AppendSource(sources, boundNode->GetSourceName(), {}, {}, true), *boundNode, parentPath, metaData);
+				AppendExplorerColumns(AppendSource(sources, boundNode->GetSourceSynonym(), {}, {}, true), *boundNode, parentPath, metaData);
 		}
 
 		std::vector<ibSourceId> seenRoots;   // GetSourceList is queried under two filters — a root once
