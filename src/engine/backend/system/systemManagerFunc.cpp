@@ -391,8 +391,9 @@ ibValue ibValueSystemFunction::EndOfYear(const ibValue& cData)   { return ibValu
 ibValue ibValueSystemFunction::BegOfWeek(const ibValue& cData)   { return ibValue(cData.GetDate().BeginOfPeriod(ibTotalsPeriod::Week)); }
 ibValue ibValueSystemFunction::EndOfWeek(const ibValue& cData)   { return ibValue(cData.GetDate().EndOfPeriod(ibTotalsPeriod::Week)); }
 ibValue ibValueSystemFunction::BegOfDay(const ibValue& cData)    { return ibValue(cData.GetDate().BeginOfPeriod(ibTotalsPeriod::Day)); }
-ibValue ibValueSystemFunction::BegOfHour(const ibValue& cData)   { return ibValue(cData.GetDate().BeginOfPeriod(ibTotalsPeriod::Hour)); }
 ibValue ibValueSystemFunction::EndOfDay(const ibValue& cData)    { return ibValue(cData.GetDate().EndOfPeriod(ibTotalsPeriod::Day)); }
+ibValue ibValueSystemFunction::BegOfHour(const ibValue& cData)   { return ibValue(cData.GetDate().BeginOfPeriod(ibTotalsPeriod::Hour)); }
+ibValue ibValueSystemFunction::EndOfHour(const ibValue& cData)   { return ibValue(cData.GetDate().EndOfPeriod(ibTotalsPeriod::Hour)); }
 
 int ibValueSystemFunction::GetYear(const ibValue& cData)         { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Year)); }
 int ibValueSystemFunction::GetMonth(const ibValue& cData)        { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Month)); }
@@ -400,6 +401,7 @@ int ibValueSystemFunction::GetDay(const ibValue& cData)          { return static
 int ibValueSystemFunction::GetHour(const ibValue& cData)         { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Hour)); }
 int ibValueSystemFunction::GetMinute(const ibValue& cData)       { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Minute)); }
 int ibValueSystemFunction::GetSecond(const ibValue& cData)       { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Second)); }
+ibNumber ibValueSystemFunction::GetMillisecond(const ibValue& cData) { return ibNumber(cData.GetDate().GetValue()); }
 int ibValueSystemFunction::GetWeekOfYear(const ibValue& cData)   { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Week)); }
 int ibValueSystemFunction::GetDayOfYear(const ibValue& cData)    { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::DayOfYear)); }
 int ibValueSystemFunction::GetDayOfWeek(const ibValue& cData)    { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::WeekDay)); }

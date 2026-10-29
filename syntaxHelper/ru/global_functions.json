@@ -802,6 +802,44 @@
       "reviewed": true
     },
     {
+      "id": "fn.BegOfHour",
+      "name_local": "BegOfHour",
+      "name_en": "BegOfHour",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "BegOfHour(d : date)",
+      "description": "Начало часа, которому принадлежит дата: минуты и секунды нулевые, день не меняется.",
+      "syntax_block": "BegOfHour(d : date)",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на чч:00:00.",
+      "example": "Message(BegOfHour(Date(2024, 3, 15, 14, 40, 7)));   // 15.03.2024 14:00:00",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": ["fn.EndOfHour", "fn.BegOfDay"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.EndOfHour",
+      "name_local": "EndOfHour",
+      "name_en": "EndOfHour",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "EndOfHour(d : date)",
+      "description": "Тот же час на 59-й минуте и 59-й секунде. Вместе с BegOfHour превращает час в период, пригодный для сравнения.",
+      "syntax_block": "EndOfHour(d : date)",
+      "parameters": "d — дата.",
+      "return_descr": "Дата на чч:59:59.",
+      "example": "from = BegOfHour(d);\nto   = EndOfHour(d);",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": ["fn.BegOfHour", "fn.EndOfDay"],
+      "reviewed": true
+    },
+    {
       "id": "fn.GetYear",
       "name_local": "GetYear",
       "name_en": "GetYear",
@@ -913,6 +951,25 @@
       "example": "Message(GetSecond(CurrentDate()));",
       "availability": "Тонкий клиент, Сервер",
       "see_also": ["fn.GetHour", "fn.GetMinute"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.GetMillisecond",
+      "name_local": "GetMillisecond",
+      "name_en": "GetMillisecond",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetMillisecond(d : date)",
+      "description": "Собственный отсчёт даты: миллисекунды от пустой даты. Дата, взятая как число, — это секунды; здесь миллисекунды сохраняются. Разность двух таких значений — время между ними с точностью до миллисекунды.",
+      "syntax_block": "GetMillisecond(d : date)",
+      "parameters": "d — дата.",
+      "return_descr": "Число миллисекунд.",
+      "example": "start = GetMillisecond(CurrentDate());\n// … измеряемая работа …\nMessage(GetMillisecond(CurrentDate()) - start);",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": ["fn.GetSecond", "fn.CurrentDate"],
       "reviewed": true
     },
     {

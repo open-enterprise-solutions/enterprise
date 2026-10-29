@@ -83,12 +83,14 @@ public:
 	static ibValue BegOfDay(const ibValue& cData);
 	static ibValue EndOfDay(const ibValue& cData);
 	static ibValue BegOfHour(const ibValue& cData);
+	static ibValue EndOfHour(const ibValue& cData);
 	static int GetYear(const ibValue& cData);
 	static int GetMonth(const ibValue& cData);
 	static int GetDay(const ibValue& cData);
 	static int GetHour(const ibValue& cData);
 	static int GetMinute(const ibValue& cData);
 	static int GetSecond(const ibValue& cData);
+	static ibNumber GetMillisecond(const ibValue& cData);   // the date's own count: milliseconds, not seconds
 	static int GetWeekOfYear(const ibValue& cData);
 	static int GetDayOfYear(const ibValue& cData);
 	static int GetDayOfWeek(const ibValue& cData);

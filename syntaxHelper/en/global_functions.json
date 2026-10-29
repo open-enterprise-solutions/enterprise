@@ -802,6 +802,44 @@
       "reviewed": true
     },
     {
+      "id": "fn.BegOfHour",
+      "name_local": "BegOfHour",
+      "name_en": "BegOfHour",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "BegOfHour(d : date)",
+      "description": "The start of the hour that holds the date: minutes and seconds are zero, and the day does not change.",
+      "syntax_block": "BegOfHour(d : date)",
+      "parameters": "d — a date.",
+      "return_descr": "Date at hh:00:00.",
+      "example": "Message(BegOfHour(Date(2024, 3, 15, 14, 40, 7)));   // 15.03.2024 14:00:00",
+      "availability": "Thin client, Server",
+      "see_also": ["fn.EndOfHour", "fn.BegOfDay"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.EndOfHour",
+      "name_local": "EndOfHour",
+      "name_en": "EndOfHour",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "EndOfHour(d : date)",
+      "description": "The same hour at its 59th minute and 59th second. Together with BegOfHour it makes an hour into a period a comparison can use.",
+      "syntax_block": "EndOfHour(d : date)",
+      "parameters": "d — a date.",
+      "return_descr": "Date at hh:59:59.",
+      "example": "from = BegOfHour(d);\nto   = EndOfHour(d);",
+      "availability": "Thin client, Server",
+      "see_also": ["fn.BegOfHour", "fn.EndOfDay"],
+      "reviewed": true
+    },
+    {
       "id": "fn.GetYear",
       "name_local": "GetYear",
       "name_en": "GetYear",
@@ -913,6 +951,25 @@
       "example": "Message(GetSecond(CurrentDate()));",
       "availability": "Thin client, Server",
       "see_also": ["fn.GetHour", "fn.GetMinute"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.GetMillisecond",
+      "name_local": "GetMillisecond",
+      "name_en": "GetMillisecond",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetMillisecond(d : date)",
+      "description": "The date's own count: milliseconds from the empty date. A date taken as a number is seconds; this keeps the milliseconds. Two of them apart are the time between, to the millisecond.",
+      "syntax_block": "GetMillisecond(d : date)",
+      "parameters": "d — a date.",
+      "return_descr": "Number of milliseconds.",
+      "example": "start = GetMillisecond(CurrentDate());\n// … the work measured …\nMessage(GetMillisecond(CurrentDate()) - start);",
+      "availability": "Thin client, Server",
+      "see_also": ["fn.GetSecond", "fn.CurrentDate"],
       "reviewed": true
     },
     {

@@ -3542,3 +3542,63 @@ TEST_F(BuiltInRuntime, BegOfHourFloorsToTheHour) {
 	ASSERT_TRUE(pu.GetPropVal(wxT("keptMinute"), v));
 	EXPECT_EQ(v.GetInteger(), 0);
 }
+
+// EndOfHour is BegOfHour's pair, as EndOfDay is BegOfDay's: the same hour at :59:59, the day kept.
+TEST_F(BuiltInRuntime, EndOfHourIsTheHoursLastSecond) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var hour public; var minute public; var second public; var day public;\n")
+		wxT("var last; last = EndOfHour(Date(2024, 3, 15, 14, 40, 7));\n")
+		wxT("hour = GetHour(last); minute = GetMinute(last);\n")
+		wxT("second = GetSecond(last); day = GetDay(last);\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("hour"), v));
+	EXPECT_EQ(v.GetInteger(), 14);
+	ASSERT_TRUE(pu.GetPropVal(wxT("minute"), v));
+	EXPECT_EQ(v.GetInteger(), 59);
+	ASSERT_TRUE(pu.GetPropVal(wxT("second"), v));
+	EXPECT_EQ(v.GetInteger(), 59);
+	ASSERT_TRUE(pu.GetPropVal(wxT("day"), v));
+	EXPECT_EQ(v.GetInteger(), 15);
+}
+
+// GetMillisecond is the date's own count, not divided into seconds as a date taken as a number is: two
+// of them apart are the time between, to the millisecond, and a date's milliseconds are kept.
+TEST_F(BuiltInRuntime, GetMillisecondIsTheDatesOwnCount) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var count public; var between public;\n")
+		wxT("count = GetMillisecond(Date(2024, 3, 15, 14, 40, 7));\n")
+		wxT("between = GetMillisecond(Date(2024, 3, 15, 14, 40, 8)) - count;\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	long long count = 0;
+	ASSERT_TRUE(pu.GetPropVal(wxT("count"), v));
+	ASSERT_EQ(v.GetNumber().ToInt(count), 0);
+	EXPECT_EQ(count, ibDateTime(2024, 3, 15, 14, 40, 7).GetValue());
+	long long between = 0;
+	ASSERT_TRUE(pu.GetPropVal(wxT("between"), v));
+	ASSERT_EQ(v.GetNumber().ToInt(between), 0);
+	EXPECT_EQ(between, 1000);
+
+	// …and the milliseconds a date holds come out with it.
+	long long withMilliseconds = 0;
+	const ibNumber counted = ibValueSystemFunction::GetMillisecond(ibValue(ibDateTime(2024, 3, 15, 14, 40, 7, 250)));
+	ASSERT_EQ(counted.ToInt(withMilliseconds), 0);
+	EXPECT_EQ(withMilliseconds - count, 250);
+}

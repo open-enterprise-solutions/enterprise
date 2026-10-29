@@ -54,12 +54,15 @@ enum
 	enEndOfWeek,
 	enBegOfDay,
 	enEndOfDay,
+	enBegOfHour,
+	enEndOfHour,
 	enGetYear,
 	enGetMonth,
 	enGetDay,
 	enGetHour,
 	enGetMinute,
 	enGetSecond,
+	enGetMillisecond,
 	enGetWeekOfYear,
 	enGetDayOfYear,
 	enGetDayOfWeek,
@@ -127,9 +130,7 @@ enum
 	enJSONValue,
 	//--- A value as XML text and back: at the END, for the same reason.
 	enXMLString,
-	enXMLValue,
-	// Appended: the ordinal is the bind-table index.
-	enBegOfHour
+	enXMLValue
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -181,12 +182,15 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(ibT("EndOfWeek"), 1, ibT("EndOfWeek(d : date)"));
 	helper.AppendFunc(ibT("BegOfDay"), 1, ibT("BegOfDay(d : date)"));
 	helper.AppendFunc(ibT("EndOfDay"), 1, ibT("EndOfDay(d : date)"));
+	helper.AppendFunc(ibT("BegOfHour"), 1, ibT("BegOfHour(d : date)"));
+	helper.AppendFunc(ibT("EndOfHour"), 1, ibT("EndOfHour(d : date)"));
 	helper.AppendFunc(ibT("GetYear"), 1, ibT("GetYear(d : date)"));
 	helper.AppendFunc(ibT("GetMonth"), 1, ibT("GetMonth(d : date)"));
 	helper.AppendFunc(ibT("GetDay"), 1, ibT("GetDay(d : date)"));
 	helper.AppendFunc(ibT("GetHour"), 1, ibT("GetHour(d : date)"));
 	helper.AppendFunc(ibT("GetMinute"), 1, ibT("GetMinute(d : date)"));
 	helper.AppendFunc(ibT("GetSecond"), 1, ibT("GetSecond(d : date)"));
+	helper.AppendFunc(ibT("GetMillisecond"), 1, ibT("GetMillisecond(d : date)"));
 	helper.AppendFunc(ibT("GetWeekOfYear"), 1, ibT("GetWeekOfYear(d : date)"));
 	helper.AppendFunc(ibT("GetDayOfYear"), 1, ibT("GetDayOfYear(d : date)"));
 	helper.AppendFunc(ibT("GetDayOfWeek"), 1, ibT("GetDayOfWeek(d : date)"));
@@ -258,7 +262,6 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(ibT("JSONValue"), 1, ibT("JSONValue(json : string)"));
 	helper.AppendFunc(ibT("XMLString"), 1, ibT("XMLString(value : any)"));
 	helper.AppendFunc(ibT("XMLValue"), 1, ibT("XMLValue(xml : string)"));
-	helper.AppendFunc(wxT("BegOfHour"), 1, wxT("BegOfHour(d : date)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -341,12 +344,15 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enEndOfWeek: pvarRetValue = EndOfWeek(*paParams[0]); return true;
 		case enBegOfDay: pvarRetValue = BegOfDay(*paParams[0]); return true;
 		case enEndOfDay: pvarRetValue = EndOfDay(*paParams[0]); return true;
+		case enBegOfHour: pvarRetValue = BegOfHour(*paParams[0]); return true;
+		case enEndOfHour: pvarRetValue = EndOfHour(*paParams[0]); return true;
 		case enGetYear: pvarRetValue = GetYear(*paParams[0]); return true;
 		case enGetMonth: pvarRetValue = GetMonth(*paParams[0]); return true;
 		case enGetDay: pvarRetValue = GetDay(*paParams[0]); return true;
 		case enGetHour: pvarRetValue = GetHour(*paParams[0]); return true;
 		case enGetMinute: pvarRetValue = GetMinute(*paParams[0]); return true;
 		case enGetSecond: pvarRetValue = GetSecond(*paParams[0]); return true;
+		case enGetMillisecond: pvarRetValue = GetMillisecond(*paParams[0]); return true;
 		case enGetWeekOfYear: pvarRetValue = GetWeekOfYear(*paParams[0]); return true;
 		case enGetDayOfYear: pvarRetValue = GetDayOfYear(*paParams[0]); return true;
 		case enGetDayOfWeek: pvarRetValue = GetDayOfWeek(*paParams[0]); return true;
@@ -406,7 +412,6 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enJSONValue: pvarRetValue = JSONValue(paParams[0]->GetString()); return true;
 		case enXMLString: pvarRetValue = XMLString(*paParams[0]); return true;
 		case enXMLValue: pvarRetValue = XMLValue(paParams[0]->GetString()); return true;
-		case enBegOfHour: pvarRetValue = BegOfHour(*paParams[0]); return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

@@ -34,8 +34,17 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   language; `L=ru` says them in the language it names. New codes: `DLF` (a preset — `D`, `DD`, `T`,
   `DT`, `DDT` — used when there is no `DF`), `L` and `NLZ` (the whole part padded with zeros to
   `ND − NFD` digits).
+- **`BegOfHour`, `EndOfHour` and `GetMillisecond`.** The first two are the hour's period, as
+  `BegOfDay`/`EndOfDay` are the day's. `GetMillisecond(d)` is the date's own count, milliseconds from
+  the empty date, where a date taken as a number is seconds: two of them apart are the time between,
+  to the millisecond.
+- **An enumeration manager answers `EmptyRef()`**, as a catalog's, a document's and a chart's do.
 
 ## Fixes
+
+- **A selection reads a row's standard attributes.** `Catalogs.X.Select()` and the selections of the
+  charts published only `Ref` and the attributes a person added, so reading `Code`, `Description`,
+  `DeletionMark` or `IsFolder` from a row was "field not found".
 
 - **A list filtered by «contains» finds the rows that contain the value.** On a list read from the
   base the condition reached the database as `LIKE 'value'`, an exact match, so "Comment contains

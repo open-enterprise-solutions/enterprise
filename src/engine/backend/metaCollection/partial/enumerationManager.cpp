@@ -31,7 +31,7 @@ void ibValueManagerDataObjectEnumeration::FillManagerMethods(ibMemberTable& help
 	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(name : string, owner : any, id : guid)"));
 	helper.AppendFunc(ibT("GetSelectForm"), 3, ibT("GetSelectForm(name : string, owner : any, id : guid)"));
 	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
-	helper.AppendFunc(wxT("EmptyRef"), wxT("EmptyRef()"));
+	helper.AppendFunc(ibT("EmptyRef"), ibT("EmptyRef()"));
 
 	//fill custom attributes
 	for (auto object : m_metaObject->GetEnumObjectArray()) {
