@@ -100,7 +100,8 @@ public:
 	virtual ibClassID GetClassType() const override { return m_classType; }
 	virtual ibString GetString() const override { return m_presentation; }
 
-	// Two are the same when the server wrote them the same: their class, and their payloads compared as text.
+	// Two are the same when the server wrote them the same: their class, and their payloads as written — of any kind
+	// (a Guid's is its 16 bytes).
 	virtual bool CompareValueEQ(const ibVariant& value) const override;
 
 protected:

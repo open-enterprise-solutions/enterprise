@@ -140,6 +140,10 @@ private:
 			m_writer.WriteText(Base64Of(utf8.data(), utf8.size()));
 			break;
 		}
+		case ibDataKind::Guid:
+			Kind(ibT("Guid"));
+			m_writer.WriteText(value.AsGuid().str());
+			break;
 		case ibDataKind::Binary: {
 			const ibMemoryBuffer bytes = value.AsBinary();
 			Kind(ibT("Binary"));
@@ -356,6 +360,12 @@ private:
 			if (!text.IsEmpty() && !date.FromString(text))
 				refuse(ibT("Date"));
 			return ibDataValue::Date(date);
+		}
+		if (kind == ibT("Guid")) {
+			ibGuid guid;
+			if (!ibGuid::parse(text, guid))
+				refuse(ibT("Guid"));
+			return ibDataValue::Guid(guid);
 		}
 		if (kind == ibT("Binary")) {
 			ibMemoryBuffer bytes;

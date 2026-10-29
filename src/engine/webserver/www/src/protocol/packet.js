@@ -17,12 +17,12 @@
 // it whole), and a Uint8Array or an ArrayBuffer is written as one; a string is always text.
 
 const MAGIC = [0x4f, 0x45, 0x53, 0x31];   // "OES1"
-const VERSION = 1;
+const VERSION = 2;   // 2: a guid has a kind of its own; 1 — its text then — is read as well, as the server reads it
 const PACKET_HEADER = 16;
 const NODE_HEADER = 32;
 const MAX_NESTING = 256;
 
-const Kind = Object.freeze({ Empty: 0, Bool: 1, Number: 2, Date: 3, String: 4, Binary: 5, Child: 6, Array: 7, Whole: 8 });
+const Kind = Object.freeze({ Empty: 0, Bool: 1, Number: 2, Date: 3, String: 4, Binary: 5, Child: 6, Array: 7, Whole: 8, Guid: 9 });
 
 // The names a node's own place in the JSON view had: its type, its id, its raw block, its children.
 const NODE_TYPE = 'NodeType';
@@ -63,8 +63,9 @@ export function decode(buffer) {
 	const reader = new Reader(bytes);
 	if (bytes.length < PACKET_HEADER + NODE_HEADER || !isPacket(bytes))
 		throw new Error('OES-RPC: the bytes are no packet');
-	if (reader.view.getUint16(4, true) !== VERSION)
-		throw new Error(`OES-RPC: the packet is version ${reader.view.getUint16(4, true)}, this page reads ${VERSION}`);
+	const version = reader.view.getUint16(4, true);
+	if (version < 1 || version > VERSION)
+		throw new Error(`OES-RPC: the packet is version ${version}, this page reads ${VERSION}`);
 	if (reader.view.getUint32(8, true) !== bytes.length)
 		throw new Error('OES-RPC: the packet\'s length is not what it says');
 	const root = reader.node(PACKET_HEADER, bytes.length, 0, true);
@@ -185,6 +186,10 @@ class Reader {
 			const next = within(8);
 			return [dateText(Number(view.getBigInt64(at, true))), next];
 		}
+		case Kind.Guid: {
+			const next = within(16);
+			return [guidText(this.bytes, at), next];
+		}
 		case Kind.Number: {
 			within(4);
 			const length = view.getUint32(at, true);
@@ -270,6 +275,14 @@ function dateText(value) {
 	const two = (n) => String(n).padStart(2, '0');
 	return `${String(date.getUTCFullYear()).padStart(4, '0')}-${two(date.getUTCMonth() + 1)}-${two(date.getUTCDate())} `
 		+ `${two(date.getUTCHours())}:${two(date.getUTCMinutes())}:${two(date.getUTCSeconds())}`;
+}
+
+/** A Guid's 16 bytes as the JSON view writes it — lower-case hex, 8-4-4-4-12 (ibGuid::str). */
+function guidText(bytes, at) {
+	let hex = '';
+	for (let i = 0; i < 16; i++)
+		hex += bytes[at + i].toString(16).padStart(2, '0');
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /**

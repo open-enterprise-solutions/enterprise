@@ -9,6 +9,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   prints the minutes where the month was, and nothing reports it: change `mm` to `MM` (and `MM` to
   `mm`, `SS` to `ss`) in the formats of attributes, form items and report fields. The built-in
   presets are already written the new way.
+- **`SerializeValue` and `DeserializeValue` are now `JSONString` and `JSONValue`**, a pair with
+  `XMLString` and `XMLValue`. A module that calls the old names no longer compiles: rename the calls.
+- **A guid takes 16 bytes, and the packet is OES-RPC version 2.** Every guid a node holds — a
+  reference's, a metadata object's, a `Guid` value — is its 16 bytes, not its text; XML and JSON
+  still show the text. A configuration, a form or a message written by this build is not read by an
+  earlier one (`the packet is OES-RPC version 2, this end reads 1`): update the thin clients with
+  the server. A base written before is read as it is.
 
 ## Script language
 
@@ -16,6 +23,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   node by node and writes one, to a file or to a string, in UTF-8, UTF-16, windows-1251 or cp866.
   The parser is expat, built into the engine; an external entity is refused, not read. A file the
   writer could not write is raised at `Close`.
+- **`XMLString(value)` and `XMLValue(xml)`: a value as XML and back.** The value is packed the way
+  `JSONString` packs it, but the XML keeps each field's kind, so a date or a number comes back
+  exactly, as the type the text names. A reference inside a structure or an array does not come
+  back yet. `Guid` and `BinaryData` now pack themselves too; a Guid takes its 16 bytes and is
+  written as its text.
 - **`Format` spells a date out and pads a number.** A date pattern takes `d`/`dd`, `ddd`/`dddd`
   (the weekday), `M`/`MM`, `MMM`/`MMMM` (the month's name, after a day in the genitive in ru and
   uk), `h`/`hh` and `tt` (a 12-hour clock) and text in single quotes. The names come from the base's

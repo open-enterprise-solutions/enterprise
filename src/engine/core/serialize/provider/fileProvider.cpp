@@ -276,7 +276,7 @@ private:
 			type = ibString::Format(ibT("%llu"), static_cast<unsigned long long>(child.GetClsid()));
 		for (const char* key : { "Name", "Guid" }) {
 			const auto value = child.FindField(key);
-			if (value && value->Kind() == ibDataKind::String && IsFileName(value->AsString()))
+			if (value && (value->Kind() == ibDataKind::String || value->Kind() == ibDataKind::Guid) && IsFileName(value->AsString()))
 				return Join(type, value->AsString());
 		}
 		return Join(type, ibString::Format(ibT("item-%u"), position));

@@ -568,7 +568,7 @@ void ibMcpDebugBridge::OnSetToolTip(const ibDebugExpressionData& data, const ibS
 }
 
 // ⭐⭐ WHAT EVALUATED CODE PRINTED. This is the sandbox's own voice: a block returns no value of
-// its own, so printing is how it hands anything back, and `Message(SerializeValue(x))` carries a
+// its own, so printing is how it hands anything back, and `Message(JSONString(x))` carries a
 // whole structure through here. Kept while a run is pending, so the answer to THAT run is what it
 // printed and not whatever else was said meanwhile.
 void ibMcpDebugBridge::OnEvalMessage(const ibString& message, MessageType type)

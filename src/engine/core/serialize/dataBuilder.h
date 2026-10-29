@@ -17,13 +17,14 @@
 //	it holds, so a reader goes by those marks and never looks for anything. The same buffer is the node in memory, in
 //	storage and on the wire: handing a node over is one more owner of its buffer.
 //
-//	   packet = "OES1" · version u16 · flags u16 · length u32 · 0 u32         — the root node at 16
+//	   packet = "OES1" · version u16 · flags u16 · length u32 · 0 u32         — the root node at 16; version 2, 1 read too
+//	            (a guid was its text then)
 //	   node   = length u32 · fields' length u32 · fields u32 · children u32 · raw length u32 · metaId i32 · clsid u64
 //	            · raw (even) · fields · children
 //	   field  = kind u8 · 0 u8 · name (length u16, UTF-16LE) · value        — an even size
 //	   value  = Empty — · Bool u8 + 0 · Number (length u32, ibNumber's bytes, even) · a whole Number i64 · Date i64
 //	            · String (length u32, UTF-16LE) · Binary (length u32, bytes, even) · Child — a node
-//	            · Array (length u32 · count u32 · items — fields with no name)
+//	            · Array (length u32 · count u32 · items — fields with no name) · Guid (16 bytes)
 //
 //	Nothing in it is a place, only lengths: a node's bytes mean the same wherever they are copied (at an even offset).
 ////////////////////////////////////////////////////////////////////////////
@@ -125,6 +126,7 @@ enum class ibDataKind : std::uint8_t {
 	Binary,    // opaque block (compiled form / module)
 	Child,     // a COMPOSITE value — a nested ibDataNode a composite fills via its own read/write
 	Array,     // an ORDERED LIST of values (e.g. a type's clsid list) — iterable, not a comma-string
+	Guid = 9,  // a guid — its 16 bytes; a text form writes its text. 8 is taken: a Number written whole (dataBuilder.cpp)
 };
 
 class CORE_API ibDataValue {
@@ -144,6 +146,7 @@ public:
 	static ibDataValue Int(std::int64_t value);    // small-int convenience over Number
 	static ibDataValue UInt(std::uint64_t value);   // unsigned-int convenience over Number
 	static ibDataValue Date(const ibDateTime& date);   // date/time scalar (the wall-clock reading, fdatetime.h)
+	static ibDataValue Guid(const ibGuid& guid);       // its 16 bytes
 	static ibDataValue Binary(const ibMemoryBuffer& data);
 	static ibDataValue Child(const std::shared_ptr<ibDataNode>& child);   // its bytes copied in; null — Empty
 	static ibDataValue Array(const std::vector<ibDataValue>& items);
@@ -152,12 +155,13 @@ public:
 	// Typed accessors — each checks the signature and THROWS (ibBackendException) on a wrong kind, so a mis-read fails
 	// loud instead of returning garbage. An Empty value (an absent field) reads as the kind's default. By value: a
 	// text is made of the characters where they lie; a sub-node and a list are handles into the same bytes.
-	ibString                  AsString() const;
+	ibString                  AsString() const;   // …and a guid's text: a guid read as a string is its text
 	bool                      AsBool()   const;
 	ibNumber                  AsNumber() const;
 	std::int64_t              AsInt()    const;
 	std::uint64_t             AsUInt()   const;
 	ibDateTime                AsDate()   const;
+	ibGuid                    AsGuid()   const;   // …and its text, where a text form carried it, as AsDate a date's
 	ibMemoryBuffer            AsBinary() const;
 	std::optional<ibDataNode> AsChild()  const;   // none — not a sub-node
 	ibDataRange<ibDataValue>  AsArray()  const;
@@ -209,9 +213,9 @@ template<> struct ibDataCodec<ibMemoryBuffer> {
 	static ibDataValue To(const ibMemoryBuffer& v) { return ibDataValue::Binary(v); }
 	static ibMemoryBuffer From(const ibDataValue& v) { return v.AsBinary(); }
 };
-template<> struct ibDataCodec<ibGuid> {           // a guid serializes as its string form
-	static ibDataValue To(const ibGuid& v) { return ibDataValue::String(v.str()); }
-	static ibGuid      From(const ibDataValue& v) { return ibGuid(v.AsString()); }
+template<> struct ibDataCodec<ibGuid> {           // a guid — its 16 bytes; its text too, as written before
+	static ibDataValue To(const ibGuid& v) { return ibDataValue::Guid(v); }
+	static ibGuid      From(const ibDataValue& v) { return v.AsGuid(); }
 };
 template<> struct ibDataCodec<ibNumber> {         // exact decimal — the Number payload
 	static ibDataValue To(const ibNumber& v) { return ibDataValue::Number(v); }

@@ -7,7 +7,7 @@
 //
 // ⭐⭐ WHY THESE EXIST. A packed value is how every typed thing travels in this platform: a schema
 // stores its parameters that way, a saved setting stores a filter's right-hand side that way,
-// `SerializeValue` writes that shape and `DeserializeValue` reads it. So a caller could always COPY
+// `JSONString` writes that shape and `JSONValue` reads it. So a caller could always COPY
 // one — take the `Value` out of a report_get answer and hand it back somewhere else — and could not
 // MAKE one. The gap showed up on the smallest possible case: a report wanted a period, JSON has no
 // date, and a date could therefore not be stated at all (Max, 2026-09-06, asking the question that
@@ -109,7 +109,7 @@ public:
 	{
 		return ibMcpText("MAKE A TYPED VALUE, packed - the form every typed thing travels in here. A "
 			"schema stores its parameters this way, a saved setting stores a filter's right-hand "
-			"side this way, and the language's own SerializeValue writes exactly this.\n"
+			"side this way, and the language's own JSONString writes exactly this.\n"
 			  "\n"
 			"WHAT IT IS FOR: a value you could not otherwise state. JSON has a string, a number and "
 			"a flag, and that is all - so a DATE, a REFERENCE, an enumeration member cannot be "

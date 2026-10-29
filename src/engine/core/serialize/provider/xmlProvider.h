@@ -10,7 +10,7 @@
 //	  <Node Type="Catalog" Id="5">
 //	    <Field Name="Name">Goods</Field>                       a string — the one kind not said
 //	    <Field Name="Count" Kind="Number">5</Field>            Bool (true / false), Number, Date (ISO, to the
-//	    <Field Name="Picture" Kind="Binary">…</Field>          millisecond), Binary (base64), Empty
+//	    <Field Name="Picture" Kind="Binary">…</Field>          millisecond), Guid (its text), Binary (base64), Empty
 //	    <Field Name="Type"><Node>…</Node></Field>              a sub-node
 //	    <Field Name="Forms" Kind="Array"><Item>…</Item></Field>  a list — an item says its kind as a field does
 //	    <Raw>…</Raw>                                           the transitional raw block, base64

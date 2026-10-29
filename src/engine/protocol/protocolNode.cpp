@@ -59,8 +59,10 @@ ibString StringOf(const std::optional<ibDataValue>& value, const ibString& other
 		return value->AsString();
 	case ibDataKind::Number:
 	case ibDataKind::Bool:
-	case ibDataKind::Date: {
-		// …where text was asked for — as the wire's JSON writes it; a date is its string. Bytes are no text: GetBinary.
+	case ibDataKind::Date:
+	case ibDataKind::Guid: {
+		// …where text was asked for — as the wire's JSON writes it; a date and a guid are their strings. Bytes are no
+		// text: GetBinary.
 		const ibString text = JsonOf(*value);
 		return text.length() >= 2 && text.GetChar(0) == ibT('"') ? text.Mid(1, text.length() - 2) : text;
 	}

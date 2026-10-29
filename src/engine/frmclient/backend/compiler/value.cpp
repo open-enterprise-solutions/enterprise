@@ -17,9 +17,7 @@ bool ibValueSerializable::CompareValueEQ(const ibVariant& value) const
 		return true;
 	if (other == nullptr || other->m_classType != m_classType)
 		return false;
-	const auto left = m_node.FindField(kValueFieldData);
-	const auto right = other->m_node.FindField(kValueFieldData);
-	return (left ? left->AsString() : ibString()) == (right ? right->AsString() : ibString());
+	return m_node.FindField(kValueFieldData) == other->m_node.FindField(kValueFieldData);
 }
 
 // An object of the client's own, of its class, read out of the node it wrote itself into.

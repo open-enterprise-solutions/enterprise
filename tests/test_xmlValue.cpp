@@ -39,12 +39,12 @@ ibString Refusal(const std::function<void()>& body)
 	return ibString();
 }
 
-// Written, read back as the type it was, and compared as the language compares - the value is its own reference.
+// Written, read back as the type the text names, and compared as the language compares - the value is its own reference.
 ibValue RoundTrip(const ibValue& value)
 {
 	const ibString text = ibValueSystemFunction::XMLString(value);
 	EXPECT_TRUE(text.StartsWith(ibT("<?xml"))) << text.ToStdString();
-	return ibValueSystemFunction::XMLValue(ibValueSystemFunction::TypeOf(value), ibValue(text));
+	return ibValueSystemFunction::XMLValue(text);
 }
 
 } // namespace
@@ -97,12 +97,19 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	EXPECT_EQ(RoundTrip(ibValue()).GetType(), ibValueTypes::TYPE_EMPTY);
 	EXPECT_EQ(RoundTrip(ibValue(ibValueTypes::TYPE_NULL)).GetType(), ibValueTypes::TYPE_NULL);
 
-	// A Guid and BinaryData pack themselves now.
+	// A Guid and BinaryData pack themselves now - a Guid as a Guid, not as the string its text would read as; and from its
+	// text, where a text form left it a string (the JSON view).
 	const ibGuid key(ibString(ibT("0f8fad5b-d9cb-469f-a165-70867728950e")));
 	ibValuePtr<ibValueGuid> guid(new ibValueGuid(key));
-	EXPECT_EQ(RoundTrip(guid).GetString(), key.str());
+	const ibValue guidBack = RoundTrip(guid);
+	EXPECT_EQ(guidBack.GetClassType(), guid->GetClassType());
+	EXPECT_EQ(guidBack.GetString(), key.str());
 	ibValuePtr<ibValueGuid> nil(new ibValueGuid(ibGuid()));
 	EXPECT_EQ(RoundTrip(nil).GetString(), ibGuid().str());
+	ibDataNode guidAsText;
+	guidAsText.SetValue(kValueFieldClsid, ibString::Format(ibT("%llu"), (unsigned long long)guid->GetClassType()));
+	guidAsText.SetValue(kValueFieldData, ibString(key.str()));
+	EXPECT_EQ(cfg->Deserialize(guidAsText).GetString(), key.str());
 	ibMemoryBuffer bytes;
 	bytes.AppendData("\0\1\xff", 3);
 	ibValuePtr<ibValueBinaryData> binary(new ibValueBinaryData(bytes));
@@ -134,7 +141,7 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	EXPECT_NE(Refusal([&] { RoundTrip(holdingRef); }).Find(ibT("Unknown value type")), wxNOT_FOUND);
 }
 
-TEST(XmlValueFunctions, WhatIsNotThisTypesXmlIsRefused)
+TEST(XmlValueFunctions, WhatIsNotAValuesXmlIsRefused)
 {
 	wxInitializer wx;
 	if (!wx.IsOk())
@@ -149,20 +156,10 @@ TEST(XmlValueFunctions, WhatIsNotThisTypesXmlIsRefused)
 	ASSERT_TRUE(cfg->RunDatabase());
 
 	const ibValue number = ibValue(5);
-	const ibString five = ibValueSystemFunction::XMLString(number);
-	// Another type's text: a number is not a string.
-	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(ibValueSystemFunction::TypeOf(ibValue(ibString())), ibValue(five)); })
-		.Find(ibT("XMLValue: the text holds a value of the type 'Number', not of the type 'String'")), wxNOT_FOUND);
 	// Not XML at all, and XML that is not a value's node.
-	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(ibValueSystemFunction::TypeOf(number), ibValue(ibString(ibT("5")))); }),
-		ibString());
-	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(ibValueSystemFunction::TypeOf(number), ibValue(ibString(ibT("<a/>")))); })
+	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(ibString(ibT("5"))); }), ibString());
+	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(ibString(ibT("<a/>"))); })
 		.Find(ibT("'a' does not belong in the document")), wxNOT_FOUND);
-	// A type that is not a Type value - a name, Undefined - is refused by XMLValue itself.
-	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(ibValue(ibString(ibT("Number"))), ibValue(five)); })
-		.Find(ibT("the type is what Type() or TypeOf() answers")), wxNOT_FOUND);
-	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(ibValue(), ibValue(five)); })
-		.Find(ibT("the type is what Type() or TypeOf() answers")), wxNOT_FOUND);
 	// A field of another kind - what a text edited by hand would give - is a value that cannot read its contents.
 	ibDataNode bytesAsText;
 	bytesAsText.SetValue(kValueFieldClsid, ibString::Format(ibT("%llu"), (unsigned long long)ibValue::GetIDObjectFromString(ibT("BinaryData"))));
@@ -172,11 +169,16 @@ TEST(XmlValueFunctions, WhatIsNotThisTypesXmlIsRefused)
 	guidAsNumber.SetValue(kValueFieldClsid, ibString::Format(ibT("%llu"), (unsigned long long)ibValue::GetIDObjectFromString(ibT("Guid"))));
 	guidAsNumber.SetValue(kValueFieldData, ibNumber(5));
 	EXPECT_NE(Refusal([&] { cfg->Deserialize(guidAsNumber); }).Find(ibT("Failed to read the contents")), wxNOT_FOUND);
-	// A Guid's text that is not a guid is refused, not read as the nil guid.
+	// A Guid goes as its text - a literal here, not produced by the writer under test - and a text that is no guid is
+	// refused, not read as the nil guid: by the provider in XML, and by the value where a text form left it a string.
 	ibValuePtr<ibValueGuid> guid(new ibValueGuid(ibGuid(ibString(ibT("0f8fad5b-d9cb-469f-a165-70867728950e")))));
 	ibString broken = ibValueSystemFunction::XMLString(guid);
-	ASSERT_EQ(broken.Replace(ibT("0f8fad5b-d9cb-469f-a165-70867728950e"), ibT("not-a-guid")), 1u);
-	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(ibValueSystemFunction::TypeOf(guid), ibValue(broken)); }), ibString());
+	ASSERT_EQ(broken.Replace(ibT("Kind=\"Guid\">0f8fad5b-d9cb-469f-a165-70867728950e<"), ibT("Kind=\"Guid\">not-a-guid<")), 1u);
+	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(broken); }).Find(ibT("'not-a-guid' is no Guid")), wxNOT_FOUND);
+	ibDataNode guidAsText;
+	guidAsText.SetValue(kValueFieldClsid, ibString::Format(ibT("%llu"), (unsigned long long)ibValue::GetIDObjectFromString(ibT("Guid"))));
+	guidAsText.SetValue(kValueFieldData, ibString(ibT("not-a-guid")));
+	EXPECT_NE(Refusal([&] { cfg->Deserialize(guidAsText); }).Find(ibT("'not-a-guid' is no guid")), wxNOT_FOUND);
 	// A value with no packed form - a type - is refused by the door, not written as nothing.
 	EXPECT_EQ(Refusal([&] { ibValueSystemFunction::XMLString(ibValueSystemFunction::TypeOf(number)); }),
 		ibString(ibT("The value 'Type' cannot be serialized")));

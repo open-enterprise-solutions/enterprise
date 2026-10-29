@@ -26,7 +26,9 @@ static_assert(sizeof(ibChar) == 2, "a name's and a text's character is two bytes
 
 constexpr std::uint32_t kPacketHeader = 16;
 constexpr std::uint32_t kNodeHeader = 32;
-constexpr std::uint16_t kVersion = 1;
+// 2: a guid has a kind of its own (ibDataKind::Guid). A packet of 1 — a base's, written before — holds its guids as
+// their text, which AsGuid reads, and is read as it is.
+constexpr std::uint16_t kVersion = 2;
 
 // A field's kind as its byte says it — ibDataKind's, and a Number written whole after them.
 constexpr unsigned char kWhole = 8;
@@ -64,6 +66,7 @@ std::uint32_t ValueSize(const unsigned char* b, unsigned char kind, std::uint32_
 	case static_cast<unsigned char>(ibDataKind::Number): return 4 + Even(Rd<std::uint32_t>(b, value));
 	case kWhole:
 	case static_cast<unsigned char>(ibDataKind::Date):   return 8;
+	case static_cast<unsigned char>(ibDataKind::Guid):   return 16;
 	case static_cast<unsigned char>(ibDataKind::String): return 4 + 2 * Rd<std::uint32_t>(b, value);
 	case static_cast<unsigned char>(ibDataKind::Binary): return 4 + Even(Rd<std::uint32_t>(b, value));
 	case static_cast<unsigned char>(ibDataKind::Child):  return Rd<std::uint32_t>(b, value + kLength);
@@ -199,6 +202,10 @@ void ibDataValue::Expect(ibDataKind expected) const
 
 ibString ibDataValue::AsString() const
 {
+	// A GUID READ AS A STRING IS ITS TEXT — what it was written as before it had a kind of its own (kVersion 1), and
+	// what a text form writes still: a reader that takes a guid's text takes it either way.
+	if (Kind() == ibDataKind::Guid)
+		return AsGuid().str();
 	Expect(ibDataKind::String);
 	if (Kind() != ibDataKind::String)
 		return ibString();
@@ -257,6 +264,26 @@ ibDateTime ibDataValue::AsDate() const
 	}
 	Expect(ibDataKind::Date);
 	return Kind() == ibDataKind::Date ? ibDateTime(Rd<std::int64_t>(Base(), ValueAt())) : ibDateTime();
+}
+
+ibGuid ibDataValue::AsGuid() const
+{
+	// A GUID THAT CAME AS ITS TEXT is read the way a date that did is: the JSON view writes a guid as its text, a
+	// packet of version 1 held it so, and whoever asks for a guid can tell it from a string. "" is the nil guid, as
+	// the codec read it before; a text that names none refuses.
+	if (Kind() == ibDataKind::String) {
+		ibGuid guid;
+		const ibString text = AsString();
+		if (!text.IsEmpty() && !ibGuid::parse(text, guid))
+			ibCoreException::Error(_("ibDataValue: '%s' is no guid"), text);
+		return guid;
+	}
+	Expect(ibDataKind::Guid);
+	if (Kind() != ibDataKind::Guid)
+		return ibGuid();
+	std::array<unsigned char, 16> bytes;
+	std::memcpy(bytes.data(), Base() + ValueAt(), bytes.size());
+	return ibGuid(bytes);
 }
 
 ibMemoryBuffer ibDataValue::AsBinary() const
@@ -364,6 +391,13 @@ ibDataValue ibDataValue::Date(const ibDateTime& date)
 {
 	ibDataValue v;
 	Wr(NewField(v.m_bytes, static_cast<unsigned char>(ibDataKind::Date), 8), 0, static_cast<std::int64_t>(date.GetValue()));
+	return v;
+}
+
+ibDataValue ibDataValue::Guid(const ibGuid& guid)
+{
+	ibDataValue v;
+	std::memcpy(NewField(v.m_bytes, static_cast<unsigned char>(ibDataKind::Guid), 16), guid.bytes().data(), 16);
 	return v;
 }
 
@@ -1037,7 +1071,7 @@ struct ibPacketCheck {
 		if (std::uint64_t(field) + 4 > end)
 			Refuse(ibT("a field past its container"), field);
 		const unsigned char kind = m_base[field];
-		if (kind > kWhole)
+		if (kind > static_cast<unsigned char>(ibDataKind::Guid))
 			Refuse(ibT("an unknown kind"), field);
 		const std::uint64_t value = std::uint64_t(field) + 4 + 2ull * NameLength(m_base, field);
 		std::uint64_t size = 0;
@@ -1046,6 +1080,7 @@ struct ibPacketCheck {
 		case static_cast<unsigned char>(ibDataKind::Bool):   size = 2; break;
 		case kWhole:
 		case static_cast<unsigned char>(ibDataKind::Date):   size = 8; break;
+		case static_cast<unsigned char>(ibDataKind::Guid):   size = 16; break;
 		case static_cast<unsigned char>(ibDataKind::Number):
 		case static_cast<unsigned char>(ibDataKind::Binary):
 			if (value + 4 > end)
@@ -1118,9 +1153,10 @@ bool ibBinaryProvider::Read(const ibMemoryBuffer& packet, ibDataNode& root) cons
 		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), ibT("too short"));
 	if (!IsPacket(base, size))
 		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), ibT("no OES1 at their start"));
-	if (Rd<std::uint16_t>(base, 4) != kVersion)
+	const std::uint16_t version = Rd<std::uint16_t>(base, 4);
+	if (version < 1 || version > kVersion)
 		ibCoreException::Error(_("ibBinaryProvider: the packet is OES-RPC version %u, this end reads %u"),
-			(unsigned)Rd<std::uint16_t>(base, 4), (unsigned)kVersion);
+			(unsigned)version, (unsigned)kVersion);
 	if (Rd<std::uint32_t>(base, 8) != size)
 		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), ibT("their length is not what they say"));
 	const ibPacketCheck check{ base };

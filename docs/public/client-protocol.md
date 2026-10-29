@@ -28,9 +28,9 @@ with the window on (left out, 120 seconds; 0 is off; never more than 30 minutes)
 comes back with `login` `{Token}`.
 
 A packet is the node the server builds, as its bytes lie (`src/engine/core/serialize/dataBuilder.h`): `OES1`, the
-version, the length, then the root — `id`, `method` and `params`, or `id` and `result` or `error`, and `types`, the
+version (2; 1, from before a guid had a kind of its own, is still read), the length, then the root — `id`, `method` and `params`, or `id` and `result` or `error`, and `types`, the
 names of the types its nodes carry. Text is UTF-16LE; bytes (a picture's PNG, a file's part) are a `Binary`, never
-text. A WebSocket opened with `?compress=deflate` gets every answer of 1 KB and more raw-deflated (RFC 1951 — a
+text; a guid is a `Guid`, its 16 bytes (the browser shows it as its text). A WebSocket opened with `?compress=deflate` gets every answer of 1 KB and more raw-deflated (RFC 1951 — a
 browser's `DecompressionStream("deflate-raw")`); a packet begins `OES1`, a deflated one never does.
 
 ## Methods

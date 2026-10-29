@@ -124,6 +124,7 @@ void ibJsonProvider::EmitValue(const ibDataValue& v, Text& out, int depth) const
 		break;
 	}
 	case ibDataKind::String: Quote(out, v.AsString()); break;
+	case ibDataKind::Guid:   Quote(out, v.AsGuid().str()); break;   // its text — read back as a string, by AsGuid
 	case ibDataKind::Binary: PutBase64(out, v.AsBinary()); break;
 	case ibDataKind::Child: {
 		if (const auto c = v.AsChild()) EmitNode(*c, out, depth);

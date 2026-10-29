@@ -123,8 +123,8 @@ enum
 	//--- Value as text: appended after the jobs for the same reason they were appended after
 	// everything else — the ordinal IS the method index, so a new name goes at the END or every
 	// later case answers to the wrong verb.
-	enSerializeValue,
-	enDeserializeValue,
+	enJSONString,
+	enJSONValue,
 	//--- A value as XML text and back: at the END, for the same reason.
 	enXMLString,
 	enXMLValue
@@ -251,11 +251,11 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(ibT("RunScheduledJobs"), ibT("RunScheduledJobs()"));
 	helper.AppendFunc(ibT("RunJob"), 1, ibT("RunJob(name : string)"));
 	helper.AppendFunc(ibT("RunBackground"), 2, ibT("RunBackground(procedure : string, args : array)"));
-	//--- …and value-as-text last, matching the enSerializeValue / enDeserializeValue tail above.
-	helper.AppendFunc(ibT("SerializeValue"), 1, ibT("SerializeValue(value : any)"));
-	helper.AppendFunc(ibT("DeserializeValue"), 1, ibT("DeserializeValue(json : string)"));
+	//--- …and value-as-text last, matching the enJSONString / enJSONValue tail above.
+	helper.AppendFunc(ibT("JSONString"), 1, ibT("JSONString(value : any)"));
+	helper.AppendFunc(ibT("JSONValue"), 1, ibT("JSONValue(json : string)"));
 	helper.AppendFunc(ibT("XMLString"), 1, ibT("XMLString(value : any)"));
-	helper.AppendFunc(ibT("XMLValue"), 2, ibT("XMLValue(type : Type, text : string)"));
+	helper.AppendFunc(ibT("XMLValue"), 1, ibT("XMLValue(xml : string)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -399,10 +399,10 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			pvarRetValue = RunBackground(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1] : nullptr);
 			return true;
-		case enSerializeValue: pvarRetValue = SerializeValue(*paParams[0]); return true;
-		case enDeserializeValue: pvarRetValue = DeserializeValue(paParams[0]->GetString()); return true;
+		case enJSONString: pvarRetValue = JSONString(*paParams[0]); return true;
+		case enJSONValue: pvarRetValue = JSONValue(paParams[0]->GetString()); return true;
 		case enXMLString: pvarRetValue = XMLString(*paParams[0]); return true;
-		case enXMLValue: pvarRetValue = XMLValue(*paParams[0], *paParams[1]); return true;
+		case enXMLValue: pvarRetValue = XMLValue(paParams[0]->GetString()); return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

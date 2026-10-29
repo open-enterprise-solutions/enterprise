@@ -146,12 +146,12 @@ public:
 	// the debugger's sandbox can BUILD a value by writing JSON, which is the only way to construct
 	// one from outside the process (Max, 2026-09-02: *"as a bonus, with these you can create
 	// runtime values just by passing JSON"*).
-	static ibString SerializeValue(const ibValue& cData);
-	static ibValue  DeserializeValue(const ibString& strJson);
+	static ibString JSONString(const ibValue& cData);
+	static ibValue  JSONValue(const ibString& strJson);
 	// …and the same as XML (ibXmlProvider): the node a value packs itself into, written whole, and read back as
-	// the type it is to be.
+	// the type it names.
 	static ibString XMLString(const ibValue& value);
-	static ibValue  XMLValue(const ibValue& type, const ibValue& text);
+	static ibValue  XMLValue(const ibString& text);
 
 	// (⛔ NO MESSAGE CAPTURE HERE. Getting the lines a run printed is not a new mechanism: the
 	//  debug channel already carries messages from a running application to whoever is attached —

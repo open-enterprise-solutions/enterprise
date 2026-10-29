@@ -55,14 +55,19 @@ ibGuid GuidOf(const ibValue& value)
 
 bool ibValueGuid::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(kValueFieldData, m_guid.str());
+	node.SetValue(kValueFieldData, m_guid);   // its 16 bytes — a text form writes the text (ibDataKind::Guid)
 	return true;
 }
 
 bool ibValueGuid::DoDeserialize(const ibDataNode& node)
 {
+	// The guid, or its text where a text form carried it (the JSON view) — a text that is no guid raises (AsGuid).
+	// Anything else is not this value's contents.
 	const auto stored = node.FindField(kValueFieldData);
-	return stored && stored->Kind() == ibDataKind::String && ibGuid::parse(stored->AsString(), m_guid);
+	if (!stored || (stored->Kind() != ibDataKind::Guid && stored->Kind() != ibDataKind::String))
+		return false;
+	m_guid = stored->AsGuid();
+	return true;
 }
 
 //**********************************************************************

@@ -6,7 +6,7 @@
 //
 //	A second ibFormatProvider next to ibBinaryProvider: it renders the SAME
 //	ibDataNode tree as JSON text (scalar -> value, Bool -> true/false, Number ->
-//	number, String -> "text", Binary -> "base64:...", Child -> { object },
+//	number, String -> "text", Guid -> "its text", Binary -> "base64:...", Child -> { object },
 //	Array -> [ list ]). Structural keys are underscore-prefixed (_clsid, _metaId,
 //	_children, _raw) so they read apart from the data.
 //
@@ -20,7 +20,8 @@
 //	point — so two things do not survive Write -> Read, and no parser can undo them
 //	(fields and properties were a third until a node held them as one set, 2026-10-26):
 //	  1. Date becomes an ISO STRING — indistinguishable from a String that happens to look
-//	     like a date, so it reads back as a String.
+//	     like a date, so it reads back as a String. So does a Guid's text; whoever asks for
+//	     a date or a guid reads one out of it (ibDataValue::AsDate, AsGuid).
 //	  2. NodeType emits the resolved type NAME (numeric clsid only as a fallback), and
 //	     TypeDesc is injected beside typeId with no node entry behind it. TypeDesc is
 //	     parsed and dropped; a name-form NodeType needs SetTypeLookup (below) to become a

@@ -982,6 +982,7 @@ ibString KindOf(const ibDataValue& value)
 		case ibDataKind::Number:  return ibT("number");
 		case ibDataKind::String:  return ibT("string");
 		case ibDataKind::Date:    return ibT("date");
+		case ibDataKind::Guid:    return ibT("guid");
 		case ibDataKind::Binary:  return ibT("binary");
 		case ibDataKind::Child:   return ibT("structure");
 		case ibDataKind::Array:   return ibT("list");

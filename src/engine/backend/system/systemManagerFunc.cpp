@@ -719,7 +719,7 @@ bool ibValueSystemFunction::ValueIsFilled(const ibValue& cData)
 // Printing answers what a value LOOKS like; this answers what it IS. A structure survives the trip,
 // which is the difference between reading a report and reading a sentence about one. Coverage grows
 // with the types: whatever learns to pack itself is in here the day it does, with nothing to add.
-ibString ibValueSystemFunction::SerializeValue(const ibValue& cData)
+ibString ibValueSystemFunction::JSONString(const ibValue& cData)
 {
 	// THE CONFIGURATION IS THE RUNNING ONE — the same one every other function in this file asks
 	// for. A value's references mean nothing without it: their types exist in its registry alone.
@@ -749,7 +749,7 @@ ibString ibValueSystemFunction::SerializeValue(const ibValue& cData)
 // carry, so a value that must return EXACTLY as it left travels as the binary form instead. Said
 // here rather than discovered: a lossy round trip that nobody warned about is read as a defect in
 // whatever used it next.
-ibValue ibValueSystemFunction::DeserializeValue(const ibString& strJson)
+ibValue ibValueSystemFunction::JSONValue(const ibString& strJson)
 {
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
 		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
@@ -773,10 +773,8 @@ ibValue ibValueSystemFunction::DeserializeValue(const ibString& strJson)
 }
 
 #include "core/serialize/provider/xmlProvider.h"   // the node as XML — the twins of the two verbs above
-#include "backend/system/value/valueType.h"
-#include "backend/compiler/valueSerialization.h"         // ibReadNodeType — whose value a node holds
 
-// ⭐ A VALUE AS XML — SerializeValue's twin, with the XML provider where that one has the JSON view: the value packs
+// ⭐ A VALUE AS XML — JSONString's twin, with the XML provider where that one has the JSON view: the value packs
 // itself into a node, the configuration's door adds what only it can make (references, enumeration members), and
 // the provider writes the node. The XML form keeps every kind the node holds, so XMLValue reads the value back as
 // it went - as far as the node does: a structure or an array reads its elements through the value registry alone,
@@ -797,16 +795,12 @@ ibString ibValueSystemFunction::XMLString(const ibValue& value)
 	return text;
 }
 
-// …AND BACK: the text XMLString wrote, read into a node and the node into a value. The type the node names is
-// compared with the one asked for BEFORE anything is made of it: a text that holds another type's value is not
-// this type's, and is refused naming both.
-ibValue ibValueSystemFunction::XMLValue(const ibValue& type, const ibValue& text)
+// …AND BACK: the text XMLString wrote, read into a node and the node into a value — of the type the node names, as
+// JSONValue reads its own.
+ibValue ibValueSystemFunction::XMLValue(const ibString& text)
 {
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
 		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
-	if (type.GetClassType() != g_valueTypeCLSID)
-		ibBackendCoreException::Error(_("XMLValue: the type is what Type() or TypeOf() answers, not a value of the type '%s'"),
-			type.GetClassName());
 
 	ibXmlProvider provider;
 	provider.SetTypeLookup([](const ibString& name) -> ibClassID {
@@ -814,12 +808,7 @@ ibValue ibValueSystemFunction::XMLValue(const ibValue& type, const ibValue& text
 			? activeMetaData->GetIDObjectFromString(name) : ibClassID(0); });
 
 	ibDataNode node;
-	provider.Read(text.GetString(), node);
-
-	ibValuePtr<ibValueType> held(new ibValueType(ibReadNodeType(node)));
-	if (!type.CompareValueEQ(held))
-		ibBackendCoreException::Error(_("XMLValue: the text holds a value of the type '%s', not of the type '%s'"),
-			held->GetString(), type.GetString());
+	provider.Read(text, node);
 	return activeMetaData->Deserialize(node);
 }
 
@@ -849,6 +838,7 @@ ibString ibValueSystemFunction::Format(ibValue& cData, const ibString& fmt)
 	return ibFormatString::Parse(fmt).Apply(cData);
 }
 
+#include "backend/system/value/valueType.h"
 
 ibValue ibValueSystemFunction::Type(const ibValue& cTypeName)
 {

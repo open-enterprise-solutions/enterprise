@@ -264,6 +264,20 @@ TEST(JsonProvider, Date_DegradesToString_ByDesign) {
 	EXPECT_FALSE(v->AsString().IsEmpty());
 }
 
+// Guid likewise: its text, read back as a String - which whoever asks for a guid reads as one (AsGuid).
+TEST(JsonProvider, Guid_DegradesToString_ByDesign) {
+	const ibGuid key(ibString(wxT("0f8fad5b-d9cb-469f-a165-70867728950e")));
+	ibDataNode n;
+	n.AddField(wxT("key"), ibDataValue::Guid(key));
+
+	const ibDataNode back = Parse(Emit(n));   // named — FindField points into it
+	auto v = back.FindField(ibT("key"));
+	ASSERT_TRUE(v);
+	EXPECT_EQ(v->Kind(), ibDataKind::String);
+	EXPECT_EQ(v->AsString(), key.str());
+	EXPECT_EQ(v->AsGuid(), key);
+}
+
 // TypeDesc is injected beside a typeId with no node entry behind it — the parser
 // drops it rather than inventing a key the writer never had.
 TEST(JsonProvider, TypeDesc_IsDroppedNotMaterialised) {

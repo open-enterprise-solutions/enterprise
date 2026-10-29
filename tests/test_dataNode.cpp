@@ -168,6 +168,51 @@ TEST(DataNode, ADateIsStoredAsItself) {
 	EXPECT_TRUE(again.FindField(ibT("none"))->AsDate().IsEmpty());
 }
 
+// ⭐ A GUID IS STORED AS ITS 16 BYTES (format 9), not its 36 characters: the same field with nothing in it is 16 bytes
+// shorter. Read from its text too, where a text form carried it as a string (the JSON view).
+TEST(DataNode, AGuidIsStoredAsItsSixteenBytes) {
+	const ibGuid key(ibString(wxT("0f8fad5b-d9cb-469f-a165-70867728950e")));
+	ibDataNode written(1001, 7);
+	written.AddField(wxT("key"), ibDataValue::Guid(key));
+	ibDataNode none(1001, 7);
+	none.AddField(wxT("key"), ibDataValue());
+	EXPECT_EQ(WriteFull(written).GetDataLen() - WriteFull(none).GetDataLen(), 16u);
+
+	ibClassID clsid = 0; ibMetaID metaId = 0;
+	const ibDataNode read = ReadFull(WriteFull(written), clsid, metaId);
+	ASSERT_TRUE(read.Has(ibT("key")));
+	EXPECT_EQ(read.FindField(ibT("key"))->Kind(), ibDataKind::Guid);
+	EXPECT_EQ(read.FindField(ibT("key"))->AsGuid(), key);
+	EXPECT_EQ(ibDataValue::String(key.str()).AsGuid(), key);
+	EXPECT_EQ(ibDataValue::String(ibString()).AsGuid(), ibGuid());   // "" is the nil guid, as AsDate's empty date
+	EXPECT_ANY_THROW(ibDataValue::String(ibString(wxT("not-a-guid"))).AsGuid());
+	// …and read as a string, it is its text: a reader that took the guid's text before reads it still.
+	EXPECT_EQ(read.GetValue<ibString>(ibT("key")), key.str());
+	EXPECT_EQ(read.GetValue<ibGuid>(ibT("key")), key);
+}
+
+// ⭐ THE PACKET IS VERSION 2 since a guid has a kind of its own. Version 1 - what a base holds from before - is read
+// as it is; a version this end does not know yet is refused, naming both.
+TEST(DataNode, APacketOfVersionOneIsRead_ANewerOneRefused) {
+	ibDataNode root(1001, 7);
+	root.AddField(wxT("name"), ibDataValue::String(wxT("Goods")));
+	ibMemoryBuffer packet;
+	ASSERT_TRUE(ibBinaryProvider().Write(root, packet));
+	ASSERT_GE(packet.GetDataLen(), 6u);
+	const unsigned char* const written = static_cast<const unsigned char*>(packet.GetData());
+	EXPECT_EQ(written[4] | written[5] << 8, 2);
+
+	ibMemoryBuffer older(packet.GetData(), packet.GetDataLen());   // a copy of its own, to write the version into
+	static_cast<unsigned char*>(older.GetData())[4] = 1;
+	ibDataNode read;
+	ASSERT_TRUE(ibBinaryProvider().Read(older, read));
+	EXPECT_EQ(read.GetValue<ibString>(ibT("name")), wxT("Goods"));
+
+	ibMemoryBuffer newer(packet.GetData(), packet.GetDataLen());
+	static_cast<unsigned char*>(newer.GetData())[4] = 3;
+	EXPECT_ANY_THROW(ibBinaryProvider().Read(newer, read));
+}
+
 // Optimistic cursor: out-of-order access still resolves; absent name defaults.
 TEST(DataNode, NamedFields_OptimisticCursor_ReorderedAndMissing) {
 	ibDataNode n;

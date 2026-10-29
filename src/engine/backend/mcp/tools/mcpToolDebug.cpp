@@ -975,7 +975,7 @@ public:
 			"language and the global functions are written up in syntax_search and syntax_get, and "
 			"the way a query is put together is a pattern of its own (pattern_read 'query-craft'). "
 			"HOW TO GET SOMETHING BACK: a block returns no value of its own, so PRINT what you want "
-			"- `Message(x)` for a line, `Message(SerializeValue(x))` for the whole structure of a "
+			"- `Message(x)` for a line, `Message(JSONString(x))` for the whole structure of a "
 			"selection, a record set or an array. Everything printed comes back in `printed`, and "
 			"the person watching sees the same lines as they happen. "
 			"SAY WHAT YOU ARE MEASURING, before and as you go: chat_say for what you are about to "
@@ -1052,7 +1052,7 @@ public:
 
 		// ⭐⭐ THE RESULT AS A VALUE, beside the way it prints. `answer` is what a person would read;
 		// this is what it is MADE OF — a selection's columns, a structure's fields — written by the
-		// language's own SerializeValue. Both, because they answer different questions and the
+		// language's own JSONString. Both, because they answer different questions and the
 		// printed form is the one that fits in a sentence.
 		//
 		// Absent when the value cannot travel, which is not a failure of the run: plenty of live
@@ -1062,7 +1062,7 @@ public:
 
 		// ⭐⭐ WHAT THE CODE PRINTED, WHICH IS HOW A BLOCK HANDS ANYTHING BACK. A block yields no
 		// value by construction — the compiler puts no return in one — so `Message` is the way out,
-		// and `Message(SerializeValue(x))` carries a whole structure through it. Collected here as
+		// and `Message(JSONString(x))` carries a whole structure through it. Collected here as
 		// they arrived rather than read from the journal afterwards, where they would be mixed with
 		// everything else the runtime said.
 		if (!printed.empty()) {

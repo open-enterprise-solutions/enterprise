@@ -1626,7 +1626,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 						// this process leaves it — GetLastError, which is exactly what the watch
 						// channel sends (SendExpressions, above). Without it a caller is told THAT
 						// their code did not compile and never WHY, which is a round trip they
-						// cannot make on their own (measured 2026-09-02: `SerializeValue(42)`
+						// cannot make on their own (measured 2026-09-02: `JSONString(42)`
 						// compiled in the designer and failed here, with nothing to say why).
 						const ibString said = ibBackendException::GetLastError();
 						if (!said.IsEmpty())
@@ -1647,7 +1647,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 						// success — so this is tried separately and its failure costs the JSON
 						// field, nothing else.
 						try {
-							json = ibValueSystemFunction::SerializeValue(vResult);
+							json = ibValueSystemFunction::JSONString(vResult);
 						}
 						catch (...) {
 							json.Clear();
