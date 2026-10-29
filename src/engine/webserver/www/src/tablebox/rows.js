@@ -66,17 +66,14 @@ function lookOf(cell) {
 }
 
 /**
- * The page's records and what it says of itself — a State's page also the row it was read around (Anchor) and how
- * many rows it asked from it, as many ahead (Count).
+ * The page's records and what it says of itself: the top (Begin), the bottom (End), the row the server stands on.
  * @param {ProtocolNode} page
  */
 export function readPage(page) {
 	return {
 		records: (page.NodeChildren ?? []).map(recordOf),
+		begin: page.Begin === true,
 		end: page.End === true,
-		before: page.Before ?? 0,
 		current: page.CurrentRow ?? 0,
-		anchor: page.Anchor ?? 0,
-		count: page.Count ?? 0,
 	};
 }

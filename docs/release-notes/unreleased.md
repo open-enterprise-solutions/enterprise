@@ -35,7 +35,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   and not installed on the machine falls back to US English too.
 - **A table read anew with no row to read around is placed by the server** — a client's first page, a
   list read again from its top: from the top when the table stands on no row, else around the row it
-  stands on, with as many rows ahead of that row as the page, the page saying how many came (`Before`).
+  stands on, with as many rows ahead of that row as the page, the page saying whether it is the top (`Begin`).
   The browser client took such a page for the top: a table standing on its last row came back to a
   resumed session as that one row, with no way to the rows above it. The thin client puts the row it
   was read around mid-view and reads the rows above the ones that came when there are more.

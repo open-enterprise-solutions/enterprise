@@ -201,23 +201,22 @@ From protocol 4 a fetch from the start (`Direction` 0) may name `Before`, the ro
 at; the answer gives those rows first and says in `Before` how many came. A server before protocol 4 gives none: the
 page comes alone. A fetch from the start that names no `Anchor` is read where the server's table stands: from the top
 when it stands on no row, else around its current row — with as many rows ahead of that row as `Count`, or `Before`
-when that is more. So the page says where it stands whatever was asked: `Before` is how many rows came ahead, fewer
-than `Count` means the top was reached, and no `Before` (or 0) is the top of the level.
+when that is more. A page at the top of its level says `Begin`, as one at the bottom says `End`: the client takes the
+top from it, not from how many rows came.
 
 From protocol 5 a table's `State` may carry `Rows` with a new `Version` — the first page, the same shape as `fetch`
-(rows as children, `End`, `Before`, `Pictures`) — so the client need not fetch to draw the tab; a server that does
-not put `Rows` in the state is answered with `fetch`, as before. The first page is read as a fetch from the start with
-no `Anchor` is: from the top, or — when the table stands on a row (a choice form opened on a value) — around that row,
-as many rows ahead of it as `Count`; the page names the row `CurrentRow`.
+(rows as children, `Begin`, `End`, `Before`, `Pictures`) — so the client need not fetch to draw the tab; a server that
+does not put `Rows` in the state is answered with `fetch`, as before. The first page is read as a fetch from the start
+with no `Anchor` is: from the top, or — when the table stands on a row (a choice form opened on a value) — around that
+row, as many rows ahead of it as `Count`; the page names the row `CurrentRow`.
 
 A later `Version` (a cell's `Change`, a row added, a refresh) may carry `Rows` too, read around the server's current row:
-`Anchor` that row, `Count` the rows from it, `Before` how many came ahead of it (fewer than `Count`: the top was
-reached). A page read from the top says `Before` 0 and no `Anchor`; one read around a row the client was never given
-(the first page's, a row just added) names no `Anchor` either, and `Before` how many came ahead of it. The client
-answers its own read anew from it when
-the read names the same `Anchor` and asks no more, or — when the page is the whole level, the top reached and `End` —
-around any row of it, cut out as the server would read it. Any other read is a `fetch`, as before. The fields are those
-of a `fetch` answer, so a client that does not look at them takes the page only for a read that matches it.
+`Anchor` that row, `Count` the rows from it, `Before` how many came ahead of it, `Begin` when they reached the top. A
+page read from the top says `Begin` and no `Anchor`; one read around a row the client was never given (the first
+page's, a row just added) names no `Anchor` either. The client answers its own read anew from it when the read names
+the same `Anchor` and asks no more, or — when the page is the whole level, `Begin` and `End` — around any row of it,
+cut out as the server would read it. Any other read is a `fetch`, as before. The fields are those of a `fetch` answer,
+so a client that does not look at them takes the page only for a read that matches it.
 A designer's module tab (its `View` `State`: `Syntax`, `Module`, `Modified`, `ReadOnly`) carries the module's `Text`
 in the frame that opens the tab, once; the client draws it without a `fetch`. A server that puts no `Text` there is
 asked with `fetch`, as before. A form's tab reads its module's text as it did.

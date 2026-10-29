@@ -209,7 +209,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 	const bool designer = appData->DesignerMode();
 	ibViewFetcher fetcher = [this, wire, designer](const ibProtocolNode& request, ibProtocolNode& answer) -> bool {
 		// The page State's Rows was read as: from the top, or around the row the server stands on — Anchor, when this side
-		// had been given it — with its Count and as many rows ahead (Before; fewer — none more above). Taken for a read it
+		// had been given it — with its Count and as many rows ahead (Before), the top saying so (Begin). Taken for a read it
 		// holds all of: that Anchor, no larger a Count, no more rows ahead than it has — or the top reached.
 		const long long held = m_firstDraw.GetInt(ibProtocol::ibForm::ibTable::Count);
 		const long long ahead = m_firstDraw.GetInt(ibProtocol::ibForm::ibTable::Before);
@@ -220,18 +220,19 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 		if (reset
 			&& request.GetInt(ibProtocol::ibForm::ibTable::Anchor) == m_firstDraw.GetInt(ibProtocol::ibForm::ibTable::Anchor)
 			&& (held == 0 || request.GetInt(ibProtocol::ibForm::ibTable::Count) <= held)
-			&& (wanted == 0 || (m_firstDraw.Has(ibProtocol::ibForm::ibTable::Before) && (ahead >= wanted || ahead < held)))) {
+			&& (wanted == 0 || m_firstDraw.GetBool(ibProtocol::ibForm::ibTable::Begin)
+				|| (m_firstDraw.Has(ibProtocol::ibForm::ibTable::Before) && ahead >= wanted))) {
 			answer = std::move(m_firstDraw);
 			m_hasFirstDraw = false;
 			m_firstDraw = ibProtocolNode();
 			return true;
 		}
-		// …AND ONE THAT IS THE WHOLE LEVEL — the top reached (fewer rows ahead than its Count) and End — answers a read
-		// anew around any row of it: the read after a cell's Change names the client's own cursor (its top row), not the
-		// row the server stands on. The page is cut out of it as the server would have read it.
+		// …AND ONE THAT IS THE WHOLE LEVEL — Begin and End — answers a read anew around any row of it: the read after a
+		// cell's Change names the client's own cursor (its top row), not the row the server stands on. The page is cut out
+		// of it as the server would have read it.
 		const long long anchor = request.GetInt(ibProtocol::ibForm::ibTable::Anchor);
 		if (reset && anchor != 0 && held > 0 && m_firstDraw.GetBool(ibProtocol::ibForm::ibTable::End)
-			&& m_firstDraw.Has(ibProtocol::ibForm::ibTable::Before) && ahead < held) {
+			&& m_firstDraw.GetBool(ibProtocol::ibForm::ibTable::Begin)) {
 			const std::vector<ibProtocolNode> rows = m_firstDraw.Children();
 			std::size_t at = 0;
 			while (at < rows.size() && rows[at].GetId() != anchor)
@@ -243,8 +244,8 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 				ibProtocolNode page;
 				for (const auto& entry : m_firstDraw.Entries()) {
 					if (entry.first != ibProtocol::ibNode::Children && entry.first != ibProtocol::ibForm::ibTable::Before
-						&& entry.first != ibProtocol::ibForm::ibTable::End && entry.first != ibProtocol::ibForm::ibTable::Anchor
-						&& entry.first != ibProtocol::ibForm::ibTable::Count)
+						&& entry.first != ibProtocol::ibForm::ibTable::Begin && entry.first != ibProtocol::ibForm::ibTable::End
+						&& entry.first != ibProtocol::ibForm::ibTable::Anchor && entry.first != ibProtocol::ibForm::ibTable::Count)
 						page.SetValue(entry.first, entry.second);
 				}
 				for (std::size_t idx = from; idx < to; ++idx) {
@@ -254,6 +255,8 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 				}
 				if (request.Has(ibProtocol::ibForm::ibTable::Before))
 					page.SetValue(ibProtocol::ibForm::ibTable::Before, static_cast<long long>(at - from));
+				if (from == 0)
+					page.SetValue(ibProtocol::ibForm::ibTable::Begin, true);
 				if (to == rows.size())
 					page.SetValue(ibProtocol::ibForm::ibTable::End, true);
 				answer = std::move(page);

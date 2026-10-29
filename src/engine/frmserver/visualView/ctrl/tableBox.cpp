@@ -700,8 +700,8 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// answers its own read anew from it, whatever row it reads around; any other read it fetches. The first Version, and
 	// a later one whose current row has no handle yet (a choice form opened on a value, a row just added), are read as
 	// the client's own opening read is — a reset with no anchor, Fetch's: from the top when the table stands on no row,
-	// else around the row it stands on with as many rows ahead as the page, the page saying how many came (Before; fewer
-	// than Count, the top). No Anchor on such a page: the client named none, and matches its own read by that.
+	// else around the row it stands on with as many rows ahead as the page, the page saying how many came (Before) and
+	// whether it is the top (Begin). No Anchor on such a page: the client named none, and matches its own read by that.
 	if (m_rowsSentVersion != m_rowsVersion) {
 		std::int32_t anchor = 0;
 		if (m_rowsSentVersion != -1 && m_tableCurrentLine != nullptr)
@@ -725,6 +725,7 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		catch (const ibCoreException& err) {
 			ibValueSystemFunction::Message(err.GetErrorDescription(), ibStatusMessage::ibStatusMessage_Error);
 			ibDataNode& none = state.Child(ibProtocol::ibForm::ibTable::Rows);
+			none.SetValue(ibProtocol::ibForm::ibTable::Begin, true);
 			none.SetValue(ibProtocol::ibForm::ibTable::End, true);
 			none.SetValue(ibProtocol::ibForm::ibTable::Before, 0);
 			none.SetValue(ibProtocol::ibForm::ibTable::Count, count);
@@ -978,12 +979,12 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 				around = current;
 		}
 		// ⚠ …AND THE ROWS AHEAD OF THAT ROW COME WITH IT — as many as the page holds, or as the client asks (Before),
-		// whichever is more — so the page says where it stands whatever the client asked: Before is how many stood
-		// ahead, and fewer than the page is the top. The row is one the client never named, and a page that started AT
-		// it was taken for the top of the table: a choice form opened on a value showed the list from that row down
-		// (2026-10-21), a table standing on its last row came back to a resumed session as that one row with no way up
-		// (2026-10-28) — and each client knew the rule, or did not (Update worked around it, the web client too). Said
-		// here once, a reset with no anchor reads as any other does, and "nothing ahead" means the top only when it is.
+		// whichever is more — and the page says whether it is the top (Begin, below) whatever the client asked. The row
+		// is one the client never named, and a page that started AT it was taken for the top of the table: a choice form
+		// opened on a value showed the list from that row down (2026-10-21), a table standing on its last row came back to
+		// a resumed session as that one row with no way up (2026-10-28) — and each client knew the rule, or did not
+		// (Update worked around it, the web client too). Said here once, a reset with no anchor reads as any other does,
+		// and the page is the top only when it is.
 		const bool aroundCurrent = around.IsOk() && !anchorItem.IsOk();
 		// The level is read anew: the rows handed out at it are forgotten — every row, at the top.
 		if (parentHandle == 0) {
@@ -999,12 +1000,14 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		if (viewMode == ibDataViewHierarchical)
 			m_drillItem = parentItem;
 		fetched = m_tableModel->GetFirstFetch(scope, around, count, items);
+		bool top = !around.IsOk();
 		// …AND ONE THAT FINDS NOTHING AROUND ITS ROW READS FROM THE TOP — the data view's own rule (its empty-fetch
 		// fallback): a row a filter took away, or one the new order cannot be read around, leaves no blank table. Asked
 		// here, since a client's own retry without an anchor would be read around the current row again.
 		if (fetched == 0 && around.IsOk()) {
 			items.Clear();
 			fetched = m_tableModel->GetFirstFetch(scope, ibDataViewItem(), count, items);
+			top = true;
 		}
 		// (protocol 4) …AND THE ROWS AHEAD OF THE PAGE, when the client asks for them (Before) — in the same answer, first,
 		// so a row kept mid-view costs no second fetch — and when the page was read around the table's own row (above).
@@ -1022,7 +1025,12 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 				ahead = above;
 			}
 			response.SetValue(ibProtocol::ibForm::ibTable::Before, static_cast<std::int32_t>(above));
+			top = top || above < static_cast<unsigned int>(before);
 		}
+		// THE PAGE SAYS IT STANDS AT THE TOP (Begin) — read from it, or fewer rows came ahead than were read for — so a
+		// client knows no rule of how many this side read ahead; a read around a row with none asked ahead says nothing.
+		if (top)
+			response.SetValue(ibProtocol::ibForm::ibTable::Begin, true);
 		break;
 	}
 	}
