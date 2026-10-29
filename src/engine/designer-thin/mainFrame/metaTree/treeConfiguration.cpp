@@ -111,6 +111,8 @@ ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, ibProtocol::ibVi
 	m_metaTreeCtrl->Bind(wxEVT_TREE_ITEM_EXPANDED, &ibMetaTreeBase::OnExpanded, this);
 	m_metaTreeCtrl->Bind(wxEVT_TREE_ITEM_COLLAPSED, &ibMetaTreeBase::OnCollapsed, this);
 	m_metaTreeCtrl->Bind(wxEVT_TREE_ITEM_MENU, &ibMetaTreeBase::OnItemMenu, this);
+	m_metaTreeCtrl->Bind(wxEVT_TREE_BEGIN_DRAG, &ibMetaTreeBase::OnBeginDrag, this);
+	m_metaTreeCtrl->Bind(wxEVT_TREE_END_DRAG, &ibMetaTreeBase::OnEndDrag, this);
 
 	// The toolbar's, the context menu's and the keys' — each a command event that comes up to the panel.
 	Bind(wxEVT_MENU, [this](wxCommandEvent&) { CreateItem(); }, ID_METATREE_NEW);
