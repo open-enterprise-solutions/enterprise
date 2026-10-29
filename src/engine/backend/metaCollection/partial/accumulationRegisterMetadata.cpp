@@ -164,13 +164,7 @@ bool ibValueMetaObjectAccumulationRegister::OnSaveMetaObject(int flags)
 	if (!(*m_propertyObjectModule)->OnSaveMetaObject(flags))
 		return false;
 
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-	if (!((*m_propertyAttributeRecorder)->GetClsidCount() > 0)) {
-		RestructureError(_("! Doesn't have any recorder ") + GetFullName());
-		return false;
-	}
-#endif 
-
+	// (A recorder is the base's question - GetSaveRefusal - asked by the save and by config_check alike.)
 	return ibValueMetaObjectRegisterData::OnSaveMetaObject(flags);
 }
 

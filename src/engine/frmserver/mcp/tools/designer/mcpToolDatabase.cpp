@@ -31,6 +31,7 @@
 #include "backend/metaCollection/metaComposerObject.h"              // …and a composer with no name
 #include "backend/metaCollection/partial/dataReport.h"              // …and a report with no composer
 #include "backend/metaCollection/metaSectionObject.h"                // …and an object no section leads to
+#include "backend/metaCollection/partial/commonObject.h"             // …and a register the save would refuse
 
 namespace {
 
@@ -872,6 +873,20 @@ public:
 
 				for (const ibString& one : missing)
 					complain(object, one);
+
+				continue;
+			}
+
+			// ⭐ A REGISTER THE SAVE WOULD REFUSE — no column at all, or written by a recorder and bound to
+			// none. Asked here in the save's own words (GetSaveRefusal), because the save refuses the WHOLE
+			// configuration over one of them: every other change of the session waited behind a sequence
+			// that was still being built, and nothing said so until the save (#189).
+			const ibValueMetaObjectRegisterData* registerData = nullptr;
+			if (object->ConvertToValue(registerData)) {
+
+				const ibString refusal = registerData->GetSaveRefusal();
+				if (!refusal.IsEmpty())
+					complain(object, refusal);
 
 				continue;
 			}

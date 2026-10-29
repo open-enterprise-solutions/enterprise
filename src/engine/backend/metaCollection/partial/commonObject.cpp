@@ -1509,7 +1509,7 @@ bool ibValueMetaObjectRegisterData::OnLoadMetaObject(ibMetaData* metaData)
 	return ibValueMetaObject::OnLoadMetaObject(metaData);
 }
 
-bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
+ibString ibValueMetaObjectRegisterData::GetSaveRefusal() const
 {
 	// ⭐⭐ A TABLE NEEDS AT LEAST ONE COLUMN. An independent register with nothing declared has none,
 	// so the differ correctly computed "every column of this table is gone" and emitted
@@ -1525,10 +1525,8 @@ bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 	// (`ibValueMetaObjectEnumeration::OnSaveMetaObject`): an empty metaobject is refused where it is
 	// SAVED, by the restructure report, so the message lands in the pane under the editor and no
 	// exception leaves the configuration write transaction open.
-	if (GetAnyAttributeArrayObject().empty()) {
-		RestructureError(_("! Doesn't have any dimension, resource or attribute ") + GetFullName());
-		return false;
-	}
+	if (GetAnyAttributeArrayObject().empty())
+		return _("! Doesn't have any dimension, resource or attribute ") + GetFullName();
 
 	// ⭐⭐ SUBORDINATE TO A RECORDER MEANS THERE HAS TO BE ONE.
 	//
@@ -1541,11 +1539,19 @@ bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 	// Reported, not thrown, and here rather than on the schema declaration: the same reasoning as the
 	// chart of accounts' missing binding — the message belongs in the pane under the editor, the save
 	// refuses, and no exception leaves the configuration write transaction open.
-	if (HasRecorder() && (*m_propertyAttributeRecorder)->IsEmptyTypeDesc()) {
-		// Into the LEDGER — see the note in metaComposerObject.cpp: one road for a refusal, read by
-		// whoever asked. Printed here it also stayed on the screen after a probe that only asked.
-		RestructureError(ibString::Format(
-			_("%s: no recorder - declare a document that posts into this register, or it can never be written to"), GetName()));
+	if (HasRecorder() && (*m_propertyAttributeRecorder)->IsEmptyTypeDesc())
+		return ibString::Format(
+			_("%s: no recorder - declare a document that posts into this register, or it can never be written to"), GetName());
+
+	return ibString();
+}
+
+bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
+{
+	// Into the LEDGER — see the note in metaComposerObject.cpp: one road for a refusal, read by
+	// whoever asked. Printed here it also stayed on the screen after a probe that only asked.
+	if (const ibString refusal = GetSaveRefusal(); !refusal.IsEmpty()) {
+		RestructureError(refusal);
 		return false;
 	}
 
