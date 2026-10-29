@@ -165,6 +165,7 @@
     <ClCompile Include="composition\compositionTheme.cpp" />
     <ClCompile Include="core.cpp" />
     <ClCompile Include="crypto\fieldCipher.cpp" />
+    <ClCompile Include="crypto\dataHash.cpp" />
     <ClCompile Include="crypto\sessionToken.cpp" />
     <ClCompile Include="crypto\sha256.cpp" />
     <ClCompile Include="description\calcScheduleDescription.cpp" />
@@ -273,6 +274,7 @@
     <ClInclude Include="core.h" />
     <ClInclude Include="coreApi.h" />
     <ClInclude Include="crypto\fieldCipher.h" />
+    <ClInclude Include="crypto\dataHash.h" />
     <ClInclude Include="crypto\sessionToken.h" />
     <ClInclude Include="crypto\sha256.hpp" />
     <ClInclude Include="description\calcScheduleDescription.h" />

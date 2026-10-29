@@ -1,0 +1,273 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.DataHashing",
+      "name_local": "DataHashing",
+      "name_en": "DataHashing",
+      "kind": "collection",
+      "class_id": 186398170078871391,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "New DataHashing(function : HashFunction [, key : string | BinaryData])",
+      "description": "A digest of data: built for one hash function, fed with strings, bytes and files, asked for its sum. Signing a request to a payment or exchange service, checking a webhook's signature, a checksum of a file - each one is this.\n\nAppend(data) feeds a string or a BinaryData, AppendFile(path) feeds a file's content whole, HashSum is the digest of everything appended so far - a BinaryData - and HashFunction is the function the object was built for.\n\nA STRING IS HASHED AS ITS UTF-8 BYTES. Another encoding is said by turning the text into bytes first - GetBinaryDataFromString(text, TextEncoding.ANSI) - and appending those. A number, a date or anything else that is not a string or a BinaryData is refused: it has no one spelling in bytes, and hashing the spelling it happens to show would sign something nobody meant.\n\nA KEY MAKES IT AN HMAC (RFC 2104) - New DataHashing(HashFunction.SHA256, key) - which is what a webhook's signature and most request signatures are. The key is a string (its UTF-8 bytes) or a BinaryData; an EMPTY key is still a key, and only a key left out gives the plain digest. The reference system has no HMAC; this argument is an OES extension.\n\nHashSum CAN BE READ MIDWAY, and appending goes on after it: the sum of \"ab\" read, \"c\" appended, the sum read again is the sum of \"abc\".\n\nTHE FUNCTION IS SAID WHEN THE OBJECT IS BUILT, and with a member of HashFunction only: New DataHashing() and New DataHashing(\"SHA1\") are both refused.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA256);\nHashing.Append(Text);\nSum = Hashing.HashSum;                 // BinaryData\n\nSigning = New DataHashing(HashFunction.SHA256, Key);   // HMAC",
+      "parameters": "function - a member of HashFunction: MD5, SHA1, SHA256, SHA384 or SHA512.\nkey - a string or a BinaryData; given, the object computes an HMAC with it. Left out, the plain digest.",
+      "return_descr": "DataHashing.",
+      "example": "// a webhook: HMAC-SHA256 of the body, compared in hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(GetHexStringFromBinaryData(Check.HashSum)) <> Signature) { Raise(\"the signature does not match\"); }",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.DataHashing.Append",
+        "cls.DataHashing.AppendFile",
+        "cls.DataHashing.HashSum",
+        "enum.HashFunction",
+        "fn.GetBase64StringFromBinaryData",
+        "fn.GetHexStringFromBinaryData"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.DataHashing.Append",
+      "name_local": "Append",
+      "name_en": "Append",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "Hashing.Append(data : string | BinaryData)",
+      "description": "Feeds the data in after what was appended before. A string is fed as its UTF-8 bytes, a BinaryData as its bytes. Anything else is refused - \"DataHashing.Append: the data is a string or a BinaryData\" - because a number or a date has no one spelling in bytes.\n\nPieces add up to the whole: Append(\"a\") then Append(\"bc\") gives the sum of \"abc\".",
+      "syntax_block": "Hashing.Append(data);",
+      "parameters": "data - a string (its UTF-8 bytes) or a BinaryData.",
+      "return_descr": "",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(Login + \":\" + Stamp);\nHashing.Append(GetBinaryDataFromString(Note, TextEncoding.ANSI));",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.DataHashing",
+        "cls.DataHashing.AppendFile",
+        "fn.GetBinaryDataFromString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.DataHashing.AppendFile",
+      "name_local": "AppendFile",
+      "name_en": "AppendFile",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "Hashing.AppendFile(path : string)",
+      "description": "Feeds a file's content in, whole and as it is - nothing is decoded, a byte-order mark is part of it. A file that cannot be opened is refused, and so is one too large to be held in memory: a part of a file is never hashed as the whole of it.",
+      "syntax_block": "Hashing.AppendFile(path);",
+      "parameters": "path - the file to read.",
+      "return_descr": "",
+      "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.AppendFile(\"C:\\in\\price.zip\");\nMessage(Lower(GetHexStringFromBinaryData(Hashing.HashSum)));",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.DataHashing",
+        "cls.DataHashing.Append",
+        "cls.BinaryData.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.DataHashing.HashSum",
+      "name_local": "HashSum",
+      "name_en": "HashSum",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "DataHashing.HashSum",
+      "description": "The digest of everything appended so far, as a BinaryData - read-only. 16 bytes for MD5, 20 for SHA1, 32, 48 and 64 for SHA256, SHA384 and SHA512.\n\nREADING IT FINISHES NOTHING: appending goes on after it, and two reads with nothing appended between them agree.\n\nAs text, a BinaryData shows as base64; another system usually wants the digest in hex - GetHexStringFromBinaryData(Hashing.HashSum), upper case, Lower() for lower - or in base64 - GetBase64StringFromBinaryData(Hashing.HashSum).\n\n⚠ In the reference system String(HashSum) gives hex with spaces between the bytes; here String gives base64 - hex is written GetHexStringFromBinaryData.",
+      "syntax_block": "Sum = Hashing.HashSum;",
+      "parameters": "",
+      "return_descr": "BinaryData.",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(GetHexStringFromBinaryData(Hashing.HashSum));      // A9993E36...\nMessage(GetBase64StringFromBinaryData(Hashing.HashSum));   // qZk+NkcGgWq6PiVxeFDCbJzQ2J0=",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.DataHashing",
+        "fn.GetHexStringFromBinaryData",
+        "fn.GetBase64StringFromBinaryData"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.DataHashing.HashFunction",
+      "name_local": "HashFunction",
+      "name_en": "HashFunction",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "DataHashing.HashFunction",
+      "description": "The hash function the object was built for, as a member of HashFunction - read-only. Whether a key was given is not part of it: an HMAC-SHA256 answers HashFunction.SHA256.",
+      "syntax_block": "Function = Hashing.HashFunction;",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "if (Hashing.HashFunction = HashFunction.MD5) { Message(\"MD5 - for a checksum only\"); }",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.DataHashing",
+        "enum.HashFunction"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction",
+      "name_local": "HashFunction",
+      "name_en": "HashFunction",
+      "kind": "enum_type",
+      "class_id": 396635086738039334,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.MD5, .SHA1, .SHA256, .SHA384, .SHA512",
+      "description": "Which digest a DataHashing computes, said as a value: five members, written HashFunction.<Name>. A script never builds one, and the string \"SHA1\" is not one either.\n\nSHA256 is the one to choose when the choice is yours. MD5 and SHA1 are there for the other systems that still ask for them - a checksum in an exchange file, the signature a payment service was specified with - and are not safe against someone who forges data on purpose.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA256);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(Hashing.HashFunction);",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.HashFunction.MD5",
+        "enum.HashFunction.SHA1",
+        "enum.HashFunction.SHA256",
+        "enum.HashFunction.SHA384",
+        "enum.HashFunction.SHA512",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction.MD5",
+      "name_local": "MD5",
+      "name_en": "MD5",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.MD5",
+      "description": "MD5 (RFC 1321), 16 bytes. Broken for signatures - two different texts with one MD5 can be made on purpose - and kept for checksums and for the systems that still ask for it.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.MD5);",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 16",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.HashFunction",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction.SHA1",
+      "name_local": "SHA1",
+      "name_en": "SHA1",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.SHA1",
+      "description": "SHA-1 (FIPS 180), 20 bytes. What many payment and exchange services were specified with; for anything new, SHA256.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA1);",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 20",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.HashFunction",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction.SHA256",
+      "name_local": "SHA256",
+      "name_en": "SHA256",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.SHA256",
+      "description": "SHA-256 (FIPS 180), 32 bytes. The one to choose when the choice is yours, and what an HMAC signature is usually made with.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA256);",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "Hashing = New DataHashing(HashFunction.SHA256);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 32",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.HashFunction",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction.SHA384",
+      "name_local": "SHA384",
+      "name_en": "SHA384",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.SHA384",
+      "description": "SHA-384 (FIPS 180), 48 bytes.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA384);",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "Hashing = New DataHashing(HashFunction.SHA384);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 48",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.HashFunction",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction.SHA512",
+      "name_local": "SHA512",
+      "name_en": "SHA512",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.SHA512",
+      "description": "SHA-512 (FIPS 180), 64 bytes.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA512);",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "Hashing = New DataHashing(HashFunction.SHA512);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 64",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.HashFunction",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    }
+  ]
+}

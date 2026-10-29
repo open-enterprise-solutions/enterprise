@@ -22,6 +22,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   language; `L=ru` says them in the language it names. New codes: `DLF` (a preset — `D`, `DD`, `T`,
   `DT`, `DDT` — used when there is no `DF`), `L` and `NLZ` (the whole part padded with zeros to
   `ND − NFD` digits).
+- **Hashing: `DataHashing` and `HashFunction`.** `New DataHashing(HashFunction.SHA256)` takes strings
+  (as UTF-8), `BinaryData` and files and gives `HashSum`, a `BinaryData`; MD5, SHA1, SHA256, SHA384
+  and SHA512. A second argument, the key, makes it an HMAC. The sum can be read midway.
+- **Bytes from text and back, as base64 and as hex** — `GetBinaryDataFromString(text, encoding,
+  byteOrderMark)`, `GetStringFromBinaryData`, `GetBase64StringFromBinaryData`,
+  `GetBinaryDataFromBase64String`, `GetHexStringFromBinaryData`, `GetBinaryDataFromHexString`. Text
+  that is not base64 or hex is refused, not read as no bytes.
 
 ## Fixes
 

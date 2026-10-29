@@ -98,6 +98,9 @@
     <ClCompile Include="crypto\fieldCipher.cpp">
       <Filter>crypto</Filter>
     </ClCompile>
+    <ClCompile Include="crypto\dataHash.cpp">
+      <Filter>crypto</Filter>
+    </ClCompile>
     <ClCompile Include="crypto\sessionToken.cpp">
       <Filter>crypto</Filter>
     </ClCompile>
@@ -328,6 +331,9 @@
     <ClInclude Include="core.h" />
     <ClInclude Include="coreApi.h" />
     <ClInclude Include="crypto\fieldCipher.h">
+      <Filter>crypto</Filter>
+    </ClInclude>
+    <ClInclude Include="crypto\dataHash.h">
       <Filter>crypto</Filter>
     </ClInclude>
     <ClInclude Include="crypto\sessionToken.h">

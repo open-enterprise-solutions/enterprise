@@ -88,6 +88,27 @@ bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding encoding, ibS
 	return !text.empty();
 }
 
+bool ibTextToBytes(const ibString& text, ibTextEncoding encoding, std::string& bytes)
+{
+	bytes.clear();
+	if (text.empty())
+		return true;
+	if (encoding == ibTextEncoding_UTF8) {
+		bytes = text.ToUtf8();
+		return true;
+	}
+	// ⚠ THE CONVERTER'S OWN BUFFER, not a wxString's mb_str(): that one points into the string it came from, and
+	// over a temporary `wxString(text)` it was gone before it was read — "ab" in UTF-16 came back as two other
+	// letters (2026-10-27).
+	const std::unique_ptr<wxMBConv> conv = ibCreateTextConv(encoding);
+	size_t length = 0;
+	const wxCharBuffer converted = conv->cWC2MB(text.wc_str(), wxNO_LEN, &length);
+	if (length == 0 || length == wxCONV_FAILED)
+		return false;
+	bytes.assign(converted.data(), length);
+	return true;
+}
+
 std::unique_ptr<wxMBConv> ibCreateTextConv(ibTextEncoding encoding)
 {
 	switch (encoding) {

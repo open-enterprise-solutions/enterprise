@@ -67,6 +67,20 @@ class ibValueEnumTextEncoding : public ibValueEnumeration<ibTextEncoding> {
 	}
 };
 
+class ibValueEnumHashFunction : public ibValueEnumeration<ibHashFunction> {
+	public:
+	ibValueEnumHashFunction() : ibValueEnumeration() {}
+
+	// A function is the standard's name, the same in every language - not a catalog entry.
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibHashFunction::ibHashFunction_MD5, ibT("MD5"), ibT("MD5"));
+		AddEnumeration(ibHashFunction::ibHashFunction_SHA1, ibT("SHA1"), ibT("SHA-1"));
+		AddEnumeration(ibHashFunction::ibHashFunction_SHA256, ibT("SHA256"), ibT("SHA-256"));
+		AddEnumeration(ibHashFunction::ibHashFunction_SHA384, ibT("SHA384"), ibT("SHA-384"));
+		AddEnumeration(ibHashFunction::ibHashFunction_SHA512, ibT("SHA512"), ibT("SHA-512"));
+	}
+};
+
 class ibValueEnumHttpMethod : public ibValueEnumeration<ibHttpMethod> {
 	public:
 	ibValueEnumHttpMethod() : ibValueEnumeration() {}

@@ -316,7 +316,7 @@
         "text_files"
       ],
       "signature": "New BinaryData([base64 : string])",
-      "description": "Bytes, held as a value - an image, a PDF, a zip, a file whose content is not text at all. A string would not do: text reads back in an encoding, compares as text, and quietly mangles whatever is not valid in it.\n\nRead(path) takes a file's content whole, Write(path) puts the content into a file, Size() says how many bytes there are. Those three are the whole surface - a binary value has no properties.\n\nTHE CONSTRUCTOR'S STRING IS BASE64, NOT A PATH, which is why reading a file is a method: one argument meaning two things is a file that silently fails to decode. A string that is not strict base64 is refused when the value is built - \"Error initializing object 'BinaryData'\" - and another BinaryData handed to the constructor is copied.\n\nTEXT IS A PROJECTION OF THE BYTES, not their storage: written into a string, a BinaryData shows as base64, and an empty one as \"\". Two of them are EQUAL when they hold the same bytes - the comparison reads the content, not its text - and against anything else it is the text that is compared. ValueIsFilled answers whether there are any bytes at all.\n\nA file that cannot be opened is a refusal, and so is one too large to be held in memory: a part of a file is never handed over as the whole of it.",
+      "description": "Bytes, held as a value - an image, a PDF, a zip, a file whose content is not text at all. A string would not do: text reads back in an encoding, compares as text, and quietly mangles whatever is not valid in it.\n\nRead(path) takes a file's content whole, Write(path) puts the content into a file, Size() says how many bytes there are. Those three are the whole surface - a binary value has no properties.\n\nTHE REST IS GLOBAL FUNCTIONS, as in the reference system: GetBinaryDataFromString and GetStringFromBinaryData turn a text into bytes and back in a TextEncoding, GetBase64StringFromBinaryData and GetBinaryDataFromBase64String write the bytes as base64 and read them back, GetHexStringFromBinaryData and GetBinaryDataFromHexString do the same in hex. A digest of the bytes is DataHashing's.\n\nTHE CONSTRUCTOR'S STRING IS BASE64, NOT A PATH, which is why reading a file is a method: one argument meaning two things is a file that silently fails to decode. A string that is not strict base64 is refused when the value is built - \"Error initializing object 'BinaryData'\" - and another BinaryData handed to the constructor is copied.\n\nTEXT IS A PROJECTION OF THE BYTES, not their storage: written into a string, a BinaryData shows as base64, and an empty one as \"\". Two of them are EQUAL when they hold the same bytes - the comparison reads the content, not its text - and against anything else it is the text that is compared. ValueIsFilled answers whether there are any bytes at all.\n\nA file that cannot be opened is a refusal, and so is one too large to be held in memory: a part of a file is never handed over as the whole of it.",
       "syntax_block": "Bytes = New BinaryData();\nBytes.Read(path);\nMessage(Bytes.Size());\nBytes.Write(otherPath);\n\nSame = New BinaryData(Text);      // the constructor's string is BASE64, never a path",
       "parameters": "base64 - the bytes written as base64, the same form the value shows as text; strict, and anything else is refused. Another BinaryData is copied instead. Left out, the value holds no bytes.",
       "return_descr": "BinaryData.",
@@ -327,6 +327,10 @@
         "cls.BinaryData.Read",
         "cls.BinaryData.Write",
         "cls.TextReader",
+        "fn.GetBinaryDataFromString",
+        "fn.GetBase64StringFromBinaryData",
+        "fn.GetHexStringFromBinaryData",
+        "cls.DataHashing",
         "guide.textFiles"
       ],
       "reviewed": false
@@ -415,7 +419,7 @@
         "text_files"
       ],
       "signature": "TextEncoding.UTF8, .UTF16, .ANSI, .OEM, .System",
-      "description": "How bytes spell text, said as a value: TextEncoding has five members - UTF8, UTF16, ANSI, OEM and System - and a member is written TextEncoding.<Name>. A script never builds one, and the string \"utf-8\" is not one either: the enumeration is there instead of it.\n\nIT IS READ WHEREVER BYTES MEET TEXT - New TextReader(path, encoding) and TextReader.Open, New TextWriter(path, encoding, append) and TextWriter.Open. Left out, or given empty, it is UTF8.\n\nUTF-8 IS STRICT: bytes that are not UTF-8 are a refusal, not a text with holes in it. On reading, a byte-order mark at the head of a UTF-8 or UTF-16 file is read as a mark and never handed over as text, and a UTF-16 mark says which end comes first; on writing, UTF-16 gets a mark and UTF-8 gets none.\n\nANSI, OEM AND System ARE THE MACHINE'S OWN, ASKED OF IT rather than assumed, so a base moved from one machine to another reads the files of the machine it runs on. On Windows they are code pages taken by NUMBER: ANSI and System are both the system's ANSI page, OEM is the console's. Away from Windows there is only one such encoding - the current locale's - and all three of them are it. A byte a page has no character for, and a character it has no bytes for, are refusals.",
+      "description": "How bytes spell text, said as a value: TextEncoding has five members - UTF8, UTF16, ANSI, OEM and System - and a member is written TextEncoding.<Name>. A script never builds one, and the string \"utf-8\" is not one either: the enumeration is there instead of it.\n\nIT IS READ WHEREVER BYTES MEET TEXT - New TextReader(path, encoding) and TextReader.Open, New TextWriter(path, encoding, append) and TextWriter.Open, GetBinaryDataFromString(text, encoding) and GetStringFromBinaryData(data, encoding). Left out, or given empty, it is UTF8.\n\nUTF-8 IS STRICT: bytes that are not UTF-8 are a refusal, not a text with holes in it. On reading, a byte-order mark at the head of a UTF-8 or UTF-16 file is read as a mark and never handed over as text, and a UTF-16 mark says which end comes first; on writing, UTF-16 gets a mark and UTF-8 gets none.\n\nANSI, OEM AND System ARE THE MACHINE'S OWN, ASKED OF IT rather than assumed, so a base moved from one machine to another reads the files of the machine it runs on. On Windows they are code pages taken by NUMBER: ANSI and System are both the system's ANSI page, OEM is the console's. Away from Windows there is only one such encoding - the current locale's - and all three of them are it. A byte a page has no character for, and a character it has no bytes for, are refusals.",
       "syntax_block": "Reader = New TextReader(path, TextEncoding.ANSI);\nWriter = New TextWriter(path, TextEncoding.UTF16);",
       "parameters": "",
       "return_descr": "",
@@ -427,7 +431,8 @@
         "enum.TextEncoding.ANSI",
         "cls.TextReader",
         "cls.TextWriter",
-        "guide.textFiles"
+        "guide.textFiles",
+        "fn.GetBinaryDataFromString"
       ],
       "reviewed": false
     },

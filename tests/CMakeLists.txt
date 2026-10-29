@@ -181,6 +181,7 @@ add_executable(oes_tests
     test_programFolder.cpp
     test_md5.cpp
     test_sha256.cpp
+    test_dataHashing.cpp
     test_stringUtils.cpp
     test_guid.cpp
     test_dbTransaction.cpp

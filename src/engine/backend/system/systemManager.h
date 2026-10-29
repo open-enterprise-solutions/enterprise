@@ -149,6 +149,15 @@ public:
 	static ibString SerializeValue(const ibValue& cData);
 	static ibValue  DeserializeValue(const ibString& strJson);
 
+	//--- Binary data: bytes from a text and back, written as base64 and as hex - the reference system's six. A
+	// digest is DataHashing's (valueDataHashing.h); these are what its sum is read and sent in.
+	static ibValue  GetBinaryDataFromString(const ibString& text, ibTextEncoding encoding = ibTextEncoding_UTF8, bool byteOrderMark = false);
+	static ibString GetStringFromBinaryData(const ibValue& data, ibTextEncoding encoding = ibTextEncoding_UTF8);
+	static ibString GetBase64StringFromBinaryData(const ibValue& data);
+	static ibValue  GetBinaryDataFromBase64String(const ibString& text);
+	static ibString GetHexStringFromBinaryData(const ibValue& data);
+	static ibValue  GetBinaryDataFromHexString(const ibString& text);
+
 	// (⛔ NO MESSAGE CAPTURE HERE. Getting the lines a run printed is not a new mechanism: the
 	//  debug channel already carries messages from a running application to whoever is attached —
 	//  `CommandId_MessageFromServer`, sent by ibDebuggerServer::SendErrorToClient. It looked like

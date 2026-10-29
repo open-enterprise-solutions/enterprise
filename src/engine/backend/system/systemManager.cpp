@@ -124,7 +124,13 @@ enum
 	// everything else — the ordinal IS the method index, so a new name goes at the END or every
 	// later case answers to the wrong verb.
 	enSerializeValue,
-	enDeserializeValue
+	enDeserializeValue,
+	enGetBinaryDataFromString,
+	enGetStringFromBinaryData,
+	enGetBase64StringFromBinaryData,
+	enGetBinaryDataFromBase64String,
+	enGetHexStringFromBinaryData,
+	enGetBinaryDataFromHexString
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -251,6 +257,13 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	//--- …and value-as-text last, matching the enSerializeValue / enDeserializeValue tail above.
 	helper.AppendFunc(ibT("SerializeValue"), 1, ibT("SerializeValue(value : any)"));
 	helper.AppendFunc(ibT("DeserializeValue"), 1, ibT("DeserializeValue(json : string)"));
+	//--- …then bytes, matching the enGetBinaryDataFromString..enGetBinaryDataFromHexString tail above.
+	helper.AppendFunc(ibT("GetBinaryDataFromString"), 3, ibT("GetBinaryDataFromString(text : string, encoding : TextEncoding, byteOrderMark : boolean)"));
+	helper.AppendFunc(ibT("GetStringFromBinaryData"), 2, ibT("GetStringFromBinaryData(data : BinaryData, encoding : TextEncoding)"));
+	helper.AppendFunc(ibT("GetBase64StringFromBinaryData"), 1, ibT("GetBase64StringFromBinaryData(data : BinaryData)"));
+	helper.AppendFunc(ibT("GetBinaryDataFromBase64String"), 1, ibT("GetBinaryDataFromBase64String(text : string)"));
+	helper.AppendFunc(ibT("GetHexStringFromBinaryData"), 1, ibT("GetHexStringFromBinaryData(data : BinaryData)"));
+	helper.AppendFunc(ibT("GetBinaryDataFromHexString"), 1, ibT("GetBinaryDataFromHexString(text : string)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -259,6 +272,23 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 #include "backend/backend_exception.h"   // a call this dispatcher itself refuses (Date with two arguments)
 
 #include "backend/appData.h"
+
+namespace {
+
+// A TextEncoding value and nothing else, UTF8 when the argument is left out: a string that "means" one is what the
+// enumeration is there instead of.
+ibTextEncoding TextEncodingAt(ibValue** paParams, const long lSizeArray, const long at)
+{
+	if (lSizeArray <= at || paParams[at]->GetType() == ibValueTypes::TYPE_EMPTY)
+		return ibTextEncoding_UTF8;
+	const ibTextEncoding encoding = paParams[at]->GetType() == ibValueTypes::TYPE_ENUM
+		? paParams[at]->ConvertToEnumValue<ibTextEncoding>() : ibTextEncoding();
+	if (encoding < ibTextEncoding_UTF8 || encoding > ibTextEncoding_System)
+		ibBackendCoreException::Error(_("The encoding is a TextEncoding value - TextEncoding.UTF8, for one"));
+	return encoding;
+}
+
+} // namespace
 
 bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
@@ -396,6 +426,18 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			return true;
 		case enSerializeValue: pvarRetValue = SerializeValue(*paParams[0]); return true;
 		case enDeserializeValue: pvarRetValue = DeserializeValue(paParams[0]->GetString()); return true;
+			//--- Binary data:
+		case enGetBinaryDataFromString:
+			pvarRetValue = GetBinaryDataFromString(paParams[0]->GetString(), TextEncodingAt(paParams, lSizeArray, 1),
+				lSizeArray > 2 && paParams[2]->GetBoolean());
+			return true;
+		case enGetStringFromBinaryData:
+			pvarRetValue = GetStringFromBinaryData(*paParams[0], TextEncodingAt(paParams, lSizeArray, 1));
+			return true;
+		case enGetBase64StringFromBinaryData: pvarRetValue = GetBase64StringFromBinaryData(*paParams[0]); return true;
+		case enGetBinaryDataFromBase64String: pvarRetValue = GetBinaryDataFromBase64String(paParams[0]->GetString()); return true;
+		case enGetHexStringFromBinaryData: pvarRetValue = GetHexStringFromBinaryData(*paParams[0]); return true;
+		case enGetBinaryDataFromHexString: pvarRetValue = GetBinaryDataFromHexString(paParams[0]->GetString()); return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

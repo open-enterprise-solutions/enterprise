@@ -7,6 +7,7 @@
 #include "core/memory/memoryBuffer.h"
 
 #include <memory>
+#include <string>
 #include <vector>
 
 class wxFFile;
@@ -37,6 +38,10 @@ BACKEND_API std::unique_ptr<wxMBConv> ibCreateTextConv(ibTextEncoding encoding);
 // that cannot be read, an answer that is not text - is the caller's sentence. The one door for a file's
 // content and for a body that came over the wire.
 BACKEND_API bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding encoding, ibString& text);
+
+// …and the other way: the text spelled in bytes, with no byte-order mark. False when a character has no bytes in
+// the encoding - a text is not written with a question mark where a letter should stand.
+BACKEND_API bool ibTextToBytes(const ibString& text, ibTextEncoding encoding, std::string& bytes);
 
 void ibValueTextReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 

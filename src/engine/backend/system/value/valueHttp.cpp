@@ -4,7 +4,7 @@
 #include "backend/compiler/enumUnit.h"            // ConvertToEnumValue<> is declared in value.h and DEFINED here
 #include "backend/system/systemManagerEnum.h"
 #include "backend/system/value/valueBinaryData.h"
-#include "backend/system/value/valueTextFile.h"   // ibCreateTextConv - the one door from a TextEncoding to a converter
+#include "backend/system/value/valueTextFile.h"   // ibTextToBytes / ibTextFromBytes - the doors between a TextEncoding and bytes
 
 #include "core/net/httpClient.h"                   // the transport - the core's, with its TLS
 #include "core/utils/base64.h"                     // ibBase64 - the user and password of Basic, in bytes
@@ -55,22 +55,13 @@ std::string ibHttpUtf8(const ibString& text)
 }
 
 // text -> bytes. No byte-order mark: a body is not a file, and a mark in front of JSON is a parse error at the
-// other end.
+// other end. The same door GetBinaryDataFromString spells a text through.
 std::string ibHttpEncode(const ibString& text, ibTextEncoding encoding)
 {
-	if (text.empty())
-		return std::string();
-	if (encoding == ibTextEncoding_UTF8)
-		return ibHttpUtf8(text);
-	const std::unique_ptr<wxMBConv> conv = ibCreateTextConv(encoding);
-	// ⚠ THE CONVERTER'S OWN BUFFER, not a wxString's mb_str(): that one points into the string it came from, and
-	// over a temporary `wxString(text)` it was gone before it was read — "ab" in UTF-16 came back as two other
-	// letters (2026-10-27).
-	size_t length = 0;
-	const wxCharBuffer bytes = conv->cWC2MB(text.wc_str(), wxNO_LEN, &length);
-	if (length == 0 || length == wxCONV_FAILED)
+	std::string bytes;
+	if (!ibTextToBytes(text, encoding, bytes))
 		ibBackendCoreException::Error(_("HTTPRequest: the text cannot be written in this encoding"));
-	return std::string(bytes.data(), length);
+	return bytes;
 }
 
 // bytes -> text, or a refusal: bytes that are not text in this encoding are not handed over as something else.
