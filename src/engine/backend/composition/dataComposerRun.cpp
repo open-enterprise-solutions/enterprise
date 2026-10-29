@@ -427,11 +427,17 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// its figure.
 	{
 		const std::vector<ibString> shown = ShownFor(output);
+		// …AND WHERE NOTHING IS CHOSEN AND THE READ IS THE STAR, WHAT IS READ IS WHAT IS SHOWN — asked as
+		// WhenNothingChosen asks it: a list, and a report that folds by nothing (a bare question through
+		// compose_run). Every field of it was read and none was shown. A report that folds answers "nothing chosen"
+		// with its headings alone, and there an empty table — a reader's too — blanks the details as before.
+		const bool readsStar = shown.empty()
+			&& (ReadsEveryField() || ibComposerGroupingFieldsOf(output).empty());
 		info.m_shown.assign(schema.size(), true);
 		for (size_t i = 0; i < schema.size(); ++i) {
 			if (schema[i].m_role != ibQueryLowering::ibColumnRole::Detail)
 				continue;
-			bool shows = false;
+			bool shows = readsStar;
 			for (const ibString& name : shown)
 				if (ibComposerColumnAnswersTo(schema[i], name)) { shows = true; break; }
 			// …and a column of something this base does not use is not shown, whoever chose it — the

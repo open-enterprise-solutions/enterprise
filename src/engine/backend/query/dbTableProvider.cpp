@@ -204,6 +204,20 @@ ibString SelfReferenceField(const ibBackendQueryable* queryable)
 	return keys.empty() ? ibString() : ReferenceFieldOf(keys.front());
 }
 
+// ⭐ THE PARENT COLUMN AS THE SOURCE BEING READ NAMES IT. A page carries the list's own — its main table's; a list over
+// an arbitrary query reads the QUERY, whose columns are its outputs, and the table's field is not one of them (`-206
+// Column unknown FLD1013_RRREF` under `FROM q_sub0`, 2026-10-28). Found by name, as the list's sort already is; a query
+// that does not select it is refused in the author's words — the query is theirs, `q_sub0` is the wrapper's.
+static const ibBackendQueryColumn* HierarchyColumnOf(const ibBackendQueryable* queryable, const ibBackendQueryColumn* listed)
+{
+	if (listed == nullptr || queryable->OwnsColumn(listed))
+		return listed;
+	if (const ibBackendQueryColumn* const read = queryable->ResolveColumnByName(listed->GetName()))
+		return read;
+	ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+		ibString::Format(_("the list's query does not select '%s', and a hierarchical view needs it"), listed->GetName()));
+}
+
 // (The "does this column admit a reference value" check moved to the column-layout tier —
 //  ibColumnCodec::HasReference, query/columnLayout.h. Callers here use it directly.)
 
@@ -5733,7 +5747,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				innerWhere = AndFold(innerWhere, ibMetaIRBuilder::BuildPredicateExpr(queryable, spec.m_predicate, mainTable));
 				if (req.m_hierarchyFilter && !req.m_flatScan)
 					innerWhere = AndFold(innerWhere, ibMetaIRBuilder::BuildParentRefPredicate(queryable,
-						ReferenceFieldOf(req.m_hierarchyCol), req.m_hierarchyKey, req.m_isTopLevel, mainTable));
+						ReferenceFieldOf(HierarchyColumnOf(queryable, req.m_hierarchyCol)), req.m_hierarchyKey, req.m_isTopLevel, mainTable));
 				ibQueryRelPtr source = SourceRelationOf(queryable, mainTable);
 				if (innerWhere)
 					source = ibFilter(source, innerWhere);
@@ -6001,7 +6015,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		if (req.m_hierarchyFilter && !req.m_flatScan && !windowFirst) {
 			// The envelope carries the parent COLUMN; the physical field derives HERE
 			// — the field machinery is the provider's job, not the consumer's.
-			const ibString parentField = ReferenceFieldOf(req.m_hierarchyCol);
+			const ibString parentField = ReferenceFieldOf(HierarchyColumnOf(queryable, req.m_hierarchyCol));
 			q.Where(ibMetaIRBuilder::BuildParentRefPredicate(
 				queryable, parentField, req.m_hierarchyKey, req.m_isTopLevel, mainQual));
 		}

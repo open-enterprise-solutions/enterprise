@@ -464,13 +464,8 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 			db_query->Commit();
 		txGuard.m_done = true;
 #endif
-		if (read) {
+		if (read)
 			m_configMetadata = published;
-			// …and the sessions to come get it: what the database publishes now is the base's active configuration —
-			// this very copy, read once. The sessions working in the one before keep it.
-			if (m_applicationInstance != nullptr && published->IsConfigOpen())
-				m_applicationInstance->ReplaceActiveMetaData(published);
-		}
 		Modify(false);
 
 		// One-time flag: the very first apply on a fresh DB runs the "create new database" path (DROP +
@@ -478,6 +473,15 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 		// blob is committed — flips the next apply to configNew=0; otherwise every Update re-DROPs sys_const
 		// and a constant read mid-cycle hits its just-dropped column (FB -206 "column unknown FLDnnnn_TYPE").
 		m_configNew = false;
+
+		// …and the sessions to come get what the database publishes now: the base reads it as its own. This copy is the
+		// designer's, made with its token — handed to the base, it took the designer's compile cache to the runtime
+		// (Max, 2026-10-28: "the designer's metadata is held only by its session; the rest hold the main one"). Raised
+		// last, with the apply's own state written: the apply is done, the base still works in the one before.
+		if (read && published->IsConfigOpen() && m_applicationInstance != nullptr
+			&& !m_applicationInstance->ReplaceActiveMetaData())
+			ibBackendCoreException::Error(_("The configuration was applied, but the base could not read it: the sessions "
+				"to come work in the one before."));
 	}
 	else {
 		// ⭐ THE PAIR IS HOW THE LATCH IS CUT, and that is the FIRST call's whole job: `Modify(false)`

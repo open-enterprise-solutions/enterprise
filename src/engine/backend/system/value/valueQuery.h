@@ -107,7 +107,7 @@ public:
 	// PUBLIC because the bind function that names the property is a free one (the static member
 	// table is shared, so it cannot be a member) — and naming the index in both places beats
 	// writing a bare 0 in one of them.
-	enum { enPropTempTablesManager = 0 };
+	enum { enPropTempTablesManager = 0, enPropText = 1 };
 
 private:
 

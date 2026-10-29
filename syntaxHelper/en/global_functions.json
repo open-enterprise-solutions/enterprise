@@ -1411,11 +1411,11 @@
         "global_functions"
       ],
       "signature": "Format(value : any, format : string)",
-      "description": "A value as text, under an explicit format — String gives the platform's default appearance, Format gives the one you state. The format is a list of `CODE=value` pairs separated by `;`.\n\nNumbers: ND (total digits), NFD (digits after the point), NDS (decimal separator), NGS (group separator), NG (group size), NZ (what a zero prints as). Booleans: BT and BF (the text for true and for false). Dates: DF (the date pattern), DE (what an empty date prints as).",
+      "description": "A value as text, under an explicit format — String gives the platform's default appearance, Format gives the one you state. The format is a list of `CODE=value` pairs separated by `;`.\n\nNumbers: ND (total digits), NFD (digits after the point), NDS (decimal separator), NGS (group separator), NG (group size), NZ (what a zero prints as), NLZ (pad the whole part with zeros up to ND − NFD digits). Booleans: BT and BF (the text for true and for false). Dates: DF (the date pattern), DE (what an empty date prints as), DLF (a preset used when there is no DF: D, DD, T, DT, DDT), L (the language month and day names are said in, such as ru or uk_UA; the base's language when absent). The codes are written in Latin letters.\n\nThe letters of a date pattern: yyyy or yy the year, MM or M the month (MMM short, MMMM full; after a day the genitive in ru and uk), dd or d the day (ddd and dddd the weekday), HH or H the hours (hh or h on a 12-hour clock, tt AM/PM), mm or m the minutes, ss or s the seconds; text in single quotes stands as written. **MM is the month, mm the minutes.**",
       "syntax_block": "Format(value : any, format : string)",
       "parameters": "value — the value. format — the format string, e.g. \"NFD=2; NGS= \".",
       "return_descr": "String.",
-      "example": "Message(Format(1250.5, \"NFD=2\"));\nMessage(Format(0, \"NZ=-\"));\nMessage(Format(True, \"BT=yes; BF=no\"));",
+      "example": "Message(Format(1250.5, \"NFD=2\"));\nMessage(Format(0, \"NZ=-\"));\nMessage(Format(True, \"BT=yes; BF=no\"));\nMessage(Format(CurrentDate(), \"DF=dd.MM.yyyy HH:mm\"));",
       "availability": "Thin client, Server",
       "see_also": ["fn.String", "fn.Number", "fn.Tstr"],
       "reviewed": true

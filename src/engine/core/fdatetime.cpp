@@ -198,6 +198,20 @@ const char* const s_monthNames[12] = {
 	ibTRANSLATE_IN_CONTEXT("month", "November"),
 	ibTRANSLATE_IN_CONTEXT("month", "December")
 };
+const char* const s_monthGenitiveNames[12] = {
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "January"),
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "February"),
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "March"),
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "April"),
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "May"),
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "June"),
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "July"),
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "August"),
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "September"),
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "October"),
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "November"),
+	ibTRANSLATE_IN_CONTEXT("month, genitive", "December")
+};
 const char* const s_monthShortNames[12] = {
 	ibTRANSLATE_IN_CONTEXT("month, short", "Jan"),
 	ibTRANSLATE_IN_CONTEXT("month, short", "Feb"),
@@ -232,24 +246,29 @@ const char* const s_weekDayShortNames[7] = {
 };
 } // namespace
 
-ibString ibDateTime::MonthName(unsigned month)
+ibString ibDateTime::MonthName(unsigned month, const ibDictionary* dictionary)
 {
-	return month >= 1 && month <= 12 ? ibGetTranslation(ibString(s_monthNames[month - 1]), ibT("month")) : ibString();
+	return month >= 1 && month <= 12 ? ibGetTranslation(dictionary, ibString(s_monthNames[month - 1]), ibT("month")) : ibString();
 }
 
-ibString ibDateTime::MonthShortName(unsigned month)
+ibString ibDateTime::MonthGenitiveName(unsigned month, const ibDictionary* dictionary)
 {
-	return month >= 1 && month <= 12 ? ibGetTranslation(ibString(s_monthShortNames[month - 1]), ibT("month, short")) : ibString();
+	return month >= 1 && month <= 12 ? ibGetTranslation(dictionary, ibString(s_monthGenitiveNames[month - 1]), ibT("month, genitive")) : ibString();
 }
 
-ibString ibDateTime::WeekDayName(unsigned weekDay)
+ibString ibDateTime::MonthShortName(unsigned month, const ibDictionary* dictionary)
 {
-	return weekDay >= 1 && weekDay <= 7 ? ibGetTranslation(ibString(s_weekDayNames[weekDay - 1]), ibT("weekday")) : ibString();
+	return month >= 1 && month <= 12 ? ibGetTranslation(dictionary, ibString(s_monthShortNames[month - 1]), ibT("month, short")) : ibString();
 }
 
-ibString ibDateTime::WeekDayShortName(unsigned weekDay)
+ibString ibDateTime::WeekDayName(unsigned weekDay, const ibDictionary* dictionary)
 {
-	return weekDay >= 1 && weekDay <= 7 ? ibGetTranslation(ibString(s_weekDayShortNames[weekDay - 1]), ibT("weekday, short")) : ibString();
+	return weekDay >= 1 && weekDay <= 7 ? ibGetTranslation(dictionary, ibString(s_weekDayNames[weekDay - 1]), ibT("weekday")) : ibString();
+}
+
+ibString ibDateTime::WeekDayShortName(unsigned weekDay, const ibDictionary* dictionary)
+{
+	return weekDay >= 1 && weekDay <= 7 ? ibGetTranslation(dictionary, ibString(s_weekDayShortNames[weekDay - 1]), ibT("weekday, short")) : ibString();
 }
 
 void ibDateTime::ToParts(ibDateTimeParts& parts) const noexcept

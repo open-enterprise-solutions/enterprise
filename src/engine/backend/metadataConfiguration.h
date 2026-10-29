@@ -12,6 +12,7 @@
 
 class ibDebuggerServer;
 class ibDebuggerClient;
+class ibDataNode;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 // activeMetaData — the configuration the calling thread's session works in: its own reference
@@ -176,6 +177,13 @@ public:
 	bool LoadConfigFromFile(const ibString& strFileName);
 	bool SaveConfigToFile(const ibString& strFileName);
 
+	// …into a directory of files, one a part (ibFileProvider) — and as the set of those files itself, for a directory on
+	// another machine: a thin designer's, the set travelling as one node.
+	bool LoadConfigFromFiles(const ibString& directory);
+	bool LoadConfigFromFiles(const ibDataNode& files);
+	bool SaveConfigToFiles(const ibString& directory);
+	bool SaveConfigToFiles(ibDataNode& files);
+
 public:
 
 	// Called by the appData fabric right after construction (OnInitialize)
@@ -311,12 +319,10 @@ public:
 	//get config type
 	virtual ibConfigType GetConfigType() const { return ibConfigType::ibConfigType_Load; };
 
-	// The compile-value cache lives on EVERY designer-side config — not only the designer's active edit config
-	// (Storage) but also a config browsed read-only from the DB / file (which is THIS inner baseline). Its
-	// metaobjects need the cache to build their forms: the owner + the seated source object come THROUGH it, so
-	// without it an object form (catalog / document / list / choice) opens sourceless and crashes. Enterprise
-	// runtime never opens the metadata tree (only objects execute) → nullptr. Regression from the per-config
-	// image (ibMetaImage): the cache had narrowed to Storage only.
+	// ⭐ THE COMPILE CACHE IS A DESIGNER'S — on a configuration made for a designer's session: the one it edits and its
+	// copy of the database's. Asked of the token it was made with, not of the thread that builds it: an apply builds
+	// on the designer's thread, and the base's own configuration, the one the runtime works in, carries none — given
+	// one, it handed the runtime the designer's one instance of a form ("duplicate identifier Controls", 2026-10-28).
 	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() override;
 
 protected:
@@ -331,10 +337,13 @@ public:
 	// which designer edits are compared). Both gate on the
 	// ib::AppDataCtorToken — appData mints once, Storage forwards the
 	// token it received when constructing its inner baseline. The token names
-	// the base it is made for (GetApplicationInstance).
+	// the base it is made for (GetApplicationInstance) and the session it is made for (GetSessionKind).
 	explicit ibMetaDataConfiguration(ib::AppDataCtorToken owner);
 
 protected:
+
+	// What it was made with — its base, and the session it was made for; a new copy is made with it.
+	const ib::AppDataCtorToken m_owner;
 
 	ibGuid m_metaGuid;
 	bool m_configNew;
@@ -458,13 +467,10 @@ private:
 	bool LoadSequenceFromBuffer(const ibReaderMemory& reader);
 	bool SaveSequenceToBuffer(ibWriterMemory& writer);
 
-	// THE DATABASE'S COPY — what IsConfigSave compares against and what an apply diffs from. Shared: an apply reads
-	// the published configuration into a NEW one and hands it to the base as its active configuration, so the copy
-	// before is never re-read in place under the sessions working in it (OnAfterSaveDatabase).
+	// THE DATABASE'S COPY — what IsConfigSave compares against and what an apply diffs from. The designer's, made with
+	// its token: an apply reads the published configuration into a NEW one, and the base reads its own
+	// (ibApplicationInstance::ReplaceActiveMetaData) — the designer's copy is never handed to the runtime.
 	std::shared_ptr<ibMetaDataConfiguration> m_configMetadata;
-
-	// What a new copy is made with — the token this Storage was made with, and with it its base.
-	const ib::AppDataCtorToken m_owner;
 
 	// The config-save STRUCTURE + SEED engine — METADATA-AGNOSTIC: it works only on snapshots this Storage
 	// hands it (built via ContributeTables on the edited config + the saved baseline). On save the Storage

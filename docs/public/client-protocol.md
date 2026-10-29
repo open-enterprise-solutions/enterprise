@@ -194,7 +194,8 @@ A table's `fetch` gives rows, each with `Container`, `Group` (a group's caption)
 by column id: `Text`, `Checked` for a flag, `Number`, `Value` when the cell takes an edit; its look, when the server's
 model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as a form's colours), `Bold`, `Italic`,
 `Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`). In the designer (`login` `Mode` 2)
-a table reads no rows — its `fetch` is refused, and a designer's client does not ask.
+a table reads no rows — its `fetch` is refused, and a designer's client does not ask. A read that fails is refused
+`Failed` in the base's own words, and the frame carries the same message for the person.
 
 From protocol 4 a fetch from the start (`Direction` 0) may name `Before`, the rows wanted ahead of the row it starts
 at; the answer gives those rows first and says in `Before` how many came. A server before protocol 4 gives none: the

@@ -9,7 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "core/description/choiceLinkDescription.h"
-#include "core/serialize/jsonProvider.h"
+#include "core/serialize/provider/jsonProvider.h"
 
 namespace {
 

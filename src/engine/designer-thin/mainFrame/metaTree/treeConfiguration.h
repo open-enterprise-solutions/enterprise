@@ -218,6 +218,10 @@ public:
 	bool ApplyConfiguration() const;
 	bool LoadConfigFromFile(const wxString& strFileName) const;
 	bool SaveConfigToFile(const wxString& strFileName) const;
+	// …and as a directory of files, one a part (ibFileProvider): read and written here, where the directory is, the
+	// files travelling to the server and back as one node. A directory that is no export, or holds other files, refuses.
+	bool LoadConfigFromFiles(const wxString& directory) const;
+	bool SaveConfigToFiles(const wxString& directory) const;
 };
 
 #endif

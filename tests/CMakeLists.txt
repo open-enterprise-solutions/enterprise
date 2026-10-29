@@ -79,8 +79,12 @@ add_executable(oes_tests
     test_dataNode.cpp
     test_dataMover.cpp
     test_pointInTime.cpp
+    test_fileProvider.cpp
     test_jsonProvider.cpp
     test_valueJson.cpp
+    test_valueXml.cpp
+    test_xmlEncoding.cpp
+    test_xmlProvider.cpp
     test_queryRenderer.cpp
     test_queryStringConcat.cpp
     test_queryLifecycle.cpp

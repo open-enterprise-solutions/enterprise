@@ -23,7 +23,7 @@
 #include <vector>
 
 #include "core/fstring.h"
-#include "core/serialize/jsonProvider.h"
+#include "core/serialize/provider/jsonProvider.h"
 
 // ONE SERVER'S STATE — as the cluster holds it (ibClusterWorker) and the tray shows it.
 enum class ibClusterState {

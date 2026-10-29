@@ -22,7 +22,7 @@
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_OPTION, "d",  "dir",          "Server folder: server.conf, server.key and a folder per base (default: server beside the executable)", wxCMD_LINE_VAL_STRING, 0 },
-	{ wxCMD_LINE_OPTION, "lc", "locale",       "The platform's locale for a base that names none (default: backend.conf's Locale, else the system's)", wxCMD_LINE_VAL_STRING, 0 },
+	{ wxCMD_LINE_OPTION, "lc", "locale",       "The platform's locale for a base that names none (default: backend.conf's Locale, else English)", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_OPTION, "sp", "set-password", "Seal a password into the config: <base>/Password or <base>/IbPassword, typed at the keyboard", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_OPTION, "w",  "worker",       "Serve one base for the cluster that started this server (appcluster): its port said on standard output, stopped by 'stop' on standard input or by its closing", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_OPTION, "r",  "route",        "Which of the base's servers this one is (server.conf's Processes, from 1): its sessions' tokens end in it, and the cluster carries their clients back to it", wxCMD_LINE_VAL_NUMBER, 0 },
@@ -129,7 +129,7 @@ int main(int argc, char** argv)
 	if (parser.Found(wxT("again")))
 		ibTechJournal::SkipErrorDump();
 
-	// The locale left out is the platform's own: a base's, then backend.conf's Locale, then the system's (InitLocale).
+	// The locale left out is the platform's own: a base's, then backend.conf's Locale, then English (InitLocale).
 	// wxCmdLineParser's own: it writes what it found into wx strings.
 	wxString folder = ibServerConfig::DefaultFolder(), locale, sealTarget, workerBase;
 	parser.Found(wxT("dir"), &folder);

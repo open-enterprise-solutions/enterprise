@@ -15,6 +15,7 @@
 
 #include "clipboardLock.h"   // the Open/Close pair, taken as a guard — the desktop's
 #include "core/fileKind.h"   // ibFileKindOf, ibFileFilter — the file a data processor or a report is kept in
+#include "core/serialize/provider/fileProvider.h"   // ibFileProvider — the configuration as a directory of files, written here
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"   // a module's tab — the line a stop shows
 #include "frmclient/artProvider/artProvider.h"
 #include "frmclient/backend/metaCollection/metaObjectMetadata.h"      // the objects a modal editor of its menu is over
@@ -980,4 +981,56 @@ bool ibConfigurationTree::SaveConfigToFile(const wxString& strFileName) const
 	return uploaded
 		&& Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Unload, args)
 		&& frame->DownloadFile(file, strFileName);
+}
+
+// THE DIRECTORY IS THIS COMPUTER'S, the configuration the server's: the files the export names are read here, sent up as
+// one node in a file of their own (the binary form), and read in there as Load reads a configuration's file.
+bool ibConfigurationTree::LoadConfigFromFiles(const wxString& directory) const
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	ibDataNode files;
+	ibMemoryBuffer bytes;
+	if (frame == nullptr || !ibFileProvider::Collect(directory, files) || !ibBinaryProvider().Write(files, bytes))
+		return false;
+
+	const wxString local = wxFileName::CreateTempFileName(wxT("oes"));
+	wxFile out(local, wxFile::write);
+	const bool kept = out.IsOpened() && out.Write(bytes.GetData(), bytes.GetDataLen()) == bytes.GetDataLen();
+	out.Close();
+	wxString file;
+	const bool uploaded = kept && frame->UploadFile(local, file);
+	wxRemoveFile(local);
+	if (!uploaded)
+		return false;
+
+	ibProtocolNode args;
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::File, file);
+	return Command(ibProtocol::ibSchema::ibMetaData::ibCommand::LoadFiles, args);
+}
+
+// …and written there: the server lays the configuration out as files into a file uploaded empty, it is taken down, and
+// its files are published into the directory the person chose (ibFileProvider::Publish).
+bool ibConfigurationTree::SaveConfigToFiles(const wxString& directory) const
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	const wxString local = frame != nullptr ? wxFileName::CreateTempFileName(wxT("oes")) : wxString();
+	if (local.IsEmpty())
+		return false;
+
+	wxString file;
+	ibProtocolNode args;
+	ibMemoryBuffer bytes;
+	if (frame->UploadFile(local, file)) {
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::File, file);
+		if (Command(ibProtocol::ibSchema::ibMetaData::ibCommand::UnloadFiles, args) && frame->DownloadFile(file, local)) {
+			wxFile in(local);
+			const wxFileOffset length = in.IsOpened() ? in.Length() : wxInvalidOffset;
+			if (length != wxInvalidOffset && in.Read(bytes.GetWriteBuf(length), length) == length)
+				bytes.UngetWriteBuf(length);
+		}
+	}
+	wxRemoveFile(local);
+
+	ibDataNode files;
+	return bytes.GetDataLen() != 0 && ibBinaryProvider().Read(bytes, files) && ibFileProvider::Publish(files, directory);
 }

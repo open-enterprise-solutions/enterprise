@@ -48,6 +48,11 @@ bool ibCompositionCompare(const ibValue& cell, const ibString& op, const ibValue
 	return true;   // unknown operator → do not hide anything over a line nobody can read
 }
 
+ibString ibComposerContainsPattern(const ibString& value)
+{
+	return ibT("%") + value + ibT("%");
+}
+
 // ⭐ THE SAME COMPARISON, ASKED WITH THE KIND IT IS. A stored condition holds an ibComparisonKind,
 // not a spelling, and the string pair that used to translate between them is gone (there was an
 // inverse map that read "IN" back as Equal — see list-settings.md § 5a). So the row-side comparison
@@ -63,7 +68,7 @@ bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind, const ibVa
 	case ibComparisonKind_Less:         return cell <  value;
 	case ibComparisonKind_LessEqual:    return cell <= value;
 	case ibComparisonKind_Contains:     return ibCompositionCompare(cell, ibT("LIKE"),
-	                                        ibValue(ibT("%") + value.GetString() + ibT("%")));
+	                                        ibValue(ibComposerContainsPattern(value.GetString())));
 	// WHETHER THERE IS A VALUE — the cell alone; NULL, an empty reference, "", 0, an empty date and False are none.
 	case ibComparisonKind_Filled:       return !cell.IsEmpty();
 	case ibComparisonKind_NotFilled:    return cell.IsEmpty();

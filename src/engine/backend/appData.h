@@ -616,9 +616,10 @@ public:
 	static class ibMetaDataConfigurationBase* GetActiveMetaData() { return GetActiveMetaData(Get()); }
 	static class ibMetaDataConfigurationBase* GetActiveMetaData(const ibApplicationInstance* applicationInstance);
 
-	// The active configuration replaced — by the one handed in: the designer's apply hands in what the database now
-	// publishes. The sessions working in the old one keep it; it goes with the last of them.
-	void ReplaceActiveMetaData(std::shared_ptr<class ibMetaDataConfigurationBase> metaData);
+	// The active configuration replaced — the base reads what the database now publishes, as its own (the designer's
+	// apply asks it to; the designer's copy is the designer's). The sessions working in the old one keep it; it goes
+	// with the last of them. False when the database's copy could not be read: the old one stays.
+	bool ReplaceActiveMetaData();
 
 	// Fabric — the configuration the application runs, put in m_activeMetaData, loaded and run: the base's opening
 	// makes it, before any session is let in. Returns false if OnInitialize or the run failed.
@@ -673,6 +674,13 @@ public:
 	}
 
 private:
+
+	// …the replacement itself — the one handed in put in m_activeMetaData, the one before let go; the public
+	// ReplaceActiveMetaData() hands in what it read from the database, a test — a configuration made in memory.
+	void ReplaceActiveMetaData(std::shared_ptr<class ibMetaDataConfigurationBase> metaData);
+#ifdef OES_TESTING
+	friend struct ActiveMetaDataAccess;
+#endif
 
 	// Build the absolute path for the .olg directory:
 	//   - a Firebird base   → <m_strFile>/oeslog

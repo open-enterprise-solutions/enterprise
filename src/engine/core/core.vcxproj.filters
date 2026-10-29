@@ -49,6 +49,9 @@
     <Filter Include="serialize">
       <UniqueIdentifier>{8708f6ac-1c30-4368-8d4f-7555b0b5d7bf}</UniqueIdentifier>
     </Filter>
+    <Filter Include="serialize\provider">
+      <UniqueIdentifier>{3e7b1c52-9d04-4a6f-b2e8-5c1a7f0d9e36}</UniqueIdentifier>
+    </Filter>
     <Filter Include="server">
       <UniqueIdentifier>{c2f8a4d1-6b3e-4f97-8d05-1e9a7b3c5f62}</UniqueIdentifier>
     </Filter>
@@ -66,6 +69,12 @@
     </Filter>
     <Filter Include="utils">
       <UniqueIdentifier>{aee12374-94c8-4629-ad37-42f5f8911ad6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="json">
+      <UniqueIdentifier>{f2702bcd-c8c8-4a7e-836b-8633b098c71c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="xml">
+      <UniqueIdentifier>{b5d2e8f1-4c63-4e9a-8f17-2a9c6e3b0d48}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -243,11 +252,20 @@
     <ClCompile Include="serialize\dataBuilder.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
-    <ClCompile Include="serialize\jsonProvider.cpp">
-      <Filter>serialize</Filter>
+    <ClCompile Include="serialize\provider\fileProvider.cpp">
+      <Filter>serialize\provider</Filter>
     </ClCompile>
-    <ClCompile Include="serialize\jsonText.cpp">
-      <Filter>serialize</Filter>
+    <ClCompile Include="serialize\provider\jsonProvider.cpp">
+      <Filter>serialize\provider</Filter>
+    </ClCompile>
+    <ClCompile Include="serialize\provider\xmlProvider.cpp">
+      <Filter>serialize\provider</Filter>
+    </ClCompile>
+    <ClCompile Include="json\jsonText.cpp">
+      <Filter>json</Filter>
+    </ClCompile>
+    <ClCompile Include="xml\xmlText.cpp">
+      <Filter>xml</Filter>
     </ClCompile>
     <ClCompile Include="server\listener.cpp">
       <Filter>server</Filter>
@@ -504,11 +522,26 @@
     <ClInclude Include="serialize\dataBuilder.h">
       <Filter>serialize</Filter>
     </ClInclude>
-    <ClInclude Include="serialize\jsonProvider.h">
-      <Filter>serialize</Filter>
+    <ClInclude Include="serialize\provider\fileProvider.h">
+      <Filter>serialize\provider</Filter>
     </ClInclude>
-    <ClInclude Include="serialize\jsonText.h">
-      <Filter>serialize</Filter>
+    <ClInclude Include="serialize\provider\jsonProvider.h">
+      <Filter>serialize\provider</Filter>
+    </ClInclude>
+    <ClInclude Include="serialize\provider\xmlProvider.h">
+      <Filter>serialize\provider</Filter>
+    </ClInclude>
+    <ClInclude Include="json\jsonText.h">
+      <Filter>json</Filter>
+    </ClInclude>
+    <ClInclude Include="xml\xmlNodeType.h">
+      <Filter>xml</Filter>
+    </ClInclude>
+    <ClInclude Include="xml\xmlText.h">
+      <Filter>xml</Filter>
+    </ClInclude>
+    <ClInclude Include="xml\expat\expat_config.h">
+      <Filter>xml</Filter>
     </ClInclude>
     <ClInclude Include="server\clusterControl.h">
       <Filter>server</Filter>

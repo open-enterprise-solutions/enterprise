@@ -5,6 +5,7 @@
 
 #include "backend/backend_mainFrame.h"
 #include "backend/appData.h"
+#include "backend/session/session.h"   // IsDesignerSessionKind — whom a configuration was made for
 #include "backend/job/jobManager.h"   // the job records are swept once the surviving jobs are known
 
 // ms_instance / Get / Initialize / Destroy retired — ownership moved
@@ -27,8 +28,76 @@
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
 #include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot / ibSchemaTable — ContributeTables drives data dump
 #include "backend/query/dataMover.h"         // ibDataMover::Dump / Restore (L3-3 row mover)
+#include "core/serialize/provider/fileProvider.h"
 #include "core/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/objCtor.h"                       // ibCtorMetaValueType::GetClassName — clsid -> type name
+
+namespace {
+
+// ⭐ THE TYPES A DIRECTORY NAMES ARE THE REGISTRY'S — Catalog, Attribute, Form: the same in every configuration, so an
+// export reads into any one. A configuration's own (CatalogRef.Goods) would read back into that one alone.
+ibFileProvider ConfigurationFiles()
+{
+	ibFileProvider provider;
+	provider.SetTypeResolver([](ibClassID clsid) {
+		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(clsid);
+		return ctor != nullptr ? ctor->GetClassName() : ibString();
+	});
+	provider.SetTypeLookup([](const ibString& name) {
+		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(name);
+		return ctor != nullptr ? ctor->GetClassType() : ibClassID(0);
+	});
+	return provider;
+}
+
+} // namespace
+
+bool ibMetaDataConfigurationBase::SaveConfigToFiles(const ibString& directory)
+{
+	ibDataNode files;
+	return SaveConfigToFiles(files) && ibFileProvider::Publish(files, directory);
+}
+
+bool ibMetaDataConfigurationBase::SaveConfigToFiles(ibDataNode& files)
+{
+	ibDataNode root;
+	if (!GetCommonMetaObject()->BuildDataNode(root, saveToFileFlag))
+		return false;
+	return ConfigurationFiles().Write(root, files);
+}
+
+bool ibMetaDataConfigurationBase::LoadConfigFromFiles(const ibString& directory)
+{
+	ibDataNode files;
+	return ibFileProvider::Collect(directory, files) && LoadConfigFromFiles(files);
+}
+
+bool ibMetaDataConfigurationBase::LoadConfigFromFiles(const ibDataNode& files)
+{
+	if (!IsEditable())
+		ibBackendCoreException::Error(_("This configuration is open for reading only."));
+	ibDataNode root;
+	if (!ConfigurationFiles().Read(files, root))
+		return false;
+	if (root.GetClsid() != g_metaCommonMetadataCLSID)
+		ibBackendCoreException::Error(_("The directory does not contain a configuration."));
+
+	// Enter through the same detached-root load as a configuration file. Parsing all
+	// files finishes before that door closes editors or replaces any live metadata.
+	ibWriterMemory inner;
+	ibBinaryProvider provider;
+	if (!provider.Write(root, inner))
+		return false;
+	ibWriterMemory header;
+	header.w_u64(sign_metadata);
+	header.w_stringZ(root.GetValue<ibString>(ibT("Guid")));
+	ibWriterMemory metadata;
+	metadata.w_chunk(static_cast<std::uint64_t>(root.GetMetaId()), inner.buffer());
+	ibWriterMemory configuration;
+	configuration.w_chunk(eHeaderBlock, header.buffer());
+	configuration.w_chunk(root.GetClsid(), metadata.buffer());
+	return LoadConfigFromBuffer(configuration.buffer());
+}
 
 bool ibMetaDataConfigurationBase::LoadConfigFromFile(const ibString& strFileName)
 {
@@ -499,7 +568,7 @@ ibMetaDataConfiguration::~ibMetaDataConfiguration() = default;
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ibMetaDataConfiguration::ibMetaDataConfiguration(ib::AppDataCtorToken owner) :
-	ibMetaDataConfigurationFile(), m_configNew(true)
+	ibMetaDataConfigurationFile(), m_owner(owner), m_configNew(true)
 {
 	m_applicationInstance = owner.GetApplicationInstance();
 }
@@ -554,8 +623,7 @@ bool ibMetaDataConfigurationStorage::OnDestroy()
 
 ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorToken owner) :
 	ibMetaDataConfiguration(owner),
-	m_configMetadata(MakeShared<ibMetaDataConfiguration>(owner)),
-	m_owner(owner) {
+	m_configMetadata(MakeShared<ibMetaDataConfiguration>(owner)) {
 	// Designer-edit configuration carries a compile-value cache + its module-manager —
 	// built with the runtime image (CreateDesignerCache below); callsites gate on
 	// `if (auto* cc = metaData->GetCompileCache())` rather than appData->DesignerMode().
@@ -564,15 +632,9 @@ ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorTo
 // Designer-edit config: compile cache + its module-manager (bound to the common
 // metaobject, rebuilt fresh with the image each run). Built by the image ctor; dropping
 // the image releases the manager (RAII → DestroyMainModule).
-// Designer mode only (Enterprise runtime never opens the metadata tree — only objects execute). A config ALWAYS
-// carries the cache in the designer: the active edit config AND one browsed read-only from the DB (this inner
-// baseline, reached via activeMetaData->GetConfiguration()). A metaobject's form is built THROUGH the cache (its
-// owner + the seated source object come from it), so without it an object form opens sourceless and crashes.
-// Storage inherits this (its own identical override is gone). Regression from the per-config image (ibMetaImage):
-// the cache had narrowed to Storage only. Mode-gated inside, by analogy with the external report / data processor.
 std::unique_ptr<ibCompileValueCache> ibMetaDataConfiguration::CreateDesignerCache()
 {
-	if (!appData->DesignerMode())
+	if (!IsDesignerSessionKind(m_owner.GetSessionKind()))
 		return nullptr;
 	auto cache = std::make_unique<ibCompileValueCache>();
 	cache->SetModuleManager(new ibValueModuleManagerDesigner(this, GetCommonMetaObject()));

@@ -1428,6 +1428,9 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 		// beside the value, which is what makes a stored movement self-describing.
 		virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
 		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
+		// `For Each Item In row.AccountDimensionDr` yields Key (kind) / Value pairs, the filled slots in
+		// slot order, as a Map does. A snapshot: deleting while walking is safe.
+		virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
 
 		// ⭐⭐ AND BY NAME, LIKE A STRUCTURE: `row.AccountDimensionDr.Contractor = value`.
 		//
@@ -1452,6 +1455,10 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 		// Empty the whole side — every kind and every value of it. Reached as `Clear()` from a script,
 		// and as the meaning of assigning nothing to the collection.
 		void Clear();
+
+		// `Delete(kind)` empties the slot holding that kind (both halves of the pair). Returns false when
+		// the line carries no such kind.
+		bool Delete(const ibValue& kind);
 
 	private:
 		// The account THIS ROW names on this side — the debit account on the debit side, the credit one on

@@ -272,12 +272,12 @@ const ibArg& ArgHelp()
 const ibArg& ArgProperties()
 {
 	static const ibArg s_a(ibT("properties"), ibArg::Kind::Node,
-		ibMcpText("Properties to set on the new object, by name - {\"FormType\": \"FormObject\"}. "
+		ibMcpText("Properties to set on the new object, by name - {\"FormType\": 2}. "
 			  "Each is placed the way metadata_set places it, so a property with a closed set "
-			  "takes one of its words. The answer lists every property the object has, with what "
-			  "each accepts, so one call is enough to learn the rest. Passing any of these also "
-			  "means the platform will not stop to ASK: a form, which a click answers in a "
-			  "dialog, is created outright."));
+			  "takes one of its ids or one of its words, in the designer's language. The answer "
+			  "lists every property the object has, with what each accepts, so one call is enough "
+			  "to learn the rest. Passing any of these also means the platform will not stop to "
+			  "ASK: a form, which a click answers in a dialog, is created outright."));
 	return s_a;
 }
 
@@ -1139,16 +1139,21 @@ public:
 		// with the words its owner offers.
 		if (ibValueMetaObjectForm* form = created->ConvertToType<ibValueMetaObjectForm>()) {
 			if (form->GetTypeForm() == wxNOT_FOUND) {
+				// ⚠ IN THE PROPERTY'S OWN WORDS — its ids and the labels it matches, in the designer's language. The
+				// owner's names for the kinds were offered here, and the property refused them: `FormList` (2026-10-28).
 				ibString words;
-				if (ibValueMetaObjectGenericData* owner = parent != nullptr
-						? parent->ConvertToType<ibValueMetaObjectGenericData>() : nullptr) {
-					const ibFormTypeList kinds = owner->GetFormType();
-					for (unsigned int idx = 0; idx < kinds.GetItemCount(); idx++)
-						words += (words.IsEmpty() ? ibString() : ibString(ibT(", "))) + kinds.GetItemName(idx);
+				ibPropertyChoiceList kinds;
+				if (ibProperty* property = form->GetProperty(ibT("FormType")))
+					property->GetValueList(kinds);
+				for (unsigned int idx = 0; idx < kinds.GetCount(); idx++) {
+					if (kinds.GetId(idx) == wxNOT_FOUND)
+						continue;   // the kindless form, the one refused here
+					words += (words.IsEmpty() ? ibString() : ibString(ibT(", "))) +
+						ibString::Format(ibT("%li (%s)"), kinds.GetId(idx), kinds.GetLabel(idx));
 				}
 				metaData->RemoveMetaObject(created, parent);
 				refusal = ibString::Format(ibMcpText("A form is made with its kind - properties: {\"FormType\": ...}, "
-					"one of: %s. Nothing was created."), words);
+					"by id or by word, one of: %s. Nothing was created."), words);
 				return false;
 			}
 		}
@@ -1946,7 +1951,7 @@ MCP_TOOL_REGISTER(ibMcpToolMetadataSet);
 // structure back through the JSON view does not work and cannot be made to:
 // the reader takes the type list from the node's PROPERTY area, while a JSON
 // array comes back in the FIELD area, because the view flattens the two on the
-// way out and guesses on the way in (serialize/jsonProvider.h says so plainly).
+// way out and guesses on the way in (serialize/provider/jsonProvider.h says so plainly).
 // The value went in, nothing landed, and no error was raised.
 //
 // So the shape stops being the caller's problem: it says "String, 20" and this
@@ -2102,11 +2107,8 @@ public:
 						return false;
 					}
 					const ibString name = item.AsString();
-					ibClassID named = 0;
-					if (const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(name))
-						named = ctor->GetClassType();
-					else if (const ibCtorAbstractType* builtin = ibValue::GetAvailableCtor(name))
-						named = builtin->GetClassType();
+					const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(name);
+					const ibClassID named = ctor != nullptr ? ctor->GetClassType() : 0;
 					if (named == 0) {
 						refusal = ibString::Format(
 							ibMcpText("'%s' in Types is not a type this configuration knows. type_list shows the names."), name);
@@ -2154,10 +2156,8 @@ public:
 		}
 
 		if (clsid == 0) {
-			if (const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(typeName))
-				clsid = ctor->GetClassType();
-			else if (const ibCtorAbstractType* builtin = ibValue::GetAvailableCtor(typeName))
-				clsid = builtin->GetClassType();
+			if (const ibCtorAbstractType* const named = metaData->GetAvailableCtor(typeName))
+				clsid = named->GetClassType();
 		}
 
 		if (clsid == 0) {

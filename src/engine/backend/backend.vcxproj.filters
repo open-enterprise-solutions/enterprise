@@ -609,6 +609,9 @@
     <ClInclude Include="system\value\valueJson.h">
       <Filter>system\value</Filter>
     </ClInclude>
+    <ClInclude Include="system\value\valueXml.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
     <ClInclude Include="system\value\valueJob.h">
       <Filter>system\value</Filter>
     </ClInclude>
@@ -1927,6 +1930,9 @@
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueJson.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueXml.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueJob.cpp">

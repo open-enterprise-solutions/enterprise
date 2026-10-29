@@ -308,7 +308,8 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 				frame->ShowModalMessage(BackendErrorChain(refusal), _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 		};
 	}
-	case ibProtocol::ibSchema::ibMetaData::ibCommand::Load: {
+	case ibProtocol::ibSchema::ibMetaData::ibCommand::Load:
+	case ibProtocol::ibSchema::ibMetaData::ibCommand::LoadFiles: {
 		// …or a data processor or a report, from the file it is kept in apart (the desktop's tree's Replace and Insert):
 		// that one replaced by the one read (Id), or one read in under that object (Type, Parent).
 		if (args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Id) != 0
@@ -363,17 +364,22 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		ibMemoryBuffer part;
 		for (int index = 0; file.ReadPart(index, part); ++index)
 			bytes.AppendData(part.GetData(), part.GetDataLen());
-		// Read as the desktop's LoadConfigFromFile reads its file (LoadConfigFromBuffer); a file that is no configuration
-		// leaves the one there as it was, and the person is told.
-		return [configuration, bytes]() {
-			if (configuration->LoadConfigFromBuffer(bytes))
+		// Read as the desktop's LoadConfigFromFile reads its file (LoadConfigFromBuffer) — or, LoadFiles, as the files of a
+		// directory the client read out of it, one node (ibFileProvider::Collect); a file that is no configuration leaves
+		// the one there as it was, and the person is told.
+		const bool asFiles = command == static_cast<std::int32_t>(ibProtocol::ibSchema::ibMetaData::ibCommand::LoadFiles);
+		return [configuration, bytes, asFiles]() {
+			ibDataNode files;
+			if (asFiles ? ibBinaryProvider().Read(bytes, files) && configuration->LoadConfigFromFiles(files)
+					: configuration->LoadConfigFromBuffer(bytes))
 				return;
 			if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
 				frame->ShowModalMessage(BackendErrorChain(_("The configuration could not be read from the file.")),
 					ibString(), wxOK | wxCENTRE | wxICON_ERROR);
 		};
 	}
-	case ibProtocol::ibSchema::ibMetaData::ibCommand::Unload: {
+	case ibProtocol::ibSchema::ibMetaData::ibCommand::Unload:
+	case ibProtocol::ibSchema::ibMetaData::ibCommand::UnloadFiles: {
 		// …or a data processor or a report, written as the file it is kept in apart (Id — the desktop's tree's Save).
 		if (args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Id) != 0) {
 			ibValueMetaObject* const object = FindObject(metaData, args, ibProtocol::ibSchema::ibMetaData::Id, refusal, error);
@@ -395,8 +401,22 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		ibMetaDataConfigurationBase* const configuration = FindConfiguration(session, metaData, refusal, error);
 		if (configuration == nullptr)
 			return nullptr;
+		// The configuration's file — or, UnloadFiles, the files of its directory as one node, for the client to write
+		// into the directory the person chose (ibFileProvider::Publish).
 		ibMemoryBuffer bytes;
-		if (!configuration->SaveConfigToBuffer(bytes)) {
+		ibDataNode files;
+		bool written = false;
+		try {
+			written = command == static_cast<std::int32_t>(ibProtocol::ibSchema::ibMetaData::ibCommand::UnloadFiles)
+				? configuration->SaveConfigToFiles(files) && ibBinaryProvider().Write(files, bytes)
+				: configuration->SaveConfigToBuffer(bytes);
+		}
+		catch (const ibCoreException& err) {
+			refusal = ibProtocol::ibRefusal::Failed;
+			error = err.GetErrorDescription();
+			return nullptr;
+		}
+		if (!written) {
 			refusal = ibProtocol::ibRefusal::Failed;
 			error = BackendErrorChain(ibT("the configuration could not be written"));
 			return nullptr;

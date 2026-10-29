@@ -182,7 +182,7 @@ The compiler is a single-pass recursive descent parser with a deferred-call-reso
 
 `backend.dll` has zero UI code. The wxWidgets GUI is the clients': `frmclient.dll` under `enterprise-thin` and `designer-thin`, and `launcher` / `codeRunner` on wx directly. The forms are `frmserver.dll`'s, which reaches the engine through abstract C++ interfaces exported by `backend.dll` and a client through the protocol. This allows the backend to run headless (daemon, codeRunner, service mode).
 
-Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS` and the platform `__IBMSW__` / `__IBOSX__` / `__IBGTK__` in `coreApi.h`; its text is `ibString` throughout — UTF-16, `ibChar` = `char16_t` on every OS, `wc_str()` its one wide boundary — and of wx it keeps the base for `ibString`'s conversion, `_()`, `wxFileConfig`, zip and zlib): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibVariant` (`core/variant.h`, the one value type: a primitive or a counted reference, its lifecycle, serialization and compare, no base, no factory — the engine's `ibValue` adds the runtime and the factory, the thin client's a small factory; `ibVariantPtr<T>` in `core/variant_ptr.h`), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, binary + JSON providers), `ibCoreException`, `ibLocalization`, `diagnostics/` (the technology journal — one per process — and the crash guard), `description/` (the schemas both sides share — source path, command path, calc schedule, choice link, home page; ids and nodes, never a value), `query/` (the query language's words: keywords, scalar calls, unfold, balance role), `graphics/` (`ibPicture`, `ibFont`, `ibColour`, `ibPoint`/`ibSize`/`ibRect` — data; the conversion to wx is each side's), `ibProgramFolder` (`fileSystem.h` — where `backend.conf`, `lang/`, `plugins/`, `_fb/` and the other programs are looked for: the executable's folder, or on macOS the one that holds the `.app`, never `Contents/MacOS`) and `ibDiagnosticFolder` (where the journal, the dumps and `oes-debug.log` go: the same folder, except `~/Library/Logs/OES` for a program running from a macOS bundle), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
+Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS` and the platform `__IBMSW__` / `__IBOSX__` / `__IBGTK__` in `coreApi.h`; its text is `ibString` throughout — UTF-16, `ibChar` = `char16_t` on every OS, `wc_str()` its one wide boundary — and of wx it keeps the base for `ibString`'s conversion, `_()`, `wxFileConfig`, zip and zlib): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibVariant` (`core/variant.h`, the one value type: a primitive or a counted reference, its lifecycle, serialization and compare, no base, no factory — the engine's `ibValue` adds the runtime and the factory, the thin client's a small factory; `ibVariantPtr<T>` in `core/variant_ptr.h`), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, the binary provider; `provider/` — JSON, XML, files), `json/` and `xml/` (the formats' text), `ibCoreException`, `ibLocalization`, `diagnostics/` (the technology journal — one per process — and the crash guard), `description/` (the schemas both sides share — source path, command path, calc schedule, choice link, home page; ids and nodes, never a value), `query/` (the query language's words: keywords, scalar calls, unfold, balance role), `graphics/` (`ibPicture`, `ibFont`, `ibColour`, `ibPoint`/`ibSize`/`ibRect` — data; the conversion to wx is each side's), `ibProgramFolder` (`fileSystem.h` — where `backend.conf`, `lang/`, `plugins/`, `_fb/` and the other programs are looked for: the executable's folder, or on macOS the one that holds the `.app`, never `Contents/MacOS`) and `ibDiagnosticFolder` (where the journal, the dumps and `oes-debug.log` go: the same folder, except `~/Library/Logs/OES` for a program running from a macOS bundle), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
 
 - Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin; fileserver = backend + frmserver inside the client process.
 - backend links core PUBLIC; every project that links `backend.lib` also links `core.lib`; protocol links core; frmclient links core + protocol. `protocol.h` itself stays dependency-free.
@@ -531,16 +531,29 @@ that tree to bytes (and reads it back).
 - **`ibBinaryProvider`** (`dataBuilder.{h,cpp}`) — the packet, OES-RPC 1.0: the node's own
   bytes, the same in memory, in storage and on the client protocol's WebSocket (its layout in
   `dataBuilder.h`'s header). This is the round-trip path (Write + Read).
-- **`ibJsonProvider`** (`serialize/jsonProvider.{h,cpp}`) — JSON. `Write` emits JSON for
+- **`ibJsonProvider`** (`serialize/provider/jsonProvider.{h,cpp}`) — JSON. `Write` emits JSON for
   diff/inspection; `Read` is a full parser that reads MESSAGES, never a configuration: MCP and
   the client protocol's HTTP `POST` parse every JSON-RPC request through it (`rpc/rpcMessage.cpp`,
   before any login), as does the thin client (`frmclient/backend/serialize/dataProtocol.cpp`), so it
-  refuses nesting past `ibJsonProvider::kMaxNesting` (256). The view is lossy by design (Fields +
-  Properties flatten into one key set, Date → ISO string, synthetic `TypeDesc`), so Write→Read is
-  not a round trip — use `ibBinaryProvider` for that.
+  refuses nesting past `ibJsonProvider::kMaxNesting` (256). The view is lossy by design (Date → ISO
+  string, the type by name with a synthetic `TypeDesc`), so Write→Read is not a round trip — use
+  `ibBinaryProvider`, or `ibXmlProvider` for text.
   A type is named only by the injected `SetTypeResolver` (no built-in fallback — the
   engine's resolvers, e.g. `ibMetaTypeResolver`, name built-in types from the static
   registry); `SetTypeLookup` supplies the name→clsid inverse. Tests: `tests/test_jsonProvider.cpp`.
+- **`ibXmlProvider`** (`serialize/provider/xmlProvider.{h,cpp}`) — the node as XML, on the core's
+  own XML (`core/xml/xmlText.h`, expat). Unlike the JSON view it loses nothing: a field that is not
+  a string names its kind (`Kind="Number|Bool|Date|Binary|Empty|Array"`), a date keeps its
+  milliseconds, a string XML 1.0 cannot hold goes as base64 — Write→Read→Write gives the same text.
+  Refuses nesting past `ibXmlProvider::kMaxNesting` (256); types by the same `SetTypeResolver` /
+  `SetTypeLookup`. Tests: `tests/test_xmlProvider.cpp`.
+- **`ibFileProvider`** (`serialize/provider/fileProvider.{h,cpp}`) — a configuration as a directory
+  of files: `Catalog/Goods/node.json` (the node in `ibJsonProvider`'s form), module texts and
+  binaries beside it, from any depth of a value (`ObjectModule.Module.txt`). Laid out in memory (`files`, one field a file); `Publish` / `Collect`
+  touch the disk. Entry points: `SaveConfigToFiles` / `LoadConfigFromFiles` (a directory, or
+  the set of files), the Designer's *Configuration* menu, MCP `config_export_files` /
+  `config_import_files`. Records and user accounts are excluded.
+  See [configuration-files.md](docs/public/configuration-files.md). Tests: `tests/test_fileProvider.cpp`.
 - The old XML/JSON config layer is **gone**: `metadataConfigurationXML.cpp` /
   `metadataConfigurationJSON.cpp` and the `SaveConfigToXML` / `LoadConfigFromXML`
   / `SaveConfigToJSON` / `LoadConfigFromJSON` methods no longer exist.

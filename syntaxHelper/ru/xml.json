@@ -1,0 +1,1943 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.XMLReader",
+      "name_local": "XMLReader",
+      "name_en": "XMLReader",
+      "kind": "collection",
+      "class_id": 215563432532262761,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "New XMLReader()",
+      "description": "XML, читаемый скриптом ПО УЗЛАМ, - налоговая декларация, банковская выписка, прайс-лист поставщика. Каждый `Read()` переходит к следующему узлу, а свойства описывают узел, на котором он стоит.\n\nИСТОЧНИК - файл (`OpenFile`) или строка (`SetString`). Ничего не разбирается до первого `Read()`, а файл читается порциями - документ любого размера обходится, не удерживаясь целиком. То, что ждёт чтения, тоже ограничено: несколько сотен байт вложенных сущностей, раскрывающихся в миллион элементов, отдаются по мере чтения, а не строятся сначала в памяти.\n\nЧТО ТАКОЕ УЗЕЛ: `<a/>` - это ПАРА, `StartElement` и затем `EndElement`, - и `<a></a>` тоже (различает их `IsEmptyElement`). Комментарий и инструкция обработки - узлы. Секция CDATA - узел СВОЙ, никогда не сливается с текстом рядом. Объявление XML - НЕ узел: его читают `XMLVersion`, `XMLEncoding` и `Standalone`. Текст между элементами, состоящий только из пробельных символов, отбрасывается, пока `IgnoreWhitespace` равно True - по умолчанию.\n\nАТРИБУТЫ - текущего элемента: по номеру (с 0), по имени или курсором (`ReadAttribute`), который встаёт на них по одному. Объявления `xmlns` - тоже атрибуты, и идут ПЕРВЫМИ. Атрибут, которого нет, - это `Undefined`, а не пустая строка, которой был бы `a=\"\"`.\n\nДОКУМЕНТ НЕ МОЖЕТ ДОТЯНУТЬСЯ ЗА СВОИ ПРЕДЕЛЫ: внешняя сущность (`<!ENTITY e SYSTEM \"file:///...\">`) или внешний DTD ОТВЕРГАЮТСЯ - не читаются, но и не пропускаются молча. Сущности, объявленные внутри документа, читаются как всегда.\n\nТекст, не являющийся правильно построенным XML, отвергается ТАМ, ГДЕ ОН СЛОМАЛСЯ, со строкой и колонкой - после того как узлы до ошибки уже отданы, поэтому обход останавливается в одном и том же месте, как бы файл ни был нарезан на порции.",
+      "syntax_block": "var Reader = New XMLReader();\nReader.OpenFile(Path);\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        Message(Reader.Name);\n    }\n}\nReader.Close();",
+      "syntax_block_ves": "Reader = New XMLReader();\nReader.OpenFile(Path);\nWhile Reader.Read() Do\n    If Reader.NodeType = XMLNodeType.StartElement Then\n        Message(Reader.Name);\n    Endif;\nEndDo;\nReader.Close();",
+      "parameters": "Нет - читатель создаётся пустым, а источник ему дают `OpenFile` или `SetString`.",
+      "return_descr": "XMLReader - без открытого источника.",
+      "example": "var Reader = New XMLReader();\nReader.OpenFile(\"C:\\in\\J0100117.xml\");\nvar Tin = \"\";\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        if (Reader.Name = \"TIN\") {\n            Reader.Read();                 // текст внутри <TIN>\n            Tin = Reader.Value;\n        }\n    }\n}\nReader.Close();\nMessage(Tin);",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.Read",
+        "cls.XMLReader.NodeType",
+        "cls.XMLReader.GetAttribute",
+        "cls.XMLWriter",
+        "enum.XMLNodeType",
+        "cls.XMLNamespaceContext"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.NodeType",
+      "name_local": "NodeType",
+      "name_en": "NodeType",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.NodeType",
+      "description": "НА ЧЁМ СТОИТ ЧИТАТЕЛЬ - член `XMLNodeType`, только для чтения. Им управляется обход: `Read()` - шаг, `NodeType` - вопрос, на что шаг привёл.\n\nДо первого `Read()`, после того как `Read()` ответил False, и после `Close()` это `XMLNodeType.None`. Пока курсор атрибутов стоит на атрибуте, это `XMLNodeType.Attribute` - до `MoveToElement` или следующего `Read()`.\n\nУзлы, которые обход действительно встречает: `StartElement`, `EndElement`, `Text`, `Whitespace` (только при `IgnoreWhitespace = False`), `CDATASection`, `Comment`, `ProcessingInstruction` - и `Attribute` через курсор. Объявление XML и тип документа здесь не узлы, а о сущности или нотации не сообщается никогда.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.StartElement) {\n    // ...\n}",
+      "parameters": "",
+      "return_descr": "XMLNodeType.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>t<!--c--></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Comment) {\n        Message(\"комментарий: \" + Reader.Value);   // c\n    }\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.Read",
+        "cls.XMLReader.MoveToContent"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Name",
+      "name_local": "Name",
+      "name_en": "Name",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Name",
+      "description": "ИМЯ КАК ОНО НАПИСАНО, с префиксом (`xsi:type`) - только для чтения. Имя элемента - на его `StartElement` и на его `EndElement`; имя атрибута - пока на нём стоит курсор; цель инструкции обработки.\n\nУ текста, CDATA, комментария и пробельных символов имени нет: там это \"\". Есть ли у узла имя, говорит `HasName`.\n\nИмена XML чувствительны к регистру: `Name = \"TIN\"` не совпадает с `<tin>`.",
+      "syntax_block": "Name = Reader.Name;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<p:a xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nMessage(Reader.Name);                      // p:a\nMessage(Reader.LocalName);                 // a",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.LocalName",
+        "cls.XMLReader.Prefix",
+        "cls.XMLReader.NamespaceURI",
+        "cls.XMLReader.HasName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.LocalName",
+      "name_local": "LocalName",
+      "name_en": "LocalName",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.LocalName",
+      "description": "ИМЯ БЕЗ ПРЕФИКСА - `type` от `xsi:type` - только для чтения; для имени без префикса - само имя. Вместе с `NamespaceURI` это то, что имя ЗНАЧИТ, какой бы префикс ни выбрал конкретный документ.\n\nУ объявления пространства имён по умолчанию `xmlns=\"...\"`, прочитанного как атрибут, локальное имя - сам `xmlns`.",
+      "syntax_block": "Local = Reader.LocalName;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<d:Item xmlns:d=\"\"urn:d\"\"/>\");\nReader.Read();\nif (Reader.LocalName = \"Item\" And Reader.NamespaceURI = \"urn:d\") {\n    Message(\"товар, какой бы ни был префикс\");\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.Name",
+        "cls.XMLReader.NamespaceURI",
+        "cls.XMLReader.Prefix"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Prefix",
+      "name_local": "Prefix",
+      "name_en": "Prefix",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Prefix",
+      "description": "ПРЕФИКС ИМЕНИ - `xsi` от `xsi:type` - только для чтения; \"\" у имени без префикса. Префикс выбирает документ, и у разных отправителей он может различаться; когда важно пространство имён, сравнивайте `NamespaceURI`.\n\nОбъявление пространства имён `xmlns:d=\"...\"`, прочитанное как атрибут, имеет префикс `xmlns`.",
+      "syntax_block": "Prefix = Reader.Prefix;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<p:a xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nMessage(Reader.Prefix);                    // p",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.Name",
+        "cls.XMLReader.LocalName",
+        "cls.XMLReader.NamespaceURI"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.NamespaceURI",
+      "name_local": "NamespaceURI",
+      "name_en": "NamespaceURI",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.NamespaceURI",
+      "description": "ПРОСТРАНСТВО ИМЁН, В КОТОРОМ НАХОДИТСЯ ИМЯ, - только для чтения; \"\", когда ни в каком. Элемент без префикса находится в действующем пространстве имён по умолчанию; атрибут без префикса НЕ находится НИ В КАКОМ пространстве имён, несмотря на пространство по умолчанию, - так велит рекомендация Namespaces.\n\nОбъявления `xmlns`, прочитанные как атрибуты, находятся в `http://www.w3.org/2000/xmlns/`.",
+      "syntax_block": "Uri = Reader.NamespaceURI;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:x\"\" a=\"\"1\"\"/>\");\nReader.Read();\nMessage(Reader.NamespaceURI);              // urn:x\nReader.ReadAttribute();                    // xmlns\nReader.ReadAttribute();                    // a\nMessage(Reader.NamespaceURI = \"\");        // True: пространства имён нет",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.LocalName",
+        "cls.XMLReader.NamespaceContext",
+        "cls.XMLNamespaceContext"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Value",
+      "name_local": "Value",
+      "name_en": "Value",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Value",
+      "description": "ЧТО ДЕРЖИТ УЗЕЛ - только для чтения: текст узла `Text`, `Whitespace` или `CDATASection`, текст комментария, данные инструкции обработки и значение атрибута, пока на нём стоит курсор.\n\nУ элемента значения НЕТ: его текст - это узел `Text`, следующий за его `StartElement`, поэтому приём такой: `Read()` на начало, ещё раз `Read()`, затем `Value`. На элементе это \"\".\n\nСущности уже заменены: `&amp;` приходит как `&`, `&#1028;` - как сам символ. Текст - ОДИН узел, как бы он ни был разрезан - порциями, которыми читается файл, или сущностью в его середине.",
+      "syntax_block": "Text = Reader.Value;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<HNAME>A &amp; B</HNAME>\");\nReader.Read();                             // <HNAME>\nReader.Read();                             // текст\nMessage(Reader.Value);                      // A & B",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.HasValue",
+        "cls.XMLReader.Read",
+        "cls.XMLReader.IgnoreWhitespace"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.HasValue",
+      "name_local": "HasValue",
+      "name_en": "HasValue",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.HasValue",
+      "description": "МОЖЕТ ли узел держать значение - только для чтения. True на `Attribute`, `Text`, `Whitespace`, `CDATASection`, `Comment` и `ProcessingInstruction`; False на начале или конце элемента и на `None`.\n\nРечь о ВИДЕ узла, а не о тексте: у пустого атрибута `a=\"\"` значение есть, и это \"\".",
+      "syntax_block": "if (Reader.HasValue) {\n    Message(Reader.Value);\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>t</a>\");\nReader.Read();\nMessage(Reader.HasValue);                   // False: элемент\nReader.Read();\nMessage(Reader.HasValue);                   // True: текст",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.Value",
+        "cls.XMLReader.HasName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.HasName",
+      "name_local": "HasName",
+      "name_en": "HasName",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.HasName",
+      "description": "ЕСТЬ ли у узла имя - только для чтения. True на `StartElement`, `EndElement`, `ProcessingInstruction` и `Attribute`; False на тексте, CDATA, пробельных символах, комментарии и `None`.",
+      "syntax_block": "if (Reader.HasName) {\n    Message(Reader.Name);\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a><!--c--></a>\");\nwhile (Reader.Read()) {\n    Message(Reader.HasName);               // True, False, True\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.Name",
+        "cls.XMLReader.HasValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IsWhitespace",
+      "name_local": "IsWhitespace",
+      "name_en": "IsWhitespace",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IsWhitespace",
+      "description": "Стоит ли читатель на узле `Whitespace` - только для чтения.\n\nТекст, состоящий ТОЛЬКО из пробельных символов - пробелов, табуляций, переводов строки, включая `&#32;`, - при чтении всегда становится узлом `Whitespace`, никогда `Text`; поэтому здесь это тот же вопрос, что и `NodeType = XMLNodeType.Whitespace`. Такие узлы встречаются только при `IgnoreWhitespace = False`.",
+      "syntax_block": "if (Reader.IsWhitespace) {\n    // переводы строки и отступы между элементами\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b/></a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.IsWhitespace);               // True",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.IgnoreWhitespace",
+        "cls.XMLReader.IsCharacters"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IsCharacters",
+      "name_local": "IsCharacters",
+      "name_en": "IsCharacters",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IsCharacters",
+      "description": "Стоит ли читатель на символьных данных - только для чтения: True на `Text`, `CDATASection` и `Whitespace`, False на всём остальном (включая текст комментария).\n\nЭто вопрос, который нужно задавать, когда значение может прийти либо текстом, либо обёрнутым в CDATA: и то и другое - символы.",
+      "syntax_block": "if (Reader.IsCharacters) {\n    Text = Text + Reader.Value;\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>x<![CDATA[<y>]]></a>\");\nvar Text = \"\";\nwhile (Reader.Read()) {\n    if (Reader.IsCharacters) {\n        Text = Text + Reader.Value;\n    }\n}\nMessage(Text);                              // x<y>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.IsWhitespace",
+        "cls.XMLReader.Value"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.XMLVersion",
+      "name_local": "XMLVersion",
+      "name_en": "XMLVersion",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.XMLVersion",
+      "description": "ВЕРСИЯ, КОТОРУЮ НАЗЫВАЕТ ОБЪЯВЛЕНИЕ XML, - `1.0` из `<?xml version=\"1.0\"?>` - только для чтения. Объявление - не узел: оно читается вместе с началом документа, поэтому известно начиная с первого `Read()`; до него, а также у документа без объявления, это \"\".",
+      "syntax_block": "Version = Reader.XMLVersion;",
+      "parameters": "",
+      "return_descr": "String - \"\", когда у документа нет объявления.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\" encoding=\"\"UTF-8\"\"?><a/>\");\nReader.Read();\nMessage(Reader.XMLVersion);                // 1.0",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.XMLEncoding",
+        "cls.XMLReader.Standalone"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.XMLEncoding",
+      "name_local": "XMLEncoding",
+      "name_en": "XMLEncoding",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.XMLEncoding",
+      "description": "КОДИРОВКА, КОТОРУЮ НАЗЫВАЕТ ОБЪЯВЛЕНИЕ XML, - только для чтения, известна начиная с первого `Read()`; \"\" без объявления или без `encoding=` в нём.\n\nЭто СЛОВО объявления, прочитанное как написано. Для файла это ещё и то, чем были декодированы байты (если метка порядка байтов не сказала иного). Для текста, переданного через `SetString`, это только слово: текст - уже символы, а кодировка, которую он называет, - то, чем текст когда-то БЫЛ; повторно она не применяется.",
+      "syntax_block": "Encoding = Reader.XMLEncoding;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.OpenFile(\"C:\\in\\J0100117.xml\");\nReader.Read();\nMessage(Reader.XMLEncoding);               // windows-1251",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.InputEncoding",
+        "cls.XMLReader.OpenFile",
+        "cls.XMLReader.SetString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.InputEncoding",
+      "name_local": "InputEncoding",
+      "name_en": "InputEncoding",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.InputEncoding",
+      "description": "То же, что `XMLEncoding`, - только для чтения: кодировка, которую называет объявление, \"\" без него. Оно не говорит ничего, чего не говорит `XMLEncoding`.\n\nЭто НЕ определение кодировки: файл UTF-8 без объявления и здесь отвечает \"\".",
+      "syntax_block": "Encoding = Reader.InputEncoding;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\" encoding=\"\"UTF-8\"\"?><a/>\");\nReader.Read();\nMessage(Reader.InputEncoding);             // UTF-8",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.XMLEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Standalone",
+      "name_local": "Standalone",
+      "name_en": "Standalone",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Standalone",
+      "description": "Говорит ли объявление XML `standalone=\"yes\"` - только для чтения, известно начиная с первого `Read()`. False для `\"no\"`, для объявления без этого слова и для документа без объявления.\n\nОно лишь сообщает то, что говорит документ.",
+      "syntax_block": "if (Reader.Standalone) {\n    // ...\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\" standalone=\"\"yes\"\"?><a/>\");\nReader.Read();\nMessage(Reader.Standalone);                // True",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.XMLVersion",
+        "cls.XMLReader.XMLEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IgnoreWhitespace",
+      "name_local": "IgnoreWhitespace",
+      "name_en": "IgnoreWhitespace",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IgnoreWhitespace",
+      "description": "ОТБРАСЫВАЕТСЯ ли текст, состоящий только из пробельных символов, - чтение и запись, по умолчанию True.\n\nTrue: переводы строки и отступы между элементами документа, размеченного для человека, никогда не видны, и обход идёт от элемента к элементу. False: они отдаются узлами `Whitespace` - это нужно копии, которая должна сохранить раскладку, или значению, состоящему из пробелов.\n\nРечь только о тексте, ЦЕЛИКОМ состоящем из пробельных символов: `<b>x y</b>` сохраняет свой пробел в любом случае, как и пробельные символы внутри текста, в котором есть что-то ещё. Секция CDATA пробельной не бывает никогда. Настройку можно менять в любой момент, и она действует начиная со следующего `Read()`.",
+      "syntax_block": "Reader.IgnoreWhitespace = False;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a>\" + Chars.LF + \"  <b/>\" + Chars.LF + \"</a>\");\nvar Count = 0;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Whitespace) {\n        Count = Count + 1;\n    }\n}\nMessage(Count);                             // 2: перевод строки перед <b/> и тот, что после него",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.IsWhitespace",
+        "enum.XMLNodeType.Whitespace"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IsEmptyElement",
+      "name_local": "IsEmptyElement",
+      "name_en": "IsEmptyElement",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IsEmptyElement",
+      "description": "Был ли элемент записан как `<a/>`, а не `<a></a>`, - только для чтения.\n\nОбе формы - одна и та же ПАРА узлов, `StartElement` и затем `EndElement`; это единственное, что их различает. Об этом сообщают ОБА узла пары, а также атрибут такого элемента. False на любом другом узле.\n\n⚠ Внутри заменяющего текста сущности эти две формы не различить, и пустой элемент там не отмечается.",
+      "syntax_block": "if (Reader.IsEmptyElement) {\n    // <a/>: следующий узел - его EndElement\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r><a/><b></b></r>\");\nReader.Read();                             // r\nReader.Read();                             // a\nMessage(Reader.IsEmptyElement);             // True\nReader.Read();                             // </a> - тот же тег\nMessage(Reader.IsEmptyElement);             // True\nReader.Read();                             // b\nMessage(Reader.IsEmptyElement);             // False",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.Read",
+        "enum.XMLNodeType.StartElement",
+        "enum.XMLNodeType.EndElement"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Depth",
+      "name_local": "Depth",
+      "name_en": "Depth",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Depth",
+      "description": "На какой глубине стоит узел - только для чтения. Корневой элемент - на 0, то, что прямо внутри него, - на 1, а `EndElement` элемента - на глубине его `StartElement`, так что два узла одного элемента всегда совпадают. На атрибуте это глубина его элемента.\n\n⚠ Это НЕ `Depth` у `NamespaceContext`: тот считает на единицу больше этого на начале или на тексте и столько же на конце. Сравнивайте собственный `Depth` читателя с собственным же.",
+      "syntax_block": "Level = Reader.Depth;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r><a>t</a></r>\");\nwhile (Reader.Read()) {\n    Message(Reader.Depth);                 // 0, 1, 2, 1, 0\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.NamespaceContext",
+        "cls.XMLNamespaceContext.Depth",
+        "cls.XMLReader.Skip"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.LineNumber",
+      "name_local": "LineNumber",
+      "name_en": "LineNumber",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.LineNumber",
+      "description": "Строка, на которой узел НАЧИНАЕТСЯ, считая с 1, - только для чтения. Оба узла `<a/>` стоят там, где стоит этот единственный тег; на атрибуте это строка его элемента. Узел, пришедший из заменяющего текста сущности, указывает, где стоит ССЫЛКА на сущность.\n\n0 до первого `Read()` и в конце. Отказ на тексте, не являющемся правильно построенным XML, называет свои строку и колонку в собственной фразе.",
+      "syntax_block": "Line = Reader.LineNumber;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>\" + Chars.LF + \"<b/></a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.LineNumber);                // 2\nMessage(Reader.LinePosition);              // 1",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.LinePosition"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.LinePosition",
+      "name_local": "LinePosition",
+      "name_en": "LinePosition",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.LinePosition",
+      "description": "Колонка, с которой узел начинается в своей строке, считая с 1, - только для чтения. У элемента это колонка его `<`; у обоих узлов `<a/>` - колонка единственного тега. На атрибуте - колонка его элемента.\n\n0 до первого `Read()` и в конце.",
+      "syntax_block": "Column = Reader.LinePosition;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a><c></c></a>\");\nReader.Read();\nReader.Read();                             // <c>\nMessage(Reader.LinePosition);              // 4\nReader.Read();                             // </c>\nMessage(Reader.LinePosition);              // 7",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.LineNumber"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.NamespaceContext",
+      "name_local": "NamespaceContext",
+      "name_en": "NamespaceContext",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.NamespaceContext",
+      "description": "ПРОСТРАНСТВА ИМЁН, ДЕЙСТВУЮЩИЕ НА УЗЛЕ, - `XMLNamespaceContext`, только для чтения. Это СНИМОК: взятый на узле, он отвечает за этот узел, как бы далеко ни ушёл читатель с тех пор, включая `Close()`.\n\nНа `EndElement` элемента область действия всё ещё его; на атрибуте - его элемента; текст сохраняет область, в которой начался. До первого `Read()` связан только `xml`. Когда ничего не открыто - до `OpenFile` или `SetString` и после `Close()`, - это `Undefined`.\n\n⚠ Его `Depth` - НЕ `Depth` читателя: на начале корня это 1, на тексте внутри корня 2, на конце корня 0; на атрибуте - на единицу больше, чем на начале его элемента.",
+      "syntax_block": "Context = Reader.NamespaceContext;",
+      "parameters": "",
+      "return_descr": "XMLNamespaceContext - или Undefined, когда ничего не открыто.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:p=\"\"urn:p\"\"><p:x/></r>\");\nReader.Read();\nReader.Read();                             // p:x\nvar Context = Reader.NamespaceContext;\nMessage(Context.LookupNamespaceURI(\"p\"));  // urn:p",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLNamespaceContext",
+        "cls.XMLReader.NamespaceURI",
+        "cls.XMLReader.Depth"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.OpenFile",
+      "name_local": "OpenFile",
+      "name_en": "OpenFile",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "OpenFile(path : string)",
+      "description": "Открывает ФАЙЛ для чтения - сначала закрывая то, что держал читатель. Файл читается порциями по ходу обхода и никогда не загружается целиком.\n\nКОДИРОВКА - собственная кодировка файла: его метка порядка байтов, а иначе его объявление XML; UTF-8, если нет ни того, ни другого. Читаются UTF-8, UTF-16, ISO-8859-1 и US-ASCII, а также windows-1251 и cp866 (они же `cp1251` и `IBM866`) - по собственным таблицам движка: одни и те же символы на любой машине, какой бы ни была её системная кодовая страница. Аргумента кодировки нет: файл сам говорит, что он такое.\n\nФайл, который не открывается, отвергается ЗДЕСЬ: `XMLReader: cannot open the file '...' for reading`. Всё, что касается его СОДЕРЖИМОГО - неподдерживаемая кодировка, неправильно построенный XML, - говорит тот `Read()`, который до этого доходит: `XMLReader: the encoding 'koi8-u' is not supported; supported: UTF-8, UTF-16, windows-1251, cp866, ISO-8859-1, US-ASCII at line 1, column ... of '...'`. Известная кодировка, написанная в объявлении иначе, отвергается с указанием имени, которое нужно написать: `the encoding 'utf8' is read under its own name only - write it 'UTF-8'`.",
+      "syntax_block": "Reader.OpenFile(Path);",
+      "parameters": "path - файл для чтения.",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.OpenFile(\"C:\\in\\statement.xml\");\nwhile (Reader.Read()) {\n    // ...\n}\nReader.Close();",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader",
+        "cls.XMLReader.SetString",
+        "cls.XMLReader.Close",
+        "cls.XMLReader.XMLEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.SetString",
+      "name_local": "SetString",
+      "name_en": "SetString",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "SetString(text : string)",
+      "description": "Даёт читателю ТЕКСТ для чтения - сначала закрывая то, что он держал. Как и при `OpenFile`, пока ничего не разбирается: начинает первый `Read()`, а текст, не являющийся правильно построенным XML, отвергается тем `Read()`, который доходит до ошибки.\n\nСТРОКА - УЖЕ СИМВОЛЫ. `encoding=\"windows-1251\"` в её объявлении называет то, чем текст когда-то БЫЛ - байтами в файле, - и второй раз не применяется: иначе каждая кириллическая буква превратилась бы в две. `XMLEncoding` по-прежнему сообщает это слово.\n\nТекст, содержащий то, что не является символом (одиночный суррогат), отвергается тем `Read()`, который до него дойдёт, как любой неправильно построенный текст: `XMLReader: not well-formed (invalid token) at line 1, column 5`.",
+      "syntax_block": "Reader.SetString(Text);",
+      "parameters": "text - документ XML целиком.",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(Response.GetBodyAsString());\nwhile (Reader.Read()) {\n    // ...\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader",
+        "cls.XMLReader.OpenFile",
+        "cls.XMLReader.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Close()",
+      "description": "Отпускает файл или текст, разборщик и каждый узел, ждущий чтения; после этого читатель стоит на `None`, и ничего не открыто. Затем `Read()` выбрасывает `XMLReader: no text or file is open`, пока `OpenFile` или `SetString` снова не дадут ему источник.\n\nЗакрывать читатель, чтобы использовать его повторно, не обязательно - `OpenFile` и `SetString` сначала закрывают сами, - но файл остаётся открытым, пока читатель не закроет его или не дочитает до конца.\n\nВ отличие от `XMLWriter.Close()`, который может отдать записанный текст, этот метод НИЧЕГО не возвращает.",
+      "syntax_block": "Reader.Close();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.OpenFile(Path);\nwhile (Reader.Read()) {\n    // ...\n}\nReader.Close();      // здесь файл отпускается",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.OpenFile",
+        "cls.XMLReader.SetString",
+        "cls.XMLWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Read",
+      "name_local": "Read",
+      "name_en": "Read",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Read()",
+      "description": "Делает шаг к СЛЕДУЮЩЕМУ УЗЛУ и отвечает, есть ли он. Первый вызов ставит читателя на первый узел документа; когда ничего не осталось, он отвечает False, и читатель стоит на `None`. Он же уводит с курсора атрибутов: после `Read()` читатель стоит на узле, а не на атрибуте.\n\nТекст только из пробельных символов пропускается, пока `IgnoreWhitespace` равно True.\n\nОН ОТКАЗЫВАЕТ: `XMLReader: no text or file is open` - без источника; и на документе, не являющемся правильно построенным, - `XMLReader: mismatched tag at line 2, column 6` для строки, с добавкой `of '<file>'` для файла. Узлы ДО ошибки сначала отдаются, поэтому отказ приходит ровно там, где документ сломался; при повторном вызове `Read()` снова отказывает, а не идёт дальше ошибки.\n\nЗдесь же отвергаются: внешняя сущность (`XMLReader: the external entity 'file:///...' is not read - a document may not reach outside itself at line ..., column ...`), документ, зависящий от внешнего DTD или параметрической сущности (`... the document depends on declarations outside itself (an external DTD or a parameter entity), which are not read ...`), и неподдерживаемая кодировка.",
+      "syntax_block": "while (Reader.Read()) {\n    // Reader.NodeType, Reader.Name, Reader.Value\n}",
+      "parameters": "Нет.",
+      "return_descr": "Boolean - False, когда ничего не осталось.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>\" + Chars.LF + \"<b></a>\");\ntry {\n    while (Reader.Read()) {\n        Message(Reader.Name);              // a, b\n    }\n} except {\n    Message(ErrorDescription());           // ... at line 2, column 6\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.NodeType",
+        "cls.XMLReader.Skip",
+        "cls.XMLReader.MoveToContent",
+        "cls.XMLReader.IgnoreWhitespace"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Skip",
+      "name_local": "Skip",
+      "name_en": "Skip",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Skip()",
+      "description": "Перешагивает ЭЛЕМЕНТ, на котором стоит читатель, целиком: на `StartElement` он прочитывает всё внутри и останавливается НА собственном `EndElement` этого элемента - найденном по глубине, а не по имени, так что вложенный элемент с тем же именем его не остановит. Следующий `Read()` идёт уже после элемента. Для `<a/>` этот конец - самый следующий узел.\n\nНа атрибуте он так же перешагивает ЭЛЕМЕНТ атрибута. На любом другом узле - тексте, комментарии, конце - это просто `Read()`.\n\nПри перешагивании ничего не собирается: элемент любого размера проходится по одному узлу.",
+      "syntax_block": "Reader.Skip();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r><meta><x/><y/></meta><TIN>1</TIN></r>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        if (Reader.Name = \"meta\") {\n            Reader.Skip();                 // стоит на </meta>\n        } else {\n            Message(Reader.Name);          // r, TIN\n        }\n    }\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.Read",
+        "cls.XMLReader.Depth",
+        "cls.XMLReader.MoveToContent"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.MoveToContent",
+      "name_local": "MoveToContent",
+      "name_en": "MoveToContent",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "MoveToContent()",
+      "description": "Переходит к следующему узлу, являющемуся СОДЕРЖИМЫМ, и отвечает его тип. Он пропускает пробельные символы, комментарии и инструкции обработки - и время до первого `Read()`, так что на свежем читателе он дочитывает до корневого элемента. На содержимом (начале или конце элемента, тексте, CDATA) он не двигается. На атрибуте он возвращается к элементу атрибута.\n\nВ конце документа он отвечает `XMLNodeType.None`.",
+      "syntax_block": "Type = Reader.MoveToContent();",
+      "parameters": "Нет.",
+      "return_descr": "XMLNodeType - тип узла, на котором он остановился.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!--generated--><DECLAR/>\");\nif (Reader.MoveToContent() = XMLNodeType.StartElement) {\n    Message(Reader.Name);                  // DECLAR\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.Read",
+        "cls.XMLReader.Skip",
+        "enum.XMLNodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributeCount",
+      "name_local": "AttributeCount",
+      "name_en": "AttributeCount",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributeCount()",
+      "description": "Сколько атрибутов у текущего элемента - включая объявления `xmlns`.\n\nАтрибуты есть у `StartElement` элемента, а также у `EndElement` элемента `<a x=\"1\"/>`, поскольку это тот же тег; конец `<b z=\"3\"></b>` - отдельный тег, и атрибутов у него нет. На тексте, комментарии или до первого `Read()` это 0. Пока курсор стоит на атрибуте, это всё ещё число атрибутов элемента.",
+      "syntax_block": "Count = Reader.AttributeCount();",
+      "parameters": "Нет.",
+      "return_descr": "Number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\" b=\"\"2\"\"/>\");\nReader.Read();\nfor (i = 0 To Reader.AttributeCount() - 1) {\n    Message(Reader.AttributeName(i) + \" = \" + Reader.AttributeValue(i));\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.AttributeName",
+        "cls.XMLReader.AttributeValue",
+        "cls.XMLReader.ReadAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributeName",
+      "name_local": "AttributeName",
+      "name_en": "AttributeName",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributeName(index : number)",
+      "description": "ИМЯ атрибута с этим номером, считая с 0, как оно написано - с префиксом (`xsi:type`).\n\nОбъявления `xmlns` - тоже атрибуты и идут ПЕРВЫМИ, где бы они ни стояли в теге: `xmlns` для пространства имён по умолчанию, `xmlns:p` для префикса.\n\nОН ОТКАЗЫВАЕТ на том, что не является числом: `XMLReader: an attribute is asked for by its number - a value of the type 'String' is not a number`. Номер, не указывающий ни на какой атрибут, - отрицательный, дробный, за последним, - даёт \"\"; скрипт сравнивает с \"\".",
+      "syntax_block": "Name = Reader.AttributeName(0);",
+      "parameters": "index - номер атрибута, с 0.",
+      "return_descr": "String - \"\", когда атрибута с таким номером нет.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" a=\"\"1\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeName(0));          // xmlns:d\nMessage(Reader.AttributeName(2));          // d:b\nMessage(Reader.AttributeName(9) = \"\");     // True",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.AttributeLocalName",
+        "cls.XMLReader.AttributeCount",
+        "cls.XMLReader.AttributeValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributeLocalName",
+      "name_local": "AttributeLocalName",
+      "name_en": "AttributeLocalName",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributeLocalName(index : number)",
+      "description": "ЛОКАЛЬНОЕ ИМЯ атрибута с этим номером, считая с 0, - имя без префикса: `b` от `d:b`, `d` от `xmlns:d` и сам `xmlns` для объявления пространства имён по умолчанию.\n\nОН ОТКАЗЫВАЕТ на том, что не является числом: `XMLReader: an attribute is asked for by its number - a value of the type 'String' is not a number`. Номер, не указывающий ни на какой атрибут, - отрицательный, дробный, за последним, - даёт \"\"; скрипт сравнивает с \"\".",
+      "syntax_block": "Local = Reader.AttributeLocalName(i);",
+      "parameters": "index - номер атрибута, с 0.",
+      "return_descr": "String - \"\", когда атрибута с таким номером нет.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeLocalName(1));     // b",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.AttributeName",
+        "cls.XMLReader.AttributeNamespaceURI"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributeNamespaceURI",
+      "name_local": "AttributeNamespaceURI",
+      "name_en": "AttributeNamespaceURI",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributeNamespaceURI(index : number)",
+      "description": "ПРОСТРАНСТВО ИМЁН атрибута с этим номером, считая с 0. Атрибут БЕЗ префикса не находится ни в каком пространстве имён - \"\", - какое бы пространство по умолчанию ни действовало. Объявления `xmlns` находятся в `http://www.w3.org/2000/xmlns/`.\n\nОН ОТКАЗЫВАЕТ на том, что не является числом: `XMLReader: an attribute is asked for by its number - a value of the type 'String' is not a number`. Номер, не указывающий ни на какой атрибут, - отрицательный, дробный, за последним, - даёт \"\"; скрипт сравнивает с \"\".",
+      "syntax_block": "Uri = Reader.AttributeNamespaceURI(i);",
+      "parameters": "index - номер атрибута, с 0.",
+      "return_descr": "String - \"\", когда атрибута с таким номером нет.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" a=\"\"1\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeNamespaceURI(1) = \"\"); // True: у a нет префикса\nMessage(Reader.AttributeNamespaceURI(2));  // urn:d",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.AttributeName",
+        "cls.XMLReader.AttributeValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributePrefix",
+      "name_local": "AttributePrefix",
+      "name_en": "AttributePrefix",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributePrefix(index : number)",
+      "description": "ПРЕФИКС атрибута с этим номером, считая с 0: `d` от `d:b`, `xmlns` от `xmlns:d` и \"\" для атрибута без префикса - в том числе для объявления пространства имён по умолчанию `xmlns`.\n\nОН ОТКАЗЫВАЕТ на том, что не является числом: `XMLReader: an attribute is asked for by its number - a value of the type 'String' is not a number`. Номер, не указывающий ни на какой атрибут, - отрицательный, дробный, за последним, - даёт \"\"; скрипт сравнивает с \"\".",
+      "syntax_block": "Prefix = Reader.AttributePrefix(i);",
+      "parameters": "index - номер атрибута, с 0.",
+      "return_descr": "String - \"\", когда атрибута с таким номером нет.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributePrefix(0));        // xmlns\nMessage(Reader.AttributePrefix(1));        // d",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.AttributeName",
+        "cls.XMLReader.AttributeLocalName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributeValue",
+      "name_local": "AttributeValue",
+      "name_en": "AttributeValue",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributeValue(indexOrName : number | string [, namespaceURI : string])",
+      "description": "ЗНАЧЕНИЕ атрибута текущего элемента, найденного по НОМЕРУ (с 0) или по ИМЕНИ.\n\nПО ИМЕНИ без пространства имён имя - то, что написано в теге, с префиксом, - `GetAttribute(\"xsi:type\")`. С URI пространства имён это ЛОКАЛЬНОЕ имя в этом пространстве - `GetAttribute(\"type\", \"http://www.w3.org/2001/XMLSchema-instance\")`, - и атрибут находится, какой бы префикс ни выбрал для него документ. Пустой URI - то же, что его отсутствие. Имена чувствительны к регистру.\n\nАТРИБУТ, КОТОРОГО НЕТ, - это `Undefined`, а не пустая строка, которой является атрибут, записанный `a=\"\"`, - и то же для номера, не указывающего ни на какой атрибут (отрицательного, дробного, за последним). Чтобы спросить, есть ли атрибут, сравнивайте с `Undefined`.\n\nОН ОТКАЗЫВАЕТ на всём, кроме числа или строки: `XMLReader: an attribute is found by its number or its name, not by a value of the type 'Boolean'`.\n\nСущности в значении уже заменены, как и переводы строки и табуляции, которые писателю пришлось экранировать.\n\n`AttributeValue` и `GetAttribute` - один и тот же глагол под двумя именами.",
+      "syntax_block": "Value = Reader.AttributeValue(\"name\");\nValue = Reader.AttributeValue(\"localName\", NamespaceURI);\nValue = Reader.AttributeValue(0);",
+      "parameters": "indexOrName - номер атрибута с 0 или его имя.\nnamespaceURI - необязательный: с ним имя - локальное имя в этом пространстве имён.",
+      "return_descr": "String - или Undefined, когда такого атрибута нет.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\" e=\"\"\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeValue(\"a\"));                 // 1\nMessage(Reader.AttributeValue(\"e\") = \"\");          // True: есть, и пустой\nMessage(Reader.AttributeValue(\"missing\") = Undefined); // True: нет",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.GetAttribute",
+        "cls.XMLReader.AttributeName",
+        "cls.XMLReader.AttributeCount"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.GetAttribute",
+      "name_local": "GetAttribute",
+      "name_en": "GetAttribute",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "GetAttribute(indexOrName : number | string [, namespaceURI : string])",
+      "description": "ЗНАЧЕНИЕ атрибута текущего элемента, найденного по НОМЕРУ (с 0) или по ИМЕНИ.\n\nПО ИМЕНИ без пространства имён имя - то, что написано в теге, с префиксом, - `GetAttribute(\"xsi:type\")`. С URI пространства имён это ЛОКАЛЬНОЕ имя в этом пространстве - `GetAttribute(\"type\", \"http://www.w3.org/2001/XMLSchema-instance\")`, - и атрибут находится, какой бы префикс ни выбрал для него документ. Пустой URI - то же, что его отсутствие. Имена чувствительны к регистру.\n\nАТРИБУТ, КОТОРОГО НЕТ, - это `Undefined`, а не пустая строка, которой является атрибут, записанный `a=\"\"`, - и то же для номера, не указывающего ни на какой атрибут (отрицательного, дробного, за последним). Чтобы спросить, есть ли атрибут, сравнивайте с `Undefined`.\n\nОН ОТКАЗЫВАЕТ на всём, кроме числа или строки: `XMLReader: an attribute is found by its number or its name, not by a value of the type 'Boolean'`.\n\nСущности в значении уже заменены, как и переводы строки и табуляции, которые писателю пришлось экранировать.\n\n`GetAttribute` и `AttributeValue` - один и тот же глагол под двумя именами.",
+      "syntax_block": "Value = Reader.GetAttribute(\"name\");\nValue = Reader.GetAttribute(\"localName\", NamespaceURI);",
+      "parameters": "indexOrName - номер атрибута с 0 или его имя.\nnamespaceURI - необязательный: с ним имя - локальное имя в этом пространстве имён.",
+      "return_descr": "String - или Undefined, когда такого атрибута нет.",
+      "example": "var Xsi = \"http://www.w3.org/2001/XMLSchema-instance\";\nvar Reader = New XMLReader();\nReader.SetString(\"<DECLAR xmlns:xsi=\"\"\" + Xsi + \"\"\" xsi:noNamespaceSchemaLocation=\"\"J0100117.xsd\"\"/>\");\nReader.Read();\nMessage(Reader.GetAttribute(\"xsi:noNamespaceSchemaLocation\"));   // J0100117.xsd\nMessage(Reader.GetAttribute(\"noNamespaceSchemaLocation\", Xsi));  // J0100117.xsd\nif (Reader.GetAttribute(\"version\") = Undefined) {\n    Message(\"версия не указана\");\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.AttributeValue",
+        "cls.XMLReader.ReadAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.FirstAttribute",
+      "name_local": "FirstAttribute",
+      "name_en": "FirstAttribute",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "FirstAttribute()",
+      "description": "Ставит курсор атрибутов на ПЕРВЫЙ атрибут текущего элемента и отвечает True - или отвечает False и не двигается, когда атрибутов у элемента нет (или читатель стоит не на элементе). С атрибута он начинает заново.\n\nНА АТРИБУТЕ читатель отвечает за него: `NodeType` - это `XMLNodeType.Attribute`, а `Name`, `LocalName`, `Prefix`, `NamespaceURI` и `Value` - атрибута. `AttributeCount`, `Depth`, `LineNumber` и `IsEmptyElement` остаются элемента. Уводят с атрибута `MoveToElement` или следующий `Read()`.",
+      "syntax_block": "if (Reader.FirstAttribute()) {\n    // Reader.Name, Reader.Value - первый атрибут\n}",
+      "parameters": "Нет.",
+      "return_descr": "Boolean - False, когда атрибута нет.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<b x=\"\"1\"\" y=\"\"2\"\"/>\");\nReader.Read();\nif (Reader.FirstAttribute()) {\n    Message(Reader.Name + \" = \" + Reader.Value);   // x = 1\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.NextAttribute",
+        "cls.XMLReader.ReadAttribute",
+        "cls.XMLReader.MoveToElement"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.NextAttribute",
+      "name_local": "NextAttribute",
+      "name_en": "NextAttribute",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "NextAttribute()",
+      "description": "Переводит курсор атрибутов на СЛЕДУЮЩИЙ атрибут и отвечает True. С самого элемента он переходит на ПЕРВЫЙ атрибут, поэтому `while (Reader.NextAttribute())` обходит их все. За последним он отвечает False и ОСТАЁТСЯ на последнем.\n\nНА АТРИБУТЕ читатель отвечает за него: `NodeType` - это `XMLNodeType.Attribute`, а `Name`, `LocalName`, `Prefix`, `NamespaceURI` и `Value` - атрибута. `AttributeCount`, `Depth`, `LineNumber` и `IsEmptyElement` остаются элемента. Уводят с атрибута `MoveToElement` или следующий `Read()`.\n\nТо же, что `ReadAttribute`.",
+      "syntax_block": "while (Reader.NextAttribute()) {\n    // Reader.Name, Reader.Value\n}",
+      "parameters": "Нет.",
+      "return_descr": "Boolean - False, когда следующего атрибута нет.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<b x=\"\"1\"\" y=\"\"2\"\"/>\");\nReader.Read();\nwhile (Reader.NextAttribute()) {\n    Message(Reader.Name + \" = \" + Reader.Value);   // x = 1, y = 2\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.ReadAttribute",
+        "cls.XMLReader.FirstAttribute",
+        "cls.XMLReader.MoveToElement"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.ReadAttribute",
+      "name_local": "ReadAttribute",
+      "name_en": "ReadAttribute",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "ReadAttribute()",
+      "description": "Обходит атрибуты текущего элемента: первый вызов встаёт на ПЕРВЫЙ атрибут, каждый следующий - на следующий, а за последним он отвечает False и остаётся, где был. Поэтому `while (Reader.ReadAttribute())` посещает каждый атрибут, объявления `xmlns` - первыми.\n\nНА АТРИБУТЕ читатель отвечает за него: `NodeType` - это `XMLNodeType.Attribute`, а `Name`, `LocalName`, `Prefix`, `NamespaceURI` и `Value` - атрибута. `AttributeCount`, `Depth`, `LineNumber` и `IsEmptyElement` остаются элемента. Уводят с атрибута `MoveToElement` или следующий `Read()`.\n\nСледующий `Read()` идёт ПОСЛЕ элемента - в его содержимое, - а не к чему-то рядом с атрибутом.\n\nТо же, что `NextAttribute`.",
+      "syntax_block": "while (Reader.ReadAttribute()) {\n    // Reader.Name, Reader.Value\n}",
+      "parameters": "Нет.",
+      "return_descr": "Boolean - False, когда следующего атрибута нет.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\" p:b=\"\"2\"\" xmlns:p=\"\"urn:p\"\"><c/></r>\");\nReader.Read();\nwhile (Reader.ReadAttribute()) {\n    Message(Reader.Name + \" = \" + Reader.Value);   // xmlns:p = urn:p, a = 1, p:b = 2\n}\nReader.Read();\nMessage(Reader.Name);                                // c",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.NextAttribute",
+        "cls.XMLReader.FirstAttribute",
+        "cls.XMLReader.MoveToElement",
+        "cls.XMLReader.GetAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.MoveToElement",
+      "name_local": "MoveToElement",
+      "name_en": "MoveToElement",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "MoveToElement()",
+      "description": "Возвращает курсор атрибутов к ЭЛЕМЕНТУ, которому принадлежит атрибут, и отвечает True; отвечает False, когда читатель не стоял на атрибуте и потому не сдвинулся.\n\nПосле него `NodeType`, `Name` и `Value` снова относятся к элементу, а `NextAttribute` начинает с первого атрибута.",
+      "syntax_block": "Reader.MoveToElement();",
+      "parameters": "Нет.",
+      "return_descr": "Boolean - True, когда он стоял на атрибуте.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<b x=\"\"1\"\"/>\");\nReader.Read();\nReader.ReadAttribute();\nMessage(Reader.NodeType = XMLNodeType.Attribute);   // True\nReader.MoveToElement();\nMessage(Reader.Name);                      // b",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.ReadAttribute",
+        "cls.XMLReader.FirstAttribute",
+        "cls.XMLReader.NextAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter",
+      "name_local": "XMLWriter",
+      "name_en": "XMLWriter",
+      "kind": "collection",
+      "class_id": 210769561834208926,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "New XMLWriter()",
+      "description": "XML, записываемый скриптом, - налоговая декларация, файл обмена, тело запроса. Писатель САМ держит КАЖДЫЙ ЭЛЕМЕНТ ПРАВИЛЬНО ПОСТРОЕННЫМ: имя - настоящее имя, атрибут - только сразу после начала своего элемента и только один раз, конец - только для начатого элемента, объявление - только первым, а `Close()` отказывает, пока открыт элемент или атрибут. ОДНОГО КОРНЯ он НЕ требует: несколько элементов на верхнем уровне или текст там не отвергаются - ФРАГМЕНТ пишется так же охотно, как документ, а держаться одного корня - забота скрипта.\n\nОТВЕРГНУТАЯ ЗАПИСЬ НИЧЕГО НЕ МЕНЯЕТ: не остаётся ни половины тега, ни половины значения атрибута, ни начатого элемента - скрипт может перехватить отказ и писать дальше с того места, где стоял до вызова.\n\nЦЕЛЬ - файл, `OpenFile(path, encoding, writeBOM)`, записываемый по частям, - или строка: `SetString(encoding)`, и затем `Close()` отдаёт текст.\n\nТО, ЧТО ПЕРЕДАНО, ЭКРАНИРУЕТСЯ там, где нужно: `&`, `<`, `>` в тексте; а в значении атрибута ещё `\"`, табуляция и переводы строки, которые читатель иначе превратил бы в пробелы. Символ, для которого в кодировке файла нет байта, записывается ссылкой `&#N;` в тексте и в атрибуте - это законный XML, который читается обратно как сам символ; в имени, комментарии, инструкции или секции CDATA такого способа нет, и символ ОТВЕРГАЕТСЯ. Символ, который XML не допускает вовсе (большинство управляющих символов ниже пробела), отвергается везде.\n\nПРОСТРАНСТВА ИМЁН объявляются там, где впервые нужны: элемент или атрибут, записанный с URI, не связанным в текущей области, получает объявление прямо на этом теге. `xmlns` и `xmlns:p`, записанные через `WriteAttribute`, - тоже объявления, и писатель знает их как объявления.\n\nРАСКЛАДКА: `Indent`, по умолчанию True, ставит каждый элемент на отдельную строку, по табуляции на уровень, - но никогда внутри элемента, содержащего текст, где строка стала бы частью текста.",
+      "syntax_block": "var Writer = New XMLWriter();\nWriter.OpenFile(Path, \"windows-1251\");\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"DECLAR\");\nWriter.WriteStartElement(\"TIN\");\nWriter.WriteText(Tin);\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nWriter.Close();",
+      "syntax_block_ves": "Writer = New XMLWriter();\nWriter.OpenFile(Path, \"windows-1251\");\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"DECLAR\");\nWriter.WriteStartElement(\"TIN\");\nWriter.WriteText(Tin);\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nWriter.Close();",
+      "parameters": "Нет - писатель создаётся без открытой цели, а цель ему дают `OpenFile` или `SetString`.",
+      "return_descr": "XMLWriter - без открытой цели.",
+      "example": "var Xsi = \"http://www.w3.org/2001/XMLSchema-instance\";\nvar Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"DECLAR\");\nWriter.WriteNamespaceMapping(\"xsi\", Xsi);\nWriter.WriteAttribute(\"xsi:noNamespaceSchemaLocation\", \"J0100117.xsd\");\nWriter.WriteStartElement(\"HNAME\");\nWriter.WriteText(\"Бумага & Ко\");\nWriter.WriteEndElement();\nWriter.WriteStartElement(\"EMPTY\");\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <?xml version=\"1.0\" encoding=\"UTF-8\"?><DECLAR xmlns:xsi=\"...\" xsi:noNamespaceSchemaLocation=\"J0100117.xsd\"><HNAME>Бумага &amp; Ко</HNAME><EMPTY/></DECLAR>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.OpenFile",
+        "cls.XMLWriter.SetString",
+        "cls.XMLWriter.WriteStartElement",
+        "cls.XMLWriter.Close",
+        "cls.XMLReader"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.Indent",
+      "name_local": "Indent",
+      "name_en": "Indent",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLWriter.Indent",
+      "description": "РАЗМЕЧАЕТСЯ ли текст для человека - чтение и запись, по умолчанию True.\n\nTrue: перевод строки перед каждым элементом, комментарием, инструкцией и секцией CDATA и по одной табуляции на каждый открытый уровень; конец элемента, содержащего элементы, стоит на отдельной строке. НО НЕ внутри элемента, содержащего текст, - `<b>t</b>`, `<m>x<i/>y</m>` остаются на одной строке, - потому что там строка и табуляции стали бы частью текста. Перед самым первым записанным ничего не ставится.\n\nFalse: всё в одну строку, без пробельных символов, которые не были записаны.\n\nМожно менять в любой момент; действует на то, что записывается после этого.",
+      "syntax_block": "Writer.Indent = False;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteStartElement(\"b\");\nWriter.WriteText(\"t\");\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <a>\n// \t<b>t</b>\n// </a>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter",
+        "cls.XMLWriter.WriteText"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.NamespaceContext",
+      "name_local": "NamespaceContext",
+      "name_en": "NamespaceContext",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLWriter.NamespaceContext",
+      "description": "ПРОСТРАНСТВА ИМЁН, ДЕЙСТВУЮЩИЕ ТАМ, ГДЕ СТОИТ ПИСАТЕЛЬ, - `XMLNamespaceContext`, только для чтения: каждое объявление на ещё открытых элементах, включая сделанные писателем самостоятельно, и `xml`. Его `Depth` - число открытых элементов.\n\nСНИМОК: он отвечает за момент, когда был взят, что бы ни было записано после. Когда ничего не открыто, это `Undefined`.",
+      "syntax_block": "Context = Writer.NamespaceContext;",
+      "parameters": "",
+      "return_descr": "XMLNamespaceContext - или Undefined, когда ничего не открыто.",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\", \"urn:x\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nvar Context = Writer.NamespaceContext;\nMessage(Context.DefaultNamespace);          // urn:x\nMessage(Context.LookupNamespaceURI(\"p\"));  // urn:p",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLNamespaceContext",
+        "cls.XMLWriter.LookupPrefix",
+        "cls.XMLWriter.WriteNamespaceMapping"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.OpenFile",
+      "name_local": "OpenFile",
+      "name_en": "OpenFile",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "OpenFile(path : string [, encoding : string = \"UTF-8\" [, writeBOM : boolean = True]])",
+      "description": "Создаёт ФАЙЛ для записи - новый или очищенный, если он есть. Записанное попадает в файл по частям; на диске он полон, когда `Close()` ответил.\n\nКОДИРОВКА: `UTF-8` (по умолчанию), `UTF-16`, `windows-1251` или `cp866` - регистр не важен, принимаются также `utf8`, `utf16`, `cp1251` и `IBM866`. windows-1251 и cp866 - собственные таблицы движка: одни и те же байты на любой машине, какой бы ни была её системная кодовая страница. `WriteXMLDeclaration` затем называет кодировку её обычным именем (`cp1251` объявляется как `windows-1251`). Всё прочее отвергается: `XMLWriter: the encoding 'koi8-u' is not supported; supported: UTF-8, UTF-16, windows-1251, cp866`.\n\nМЕТКА ПОРЯДКА БАЙТОВ: UTF-8 получает её, если `writeBOM` не False; у UTF-16 (little-endian) она есть ВСЕГДА, потому что без неё его не прочитать; у windows-1251 и cp866 её нет никогда, что бы ни говорил `writeBOM`.\n\nФайл, который не удаётся создать, отвергается: `XMLWriter: cannot open the file '...' for writing`; о переполненном диске говорит `Close()`: `XMLWriter: writing to the file '...' failed`.\n\n⚠ Новый `OpenFile` или `SetString` у ещё открытого писателя - как и писатель, брошенный без `Close()`, - не обрезает свой файл: записанное к этому моменту попадает в файл, недописанным, как есть, и файл закрывается. (Путь, который не удаётся открыть, оставляет открытого писателя как был.) ТОТ ЖЕ путь, что у файла, открытого писателем, начинает этот файл заново: старый документ сначала оставляется, а затем файл пишется с начала. Только `Close()` сообщает, что файл не удалось записать полностью, и только `Close()` отказывает недописанному документу - сначала `Close()`.",
+      "syntax_block": "Writer.OpenFile(Path);\nWriter.OpenFile(Path, \"windows-1251\");\nWriter.OpenFile(Path, \"UTF-8\", False);",
+      "parameters": "path - файл для записи.\nencoding - необязательный: UTF-8 (по умолчанию), UTF-16, windows-1251, cp866.\nwriteBOM - необязательный, по умолчанию True: начинается ли файл UTF-8 с метки порядка байтов.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.OpenFile(\"C:\\out\\J0100117.xml\", \"windows-1251\");\nWriter.WriteXMLDeclaration();   // encoding=\"windows-1251\"\nWriter.WriteStartElement(\"DECLAR\");\nWriter.WriteEndElement();\nWriter.Close();",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.SetString",
+        "cls.XMLWriter.Close",
+        "cls.XMLWriter.WriteXMLDeclaration"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.SetString",
+      "name_local": "SetString",
+      "name_en": "SetString",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "SetString([encoding : string = \"UTF-8\"])",
+      "description": "Заставляет писателя писать в СТРОКУ; затем `Close()` отдаёт текст.\n\nСтрока вмещает любой символ, поэтому здесь ничего не превращается в ссылку `&#N;`, а КОДИРОВКА - лишь СЛОВО, которое `WriteXMLDeclaration` пишет в объявление, - для текста, который станет байтами позже, в файле или теле запроса, в этой кодировке. Оно пишется обычным именем, как его пишет `OpenFile`: `cp1251` объявляется как `windows-1251`, `utf8` - как `UTF-8`. Слово, не называющее ни одной известной движку кодировки, отвергается и здесь: `XMLWriter: the encoding '...' is not supported; supported: UTF-8, UTF-16, windows-1251, cp866`.\n\n⚠ Новый `SetString` или `OpenFile` у ещё открытого писателя оставляет недописанный документ: записываемый в файл попадает в свой файл, и файл закрывается; записываемый в строку отбрасывается. Сначала `Close()`.",
+      "syntax_block": "Writer.SetString();\nWriter.SetString(\"windows-1251\");",
+      "parameters": "encoding - необязательный, по умолчанию UTF-8: слово, которое назовёт объявление.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString(\"windows-1251\");\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"a\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <?xml version=\"1.0\" encoding=\"windows-1251\"?>\n// <a/>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.OpenFile",
+        "cls.XMLWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Close()",
+      "description": "Завершает документ. Для СТРОКИ отвечает ТЕКСТОМ; для ФАЙЛА дописывает оставшееся, закрывает файл и отвечает \"\" - документ на диске, когда метод вернул управление. Когда ничего не открыто, отвечает \"\".\n\nОН ОТКАЗЫВАЕТ НЕДОПИСАННОМУ документу: `XMLWriter: the element 'a' is still open - WriteEndElement for every WriteStartElement` и `XMLWriter: an attribute is still open`; после отказа писатель остаётся открытым, и скрипт может закончить открытое и закрыть снова. Несколько элементов на верхнем уровне или текст там не отвергаются: фрагмент отдаётся таким, каким записан. Файл, который не удалось записать полностью, говорит об этом здесь: `XMLWriter: writing to the file '...' failed`.\n\nПосле закрытия у писателя ничего не открыто: следующий документ начинается с `OpenFile` или `SetString`, а запись до этого отвергается - `XMLWriter: no file or string is open - OpenFile or SetString first`.",
+      "syntax_block": "Text = Writer.Close();",
+      "parameters": "Нет.",
+      "return_descr": "String - текст для строки; \"\" для файла.",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\ntry {\n    Writer.Close();\n} except {\n    Message(ErrorDescription());           // ... the element 'a' is still open ...\n}\nWriter.WriteEndElement();\nMessage(Writer.Close());                   // <a/>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.OpenFile",
+        "cls.XMLWriter.SetString",
+        "cls.XMLReader.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteXMLDeclaration",
+      "name_local": "WriteXMLDeclaration",
+      "name_en": "WriteXMLDeclaration",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteXMLDeclaration()",
+      "description": "Записывает объявление XML: `<?xml version=\"1.0\" encoding=\"...\"?>`, где кодировка - кодировка файла (обычным именем) или, для строки, та, что назвал `SetString`, - UTF-8, если не назвал никакой.\n\nОно должно быть ПЕРВЫМ в документе, иначе отвергается: `XMLWriter: the XML declaration is the first thing in a document`. Документ может обойтись без него; файл UTF-8 читается как UTF-8 и без него.",
+      "syntax_block": "Writer.WriteXMLDeclaration();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"a\");\nWriter.WriteEndElement();\nMessage(Writer.Close());                   // <?xml version=\"1.0\" encoding=\"UTF-8\"?><a/>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.OpenFile",
+        "cls.XMLWriter.SetString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteStartElement",
+      "name_local": "WriteStartElement",
+      "name_en": "WriteStartElement",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteStartElement(name : string [, namespaceURI : string])",
+      "description": "Начинает ЭЛЕМЕНТ. Его начальный тег остаётся открытым для атрибутов и объявлений пространств имён, пока внутри не будет что-то записано; заканчивает его `WriteEndElement` - как `<a/>`, если внутри ничего не записано.\n\nИМЯ может быть вида `prefix:local`. С URI ПРОСТРАНСТВА ИМЁН: URI, не связанный в текущей области, объявляется на этом элементе - под префиксом имени или, для имени без префикса, как пространство имён по умолчанию; имя без префикса, чей URI уже связан с префиксом, ПОЛУЧАЕТ этот префикс. БЕЗ URI имени с префиксом нужно, чтобы префикс уже был связан (`XMLWriter: the prefix 'p' is not bound to a namespace`), а имя без префикса остаётся в ДЕЙСТВУЮЩЕМ ПРОСТРАНСТВЕ ИМЁН ПО УМОЛЧАНИЮ - ничего, что отменяло бы его, не пишется.\n\nИМЯ ПРОВЕРЯЕТСЯ: из ASCII допустимы только буквы, цифры и `_`, `-`, `.`, `:`; имя не начинается с цифры, `-`, `.` или `:` и содержит не больше ОДНОГО двоеточия, причём не в конце; локальная часть после двоеточия тоже не начинается с цифры, `-` или `.`. Всё прочее отвергается: `XMLWriter: 'a b' is not a name for an element`, `XMLWriter: 'a:b:c' is not a name for an element`, `XMLWriter: 'p:1x' is not a name for an element`. Отвергается и префикс `xmlns`: `XMLWriter: the prefix 'xmlns' is reserved`. Символ за пределами ASCII пропускается там, где его допускает XML, - но не тот, который не вмещает кодировка файла: `XMLWriter: the character U+0100 in an element has no byte in windows-1251`. Имя должно быть строкой: `XMLWriter: the name is a string, not a value of the type 'Number'`.",
+      "syntax_block": "Writer.WriteStartElement(\"Name\");\nWriter.WriteStartElement(\"Name\", NamespaceURI);",
+      "parameters": "name - имя элемента, `local` или `prefix:local`.\nnamespaceURI - необязательный: пространство имён, в котором он находится.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteStartElement(\"a\", \"urn:d\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nWriter.WriteStartElement(\"b\", \"urn:p\");     // URI принадлежит p\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a xmlns=\"urn:d\" xmlns:p=\"urn:p\"><p:b/></a>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteEndElement",
+        "cls.XMLWriter.WriteAttribute",
+        "cls.XMLWriter.WriteNamespaceMapping"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteEndElement",
+      "name_local": "WriteEndElement",
+      "name_en": "WriteEndElement",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteEndElement()",
+      "description": "Заканчивает элемент, начатый последним. Если внутри ничего не записано, элемент закрывается как `<a/>`; иначе записывается его конечный тег - на отдельной строке, когда он содержит элементы и включён `Indent`.\n\nОН ОТКАЗЫВАЕТ: `XMLWriter: no element is open to end` и `XMLWriter: an attribute is open - WriteEndAttribute comes first`.",
+      "syntax_block": "Writer.WriteEndElement();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"EMPTY\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <EMPTY/>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteStartElement",
+        "cls.XMLWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteAttribute",
+      "name_local": "WriteAttribute",
+      "name_en": "WriteAttribute",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteAttribute(name : string, value : string) | WriteAttribute(name : string, namespaceURI : string, value : string)",
+      "description": "Записывает АТРИБУТ элемента, начальный тег которого ещё открыт. ДВЕ ФОРМЫ: `(name, value)` и `(name, namespaceURI, value)` - три аргумента означают, что второй - пространство имён.\n\n⚠ Третий аргумент, равный `Undefined`, считается отсутствующим: тогда значение - ВТОРОЙ.\n\nЗНАЧЕНИЕ экранируется - `&`, `<`, `>`, `\"`, табуляция и переводы строки - и читается обратно ровно таким, каким было передано. Символ, который не вмещает кодировка файла, записывается как `&#N;`.\n\nС URI ПРОСТРАНСТВА ИМЁН: имя с префиксом, чей префикс в текущей области не означает этот URI, получает объявление на теге, под своим префиксом. Имя без префикса берёт именованный префикс, связанный с этим URI в текущей области; когда такого нет, писатель придумывает префикс сам (`d1p1`, `d2p1`, ...) и объявляет его на теге - и тогда, когда URI принадлежит пространству имён ПО УМОЛЧАНИЮ, потому что атрибут никогда не находится в пространстве имён по умолчанию. Имени с префиксом без URI нужно, чтобы префикс уже был связан.\n\nОБЪЯВЛЕНИЯ ПРОСТРАНСТВ ИМЁН: `WriteAttribute(\"xmlns:p\", uri)` и `WriteAttribute(\"xmlns\", uri)` ОБЪЯВЛЯЮТ пространство имён, как это делает `WriteNamespaceMapping`, и писатель их знает: имя с префиксом `p`, записанное после, связано, `LookupPrefix` находит `p`, а то же объявление дважды не пишется. В форме с тремя аргументами URI такого объявления может быть только пространством имён xmlns: `XMLWriter: a namespace declaration is in the namespace 'http://www.w3.org/2000/xmlns/', not in 'urn:x'`. `xmlns:` без ничего после двоеточия - не имя: `XMLWriter: 'xmlns:' is not a name for an attribute`.\n\nОБЪЯВЛЕНИЕ, КОТОРОЕ ПЕРЕНЕСЛО БЫ ИМЯ, уже стоящее на теге, - собственное имя элемента или записанного атрибута, - в другое пространство имён, отвергается: `XMLWriter: the prefix 'p' already stands for 'urn:x' on this element`; для пространства имён по умолчанию в сообщении стоит `xmlns`. Так же отвергается атрибут, чей URI заново объявил бы префикс элемента для другого пространства имён.\n\nОДИН И ТОТ ЖЕ АТРИБУТ ДВАЖДЫ на одном элементе отвергается - под тем же именем или под двумя префиксами одного пространства имён: `XMLWriter: the attribute 'a' is written on this element already`.\n\nОН ОТКАЗЫВАЕТ атрибуту где угодно, кроме как сразу после начала его элемента, - `XMLWriter: an attribute is written right after its element's start, before anything inside it`, - и значению, которое не является строкой: `XMLWriter: the value is a string, not a value of the type 'Number'`. Число или дату сначала преобразуйте в текст, которого требует формат. Отвергнутый атрибут не оставляет на теге ничего от себя.",
+      "syntax_block": "Writer.WriteAttribute(\"name\", Value);\nWriter.WriteAttribute(\"name\", NamespaceURI, Value);",
+      "parameters": "name - имя атрибута.\nnamespaceURI - в форме с тремя аргументами: пространство имён, в котором он находится.\nvalue - значение, строка.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"r\");\nWriter.WriteAttribute(\"a\", \"1 < 2\");\nWriter.WriteAttribute(\"q\", \"urn:q\", \"x\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <r a=\"1 &lt; 2\" xmlns:d1p1=\"urn:q\" d1p1:q=\"x\"/>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteStartAttribute",
+        "cls.XMLWriter.WriteStartElement",
+        "cls.XMLWriter.WriteNamespaceMapping"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteStartAttribute",
+      "name_local": "WriteStartAttribute",
+      "name_en": "WriteStartAttribute",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteStartAttribute(name : string [, namespaceURI : string])",
+      "description": "Начинает АТРИБУТ, значение которого записывается ЧАСТЯМИ: `WriteText` (с экранированием) и `WriteRaw` (как есть) затем пишут в значение, пока `WriteEndAttribute` его не закроет. Имя и пространство имён работают как в `WriteAttribute`.\n\nОтвергается где угодно, кроме как сразу после начала элемента, а также пока открыт другой атрибут: `XMLWriter: an attribute is written right after its element's start, before anything inside it`. Оставленный открытым атрибут отвергается следующим элементом, концом элемента и `Close()`.\n\nОбъявление пространства имён частями не пишется: имя `xmlns` или `xmlns:p` отвергается - `XMLWriter: a namespace is declared with WriteNamespaceMapping or WriteAttribute, not as an open attribute`. Один и тот же атрибут дважды на одном элементе отвергается, как в `WriteAttribute`.",
+      "syntax_block": "Writer.WriteStartAttribute(\"name\");\nWriter.WriteText(Part);\nWriter.WriteEndAttribute();",
+      "parameters": "name - имя атрибута.\nnamespaceURI - необязательный: пространство имён, в котором он находится.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"r\");\nWriter.WriteStartAttribute(\"period\");\nWriter.WriteText(\"2026\");\nWriter.WriteText(\"-10\");\nWriter.WriteEndAttribute();\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <r period=\"2026-10\"/>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteEndAttribute",
+        "cls.XMLWriter.WriteAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteEndAttribute",
+      "name_local": "WriteEndAttribute",
+      "name_en": "WriteEndAttribute",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteEndAttribute()",
+      "description": "Закрывает атрибут, открытый `WriteStartAttribute`. Отвергается, когда открытого нет: `XMLWriter: no attribute is open to end`.",
+      "syntax_block": "Writer.WriteEndAttribute();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "Writer.WriteStartAttribute(\"code\");\nWriter.WriteText(Code);\nWriter.WriteEndAttribute();",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteStartAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteText",
+      "name_local": "WriteText",
+      "name_en": "WriteText",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteText(text : string)",
+      "description": "Записывает ТЕКСТ - с экранированием: `&`, `<` и `>` становятся `&amp;`, `&lt;`, `&gt;`, а возврат каретки - `&#13;` (голый читатель превратил бы в перевод строки). Он читается обратно ровно таким, каким был передан. Внутри открытого `WriteStartAttribute` он вместо этого идёт в значение атрибута.\n\nСимвол, для которого в кодировке файла нет байта, записывается ссылкой `&#N;`. Символ, который XML не допускает вовсе, отвергается: `XMLWriter: the character U+0001 is not allowed in XML`, - и отвергнутый текст не записывает ничего от себя, даже части перед этим символом.\n\nТекст помечает свой элемент как содержащий текст: с этого момента `Indent` не ставит внутри него переводов строки.\n\nТекст должен быть строкой - `XMLWriter: the text is a string, not a value of the type 'Number'`: число, дату или Boolean в текст, которого требует формат, преобразует скрипт, а не угадывает писатель.",
+      "syntax_block": "Writer.WriteText(Text);",
+      "parameters": "text - текст, строка.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"c\");\nWriter.WriteText(\"1 < 2 & 3\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <c>1 &lt; 2 &amp; 3</c>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteCDATASection",
+        "cls.XMLWriter.WriteRaw",
+        "cls.XMLWriter.Indent"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteCDATASection",
+      "name_local": "WriteCDATASection",
+      "name_en": "WriteCDATASection",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteCDATASection(text : string)",
+      "description": "Записывает СЕКЦИЮ CDATA - `<![CDATA[...]]>`, - в которой текст стоит БЕЗ ЭКРАНИРОВАНИЯ. Текст, содержащий `]]>`, который закончил бы секцию раньше времени, делится на две секции и читается обратно целиком как два узла `CDATASection`.\n\nВнутри CDATA ссылок не бывает, поэтому символ, который не вмещает кодировка файла, здесь ОТВЕРГАЕТСЯ: `XMLWriter: the character U+0100 in a CDATA section has no byte in windows-1251`.\n\nКак и текст, секция помечает свой элемент как содержащий текст: `Indent` не ставит после неё переводов строки внутри этого элемента.",
+      "syntax_block": "Writer.WriteCDATASection(Text);",
+      "parameters": "text - текст, строка.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteStartElement(\"a\");\nWriter.WriteCDATASection(\"<b>bold</b>\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a><![CDATA[<b>bold</b>]]></a>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteText",
+        "enum.XMLNodeType.CDATASection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteComment",
+      "name_local": "WriteComment",
+      "name_en": "WriteComment",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteComment(text : string)",
+      "description": "Записывает КОММЕНТАРИЙ - `<!--text-->`, текст как есть (пробелы вокруг него, если они нужны, ставьте сами).\n\nОтвергаются: текст, содержащий `--` или оканчивающийся на `-`, - `XMLWriter: a comment cannot hold '--' or end with '-'`, - и символ, который не вмещает кодировка файла, поскольку в комментарии нет ссылок: `XMLWriter: the character U+0100 in a comment has no byte in windows-1251`.",
+      "syntax_block": "Writer.WriteComment(Text);",
+      "parameters": "text - текст комментария.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteStartElement(\"a\");\nWriter.WriteComment(\" сформировано \");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a><!-- сформировано --></a>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteProcessingInstruction",
+        "enum.XMLNodeType.Comment"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteProcessingInstruction",
+      "name_local": "WriteProcessingInstruction",
+      "name_en": "WriteProcessingInstruction",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteProcessingInstruction(name : string [, text : string])",
+      "description": "Записывает ИНСТРУКЦИЮ ОБРАБОТКИ - `<?name text?>`; без текста - `<?name?>`.\n\nОтвергаются: имя `xml` в любом регистре - `XMLWriter: 'xml' is the declaration's, not an instruction's name - WriteXMLDeclaration writes it`; имя с двоеточием или то, что не является именем, - `XMLWriter: 'a b' is not a name for a processing instruction`; текст, содержащий `?>`, - `XMLWriter: a processing instruction cannot hold '?>'`; и символ, который не вмещает кодировка файла.",
+      "syntax_block": "Writer.WriteProcessingInstruction(\"xml-stylesheet\", \"type=\"\"text/xsl\"\" href=\"\"form.xsl\"\"\");",
+      "parameters": "name - цель инструкции.\ntext - необязательный: то, что следует за ней.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteProcessingInstruction(\"xml-stylesheet\", \"href=\"\"form.xsl\"\"\");\nWriter.WriteStartElement(\"a\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <?xml-stylesheet href=\"form.xsl\"?><a/>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteComment",
+        "enum.XMLNodeType.ProcessingInstruction"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteNamespaceMapping",
+      "name_local": "WriteNamespaceMapping",
+      "name_en": "WriteNamespaceMapping",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteNamespaceMapping(prefix : string, namespaceURI : string)",
+      "description": "ОБЪЯВЛЯЕТ пространство имён на элементе, начальный тег которого ещё открыт: `xmlns:prefix=\"uri\"` или, для пустого префикса (\"\" или `Undefined`), `xmlns=\"uri\"` - пространство имён по умолчанию. Объявленное один раз на корне, пространство имён служит всему документу, и писатель затем сам использует его префикс для каждого имени с этим URI.\n\nОдно и то же объявление дважды на одном элементе записывается один раз. Отвергаются: объявление где угодно, кроме открытого начального тега, - `XMLWriter: a namespace is declared on an element's start, before anything inside it`; префикс `xml` или `xmlns` - `XMLWriter: the prefix 'xml' is reserved`; префикс без пространства имён - `XMLWriter: the prefix 'p' cannot be bound to no namespace`; префикс, который не является именем или содержит двоеточие, - `XMLWriter: 'p:q' is not a name for a prefix`; префикс, связываемый с пространством имён XML или xmlns, - `XMLWriter: the namespace 'http://www.w3.org/2000/xmlns/' is reserved`; один префикс для двух URI на одном элементе - `XMLWriter: the prefix 'p' is declared on this element already`; и объявление, которое перенесло бы имя, уже стоящее на теге, - собственное имя элемента или записанного атрибута, - в другое пространство имён: `XMLWriter: the prefix 'p' already stands for 'urn:x' on this element` (для пространства имён по умолчанию в сообщении стоит `xmlns`).\n\n`WriteAttribute(\"xmlns:p\", uri)` объявляет точно так же.",
+      "syntax_block": "Writer.WriteNamespaceMapping(\"xsi\", \"http://www.w3.org/2001/XMLSchema-instance\");",
+      "parameters": "prefix - префикс; \"\" для пространства имён по умолчанию.\nnamespaceURI - пространство имён.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\", \"urn:x\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a xmlns=\"urn:x\" xmlns:p=\"urn:p\"/>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteStartElement",
+        "cls.XMLWriter.LookupPrefix",
+        "cls.XMLWriter.NamespaceContext"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteRaw",
+      "name_local": "WriteRaw",
+      "name_en": "WriteRaw",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteRaw(text : string)",
+      "description": "Записывает текст КАК ЕСТЬ - БЕЗ экранирования и без проверки разметки: фрагмент XML, сделанный в другом месте. Внутри открытого `WriteStartAttribute` он идёт в значение атрибута, тоже без экранирования.\n\n⚠ Писатель не может ручаться за то, чего не писал сам: сырой текст, не являющийся XML, даёт документ, который не разбирается, и ничто не скажет об этом, пока его кто-нибудь не прочитает. ПРОВЕРЯЕТСЯ каждый символ, ДО того как записано хоть что-то из текста: он должен быть допустим в XML - одиночный суррогат или управляющий символ отвергается, `XMLWriter: the character U+D800 is not allowed in XML`, - и у него должен быть байт в кодировке цели, поскольку ссылка для него не делается: `XMLWriter: the character U+0100 has no byte in windows-1251`. Строка вмещает любой символ, допустимый в XML.\n\nСырой текст помечает свой элемент как содержащий текст - `Indent` не ставит внутри него переводов строки.",
+      "syntax_block": "Writer.WriteRaw(Fragment);",
+      "parameters": "text - текст, записываемый как есть.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteRaw(\"<b>сделано в другом месте</b>\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a><b>сделано в другом месте</b></a>",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteText",
+        "cls.XMLWriter.WriteCDATASection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteCurrent",
+      "name_local": "WriteCurrent",
+      "name_en": "WriteCurrent",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteCurrent(reader : XMLReader)",
+      "description": "Записывает узел, на котором СТОИТ `XMLReader`, - только этот узел, а не то, что внутри него: начало элемента с его атрибутами (включая его объявления пространств имён), конец, текст, секцию CDATA, комментарий, инструкцию; на курсоре атрибутов - этот атрибут, причём `xmlns` или `xmlns:p` пишется как объявление, которым он и является. Начало элемента - ОДНА запись вместе со всеми его атрибутами: если атрибут отвергнут, элемент тоже не начинается. Поэтому цикл по читателю КОПИРУЕТ документ, а цикл, который пропускает узел или пишет на его месте что-то другое, преобразует его по пути.\n\n`<a/>` остаётся `<a/>`: начало записывается закрытым, а его конец, прочитанный следующим, не пишет ничего. До первого `Read()` и в конце записывать нечего. Для копии, совпадающей с исходным текстом, сохраняйте пробельные символы через `IgnoreWhitespace = False` и `Indent = False`.\n\nВсё, кроме читателя, отвергается: `XMLWriter: WriteCurrent writes what an XMLReader stands on - not a value of the type 'String'`.",
+      "syntax_block": "Writer.WriteCurrent(Reader);",
+      "parameters": "reader - XMLReader, текущий узел которого записывается.",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(Source);\nvar Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType <> XMLNodeType.Comment) {\n        Writer.WriteCurrent(Reader);       // документ без его комментариев\n    }\n}\nMessage(Writer.Close());",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader",
+        "cls.XMLReader.Read",
+        "cls.XMLWriter.Indent"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.LookupPrefix",
+      "name_local": "LookupPrefix",
+      "name_en": "LookupPrefix",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "LookupPrefix(namespaceURI : string)",
+      "description": "ПРЕФИКС, с которым связано пространство имён ТАМ, ГДЕ СТОИТ ПИСАТЕЛЬ, - самое внутреннее объявление, которое всё ещё означает этот URI, включая придуманные самим писателем (`d1p1`); \"\", когда это пространство имён по умолчанию; `xml` для пространства имён XML.\n\n`Undefined`, когда его ничто не связывает, для пустого URI и когда у писателя ничего не открыто. Объявления, записанные через `WriteAttribute(\"xmlns:p\", ...)`, учитываются так же, как объявления `WriteNamespaceMapping`.\n\nОтвет дан для имени ЭЛЕМЕНТА. Атрибут никогда не берёт \"\" пространства имён по умолчанию: атрибут, записанный с URI пространства по умолчанию, получает придуманный префикс (`d1p1`), если в текущей области нет именованного префикса для этого URI.",
+      "syntax_block": "Prefix = Writer.LookupPrefix(NamespaceURI);",
+      "parameters": "namespaceURI - пространство имён.",
+      "return_descr": "String - или Undefined, когда с ним не связан ни один префикс.",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nMessage(Writer.LookupPrefix(\"urn:p\"));                // p\nMessage(Writer.LookupPrefix(\"urn:none\") = Undefined); // True",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLWriter.WriteNamespaceMapping",
+        "cls.XMLWriter.NamespaceContext",
+        "cls.XMLNamespaceContext.LookupPrefix"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext",
+      "name_local": "XMLNamespaceContext",
+      "name_en": "XMLNamespaceContext",
+      "kind": "collection",
+      "class_id": 334649882924145898,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Reader.NamespaceContext : XMLNamespaceContext",
+      "description": "ПРОСТРАНСТВА ИМЁН, ДЕЙСТВУЮЩИЕ В ОДНОМ МЕСТЕ ДОКУМЕНТА, - какой префикс там означает какой URI и каково пространство имён по умолчанию. СКРИПТ НИКОГДА ЕГО НЕ СОЗДАЁТ - `New XMLNamespaceContext()` не компилируется, поскольку ему не было бы чего быть контекстом: `XMLReader` выдаёт его для узла, на котором стоит, `XMLWriter` - для места, где пишет, оба через своё свойство `NamespaceContext`.\n\nЭТО СНИМОК: взятый на узле, он отвечает за этот узел, как бы далеко ни ушёл читатель с тех пор, включая `Close()`.\n\nЧто он содержит: каждое действующее объявление, по одному URI на префикс, - префикс, объявленный заново глубже, внутри означает новый URI, а когда тот элемент закончился, снова старый; `xmlns=\"\"` отменяет пространство имён по умолчанию. И `xml`, связанный в любом документе, объявлен он или нет.\n\nЗачем он нужен: значение вроде `xsi:type=\"d:Item\"` несёт в своём тексте ПРЕФИКС, и только контекст узла говорит, какое пространство имён этот префикс там означает.",
+      "syntax_block": "Context = Reader.NamespaceContext;\nContext.LookupNamespaceURI(\"p\")   Context.LookupPrefix(Uri)   Context.DefaultNamespace",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\" xmlns:p=\"\"urn:p\"\"><p:x/></r>\");\nReader.Read();\nReader.Read();                             // p:x\nvar Context = Reader.NamespaceContext;\nMessage(Context.DefaultNamespace);          // urn:a\nMessage(Context.LookupNamespaceURI(\"p\"));  // urn:p\nMessage(Context.LookupPrefix(\"urn:p\"));     // p",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.NamespaceContext",
+        "cls.XMLWriter.NamespaceContext",
+        "cls.XMLNamespaceContext.LookupNamespaceURI"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.DefaultNamespace",
+      "name_local": "DefaultNamespace",
+      "name_en": "DefaultNamespace",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNamespaceContext.DefaultNamespace",
+      "description": "ДЕЙСТВУЮЩЕЕ ПРОСТРАНСТВО ИМЁН ПО УМОЛЧАНИЮ - то, в котором находится элемент без префикса, - только для чтения; \"\", когда его нет, в том числе там, где его отменил `xmlns=\"\"`.",
+      "syntax_block": "Uri = Context.DefaultNamespace;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\"><c xmlns=\"\"\"\"/></r>\");\nReader.Read();\nMessage(Reader.NamespaceContext.DefaultNamespace);          // urn:a\nReader.Read();\nMessage(Reader.NamespaceContext.DefaultNamespace = \"\");     // True: отменено",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLNamespaceContext",
+        "cls.XMLNamespaceContext.LookupNamespaceURI"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.Depth",
+      "name_local": "Depth",
+      "name_en": "Depth",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNamespaceContext.Depth",
+      "description": "На какой глубине стоит место, где был взят контекст, - только для чтения.\n\nОТ ЧИТАТЕЛЯ это НЕ собственный `Depth` читателя: на единицу больше, чем у читателя, на начале элемента и на тексте (начало корня - 1, текст внутри корня - 2), столько же, сколько у читателя, на конце элемента (конец корня - 0, в том числе конец пустого элемента), а на атрибуте - на единицу больше, чем на начале его элемента. До первого `Read()` это 1.\n\nОТ ПИСАТЕЛЯ это число открытых элементов.",
+      "syntax_block": "Level = Context.Depth;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r>t</r>\");\nwhile (Reader.Read()) {\n    Message(\"\" + Reader.Depth + \" / \" + Reader.NamespaceContext.Depth);   // 0 / 1, 1 / 2, 0 / 0\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLNamespaceContext",
+        "cls.XMLReader.Depth",
+        "cls.XMLReader.NamespaceContext"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.LookupNamespaceURI",
+      "name_local": "LookupNamespaceURI",
+      "name_en": "LookupNamespaceURI",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "LookupNamespaceURI(prefix : string)",
+      "description": "ПРОСТРАНСТВО ИМЁН, которое здесь означает префикс; с \"\" - пространство имён по умолчанию. `xml` всегда отвечает `http://www.w3.org/XML/1998/namespace`. Префикс, не связанный здесь, - и \"\" там, где нет пространства имён по умолчанию, - отвечает `Undefined`.\n\nПрефикс должен быть строкой - `XMLNamespaceContext: a prefix is a string, not a value of the type 'Number'`, - поскольку `Undefined`, прочитанный как \"\", молча спрашивал бы о пространстве имён по умолчанию.",
+      "syntax_block": "Uri = Context.LookupNamespaceURI(\"p\");",
+      "parameters": "prefix - префикс; \"\" для пространства имён по умолчанию.",
+      "return_descr": "String - или Undefined, когда префикс не связан.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" xmlns:xsi=\"\"http://www.w3.org/2001/XMLSchema-instance\"\"><i xsi:type=\"\"d:Item\"\"/></r>\");\nReader.Read();\nReader.Read();\nvar Type = Reader.GetAttribute(\"xsi:type\");                     // d:Item - префикс в значении\nvar Uri = Reader.NamespaceContext.LookupNamespaceURI(Left(Type, Find(Type, \":\") - 1));\nMessage(Uri);                                                    // urn:d",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLNamespaceContext.LookupPrefix",
+        "cls.XMLNamespaceContext.DefaultNamespace"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.LookupPrefix",
+      "name_local": "LookupPrefix",
+      "name_en": "LookupPrefix",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "LookupPrefix(namespaceURI : string)",
+      "description": "ПРЕФИКС, связанный здесь с пространством имён: \"\", когда это пространство имён по умолчанию, `xml` для пространства имён XML и `Undefined`, когда его ничто не связывает. Префикс, объявленный заново глубже для другого URI, больше не считается.\n\nЕсли на один URI приходится НЕСКОЛЬКО префиксов, отвечается САМЫЙ ВНЕШНИЙ; все их даёт `Prefixes`.\n\nURI должен быть строкой: `XMLNamespaceContext: a namespace URI is a string, not a value of the type 'Number'`.",
+      "syntax_block": "Prefix = Context.LookupPrefix(Uri);",
+      "parameters": "namespaceURI - пространство имён.",
+      "return_descr": "String - или Undefined, когда с ним не связан ни один префикс.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nvar Context = Reader.NamespaceContext;\nMessage(Context.LookupPrefix(\"urn:p\"));                // p\nMessage(Context.LookupPrefix(\"urn:none\") = Undefined); // True",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLNamespaceContext.LookupNamespaceURI",
+        "cls.XMLNamespaceContext.Prefixes",
+        "cls.XMLWriter.LookupPrefix"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.NamespaceURIs",
+      "name_local": "NamespaceURIs",
+      "name_en": "NamespaceURIs",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "NamespaceURIs()",
+      "description": "Каждое ПРОСТРАНСТВО ИМЁН, связанное здесь, - по одному разу, даже когда его означают несколько префиксов, - включая пространство имён по умолчанию и пространство имён XML, связанное везде.",
+      "syntax_block": "Uris = Context.NamespaceURIs();",
+      "parameters": "Нет.",
+      "return_descr": "Array строк.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\" xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nforeach (Uri In Reader.NamespaceContext.NamespaceURIs()) {\n    Message(Uri);          // urn:a, urn:p и пространство имён XML\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLNamespaceContext.Prefixes",
+        "cls.XMLNamespaceContext.NamespaceMappings"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.Prefixes",
+      "name_local": "Prefixes",
+      "name_en": "Prefixes",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Prefixes(namespaceURI : string)",
+      "description": "Каждый ПРЕФИКС, связанный здесь с пространством имён, - включая \"\", когда это ещё и пространство имён по умолчанию. Пустой массив, когда его ничто не связывает.\n\nURI должен быть строкой: `XMLNamespaceContext: a namespace URI is a string, not a value of the type 'Number'`.",
+      "syntax_block": "List = Context.Prefixes(Uri);",
+      "parameters": "namespaceURI - пространство имён.",
+      "return_descr": "Array строк.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:p=\"\"urn:p\"\" xmlns:q=\"\"urn:p\"\"/>\");\nReader.Read();\nMessage(Reader.NamespaceContext.Prefixes(\"urn:p\").Count());   // 2",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLNamespaceContext.LookupPrefix",
+        "cls.XMLNamespaceContext.NamespaceURIs"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.NamespaceMappings",
+      "name_local": "NamespaceMappings",
+      "name_en": "NamespaceMappings",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "NamespaceMappings()",
+      "description": "Всё действующее сразу: `Container` из ПРЕФИКСА в ПРОСТРАНСТВО ИМЁН - пространство имён по умолчанию под ключом \"\", и `xml` всегда среди ключей.",
+      "syntax_block": "Mappings = Context.NamespaceMappings();",
+      "parameters": "Нет.",
+      "return_descr": "Container - префикс → URI пространства имён.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\" xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nforeach (Pair In Reader.NamespaceContext.NamespaceMappings()) {\n    Message(\"'\" + Pair.Key + \"' = \" + Pair.Value);   // '' = urn:a, 'p' = urn:p, 'xml' = ...\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLNamespaceContext.NamespaceURIs",
+        "cls.XMLNamespaceContext.LookupNamespaceURI"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType",
+      "name_local": "XMLNodeType",
+      "name_en": "XMLNodeType",
+      "kind": "enum_type",
+      "class_id": 389858258248631250,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.<Member>",
+      "description": "НА ЧЁМ СТОИТ XMLReader - `NodeType` отвечает одним из этих членов, и `MoveToContent` тоже. В списке все пятнадцать видов, в неизменном порядке, чтобы компилировался код, написанный по всему списку: `None, StartElement, EndElement, Text, Whitespace, CDATASection, Comment, ProcessingInstruction, XMLDeclaration, DocumentTypeDefinition, Attribute, EntityReference, Entity, EndEntity, Notation`.\n\nТО, ЧТО ОБХОД ДЕЙСТВИТЕЛЬНО ВСТРЕЧАЕТ, - меньше: `StartElement`, `EndElement`, `Text`, `CDATASection`, `Comment`, `ProcessingInstruction`, `Whitespace` при `IgnoreWhitespace = False`, `Attribute` на курсоре атрибутов и `None` там, где читатель ни на чём не стоит. Объявление XML и тип документа здесь не узлы, а о сущности или нотации не сообщается никогда - сущности приходят уже заменёнными.\n\nЧлен пишется как `XMLNodeType.<Имя>` и сравнивается через `=` и `<>`.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.StartElement) {\n    // ...\n}",
+      "syntax_block_ves": "If Reader.NodeType = XMLNodeType.StartElement Then\n    // ...\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>t</a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Text) {\n        Message(Reader.Value);             // t\n    }\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.XMLReader.NodeType",
+        "cls.XMLReader.MoveToContent",
+        "cls.XMLReader.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.None",
+      "name_local": "None",
+      "name_en": "None",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.None",
+      "description": "ТАМ, ГДЕ ЧИТАТЕЛЬ НИ НА ЧЁМ НЕ СТОИТ, - это не узел документа. `NodeType` равен `None` до первого `Read()`, после того как `Read()` ответил False, и после `Close()`; `MoveToContent` отвечает им в конце документа.",
+      "syntax_block": "if (Reader.MoveToContent() = XMLNodeType.None) {\n    // документ закончился\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a/>\");\nMessage(Reader.NodeType = XMLNodeType.None);   // True: ещё ничего не прочитано\nwhile (Reader.Read()) {\n}\nMessage(Reader.NodeType = XMLNodeType.None);   // True: за концом",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.StartElement",
+      "name_local": "StartElement",
+      "name_en": "StartElement",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.StartElement",
+      "description": "НАЧАЛО ЭЛЕМЕНТА - `<a>`, а также первый из двух узлов `<a/>`. Его `Name`, `LocalName`, `Prefix` и `NamespaceURI` - элемента, и на нём читаются атрибуты. `IsEmptyElement` говорит, был ли он записан как `<a/>`; `Skip()` на нём перешагивает весь элемент.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.StartElement And Reader.Name = \"TIN\") {\n    Reader.Read();\n    Tin = Reader.Value;\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        Message(\"StartElement: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.EndElement",
+      "name_local": "EndElement",
+      "name_en": "EndElement",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.EndElement",
+      "description": "КОНЕЦ ЭЛЕМЕНТА - `</a>`, а также второй узел `<a/>`, который является тем же тегом: там он тоже сообщает `IsEmptyElement` и всё ещё имеет атрибуты. Он стоит на глубине своего `StartElement`, поэтому их пара сопоставляется по `Depth`.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.EndElement And Reader.Name = \"ROW\") {\n    // одна строка готова\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.EndElement) {\n        Message(\"EndElement: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Text",
+      "name_local": "Text",
+      "name_en": "Text",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Text",
+      "description": "ТЕКСТ ВНУТРИ ЭЛЕМЕНТА, с уже заменёнными сущностями, - его держит `Value`. Один узел, как бы он ни был разрезан: порциями, которыми читается файл, или сущностью в его середине. Текст, состоящий только из пробельных символов, - это узел `Whitespace`, а не этот; CDATA - отдельный узел.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.Text) {\n    Message(Reader.Value);\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Text) {\n        Message(\"Text: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Whitespace",
+      "name_local": "Whitespace",
+      "name_en": "Whitespace",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Whitespace",
+      "description": "ТЕКСТ, СОСТОЯЩИЙ ТОЛЬКО ИЗ ПРОБЕЛЬНЫХ СИМВОЛОВ, - переводы строки и отступы между элементами. Встречается только при `IgnoreWhitespace = False`; по умолчанию такой текст отбрасывается, и этот член не появляется никогда.",
+      "syntax_block": "Reader.IgnoreWhitespace = False;\n// ... Reader.NodeType = XMLNodeType.Whitespace",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Whitespace) {\n        Message(\"Whitespace: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.CDATASection",
+      "name_local": "CDATASection",
+      "name_en": "CDATASection",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.CDATASection",
+      "description": "СЕКЦИЯ CDATA - `<![CDATA[...]]>`, - её текст в `Value`, без экранирования. Узел СВОЙ: никогда не сливается с текстом до или после него и никогда не бывает узлом `Whitespace`. `IsCharacters` на нём равно True, как и на тексте.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.CDATASection) {\n    Html = Reader.Value;\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.CDATASection) {\n        Message(\"CDATASection: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Comment",
+      "name_local": "Comment",
+      "name_en": "Comment",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Comment",
+      "description": "КОММЕНТАРИЙ - `<!--...-->`, - его текст в `Value`. Комментарии внутри типа документа не отдаются. `MoveToContent` их пропускает.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.Comment) {\n    // пропускается\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Comment) {\n        Message(\"Comment: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.ProcessingInstruction",
+      "name_local": "ProcessingInstruction",
+      "name_en": "ProcessingInstruction",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.ProcessingInstruction",
+      "description": "ИНСТРУКЦИЯ ОБРАБОТКИ - `<?target data?>`: `Name` - цель, `Value` - данные. Объявление XML `<?xml ...?>` похоже на неё, но ею не является: это вообще не узел.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.ProcessingInstruction) {\n    Message(Reader.Name + \": \" + Reader.Value);\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.ProcessingInstruction) {\n        Message(\"ProcessingInstruction: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.XMLDeclaration",
+      "name_local": "XMLDeclaration",
+      "name_en": "XMLDeclaration",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.XMLDeclaration",
+      "description": "ОБЪЯВЛЕНИЕ XML, которое здесь НЕ является узлом: `<?xml version=\"1.0\" encoding=\"...\"?>` читается вместе с началом документа, и о нём сообщают `XMLVersion`, `XMLEncoding` и `Standalone`. ЧИТАТЕЛЬ ЕГО НИКОГДА НЕ ВЫДАЁТ: член есть в списке, чтобы компилировался код, написанный по всему списку; сравнение с ним здесь просто никогда не бывает истинным.",
+      "syntax_block": "Encoding = Reader.XMLEncoding;   // не узел",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.XMLDeclaration) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - здесь не встречается",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.DocumentTypeDefinition",
+      "name_local": "DocumentTypeDefinition",
+      "name_en": "DocumentTypeDefinition",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.DocumentTypeDefinition",
+      "description": "ТИП ДОКУМЕНТА - `<!DOCTYPE ...>`, который не отдаётся как узел: его внутренние сущности применяются, внешняя отвергается. ЧИТАТЕЛЬ ЕГО НИКОГДА НЕ ВЫДАЁТ: член есть в списке, чтобы компилировался код, написанный по всему списку; сравнение с ним здесь просто никогда не бывает истинным.",
+      "syntax_block": "// <!DOCTYPE ...> здесь не узел",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.DocumentTypeDefinition) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - здесь не встречается",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Attribute",
+      "name_local": "Attribute",
+      "name_en": "Attribute",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Attribute",
+      "description": "АТРИБУТ, встречающийся только через курсор атрибутов - после `ReadAttribute`, `NextAttribute` или `FirstAttribute`, - и никогда через `Read()`. Тогда `Name` и `Value` - атрибута, до `MoveToElement` или следующего `Read()`.",
+      "syntax_block": "while (Reader.ReadAttribute()) {\n    // Reader.NodeType = XMLNodeType.Attribute\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\"/>\");\nReader.Read();\nReader.ReadAttribute();\nMessage(Reader.NodeType = XMLNodeType.Attribute);   // True\nMessage(Reader.Name + \" = \" + Reader.Value);       // a = 1",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.EntityReference",
+      "name_local": "EntityReference",
+      "name_en": "EntityReference",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.EntityReference",
+      "description": "ССЫЛКА НА СУЩНОСТЬ, которая никогда не приходит узлом: сущности заменяются при чтении текста, и `&amp;` приходит как `&` внутри текста, в котором стоит. ЧИТАТЕЛЬ ЕГО НИКОГДА НЕ ВЫДАЁТ: член есть в списке, чтобы компилировался код, написанный по всему списку; сравнение с ним здесь просто никогда не бывает истинным.",
+      "syntax_block": "// &e; приходит своим заменяющим текстом",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.EntityReference) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - здесь не встречается",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Entity",
+      "name_local": "Entity",
+      "name_en": "Entity",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Entity",
+      "description": "ОБЪЯВЛЕНИЕ СУЩНОСТИ. ЧИТАТЕЛЬ ЕГО НИКОГДА НЕ ВЫДАЁТ: член есть в списке, чтобы компилировался код, написанный по всему списку; сравнение с ним здесь просто никогда не бывает истинным.",
+      "syntax_block": "// не выдаётся",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Entity) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - здесь не встречается",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.EndEntity",
+      "name_local": "EndEntity",
+      "name_en": "EndEntity",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.EndEntity",
+      "description": "КОНЕЦ ЗАМЕНЯЮЩЕГО ТЕКСТА СУЩНОСТИ. ЧИТАТЕЛЬ ЕГО НИКОГДА НЕ ВЫДАЁТ: член есть в списке, чтобы компилировался код, написанный по всему списку; сравнение с ним здесь просто никогда не бывает истинным.",
+      "syntax_block": "// не выдаётся",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.EndEntity) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - здесь не встречается",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Notation",
+      "name_local": "Notation",
+      "name_en": "Notation",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Notation",
+      "description": "ОБЪЯВЛЕНИЕ НОТАЦИИ. ЧИТАТЕЛЬ ЕГО НИКОГДА НЕ ВЫДАЁТ: член есть в списке, чтобы компилировался код, написанный по всему списку; сравнение с ним здесь просто никогда не бывает истинным.",
+      "syntax_block": "// не выдаётся",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Notation) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - здесь не встречается",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    }
+  ]
+}

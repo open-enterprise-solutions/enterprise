@@ -92,6 +92,12 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 
 	m_menuConfiguration->AppendSeparator();
 
+	// …and as a directory of files, one a part — for a repository and its diffs.
+	m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILES, _("Load configuration from files..."));
+	m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILES, _("Save configuration to files..."));
+
+	m_menuConfiguration->AppendSeparator();
+
 	// "Compare configurations" submenu — three entry points (file / DB
 	// baseline / two arbitrary files) grouped together so the parent
 	// Configuration menu stays compact.
@@ -117,6 +123,7 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnRollbackConfiguration, this, wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnUpdateConfiguration, this, wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE, wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILES, wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILES);
 	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateSaveMetadata, this, wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE);
 	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateSaveMetadata, this, wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE);
 

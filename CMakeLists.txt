@@ -325,6 +325,40 @@ else()
     target_compile_options(lodepng PRIVATE -w)
 endif()
 
+# THE CORE'S XML (core/xml) — expat, under the script's XMLReader, so that nothing reads XML through wx.
+# Built here from its C files, as core/xml/expat/expat.vcxproj builds them, with the one configuration both use
+# (core/xml/expat/expat_config.h: expat's own CMake would probe the machine and write into its build tree).
+# Entropy for the hash salt is one file of expat's per platform: rand_s, arc4random_buf, getrandom and /dev/urandom.
+oes_require_submodule(expat expat/lib/expat.h)
+set(OES_EXPAT_SOURCES
+    "${OES_3RDPARTY_DIR}/expat/expat/lib/xcs.c"
+    "${OES_3RDPARTY_DIR}/expat/expat/lib/xmlparse.c"
+    "${OES_3RDPARTY_DIR}/expat/expat/lib/xmlrole.c"
+    "${OES_3RDPARTY_DIR}/expat/expat/lib/xmltok.c"
+)
+if(WIN32)
+    list(APPEND OES_EXPAT_SOURCES "${OES_3RDPARTY_DIR}/expat/expat/lib/random_rand_s.c")
+elseif(APPLE)
+    list(APPEND OES_EXPAT_SOURCES "${OES_3RDPARTY_DIR}/expat/expat/lib/random_arc4random_buf.c")
+else()
+    list(APPEND OES_EXPAT_SOURCES
+        "${OES_3RDPARTY_DIR}/expat/expat/lib/random_getrandom.c"
+        "${OES_3RDPARTY_DIR}/expat/expat/lib/random_dev_urandom.c")
+endif()
+add_library(expat STATIC ${OES_EXPAT_SOURCES})
+target_include_directories(expat
+    PUBLIC  "${OES_3RDPARTY_DIR}/expat/expat/lib"
+    PRIVATE "${CMAKE_SOURCE_DIR}/src/engine/core/xml/expat")
+target_compile_definitions(expat PUBLIC XML_STATIC)
+# Hidden, like Mbed TLS above: wx's XML library links the SYSTEM expat on Linux, and an exported XML_* of ours
+# would interpose with it in one process - a parser made by one copy and driven by the other.
+set_target_properties(expat PROPERTIES POSITION_INDEPENDENT_CODE ON C_VISIBILITY_PRESET hidden)
+if(MSVC)
+    target_compile_options(expat PRIVATE /W0)
+else()
+    target_compile_options(expat PRIVATE -w)
+endif()
+
 # THE CORE'S SVG (ibPicture::FromSvg) — NanoSVG, two headers, compiled in core/graphics/picture.cpp: an SVG read and
 # drawn into pixels the core writes as a PNG. Nothing to build here.
 oes_require_submodule(nanosvg src/nanosvg.h)

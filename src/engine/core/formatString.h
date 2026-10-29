@@ -23,7 +23,6 @@
 #include <utility>
 #include <vector>
 
-
 #include "core/fdatetime.h"
 #include "core/fnumber.h"
 #include "core/core.h"    // ibValueTypes, ibDateFractions — what a type description is asked
@@ -45,22 +44,27 @@ enum class ibFormatCode {
 	NumberGroupSeparator,      // NGS - the character between digit groups (groups of three unless NG)
 	NumberGroupSize,           // NG  - digits per group
 	NumberZero,                // NZ  - what a zero prints as
-	DatePattern,               // DF  - yyyy/yy year, mm/m month, dd/d day, HH/H hours, MM/M minutes, SS/S seconds
+	DatePattern,               // DF  - yyyy/yy/y year, MMMM/MMM/MM/M month, dddd/ddd/dd/d day,
+	                           //       HH/H hours (hh/h on a 12-hour clock), mm/m minutes, ss/s seconds, tt AM/PM
 	DateEmpty,                 // DE  - what an empty date prints as
 	BooleanTrue,               // BT  - what True prints as
 	BooleanFalse,              // BF  - what False prints as
+	// Appended, never inserted: a code's position is the order of the constructor's tabs.
+	NumberLeadingZero,         // NLZ - pad the whole part with zeros up to ND - NFD digits
+	DateLocalFormat,           // DLF - a preset: D, DD, T, DT, DDT (date, long date, time, both, long date and time)
+	Language,                  // L   - the language the names are said in (ru, uk_UA); the thread's when absent
 };
 
 // The patterns a date pattern is usually one of. `Custom` is any other.
 enum class ibDatePreset {
 	Custom,
-	Date,                      // dd.mm.yyyy
-	DateTime,                  // dd.mm.yyyy HH:MM:SS
-	Time,                      // HH:MM:SS
-	HoursMinutes,              // HH:MM
-	MonthYear,                 // mm.yyyy
+	Date,                      // dd.MM.yyyy
+	DateTime,                  // dd.MM.yyyy HH:mm:ss
+	Time,                      // HH:mm:ss
+	HoursMinutes,              // HH:mm
+	MonthYear,                 // MM.yyyy
 	Year,                      // yyyy
-	Sortable,                  // yyyy-mm-dd
+	Sortable,                  // yyyy-MM-dd
 };
 
 struct CORE_API ibNumberFormat {
@@ -70,6 +74,7 @@ struct CORE_API ibNumberFormat {
 	std::optional<ibChar> m_groupSeparator;     // NGS
 	std::optional<int>       m_groupSize;          // NG
 	std::optional<ibString>  m_zero;               // NZ
+	std::optional<ibString>  m_leadingZero;        // NLZ (present = pad; the value is not read)
 
 	bool operator == (const ibNumberFormat& other) const;
 };
@@ -77,6 +82,8 @@ struct CORE_API ibNumberFormat {
 struct CORE_API ibDateFormat {
 	std::optional<ibString>  m_pattern;            // DF
 	std::optional<ibString>  m_empty;              // DE
+	std::optional<ibString>  m_localFormat;        // DLF - used when DF is absent
+	std::optional<ibString>  m_language;           // L   - the language of the names MMMM, MMM, dddd, ddd spell
 
 	bool operator == (const ibDateFormat& other) const;
 };

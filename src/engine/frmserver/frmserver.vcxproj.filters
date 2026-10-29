@@ -178,6 +178,9 @@
     <ClCompile Include="docView\templates\docViewText.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolForms.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
     <ClCompile Include="mcp\tools\mcpToolProtocol.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>

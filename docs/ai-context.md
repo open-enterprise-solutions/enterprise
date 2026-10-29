@@ -254,9 +254,10 @@ Two further global namespaces exist for the external (out-of-configuration) vari
 metaobject ones plus `ScheduledJobs` and `SessionParameters`). The LINQ door has the same kinds under
 `Data.` — `Data.CalculationRegisters.<Name>`, `Data.ChartsOfCalculationTypes.<Name>`.
 
-Configuration is serialized through the `ibDataNode` tree (binary via
-`ibBinaryProvider`); the JSON side is the one you read, never the one you load back — its
-`Read` is a complete parser but nothing calls it, the view being lossy by design. See
+Configuration is serialized through the `ibDataNode` tree: in storage as the node's own bytes
+(`ibBinaryProvider`), and as a directory of text files that loads back (`ibFileProvider`, see
+[configuration-files.md](public/configuration-files.md)). The JSON view of one node
+(`ibJsonProvider`) is lossy by design — read it, do not load a configuration from it. See
 `docs/configuration-compare.md` for the Compare/Merge feature.
 
 ### 5.1 Calculation register — what a generator must get right

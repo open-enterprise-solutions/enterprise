@@ -5,7 +5,7 @@
 #include <cstring>
 
 #include "core/exception.h"                // ibCoreException — bytes or a text that are no node
-#include "core/serialize/jsonProvider.h"   // the JSON view — a node's text, and the text of a value that is not one
+#include "core/serialize/provider/jsonProvider.h"   // the JSON view — a node's text, and the text of a value that is not one
 
 namespace {
 

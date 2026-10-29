@@ -5,7 +5,7 @@
 #include "backend/rpc/rpcMessage.h"
 
 #include "backend/backend_exception.h"
-#include "core/serialize/jsonProvider.h"
+#include "core/serialize/provider/jsonProvider.h"
 #include "backend/compiler/value.h"            // ibValue::GetAvailableCtor — a built-in's name
 #include "backend/objCtor.h"                   // ibCtorAbstractType::GetClassName
 #include "core/description/compositionDescription.h"   // ibCompositionNodeName / …Clsid — a composition's parts, both ways

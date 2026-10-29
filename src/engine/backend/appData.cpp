@@ -388,6 +388,19 @@ ibMetaDataConfigurationBase* ibApplicationInstance::GetActiveMetaData(const ibAp
 	return applicationInstance->m_activeMetaData.get();
 }
 
+bool ibApplicationInstance::ReplaceActiveMetaData()
+{
+	// ⭐ THE BASE READS ITS OWN, made with its own token — for no session, whatever thread asks: the designer's apply
+	// asks on its own, and what the designer reads there is the designer's (its compile cache with it). Read as the
+	// apply's copy is read, the mirror of the database (loadConfigFlag).
+	const std::shared_ptr<ibMetaDataConfiguration> metaData =
+		ibMetaData::MakeShared<ibMetaDataConfiguration>(ib::AppDataCtorToken{ this });
+	if (!metaData->LoadDatabase(onlyLoadFlag) || !metaData->RunDatabase(loadConfigFlag))
+		return false;
+	ReplaceActiveMetaData(metaData);
+	return true;
+}
+
 void ibApplicationInstance::ReplaceActiveMetaData(std::shared_ptr<ibMetaDataConfigurationBase> metaData)
 {
 	const ibString digest = metaData->GetConfigMD5();

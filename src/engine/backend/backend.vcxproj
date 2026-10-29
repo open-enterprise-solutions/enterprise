@@ -377,6 +377,7 @@
     <ClInclude Include="system\value\valueFont.h" />
     <ClInclude Include="system\value\valueGuid.h" />
     <ClInclude Include="system\value\valueJson.h" />
+    <ClInclude Include="system\value\valueXml.h" />
     <ClInclude Include="system\value\valueJob.h" />
     <ClInclude Include="system\value\valueMap.h" />
     <ClInclude Include="system\value\valueOLE.h" />
@@ -910,6 +911,7 @@
     <ClCompile Include="system\value\valueFont.cpp" />
     <ClCompile Include="system\value\valueGuid.cpp" />
     <ClCompile Include="system\value\valueJson.cpp" />
+    <ClCompile Include="system\value\valueXml.cpp" />
     <ClCompile Include="system\value\valueJob.cpp" />
     <ClCompile Include="system\value\valueMap.cpp" />
     <ClCompile Include="system\value\valueOLE.cpp" />

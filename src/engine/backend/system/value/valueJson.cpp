@@ -5,7 +5,7 @@
 #include "valueJson.h"
 
 #include "backend/backend_exception.h"
-#include "core/serialize/jsonText.h"            // ibJsonText — how a string is spelled in JSON, said once
+#include "core/json/jsonText.h"            // ibJsonText — how a string is spelled in JSON, said once
 #include "backend/compiler/enumUnit.h"            // ConvertToEnumValue<> is declared in value.h and DEFINED here
 #include "backend/system/systemManagerEnum.h"
 #include "backend/system/value/valueArray.h"

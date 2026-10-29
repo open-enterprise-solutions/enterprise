@@ -3185,6 +3185,15 @@ msgstr ""
 msgid "unknown attribute '%s' on source '%s'"
 msgstr ""
 
+#: src/engine/backend/query/dbTableProvider.cpp:217
+#, c-format
+msgid "the list's query does not select '%s', and a hierarchical view needs it"
+msgstr ""
+
+#: src/engine/backend/metadataConfigurationQuery.cpp:483
+msgid "The configuration was applied, but the base could not read it: the sessions to come work in the one before."
+msgstr ""
+
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataTotals.cpp:5978
 msgid "A condition on the ACCOUNT, consumed by the reading itself: `IN HIERARCHY` reports the subordinate accounts folded under the one named, which a filter applied around the reading could never do. Any condition on the account is taken - NOT, OR, `NOT Account.OffBalance`, `Account.Code LIKE \"6%\"` - and selects the rows before they are folded."
 msgstr ""
@@ -9549,7 +9558,7 @@ msgid "Activate row"
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:441
-msgid "When row is activated"
+msgid "When the current row changes. Turning standard processing off keeps the row where it was."
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:442
@@ -12306,6 +12315,71 @@ msgctxt "month"
 msgid "December"
 msgstr ""
 
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "January"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "February"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "March"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "April"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "May"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "June"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "July"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "August"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "September"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "October"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "November"
+msgstr ""
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, genitive"
+msgid "December"
+msgstr ""
+
+#: src/engine/core/formatString.cpp
+msgctxt "date pattern"
+msgid "d MMMM yyyy"
+msgstr ""
+
 #: src/engine/core/fdatetime.cpp:202
 msgctxt "month, short"
 msgid "Jan"
@@ -12949,4 +13023,142 @@ msgstr ""
 #: src/engine/protocol/connectionServer.cpp:184
 #, c-format
 msgid "The connection to the server at %s:%d did not open: %s."
+msgstr ""
+
+#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:96
+msgid "Load configuration from files..."
+msgstr ""
+
+#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:97
+msgid "Save configuration to files..."
+msgstr ""
+
+#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:276
+msgid "Choose the directory the configuration was saved to"
+msgstr ""
+
+#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:295
+msgid "Choose a directory of its own for the configuration's files"
+msgstr ""
+
+#: src/engine/backend/metadataConfiguration.cpp:83
+msgid "The directory does not contain a configuration."
+msgstr ""
+
+#: src/engine/core/serialize/dataBuilder.cpp:255
+#, c-format
+msgid "ibDataValue: '%s' is no date"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:40
+#, c-format
+msgid "Configuration files: %s"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:46
+msgid "the structure is nested too deeply"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:93
+#, c-format
+msgid "'%s' is not UTF-8 text"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:108
+#: src/engine/core/serialize/fileProvider.cpp:117
+#, c-format
+msgid "'%s' is not a file name inside the directory"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:111
+msgid "an export directory cannot be a symbolic link"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:120
+msgid "a configuration file cannot be a symbolic link"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:129
+#, c-format
+msgid "'%s' is missing or is not a file"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:133
+#, c-format
+msgid "'%s' could not be read"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:146
+#, c-format
+msgid "'%s' could not be written"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:179
+#, c-format
+msgid "two parts of '%s' are named '%s'"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:193
+#, c-format
+msgid ""
+"two parts of the configuration are named '%s' - a name told apart only by "
+"case is the same folder"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:262
+#, c-format
+msgid "'%s' is empty"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:271
+#, c-format
+msgid "'%s': %s must hold a list"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:274
+#, c-format
+msgid "'%s': '%s' names no folder"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:281
+#, c-format
+msgid "'%s': '%s' names no file beside it"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:300
+#, c-format
+msgid "'%s' is named more than once"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:334
+msgid "the directory holds no configuration export of a version this build reads"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:344
+#, c-format
+msgid "no type is named '%s' here"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:384
+#, c-format
+msgid "'%s' is missing"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:421
+msgid "there is no configuration export to write"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:431
+msgid "choose a directory of its own for the export"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:436
+msgid "the directory holds files and no export - choose a directory of its own"
+msgstr ""
+
+#: src/engine/core/serialize/fileProvider.cpp:455
+#, c-format
+msgid ""
+"the directory holds '%s', which is no part of an export - choose a directory "
+"of its own"
 msgstr ""

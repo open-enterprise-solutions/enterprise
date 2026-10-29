@@ -15,6 +15,8 @@
 #include "backend/metadataConfiguration.h"            // ibMetaDataConfigurationBase (GetSourceMetaData)
 #include "core/picturePredefined.h"                // g_picRowFolderCLSID — what a grouping's heading wears
 
+#include <algorithm>                                  // std::find — a name's id already taken in the query's columns
+
 namespace {
 // (ibDynamicListProvider DELETED — the dynamic list fetches through the base ibValueModel::RunComposerPage now,
 //  like every other model: ONE fetch in the parent. Its keyset provider + ibDynamicListNode are gone;
@@ -68,9 +70,9 @@ class ibQuerySchemaColumns : public ibValueModelCursor::ibValueModelColumnCollec
 public:
 	class ColInfo : public ibValueModelColumnInfo {
 	public:
-		ColInfo(ibString name, const ibBackendQueryColumn* col, bool walkAvailable = true)
-			: m_name(std::move(name)), m_col(col), m_walkAvailable(walkAvailable) {}
-		virtual unsigned int GetColumnID() const override { return m_col != nullptr ? m_col->GetColumnId() : 0; }
+		ColInfo(ibString name, const ibBackendQueryColumn* col, ibMetaID id, bool walkAvailable = true)
+			: m_name(std::move(name)), m_col(col), m_id(id), m_walkAvailable(walkAvailable) {}
+		virtual unsigned int GetColumnID() const override { return m_id; }
 		// THE QUERY'S NAME FOR IT, not the underlying column's. `Owner.Code AS Supplier` is called
 		// `Supplier` here and nowhere else — that is the whole point of writing the query.
 		virtual ibString GetColumnName() const override { return m_name; }
@@ -84,12 +86,38 @@ public:
 	private:
 		ibString                    m_name;
 		const ibBackendQueryColumn* m_col;
+		ibMetaID                    m_id;
 		bool                        m_walkAvailable;
 	};
 
+	// ⭐⭐ AN OUTPUT IS KNOWN BY ITS NAME, AND ITS ID FOLLOWS THE NAME. A form's column is bound to the list by
+	// id (ibSourceHop) and that id goes to the file, while the id the query gives a renamed or computed output
+	// is the lowering's — a kind and an ordinal (ibBackendQueryColumn::SyntheticId), which nothing is meant to
+	// persist. So it moved whenever the query did: `Stock.QuantityBalance AS Stock` bound a column to the
+	// balance's figure, the join became a grouped nested query, the output kept its name, got another number,
+	// and the column went blank (2026-10-28). A declared attribute under its own name keeps the attribute's id
+	// — the row's key, its folder flag and the commands read it by that id; every other output is numbered
+	// from its name.
 	explicit ibQuerySchemaColumns(const std::vector<ibQueryLowering::OutputColumn>& schema) {
-		for (const ibQueryLowering::OutputColumn& oc : schema)
-			m_cols.push_back(new ColInfo(oc.m_name, oc.m_col, oc.m_available));
+		std::vector<ibMetaID> taken;
+		for (const ibQueryLowering::OutputColumn& oc : schema) {
+			ibMetaID id = wxNOT_FOUND;
+			if (oc.m_col != nullptr && !ibBackendQueryColumn::IsSyntheticId(oc.m_col->GetColumnId())
+			    && oc.m_col->GetName().IsSameAs(oc.m_name, false))
+				id = oc.m_col->GetColumnId();
+			else {
+				// (Body 0 would be -1, which every reader takes for "none" — so the bodies start at 1. Two names
+				//  of one hash — about one list in a hundred thousand — take the next body, not one cell.)
+				ibMetaID body = static_cast<ibMetaID>(ib_clsid_hash(oc.m_name.Lower()) % (s_nameBodies - 1)) + 1;
+				id = ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Output, body);
+				while (std::find(taken.begin(), taken.end(), id) != taken.end()) {
+					body = body % static_cast<ibMetaID>(s_nameBodies - 1) + 1;
+					id = ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Output, body);
+				}
+			}
+			taken.push_back(id);
+			m_cols.push_back(new ColInfo(oc.m_name, oc.m_col, id, oc.m_available));
+		}
 	}
 	virtual ~ibQuerySchemaColumns() { for (auto* c : m_cols) delete c; }
 
@@ -99,6 +127,11 @@ public:
 	virtual unsigned int GetColumnCount() const override { return static_cast<unsigned int>(m_cols.size()); }
 
 private:
+	// The bodies a name is numbered within — as many as still take a kind (CanComposeSyntheticId).
+	static constexpr ibClassID s_nameBodies = ibClassID(1) << 25;
+	static_assert(ibBackendQueryColumn::CanComposeSyntheticId(static_cast<ibMetaID>(s_nameBodies - 1)),
+		"a name's body must still take a kind");
+
 	std::vector<ColInfo*> m_cols;
 };
 
@@ -639,19 +672,22 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 		return &m_sourceExplorer;   // built at this version of the metadata, of this source and query — read as it is
 	// The list is a MIRROR: it resets the explorer and hands it to the source descriptor (the single bridge), which
 	// forwards the fill to the metaobject — the same one that lists/runs commands and resolves select.
-	if (const ibQueryableSourceDescriptor* holder = GetSourceDescriptor())
-		holder->FillSourceExplorer(m_sourceExplorer);
+	if (!IsArbitraryQuery())
+		if (const ibQueryableSourceDescriptor* holder = GetSourceDescriptor())
+			holder->FillSourceExplorer(m_sourceExplorer);
 
-	// …AND WHAT THE ARBITRARY QUERY ADDS ON TOP. The main table's fields are there because the list is
-	// that table; the query's output columns are there because that is what the list actually shows —
-	// and a field a person can SEE in the list but cannot filter, sort or group by is the defect Max
+	// ⭐ OVER AN ARBITRARY QUERY, WHAT THE QUERY READS — its output columns, since that is what the list
+	// shows, and a field a person can SEE in the list but cannot filter, sort or group by is the defect Max
 	// reported ("I add fields to the query and I do not see them in the filters").
 	//
-	// Added, not substituted: a query that renames `Owner.Code` to `Supplier` still leaves every field
-	// of the main table reachable, because the row is still a row of that table.
+	// 🛑 …AND ONLY THAT. The main table's fields stood here too, "because the row is still a row of that
+	// table" — true while the list read the table, false since it reads `SELECT * FROM (<query>) AS
+	// AuthorQuery` (2026-08-27): a field the query does not select is not in what is read. Offered here, it
+	// was kept by the settings' prune as well, and the catalog's own folders-first sort put `ORDER BY
+	// IsFolder` on a query without it (2026-10-28). The main table's fields stay reachable through the
+	// query's reference to its row (`Ref.Code`).
 	//
-	// (A name the main table already offers is not added twice — the explorer would show one field
-	// under two entries that mean the same column.)
+	// (A name the query gives twice is offered once.)
 	for (const ibQueryLowering::OutputColumn& column : m_querySchema) {
 		if (column.m_name.IsEmpty())
 			continue;
@@ -659,16 +695,16 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 		if (already)
 			continue;
 
-		// The column's own DESCRIPTOR when the query did not rename it — that is what carries the
-		// synonym and the binding, so a plain projection reads in the pickers exactly as the field
-		// does. A RENAMED one (`Owner.Code AS Supplier`) is appended by name and type: the new name is
-		// the query's, and it belongs to no attribute to borrow a synonym from.
-		if (column.m_col != nullptr && column.m_col->GetName().IsSameAs(column.m_name, false))
+		// The column's own DESCRIPTOR when the list knows the output by the column's id — a declared
+		// attribute the query did not rename: that is what carries the synonym and the binding, so a plain
+		// projection reads in the pickers exactly as the field does. Any other (`Owner.Code AS Supplier`, a
+		// figure) is appended by name, type and the id the list numbered it with: the name is the query's,
+		// and it belongs to no attribute to borrow a synonym from.
+		const ibMetaID id = GetColumnIDByName(column.m_name);
+		if (column.m_col != nullptr && column.m_col->GetColumnId() == id)
 			m_sourceExplorer.AppendColumn(column.m_col);
 		else
-			m_sourceExplorer.AppendColumn(column.m_name,
-				column.m_col != nullptr ? column.m_col->GetColumnId() : wxNOT_FOUND,
-				column.GetTypeDesc());
+			m_sourceExplorer.AppendColumn(column.m_name, id, column.GetTypeDesc());
 	}
 	// The list's DEFAULT view rides onto the explorer: a Choice list stamps the choice flag the form auto-build copies
 	// onto the mainTableBox (where it serialises per-form). A Normal list leaves it off. This is the ONE propagation.
@@ -780,6 +816,15 @@ void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const ibVariant
 	// is const, so `GetCompositionDesc()` hands back a const reference there (C3892). Which was the
 	// design saying so out loud — a save must WRITE what is held, not decide it. It is written on the
 	// change, in RebuildSource, which every change of source passes through.
+
+	// ⭐ A MAIN TABLE SAID WITH THE SETTINGS IS PUT ON THE WIDGET THAT SHOWS IT, as a read puts it
+	// (ReadProperty): the description is its home, the Source property its view. A whole composition
+	// handed in with its main table left the Source empty, and RebuildSource wrote the empty one back.
+	const ibCompositionDescription& description = GetCompositionDesc();
+	if (m_propertySettings == property && description.HasMainTable()
+		&& description.m_mainTable != m_propertySource->GetTableId())
+		m_propertySource->SetTableId(description.m_mainTable);
+
 	// The source/settings changed; re-commit the settings buffer onto the composer (L5).
 	RefreshComposerSettings();
 	// Toggling DynamicRead switches the fetch path (live keyset cursor ↔ whole-list RAM snapshot). Re-drive the fetch
@@ -808,13 +853,21 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 	// it does not use come back empty rather than being a second format.
 	// …against its own configuration, like a report's (valueDataComposition.cpp): a saved filter
 	// compares against references, and only the metadata can build those.
+	//
+	// ⭐ A LIST THAT HAS ITS SOURCE ALREADY KEEPS IT — the main list of an object form, made from the
+	// object the form was opened for (ibValueForm::ReadAttributes): the file brings its children, the
+	// query, the filter and the order, not whose rows they are.
+	const ibMetaID given = m_propertySource->GetTableId();
 	ibBackendCompositionDescriptionMemory::ReadNode(node, GetCompositionDesc(), GetSourceMetaData());
 
 	// ⭐ …AND THE ANCHOR IS PUT BACK ON THE WIDGET THAT SHOWS IT. The main table lives in the
 	// description (see WriteProperty); the Source property is its view, and it is filled here — as an
 	// ID, without resolving. Nothing is registered yet at load time, and resolving now is exactly
 	// what used to throw the value away (ibPropertyDynamicSource::ReadNodeValue).
-	m_propertySource->SetTableId(GetCompositionDesc().m_mainTable);
+	if (given != wxNOT_FOUND)
+		GetCompositionDesc().m_mainTable = given;
+	else
+		m_propertySource->SetTableId(GetCompositionDesc().m_mainTable);
 
 	// Default view — a hidden intrinsic field (absent on an old blob → Normal, forward-compatible).
 	m_view = (ibDynamicListView)node.GetValue<std::int32_t>(ibT("View"));
@@ -823,6 +876,12 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 	// DynamicRead — stored INVERTED (DynamicReadOff: 1 = static/RAM-snapshot, absent/0 = the default dynamic read), so
 	// a list blob written before this field loads as dynamic. (SetValue does not fire OnPropertyChanged.)
 	m_propertyDynamicRead->SetValue(node.GetValue<std::int32_t>(ibT("DynamicReadOff")) == 0);
+
+	// ⭐ …AND WHAT WAS READ IS BUILT, as an edit of the source or the settings builds it (OnChildChanged).
+	// A list read from a file kept its query in the description and nothing else: the composer had no
+	// source, the query's columns were described nowhere, and its fields reached no picker until
+	// somebody opened the settings window. The id above is not resolved by this — only asked.
+	RebuildSource();
 	return true;
 }
 

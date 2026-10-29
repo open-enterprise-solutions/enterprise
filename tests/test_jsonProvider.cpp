@@ -11,7 +11,7 @@
 #include <functional>
 #include <string>
 
-#include "core/serialize/jsonProvider.h"
+#include "core/serialize/provider/jsonProvider.h"
 #include "backend/backend_exception.h"
 
 // After wx: windows.h first would leave its macros in wx's way.

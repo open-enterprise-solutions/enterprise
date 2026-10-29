@@ -13,7 +13,7 @@
 #include "core/fiber/fiber.h"
 #include "core/memory/memoryStream.h"
 #include "core/serialize/dataBuilder.h"
-#include "core/serialize/jsonProvider.h"
+#include "core/serialize/provider/jsonProvider.h"
 
 #include <functional>
 #include <string>

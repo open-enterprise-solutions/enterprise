@@ -66,6 +66,9 @@ void ibValueQueryExec_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	// WHERE this query's temp tables live. Left unset they die with the execution; set to a
 	// TempTablesManager they outlive it and other queries attached to the same manager read them.
 	helper.AppendProp(ibT("TempTablesManager"), true, true, ibValueQueryExec::enPropTempTablesManager);
+	// The text the query was made with (`New Query(text)`), to read back: a script edits it and makes a new query
+	// (`New Query(StrReplace(Q.Text, ...))`). Read-only - the text is parsed once, in the constructor.
+	helper.AppendProp(ibT("Text"), true, false, ibValueQueryExec::enPropText);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -233,6 +236,10 @@ bool ibValueQueryExec::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 // a data tag, so the index IS the identity (the ibValuePoint / ibValueColour convention).
 bool ibValueQueryExec::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
+	if (lPropNum == enPropText) {
+		pvarPropVal = m_text;
+		return true;
+	}
 	if (lPropNum != enPropTempTablesManager)
 		return false;
 	pvarPropVal = m_tempTables;

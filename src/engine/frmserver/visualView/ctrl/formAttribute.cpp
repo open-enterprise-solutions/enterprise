@@ -39,8 +39,16 @@ bool ibValueForm::ReadAttributes(const ibDataNode& node)
 	if (auto attrsNode = node.FindChild(ibProtocol::ibView::ibFormDesigner::Attributes)) {
 		for (const ibDataNode& attrNode : attrsNode->Children()) {
 			const bool isMain = attrNode.GetValue<bool>(ibProtocol::ibView::ibFormDesigner::Main);
-			if (isMain && hasMain)
-				continue;   // the source-reconstructed main wins — never load a second one
+			if (isMain && hasMain) {
+				// The source-reconstructed main wins — never load a second one. ⭐ …BUT IT TAKES BACK ITS CHILDREN:
+				// what the form stored of it — a list's query, filter and order — is read into the value the source
+				// made, which keeps its own source (ibValueDynamicList::ReadProperty). Skipped whole, the author's
+				// settings of a list form's List were written on every save and read on none (2026-10-28).
+				// An object is no property object and has nothing here to take back.
+				if (ibPropertyObject* held = GetMainAttribute()->GetValueAsProperty())
+					held->ReadProperty(attrNode);
+				continue;
+			}
 			ibValuePtr<ibFormAttributeValue> holder(new ibFormAttributeValue(this));   // builds its description
 			if (!holder->ReadProperty(attrNode))   // facade: reads the attribute (incl. its Main flag) + the value
 				return false;

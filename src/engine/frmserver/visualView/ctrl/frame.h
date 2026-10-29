@@ -247,7 +247,7 @@ public:
 	// with a `State` child beside them, which is what this writes: the value, the caption as resolved,
 	// whether the control is enabled and shown. Everything a renderer would otherwise have to work out
 	// itself is worked out here, once, on the server. A child of its own and not more fields, because the
-	// JSON a client reads flattens fields and properties into one key set (serialize/jsonProvider.h): a
+	// JSON a client reads flattens fields and properties into one key set (serialize/provider/jsonProvider.h): a
 	// resolved `Enabled` beside the saved one would be the same key twice. The node stands where the window
 	// stood in the window's Update — and, like it, this is not const: resolving can build what it reads (a
 	// command bar gathers its entries).

@@ -9,7 +9,7 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaObjectMetadata.h"   // GetCompileSyntax — the configuration's dialect
 #include "backend/objCtor.h"                  // ibCtorMetaValueType — full type, for the type resolver
-#include "core/serialize/jsonProvider.h"
+#include "core/serialize/provider/jsonProvider.h"
 
 ibClassID ibResolveMetaKind(const ibMetaData* metaData, const ibString& kind)
 {

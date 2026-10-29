@@ -380,22 +380,22 @@ bool ibApplicationHost::InitLocale(const ibString& locale)
 	wxLog::AddTraceMask(wxS("i18n"));
 #endif // WXDEBUG
 
-	m_localeLang = wxLocale::GetSystemLanguage();
-	if (m_localeLang == wxLanguage::wxLANGUAGE_UNKNOWN)
-		m_localeLang = wxLanguage::wxLANGUAGE_DEFAULT;
-
-	// The base's word, else backend.conf's — when this machine can set it. A wish it cannot grant is not a refusal to
-	// open the base (a base names its locale on one machine and is opened on every other): the process speaks the
-	// system's language, else English, and the journal says which wish went ungranted.
+	// The base's word, else backend.conf's — when this machine can set it. NOTHING NAMED, OR A WISH THIS MACHINE CANNOT
+	// GRANT, IS ENGLISH — the language the engine's words are written in — never the machine's own: a process that
+	// speaks whatever the system does answers differently on every machine it runs on (a test reading an English
+	// sentence failed on a desktop whose Windows speaks Russian, 2026-10-28). A wish not granted is not a refusal to
+	// open the base (a base names its locale on one machine and is opened on every other); the journal says which.
+	// US English: wx's plain ENGLISH is en_GB, a locale a machine may not have made; en_US is the one it nearly always has.
+	m_localeLang = wxLanguage::wxLANGUAGE_ENGLISH_US;
 	const ibString& wanted = !locale.IsEmpty() ? locale : m_configLocale;
 	const wxLanguageInfo* const wish = !wanted.IsEmpty() ? wxLocale::FindLanguageInfo(wanted) : nullptr;
 	if (wish != nullptr && wxLocale::IsAvailable(wish->Language))
 		m_localeLang = wish->Language;
 	else if (!wxLocale::IsAvailable(m_localeLang))
-		m_localeLang = wxLanguage::wxLANGUAGE_ENGLISH;
+		m_localeLang = wxLanguage::wxLANGUAGE_DEFAULT;   // a machine with no English locale made (a bare Linux): what it has
 
 	// Independently of whether we succeeded to set the locale or not, try
-	// to load the translations (for the default system language) here.
+	// to load the translations (for the language settled above) here.
 
 	const ibString& workingDir = ibGetCwd();
 

@@ -28,13 +28,13 @@
 
 #include "core/stringUtils.h"   // names compare case-insensitively here, as everywhere else
 
+#include <algorithm>   // a type named in words — among those a field is offered
 #include <memory>
-#include <set>      // one link per id — the same object named twice is one fact
+#include <set>      // one link per id — the same object named twice is one fact; a property met once
 #include <atomic>   // how deep the host is in modal dialogs — read from any thread
 #include <wx/process.h>   // wxProcess::Exists — is the application app_run started still there
 #include <mutex>
 
-#include <map>   // property name -> the category it was declared into
 #include "backend/restructureInfo.h"              // the ledger an object complains into
 
 namespace {
@@ -648,6 +648,53 @@ ibString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 		return ibT("an empty value");
 	};
 
+	// ⭐⭐ THE FIRST TEXT IN A VALUE THAT CAME ENCODED TWICE, read once — or empty. JSON carries text as UTF-8,
+	// once; a script that hands its request BYTES where it means characters (Perl without `use utf8`) has them
+	// encoded a second time, and every Cyrillic letter arrives as two Latin ones. Nothing downstream could tell:
+	// chat_say showed "Ð¿Ñ…" to the person and module_write would have stored it (2026-10-28).
+	//
+	// Read as it was meant: every character fits in a byte, and those bytes are UTF-8 with a sequence in them.
+	// Text a person typed in Latin-1 is not — a letter like "é" is followed by an ASCII one, and that is no
+	// sequence.
+	const auto readOnce = [](const ibDataValue& value) -> ibString {
+		std::vector<ibDataValue> pending{ value };
+		while (!pending.empty()) {
+			const ibDataValue at = pending.back();
+			pending.pop_back();
+			if (at.Kind() == ibDataKind::Array) {
+				for (const ibDataValue& item : at.AsArray())
+					pending.push_back(item);
+			}
+			else if (at.Kind() == ibDataKind::Child) {
+				if (const std::optional<ibDataNode> node = at.AsChild())
+					for (const auto& field : node->Fields())
+						pending.push_back(field.second);
+			}
+			else if (at.Kind() == ibDataKind::String) {
+				const ibString text = at.AsString();
+				size_t follow = 0;
+				bool sequence = false, fits = true;
+				for (const ibChar c : text) {
+					if (c > 0xFF || (follow > 0) != ((c & 0xC0) == 0x80)) { fits = false; break; }
+					if (follow > 0)                   --follow;
+					else if (c >= 0xC2 && c <= 0xDF)  follow = 1;
+					else if (c >= 0xE0 && c <= 0xEF)  follow = 2;
+					else if (c >= 0xF0 && c <= 0xF4)  follow = 3;
+					else if (c >= 0x80)               { fits = false; break; }
+					sequence = sequence || follow > 0;
+				}
+				// The bytes only once it is known — a module text runs to megabytes, and nearly all of it is fine.
+				if (fits && sequence && follow == 0) {
+					std::string bytes;
+					for (const ibChar c : text)
+						bytes.push_back(static_cast<char>(c));
+					return ibString::FromUTF8(bytes);
+				}
+			}
+		}
+		return ibEmptyString;
+	};
+
 	for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
 
 		auto value = arguments.FindField(argument.Name());
@@ -690,6 +737,15 @@ ibString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 			return ibString::Format(
 				ibMcpText("'%s' takes %s for '%s', and %s came. Nothing was done."),
 				tool->GetName(), shapeWord(kind), argument.Name(), arrived(value, child));
+		}
+
+		// …and said ONCE. Before the closed set: a word encoded twice is not in it either, and "not one of the
+		// words" would send the caller looking for a spelling instead of at their encoder.
+		if (const ibString once = value ? readOnce(*value) : ibEmptyString; !once.IsEmpty()) {
+			return ibString::Format(
+				ibMcpText("'%s' came to '%s' encoded as UTF-8 TWICE; read once it says \"%s\". Text travels as "
+				  "UTF-8 once - hand the request characters, not their bytes (Perl: `use utf8`). Nothing was done."),
+				argument.Name(), tool->GetName(), once);
 		}
 
 		// ⭐ AND A CLOSED SET IS CLOSED. `enum` is published in the schema, and a word outside it
@@ -945,9 +1001,9 @@ ibString KindOf(const ibDataValue& value)
 //
 // It is at least DECLARED rather than guessed: a property is created INTO a category
 // (`CreateProperty(m_categoryCommon, …)`), categories nest, and the object holds the root. Walked
-// once here into a name → group lookup.
+// once here into (name, group) pairs, in the order the inspector shows them.
 void CollectCategories(const ibPropertyCategory* category,
-	std::map<ibString, ibString>& into)
+	std::vector<std::pair<ibString, ibString>>& into)
 {
 	if (category == nullptr)
 		return;
@@ -955,7 +1011,7 @@ void CollectCategories(const ibPropertyCategory* category,
 	const ibString label = category->GetLabel();
 
 	for (unsigned int index = 0; index < category->GetPropertyCount(); ++index)
-		into[category->GetPropertyName(index)] = label;
+		into.emplace_back(category->GetPropertyName(index), label);
 
 	for (unsigned int index = 0; index < category->GetCategoryCount(); ++index)
 		CollectCategories(category->GetCategory(index), into);
@@ -1015,18 +1071,25 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 	if (object == nullptr)
 		return;
 
-	std::map<ibString, ibString> groups;
-	CollectCategories(object->GetCategory(), groups);
+	// ⭐ WALKED AS THE INSPECTOR WALKS IT (propertyInspector.cpp, AppendCategory) — the category tree from
+	// the object's root, each name asked of the object, a name met before not met again. The root lists an
+	// attached object's categories as its own and GetProperty(name) routes to the object holding it, so a
+	// form attribute's Settings — they live on the list it holds — come with it. The walk by index was a
+	// road of its own, and it reached only the object's own properties: a form attribute read back empty.
+	std::vector<std::pair<ibString, ibString>> named;
+	CollectCategories(object->GetCategory(), named);
 
 	std::vector<ibDataValue> out;
+	std::set<ibString> met;
 
-	for (unsigned int index = 0; index < object->GetPropertyCount(); ++index) {
+	for (const auto& [name, group] : named) {
 
-		ibProperty* property = object->GetProperty(index);
+		if (!met.insert(name).second)
+			continue;
+		ibProperty* property = object->GetProperty(name);
 		if (property == nullptr)
 			continue;
 
-		const ibString name = property->GetName();
 		if (!only.IsEmpty() && !name.IsSameAs(only, false))
 			continue;
 
@@ -1046,9 +1109,8 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 		if (!property->GetHelp().IsEmpty())
 			entry->SetValue(ibT("help"), property->GetHelp());
 
-		const auto group = groups.find(name);
-		if (group != groups.end())
-			entry->SetValue(ibT("group"), group->second);
+		if (!group.IsEmpty())
+			entry->SetValue(ibT("group"), group);
 
 		// SAID EVEN WHEN TRUE IS THE DULL CASE. A property that cannot be changed is the commonest
 		// reason a write does nothing, and finding that out from a silent no-op costs a round trip.
@@ -1295,23 +1357,30 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			//
 			// So the value says WHICH one it is and stops. Its whole contents are one metadata_get
 			// away, addressed by the id printed here — which is the thing a caller actually needs.
-			if (value.Kind() == ibDataKind::Child && value.AsChild()) {
+			//
+			// 🛑 …AND ONLY A METAOBJECT IS ONE, which its node says itself: its Id is a FIELD (see below).
+			// Every structure was taken for a metaobject, so every other one read back as {"name": ""} —
+			// a caption, a type, a picture, a command binding, a field binding, a list's whole Settings —
+			// and each was rescued by a cast of its own above, the property's class named here one at a
+			// time (2026-10-28). Anything else is said as the property writes it: the shape that goes back.
+			const bool metaObject = value.Kind() == ibDataKind::Child && value.AsChild()
+				&& value.AsChild()->FindField(ibT("Id"));
+			if (metaObject) {
 
 				const ibDataNode held = *value.AsChild();
 				ibDataNode& shown = entry->Child(ibT("value"));
 
-				// ⚠ THE NAME IS A PROPERTY, THE ID IS A FIELD — the node keeps two areas and they are
-				// not interchangeable. `GetValue` reads the FIELD area, so asking it for `Name`
-				// came back empty and every structure was reported with an id and no name.
-				// ibValueMetaObject::SaveNode is where the split is written down: intrinsics
-				// (Guid, Id, Deleted) go to fields, editable values (Name, Synonym, Comment) go to
-				// properties.
-				shown.SetValue(ibT("name"), held.GetProp<ibString>(ibT("Name")));
+				shown.SetValue(ibT("name"), held.GetValue<ibString>(ibT("Name")));
 				if (auto id = held.FindField(ibT("Id")))
 					shown.AddField(ibT("id"), *id);
 			}
 			else {
 				entry->AddField(ibT("value"), value);
+				// …and a structure beside it as it READS, the inspector's presentation of the same cell: a binding's
+				// hops are ids, its path is words.
+				if (value.Kind() == ibDataKind::Child)
+					if (const ibString presentation = property->GetValue().GetString(); !presentation.IsEmpty())
+						entry->SetValue(ibT("presentation"), presentation);
 			}
 		}
 
@@ -1955,6 +2024,29 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	    && !ibMcpCaptionInEveryLanguage(owner, value.AsString(), ibString::Format(ibT("'%s'"), name), refusal))
 		return false;
 
+	// ⭐ A TYPE BY ITS NAME — `String`, `CatalogRef.Goods`, `DynamicList` — is turned here into the node the property
+	// reads, and goes in by the same gate. A node is the property's serialization, and a word is not one: it is read at
+	// the door that reads what a caller sends, as the configuration names it (GetAvailableCtor — an external
+	// processor's falls through to its host's), and only a type the field's picker offers or it holds already
+	// (GetProtocolValue's list). Its length, precision, a composite: metadata_set_type's.
+	const ibPropertyType* const asType = dynamic_cast<const ibPropertyType*>(property);
+	if (asType != nullptr && value.Kind() == ibDataKind::String) {
+		const ibCtorAbstractType* const named = owner != nullptr
+			? owner->GetAvailableCtor(value.AsString()) : ibValue::GetAvailableCtor(value.AsString());
+		std::vector<ibClassID> offered;
+		ibBackendTypeConfigFactory::GetTypesByFilter(asType->GetFilterDataType(), owner, offered);
+		const std::vector<ibClassID>& held = asType->GetValueAsTypeDesc().GetClsidList();
+		if (named == nullptr || (std::find(offered.begin(), offered.end(), named->GetClassType()) == offered.end()
+				&& std::find(held.begin(), held.end(), named->GetClassType()) == held.end())) {
+			refusal = ibString::Format(ibMcpText("'%s' is not a type '%s' may hold - type_list names the types, "
+				"metadata_properties {property: \"%s\"} the ones it is offered."), value.AsString(), name, name);
+			return false;
+		}
+		ibTypeDescription described;
+		described.SetDefaultMetaType(named->GetClassType());
+		ibTypeDescriptionMemory::WriteNode(value, described);
+	}
+
 	// ⭐ THE PROPERTY JUDGES, AND THE REFUSAL CARRIES THE SHAPE. Nothing here decides whether a
 	// value is legal — the gate hands the node to the property, the only place that knows, and puts
 	// what it read before its owner (ibPropertyGate::SetValue, the node's door — the designer's
@@ -1974,8 +2066,6 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// ⭐ CAST ONCE, CHECKED, THEN USED. The name obtained for the test is the one the message
 		// reads from — saying what the property holds NOW turns "you used the wrong verb" into a
 		// sentence an author can act on without a second call.
-		const ibPropertyType* asType = dynamic_cast<const ibPropertyType*>(property);
-
 		if (asType != nullptr) {
 
 			// ⚠ NAMED THROUGH THE ONE RESOLVER, which knows BOTH kinds of id. A REFERENCE type is
@@ -1987,8 +2077,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			// 🛑 BOTH HALVES WERE GOT WRONG IN TURN, in the same hour: first the value registry
 			// alone (a reference would have come out unnamed), then the metadata alone — and that
 			// one was measured saying "It holds nothing now" about an attribute holding String.
-			const auto named = ibMetaTypeResolver(property->GetPropertyObject() != nullptr
-				? property->GetPropertyObject()->GetMetaData() : nullptr);
+			const auto named = ibMetaTypeResolver(owner);
 
 			ibString holds;
 			for (const ibClassID& clsid : asType->GetValueAsTypeDesc().m_listTypeClass) {
@@ -1999,9 +2088,9 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			}
 
 			refusal = ibString::Format(
-				ibMcpText("'%s' is a TYPE, and it is not set as a value: use metadata_set_type - it takes "
-				  "the type in words (String with a length, Number with precision and scale, "
-				  "CatalogRef.Goods), and `description` for a composite one. It holds %s now."),
+				ibMcpText("'%s' is a TYPE: it takes one by its name - String, Number, Date, Boolean, CatalogRef.Goods, "
+				  "DynamicList, as type_list names them - when a field of its kind may hold it. A length, a "
+				  "precision and scale, a composite: metadata_set_type. It holds %s now."),
 				name, holds.IsEmpty() ? ibMcpText("nothing") : holds);
 			return false;
 		}

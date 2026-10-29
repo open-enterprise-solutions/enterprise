@@ -365,7 +365,7 @@ bool ibValueModelTable::WriteProperty(ibDataNode& node) const
 	// It rides with the COLUMNS because it is a fact about the same thing they are — what the designer
 	// declared. A table created in a SCRIPT is never written, keeps the minted one, and is unaddressable
 	// by design: nobody declared it, so nobody can have kept anything for it.
-	node.SetProp(ibT("Guid"), m_guid.GetGuid());
+	node.SetValue(ibT("Guid"), m_guid.GetGuid());
 
 	// One child node per column; the column-info serializes ITSELF through the unified property mechanism
 	// (its own WriteProperty — Name / Caption / Type / Indexing via each property's GetNodeValue, + id / width). No
@@ -384,7 +384,7 @@ bool ibValueModelTable::ReadProperty(const ibDataNode& node)
 	// …AND TAKEN BACK, so the table is the same table it was last time. Kept ONLY when something was
 	// written: a configuration saved before this existed carries no guid, and overwriting the minted one
 	// with a null would give every such table one shared address — which is worse than a fresh one.
-	const ibGuid stored = node.GetProp<ibGuid>(ibT("Guid"));
+	const ibGuid stored = node.GetValue<ibGuid>(ibT("Guid"));
 	if (stored.isValid())
 		m_guid = stored;
 

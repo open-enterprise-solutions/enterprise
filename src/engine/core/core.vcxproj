@@ -88,12 +88,12 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_USRDLL;CORE_EXPORTS;_WIN32_WINNT=0x0A00;ASIO_STANDALONE;ASIO_SEPARATE_COMPILATION;ASIO_NO_DEPRECATED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_USRDLL;CORE_EXPORTS;_WIN32_WINNT=0x0A00;ASIO_STANDALONE;ASIO_SEPARATE_COMPILATION;ASIO_NO_DEPRECATED;XML_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(oesEngine);$(oes3rdParty)asio\asio\include;$(oes3rdParty)llhttp\include;$(oes3rdParty)lodepng;$(oes3rdParty)mbedtls\include;$(oesEngine)core\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oesEngine);$(oes3rdParty)asio\asio\include;$(oes3rdParty)llhttp\include;$(oes3rdParty)lodepng;$(oes3rdParty)expat\expat\lib;$(oes3rdParty)mbedtls\include;$(oesEngine)core\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <!-- Asio's templates (net\) make more sections than an object file holds by default. -->
       <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -101,7 +101,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>ws2_32.lib;crypt32.lib;bcrypt.lib;mbedtls.lib;llhttp.lib;lodepng.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;crypt32.lib;bcrypt.lib;mbedtls.lib;llhttp.lib;lodepng.lib;expat.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -239,8 +239,9 @@
     <ClCompile Include="query\anyQueryConstructorModel.cpp" />
     <ClCompile Include="query\queryRefusal.cpp" />
     <ClCompile Include="serialize\dataBuilder.cpp" />
-    <ClCompile Include="serialize\jsonProvider.cpp" />
-    <ClCompile Include="serialize\jsonText.cpp" />
+    <ClCompile Include="serialize\provider\fileProvider.cpp" />
+    <ClCompile Include="serialize\provider\jsonProvider.cpp" />
+    <ClCompile Include="serialize\provider\xmlProvider.cpp" />
     <ClCompile Include="server\listener.cpp" />
     <ClCompile Include="server\serverConfig.cpp" />
     <ClCompile Include="spreadsheet\sheetFormat.cpp" />
@@ -256,6 +257,8 @@
     <ClCompile Include="variant.cpp" />
     <ClCompile Include="utils\base64.cpp" />
     <ClCompile Include="utils\md5.cpp" />
+    <ClCompile Include="json\jsonText.cpp" />
+    <ClCompile Include="xml\xmlText.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="build.h" />
@@ -344,8 +347,9 @@
     <ClInclude Include="roleCompositionMode.h" />
     <ClInclude Include="selectorDataType.h" />
     <ClInclude Include="serialize\dataBuilder.h" />
-    <ClInclude Include="serialize\jsonProvider.h" />
-    <ClInclude Include="serialize\jsonText.h" />
+    <ClInclude Include="serialize\provider\fileProvider.h" />
+    <ClInclude Include="serialize\provider\jsonProvider.h" />
+    <ClInclude Include="serialize\provider\xmlProvider.h" />
     <ClInclude Include="server\clusterControl.h" />
     <ClInclude Include="server\listener.h" />
     <ClInclude Include="server\serverConfig.h" />
@@ -368,6 +372,10 @@
     <ClInclude Include="variant_ptr.h" />
     <ClInclude Include="utils\base64.h" />
     <ClInclude Include="utils\md5.hpp" />
+    <ClInclude Include="json\jsonText.h" />
+    <ClInclude Include="xml\xmlNodeType.h" />
+    <ClInclude Include="xml\xmlText.h" />
+    <ClInclude Include="xml\expat\expat_config.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
