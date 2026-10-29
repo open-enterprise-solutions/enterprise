@@ -5,10 +5,11 @@
 // ibSheetFormatXlsx — the Excel workbook (2007 and later), read and written
 // with what the tree already has: a ZIP stream and an XML parser.
 //
-// ⭐ NOTHING VENDORED. An .xlsx IS a zip of XML parts, and both halves are in
-// wxWidgets already (wxZipInputStream / wxZipOutputStream, and the XML parser
-// over expat). What is written here is the mapping between those parts and our
-// own document — which is the part no library could have supplied anyway.
+// ⭐ NOTHING VENDORED. An .xlsx IS a zip of XML parts: the zip is wx base's
+// (wxZipInputStream / wxZipOutputStream), the XML is the core's own
+// (core/xml/xmlDocument.h, over expat). What is written here is the mapping
+// between those parts and our own document — which is the part no library could
+// have supplied anyway.
 //
 // ⚠ THE OLD .xls IS A DIFFERENT ANIMAL and is deliberately not here: it is an
 // OLE2 compound file (a filesystem inside a file) carrying a stream of BIFF

@@ -264,6 +264,9 @@
     <ClCompile Include="json\jsonText.cpp">
       <Filter>json</Filter>
     </ClCompile>
+    <ClCompile Include="xml\xmlDocument.cpp">
+      <Filter>xml</Filter>
+    </ClCompile>
     <ClCompile Include="xml\xmlText.cpp">
       <Filter>xml</Filter>
     </ClCompile>
@@ -535,6 +538,9 @@
       <Filter>json</Filter>
     </ClInclude>
     <ClInclude Include="xml\xmlNodeType.h">
+      <Filter>xml</Filter>
+    </ClInclude>
+    <ClInclude Include="xml\xmlDocument.h">
       <Filter>xml</Filter>
     </ClInclude>
     <ClInclude Include="xml\xmlText.h">

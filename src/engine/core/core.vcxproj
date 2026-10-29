@@ -258,6 +258,7 @@
     <ClCompile Include="utils\base64.cpp" />
     <ClCompile Include="utils\md5.cpp" />
     <ClCompile Include="json\jsonText.cpp" />
+    <ClCompile Include="xml\xmlDocument.cpp" />
     <ClCompile Include="xml\xmlText.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -374,6 +375,7 @@
     <ClInclude Include="utils\md5.hpp" />
     <ClInclude Include="json\jsonText.h" />
     <ClInclude Include="xml\xmlNodeType.h" />
+    <ClInclude Include="xml\xmlDocument.h" />
     <ClInclude Include="xml\xmlText.h" />
     <ClInclude Include="xml\expat\expat_config.h" />
   </ItemGroup>
