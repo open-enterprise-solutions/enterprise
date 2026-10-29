@@ -14,6 +14,7 @@
 #include "formAttribute.h"                              // the attribute this box is bound to — its source IS the address
 #include "backend/srcDataObject.h"                      // …and the source answers with the guid of what it reads
 #include "backend/appData.h"
+#include "backend/backend_exception.h"                  // ibBackendException — a folder the table no longer holds, said
 #include "backend/backend_picture.h"                    // ibBackendPicture::SendPicture — a row's picture, by its id
 #include "frmserver/visualView/visualHost.h"            // IsDesignerHost — what the form is held by
 
@@ -938,10 +939,12 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	// the top. A FLAT List view passes the ignore-parent SENTINEL, so the model walks the WHOLE table in one
 	// order; any other view an EMPTY parent, so it returns the roots.
 	ibDataViewItem parentItem;
+	// …and one the table no longer holds (its data replaced while the client stood in it) is said: refused as no rows,
+	// the client showed the folder empty.
 	if (parentHandle != 0) {
 		parentItem = FindRow(parentHandle);
 		if (!parentItem.IsOk())
-			return false;   // a container the table no longer holds — the client reads the top again
+			ibBackendException::Error(_("The folder is no longer in the list."));
 	}
 	const ibDataViewViewMode viewMode = m_propertyViewMode->GetValueAsEnum();
 	const ibDataViewItem scope = parentItem.IsOk() ? parentItem

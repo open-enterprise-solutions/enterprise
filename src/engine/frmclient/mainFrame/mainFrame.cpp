@@ -23,6 +23,7 @@
 #include "settings/settingsxml.h"
 
 
+#include "core/exception.h"   // ibCoreException — the engine's exception a fetch was refused with
 #include "frmclient/docView/docManager.h"
 #include "frmclient/docView/templates/docViewFile.h"
 #include "frmclient/docView/templates/docViewAuditLog.h"   // the journal's tab — a view of its own (the tab's Kind)
@@ -894,7 +895,13 @@ bool ibFrontendMainFrame::Fetch(ibProtocol::ibMethod method, const ibProtocolNod
 {
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	ibString error;
-	return m_communicator->Call(method, params, answer, refusal, error);
+	if (m_communicator->Call(method, params, answer, refusal, error))
+		return true;
+	// ⭐ THE ENGINE'S EXCEPTION IS THE CLIENT'S — a read that failed came back as false, and a table took it for no rows:
+	// a folder read anew showed empty, and nobody was told why (2026-10-29).
+	if (refusal == ibProtocol::ibRefusal::Exception)
+		ibCoreException::Error(ibT("%s"), error);
+	return false;
 }
 
 void ibFrontendMainFrame::ShowSchema(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown)

@@ -117,6 +117,7 @@ namespace ibProtocol {
 		NotFound     = 404,   // no such client's thing: schema, command, item, tab, file, part, request
 		NotNow       = 409,   // offered, but not now: the active document does not take the command
 		Failed       = 500,   // the server could not do it: a part not written, a frame not drawn
+		Exception    = 520,   // the engine raised it doing the call — its words, for the person: a read that failed
 	};
 
 	// THE ENVELOPE — JSON-RPC 2.0's own.

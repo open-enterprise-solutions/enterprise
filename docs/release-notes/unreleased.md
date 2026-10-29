@@ -66,6 +66,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   reads one level and one page from where the last ended, as a list read from the base does.
 - **Switching the view mode reads the list at once**, where the rows came in the new mode only after the
   next click.
+- **A read the server could not do is said in the thin client**, where the list or the sheet showed
+  nothing: a folder opened, a list scrolled or read anew. The engine's exception is refused with a code
+  of its own, 520, its words in `message` (500 stays "the server could not do it"); the thin client raises
+  it as its own, the list keeping the rows it had. A folder the server no longer holds is said too.
 - **An Excel workbook with a part that does not parse is refused, the part named**, where it was read
   with that part left out: shared strings that did not parse left every string cell of the book empty,
   and nobody was told. The workbook's XML is read by the engine's own parser, no longer by wx's.

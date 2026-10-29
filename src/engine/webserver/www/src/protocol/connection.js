@@ -7,7 +7,7 @@
 import { decode, encode, isPacket } from './packet.js';
 
 /**
- * A refused call: the protocol's code (400, 401, 403, 404, 409, 500 — ibRefusal) and what it says to a person; 0 — the
+ * A refused call: the protocol's code (400, 401, 403, 404, 409, 500, 520 — ibRefusal) and what it says to a person; 0 — the
  * connection dropped under it, the request it left unanswered kept to be sent again as it went.
  */
 export class Refusal extends Error {

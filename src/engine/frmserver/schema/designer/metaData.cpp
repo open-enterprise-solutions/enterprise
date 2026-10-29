@@ -420,7 +420,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 				: configuration->SaveConfigToBuffer(bytes);
 		}
 		catch (const ibCoreException& err) {
-			refusal = ibProtocol::ibRefusal::Failed;
+			refusal = ibProtocol::ibRefusal::Exception;
 			error = err.GetErrorDescription();
 			return nullptr;
 		}

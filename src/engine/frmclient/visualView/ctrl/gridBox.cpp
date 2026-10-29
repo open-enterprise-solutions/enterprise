@@ -5,6 +5,8 @@
 
 #include "gridBox.h"
 
+#include "core/exception.h"                                     // ibCoreException — the engine's refusal of a sheet
+
 #include "frmclient/visualView/commandBar.h"
 #include "frmclient/backend/serialize/dataProtocol.h"           // the sheet as the wire brought it
 #include "frmclient/docView/templates/docViewSpreadsheet.h"    // the document it holds, and its view
@@ -97,8 +99,16 @@ void ibValueGridBox::Update(const ibProtocolNode& node)
 		// Sheet may already ride in this State's frame (composed report). Else Fetch, as before.
 		ibProtocolNode answer = state;
 		bool have = state.Has(ibProtocol::ibForm::ibSpreadsheet::Sheet);
-		if (!have)
-			have = m_fetcher(ibProtocolNode(), answer) && answer.GetInt(ibProtocol::ibForm::ibSpreadsheet::Version) == version;
+		// …and one the engine refused is asked once for its version — the refusal is in the journal (the call's line),
+		// and the sheet shown stays.
+		if (!have) {
+			try {
+				have = m_fetcher(ibProtocolNode(), answer) && answer.GetInt(ibProtocol::ibForm::ibSpreadsheet::Version) == version;
+			}
+			catch (const ibCoreException&) {
+				m_version = version;
+			}
+		}
 		if (have) {
 			m_version = version;
 

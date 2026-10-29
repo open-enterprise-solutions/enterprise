@@ -158,7 +158,9 @@ public:
 	bool IsClosingWindow() const { return m_closingWindow; }
 	// A fetch — a control's (Fetch: a table's rows, a spreadsheet's cells; `params` — the control, its request, the view
 	// it is of) or the pictures of their ids (Picture): the answer is no frame, nothing is drawn or asked, and a refusal is
-	// only false. It speaks to the communicator alone, so a control's own thread may make it.
+	// only false — but the engine's exception (Exception), thrown here in its words: the caller says it where it belongs
+	// (a table's page, by its data view), else the application's loop journals it. It speaks to the communicator alone,
+	// so a control's own thread may make it.
 	bool Fetch(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer);
 	// A file of the person's, up to the server in its parts — `file` the id it was given. False: not read, or refused
 	// (said to the person).

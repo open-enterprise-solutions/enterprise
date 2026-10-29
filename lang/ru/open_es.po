@@ -11948,6 +11948,10 @@ msgstr "Настройки списка"
 msgid "The settings marked to be restored on open could not be found"
 msgstr "Настройки, отмеченные для восстановления при открытии, не найдены"
 
+#: src/engine/frmserver/visualView/ctrl/tableBox.cpp:947
+msgid "The folder is no longer in the list."
+msgstr "Папки больше нет в списке."
+
 msgid "Restore"
 msgstr "Восстановить"
 

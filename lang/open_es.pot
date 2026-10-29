@@ -11613,6 +11613,10 @@ msgstr ""
 msgid "The settings marked to be restored on open could not be found"
 msgstr ""
 
+#: src/engine/frmserver/visualView/ctrl/tableBox.cpp:947
+msgid "The folder is no longer in the list."
+msgstr ""
+
 msgid "Restore"
 msgstr ""
 

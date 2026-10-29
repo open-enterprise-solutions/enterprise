@@ -203,7 +203,8 @@ by column id: `Text`, `Checked` for a flag, `Number`, `Value` when the cell take
 model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as a form's colours), `Bold`, `Italic`,
 `Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`). In the designer (`login` `Mode` 2)
 a table reads no rows — its `fetch` is refused, and a designer's client does not ask. A read that fails is refused
-`Failed` in the base's own words, and the frame carries the same message for the person.
+`Exception` in the base's own words, and the frame carries the same message for the person; a `Parent` the table no
+longer holds is refused `Exception` too.
 
 From protocol 4 a fetch from the start (`Direction` 0) may name `Before`, the rows wanted ahead of the row it starts
 at; the answer gives those rows first and says in `Before` how many came. A server before protocol 4 gives none: the
@@ -530,6 +531,7 @@ are HTTP's by meaning; where two reasons share one, the method tells them apart.
 | 404 | no such schema, command, item, tab, file, part or request |
 | 409 | not now: the active document does not take the command; `login`: the server could not take the session in yet — log in again |
 | 500 | the server could not do it |
+| 520 | the engine raised an exception doing it: `message` is its words, for the person — a read that failed. A client raises it as its own |
 
 An HTTP status answers only what comes before the protocol: no base at the address (404), a notification (204).
 
