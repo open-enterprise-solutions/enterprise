@@ -57,6 +57,7 @@ browser's `DecompressionStream("deflate-raw")`); a packet begins `OES1`, a defla
 | `picture` | `Client`, `Pictures` — the ids: an engine picture's number, a configuration picture's `<guid>#<version>` (read by the guid) | `Pictures` — each `Id`, `Picture` (the PNG, a `Binary`; empty when there is none of that id) |
 | `debug` | `Client`, `Command` and its fields (protocol 6) | at once, never the frame — [The debugger](#the-debugger) |
 | `mcp` | `Client`, `Command` and its fields (protocol 7) | never the frame — [The assistant](#the-assistant) |
+| `http` | no `Client`: `Method`, `Path` (after `/hs`, decoded), `Query` (as written), `Prefix` (the address up to and with `/hs`), `Headers` (a child per header, `Name`, `Value`, the names lower case), `Body` (a `Binary`) | `Status`, `Headers`, `Body` — what the configuration's HTTP service answered ([http-services.md](http-services.md)); a refusal is the answer's `Status`, never the call's |
 
 `login`'s `Read` saves the start's own reads: the designer names the debugger's store (`Schema` 15), which was a
 call of its own at every start. A schema the server does not know, the person has no right to, or that could not be
