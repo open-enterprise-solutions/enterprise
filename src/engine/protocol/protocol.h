@@ -1854,7 +1854,9 @@ namespace ibProtocol {
 			inline constexpr const char* Parent           = "Parent";
 			inline constexpr const char* Count            = "Count";
 			inline constexpr const char* Before           = "Before";      // (protocol 4) a reset fetch's: the rows wanted ahead
-			                                                               // of the page — answered with how many stand first
+			                                                               // of the page — answered with how many stand first.
+			                                                               // A reset with no Anchor is read around the row the
+			                                                               // table stands on, as many ahead as Count at least
 			inline constexpr const char* End              = "End";
 			// …a row:
 			inline constexpr const char* Container        = "Container";

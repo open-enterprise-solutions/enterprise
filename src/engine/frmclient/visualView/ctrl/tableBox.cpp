@@ -208,9 +208,9 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 	// a form tried out in it was refused (404), each of its tables (2026-10-15).
 	const bool designer = appData->DesignerMode();
 	ibViewFetcher fetcher = [this, wire, designer](const ibProtocolNode& request, ibProtocolNode& answer) -> bool {
-		// The page State's Rows was read as: from the top, or (Anchor) around the row the server stands on, with its Count
-		// and as many rows ahead (Before; fewer — none more above). Taken for a read it holds all of: that Anchor, no
-		// larger a Count, no more rows ahead than it has — or the top reached.
+		// The page State's Rows was read as: from the top, or around the row the server stands on — Anchor, when this side
+		// had been given it — with its Count and as many rows ahead (Before; fewer — none more above). Taken for a read it
+		// holds all of: that Anchor, no larger a Count, no more rows ahead than it has — or the top reached.
 		const long long held = m_firstDraw.GetInt(ibProtocol::ibForm::ibTable::Count);
 		const long long ahead = m_firstDraw.GetInt(ibProtocol::ibForm::ibTable::Before);
 		const long long wanted = request.GetInt(ibProtocol::ibForm::ibTable::Before);
