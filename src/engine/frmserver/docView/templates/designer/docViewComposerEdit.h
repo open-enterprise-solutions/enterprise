@@ -44,7 +44,8 @@ public:
 
 // WHAT A COMPOSITION'S PANEL ASKS OF THE CONFIGURATION, on whichever designer tab it is — a composer's own, or a form's
 // whose attribute holds a composition (ibPropertyDataComposition): the fields of a query text (Kind Fields {Text}) and
-// of a reference's targets (Kind Expand {Targets}), and a dynamic list's (Kind Source {Id, Text}). False: not one of these.
+// of a reference's targets (Kind Expand {Targets}), a dynamic list's (Kind Source {Id, Text}), and what is wrong with a
+// parameter's expression (Kind Check {Text} — Error, or nothing). False: not one of these.
 FRMSERVER_API bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, const ibMetaData* metaData);
 
 #endif

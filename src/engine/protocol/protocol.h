@@ -1577,6 +1577,9 @@ namespace ibProtocol {
 				Source = 23,   // {Id, Text} — a dynamic list's fields: those of its main table (Id, optional) and what its
 				               // query (Text, optional) adds — Fields, References, Error — as the desktop's list settings
 				               // window reads them
+				Check  = 28,   // {Text} — a parameter's expression compiled, not run: Error — why it does not compile;
+				               // none — it does (the desktop panel's CheckExpression). Past the query constructor's
+				               // (ibQueryConstructor::ibRequest, 24–27): the same tab answers both
 			};
 
 		}
