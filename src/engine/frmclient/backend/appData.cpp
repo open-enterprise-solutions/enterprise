@@ -1,5 +1,7 @@
 #include "appData.h"
 
+#include <wx/intl.h>   // wxGetLocale — the locale this process settled on
+
 #include <wx/filename.h>
 #include <wx/utils.h>   // wxLaunchDefaultBrowser, wxYieldIfNeeded
 
@@ -27,6 +29,13 @@ long ibApplicationData::RunApplication(const ibString& strAppName, bool searchDe
 		? (ibT('"') + ibString(binary.GetFullPath()) + ibT('"'))
 		: strAppName;
 
+	// THE LOCALE IT RUNS IN — the one asked for (--locale), else the one this process settled on: the desktop's passed its
+	// host's (ibApplicationHost::GetLocaleName) whether or not it was asked for one, and a base opened in this process
+	// settles the process's locale the same way. Neither — none passed, the program settles its own.
+	const wxLocale* const settled = wxGetLocale();
+	const ibString locale = !m_strLocale.IsEmpty() ? m_strLocale
+		: (settled != nullptr ? ibString(settled->GetName()) : ibString());
+
 	// THE WEB SERVER publishes this base — the application server's, or the file base with its debugger — and the
 	// browser opens its page once the server says where it is; a login is the browser's. A base on a DBMS server is no
 	// publication of it (webserver/webServer.h).
@@ -46,8 +55,8 @@ long ibApplicationData::RunApplication(const ibString& strAppName, bool searchDe
 				strAppName);
 			return 0;
 		}
-		if (!m_strLocale.IsEmpty())
-			executeCmd += ibString::Format(ibT(" --locale=%s"), m_strLocale);
+		if (!locale.IsEmpty())
+			executeCmd += ibString::Format(ibT(" --locale=%s"), locale);
 
 		ibString url;
 		const long pid = ibStartWebServer(executeCmd, url, []() { wxYieldIfNeeded(); });
@@ -86,8 +95,8 @@ long ibApplicationData::RunApplication(const ibString& strAppName, bool searchDe
 		executeCmd += ibString::Format(ibT(" --ibuser=%s"), m_strIBUser);
 	if (!m_strIBPassword.IsEmpty())
 		executeCmd += ibString::Format(ibT(" --ibpwd=%s"), m_strIBPassword);
-	if (!m_strLocale.IsEmpty())
-		executeCmd += ibString::Format(ibT(" --locale=%s"), m_strLocale);
+	if (!locale.IsEmpty())
+		executeCmd += ibString::Format(ibT(" --locale=%s"), locale);
 
 	return wxExecute(executeCmd);
 }
