@@ -127,7 +127,9 @@ enum
 	enJSONValue,
 	//--- A value as XML text and back: at the END, for the same reason.
 	enXMLString,
-	enXMLValue
+	enXMLValue,
+	// Appended: the ordinal is the bind-table index.
+	enBegOfHour
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -256,6 +258,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(ibT("JSONValue"), 1, ibT("JSONValue(json : string)"));
 	helper.AppendFunc(ibT("XMLString"), 1, ibT("XMLString(value : any)"));
 	helper.AppendFunc(ibT("XMLValue"), 1, ibT("XMLValue(xml : string)"));
+	helper.AppendFunc(wxT("BegOfHour"), 1, wxT("BegOfHour(d : date)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -403,6 +406,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enJSONValue: pvarRetValue = JSONValue(paParams[0]->GetString()); return true;
 		case enXMLString: pvarRetValue = XMLString(*paParams[0]); return true;
 		case enXMLValue: pvarRetValue = XMLValue(paParams[0]->GetString()); return true;
+		case enBegOfHour: pvarRetValue = BegOfHour(*paParams[0]); return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

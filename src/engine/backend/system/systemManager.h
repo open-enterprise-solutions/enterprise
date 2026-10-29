@@ -82,6 +82,7 @@ public:
 	static ibValue EndOfWeek(const ibValue& cData);
 	static ibValue BegOfDay(const ibValue& cData);
 	static ibValue EndOfDay(const ibValue& cData);
+	static ibValue BegOfHour(const ibValue& cData);
 	static int GetYear(const ibValue& cData);
 	static int GetMonth(const ibValue& cData);
 	static int GetDay(const ibValue& cData);
