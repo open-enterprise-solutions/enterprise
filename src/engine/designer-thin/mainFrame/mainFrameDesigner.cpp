@@ -192,6 +192,23 @@ ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocol::ibView::i
 	return ibFrontendMainFrame::CreateDocument(kind, tabId);
 }
 
+bool ibFrontendMainFrameDesigner::AllowClose()
+{
+	// ⭐ THE CONFIGURATION IS ASKED ABOUT BEFORE THE TABS, where the desktop asked after them: the base's Exit is the
+	// server's, and once it says Exit the window goes (CallSettled) — a Cancel said after it could not keep it. Not asked,
+	// an edit nobody saved went with the window (2026-10-28). A session already gone has nothing to save.
+	if (m_metaWindow != nullptr && GetCommunicator().IsLoggedIn() && m_metaWindow->IsEdited()) {
+		const int answer = wxMessageBox(
+			ibString::Format(_("Configuration '%s' has been changed. Save?"), m_metaWindow->GetConfigName()),
+			wxTheApp->GetAppDisplayName(), wxYES | wxNO | wxCANCEL | wxCENTRE | wxICON_QUESTION, this);
+		if (answer == wxCANCEL)
+			return false;
+		if (answer == wxYES && !m_metaWindow->SaveDatabase())
+			return false;
+	}
+	return ibFrontendMainFrame::AllowClose();
+}
+
 std::vector<ibProtocol::ibSchema::ibKind> ibFrontendMainFrameDesigner::GetStartSchemas() const
 {
 	return { ibProtocol::ibSchema::ibKind::Debugger };

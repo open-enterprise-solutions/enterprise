@@ -141,6 +141,9 @@ protected:
 	// THE CONFIGURATION'S TREE — the frame's MetaData, drawn when the patch changed it; its state on the pane's caption.
 	virtual void DrawFrame(const ibProtocolNode& frame, const ibProtocolNode& patch) override;
 
+	// May the window go down? An edited configuration is asked about first — the desktop's Save? — then the base's.
+	virtual bool AllowClose() override;
+
 	// The designer's tabs — an external data processor's and report's tree — over the base's.
 	virtual ibTabDocument* CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId) override;
 
