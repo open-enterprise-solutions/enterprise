@@ -6,6 +6,7 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/temp/tempStorage.h"
+#include "frmserver/client/clientFrame.h"   // ibClientFrame — its open tabs, closed first
 #include "core/exception.h"   // ibCoreException — a restore refused on the way
 #include "core/fileKind.h"
 #include "core/serialize/dataBuilder.h"
@@ -35,6 +36,20 @@ bool RequestFile(ibBackendDocFrame* frame, const ibString& caption, ibString& fi
 	return !file.IsEmpty();
 }
 
+// THE OPEN TABS CLOSED FIRST — the desktop's Clear closed every child window before it cleared, each asked as its tab's
+// cross asks it (a modified one: save?), and stopped at the first that refused. False: one refused, nothing cleared.
+bool CloseTabs()
+{
+	ibClientFrame* const frame = ibClientFrame::GetFrame();
+	if (frame == nullptr)
+		return true;
+	for (ibDocument* const document : frame->GetDocumentManager()->GetDocumentsVector()) {
+		if (!frame->GetDocumentManager()->CloseDocument(document, false))
+			return false;
+	}
+	return true;
+}
+
 }
 
 bool ibSchemaDatabase::AccessRight(const ibSession& session) const
@@ -58,8 +73,7 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 		return nullptr;
 	}
 
-	// ⚠ THE TABS ARE NOT CLOSED FIRST, as the desktop's were: a restore closes every session after, this one among them,
-	// and a clear leaves the configuration the tabs edit as it was.
+	// ⚠ A RESTORE DOES NOT CLOSE THE TABS FIRST, as the desktop's did: it closes every session after, this one among them.
 	switch (static_cast<ibProtocol::ibSchema::ibCommand>(command)) {
 	case ibProtocol::ibSchema::ibCommand::Load:
 		return [applicationInstance]() {
@@ -124,6 +138,8 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 			if (frame == nullptr || frame->ShowModalMessage(_("Are you sure you want to clear the database?"),
 				ibString(), wxYES_NO | wxCENTRE | wxICON_QUESTION) != wxYES)
+				return;
+			if (!CloseTabs())
 				return;
 			if (applicationInstance->ClearDatabase())
 				frame->ShowModalMessage(_("Database cleared successfully!"), ibString(), wxOK | wxCENTRE);
