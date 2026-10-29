@@ -3525,7 +3525,7 @@ TEST_F(BuiltInRuntime, BegOfHourFloorsToTheHour) {
 		wxT("keptHour = GetHour(exact); keptMinute = GetMinute(exact);\n")));
 
 	ibProcUnit pu;
-	wxString strError;
+	ibString strError;
 	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
 
 	ibValue v;
@@ -3556,7 +3556,7 @@ TEST_F(BuiltInRuntime, EndOfHourIsTheHoursLastSecond) {
 		wxT("second = GetSecond(last); day = GetDay(last);\n")));
 
 	ibProcUnit pu;
-	wxString strError;
+	ibString strError;
 	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
 
 	ibValue v;
@@ -3583,7 +3583,7 @@ TEST_F(BuiltInRuntime, GetMillisecondIsTheDatesOwnCount) {
 		wxT("between = GetMillisecond(Date(2024, 3, 15, 14, 40, 8)) - count;\n")));
 
 	ibProcUnit pu;
-	wxString strError;
+	ibString strError;
 	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
 
 	ibValue v;

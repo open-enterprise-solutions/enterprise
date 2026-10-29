@@ -21,7 +21,6 @@
 #include "backend/metaCollection/partial/reference/reference.h"
 
 #include <wx/init.h>
-#include <wx/image.h>
 #include <wx/log.h>
 
 TEST(MetadataTree, FreshConfigHasNoBusinessObjects) {
@@ -187,7 +186,6 @@ bool EnsureAppData()
 {
 	if (ibApplicationInstance::Get() != nullptr)
 		return true;
-	wxInitAllImageHandlers();
 	if (wxLog::GetActiveTarget() != nullptr)
 		delete wxLog::SetActiveTarget(new wxLogStderr());
 	return ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE);
@@ -204,7 +202,7 @@ void ExpectSelectionMember(ibValueMetaObjectRecordDataMutableRef* meta, const wx
 	ASSERT_NE(prop, wxNOT_FOUND) << name;
 	ibValue value;
 	ASSERT_TRUE(selection.GetPropVal(prop, value)) << name;
-	EXPECT_FALSE(selection.SetPropVal(prop, ibValue(wxT("x")))) << name << " is read-only";
+	EXPECT_FALSE(selection.SetPropVal(prop, ibValue(ibString(wxT("x"))))) << name << " is read-only";
 }
 
 } // namespace
