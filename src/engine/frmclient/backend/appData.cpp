@@ -23,6 +23,20 @@ long ibApplicationData::RunApplication(const ibString& strAppName, bool searchDe
 	wxFileName binary = wxFileName::DirName(ibProgramFolder());
 	binary.SetFullName(strAppName);
 
+#ifdef __WXOSX__
+	// …and on macOS it is not even a plain file: the sibling is enterprise-thin.app, its executable inside it, as the
+	// engine's RunApplication finds it. Without this the fork succeeds and the exec fails (error 2), and nothing runs.
+	if (!binary.FileExists()) {
+		wxFileName bundled = wxFileName::DirName(ibProgramFolder());
+		bundled.AppendDir(strAppName + ibT(".app"));
+		bundled.AppendDir(wxT("Contents"));
+		bundled.AppendDir(wxT("MacOS"));
+		bundled.SetFullName(strAppName);
+		if (bundled.FileExists())
+			binary = bundled;
+	}
+#endif
+
 	ibString executeCmd = binary.FileExists()
 		? (ibT('"') + ibString(binary.GetFullPath()) + ibT('"'))
 		: strAppName;
