@@ -124,6 +124,29 @@ ibString ibExecutablePath()
 #endif
 }
 
+ibString ibExecutablePath(const ibString& name)
+{
+	const std::filesystem::path folder = ibPathOf(ibProgramFolder());
+	std::error_code error;
+
+	std::filesystem::path flat = folder / ibPathOf(name);
+#if defined(__IBMSW__)
+	if (flat.extension() != L".exe")
+		flat += L".exe";
+#endif
+	if (std::filesystem::is_regular_file(flat, error))
+		return TextOf(flat);
+
+#if defined(__IBOSX__)
+	// A bundle keeps its binary inside: name.app beside this one's .app, or beside this binary off a bundle.
+	const std::filesystem::path bundled = folder / ibPathOf(name + ibT(".app")) / "Contents" / "MacOS" / ibPathOf(name);
+	if (std::filesystem::is_regular_file(bundled, error))
+		return TextOf(bundled);
+#endif
+
+	return name;
+}
+
 ibString ibGetCwd()
 {
 	std::error_code error;

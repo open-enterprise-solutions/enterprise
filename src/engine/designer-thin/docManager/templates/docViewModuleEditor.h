@@ -20,6 +20,8 @@ public:
 	virtual bool OnCreate(ibFrontendDocument* doc, long flags) override;
 	virtual void OnActivateView(bool activate, ibFrontendView* activeView, ibFrontendView* deactiveView) override;
 	virtual void OnDraw(wxDC* dc) override;
+	// The options taken anew (Tools → Options): the editor set by them again, as the desktop's.
+	virtual void OnUpdate(ibFrontendView* sender, wxObject* hint = nullptr) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
 	virtual wxPrintout* OnCreatePrintout() override;

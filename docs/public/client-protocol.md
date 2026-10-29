@@ -157,7 +157,10 @@ the command bound already, sends nothing. Making a new form command is the form 
 A picture's `ibPropertyPicture` row carries the configuration's pictures it may be loaded from (the picture
 metaobjects of the owner's configuration, or of the one it extends) as an optional node `Pictures`: children with
 `Name`, `Guid` and `Id` (the id it is drawn by). They are named rather than sent as a `Picture`; the cell asks for them
-in one `picture` call. Picking one is the row's `Set` with the value `{Type 2, Guid}`.
+in one `picture` call. Picking one is the row's `Set` with the value `{Type 2, Guid}`. Beside them, as an optional
+node `ClassPictures`, come the engine's class icons, a metadata class's and a control's: children with `Name` and `Id`,
+the class id the icon is drawn and stored by. The core's own pictures are not among them; the client has those. Picking
+one is `{Type 1, Id}`.
 A configuration picture's version is a guid new with each picture its object is given; it is not stored. A client
 keeps a picture by its guid with the id it came by, and asks again when an answer names another version.
 A field's `ibPropertyChoiceLink` (link by type) and `ibPropertyChoiceParameters` rows carry what their windows ask of

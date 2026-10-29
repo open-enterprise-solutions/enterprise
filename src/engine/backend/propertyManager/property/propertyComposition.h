@@ -43,6 +43,10 @@ public:
 	// whatever else a composition is made of — see compositionDescription.h.
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// NO ROW — the composer's composition is edited in the composer's own tab, never in a cell, and the desktop's
+	// inspector had no editor for it (RegisterNoEditor). Sent, it was a read-only string: "Composition data: SELECT".
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override { return false; }
 };
 
 #endif // __PROPERTY_COMPOSITION_H__

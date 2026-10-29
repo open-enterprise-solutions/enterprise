@@ -38,6 +38,10 @@ CORE_API ibString ibDiagnosticFolder();
 
 // This process's binary, its full path — the one the no-argument ibProgramFolder walks from.
 CORE_API ibString ibExecutablePath();
+// …and the binary of the program `name` beside this one, in the program folder: the plain file (name.exe on Windows),
+// else, on macOS, the one inside its bundle, name.app/Contents/MacOS/name. Neither there — the bare name, left to the
+// system's search. ONE LOOKUP for whoever starts a sibling: the launcher, the engine's RunApplication, the client's.
+CORE_API ibString ibExecutablePath(const ibString& name);
 
 // The process's working directory; empty when it cannot be read.
 CORE_API ibString ibGetCwd();

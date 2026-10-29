@@ -348,7 +348,7 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
   A program running from `X.app/Contents/MacOS/` looks beside the bundle for everything a Windows
   or Linux build keeps beside its executable: `backend.conf`, `lang/`, `help/`, `plugins/`, `_fb/`,
   `web/`, the application server's default `server/`, `libfileserver.dylib`, and the other
-  programs (as `<name>.app` or flat). A binary outside a bundle uses its own folder
+  programs (as `<name>.app` or flat; `ibExecutablePath(name)` finds one). A binary outside a bundle uses its own folder
 - **A program running from a bundle writes its logs under `~/Library/Logs/OES`**: `journal/`,
   `crashdumps/` and `oes-debug.log`. The folder beside an installed `.app` is usually
   `/Applications`, which a normal user cannot write. A binary outside a bundle — and every

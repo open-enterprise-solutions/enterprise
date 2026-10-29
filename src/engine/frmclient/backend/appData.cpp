@@ -1,12 +1,10 @@
 #include "appData.h"
 
-#include <wx/intl.h>   // wxGetLocale — the locale this process settled on
-
-#include <wx/filename.h>
 #include <wx/utils.h>   // wxLaunchDefaultBrowser, wxYieldIfNeeded
 
 #include "core/diagnostics/journal.h"
 #include "core/fileSystem.h"   // the binary next to this one — RunApplication
+#include "core/localization/dictionary.h"   // ibDictionary::GetProcessLanguage — the base's language, RunApplication
 #include "core/startProcess.h"   // ibStartWebServer
 
 #include "frmclient/backend/mcp/mcpServer.h"
@@ -20,35 +18,15 @@ bool ibApplicationData::DesignerMode() const
 
 long ibApplicationData::RunApplication(const ibString& strAppName, bool searchDebug, bool useManifest) const
 {
-	// Resolve the binary next to this one, as the engine's: a bare name is looked up on PATH and in the working
-	// directory, and it is in neither. Quoted because a resolved path can contain a space and wxExecute splits on those.
-	wxFileName binary = wxFileName::DirName(ibProgramFolder());
-	binary.SetFullName(strAppName);
+	// Resolve the binary next to this one, as the engine's (ibExecutablePath): a bare name is looked up on PATH and in the
+	// working directory, and it is in neither; on macOS it is inside its bundle. Quoted because a resolved path can
+	// contain a space and wxExecute splits on those.
+	ibString executeCmd = ibT('"') + ibExecutablePath(strAppName) + ibT('"');
 
-#ifdef __WXOSX__
-	// …and on macOS it is not even a plain file: the sibling is enterprise-thin.app, its executable inside it, as the
-	// engine's RunApplication finds it. Without this the fork succeeds and the exec fails (error 2), and nothing runs.
-	if (!binary.FileExists()) {
-		wxFileName bundled = wxFileName::DirName(ibProgramFolder());
-		bundled.AppendDir(strAppName + ibT(".app"));
-		bundled.AppendDir(wxT("Contents"));
-		bundled.AppendDir(wxT("MacOS"));
-		bundled.SetFullName(strAppName);
-		if (bundled.FileExists())
-			binary = bundled;
-	}
-#endif
-
-	ibString executeCmd = binary.FileExists()
-		? (ibT('"') + ibString(binary.GetFullPath()) + ibT('"'))
-		: strAppName;
-
-	// THE LOCALE IT RUNS IN — the one asked for (--locale), else the one this process settled on: the desktop's passed its
-	// host's (ibApplicationHost::GetLocaleName) whether or not it was asked for one, and a base opened in this process
-	// settles the process's locale the same way. Neither — none passed, the program settles its own.
-	const wxLocale* const settled = wxGetLocale();
-	const ibString locale = !m_strLocale.IsEmpty() ? m_strLocale
-		: (settled != nullptr ? ibString(settled->GetName()) : ibString());
+	// THE LOCALE IT RUNS IN — the one asked for (--locale), else the base's: the desktop's passed its host's
+	// (ibApplicationHost::GetLocaleName) whether or not it was asked for one; here the language the login answered
+	// (ibLogin::Locale), the process's since. Neither — none passed, the program settles its own.
+	const ibString locale = !m_strLocale.IsEmpty() ? m_strLocale : ibDictionary::GetProcessLanguage();
 
 	// THE WEB SERVER publishes this base — the application server's, or the file base with its debugger — and the
 	// browser opens its page once the server says where it is; a login is the browser's. A base on a DBMS server is no

@@ -15,7 +15,6 @@
 
 #include <wx/ffile.h>      // infobase.conf — written for a new base
 #include <wx/fileconf.h>   // infobase.conf — a base's own settings
-#include <wx/filename.h>
 #include <wx/stdpaths.h>
 
 #include "core/fileSystem.h"
@@ -1078,35 +1077,12 @@ long ibApplicationInstance::RunApplication(const ibString& strAppName, const ibS
 		cmd += ibT(" --") + name + ibT("=\"") + value + ibT("\"");
 	};
 
-	// Resolve the binary next to this one. A bare "enterprise" is looked up on PATH and in the
-	// working directory, and it is in neither; on macOS it is not even a plain file, since the
-	// sibling is enterprise.app and the executable sits inside it. Without this the fork succeeds,
-	// the exec fails, and wxExecute still returns a pid — so the caller is told the application
-	// started while nothing runs.
-	// The program folder. Inside a bundle the sibling is not in Contents/MacOS — it is
-	// beside this .app, either as a flat binary or as its own bundle.
-	wxFileName home = wxFileName::DirName(ibProgramFolder());
-
-	wxFileName binary(home);
-	binary.SetFullName(strAppName);
-
-#ifdef __WXOSX__
-	if (!binary.FileExists()) {
-		wxFileName bundled(home);
-		bundled.AppendDir(strAppName + ibT(".app"));
-		bundled.AppendDir(wxT("Contents"));
-		bundled.AppendDir(wxT("MacOS"));
-		bundled.SetFullName(strAppName);
-		if (bundled.FileExists())
-			binary = bundled;
-	}
-#endif
-
-	// The bare name stays the fallback, so a layout this does not recognise behaves as before.
-	// Quoted because a resolved path can contain a space and the command is split on those.
-	ibString executeCmd = binary.FileExists()
-		? (ibT('"') + ibString(binary.GetFullPath()) + ibT("\" "))
-		: (strAppName + ibT(' '));
+	// Resolve the binary next to this one (ibExecutablePath). A bare "enterprise" is looked up on PATH and in the
+	// working directory, and it is in neither; on macOS it is not even a plain file, since the sibling is enterprise.app
+	// and the executable sits inside it. Without this the fork succeeds, the exec fails, and wxExecute still returns a
+	// pid — so the caller is told the application started while nothing runs. Quoted because a resolved path can contain
+	// a space and the command is split on those.
+	ibString executeCmd = ibT('"') + ibExecutablePath(strAppName) + ibT("\" ");
 
 	// THE WEB SERVER publishes a file base: the base, its debugger, its language - a login is the browser's, and a
 	// base on a DBMS server is no publication of it (webserver/webServer.h). Its page is opened once the server says

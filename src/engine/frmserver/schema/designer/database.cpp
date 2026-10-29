@@ -6,7 +6,7 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/temp/tempStorage.h"
-#include "frmserver/client/clientFrame.h"   // ibClientFrame — its open tabs, closed first
+#include "frmserver/client/clientFrame.h"   // ibClientFrame::CloseAll — the open tabs, closed before a clear
 #include "core/exception.h"   // ibCoreException — a restore refused on the way
 #include "core/fileKind.h"
 #include "core/serialize/dataBuilder.h"
@@ -34,20 +34,6 @@ bool RequestFile(ibBackendDocFrame* frame, const ibString& caption, ibString& fi
 		return response.GetValue<bool>(ibProtocol::ibRequest::ibFile::Done);
 	file = response.GetValue<ibString>(ibProtocol::ibRequest::ibFile::File);
 	return !file.IsEmpty();
-}
-
-// THE OPEN TABS CLOSED FIRST — the desktop's Clear closed every child window before it cleared, each asked as its tab's
-// cross asks it (a modified one: save?), and stopped at the first that refused. False: one refused, nothing cleared.
-bool CloseTabs()
-{
-	ibClientFrame* const frame = ibClientFrame::GetFrame();
-	if (frame == nullptr)
-		return true;
-	for (ibDocument* const document : frame->GetDocumentManager()->GetDocumentsVector()) {
-		if (!frame->GetDocumentManager()->CloseDocument(document, false))
-			return false;
-	}
-	return true;
 }
 
 }
@@ -139,7 +125,10 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 			if (frame == nullptr || frame->ShowModalMessage(_("Are you sure you want to clear the database?"),
 				ibString(), wxYES_NO | wxCENTRE | wxICON_QUESTION) != wxYES)
 				return;
-			if (!CloseTabs())
+			// …the open tabs closed first, as the desktop's Clear closed its windows: the frame's Close All, each tab by the
+			// road its cross takes (a modified one asks) — one kept, nothing cleared.
+			ibClientFrame* const client = ibClientFrame::GetFrame();
+			if (client != nullptr && !client->CloseAll())
 				return;
 			if (applicationInstance->ClearDatabase())
 				frame->ShowModalMessage(_("Database cleared successfully!"), ibString(), wxOK | wxCENTRE);

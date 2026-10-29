@@ -13,31 +13,10 @@
 
 namespace {
 
-wxString FindSiblingExecutable(const wxString& exeName) {
-	// The program folder: the executable's directory, or — inside a bundle — the directory that
-	// contains the .app. A flat build keeps designer beside launcher. A bundle keeps
-	// designer.app beside launcher.app, and the binary is Contents/MacOS/designer.
-	const wxString sep = wxFileName::GetPathSeparator();
-	const wxString folder = ibProgramFolder();
-
-	wxString flatPath = folder + sep + exeName;
-#ifdef __WXMSW__
-	flatPath += wxT(".exe");
-#endif
-	if (wxFileExists(flatPath))
-		return flatPath;
-
-	const wxString siblingApp = folder + sep + exeName + wxT(".app")
-		+ sep + wxT("Contents") + sep + wxT("MacOS") + sep + exeName;
-	if (wxFileExists(siblingApp))
-		return siblingApp;
-
-	return flatPath;
-}
-
 wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info, ibLaunchSecrets& secrets) {
-	wxString exePath = FindSiblingExecutable(exeName);
-	wxString cmd = wxT("\"") + exePath + wxT("\"");
+	// The program beside this one — a flat build's designer beside launcher, a bundle's designer.app beside launcher.app
+	// (ibExecutablePath).
+	wxString cmd = wxT("\"") + wxString(ibExecutablePath(exeName)) + wxT("\"");
 	secrets = ibLaunchSecrets();
 
 	if (info.m_bFileMode) {
@@ -322,7 +301,7 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 			_("Launch OES"), wxOK | wxICON_ERROR, this);
 		return;
 	}
-	wxString cmd = wxT("\"") + FindSiblingExecutable(wxT("webserver")) + wxT("\" --file=\"") + info.m_strFilePath + wxT("\"");
+	wxString cmd = wxT("\"") + wxString(ibExecutablePath(wxT("webserver"))) + wxT("\" --file=\"") + info.m_strFilePath + wxT("\"");
 	if (appData != nullptr) {
 		wxString locale = appData->GetLocale();
 		if (!locale.IsEmpty())

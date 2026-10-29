@@ -451,25 +451,8 @@ void ibFrontendMainFrameDesigner::OnUpdateDebugCommand(wxUpdateUIEvent& event)
 #include "frmclient/mainFrame/settings/keybinderpanel.h"
 #include "frmclient/mainFrame/settings/fontcolorsettingspanel.h"
 #include "frmclient/mainFrame/settings/editorsettingspanel.h"
-#include "frmclient/mainFrame/output/outputWindow.h"
-#include "frmclient/win/editor/codeEditor/codeEditor.h"
-
-namespace {
-
-// EVERY CODE EDITOR UNDER `window` TAKES THE OPTIONS AGAIN — the desktop's UpdateEditorOptions told every document's
-// views, and a module's view set its editor anew; here an editor is wherever a tab put it (a module's, a form's Module
-// page), so the windows are walked rather than the documents.
-void RefreshCodeEditors(wxWindow* window)
-{
-	for (wxWindow* const child : window->GetChildren()) {
-		if (ibCodeEditor* const editor = dynamic_cast<ibCodeEditor*>(child))
-			editor->RefreshEditor();
-		RefreshCodeEditors(child);
-	}
-}
-
-}
 #include "frmclient/mainFrame/settings/mcpsettingspanel.h"
+#include "frmclient/mainFrame/output/outputWindow.h"
 
 #include "frmclient/win/dlgs/userList.h"
 
@@ -536,8 +519,10 @@ void ibFrontendMainFrameDesigner::ShowSchema(ibProtocol::ibSchema::ibKind schema
 		m_fontColorSettings = dialog.GetFontColorSettingsPanel()->GetSettings();
 		m_editorSettings = dialog.GetEditorSettingsPanel()->GetSettings();
 
-		// …and in force at once, in the editors already open and in the output window, as the desktop's were.
-		RefreshCodeEditors(this);
+		// …and in force at once, as the desktop's UpdateEditorOptions put them: every document's views told (a module's
+		// sets its editor anew, a form's its Module page), and the output window.
+		for (ibFrontendDocument* const doc : m_docManager->GetDocumentsVector())
+			doc->UpdateAllViews();
 		if (m_outputWindow != nullptr)
 			m_outputWindow->SetFontColorSettings(m_fontColorSettings);
 	}

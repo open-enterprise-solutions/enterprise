@@ -65,6 +65,12 @@ void ibModuleEditView::OnDraw(wxDC* WXUNUSED(dc))
 	// nothing to do here, wxTextCtrl draws itself
 }
 
+void ibModuleEditView::OnUpdate(ibFrontendView* sender, wxObject* hint)
+{
+	if (m_codeEditor != nullptr)
+		m_codeEditor->RefreshEditor();
+}
+
 bool ibModuleEditView::OnClose(bool deleteWindow)
 {
 	// ⚠ THE TAB IS THE SERVER'S: closing it asks there (ibTabDocument::Close), and its window goes with the document when

@@ -55,3 +55,15 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   parameter set to `CatalogRef.Goods.EmptyRef` or to a predefined element read as a number: its text was written
   under the name the value's type is written under, and the type was read in its place. A composition saved before
   reads such a value as nothing until it is chosen again; what it refers to is unchanged.
+- **The thin designer does what the desktop did in these places**:
+  - A row dragged onto another in the configuration tree is copied there.
+  - Clear database closes the open tabs first. A modified tab asks to be saved, and a tab that stays leaves the
+    base as it was.
+  - A data processor or a report replaced from its file keeps its place in the tree.
+  - Tools → Options takes effect in the editors already open and in the output window.
+  - A picture's System list offers the class icons too.
+  - A control's Source window names fields by their synonyms.
+  - A web client started from the designer runs in the base's language.
+  - On macOS, Start without debugging starts the thin client. The designer looked for a plain file and missed the
+    client's bundle.
+  - A composer has no "Composition data" row in the inspector.
