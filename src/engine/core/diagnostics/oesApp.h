@@ -40,7 +40,9 @@
 #include <wx/msgdlg.h>
 #include <wx/string.h>
 #include <wx/thread.h>
+#include <wx/timer.h>   // the stop watch — a SIGTERM seen on the main loop
 
+#include <csignal>   // SIGTERM / SIGINT — a request to quit
 #include <cstdio>    // stderr, for an assertion raised before the journal is open
 #include <cstdlib>   // EXIT_FAILURE
 #include <exception>
@@ -139,6 +141,28 @@ public:
 		// deliberately ignored — CannotChange is the correct answer on a platform with no such
 		// concept, and it is not a startup failure anywhere.
 		SetAppearance(Appearance::Light);
+
+		// ⭐ SIGTERM AND SIGINT ARE A REQUEST TO QUIT, and the application answers it. Unanswered, the only answer was
+		// the database client's: Firebird's own handler shuts every attachment down and the process lives on — the
+		// window open over a base that is gone, its session registry failing once a second ("invalid database handle")
+		// until somebody killed it, or until a failure took the terminate path (enterprise-thin, 2026-10-29).
+		//
+		// Installed BEFORE DoOnInit opens a base, so the client, installing its handler at the first attachment, keeps
+		// this one and calls it too. The handler only marks the stop (async-signal-safe); the main loop's watch closes
+		// the main window, the way the person would — the base, the sessions and the journal are let go in order.
+		std::signal(SIGTERM, &ibWxApp::OnStopSignal);
+		std::signal(SIGINT, &ibWxApp::OnStopSignal);
+		m_stopWatch.Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
+			if (!ibCrashGuard::IsStopRequested())
+				return;
+			m_stopWatch.Stop();
+			ibJournalInfo(wxT("start"), wxT("%s asked to stop by a signal - closing"), GetExeName());
+			if (wxWindow* const top = GetTopWindow())
+				top->Close(true);
+			else
+				ExitMainLoop();
+		});
+		m_stopWatch.Start(250);
 
 		return DoOnInit();
 	}
@@ -306,6 +330,16 @@ public:
 		// fault during OnExit cleanup is OK — the dump survives.
 	}
 #endif // wxUSE_ON_FATAL_EXCEPTION
+
+private:
+
+	// SIGTERM / SIGINT — the stop marked, nothing else: the watch acts on it from the main loop.
+	static void OnStopSignal(int)
+	{
+		ibCrashGuard::MarkStopRequested();
+	}
+
+	wxTimer m_stopWatch;
 
 protected:
 

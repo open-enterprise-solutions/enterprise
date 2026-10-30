@@ -10,6 +10,7 @@
 #include <wx/fileconf.h>
 #include <wx/filename.h>
 #include "core/stringTokenizer.h"
+#include "core/diagnostics/crashGuard.h"   // MarkStopRequested — the process told it is leaving
 #include <wx/utils.h>   // wxGetFullHostName — the server named in an address
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>
@@ -37,6 +38,8 @@ std::atomic<ibServeState> s_state{ ibServeState::Serving };
 
 void OnStopSignal(int)
 {
+	// Said to the process first — a background thread failing from here on is the stop, not a fault.
+	ibCrashGuard::MarkStopRequested();
 	ibServeState serving = ibServeState::Serving;
 	s_state.compare_exchange_strong(serving, ibServeState::Stopping);
 }

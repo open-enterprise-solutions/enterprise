@@ -86,6 +86,13 @@ CORE_API void PlatformNativeMessage(const ibString& caption,
 // POSIX: _Exit.
 CORE_API void TerminateProcessFast(int exitCode);
 
+// THE PROCESS WAS ASKED TO STOP — SIGINT, SIGTERM, a console closing — and is leaving. Set from the program's own
+// stop handler (async-signal-safe: one lock-free store), read by a background thread whose failure would otherwise be
+// a crash. The database client has a SIGTERM handler of its own (Firebird's: every attachment shut down at once), so
+// a statement may fail before the program has begun its ordered stop; a failure then is the stop, not a fault.
+CORE_API void MarkStopRequested() noexcept;
+CORE_API bool IsStopRequested() noexcept;
+
 // Headless WrapStartup — runs `body` inside a try/catch, logs any
 // escape to `<exeName>_startup.log` AND surfaces a PlatformNativeMessage.
 // Returns body's int on success, 1 on caught error. ibWxApp::OnRun

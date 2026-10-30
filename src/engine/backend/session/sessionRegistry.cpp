@@ -9,6 +9,7 @@
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#include "core/diagnostics/crashGuard.h"   // IsStopRequested — a failure once the process was told to stop is the stop
 #include "backend/databaseLayer/databaseLayerException.h"   // a missing column is Syntax; a lock is not
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — q(&m_writeHolder) resolves to the holder's bound conn (write helpers); snapshot reads still raw
 #include "workerPool.h"
@@ -2489,7 +2490,12 @@ void ibSessionRegistry::Die(const ibString& why)
 	// be left lying, and it does not matter, because the rows are stale rows and the next
 	// process's eager sweep DELETEs them — the same idempotence the soft path above relies
 	// on. Say it and leave quietly; the reason is recorded either way.
-	if (m_stop.load(std::memory_order_acquire)) {
+	//
+	// …AND THE PROCESS'S STOP COUNTS AS THIS ONE'S. A SIGTERM reaches Firebird's client too, which shuts every
+	// attachment down at once (its own handler, beside the program's), so the statement fails before the program has
+	// come round to Stop() and set m_stop — the same ordinary exit, a moment earlier (enterprise-thin, 2026-10-29:
+	// SIGTERM, this FATAL, then SIGABRT).
+	if (m_stop.load(std::memory_order_acquire) || ibCrashGuard::IsStopRequested()) {
 		m_submitCv.notify_all();
 		return;
 	}

@@ -14,6 +14,7 @@
 #endif
 
 #include "backend/appHost.h"
+#include "core/diagnostics/crashGuard.h"   // MarkStopRequested — the process told it is leaving
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
 #include "backend/mcp/mcpServer.h"
@@ -31,6 +32,8 @@ std::atomic<ibServeState> s_state{ ibServeState::Serving };
 
 void OnStopSignal(int)
 {
+	// Said to the process first — a background thread failing from here on is the stop, not a fault.
+	ibCrashGuard::MarkStopRequested();
 	ibServeState serving = ibServeState::Serving;
 	s_state.compare_exchange_strong(serving, ibServeState::Stopping);
 }
