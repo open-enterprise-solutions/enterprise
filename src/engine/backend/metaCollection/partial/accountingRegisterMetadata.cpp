@@ -1067,7 +1067,7 @@ void ibValueMetaObjectAccountingRegister::FillSourceExplorer(ibSourceDataObject:
 		if (attribute == nullptr)
 			continue;
 
-		if (inBlock.find(attribute) != inBlock.end()) {
+		if (inBlock.contains(attribute)) {
 			// Part of the posting: laid out with the block, at the debit account's place.
 			if (attribute == account)
 				for (const ibPostingColumn& member : posting)

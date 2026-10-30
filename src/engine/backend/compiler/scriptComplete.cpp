@@ -227,9 +227,9 @@ public:
 		if (slot.m_numArray == DEF_VAR_CONST) {
 			if (slot.m_numIndex < 0 || (size_t)slot.m_numIndex >= m_byteCode.m_listConst.size())
 				return false;
-			out.emplace_back();
-			out.back().m_value = m_byteCode.m_listConst[(size_t)slot.m_numIndex];
-			out.back().m_origin = ibNameOrigin::Declared;   // written in this text, right here
+			auto& made = out.emplace_back();
+			made.m_value = m_byteCode.m_listConst[(size_t)slot.m_numIndex];
+			made.m_origin = ibNameOrigin::Declared;   // written in this text, right here
 			return true;
 		}
 
@@ -397,8 +397,8 @@ public:
 			&& ElementOfLambdaSource(out, depth))
 			return true;
 
-		out.emplace_back();
-		if (!BoundValue(NameOfSlot(slot), out.back().m_value, &out.back().m_origin)) {
+		auto& made = out.emplace_back();
+		if (!BoundValue(NameOfSlot(slot), made.m_value, &made.m_origin)) {
 			out.pop_back();
 			return false;
 		}
@@ -442,8 +442,8 @@ private:
 		const short oper = code.m_numOper % TYPE_DELTA1;
 
 		if (oper != OPER_GET_A && oper != OPER_GET_SCOPE) {
-			out.emplace_back();
-			const ibStep step = StepOf(code, ip, out.back().m_value, depth, &out.back().m_origin);
+			auto& made = out.emplace_back();
+			const ibStep step = StepOf(code, ip, made.m_value, depth, &made.m_origin);
 			if (step != ibStep::Value)
 				out.pop_back();
 			return step;
@@ -485,8 +485,8 @@ private:
 			if (declared && types.size() > 1 && Composite(types, out))
 				continue;
 
-			out.emplace_back();
-			if (!MemberOf(parent.m_value, name, out.back().m_value)) {
+			auto& made = out.emplace_back();
+			if (!MemberOf(parent.m_value, name, made.m_value)) {
 				out.pop_back();
 				continue;
 			}
@@ -494,9 +494,9 @@ private:
 			// Declared by the metadata — the object's own data. Otherwise it came off the value's
 			// own surface, and the surface holds two different kinds of thing: the platform's own
 			// members and whatever the module staged there.
-			out.back().m_origin = declared
+			made.m_origin = declared
 				? ibNameOrigin::Member
-				: OriginOfStaged(out.back().m_value);
+				: OriginOfStaged(made.m_value);
 		}
 
 		m_trace << ibString::Format(ibT("\n  %*sop %3d at %-5u `%s` -> %u of %u branch(es)"),
@@ -1879,10 +1879,8 @@ bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 			for (const ibParamRunUnit* operand : operands) {
 				if (FrameOf(*operand) != 0 || operand->m_numIndex < 0)
 					continue;
-				const auto seen = firstTouchAt.find(operand->m_numIndex);
-				if (seen == firstTouchAt.end())
-					firstTouchAt.emplace(operand->m_numIndex, code.m_numString);
-				else if (code.m_numString < seen->second)
+				const auto [seen, inserted] = firstTouchAt.try_emplace(operand->m_numIndex, code.m_numString);
+				if (!inserted && code.m_numString < seen->second)
 					seen->second = code.m_numString;
 			}
 		}

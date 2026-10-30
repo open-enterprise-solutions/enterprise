@@ -136,7 +136,7 @@ bool ibMetaDataConfigurationBase::SaveConfigToFile(const ibString& strFileName)
 	// buffer, write it to a sibling temp file, then rename over the target. The
 	// rename is the one commit point — a failed or partial write never replaces
 	// a good existing config file. Temp sits next to the target so the rename
-	// stays on one filesystem (atomic). std::filesystem (C++17), no wx.
+	// stays on one filesystem (atomic). std::filesystem, no wx.
 	namespace fs = std::filesystem;
 	const fs::path dstPath = ibPathOf(strFileName);
 	fs::path tmpPath = dstPath;

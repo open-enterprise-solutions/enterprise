@@ -159,8 +159,7 @@ public:
 
 		// Append a COLUMN by plain values (a queryable column with no descriptor object).
 		void AppendColumn(const ibString& name, const ibMetaID& id, const ibTypeDescription& typeDesc) {
-			m_arraySource.emplace_back(ibSourceExplorer{ name, id, typeDesc });
-			m_arraySource.back().m_sourceInfo.m_owner = m_sourceInfo.m_owner;
+			m_arraySource.emplace_back(ibSourceExplorer{ name, id, typeDesc }).m_sourceInfo.m_owner = m_sourceInfo.m_owner;
 		}
 
 		// Append a COLUMN from an ABSTRACT source-column descriptor + its id. Unlike the ibBackendQueryColumn
@@ -205,9 +204,9 @@ public:
 		// section's own columns to it via AppendColumn (the form builder reads them as a sub-tablebox).
 		ibSourceExplorer& AppendTable(const ibString& name, const ibString& synonym, const ibMetaID& id,
 			const ibTypeDescription& typeDesc) {
-			m_arraySource.emplace_back(ibSourceExplorer{ name, synonym, id, typeDesc, /*tableSection*/true });
-			m_arraySource.back().m_sourceInfo.m_owner = m_sourceInfo.m_owner;
-			return m_arraySource.back();
+			ibSourceExplorer& table = m_arraySource.emplace_back(ibSourceExplorer{ name, synonym, id, typeDesc, /*tableSection*/true });
+			table.m_sourceInfo.m_owner = m_sourceInfo.m_owner;
+			return table;
 		}
 
 		// By POINTER — no copy of the node + its child vector (the no-allocation discipline). An out-of-

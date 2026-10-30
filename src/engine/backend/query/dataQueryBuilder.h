@@ -508,7 +508,6 @@ struct ibPageSignature
 		return m_count == other.m_count && m_direction == other.m_direction && m_reverseSort == other.m_reverseSort
 			&& m_text == other.m_text && m_names == other.m_names && ibValueSeqEqual()(m_values, other.m_values);
 	}
-	bool operator!=(const ibPageSignature& other) const { return !(*this == other); }
 };
 
 // L3 join kind — the door's own (NOT L2's ibQueryJoinType; the door is L2-blind).

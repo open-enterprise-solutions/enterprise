@@ -1106,7 +1106,7 @@ void ibValueLayerObject::SetCommandItems(const std::vector<ibProtocolNode>& item
 		for (const ibProtocolNode& item : items) {
 			ibProtocolNode copy = item.Clone();
 			wxString name = copy.GetString(ibProtocol::ibView::ibFormDesigner::Name);
-			for (int n = 1; name.IsEmpty() || taken.count(name) > 0; n++)
+			for (int n = 1; name.IsEmpty() || taken.contains(name); n++)
 				name = wxString::Format(wxT("Command%d"), n);
 			copy.SetValue(ibProtocol::ibView::ibFormDesigner::Name, name);
 			taken.insert(name);

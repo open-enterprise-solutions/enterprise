@@ -112,7 +112,6 @@ public:
 	ibString GetRawText() const { return ibLocalization::GetRawLocText(m_translations); }
 
 	bool operator == (const ibTranslateString& src) const;
-	bool operator != (const ibTranslateString& src) const { return !(*this == src); }
 };
 
 #endif 

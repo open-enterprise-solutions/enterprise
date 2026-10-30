@@ -178,7 +178,7 @@ ibQueryTempTableStore::~ibQueryTempTableStore()
 
 bool ibQueryTempTableStore::Has(const ibString& name) const
 {
-	return m_sources.find(name) != m_sources.end();
+	return m_sources.contains(name);
 }
 
 void ibQueryTempTableStore::Put(const ibString& name, ibQueryRamTable&& rows,

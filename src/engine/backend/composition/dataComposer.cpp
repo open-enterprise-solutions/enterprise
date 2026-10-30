@@ -882,17 +882,17 @@ const ibDataComposer::GroupNode* ibDataComposer::DetailLevelOf(const Output& out
 ibGroupDescription ibDataComposer::GetAvailableGroupDesc() const
 {
 	ibGroupDescription group = GetCurrentGroupDesc();
-	group.m_lines.erase(std::remove_if(group.m_lines.begin(), group.m_lines.end(),
-		[this](const ibGroupLineDescription& line) { return !IsAvailable(line.m_path); }), group.m_lines.end());
+	std::erase_if(group.m_lines,
+		[this](const ibGroupLineDescription& line) { return !IsAvailable(line.m_path); });
 	return group;
 }
 
 // A selected-fields table less its rows on a field this base does not use (`Auto` names no field and stays).
 static void ibDropUnavailableRows(std::vector<ibSelectedFieldDescription>& rows, const ibDataComposer& composer)
 {
-	rows.erase(std::remove_if(rows.begin(), rows.end(), [&composer](const ibSelectedFieldDescription& row) {
+	std::erase_if(rows, [&composer](const ibSelectedFieldDescription& row) {
 		return !row.IsAuto() && !composer.IsAvailable(row.m_path);
-	}), rows.end());
+	});
 }
 
 // A ladder of levels less what this base does not use: a grouping line on an unavailable field goes, and a level
@@ -908,9 +908,9 @@ static void ibDropUnavailableLevels(std::vector<ibLevelDescription>& levels, con
 
 		std::vector<ibGroupLineDescription>& lines = level.m_settings.m_group.m_lines;
 		const bool grouped = !lines.empty();
-		lines.erase(std::remove_if(lines.begin(), lines.end(), [&composer](const ibGroupLineDescription& line) {
+		std::erase_if(lines, [&composer](const ibGroupLineDescription& line) {
 			return !composer.IsAvailable(line.m_path);
-		}), lines.end());
+		});
 		if (grouped && lines.empty()) {
 			for (ibLevelDescription& child : level.m_children)
 				kept.push_back(std::move(child));
@@ -971,8 +971,8 @@ std::vector<ibString> ibDataComposer::SelectedFor(const Output& output) const
 	std::vector<ibString> selected;
 	ibComposerResolveSelected(selected, output.m_selected, byReader);
 	// …and what this base does not use is not shown, whichever storey named it (IsAvailable).
-	selected.erase(std::remove_if(selected.begin(), selected.end(),
-		[this](const ibString& path) { return !IsAvailable(path); }), selected.end());
+	std::erase_if(selected,
+		[this](const ibString& path) { return !IsAvailable(path); });
 	// WHAT A NODE NAMES IS **NOT** HERE — deliberately. This is what the report SHOWS down to the
 	// output, and a node's own fields are what IT shows.
 	return selected;

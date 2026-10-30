@@ -773,7 +773,7 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		state.SetValue(ibProtocol::ibForm::ibTable::CurrentColumn, static_cast<std::int32_t>(m_currentColumn));
 
 	// The cell whose editor is open — while its row is still one the client was given.
-	if (m_editRow != 0 && m_fetchedRows.find(m_editRow) != m_fetchedRows.end()) {
+	if (m_editRow != 0 && m_fetchedRows.contains(m_editRow)) {
 		ibDataNode& edit = state.Child(ibProtocol::ibForm::ibTable::Edit);
 		edit.SetValue(ibProtocol::ibForm::ibTable::Row, m_editRow);
 		edit.SetValue(ibProtocol::ibForm::ibTable::Column, static_cast<std::int32_t>(m_editColumn));
@@ -876,7 +876,7 @@ void ibValueModelTableBox::ForgetRow(std::int32_t handle)
 		const auto parent = m_fetchedRows.find(parentHandle);
 		if (parent != m_fetchedRows.end()) {
 			std::vector<std::int32_t>& siblings = parent->second.m_children;
-			siblings.erase(std::remove(siblings.begin(), siblings.end(), handle), siblings.end());
+			std::erase(siblings, handle);
 		}
 	}
 
@@ -1145,7 +1145,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	if (fetched < static_cast<unsigned int>(count))
 		response.SetValue(ibProtocol::ibForm::ibTable::End, true);
 	// …the same for a read: the row the server moved to, not the client's own.
-	if (currentHandle != 0 && currentHandle != m_clientRow && m_fetchedRows.find(currentHandle) != m_fetchedRows.end()) {
+	if (currentHandle != 0 && currentHandle != m_clientRow && m_fetchedRows.contains(currentHandle)) {
 		response.SetValue(ibProtocol::ibForm::ibTable::CurrentRow, currentHandle);
 		m_clientRow = currentHandle;
 	}

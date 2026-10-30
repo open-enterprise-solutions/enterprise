@@ -467,15 +467,13 @@ void ibSyncParametersWithTexts(std::vector<ibParameterDescription>& parameters,
 				named.push_back(name);
 
 	// 1) Drop the AUTO ones the text no longer asks for.
-	parameters.erase(
-		std::remove_if(parameters.begin(), parameters.end(),
-			[&named](const ibParameterDescription& parameter) {
-				if (!parameter.m_fromQuery)
-					return false;
-				return std::find_if(named.begin(), named.end(),
-					[&parameter](const ibString& name) { return name.IsSameAs(parameter.m_name, false); }) == named.end();
-			}),
-		parameters.end());
+	std::erase_if(parameters,
+		[&named](const ibParameterDescription& parameter) {
+			if (!parameter.m_fromQuery)
+				return false;
+			return std::find_if(named.begin(), named.end(),
+				[&parameter](const ibString& name) { return name.IsSameAs(parameter.m_name, false); }) == named.end();
+		});
 
 	// 2) Add what is new. An existing entry — hand-made or already filled in — is left exactly as it
 	//    is: re-reading the text must not clear a value somebody chose.

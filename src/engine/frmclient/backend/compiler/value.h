@@ -175,49 +175,14 @@ inline bool operator==(const ibValuePtr<_Ty1>& _Left, const ibValuePtr<_Ty2>& _R
 	return static_cast<_Ty1*>(_Left) == static_cast<_Ty2*>(_Right);
 }
 
-template <class _Ty1, class _Ty2>
-inline bool operator!=(const ibValuePtr<_Ty1>& _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return static_cast<_Ty1*>(_Left) != static_cast<_Ty2*>(_Right);
-}
-
-template <class _Ty>
-inline bool operator==(std::nullptr_t, const ibValuePtr<_Ty>& _Right) noexcept {
-	return static_cast<_Ty*>(_Right) == nullptr;
-}
-
-template <class _Ty>
-inline bool operator!=(std::nullptr_t, const ibValuePtr<_Ty>& _Right) noexcept {
-	return static_cast<_Ty*>(_Right) != nullptr;
-}
-
 template <class _Ty>
 inline bool operator==(const ibValuePtr<_Ty>& _Left, std::nullptr_t) noexcept {
 	return static_cast<_Ty*>(_Left) == nullptr;
 }
 
-template <class _Ty>
-inline bool operator!=(const ibValuePtr<_Ty>& _Left, std::nullptr_t) noexcept {
-	return static_cast<_Ty*>(_Left) != nullptr;
-}
-
 template <class _Ty1, class _Ty2>
 inline bool operator==(const ibValuePtr<_Ty1>& _Left, _Ty2* _Right) noexcept {
 	return static_cast<_Ty1*>(_Left) == _Right;
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator==(_Ty1* _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return _Left == static_cast<_Ty2*>(_Right);
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator!=(_Ty1* _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return _Left != static_cast<_Ty2*>(_Right);
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator!=(const ibValuePtr<_Ty1>& _Left, _Ty2* _Right) noexcept {
-	return static_cast<_Ty1*>(_Left) != _Right;
 }
 
 #endif

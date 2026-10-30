@@ -1018,7 +1018,7 @@ private:
 		std::string head = "HTTP/1.1 " + std::to_string(reply.m_status) + " " + Reason(reply.m_status) + "\r\n";
 		for (const auto& header : reply.m_headers) {
 			std::string value = header.second;
-			value.erase(std::remove_if(value.begin(), value.end(), [](char c) { return c == '\r' || c == '\n'; }), value.end());
+			std::erase_if(value, [](char c) { return c == '\r' || c == '\n'; });
 			head += header.first + ": " + value + "\r\n";
 		}
 		if (!lengthless)

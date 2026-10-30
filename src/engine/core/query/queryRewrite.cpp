@@ -403,7 +403,7 @@ void FlattenFrom(ibQuerySelect& s)
 			size_t head = 0;
 			if (!outerAliasName.empty() && p.size() > 1 && p[0].CmpNoCase(outerAliasName) == 0)
 				head = 1;
-			if (aliasMap.find(p[head]) == aliasMap.end()) outOfScope = true;
+			if (!aliasMap.contains(p[head])) outOfScope = true;
 		};
 		for (ibQueryProjection& p : s.m_projections) WalkColumns(p.m_expr, checkRef);
 		WalkColumns(s.m_where, checkRef);

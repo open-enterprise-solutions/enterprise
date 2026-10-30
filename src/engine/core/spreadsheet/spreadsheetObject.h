@@ -285,9 +285,7 @@ public:
 		// undefined behaviour, and the debug runtime says so ("vector erase iterator outside range").
 		// Removing a notifier twice — a view detaching after the document already dropped it — is an
 		// ordinary thing to do, and it must be a no-op.
-		m_spreadsheetNotifiers.erase(
-			std::remove(m_spreadsheetNotifiers.begin(), m_spreadsheetNotifiers.end(), notify),
-			m_spreadsheetNotifiers.end());
+		std::erase(m_spreadsheetNotifiers, notify);
 	}
 
 #pragma endregion

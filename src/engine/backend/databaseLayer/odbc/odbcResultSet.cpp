@@ -131,7 +131,7 @@ bool ibDatabaseResultSetODBC::IsFieldNull(int nField)
 
 	if (!IsBlob(nField))
 	{
-		if (m_RetrievedValues.find(nField) == m_RetrievedValues.end())
+		if (!m_RetrievedValues.contains(nField))
 		{
 			RetrieveFieldData(nField);
 		}
@@ -144,7 +144,7 @@ bool ibDatabaseResultSetODBC::IsFieldNull(int nField)
 			m_NullValues.insert(nField);
 	}
 
-	return (m_NullValues.find(nField) != m_NullValues.end());
+	return (m_NullValues.contains(nField));
 }
 
 int ibDatabaseResultSetODBC::GetFieldLength(int nField)
@@ -404,12 +404,12 @@ ibNumber ibDatabaseResultSetODBC::GetResultNumber(int nField)
 
 void* ibDatabaseResultSetODBC::GetResultBlob(int nField, ibMemoryBuffer& buffer)
 {
-	if (m_BlobMap.find(nField) == m_BlobMap.end())
+	if (!m_BlobMap.contains(nField))
 	{
 		if (m_pODBCStatement == nullptr)
 			m_pODBCStatement = m_pStatement->GetLastStatement();
 
-		if (m_NullValues.find(nField) != m_NullValues.end())
+		if (m_NullValues.contains(nField))
 			return nullptr;
 
 		SQLINTEGER iLength = 8192;

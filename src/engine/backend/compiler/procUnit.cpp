@@ -906,7 +906,7 @@ inline void ModValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 }
 
 // Definition of the LINQ-filter three-valued NULL flag (declared in procUnitLambda.h).
-thread_local bool ts_threeValuedNullCompare = false;
+constinit thread_local bool ts_threeValuedNullCompare = false;
 
 namespace {
 

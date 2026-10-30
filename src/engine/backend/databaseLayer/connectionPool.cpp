@@ -372,8 +372,8 @@ ibConnectionScope ibConnectionPool::GetFreeConnection()
 	// inside ibConnectionScope's default ctor. Returning the scope
 	// directly lets callers write the natural RAII form
 	// `ibConnectionScope scope = GetFreeConnection()` without an
-	// intermediate shared_ptr round-trip. Mandatory copy elision in
-	// C++17 means no move actually happens for prvalue returns.
+	// intermediate shared_ptr round-trip. Mandatory copy elision
+	// means no move actually happens for prvalue returns.
 	return ibConnectionScope();
 }
 

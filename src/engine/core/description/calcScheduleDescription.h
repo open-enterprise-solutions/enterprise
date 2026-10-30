@@ -77,7 +77,6 @@ struct ibCalcScheduleDescription {
 		return m_register == other.m_register && m_value == other.m_value && m_date == other.m_date
 			&& m_links == other.m_links;
 	}
-	bool operator!=(const ibCalcScheduleDescription& other) const { return !(*this == other); }
 };
 
 // node form: a Child {register, value, date, links: [{dimension, field}]} of raw metaIDs — metaID and not guid

@@ -49,7 +49,6 @@ struct ibHomePageItem {
 	bool operator==(const ibHomePageItem& o) const {
 		return m_formId == o.m_formId && m_height == o.m_height && m_visible == o.m_visible;
 	}
-	bool operator!=(const ibHomePageItem& o) const { return !(*this == o); }
 };
 
 class CORE_API ibHomePageDescription {
@@ -62,7 +61,6 @@ public:
 			&& m_columns[eHomePageColumn_Left] == o.m_columns[eHomePageColumn_Left]
 			&& m_columns[eHomePageColumn_Right] == o.m_columns[eHomePageColumn_Right];
 	}
-	bool operator!=(const ibHomePageDescription& o) const { return !(*this == o); }
 
 	ibHomePageTemplate GetTemplate() const { return m_template; }
 	void SetTemplate(ibHomePageTemplate value) { m_template = value; }

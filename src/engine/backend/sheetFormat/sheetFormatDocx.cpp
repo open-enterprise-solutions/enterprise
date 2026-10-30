@@ -454,7 +454,7 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 
 		// ⭐ WHERE A PAGE ENDED HERE, A PAGE ENDS THERE. A break inside a table has to
 		// close it and open the next one — Word has no "break between these rows".
-		if (pageBreaks.find(row) != pageBreaks.end() && row < numRows) {
+		if (pageBreaks.contains(row) && row < numRows) {
 			table += ibT("</w:tbl>");
 			body += table;
 			body += ibT("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>");

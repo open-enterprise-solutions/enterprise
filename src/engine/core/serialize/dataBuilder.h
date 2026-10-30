@@ -76,7 +76,6 @@ public:
 		iterator& operator++() noexcept { m_at = m_range->m_next(Base(), m_at); --m_left; return *this; }
 		iterator  operator++(int) noexcept { iterator was = *this; ++*this; return was; }
 		bool      operator==(const iterator& other) const noexcept { return m_left == other.m_left; }
-		bool      operator!=(const iterator& other) const noexcept { return m_left != other.m_left; }
 	private:
 		const unsigned char* Base() const noexcept { return static_cast<const unsigned char*>(m_range->m_bytes.GetData()); }
 		const ibDataRange* m_range;
@@ -170,7 +169,6 @@ public:
 	// is how you check the value for equality"). A value has one spelling of each kind (a whole number is always
 	// written whole), so the bytes compared are the answer.
 	bool operator==(const ibDataValue& other) const;
-	bool operator!=(const ibDataValue& other) const { return !(*this == other); }
 
 	// HOW MUCH IT SAYS — the bytes it takes.
 	std::size_t Weight() const;
@@ -329,7 +327,6 @@ public:
 	// …and the same question one storey up: two nodes are equal when their bytes are — the type, the identity, the
 	// fields in their order, the raw block and the children.
 	bool operator==(const ibDataNode& other) const;
-	bool operator!=(const ibDataNode& other) const { return !(*this == other); }
 
 	// …and its weight: the bytes it takes.
 	std::size_t Weight() const;

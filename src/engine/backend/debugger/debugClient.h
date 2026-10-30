@@ -547,9 +547,7 @@ protected:
 	void DeleteConnection(ibDebuggerClientConnection* client) {
 		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		if (m_activeSocket == client) m_activeSocket = nullptr;
-		m_listConnection.erase(
-			std::remove(m_listConnection.begin(), m_listConnection.end(), client), m_listConnection.end()
-		);
+		std::erase(m_listConnection, client);
 		if (m_listConnection.size() == 0) m_enterLoop = false;
 		m_connectionsCv.notify_all();   // the client's end may be waiting for it (~ibDebuggerClient)
 	}

@@ -249,8 +249,7 @@ ibSchemaTable& ibSchemaSnapshot::CreateSchemaTable(const ibBackendQueryable* que
 	t.m_id        = queryable->GetQueryTableId();
 	t.m_name      = queryable->GetQueryTableName();
 	t.m_queryable = queryable;
-	m_tables.push_back(std::move(t));
-	return m_tables.back();
+	return m_tables.emplace_back(std::move(t));
 }
 
 ibSchemaTable& ibSchemaSnapshot::Shared(ibMetaID id, const ibString& name)
@@ -268,8 +267,7 @@ ibSchemaTable& ibSchemaSnapshot::Shared(ibMetaID id, const ibString& name)
 	ibSchemaTable t;
 	t.m_id   = id;
 	t.m_name = name;
-	m_tables.push_back(std::move(t));
-	return m_tables.back();
+	return m_tables.emplace_back(std::move(t));
 }
 
 namespace {

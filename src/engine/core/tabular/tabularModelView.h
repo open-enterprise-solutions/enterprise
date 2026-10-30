@@ -232,7 +232,6 @@ public:
 		if (m_mode != Mode::Refcounted || o.m_mode != Mode::Refcounted) return false;
 		return m_id->IsEqualTo(*o.m_id);
 	}
-	bool operator!=(const ibDataViewItem& o) const { return !(*this == o); }
 
 	// Row-side queries — delegate to the held ibDataViewObject so the
 	// caller (data-view control / business code) doesn't have to go

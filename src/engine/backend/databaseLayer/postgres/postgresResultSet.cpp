@@ -236,7 +236,7 @@ double ibDatabaseResultSetPostgres::GetResultDouble(int nField)
 		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
 		{
 			ibString strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-			strValue.ToDouble(&dblValue);
+			strValue.ToCDouble(&dblValue);   // the server's text always has a dot, whatever this process's locale says
 		}
 	}
 

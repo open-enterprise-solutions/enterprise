@@ -363,7 +363,7 @@ same pass as `src/`. It is the same class as the two build systems seeing differ
 
 ### 1.11 The standard: C++20, no modules (2026-10-26)
 
-- Both roads say it: `LanguageStandard=stdcpp20` + `ConformanceMode=true` in every `.vcxproj`;
+- Both roads say it: `LanguageStandard=stdcpp20` in every C++ `.vcxproj`, which turns `/permissive-` on by itself;
   `CMAKE_CXX_STANDARD 20` and `CMAKE_CXX_SCAN_FOR_MODULES OFF` in CMake — no modules, so no scan.
 - wxWidgets builds with the same standard: `wxBUILD_CXX_STANDARD` on CMake's road, `wx_local.props`
   on the `.sln` road's prebuilt binaries ([BUILD.md](BUILD.md#wxwidgets-submodule-details)).

@@ -88,8 +88,8 @@ ibDataNode Applied(const ibDataNode& held, const ibDataNode& patch)
 	const std::vector<long long> removedIds = IdsOf(patch, ibProtocol::ibNode::RemovedIds);
 	if (!removedIds.empty()) {
 		const std::set<long long> ids(removedIds.begin(), removedIds.end());
-		kids.erase(std::remove_if(kids.begin(), kids.end(),
-			[&ids](const ibDataNode& kid) { return ids.count(kid.GetMetaId()) != 0; }), kids.end());
+		std::erase_if(kids,
+			[&ids](const ibDataNode& kid) { return ids.contains(kid.GetMetaId()); });
 	}
 	for (const ibDataNode& child : patch.Children()) {
 		const auto kid = std::find_if(kids.begin(), kids.end(),

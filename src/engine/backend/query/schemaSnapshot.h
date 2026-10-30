@@ -240,8 +240,7 @@ struct ibSchemaMaterialize
 	{
 		ibMaterializeView v;
 		v.m_name = name; v.m_withPeriod = withPeriod; v.m_dropZeroRows = dropZeroRows;
-		m_views.push_back(std::move(v));
-		return m_views.back();
+		return m_views.emplace_back(std::move(v));
 	}
 	// ⭐⭐ A SECOND GUARD NARROWS THE FIRST — it does not REPLACE it.
 	//
@@ -320,8 +319,7 @@ struct ibSchemaTable
 	// Own a raw column and return a stable pointer to it (for scaffold / index use).
 	const ibBackendQueryColumn* OwnRaw(ibBackendColumnRawDB col)
 	{
-		m_ownedRaw.push_back(std::make_shared<ibBackendColumnRawDB>(std::move(col)));
-		return m_ownedRaw.back().get();
+		return m_ownedRaw.emplace_back(std::make_shared<ibBackendColumnRawDB>(std::move(col))).get();
 	}
 
 	// ---- fluent builders: a metaobject DECLARES its table by chaining these (structure first, then rows) --
@@ -370,8 +368,7 @@ struct ibSchemaTable
 	ibSchemaSeedRow& AddRow(const ibGuid& uuid, const ibString& name = ibEmptyString)
 	{
 		ibSchemaSeedRow r; r.m_id = uuid; r.m_name = name;
-		m_seed.push_back(std::move(r));
-		return m_seed.back();
+		return m_seed.emplace_back(std::move(r));
 	}
 };
 

@@ -138,7 +138,7 @@ enum ibFilterDisplayMode {
 //
 // ⭐ AND IT STAYS A TREE, IN MEMORY AND ON DISK (Max, 2026-08-23: "a filter is a tree structure —
 // filter A has children inside it; the SAVE is tree-shaped at the very least"). A group OWNS its
-// children: `std::vector<ibFilterNodeDescription>` inside the node it belongs to, which C++17 allows
+// children: `std::vector<ibFilterNodeDescription>` inside the node it belongs to, which the standard allows
 // for exactly this shape. Copying a description therefore deep-copies the whole filter with it,
 // which is the one thing every window relies on — edit a copy, put it back on OK.
 //
@@ -160,7 +160,6 @@ struct ibFilterOperandDescription {
 		return m_path == o.m_path && m_value == o.m_value && m_leafId == o.m_leafId
 			&& m_presentation == o.m_presentation;
 	}
-	bool operator!=(const ibFilterOperandDescription& o) const { return !(*this == o); }
 };
 
 // A NODE of the filter tree — a CONDITION or a GROUP, said by its KIND rather than by a bit. A
@@ -192,7 +191,6 @@ struct ibFilterNodeDescription {
 			&& m_left == o.m_left && m_comparison == o.m_comparison && m_right == o.m_right
 			&& m_groupKind == o.m_groupKind && m_children == o.m_children;
 	}
-	bool operator!=(const ibFilterNodeDescription& o) const { return !(*this == o); }
 };
 
 // ⭐ EVERY PART COMPARES ITSELF, and the whole compares by comparing its parts. A property asks
@@ -216,8 +214,7 @@ struct ibFilterDescription {
 		node.m_left.m_path = path;
 		node.m_comparison = comparison;
 		node.m_right.m_value = value;
-		into.push_back(node);
-		return into.back();
+		return into.emplace_back(node);
 	}
 	ibFilterNodeDescription& Append(const ibString& path, ibComparisonKind comparison,
 		const ibDataNode& value, bool use = true) {
@@ -230,14 +227,12 @@ struct ibFilterDescription {
 		ibFilterNodeDescription node;
 		node.m_kind = ibFilterNodeKind_Group;
 		node.m_groupKind = kind;
-		into.push_back(node);
-		return into.back();
+		return into.emplace_back(node);
 	}
 
 	bool operator==(const ibFilterDescription& o) const {
 		return m_rootKind == o.m_rootKind && m_nodes == o.m_nodes;
 	}
-	bool operator!=(const ibFilterDescription& o) const { return !(*this == o); }
 };
 
 // --- SORT ------------------------------------------------------------------
@@ -248,7 +243,6 @@ struct ibSortLineDescription {
 	ibString m_path;
 	bool     m_ascending = true;
 	bool operator==(const ibSortLineDescription& o) const { return m_path == o.m_path && m_ascending == o.m_ascending; }
-	bool operator!=(const ibSortLineDescription& o) const { return !(*this == o); }
 };
 
 struct ibSortDescription {
@@ -257,7 +251,6 @@ struct ibSortDescription {
 	void Clear() { m_lines.clear(); }
 	void Append(const ibString& path, bool ascending) { m_lines.push_back({ path, ascending }); }
 	bool operator==(const ibSortDescription& o) const { return m_lines == o.m_lines; }
-	bool operator!=(const ibSortDescription& o) const { return !(*this == o); }
 };
 
 // --- GROUPING --------------------------------------------------------------
@@ -285,7 +278,6 @@ struct ibGroupPeriodsDescription {
 	bool operator==(const ibGroupPeriodsDescription& o) const {
 		return m_unit == o.m_unit && m_from == o.m_from && m_to == o.m_to;
 	}
-	bool operator!=(const ibGroupPeriodsDescription& o) const { return !(*this == o); }
 };
 
 struct ibGroupLineDescription {
@@ -300,7 +292,6 @@ struct ibGroupLineDescription {
 	bool operator==(const ibGroupLineDescription& o) const {
 		return m_path == o.m_path && m_kind == o.m_kind && m_periods == o.m_periods;
 	}
-	bool operator!=(const ibGroupLineDescription& o) const { return !(*this == o); }
 };
 
 struct ibGroupDescription {
@@ -311,7 +302,6 @@ struct ibGroupDescription {
 		m_lines.push_back({ path, kind });
 	}
 	bool operator==(const ibGroupDescription& o) const { return m_lines == o.m_lines; }
-	bool operator!=(const ibGroupDescription& o) const { return !(*this == o); }
 };
 
 // (THE TWO DOORS BETWEEN A STORE AND A RUNTIME VALUE — ibStoredValue / ibStoreValue — are each side's: a
@@ -336,7 +326,6 @@ struct ibParameterValueDescription {
 	bool operator==(const ibParameterValueDescription& o) const {
 		return m_parameter == o.m_parameter && m_use == o.m_use && m_value == o.m_value;
 	}
-	bool operator!=(const ibParameterValueDescription& o) const { return !(*this == o); }
 };
 
 template <class Parameter>
@@ -408,7 +397,6 @@ struct ibParameterValuesDescription {
 	void Clear() { m_values.clear(); }
 
 	bool operator==(const ibParameterValuesDescription& o) const { return m_values == o.m_values; }
-	bool operator!=(const ibParameterValuesDescription& o) const { return !(*this == o); }
 };
 
 // --- APPEARANCE ------------------------------------------------------------
@@ -457,7 +445,6 @@ struct ibConditionalAppearanceRuleDescription {
 		return m_use == o.m_use && m_condition == o.m_condition && m_fields == o.m_fields
 		    && m_appearance == o.m_appearance;
 	}
-	bool operator!=(const ibConditionalAppearanceRuleDescription& o) const { return !(*this == o); }
 };
 
 struct ibConditionalAppearanceDescription {
@@ -467,7 +454,6 @@ struct ibConditionalAppearanceDescription {
 	void Clear() { m_rules.clear(); }
 
 	bool operator==(const ibConditionalAppearanceDescription& o) const { return m_rules == o.m_rules; }
-	bool operator!=(const ibConditionalAppearanceDescription& o) const { return !(*this == o); }
 };
 
 // --- OTHER SETTINGS --------------------------------------------------------
@@ -585,7 +571,6 @@ struct ibSettingsDescription {
 	void Clear();
 
 	bool operator==(const ibSettingsDescription& o) const;
-	bool operator!=(const ibSettingsDescription& o) const { return !(*this == o); }
 };
 
 // --- PARAMETER -------------------------------------------------------------
@@ -619,7 +604,6 @@ struct ibParameterDescription {
 		return m_name == o.m_name && m_expression == o.m_expression && m_value == o.m_value
 		    && m_userSettable == o.m_userSettable && m_fromQuery == o.m_fromQuery;
 	}
-	bool operator!=(const ibParameterDescription& o) const { return !(*this == o); }
 };
 
 // ⭐⭐ THE TITLE A NAME IMPLIES — `DataVersion` → "Data Version", `Number` → "Number". A name is
@@ -671,7 +655,6 @@ struct ibResourceDescription {
 	bool operator==(const ibResourceDescription& o) const {
 		return m_func == o.m_func && m_path == o.m_path && m_alias == o.m_alias && m_scope == o.m_scope;
 	}
-	bool operator!=(const ibResourceDescription& o) const { return !(*this == o); }
 };
 
 // (THE APPEARANCE — how a value is shown — stands above the settings now, because a conditional-appearance
@@ -752,7 +735,6 @@ struct ibFieldDescription {
 		    && m_useRole == o.m_useRole && m_role == o.m_role && m_periodRank == o.m_periodRank
 		    && m_appearance == o.m_appearance;
 	}
-	bool operator!=(const ibFieldDescription& o) const { return !(*this == o); }
 };
 
 // ⭐⭐ ONE SELECT OF THE QUERY, AND WHAT ITS FIELDS ARE CALLED (Max, 2026-08-26: "you are storing the
@@ -800,7 +782,6 @@ struct ibSelectDescription {
 	bool operator==(const ibSelectDescription& o) const {
 		return m_id == o.m_id && m_name == o.m_name && m_fields == o.m_fields;
 	}
-	bool operator!=(const ibSelectDescription& o) const { return !(*this == o); }
 
 	// THE FIELD AN UNQUALIFIED NAME MEANS, inside this select. Null when nobody has said anything
 	// about it — which is the ordinary case and not an error: its title is then its name.
@@ -879,7 +860,6 @@ struct ibSelectedFieldDescription {
 	bool operator==(const ibSelectedFieldDescription& o) const {
 		return m_kind == o.m_kind && m_path == o.m_path;
 	}
-	bool operator!=(const ibSelectedFieldDescription& o) const { return !(*this == o); }
 };
 
 // THE LIST AS A WHOLE — asked rather than walked, because "does this inherit" is one question and
@@ -1023,7 +1003,6 @@ struct ibLevelDescription {
 		return m_kind == o.m_kind && m_selected == o.m_selected
 		    && m_settings == o.m_settings && m_children == o.m_children;
 	}
-	bool operator!=(const ibLevelDescription& o) const { return !(*this == o); }
 };
 
 // One output — what a report SHOWS: its rows, its columns, and what it reads.
@@ -1058,7 +1037,6 @@ struct ibOutputDescription {
 		    && m_settings == o.m_settings
 		    && m_rowGroups == o.m_rowGroups && m_columnGroups == o.m_columnGroups;
 	}
-	bool operator!=(const ibOutputDescription& o) const { return !(*this == o); }
 };
 
 // ⭐⭐ THE SETTING'S OWN THREE, NOW THAT AN OUTPUT IS A COMPLETE TYPE. Declared up there, defined
@@ -1114,7 +1092,6 @@ struct ibVariantDescription {
 	bool operator==(const ibVariantDescription& o) const {
 		return m_name == o.m_name && m_synonym == o.m_synonym && m_settings == o.m_settings;
 	}
-	bool operator!=(const ibVariantDescription& o) const { return !(*this == o); }
 };
 
 // --- THE COMPOSITION -------------------------------------------------------
@@ -1281,7 +1258,6 @@ struct ibCompositionDescription {
 		    // unmodified — and Save with nothing to do.
 		    && m_selected == o.m_selected;
 	}
-	bool operator!=(const ibCompositionDescription& o) const { return !(*this == o); }
 
 	// ⭐⭐ IS THERE ANYTHING TO READ — one question for both, and the reason the two are one format.
 	// TECHNICALLY A MAIN TABLE IS `SELECT * FROM <table>` (Max, 2026-08-23): a list's table is not a

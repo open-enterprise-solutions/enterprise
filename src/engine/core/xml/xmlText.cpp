@@ -260,8 +260,8 @@ std::shared_ptr<const ibXmlParser::ibNamespaceArray> ibXmlParser::Resolve(
 		else
 			resolved->push_back(declaration);
 	}
-	resolved->erase(std::remove_if(resolved->begin(), resolved->end(),
-		[](const std::pair<ibString, ibString>& pair) { return pair.second.IsEmpty(); }), resolved->end());
+	std::erase_if(*resolved,
+		[](const std::pair<ibString, ibString>& pair) { return pair.second.IsEmpty(); });
 	return resolved;
 }
 

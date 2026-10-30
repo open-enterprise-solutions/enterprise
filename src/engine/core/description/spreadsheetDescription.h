@@ -303,7 +303,6 @@ struct ibSpreadsheetGroupDescription {
 			&& m_collapsed == rhs.m_collapsed
 			&& m_head == rhs.m_head;
 	}
-	bool operator != (const ibSpreadsheetGroupDescription& rhs) const { return !(*this == rhs); }
 
 	unsigned int m_start, m_end;
 	unsigned int m_level;
@@ -326,7 +325,6 @@ struct ibSpreadsheetRowSizeDescription
 	bool operator == (const ibSpreadsheetRowSizeDescription& rhs) const {
 		return m_row == rhs.m_row && m_height == rhs.m_height;
 	}
-	bool operator != (const ibSpreadsheetRowSizeDescription& rhs) const { return !(*this == rhs); }
 
 	unsigned int m_row;
 	unsigned int m_height = 0;
@@ -339,7 +337,6 @@ struct ibSpreadsheetColSizeDescription
 	bool operator == (const ibSpreadsheetColSizeDescription& rhs) const {
 		return m_col == rhs.m_col && m_width == rhs.m_width;
 	}
-	bool operator != (const ibSpreadsheetColSizeDescription& rhs) const { return !(*this == rhs); }
 
 	unsigned int m_col;
 	unsigned int m_width = 0;
@@ -565,14 +562,14 @@ struct ibSpreadsheetDescription {
 	// short of losing every other fold on the sheet. Matched by START and END — that pair is what
 	// a group IS; level and collapsed are things it carries, not what identifies it.
 	void DeleteRowGroup(unsigned int start, unsigned int end) {
-		m_rowGroupAt.erase(std::remove_if(m_rowGroupAt.begin(), m_rowGroupAt.end(),
+		std::erase_if(m_rowGroupAt,
 			[start, end](const ibSpreadsheetGroupDescription& g) {
-				return g.m_start == start && g.m_end == end; }), m_rowGroupAt.end());
+				return g.m_start == start && g.m_end == end; });
 	}
 	void DeleteColGroup(unsigned int start, unsigned int end) {
-		m_colGroupAt.erase(std::remove_if(m_colGroupAt.begin(), m_colGroupAt.end(),
+		std::erase_if(m_colGroupAt,
 			[start, end](const ibSpreadsheetGroupDescription& g) {
-				return g.m_start == start && g.m_end == end; }), m_colGroupAt.end());
+				return g.m_start == start && g.m_end == end; });
 	}
 
 	void ClearRowGroups() { m_rowGroupAt.clear(); }
@@ -934,8 +931,8 @@ struct ibSpreadsheetDescription {
 	void AddRowBrake(int row) { m_rowBrakeAt.emplace_back(row); }
 	void AddColBrake(int col) { m_colBrakeAt.emplace_back(col); }
 
-	void DeleteRowBrake(int row) { m_rowBrakeAt.erase(std::remove(m_rowBrakeAt.begin(), m_rowBrakeAt.end(), row), m_rowBrakeAt.end()); }
-	void DeleteColBrake(int col) { m_colBrakeAt.erase(std::remove(m_colBrakeAt.begin(), m_colBrakeAt.end(), col), m_colBrakeAt.end()); }
+	void DeleteRowBrake(int row) { std::erase(m_rowBrakeAt, row); }
+	void DeleteColBrake(int col) { std::erase(m_colBrakeAt, col); }
 
 	void SetRowBrake(int row) {
 		if (m_rowBrakeAt.size() != 0)
@@ -1160,7 +1157,6 @@ private:
 					return false;
 			return true;
 		}
-		bool operator!=(const CellBlocks& rhs) const { return !(*this == rhs); }
 
 	private:
 		// Blocks 0..3 hold 16, 32, 64 and 128 cells — 240 in all — and every block after them 256.

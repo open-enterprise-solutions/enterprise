@@ -23,8 +23,9 @@
 #include "core/fboolean.h"   // ibBoolean — the flag in the word
 
 #include <atomic>
+#include <concepts>      // the pointer catch-all below (same_as / derived_from)
 #include <string>
-#include <type_traits>   // the pointer catch-all below (enable_if / is_base_of / is_same)
+#include <type_traits>   // std::remove_cv_t — the same catch-all
 
 class ibDataNode;
 
@@ -90,10 +91,9 @@ public:
 
 	// ANY OTHER POINTER IS A MISTAKE, the runtime's rule: pointer-to-bool is a standard conversion, and an unrelated
 	// pointer would arrive as TRUE. Only an object (derived from this class) and a text are taken.
-	template <class T, class = typename std::enable_if<
-		!std::is_same<typename std::remove_cv<T>::type, char>::value &&
-		!std::is_same<typename std::remove_cv<T>::type, ibChar>::value &&
-		!std::is_base_of<ibVariant, T>::value>::type>
+	template <class T>
+		requires (!std::same_as<std::remove_cv_t<T>, char> && !std::same_as<std::remove_cv_t<T>, ibChar> &&
+			!std::derived_from<T, ibVariant>)
 	ibVariant(T*) = delete;
 
 	virtual ~ibVariant();

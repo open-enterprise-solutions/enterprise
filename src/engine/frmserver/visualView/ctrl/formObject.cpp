@@ -838,7 +838,7 @@ void ibValueForm::AttachIdleHandler(const ibString& procedureName, int interval,
 	// Recorded, not started: the client's tick runs it when it is due (RunIdleHandlers). Attaching one that is
 	// attached already changes nothing, as it did when each was a timer of its own.
 	if (m_procUnit != nullptr && m_procUnit->FindMethod(procedureName, true) && interval > 0) {
-		if (m_idleHandlerArray.find(procedureName) == m_idleHandlerArray.end()) {
+		if (!m_idleHandlerArray.contains(procedureName)) {
 			const std::chrono::seconds every(interval);
 			m_idleHandlerArray.emplace(procedureName,
 				ibIdleHandler{ every, single, std::chrono::steady_clock::now() + every });

@@ -30,7 +30,6 @@ struct CORE_API ibPoint {
 	ibString ToString() const;
 
 	bool operator==(const ibPoint& other) const { return m_x == other.m_x && m_y == other.m_y; }
-	bool operator!=(const ibPoint& other) const { return !(*this == other); }
 };
 
 struct CORE_API ibSize {
@@ -45,7 +44,6 @@ struct CORE_API ibSize {
 	ibString ToString() const;
 
 	bool operator==(const ibSize& other) const { return m_width == other.m_width && m_height == other.m_height; }
-	bool operator!=(const ibSize& other) const { return !(*this == other); }
 };
 
 // No position, no size said — wx's wxDefaultPosition and wxDefaultSize, whose numbers they are.
@@ -69,7 +67,6 @@ struct ibRect {
 	bool operator==(const ibRect& other) const {
 		return m_x == other.m_x && m_y == other.m_y && m_width == other.m_width && m_height == other.m_height;
 	}
-	bool operator!=(const ibRect& other) const { return !(*this == other); }
 };
 
 #endif

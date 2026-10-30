@@ -234,7 +234,7 @@ void ibCommandTree::Draw(const ibProtocolNode& rows)
 
 	// …and a holder whose row is gone goes too — let go of first where it is shown.
 	for (auto it = m_entries.begin(); it != m_entries.end(); ) {
-		if (drawn.find(it->first) != drawn.end()) {
+		if (drawn.contains(it->first)) {
 			++it;
 			continue;
 		}

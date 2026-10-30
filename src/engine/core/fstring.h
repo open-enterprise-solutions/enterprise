@@ -316,30 +316,17 @@ public:
 
 	// --- comparison (native; case-insensitive folds per-char via ibToLower) ---
 	bool operator==(const ibString& o) const noexcept { return m_impl == o.m_impl || View() == o.View(); }
-	bool operator!=(const ibString& o) const noexcept { return !(*this == o); }
 	bool operator<(const ibString& o)  const noexcept { return View() < o.View(); }
 	bool operator>(const ibString& o)  const noexcept { return o < *this; }
 	bool operator<=(const ibString& o) const noexcept { return !(o < *this); }
 	bool operator>=(const ibString& o) const noexcept { return !(*this < o); }
 	// …and against a literal, exact — see operator+ above for why.
 	bool operator==(const ibChar* s) const noexcept { return View().compare(s != nullptr ? s : ibT("")) == 0; }
-	bool operator!=(const ibChar* s) const noexcept { return !(*this == s); }
-	friend bool operator==(const ibChar* a, const ibString& b) { return b == a; }
-	friend bool operator!=(const ibChar* a, const ibString& b) { return !(b == a); }
 	bool operator==(const wchar_t* s) const;
-	bool operator!=(const wchar_t* s) const { return !(*this == s); }
-	friend bool operator==(const wchar_t* a, const ibString& b) { return b == a; }
-	friend bool operator!=(const wchar_t* a, const ibString& b) { return !(b == a); }
 	bool operator==(const wxString& s) const;
-	bool operator!=(const wxString& s) const { return !(*this == s); }
-	friend bool operator==(const wxString& a, const ibString& b) { return b == a; }
-	friend bool operator!=(const wxString& a, const ibString& b) { return !(b == a); }
 	// …and against UTF-8 — a protocol's word, a narrow literal: the bytes decoded as they are compared, no text made of
 	// them (either string would make one, and the two of them made the comparison ambiguous).
 	bool operator==(const char* utf8) const noexcept;
-	bool operator!=(const char* utf8) const noexcept { return !(*this == utf8); }
-	friend bool operator==(const char* a, const ibString& b) { return b == a; }
-	friend bool operator!=(const char* a, const ibString& b) { return !(b == a); }
 	bool IsSameAs(const ibString& o, bool caseSensitive = true) const;
 	// …and exact for a literal and for wx's own string (a bytecode's names), read where they lie —
 	// the ones operator== has, and for the same reason.
@@ -429,9 +416,6 @@ CORE_API std::ostream& operator<<(std::ostream& out, const ibString& s);
 inline ibString operator+(const wxString& a, const ibChar* b) { ibString r(a); r += b; return r; }
 inline ibString operator+(const ibChar* a, const wxString& b) { ibString r(a); r += b; return r; }
 CORE_API bool operator==(const wxString& a, const ibChar* b);
-inline bool operator==(const ibChar* a, const wxString& b) { return b == a; }
-inline bool operator!=(const wxString& a, const ibChar* b) { return !(a == b); }
-inline bool operator!=(const ibChar* a, const wxString& b) { return !(b == a); }
 
 // A key of an unordered container, as wxString is one — by its characters.
 namespace std {

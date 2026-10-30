@@ -594,7 +594,9 @@ inline bool IsEmptyValue(const ibValue& cValue1)
 // fold (RamEvalPredicate). Scoped + restored so GENERAL script comparisons stay two-valued.
 // SPIKE: covers single comparisons / `<>` / AND / OR (AND/OR fall out of IsHasValue);
 // NOT(unknown) still diverges (a follow-up needs Kleene NOT). See test_queryParity.
-extern thread_local bool ts_threeValuedNullCompare;
+// constinit: nothing to initialise on a thread's first touch, and the declaration says so — without it GCC and Clang
+// reach an extern thread_local through a wrapper call, on every comparison (IS_THREE_VALUED_NULL below).
+extern constinit thread_local bool ts_threeValuedNullCompare;
 
 struct ScopedThreeValuedNull {
 	bool m_prev;

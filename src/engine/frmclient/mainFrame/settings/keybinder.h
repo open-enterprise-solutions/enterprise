@@ -37,7 +37,6 @@ public:
 		int code = 0;
 
 		bool operator==(const Key& other) const { return flags == other.flags && code == other.code; }
-		bool operator!=(const Key& other) const { return !(*this == other); }
 	};
 
 	struct Command

@@ -1362,7 +1362,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				bool enabled = false;
 				if (frame == nullptr || session == nullptr)
 					refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
-				else if (frame->GetDocumentManager()->GetCommands().count(command) == 0)
+				else if (!frame->GetDocumentManager()->GetCommands().contains(command))
 					refuse(ibProtocol::ibRefusal::NotFound, ibT("no such command"));
 				else {
 					session->Submit([frame, command, &enabled]() { enabled = frame->IsCommandEnabled(command); }).get();
@@ -1570,7 +1570,7 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 			for (const ibDataNode& tab : tabs->Children())
 				open.insert(static_cast<std::int32_t>(tab.GetMetaId()));
 		for (auto it = client.views.begin(); it != client.views.end();)
-			it = open.count(it->first) != 0 ? std::next(it) : client.views.erase(it);
+			it = open.contains(it->first) ? std::next(it) : client.views.erase(it);
 	}
 
 	client.sent = std::move(drawn);

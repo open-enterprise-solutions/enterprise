@@ -151,7 +151,7 @@ void ibValueForm::ResolveNameConflict(ibValueFrame* control)
 	// the name cannot be repeated within the same form: bump the
 	// numeric suffix until the candidate is free.
 	ibString strGenerateName = strOriginalName;
-	for (unsigned int index = 0; takenNames.count(toKey(strGenerateName)) > 0; )
+	for (unsigned int index = 0; takenNames.contains(toKey(strGenerateName)); )
 		strGenerateName = ibString::Format(ibT("%s%i"), strOriginalName, ++index);
 
 	control->SetControlName(strGenerateName);

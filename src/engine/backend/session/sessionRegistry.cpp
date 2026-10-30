@@ -872,7 +872,7 @@ ibSessionRegistry* ibSessionRegistry::ForDebugThread()
 bool ibSessionRegistry::IsDebugThread(std::thread::id tid) const
 {
 	std::shared_lock<std::shared_mutex> lk(m_debugMtx);
-	return m_debugThreads.find(tid) != m_debugThreads.end();
+	return m_debugThreads.contains(tid);
 }
 
 void ibSessionRegistry::EnterDebugLoop(ibSession* s)
@@ -1893,7 +1893,7 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<ibString>& peers)
 		return 0;
 	std::set<ibString> still;   // named rows that are there and have not moved yet
 	for (const ibString& peer : peers)
-		if (first.count(peer) != 0)
+		if (first.contains(peer))
 			still.insert(peer);
 
 	using clock = std::chrono::steady_clock;

@@ -333,9 +333,9 @@ public:
 		// left out here; its column stays, because the schema reads the dimensions itself.
 		// …and only once its sides exist: a copy that mirrors a database written before them still reads
 		// the field itself.
-		array.erase(std::remove_if(array.begin(), array.end(), [this](const ibValueMetaObjectAttributeBase* attribute) {
+		std::erase_if(array, [this](const ibValueMetaObjectAttributeBase* attribute) {
 			return attribute != nullptr && IsKeptPerSide(attribute) && GetFieldSide(/*creditSide*/ false, attribute) != nullptr;
-		}), array.end());
+		});
 
 		return array;
 	}

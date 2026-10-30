@@ -91,9 +91,8 @@ public:
 	bool operator < (const ibGuid& other) const;
 	bool operator <= (const ibGuid& other) const;
 
-	// overload equality and inequality operator
+	// overload equality operator
 	bool operator==(const ibGuid& other) const;
-	bool operator!=(const ibGuid& other) const;
 
 	operator ibGuidImpl() const;
 

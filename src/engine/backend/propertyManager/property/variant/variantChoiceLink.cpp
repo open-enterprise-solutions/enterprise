@@ -65,8 +65,8 @@ std::vector<ibValueMetaObjectAttributeBase*> HolderAttributes(const ibPropertyOb
 	// arrays still carry it. The lists below asked it one by one and the names did not, so a row whose source
 	// had just been deleted read on the inspector's line as a live `Export` (2026-09-24). Said here, once, for
 	// every question this file asks about the neighbourhood.
-	array.erase(std::remove_if(array.begin(), array.end(),
-		[](const ibValueMetaObjectAttributeBase* field) { return field->IsDeleted(); }), array.end());
+	std::erase_if(array,
+		[](const ibValueMetaObjectAttributeBase* field) { return field->IsDeleted(); });
 
 	return array;
 }
@@ -341,10 +341,10 @@ void ibVariantChoiceParameters::RefreshParametersDesc() const
 	if (object_version == m_object_version.load(std::memory_order_relaxed))
 		return;
 	std::vector<ibChoiceParameterRowDescription>& rows = m_paramsDesc.m_rows;
-	rows.erase(std::remove_if(rows.begin(), rows.end(), [this, metaData](const ibChoiceParameterRowDescription& row) {
+	std::erase_if(rows, [this, metaData](const ibChoiceParameterRowDescription& row) {
 		return metaData->FindAnyObjectByFilter(row.m_parameter, true) == nullptr
 			|| ibChoiceHolderFieldName(m_ownerProperty, row.m_source.GetFirst()).IsEmpty();
-	}), rows.end());
+	});
 	m_object_version.store(object_version, std::memory_order_release);
 }
 

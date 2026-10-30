@@ -422,10 +422,8 @@ bool ibSheetFormatXlsx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 			continue;
 
 		const CellStyle style = StyleOf(*cell);
-		if (styleAt.find(style) == styleAt.end()) {
-			styleAt[style] = styles.size();
+		if (styleAt.try_emplace(style, styles.size()).second)
 			styles.push_back(style);
-		}
 	}
 
 	// --- the sheet itself --------------------------------------------------------

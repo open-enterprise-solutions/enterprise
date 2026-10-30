@@ -72,9 +72,9 @@ public:
 		Node* AddChild(int level) {
 			if (m_children.empty())
 				m_children.reserve(4);
-			m_children.push_back(std::make_unique<Node>());
-			m_children.back()->m_level = level;
-			return m_children.back().get();
+			Node* const child = m_children.emplace_back(std::make_unique<Node>()).get();
+			child->m_level = level;
+			return child;
 		}
 
 		// ⭐ A CHILD AT A POSITION — what a CROSS-TABLE needs and an ordinary report never asks for.
@@ -159,8 +159,7 @@ private:
 		for (const std::unique_ptr<Node>& child : from.m_children) {
 			if (child == nullptr)
 				continue;
-			to.m_children.push_back(std::make_unique<Node>());
-			CopyNode(*child, *to.m_children.back());
+			CopyNode(*child, *to.m_children.emplace_back(std::make_unique<Node>()));
 		}
 	}
 

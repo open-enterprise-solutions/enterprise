@@ -79,7 +79,7 @@ bool ibVisualHost::UpdateVisualHost(ibDataNode& frame)
 	// drawn then. The whole view the first time, when the form itself is updated, and when an updated control is gone.
 	std::set<ibFormID> updatedControlArray;
 	updatedControlArray.swap(m_updatedControlArray);
-	bool whole = m_drawnFrame == nullptr || updatedControlArray.count(form->GetControlID()) != 0;
+	bool whole = m_drawnFrame == nullptr || updatedControlArray.contains(form->GetControlID());
 	if (!whole) {
 		ibDataNode drawn = *m_drawnFrame;
 		for (const ibFormID id : updatedControlArray) {

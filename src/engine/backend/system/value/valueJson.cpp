@@ -110,9 +110,9 @@ public:
 
 private:
 	bool Push(ibJsonValueType type, ibValue&& value) {
-		m_tokens.emplace_back();
-		m_tokens.back().m_type = type;
-		m_tokens.back().m_value = std::move(value);
+		auto& token = m_tokens.emplace_back();
+		token.m_type = type;
+		token.m_value = std::move(value);
 		return true;
 	}
 

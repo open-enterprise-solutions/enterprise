@@ -3703,8 +3703,7 @@ ibDataNode& ibComposerSettingsPanel::WritableParameterValue(const wxString& name
 
 	ibParameterDescription added;
 	added.m_name = name;   // the NAME and the value: what a parameter IS stays with the author
-	into.push_back(std::move(added));
-	return into.back().m_value;
+	return into.emplace_back(std::move(added)).m_value;
 }
 
 int ibComposerSettingsPanel::SelectedParameter() const

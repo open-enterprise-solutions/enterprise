@@ -181,7 +181,6 @@ public:
 	static ibDatePreset PresetOf(const ibString& pattern);
 
 	bool operator == (const ibFormatString& other) const;
-	bool operator != (const ibFormatString& other) const { return !(*this == other); }
 };
 
 #endif

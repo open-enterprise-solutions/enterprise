@@ -148,7 +148,7 @@ bool ibQueryHierarchyScope::Admits(const ibValue& value) const
 {
 	// A walked subtree keys every value it admits (m_reportedUnder); the named values of «in» are the list itself.
 	if (m_unfold != ibQueryDimUnfold::Elements)
-		return m_reportedUnder.find(value) != m_reportedUnder.end();
+		return m_reportedUnder.contains(value);
 	for (const ibValue& accepted : m_accepted)
 		if (accepted == value)
 			return true;

@@ -34,7 +34,7 @@ public:
 		DoSetInterface(id, set);
 	}
 
-	bool IsSetInterface(const ibMetaID& id) const { return m_interfaces.find(id) != m_interfaces.end(); }
+	bool IsSetInterface(const ibMetaID& id) const { return m_interfaces.contains(id); }
 
 	// MAY THIS BE CHECKED INTO A SECTION? Asked of the object, so the section editor builds
 	// its tree by walking the metadata instead of naming every branch by hand — a metatype

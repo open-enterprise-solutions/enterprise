@@ -877,12 +877,10 @@ void ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ibCal
 		std::unordered_map<std::vector<ibValue>, size_t, ibValueSeqHash, ibValueSeqEqual> m_at;
 		std::vector<std::pair<std::vector<ibValue>, std::vector<ibNumber>>> m_rows;
 		std::vector<ibNumber>& Row(const std::vector<ibValue>& sections, size_t figures) {
-			const auto found = m_at.find(sections);
-			if (found != m_at.end())
+			const auto [found, inserted] = m_at.try_emplace(sections, m_rows.size());
+			if (!inserted)
 				return m_rows[found->second].second;
-			m_at.emplace(sections, m_rows.size());
-			m_rows.push_back({ sections, std::vector<ibNumber>(figures, ibNumber(0)) });
-			return m_rows.back().second;
+			return m_rows.emplace_back(sections, std::vector<ibNumber>(figures, ibNumber(0))).second;
 		}
 	};
 	std::vector<ibGathered> gathered(records.size());
@@ -1148,13 +1146,11 @@ ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ib
 		reg->GetRegisterLineNumber()->GetSynonym());
 	std::vector<ibMetaID> figureColumns, sectionColumns;
 	for (const ibCalcBaseAsked::ibFigure& figure : asked.m_figures) {
-		figureColumns.push_back(static_cast<ibMetaID>(table.Columns().size() + 1));
-		table.AddColumn(figureColumns.back(), figure.m_name, figure.m_resources.front().second->GetTypeDesc(),
+		table.AddColumn(figureColumns.emplace_back(static_cast<ibMetaID>(table.Columns().size() + 1)), figure.m_name, figure.m_resources.front().second->GetTypeDesc(),
 			figure.m_resources.front().second->GetSynonym());
 	}
 	for (const auto& section : asked.m_sections) {
-		sectionColumns.push_back(static_cast<ibMetaID>(table.Columns().size() + 1));
-		table.AddColumn(sectionColumns.back(), section.second->GetName(), section.second->GetTypeDesc(),
+		table.AddColumn(sectionColumns.emplace_back(static_cast<ibMetaID>(table.Columns().size() + 1)), section.second->GetName(), section.second->GetTypeDesc(),
 			section.second->GetSynonym());
 	}
 

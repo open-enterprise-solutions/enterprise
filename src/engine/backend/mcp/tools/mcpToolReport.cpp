@@ -2642,7 +2642,7 @@ public:
 			};
 
 			const size_t before = levels.size();
-			levels.erase(std::remove_if(levels.begin(), levels.end(), matches), levels.end());
+			std::erase_if(levels, matches);
 
 			if (levels.size() == before) {
 				// SAID RATHER THAN REPORTED AS DONE. "Removed" about a level that is still there is

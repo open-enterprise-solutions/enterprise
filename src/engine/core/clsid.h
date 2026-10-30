@@ -146,7 +146,9 @@ constexpr ibClassKind metatype_to_kind(int metaType) { return static_cast<ibClas
 constexpr ibClassID kIbClsidBodyMask = (ibClassID(1) << 56) - 1;   // low 56 bits = body
 
 // Bake a kind into a name-derived id: high byte = kind, body = FNV hash (masked to 56 bits).
-constexpr ibClassID make_clsid(const char* name, ibClassKind kind) {
+// consteval: a literal's id is made by the compiler, never by a call — in Debug too. A text known only at run time takes
+// the ibString overload below.
+consteval ibClassID make_clsid(const char* name, ibClassKind kind) {
 	return (ibClassID(static_cast<unsigned char>(kind)) << 56) | (ib_clsid_hash(name) & kIbClsidBodyMask);
 }
 inline ibClassID make_clsid(const ibString& name, ibClassKind kind) {
@@ -184,14 +186,14 @@ constexpr ibClassID make_clsid_dynamic(ibClassID metaID, ibClassKind kind, ibCla
 
 // --- static name→id wrappers — the ergonomic replacements for string_to_clsid at a
 //     kind-known callsite: value_to_clsid("DynamicList"), control_to_clsid("Button"), … ---
-constexpr ibClassID primitive_to_clsid(const char* n) { return make_clsid(n, ibClassKind_Primitive); }
-constexpr ibClassID value_to_clsid    (const char* n) { return make_clsid(n, ibClassKind_Value); }
-constexpr ibClassID control_to_clsid  (const char* n) { return make_clsid(n, ibClassKind_Control); }
-constexpr ibClassID system_to_clsid   (const char* n) { return make_clsid(n, ibClassKind_System); }
-constexpr ibClassID enum_to_clsid     (const char* n) { return make_clsid(n, ibClassKind_Enum); }
-constexpr ibClassID context_to_clsid  (const char* n) { return make_clsid(n, ibClassKind_Context); }
-constexpr ibClassID metadata_to_clsid (const char* n) { return make_clsid_metaclass(ib_clsid_hash(n)); }
-constexpr ibClassID picture_to_clsid  (const char* n) { return make_clsid(n, ibClassKind_Picture); }
+consteval ibClassID primitive_to_clsid(const char* n) { return make_clsid(n, ibClassKind_Primitive); }
+consteval ibClassID value_to_clsid    (const char* n) { return make_clsid(n, ibClassKind_Value); }
+consteval ibClassID control_to_clsid  (const char* n) { return make_clsid(n, ibClassKind_Control); }
+consteval ibClassID system_to_clsid   (const char* n) { return make_clsid(n, ibClassKind_System); }
+consteval ibClassID enum_to_clsid     (const char* n) { return make_clsid(n, ibClassKind_Enum); }
+consteval ibClassID context_to_clsid  (const char* n) { return make_clsid(n, ibClassKind_Context); }
+consteval ibClassID metadata_to_clsid (const char* n) { return make_clsid_metaclass(ib_clsid_hash(n)); }
+consteval ibClassID picture_to_clsid  (const char* n) { return make_clsid(n, ibClassKind_Picture); }
 // wxString overloads — for callsites passing wxT("XX") (wide literal) or a runtime string.
 inline ibClassID primitive_to_clsid(const ibString& n) { return make_clsid(n, ibClassKind_Primitive); }
 inline ibClassID value_to_clsid    (const ibString& n) { return make_clsid(n, ibClassKind_Value); }

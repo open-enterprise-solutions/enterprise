@@ -126,7 +126,7 @@ bool ibDatabaseResultSet::CloseMetaData(ibResultSetMetaData* pMetaData)
 	if (pMetaData != nullptr)
 	{
 		// Check if we have this meta data in our list
-		if (m_MetaData.find(pMetaData) != m_MetaData.end())
+		if (m_MetaData.contains(pMetaData))
 		{
 			// Remove the meta data pointer from the list and delete the pointer
 			delete pMetaData;

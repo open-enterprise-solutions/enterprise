@@ -151,8 +151,7 @@ std::vector<ibCtorAbstractType*> ibValue::GetListCtorsByType(ibCtorObjectType ob
 		const wxBitmap picture = ibProtocolPicture(described, ibProtocol::ibRequest::ibFormEditor::Picture);
 		if (picture.IsOk())
 			icon.CopyFromBitmap(picture);
-		s_ctors.push_back(std::make_unique<ibCtorAbstractType>(described.GetString(ibProtocol::ibRequest::ibFormEditor::Name), icon));
-		listed.push_back(s_ctors.back().get());
+		listed.push_back(s_ctors.emplace_back(std::make_unique<ibCtorAbstractType>(described.GetString(ibProtocol::ibRequest::ibFormEditor::Name), icon)).get());
 	}
 	return listed;
 }

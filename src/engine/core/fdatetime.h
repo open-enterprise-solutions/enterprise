@@ -234,7 +234,6 @@ public:
 	long GetPart(ibDatePart part) const noexcept;
 
 	friend constexpr bool operator==(const ibDateTime& a, const ibDateTime& b) noexcept { return a.m_value == b.m_value; }
-	friend constexpr bool operator!=(const ibDateTime& a, const ibDateTime& b) noexcept { return a.m_value != b.m_value; }
 	friend constexpr bool operator< (const ibDateTime& a, const ibDateTime& b) noexcept { return a.m_value <  b.m_value; }
 	friend constexpr bool operator> (const ibDateTime& a, const ibDateTime& b) noexcept { return a.m_value >  b.m_value; }
 	friend constexpr bool operator<=(const ibDateTime& a, const ibDateTime& b) noexcept { return a.m_value <= b.m_value; }

@@ -72,7 +72,7 @@ void AppendCategory(ibDataNode& parent, ibPropertyObject* object, const ibProper
 {
 	for (unsigned int index = 0; index < category->GetPropertyCount(); ++index) {
 		ibProperty* const property = object->GetProperty(category->GetPropertyName(index));
-		if (property == nullptr || hidden.find(property) != hidden.end() || !met.insert(property->GetName()).second)
+		if (property == nullptr || hidden.contains(property) || !met.insert(property->GetName()).second)
 			continue;
 		ibPropertyInspector::AppendProperty(parent, property);
 	}

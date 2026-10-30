@@ -273,8 +273,8 @@ void ibAppCluster::Stop()
 
 void ibAppCluster::OnWorkerChanged()
 {
-	m_trays.erase(std::remove_if(m_trays.begin(), m_trays.end(),
-		[](const std::weak_ptr<ibWebSocket>& tray) { return tray.expired(); }), m_trays.end());
+	std::erase_if(m_trays,
+		[](const std::weak_ptr<ibWebSocket>& tray) { return tray.expired(); });
 	if (!m_trays.empty()) {
 		std::vector<ibClusterServer> servers;
 		servers.reserve(m_workers.size());
@@ -291,7 +291,7 @@ void ibAppCluster::OnWorkerChanged()
 		// The servers held till their base's first serves — taken out of the hold before they are started: a start tells
 		// this again.
 		std::vector<ibClusterWorker*> ready;
-		m_held.erase(std::remove_if(m_held.begin(), m_held.end(), [this, &ready](ibClusterWorker* held) {
+		std::erase_if(m_held, [this, &ready](ibClusterWorker* held) {
 			const bool first = std::any_of(m_workers.begin(), m_workers.end(),
 				[held](const std::unique_ptr<ibClusterWorker>& worker) {
 					const ibClusterServer& server = worker->GetServer();
@@ -301,7 +301,7 @@ void ibAppCluster::OnWorkerChanged()
 			if (first)
 				ready.push_back(held);
 			return first;
-		}), m_held.end());
+		});
 		for (ibClusterWorker* const worker : ready)
 			worker->Start();
 		return;
@@ -349,7 +349,7 @@ void ibAppCluster::Receive(const ibString& message)
 		return;
 	}
 	ibClusterWorker* const worker = found->get();
-	m_held.erase(std::remove(m_held.begin(), m_held.end(), worker), m_held.end());
+	std::erase(m_held, worker);
 	if (verb == ibClusterControl::Start)
 		worker->Start();
 	else if (verb == ibClusterControl::Stop)
@@ -401,9 +401,8 @@ void ibAppCluster::ApplyProcesses(const ibString& base)
 			}
 		}
 		for (std::unique_ptr<ibClusterWorker>& worker : taken) {
-			m_held.erase(std::remove(m_held.begin(), m_held.end(), worker.get()), m_held.end());
-			m_retired.push_back(std::move(worker));
-			m_retired.back()->Stop();
+			std::erase(m_held, worker.get());
+			m_retired.emplace_back(std::move(worker))->Stop();
 		}
 	}
 	OnWorkerChanged();

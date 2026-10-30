@@ -216,7 +216,7 @@ protected:
 private:
 
 	inline void CreateEnumeration(const valT& v) {
-		wxASSERT(m_listEnumData.find(v) != m_listEnumData.end());
+		wxASSERT(m_listEnumData.contains(v));
 		if (m_value != nullptr) {
 			m_value->CreateEnumeration(
 				GetEnumName(v),
@@ -231,7 +231,7 @@ public:
 	using valEnumType = valT;
 
 	inline void AddEnumeration(const valT& v, const ibString& name, const ibString& descr = ibEmptyString) {
-		wxASSERT(m_listEnumData.find(v) == m_listEnumData.end());
+		wxASSERT(!m_listEnumData.contains(v));
 		m_listEnumData.insert_or_assign(v, name);
 		m_listEnumDesc.insert_or_assign(v, descr.IsEmpty() ? name : descr);
 

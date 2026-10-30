@@ -738,7 +738,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	const bool firstPeriodKnown = calendarFold && beginDate.GetType() == TYPE_DATE;
 	const ibDateTime firstPeriod = firstPeriodKnown ? beginDate.GetDate().BeginOfPeriod(cFold.m_unit) : ibDateTime();
 	for (const auto& entry : opening) {
-		if (groupIndex.find(entry.first) != groupIndex.end())
+		if (groupIndex.contains(entry.first))
 			continue;
 		ibPeriodRow carried;
 		if (firstPeriodKnown)

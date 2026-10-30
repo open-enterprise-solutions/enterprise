@@ -56,8 +56,7 @@ protected:
 			wxASSERT(!ExistsAction(lNumAction));
 			ibValue* src = srcData ? srcData : m_srcData;
 			if (index < 0) {
-				m_vecAction.emplace_back(lNumAction, name, caption, pictureDescription, pictureAndText, createInForm, src);
-				return m_vecAction.back();
+				return m_vecAction.emplace_back(lNumAction, name, caption, pictureDescription, pictureAndText, createInForm, src);
 			}
 			return *m_vecAction.insert(m_vecAction.begin() + index,
 				ibCommandItem(lNumAction, name, caption, pictureDescription, pictureAndText, createInForm, src));

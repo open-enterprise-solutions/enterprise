@@ -27,7 +27,6 @@ enum ibInterfaceCommandType {
 struct ibCommandHop {
 	ibMetaID m_id = wxNOT_FOUND;
 	bool operator==(const ibCommandHop& o) const { return m_id == o.m_id; }
-	bool operator!=(const ibCommandHop& o) const { return !(*this == o); }
 };
 
 // Mirrors ibSourceDescription (a plain id path with its own *Memory serialiser).
@@ -51,7 +50,6 @@ public:
 	bool operator==(const ibCommandDescription& o) const {
 		return m_listCommand == o.m_listCommand && m_commandType == o.m_commandType;
 	}
-	bool operator!=(const ibCommandDescription& o) const { return !(*this == o); }
 
 	ibInterfaceCommandType GetCommandType() const { return m_commandType; }
 	void SetCommandType(ibInterfaceCommandType type) { m_commandType = type; }

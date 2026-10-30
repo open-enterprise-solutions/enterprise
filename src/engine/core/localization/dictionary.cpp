@@ -1204,8 +1204,7 @@ const ibDictionary* ibDictionary::ForLanguage(const ibString& asked)
 	std::unique_ptr<ibDictionary> made(new ibDictionary(language));
 	for (const ibString& domain : registry.m_domains)
 		made->LoadCatalogFrom(registry.m_prefixes, domain);
-	registry.m_languages.push_back(std::move(made));
-	return registry.m_languages.back().get();
+	return registry.m_languages.emplace_back(std::move(made)).get();
 }
 
 const ibDictionary* ibDictionary::ForThisThread()

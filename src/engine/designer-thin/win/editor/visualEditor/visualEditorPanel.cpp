@@ -229,7 +229,7 @@ void ibVisualEditorNotebook::ibVisualEditor::Draw(const ibProtocolNode& form, co
 
 bool ibVisualEditorNotebook::ibVisualEditor::FetchRows(long long controlId)
 {
-	if (m_rows.find(controlId) != m_rows.end())
+	if (m_rows.contains(controlId))
 		return true;
 
 	ibProtocolNode request;
@@ -282,7 +282,7 @@ void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node)
 
 	// Its rows, then its values as its node has them — the properties are made anew with the rows.
 	const long long controlId = node.GetInt(ibProtocol::ibForm::ControlId);
-	if (m_rowsChanged.count(controlId) != 0) {
+	if (m_rowsChanged.contains(controlId)) {
 		ibValueForm* const valueForm = GetValueForm();
 		ibValueFrame* const control = controlId == valueForm->GetControlID() ? valueForm : valueForm->FindControlByID(controlId);
 		if (control != nullptr) {

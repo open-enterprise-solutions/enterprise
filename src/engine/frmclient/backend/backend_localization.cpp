@@ -63,10 +63,9 @@ ibString ibTranslateString::FindTranslate(const ibString& strLangCode) const
 
 void ibTranslateString::RemoveTranslate(const ibString& strLangCode)
 {
-	m_translations.erase(std::remove_if(m_translations.begin(), m_translations.end(),
+	std::erase_if(m_translations,
 		[&strLangCode](const ibLocalizationEntry& entry) {
-			return stringUtils::IsSameAs(entry.m_code, strLangCode); }),
-		m_translations.end());
+			return stringUtils::IsSameAs(entry.m_code, strLangCode); });
 }
 
 bool ibTranslateString::IsEmpty() const

@@ -253,8 +253,8 @@ bool ibClientFrame::DoRequest(const ibDataNode& request, ibDataNode& response)
 		// Cancelled while waiting — the request is withdrawn and the interruption goes on up the script.
 		ibJournalInfo(ibT("client"), ibT("request %s withdrawn: the wait was interrupted"), ibString::FromUTF8(id.c_str()));
 		std::lock_guard<std::mutex> lock(m_requestMutex);
-		m_waiting.erase(std::remove_if(m_waiting.begin(), m_waiting.end(),
-			[&id](const Waiting& waiting) { return waiting.id == id; }), m_waiting.end());
+		std::erase_if(m_waiting,
+			[&id](const Waiting& waiting) { return waiting.id == id; });
 		throw;
 	}
 	if (!slot->responded)
@@ -798,7 +798,7 @@ void ibClientFrame::DrainPendingCloses()
 			const ibDocument* const owner = document != nullptr ? document->GetDocParent() : nullptr;
 			if (document != nullptr)
 				document->DeleteAllViews();
-			m_pendingCloses.erase(std::remove(m_pendingCloses.begin(), m_pendingCloses.end(), tab), m_pendingCloses.end());
+			std::erase(m_pendingCloses, tab);
 			const bool wasActive = i == m_activeTab;
 			m_tabs.erase(m_tabs.begin() + i);
 			// ⭐ WHAT IS ACTIVE AFTER IT — the desktop's: a tab closed before the active one leaves that one active; the

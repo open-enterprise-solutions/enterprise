@@ -181,7 +181,7 @@ private:
 				continue;
 
 			// we do not want to duplicate inherited properties
-			if (properties.find(strPropName) == properties.end()) {
+			if (!properties.contains(strPropName)) {
 
 				if (m_currentSel != nullptr) {
 					m_currentSel->OnPropertyCreated(prop);
@@ -267,7 +267,7 @@ private:
 				continue;
 
 			// We do not want to duplicate inherited events
-			if (events.find(eventName) == events.end()) {
+			if (!events.contains(eventName)) {
 				wxPGProperty* eg = GetEvent(event);
 				if (eg != nullptr) {
 					wxPGProperty* id = m_pg->Append(eg);

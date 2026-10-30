@@ -129,12 +129,10 @@ void ibDebuggerClient::ibDebuggerClientAdapter::RemoveBridge(ibDebuggerClientBri
 {
 	// Erasing destroys it — the list owns what it holds.
 	std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);
-	m_debugBridges.erase(
-		std::remove_if(m_debugBridges.begin(), m_debugBridges.end(),
-			[bridge](const std::unique_ptr<ibDebuggerClientBridge>& held) {
-				return held.get() == bridge;
-			}),
-		m_debugBridges.end());
+	std::erase_if(m_debugBridges,
+		[bridge](const std::unique_ptr<ibDebuggerClientBridge>& held) {
+			return held.get() == bridge;
+		});
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart()

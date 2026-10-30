@@ -86,11 +86,6 @@ public:
 		return IsSameAs(other);
 	}
 
-	bool operator!=(const ibDataViewIconText& other) const
-	{
-		return !IsSameAs(other);
-	}
-
 private:
 	wxString    m_text;
 	wxBitmapBundle m_bitmap;

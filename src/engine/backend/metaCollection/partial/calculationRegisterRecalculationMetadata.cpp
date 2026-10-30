@@ -320,8 +320,8 @@ static std::vector<std::pair<const ibValueMetaObjectCalculationRegister*, ibReca
 	for (const ibValueMetaObjectCalculationRegister* reg :
 		metaData->GetAnyArrayObject<ibValueMetaObjectCalculationRegister>(g_metaCalculationRegisterCLSID)) {
 		ibRecalculationSpec spec = ibRecalculationSpecOf(reg);
-		spec.m_sources.erase(std::remove_if(spec.m_sources.begin(), spec.m_sources.end(),
-			[&writtenTable](const ibRecalculationLeading& s) { return s.m_table != writtenTable; }), spec.m_sources.end());
+		std::erase_if(spec.m_sources,
+			[&writtenTable](const ibRecalculationLeading& s) { return s.m_table != writtenTable; });
 		if (!spec.m_sources.empty())
 			out.push_back({ reg, std::move(spec) });
 	}

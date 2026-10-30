@@ -1444,7 +1444,7 @@ public:
 		EnsureBuilt();
 		if (!m_a) return false;
 		while (m_a->MoveNext(current)) {
-			const bool inOther = (m_otherSet.count(current) > 0);
+			const bool inOther = m_otherSet.contains(current);
 			if (inOther == kKeepIfInOther && m_emitted.insert(current).second)
 				return true;
 		}

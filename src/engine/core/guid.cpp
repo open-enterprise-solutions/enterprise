@@ -356,12 +356,6 @@ bool ibGuid::operator==(const ibGuid& other) const
 	return std::memcmp(_bytes.data(), other._bytes.data(), 16) == 0;
 }
 
-// overload inequality operator
-bool ibGuid::operator!=(const ibGuid& other) const
-{
-	return !((*this) == other);
-}
-
 // member swap function
 void ibGuid::swap(ibGuid& other)
 {

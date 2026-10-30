@@ -214,11 +214,9 @@ ibString ibPicture::ToSvg(size_t mostRects) const
 	std::unordered_map<std::uint32_t, ibString> paths;
 
 	for (const Rect& rect : done) {
-		auto found = paths.find(rect.colour);
-		if (found == paths.end()) {
+		const auto [found, inserted] = paths.try_emplace(rect.colour);
+		if (inserted)
 			order.push_back(rect.colour);
-			found = paths.emplace(rect.colour, ibString()).first;
-		}
 		found->second << ibString::Format(ibT("M%d %dh%dv%dh-%dz"), rect.x, rect.y, rect.w, rect.h, rect.w);
 	}
 

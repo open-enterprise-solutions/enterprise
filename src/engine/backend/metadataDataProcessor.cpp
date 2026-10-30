@@ -367,7 +367,7 @@ bool ibMetaDataDataProcessor::SaveToFile(const ibString& strFileName)
 
 	// Atomic export: write to a sibling temp file, then rename over the target
 	// (single commit point — a partial/failed write never replaces a good file).
-	// std::filesystem (C++17), no wx.
+	// std::filesystem, no wx.
 	namespace fs = std::filesystem;
 	const fs::path dstPath = ibPathOf(strFileName);
 	fs::path tmpPath = dstPath;

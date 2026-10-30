@@ -1151,9 +1151,8 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedValue(const ib
 
 void ibValueMetaObjectRecordDataHierarchyMutableRef::DeletePredefinedValue(const ibGuid& predefinedGuid) {
 	
-	m_predefinedObjectVector.erase(
-		std::remove_if(m_predefinedObjectVector.begin(), m_predefinedObjectVector.end(),
-			[predefinedGuid](const auto value) { return predefinedGuid == value->GetPredefinedGuid(); }), m_predefinedObjectVector.end());
+	std::erase_if(m_predefinedObjectVector,
+		[predefinedGuid](const auto value) { return predefinedGuid == value->GetPredefinedGuid(); });
 
 	m_metaData->Modify(true);
 }

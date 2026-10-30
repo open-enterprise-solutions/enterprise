@@ -37,12 +37,10 @@ void ibDebuggerClient::ibDebuggerClientAdapter::AddBridge(ibDebuggerClientBridge
 void ibDebuggerClient::ibDebuggerClientAdapter::RemoveBridge(ibDebuggerClientBridge* bridge)
 {
 	// Erasing destroys it — the list owns what it holds.
-	m_debugBridges.erase(
-		std::remove_if(m_debugBridges.begin(), m_debugBridges.end(),
-			[bridge](const std::unique_ptr<ibDebuggerClientBridge>& held) {
-				return held.get() == bridge;
-			}),
-		m_debugBridges.end());
+	std::erase_if(m_debugBridges,
+		[bridge](const std::unique_ptr<ibDebuggerClientBridge>& held) {
+			return held.get() == bridge;
+		});
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart()

@@ -733,7 +733,7 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 	size_t nextSlot = 0;
 	auto mintId = [&passedThrough, &nextSlot]() {
 		ibMetaID id;
-		do { id = ibSynthSlotId(ibSynthKind::Subquery, nextSlot++); } while (passedThrough.count(id) != 0);
+		do { id = ibSynthSlotId(ibSynthKind::Subquery, nextSlot++); } while (passedThrough.contains(id));
 		return id;
 	};
 
@@ -866,7 +866,7 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		// The slot this output will occupy — taken BEFORE the borrowed column below is pushed, so a
 		// minted id names the output and never the thing it was handed.
 		ibMetaID mintedId;
-		do { mintedId = ibSynthSlotId(ibSynthKind::Subquery, nextSlot++); } while (handedIn.count(mintedId) != 0);
+		do { mintedId = ibSynthSlotId(ibSynthKind::Subquery, nextSlot++); } while (handedIn.contains(mintedId));
 
 		// ⭐ FIRST, KEEP WHAT WE ARE ABOUT TO POINT AT. `m_col` may be a column the inner schema
 		// MINTED (a dot-walk leaf, a synthetic measure) whose storage belongs to that schema — a
@@ -1632,7 +1632,7 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 					break;
 				const ibBackendQueryColumn* bring = path.back();
 				const ibString joinKey = prefixKey + ibString::Format(ibT("%p|%p"), (const void*)refCol, (const void*)bring);
-				if (joined.find(joinKey) == joined.end()) {
+				if (!joined.contains(joinKey)) {
 					const ibBackendQueryColumn* fileKey = nullptr;
 					ibQueryRamTable filed = WalkedLeafOfTargets(curQ, refCol, path, i + 1, spec.m_holder, fileKey,
 						ReferencesIn(rows, refCol));
@@ -1660,7 +1660,7 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 			// every report showing two fields of one referenced object over a computed source lost the
 			// second. A shared hop is still joined once: its key is the same, because it brings the same.
 			const ibString joinKey = prefixKey + ibString::Format(ibT("%p"), (const void*)bring);
-			if (joined.find(joinKey) == joined.end()) {
+			if (!joined.contains(joinKey)) {
 				// ⭐ A TABLE THIS WALK REACHES A SECOND WAY brings a TWIN'S column (queryLowering.cpp,
 				// TwinForDotWalk): its own id, the same data. The table is read by its own column and the
 				// cells are filed under the twin's id — so `Account.Code` and `CorrAccount.Code` are two
@@ -1728,7 +1728,7 @@ ibQueryRamTable ComputeRowsResolved(const ibDataQuerySpec& spec,
 		for (const ibQueryRamColumn& rc : rows.Columns())
 			vended.insert(rc.m_id);
 		for (const ibQueryCondition& c : plainConds)
-			if (c.m_col != nullptr && vended.count(c.m_col->GetColumnId()) != 0)
+			if (c.m_col != nullptr && vended.contains(c.m_col->GetColumnId()))
 				rows = ibQueryComposer::FilterRows(rows, ibQueryPredicate::Leaf(c).get());
 	}
 
@@ -2175,7 +2175,7 @@ void RamComputeWindows(const ibQueryColumnExpr* e, const ibQueryRamTable& t, ibR
 	for (const auto& wt : e->m_cases)                    RamComputeWindows(wt.second.get(), t, out);
 	for (const ibQueryColumnExprPtr& p : e->m_partition) RamComputeWindows(p.get(), t, out);
 	for (const auto& o : e->m_windowOrder)               RamComputeWindows(o.first.get(), t, out);
-	if (e->m_kind != ibQueryColumnExprKind::WindowAgg || out.m_byNode.count(e) != 0)
+	if (e->m_kind != ibQueryColumnExprKind::WindowAgg || out.m_byNode.contains(e))
 		return;
 
 	const long rows = t.RowCount();
@@ -3550,7 +3550,7 @@ ibRefChildren ibArrangeUnderParents(const std::vector<ibValue>& keyOrder, const 
 		chainUp(parentOfKey(key));
 	// …the folders first, in their kind's order, where the kind keeps folders and items apart (see above)
 	if (tree.foldersFirst) {
-		const auto isFolder = [&childrenOf](const ibValue& v) { return childrenOf.find(v) != childrenOf.end(); };
+		const auto isFolder = [&childrenOf](const ibValue& v) { return childrenOf.contains(v); };
 		const auto placeOf  = [&tree](const ibValue& v) {
 			const auto it = tree.place.find(v);
 			return it != tree.place.end() ? it->second : std::numeric_limits<long>::max();
@@ -5093,7 +5093,7 @@ void PadPeriodChildren(ibSelectorTree::Node& parent, const ibTotalField& field, 
 	std::map<ibDateTime, ibSelectorTree::Node*> series = have;
 	std::vector<std::unique_ptr<ibSelectorTree::Node>> made;
 	for (ibDateTime t = from; t <= to; t = t.BeginOfNextPeriod(periods.m_unit)) {
-		if (series.find(t) != series.end())
+		if (series.contains(t))
 			continue;
 		auto node = std::make_unique<ibSelectorTree::Node>();
 		node->m_level  = childLevel;
@@ -5119,7 +5119,7 @@ void PadPeriodChildren(ibSelectorTree::Node& parent, const ibTotalField& field, 
 		const ibMetaID slot = AggSlotId(aggregates, i);
 		const ibValue* carried = nullptr;
 		const auto visit = [&](const ibDateTime& at, ibSelectorTree::Node* node) {
-			if (have.count(at) != 0) {
+			if (have.contains(at)) {
 				const auto it = node->m_values.find(slot);
 				carried = it != node->m_values.end() ? &it->second : nullptr;
 			}
@@ -5321,19 +5321,14 @@ ibQueryRamTable FoldByKeysFirst(ibQueryRowCursor& rows, const std::vector<ibTota
 		key.reserve(keyIds.size());
 		for (const ibMetaID id : keyIds)
 			key.push_back(rows.Get(id));
-		size_t g;
-		const auto found = index.find(key);
-		if (found == index.end()) {
-			g = groups.size();
-			index.emplace(std::move(key), g);
+		const auto [found, inserted] = index.try_emplace(std::move(key), groups.size());
+		if (inserted) {
 			const long r = table.AppendRow();
 			for (const ibQueryRamColumn& c : rows.Columns())
 				table.SetCell(r, c.m_id, rows.Get(c.m_id));
 			groups.push_back(Group{ r, std::vector<ibAggAcc>(aggregates.size()) });
 		}
-		else {
-			g = found->second;
-		}
+		const size_t g = found->second;
 		for (size_t i = 0; i < aggregates.size(); ++i)
 			groups[g].m_parts[i].Feed(aggregates[i], rows);
 	}
@@ -5516,7 +5511,7 @@ ibSelectorTree ibQueryComposer::BuildHierarchyTree(const ibQueryRamTable& detail
 	std::vector<long> roots;
 	for (long r = 0; r < n; ++r) {
 		const ibValue pk = detail.GetCell(r, parentKeyCol->GetColumnId());
-		if (IsNoKey(pk) || keyToRow.find(pk) == keyToRow.end()) roots.push_back(r);
+		if (IsNoKey(pk) || !keyToRow.contains(pk)) roots.push_back(r);
 	}
 
 	std::vector<bool> visited(static_cast<size_t>(n), false);
@@ -5633,18 +5628,15 @@ ibSelectorTree ibQueryComposer::BuildReferenceHierarchy(const ibQueryRamTable& s
 	const long n = snapshot.RowCount();
 	for (long r = 0; r < n; ++r) {
 		const ibValue key = snapshot.GetCell(r, refCol->GetColumnId());
-		auto it = rowsByVal.find(key);
-		if (it == rowsByVal.end()) {
+		const auto [it, inserted] = rowsByVal.try_emplace(key);
+		if (inserted)
 			keyOrder.push_back(key);
-			rowsByVal.emplace(key, std::vector<long>{ r });
-		}
-		else
-			it->second.push_back(r);
+		it->second.push_back(r);
 	}
 
 	// Among VALUES PRESENT (+ their ancestors), each where its row stood.
 	ibRefChildren childrenOf = ibArrangeUnderParents(keyOrder, hierarchy,
-		[&rowsByVal](const ibValue& key) { return rowsByVal.find(key) != rowsByVal.end(); });
+		[&rowsByVal](const ibValue& key) { return rowsByVal.contains(key); });
 
 	RefHierCtx ctx{ &snapshot, refCol, &rowsByVal, &childrenOf, &aggregates, dim };
 	ibValueSeen visited;
@@ -6037,14 +6029,10 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 		keyOrder.reserve(rows.size());
 		for (long r : rows) {
 			const ibValue key = ctx.snapshot->GetCell(r, level.HeadCol()->GetColumnId());
-			auto it = byVal.find(key);
-			if (it == byVal.end()) {
+			const auto [it, inserted] = byVal.try_emplace(key);
+			if (inserted)
 				keyOrder.push_back(key);
-				byVal.emplace(key, std::vector<long>{ r });
-			}
-			else {
-				it->second.push_back(r);
-			}
+			it->second.push_back(r);
 		}
 
 		// Hierarchy / HierarchyOnly — arrange the values into the catalog's parent-ref tree. (`parentOf`
@@ -6058,7 +6046,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 		// ⭐⭐ …AND A KEY STANDS WHERE ITS OWN ROW STOOD, NOT WHERE ITS FIRST CHILD DID; a folder with no row of
 		// its own, where its first descendant did (ibArrangeUnderParents — the other hierarchy road says it too).
 		ibRefChildren childrenOf = ibArrangeUnderParents(keyOrder, hierarchy,
-			[&byVal](const ibValue& key) { return byVal.find(key) != byVal.end(); });
+			[&byVal](const ibValue& key) { return byVal.contains(key); });
 		ibValueSeen visited;
 		// Rows of ROOT values that HIERARCHYONLY folded away: an element standing at the top has no
 		// folder to be read under, so its rows join the level's remainder below rather than vanishing
@@ -6145,14 +6133,10 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 		for (const ibTotalField& field : level.m_fields)
 			key.push_back(LevelKeyValue(field, ibRamTableRow(*ctx.snapshot, r)));   // truncated when the field is BY PERIODS
 
-		const auto it = byKey.find(key);
-		if (it == byKey.end()) {
-			order.push_back(key);
-			byKey.emplace(std::move(key), std::vector<long>{ r });
-		}
-		else {
-			it->second.push_back(r);
-		}
+		const auto [it, inserted] = byKey.try_emplace(key);
+		if (inserted)
+			order.push_back(std::move(key));
+		it->second.push_back(r);
 	}
 
 	// ⚠ THE LEVEL'S NUMBER, NOT THE DEPTH BELOW THIS NODE. Down the page the two agree; across it

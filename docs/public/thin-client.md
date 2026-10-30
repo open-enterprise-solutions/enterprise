@@ -8,9 +8,11 @@ designer's `designer-thin`.
 routine the desktop window always kept — menus, toolbars, what may be pressed, file dialogs, recent files, print
 preview — so the server is not asked for it on every move.
 
-**Status.** The thin runtime is done: it does what the desktop runtime does. The thin designer is started: its window
-logs in as the designer and has the document/view skeleton; the designer's own panes and editors come next. The desktop
-`frontend` and the thick applications built on it were removed on 2026-10-27 (branch `oes/thick_client`).
+**Status.** The thin runtime is done: it does what the desktop runtime did. The thin designer has the desktop designer's
+windows: the configuration tree, the inspector, the form, module and composer editors, the role, interface, common
+attribute and functional option editors, configuration compare, the assistant and the debugger. What is left is tuning
+them in use. The desktop `frontend` and the thick applications built on it were removed on 2026-10-27 (branch
+`oes/thick_client`).
 
 ## Parts
 
@@ -146,4 +148,4 @@ over a server.
 - A chart box is drawn empty: the desktop's chart library is not copied.
 - A radio button and a slider tell the server nothing when moved — as on the desktop.
 - A script's print always shows the print dialog, and fits the sheet to the page's width.
-- The keys a person keeps are only read: there is no key editor until the thin designer.
+- A thin runtime only reads the keys a person keeps; they are edited in the thin designer, under Tools → Options.

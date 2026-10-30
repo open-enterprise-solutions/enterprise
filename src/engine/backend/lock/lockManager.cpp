@@ -409,7 +409,7 @@ void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 				{ { ibCol(ibT("sessionGuid")), ibEmptyString } })));
 			while (rs.Next()) {
 				const ibString owner = rs.GetResultString(ibT("sessionGuid"));
-				if (!owner.IsEmpty() && live.find(owner) == live.end())
+				if (!owner.IsEmpty() && !live.contains(owner))
 					orphans.insert(owner);
 			}
 		}

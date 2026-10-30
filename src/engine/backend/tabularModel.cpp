@@ -430,8 +430,7 @@ bool ibValueModel::GetCompositionAttrByRow(const ibDataViewItem& row, unsigned i
 		ibValue value;
 		if (id == wxNOT_FOUND || !node->GetValue(id, value))
 			return nullptr;
-		read.push_back(value);
-		return &read.back();
+		return &read.emplace_back(value);
 	};
 	attr = ibCompositionAttr();
 	ibCompositionAttr own;

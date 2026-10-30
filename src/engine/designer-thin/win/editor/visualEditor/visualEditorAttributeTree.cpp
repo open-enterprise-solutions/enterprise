@@ -248,7 +248,7 @@ void ibAttributeTree::Draw(const ibProtocolNode& rows, const ibProtocolNode& att
 
 	// …and a holder whose row is gone goes too — let go of first where it is shown.
 	for (auto it = m_entries.begin(); it != m_entries.end(); ) {
-		if (drawn.find(it->first) != drawn.end()) {
+		if (drawn.contains(it->first)) {
 			++it;
 			continue;
 		}
@@ -257,7 +257,7 @@ void ibAttributeTree::Draw(const ibProtocolNode& rows, const ibProtocolNode& att
 		it = m_entries.erase(it);
 	}
 	for (auto it = m_columns.begin(); it != m_columns.end(); ) {
-		if (drawn.find(it->first.first) != drawn.end()) {
+		if (drawn.contains(it->first.first)) {
 			++it;
 			continue;
 		}

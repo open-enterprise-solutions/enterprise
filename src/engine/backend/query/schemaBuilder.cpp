@@ -113,7 +113,7 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 	// What stays irreversible is said at compensation time, not swallowed: a dropped TABLE cannot be
 	// re-created (its shape left with it — and its data would not come back anyway), and a dropped
 	// column returns EMPTY. Both are the price of the phase-one commit, not of this ledger.
-	const bool onCreatedTable = h->DdlCreatedTables().count(ddl.m_table) != 0;
+	const bool onCreatedTable = h->DdlCreatedTables().contains(ddl.m_table);
 	switch (ddl.m_kind) {
 	case ibDdlKind::CreateTable:
 		if (!ddl.m_temporary) {
@@ -225,7 +225,7 @@ bool ibSchemaBuilder::RunOrDefer(const ibString& table, std::function<bool()> wo
 	// The deferral asks the WIDE question — "did this save change what the table looks like" — which
 	// is DdlShapedTables, not the created list (see connectionHolder.h on why they are two sets).
 	ibDatabaseConnectionHolder* h = BarrierHolder();
-	if (BarrierActive() && h != nullptr && h->DdlShapedTables().count(table) != 0) {
+	if (BarrierActive() && h != nullptr && h->DdlShapedTables().contains(table)) {
 		h->DdlDeferredWrites().push_back(std::move(work));
 		return true;               // deferred — real result surfaces in Flush
 	}
@@ -236,7 +236,7 @@ bool ibSchemaBuilder::RunOrDefer(const ibString& tableA, const ibString& tableB,
 {
 	ibDatabaseConnectionHolder* h = BarrierHolder();
 	if (BarrierActive() && h != nullptr
-	    && (h->DdlShapedTables().count(tableA) != 0 || h->DdlShapedTables().count(tableB) != 0)) {
+	    && (h->DdlShapedTables().contains(tableA) || h->DdlShapedTables().contains(tableB))) {
 		h->DdlDeferredWrites().push_back(std::move(work));
 		return true;
 	}

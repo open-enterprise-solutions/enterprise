@@ -1268,7 +1268,7 @@ void ibSession::BindSessionToThread(ibSession* s, std::thread::id tid)
 {
 	std::unique_lock<std::shared_mutex> lk(s_currentMutex);
 	if (s != nullptr)
-		// weak_from_this is C++17, doesn't throw if the session isn't
+		// weak_from_this doesn't throw if the session isn't
 		// yet wrapped in a shared_ptr — returns expired weak_ptr in
 		// that case. All ibSession instances are made via make_shared
 		// in the registry's typed factory, so by the time anyone calls

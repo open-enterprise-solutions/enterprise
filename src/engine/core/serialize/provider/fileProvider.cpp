@@ -531,7 +531,7 @@ bool ibFileProvider::Publish(const ibDataNode& files, const ibString& directory)
 					known = found != named.end() && found->Left(prefix.length()).CmpNoCase(prefix) == 0;
 				}
 				else
-					known = named.count(name) != 0;
+					known = named.contains(name);
 				if (!known)
 					Refuse(ibString::Format(_("the directory holds '%s', which is no part of an export - choose a directory "
 						"of its own"), name));

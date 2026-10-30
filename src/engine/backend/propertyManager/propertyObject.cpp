@@ -460,9 +460,7 @@ void ibPropertyObject::RemoveNotifier(ibPropertyObjectNotifier* notifier)
 {
 	if (notifier == nullptr)
 		return;
-	m_notifiers.erase(
-		std::remove(m_notifiers.begin(), m_notifiers.end(), notifier),
-		m_notifiers.end());
+	std::erase(m_notifiers, notifier);
 	if (notifier->GetOwner() == this)
 		notifier->SetOwner(nullptr);
 }
@@ -504,9 +502,7 @@ void ibPropertyObject::RemoveAttachedObject(ibPropertyObject* other)
 {
 	if (other == nullptr)
 		return;
-	m_attachedObjects.erase(
-		std::remove(m_attachedObjects.begin(), m_attachedObjects.end(), other),
-		m_attachedObjects.end());
+	std::erase(m_attachedObjects, other);
 	if (other->m_attachOwner == this)
 		other->m_attachOwner = nullptr;
 }

@@ -105,7 +105,7 @@ bool DiffChildren(const std::vector<ibDataNode>& from, const std::vector<ibDataN
 
 	std::vector<ibDataValue> removedIds;
 	for (const ibDataNode& child : from) {
-		if (now.count(child.GetMetaId()) == 0)
+		if (!now.contains(child.GetMetaId()))
 			removedIds.push_back(ibDataValue::Int(child.GetMetaId()));
 	}
 
@@ -134,7 +134,7 @@ bool DiffChildren(const std::vector<ibDataNode>& from, const std::vector<ibDataN
 	for (const ibDataNode& child : to)
 		order.push_back(ibDataValue::Int(child.GetMetaId()));
 	for (const ibDataNode& child : from) {
-		if (now.count(child.GetMetaId()) != 0)
+		if (now.contains(child.GetMetaId()))
 			previous.push_back(ibDataValue::Int(child.GetMetaId()));
 	}
 	if (inserted || order != previous)

@@ -193,16 +193,7 @@ void ibCheckTree::Init()
 
 void ibCheckTree::SetItemTextColour(const wxTreeItemId& item, const wxColour& col)
 {
-	std::map<wxTreeItemId, wxColor>::iterator it = m_colors.find(item);
-
-	if (it == m_colors.end())
-	{
-		m_colors.insert(std::pair<wxTreeItemId, wxColor>(item, col));
-	}
-	else
-	{
-		m_colors[item] = col;
-	}
+	m_colors.insert_or_assign(item, col);
 
 	wxTreeCtrl::SetItemTextColour(item, col);
 }

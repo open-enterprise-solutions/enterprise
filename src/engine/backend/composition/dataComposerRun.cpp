@@ -1281,7 +1281,7 @@ int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const ibStr
 				// Only the AUTO-named ones (AddParam: `__f<n>`) belong to a filter line. A parameter the
 				// caller named itself is theirs, and dropping it here would be this pass reaching outside
 				// what it was asked about.
-				it = (it->first.StartsWith(ibT("__f")) && keptParams.find(it->first) == keptParams.end())
+				it = (it->first.StartsWith(ibT("__f")) && !keptParams.contains(it->first))
 					? m_params.erase(it) : std::next(it);
 			}
 		}

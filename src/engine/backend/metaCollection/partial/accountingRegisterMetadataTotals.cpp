@@ -1381,7 +1381,7 @@ void FoldOutSummaryOnly(const ibValueMetaObjectChartOfAccounts* chart,
 				break;
 
 			const ibValue kind = kindStored ? row.m_key[kindPos] : column.m_requestedKind;
-			if (kind.IsEmpty() || summaryOnly.find(kind) == summaryOnly.end())
+			if (kind.IsEmpty() || !summaryOnly.contains(kind))
 				continue;
 
 			// No balance is kept along this breakdown: the slot leaves the key entirely — its kind with
@@ -1392,9 +1392,8 @@ void FoldOutSummaryOnly(const ibValueMetaObjectChartOfAccounts* chart,
 		}
 
 		const ibAcctKey& identity = row.m_key;
-		const auto found = index.find(identity);
-		if (found == index.end()) {
-			index[identity] = merged.size();
+		const auto [found, inserted] = index.try_emplace(identity, merged.size());
+		if (inserted) {
 			merged.push_back({ identity, row });
 			continue;
 		}
@@ -1556,7 +1555,7 @@ bool AtFullAnalytics(const ibValue& account, const std::vector<ibValue>& askedKi
 		return true;
 	const auto summaryOnly = summaryOnlyByAccount.find(account);
 	for (const ibValue& kind : kinds->second) {
-		if (summaryOnly != summaryOnlyByAccount.end() && summaryOnly->second.count(kind) != 0)
+		if (summaryOnly != summaryOnlyByAccount.end() && summaryOnly->second.contains(kind))
 			continue;
 		if (std::find(askedKinds.begin(), askedKinds.end(), kind) == askedKinds.end())
 			return false;
@@ -2423,12 +2422,10 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 				key.push_back(sel.GetValue(dimension));
 
 			const ibAcctKey& identity = key;
-			const auto found = index.find(identity);
-			if (found == index.end()) {
-				index[identity] = rows.size();
+			const auto [found, inserted] = index.try_emplace(identity, rows.size());
+			if (inserted)
 				rows.push_back({ identity, ibAcctRow{ key, {}, layoutIndex } });
-			}
-			ibAcctRow& row = rows[index[identity]].second;
+			ibAcctRow& row = rows[found->second].second;
 			// ⚠ ADDED, NOT ASSIGNED. Several groups now legitimately land on one row: an account named
 			// in hierarchy folds its subordinates into itself, and each of them arrives as its own
 			// group from the server. Assignment kept the last one and silently dropped the rest —
@@ -2767,11 +2764,10 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 				key.push_back(sel.GetValue(lineCol));
 
 			const ibAcctKey& identity = key;
-			if (index.find(identity) == index.end()) {
-				index[identity] = rows.size();
+			const auto [found, inserted] = index.try_emplace(identity, rows.size());
+			if (inserted)
 				rows.push_back({ identity, ibAcctRow{ key, {}, layoutIndex } });
-			}
-			ibAcctRow& row = rows[index[identity]].second;
+			ibAcctRow& row = rows[found->second].second;
 			// ⚠ ADDED, NOT ASSIGNED. Several groups now legitimately land on one row: an account named
 			// in hierarchy folds its subordinates into itself, and each of them arrives as its own
 			// group from the server. Assignment kept the last one and silently dropped the rest —
@@ -3090,7 +3086,7 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	std::vector<ibQueryExprPtr>  groupKeys;
 	for (const ibBackendQueryColumn* column : published->GetColumns()) {
 		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(column);
-		const bool figure = !slots.empty() && figureFields.count(slots.front().m_name) != 0;
+		const bool figure = !slots.empty() && figureFields.contains(slots.front().m_name);
 		std::unordered_map<ibString, ibQueryExprPtr> asRead;
 		if (!figure)
 			asRead = KeyFieldsAsRead(column, GetMetaData(), named);
@@ -3266,12 +3262,10 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	layouts.front().m_breakdown = layout;
 
 	const auto rowFor = [&](const ibAcctKey& identity, const std::vector<ibValue>& key) -> ibAcctRow& {
-		const auto found = index.find(identity);
-		if (found == index.end()) {
-			index[identity] = rows.size();
+		const auto [found, inserted] = index.try_emplace(identity, rows.size());
+		if (inserted)
 			rows.push_back({ identity, ibAcctRow{ key, {}, 0 } });
-		}
-		return rows[index[identity]].second;
+		return rows[found->second].second;
 	};
 
 	const auto keyValues = [&](const ibQueryRamTable& table, long row) {
@@ -3309,7 +3303,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 			const ibValue kind = column.m_byKind
 				? column.m_requestedKind
 				: (column.m_kindAlias.IsEmpty() ? ibValue() : cellByName(table, row, column.m_kindAlias));
-			if (kind.IsEmpty() || summaryOnly.find(kind) == summaryOnly.end())
+			if (kind.IsEmpty() || !summaryOnly.contains(kind))
 				continue;
 			// …and it only matters if this row actually carries a value along that breakdown.
 			if (!cellByName(table, row, column.m_alias).IsEmpty())
@@ -3393,7 +3387,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// made a month heading of its own with none (2026-09-29, the ROLE battery).
 	const bool atBeginning = withPeriod && fold.FromMovements() && begin.m_date.GetType() == TYPE_DATE;
 	for (const auto& entry : openingByKey) {
-		if (byKey.find(entry.first) != byKey.end())
+		if (byKey.contains(entry.first))
 			continue;
 
 		ibAcctKey identity = entry.first;
@@ -3462,7 +3456,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 			const ibValue kind = column.m_byKind
 				? column.m_requestedKind
 				: (column.m_kindAlias.IsEmpty() ? ibValue() : cellByName(table, row, column.m_kindAlias));
-			if (kind.IsEmpty() || foundKinds->second.find(kind) == foundKinds->second.end())
+			if (kind.IsEmpty() || !foundKinds->second.contains(kind))
 				continue;
 			for (size_t i = 0; i < names.size(); ++i)
 				if (names[i] == column.m_alias || (!column.m_kindAlias.IsEmpty() && names[i] == column.m_kindAlias))
@@ -3536,7 +3530,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 			const bool templateBalanceless = balanceless[templateRow];
 			for (const ibDateTime& period : calendar) {
 				const ibValue value(period);
-				if (present.find(value) == present.end()) {
+				if (!present.contains(value)) {
 					ibAcctRow added = rows[templateRow].second;   // the key as it stands on a row that exists
 					added.m_figures.clear();
 					if (slot < added.m_key.size())
@@ -3841,7 +3835,7 @@ void ibValueMetaObjectAccountingRegister::ReportFiguresAsKept(ibQueryRamTable& t
 	                                                       : ibAcctSummaryMap();
 	std::map<const ibValueMetaObjectAttributeBase*, ibAcctSummaryMap> tickedBy;
 	for (const ibFigureCell& cell : cells)
-		if (cell.m_byBreakdown != nullptr && tickedBy.find(cell.m_byBreakdown) == tickedBy.end())
+		if (cell.m_byBreakdown != nullptr && !tickedBy.contains(cell.m_byBreakdown))
 			tickedBy[cell.m_byBreakdown] = KindsByAccount(GetChartOfAccounts(), cell.m_byBreakdown);
 
 	const auto keptByBreakdown = [&](long row, const ibValue& account, const std::vector<ibBreakdownCell>& breakdown,
@@ -3856,9 +3850,9 @@ void ibValueMetaObjectAccountingRegister::ReportFiguresAsKept(ibQueryRamTable& t
 		for (const ibBreakdownCell& slot : breakdown) {
 			const ibValue kind = !slot.m_requested.IsEmpty() ? slot.m_requested
 			                   : slot.m_kindId != 0 ? table.GetCell(row, slot.m_kindId) : ibValue();
-			if (kind.IsEmpty() || all->second.find(kind) == all->second.end())
+			if (kind.IsEmpty() || !all->second.contains(kind))
 				continue;
-			if (mine == ticked.end() || mine->second.find(kind) == mine->second.end())
+			if (mine == ticked.end() || !mine->second.contains(kind))
 				return false;
 		}
 		return true;
@@ -4544,7 +4538,7 @@ ibQueryRelPtr RegroupServerRead(const ibValueMetaObjectAccountingRegister* reg, 
 	std::vector<ibQueryProjItem> level;
 	std::vector<ibString> outKeys;
 	for (const ibString& name : keyNames)
-		if (slotFields.find(name) == slotFields.end()) {
+		if (!slotFields.contains(name)) {
 			level.push_back({ ibCol(below, name), name });
 			outKeys.push_back(name);
 		}

@@ -83,49 +83,14 @@ inline bool operator==(const ibValuePtr<_Ty1>& _Left, const ibValuePtr<_Ty2>& _R
 	return _Left.m_pRef == _Right.m_pRef;
 }
 
-template <class _Ty1, class _Ty2>
-inline bool operator!=(const ibValuePtr<_Ty1>& _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return _Left.m_pRef != _Right.m_pRef;
-}
-
-template <class _Ty>
-inline bool operator==(nullptr_t, const ibValuePtr<_Ty>& _Right) noexcept {
-	return _Right.m_pRef == nullptr;
-}
-
-template <class _Ty>
-inline bool operator!=(nullptr_t, const ibValuePtr<_Ty>& _Right) noexcept {
-	return _Right.m_pRef != nullptr;
-}
-
 template <class _Ty>
 inline bool operator==(const ibValuePtr<_Ty>& _Left, nullptr_t) noexcept {
 	return _Left.m_pRef == nullptr;
 }
 
-template <class _Ty>
-inline bool operator!=(const ibValuePtr<_Ty>& _Left, nullptr_t) noexcept {
-	return _Left.m_pRef != nullptr;
-}
-
 template <class _Ty1, class _Ty2>
 inline bool operator==(const ibValuePtr<_Ty1>& _Left, _Ty2* _Right) noexcept {
 	return _Left.m_pRef == _Right;
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator==(_Ty1* _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return _Left == _Right.m_pRef;
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator!=(_Ty1* _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return _Left != _Right.m_pRef;
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator!=(const ibValuePtr<_Ty1>& _Left, _Ty2* _Right) noexcept {
-	return _Left.m_pRef != _Right;
 }
 
 #endif 

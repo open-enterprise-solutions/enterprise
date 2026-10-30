@@ -159,7 +159,7 @@ struct ibFormRequest {
 		return found != m_values.end() ? found->second : ibValue();
 	}
 
-	bool Has(const ibString& name) const { return m_values.find(name) != m_values.end(); }
+	bool Has(const ibString& name) const { return m_values.contains(name); }
 
 	void Set(const ibString& name, const ibValue& value) { m_values[name] = value; }
 };

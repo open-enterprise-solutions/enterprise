@@ -201,7 +201,7 @@ void ibPanelKeyBinder::OnAssign(wxCommandEvent&)
 
 	ibKeyBinder::Command* const holder = GetCommandForKey(m_pressedKey, command);
 	if (holder != nullptr) {
-		holder->keys.erase(std::remove(holder->keys.begin(), holder->keys.end(), m_pressedKey), holder->keys.end());
+		std::erase(holder->keys, m_pressedKey);
 		ShowCommandKeys(*holder);
 	}
 

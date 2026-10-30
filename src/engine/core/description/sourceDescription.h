@@ -19,7 +19,6 @@ struct ibSourceHop {
 	ibSourceId m_id   = wxNOT_FOUND;
 	ibClassID  m_type = g_valueUndefinedCLSID;
 	bool operator==(const ibSourceHop& o) const { return m_id == o.m_id && m_type == o.m_type; }
-	bool operator!=(const ibSourceHop& o) const { return !(*this == o); }
 };
 
 // Mirrors ibMetaDescription (a plain id list with its own *Memory serialiser).

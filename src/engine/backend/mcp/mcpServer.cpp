@@ -976,9 +976,7 @@ void ibMcpServer::AddNotifier(ibMcpNotifier* notifier)
 void ibMcpServer::RemoveNotifier(ibMcpNotifier* notifier)
 {
 	std::lock_guard<std::mutex> lock(m_notifiersMutex);
-	m_notifiers.erase(
-		std::remove(m_notifiers.begin(), m_notifiers.end(), notifier),
-		m_notifiers.end());
+	std::erase(m_notifiers, notifier);
 }
 
 // ⭐ THE LEVELS AS AN ORDER, which is the only thing a gate needs of them. The wire spells them as

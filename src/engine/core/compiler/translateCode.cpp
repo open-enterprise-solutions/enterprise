@@ -1163,8 +1163,7 @@ bool ibTranslateCode::Translate()
 						// lexem by coincidence, reading a nonexistent vector object for
 						// every one after it — so any define longer than a single lexem,
 						// `#Define MAX 10 + 5`, was undefined behaviour.)
-						m_listLexem.push_back(lexDef);
-						ibLexem& lexUse = m_listLexem.back();
+						ibLexem& lexUse = m_listLexem.emplace_back(lexDef);
 						lexUse.m_numString = m_currentPos;
 						lexUse.m_numLine = m_currentLine;//for breakpoints
 #ifdef UTF8_LEXEM_TRANSLATE
@@ -1886,10 +1885,7 @@ void ibTranslateCode::AppendModule(ibTranslateCode* module)
 
 void ibTranslateCode::RemoveModule(ibTranslateCode* module)
 {
-	m_listTranslateCode.erase(
-		std::remove(m_listTranslateCode.begin(), m_listTranslateCode.end(), module),
-		m_listTranslateCode.end()
-	);
+	std::erase(m_listTranslateCode, module);
 }
 
 void ibTranslateCode::OnSetParent(ibTranslateCode* setParent)

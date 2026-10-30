@@ -1,8 +1,8 @@
 #ifndef __PROTOCOL_NODE_H__
 #define __PROTOCOL_NODE_H__
 
+#include <concepts>
 #include <memory>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -89,7 +89,7 @@ public:
 	ibProtocolNode& SetValue(const char* name, const ibMemoryBuffer& data);
 	// A flag is a bool itself, never what converts to one — a literal, a pointer, a wxString's text (wx converts it to
 	// one): each of those is a text.
-	template<class Flag, std::enable_if_t<std::is_same_v<Flag, bool>, int> = 0>
+	template<std::same_as<bool> Flag>
 	ibProtocolNode& SetValue(const char* name, Flag flag) { return SetFlag(name, flag); }
 	ibProtocolNode& SetValue(const char* name, const ibProtocolNode& node);   // a copy of it
 	ibProtocolNode& SetValue(const ibString& name, const ibProtocolNode& node);
@@ -117,7 +117,6 @@ public:
 
 	// Two nodes alike: the same entries — in whatever order — and the same children in the same order.
 	bool operator==(const ibProtocolNode& other) const;
-	bool operator!=(const ibProtocolNode& other) const { return !(*this == other); }
 
 private:
 

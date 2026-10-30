@@ -11,6 +11,7 @@
 
 #include "core/localization/dictionary.h"   // _() — the refusals' words
 
+#include <bit>                           // std::endian — what the packet's bytes are taken to be
 #include <climits>                       // LLONG_MAX — an unsigned number past it is no whole one
 #include <cstring>                       // std::memcpy / memmove / memcmp — the bytes, read and moved
 #include <string>                        // std::char_traits — a key's length
@@ -23,6 +24,10 @@ static_assert(sizeof(ibChar) == 2, "a name's and a text's character is two bytes
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 #error "OES-RPC packets are little-endian; a big-endian build needs byte swaps in dataBuilder.cpp"
 #endif
+
+// A packet is little-endian (dataBuilder.h) and its numbers are read and written as they lie, with no conversion: on
+// another machine it is the build that stops here, not a base read wrong.
+static_assert(std::endian::native == std::endian::little, "OES-RPC reads its numbers where they lie: little-endian only");
 
 constexpr std::uint32_t kPacketHeader = 16;
 constexpr std::uint32_t kNodeHeader = 32;

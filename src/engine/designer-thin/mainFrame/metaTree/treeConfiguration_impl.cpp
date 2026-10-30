@@ -222,7 +222,7 @@ void ibMetaTreeBase::DrawRow(const wxTreeItemId& item, const ibProtocolNode& row
 
 	// OPEN AS THE PERSON LEFT IT — and while searching, everything: a match three levels down is not an answer until it
 	// can be seen.
-	const bool expanded = m_search.IsEmpty() ? m_expanded.find(data->m_path) != m_expanded.end() : true;
+	const bool expanded = m_search.IsEmpty() ? m_expanded.contains(data->m_path) : true;
 	if (expanded && m_metaTreeCtrl->ItemHasChildren(item) && !m_metaTreeCtrl->IsExpanded(item))
 		m_metaTreeCtrl->Expand(item);
 	else if (!expanded && m_metaTreeCtrl->IsExpanded(item))

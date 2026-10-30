@@ -159,7 +159,6 @@ public:
 
 	// --- comparison (operator< lets ibRowMetaValues be a std::map key) ---
 	bool operator==(const ibRowValues& o) const { return m_data == o.m_data; }
-	bool operator!=(const ibRowValues& o) const { return m_data != o.m_data; }
 	bool operator< (const ibRowValues& o) const { return m_data <  o.m_data; }
 
 private:

@@ -77,7 +77,6 @@ struct CORE_API ibFont {
 			&& m_pointSize == other.m_pointSize && m_family == other.m_family
 			&& m_underlined == other.m_underlined && m_strikethrough == other.m_strikethrough;
 	}
-	bool operator!=(const ibFont& other) const { return !(*this == other); }
 };
 
 #endif

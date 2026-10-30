@@ -147,7 +147,6 @@ struct CORE_API ibJobScheduleDescription {
 	// Value semantics — two schedules are the same when every field is, which is what an editor
 	// needs to know whether the user actually changed anything.
 	bool operator==(const ibJobScheduleDescription& other) const;
-	bool operator!=(const ibJobScheduleDescription& other) const { return !(*this == other); }
 
 	// Convenience for the common shapes, so a caller does not assemble bits.
 	static ibJobScheduleDescription EverySeconds(int seconds);

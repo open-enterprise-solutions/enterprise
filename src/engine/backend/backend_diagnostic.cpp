@@ -60,7 +60,7 @@ void ibDiagnostics::Unsubscribe(ibDiagnosticSink* sink)
 
 	std::lock_guard<std::mutex> lock(list->m_mutex);
 	auto& sinks = list->m_sinks;
-	sinks.erase(std::remove(sinks.begin(), sinks.end(), sink), sinks.end());
+	std::erase(sinks, sink);
 }
 
 bool ibDiagnostics::HasSubscribers()

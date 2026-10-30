@@ -1185,7 +1185,7 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 			continue;
 		}
 		// …and a tab closing is not opened again — its form went with the window it was shown in (ibDialogDocChildFrame).
-		if (m_tabsClosing.count(id) != 0)
+		if (m_tabsClosing.contains(id))
 			continue;
 		ibTabDocument* const opened = CreateDocument(static_cast<ibProtocol::ibView::ibKind>(tab.GetInt(ibProtocol::ibFrame::ibTab::Kind)), id);
 		m_documents[id] = opened;
@@ -1230,7 +1230,7 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 	// once. Looked for afresh before each: a form closed takes the forms it owns with it.
 	std::vector<long long> gone;
 	for (const auto& kept : m_documents) {
-		if (drawn.count(kept.first) == 0)
+		if (!drawn.contains(kept.first))
 			gone.push_back(kept.first);
 	}
 	for (const long long id : gone) {

@@ -674,7 +674,7 @@ bool SharesColumnNumbers(const std::vector<ibSourceBinding>& sources, const ibBa
 			for (const ibBackendQueryColumn* c : s.m_q->GetColumns())
 				if (c != nullptr) taken.insert(c->GetColumnId());
 	for (const ibBackendQueryColumn* c : q.GetColumns())
-		if (c != nullptr && taken.count(c->GetColumnId()) != 0)
+		if (c != nullptr && taken.contains(c->GetColumnId()))
 			return true;
 	return false;
 }
@@ -872,11 +872,9 @@ const ibBackendQueryable* TwinForDotWalk(const ibBackendQueryable* target, const
 	ibDotWalkTwins* const twins = t_dotWalkTwins;
 	if (twins == nullptr || twins->m_builder == nullptr || target == nullptr)
 		return target;
-	const auto first = twins->m_firstPrefix.find(target);
-	if (first == twins->m_firstPrefix.end()) {
-		twins->m_firstPrefix.emplace(target, prefix);
+	const auto [first, inserted] = twins->m_firstPrefix.try_emplace(target, prefix);
+	if (inserted)
 		return target;
-	}
 	if (first->second == prefix)
 		return target;
 	const auto known = twins->m_twinOf.find(prefix);
@@ -6751,31 +6749,30 @@ int PruneSelect(ibQuerySelect& ast, const std::map<ibString, ibValue>& params)
 
 	auto gone = [&](bool resolves) { if (!resolves) ++dropped; return !resolves; };
 
-	ast.m_projections.erase(std::remove_if(ast.m_projections.begin(), ast.m_projections.end(),
-		[&](const ibQueryProjection& p) { return gone(StillResolves(sources, p.m_expr)); }),
-		ast.m_projections.end());
+	std::erase_if(ast.m_projections,
+		[&](const ibQueryProjection& p) { return gone(StillResolves(sources, p.m_expr)); });
 
-	ast.m_groupBy.erase(std::remove_if(ast.m_groupBy.begin(), ast.m_groupBy.end(),
-		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); }), ast.m_groupBy.end());
+	std::erase_if(ast.m_groupBy,
+		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); });
 
-	ast.m_orderBy.erase(std::remove_if(ast.m_orderBy.begin(), ast.m_orderBy.end(),
-		[&](const ibQueryOrderItem& o) { return gone(StillResolves(sources, SortTargetOf(ast, o.m_expr))); }), ast.m_orderBy.end());
+	std::erase_if(ast.m_orderBy,
+		[&](const ibQueryOrderItem& o) { return gone(StillResolves(sources, SortTargetOf(ast, o.m_expr))); });
 
-	ast.m_indexBy.erase(std::remove_if(ast.m_indexBy.begin(), ast.m_indexBy.end(),
-		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); }), ast.m_indexBy.end());
+	std::erase_if(ast.m_indexBy,
+		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); });
 
-	ast.m_totalsAggregates.erase(std::remove_if(ast.m_totalsAggregates.begin(), ast.m_totalsAggregates.end(),
-		[&](const ibQueryTotalAggregate& r) { return gone(StillResolves(sources, r.m_expr)); }), ast.m_totalsAggregates.end());
+	std::erase_if(ast.m_totalsAggregates,
+		[&](const ibQueryTotalAggregate& r) { return gone(StillResolves(sources, r.m_expr)); });
 
 	// A LEVEL LOSES THE FIELDS THAT NO LONGER RESOLVE, and only then, having none left, loses itself.
 	// Dropping the whole level because one of its fields died would take the grouping away over a
 	// field the author never touched.
 	for (ibQueryTotalDim& d : ast.m_totalsBy)
-		d.m_fields.erase(std::remove_if(d.m_fields.begin(), d.m_fields.end(),
-			[&](const ibQueryTotalField& f) { return gone(StillResolves(sources, f.m_expr)); }), d.m_fields.end());
+		std::erase_if(d.m_fields,
+			[&](const ibQueryTotalField& f) { return gone(StillResolves(sources, f.m_expr)); });
 
-	ast.m_totalsBy.erase(std::remove_if(ast.m_totalsBy.begin(), ast.m_totalsBy.end(),
-		[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }), ast.m_totalsBy.end());
+	std::erase_if(ast.m_totalsBy,
+		[](const ibQueryTotalDim& d) { return d.m_fields.empty(); });
 
 	// ⚠ THE NODES ARE PRUNED THE SAME WAY — a level whose field stopped resolving goes, and a node
 	// left with nothing goes with it. Skipped here, a removed attribute would live on inside a
@@ -6783,10 +6780,10 @@ int PruneSelect(ibQuerySelect& ast, const std::map<ibString, ibValue>& params)
 	// to prevent.
 	for (ibQueryTotalSplit& node : ast.m_totalsSplits) {
 		for (ibQueryTotalDim& d : node.m_levels)
-			d.m_fields.erase(std::remove_if(d.m_fields.begin(), d.m_fields.end(),
-				[&](const ibQueryTotalField& f) { return gone(StillResolves(sources, f.m_expr)); }), d.m_fields.end());
-		node.m_levels.erase(std::remove_if(node.m_levels.begin(), node.m_levels.end(),
-			[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }), node.m_levels.end());
+			std::erase_if(d.m_fields,
+				[&](const ibQueryTotalField& f) { return gone(StillResolves(sources, f.m_expr)); });
+		std::erase_if(node.m_levels,
+			[](const ibQueryTotalDim& d) { return d.m_fields.empty(); });
 	}
 
 	bool nodesHoldLevels = false;
@@ -6806,8 +6803,8 @@ int PruneSelect(ibQuerySelect& ast, const std::map<ibString, ibValue>& params)
 		std::vector<ibQueryAstExprPtr> rows;
 		ibQueryFlattenAnd(ast.m_where, rows);
 		const size_t before = rows.size();
-		rows.erase(std::remove_if(rows.begin(), rows.end(),
-			[&](const ibQueryAstExprPtr& e) { return !StillResolves(sources, e); }), rows.end());
+		std::erase_if(rows,
+			[&](const ibQueryAstExprPtr& e) { return !StillResolves(sources, e); });
 		dropped += static_cast<int>(before - rows.size());
 		ast.m_where = ibQueryFoldAnd(rows);
 	}
@@ -9052,7 +9049,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			if (p.m_expr->m_kind != ibQueryAstExprKind::Column)
 				continue;   // a computed field is neither a moment nor a key
 			const std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, *p.m_expr);
-			if (cols.size() != 1 || cols.front() == nullptr || figureCols.count(cols.front()) != 0)
+			if (cols.size() != 1 || cols.front() == nullptr || figureCols.contains(cols.front()))
 				continue;
 			const ibBackendQueryColumn* c = cols.front();
 			decided.insert(c);
@@ -9076,7 +9073,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			if (s.m_q == nullptr)
 				continue;
 			for (const ibBackendQueryColumn* c : s.m_q->GetColumns()) {
-				if (c == nullptr || figureCols.count(c) != 0 || decided.count(c) != 0)
+				if (c == nullptr || figureCols.contains(c) || decided.contains(c))
 					continue;
 				switch (c->GetBalanceRole()) {
 				case ibBalanceRole::Moment:    periods.emplace_back(c, c->GetPeriodRank()); read(c, c->GetName()); break;

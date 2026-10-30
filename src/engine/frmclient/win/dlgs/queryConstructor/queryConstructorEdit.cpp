@@ -1015,8 +1015,7 @@ bool ibPickGroupingScope(wxWindow* parent, const std::vector<wxString>& grouping
 			ibScopeRow made;
 			made.caption = node;
 			made.node    = true;
-			rows.push_back(std::move(made));
-			parentRow = &rows.back();
+			parentRow = &rows.emplace_back(std::move(made));
 		}
 		parentRow->children.push_back(std::move(row));
 	}
@@ -1695,8 +1694,7 @@ void ibDialogQueryConstructor::OnDescribeTempTable(wxCommandEvent&)
 		else {
 			ibQueryAstJoin join;
 			join.m_kind = ibQueryJoinKindAst::Inner;   // no link yet — see the note in AddTableSources
-			select->m_joins.push_back(join);
-			source = &select->m_joins.back().m_source;
+			source = &select->m_joins.emplace_back(join).m_source;
 		}
 	}
 	ibDialogQueryTempTable::Write(*select, *source, m_model, chosen, dialog.GetFields());

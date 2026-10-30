@@ -5355,8 +5355,8 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		fieldsOf.reserve(firstRow.size());
 		std::vector<ibString> columns;
 		for (const auto& wv : firstRow) {
-			fieldsOf.push_back(ColumnFieldNames(wv.first));
-			columns.insert(columns.end(), fieldsOf.back().begin(), fieldsOf.back().end());
+			const auto& fields = fieldsOf.emplace_back(ColumnFieldNames(wv.first));
+			columns.insert(columns.end(), fields.begin(), fields.end());
 		}
 
 		if (writeRows.size() > 1) {
@@ -6756,8 +6756,8 @@ public:
 		for (size_t i = 0; i < m_aliasColumns.size(); ++i)   // by index — see PhysicalNameOf
 			if (m_aliasColumns[i].first == alias)
 				return m_aliasColumns[i].second > 0 ? m_cursor.GetValue(m_aliasColumns[i].second) : ibValue();
-		m_aliasColumns.emplace_back(alias, m_cursor.ColumnIndex(ibSqlAliasOf(alias)));
-		return m_aliasColumns.back().second > 0 ? m_cursor.GetValue(m_aliasColumns.back().second) : ibValue();
+		const auto column = m_aliasColumns.emplace_back(alias, m_cursor.ColumnIndex(ibSqlAliasOf(alias))).second;
+		return column > 0 ? m_cursor.GetValue(column) : ibValue();
 	}
 
 	// A dot-walk leaf that is a reference / enum / composite is projected as its FULL field spread under

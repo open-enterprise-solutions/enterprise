@@ -201,8 +201,7 @@ public:
 		for (const std::unique_ptr<ibQueryTotalsNode>& node : m_pool)
 			if (node->At() == at)
 				return ibDataViewItem(node.get());
-		m_pool.push_back(std::make_unique<ibQueryTotalsNode>(at, parent));
-		return ibDataViewItem(m_pool.back().get());
+		return ibDataViewItem(m_pool.emplace_back(std::make_unique<ibQueryTotalsNode>(at, parent)).get());
 	}
 
 	static ibTotalsRow AtOf(const ibDataViewItem& item)

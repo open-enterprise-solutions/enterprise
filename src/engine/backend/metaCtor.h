@@ -115,8 +115,7 @@ public:
 			if (!m_anyKinds.empty())
 				return;
 			const auto registerAnyKind = [this](ibCtorObjectMetaType kind) {
-				m_anyKinds.push_back(new ibCtorMetaAnyKind(ibCtorMetaAnyKind::NameOf(GetClassName(), kind), kind, clsid_metaclass(GetClassType()), this));
-				ibValue::RegisterCtor(m_anyKinds.back());
+				ibValue::RegisterCtor(m_anyKinds.emplace_back(new ibCtorMetaAnyKind(ibCtorMetaAnyKind::NameOf(GetClassName(), kind), kind, clsid_metaclass(GetClassType()), this)));
 			};
 			if constexpr ((T::s_features & T::ibMetaFeature_Reference) != 0)
 				registerAnyKind(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);

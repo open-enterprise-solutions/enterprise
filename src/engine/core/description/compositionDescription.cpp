@@ -1041,8 +1041,7 @@ ibFieldDescription* ibFieldEntryForPath(std::vector<ibSelectDescription>& select
 
 	ibFieldDescription made;
 	made.m_path = path;
-	select.m_fields.push_back(std::move(made));
-	return &select.m_fields.back();
+	return &select.m_fields.emplace_back(std::move(made));
 }
 
 // ===========================================================================

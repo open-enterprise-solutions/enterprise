@@ -59,9 +59,7 @@ public:
 	bool operator >=(const ibUniqueKey& other) const;
 
 	bool operator==(const ibUniqueKey& other) const;
-	bool operator!=(const ibUniqueKey& other) const;
 	bool operator==(const ibGuid& other) const;
-	bool operator!=(const ibGuid& other) const;
 
 	operator ibString()      const { return m_objGuid.str(); }
 	operator ibGuid()        const { return m_objGuid; }
@@ -70,7 +68,7 @@ public:
 
 protected:
 
-	// Equality hook.  The public operator== / != funnel through this single virtual.  The base compares the
+	// Equality hook.  The public operator== funnels through this single virtual.  The base compares the
 	// composite when either side carries one, else the guid — subsuming the old Pair-only composite compare.
 	virtual bool EqualsImpl(const ibUniqueKey& other) const;
 

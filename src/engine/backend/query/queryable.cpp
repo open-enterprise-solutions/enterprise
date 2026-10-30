@@ -88,8 +88,7 @@ ibAliasQueryable::ibAliasQueryable(const ibBackendQueryable* origin, const ibStr
 	for (const ibBackendQueryColumn* c : origin->GetColumns()) {
 		if (c == nullptr)
 			continue;
-		m_owned.push_back(std::make_shared<ibAliasColumn>(c));
-		m_published.push_back(m_owned.back().get());
+		m_published.push_back(m_owned.emplace_back(std::make_shared<ibAliasColumn>(c)).get());
 	}
 }
 
@@ -108,8 +107,7 @@ const ibBackendQueryColumn* ibAliasQueryable::ResolveColumnByName(const ibString
 	for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
 		if (c->Origin() == origin) return c.get();
 
-	m_owned.push_back(std::make_shared<ibAliasColumn>(origin));
-	return m_owned.back().get();
+	return m_owned.emplace_back(std::make_shared<ibAliasColumn>(origin)).get();
 }
 
 // The key / hierarchy columns are the ORIGIN's answers, translated to OUR twins: they are read

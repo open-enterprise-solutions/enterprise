@@ -368,11 +368,6 @@ namespace ibDataViewInternal
 			return m_column == other.m_column && m_ascending == other.m_ascending;
 		}
 
-		bool operator!=(const SortOrder& other) const
-		{
-			return !(*this == other);
-		}
-
 	private:
 		int m_column;
 		bool m_ascending;

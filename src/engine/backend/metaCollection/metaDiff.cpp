@@ -340,7 +340,7 @@ void ibMetaDiffWalker::WalkGroup(
 		const ibGuid guid = lc->GetGuid();
 		if (guid.isValid()) {
 			for (ibValueMetaObject* candidate : rightKids) {
-				if (matchedRight.find(candidate) != matchedRight.end())
+				if (matchedRight.contains(candidate))
 					continue;
 				if (candidate->CompareGuid(guid)) {
 					rc = candidate;
@@ -352,7 +352,7 @@ void ibMetaDiffWalker::WalkGroup(
 		WalkPair(lc, rc, depth + 1, groupIndex, out);
 	}
 	for (ibValueMetaObject* rc : rightKids) {
-		if (matchedRight.find(rc) != matchedRight.end())
+		if (matchedRight.contains(rc))
 			continue;
 		WalkPair(/*left*/ nullptr, rc, depth + 1, groupIndex, out);
 	}

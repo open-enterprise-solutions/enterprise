@@ -159,7 +159,6 @@ public:
 	}
 
 	bool operator==(const ibNumber& r) const { return Compare(r) == 0; }
-	bool operator!=(const ibNumber& r) const { return Compare(r) != 0; }
 	bool operator<(const ibNumber& r)  const { return Compare(r) <  0; }
 	bool operator>(const ibNumber& r)  const { return Compare(r) >  0; }
 	bool operator<=(const ibNumber& r) const { return Compare(r) <= 0; }

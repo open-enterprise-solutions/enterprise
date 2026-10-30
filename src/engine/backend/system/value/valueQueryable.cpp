@@ -86,7 +86,7 @@ bool CollectCaptured(const ibQueryAstExpr& e, const ibValueFunction* fn,
                      std::map<ibString, ibValue>& out)
 {
 	if (e.m_kind == ibQueryAstExprKind::Param) {
-		if (out.find(e.m_paramName) != out.end())
+		if (out.contains(e.m_paramName))
 			return true;
 		ibValue v;
 		// The coordinate first — a capture is always at least one frame out, so a zero frame means

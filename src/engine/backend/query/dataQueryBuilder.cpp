@@ -237,8 +237,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibBackendQueryColumn* col, c
 ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibBackendColumnRawDB& rawColumn, const ibValue& value)
 {
 	// Own a copy of the caller's temporary raw column; the condition holds a stable pointer.
-	m_ownedRawColumns.push_back(std::make_shared<ibBackendColumnRawDB>(rawColumn));
-	m_conditions.push_back(ibQueryCondition{ m_ownedRawColumns.back().get(), ibQueryFilterOp::Equal, value });
+	m_conditions.push_back(ibQueryCondition{ m_ownedRawColumns.emplace_back(std::make_shared<ibBackendColumnRawDB>(rawColumn)).get(), ibQueryFilterOp::Equal, value });
 	return *this;
 }
 
@@ -566,8 +565,8 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalByLevel(ibTotalLevel level)
 {
 	// A level with no field is not a level. Fields with no column are dropped here rather than
 	// downstream, where a null column reads as "group everything into one" — the opposite answer.
-	level.m_fields.erase(std::remove_if(level.m_fields.begin(), level.m_fields.end(),
-		[](const ibTotalField& f) { return f.m_col == nullptr; }), level.m_fields.end());
+	std::erase_if(level.m_fields,
+		[](const ibTotalField& f) { return f.m_col == nullptr; });
 	if (!level.m_fields.empty()) m_totals.push_back(std::move(level));
 	return *this;
 }
@@ -698,8 +697,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const ibBackendQueryColumn* col
 ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const ibBackendColumnRawDB& rawColumn, const ibValue& value)
 {
 	// Own a copy of the caller's temporary raw column; the assignment holds a stable pointer.
-	m_ownedRawColumns.push_back(std::make_shared<ibBackendColumnRawDB>(rawColumn));
-	m_writeRows.back().emplace_back(m_ownedRawColumns.back().get(), value);
+	m_writeRows.back().emplace_back(m_ownedRawColumns.emplace_back(std::make_shared<ibBackendColumnRawDB>(rawColumn)).get(), value);
 	m_writeAdditive.back().push_back(false);
 	return *this;
 }
@@ -713,8 +711,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::AddValue(const ibBackendQueryColumn* col
 
 ibDataQueryBuilder& ibDataQueryBuilder::AddValue(const ibBackendColumnRawDB& rawColumn, const ibValue& delta)
 {
-	m_ownedRawColumns.push_back(std::make_shared<ibBackendColumnRawDB>(rawColumn));
-	m_writeRows.back().emplace_back(m_ownedRawColumns.back().get(), delta);
+	m_writeRows.back().emplace_back(m_ownedRawColumns.emplace_back(std::make_shared<ibBackendColumnRawDB>(rawColumn)).get(), delta);
 	m_writeAdditive.back().push_back(true);
 	return *this;
 }
@@ -730,10 +727,8 @@ ibDataQueryBuilder& ibDataQueryBuilder::NextRow()
 	// cell by cell, a payroll's 72 234 movements reallocated each row's cells several times over (MEASURED
 	// 2026-09-14: the largest single share of staging a set's lines, Debug).
 	const std::size_t width = m_writeRows.back().size();
-	m_writeRows.emplace_back();
-	m_writeRows.back().reserve(width);
-	m_writeAdditive.emplace_back();
-	m_writeAdditive.back().reserve(width);
+	m_writeRows.emplace_back().reserve(width);
+	m_writeAdditive.emplace_back().reserve(width);
 	return *this;
 }
 

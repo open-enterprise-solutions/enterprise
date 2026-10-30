@@ -103,7 +103,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RebuildTr
 
 	// …and a layer's holder whose node is gone goes too — let go of first where it is shown.
 	const auto gone = [this](const ibValueLayerObject* layer) {
-		if (m_layerItemMap.find(layer) != m_layerItemMap.end())
+		if (m_layerItemMap.contains(layer))
 			return false;
 		if (objectInspector != nullptr && objectInspector->GetSelectedObject() == layer)
 			objectInspector->SelectObject(nullptr);

@@ -384,8 +384,8 @@ bool ibCommunicator::Hold(const ibProtocolNode& event)
 	// The latest of its kind in place of the one before — and at the end: it was done last.
 	ibProtocolNode held = event.Clone();
 	std::lock_guard<std::mutex> lock(m_pendingMutex);
-	m_pending.erase(std::remove_if(m_pending.begin(), m_pending.end(),
-		[&held](const ibProtocolNode& pending) { return IsSameState(pending, held); }), m_pending.end());
+	std::erase_if(m_pending,
+		[&held](const ibProtocolNode& pending) { return IsSameState(pending, held); });
 	m_pending.push_back(std::move(held));
 	return true;
 }
@@ -573,7 +573,7 @@ void ibCommunicator::Take(const ibProtocolNode& answer)
 		open.insert(tab.GetId());
 	const long long active = m_frame.GetInt(ibProtocol::ibFrame::ActiveTab);
 	for (auto it = m_views.begin(); it != m_views.end();)
-		it = open.count(it->first) != 0 && it->first != active ? std::next(it) : m_views.erase(it);
+		it = open.contains(it->first) && it->first != active ? std::next(it) : m_views.erase(it);
 }
 
 void ibCommunicator::Forget()

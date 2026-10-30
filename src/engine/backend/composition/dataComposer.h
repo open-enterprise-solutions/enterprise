@@ -623,9 +623,9 @@ public:
 	// touched, and the rows under the last heading would silently stop being printed.
 	void CollapseEmptyLevels() {
 		for (std::vector<GroupNode>* chain : { &Root().m_rowGroups, &Root().m_columnGroups })
-			chain->erase(std::remove_if(chain->begin(), chain->end(), [](const GroupNode& level) {
+			std::erase_if(*chain, [](const GroupNode& level) {
 				return level.m_kind == ibCompositionLevelKind::Grouping && !level.m_settings.m_group.IsOk();
-			}), chain->end());
+			});
 	}
 
 	// ⚠ NO "AppendDetails" VERB. A detail level is a level with no fields, and it is made where every

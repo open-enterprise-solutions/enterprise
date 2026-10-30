@@ -3,8 +3,9 @@
 
 #include <memory>
 #include <atomic>
+#include <concepts>      // the pointer catch-all below (same_as / derived_from)
 #include <cstdint>       // uint64_t — the hash mixer accumulates in it, never in size_t
-#include <type_traits>   // the pointer catch-all below (enable_if / is_base_of / is_same)
+#include <type_traits>   // std::remove_cv_t — the same catch-all
 #include <typeinfo>
 #include <unordered_map>
 #include <map>
@@ -687,9 +688,8 @@ public:
 		}
 
 		void RemoveProp(const ibString& strPropName) {
-			m_props.erase(
-				std::remove_if(m_props.begin(), m_props.end(), [&strPropName](const auto& f) {
-					return stringUtils::IsSameAs(f.m_fieldName, strPropName); }), m_props.end());
+			std::erase_if(m_props, [&strPropName](const auto& f) {
+				return stringUtils::IsSameAs(f.m_fieldName, strPropName); });
 			MarkPropDirty();
 		}
 
@@ -791,9 +791,8 @@ public:
 		}
 
 		void RemoveMethod(const ibString& strMethodName) {
-			m_methods.erase(
-				std::remove_if(m_methods.begin(), m_methods.end(), [&strMethodName](const auto& f) {
-					return stringUtils::IsSameAs(f.m_fieldName, strMethodName); }), m_methods.end());
+			std::erase_if(m_methods, [&strMethodName](const auto& f) {
+				return stringUtils::IsSameAs(f.m_fieldName, strMethodName); });
 			MarkMethodDirty();
 		}
 
@@ -914,11 +913,9 @@ public:
 	//   * anything derived from ibValue or ibBackendValue — the two pointer constructors above are
 	//     for exactly those, and a DERIVED pointer would otherwise match this template exactly and
 	//     lose the base overload it was meant for.
-	template <class T, class = typename std::enable_if<
-		!std::is_same<typename std::remove_cv<T>::type, char>::value &&
-		!std::is_same<typename std::remove_cv<T>::type, ibChar>::value &&
-		!std::is_base_of<ibValue, T>::value &&
-		!std::is_base_of<ibBackendValue, T>::value>::type>
+	template <class T>
+		requires (!std::same_as<std::remove_cv_t<T>, char> && !std::same_as<std::remove_cv_t<T>, ibChar> &&
+			!std::derived_from<T, ibValue> && !std::derived_from<T, ibBackendValue>)
 	ibValue(T*) = delete;
 
 	virtual ~ibValue();
@@ -981,11 +978,9 @@ public:
 	// Any other pointer — the deleted constructor's other half, and the same exemptions. Closing
 	// the constructor alone left `value = wxT("text")` (a `wchar_t*` since ibChar is char16_t)
 	// arriving through operator=(bool) as TRUE.
-	template <class T, class = typename std::enable_if<
-		!std::is_same<typename std::remove_cv<T>::type, char>::value &&
-		!std::is_same<typename std::remove_cv<T>::type, ibChar>::value &&
-		!std::is_base_of<ibValue, T>::value &&
-		!std::is_base_of<ibBackendValue, T>::value>::type>
+	template <class T>
+		requires (!std::same_as<std::remove_cv_t<T>, char> && !std::same_as<std::remove_cv_t<T>, ibChar> &&
+			!std::derived_from<T, ibValue> && !std::derived_from<T, ibBackendValue>)
 	void operator = (T*) = delete;
 
 	const ibValue& operator+(const ibValue& cParam);

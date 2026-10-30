@@ -61,6 +61,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   Оплат" showed nothing and only "%Оплат%" worked. The value is now wrapped as `%value%`, as the
   same condition already was in memory; a `%` or `_` typed into the value is still a wildcard. The
   query language's own `LIKE` is unchanged and takes its pattern as written.
+- **A floating-point column read from PostgreSQL does not depend on the machine's locale.** The server
+  writes such a number with a dot, and it was parsed by the locale's rules, where the separator may be a comma.
 - **A server whose base and `backend.conf` name no language speaks US English**, not the language of
   the machine it runs on, so the same server answers the same words everywhere. A language named
   and not installed on the machine falls back to US English too.

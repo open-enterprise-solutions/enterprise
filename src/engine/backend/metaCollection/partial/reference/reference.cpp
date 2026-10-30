@@ -314,10 +314,10 @@ void ibReferenceRegistry::Remember(ibValueReferenceDataObject* ref)
 			// reference it ever made. Pruned to the live and unread once it is twice what is alive.
 			if (table->m_unread.size() > 2 * table->m_live.size() + 64) {
 				std::vector<ibRefKey>& unread = table->m_unread;
-				unread.erase(std::remove_if(unread.begin(), unread.end(), [&table](const ibRefKey& k) {
+				std::erase_if(unread, [&table](const ibRefKey& k) {
 					const auto live = table->m_live.find(k);
 					return live == table->m_live.end() || live->second.m_ref->m_state != ibReferenceState::Raw;
-				}), unread.end());
+				});
 			}
 		}
 	}

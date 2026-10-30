@@ -272,7 +272,7 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 		ibWebServerSay(ibJournalMark::Error, ibT("'%s' is not a publication's name - it is a segment of the path"), name);
 		return false;
 	}
-	if (m_bases.count(name) != 0) {
+	if (m_bases.contains(name)) {
 		ibWebServerSay(ibJournalMark::Error, ibT("publication '%s' is named twice"), name);
 		return false;
 	}
@@ -494,7 +494,7 @@ int ibWebServer::Run()
 	// THE PAGE FOR WHOEVER STARTED IT (ibStartWebServer): the reader takes the line once its end is there. No page —
 	// the publication did not open, or no site is served — and nothing is written.
 	if (!m_config.m_manifest.IsEmpty() && !site.IsEmpty() && !origins.empty() && !m_config.m_publications.empty()
-		&& m_bases.count(m_config.m_publications.back().m_name) != 0) {
+		&& m_bases.contains(m_config.m_publications.back().m_name)) {
 		wxFile file;
 		if (!file.Create(m_config.m_manifest, true) || !file.Write(ibString::Format(ibT("url=%s/%s/\n"), origins.front(),
 			m_config.m_publications.back().m_name), wxConvUTF8))

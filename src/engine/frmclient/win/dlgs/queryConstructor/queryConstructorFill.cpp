@@ -719,47 +719,37 @@ void queryctor::ibQueryDropMissingFields(ibQuerySelect& select, const wxString& 
 		return false;
 	};
 
-	select.m_projections.erase(
-		std::remove_if(select.m_projections.begin(), select.m_projections.end(),
-			[&](const ibQueryProjection& p) { return lost(p.m_expr); }),
-		select.m_projections.end());
+	std::erase_if(select.m_projections,
+		[&](const ibQueryProjection& p) { return lost(p.m_expr); });
 
 	const auto dropTerms = [&](ibQueryAstExprPtr& clause) {
 		std::vector<ibQueryAstExprPtr> terms;
 		ibQueryFlattenAnd(clause, terms);
-		terms.erase(std::remove_if(terms.begin(), terms.end(), lost), terms.end());
+		std::erase_if(terms, lost);
 		clause = ibQueryFoldAnd(terms);
 	};
 	dropTerms(select.m_where);
 	dropTerms(select.m_having);
 
 	const auto dropExprs = [&](std::vector<ibQueryAstExprPtr>& list) {
-		list.erase(std::remove_if(list.begin(), list.end(), lost), list.end());
+		std::erase_if(list, lost);
 	};
 	dropExprs(select.m_groupBy);
 	dropExprs(select.m_indexBy);
 	// A RESOURCE IS AN EXPRESSION PLUS ITS NAME, so it is dropped by asking the expression — the
 	// name has nothing to say about whether the field it totals still exists.
-	select.m_totalsAggregates.erase(
-		std::remove_if(select.m_totalsAggregates.begin(), select.m_totalsAggregates.end(),
-			[&](const ibQueryTotalAggregate& r) { return lost(r.m_expr); }),
-		select.m_totalsAggregates.end());
+	std::erase_if(select.m_totalsAggregates,
+		[&](const ibQueryTotalAggregate& r) { return lost(r.m_expr); });
 
-	select.m_orderBy.erase(
-		std::remove_if(select.m_orderBy.begin(), select.m_orderBy.end(),
-			[&](const ibQueryOrderItem& o) { return lost(o.m_expr); }),
-		select.m_orderBy.end());
+	std::erase_if(select.m_orderBy,
+		[&](const ibQueryOrderItem& o) { return lost(o.m_expr); });
 	// A LEVEL LOSES THE FIELDS THAT DIED WITH THE TABLE, and only an empty level goes itself — the
 	// author's other grouping field is not collateral.
 	for (ibQueryTotalDim& dimension : select.m_totalsBy)
-		dimension.m_fields.erase(
-			std::remove_if(dimension.m_fields.begin(), dimension.m_fields.end(),
-				[&](const ibQueryTotalField& f) { return lost(f.m_expr); }),
-			dimension.m_fields.end());
-	select.m_totalsBy.erase(
-		std::remove_if(select.m_totalsBy.begin(), select.m_totalsBy.end(),
-			[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }),
-		select.m_totalsBy.end());
+		std::erase_if(dimension.m_fields,
+			[&](const ibQueryTotalField& f) { return lost(f.m_expr); });
+	std::erase_if(select.m_totalsBy,
+		[](const ibQueryTotalDim& d) { return d.m_fields.empty(); });
 
 	for (ibQueryAstJoin& join : select.m_joins)
 		if (lost(join.m_on)) {
@@ -775,10 +765,8 @@ void queryctor::ibQueryDropSourceReferences(ibQuerySelect& select, const wxStrin
 
 	const auto mentions = [&source](const ibQueryAstExprPtr& expr) { return ibQueryMentions(expr, source); };
 
-	select.m_projections.erase(
-		std::remove_if(select.m_projections.begin(), select.m_projections.end(),
-			[&](const ibQueryProjection& p) { return mentions(p.m_expr); }),
-		select.m_projections.end());
+	std::erase_if(select.m_projections,
+		[&](const ibQueryProjection& p) { return mentions(p.m_expr); });
 	if (select.m_projections.empty())
 		select.m_selectAll = true;   // a query that selects nothing reads everything, as it did at birth
 
@@ -787,38 +775,30 @@ void queryctor::ibQueryDropSourceReferences(ibQuerySelect& select, const wxStrin
 	const auto dropTerms = [&](ibQueryAstExprPtr& clause) {
 		std::vector<ibQueryAstExprPtr> terms;
 		ibQueryFlattenAnd(clause, terms);
-		terms.erase(std::remove_if(terms.begin(), terms.end(), mentions), terms.end());
+		std::erase_if(terms, mentions);
 		clause = ibQueryFoldAnd(terms);
 	};
 	dropTerms(select.m_where);
 	dropTerms(select.m_having);
 
 	const auto dropExprs = [&](std::vector<ibQueryAstExprPtr>& list) {
-		list.erase(std::remove_if(list.begin(), list.end(), mentions), list.end());
+		std::erase_if(list, mentions);
 	};
 	dropExprs(select.m_groupBy);
 	dropExprs(select.m_indexBy);
-	select.m_totalsAggregates.erase(
-		std::remove_if(select.m_totalsAggregates.begin(), select.m_totalsAggregates.end(),
-			[&](const ibQueryTotalAggregate& r) { return mentions(r.m_expr); }),
-		select.m_totalsAggregates.end());
+	std::erase_if(select.m_totalsAggregates,
+		[&](const ibQueryTotalAggregate& r) { return mentions(r.m_expr); });
 
-	select.m_orderBy.erase(
-		std::remove_if(select.m_orderBy.begin(), select.m_orderBy.end(),
-			[&](const ibQueryOrderItem& o) { return mentions(o.m_expr); }),
-		select.m_orderBy.end());
+	std::erase_if(select.m_orderBy,
+		[&](const ibQueryOrderItem& o) { return mentions(o.m_expr); });
 	// The levels go field by field, and a level left with none goes — on the hidden node and on every
 	// SPLIT node alike.
 	const auto dropLevels = [&](std::vector<ibQueryTotalDim>& levels) {
 		for (ibQueryTotalDim& dimension : levels)
-			dimension.m_fields.erase(
-				std::remove_if(dimension.m_fields.begin(), dimension.m_fields.end(),
-					[&](const ibQueryTotalField& f) { return mentions(f.m_expr); }),
-				dimension.m_fields.end());
-		levels.erase(
-			std::remove_if(levels.begin(), levels.end(),
-				[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }),
-			levels.end());
+			std::erase_if(dimension.m_fields,
+				[&](const ibQueryTotalField& f) { return mentions(f.m_expr); });
+		std::erase_if(levels,
+			[](const ibQueryTotalDim& d) { return d.m_fields.empty(); });
 	};
 	dropLevels(select.m_totalsBy);
 	bool anyLevel = !select.m_totalsBy.empty();

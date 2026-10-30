@@ -5,8 +5,7 @@ ibClientMenu::Item& ibClientMenu::Append(ibDocCommand command)
 	Item item;
 	item.kind = ibClientMenuItemKind::Command;
 	item.command = command;
-	m_items.push_back(std::move(item));
-	return m_items.back();
+	return m_items.emplace_back(std::move(item));
 }
 
 ibClientMenu::Item& ibClientMenu::Append(ibProtocol::ibSchema::ibKind schema, const ibString& title)
@@ -15,8 +14,7 @@ ibClientMenu::Item& ibClientMenu::Append(ibProtocol::ibSchema::ibKind schema, co
 	item.kind = ibClientMenuItemKind::Schema;
 	item.schema = schema;
 	item.title = title;
-	m_items.push_back(std::move(item));
-	return m_items.back();
+	return m_items.emplace_back(std::move(item));
 }
 
 ibClientMenu::Item& ibClientMenu::Append(ibProtocol::ibSchema::ibKind schema, ibProtocol::ibSchema::ibCommand command, const ibString& title)
@@ -32,8 +30,7 @@ ibClientMenu::Item& ibClientMenu::AppendSubMenu(const ibClientMenu& menu, const 
 	item.kind = ibClientMenuItemKind::Menu;
 	item.title = title;
 	item.items = menu.m_items;
-	m_items.push_back(std::move(item));
-	return m_items.back();
+	return m_items.emplace_back(std::move(item));
 }
 
 void ibClientMenu::AppendSeparator()

@@ -234,10 +234,8 @@ public:
 				const ibString haystack = Haystack(tool);
 				tools.push_back(tool);
 				length.push_back((double)haystack.length());
-				met.emplace_back();
-				ibMcpWordsPresent(haystack, query, met.back());
-				named.emplace_back();
-				ibMcpWordsPresent(Identity(tool), query, named.back());
+				ibMcpWordsPresent(haystack, query, met.emplace_back());
+				ibMcpWordsPresent(Identity(tool), query, named.emplace_back());
 			}
 			asked = met.empty() ? 0 : met.front().size();
 

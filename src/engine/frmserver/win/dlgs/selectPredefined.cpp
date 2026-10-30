@@ -86,7 +86,7 @@ void ibFillOneTypeBranch(ibDataNode& branch, std::vector<ibDesignerRefItem>& val
 		// the type, so they stand at the top rather than disappearing.
 		const auto folderOf = [&declared](const ibPredefinedValue* item) -> const ibPredefinedValue* {
 			const ibPredefinedValue* under = item->GetPredefinedParent().get();
-			return declared.count(under) != 0 ? under : nullptr;
+			return declared.contains(under) ? under : nullptr;
 		};
 		const auto writeUnder = [&](auto&& self, ibDataNode& at, const ibPredefinedValue* folder) -> void {
 			for (const ibPredefinedValue* item : items) {

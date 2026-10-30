@@ -279,7 +279,7 @@ void ibServerConfig::AssignMcpPorts(std::vector<ibConfiguredInstance>& instances
 	for (ibConfiguredInstance& instance : instances) {
 		if (!instance.m_mcpPort.IsEmpty())
 			continue;
-		while (taken.count(next) != 0)
+		while (taken.contains(next))
 			++next;
 		if (next > ibPort::BaseAssistant.Last()) {
 			ibAppServerSay(ibJournalMark::Warning, ibT("base '%s': no assistant port left from %u to %u - write its McpPort"),

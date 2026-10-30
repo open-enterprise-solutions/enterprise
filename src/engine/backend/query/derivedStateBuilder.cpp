@@ -627,7 +627,7 @@ int VerifyLastPeriod(const ibSchemaTable& derived, ibDatabaseConnectionHolder* h
 			if (entry.second[i] != found->second[i]) { mismatches++; break; }
 	}
 	for (const auto& entry : fromTotals)
-		if (fromSource.find(entry.first) == fromSource.end())
+		if (!fromSource.contains(entry.first))
 			mismatches++;
 
 	return mismatches;

@@ -436,7 +436,7 @@ ibString ibMetaData::GetNewName(ibValueMetaObject* parent, const ibNameRequest& 
 	ibString newName = request.m_forConstructor ?
 		currPrefix : ibString::Format(ibT("%s%d"), currPrefix, countRec);
 
-	while (takenNames.count(toKey(newName)) > 0)
+	while (takenNames.contains(toKey(newName)))
 		newName = ibString::Format(ibT("%s%d"), currPrefix, ++countRec);
 
 	return newName;

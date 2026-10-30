@@ -145,7 +145,7 @@ void ibProtocolPictureReceive(const std::vector<wxString>& ids)
 	std::set<wxString> asked;
 	ibProtocolNode params;
 	for (const wxString& id : ids) {
-		if (id.IsEmpty() || asked.count(id) != 0)
+		if (id.IsEmpty() || asked.contains(id))
 			continue;
 		{
 			std::lock_guard<std::mutex> lock(s_picturesLock);

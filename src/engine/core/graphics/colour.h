@@ -45,7 +45,6 @@ struct CORE_API ibColour {
 		return !m_isInit
 			|| (m_red == other.m_red && m_green == other.m_green && m_blue == other.m_blue && m_alpha == other.m_alpha);
 	}
-	bool operator!=(const ibColour& other) const { return !(*this == other); }
 };
 
 #endif

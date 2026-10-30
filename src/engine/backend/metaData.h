@@ -2,6 +2,7 @@
 #define __METADATA_H__
 
 #include <atomic>   // std::atomic — MSVC supplied this transitively
+#include <concepts>  // std::derived_from — what GetAnyArrayObject and FindAnyObjectByFilter hand back
 #include <map>
 #include <memory>
 #include <optional>
@@ -669,8 +670,7 @@ public:
 	}
 
 	void RemoveNotifier(ibMetaDataNotifier* notifier) {
-		m_notifiers.erase(
-			std::remove(m_notifiers.begin(), m_notifiers.end(), notifier), m_notifiers.end());
+		std::erase(m_notifiers, notifier);
 	}
 
 	// ⭐⭐ TWO PASSES: THE ASSISTANT, THEN EVERYONE ELSE. See ibMetaDataNotifier::IsAssistant for why
@@ -795,7 +795,7 @@ public:
 #pragma region __array_h__
 
 	//any
-	template <typename _T1 = ibValueMetaObject>
+	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject>
 	std::vector<_T1*> GetAnyArrayObject(const bool use_child_filter = false) const {
 		std::vector<_T1*> array;
 		FillArrayObjectByFilter<_T1, ibValueMetaObject>(array, {}, use_child_filter);
@@ -803,7 +803,7 @@ public:
 	}
 
 	//any
-	template <typename _T1 = ibValueMetaObject>
+	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject>
 	std::vector<_T1*> GetAnyArrayObject(const ibClassID& clsid, const bool use_child_filter = false) const {
 		std::vector<_T1*> array;
 		FillArrayObjectByFilter<_T1, ibValueMetaObject>(array, { clsid });
@@ -811,7 +811,7 @@ public:
 	}
 
 	//any
-	template <typename _T1 = ibValueMetaObject>
+	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject>
 	std::vector<_T1*> GetAnyArrayObject(const std::initializer_list<ibClassID> filter, const bool use_child_filter = false) const {
 		std::vector<_T1*> array;
 		FillArrayObjectByFilter<_T1, ibValueMetaObject>(array, filter, use_child_filter);
@@ -827,32 +827,32 @@ public:
 	// ibMetaData handle does. non-const this → mutable, for designer /
 	// meta-internal edits. The protected FindObjectByFilter helper stays const
 	// and is shared by both; the const path just narrows its result.
-	template <typename _T1 = ibValueMetaObject, typename _T2>
+	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject, typename _T2>
 	const _T1* FindAnyObjectByFilter(const _T2& id, const bool use_child_filter = false) const {
 		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, {}, use_child_filter);
 	}
-	template <typename _T1 = ibValueMetaObject, typename _T2>
+	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject, typename _T2>
 	_T1* FindAnyObjectByFilter(const _T2& id, const bool use_child_filter = false) {
 		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, {}, use_child_filter);
 	}
 
 	//any
-	template <typename _T1 = ibValueMetaObject, typename _T2>
+	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject, typename _T2>
 	const _T1* FindAnyObjectByFilter(const _T2& id, const ibClassID& clsid, const bool use_child_filter = false) const {
 		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, { clsid }, use_child_filter);
 	}
-	template <typename _T1 = ibValueMetaObject, typename _T2>
+	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject, typename _T2>
 	_T1* FindAnyObjectByFilter(const _T2& id, const ibClassID& clsid, const bool use_child_filter = false) {
 		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, { clsid }, use_child_filter);
 	}
 
 	//any
-	template <typename _T1 = ibValueMetaObject, typename _T2>
+	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject, typename _T2>
 	const _T1* FindAnyObjectByFilter(const _T2& id,
 		const std::initializer_list<ibClassID> filter, const bool use_child_filter = false) const {
 		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, filter, use_child_filter);
 	}
-	template <typename _T1 = ibValueMetaObject, typename _T2>
+	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject, typename _T2>
 	_T1* FindAnyObjectByFilter(const _T2& id,
 		const std::initializer_list<ibClassID> filter, const bool use_child_filter = false) {
 		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, filter, use_child_filter);

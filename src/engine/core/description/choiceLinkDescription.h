@@ -48,7 +48,6 @@ struct ibChoiceTypeLinkDescription {
 	bool operator==(const ibChoiceTypeLinkDescription& other) const {
 		return m_source.m_listSource == other.m_source.m_listSource && m_governedType == other.m_governedType;
 	}
-	bool operator!=(const ibChoiceTypeLinkDescription& other) const { return !(*this == other); }
 };
 
 // ⭐ WHAT HAPPENS TO THE VALUE ALREADY CHOSEN when the field that governs it changes. It is a question
@@ -80,7 +79,6 @@ struct ibChoiceParameterRowDescription {
 		return m_parameter == other.m_parameter && m_source.m_listSource == other.m_source.m_listSource
 			&& m_onChange == other.m_onChange;
 	}
-	bool operator!=(const ibChoiceParameterRowDescription& other) const { return !(*this == other); }
 };
 
 // ⭐ WHAT IS SHOWN IN THE LIST — the companion of the link by type, which answers which list opens. A
@@ -112,7 +110,6 @@ struct ibChoiceParametersDescription {
 	}
 
 	bool operator==(const ibChoiceParametersDescription& other) const { return m_rows == other.m_rows; }
-	bool operator!=(const ibChoiceParametersDescription& other) const { return !(*this == other); }
 };
 
 // node form: a link is a Child { root, path: [ids], governedType }; the parameters are a Child

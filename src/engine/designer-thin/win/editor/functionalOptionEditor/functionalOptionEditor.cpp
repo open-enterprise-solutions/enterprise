@@ -160,7 +160,7 @@ void ibFunctionalOptionEditor::AppendChildren(const wxTreeItemId& parent, const 
 		AppendChildren(AppendItem(parent, child), child);
 
 	// An object opened before the rebuild opens again, now that what is under it is there.
-	if (m_keepExpandedIds.count(row.GetId()) != 0)
+	if (m_keepExpandedIds.contains(row.GetId()))
 		m_membersCtrl->Expand(parent);
 }
 

@@ -288,9 +288,7 @@ public:
 			m_typeData.SetString(10);
 		}
 
-		m_listTypeClass.erase(
-			std::remove(m_listTypeClass.begin(), m_listTypeClass.end(), clsid),
-			m_listTypeClass.end());
+		std::erase(m_listTypeClass, clsid);
 	}
 
 	void ClearMetaType(const std::vector<ibClassID>& array) {
@@ -307,9 +305,7 @@ public:
 				m_typeData.SetString(10);
 			}
 
-			m_listTypeClass.erase(
-				std::remove(m_listTypeClass.begin(), m_listTypeClass.end(), clsid),
-				m_listTypeClass.end());
+			std::erase(m_listTypeClass, clsid);
 		}
 	}
 
@@ -442,34 +438,6 @@ public:
 		}
 
 		return false;
-	}
-
-	bool operator != (const ibTypeDescription& rhs) const {
-		if (m_listTypeClass == rhs.m_listTypeClass) {
-			for (auto clsid : m_listTypeClass) {
-								if (clsid == g_valueNumberCLSID) {
-					bool result = m_typeData.m_number.m_precision != rhs.m_typeData.m_number.m_precision ||
-						m_typeData.m_number.m_scale != rhs.m_typeData.m_number.m_scale ||
-						m_typeData.m_number.m_nonNegative != rhs.m_typeData.m_number.m_nonNegative;
-					if (result)
-						return true;
-
-				}
-				else if (clsid == g_valueDateCLSID) {
-					bool result = m_typeData.m_date.m_dateTime != rhs.m_typeData.m_date.m_dateTime;
-					if (result)
-						return true;
-				}
-				else if (clsid == g_valueStringCLSID) {
-					bool result = m_typeData.m_string.m_length != rhs.m_typeData.m_string.m_length ||
-						m_typeData.m_string.m_allowedLength != rhs.m_typeData.m_string.m_allowedLength;
-					if (result)
-						return true;
-				}
-			}
-			return false;
-		}
-		return true;
 	}
 
 	bool LoadMetaType(const ibTypeDescription& rhs) {

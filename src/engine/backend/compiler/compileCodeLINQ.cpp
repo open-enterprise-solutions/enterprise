@@ -108,8 +108,7 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 	// ⭐ THE QUERY IS ENTERED IN THE BYTECODE, and the scope merely points at it — so the query
 	// outlives every scope that reads it, and what ends its life is the SLICE at the end of
 	// compilation rather than a brace closing.
-	m_cByteCode.m_listLinq.emplace_back();
-	ibLinqQuery& data = m_cByteCode.m_listLinq.back();
+	ibLinqQuery& data = m_cByteCode.m_listLinq.emplace_back();
 	linqCtxOwner->m_linqQuery = &data;
 
 	// Where the query starts in the text — the `from` token itself, which the cursor is standing on.
@@ -291,8 +290,7 @@ ibParamUnit ibCompileCode::CompileRestrictExpression(ibCompileContext* context)
 	// and a reader asking "what does this text do" should get the same kind of answer whichever of
 	// the two was written. The entry is made before anything is read so the `restrict` token's own
 	// position is what brackets it.
-	m_cByteCode.m_listLinq.emplace_back();
-	ibLinqQuery& data = m_cByteCode.m_listLinq.back();
+	ibLinqQuery& data = m_cByteCode.m_listLinq.emplace_back();
 	data.m_restrict = true;
 	if (m_numCurrentCompile >= 0 && (size_t)m_numCurrentCompile < m_translateCode.GetLexCount())
 		data.m_textFrom = m_translateCode.GetLexAt((size_t)m_numCurrentCompile).m_numString;
