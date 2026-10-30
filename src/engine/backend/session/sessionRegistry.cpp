@@ -9,13 +9,13 @@
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseLayer.h"
-#include "core/diagnostics/crashGuard.h"   // IsStopRequested — a failure once the process was told to stop is the stop
 #include "backend/databaseLayer/databaseLayerException.h"   // a missing column is Syntax; a lock is not
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — q(&m_writeHolder) resolves to the holder's bound conn (write helpers); snapshot reads still raw
 #include "workerPool.h"
 #include "workerPoolHeadless.h"
 #include "backend/lock/lockManager.h"
 #include "backend/temp/tempStorage.h"
+#include "core/diagnostics/crashGuard.h"   // IsStopRequested — a failure once the process was told to stop is the stop
 #include "core/diagnostics/debugTrace.h"   // ibTraceToFile — Die's reason must survive a GUI build
 
 #include <chrono>

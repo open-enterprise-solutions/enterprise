@@ -40,9 +40,11 @@
 #include <wx/msgdlg.h>
 #include <wx/string.h>
 #include <wx/thread.h>
-#include <wx/timer.h>   // the stop watch — a SIGTERM seen on the main loop
 
-#include <csignal>   // SIGTERM / SIGINT — a request to quit
+#ifndef __WXMSW__
+#include <signal.h>  // SIGTERM / SIGINT, a request to quit; sigaction, wx's handler read back
+#endif
+
 #include <cstdio>    // stderr, for an assertion raised before the journal is open
 #include <cstdlib>   // EXIT_FAILURE
 #include <exception>
@@ -147,22 +149,17 @@ public:
 		// window open over a base that is gone, its session registry failing once a second ("invalid database handle")
 		// until somebody killed it, or until a failure took the terminate path (enterprise-thin, 2026-10-29).
 		//
-		// Installed BEFORE DoOnInit opens a base, so the client, installing its handler at the first attachment, keeps
-		// this one and calls it too. The handler only marks the stop (async-signal-safe); the main loop's watch closes
-		// the main window, the way the person would — the base, the sessions and the journal are let go in order.
-		std::signal(SIGTERM, &ibWxApp::OnStopSignal);
-		std::signal(SIGINT, &ibWxApp::OnStopSignal);
-		m_stopWatch.Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
-			if (!ibCrashGuard::IsStopRequested())
-				return;
-			m_stopWatch.Stop();
-			ibJournalInfo(wxT("start"), wxT("%s asked to stop by a signal - closing"), GetExeName());
-			if (wxWindow* const top = GetTopWindow())
-				top->Close(true);
-			else
-				ExitMainLoop();
-		});
-		m_stopWatch.Start(250);
+		// Installed BEFORE DoOnInit opens a base (ibCrashGuard::InstallStopSignals says why). The main loop is woken by
+		// wx's own handler: SetSignalHandler puts it in place and calls OnStopSignal from the loop, and it is read back
+		// to be the wake of the door in core, which sits over it; nothing polls. Windows has no such signal for a window:
+		// a process is asked to go by WM_CLOSE (ibStopProcess).
+#ifndef __WXMSW__
+		if (SetSignalHandler(SIGTERM, &ibWxApp::OnStopSignal) && SetSignalHandler(SIGINT, &ibWxApp::OnStopSignal)) {
+			struct sigaction wxHandler;
+			if (::sigaction(SIGTERM, nullptr, &wxHandler) == 0)
+				ibCrashGuard::InstallStopSignals(wxHandler.sa_handler);
+		}
+#endif
 
 		return DoOnInit();
 	}
@@ -331,17 +328,20 @@ public:
 	}
 #endif // wxUSE_ON_FATAL_EXCEPTION
 
-private:
+protected:
 
-	// SIGTERM / SIGINT — the stop marked, nothing else: the watch acts on it from the main loop.
+#ifndef __WXMSW__
+	// SIGTERM / SIGINT, on the main loop: the main window closes, as if the person closed it, except that nobody is
+	// asked anything — the base, the sessions and the journal are let go in order. A signal cannot answer a question.
 	static void OnStopSignal(int)
 	{
-		ibCrashGuard::MarkStopRequested();
+		ibJournalInfo(wxT("start"), wxT("asked to stop by a signal - closing"));
+		if (wxWindow* const top = wxTheApp->GetTopWindow())
+			top->Close(true);
+		else
+			wxTheApp->ExitMainLoop();
 	}
-
-	wxTimer m_stopWatch;
-
-protected:
+#endif
 
 	// Startup-error surface. Logs to file + prefers wxMessageBox if the
 	// app has reached an UI-ready state, otherwise falls back to

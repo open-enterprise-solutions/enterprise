@@ -3,14 +3,12 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <csignal>
 #include <thread>
 
 #include <wx/file.h>
 #include <wx/fileconf.h>
 #include <wx/filename.h>
 #include "core/stringTokenizer.h"
-#include "core/diagnostics/crashGuard.h"   // MarkStopRequested — the process told it is leaving
 #include <wx/utils.h>   // wxGetFullHostName — the server named in an address
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>
@@ -26,31 +24,22 @@
 #include "core/net/httpClient.h"
 #include "core/net/webSocketFrame.h"
 #include "core/net/webSocketRelay.h"
+#include "core/diagnostics/crashGuard.h"   // the stop, one fact: who asks, the serving loop that reads it
 #include "core/fileSystem.h"   // ibDirExists
 #include "core/startProcess.h" // ibProcessExists
 
 namespace {
 
-// WHERE THE SERVER STANDS — one value, read by the main thread and the signals alike (appserver/appServer.cpp says
-// why the console's closing waits for the stop).
-enum class ibServeState { Serving, Stopping, Stopped };
-std::atomic<ibServeState> s_state{ ibServeState::Serving };
-
-void OnStopSignal(int)
-{
-	// Said to the process first — a background thread failing from here on is the stop, not a fault.
-	ibCrashGuard::MarkStopRequested();
-	ibServeState serving = ibServeState::Serving;
-	s_state.compare_exchange_strong(serving, ibServeState::Stopping);
-}
+// The stop done, which is what a console closing waits for (appserver/appServer.cpp says why).
+std::atomic<bool> s_stopped{ false };
 
 #ifdef __WXMSW__
 BOOL WINAPI OnConsoleClose(DWORD type)
 {
 	if (type != CTRL_CLOSE_EVENT && type != CTRL_LOGOFF_EVENT && type != CTRL_SHUTDOWN_EVENT)
 		return FALSE;
-	OnStopSignal(0);
-	for (int waited = 0; waited < 4500 && s_state.load() != ibServeState::Stopped; waited += 50)
+	ibCrashGuard::MarkStopRequested();
+	for (int waited = 0; waited < 4500 && !s_stopped.load(); waited += 50)
 		::Sleep(50);
 	return TRUE;
 }
@@ -393,25 +382,21 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 int ibWebServer::Run()
 {
 	// Told to stop from here on — while the bases are still being opened too.
-	std::signal(SIGINT, OnStopSignal);
-	std::signal(SIGTERM, OnStopSignal);
-#ifdef SIGBREAK
-	std::signal(SIGBREAK, OnStopSignal);   // Windows: Ctrl+Break
-#endif
+	ibCrashGuard::InstallStopSignals();
 #ifdef __WXMSW__
 	::SetConsoleCtrlHandler(OnConsoleClose, TRUE);   // after the signals: asked first, it passes on what is theirs
 #endif
 	// A SERVER A DEBUGGER STARTED LIVES WHILE IT IS ATTACHED: the debugger letting go or ending the session ends this
 	// process. One started by itself only loses the session, and serves on.
 	if (m_config.m_owner != 0)
-		ibOnStopProcess([]() { OnStopSignal(0); });
+		ibOnStopProcess(ibCrashGuard::MarkStopRequested);
 
 	// However Run ends — served and stopped, or refused at any step — a console closing waits no longer.
-	struct ibStoppedMark { ~ibStoppedMark() { s_state.store(ibServeState::Stopped); } } stoppedMark;
+	struct ibStoppedMark { ~ibStoppedMark() { s_stopped.store(true); } } stoppedMark;
 
 	std::size_t published = 0;
 	for (const ibWebPublication& publication : m_config.m_publications) {
-		if (s_state.load() != ibServeState::Serving)
+		if (ibCrashGuard::IsStopRequested())
 			break;
 		if (Publish(publication))
 			++published;
@@ -518,11 +503,11 @@ int ibWebServer::Run()
 
 	// A DESIGNER'S DEBUG RUN GOES WITH THE DESIGNER, closed or fallen: nobody else knows this one is there, and it holds
 	// the base and the executable's libraries from whoever comes next.
-	while (s_state.load() == ibServeState::Serving) {
+	while (!ibCrashGuard::IsStopRequested()) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
 		if (m_config.m_owner != 0 && !ibProcessExists(m_config.m_owner)) {
 			ibWebServerSay(ibJournalMark::Info, ibT("the process %ld that started this server has ended"), m_config.m_owner);
-			OnStopSignal(0);
+			ibCrashGuard::MarkStopRequested();
 		}
 	}
 

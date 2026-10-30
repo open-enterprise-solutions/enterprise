@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <csignal>
 #include <cstdio>
 #include <iostream>
 #include <string>
@@ -14,29 +13,20 @@
 #endif
 
 #include "backend/appHost.h"
-#include "core/diagnostics/crashGuard.h"   // MarkStopRequested — the process told it is leaving
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
 #include "backend/mcp/mcpServer.h"
 #include "backend/session/session.h"
 
+#include "core/diagnostics/crashGuard.h"   // the stop, one fact: who asks, the serving loop that reads it
+
 #include "frmserver/client/clientHost.h"
 
 namespace {
 
-// WHERE THE SERVER STANDS — one value, read by the main thread and the signals alike. Ctrl+C, a console closing, a
-// service stop only ask for the stop (Serving → Stopping); the main thread does it, and says when it is done
-// (Stopped), which is what a console closing waits for (OnConsoleClose).
-enum class ibServeState { Serving, Stopping, Stopped };
-std::atomic<ibServeState> s_state{ ibServeState::Serving };
-
-void OnStopSignal(int)
-{
-	// Said to the process first — a background thread failing from here on is the stop, not a fault.
-	ibCrashGuard::MarkStopRequested();
-	ibServeState serving = ibServeState::Serving;
-	s_state.compare_exchange_strong(serving, ibServeState::Stopping);
-}
+// Ctrl+C, a console closing, a service stop only ask for the stop (ibCrashGuard::MarkStopRequested); the main thread
+// does it, and says here when it is done, which is what a console closing waits for (OnConsoleClose).
+std::atomic<bool> s_stopped{ false };
 
 #ifdef __WXMSW__
 // THE CONSOLE WINDOW CLOSING, a logoff, a shutdown: Windows ends the process the moment this handler returns,
@@ -47,8 +37,8 @@ BOOL WINAPI OnConsoleClose(DWORD type)
 {
 	if (type != CTRL_CLOSE_EVENT && type != CTRL_LOGOFF_EVENT && type != CTRL_SHUTDOWN_EVENT)
 		return FALSE;
-	OnStopSignal(0);
-	for (int waited = 0; waited < 4500 && s_state.load() != ibServeState::Stopped; waited += 50)
+	ibCrashGuard::MarkStopRequested();
+	for (int waited = 0; waited < 4500 && !s_stopped.load(); waited += 50)
 		::Sleep(50);
 	return TRUE;
 }
@@ -66,7 +56,7 @@ void ListenToCluster()
 			if (line == ibWorkerPipe::Stop)
 				break;
 		}
-		OnStopSignal(0);
+		ibCrashGuard::MarkStopRequested();
 	}).detach();
 }
 
@@ -114,21 +104,17 @@ int ibAppServer::Run()
 
 	// Told to stop from here on — while the base is still being opened too: what is open is then closed in order
 	// instead of the process being cut off with its base in hand.
-	std::signal(SIGINT, OnStopSignal);
-	std::signal(SIGTERM, OnStopSignal);
-#ifdef SIGBREAK
-	std::signal(SIGBREAK, OnStopSignal);   // Windows: Ctrl+Break
-#endif
+	ibCrashGuard::InstallStopSignals();
 #ifdef __WXMSW__
 	::SetConsoleCtrlHandler(OnConsoleClose, TRUE);   // after the signals: asked first, it passes on what is theirs
 #endif
 	ListenToCluster();
 
 	// However Run ends — served and stopped, or refused at any step — a console closing waits no longer.
-	struct ibStoppedMark { ~ibStoppedMark() { s_state.store(ibServeState::Stopped); } } stoppedMark;
+	struct ibStoppedMark { ~ibStoppedMark() { s_stopped.store(true); } } stoppedMark;
 
 	// A base that did not open has said why already: its own line is the cause the cluster shows.
-	if (s_state.load() != ibServeState::Serving || !Open(*base)) {
+	if (ibCrashGuard::IsStopRequested() || !Open(*base)) {
 		ibApplicationInstance::DestroyAppDataEnv();
 		return 1;
 	}
@@ -151,7 +137,7 @@ int ibAppServer::Run()
 	ibAppServerSay(ibJournalMark::Info, ibT("serving '%s' (route %u) for the cluster on 127.0.0.1:%u"), m_workerBase,
 		m_route, static_cast<unsigned>(port));
 
-	while (s_state.load() == ibServeState::Serving)
+	while (!ibCrashGuard::IsStopRequested())
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
 	ibAppServerSay(ibJournalMark::Info, ibT("stopping"));

@@ -199,6 +199,7 @@ add_executable(oes_tests
     test_fiberTrust.cpp
     test_fiberFp.cpp
     test_fiberStack.cpp
+    test_stopSignals.cpp
     test_typeFamilyAdjust.cpp
     test_eventHandler.cpp
     test_functionalOption.cpp

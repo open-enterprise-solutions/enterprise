@@ -52,6 +52,7 @@ LPTOP_LEVEL_EXCEPTION_FILTER s_prevSehFilter = nullptr;
 std::terminate_handler       s_prevTerminate = nullptr;
 std::atomic<bool>            s_installed{ false };
 std::atomic<bool>            s_stopRequested{ false };   // MarkStopRequested — lock-free, so a signal handler may set it
+std::atomic<void (*)(int)>   s_stopWake{ nullptr };      // InstallStopSignals — …and read this
 
 void EnsureCrashDir()
 {
@@ -451,6 +452,34 @@ void MarkStopRequested() noexcept
 bool IsStopRequested() noexcept
 {
 	return s_stopRequested.load(std::memory_order_acquire);
+}
+
+namespace {
+
+const int kStopSignals[] = {
+	SIGINT,
+	SIGTERM,
+#ifdef SIGBREAK
+	SIGBREAK,   // Windows: Ctrl+Break
+#endif
+};
+
+void OnStopSignal(int signal)
+{
+	for (const int stop : kStopSignals)
+		std::signal(stop, SIG_DFL);
+	MarkStopRequested();
+	if (void (*const wake)(int) = s_stopWake.load())
+		wake(signal);
+}
+
+} // namespace
+
+void InstallStopSignals(void (*wake)(int))
+{
+	s_stopWake.store(wake);
+	for (const int stop : kStopSignals)
+		std::signal(stop, OnStopSignal);
 }
 
 int WrapStartup(const ibString& exeName, std::function<int()> body)

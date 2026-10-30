@@ -86,12 +86,20 @@ CORE_API void PlatformNativeMessage(const ibString& caption,
 // POSIX: _Exit.
 CORE_API void TerminateProcessFast(int exitCode);
 
-// THE PROCESS WAS ASKED TO STOP — SIGINT, SIGTERM, a console closing — and is leaving. Set from the program's own
-// stop handler (async-signal-safe: one lock-free store), read by a background thread whose failure would otherwise be
-// a crash. The database client has a SIGTERM handler of its own (Firebird's: every attachment shut down at once), so
-// a statement may fail before the program has begun its ordered stop; a failure then is the stop, not a fault.
+// THE PROCESS WAS ASKED TO STOP — SIGINT, SIGTERM, a console closing, the debugger or the cluster letting go — and is
+// leaving: one fact, whoever said it (async-signal-safe: one lock-free store). A server's serving loop reads it, and so
+// does a background thread whose failure would otherwise be a crash. The database client has a SIGTERM handler of its
+// own (Firebird's: every attachment shut down at once), so a statement may fail before the program has begun its
+// ordered stop; a failure then is the stop, not a fault.
 CORE_API void MarkStopRequested() noexcept;
 CORE_API bool IsStopRequested() noexcept;
+
+// …AND THE SIGNALS THAT SAY SO: SIGINT, SIGTERM, Ctrl+Break on Windows. The first marks the stop and calls `wake`, in
+// the signal's context, for whoever does not look at the fact by itself (a window's main loop). It also gives the
+// signals back to their default action, so a second one ends the process: a program busy where it cannot look, or
+// stuck in its stop, can still be ended the way it always could. Installed BEFORE a base opens: the database client,
+// installing its handler at the first attachment, keeps this one and calls it too.
+CORE_API void InstallStopSignals(void (*wake)(int) = nullptr);
 
 // Headless WrapStartup — runs `body` inside a try/catch, logs any
 // escape to `<exeName>_startup.log` AND surfaces a PlatformNativeMessage.
