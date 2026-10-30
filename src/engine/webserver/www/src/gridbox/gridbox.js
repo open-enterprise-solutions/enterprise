@@ -56,7 +56,7 @@ class Gridbox extends Control {
 		if (state.Sheet !== undefined)
 			this.draw(state.Sheet, state.GridLines === true);
 		else
-			this.load(state.Version, state.GridLines === true);
+			this.drawing = this.load(state.Version, state.GridLines === true);
 	}
 
 	/**

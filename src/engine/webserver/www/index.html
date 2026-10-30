@@ -23,10 +23,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>OES</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="vendor/webawesome/3.14.0/styles/webawesome.css">
 <link rel="stylesheet" href="styles/tokens.css">
-<link rel="stylesheet" href="styles/window.css">
-<link rel="stylesheet" href="styles/form.css">
+<link rel="stylesheet" href="styles/splash.css">
 <script type="importmap">
 { "imports": { "tabulator": "./vendor/tabulator/6.6.1/tabulator_esm.min.mjs" } }
 </script>
@@ -36,6 +34,16 @@
 <script type="module" src="src/main.js"></script>
 </head>
 <body>
+<!-- THE SPLASH (styles/splash.css, src/window/splash.js). The big stylesheets stand after it, in the body: a stylesheet
+     holds back only what stands after it, so a slow one does not leave the page blank. -->
+<div id="splash" role="status" aria-label="Loading">
+<img src="styles/splash.png" width="434" height="245" alt="OES">
+<div class="arrows"><i></i><i></i><i></i></div>
+<div class="stage">Loading the page</div>
+</div>
+<link rel="stylesheet" href="vendor/webawesome/3.14.0/styles/webawesome.css">
+<link rel="stylesheet" href="styles/window.css">
+<link rel="stylesheet" href="styles/form.css">
 <div id="client"></div>
 </body>
 </html>

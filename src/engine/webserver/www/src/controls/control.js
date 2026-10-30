@@ -48,10 +48,18 @@ export class Control extends HTMLElement {
 		this.context = /** @type {any} */ (null);
 		/** @type {HTMLElement} where its colours go — the field, not the row with the caption beside it */
 		this.lookTarget = this;
+		/** @type {Promise<unknown>} its first drawing, done — a table's rows and a sheet's cells come after the frame */
+		this.drawing = Promise.resolve();
 	}
 
 	/** The first drawing. @param {ProtocolNode} node */
 	build(node) {}
+
+	/** Its first drawing done, and that of every control under it: what the form shows is what it will go on showing. */
+	settled() {
+		const controls = [this, ...this.querySelectorAll('*')].filter((element) => element instanceof Control);
+		return Promise.all(controls.map((control) => /** @type {Control} */ (control).drawing));
+	}
 
 	/**
 	 * Brought up to the node in place; false — it cannot be, and is drawn anew. The default stands as long as the

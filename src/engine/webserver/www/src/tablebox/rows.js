@@ -66,12 +66,18 @@ function lookOf(cell) {
 }
 
 /**
- * The page's records and what it says of itself: the top (Begin), the bottom (End), the row the server stands on.
+ * The page's records and what it says of itself: the top (Begin), the bottom (End), the row the server stands on. A
+ * record of the top level; `level` and `path` — the way to it in a tree — are the table's to change for a folder's.
  * @param {ProtocolNode} page
  */
 export function readPage(page) {
 	return {
-		records: (page.NodeChildren ?? []).map(recordOf),
+		records: (page.NodeChildren ?? []).map((row) => {
+			const record = recordOf(row);
+			record.level = 0;
+			record.path = Object.keys(record).filter((name) => /^c\d+$/.test(name)).map((name) => record[name]).join('\t');
+			return record;
+		}),
 		begin: page.Begin === true,
 		end: page.End === true,
 		current: page.CurrentRow ?? 0,

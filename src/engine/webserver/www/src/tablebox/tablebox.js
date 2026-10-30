@@ -27,9 +27,22 @@
 // cell typed into (Input) and committed (Change {Row, Column, Text}), an editor's button (Select, Open, Clear {Row,
 // Column}). The cell shows the server's text, never the one typed: what the server takes comes back with the rows read
 // anew, and an edit it refused leaves the cell as it was.
+//
+// HOW IT SHOWS ITS ROWS is the State's ViewMode, the person's to switch (the bar's View mode, a question of the server's):
+// every row flat (List); one level, a folder activated entered and the folders it stands in frozen over its rows, one of
+// them activated gone back out of (Hierarchical, the thin client's crumbs); or the hierarchy in place, a folder opened
+// by its expander (Tree). Every read names its level (Parent). A tree's rows opened stay held: only the top level is
+// paged, and what the window lets go of applies to a flat level alone.
+//
+// WHAT THE CURSOR STANDS ON is the table's RowSelectionMode: the row, or the cell, its row tinted (the thin client's). A
+// second click on the cell it stands on opens the cell's editor, and the keys are the data view's (pressKey).
+//
+// THE FIRST COLUMN'S CELL is the row's as much as its own, as the thin client draws it: the step in, the expander, the
+// row's picture, what the cell shows (firstCell). A row with a Group is that caption alone, across the whole line.
 
 import { Control, EventKind, defineControl } from '../controls/control.js';
 import { CommandBar } from '../controls/commandBar.js';
+import { TextEditor } from '../controls/textEditor.js';
 import { readPage } from './rows.js';
 
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
@@ -56,6 +69,20 @@ const oneUnderAnother = 1;
 
 // A command that edits (eStartEditingFlag): the current row's editor is opened before it goes.
 const startEditing = 0x1000;
+
+// How a table shows its rows (ibTable::ibViewMode).
+const treeView = 0;
+const hierarchicalView = 1;
+
+// What the cursor stands on (ibDataViewSelectionMode): the cell; otherwise its row.
+const selectCell = 0;
+
+/** A tree's step in, per level, in pixels — and how many of a folder's rows one read asks for. */
+const treeIndent = 16;
+const treeBatch = 100;
+
+/** How long a second click on the cursor's cell waits for the double click it may be (the data view's rename timer). */
+const secondClickDelay = 100;
 
 /** @type {Promise<typeof import('tabulator').TabulatorFull> | null} */
 let loading = null;
@@ -94,6 +121,8 @@ class Tablebox extends Control {
 		this.built = null;
 		this.disposed = false;
 		this.drawnColumns = '';
+		/** @type {number[]} what stands directly under the table, as the server has it, the hidden columns too */
+		this.columnIds = [];
 		/** @type {number | undefined} the Version of the rows held */
 		this.version = undefined;
 		/** the reads of the rows held — a page asked under an older one is dropped */
@@ -112,13 +141,43 @@ class Tablebox extends Control {
 		this.currentColumn = 0;
 		/** the column under the last press — one of a group's drawn in one grid column */
 		this.pressedColumn = 0;
+		/** the last press was inside a cell's editor: the editor's, no move of the cursor */
+		this.pressedEditor = false;
+		/** the table had the focus as the last press came: a click on the cursor's cell is then a second one */
+		this.pressedFocused = false;
+		/** @type {ReturnType<typeof setTimeout> | undefined} a second click, waiting to open the editor */
+		this.secondClick = undefined;
+		/** the keys put the current column: on a row selected whole, its cell is marked */
+		this.columnByKeys = false;
+		/** @type {number | undefined} how its rows are shown (the State's ViewMode) */
+		this.viewMode = undefined;
+		/** @type {any[]} the folders it stands in, the outermost first — the Hierarchical view's records of them */
+		this.crumbs = [];
+		/** the cursor stands on a cell, not on a row */
+		this.cellMode = false;
+		/** @type {Element | null} the row and the cell marked as the cursor's */
+		this.markedRow = null;
+		this.markedCell = null;
+		/** the first rows are in the grid: {@link Control#drawing} */
+		this.drawn = () => {};
+		this.drawing = new Promise((resolve) => { this.drawn = resolve; });
 		/** a row activated with no cell the client may edit: the editor the server opens is opened here */
 		this.awaitEdit = false;
 		/** @type {ProtocolNode | undefined} the table's standard commands, as its State offers them */
 		this.contextMenu = undefined;
 		this.host.addEventListener('pointerdown', (event) => {
 			this.pressedColumn = columnUnder(event.target);
+			this.pressedEditor = event.target instanceof Element && event.target.closest('.cell-editor') !== null;
+			this.pressedFocused = this.host.contains(document.activeElement);
 		}, true);
+		// A press on a row leaves the focus on the table: on a cell it would go with the cell, which the grid draws anew.
+		this.host.addEventListener('mousedown', (event) => {
+			if (event.target instanceof Element && event.target.closest('.tabulator-row') !== null
+				&& event.target.closest('.cell-editor') === null) {
+				event.preventDefault();
+				this.host.focus({ preventScroll: true });
+			}
+		});
 		this.listenPager();
 		// A window grown taller shows more rows than are held past it: read on, and the scrollbar placed again.
 		this.resized = new ResizeObserver(() => {
@@ -126,7 +185,16 @@ class Tablebox extends Control {
 			this.fill();
 		});
 		this.resized.observe(this.frame);
+		this.listenKeys();
 		this.update(node);
+	}
+
+	/**
+	 * The focus on the rows: the keys are theirs.
+	 * @param {FocusOptions} [options]
+	 */
+	focus(options) {
+		this.host.focus(options);
 	}
 
 	/** @param {ProtocolNode} node */
@@ -134,6 +202,10 @@ class Tablebox extends Control {
 		this.bar.update(this.state(node).CommandBar);
 		this.contextMenu = this.state(node).ContextMenu;
 		this.host.classList.toggle('no-header', node.Header === false);
+		this.host.style.setProperty('--oes-header-lines', String(node.HeaderHeight ?? 1));
+		this.host.style.setProperty('--oes-footer-lines', String(node.FooterHeight ?? 1));
+		this.cellMode = node.RowSelectionMode === selectCell;
+		this.host.classList.toggle('select-cell', this.cellMode);
 		return true;
 	}
 
@@ -155,13 +227,20 @@ class Tablebox extends Control {
 	 * @param {ProtocolNode} node
 	 */
 	drawChildren(node) {
-		const definitions = [pictureColumn(this), ...(node.NodeChildren ?? []).flatMap((child) => this.definitionsOf(child, node))];
-		// The columns frozen at the left (its FrezeeCol), the rows' pictures with them.
+		const state = this.state(node);
+		const mode = state.ViewMode ?? hierarchicalView;
+		const switched = this.viewMode !== undefined && this.viewMode !== mode;
+		this.viewMode = mode;
+		this.columnIds = (node.NodeChildren ?? []).map((child) => child.ControlId);
+		const definitions = (node.NodeChildren ?? []).flatMap((child) => this.definitionsOf(child, node));
+		const first = firstShown(definitions);
+		if (first !== undefined)
+			first.formatterParams = { ...first.formatterParams, first: true };
+		// The columns frozen at the left (its FrezeeCol).
 		const frozen = node.FrezeeCol ?? 0;
 		if (frozen > 0)
-			definitions.slice(0, frozen + 1).forEach((definition) => { definition.frozen = true; });
+			definitions.slice(0, frozen).forEach((definition) => { definition.frozen = true; });
 		const drawn = JSON.stringify(definitions, (name, value) => typeof value === 'function' ? undefined : value);
-		const state = this.state(node);
 		this.grid(definitions, node).then((table) => {
 			if (this.disposed)
 				return;
@@ -169,7 +248,17 @@ class Tablebox extends Control {
 				this.drawnColumns = drawn;
 				table.setColumns(definitions);
 			}
-			if (state.Version !== this.version) {
+			if (state.CurrentColumn)
+				this.currentColumn = state.CurrentColumn;
+			if (switched) {
+				// Another way of showing them: read from nothing, no folder stood in. The State's page is of the mode just
+				// left unless its Version moved with the switch.
+				this.crumbs = [];
+				const moved = state.Version !== this.version;
+				this.version = state.Version;
+				this.load(moved ? state.Rows : undefined, state.CurrentRow ?? 0);
+			}
+			else if (state.Version !== this.version) {
 				const first = this.version === undefined;
 				this.version = state.Version;
 				if (first)
@@ -179,6 +268,8 @@ class Tablebox extends Control {
 			}
 			else if (state.CurrentRow)
 				this.select(state.CurrentRow);
+			else
+				this.markCursor();
 			if (this.awaitEdit && state.Edit !== undefined) {
 				this.awaitEdit = false;
 				const column = state.Edit.Column;
@@ -206,8 +297,23 @@ class Tablebox extends Control {
 				height: '100%',
 				layout: 'fitColumns',
 				responsiveLayout: 'collapse',
-				selectableRows: 1,
 				placeholder: '',
+				// The keys are the table's own (pressKey), not the grid's scrolling.
+				keybindings: false,
+				// A column dragged by its header, where the columns are a row of them: a group holds its own.
+				movableColumns: (node.NodeChildren ?? []).every((child) => child.NodeType === 'TableboxColumn'
+					&& child.Reorderable !== false),
+				// A row the grid draws as the window comes to it: the cursor, a crumb and a group's caption are marked as it is.
+				rowFormatter: (row) => {
+					const record = row.getData();
+					row.getElement().classList.toggle('crumb', record.crumb === true);
+					row.getElement().classList.toggle('group-row', Boolean(record.group));
+					// Tab is the table's (pressKey): a cell with an editor is no stop of the page's.
+					for (const cell of row.getElement().querySelectorAll('.tabulator-cell[tabindex]'))
+						cell.removeAttribute('tabindex');
+					if (record.handle === this.currentRow)
+						this.markCursor();
+				},
 				// A cell's editor opens as the row is activated, as the desktop's does — a click only moves the cursor.
 				editTriggerEvent: 'dblclick',
 				frozenRows: node.FrezeeRow > 0 ? node.FrezeeRow : 0,
@@ -230,15 +336,22 @@ class Tablebox extends Control {
 
 	/** @param {TabulatorFull} table */
 	listen(table) {
-		table.on('cellClick', (event, cell) => this.sendCursor(cell));
-		table.on('cellDblClick', (event, cell) => {
-			// The desktop's ActivateRow: the cell clicked opens its editor when it may be edited (the grid opens it), else
-			// the row's current or first that may — and with none, the server opens one if it will.
-			if (!mayEdit(cell, this.pressedColumn) && !this.editCurrentRow())
-				this.awaitEdit = true;
-			// What else activating it is the server decides — the row's object opened, a choice made.
-			this.send(EventKind.Open, { Row: cell.getRow().getData().handle });
+		table.on('cellClick', (event, cell) => {
+			if (this.pressedEditor || cell.getRow().getData().crumb === true)
+				return;
+			const column = this.pressedColumn || idOf(cell.getField());
+			const second = this.pressedFocused && cell.getRow().getData().handle === this.currentRow && column === this.currentColumn;
+			this.sendCursor(cell);
+			// The file manager's rule, the data view's: a click on the cell the cursor stands on opens its editor.
+			if (second && mayEdit(cell, column))
+				this.secondClick = setTimeout(() => this.editIn(cell, column), secondClickDelay);
 		});
+		table.on('cellDblClick', (event, cell) => {
+			clearTimeout(this.secondClick);
+			if (!this.pressedEditor)
+				this.activate(cell);
+		});
+		table.on('columnMoved', (column, columns) => this.sendMove(column, columns));
 		table.on('rowContext', (event, row) => {
 			// The desktop's OnContextMenu: the table's standard commands, as the server offers them.
 			const entries = this.contextMenu?.NodeChildren ?? [];
@@ -261,6 +374,361 @@ class Tablebox extends Control {
 			this.edge(direction);
 			this.updatePager();
 		});
+	}
+
+	/**
+	 * A column dragged by its header, told where it now stands among the table's columns, the hidden ones too.
+	 * @param {any} column
+	 * @param {any[]} columns as they stand now
+	 */
+	sendMove(column, columns) {
+		const id = idOf(column.getField());
+		const order = columns.map((one) => idOf(one.getField()));
+		const next = order[order.indexOf(id) + 1];
+		const others = this.columnIds.filter((one) => one !== id);
+		this.send(EventKind.Move, { Column: id, Holder: 0, Position: next === undefined ? others.length : others.indexOf(next) });
+	}
+
+	/**
+	 * A row double-clicked. In the Hierarchical view a folder is entered and a crumb gone back out of — the view's own,
+	 * nothing for the server to open (the thin client's SetTopParent). Anything else is the row activated; the cell clicked
+	 * opens its editor when it may be edited (the grid opens it).
+	 * @param {any} cell
+	 */
+	activate(cell) {
+		const record = cell.getRow().getData();
+		if (record.crumb === true) {
+			this.leave(record.handle);
+			return;
+		}
+		if (this.viewMode === hierarchicalView && record.container) {
+			this.enter(record);
+			return;
+		}
+		if (mayEdit(cell, this.pressedColumn))
+			this.send(EventKind.Open, { Row: record.handle });
+		else
+			this.activateRow(record.handle);
+	}
+
+	/**
+	 * The desktop's ActivateRow, a double click's and Enter's: the row's current or first cell that may be edited opens its
+	 * editor, and with none the server opens one if it will. What else activating it is the server decides — the row's
+	 * object opened, a choice made.
+	 * @param {number} handle
+	 */
+	activateRow(handle) {
+		if (!this.editCurrentRow())
+			this.awaitEdit = true;
+		this.send(EventKind.Open, { Row: handle });
+	}
+
+	/**
+	 * A folder entered: its level read, it frozen over its rows.
+	 * @param {any} record
+	 */
+	enter(record) {
+		return this.readLevel([...this.crumbs, { ...record, crumb: true }]);
+	}
+
+	/**
+	 * A crumb activated: it and what stands in it gone, the level it stands in read.
+	 * @param {number} handle
+	 */
+	leave(handle) {
+		return this.readLevel(this.crumbs.slice(0, this.crumbs.findIndex((crumb) => crumb.handle === handle)));
+	}
+
+	/**
+	 * The level the crumbs lead to, read from its top; the cursor stands on the row the server names, else on its first.
+	 * A level refused stays unentered.
+	 * @param {any[]} crumbs
+	 */
+	async readLevel(crumbs) {
+		if (this.table === null)
+			return;
+		const generation = ++this.generation;
+		const parent = crumbs.at(-1)?.handle ?? 0;
+		const page = await this.fetch({ Direction: reset, Parent: parent, Count: this.perPage() + slack, Before: 0 });
+		if (page === null || generation !== this.generation || this.table === null)
+			return;
+		this.crumbs = crumbs;
+		const read = readPage(page);
+		await this.setRows(read.records);
+		this.take(read);
+		this.scrollTo(0);
+		if (read.current !== 0)
+			this.select(read.current, false);
+		else if (read.records.length > 0)
+			this.moveCursor(read.records[0].handle, this.currentColumn);
+		this.updatePager();
+		this.fill();
+	}
+
+	/**
+	 * The rows of a read anew, the crumbs frozen over them.
+	 * @param {any[]} records
+	 * @param {boolean} [inPlace] the window stays where it stands
+	 */
+	async setRows(records, inPlace = false) {
+		if (this.table === null)
+			return;
+		await (inPlace ? this.table.replaceData(records) : this.table.setData(records));
+		if (this.crumbs.length > 0) {
+			// A copy: the grid turns the rows it adds at the top round in place.
+			await this.table.addData(this.crumbs.map((crumb) => ({ ...crumb })), true);
+			for (const crumb of this.crumbs)
+				this.rowOf(crumb.handle)?.freeze();
+		}
+	}
+
+	/**
+	 * A folder of the tree opened or closed by its expander.
+	 * @param {any} row
+	 */
+	async toggle(row) {
+		const record = row.getData();
+		if (record.open)
+			await this.collapse(row);
+		else
+			await this.expand(row);
+		this.updatePager();
+	}
+
+	/**
+	 * A folder of the tree opened: its rows read whole — after it, a level further in — and those of them that were open
+	 * before a read anew opened again.
+	 * @param {any} row
+	 * @param {Set<string>} [wasOpen]
+	 * @returns {Promise<any[]>} what it held
+	 */
+	async expand(row, wasOpen) {
+		const record = row.getData();
+		const generation = this.generation;
+		const records = await this.readFolder(record);
+		if (records === null || generation !== this.generation || this.table === null)
+			return [];
+		record.open = true;
+		row.reformat();
+		await this.table.addData(records.map((one) => ({ ...one })), false, row);
+		if (wasOpen !== undefined)
+			await this.reopen(records, wasOpen);
+		this.markCursor();
+		return records;
+	}
+
+	/**
+	 * A folder of the tree opened with every folder in it (the keys' *).
+	 * @param {any} row
+	 */
+	async expandWhole(row) {
+		for (const record of await this.expand(row)) {
+			const inner = record.container ? this.rowOf(record.handle) : null;
+			if (inner !== null)
+				await this.expandWhole(inner);
+		}
+	}
+
+	/**
+	 * A folder's rows, all of them — read ahead of the page too when the server stands inside it. Null when refused.
+	 * @param {any} folder
+	 */
+	async readFolder(folder) {
+		const level = (record) => ({ ...record, level: folder.level + 1, path: `${folder.path}/${keyOf(record)}` });
+		const page = await this.fetch({ Direction: reset, Parent: folder.handle, Count: treeBatch, Before: 0 });
+		if (page === null)
+			return null;
+		const read = readPage(page);
+		let records = read.records;
+		for (let end = read.end; !end && records.length > 0;) {
+			const next = await this.fetch({ Direction: forward, Parent: folder.handle, Anchor: records.at(-1).handle, Count: treeBatch });
+			if (next === null)
+				return null;
+			const more = readPage(next);
+			records = [...records, ...more.records];
+			end = more.end || more.records.length < treeBatch;
+		}
+		for (let begin = read.begin; !begin && records.length > 0;) {
+			const next = await this.fetch({ Direction: backward, Parent: folder.handle, Anchor: records[0].handle, Count: treeBatch });
+			if (next === null)
+				return null;
+			const more = readPage(next);
+			records = [...more.records, ...records];
+			begin = more.records.length < treeBatch;
+		}
+		return records.map(level);
+	}
+
+	/**
+	 * A folder of the tree closed: what stands in it let go of, the cursor moved onto it if it stood there.
+	 * @param {any} row
+	 */
+	async collapse(row) {
+		const record = row.getData();
+		const rows = this.table?.getRows() ?? [];
+		const inside = [];
+		for (let at = rows.indexOf(row) + 1; at < rows.length && rows[at].getData().level > record.level; at++)
+			inside.push(rows[at]);
+		const cursorInside = inside.some((one) => one.getData().handle === this.currentRow);
+		if (inside.length > 0)
+			await this.table?.deleteRow(inside);
+		record.open = false;
+		row.reformat();
+		if (cursorInside)
+			this.moveCursor(record.handle, this.currentColumn);
+		else
+			this.markCursor();
+	}
+
+	/**
+	 * The folders open before a read anew, opened again — a row read again has a new handle, so they are known by the way
+	 * to them: what their rows read.
+	 * @param {any[]} records
+	 * @param {Set<string>} wasOpen
+	 */
+	async reopen(records, wasOpen) {
+		for (const record of records) {
+			if (record.container && wasOpen.has(record.path)) {
+				const row = this.rowOf(record.handle);
+				if (row !== null)
+					await this.expand(row, wasOpen);
+			}
+		}
+	}
+
+	/** The keys of the rows — wherever in the grid the focus is (a click leaves it on the grid's window), but an editor. */
+	listenKeys() {
+		this.host.tabIndex = 0;
+		this.host.addEventListener('keydown', (event) => {
+			if (this.table === null || event.ctrlKey || event.altKey || event.metaKey
+				|| (event.target instanceof Element && event.target.closest('.cell-editor') !== null))
+				return;
+			if (this.pressKey(event.key, event.shiftKey))
+				event.preventDefault();
+		});
+	}
+
+	/**
+	 * A key among the rows, the data view's (ProcessTableCharEvent): the arrows, a page, the ends; sideways and Tab a
+	 * column, in a tree a folder closed, opened, its parent; + - * a folder; Enter activates; F2 and Space edit.
+	 * @param {string} key
+	 * @param {boolean} shift
+	 * @returns {boolean} it was one of its
+	 */
+	pressKey(key, shift) {
+		const rows = this.heldRows();
+		const at = rows.findIndex((row) => row.getData().handle === this.currentRow);
+		switch (key) {
+		case 'ArrowUp': return this.goToRow(rows, at - 1);
+		case 'ArrowDown': return this.goToRow(rows, at + 1);
+		case 'PageUp': return this.goToRow(rows, at - (this.perPage() - 1));
+		case 'PageDown': return this.goToRow(rows, at + (this.perPage() - 1));
+		case 'Home': return this.goToRow(rows, 0);
+		case 'End': return this.goToRow(rows, rows.length - 1);
+		}
+		const row = rows[at];
+		if (row === undefined)
+			return false;
+		const record = row.getData();
+		const folder = this.viewMode === treeView && record.container === true;
+		const columns = row.getCells().flatMap(columnsOf);
+		switch (key) {
+		case 'ArrowLeft':
+			if (this.moveColumn(columns, -1))
+				return true;
+			if (folder && record.open)
+				this.toggle(row);
+			else
+				this.goToRow(rows, rows.slice(0, at).findLastIndex((one) => one.getData().level < record.level));
+			return true;
+		case 'ArrowRight':
+			if (!folder)
+				return this.moveColumn(columns, 1);
+			if (record.open)
+				this.goToRow(rows, at + 1);
+			else
+				this.toggle(row);
+			return true;
+		case 'Tab':
+			return this.moveColumn(columns, shift ? -1 : 1) || this.tabToRow(rows[at + (shift ? -1 : 1)], shift);
+		case '+':
+			if (folder && !record.open)
+				this.toggle(row);
+			return true;
+		case '-':
+			if (folder && record.open)
+				this.toggle(row);
+			return true;
+		case '*':
+			if (folder && record.open)
+				this.toggle(row);
+			else if (folder)
+				this.expandWhole(row).then(() => this.updatePager());
+			return true;
+		case 'Enter':
+			this.activateRow(record.handle);
+			return true;
+		case 'F2':
+		case ' ':
+			this.editCurrentRow();
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	/**
+	 * The cursor on a row of those held, the place kept inside them, and the row brought into view.
+	 * @param {any[]} rows
+	 * @param {number} at
+	 */
+	goToRow(rows, at) {
+		const row = rows[Math.max(0, Math.min(rows.length - 1, at))];
+		if (row === undefined)
+			return false;
+		this.moveCursor(row.getData().handle, this.currentColumn);
+		row.scrollTo('nearest', false).catch(() => {});
+		return true;
+	}
+
+	/**
+	 * The cursor a column along its row. On a row selected whole the first press marks the first cell, and back past it the
+	 * row is whole again (the data view's TryAdvanceCurrentColumn).
+	 * @param {number[]} columns the row's
+	 * @param {number} step
+	 * @returns {boolean} false at the row's edge
+	 */
+	moveColumn(columns, step) {
+		const place = columns.indexOf(this.currentColumn);
+		const from = this.cellMode ? Math.max(0, place) : this.columnByKeys ? place : -1;
+		const next = from + step;
+		if (next < 0 && from === 0 && !this.cellMode) {
+			this.columnByKeys = false;
+			this.markCursor();
+			return true;
+		}
+		if (next < 0 || next >= columns.length)
+			return false;
+		this.columnByKeys = true;
+		this.moveCursor(this.currentRow, columns[next]);
+		this.markCursor();
+		this.markedCell?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+		return true;
+	}
+
+	/**
+	 * Tab past a row's edge: the next row's first column, or the one before's last; with none the focus leaves the table.
+	 * @param {any} row
+	 * @param {boolean} back
+	 */
+	tabToRow(row, back) {
+		if (row === undefined)
+			return false;
+		const columns = row.getCells().flatMap(columnsOf);
+		this.columnByKeys = true;
+		this.moveCursor(row.getData().handle, back ? columns.at(-1) : columns[0]);
+		row.scrollTo('nearest', false).catch(() => {});
+		return true;
 	}
 
 	/**
@@ -393,15 +861,51 @@ class Tablebox extends Control {
 	 * @param {any} cell
 	 */
 	sendCursor(cell) {
-		const handle = cell.getRow().getData().handle;
-		const column = this.pressedColumn || idOf(cell.getField());
+		this.columnByKeys = false;
+		this.moveCursor(cell.getRow().getData().handle, this.pressedColumn || idOf(cell.getField()));
+		this.markCursor();
+	}
+
+	/**
+	 * The cursor moved here, marked and told.
+	 * @param {number} handle
+	 * @param {number} column
+	 */
+	moveCursor(handle, column) {
 		if (handle === this.currentRow && column === this.currentColumn)
 			return;
 		if (handle !== this.currentRow)
 			this.awaitEdit = false;
 		this.currentRow = handle;
 		this.currentColumn = column;
+		this.markCursor();
 		this.send(EventKind.Row, column !== 0 ? { Row: handle, Column: column } : { Row: handle });
+	}
+
+	/**
+	 * The cursor's marks where it stands: its row and, when it stands on cells or the keys put a column, its cell — the
+	 * current column's, else the row's first; of a group drawn as one, that column's part.
+	 */
+	markCursor() {
+		const row = this.rowOf(this.currentRow);
+		const element = row?.getElement() ?? null;
+		if (this.markedRow !== element) {
+			this.markedRow?.classList.remove('current-row');
+			element?.classList.add('current-row');
+			this.markedRow = element;
+		}
+		/** @type {Element | null} */
+		let cell = null;
+		if ((this.cellMode || this.columnByKeys) && row !== null) {
+			const cells = row.getCells();
+			const found = cells.find((one) => columnsOf(one).includes(this.currentColumn)) ?? cells[0];
+			cell = found?.getElement().querySelector(`[data-column="${this.currentColumn}"]`) ?? found?.getElement() ?? null;
+		}
+		if (this.markedCell !== cell) {
+			this.markedCell?.classList.remove('current-cell');
+			cell?.classList.add('current-cell');
+			this.markedCell = cell;
+		}
 	}
 
 	/**
@@ -494,8 +998,9 @@ class Tablebox extends Control {
 			if (state.Visible === false)
 				return [];
 			const grouping = child.Grouping ?? oneUnderAnother;
-			const columns = (child.NodeChildren ?? []).flatMap((one) => this.definitionsOf(one, table));
-			const laid = grouping === sideBySide || columns.length < 2 ? columns : [this.joined(child, columns, grouping)];
+			const columns = (child.NodeChildren ?? []).flatMap((one) => this.definitionsOf(one, table))
+				.filter((one) => one.visible !== false);
+			const laid = grouping === sideBySide || columns.length < 2 ? columns : [this.joined(child, columns, grouping, table)];
 			return child.ShowTitle !== true || laid.length === 0 ? laid
 				: [{ title: state.Caption ?? '', headerHozAlign: alignOf(child.HeaderAlign ?? centred), columns: laid }];
 		}
@@ -507,11 +1012,12 @@ class Tablebox extends Control {
 		const part = {
 			id,
 			title: state.Representation === pictureOnly ? '' : state.Caption ?? '',
-			editable: state.ReadOnly !== true && child.TexteditMode !== false,
+			typed: state.ReadOnly !== true && child.TexteditMode !== false,
 			select: child.ButtonSelect !== false,
 			open: child.ButtonOpen === true,
 			clear: child.ButtonClear !== false,
 			password: child.PasswordMode === true,
+			multiline: child.MultilineMode === true,
 		};
 		/** @type {any} */
 		const definition = {
@@ -528,33 +1034,50 @@ class Tablebox extends Control {
 			titleFormatterParams: { picture: state.HeaderPicture ?? '', sort: state.Sort ?? 0, sortable },
 			// The sort is the server's: asked of it, the arrow and the rows come back with its answer.
 			headerClick: sortable ? () => this.send(EventKind.Sort, { Column: id }) : undefined,
-			resizable: child.Resizable !== false,
-			formatter: formatCell,
+			// By its header alone, as the thin client's: an edge in every cell takes the click meant for the row.
+			resizable: child.Resizable !== false ? 'header' : false,
+			formatter: (cell, drawn) => formatCell(this, cell, drawn),
 			formatterParams: { parts: [part], grouping: sideBySide },
-			editor: part.editable ? cellEditor(this) : false,
+			editor: cellEditor(this),
 			editable: (cell) => mayEdit(cell, this.pressedColumn),
 		};
-		// The footer, when the table shows one: the column's text and picture, where its FooterAlign puts them.
+		// The footer, when the table shows one: the column's text and picture — the picture alone when its representation
+		// says so, as the header's — where its FooterAlign puts them.
 		if (table.Footer === true) {
 			definition.bottomCalc = () => '';
 			definition.bottomCalcFormatter = (cell, footer) => footerOf(this, footer);
-			definition.bottomCalcFormatterParams = { text: state.FooterText ?? '', picture: state.FooterPicture ?? '',
-				align: alignOf(child.FooterAlign ?? 0) };
+			definition.bottomCalcFormatterParams = {
+				text: state.Representation === pictureOnly ? '' : state.FooterText ?? '',
+				picture: state.FooterPicture ?? '',
+				align: alignOf(child.FooterAlign ?? 0),
+			};
 		}
 		return [definition];
 	}
 
 	/**
 	 * A group drawn as one column of the grid: its columns' parts one under the other, or side by side in one cell, the
-	 * header theirs as their cells are.
+	 * header theirs as their cells are, and the footer.
 	 * @param {ProtocolNode} group
 	 * @param {any[]} columns its columns' definitions
 	 * @param {number} grouping
+	 * @param {ProtocolNode} table
 	 */
-	joined(group, columns, grouping) {
+	joined(group, columns, grouping, table) {
 		/** @type {Part[]} */
 		const parts = columns.flatMap((column) => column.formatterParams?.parts ?? []);
+		const footers = table.Footer === true ? columns.map((column) => column.bottomCalcFormatterParams) : undefined;
 		return {
+			...(footers !== undefined ? {
+				bottomCalc: () => '',
+				bottomCalcFormatter: (cell, drawn) => {
+					const holder = document.createElement('div');
+					holder.className = grouping === oneUnderAnother ? 'joined one-under-another' : 'joined in-cell';
+					holder.append(...drawn.footers.map((footer) => footerOf(this, footer)));
+					return holder;
+				},
+				bottomCalcFormatterParams: { footers },
+			} : {}),
 			title: parts.map((part) => part.title).join(grouping === oneUnderAnother ? '\n' : ' '),
 			field: `g${group.ControlId}`,
 			minWidth: Math.max(...columns.map((column) => column.minWidth ?? 40)),
@@ -566,10 +1089,10 @@ class Tablebox extends Control {
 				header.textContent = cell.getValue();
 				return header;
 			},
-			resizable: group.Resizable !== false,
-			formatter: formatCell,
+			resizable: group.Resizable !== false ? 'header' : false,
+			formatter: (cell, drawn) => formatCell(this, cell, drawn),
 			formatterParams: { parts, grouping },
-			editor: parts.some((part) => part.editable) ? cellEditor(this) : false,
+			editor: cellEditor(this),
 			editable: (cell) => mayEdit(cell, this.pressedColumn),
 		};
 	}
@@ -585,18 +1108,23 @@ class Tablebox extends Control {
 	 * @param {number} current
 	 */
 	async load(rows, current) {
-		const generation = ++this.generation;
-		const page = rows ?? await this.fetch({ Direction: reset, Count: this.perPage() + slack, Before: 0 });
-		if (page === null || generation !== this.generation || this.table === null)
-			return;
-		const read = readPage(page);
-		await this.table.setData(read.records);
-		this.take(read);
-		const at = read.current || current;
-		if (at !== 0 && !this.select(at))
-			this.around(at);
-		this.updatePager();
-		this.fill();
+		try {
+			const generation = ++this.generation;
+			const page = rows ?? await this.fetch({ Direction: reset, Count: this.perPage() + slack, Before: 0 });
+			if (page === null || generation !== this.generation || this.table === null)
+				return;
+			const read = readPage(page);
+			await this.setRows(read.records);
+			this.take(read);
+			const at = read.current || current;
+			if (at !== 0 && !this.select(at))
+				this.around(at);
+			this.updatePager();
+			this.fill();
+		}
+		finally {
+			this.drawn();
+		}
 	}
 
 	/**
@@ -612,7 +1140,7 @@ class Tablebox extends Control {
 		if (page === null || generation !== this.generation || this.table === null)
 			return;
 		const read = readPage(page);
-		await this.table.replaceData(read.records);
+		await this.setRows(read.records, true);
 		this.take(read);
 		this.scrollTo(0);
 		this.restore(read);
@@ -629,18 +1157,24 @@ class Tablebox extends Control {
 		if (this.table === null)
 			return;
 		const generation = ++this.generation;
-		const visible = this.table.getRows('visible');
+		// …around a row of the level read: in a tree a row opened is another's, and the crumbs stand over the level.
+		const visible = this.table.getRows('visible').filter((row) => row.getData().crumb !== true && !row.getData().level);
 		const top = visible[0]?.getData().handle ?? 0;
 		const place = this.placeOf(top);
-		const held = rows !== undefined && (top === 0 || (rows.NodeChildren ?? []).some((row) => row.NodeId === top));
+		const wasOpen = new Set(this.table.getRows().filter((row) => row.getData().open).map((row) => row.getData().path));
+		// A page of the top is no answer in a folder: there the level is read, whatever the State holds.
+		const held = rows !== undefined && this.crumbs.length === 0
+			&& (top === 0 || (rows.NodeChildren ?? []).some((row) => row.NodeId === top));
 		const page = held ? rows : await this.fetch(top !== 0
 			? { Direction: reset, Anchor: top, Count: this.perPage() + slack, Before: slack }
 			: { Direction: reset, Count: this.perPage() + slack, Before: 0 });
 		if (page === null || generation !== this.generation || this.table === null)
 			return;
 		const read = readPage(page);
-		await this.table.replaceData(read.records);
+		await this.setRows(read.records, true);
 		this.take(read);
+		if (wasOpen.size > 0)
+			await this.reopen(read.records, wasOpen);
 		await this.putBack(top, place);
 		if (read.current !== 0)
 			this.select(read.current);
@@ -660,7 +1194,7 @@ class Tablebox extends Control {
 		if (page === null || generation !== this.generation || this.table === null)
 			return;
 		const read = readPage(page);
-		await this.table.setData(read.records);
+		await this.setRows(read.records);
 		this.take(read);
 		this.select(read.current || handle);
 		this.updatePager();
@@ -745,7 +1279,7 @@ class Tablebox extends Control {
 	 */
 	async trimFront() {
 		const shown = this.shown();
-		if (shown === null)
+		if (shown === null || this.viewMode === treeView)
 			return;
 		const { rows, top, stood } = shown;
 		const cut = Math.min(rows.length - (this.perPage() + 2 * slack), top - slack);
@@ -771,7 +1305,7 @@ class Tablebox extends Control {
 	/** …and the rows under it, after a page read above (the thin client's trim of the tail). */
 	async trimTail() {
 		const shown = this.shown();
-		if (shown === null)
+		if (shown === null || this.viewMode === treeView)
 			return;
 		const { rows, bottom } = shown;
 		const cut = Math.min(rows.length - (this.perPage() + 2 * slack), rows.length - 1 - bottom - slack);
@@ -791,7 +1325,7 @@ class Tablebox extends Control {
 		const holder = this.holder();
 		if (this.table === null || holder === null)
 			return null;
-		const rows = this.table.getRows();
+		const rows = this.heldRows();
 		const height = this.rowHeight();
 		const stood = holder.scrollTop;
 		const last = rows.length - 1;
@@ -816,13 +1350,19 @@ class Tablebox extends Control {
 		this.scrolled = holder.scrollTop;
 	}
 
+	/** The rows held, in their order, without the crumbs frozen over them. */
+	heldRows() {
+		return (this.table?.getRows() ?? []).filter((row) => row.getData().crumb !== true);
+	}
+
 	/**
-	 * A page read, with the pictures its rows name — drawn once and whole.
+	 * A page read, with the pictures its rows name — drawn once and whole. Of the level the table stands in unless it
+	 * says which (Parent).
 	 * @param {object} request
 	 */
 	async fetch(request) {
 		try {
-			const page = await this.context.fetch(this.node.ControlId, request);
+			const page = await this.context.fetch(this.node.ControlId, { Parent: this.crumbs.at(-1)?.handle ?? 0, ...request });
 			await this.context.fetchPictures(page);
 			return page;
 		}
@@ -884,10 +1424,9 @@ class Tablebox extends Control {
 	select(handle, show = true) {
 		this.currentRow = handle;
 		const row = this.rowOf(handle);
+		this.markCursor();
 		if (row === null)
 			return false;
-		this.table?.deselectRow();
-		row.select();
 		if (show)
 			row.scrollTo('nearest', false).catch(() => {});
 		return true;
@@ -895,33 +1434,12 @@ class Tablebox extends Control {
 
 	dispose() {
 		this.disposed = true;
+		clearTimeout(this.secondClick);
+		this.drawn();
 		this.resized.disconnect();
 		this.table?.destroy();
 		this.table = null;
 	}
-}
-
-/**
- * The column of the rows' own pictures — a folder, an element, a document posted — narrow, before the others.
- * @param {Tablebox} owner
- */
-function pictureColumn(owner) {
-	return {
-		field: 'picture',
-		title: '',
-		width: 28,
-		headerSort: false,
-		resizable: false,
-		formatter: (cell) => {
-			const url = owner.context.picture(cell.getValue());
-			if (!url)
-				return '';
-			const image = document.createElement('img');
-			image.src = url;
-			image.alt = '';
-			return image;
-		},
-	};
 }
 
 /**
@@ -953,10 +1471,10 @@ function headerOf(owner, caption, header) {
 }
 
 /**
- * A table column as a column of the grid draws it: its id, its caption, whether it takes edits, and its editor's
- * buttons as it was saved with them.
- * @typedef {{id: number, title: string, editable: boolean, select: boolean, open: boolean, clear: boolean,
- *   password: boolean}} Part
+ * A table column as a column of the grid draws it: its id, its caption, whether its editor takes typing, and its
+ * editor's buttons and kind as it was saved with them.
+ * @typedef {{id: number, title: string, typed: boolean, select: boolean, open: boolean, clear: boolean,
+ *   password: boolean, multiline: boolean}} Part
  */
 
 /**
@@ -984,13 +1502,13 @@ function partOf(cell, column) {
 }
 
 /**
- * May the person type into this cell's column — the server wrote its value, and the column takes edits.
+ * May this cell's editor open — the server wrote its value. A column that takes no typing still has its buttons (`typed`).
  * @param {any} cell
  * @param {number} column
  */
 function mayEdit(cell, column) {
 	const part = partOf(cell, column);
-	return part !== undefined && part.editable && cell.getRow().getData()[`e${part.id}`] === true;
+	return part !== undefined && cell.getRow().getData()[`e${part.id}`] === true;
 }
 
 /**
@@ -1004,8 +1522,8 @@ function columnUnder(target) {
 
 /**
  * A cell's editor — its column's text editor (the part pressed, of a group's), the buttons inside it as the column was
- * saved with them: Select (…), Open (▷), Clear (×). Opened, it tells the server the cell is typed into (Input); Enter
- * or leaving it commits what was typed (Change {Row, Column, Text}), Escape lets it go. The cell keeps the server's
+ * saved with them: Select (…), Open (▷), Clear (×). Opened, it tells the server the cell is typed into (Input); Enter,
+ * Tab or leaving it commits what was typed (Change {Row, Column, Text}), Escape lets it go. The cell keeps the server's
  * text either way: what the server takes comes with the rows read anew, an edit it refuses leaves the cell as it was.
  * A button lets the edit go — nothing typed is committed to race the value it brings — and asks the server for its act
  * on the cell, {Row, Column}.
@@ -1020,78 +1538,124 @@ function cellEditor(owner) {
 		}
 		const row = cell.getRow().getData().handle;
 		const text = cell.getRow().getData()[`c${part.id}`] ?? '';
+		const editor = new TextEditor({ multiline: part.multiline, password: part.password });
+		const field = editor.field;
+		field.readonly = !part.typed;
+		if (part.multiline)
+			field.setAttribute('rows', '1');
 		let done = false;
 		const finish = (/** @type {boolean} */ commit) => {
 			if (done)
 				return;
 			done = true;
+			const typed = field.value ?? text;
 			cancel();
-			if (commit && input.value !== text)
-				owner.send(EventKind.Change, { Row: row, Column: part.id, Text: input.value });
+			if (commit && typed !== text)
+				owner.send(EventKind.Change, { Row: row, Column: part.id, Text: typed });
 		};
 		owner.awaitEdit = false;
 		owner.send(EventKind.Input, { Row: row, Column: part.id });
-		const editor = document.createElement('div');
-		editor.className = 'cell-editor';
-		const input = document.createElement('input');
-		input.type = part.password ? 'password' : 'text';
-		input.value = text;
-		editor.append(input);
-		for (const [shown, glyph, title, kind] of /** @type {[boolean, string, string, number][]} */ ([
-			[part.select, '…', 'Select', EventKind.Select],
-			[part.open, '▷', 'Open', EventKind.Open],
-			[part.clear, '×', 'Clear', EventKind.Clear],
-		])) {
-			if (!shown)
-				continue;
-			const button = document.createElement('button');
-			button.type = 'button';
-			button.textContent = glyph;
-			button.title = title;
-			button.setAttribute('aria-label', title);
-			button.addEventListener('mousedown', (event) => event.preventDefault());
-			button.addEventListener('click', () => {
-				finish(false);
-				owner.send(kind, { Row: row, Column: part.id });
-			});
-			editor.append(button);
-		}
-		input.addEventListener('keydown', (event) => {
-			if (event.key === 'Enter')
+		field.classList.add('cell-editor');
+		field.value = text;
+		editor.showButtons({ ButtonSelect: part.select, ButtonOpen: part.open, ButtonClear: part.clear });
+		editor.onButton = (kind) => {
+			finish(false);
+			owner.send(kind, { Row: row, Column: part.id });
+		};
+		field.addEventListener('keydown', (/** @type {KeyboardEvent} */ event) => {
+			if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab')
 				finish(true);
 			else if (event.key === 'Escape')
 				finish(false);
+			else
+				return;
+			// The keys go on among the rows.
+			event.preventDefault();
+			owner.host.focus({ preventScroll: true });
 		});
-		input.addEventListener('blur', () => finish(true));
-		onRendered(() => {
-			input.focus();
-			input.select();
-		});
-		return editor;
+		field.addEventListener('blur', () => finish(true));
+		onRendered(() => editor.focus());
+		return field;
 	};
 }
 
 /**
  * A cell drawn as text — never as markup, whatever the text holds — with its look and a flag's mark; a group's drawn
- * as one, each of its columns' parts one under the other or side by side, each marked with its column.
+ * as one, each of its columns' parts one under the other or side by side, each marked with its column. A group's row is
+ * its caption alone, in the first column, running on over the others. The first column has the row's own before it.
+ * @param {Tablebox} owner
  * @param {any} cell
- * @param {{parts: Part[], grouping: number}} drawn
+ * @param {{parts: Part[], grouping: number, first?: boolean}} drawn
  */
-function formatCell(cell, drawn) {
+function formatCell(owner, cell, drawn) {
 	const record = cell.getRow().getData();
 	const element = cell.getElement();
-	if (drawn.parts.length === 1) {
+	if (drawn.parts.length === 1)
 		element.dataset.column = String(drawn.parts[0].id);
-		return drawPart(element, record, drawn.parts[0].id);
+	/** @type {Node} */
+	let content;
+	if (record.group)
+		content = document.createTextNode(drawn.first === true ? record.group : '');
+	else if (drawn.parts.length === 1)
+		content = drawPart(element, record, drawn.parts[0].id);
+	else {
+		const holder = document.createElement('div');
+		holder.className = drawn.grouping === oneUnderAnother ? 'joined one-under-another' : 'joined in-cell';
+		for (const part of drawn.parts) {
+			const line = document.createElement('div');
+			line.dataset.column = String(part.id);
+			line.append(drawPart(line, record, part.id));
+			holder.append(line);
+		}
+		content = holder;
 	}
-	const holder = document.createElement('div');
-	holder.className = drawn.grouping === oneUnderAnother ? 'joined one-under-another' : 'joined in-cell';
-	for (const part of drawn.parts) {
-		const line = document.createElement('div');
-		line.dataset.column = String(part.id);
-		line.append(drawPart(line, record, part.id));
-		holder.append(line);
+	return drawn.first === true ? firstCell(owner, cell, record, content) : content;
+}
+
+/**
+ * The first column's cell, as the data view draws it in every view: stepped in by its level, the place of the expander —
+ * a folder's in a tree a button, in the Hierarchical view a mark, a crumb's open — the row's picture, what the cell shows.
+ * @param {Tablebox} owner
+ * @param {any} cell
+ * @param {any} record
+ * @param {Node} content
+ */
+function firstCell(owner, cell, record, content) {
+	const holder = document.createElement('span');
+	holder.className = 'first-cell';
+	holder.style.paddingInlineStart = `${(record.level ?? 0) * treeIndent}px`;
+	const folder = record.container === true || record.crumb === true;
+	const open = record.open === true || record.crumb === true;
+	const button = folder && owner.viewMode === treeView;
+	const expander = document.createElement(button ? 'button' : 'span');
+	expander.className = 'expander';
+	if (folder)
+		expander.textContent = open ? '▾' : '▸';
+	else
+		expander.style.visibility = 'hidden';
+	if (button) {
+		expander.setAttribute('type', 'button');
+		expander.setAttribute('aria-expanded', String(open));
+		expander.setAttribute('aria-label', open ? 'Close' : 'Open');
+		// Its own: neither a move of the cursor nor an activation of the row.
+		expander.addEventListener('click', (event) => {
+			event.stopPropagation();
+			owner.toggle(cell.getRow());
+		});
+		expander.addEventListener('dblclick', (event) => event.stopPropagation());
 	}
+	holder.append(expander);
+	const url = owner.context.picture(record.picture);
+	if (url) {
+		const image = document.createElement('img');
+		image.src = url;
+		image.alt = '';
+		holder.append(image);
+	}
+	const text = document.createElement('span');
+	text.className = 'first-text';
+	text.append(content);
+	holder.append(text);
 	return holder;
 }
 
@@ -1112,7 +1676,8 @@ function drawPart(element, record, id) {
 	element.style.fontFamily = look.fontFamily ?? '';
 	element.style.fontSize = look.fontSize ?? '';
 	const checked = record[`k${id}`];
-	return document.createTextNode(checked === undefined ? record[`c${id}`] ?? '' : checked ? '☑' : '☐');
+	// A flag is a tick, not a box: a list's cell is not ticked by a click (the thin client's).
+	return document.createTextNode(checked === undefined ? record[`c${id}`] ?? '' : checked ? '✓' : '');
 }
 
 /**
@@ -1140,7 +1705,30 @@ function alignOf(flags) {
 	return (flags & right) !== 0 ? 'right' : (flags & centred) !== 0 ? 'center' : 'left';
 }
 
-/** A grid field's column id: `c<id>` → id; 0 for the picture column. @param {string} field */
+/**
+ * The first column of the grid that is shown — one of a group's standing under its title too.
+ * @param {any[]} definitions
+ * @returns {any}
+ */
+function firstShown(definitions) {
+	for (const definition of definitions) {
+		const found = definition.columns !== undefined ? firstShown(definition.columns)
+			: definition.visible !== false ? definition : undefined;
+		if (found !== undefined)
+			return found;
+	}
+	return undefined;
+}
+
+/**
+ * What a row of a tree is known by when it is read again with another handle: what it reads.
+ * @param {any} record
+ */
+function keyOf(record) {
+	return Object.keys(record).filter((name) => /^c\d+$/.test(name)).map((name) => record[name]).join('\t');
+}
+
+/** A grid field's column id: `c<id>` → id; 0 for a group drawn as one. @param {string} field */
 function idOf(field) {
 	return field?.startsWith('c') ? Number(field.slice(1)) : 0;
 }

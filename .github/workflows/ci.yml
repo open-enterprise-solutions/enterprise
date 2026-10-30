@@ -93,6 +93,28 @@ jobs:
   # ---------------------------------------------------------------------------
   # The primary signal: the backend suite (~850 tests), no GUI, no display.
   # ---------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # The browser client (src/engine/webserver/www): the page's own modules in a real browser, the server a fake in
+  # the page (tests/web). Nothing to build, so a change to the page hears within a minute.
+  # ---------------------------------------------------------------------------
+  tests-web:
+    name: Tests (browser client)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install the browser
+        run: |
+          python -m pip install playwright==1.60.0
+          python -m playwright install --with-deps chromium
+      - name: Test
+        run: python -m unittest discover -s tests/web -v
+
   tests-linux:
     name: Tests (Linux, Debug)
     runs-on: ubuntu-22.04

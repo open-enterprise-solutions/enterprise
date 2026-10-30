@@ -1,13 +1,14 @@
-// A FIELD (Textctrl) — its caption beside it, the text it shows (State's Text), and the buttons its node was saved
-// with: Select (…), Open (▷), Clear (×), inside its frame, as the desktop's text editor has them. The text is
-// committed on change and on Enter — event Change {Text}, which the server parses by the field's type — never by the
-// key; typing begun is the state event Input, the focus taken Focus.
+// A FIELD (Textctrl) — its caption beside it, the text it shows (State's Text), in the text editor a table's cell has
+// too (textEditor.js), with the buttons its node was saved with. The text is committed on change and on Enter — event
+// Change {Text}, which the server parses by the field's type — never by the key; typing begun is the state event Input,
+// the focus taken Focus.
 //
 // Typing wins over the server. What the field shows is written from the node while nobody is in it, or while it still
 // shows what the page last wrote there and no older commit of it is unanswered; otherwise the server's text waits and
 // lands when the field is left with nothing changed.
 
 import { Control, EventKind, defineControl } from './control.js';
+import { TextEditor } from './textEditor.js';
 
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 
@@ -17,10 +18,8 @@ class Textctrl extends Control {
 		this.caption = document.createElement('span');
 		this.caption.className = 'caption';
 		const multiline = node.MultilineMode === true;
-		this.field = /** @type {any} */ (document.createElement(multiline ? 'wa-textarea' : 'wa-input'));
-		this.field.setAttribute('size', 's');
-		if (!multiline && node.PasswordMode)
-			this.field.setAttribute('type', 'password');
+		this.editor = new TextEditor({ multiline, password: node.PasswordMode === true });
+		this.field = this.editor.field;
 		this.lookTarget = this.field;
 		this.append(this.caption, this.field);
 
@@ -60,32 +59,7 @@ class Textctrl extends Control {
 			this.waiting = undefined;
 		});
 
-		/** @type {{[kind: string]: HTMLElement}} */
-		this.buttons = {
-			ButtonSelect: this.sideButton('…', 'Select', EventKind.Select),
-			ButtonOpen: this.sideButton('▷', 'Open', EventKind.Open),
-			ButtonClear: this.sideButton('×', 'Clear', EventKind.Clear),
-		};
-		this.update(node, {});
-	}
-
-	/**
-	 * @param {string} glyph
-	 * @param {string} title
-	 * @param {number} kind
-	 */
-	sideButton(glyph, title, kind) {
-		const button = document.createElement('button');
-		button.type = 'button';
-		button.slot = 'end';
-		button.className = 'side-button';
-		button.textContent = glyph;
-		button.title = title;
-		button.setAttribute('aria-label', title);
-		// The focus stays where it is: a blur here would commit the field beside the button, and the two would race
-		// for one value.
-		button.addEventListener('mousedown', (event) => event.preventDefault());
-		button.addEventListener('click', async () => {
+		this.editor.onButton = async (kind) => {
 			// The button acts on the field as it stands: text typed and not committed is let go.
 			this.applied = this.field.value;
 			this.waiting = undefined;
@@ -96,9 +70,8 @@ class Textctrl extends Control {
 				this.field.focus({ preventScroll: true });
 				this.field.setSelectionRange?.(0, 0);
 			}
-		});
-		this.field.append(button);
-		return button;
+		};
+		this.update(node, {});
 	}
 
 	/** Its caption's width in its font; an empty caption is 0 and still takes part, as the desktop's does. */
@@ -144,8 +117,7 @@ class Textctrl extends Control {
 		this.caption.textContent = state.Caption ?? node.Title ?? '';
 		this.caption.hidden = this.caption.textContent === '' && this.labelWidth <= 0;
 		this.field.toggleAttribute('readonly', state.ReadOnly === true || node.TexteditMode === false);
-		for (const [saved, button] of Object.entries(this.buttons))
-			button.hidden = node[saved] !== true;
+		this.editor.showButtons(node);
 
 		const text = state.Text ?? '';
 		const focused = this.contains(document.activeElement) || this.field.matches(':focus-within');

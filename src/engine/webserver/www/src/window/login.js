@@ -3,6 +3,7 @@
 // password; a refusal is said where it was made, and the person tries again with the password typed anew.
 
 import { Refusal } from '../protocol/connection.js';
+import { hideSplash } from './splash.js';
 
 /** @typedef {import('../protocol/session.js').Session} Session */
 
@@ -79,5 +80,6 @@ export async function logIn(root, session, publication) {
 		});
 		root.replaceChildren(form);
 		(users.length > 0 ? password : user).focus?.();
+		hideSplash();
 	});
 }

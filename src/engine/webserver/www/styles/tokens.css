@@ -40,17 +40,36 @@
 	--oes-message-warning: #d99a00;
 	--oes-message-error: #c0392b;
 
+	/* The arrows under the splash, in the picture's blue. */
+	--oes-splash-arrow: #1c9ad6;
+
+	/* The cell the cursor stands on, its row tinted with the selected row's fill — and a row selected whole, stronger. */
+	--oes-table-cell-current-bg: #bcd9f2;
+	--oes-table-row-current-bg: #cfe4f7;
+	/* The folders a Hierarchical view stands in, the thin client's fill of them. */
+	--oes-table-crumb-bg: #c5dce8;
+
 	/* A field's width when nothing stretches it. */
 	--oes-field-width: 16rem;
 
 	/* Something to press is at least this tall — a finger, not a pointer, on a touch screen. */
-	--oes-touch: 2rem;
+	--oes-touch: 1.75rem;
 
 	/* A table's scrollbar over the window of rows it holds. */
 	--oes-pager: 12px;
 }
 
+/* THE PAGE'S SIZE — a desktop form's, as close as the thin client's: everything is in rem, so the root says it once. A
+   finger keeps the browser's own size and its touch targets. */
+html {
+	font-size: 13px;
+}
+
 @media (pointer: coarse) {
+	html {
+		font-size: 16px;
+	}
+
 	:root {
 		--oes-touch: 44px;
 		--oes-pager: 16px;

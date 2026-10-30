@@ -3,6 +3,48 @@
    on: below 40rem of it, a row folds into a column, every item stretches across, and a caption stands over its field
    instead of beside it — a form drawn for a desktop still reads on a phone. */
 
+/* A control's height, the theme's taken down to a desktop form's: the padding around its text. A finger keeps the theme's. */
+@media (pointer: fine) {
+	:root {
+		--wa-form-control-padding-block: 0.45em;
+		--wa-form-control-padding-inline: 0.5em;
+	}
+}
+
+/* The window a form just opened is drawn in, out of sight over the one on show, until it has settled (ClientWindow): it
+   is measured as it will stand, and takes nothing from what is on show. It comes in with a short fade. */
+.views > .arriving {
+	position: absolute;
+	inset: 0;
+	visibility: hidden;
+}
+
+.views > .arrived {
+	animation: form-arrives 100ms ease-out;
+}
+
+@keyframes form-arrives {
+	from {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.views > .arrived {
+		animation: none;
+	}
+}
+
+/* A component not yet defined takes its place but shows no raw text. */
+wa-button:not(:defined),
+wa-input:not(:defined),
+wa-textarea:not(:defined),
+wa-select:not(:defined),
+wa-dropdown:not(:defined),
+wa-dialog:not(:defined) {
+	visibility: hidden;
+}
+
 /* The form is its view's height: its command bar on top, still, and under it the window its controls scroll in — the
    thin client's (ibVisualHostClient). The controls fill that window while they fit, what grows sharing what is left,
    and keep their own size and scroll when they do not. */
@@ -128,6 +170,7 @@ wa-tab img {
 
 /* A tool's own padding, not the page button's: the thin client's bar is a strip of tools close together. */
 .command-bar wa-button::part(base) {
+	height: var(--oes-touch);
 	min-height: var(--oes-touch);
 	min-width: var(--oes-touch);
 	padding-inline: 0.375rem;
@@ -157,18 +200,30 @@ oes-textctrl wa-textarea {
 	min-width: 6rem;
 }
 
-oes-textctrl .side-button {
-	min-width: var(--oes-touch);
+oes-textctrl .side-button,
+oes-tablebox .side-button {
+	min-width: 1.5em;
+	height: auto;
+	padding: 0;
 	align-self: stretch;
 	border: none;
+	border-radius: 0;
 	background: none;
 	color: var(--oes-muted);
 	cursor: pointer;
 	font: inherit;
 }
 
-oes-textctrl .side-button:hover {
+oes-textctrl .side-button:hover,
+oes-tablebox .side-button:hover {
 	color: var(--oes-accent);
+}
+
+@media (pointer: coarse) {
+	oes-textctrl .side-button,
+	oes-tablebox .side-button {
+		min-width: var(--oes-touch);
+	}
 }
 
 /* A caption breaks its lines where its text does, as the desktop's does. */
@@ -213,14 +268,14 @@ oes-notebook.no-tabs wa-tab-group::part(nav) {
 oes-tablebox {
 	display: flex;
 	flex-direction: column;
-	min-height: 12rem;
+	min-height: 15rem;
 	min-width: 0;
 }
 
 oes-tablebox .grid-frame {
 	position: relative;
 	flex: 1 1 auto;
-	min-height: 8rem;
+	min-height: 11rem;
 }
 
 /* Laid in its frame, not flowing in it: what the grid holds never makes the frame taller. */
@@ -314,6 +369,28 @@ oes-tablebox .tabulator .tabulator-row {
 	min-height: var(--oes-touch);
 }
 
+/* A cell's text is not taken by a double click: a double click activates the row. */
+oes-tablebox .tabulator .tabulator-cell {
+	padding: 0.35rem 0.3rem;
+	line-height: 1.25;
+	user-select: none;
+}
+
+/* The header takes the lines its table says (its HeaderHeight), a line a row's. */
+oes-tablebox .tabulator .tabulator-header .tabulator-col .tabulator-col-content {
+	padding: 0.1rem 0.3rem;
+}
+
+oes-tablebox .tabulator .tabulator-header .tabulator-col-title {
+	min-height: calc(var(--oes-header-lines, 1) * 1.25em);
+	line-height: 1.25;
+}
+
+oes-tablebox .grid:focus,
+oes-tablebox .tabulator .tabulator-tableholder:focus {
+	outline: none;
+}
+
 oes-tablebox .tabulator .tabulator-row.tabulator-row-even {
 	background: var(--oes-table-row-alt-bg);
 }
@@ -322,10 +399,83 @@ oes-tablebox .tabulator .tabulator-row:hover {
 	background: var(--oes-table-row-hover-bg);
 }
 
-oes-tablebox .tabulator .tabulator-row.tabulator-selected,
-oes-tablebox .tabulator .tabulator-row.tabulator-selected:hover {
-	background: var(--oes-table-row-selected-bg);
+/* The cursor (Tablebox.markCursor): on a row, the row in the strong fill; on a cell, the row tinted and the cell strong —
+   the thin client's two modes. */
+oes-tablebox .tabulator .tabulator-row.current-row,
+oes-tablebox .tabulator .tabulator-row.current-row:hover {
+	background: var(--oes-table-row-current-bg);
 	box-shadow: inset 3px 0 0 var(--oes-table-row-selected-accent);
+}
+
+oes-tablebox .grid.select-cell .tabulator-row.current-row,
+oes-tablebox .grid.select-cell .tabulator-row.current-row:hover {
+	background: var(--oes-table-row-selected-bg);
+}
+
+oes-tablebox .tabulator .current-cell {
+	background: var(--oes-table-cell-current-bg);
+	box-shadow: inset 0 0 0 1px var(--oes-accent);
+}
+
+/* On a row selected whole, the cell the keys put the cursor on: the row's fill left off it, as the thin client's. */
+oes-tablebox .grid:not(.select-cell) .tabulator .current-cell {
+	background: var(--oes-table-bg);
+}
+
+/* The folders the Hierarchical view stands in, frozen over the rows of the level. */
+oes-tablebox .tabulator .tabulator-row.crumb {
+	background: var(--oes-table-crumb-bg);
+	font-weight: normal;
+	cursor: pointer;
+}
+
+/* A row that is a group's caption: one line across the row, no cell's rule under it. */
+oes-tablebox .tabulator .tabulator-row.group-row .tabulator-cell {
+	border-right-color: transparent;
+	overflow: visible;
+}
+
+oes-tablebox .tabulator .tabulator-row.group-row .first-text {
+	overflow: visible;
+}
+
+/* The first column's cell: its step in, the place of the expander, the row's picture, what it shows. */
+oes-tablebox .first-cell {
+	display: flex;
+	align-items: center;
+	gap: 0.2rem;
+	min-width: 0;
+}
+
+oes-tablebox .first-cell .first-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+oes-tablebox .first-cell .expander {
+	flex: 0 0 1em;
+	width: 1em;
+	height: auto;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: none;
+	color: var(--oes-muted);
+	font: inherit;
+	text-align: center;
+}
+
+oes-tablebox .first-cell button.expander {
+	cursor: pointer;
+}
+
+@media (pointer: coarse) {
+	oes-tablebox .first-cell button.expander {
+		flex-basis: var(--oes-touch);
+		width: var(--oes-touch);
+	}
 }
 
 oes-tablebox .tabulator .tabulator-cell img {
@@ -370,11 +520,12 @@ oes-tablebox .joined.in-cell {
 	gap: 0.5em;
 }
 
-/* A column's footer: its picture and text, where its alignment puts them. */
+/* A column's footer: its picture and text, where its alignment puts them, the lines its table says (its FooterHeight). */
 oes-tablebox .column-footer {
 	display: flex;
 	align-items: center;
 	gap: 0.25rem;
+	min-height: calc(var(--oes-footer-lines, 1) * 1.25em);
 }
 
 oes-tablebox .column-footer img {
@@ -382,39 +533,22 @@ oes-tablebox .column-footer img {
 	height: 16px;
 }
 
-/* A cell's editor: the text, its buttons inside the cell as a field has them. */
+/* A cell's editor is a field's (controls/textEditor.js), filling its cell. */
 oes-tablebox .cell-editor {
-	display: flex;
-	align-items: stretch;
+	--wa-form-control-height: 1.85rem;
 	width: 100%;
-	height: 100%;
 }
 
-oes-tablebox .cell-editor input {
-	flex: 1 1 auto;
-	min-width: 0;
-	padding: 0 3px;
+/* Its focus ring inside its frame: outside it, the cells around would cut it. */
+oes-tablebox .cell-editor:focus-within::part(base) {
+	outline: 2px solid var(--oes-accent);
+	outline-offset: -2px;
+}
+
+oes-tablebox .tabulator .tabulator-cell.tabulator-editing {
+	padding: 0;
 	border: none;
-	outline: none;
-	font: inherit;
-	color: inherit;
-	background: transparent;
-}
-
-oes-tablebox .cell-editor button {
-	flex: 0 0 auto;
-	height: auto;
-	padding: 0 0.375rem;
-	border: none;
-	border-radius: 0;
-	background: none;
-	color: var(--oes-muted);
-	font: inherit;
-	cursor: pointer;
-}
-
-oes-tablebox .cell-editor button:hover {
-	color: var(--oes-accent);
+	overflow: visible;
 }
 
 /* A spreadsheet: its command bar over the sheet, the sheet scrolling inside its own frame — sideways too, never the

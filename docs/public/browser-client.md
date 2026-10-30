@@ -25,7 +25,8 @@ from its pack `web/www.wpk`.
 | `src/controls/` | a form's controls, one file each, each its own element; the sizers; the label column |
 | `src/tablebox/` | the table: the grid fed with the server's pages |
 | `src/gridbox/` | the spreadsheet, drawn as a table |
-| `styles/` | the palette, the window, the form — and the form folded for a narrow screen |
+| `styles/` | the palette, the splash, the window, the form — and the form folded for a narrow screen |
+| `tests/web/` (the repository's) | the page's tests: its own modules in a real browser, the server a fake in the page. Python and Playwright, no Node; `python -m unittest discover -s tests/web` |
 
 ## Who does what
 
@@ -35,6 +36,11 @@ by a patch is updated in place, so the focus and the caret stay where they were.
 
 ## What it guarantees
 
+- **The start.** The thin client's splash is on the screen before the big stylesheets have come, the arrows and the stage
+  of the start under it. A login asked takes its place; then it is up again until the first window has its rows.
+- **A form comes whole.** A form just opened is drawn out of sight, the one on show staying up until it has its rows, for
+  a second at most; a tab gone back to comes at once. What did not change is not drawn again.
+- **As dense as a desktop form on a mouse**, the root's 13 px; a finger keeps 16 px and targets of 44 px.
 - **The thin client's rules.** The login first goes in with no name — a base with no users lets it in. A refused call
   is said in a box with the server's words; a session that ended closes the window. A dropped socket is opened again and
   the session taken back with `login {Token}` while the server keeps it; the call the drop left unanswered is sent again
@@ -50,7 +56,19 @@ by a patch is updated in place, so the focus and the caret stay where they were.
   Ctrl+A. Ctrl+C copies them as cells — a figure as a number — and the figures taken are summed in the sheet's corner:
   average, count, sum. A row folded away is neither summed nor copied.
 - **The table** keeps its place: a list read again is read around its top visible row, paged both ways, a stale page
-  dropped. A cell keeps the server's text; its editor has the column's buttons (… ▷ ×).
+  dropped. A cell keeps the server's text; its editor is a field's (`controls/textEditor.js`), with the column's buttons
+  (… ▷ ×).
+- **A table shows its rows three ways**, the person's to switch: every row flat (List); one level, a folder activated
+  entered and the folders it stands in frozen over its rows, one of them activated gone back out of (Hierarchy); or the
+  hierarchy in place, a folder opened by its expander and read whole (Tree). Read again, a tree keeps its folders open.
+- **The cursor stands on a row or on a cell**, as the table's selection mode says: a cell is marked, its row tinted. The
+  keys are the thin client's: the arrows, Page Up and Down, Home and End among the rows held, Tab along the columns, F2 and
+  Space edit, Enter activates, and in a tree the arrows sideways and + - * open and close a folder. A second click on the
+  cursor's cell opens its editor. A column that takes no typing still opens, for its buttons.
+- **The first column's cell is the row's too**, in every view: the step in, the place of the expander, the row's picture,
+  then the value. A row with a group's caption is that caption, across the whole line. A table has its footer and its
+  column groups: side by side under a title, one under the other, in one cell; its header and footer take the lines it
+  says. A column is dragged by its header where the columns are a plain row.
 - **A table holds a window of rows, not the list** — the thin client's: a page is as many rows as the window shows,
   read when fewer than five are left past its edge, and the side left behind is let go, so a list scrolled to its end
   holds about two windows. Its scrollbar says only whether there are rows before and after (at the top, in the middle,
@@ -65,8 +83,10 @@ by a patch is updated in place, so the focus and the caret stay where they were.
 
 ## Where it stops
 
-- The questions drawn are the message box, the choice, the menu, the calculator and the calendar, the error and the
-  print; the others are answered as cancelled.
+- The questions drawn are the message box, the choice, the view mode, the menu, the calculator and the calendar, the
+  error and the print; the others are answered as cancelled.
+- A tree's rows opened stay held: only its top level is paged, and a folder is read whole.
+- A column under a group is not dragged.
 - A printed sheet is answered as printed: the browser does not say whether its print dialog was cancelled.
 - A number goes back from the calculator exact to 15 digits.
 - No files: nothing is uploaded or saved from the page.

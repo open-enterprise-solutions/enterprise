@@ -6,6 +6,7 @@ import { Connection } from './protocol/connection.js';
 import { Session } from './protocol/session.js';
 import { Pictures } from './protocol/pictures.js';
 import { logIn } from './window/login.js';
+import { hideSplash, showSplash } from './window/splash.js';
 import { ClientWindow } from './window/window.js';
 
 const root = /** @type {HTMLElement} */ (document.getElementById('client'));
@@ -14,25 +15,32 @@ const publication = location.pathname.split('/').filter(Boolean)[0] ?? '';
 async function start() {
 	if (publication === '') {
 		root.textContent = 'No publication in the address: open /<publication>/.';
+		hideSplash();
 		return;
 	}
 	document.title = publication;
+	showSplash('Connecting to the base');
 	const connection = Connection.beside(location);
 	try {
 		await connection.open();
 	}
 	catch (error) {
 		root.textContent = `${publication}: ${/** @type {Error} */ (error).message}`;
+		hideSplash();
 		return;
 	}
 	const session = new Session(connection);
 	const pictures = new Pictures(session);
+	showSplash('Logging in');
 	await logIn(root, session, publication);
 	addEventListener('pagehide', () => session.logout());
+	showSplash('Opening the window');
 	// The login's answer is the first frame: the session holds it, and the window draws it as it comes up.
 	const clientWindow = new ClientWindow(root, session, pictures);
 	if (session.frame !== null)
-		clientWindow.draw(session.frame);
+		await clientWindow.draw(session.frame);
+	await clientWindow.settled();
+	hideSplash();
 }
 
 start();

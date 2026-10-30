@@ -11,6 +11,7 @@ import { calculator, calendar } from './simpleChoice.js';
 // The kinds asked here (ibRequest::ibKind).
 const message = 1;
 const choice = 2;
+const viewMode = 7;
 const menu = 9;
 const simpleChoice = 12;
 const error = 14;
@@ -64,6 +65,8 @@ export class Questions {
 			this.message(request);
 		else if (request.Kind === choice)
 			this.choice(request);
+		else if (request.Kind === viewMode)
+			this.viewMode(request);
 		else if (request.Kind === menu)
 			this.menu(request);
 		else if (request.Kind === simpleChoice)
@@ -108,6 +111,35 @@ export class Questions {
 			button.addEventListener('click', () => this.answer(dialog, request, { Id: item.Id }));
 			list.append(button);
 		}
+		dialog.querySelector('.text')?.replaceWith(list);
+	}
+
+	/**
+	 * How a table shows its rows, as the thin client's window asks it (wxTableViewModeDialog): the three, the one in force
+	 * chosen. OK answers with the one chosen, Cancel and closing with none.
+	 * @param {ProtocolNode} request
+	 */
+	viewMode(request) {
+		const list = document.createElement('div');
+		list.className = 'view-modes';
+		for (const [mode, caption] of /** @type {[number, string][]} */ ([[0, 'Tree'], [1, 'Hierarchy'], [2, 'List']])) {
+			const label = document.createElement('label');
+			const radio = document.createElement('input');
+			radio.type = 'radio';
+			radio.name = 'view-mode';
+			radio.value = String(mode);
+			radio.checked = mode === request.Mode;
+			label.append(radio, caption);
+			list.append(label);
+		}
+		const answer = { Mode: request.Mode };
+		list.addEventListener('change', (event) => {
+			answer.Mode = Number(/** @type {HTMLInputElement} */ (event.target).value);
+		});
+		const dialog = this.dialog('View mode', '', [
+			{ caption: 'OK', answer, preferred: true },
+			{ caption: 'Cancel', answer: {} },
+		], request);
 		dialog.querySelector('.text')?.replaceWith(list);
 	}
 

@@ -50,6 +50,28 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
 
+## The browser client
+
+- **The start**: the thin client's splash, with arrows and the stage of the start under it, is up from the first paint;
+  a login asked takes its place, and it stays until the first window has its rows. The window's title has the OES logo
+  beside the configuration's name.
+- **A form comes whole**: one just opened is shown once it has its rows, the one before staying up meanwhile. The tabs are
+  no longer drawn anew by every answer.
+- **Denser on a mouse**: a field, a row, a tool, the window's title and a table's header take about two thirds of the height
+  they took. A touch screen keeps its targets.
+- **A table's three view modes**: List, Hierarchy with the folders it stands in frozen over the rows, and Tree with
+  expanders. View mode on the bar asks which.
+- **A table's selection mode**: the row, or the cell with its row tinted.
+- **A table takes the thin client's keys and clicks**: the arrows, Page Up and Down, Home and End, Tab, F2, Space and Enter, and
+  in a tree the arrows sideways and + - *. A second click on the cursor's cell opens its editor, and the table takes the focus
+  as its form opens.
+- **A table draws its rows as the thin client does**: the row's picture and the expander in the first column, a group's caption
+  across the whole line, a flag as a tick, the header and the footer in as many lines as the table says. A column is dragged by
+  its header.
+- **A cell's editor is a field's**, in look and in buttons, and a column that takes no typing still opens for its buttons.
+- **A hidden column in a group drawn as one is not drawn**, and such a group keeps its columns' footers.
+- **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
+
 ## Fixes
 
 - **A selection reads a row's standard attributes.** `Catalogs.X.Select()` and the selections of the

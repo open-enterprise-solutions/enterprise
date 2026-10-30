@@ -9,6 +9,7 @@ import { Refusal } from '../protocol/connection.js';
 import { Questions } from './questions.js';
 import { Sections } from './sections.js';
 import { showFunctions } from './functions.js';
+import { showAbout } from './about.js';
 
 /** @typedef {import('../protocol/session.js').Session} Session */
 /** @typedef {import('../protocol/pictures.js').Pictures} Pictures */
@@ -17,9 +18,13 @@ import { showFunctions } from './functions.js';
 
 // The schemas the window opens itself (ibSchema): All functions.
 const allFunctions = 1;
+const about = 4;
 
 // How long a call is waited on before the window says it waits: a quick answer shows nothing.
 const busyAfter = 800;
+
+// How long a form just opened is waited for, the one on show staying where it is: past this it comes as far as it has got.
+const arrivesWithin = 1000;
 
 // A message's level (ibMessage::ibLevel), as its line is marked.
 const information = 1;
@@ -40,10 +45,14 @@ export class ClientWindow {
 		root.className = 'client-window';
 
 		this.header = document.createElement('header');
+		const logo = document.createElement('img');
+		logo.className = 'logo';
+		logo.src = 'styles/logo.png';
+		logo.alt = 'OES';
 		this.title = document.createElement('h1');
 		this.menu = document.createElement('nav');
 		this.menu.className = 'menu';
-		this.header.append(this.title, this.menu);
+		this.header.append(logo, this.title, this.menu);
 
 		this.tabs = document.createElement('div');
 		this.tabs.className = 'tabs';
@@ -81,8 +90,9 @@ export class ClientWindow {
 
 		// The sections are the configuration's and stay while the session lasts: read once, as the window comes up.
 		this.sections = new Sections(session, pictures, (error) => this.refused(error));
-		if (session.frame !== null)
-			this.sections.read(session.frame).catch((error) => this.refused(error));
+		/** @type {Promise<unknown>} */
+		this.sectionsRead = session.frame !== null
+			? this.sections.read(session.frame).catch((error) => this.refused(error)) : Promise.resolve();
 
 		// The server waited on, and the connection lost — over the window, taking no click.
 		this.busy = document.createElement('div');
@@ -104,7 +114,12 @@ export class ClientWindow {
 
 		/** @type {Map<number, HTMLElement>} each tab's view, drawn */
 		this.tabViews = new Map();
+		/** @type {Map<number, HTMLElement>} each tab's button in the strip, kept while the tab is open */
+		this.tabButtons = new Map();
+		/** @type {{id: number} | null} the tab whose form is being drawn, the one on show still up */
+		this.arrival = null;
 		this.drawnMenu = '';
+		this.drawnTabs = '';
 
 		session.addEventListener('frame', (event) => this.draw(/** @type {CustomEvent} */ (event).detail));
 		session.addEventListener('events', (event) => this.happened(/** @type {CustomEvent} */ (event).detail));
@@ -210,6 +225,8 @@ export class ClientWindow {
 				await this.session.call('schema', { Schema: item.Schema, Command: item.Command });
 			else if (item.Schema === allFunctions)
 				await showFunctions(this.session, this.pictures, (error) => this.refused(error));
+			else if (item.Schema === about)
+				await showAbout(this.session);
 			else if (item.Schema !== undefined)
 				this.say(`${item.Title ?? ''}: not in the browser yet`);
 			else if (item.Command !== undefined)
@@ -220,26 +237,52 @@ export class ClientWindow {
 		}
 	}
 
-	/** @param {ProtocolNode} frame */
+	/**
+	 * The strip of tabs, brought up to the frame — only when what it shows changed, and over the buttons it has: drawn
+	 * anew on every answer, a tab under the pointer lost its hover and its icon was decoded again each time.
+	 * @param {ProtocolNode} frame
+	 */
 	drawTabs(frame) {
 		const tabs = frame.Tabs?.NodeChildren ?? [];
-		this.tabs.replaceChildren(...tabs.map((tab) => {
-			const button = document.createElement('div');
+		const drawn = JSON.stringify([tabs, frame.ActiveTab]);
+		if (drawn === this.drawnTabs)
+			return;
+		this.drawnTabs = drawn;
+		const open = new Set(tabs.map((tab) => tab.NodeId));
+		for (const [id, button] of this.tabButtons) {
+			if (!open.has(id)) {
+				button.remove();
+				this.tabButtons.delete(id);
+			}
+		}
+		tabs.forEach((tab, place) => {
+			const button = this.tabButton(tab, frame.ActiveTab);
+			if (this.tabs.children[place] !== button)
+				this.tabs.insertBefore(button, this.tabs.children[place] ?? null);
+		});
+		this.tabs.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+		// A tab closed takes its view with it.
+		for (const [id, element] of this.tabViews) {
+			if (!open.has(id)) {
+				dispose(element);
+				this.tabViews.delete(id);
+			}
+		}
+	}
+
+	/**
+	 * A tab's button in the strip, made once.
+	 * @param {ProtocolNode} tab
+	 * @param {number | undefined} active
+	 */
+	tabButton(tab, active) {
+		let button = this.tabButtons.get(tab.NodeId);
+		if (button === undefined) {
+			button = document.createElement('div');
 			button.className = 'tab';
 			button.setAttribute('role', 'tab');
-			button.setAttribute('aria-selected', String(tab.NodeId === frame.ActiveTab));
 			button.tabIndex = 0;
-			const icon = this.pictures.url(tab.Icon);
-			if (icon) {
-				const image = document.createElement('img');
-				image.src = icon;
-				image.alt = '';
-				button.append(image);
-			}
-			const title = document.createElement('span');
-			title.textContent = tab.Title ?? '';
-			button.title = tab.Title ?? '';
-			button.append(title);
+			button.append(document.createElement('span'));
 			button.addEventListener('click', () => {
 				if (tab.NodeId !== this.session.frame?.ActiveTab)
 					this.session.call('activate', { Tab: tab.NodeId }).catch((error) => this.refused(error));
@@ -249,50 +292,101 @@ export class ClientWindow {
 				close.type = 'button';
 				close.className = 'close';
 				close.textContent = '×';
-				close.setAttribute('aria-label', `Close ${tab.Title ?? ''}`);
 				close.addEventListener('click', (event) => {
 					event.stopPropagation();
 					this.session.call('close', { Tab: tab.NodeId }).catch((error) => this.refused(error));
 				});
 				button.append(close);
 			}
-			return button;
-		}));
-		this.tabs.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-		// A tab closed takes its view with it.
-		const open = new Set(tabs.map((tab) => tab.NodeId));
-		for (const [id, element] of this.tabViews) {
-			if (!open.has(id)) {
-				dispose(element);
-				this.tabViews.delete(id);
-			}
+			this.tabButtons.set(tab.NodeId, button);
 		}
+		button.setAttribute('aria-selected', String(tab.NodeId === active));
+		button.title = tab.Title ?? '';
+		/** @type {HTMLElement} */ (button.querySelector('span')).textContent = tab.Title ?? '';
+		button.querySelector('.close')?.setAttribute('aria-label', `Close ${tab.Title ?? ''}`);
+		const icon = this.pictures.url(tab.Icon);
+		let image = button.querySelector('img');
+		if (icon && image === null) {
+			image = document.createElement('img');
+			image.alt = '';
+			button.prepend(image);
+		}
+		if (image !== null && image.getAttribute('src') !== icon)
+			image.src = icon;
+		return button;
 	}
 
-	/** @param {ProtocolNode} frame */
+	/**
+	 * The active tab's view. A form just opened is drawn out of sight, the one on show staying up until it has its rows:
+	 * the person sees the one, then the other, and never an empty table filling.
+	 * @param {ProtocolNode} frame
+	 */
 	drawView(frame) {
 		const active = frame.ActiveTab;
 		const view = frame.View;
-		for (const [id, element] of this.tabViews)
-			element.hidden = id !== active;
-		if (view === undefined || active === undefined || active === 0)
+		if (view === undefined || active === undefined || active === 0) {
+			this.showView(active);
 			return;
+		}
 		const existing = this.tabViews.get(active) ?? null;
 		if (view.NodeType !== 'ClientForm') {
 			// A view that is no form — a text, a spreadsheet, the journal, the start page — is not drawn here yet.
 			const placeholder = existing ?? document.createElement('div');
 			placeholder.className = 'view-placeholder';
 			placeholder.textContent = 'This view is not in the browser yet.';
-			placeholder.hidden = false;
 			if (existing === null) {
 				this.views.append(placeholder);
 				this.tabViews.set(active, placeholder);
 			}
+			this.showView(active);
 			return;
 		}
 		const form = reconcile(this.views, /** @type {any} */ (existing), view, this.contextOf(view));
-		form.hidden = false;
 		this.tabViews.set(active, form);
+		if (existing === null)
+			this.arrive(active, /** @type {any} */ (form));
+		else if (this.arrival?.id !== active)
+			this.showView(active);
+	}
+
+	/**
+	 * A form just drawn, out of sight until it has settled.
+	 * @param {number} id its tab
+	 * @param {import('../controls/control.js').Control} form
+	 */
+	arrive(id, form) {
+		const arrival = { id };
+		this.arrival = arrival;
+		form.classList.add('arriving');
+		Promise.race([form.settled(), new Promise((resolve) => setTimeout(resolve, arrivesWithin))]).then(() => {
+			if (this.arrival !== arrival)
+				return;
+			this.showView(id);
+			// The table takes the focus as its form opens, as the thin client's, from the section pressed to open it — now
+			// that it can be seen, and never out of a question being answered.
+			if (document.activeElement?.closest('wa-dialog') === null || document.activeElement === null)
+				/** @type {HTMLElement | null} */ (form.querySelector('oes-tablebox'))?.focus({ preventScroll: true });
+		});
+	}
+
+	/**
+	 * The tab's view on show and no other — the form that was arriving comes in.
+	 * @param {number | undefined} active
+	 */
+	showView(active) {
+		this.arrival = null;
+		for (const [id, element] of this.tabViews) {
+			element.hidden = id !== active;
+			element.classList.toggle('arrived', id === active && element.classList.contains('arriving'));
+			element.classList.remove('arriving');
+		}
+	}
+
+	/** The window as it is meant to be seen: its sections read, the form on show drawn. */
+	settled() {
+		const form = this.tabViews.get(this.session.frame?.ActiveTab ?? 0);
+		const drawn = /** @type {any} */ (form)?.settled?.() ?? Promise.resolve();
+		return Promise.race([Promise.all([this.sectionsRead, drawn]), new Promise((resolve) => setTimeout(resolve, arrivesWithin))]);
 	}
 
 	/**
