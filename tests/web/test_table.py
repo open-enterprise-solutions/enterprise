@@ -232,6 +232,26 @@ class ContextMenu(PageTest):
         page.mouse.click(frame['x'] + 100, frame['y'] + frame['height'] - 20, button='right')
         page.wait_for_selector('.popup-menu:popover-open')
 
+    def test_asked_at_the_press_it_opens_at_the_release(self):
+        # Linux and macOS ask for the menu as the button goes down, Windows as it comes up: here the first, on any OS.
+        page = self.open()
+        at = self.row('Item 2').bounding_box()
+        x, y = at['x'] + 100, at['y'] + at['height'] / 2
+        # The browser's own is not the one asked here.
+        page.evaluate("""() => addEventListener('contextmenu', (event) => {
+            if (event.isTrusted)
+                event.stopImmediatePropagation();
+        }, true)""")
+        page.mouse.move(x, y)
+        page.mouse.down(button='right')
+        page.evaluate("""([x, y]) => document.elementFromPoint(x, y).dispatchEvent(new MouseEvent('contextmenu',
+            { bubbles: true, cancelable: true, button: 2, buttons: 2, clientX: x, clientY: y }))""", [x, y])
+        self.assertEqual(page.locator('.popup-menu').count(), 0)
+        page.mouse.up(button='right')
+        page.wait_for_selector('.popup-menu:popover-open')
+        page.wait_for_timeout(200)
+        self.assertEqual(page.locator('.popup-menu:popover-open').count(), 1)
+
     def test_the_one_picked_goes_to_the_server(self):
         page = self.open()
         last = self.row('Item 5').bounding_box()

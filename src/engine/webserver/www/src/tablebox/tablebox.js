@@ -953,7 +953,13 @@ class Tablebox extends Control {
 		if (entries.length === 0)
 			return;
 		event.preventDefault();
-		this.showContextMenu(entries, event.clientX, event.clientY);
+		const show = () => this.showContextMenu(entries, event.clientX, event.clientY);
+		// Linux and macOS ask for the menu as the button goes down, Windows as it comes up: it opens once the button is up,
+		// the release being what closes a menu opened under it.
+		if (event.buttons === 0)
+			show();
+		else
+			document.addEventListener('pointerup', () => setTimeout(show), { once: true, capture: true });
 	}
 
 	/**
