@@ -19,6 +19,10 @@ know it. The bases start afresh with every nightly — what visitors typed is go
 
 Not reachable from outside: the cluster's port (7373), MCP (7374, 7600–7699), the designer.
 
+⚠ A visitor's rights are what the base gives: a base without users lets anyone in with all of them, and a client can
+hand the server a file to open. The web server runs as `oes`, on the loopback alone, writing only in the releases
+(`oes-web.service`), and owns nothing root runs.
+
 ## A base in the demo
 
 A folder in `examples/` with an `infobase.conf` and its database. The nightly packs every such folder

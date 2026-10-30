@@ -57,7 +57,10 @@ TAG=nightly
 KEEP=2
 CONF
 [ -e "$root/site/index.html" ] || echo '<!doctype html><title>OES Enterprise demo</title><p>Starting.</p>' > "$root/site/index.html"
-chown -R oes:oes "$root"
+# Root's, all but the releases' own folders (the update gives each to oes): root runs the script and reads the settings
+# every hour, so the web server, which strangers log in to, must not be able to rewrite them or their folder.
+chown -R root:root "$root/bin" "$root/site"
+chown root:root "$root" "$root/releases" "$root/demo.conf"
 
 install -m 644 "$here/oes-web.service" "$here/oes-demo-update.service" "$here/oes-demo-update.timer" /etc/systemd/system/
 sed "s/DEMO_HOST/$name/" "$here/Caddyfile" > /etc/caddy/Caddyfile
