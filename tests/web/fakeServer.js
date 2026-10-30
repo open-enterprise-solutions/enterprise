@@ -9,8 +9,13 @@
 
 	// The events (ibEvent::ibKind) and the questions (ibRequest::ibKind) this server knows of.
 	const Event = { Command: 2, Open: 7 };
+	const messageRequest = 1;
 	const viewModeRequest = 7;
 	const viewModeCommand = 700;
+	// A message's buttons, wx's flags and codes alike.
+	const yes = 0x02;
+	const no = 0x08;
+	const cancel = 0x10;
 	// An item's Stretch (wxStretch): it fills its box across.
 	const expand = 0x2000;
 
@@ -65,7 +70,7 @@
 				Title: scenario.title ?? 'Test base',
 				Status: 'Ready',
 				Menu: scenario.menu ?? {},
-				Tabs: { NodeChildren: this.tabs.map((one) => ({ NodeId: one.id, Title: one.title, Locked: false })) },
+				Tabs: { NodeChildren: this.tabs.map((one) => ({ NodeId: one.id, Title: one.title, Locked: one.locked === true })) },
 				ActiveTab: this.active,
 				...(tab !== undefined ? { View: this.view(tab) } : {}),
 				...(this.request !== undefined ? { Request: this.request } : {}),
@@ -163,9 +168,11 @@
 					this.active = params.Tab;
 				return this.answerFrame();
 			case 'close':
-				this.tabs = this.tabs.filter((tab) => tab.id !== params.Tab);
-				this.active = this.tabs.at(-1)?.id ?? 0;
-				return this.answerFrame();
+				if (this.tabs.find((tab) => tab.id === params.Tab)?.unsaved === true) {
+					this.request = { Id: this.nextRequest++, Kind: messageRequest, Text: 'Save?', Style: yes | no | cancel };
+					return this.answerFrame();
+				}
+				return this.closed(params.Tab);
 			case 'fetch':
 				return this.fetch(this.tab().table, params.Request);
 			case 'event':
@@ -192,9 +199,17 @@
 			return this.answerFrame();
 		}
 
+		closed(id) {
+			this.tabs = this.tabs.filter((tab) => tab.id !== id);
+			this.active = this.tabs.at(-1)?.id ?? 0;
+			return this.answerFrame();
+		}
+
 		respond(params) {
 			const table = this.tab().table;
 			this.request = undefined;
+			if (params.Response?.Button === no)
+				return this.closed(this.active);
 			if (params.Response?.Mode !== undefined && params.Response.Mode !== table.viewMode) {
 				table.viewMode = params.Response.Mode;
 				table.version = (table.version ?? 1) + 1;

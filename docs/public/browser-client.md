@@ -81,6 +81,8 @@ by a patch is updated in place, so the focus and the caret stay where they were.
 - **Printing prints the active tab's content**, without the window around it; a sheet a script prints is drawn for the
   printer alone. A sheet's frozen rows repeat on every page; a row's print break ends its page.
 - **Busy and offline are shown**: a call unanswered for 800 ms shows a spinner, a dropped connection a strip.
+- **Escape closes what stands on top**, one thing a press: a cell's editor, a menu, a dialog, then the active tab. The tab
+  is closed as its × closes it: the text typed is sent first, and the server asks about what is left to save.
 
 ## Where it stops
 

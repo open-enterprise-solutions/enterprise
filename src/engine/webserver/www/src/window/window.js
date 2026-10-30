@@ -126,6 +126,12 @@ export class ClientWindow {
 		session.addEventListener('busy', (event) => this.waiting(/** @type {CustomEvent} */ (event).detail));
 		session.addEventListener('connection', (event) => this.connected(/** @type {CustomEvent} */ (event).detail));
 		session.addEventListener('ended', (event) => this.ended(/** @type {CustomEvent} */ (event).detail));
+		document.addEventListener('keydown', (event) => this.escaped(event));
+		// A dialog gone whose form went with it has nothing to give the focus back to.
+		document.addEventListener('wa-after-hide', () => {
+			if (document.activeElement === document.body)
+				this.focusTable(this.tabViews.get(this.session.frame?.ActiveTab ?? 0));
+		});
 	}
 
 	/**
@@ -294,7 +300,7 @@ export class ClientWindow {
 				close.textContent = '×';
 				close.addEventListener('click', (event) => {
 					event.stopPropagation();
-					this.session.call('close', { Tab: tab.NodeId }).catch((error) => this.refused(error));
+					this.closeTab(tab.NodeId);
 				});
 				button.append(close);
 			}
@@ -314,6 +320,37 @@ export class ClientWindow {
 		if (image !== null && image.getAttribute('src') !== icon)
 			image.src = icon;
 		return button;
+	}
+
+	/**
+	 * A tab closed by the server: what is left to save it asks about itself, as a question.
+	 * @param {number} id
+	 */
+	closeTab(id) {
+		this.session.call('close', { Tab: id }).catch((error) => this.refused(error));
+	}
+
+	/**
+	 * Escape closes what stands on top, one thing a press: an editor, a menu or a dialog takes it itself, and with none of
+	 * them up the active tab goes. A key held closes one, and a press while the server is still answering closes none. The
+	 * field in focus lets go first, so that the text typed in it reaches the server before the close does and is asked about.
+	 * @param {KeyboardEvent} event
+	 */
+	escaped(event) {
+		if (event.key !== 'Escape' || event.repeat || event.defaultPrevented || event.ctrlKey || event.altKey || event.shiftKey
+			|| event.metaKey)
+			return;
+		const frame = this.session.frame;
+		if (frame === null || frame.Request !== undefined || this.session.outstanding > 0 || this.arrival !== null
+			|| document.querySelector('wa-dialog[open], wa-dropdown[open], :popover-open') !== null)
+			return;
+		const tab = frame.Tabs?.NodeChildren?.find((one) => one.NodeId === frame.ActiveTab);
+		if (tab === undefined || tab.Locked)
+			return;
+		const field = /** @type {HTMLElement | null} */ (document.activeElement);
+		field?.blur();
+		field?.focus({ preventScroll: true });
+		this.closeTab(tab.NodeId);
 	}
 
 	/**
@@ -341,12 +378,16 @@ export class ClientWindow {
 			this.showView(active);
 			return;
 		}
+		const returned = existing?.hidden === true;
 		const form = reconcile(this.views, /** @type {any} */ (existing), view, this.contextOf(view));
 		this.tabViews.set(active, form);
 		if (existing === null)
 			this.arrive(active, /** @type {any} */ (form));
-		else if (this.arrival?.id !== active)
+		else if (this.arrival?.id !== active) {
 			this.showView(active);
+			if (returned)
+				this.focusTable(form);
+		}
 	}
 
 	/**
@@ -362,11 +403,18 @@ export class ClientWindow {
 			if (this.arrival !== arrival)
 				return;
 			this.showView(id);
-			// The table takes the focus as its form opens, as the thin client's, from the section pressed to open it — now
-			// that it can be seen, and never out of a question being answered.
-			if (document.activeElement?.closest('wa-dialog') === null || document.activeElement === null)
-				/** @type {HTMLElement | null} */ (form.querySelector('oes-tablebox'))?.focus({ preventScroll: true });
+			this.focusTable(form);
 		});
+	}
+
+	/**
+	 * The table takes the focus as its form comes up, as the thin client's, from the section pressed to open it — once it
+	 * can be seen, and never out of a question being answered.
+	 * @param {HTMLElement | undefined} form
+	 */
+	focusTable(form) {
+		if (document.activeElement?.closest('wa-dialog') === null || document.activeElement === null)
+			/** @type {HTMLElement | null | undefined} */ (form?.querySelector('oes-tablebox'))?.focus({ preventScroll: true });
 	}
 
 	/**
