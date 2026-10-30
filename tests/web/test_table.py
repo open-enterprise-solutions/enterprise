@@ -204,6 +204,49 @@ class RowSelection(PageTest):
         self.assertFalse(page.evaluate("document.querySelector('.tabulator-col').hasAttribute('draggable')"))
 
 
+class ContextMenu(PageTest):
+    MENU = [{'Id': 11, 'Caption': 'Add'}, {'Id': 12, 'Caption': 'Delete', 'Enabled': False}]
+
+    def open(self, **extra):
+        page = self.start({'tabs': [tab(contextMenu=self.MENU, **extra)]})
+        self.row('Item 1').wait_for()
+        return page
+
+    def test_on_a_row_it_moves_the_cursor_and_offers_the_commands(self):
+        page = self.open()
+        self.row('Item 2').click(button='right')
+        page.wait_for_selector('.popup-menu:popover-open')
+        self.assertEqual(page.locator('.popup-menu button').all_inner_texts(), ['Add', 'Delete'])
+        page.wait_for_function("document.querySelector('.current-row')?.textContent.includes('Item 2')")
+
+    def test_past_the_last_row_it_offers_them_too(self):
+        page = self.open()
+        last = self.row('Item 5').bounding_box()
+        page.mouse.click(last['x'] + 100, last['y'] + last['height'] + 60, button='right')
+        page.wait_for_selector('.popup-menu:popover-open')
+        self.assertEqual(page.locator('.popup-menu button').count(), 2)
+
+    def test_in_an_empty_table_too(self):
+        page = self.start({'tabs': [tab(contextMenu=self.MENU, rows=[])]})
+        frame = page.locator('oes-tablebox .grid-frame').bounding_box()
+        page.mouse.click(frame['x'] + 100, frame['y'] + frame['height'] - 20, button='right')
+        page.wait_for_selector('.popup-menu:popover-open')
+
+    def test_the_one_picked_goes_to_the_server(self):
+        page = self.open()
+        last = self.row('Item 5').bounding_box()
+        page.mouse.click(last['x'] + 100, last['y'] + last['height'] + 60, button='right')
+        page.locator('.popup-menu button', has_text='Add').click()
+        page.wait_for_function("window.fake.events(16).length === 1")
+        self.assertEqual(self.sent(16)[0]['Args'], {'Id': 11})
+
+    def test_with_none_offered_it_stays_the_browser_s(self):
+        page = self.start({'tabs': [tab()]})
+        self.row('Item 1').click(button='right')
+        page.wait_for_timeout(100)
+        self.assertEqual(page.locator('.popup-menu').count(), 0)
+
+
 class Lines(PageTest):
     def test_the_header_takes_the_lines_its_table_says(self):
         page = self.start({'tabs': [tab(headerHeight=3)]})

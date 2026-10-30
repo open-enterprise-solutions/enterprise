@@ -79,6 +79,8 @@
 				state.CurrentRow = table.currentRow;
 			if (table.currentColumn !== undefined)
 				state.CurrentColumn = table.currentColumn;
+			if (table.contextMenu !== undefined)
+				state.ContextMenu = { NodeChildren: table.contextMenu };
 			if (table.bar !== false)
 				state.CommandBar = { NodeChildren: [{ Id: viewModeCommand, Caption: 'View mode' }] };
 			return {

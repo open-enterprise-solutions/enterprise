@@ -353,15 +353,15 @@ class Tablebox extends Control {
 		});
 		table.on('columnMoved', (column, columns) => this.sendMove(column, columns));
 		table.on('rowContext', (event, row) => {
-			// The desktop's OnContextMenu: the table's standard commands, as the server offers them.
-			const entries = this.contextMenu?.NodeChildren ?? [];
-			if (entries.length === 0)
-				return;
-			event.preventDefault();
 			const cell = row.getCells().find((one) => one.getElement().contains(/** @type {Node} */ (event.target)));
-			if (cell !== undefined)
+			if (cell !== undefined && row.getData().crumb !== true)
 				this.sendCursor(cell);
-			this.showContextMenu(entries, event.clientX, event.clientY);
+			this.offerContextMenu(event);
+		});
+		// …and past the last row: the data view offers them wherever among the rows it is pressed, on a row or not.
+		this.host.addEventListener('contextmenu', (event) => {
+			if (event.target instanceof Element && event.target.closest('.tabulator-row, .tabulator-header, .cell-editor') === null)
+				this.offerContextMenu(event);
 		});
 		table.on('columnResized', (column) => {
 			const id = idOf(column.getField());
@@ -941,6 +941,19 @@ class Tablebox extends Control {
 	editIn(cell, column) {
 		this.pressedColumn = column;
 		cell.edit(true);
+	}
+
+	/**
+	 * The desktop's OnContextMenu: the table's standard commands, as the server offers them, in the browser's menu's
+	 * place; with none offered the browser's stays.
+	 * @param {MouseEvent} event
+	 */
+	offerContextMenu(event) {
+		const entries = this.contextMenu?.NodeChildren ?? [];
+		if (entries.length === 0)
+			return;
+		event.preventDefault();
+		this.showContextMenu(entries, event.clientX, event.clientY);
 	}
 
 	/**
