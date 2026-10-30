@@ -6769,10 +6769,6 @@ msgstr ""
 msgid "%s: the body is not text in this encoding - take it with GetBodyAsBinaryData()"
 msgstr ""
 
-#: src/engine/backend/system/value/valueHttp.cpp:114
-msgid "the encoding is a TextEncoding value - TextEncoding.UTF8, for one"
-msgstr ""
-
 #: src/engine/backend/system/value/valueHttp.cpp:243
 #, c-format
 msgid "HTTPRequest: a resource address starts with '/' - the host and the port are the connection's: '%s'"
@@ -13200,4 +13196,58 @@ msgstr ""
 msgid ""
 "the directory holds '%s', which is no part of an export - choose a directory "
 "of its own"
+msgstr ""
+
+#: src/engine/backend/system/value/valueDataHashing.cpp
+msgid "DataHashing: no hash function is set"
+msgstr ""
+
+#: src/engine/backend/system/value/valueDataHashing.cpp
+msgid "DataHashing: the hash function is a HashFunction value - HashFunction.SHA256, for one"
+msgstr ""
+
+#: src/engine/backend/system/value/valueDataHashing.cpp
+msgid "DataHashing: the hash function is said when the object is built - New DataHashing(HashFunction.SHA256)"
+msgstr ""
+
+#: src/engine/core/crypto/dataHash.cpp
+msgid "The hash sum could not be computed"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "BinaryData: the text is a string"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "BinaryData: the text is not base64"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "BinaryData: the text cannot be written in the encoding given"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "BinaryData: the bytes are not text in the encoding given"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "HexValue: the text is not hex"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "HexValue: the text is not hex - its digits do not pair into bytes"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "Base64Value: the text is not base64"
+msgstr ""
+
+#: src/engine/backend/value_cast.cpp
+#, c-format
+msgid "A value of type '%s' does not support this operation"
+msgstr ""
+
+#: src/engine/backend/value_cast.cpp
+#, c-format
+msgid "A value of type '%s' is not a '%s'"
 msgstr ""

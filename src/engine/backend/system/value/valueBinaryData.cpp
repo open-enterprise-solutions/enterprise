@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueBinaryData.h"
+#include "valueTextFile.h"   // ibTextToBytes / ibTextFromBytes - a text in an encoding, and back
 
 #include "backend/backend_exception.h"
 
@@ -15,17 +16,45 @@
 
 #include <cstring>
 #include <new>       // std::bad_alloc — a file the heap has no room for
+#include <string>
 
+namespace {
+
+// A text form of bytes - base64, hex - with its spaces and line breaks left out: neither has any, and a text from
+// elsewhere often comes wrapped (at 76 characters, in mail).
+ibString WithoutWhitespace(const ibString& text)
+{
+	ibString kept;
+	kept.reserve(text.length());
+	for (const ibChar c : text) {
+		if (c != ibT(' ') && c != ibT('\t') && c != ibT('\r') && c != ibT('\n'))
+			kept += c;
+	}
+	return kept;
+}
+
+int HexDigit(ibChar c)
+{
+	if (c >= ibT('0') && c <= ibT('9')) return c - ibT('0');
+	if (c >= ibT('A') && c <= ibT('F')) return c - ibT('A') + 10;
+	if (c >= ibT('a') && c <= ibT('f')) return c - ibT('a') + 10;
+	return -1;
+}
+
+} // namespace
 
 // Order MUST match ibValueBinaryData::Func - the method number is the index into this table.
 void ibValueBinaryData_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
 	helper.AppendConstructor(0, ibT("BinaryData()"));
 	helper.AppendConstructor(1, ibT("BinaryData(base64 : string)"));
+	helper.AppendConstructor(2, ibT("BinaryData(text : string, encoding : TextEncoding)"));
+	helper.AppendConstructor(3, ibT("BinaryData(text : string, encoding : TextEncoding, byteOrderMark : boolean)"));
 
 	helper.AppendFunc(ibT("Size"), ibT("Size()"));
 	helper.AppendFunc(ibT("Read"), 1, ibT("Read(path : string)"));
 	helper.AppendFunc(ibT("Write"), 1, ibT("Write(path : string)"));
+	helper.AppendFunc(ibT("GetString"), 1, ibT("GetString(encoding : TextEncoding)"));
 }
 
 ibValueBinaryData::ibValueBinaryData() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_data() {}
@@ -49,20 +78,39 @@ bool ibValueBinaryData::Init(ibValue** paParams, const long lSizeArray)
 	if (lSizeArray < 1)
 		return false;
 
+	// From a TEXT IN AN ENCODING — the bytes it spells. The mark is asked for, never added by itself: in front of
+	// JSON or the first field of a CSV it is what the reader at the other end breaks on. Only the two Unicode
+	// encodings have one.
+	if (lSizeArray > 1) {
+		if (paParams[0]->GetType() != ibValueTypes::TYPE_STRING)
+			ibBackendCoreException::Error(_("BinaryData: the text is a string"));
+		const ibTextEncoding encoding = ibTextEncodingAt(paParams, lSizeArray, 1);
+		std::string bytes;
+		if (!ibTextToBytes(paParams[0]->GetString(), encoding, bytes))
+			ibBackendCoreException::Error(_("BinaryData: the text cannot be written in the encoding given"));
+		if (lSizeArray > 2 && paParams[2]->GetBoolean()) {
+			if (encoding == ibTextEncoding_UTF8)
+				bytes.insert(0, "\xEF\xBB\xBF", 3);
+			else if (encoding == ibTextEncoding_UTF16)
+				bytes.insert(0, "\xFF\xFE", 2);
+		}
+		m_data.Clear();
+		m_data.AppendData(bytes.data(), bytes.size());
+		return true;
+	}
+
 	// From TEXT — base64, the same form GetString hands out, so a value written to text and read
 	// back keeps its bytes. Anything that is not valid base64 is a refusal rather than a silent
 	// empty: bytes nobody can reconstruct are not the same thing as no bytes.
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
-		return ibBase64::Read(paParams[0]->GetString(), m_data);
-	}
-
-	// From another BINARY value — a copy, by the same door a caller would expect assignment to take.
-	if (const ibValueBinaryData* other = dynamic_cast<const ibValueBinaryData*>(paParams[0]->GetRef())) {
-		m_data = other->GetBuffer();
+		if (!ibBase64::Read(WithoutWhitespace(paParams[0]->GetString()), m_data))
+			ibBackendCoreException::Error(_("BinaryData: the text is not base64"));
 		return true;
 	}
 
-	return false;
+	// From another BINARY value — a copy, by the same door a caller would expect assignment to take.
+	m_data = paParams[0]->ConvertToType<ibValueBinaryData>()->GetBuffer();
+	return true;
 }
 
 void ibValueBinaryData::ReadWholeFile(const ibString& fileName, const ibString& who, ibMemoryBuffer& bytes)
@@ -153,6 +201,15 @@ bool ibValueBinaryData::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 			return false;
 		WriteFile(paParams[0]->GetString());
 		return true;
+	case enGetString: {
+		if (lSizeArray < 1)
+			return false;
+		ibString text;
+		if (!ibTextFromBytes(m_data.GetData(), m_data.GetDataLen(), ibTextEncodingAt(paParams, lSizeArray, 0), text))
+			ibBackendCoreException::Error(_("BinaryData: the bytes are not text in the encoding given"));
+		pvarRetValue = text;
+		return true;
+	}
 	}
 	return false;
 }
@@ -164,13 +221,66 @@ ibString ibValueBinaryData::GetString() const
 	return text;
 }
 
+// Upper case, two digits a byte, nothing between them - the form a digest is compared in once Lower() has been
+// applied to it. A string is NOT read as bytes here: which bytes a text is depends on an encoding, and that is
+// New BinaryData's to be told.
+ibString ibValueBinaryData::HexString(const ibValue& data)
+{
+	static const ibChar s_digits[] = ibT("0123456789ABCDEF");
+	const ibMemoryBuffer& bytes = data.ConvertToType<ibValueBinaryData>()->m_data;
+	const unsigned char* const at = static_cast<const unsigned char*>(bytes.GetData());
+	const size_t length = bytes.GetDataLen();
+
+	ibString text;
+	text.reserve(length * 2);
+	for (size_t i = 0; i < length; ++i) {
+		text += s_digits[at[i] >> 4];
+		text += s_digits[at[i] & 0x0F];
+	}
+	return text;
+}
+
+// ⚠ TEXT THAT IS NOT HEX IS A REFUSAL, NOT AN EMPTY VALUE. Bytes nobody can reconstruct are not the same thing as no
+// bytes, and a signature checked against nothing compares as "different" for the wrong reason.
+ibValue ibValueBinaryData::HexValue(const ibString& text)
+{
+	const ibString digits = WithoutWhitespace(text);
+	if (digits.length() % 2 != 0)
+		ibBackendCoreException::Error(_("HexValue: the text is not hex - its digits do not pair into bytes"));
+
+	std::string bytes;
+	bytes.reserve(digits.length() / 2);
+	for (size_t i = 0; i < digits.length(); i += 2) {
+		const int high = HexDigit(digits[i]), low = HexDigit(digits[i + 1]);
+		if (high < 0 || low < 0)
+			ibBackendCoreException::Error(_("HexValue: the text is not hex"));
+		bytes += static_cast<char>((high << 4) | low);
+	}
+	const ibValuePtr<ibValueBinaryData> made(new ibValueBinaryData(bytes.data(), bytes.size()));
+	return made;
+}
+
+ibString ibValueBinaryData::Base64String(const ibValue& data)
+{
+	return data.ConvertToType<ibValueBinaryData>()->GetString();
+}
+
+ibValue ibValueBinaryData::Base64Value(const ibString& text)
+{
+	const ibValuePtr<ibValueBinaryData> made(new ibValueBinaryData());
+	if (!ibBase64::Read(WithoutWhitespace(text), made->m_data))
+		ibBackendCoreException::Error(_("Base64Value: the text is not base64"));
+	return made;
+}
+
 // Equality is over the BYTES, never over their text: two buffers are the same value when they hold
 // the same content, and comparing base64 would answer the same question after paying for two
 // encodings. A non-binary operand is compared through its text, which is the only form both sides
 // share.
 bool ibValueBinaryData::CompareValueEQ(const ibVariant& cParam) const
 {
-	if (const ibValueBinaryData* other = dynamic_cast<const ibValueBinaryData*>(cParam.GetRef())) {
+	ibValueBinaryData* other = nullptr;
+	if (cParam.ConvertToValue(other)) {
 		const size_t length = m_data.GetDataLen();
 		if (length != other->m_data.GetDataLen())
 			return false;

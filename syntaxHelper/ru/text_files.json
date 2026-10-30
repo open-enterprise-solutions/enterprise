@@ -315,10 +315,10 @@
         "runtime",
         "text_files"
       ],
-      "signature": "New BinaryData([base64 : string])",
-      "description": "Байты как значение — картинка, PDF, zip, файл, содержимое которого вообще не текст. Строка для этого не годится: текст читается обратно в какой-то кодировке, сравнивается как текст и молча портит всё, что в ней недопустимо.\n\nRead(path) берёт содержимое файла целиком, Write(path) кладёт содержимое в файл, Size() говорит, сколько байтов. Эти три — вся поверхность: свойств у двоичного значения нет.\n\nОСТАЛЬНОЕ — ГЛОБАЛЬНЫЕ ФУНКЦИИ, как в эталонной системе: GetBinaryDataFromString и GetStringFromBinaryData превращают текст в байты и обратно в кодировке TextEncoding, GetBase64StringFromBinaryData и GetBinaryDataFromBase64String записывают байты в base64 и читают обратно, GetHexStringFromBinaryData и GetBinaryDataFromHexString — то же в hex. Хеш байтов — дело DataHashing.\n\nСТРОКА КОНСТРУКТОРА — ЭТО BASE64, А НЕ ПУТЬ, поэтому чтение файла сделано методом: один аргумент, означающий две вещи, — это файл, который молча не раскодировался. Строка, не являющаяся строгим base64, отвергается при построении значения — \"Error initializing object 'BinaryData'\", — а другое BinaryData, переданное конструктору, копируется.\n\nТЕКСТ — ЭТО ПРОЕКЦИЯ БАЙТОВ, а не их хранилище: записанное в строку, BinaryData показывается как base64, а пустое — как \"\". Два таких значения РАВНЫ, когда держат одни и те же байты, — сравнение читает содержимое, а не его текст; со всем остальным сравнивается именно текст. ValueIsFilled отвечает, есть ли байты вообще.\n\nФайл, который не удалось открыть, — отказ; файл, не помещающийся в память, — тоже: часть файла никогда не отдаётся как файл целиком.",
-      "syntax_block": "Bytes = New BinaryData();\nBytes.Read(path);\nMessage(Bytes.Size());\nBytes.Write(otherPath);\n\nSame = New BinaryData(Text);      // the constructor's string is BASE64, never a path",
-      "parameters": "base64 — байты, записанные в base64, в той же форме, какой значение показывается как текст; строго, всё прочее отвергается. Вместо него можно передать другое BinaryData — оно будет скопировано. Если аргумент опущен, значение байтов не держит.",
+      "signature": "New BinaryData([base64 : string])\nNew BinaryData(text : string, encoding : TextEncoding [, byteOrderMark : boolean])",
+      "description": "Байты как значение — картинка, PDF, zip, файл, содержимое которого вообще не текст. Строка для этого не годится: текст читается обратно в какой-то кодировке, сравнивается как текст и молча портит всё, что в ней недопустимо.\n\nRead(path) берёт содержимое файла целиком, Write(path) кладёт содержимое в файл, Size() говорит, сколько байтов, GetString(encoding) читает их как текст. Эти четыре — вся поверхность: свойств у двоичного значения нет.\n\nТЕКСТ В КОДИРОВКЕ: New BinaryData(text, encoding) держит байты, которыми записан текст, а символ, для которого в кодировке нет байтов, — отказ, а не вопросительный знак. БЕЗ МЕТКИ ПОРЯДКА БАЙТОВ, ЕСЛИ ЕЁ НЕ ПРОСИЛИ — перед JSON или первым полем CSV именно на ней ломается читатель на другой стороне. True третьим аргументом ставит её впереди для UTF8 (EF BB BF) и UTF16 (FF FE); у прочих кодировок её нет. UTF16 — little-endian.\n\nHex и base64 — глобальные функции HexString и HexValue, Base64String и Base64Value. Хеш байтов — дело DataHashing.\n\nОДНА СТРОКА — ЭТО BASE64, А НЕ ПУТЬ, поэтому чтение файла сделано методом: один аргумент, означающий две вещи, — это файл, который молча не раскодировался. Пробелы и переводы строк в ней пропускаются. Строка, не являющаяся base64, отвергается при построении значения — \"BinaryData: the text is not base64\", — а другое BinaryData, переданное конструктору, копируется.\n\nТЕКСТ — ЭТО ПРОЕКЦИЯ БАЙТОВ, а не их хранилище: записанное в строку, BinaryData показывается как base64, с дополнением, без переводов строк, а пустое — как \"\". Два таких значения РАВНЫ, когда держат одни и те же байты, — сравнение читает содержимое, а не его текст; со всем остальным сравнивается именно текст. ValueIsFilled отвечает, есть ли байты вообще.\n\nФайл, который не удалось открыть, — отказ; файл, не помещающийся в память, — тоже: часть файла никогда не отдаётся как файл целиком.",
+      "syntax_block": "Bytes = New BinaryData();\nBytes.Read(path);\nMessage(Bytes.Size());\nBytes.Write(otherPath);\n\nSame = New BinaryData(Text);      // the constructor's string is BASE64, never a path\n\nSpelled = New BinaryData(Text, TextEncoding.UTF8);\nMessage(Spelled.GetString(TextEncoding.UTF8));",
+      "parameters": "base64 — байты, записанные в base64, в той же форме, какой значение показывается как текст; всё прочее отвергается. Вместо него можно передать другое BinaryData — оно будет скопировано. Если аргумент опущен, значение байтов не держит.\ntext — строка, которую записываем байтами.\nencoding — значение TextEncoding; строка отвергается.\nbyteOrderMark — True, чтобы поставить метку впереди; опущен — False.",
       "return_descr": "BinaryData.",
       "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\logo.png\");\nMessage(Bytes.Size());\nBytes.Write(GetTempDir() + \"logo.png\");",
       "availability": "Тонкий клиент, Сервер",
@@ -326,10 +326,13 @@
         "cls.BinaryData.Size",
         "cls.BinaryData.Read",
         "cls.BinaryData.Write",
+        "cls.BinaryData.GetString",
         "cls.TextReader",
-        "fn.GetBinaryDataFromString",
-        "fn.GetBase64StringFromBinaryData",
-        "fn.GetHexStringFromBinaryData",
+        "enum.TextEncoding",
+        "fn.HexString",
+        "fn.HexValue",
+        "fn.Base64String",
+        "fn.Base64Value",
         "cls.DataHashing",
         "guide.textFiles"
       ],
@@ -408,6 +411,30 @@
       "reviewed": false
     },
     {
+      "id": "cls.BinaryData.GetString",
+      "name_local": "GetString",
+      "name_en": "GetString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Bytes.GetString(encoding : TextEncoding) : string",
+      "description": "Текст, который байты записывают в кодировке. Метка порядка байтов в начале читается как метка и текстом не отдаётся, а метка UTF-16 говорит, какой конец идёт первым.\n\nБайты, не составляющие текст в этой кодировке, — ОТКАЗ, а не текст с дырами.\n\nКОДИРОВКУ СПРАШИВАЮТ, потому что String(Bytes) — другое: base64, единственный текст, который возвращает те же байты, какими бы они ни были.",
+      "syntax_block": "Text = Bytes.GetString(encoding);",
+      "parameters": "encoding — значение TextEncoding; строка отвергается.",
+      "return_descr": "Строка.",
+      "example": "Answer = Response.GetBodyAsBinaryData();\nText = Answer.GetString(TextEncoding.ANSI);",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": [
+        "cls.BinaryData",
+        "enum.TextEncoding",
+        "cls.TextReader"
+      ],
+      "reviewed": false
+    },
+    {
       "id": "enum.TextEncoding",
       "name_local": "TextEncoding",
       "name_en": "TextEncoding",
@@ -419,7 +446,7 @@
         "text_files"
       ],
       "signature": "TextEncoding.UTF8, .UTF16, .ANSI, .OEM, .System",
-      "description": "Как байты складываются в текст, сказанное значением: у TextEncoding пять членов — UTF8, UTF16, ANSI, OEM и System, — и член пишется как TextEncoding.<Имя>. Скрипт такого значения не строит, и строка \"utf-8\" им тоже не является: перечисление стоит вместо неё.\n\nЕГО ЧИТАЮТ ВЕЗДЕ, ГДЕ БАЙТЫ ВСТРЕЧАЮТСЯ С ТЕКСТОМ, — New TextReader(path, encoding) и TextReader.Open, New TextWriter(path, encoding, append) и TextWriter.Open, GetBinaryDataFromString(text, encoding) и GetStringFromBinaryData(data, encoding). Если опущено или пусто — UTF8.\n\nUTF-8 СТРОГИЙ: байты, которые не UTF-8, — это отказ, а не текст с дырами. При чтении метка порядка байтов в начале файла UTF-8 или UTF-16 читается как метка и текстом не отдаётся, а метка UTF-16 говорит, какой конец идёт первым; при записи UTF-16 получает метку, UTF-8 — нет.\n\nANSI, OEM И System — СОБСТВЕННЫЕ КОДИРОВКИ МАШИНЫ, СПРОШЕННЫЕ У НЕЁ, а не предположенные: база, переехавшая с машины на машину, читает файлы той машины, на которой работает. В Windows это кодовые страницы, взятые ПО НОМЕРУ: ANSI и System — обе страница ANSI системы, OEM — консольная. Вне Windows такая кодировка одна — текущей локали, — и все три означают её. Байт, для которого у страницы нет символа, и символ, для которого у неё нет байтов, — это отказы.",
+      "description": "Как байты складываются в текст, сказанное значением: у TextEncoding пять членов — UTF8, UTF16, ANSI, OEM и System, — и член пишется как TextEncoding.<Имя>. Скрипт такого значения не строит, и строка \"utf-8\" им тоже не является: перечисление стоит вместо неё.\n\nЕГО ЧИТАЮТ ВЕЗДЕ, ГДЕ БАЙТЫ ВСТРЕЧАЮТСЯ С ТЕКСТОМ, — New TextReader(path, encoding) и TextReader.Open, New TextWriter(path, encoding, append) и TextWriter.Open, New BinaryData(text, encoding) и BinaryData.GetString(encoding). Если опущено или пусто — UTF8.\n\nUTF-8 СТРОГИЙ: байты, которые не UTF-8, — это отказ, а не текст с дырами. При чтении метка порядка байтов в начале файла UTF-8 или UTF-16 читается как метка и текстом не отдаётся, а метка UTF-16 говорит, какой конец идёт первым; при записи UTF-16 получает метку, UTF-8 — нет.\n\nANSI, OEM И System — СОБСТВЕННЫЕ КОДИРОВКИ МАШИНЫ, СПРОШЕННЫЕ У НЕЁ, а не предположенные: база, переехавшая с машины на машину, читает файлы той машины, на которой работает. В Windows это кодовые страницы, взятые ПО НОМЕРУ: ANSI и System — обе страница ANSI системы, OEM — консольная. Вне Windows такая кодировка одна — текущей локали, — и все три означают её. Байт, для которого у страницы нет символа, и символ, для которого у неё нет байтов, — это отказы.",
       "syntax_block": "Reader = New TextReader(path, TextEncoding.ANSI);\nWriter = New TextWriter(path, TextEncoding.UTF16);",
       "parameters": "",
       "return_descr": "",
@@ -432,7 +459,7 @@
         "cls.TextReader",
         "cls.TextWriter",
         "guide.textFiles",
-        "fn.GetBinaryDataFromString"
+        "cls.BinaryData"
       ],
       "reviewed": false
     },

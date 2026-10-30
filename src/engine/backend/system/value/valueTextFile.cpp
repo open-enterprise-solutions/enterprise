@@ -140,16 +140,12 @@ std::unique_ptr<wxMBConv> ibCreateTextConv(ibTextEncoding encoding)
 	}
 }
 
-namespace {
-
-ibTextEncoding EncodingOf(ibValue** paParams, const long lSizeArray, long at)
+ibTextEncoding ibTextEncodingAt(ibValue** paParams, const long lSizeArray, const long at)
 {
-	if (lSizeArray > at && !paParams[at]->IsEmpty())
-		return paParams[at]->ConvertToEnumValue<ibTextEncoding>();
-	return ibTextEncoding_UTF8;
+	if (lSizeArray <= at || paParams[at]->GetType() == ibValueTypes::TYPE_EMPTY)
+		return ibTextEncoding_UTF8;
+	return paParams[at]->ConvertToEnumValue<ibTextEncoding>();
 }
-
-} // namespace
 
 //////////////////////////////////////////////////////////////////////
 // TextReader
@@ -177,7 +173,7 @@ bool ibValueTextReader::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray < 1)
 		return false;
-	Open(paParams[0]->GetString(), EncodingOf(paParams, lSizeArray, 1));
+	Open(paParams[0]->GetString(), ibTextEncodingAt(paParams, lSizeArray, 1));
 	return true;
 }
 
@@ -267,7 +263,7 @@ bool ibValueTextReader::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	case enOpen:
 		if (lSizeArray < 1)
 			return false;
-		Open(paParams[0]->GetString(), EncodingOf(paParams, lSizeArray, 1));
+		Open(paParams[0]->GetString(), ibTextEncodingAt(paParams, lSizeArray, 1));
 		return true;
 	case enReadLine: {
 		// THE END OF THE FILE IS Undefined - an empty line is a line.
@@ -337,7 +333,7 @@ bool ibValueTextWriter::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray < 1)
 		return false;
-	Open(paParams[0]->GetString(), EncodingOf(paParams, lSizeArray, 1),
+	Open(paParams[0]->GetString(), ibTextEncodingAt(paParams, lSizeArray, 1),
 		lSizeArray > 2 && paParams[2]->GetBoolean());
 	return true;
 }
@@ -413,7 +409,7 @@ bool ibValueTextWriter::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	case enOpen:
 		if (lSizeArray < 1)
 			return false;
-		Open(paParams[0]->GetString(), EncodingOf(paParams, lSizeArray, 1),
+		Open(paParams[0]->GetString(), ibTextEncodingAt(paParams, lSizeArray, 1),
 			lSizeArray > 2 && paParams[2]->GetBoolean());
 		return true;
 	case enWrite:

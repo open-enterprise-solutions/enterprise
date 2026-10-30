@@ -15,19 +15,19 @@
         "hashing"
       ],
       "signature": "New DataHashing(function : HashFunction [, key : string | BinaryData])",
-      "description": "A digest of data: built for one hash function, fed with strings, bytes and files, asked for its sum. Signing a request to a payment or exchange service, checking a webhook's signature, a checksum of a file - each one is this.\n\nAppend(data) feeds a string or a BinaryData, AppendFile(path) feeds a file's content whole, HashSum is the digest of everything appended so far - a BinaryData - and HashFunction is the function the object was built for.\n\nA STRING IS HASHED AS ITS UTF-8 BYTES. Another encoding is said by turning the text into bytes first - GetBinaryDataFromString(text, TextEncoding.ANSI) - and appending those. A number, a date or anything else that is not a string or a BinaryData is refused: it has no one spelling in bytes, and hashing the spelling it happens to show would sign something nobody meant.\n\nA KEY MAKES IT AN HMAC (RFC 2104) - New DataHashing(HashFunction.SHA256, key) - which is what a webhook's signature and most request signatures are. The key is a string (its UTF-8 bytes) or a BinaryData; an EMPTY key is still a key, and only a key left out gives the plain digest. The reference system has no HMAC; this argument is an OES extension.\n\nHashSum CAN BE READ MIDWAY, and appending goes on after it: the sum of \"ab\" read, \"c\" appended, the sum read again is the sum of \"abc\".\n\nTHE FUNCTION IS SAID WHEN THE OBJECT IS BUILT, and with a member of HashFunction only: New DataHashing() and New DataHashing(\"SHA1\") are both refused.",
+      "description": "A digest of data: built for one hash function, fed with strings, bytes and files, asked for its sum. Signing a request to a payment or exchange service, checking a webhook's signature, a checksum of a file - each one is this.\n\nAppend(data) feeds a string or a BinaryData, AppendFile(path) feeds a file's content whole, HashSum is the digest of everything appended so far - a BinaryData - and HashFunction is the function the object was built for.\n\nA STRING IS HASHED AS ITS UTF-8 BYTES. Another encoding is said by turning the text into bytes first - New BinaryData(text, TextEncoding.ANSI) - and appending those. A number, a date or anything else that is not a string or a BinaryData is refused: it has no one spelling in bytes, and hashing the spelling it happens to show would sign something nobody meant.\n\nA KEY MAKES IT AN HMAC (RFC 2104) - New DataHashing(HashFunction.SHA256, key) - which is what a webhook's signature and most request signatures are. The key is a string (its UTF-8 bytes) or a BinaryData; an EMPTY key is still a key, and only a key left out gives the plain digest.\n\nHashSum CAN BE READ MIDWAY, and appending goes on after it: the sum of \"ab\" read, \"c\" appended, the sum read again is the sum of \"abc\".\n\nTHE FUNCTION IS SAID WHEN THE OBJECT IS BUILT, and with a member of HashFunction only: New DataHashing() and New DataHashing(\"SHA1\") are both refused.",
       "syntax_block": "Hashing = New DataHashing(HashFunction.SHA256);\nHashing.Append(Text);\nSum = Hashing.HashSum;                 // BinaryData\n\nSigning = New DataHashing(HashFunction.SHA256, Key);   // HMAC",
       "parameters": "function - a member of HashFunction: MD5, SHA1, SHA256, SHA384 or SHA512.\nkey - a string or a BinaryData; given, the object computes an HMAC with it. Left out, the plain digest.",
       "return_descr": "DataHashing.",
-      "example": "// a webhook: HMAC-SHA256 of the body, compared in hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(GetHexStringFromBinaryData(Check.HashSum)) <> Signature) { Raise(\"the signature does not match\"); }",
+      "example": "// a webhook: HMAC-SHA256 of the body, compared in hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(HexString(Check.HashSum)) <> Signature) { Raise(\"the signature does not match\"); }",
       "availability": "Thin client, Server",
       "see_also": [
         "cls.DataHashing.Append",
         "cls.DataHashing.AppendFile",
         "cls.DataHashing.HashSum",
         "enum.HashFunction",
-        "fn.GetBase64StringFromBinaryData",
-        "fn.GetHexStringFromBinaryData"
+        "cls.BinaryData",
+        "fn.HexString"
       ],
       "reviewed": false
     },
@@ -46,12 +46,12 @@
       "syntax_block": "Hashing.Append(data);",
       "parameters": "data - a string (its UTF-8 bytes) or a BinaryData.",
       "return_descr": "",
-      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(Login + \":\" + Stamp);\nHashing.Append(GetBinaryDataFromString(Note, TextEncoding.ANSI));",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(Login + \":\" + Stamp);\nHashing.Append(New BinaryData(Note, TextEncoding.ANSI));",
       "availability": "Thin client, Server",
       "see_also": [
         "cls.DataHashing",
         "cls.DataHashing.AppendFile",
-        "fn.GetBinaryDataFromString"
+        "cls.BinaryData"
       ],
       "reviewed": false
     },
@@ -70,7 +70,7 @@
       "syntax_block": "Hashing.AppendFile(path);",
       "parameters": "path - the file to read.",
       "return_descr": "",
-      "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.AppendFile(\"C:\\in\\price.zip\");\nMessage(Lower(GetHexStringFromBinaryData(Hashing.HashSum)));",
+      "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.AppendFile(\"C:\\in\\price.zip\");\nMessage(Lower(HexString(Hashing.HashSum)));",
       "availability": "Thin client, Server",
       "see_also": [
         "cls.DataHashing",
@@ -90,16 +90,16 @@
         "hashing"
       ],
       "signature": "DataHashing.HashSum",
-      "description": "The digest of everything appended so far, as a BinaryData - read-only. 16 bytes for MD5, 20 for SHA1, 32, 48 and 64 for SHA256, SHA384 and SHA512.\n\nREADING IT FINISHES NOTHING: appending goes on after it, and two reads with nothing appended between them agree.\n\nAs text, a BinaryData shows as base64; another system usually wants the digest in hex - GetHexStringFromBinaryData(Hashing.HashSum), upper case, Lower() for lower - or in base64 - GetBase64StringFromBinaryData(Hashing.HashSum).\n\n⚠ In the reference system String(HashSum) gives hex with spaces between the bytes; here String gives base64 - hex is written GetHexStringFromBinaryData.",
+      "description": "The digest of everything appended so far, as a BinaryData - read-only. 16 bytes for MD5, 20 for SHA1, 32, 48 and 64 for SHA256, SHA384 and SHA512.\n\nREADING IT FINISHES NOTHING: appending goes on after it, and two reads with nothing appended between them agree.\n\nAs text, a BinaryData shows as base64; another system usually wants the digest in hex - HexString(Hashing.HashSum), upper case, Lower() for lower - or in base64 - String(Hashing.HashSum).",
       "syntax_block": "Sum = Hashing.HashSum;",
       "parameters": "",
       "return_descr": "BinaryData.",
-      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(GetHexStringFromBinaryData(Hashing.HashSum));      // A9993E36...\nMessage(GetBase64StringFromBinaryData(Hashing.HashSum));   // qZk+NkcGgWq6PiVxeFDCbJzQ2J0=",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(HexString(Hashing.HashSum));   // A9993E36...\nMessage(String(Hashing.HashSum));      // qZk+NkcGgWq6PiVxeFDCbJzQ2J0=",
       "availability": "Thin client, Server",
       "see_also": [
         "cls.DataHashing",
-        "fn.GetHexStringFromBinaryData",
-        "fn.GetBase64StringFromBinaryData"
+        "fn.HexString",
+        "cls.BinaryData"
       ],
       "reviewed": false
     },

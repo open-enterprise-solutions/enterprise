@@ -22,6 +22,10 @@
 // puts the content there, `Size()` says how much there is. A constructor from a PATH is deliberately not
 // offered: a string handed to the constructor already means base64, and the same argument meaning two
 // things is a file that silently fails to decode.
+//
+// ⭐ …AND FROM A TEXT IN AN ENCODING AND BACK. `New BinaryData(text, encoding [, byteOrderMark])` takes the bytes the
+// text spells; the encoding is what tells it from base64. `GetString(encoding)` reads them as text, and asks for one
+// because `String(data)` stays base64: the one text that gives the same bytes back whatever they are.
 void ibValueBinaryData_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
 class BACKEND_API ibValueBinaryData : public ibValueStaticMembers<&ibValueBinaryData_BindNames> {
@@ -29,6 +33,7 @@ class BACKEND_API ibValueBinaryData : public ibValueStaticMembers<&ibValueBinary
 		enSize,
 		enRead,
 		enWrite,
+		enGetString,
 	};
 public:
 
@@ -56,6 +61,12 @@ public:
 	// A file's bytes, whole - the one place a file is read into memory (TextReader decodes what this hands
 	// over). `who` opens the refusal, so the message names the type the script was talking to.
 	static void ReadWholeFile(const ibString& fileName, const ibString& who, ibMemoryBuffer& bytes);
+
+	// The global functions: the bytes as hex or as base64, what a digest is compared and sent in, and back.
+	static ibString HexString(const ibValue& data);
+	static ibValue HexValue(const ibString& text);
+	static ibString Base64String(const ibValue& data);
+	static ibValue Base64Value(const ibString& text);
 
 	// The TEXT projection: base64. Not the storage — GetBuffer is.
 	virtual ibString GetString() const;

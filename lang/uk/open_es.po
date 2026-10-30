@@ -6807,10 +6807,6 @@ msgstr "HTTPRequest: текст неможливо записати в цьом�
 msgid "%s: the body is not text in this encoding - take it with GetBodyAsBinaryData()"
 msgstr "%s: тіло не є текстом у цьому кодуванні - отримайте його через GetBodyAsBinaryData()"
 
-#: src/engine/backend/system/value/valueHttp.cpp:114
-msgid "the encoding is a TextEncoding value - TextEncoding.UTF8, for one"
-msgstr "кодування задається значенням TextEncoding - наприклад, TextEncoding.UTF8"
-
 #: src/engine/backend/system/value/valueHttp.cpp:243
 #, c-format
 msgid "HTTPRequest: a resource address starts with '/' - the host and the port are the connection's: '%s'"
@@ -13533,3 +13529,57 @@ msgid ""
 "the directory holds '%s', which is no part of an export - choose a directory "
 "of its own"
 msgstr "у теці є '%s', який не входить до вивантаження, - виберіть окрему теку"
+
+#: src/engine/backend/system/value/valueDataHashing.cpp
+msgid "DataHashing: no hash function is set"
+msgstr "DataHashing: геш-функцію не задано"
+
+#: src/engine/backend/system/value/valueDataHashing.cpp
+msgid "DataHashing: the hash function is a HashFunction value - HashFunction.SHA256, for one"
+msgstr "DataHashing: геш-функція - це значення HashFunction, наприклад HashFunction.SHA256"
+
+#: src/engine/backend/system/value/valueDataHashing.cpp
+msgid "DataHashing: the hash function is said when the object is built - New DataHashing(HashFunction.SHA256)"
+msgstr "DataHashing: геш-функцію вказують під час створення об'єкта - New DataHashing(HashFunction.SHA256)"
+
+#: src/engine/core/crypto/dataHash.cpp
+msgid "The hash sum could not be computed"
+msgstr "Не вдалося обчислити геш-суму"
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "BinaryData: the text is a string"
+msgstr "BinaryData: текст - це рядок"
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "BinaryData: the text is not base64"
+msgstr "BinaryData: текст не є base64"
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "BinaryData: the text cannot be written in the encoding given"
+msgstr "BinaryData: текст не можна записати у вказаному кодуванні"
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "BinaryData: the bytes are not text in the encoding given"
+msgstr "BinaryData: байти не є текстом у вказаному кодуванні"
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "HexValue: the text is not hex"
+msgstr "HexValue: текст не є hex"
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "HexValue: the text is not hex - its digits do not pair into bytes"
+msgstr "HexValue: текст не є hex - цифри не складаються в байти парами"
+
+#: src/engine/backend/system/value/valueBinaryData.cpp
+msgid "Base64Value: the text is not base64"
+msgstr "Base64Value: текст не є base64"
+
+#: src/engine/backend/value_cast.cpp
+#, c-format
+msgid "A value of type '%s' does not support this operation"
+msgstr "Значення типу '%s' не підтримує цю операцію"
+
+#: src/engine/backend/value_cast.cpp
+#, c-format
+msgid "A value of type '%s' is not a '%s'"
+msgstr "Значення типу '%s' не є '%s'"

@@ -11,8 +11,8 @@
 
 namespace {
 
-// HashFunction -> the core's. Anything that is not a member - a number, a string, a member of another
-// enumeration - comes in as no function at all and is refused by the caller.
+// HashFunction -> the core's. What a script hands in is a member or was refused by the cast; this is the door for a
+// caller in C++, whose no function at all is refused by the caller.
 bool CoreFunctionOf(ibHashFunction function, ibDataHash::Function& made)
 {
 	switch (function) {
@@ -33,20 +33,16 @@ ibDataHash::Function CoreFunction(ibHashFunction function)
 	return made;
 }
 
-// The bytes a value stands for: a BinaryData's own, a string's in UTF-8. Anything else is refused - a number or a
-// date has no one spelling in bytes, and hashing the spelling it happens to show would sign something else.
-void BytesOf(const ibValue& value, const ibChar* who, std::string& bytes)
+// The bytes a value stands for: a string's in UTF-8, a BinaryData's own. Anything else is refused by the cast - a
+// number or a date has no one spelling in bytes, and hashing the spelling it happens to show would sign something else.
+void BytesOf(const ibValue& value, std::string& bytes)
 {
-	if (const ibValueBinaryData* binary = dynamic_cast<const ibValueBinaryData*>(value.GetRef())) {
-		const ibMemoryBuffer& buffer = binary->GetBuffer();
-		bytes.assign(static_cast<const char*>(buffer.GetData()), buffer.GetDataLen());
-		return;
-	}
 	if (value.GetType() == ibValueTypes::TYPE_STRING) {
 		bytes = value.GetString().ToUtf8();
 		return;
 	}
-	ibBackendCoreException::Error(_("%s: the data is a string or a BinaryData"), ibString(who));
+	const ibMemoryBuffer& buffer = value.ConvertToType<ibValueBinaryData>()->GetBuffer();
+	bytes.assign(static_cast<const char*>(buffer.GetData()), buffer.GetDataLen());
 }
 
 } // namespace
@@ -78,14 +74,13 @@ bool ibValueDataHashing::Init(ibValue** paParams, const long lSizeArray)
 	if (lSizeArray < 1)
 		return Init();
 
-	const ibHashFunction function = paParams[0]->GetType() == ibValueTypes::TYPE_ENUM
-		? paParams[0]->ConvertToEnumValue<ibHashFunction>() : ibHashFunction();
+	const ibHashFunction function = paParams[0]->ConvertToEnumValue<ibHashFunction>();
 
 	// ⚠ WHETHER A KEY WAS GIVEN IS ASKED OF ITS TYPE, NOT OF ITS EMPTINESS. An empty string is a key - an HMAC
 	// with an empty key is a value of its own - and only an argument left out means the plain digest.
 	if (lSizeArray > 1 && paParams[1]->GetType() != ibValueTypes::TYPE_EMPTY) {
 		std::string key;
-		BytesOf(*paParams[1], ibT("DataHashing"), key);
+		BytesOf(*paParams[1], key);
 		Start(function, key.data(), key.size());
 	}
 	else {
@@ -111,7 +106,7 @@ void ibValueDataHashing::Append(const ibValue& data)
 	if (m_hash == nullptr)
 		ibBackendCoreException::Error(_("DataHashing: no hash function is set"));
 	std::string bytes;
-	BytesOf(data, ibT("DataHashing.Append"), bytes);
+	BytesOf(data, bytes);
 	m_hash->Append(bytes.data(), bytes.size());
 }
 
@@ -146,7 +141,7 @@ bool ibValueDataHashing::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	return false;
 }
 
-bool ibValueDataHashing::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+bool ibValueDataHashing::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
 	switch (lMethodNum) {
 	case enAppend:

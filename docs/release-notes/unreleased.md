@@ -42,10 +42,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **Hashing: `DataHashing` and `HashFunction`.** `New DataHashing(HashFunction.SHA256)` takes strings
   (as UTF-8), `BinaryData` and files and gives `HashSum`, a `BinaryData`; MD5, SHA1, SHA256, SHA384
   and SHA512. A second argument, the key, makes it an HMAC. The sum can be read midway.
-- **Bytes from text and back, as base64 and as hex** — `GetBinaryDataFromString(text, encoding,
-  byteOrderMark)`, `GetStringFromBinaryData`, `GetBase64StringFromBinaryData`,
-  `GetBinaryDataFromBase64String`, `GetHexStringFromBinaryData`, `GetBinaryDataFromHexString`. Text
-  that is not base64 or hex is refused, not read as no bytes.
+- **Bytes from text and back, and as hex.** `New BinaryData(text, encoding [, byteOrderMark])` holds the
+  bytes a text spells, `data.GetString(encoding)` reads them back. `HexString(data)` and `HexValue(text)`
+  write them as hex and read them, `Base64String(data)` and `Base64Value(text)` as base64. `String(data)`
+  and `New BinaryData(text)` stay base64, and now skip line breaks. Text that is not base64 or hex is
+  refused, not read as no bytes.
+- **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
+  enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
 
 ## Fixes
 

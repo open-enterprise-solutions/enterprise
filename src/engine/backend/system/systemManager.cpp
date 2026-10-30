@@ -131,12 +131,11 @@ enum
 	//--- A value as XML text and back: at the END, for the same reason.
 	enXMLString,
 	enXMLValue,
-	enGetBinaryDataFromString,
-	enGetStringFromBinaryData,
-	enGetBase64StringFromBinaryData,
-	enGetBinaryDataFromBase64String,
-	enGetHexStringFromBinaryData,
-	enGetBinaryDataFromHexString
+	//--- Bytes as hex and as base64, and back: at the END, for the same reason.
+	enHexString,
+	enHexValue,
+	enBase64String,
+	enBase64Value
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -268,38 +267,19 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(ibT("JSONValue"), 1, ibT("JSONValue(json : string)"));
 	helper.AppendFunc(ibT("XMLString"), 1, ibT("XMLString(value : any)"));
 	helper.AppendFunc(ibT("XMLValue"), 1, ibT("XMLValue(xml : string)"));
-	//--- …then bytes, matching the enGetBinaryDataFromString..enGetBinaryDataFromHexString tail above.
-	helper.AppendFunc(ibT("GetBinaryDataFromString"), 3, ibT("GetBinaryDataFromString(text : string, encoding : TextEncoding, byteOrderMark : boolean)"));
-	helper.AppendFunc(ibT("GetStringFromBinaryData"), 2, ibT("GetStringFromBinaryData(data : BinaryData, encoding : TextEncoding)"));
-	helper.AppendFunc(ibT("GetBase64StringFromBinaryData"), 1, ibT("GetBase64StringFromBinaryData(data : BinaryData)"));
-	helper.AppendFunc(ibT("GetBinaryDataFromBase64String"), 1, ibT("GetBinaryDataFromBase64String(text : string)"));
-	helper.AppendFunc(ibT("GetHexStringFromBinaryData"), 1, ibT("GetHexStringFromBinaryData(data : BinaryData)"));
-	helper.AppendFunc(ibT("GetBinaryDataFromHexString"), 1, ibT("GetBinaryDataFromHexString(text : string)"));
+	helper.AppendFunc(ibT("HexString"), 1, ibT("HexString(data : BinaryData)"));
+	helper.AppendFunc(ibT("HexValue"), 1, ibT("HexValue(text : string)"));
+	helper.AppendFunc(ibT("Base64String"), 1, ibT("Base64String(data : BinaryData)"));
+	helper.AppendFunc(ibT("Base64Value"), 1, ibT("Base64Value(text : string)"));
 };
 
 #include "backend/compiler/enumUnit.h"
+#include "backend/system/value/valueBinaryData.h"   // HexString / HexValue, Base64String / Base64Value
 #include "backend/system/value/valueGuid.h"
 #include "backend/system/value/valueJson.h"   // ReadJSON / WriteJSON
 #include "backend/backend_exception.h"   // a call this dispatcher itself refuses (Date with two arguments)
 
 #include "backend/appData.h"
-
-namespace {
-
-// A TextEncoding value and nothing else, UTF8 when the argument is left out: a string that "means" one is what the
-// enumeration is there instead of.
-ibTextEncoding TextEncodingAt(ibValue** paParams, const long lSizeArray, const long at)
-{
-	if (lSizeArray <= at || paParams[at]->GetType() == ibValueTypes::TYPE_EMPTY)
-		return ibTextEncoding_UTF8;
-	const ibTextEncoding encoding = paParams[at]->GetType() == ibValueTypes::TYPE_ENUM
-		? paParams[at]->ConvertToEnumValue<ibTextEncoding>() : ibTextEncoding();
-	if (encoding < ibTextEncoding_UTF8 || encoding > ibTextEncoding_System)
-		ibBackendCoreException::Error(_("The encoding is a TextEncoding value - TextEncoding.UTF8, for one"));
-	return encoding;
-}
-
-} // namespace
 
 bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
@@ -442,18 +422,10 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enJSONValue: pvarRetValue = JSONValue(paParams[0]->GetString()); return true;
 		case enXMLString: pvarRetValue = XMLString(*paParams[0]); return true;
 		case enXMLValue: pvarRetValue = XMLValue(paParams[0]->GetString()); return true;
-			//--- Binary data:
-		case enGetBinaryDataFromString:
-			pvarRetValue = GetBinaryDataFromString(paParams[0]->GetString(), TextEncodingAt(paParams, lSizeArray, 1),
-				lSizeArray > 2 && paParams[2]->GetBoolean());
-			return true;
-		case enGetStringFromBinaryData:
-			pvarRetValue = GetStringFromBinaryData(*paParams[0], TextEncodingAt(paParams, lSizeArray, 1));
-			return true;
-		case enGetBase64StringFromBinaryData: pvarRetValue = GetBase64StringFromBinaryData(*paParams[0]); return true;
-		case enGetBinaryDataFromBase64String: pvarRetValue = GetBinaryDataFromBase64String(paParams[0]->GetString()); return true;
-		case enGetHexStringFromBinaryData: pvarRetValue = GetHexStringFromBinaryData(*paParams[0]); return true;
-		case enGetBinaryDataFromHexString: pvarRetValue = GetBinaryDataFromHexString(paParams[0]->GetString()); return true;
+		case enHexString: pvarRetValue = ibValueBinaryData::HexString(*paParams[0]); return true;
+		case enHexValue: pvarRetValue = ibValueBinaryData::HexValue(paParams[0]->GetString()); return true;
+		case enBase64String: pvarRetValue = ibValueBinaryData::Base64String(*paParams[0]); return true;
+		case enBase64Value: pvarRetValue = ibValueBinaryData::Base64Value(paParams[0]->GetString()); return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

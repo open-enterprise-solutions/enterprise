@@ -15,19 +15,19 @@
         "hashing"
       ],
       "signature": "New DataHashing(function : HashFunction [, key : string | BinaryData])",
-      "description": "Хеш данных: строится для одной хеш-функции, получает строки, байты и файлы, отдаёт сумму. Подпись запроса к платёжному или обменному сервису, проверка подписи вебхука, контрольная сумма файла — всё это он.\n\nAppend(data) добавляет строку или BinaryData, AppendFile(path) — содержимое файла целиком, HashSum — хеш всего добавленного к этому моменту, BinaryData, а HashFunction — функция, для которой объект построен.\n\nСТРОКА ХЕШИРУЕТСЯ КАК ЕЁ БАЙТЫ В UTF-8. Другая кодировка говорится так: сначала текст превращается в байты — GetBinaryDataFromString(text, TextEncoding.ANSI), — и добавляются они. Число, дата и всё, что не строка и не BinaryData, отвергается: у них нет одного написания в байтах, и хеш того написания, которое они случайно показывают, подписал бы не то, что имелось в виду.\n\nКЛЮЧ ДЕЛАЕТ ЕГО HMAC (RFC 2104) — New DataHashing(HashFunction.SHA256, key); именно это — подпись вебхука и большинства запросов. Ключ — строка (её байты в UTF-8) или BinaryData; ПУСТОЙ ключ — тоже ключ, и только опущенный ключ даёт простой хеш. В эталонной системе HMAC нет; этот аргумент — расширение OES.\n\nHashSum МОЖНО ЧИТАТЬ НА ПОЛПУТИ, и добавление продолжается после него: сумма \"ab\" прочитана, добавлено \"c\", сумма прочитана снова — это сумма \"abc\".\n\nФУНКЦИЯ ГОВОРИТСЯ ПРИ ПОСТРОЕНИИ ОБЪЕКТА, и только значением HashFunction: и New DataHashing(), и New DataHashing(\"SHA1\") отвергаются.",
+      "description": "Хеш данных: строится для одной хеш-функции, получает строки, байты и файлы, отдаёт сумму. Подпись запроса к платёжному или обменному сервису, проверка подписи вебхука, контрольная сумма файла — всё это он.\n\nAppend(data) добавляет строку или BinaryData, AppendFile(path) — содержимое файла целиком, HashSum — хеш всего добавленного к этому моменту, BinaryData, а HashFunction — функция, для которой объект построен.\n\nСТРОКА ХЕШИРУЕТСЯ КАК ЕЁ БАЙТЫ В UTF-8. Другая кодировка говорится так: сначала текст превращается в байты — New BinaryData(text, TextEncoding.ANSI), — и добавляются они. Число, дата и всё, что не строка и не BinaryData, отвергается: у них нет одного написания в байтах, и хеш того написания, которое они случайно показывают, подписал бы не то, что имелось в виду.\n\nКЛЮЧ ДЕЛАЕТ ЕГО HMAC (RFC 2104) — New DataHashing(HashFunction.SHA256, key); именно это — подпись вебхука и большинства запросов. Ключ — строка (её байты в UTF-8) или BinaryData; ПУСТОЙ ключ — тоже ключ, и только опущенный ключ даёт простой хеш.\n\nHashSum МОЖНО ЧИТАТЬ НА ПОЛПУТИ, и добавление продолжается после него: сумма \"ab\" прочитана, добавлено \"c\", сумма прочитана снова — это сумма \"abc\".\n\nФУНКЦИЯ ГОВОРИТСЯ ПРИ ПОСТРОЕНИИ ОБЪЕКТА, и только значением HashFunction: и New DataHashing(), и New DataHashing(\"SHA1\") отвергаются.",
       "syntax_block": "Hashing = New DataHashing(HashFunction.SHA256);\nHashing.Append(Text);\nSum = Hashing.HashSum;                 // BinaryData\n\nSigning = New DataHashing(HashFunction.SHA256, Key);   // HMAC",
       "parameters": "function — значение HashFunction: MD5, SHA1, SHA256, SHA384 или SHA512.\nkey — строка или BinaryData; если задан, объект считает с ним HMAC. Опущен — простой хеш.",
       "return_descr": "DataHashing.",
-      "example": "// вебхук: HMAC-SHA256 тела, сравнение в hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(GetHexStringFromBinaryData(Check.HashSum)) <> Signature) { Raise(\"подпись не совпала\"); }",
+      "example": "// вебхук: HMAC-SHA256 тела, сравнение в hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(HexString(Check.HashSum)) <> Signature) { Raise(\"подпись не совпала\"); }",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.DataHashing.Append",
         "cls.DataHashing.AppendFile",
         "cls.DataHashing.HashSum",
         "enum.HashFunction",
-        "fn.GetBase64StringFromBinaryData",
-        "fn.GetHexStringFromBinaryData"
+        "cls.BinaryData",
+        "fn.HexString"
       ],
       "reviewed": false
     },
@@ -46,12 +46,12 @@
       "syntax_block": "Hashing.Append(data);",
       "parameters": "data — строка (её байты в UTF-8) или BinaryData.",
       "return_descr": "",
-      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(Login + \":\" + Stamp);\nHashing.Append(GetBinaryDataFromString(Note, TextEncoding.ANSI));",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(Login + \":\" + Stamp);\nHashing.Append(New BinaryData(Note, TextEncoding.ANSI));",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.DataHashing",
         "cls.DataHashing.AppendFile",
-        "fn.GetBinaryDataFromString"
+        "cls.BinaryData"
       ],
       "reviewed": false
     },
@@ -70,7 +70,7 @@
       "syntax_block": "Hashing.AppendFile(path);",
       "parameters": "path — читаемый файл.",
       "return_descr": "",
-      "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.AppendFile(\"C:\\in\\price.zip\");\nMessage(Lower(GetHexStringFromBinaryData(Hashing.HashSum)));",
+      "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.AppendFile(\"C:\\in\\price.zip\");\nMessage(Lower(HexString(Hashing.HashSum)));",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.DataHashing",
@@ -90,16 +90,16 @@
         "hashing"
       ],
       "signature": "DataHashing.HashSum",
-      "description": "Хеш всего добавленного к этому моменту, как BinaryData, — только чтение. 16 байтов для MD5, 20 для SHA1, 32, 48 и 64 для SHA256, SHA384 и SHA512.\n\nЧТЕНИЕ НИЧЕГО НЕ ЗАВЕРШАЕТ: добавление продолжается после него, и два чтения без добавления между ними совпадают.\n\nТекстом BinaryData показывается как base64; другой системе хеш обычно нужен в hex — GetHexStringFromBinaryData(Hashing.HashSum), прописными, Lower() для строчных, — или в base64 — GetBase64StringFromBinaryData(Hashing.HashSum).\n\n⚠ В эталонной системе String(ХешСумма) даёт hex через пробелы; здесь String даёт base64 — для hex пишется GetHexStringFromBinaryData.",
+      "description": "Хеш всего добавленного к этому моменту, как BinaryData, — только чтение. 16 байтов для MD5, 20 для SHA1, 32, 48 и 64 для SHA256, SHA384 и SHA512.\n\nЧТЕНИЕ НИЧЕГО НЕ ЗАВЕРШАЕТ: добавление продолжается после него, и два чтения без добавления между ними совпадают.\n\nТекстом BinaryData показывается как base64; другой системе хеш обычно нужен в hex — HexString(Hashing.HashSum), прописными, Lower() для строчных, — или в base64 — String(Hashing.HashSum).",
       "syntax_block": "Sum = Hashing.HashSum;",
       "parameters": "",
       "return_descr": "BinaryData.",
-      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(GetHexStringFromBinaryData(Hashing.HashSum));      // A9993E36...\nMessage(GetBase64StringFromBinaryData(Hashing.HashSum));   // qZk+NkcGgWq6PiVxeFDCbJzQ2J0=",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(HexString(Hashing.HashSum));   // A9993E36...\nMessage(String(Hashing.HashSum));      // qZk+NkcGgWq6PiVxeFDCbJzQ2J0=",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.DataHashing",
-        "fn.GetHexStringFromBinaryData",
-        "fn.GetBase64StringFromBinaryData"
+        "fn.HexString",
+        "cls.BinaryData"
       ],
       "reviewed": false
     },

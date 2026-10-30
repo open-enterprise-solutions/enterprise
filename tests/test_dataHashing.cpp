@@ -1,19 +1,21 @@
 // =============================================================================
-// DataHashing, HashFunction and the six conversions of bytes (GetBinaryDataFromString, GetStringFromBinaryData,
-// the base64 pair, the hex pair) - pinned to the published vectors: FIPS 180 for the digests, RFC 1321 for MD5,
-// RFC 2202 and RFC 4231 for the HMACs. The corpus suite, tests/scripts/test_binary_data_suite.txt, checks the
-// language side: New, the enumeration, the property, the global functions by their names.
+// DataHashing, HashFunction and BinaryData's conversions (a text in an encoding, base64, hex) - pinned to the
+// published vectors: FIPS 180 for the digests, RFC 1321 for MD5, RFC 2202 and RFC 4231 for the HMACs. The corpus
+// suite, tests/scripts/test_binary_data_suite.txt, checks the language side: New, the enumeration, the property,
+// the global functions by their names.
 // =============================================================================
 
 #include <gtest/gtest.h>
 
 #include <string>
+#include <vector>
 
 #include <wx/ffile.h>
 #include <wx/filename.h>
 
 #include "backend/backend_exception.h"
-#include "backend/system/systemManager.h"
+#include "backend/compiler/enumUnit.h"
+#include "backend/system/systemManagerEnum.h"
 #include "backend/system/value/valueBinaryData.h"
 #include "backend/system/value/valueDataHashing.h"
 
@@ -50,8 +52,8 @@ std::string Hmac(ibDataHash::Function function, const std::string& key, const st
 // The bytes a BinaryData value holds - or nothing, when the value is not one.
 std::string BytesOf(const ibValue& value)
 {
-	const ibValueBinaryData* binary = dynamic_cast<const ibValueBinaryData*>(value.GetRef());
-	if (binary == nullptr)
+	ibValueBinaryData* binary = nullptr;
+	if (!value.ConvertToValue(binary))
 		return "<not BinaryData>";
 	return std::string(static_cast<const char*>(binary->GetBuffer().GetData()), binary->GetLength());
 }
@@ -60,6 +62,37 @@ ibValue Binary(const std::string& bytes)
 {
 	const ibValuePtr<ibValueBinaryData> made(new ibValueBinaryData(bytes.data(), bytes.size()));
 	return made;
+}
+
+// New BinaryData(...), the way a script's New reaches it.
+ibValue Built(std::vector<ibValue> arguments)
+{
+	std::vector<ibValue*> params;
+	for (ibValue& argument : arguments)
+		params.push_back(&argument);
+	const ibValuePtr<ibValueBinaryData> made(new ibValueBinaryData());
+	EXPECT_TRUE(made->Init(params.data(), static_cast<long>(params.size())));
+	return made;
+}
+
+ibValue Member(ibTextEncoding encoding)
+{
+	return ibValue::CreateEnumObject<ibValueEnumTextEncoding>(encoding);
+}
+
+ibValue Spelled(const ibString& text, ibTextEncoding encoding)
+{
+	return Built({ ibValue(text), Member(encoding) });
+}
+
+// data.GetString(encoding), the way a script's call reaches it.
+ibString Read(const ibValue& data, ibTextEncoding encoding)
+{
+	ibValue answer, argument = Member(encoding);
+	ibValue* params[] = { &argument };
+	ibValue* const held = data.GetRef();
+	EXPECT_TRUE(held->CallAsFunc(held->FindMethod(ibT("GetString")), answer, params, 1));
+	return answer.GetString();
 }
 
 } // namespace
@@ -160,8 +193,19 @@ TEST(DataHash, Hmac_TheSumCanBeAskedMidway) {
 TEST(DataHashing, AStringIsHashedAsItsUtf8Bytes) {
 	ibValueDataHashing hashing;
 	hashing.Start(ibHashFunction_MD5);
-	hashing.Append(ibValue(ibString(wxT("абв"))));
+	hashing.Append(ibValue(ibString(ibT("\x0430\x0431\x0432"))));
 	EXPECT_EQ(Hex(hashing.GetHashSum()), Digest(ibDataHash::Function::MD5, "\xD0\xB0\xD0\xB1\xD0\xB2"));
+}
+
+// The road a script takes: a statement is a procedure call, and an Append that only answered as a function did
+// nothing, the sum staying the digest of no bytes.
+TEST(DataHashing, AScriptsAppendReachesTheHash) {
+	ibValueDataHashing hashing;
+	hashing.Start(ibHashFunction_MD5);
+	ibValue data(ibString(ibT("abc")));
+	ibValue* params[] = { &data };
+	EXPECT_TRUE(hashing.CallAsProc(hashing.FindMethod(ibT("Append")), params, 1));
+	EXPECT_EQ(Hex(hashing.GetHashSum()), Digest(ibDataHash::Function::MD5, "abc"));
 }
 
 TEST(DataHashing, BinaryDataIsHashedAsItsBytes) {
@@ -185,12 +229,6 @@ TEST(DataHashing, AFileIsHashedWhole) {
 	EXPECT_EQ(Hex(hashing.GetHashSum()), Digest(ibDataHash::Function::SHA256, "abc"));
 }
 
-TEST(DataHashing, ANumberIsNotData) {
-	ibValueDataHashing hashing;
-	hashing.Start(ibHashFunction_SHA256);
-	EXPECT_THROW(hashing.Append(ibValue(ibNumber(12))), ibBackendException);
-}
-
 TEST(DataHashing, AFunctionThatIsNoMemberIsRefused) {
 	ibValueDataHashing hashing;
 	EXPECT_THROW(hashing.Start(ibHashFunction()), ibBackendException);
@@ -202,59 +240,66 @@ TEST(DataHashing, NoFunctionNoSum) {
 	EXPECT_THROW(hashing.GetHashSum(), ibBackendException);
 }
 
-// --- the six conversions -------------------------------------------------------
+// --- BinaryData's conversions --------------------------------------------------
 
 TEST(BinaryDataConversions, StringToBytesAndBack) {
-	const ibValue bytes = ibValueSystemFunction::GetBinaryDataFromString(wxT("Борщ"));
+	const ibString text(ibT("\x0411\x043E\x0440\x0449"));
+	const ibValue bytes = Spelled(text, ibTextEncoding_UTF8);
 	EXPECT_EQ(BytesOf(bytes), "\xD0\x91\xD0\xBE\xD1\x80\xD1\x89");
-	EXPECT_EQ(ibValueSystemFunction::GetStringFromBinaryData(bytes), ibString(wxT("Борщ")));
+	EXPECT_EQ(Read(bytes, ibTextEncoding_UTF8), text);
 }
 
 TEST(BinaryDataConversions, Utf16IsLittleEndian_AndTheMarkIsAskedFor) {
-	EXPECT_EQ(BytesOf(ibValueSystemFunction::GetBinaryDataFromString(wxT("ab"), ibTextEncoding_UTF16)),
-		std::string("a\0b\0", 4));
-	EXPECT_EQ(BytesOf(ibValueSystemFunction::GetBinaryDataFromString(wxT("ab"), ibTextEncoding_UTF16, true)),
+	EXPECT_EQ(BytesOf(Spelled(ibT("ab"), ibTextEncoding_UTF16)), std::string("a\0b\0", 4));
+	EXPECT_EQ(BytesOf(Built({ ibValue(ibString(ibT("ab"))), Member(ibTextEncoding_UTF16), ibValue(true) })),
 		std::string("\xFF\xFE" "a\0b\0", 6));
-	EXPECT_EQ(BytesOf(ibValueSystemFunction::GetBinaryDataFromString(wxT("ab"), ibTextEncoding_UTF8, true)),
+	EXPECT_EQ(BytesOf(Built({ ibValue(ibString(ibT("ab"))), Member(ibTextEncoding_UTF8), ibValue(true) })),
 		"\xEF\xBB\xBF" "ab");
 }
 
 TEST(BinaryDataConversions, AMarkIsReadAsAMark) {
-	EXPECT_EQ(ibValueSystemFunction::GetStringFromBinaryData(Binary("\xEF\xBB\xBF" "ab")), ibString(wxT("ab")));
-	EXPECT_EQ(ibValueSystemFunction::GetStringFromBinaryData(Binary(std::string("\xFF\xFE" "a\0b\0", 6)), ibTextEncoding_UTF16),
-		ibString(wxT("ab")));
+	EXPECT_EQ(Read(Binary("\xEF\xBB\xBF" "ab"), ibTextEncoding_UTF8), ibString(ibT("ab")));
+	EXPECT_EQ(Read(Binary(std::string("\xFF\xFE" "a\0b\0", 6)), ibTextEncoding_UTF16), ibString(ibT("ab")));
 }
 
 TEST(BinaryDataConversions, BytesThatAreNotTextAreRefused) {
-	EXPECT_THROW(ibValueSystemFunction::GetStringFromBinaryData(Binary("\xFF\xFE\xFD")), ibBackendException);
-	EXPECT_THROW(ibValueSystemFunction::GetStringFromBinaryData(ibValue(ibString(wxT("text")))), ibBackendException)
-		<< "a string is not BinaryData";
+	EXPECT_THROW(Read(Binary("\xFF\xFE\xFD"), ibTextEncoding_UTF8), ibBackendException);
 }
 
 TEST(BinaryDataConversions, Base64BothWays) {
-	EXPECT_EQ(ibValueSystemFunction::GetBase64StringFromBinaryData(Binary("Man")), ibString(wxT("TWFu")));
-	EXPECT_EQ(ibValueSystemFunction::GetBase64StringFromBinaryData(Binary("Ma")), ibString(wxT("TWE=")));
-	EXPECT_EQ(ibValueSystemFunction::GetBase64StringFromBinaryData(Binary("")), ibString());
-	EXPECT_EQ(BytesOf(ibValueSystemFunction::GetBinaryDataFromBase64String(wxT("TWE="))), "Ma");
+	EXPECT_EQ(Binary("Man").GetString(), ibString(ibT("TWFu")));
+	EXPECT_EQ(Binary("Ma").GetString(), ibString(ibT("TWE=")));
+	EXPECT_EQ(Binary("").GetString(), ibString());
+	EXPECT_EQ(BytesOf(Built({ ibValue(ibString(ibT("TWE="))) })), "Ma");
 }
 
-// Another system wraps base64 at 76 characters; the line breaks are not part of it.
+// A text from elsewhere comes wrapped at 76 characters; the line breaks are not part of it.
 TEST(BinaryDataConversions, Base64LineBreaksAreSkipped) {
-	EXPECT_EQ(BytesOf(ibValueSystemFunction::GetBinaryDataFromBase64String(wxT("TW\r\nFu TWE=\n"))), "ManMa");
+	EXPECT_EQ(BytesOf(Built({ ibValue(ibString(ibT("TW\r\nFu TWE=\n"))) })), "ManMa");
 }
 
 TEST(BinaryDataConversions, TextThatIsNotBase64IsRefused) {
-	EXPECT_THROW(ibValueSystemFunction::GetBinaryDataFromBase64String(wxT("TWF")), ibBackendException);
-	EXPECT_THROW(ibValueSystemFunction::GetBinaryDataFromBase64String(wxT("TW*u")), ibBackendException);
+	ibValueBinaryData bytes;
+	for (const ibChar* text : { ibT("TWF"), ibT("TW*u") }) {
+		ibValue argument{ ibString(text) };
+		ibValue* params[] = { &argument };
+		EXPECT_THROW(bytes.Init(params, 1), ibBackendException);
+	}
+}
+
+TEST(BinaryDataConversions, Base64FunctionsBothWays) {
+	EXPECT_EQ(ibValueBinaryData::Base64String(Binary("Man")), ibString(ibT("TWFu")));
+	EXPECT_EQ(BytesOf(ibValueBinaryData::Base64Value(ibT("TW\r\nFu"))), "Man");
+	EXPECT_THROW(ibValueBinaryData::Base64Value(ibT("TW*u")), ibBackendException);
 }
 
 TEST(BinaryDataConversions, HexBothWays) {
-	EXPECT_EQ(ibValueSystemFunction::GetHexStringFromBinaryData(Binary(std::string("\x00\x0A\xFF", 3))), ibString(wxT("000AFF")));
-	EXPECT_EQ(BytesOf(ibValueSystemFunction::GetBinaryDataFromHexString(wxT("00 0a Ff"))), std::string("\x00\x0A\xFF", 3));
-	EXPECT_EQ(BytesOf(ibValueSystemFunction::GetBinaryDataFromHexString(wxT(""))), "");
+	EXPECT_EQ(ibValueBinaryData::HexString(Binary(std::string("\x00\x0A\xFF", 3))), ibString(ibT("000AFF")));
+	EXPECT_EQ(BytesOf(ibValueBinaryData::HexValue(ibT("00 0a Ff"))), std::string("\x00\x0A\xFF", 3));
+	EXPECT_EQ(BytesOf(ibValueBinaryData::HexValue(ibT(""))), "");
 }
 
 TEST(BinaryDataConversions, TextThatIsNotHexIsRefused) {
-	EXPECT_THROW(ibValueSystemFunction::GetBinaryDataFromHexString(wxT("ABC")), ibBackendException);
-	EXPECT_THROW(ibValueSystemFunction::GetBinaryDataFromHexString(wxT("0G")), ibBackendException);
+	EXPECT_THROW(ibValueBinaryData::HexValue(ibT("ABC")), ibBackendException);
+	EXPECT_THROW(ibValueBinaryData::HexValue(ibT("0G")), ibBackendException);
 }

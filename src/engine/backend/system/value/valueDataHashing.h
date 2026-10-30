@@ -8,22 +8,21 @@
 
 #include <memory>
 
-// ⭐⭐ A DIGEST OF DATA, COMPUTED BY A SCRIPT - as the reference system has it: an object built for one hash
-// function, fed with strings, bytes and files, asked for its sum.
+// ⭐⭐ A DIGEST OF DATA, COMPUTED BY A SCRIPT: an object built for one hash function, fed with strings, bytes and
+// files, asked for its sum.
 //
 //     var hashing = New DataHashing(HashFunction.SHA1);
 //     hashing.Append(login + ":" + stamp);
-//     var signature = GetBase64StringFromBinaryData(hashing.HashSum);
+//     var signature = String(hashing.HashSum);   // base64; HexString(hashing.HashSum) for hex
 //
 // Signing a request to a payment or exchange service, checking a webhook, a checksum of a file - each one is a
 // digest of bytes, and until now a script could not compute one at all.
 //
-// ⭐ A KEY MAKES IT AN HMAC (RFC 2104) - `New DataHashing(HashFunction.SHA256, key)`. The reference system has
-// no HMAC, and a script there builds one out of two hashings and a byte buffer; here it is an argument, because
-// a webhook's signature is exactly that and nothing else.
+// ⭐ A KEY MAKES IT AN HMAC (RFC 2104) - `New DataHashing(HashFunction.SHA256, key)`: a webhook's signature is exactly
+// that and nothing else.
 //
 // A STRING IS HASHED AS ITS UTF-8 BYTES. Another encoding is said by turning the string into bytes first -
-// GetBinaryDataFromString(text, TextEncoding.ANSI) - and appending those.
+// New BinaryData(text, TextEncoding.ANSI) - and appending those.
 //
 // HashSum is the digest of everything appended SO FAR, and appending goes on after it was read: the state is
 // copied and the copy finished (core/crypto/dataHash.h).
@@ -43,13 +42,13 @@ public:
 	ibValueDataHashing();
 	virtual ~ibValueDataHashing();
 
-	virtual bool IsEmpty() const { return m_hash == nullptr; }
+	virtual bool IsEmpty() const override { return m_hash == nullptr; }
 
-	virtual bool Init();                                                     // refused: a hashing is built for a function
-	virtual bool Init(ibValue** paParams, const long lSizeArray);           // New DataHashing(function [, key])
+	virtual bool Init() override;                                                     // refused: a hashing is built for a function
+	virtual bool Init(ibValue** paParams, const long lSizeArray) override;           // New DataHashing(function [, key])
 
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
-	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
+	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 
 	// The same verbs for a caller in C++ (and for the tests).
 	void Start(ibHashFunction function);

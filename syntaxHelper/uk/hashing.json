@@ -15,19 +15,19 @@
         "hashing"
       ],
       "signature": "New DataHashing(function : HashFunction [, key : string | BinaryData])",
-      "description": "Геш даних: будується для однієї геш-функції, отримує рядки, байти й файли, віддає суму. Підпис запиту до платіжного чи обмінного сервісу, перевірка підпису вебхука, контрольна сума файлу — усе це він.\n\nAppend(data) додає рядок або BinaryData, AppendFile(path) — вміст файлу цілком, HashSum — геш усього доданого на цю мить, BinaryData, а HashFunction — функція, для якої об'єкт побудовано.\n\nРЯДОК ГЕШУЄТЬСЯ ЯК ЙОГО БАЙТИ В UTF-8. Інше кодування кажуть так: спершу текст перетворюють на байти — GetBinaryDataFromString(text, TextEncoding.ANSI), — і додають їх. Число, дата й усе, що не рядок і не BinaryData, відхиляється: вони не мають одного написання в байтах, і геш того написання, яке вони випадково показують, підписав би не те, що малося на увазі.\n\nКЛЮЧ РОБИТЬ ЙОГО HMAC (RFC 2104) — New DataHashing(HashFunction.SHA256, key); саме це — підпис вебхука й більшості запитів. Ключ — рядок (його байти в UTF-8) або BinaryData; ПОРОЖНІЙ ключ — теж ключ, і лише пропущений ключ дає простий геш. В еталонній системі HMAC немає; цей аргумент — розширення OES.\n\nHashSum МОЖНА ЧИТАТИ НА ПІВДОРОЗІ, і додавання триває після нього: суму \"ab\" прочитано, додано \"c\", суму прочитано знову — це сума \"abc\".\n\nФУНКЦІЮ КАЖУТЬ ПІД ЧАС ПОБУДОВИ ОБ'ЄКТА, і лише значенням HashFunction: і New DataHashing(), і New DataHashing(\"SHA1\") відхиляються.",
+      "description": "Геш даних: будується для однієї геш-функції, отримує рядки, байти й файли, віддає суму. Підпис запиту до платіжного чи обмінного сервісу, перевірка підпису вебхука, контрольна сума файлу — усе це він.\n\nAppend(data) додає рядок або BinaryData, AppendFile(path) — вміст файлу цілком, HashSum — геш усього доданого на цю мить, BinaryData, а HashFunction — функція, для якої об'єкт побудовано.\n\nРЯДОК ГЕШУЄТЬСЯ ЯК ЙОГО БАЙТИ В UTF-8. Інше кодування кажуть так: спершу текст перетворюють на байти — New BinaryData(text, TextEncoding.ANSI), — і додають їх. Число, дата й усе, що не рядок і не BinaryData, відхиляється: вони не мають одного написання в байтах, і геш того написання, яке вони випадково показують, підписав би не те, що малося на увазі.\n\nКЛЮЧ РОБИТЬ ЙОГО HMAC (RFC 2104) — New DataHashing(HashFunction.SHA256, key); саме це — підпис вебхука й більшості запитів. Ключ — рядок (його байти в UTF-8) або BinaryData; ПОРОЖНІЙ ключ — теж ключ, і лише пропущений ключ дає простий геш.\n\nHashSum МОЖНА ЧИТАТИ НА ПІВДОРОЗІ, і додавання триває після нього: суму \"ab\" прочитано, додано \"c\", суму прочитано знову — це сума \"abc\".\n\nФУНКЦІЮ КАЖУТЬ ПІД ЧАС ПОБУДОВИ ОБ'ЄКТА, і лише значенням HashFunction: і New DataHashing(), і New DataHashing(\"SHA1\") відхиляються.",
       "syntax_block": "Hashing = New DataHashing(HashFunction.SHA256);\nHashing.Append(Text);\nSum = Hashing.HashSum;                 // BinaryData\n\nSigning = New DataHashing(HashFunction.SHA256, Key);   // HMAC",
       "parameters": "function — значення HashFunction: MD5, SHA1, SHA256, SHA384 або SHA512.\nkey — рядок або BinaryData; якщо задано, об'єкт рахує з ним HMAC. Пропущено — простий геш.",
       "return_descr": "DataHashing.",
-      "example": "// вебхук: HMAC-SHA256 тіла, порівняння в hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(GetHexStringFromBinaryData(Check.HashSum)) <> Signature) { Raise(\"підпис не збігся\"); }",
+      "example": "// вебхук: HMAC-SHA256 тіла, порівняння в hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(HexString(Check.HashSum)) <> Signature) { Raise(\"підпис не збігся\"); }",
       "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.DataHashing.Append",
         "cls.DataHashing.AppendFile",
         "cls.DataHashing.HashSum",
         "enum.HashFunction",
-        "fn.GetBase64StringFromBinaryData",
-        "fn.GetHexStringFromBinaryData"
+        "cls.BinaryData",
+        "fn.HexString"
       ],
       "reviewed": false
     },
@@ -46,12 +46,12 @@
       "syntax_block": "Hashing.Append(data);",
       "parameters": "data — рядок (його байти в UTF-8) або BinaryData.",
       "return_descr": "",
-      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(Login + \":\" + Stamp);\nHashing.Append(GetBinaryDataFromString(Note, TextEncoding.ANSI));",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(Login + \":\" + Stamp);\nHashing.Append(New BinaryData(Note, TextEncoding.ANSI));",
       "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.DataHashing",
         "cls.DataHashing.AppendFile",
-        "fn.GetBinaryDataFromString"
+        "cls.BinaryData"
       ],
       "reviewed": false
     },
@@ -70,7 +70,7 @@
       "syntax_block": "Hashing.AppendFile(path);",
       "parameters": "path — файл, що читається.",
       "return_descr": "",
-      "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.AppendFile(\"C:\\in\\price.zip\");\nMessage(Lower(GetHexStringFromBinaryData(Hashing.HashSum)));",
+      "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.AppendFile(\"C:\\in\\price.zip\");\nMessage(Lower(HexString(Hashing.HashSum)));",
       "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.DataHashing",
@@ -90,16 +90,16 @@
         "hashing"
       ],
       "signature": "DataHashing.HashSum",
-      "description": "Геш усього доданого на цю мить, як BinaryData, — лише читання. 16 байтів для MD5, 20 для SHA1, 32, 48 і 64 для SHA256, SHA384 і SHA512.\n\nЧИТАННЯ НІЧОГО НЕ ЗАВЕРШУЄ: додавання триває після нього, і два читання без додавання між ними збігаються.\n\nТекстом BinaryData показується як base64; іншій системі геш зазвичай потрібен у hex — GetHexStringFromBinaryData(Hashing.HashSum), великими літерами, Lower() для малих, — або в base64 — GetBase64StringFromBinaryData(Hashing.HashSum).\n\n⚠ В еталонній системі String(ХешСумма) дає hex через пробіли; тут String дає base64 — для hex пишуть GetHexStringFromBinaryData.",
+      "description": "Геш усього доданого на цю мить, як BinaryData, — лише читання. 16 байтів для MD5, 20 для SHA1, 32, 48 і 64 для SHA256, SHA384 і SHA512.\n\nЧИТАННЯ НІЧОГО НЕ ЗАВЕРШУЄ: додавання триває після нього, і два читання без додавання між ними збігаються.\n\nТекстом BinaryData показується як base64; іншій системі геш зазвичай потрібен у hex — HexString(Hashing.HashSum), великими літерами, Lower() для малих, — або в base64 — String(Hashing.HashSum).",
       "syntax_block": "Sum = Hashing.HashSum;",
       "parameters": "",
       "return_descr": "BinaryData.",
-      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(GetHexStringFromBinaryData(Hashing.HashSum));      // A9993E36...\nMessage(GetBase64StringFromBinaryData(Hashing.HashSum));   // qZk+NkcGgWq6PiVxeFDCbJzQ2J0=",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(HexString(Hashing.HashSum));   // A9993E36...\nMessage(String(Hashing.HashSum));      // qZk+NkcGgWq6PiVxeFDCbJzQ2J0=",
       "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.DataHashing",
-        "fn.GetHexStringFromBinaryData",
-        "fn.GetBase64StringFromBinaryData"
+        "fn.HexString",
+        "cls.BinaryData"
       ],
       "reviewed": false
     },

@@ -43,6 +43,10 @@ BACKEND_API bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding e
 // the encoding - a text is not written with a question mark where a letter should stand.
 BACKEND_API bool ibTextToBytes(const ibString& text, ibTextEncoding encoding, std::string& bytes);
 
+// The optional TextEncoding argument at `at`: UTF-8 when it is left out, and nothing but a member otherwise. A string
+// that "means" one, or a member of another enumeration, is refused. The one door for a script saying an encoding.
+BACKEND_API ibTextEncoding ibTextEncodingAt(ibValue** paParams, const long lSizeArray, const long at);
+
 void ibValueTextReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
 class BACKEND_API ibValueTextReader : public ibValueStaticMembers<&ibValueTextReader_BindNames> {

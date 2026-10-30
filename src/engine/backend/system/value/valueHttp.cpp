@@ -55,7 +55,7 @@ std::string ibHttpUtf8(const ibString& text)
 }
 
 // text -> bytes. No byte-order mark: a body is not a file, and a mark in front of JSON is a parse error at the
-// other end. The same door GetBinaryDataFromString spells a text through.
+// other end. The same door New BinaryData(text, encoding) spells a text through.
 std::string ibHttpEncode(const ibString& text, ibTextEncoding encoding)
 {
 	std::string bytes;
@@ -89,16 +89,6 @@ template <class T>
 T* ibHttpHeld(const ibValue& value)
 {
 	return dynamic_cast<T*>(value.GetRef());
-}
-
-// The optional TextEncoding argument at `at`: UTF-8 when it is left out, and nothing but a TextEncoding otherwise.
-ibTextEncoding ibHttpEncodingAt(ibValue** paParams, const long lSizeArray, const long at)
-{
-	if (!ibHttpGiven(paParams, lSizeArray, at))
-		return ibTextEncoding_UTF8;
-	if (paParams[at]->GetType() != ibValueTypes::TYPE_ENUM)
-		ibBackendCoreException::Error(_("the encoding is a TextEncoding value - TextEncoding.UTF8, for one"));
-	return paParams[at]->ConvertToEnumValue<ibTextEncoding>();
 }
 
 bool ibHttpHoldsControl(const ibString& text)
@@ -297,7 +287,7 @@ bool ibValueHttpRequest::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 	case enSetBodyFromString:
 		if (lSizeArray < 1)
 			return false;
-		SetBodyText(paParams[0]->GetString(), ibHttpEncodingAt(paParams, lSizeArray, 1));
+		SetBodyText(paParams[0]->GetString(), ibTextEncodingAt(paParams, lSizeArray,1));
 		return true;
 	case enSetBodyFromBinaryData: {
 		if (lSizeArray < 1)
@@ -309,7 +299,7 @@ bool ibValueHttpRequest::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		return true;
 	}
 	case enGetBodyAsString:
-		pvarRetValue = ibHttpDecode(m_body, ibHttpEncodingAt(paParams, lSizeArray, 0), ibT("HTTPRequest"));
+		pvarRetValue = ibHttpDecode(m_body, ibTextEncodingAt(paParams, lSizeArray,0), ibT("HTTPRequest"));
 		return true;
 	case enGetBodyAsBinaryData: {
 		const ibValuePtr<ibValueBinaryData> data(new ibValueBinaryData(m_body.data(), m_body.size()));
@@ -367,7 +357,7 @@ bool ibValueHttpResponse::CallAsFunc(const long lMethodNum, ibValue& pvarRetValu
 {
 	switch (lMethodNum) {
 	case enGetBodyAsString:
-		pvarRetValue = BodyAsString(ibHttpEncodingAt(paParams, lSizeArray, 0));
+		pvarRetValue = BodyAsString(ibTextEncodingAt(paParams, lSizeArray,0));
 		return true;
 	case enGetBodyAsBinaryData: {
 		const ibValuePtr<ibValueBinaryData> data(new ibValueBinaryData(m_body.data(), m_body.size()));
