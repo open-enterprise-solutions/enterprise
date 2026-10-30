@@ -55,8 +55,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **The start**: the thin client's splash, with arrows and the stage of the start under it, is up from the first paint;
   a login asked takes its place, and it stays until the first window has its rows. The window's title has the OES logo
   beside the configuration's name.
-- **A form comes whole**: one just opened is shown once it has its rows, the one before staying up meanwhile. The tabs are
-  no longer drawn anew by every answer.
+- **The start page**: the forms the configuration places on it, live, in its columns, with sashes to drag between them.
+- **A form comes whole**: one just opened is shown once it has its rows and its fields can be seen, the one before staying up
+  meanwhile, and it replaces that one in a single frame. The tabs are no longer drawn anew by every answer.
+- **A table's columns fold into their row only in a narrow window**; anywhere else those that do not fit scroll sideways.
 - **Denser on a mouse**: a field, a row, a tool, the window's title and a table's header take about two thirds of the height
   they took. A touch screen keeps its targets.
 - **A table's three view modes**: List, Hierarchy with the folders it stands in frozen over the rows, and Tree with

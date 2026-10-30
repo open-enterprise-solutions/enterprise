@@ -12,6 +12,8 @@
 	const messageRequest = 1;
 	const viewModeRequest = 7;
 	const viewModeCommand = 700;
+	// What a tab's view shows when it is no form (ibView::ibKind): the start page.
+	const homePageKind = 16;
 	// A message's buttons, wx's flags and codes alike.
 	const yes = 0x02;
 	const no = 0x08;
@@ -33,6 +35,8 @@
 			this.active = this.tabs.length > 0 ? 1 : 0;
 			this.request = undefined;
 			this.nextRequest = 1;
+			/** @type {Map<string, any>} the forms drawn, by their Key */
+			this.forms = new Map();
 		}
 
 		/** The events the page sent of one kind, or every one. @param {number} [kind] */
@@ -70,7 +74,8 @@
 				Title: scenario.title ?? 'Test base',
 				Status: 'Ready',
 				Menu: scenario.menu ?? {},
-				Tabs: { NodeChildren: this.tabs.map((one) => ({ NodeId: one.id, Title: one.title, Locked: one.locked === true })) },
+				Tabs: { NodeChildren: this.tabs.map((one) => ({ NodeId: one.id, Title: one.title, Locked: one.locked === true,
+					...(one.columns !== undefined ? { Kind: homePageKind } : {}) })) },
 				ActiveTab: this.active,
 				...(tab !== undefined ? { View: this.view(tab) } : {}),
 				...(this.request !== undefined ? { Request: this.request } : {}),
@@ -78,6 +83,25 @@
 		}
 
 		view(tab) {
+			if (tab.columns === undefined)
+				return this.form(tab);
+			// The start page: a form of each cell by its own control ids and Key, as a tab's; a cell with none says why.
+			return {
+				...(tab.gravity !== undefined ? { Gravity: tab.gravity } : {}),
+				Columns: { NodeChildren: tab.columns.map((cells, column) => ({
+					NodeId: column + 1,
+					NodeChildren: cells.map((cell, place) => ({
+						NodeId: place + 1, Title: cell.title, Height: cell.height ?? 1,
+						...(cell.table !== undefined
+							? { View: this.form({ id: tab.id * 10 + column * 3 + place + 1, ...cell }) } : { Unavailable: cell.unavailable }),
+					})),
+				})) },
+			};
+		}
+
+		/** A form, its table remembered under its Key: a read and an event name the form, not the tab. @param {any} tab */
+		form(tab) {
+			this.forms.set(`form${tab.id}`, tab);
 			const table = tab.table;
 			const state = { ViewMode: table.viewMode, Version: table.version ?? 1 };
 			if (table.currentRow !== undefined)
@@ -174,7 +198,7 @@
 				}
 				return this.closed(params.Tab);
 			case 'fetch':
-				return this.fetch(this.tab().table, params.Request);
+				return this.fetch((this.forms.get(params.Form) ?? this.tab()).table, params.Request);
 			case 'event':
 				return this.event(params);
 			case 'respond':

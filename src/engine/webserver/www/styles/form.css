@@ -12,27 +12,11 @@
 }
 
 /* The window a form just opened is drawn in, out of sight over the one on show, until it has settled (ClientWindow): it
-   is measured as it will stand, and takes nothing from what is on show. It comes in with a short fade. */
+   is measured as it will stand, and takes nothing from what is on show. It comes in one frame, whole. */
 .views > .arriving {
 	position: absolute;
 	inset: 0;
 	visibility: hidden;
-}
-
-.views > .arrived {
-	animation: form-arrives 100ms ease-out;
-}
-
-@keyframes form-arrives {
-	from {
-		opacity: 0;
-	}
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.views > .arrived {
-		animation: none;
-	}
 }
 
 /* A component not yet defined takes its place but shows no raw text. */

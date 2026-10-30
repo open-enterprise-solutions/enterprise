@@ -77,6 +77,9 @@ const hierarchicalView = 1;
 // What the cursor stands on (ibDataViewSelectionMode): the cell; otherwise its row.
 const selectCell = 0;
 
+// The window a table folds its columns in, the stylesheets' narrow one.
+const narrowWindow = '(max-width: 40rem)';
+
 /** A tree's step in, per level, in pixels — and how many of a folder's rows one read asks for. */
 const treeIndent = 16;
 const treeBatch = 100;
@@ -296,7 +299,8 @@ class Tablebox extends Control {
 				index: 'handle',
 				height: '100%',
 				layout: 'fitColumns',
-				responsiveLayout: 'collapse',
+				// Folded only in a narrow window: anywhere else a table narrower than its columns scrolls, as the thin client's.
+				responsiveLayout: matchMedia(narrowWindow).matches ? 'collapse' : false,
 				placeholder: '',
 				// The keys are the table's own (pressKey), not the grid's scrolling.
 				keybindings: false,

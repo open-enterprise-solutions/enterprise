@@ -38,8 +38,12 @@ by a patch is updated in place, so the focus and the caret stay where they were.
 
 - **The start.** The thin client's splash is on the screen before the big stylesheets have come, the arrows and the stage
   of the start under it. A login asked takes its place; then it is up again until the first window has its rows.
-- **A form comes whole.** A form just opened is drawn out of sight, the one on show staying up until it has its rows, for
-  a second at most; a tab gone back to comes at once. What did not change is not drawn again.
+- **A form comes whole.** A form just opened is drawn out of sight, the one on show staying up until it has its rows and
+  the components it is drawn with have come and drawn themselves, for a second at most; then it replaces the other in one
+  frame. A tab gone back to comes at once. What did not change is not drawn again.
+- **The start page is a container of forms.** Its columns stand side by side and the cells of each one under the other, in
+  the shares the configuration gives, with a sash between them to drag. Each cell is a strip with its title over a form
+  that works as a tab's does and goes back to the server by its own `Key`; a form that would not open is said in its cell.
 - **As dense as a desktop form on a mouse**, the root's 13 px; a finger keeps 16 px and targets of 44 px.
 - **The thin client's rules.** The login first goes in with no name — a base with no users lets it in. A refused call
   is said in a box with the server's words; a session that ended closes the window. A dropped socket is opened again and
@@ -52,7 +56,8 @@ by a patch is updated in place, so the focus and the caret stay where they were.
   dialog: the dialog blocks the form, so a tab beneath it could not be seen.
 - **A form's command bar stays on top**; the controls under it fill the tab while they fit, what grows sharing what is
   left, and scroll under the bar when they do not — the thin client's layout. A table or a sheet takes the height the
-  form gives it and scrolls its rows inside itself. A command bar keeps one line; what does not fit is under its ».
+  form gives it and scrolls its rows inside itself; columns that do not fit scroll sideways, and fold into their row only
+  in a narrow window. A command bar keeps one line; what does not fit is under its ».
 - **A sheet's cells are taken as in a spreadsheet program**: a click, a drag, Shift and Ctrl with a click, the arrows,
   Ctrl+A. Ctrl+C copies them as cells — a figure as a number — and the figures taken are summed in the sheet's corner:
   average, count, sum. A row folded away is neither summed nor copied.

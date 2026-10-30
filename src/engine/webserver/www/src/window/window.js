@@ -6,6 +6,7 @@
 
 import { reconcile, dispose } from '../controls/control.js';
 import { Refusal } from '../protocol/connection.js';
+import { HomePage } from './homePage.js';
 import { Questions } from './questions.js';
 import { Sections } from './sections.js';
 import { showFunctions } from './functions.js';
@@ -19,6 +20,9 @@ import { showAbout } from './about.js';
 // The schemas the window opens itself (ibSchema): All functions.
 const allFunctions = 1;
 const about = 4;
+
+// What a tab's view shows when it is no form (ibView::ibKind): the start page.
+const homePage = 16;
 
 // How long a call is waited on before the window says it waits: a quick answer shows nothing.
 const busyAfter = 800;
@@ -366,8 +370,9 @@ export class ClientWindow {
 			return;
 		}
 		const existing = this.tabViews.get(active) ?? null;
-		if (view.NodeType !== 'ClientForm') {
-			// A view that is no form — a text, a spreadsheet, the journal, the start page — is not drawn here yet.
+		const isHomePage = frame.Tabs?.NodeChildren?.find((tab) => tab.NodeId === active)?.Kind === homePage;
+		if (view.NodeType !== 'ClientForm' && !isHomePage) {
+			// A view that is no form — a text, a spreadsheet, the journal — is not drawn here yet.
 			const placeholder = existing ?? document.createElement('div');
 			placeholder.className = 'view-placeholder';
 			placeholder.textContent = 'This view is not in the browser yet.';
@@ -379,7 +384,8 @@ export class ClientWindow {
 			return;
 		}
 		const returned = existing?.hidden === true;
-		const form = reconcile(this.views, /** @type {any} */ (existing), view, this.contextOf(view));
+		const form = isHomePage ? this.drawHomePage(existing, view)
+			: reconcile(this.views, /** @type {any} */ (existing), view, this.contextOf(view));
 		this.tabViews.set(active, form);
 		if (existing === null)
 			this.arrive(active, /** @type {any} */ (form));
@@ -388,6 +394,18 @@ export class ClientWindow {
 			if (returned)
 				this.focusTable(form);
 		}
+	}
+
+	/**
+	 * The start page brought up to its view: each of its forms goes back to the server by its own Key.
+	 * @param {HTMLElement | null} existing
+	 * @param {ProtocolNode} view
+	 * @returns {HomePage}
+	 */
+	drawHomePage(existing, view) {
+		const page = /** @type {HomePage} */ (existing ?? this.views.appendChild(document.createElement('oes-homepage')));
+		page.draw(view, (form) => this.contextOf(form), this.pictures);
+		return page;
 	}
 
 	/**
@@ -425,7 +443,6 @@ export class ClientWindow {
 		this.arrival = null;
 		for (const [id, element] of this.tabViews) {
 			element.hidden = id !== active;
-			element.classList.toggle('arrived', id === active && element.classList.contains('arriving'));
 			element.classList.remove('arriving');
 		}
 	}

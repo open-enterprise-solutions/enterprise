@@ -55,10 +55,17 @@ export class Control extends HTMLElement {
 	/** The first drawing. @param {ProtocolNode} node */
 	build(node) {}
 
-	/** Its first drawing done, and that of every control under it: what the form shows is what it will go on showing. */
-	settled() {
+	/**
+	 * Its first drawing done, and that of every control under it, each with the components it is drawn with come and drawn
+	 * too (a component is loaded the first time it is met, and draws itself after that): what the form shows is what it
+	 * will go on showing.
+	 */
+	async settled() {
 		const controls = [this, ...this.querySelectorAll('*')].filter((element) => element instanceof Control);
-		return Promise.all(controls.map((control) => /** @type {Control} */ (control).drawing));
+		await Promise.all(controls.map((control) => /** @type {Control} */ (control).drawing));
+		const components = [...this.querySelectorAll('*')].filter((element) => element.localName.startsWith('wa-'));
+		await Promise.all([...new Set(components.map((one) => one.localName))].map((tag) => customElements.whenDefined(tag)));
+		await Promise.all(components.map((one) => /** @type {any} */ (one).updateComplete));
 	}
 
 	/**

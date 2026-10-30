@@ -35,6 +35,28 @@ class FormArrives(PageTest):
         self.assertEqual([one for one in samples if one['forms'] != 1], [], 'not exactly one form was on show')
         self.assertEqual({one['title'] for one in samples}, {'100', '200'}, 'the first stays, then the second')
 
+    def test_a_new_form_is_never_on_show_before_its_fields_can_be_seen(self):
+        # A component is loaded the first time it is met: the fields of the first form with any came after the form.
+        self.serve_late('components/input/input.js', 0.3)
+        page = self.start({'tabs': [tab('First')]})
+        page.evaluate("""() => {
+          window.bare = 0;
+          const look = () => {
+            for (const form of document.querySelectorAll('.views > oes-clientform:not([hidden])')) {
+              const field = form.querySelector('wa-input');
+              if (field !== null && getComputedStyle(form).visibility !== 'hidden' && !field.shadowRoot?.querySelector('input'))
+                window.bare++;
+            }
+            requestAnimationFrame(look);
+          };
+          look();
+        }""")
+        opened = {'title': 'Second', 'fields': [{'id': 50, 'caption': 'Number', 'text': '1'}], 'table': table()}
+        page.evaluate('(tab) => window.fake.open(tab)', opened)
+        page.wait_for_function("document.querySelector('.views > oes-clientform:not([hidden]) wa-input')?.shadowRoot?.querySelector('input')")
+        page.wait_for_timeout(100)
+        self.assertEqual(page.evaluate('window.bare'), 0, 'a form was on show with its fields not drawn')
+
     def test_a_form_whose_rows_do_not_come_still_comes(self):
         opened = {'title': 'Second', 'table': table(rows=[row(1, 'Slow')])}
         page = self.start({'tabs': [tab('First')]})
