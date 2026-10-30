@@ -2,7 +2,46 @@
 
 #include <algorithm>   // std::min
 #include <string>
-#include <utility>     // std::move
+#include <vector>
+
+// One attribute: a node links its own, the first written first - most nodes have none, and pay nothing for it.
+struct ibXmlNode::ibAttribute {
+	ibString     m_name, m_value;
+	ibAttribute* m_next = nullptr;
+};
+
+namespace {
+
+// ⭐ KEPT IN BLOCKS: a node never moves once made, and one allocation serves many - a std::deque of a type this size
+// allocates one block per element under MSVC. A block is twice the one before, from 16 to 1024: a text of one element
+// - a value read back, a workbook's small part - is not made to pay for a thousand.
+template <typename T>
+class ibBlockArray {
+public:
+	T& Make()
+	{
+		if (m_used == m_size) {
+			const size_t size = m_size == 0 ? kFirst : std::min(m_size * 2, kLast);
+			m_blockArray.push_back(std::make_unique<T[]>(size));   // what may raise, before the counts change
+			m_size = size;
+			m_used = 0;
+		}
+		return m_blockArray.back()[m_used++];
+	}
+
+private:
+	static constexpr size_t kFirst = 16, kLast = 1024;
+	std::vector<std::unique_ptr<T[]>> m_blockArray;
+	size_t m_size = 0;   // of the last block
+	size_t m_used = 0;   // ...and taken of it
+};
+
+} // namespace
+
+struct ibXmlDocument::ibStore {
+	ibBlockArray<ibXmlNode>              m_nodeArray;
+	ibBlockArray<ibXmlNode::ibAttribute> m_attributeArray;
+};
 
 ibString ibXmlNode::GetNodeContent() const
 {
@@ -13,11 +52,11 @@ ibString ibXmlNode::GetNodeContent() const
 	return ibString();
 }
 
-const ibXmlParser::ibAttribute* ibXmlNode::FindAttribute(const ibString& name) const
+const ibXmlNode::ibAttribute* ibXmlNode::FindAttribute(const ibString& name) const
 {
-	for (const ibXmlParser::ibAttribute& attribute : m_attributeArray)
-		if (attribute.m_name == name)
-			return &attribute;
+	for (const ibAttribute* attribute = m_firstAttribute; attribute != nullptr; attribute = attribute->m_next)
+		if (attribute->m_name == name)
+			return attribute;
 	return nullptr;
 }
 
@@ -28,13 +67,16 @@ bool ibXmlNode::HasAttribute(const ibString& name) const
 
 ibString ibXmlNode::GetAttribute(const ibString& name, const ibString& absent) const
 {
-	const ibXmlParser::ibAttribute* attribute = FindAttribute(name);
+	const ibAttribute* attribute = FindAttribute(name);
 	return attribute != nullptr ? attribute->m_value : absent;
 }
 
+ibXmlDocument::ibXmlDocument() = default;
+ibXmlDocument::~ibXmlDocument() = default;
+
 ibXmlNode& ibXmlDocument::Append(ibXmlNode* parent, ibXmlNodeType type)
 {
-	ibXmlNode& node = m_nodeArray.emplace_back();
+	ibXmlNode& node = m_store->m_nodeArray.Make();
 	node.m_type = type;
 	node.m_parent = parent;
 	if (parent != nullptr) {
@@ -53,82 +95,78 @@ ibXmlNode& ibXmlDocument::Append(ibXmlNode* parent, ibXmlNodeType type)
 void ibXmlDocument::Load(const ibString& text, const ibString& source)
 {
 	const std::string utf8 = text.ToUtf8();
-	ibXmlParser parser(ibT("XML"), ibXmlParser::kCharacters, ibXmlParser::kAsWritten);
-	Load(parser, utf8.data(), utf8.size(), source);
+	Load(ibXmlParser::kCharacters, utf8.data(), utf8.size(), source);
 }
 
 void ibXmlDocument::Load(const char* data, size_t size, const ibString& source)
 {
-	ibXmlParser parser(ibT("XML"), ibXmlParser::kBytes, ibXmlParser::kAsWritten);
-	Load(parser, data, size, source);
+	Load(ibXmlParser::kBytes, data, size, source);
 }
 
-// The parser hands its nodes over a queue at a time; the tree is built as they come - an element opens a level,
-// its end closes it. What stands outside the root (a comment before it, the whitespace after it) is not kept.
-void ibXmlDocument::Load(ibXmlParser& parser, const char* data, size_t size, const ibString& source)
+// ⭐ THE PARSER HANDS EACH EVENT STRAIGHT TO THE TREE (ibXmlParser::ibReceiver): an element opens a level, its end
+// closes it, and no node of the parser's is made in between - in a checked build that node, with its strings, its
+// attribute list and its scope, cost more than expat's own reading of the text. What stands outside the root (a comment
+// before it, the whitespace after it) is not kept.
+void ibXmlDocument::Load(ibXmlParser::ibInput input, const char* data, size_t size, const ibString& source)
 {
-	m_nodeArray.clear();
 	m_root = nullptr;
+	m_store = std::make_unique<ibStore>();
 
-	std::vector<ibXmlNode*> open;   // the elements not ended, innermost last
+	struct Building : ibXmlParser::ibReceiver {
+		ibXmlDocument&          m_document;
+		std::vector<ibXmlNode*> m_openArray;   // the elements not ended, innermost last
 
-	const auto take = [&]() {
-		std::deque<ibXmlParser::ibNode>& queue = parser.Queue();
-		for (ibXmlParser::ibNode& parsed : queue) {
-			ibXmlNode* const parent = open.empty() ? nullptr : open.back();
-			switch (parsed.m_type) {
-			case ibXmlNodeType_StartElement: {
-				if (parent == nullptr && m_root != nullptr)
-					break;   // expat refuses a second root before it gets here
-				ibXmlNode& element = Append(parent, ibXmlNodeType_StartElement);
-				element.m_name = std::move(parsed.m_name);
-				element.m_line = parsed.m_line;
-				element.m_attributeArray = std::move(parsed.m_attributeArray);
-				if (parent == nullptr)
-					m_root = &element;
-				open.push_back(&element);
-				break;
+		explicit Building(ibXmlDocument& document) : m_document(document) {}
+
+		virtual void Start(const char* name, const char* const* attributes, unsigned long long line) override
+		{
+			ibXmlNode* const parent = m_openArray.empty() ? nullptr : m_openArray.back();
+			ibXmlNode& element = m_document.Append(parent, ibXmlNodeType_StartElement);
+			element.m_name = ibString::FromUTF8(name);
+			element.m_line = line;
+			ibXmlNode::ibAttribute** last = &element.m_firstAttribute;
+			for (const char* const* at = attributes; at[0] != nullptr; at += 2) {
+				ibXmlNode::ibAttribute& attribute = m_document.m_store->m_attributeArray.Make();
+				attribute.m_name = ibString::FromUTF8(at[0]);
+				attribute.m_value = ibString::FromUTF8(at[1]);
+				*last = &attribute;
+				last = &attribute.m_next;
 			}
-			case ibXmlNodeType_EndElement:
-				if (!open.empty())
-					open.pop_back();
-				break;
-			case ibXmlNodeType_Text:
-			case ibXmlNodeType_Whitespace:
-			case ibXmlNodeType_CDATASection:
-			case ibXmlNodeType_Comment:
-			case ibXmlNodeType_ProcessingInstruction: {
-				if (parent == nullptr)
-					break;
-				ibXmlNode& node = Append(parent, parsed.m_type);
-				node.m_name = std::move(parsed.m_name);
-				node.m_content = std::move(parsed.m_value);
-				node.m_line = parsed.m_line;
-				break;
-			}
-			default:
-				break;
-			}
+			if (parent == nullptr)
+				m_document.m_root = &element;   // expat refuses a second root before it gets here
+			m_openArray.push_back(&element);
 		}
-		queue.clear();
-	};
+
+		virtual void End() override
+		{
+			if (!m_openArray.empty())
+				m_openArray.pop_back();
+		}
+
+		virtual void Content(ibXmlNodeType type, const char* name, const char* text, size_t size, unsigned long long line) override
+		{
+			if (m_openArray.empty())
+				return;
+			ibXmlNode& node = m_document.Append(m_openArray.back(), type);
+			if (name != nullptr)
+				node.m_name = ibString::FromUTF8(name);
+			node.m_content = ibString::FromUTF8(text, size);
+			node.m_line = line;
+		}
+	} building(*this);
 
 	try {
+		ibXmlParser parser(ibT("XML"), input, building);
 		size_t at = 0;
 		do {
 			const size_t chunk = std::min(ibXmlParser::kChunk, size - at);
 			parser.Feed(data + at, chunk, at + chunk == size, source);
 			at += chunk;
-			take();
-			while (parser.Paused()) {
-				parser.Resume(source);
-				take();
-			}
 		} while (at < size);
 	}
 	catch (...) {
-		m_nodeArray.clear();
 		m_root = nullptr;
+		m_store.reset();
 		throw;
 	}
 }

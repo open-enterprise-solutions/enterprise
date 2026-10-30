@@ -6,6 +6,7 @@
 #include "core/localization/dictionary.h"    // _() — their words
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -208,7 +209,7 @@ private:
 			|| node.GetType() == ibXmlNodeType_CDATASection;
 	}
 
-	static bool AttributeOf(const ibXmlNode& node, const ibChar* name, ibString& value)
+	static bool AttributeOf(const ibXmlNode& node, const ibString& name, ibString& value)
 	{
 		if (!node.HasAttribute(name))
 			return false;
@@ -228,7 +229,7 @@ private:
 		ibClassID clsid = 0;
 		ibMetaID metaId = 0;
 		ibString type, id;
-		const bool typed = AttributeOf(start, ibT("Type"), type);
+		const bool typed = AttributeOf(start, m_typeName, type);
 		if (typed) {
 			unsigned long long number = 0;
 			if (type.ToULongLong(&number))
@@ -236,7 +237,7 @@ private:
 			else if (m_lookupType)
 				clsid = m_lookupType(type);
 		}
-		if (AttributeOf(start, ibT("Id"), id)) {
+		if (AttributeOf(start, m_idName, id)) {
 			long long number = 0;
 			if (!id.ToLongLong(&number))
 				ibCoreException::Error(_("ibXmlProvider: Id '%s' is no number, line %llu"), id, start.GetLine());
@@ -256,7 +257,7 @@ private:
 			}
 			if (item->GetName() == ibT("Field")) {
 				ibString name;
-				if (!AttributeOf(*item, ibT("Name"), name))
+				if (!AttributeOf(*item, m_nameName, name))
 					ibCoreException::Error(_("ibXmlProvider: a Field with no Name, line %llu"), item->GetLine());
 				node.AddField(name, ReadValue(*item, depth + 1));
 			}
@@ -304,20 +305,25 @@ private:
 	{
 		CheckDepth(depth, start.GetLine());
 		ibString kind, encoding;
-		AttributeOf(start, ibT("Kind"), kind);
-		AttributeOf(start, ibT("Encoding"), encoding);
+		AttributeOf(start, m_kindName, kind);
+		AttributeOf(start, m_encodingName, encoding);
 		const bool list = kind == ibT("Array");
 
 		ibString text;
-		std::vector<ibDataValue> items;
+		std::optional<std::vector<ibDataValue>> items;   // made for a list alone: an empty vector is not free
+		if (list)
+			items.emplace();
 		std::shared_ptr<ibDataNode> child;
 		for (const ibXmlNode* item = Next(start.GetChildren()); item != nullptr; item = Next(item->GetNext())) {
 			if (IsText(*item)) {
-				text += item->GetContent();
+				if (text.IsEmpty())
+					text = item->GetContent();   // the one text a value holds is shared, not copied
+				else
+					text += item->GetContent();
 				continue;
 			}
 			if (list && item->GetName() == ibT("Item"))
-				items.push_back(ReadValue(*item, depth + 1));
+				items->push_back(ReadValue(*item, depth + 1));
 			else if (kind.IsEmpty() && child == nullptr && item->GetName() == ibT("Node"))
 				child = std::make_shared<ibDataNode>(ReadNode(*item, depth + 1));
 			else
@@ -330,7 +336,7 @@ private:
 		if (list || child != nullptr) {
 			if (!IsBlank(text))
 				refuse(list ? ibT("list") : ibT("node"));
-			return list ? ibDataValue::Array(std::move(items)) : ibDataValue::Child(child);
+			return list ? ibDataValue::Array(std::move(*items)) : ibDataValue::Child(child);
 		}
 		if (kind.IsEmpty())
 			return ibDataValue::String(text);
@@ -377,6 +383,9 @@ private:
 	}
 
 	const std::function<ibClassID(const ibString&)>& m_lookupType;
+	// The attributes' names, made once for the walk rather than for every lookup.
+	const ibString m_typeName = ibT("Type"), m_idName = ibT("Id"), m_nameName = ibT("Name"),
+		m_kindName = ibT("Kind"), m_encodingName = ibT("Encoding");
 };
 
 } // namespace
