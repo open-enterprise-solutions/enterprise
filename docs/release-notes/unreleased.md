@@ -70,6 +70,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   its header.
 - **A cell's editor is a field's**, in look and in buttons, and a column that takes no typing still opens for its buttons.
 - **A hidden column in a group drawn as one is not drawn**, and such a group keeps its columns' footers.
+- **A dialog moves by its title**, as a window on a desktop.
 - **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
 
 ## Fixes

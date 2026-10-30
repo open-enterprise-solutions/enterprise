@@ -45,6 +45,7 @@ by a patch is updated in place, so the focus and the caret stay where they were.
   is said in a box with the server's words; a session that ended closes the window. A dropped socket is opened again and
   the session taken back with `login {Token}` while the server keeps it; the call the drop left unanswered is sent again
   under its own id.
+- **A dialog moves by its title**, as a window on a desktop, and stays inside the window.
 - **A question is never left standing.** The server's code waits where it asked; a question the page does not draw is
   answered as cancelled, and the person is told so.
 - **A choice form opens as a tab**, as any form. Asked from a modal dialog — a report's settings — it opens over that

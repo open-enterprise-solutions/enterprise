@@ -8,6 +8,7 @@ import { Pictures } from './protocol/pictures.js';
 import { logIn } from './window/login.js';
 import { hideSplash, showSplash } from './window/splash.js';
 import { ClientWindow } from './window/window.js';
+import { moveDialogs } from './window/dialogMove.js';
 
 const root = /** @type {HTMLElement} */ (document.getElementById('client'));
 const publication = location.pathname.split('/').filter(Boolean)[0] ?? '';
@@ -19,6 +20,7 @@ async function start() {
 		return;
 	}
 	document.title = publication;
+	moveDialogs();
 	showSplash('Connecting to the base');
 	const connection = Connection.beside(location);
 	try {

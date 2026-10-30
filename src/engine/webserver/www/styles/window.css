@@ -475,6 +475,13 @@ html, body {
 }
 
 /* A question that only its buttons answer — a Yes/No with no Cancel — has no ×. */
+/* A dialog is taken by its title (window/dialogMove.js). */
+wa-dialog::part(header) {
+	cursor: move;
+	user-select: none;
+	touch-action: none;
+}
+
 wa-dialog.answered-only::part(close-button) {
 	display: none;
 }
