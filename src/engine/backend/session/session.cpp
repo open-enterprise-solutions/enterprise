@@ -522,13 +522,12 @@ struct ibThreadBinding {
 	ibSession* m_session;   // nullptr: the thread had no binding at m_epoch
 };
 
-// Linux reaches it at a fixed offset, as the string pool (fstring.cpp) — from inside the shared library
-// the default model is a __tls_get_addr call per access.
-#if defined(__linux__)
-thread_local ibThreadBinding t_binding __attribute__((tls_model("initial-exec")));
-#else
+// 🛑 THE DEFAULT TLS MODEL, NOT initial-exec — the backend is LOADED, not only linked. A program opening a
+// file base dlopens libfileserver and the backend with it (the web server, the thin client on Linux), and one
+// initial-exec variable makes the library's whole TLS block (2.3 KB) static, of which a dlopened library gets
+// some 512 bytes: "libbackend.so: cannot allocate memory in static TLS block", the demo server's first night
+// (2026-10-30). The fixed offset is core's alone (memoryPool.cpp), which every program has from the start.
 thread_local ibThreadBinding t_binding;
-#endif
 
 void BindingsChanged() noexcept
 {

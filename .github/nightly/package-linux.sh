@@ -115,6 +115,22 @@ if [ -n "$missing" ]; then
 fi
 echo "Clean Debian 12: the server's programs resolve with GLib alone, the rest with GTK 3."
 
+# ⭐ AND NONE OF OUR LIBRARIES BUT CORE ASKS FOR STATIC TLS — which ldd does not see either. A library a program
+# LOADS (libfileserver and the backend with it, when a file base is opened; a plugin) gets some 512 bytes of the
+# static TLS block, and one initial-exec variable makes its whole TLS static: "libbackend.so: cannot allocate
+# memory in static TLS block" was the demo server's first night (2026-10-30). Core is linked by every program,
+# so its fixed offset (memoryPool.cpp) is reserved at start.
+static_tls=""
+for f in "$stage"/lib*.so "$stage"/plugins/*.so; do
+  [ -e "$f" ] && [ "$(basename "$f")" != libcore.so ] || continue
+  # grep reads to the end: with -q it would stop early, and under pipefail readelf's SIGPIPE would hide the find
+  readelf -d "$f" | grep 'STATIC_TLS' > /dev/null && static_tls="$static_tls $(basename "$f")"
+done
+if [ -n "$static_tls" ]; then
+  echo "::error::Static TLS (an initial-exec thread_local) in a library a program may dlopen:$static_tls"
+  exit 1
+fi
+
 # What the user's system has to provide — everything the programs load from outside the package.
 {
   echo '### Linux: libraries the package takes from the system'
