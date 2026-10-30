@@ -2,6 +2,8 @@
 
 #include "core/serialize/dataBuilder.h"
 #include "compiler/valueSerialization.h"
+#include "appData.h"   // ibApplicationInstance — the configuration the session runs
+#include "metadataConfiguration.h"   // ibMetaDataConfigurationBase — what it answers, an ibMetaData
 #include "backend_exception.h"
 
 ////////////////////////////////////////////////////////////////////////////
@@ -14,7 +16,12 @@
 //   value = metaData->Deserialize(node);      // a tree in, a live value out
 //
 // A caller takes the metadata it wants — the active one, or any other — and
-// asks it. A value itself is blind to metadata and stays that way.
+// asks it. A value itself is blind to metadata and stays that way — save one
+// door: a container's elements (an array, a structure, a container) are read through
+// ibDeserializeValue, which asks the configuration the SESSION runs. So a
+// reference inside an array comes back at run time; a caller that passed
+// another configuration has it for the container, the session's for what the
+// container holds.
 //
 // The tree, not bytes: what it becomes is the PROVIDER's business — binary for
 // storage and transport, JSON for a wire or for a human reading a dump — the
@@ -79,4 +86,11 @@ ibValue ibMetaData::Deserialize(const ibDataNode& node) const
 			ibValue::GetNameObjectFromID(classType));
 
 	return createdValue;
+}
+
+ibValue ibDeserializeValue(const ibDataNode& node)
+{
+	// Asked, not required: a thread working for no base reads with the registry alone rather than refusing.
+	const ibMetaData* const metaData = ibApplicationInstance::GetActiveMetaData(ibApplicationInstance::Get(false));
+	return metaData != nullptr ? metaData->Deserialize(node) : ibValue::FromNode(node);
 }

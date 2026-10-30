@@ -40,7 +40,7 @@
 #include "backend/system/value/valueMap.h"   // ibValueStructure - what a sent object becomes
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerReader.h"
-#include "backend/metadataConfiguration.h"   // activeMetaData - the door that knows configuration types
+#include "backend/compiler/valueSerialization.h"   // ibDeserializeValue - the door that knows configuration types
 #include "core/fdatetime.h"           // ibDateTime - a line's moment
 #include "core/fileSystem.h"          // the journal lives in the diagnostic folder
 #include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
@@ -501,12 +501,10 @@ public:
 					// The metadata is the step IN FRONT of that registry, not a copy of it: it makes
 					// the types only it has and redirects everything else to the same mechanism. So
 					// the configuration answers when there is one, and the registry when there is not
-					// - the shape compositionDescription.cpp already uses at its own door.
+					// - the shape backend_composition.cpp already uses at its own door.
 					std::shared_ptr<ibDataNode> carried = std::make_shared<ibDataNode>();
 					try {
-						const ibValue rebuilt = activeMetaData != nullptr
-							? activeMetaData->Deserialize(payload)
-							: ibValue::FromNode(payload);
+						const ibValue rebuilt = ibDeserializeValue(payload);
 						carried->SetValue(ibT("type"), rebuilt.GetClassName());
 						carried->SetValue(ibT("value"), rebuilt.GetString());
 					}

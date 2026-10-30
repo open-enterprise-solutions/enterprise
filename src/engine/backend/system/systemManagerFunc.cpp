@@ -780,8 +780,8 @@ ibValue ibValueSystemFunction::JSONValue(const ibString& strJson)
 // ⭐ A VALUE AS XML — JSONString's twin, with the XML provider where that one has the JSON view: the value packs
 // itself into a node, the configuration's door adds what only it can make (references, enumeration members), and
 // the provider writes the node. The XML form keeps every kind the node holds, so XMLValue reads the value back as
-// it went - as far as the node does: a structure or an array reads its elements through the value registry alone,
-// so a reference inside one does not come back yet. A value that cannot pack itself is refused by the door; the
+// it went - a structure or an array too, its elements read through the configuration (ibDeserializeValue), a
+// reference among them. A value that cannot pack itself is refused by the door; the
 // provider refuses on its own what it cannot write or read.
 ibString ibValueSystemFunction::XMLString(const ibValue& value)
 {
