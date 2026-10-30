@@ -520,6 +520,16 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 			std::lock_guard<std::mutex> lk(run->m_mtx);
 			run->m_error = _("the run was cancelled");
 		}
+		// ⭐ A SCRIPT'S FAILURE SAYS WHERE — the module and the line its run stopped at (ProcessError), so a status
+		// read later points at the code rather than only quoting what it said.
+		catch (const ibBackendException& err) {
+			const ibString said = err.GetErrorModule().IsEmpty() ? err.GetErrorDescription()
+				: ibString::Format(_("%s (module %s, line %u)"), err.GetErrorDescription(), err.GetErrorModule(), err.GetErrorLine());
+			Journal(ibString::Format(_("Background job FAILED: %s - %s"), l.m_activity, said), ibStatusMessage_Error);
+
+			std::lock_guard<std::mutex> lk(run->m_mtx);
+			run->m_error = said;
+		}
 		catch (const ibCoreException& err) {
 			Journal(ibString::Format(_("Background job FAILED: %s - %s"),
 				l.m_activity, err.GetErrorDescription()), ibStatusMessage_Error);

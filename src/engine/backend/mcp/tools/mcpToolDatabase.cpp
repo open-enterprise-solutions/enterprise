@@ -823,7 +823,9 @@ public:
 			// true of everything and says nothing about any of it — that is a base at the start,
 			// not a base with a fault, and an audit that fires on all of it teaches people to skip
 			// the audit.
-			if (!sections.empty() && object->IsInterfaceAllowed() && !object->IsDeleted()) {
+			// …and only of what is reached ONLY from a section (`IsInterfaceRequired`): an enumeration is picked in
+			// the fields that hold it, and reporting it here would send someone to fix what is not broken.
+			if (!sections.empty() && object->IsInterfaceRequired() && !object->IsDeleted()) {
 
 				bool reachable = false;
 				for (const ibValueMetaObjectSection* section : sections) {

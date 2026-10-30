@@ -188,6 +188,9 @@ public:
 	// A general command checked into a section renders in that section's menu and runs
 	// from there — which is the whole reason the section editor lists commands at all.
 	virtual bool IsInterfaceAllowed() const override { return true; }
+	// …and it NEEDS one unless it stands on forms: filed under a group of the form command bar and typed for an object,
+	// it is in that group's submenu on every form of the objects its ParameterType names.
+	virtual bool IsInterfaceRequired() const override;
 };
 
 //********************************************************************************************

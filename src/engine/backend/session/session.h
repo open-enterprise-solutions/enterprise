@@ -335,13 +335,13 @@ public:
 	// pulls it opaquely in its ctor and applies it to every read/write. Null on
 	// Designer / technical sessions (no enforcement). Created at authentication
 	// (EnsureRoot) for runtime sessions; the concrete impl lives in session.cpp.
-	// Returns null inside an ibAccessTrustScope (a role module runs privileged).
-	// Await pauses that window, so a task it runs while a question is open
-	// does not see the bypass.
+	// Returns null inside an ibAccessTrustScope (a role module, a privileged module
+	// runs privileged). Await pauses that window, so a task it runs while a question
+	// is open does not see the bypass.
 	const ibAccessPolicy* GetAccessPolicy() const;
 
-	// The role-handler bypass and the session-parameter write window.
-	// Await clears both for the tasks it runs and puts them back after.
+	// The trusted window (no RLS, no rights on objects) and the session-parameter
+	// write window. Await clears both for the tasks it runs and puts them back after.
 	bool AccessTrusted() const { return m_accessTrusted; }
 	bool SessionParametersOpen() const { return m_sessionParametersOpen; }
 
@@ -1217,9 +1217,12 @@ private:
 };
 
 // RAII: mark the session's access context TRUSTED for the scope's lifetime, so
-// a role module runs PRIVILEGED — every query its body builds sees GetAccessPolicy()
-// return null and therefore bypasses RLS, dissolving re-entrancy (the module may
-// read the very source it restricts). Saves and restores the PRIOR value, so nested
+// the code it runs is PRIVILEGED — every query its body builds sees GetAccessPolicy()
+// return null and therefore bypasses RLS, and every right on an object is granted
+// (ibValueMetaObject::IsFullAccess). Opened by a role module — which dissolves
+// re-entrancy, the module may read the very source it restricts — by the session
+// parameters' handler, and by every call into a privileged common module
+// (ibRuntimeModuleDataObject::ExecAsProc). Saves and restores the PRIOR value, so nested
 // trusted scopes compose; the dtor runs on every exit INCLUDING a handler throw, so
 // enforcement is always restored. The bypass is CONSTRUCTIVE (only this scope sets
 // the flag) — never a failure default, so a genuinely absent policy stays fail-closed.

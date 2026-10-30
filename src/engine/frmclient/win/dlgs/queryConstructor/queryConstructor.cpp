@@ -2176,7 +2176,8 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		// The field the total is OVER — the argument, which is what a person looks down this column for.
 		if (expr.m_kind == ibQueryAstExprKind::Func)
 			return expr.m_star ? ibString(ibT("*")) : (expr.m_arg ? ibRenderQueryExpr(*expr.m_arg) : ibString());
-		return ibRenderQueryExpr(expr);
+		// …and a figure made of figures folds no one field: the row is the field it answers to (ibQueryTotalsFieldName).
+		return !resource.m_alias.IsEmpty() ? resource.m_alias : ibRenderQueryExpr(expr);
 	});
 	m_totalsAggregateModel->SetWriter([this](unsigned int row, unsigned int col, const wxString& text) -> bool {
 		ibQuerySelect* select = Current();
@@ -2196,13 +2197,23 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		wxString source = text;
 		if (col == kGridCol1) {
 			const ibQueryAstExprPtr& current = select->m_totalsAggregates[row].m_expr;
+			// A figure made of figures is the field it ANSWERS to, so the field typed here is that one; its
+			// calls stay as written.
+			if (current && current->m_kind != ibQueryAstExprKind::Func) {
+				wxString field = text;
+				field.Trim(true).Trim(false);
+				if (field.IsEmpty())
+					return false;
+				select->m_totalsAggregates[row].m_alias = field;
+				return true;
+			}
 			const ibQueryKeyword func = current && current->m_kind == ibQueryAstExprKind::Func
 				? current->m_func : ibQueryKeyword::Sum;
 			source = ibQueryKeywordText(func) + wxT("(") + text + wxT(")");
 		}
 		try {
 			ibQueryParser parser;
-			select->m_totalsAggregates[row].m_expr = parser.ParseExpression(source);
+			ibQuerySetTotalsExpression(select->m_totalsAggregates[row], parser.ParseExpression(source));
 		}
 		catch (const ibCoreException& error) {
 			ShowEngineError(error.GetErrorDescription());
@@ -2238,13 +2249,18 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			if (select == nullptr || row < 0 || static_cast<size_t>(row) >= select->m_totalsAggregates.size())
 				return words;
 
-			const ibQueryAstExprPtr& current = select->m_totalsAggregates[row].m_expr;
+			const ibQueryTotalAggregate& resource = select->m_totalsAggregates[row];
+			const ibQueryAstExprPtr& current = resource.m_expr;
 			if (!current)
 				return words;
-			// THE FIELD THIS TOTAL IS OVER — the argument of the call, or the whole expression when it
-			// is not one. A ready call can only be offered around something.
-			const ibQueryAstExprPtr argument = current->m_kind == ibQueryAstExprKind::Func
-				? current->m_arg : current;
+			// THE FIELD THIS TOTAL IS OVER — the argument of the call; for a figure made of figures, the field it
+			// answers to (a ready call over it is the way back to one call); else the whole expression. A ready
+			// call can only be offered around something.
+			ibQueryAstExprPtr argument = current->m_kind == ibQueryAstExprKind::Func ? current->m_arg : current;
+			if (current->m_kind != ibQueryAstExprKind::Func && !resource.m_alias.IsEmpty()) {
+				argument = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+				argument->m_path = { resource.m_alias };
+			}
 			if (!argument)
 				return words;
 			const wxString field = ibRenderQueryExpr(*argument);

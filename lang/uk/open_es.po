@@ -558,6 +558,15 @@ msgstr "Для 'in' потрібно, у чому шукати - список п
 msgid "'==' is not an operator here - comparison is written with a single '='"
 msgstr "'==' тут не оператор - порівняння записується одним '='"
 
+msgid "'!=' is not an operator here - inequality is written '<>'"
+msgstr "'!=' тут не оператор - нерівність записується '<>'"
+
+msgid "'&&' is not an operator here - conditions join with the word And"
+msgstr "'&&' тут не оператор - умови з'єднуються словом And"
+
+msgid "'||' is not an operator here - conditions join with the word Or"
+msgstr "'||' тут не оператор - умови з'єднуються словом Or"
+
 #: src/engine/backend/compiler/compileCodeLINQ.cpp:2523
 msgid "Single: the source has more than one element"
 msgstr "Single: у джерелі більше одного елемента"
@@ -1478,6 +1487,10 @@ msgstr "виконання скасовано"
 msgid "Background job FAILED: %s - %s"
 msgstr "Фонове завдання ЗАВЕРШИЛОСЯ ПОМИЛКОЮ: %s - %s"
 
+#, c-format
+msgid "%s (module %s, line %u)"
+msgstr "%s (модуль %s, рядок %u)"
+
 #: src/engine/backend/job/jobBackground.cpp:525
 #, c-format
 msgid "Background job FAILED: %s - unknown error"
@@ -1778,6 +1791,9 @@ msgstr "Асистент не зміг відповісти: %s"
 #, c-format
 msgid "unreadable message: %s"
 msgstr "нечитабельне повідомлення: %s"
+
+msgid "The request is not UTF-8. Send its body as UTF-8 bytes - from a file or a pipe: a shell hands its arguments over in its own code page."
+msgstr "Запит не в UTF-8. Передайте його тіло байтами UTF-8 - з файлу або через канал: оболонка передає свої аргументи у власній кодовій сторінці."
 
 #: src/engine/backend/mcp/mcpServer.cpp:2657
 msgid "An assistant has connected"
@@ -2493,6 +2509,14 @@ msgstr "Глобальний модуль"
 msgid "Whether the module's exported methods are callable by bare name from any code, without the ModuleName. prefix. Off by default: a global module's names share one namespace with every other global name."
 msgstr "Чи можна викликати експортні методи модуля просто за іменем з будь-якого коду, без префікса ModuleName. За замовчуванням вимкнено: імена глобального модуля ділять один простір імен з усіма іншими глобальними іменами."
 
+#: src/engine/backend/metaCollection/metaModuleObject.h:300
+msgid "Privileged module"
+msgstr "Привілейований модуль"
+
+#: src/engine/backend/metaCollection/metaModuleObject.h:301
+msgid "Whether a call into the module runs with no access checks - neither the rights on objects nor the record-level restrictions - for everything the call runs. For code that has to see past the user's rights, such as checking them. A module is global or privileged, not both: switching one on switches the other off."
+msgstr "Чи виконується виклик модуля без перевірок доступу - ні прав на об'єкти, ні обмежень на рівні записів - для всього, що цей виклик виконує. Для коду, якому треба бачити більше, ніж дозволено користувачеві, наприклад щоб перевірити його права. Модуль або глобальний, або привілейований, не обидва одразу: увімкнення одного вимикає інший."
+
 #: src/engine/backend/metaCollection/metaModuleObjectMenu.cpp:11
 msgid "Open module"
 msgstr "Відкрити модуль"
@@ -2962,7 +2986,7 @@ msgstr "Константа '%s': запис скасовано обробник�
 #: src/engine/backend/metaCollection/partial/parameterizedJob.h:66
 #: src/engine/backend/metaCollection/partial/sequence.h:160
 msgid "Form list"
-msgstr "Список форм"
+msgstr "Форма списку"
 
 #: src/engine/backend/metaCollection/partial/accountingRegister.h:597
 msgid "Debit account"
@@ -5854,6 +5878,14 @@ msgstr "TOTALS очікує агрегатні функції (SUM/COUNT/MIN/MAX
 msgid "TOTALS names the resource \"%s\", and a grouping level already answers to that name: give one of them another alias"
 msgstr "TOTALS називає ресурс \"%s\", а рівень групування вже має це ім'я: задайте одному з них інший псевдонім"
 
+#, c-format
+msgid "TOTALS computes \"%s\" from other figures: name the field it answers to (AS Name)"
+msgstr "TOTALS обчислює \"%s\" з інших показників: назвіть поле, якому він відповідає (AS Ім'я)"
+
+#, c-format
+msgid "TOTALS figure \"%s\" reads \"%s\" outside an aggregate: a heading holds no single value of it"
+msgstr "показник TOTALS \"%s\" читає \"%s\" поза агрегатом: у групування немає одного значення цього поля"
+
 #: src/engine/backend/query/queryLowering.cpp:8855
 #, c-format
 msgid "OVER \"%s\": this TOTALS declares no such grouping: name a level of its own BY, qualifying it with the branch (Branch.Level) where two branches carry one name"
@@ -5963,6 +5995,9 @@ msgstr "у TOTALS очікується агрегатна функція (SUM/CO
 
 msgid "expected a grouping name after OVER: the level this figure is computed over"
 msgstr "після OVER очікується ім'я групування: рівень, за яким обчислюється цей показник"
+
+msgid "OVER is the area of the whole TOTALS figure and is written after it: SUM(a) - SUM(b) OVER Level"
+msgstr "OVER — область усього показника TOTALS і пишеться після нього: SUM(a) - SUM(b) OVER Рівень"
 
 msgid "expected a grouping name after the branch name in OVER"
 msgstr "в OVER після імені гілки очікується ім'я групування"

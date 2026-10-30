@@ -185,6 +185,7 @@ public:
 	void ClearDefaultProcedures() { m_contentHelper.clear(); }
 
 	virtual bool IsGlobalModule() const { return false; }
+	virtual bool IsPrivilegedModule() const { return false; }
 
 private:
 
@@ -266,6 +267,13 @@ public:
 		return m_propertyGlobalModule->GetValueAsBoolean();
 	}
 
+	// A call into it runs in the session's trusted window, checking no access (ibRuntimeModuleDataObject::ExecAsProc).
+	// Never a global module: that one is compiled into the configuration's module and called by bare name, past the
+	// door that opens the window.
+	virtual bool IsPrivilegedModule() const {
+		return m_propertyPrivilegedModule->GetValueAsBoolean() && !IsGlobalModule();
+	}
+
 	// Manager-module flag — false on plain common module, true on
 	// ibValueMetaObjectManagerModule. Replaces the explicit managerModule
 	// argument that was passed to mm->AddCommonModule.
@@ -288,6 +296,9 @@ private:
 	ibPropertyCategory* m_moduleCategory = ibPropertyObject::CreatePropertyCategory(ibT("Common module"), _("Common module"));
 	ibPropertyBoolean* m_propertyGlobalModule = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_moduleCategory, ibT("GlobalModule"), _("Global module"),
 		_("Whether the module's exported methods are callable by bare name from any code, without the ModuleName. prefix. Off by default: a global module's names share one namespace with every other global name."),
+		false);
+	ibPropertyBoolean* m_propertyPrivilegedModule = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_moduleCategory, ibT("PrivilegedModule"), _("Privileged module"),
+		_("Whether a call into the module runs with no access checks - neither the rights on objects nor the record-level restrictions - for everything the call runs. For code that has to see past the user's rights, such as checking them. A module is global or privileged, not both: switching one on switches the other off."),
 		false);
 };
 

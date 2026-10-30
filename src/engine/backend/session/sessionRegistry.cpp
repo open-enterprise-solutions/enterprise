@@ -539,8 +539,10 @@ ibConnectResult ibSessionRegistry::Connect(const ibConnectRequest& req,
 	}
 	ibSessionState st = session->WaitForState(ibSessionState::Created, timeout);
 	if (st == ibSessionState::Created) {
+		// A parked Add says why it waits (ProcessAdd: exclusive mode); only an Add nobody took is the registry's silence.
+		const ibString parked = session->Reason();
 		r.m_code   = ibConnectResult::Timeout;
-		r.m_reason = _("registry did not answer to Add");
+		r.m_reason = parked.IsEmpty() ? _("registry did not answer to Add") : parked;
 		return r;
 	}
 	if (st == ibSessionState::Rejected) {
@@ -1088,6 +1090,9 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 		holder = m_exclusiveSession.lock();
 	}
 	if (holder && holder.get() != &s) {
+		// Said while it waits: a Connect that gives up on a parked Add heard "registry did not answer" and went
+		// looking for a stalled registry, not for the session holding the base (2026-10-30).
+		s.SetReason(ibString::Format(_("Another session holds exclusive mode (user '%s')"), holder->Identity().m_userName));
 		m_pendingExclusive.push_back(std::move(req));
 		return;
 	}
@@ -1607,8 +1612,11 @@ void ibSessionRegistry::DrainPendingExclusive()
 	// holder is gone — but defensive) doesn't iterate a moving deque.
 	std::deque<ibRegistryRequest> pending;
 	pending.swap(m_pendingExclusive);
-	for (auto& r : pending)
+	for (auto& r : pending) {
+		if (r.session)
+			r.session->SetReason(ibEmptyString);   // the wait is over: what it said no longer holds
 		ProcessAdd(r);
+	}
 }
 
 void ibSessionRegistry::ProcessSetActivity(ibRegistryRequest& req)

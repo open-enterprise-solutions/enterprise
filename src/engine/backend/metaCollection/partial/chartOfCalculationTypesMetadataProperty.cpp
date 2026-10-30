@@ -18,5 +18,8 @@ void ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanged(ibProperty* pro
 	if (property == m_propertyBaseCharts)
 		TypeBaseAndLeading();
 
-	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
+	// Through the hierarchy, not past it: a new HierarchyType restates Parent and IsFolder there (ApplyHierarchyType).
+	// Skipped, a chart made flat kept both fields on, its predefined rows carried cells its table has no columns for,
+	// and every apply listed them as changed (2026-10-30).
+	ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanged(property, oldValue, newValue);
 }

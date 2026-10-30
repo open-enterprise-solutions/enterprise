@@ -520,6 +520,13 @@ ibDataQueryBuilder& ibDataQueryBuilder::AggregateReceiver(const ibString& alias,
 	return *this;
 }
 
+ibDataQueryBuilder& ibDataQueryBuilder::AggregateDerived(const ibBackendQueryColumn* col, const ibString& alias,
+	ibQueryColumnExprPtr expr, std::vector<std::shared_ptr<ibBackendQueryColumn>> measures)
+{
+	m_totalDerived.push_back({ col, alias, std::move(expr), std::move(measures) });
+	return *this;
+}
+
 // See the declaration: asked of THIS door's connection, never of the active database.
 bool ibDataQueryBuilder::CanPushWindow() const
 {
@@ -815,7 +822,7 @@ std::vector<const ibBackendQueryColumn*> ibDataQueryBuilder::MaterialiseColumns(
 void ibDataQueryBuilder::StampResult(ibDataQueryResult& r) const
 {
 	r.SetMaterialiseColumns(MaterialiseColumns());
-	r.SetTotals(m_totals, m_totalAggregates, m_totalsOverall);
+	r.SetTotals(m_totals, m_totalAggregates, m_totalsOverall, m_totalDerived);
 	// …and HOW a dot-walked object dimension is read back — see ibDataQueryResult::m_objectReads.
 	for (const ibDimObjectRead& read : m_dimObjectReads)
 		r.SetObjectRead(read.m_dimColumnId, read.m_alias, read.m_leaf);
@@ -1017,7 +1024,7 @@ bool ibDataQueryBuilder::TryTotalsPushdown(ibDataQueryResult& out) const
 		return false;
 
 	out = ibMakeEmptyQueryResult(m_queryable);
-	out.SetTotals(m_totals, m_totalAggregates, m_totalsOverall);
+	out.SetTotals(m_totals, m_totalAggregates, m_totalsOverall, m_totalDerived);
 	out.SetReadyTree(std::move(folded));
 	return true;
 }
@@ -1035,7 +1042,9 @@ ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 		}
 		return guarded.SelectTotals();
 	}
-	return ibQueryComposer::ExecuteTotals(BuildSpec());
+	ibSelectorTree tree = ibQueryComposer::ExecuteTotals(BuildSpec());
+	ibQueryComposer::ApplyDerivedAggregates(tree, m_totalAggregates, m_totalDerived);   // as a selection's Build does
+	return tree;
 }
 
 bool ibDataQueryBuilder::Insert() const

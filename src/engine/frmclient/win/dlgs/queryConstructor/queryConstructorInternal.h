@@ -114,6 +114,13 @@ inline bool ibQueryTabIsWholeResult(const wxString& tab)
 // nothing before it, which the parser refuses.
 void ibQueryDropTotals(ibQuerySelect& select);
 
+// ⭐ A TOTALS ROW IS THE FIELD IT ANSWERS TO — its AS when it has one, else the field its call folds (`SUM(ToPay)` is
+// ToPay's without saying so). A figure made of figures (`SUM(Accrued) - SUM(Deducted)`) folds no one field, so its
+// name is the only thing that says whose it is. Empty = it answers to nothing yet.
+wxString ibQueryTotalsFieldName(const ibQueryTotalAggregate& figure);
+// …AND A NEW EXPRESSION KEEPS IT: the name the row had is written down when what it now holds no longer says it.
+void ibQuerySetTotalsExpression(ibQueryTotalAggregate& figure, ibQueryAstExprPtr expr);
+
 // ⭐⭐ A UNION IS PADDED, NOT REFUSED. Every branch ends up selecting the same fields, in the same
 // order; a branch that has no column for one of them selects an EMPTY value under that name.
 // Applied on the way out of the dialog, so the query it hands back is one the engine can read.

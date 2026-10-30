@@ -145,6 +145,7 @@ bool ibValueMetaObjectCommonModule::ReadData(const ibDataNode& node)
 {
 	m_propertyModule->SetNodeValue(node.GetProperty(m_propertyModule->GetName()));
 	m_propertyGlobalModule->SetNodeValue(node.GetProperty(m_propertyGlobalModule->GetName()));
+	m_propertyPrivilegedModule->SetNodeValue(node.GetProperty(m_propertyPrivilegedModule->GetName()));
 	return true;
 }
 
@@ -152,6 +153,7 @@ bool ibValueMetaObjectCommonModule::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyModule->GetName(), m_propertyModule->GetNodeValue());
 	node.SetProperty(m_propertyGlobalModule->GetName(), m_propertyGlobalModule->GetNodeValue());
+	node.SetProperty(m_propertyPrivilegedModule->GetName(), m_propertyPrivilegedModule->GetNodeValue());
 	return true;
 }
 

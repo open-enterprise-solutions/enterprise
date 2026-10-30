@@ -334,6 +334,8 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 			);
 		}
 
+		err.m_errorModule  = strModuleName;
+		err.m_errorLine    = error.m_numLine + 1;   // 1-based, as the journal line above writes it
 		err.m_errorHandled = true;
 	}
 

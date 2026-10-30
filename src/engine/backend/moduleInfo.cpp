@@ -43,9 +43,33 @@ std::shared_ptr<ibProcUnit> ibRuntimeModuleDataObject::GetProcUnit() const
 #include "backend/session/session.h"                              // ibSession::EditModuleManagerFor — where they run
 #include "backend/moduleManager/moduleManager.h"                  // FindCommonModule — an event handler's module
 
-// Every event handler of `metaData` for this event of `source`, called with `source` and the event's
-// arguments — the second half of an owner's event (ExecAsEvent) and of a manager's (ExecAsManagerEvent).
-static void ExecEventHandlers(const ibMetaData* metaData, const ibValue* source,
+// A module value's method, a job, an owner's event, a manager's, an event handler: every call into a module
+// comes through here, so a privileged module's window is opened in one place and no road can miss it. For
+// the whole call, and for everything the call runs: nested windows compose, and Await pauses this one while
+// a question is open (ibSessionTrustPause). The flag is read off the module at the call, not copied anywhere.
+bool ibRuntimeModuleDataObject::ExecAsProc(const ibString& strMethodName,
+	ibValue** paParams, const long lSizeArray) const
+{
+	const std::shared_ptr<ibProcUnit> pu = GetProcUnit();
+	if (!pu)
+		return false;
+	const ibValueMetaObjectModuleBase* const module = GetMetaForCompile();
+	const ibAccessTrustScope trusted(module != nullptr && module->IsPrivilegedModule() ? ibSession::Current() : nullptr);
+	return pu->CallAsProc(strMethodName, paParams, lSizeArray);
+}
+
+bool ibRuntimeModuleDataObject::ExecAsFunc(const ibString& strMethodName,
+	ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) const
+{
+	const std::shared_ptr<ibProcUnit> pu = GetProcUnit();
+	if (!pu)
+		return false;
+	const ibValueMetaObjectModuleBase* const module = GetMetaForCompile();
+	const ibAccessTrustScope trusted(module != nullptr && module->IsPrivilegedModule() ? ibSession::Current() : nullptr);
+	return pu->CallAsFunc(strMethodName, pvarRetValue, paParams, lSizeArray);
+}
+
+void ibRuntimeModuleDataObject::ExecEventHandlers(const ibMetaData* metaData, const ibValue* source,
 	const ibString& strEventName, ibValue** paParams, const long lSizeArray)
 {
 	if (metaData == nullptr || source == nullptr)
@@ -82,11 +106,8 @@ static void ExecEventHandlers(const ibMetaData* metaData, const ibValue* source,
 	params.insert(params.end(), paParams, paParams + lSizeArray);
 
 	for (const ibValueMetaObjectEventHandler* handler : taking) {
-		const ibRuntimeModuleDataObject* const unit = moduleManager->FindCommonModule(handler->GetHandlerModule());
-		if (unit == nullptr)
-			continue;
-		if (const std::shared_ptr<ibProcUnit> procUnit = unit->GetProcUnit())   // pinned for the call, as ExecAsProc pins it
-			procUnit->CallAsProc(strEventName, params.data(), static_cast<long>(params.size()));
+		if (const ibRuntimeModuleDataObject* const unit = moduleManager->FindCommonModule(handler->GetHandlerModule()))
+			unit->ExecAsProc(strEventName, params.data(), static_cast<long>(params.size()));
 	}
 }
 

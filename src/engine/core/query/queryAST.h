@@ -383,7 +383,7 @@ struct ibQueryTotalField
 // one the author gave.
 struct ibQueryTotalAggregate
 {
-	ibQueryAstExprPtr m_expr;    // the aggregate call — SUM(x), COUNT(DISTINCT y), …
+	ibQueryAstExprPtr m_expr;    // the aggregate call — SUM(x), COUNT(DISTINCT y), … — or arithmetic between calls (SUM(a) - SUM(b))
 	// AS name. Empty = derive it (the argument's own name), which is what every query written
 	// before this says and what a person means when they do not name the column.
 	ibString          m_alias;

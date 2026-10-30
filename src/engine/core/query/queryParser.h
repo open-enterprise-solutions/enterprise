@@ -79,6 +79,10 @@ public:
 private:
 	std::vector<ibQueryToken> m_toks;
 	size_t                    m_pos = 0;
+	// True while a TOTALS figure is read: a call inside it takes no window, because `OVER` there names the
+	// figure's AREA (`OVER (Item, Warehouse)` reads like a window's partition and is not one), and the area is
+	// read once, after the whole figure (ParseTotals).
+	bool                      m_overNamesArea = false;
 
 	// --- token cursor ----------------------------------------------------
 	// All three clamp to the final End token — a malformed advance never reads out of bounds.

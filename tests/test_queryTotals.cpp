@@ -345,6 +345,85 @@ TEST(QueryTotals, EmptyLevelHangsTheDetailRows)
 	EXPECT_TRUE(NumEq(south.m_children[0]->m_values.at(AGG0), 7));
 }
 
+// ⭐⭐ A FIGURE MADE OF FIGURES — `TOTALS SUM(Accrued) - SUM(Deducted) AS ToPay`. Worked out at every heading from
+// the figures folded there. Answering to a SELECTED field it is that field's column: a detail row keeps the
+// field's own value. Answering to nothing selected it is a slot of its own, and a detail row has none of it — its
+// calls' slots there are readings, not folds. Applied twice — a selection builds again on a tree that has it — it
+// says the same thing.
+TEST(QueryTotals, AFigureMadeOfFiguresIsWorkedOutAtEveryHeading)
+{
+	const ibMetaID EMPLOYEE = 1, ACCRUED = 2, DEDUCTED = 3, TOPAY = 4;
+
+	ibQueryRamTable detail;
+	detail.AddColumn(EMPLOYEE, wxT("employee"), ibTypeDescription());
+	detail.AddColumn(ACCRUED,  wxT("accrued"),  ibTypeDescription());
+	detail.AddColumn(DEDUCTED, wxT("deducted"), ibTypeDescription());
+	detail.AddColumn(TOPAY,    wxT("toPay"),    ibTypeDescription());
+	// The row's own ToPay is the selection's reading, set apart from the figure here so the test can tell the two.
+	auto add = [&](const ibString& who, long accrued, long deducted, long toPay) {
+		const long row = detail.AppendRow();
+		detail.SetCell(row, EMPLOYEE, ibValue(who));
+		detail.SetCell(row, ACCRUED,  ibValue(ibNumber(accrued)));
+		detail.SetCell(row, DEDUCTED, ibValue(ibNumber(deducted)));
+		detail.SetCell(row, TOPAY,    ibValue(ibNumber(toPay)));
+	};
+	add(wxT("Ann"), 100, 30, 71);
+	add(wxT("Ann"),  50,  0, 52);
+	add(wxT("Bob"),  80, 20, 63);
+
+	TestCol employee(wxT("employee"), EMPLOYEE), accrued(wxT("accrued"), ACCRUED),
+	        deducted(wxT("deducted"), DEDUCTED), toPay(wxT("toPay"), TOPAY);
+
+	// The calls, each an ordinary figure under a name of its own — what the lowering declares them as.
+	ibDataQueryBuilder::AggregateItem sumAccrued;
+	sumAccrued.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sumAccrued.m_col = &accrued; sumAccrued.m_alias = wxT("fig1");
+	ibDataQueryBuilder::AggregateItem sumDeducted;
+	sumDeducted.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sumDeducted.m_col = &deducted; sumDeducted.m_alias = wxT("fig2");
+	const std::vector<ibDataQueryBuilder::AggregateItem> aggs = { sumAccrued, sumDeducted };
+
+	const ibQueryColumnExprPtr difference = ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Sub,
+		ibQueryColumnExpr::OutputRef(wxT("fig1")), ibQueryColumnExpr::OutputRef(wxT("fig2")));
+	const std::vector<ibDerivedAggregate> derived = {
+		{ &toPay,  wxT("ToPay"), difference, {} },    // the selected field's column
+		{ nullptr, wxT("Net"),   difference, {} } };  // a slot of its own, read by name
+
+	std::vector<ibTotalLevel> levels;
+	levels.push_back(ibTotalLevel::One(&employee, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel{});   // …and the rows under each heading
+	ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, aggs, nullptr, nullptr);
+	ibQueryComposer::ApplyDerivedAggregates(tree, aggs, derived);
+	ibQueryComposer::ApplyDerivedAggregates(tree, aggs, derived);
+
+	// Declared ONCE, under the name it is read by.
+	ibMetaID NET = 0;
+	int netColumns = 0;
+	for (const ibQueryRamColumn& c : tree.Columns())
+		if (c.m_name == wxT("Net")) { NET = c.m_id; ++netColumns; }
+	ASSERT_EQ(netColumns, 1);
+
+	const ibSelectorTree::Node& root = tree.Root();
+	EXPECT_TRUE(NumEq(root.m_values.at(TOPAY), 180));   // (100 + 50 + 80) - (30 + 0 + 20)
+	EXPECT_TRUE(NumEq(root.m_values.at(NET),   180));
+	ASSERT_EQ(root.m_children.size(), 2u);
+
+	const ibSelectorTree::Node& ann = *root.m_children[0];
+	EXPECT_TRUE(NumEq(ann.m_values.at(TOPAY), 120));    // 150 - 30
+	EXPECT_TRUE(NumEq(ann.m_values.at(NET),   120));
+	ASSERT_EQ(ann.m_children.size(), 2u);
+	for (size_t i = 0; i < ann.m_children.size(); ++i) {
+		const ibSelectorTree::Node& row = *ann.m_children[i];
+		EXPECT_EQ(row.m_kind, ibSelectorNodeKind::Detail);
+		EXPECT_TRUE(row.m_values.find(NET) == row.m_values.end());     // no figure on a row
+	}
+	EXPECT_TRUE(NumEq(ann.m_children[0]->m_values.at(TOPAY), 71));   // the field's own value, not the figure
+	EXPECT_TRUE(NumEq(ann.m_children[1]->m_values.at(TOPAY), 52));
+
+	const ibSelectorTree::Node& bob = *root.m_children[1];
+	EXPECT_TRUE(NumEq(bob.m_values.at(TOPAY), 60));
+	ASSERT_EQ(bob.m_children.size(), 1u);
+	EXPECT_TRUE(NumEq(bob.m_children[0]->m_values.at(TOPAY), 63));
+}
+
 // A LEVEL OF SEVERAL FIELDS is ONE heading keyed by the TUPLE — `BY (region, product)` folds into
 // one level, not two nested ones. Two rows share a heading only when BOTH fields match.
 TEST(QueryTotals, TupleLevelGroupsByEveryFieldTogether)

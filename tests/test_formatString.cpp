@@ -142,6 +142,16 @@ TEST(FormatString, EveryDateSpelling)
 	EXPECT_EQ(wxT("day 05"), ibFormatString::Parse(wxT("DF='day' dd")).Apply(date));
 }
 
+// A value in quotes is the value: the quotes fence it and are not a literal of the pattern.
+TEST(FormatString, AQuotedValueIsTheValue)
+{
+	const ibValue date(2026, 9, 5, 16, 3, 2);
+	EXPECT_EQ(wxT("09.2026"), ibFormatString::Parse(wxT("DF='MM.yyyy'")).Apply(date));
+	EXPECT_EQ(wxT("09.2026"), ibFormatString::Parse(wxT("DF=\"MM.yyyy\"")).Apply(date));
+	EXPECT_EQ(wxT("day 05 of September"), ibFormatString::Parse(wxT("DF='day' dd 'of' MMMM")).Apply(date)) << "two literals, no fence";
+	EXPECT_EQ(wxT("yes"), ibFormatString::Parse(wxT("BT='yes'")).Apply(ibValue(true)));
+}
+
 // A code is its Latin name and nothing else: spelled in Cyrillic it is a code this engine does not read, kept as
 // written, and a pattern's letters are Latin too.
 TEST(FormatString, ACodeIsItsLatinName)

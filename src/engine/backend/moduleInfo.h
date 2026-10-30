@@ -249,21 +249,14 @@ protected:
 	// public variadic forms above. External callers should use the
 	// variadic — this raw form stays protected because the array shape
 	// is a derived-class implementation detail.
+	//
+	// ⭐ THE DOOR EVERY CALL INTO A MODULE PASSES, and so where a privileged module's call opens the
+	// session's trusted window. Out of line: the window is the session's, and this header is included
+	// nearly everywhere.
 	bool ExecAsProc(const ibString& strMethodName,
-		ibValue** paParams, const long lSizeArray) const
-	{
-		if (auto pu = GetProcUnit())
-			return pu->CallAsProc(strMethodName, paParams, lSizeArray);
-		return false;
-	}
-
+		ibValue** paParams, const long lSizeArray) const;
 	bool ExecAsFunc(const ibString& strMethodName,
-		ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) const
-	{
-		if (auto pu = GetProcUnit())
-			return pu->CallAsFunc(strMethodName, pvarRetValue, paParams, lSizeArray);
-		return false;
-	}
+		ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) const;
 
 	// The declared default of a parameter of the module's function — the answer a derived class's
 	// GetParamDefValue gives for a method it calls through ExecAsProc / ExecAsFunc, when a call left
@@ -280,6 +273,12 @@ protected:
 	// The event's array form — see the variadic above. Out of line: it asks the configuration for its
 	// event handlers, and this header is included nearly everywhere.
 	void ExecAsEvent(const ibString& strEventName, ibValue** paParams, const long lSizeArray) const;
+
+	// Every event handler of `metaData` for this event of `source`, called with `source` and the event's
+	// arguments — the second half of an owner's event (ExecAsEvent) and of a manager's (ExecAsManagerEvent).
+	// A member so that a handler's module is called through ExecAsProc, the door every other call passes.
+	static void ExecEventHandlers(const class ibMetaData* metaData, const ibValue* source,
+		const ibString& strEventName, ibValue** paParams, const long lSizeArray);
 
 	// Populate a value's method-helper from this descriptor's bytecode —
 	// every kind=Export entry in m_listFunc / m_listVar is appended as

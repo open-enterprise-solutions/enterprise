@@ -2762,9 +2762,13 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("Declare a resource - what the levels FOLD. Either a function over a field "
-			"(SUM over Quantity) or a whole expression, which is checked by the compiler. The "
-			"resource has no caption of its own: it is built on a field, and the field holds "
+		return ibMcpText("Declare a resource - what the levels FOLD. A function over a field "
+			"(SUM over Quantity), one aggregate call over an expression, `SUM(Quantity * Price)`, or "
+			"arithmetic BETWEEN calls, `SUM(Accrued) - SUM(Deducted)` or `100 * SUM(Margin) / SUM(Revenue)` "
+			"- worked out at every grouping from the calls folded there, which a sum of per-row ratios "
+			"is not. Arithmetic between calls folds no one field, so it needs `name`: the field of the "
+			"query it answers to - a grouping shows the figure, a detail row the field's own value. An "
+			"area (`over`) is the whole figure's. The resource has no caption of its own: it is built on a field, and the field holds "
 			"the title. A resource is known by its name: declaring one under a name already taken "
 			"REPLACES it, so running the same build twice leaves one. Pass remove:true with the "
 			"same path to take one out again.");
@@ -2848,8 +2852,8 @@ public:
 		if (function.IsEmpty()) {
 			result.SetValue(ibT("expression"), path);
 			result.SetValue(ibT("note"),
-				ibMcpText("An expression is not checked here - script_check compiles it, which is what "
-				  "the settings window does before it closes."));
+				ibMcpText("An expression is not checked here: the query it goes into is built and parsed "
+				  "by compose_run, and a mistake in it comes back from there."));
 		}
 		else {
 			result.SetValue(ibT("function"), function);

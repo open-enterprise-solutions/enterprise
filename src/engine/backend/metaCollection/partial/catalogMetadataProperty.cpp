@@ -29,6 +29,7 @@ void ibValueMetaObjectCatalog::OnPropertyChanged(ibProperty* property, const ibV
 
 	if ((*m_propertyAttributeOwner)->GetClsidCount() > 0) (*m_propertyAttributeOwner)->ClearFlag(metaDisableFlag);
 	else (*m_propertyAttributeOwner)->SetFlag(metaDisableFlag);
-	
-	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
+
+	// Through the hierarchy, not past it — it restates Parent and IsFolder for a new HierarchyType.
+	ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanged(property, oldValue, newValue);
 }

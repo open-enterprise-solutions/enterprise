@@ -165,6 +165,21 @@ ibString LocalFormatPattern(const ibString& preset, const ibDictionary* dictiona
 	return ibString();
 }
 
+// ⚠ A VALUE IN QUOTES IS THE VALUE, the quotes only its fence: `DF='MM.yyyy'` is how a format is commonly written,
+// and the date pattern read the fence as a quoted literal and printed `MM.yyyy` itself (2026-10-30). A fence is
+// taken off only when no quote of its kind stands inside it - `'day' dd 'of' MMMM` is a pattern with two literals.
+ibString Unfenced(const ibString& value)
+{
+	const size_t length = value.length();
+	if (length < 2)
+		return value;
+	const ibChar quote = value[0];
+	if ((quote != L'\'' && quote != L'"') || value[length - 1] != quote)
+		return value;
+	const ibString inner = value.Mid(1, length - 2);
+	return inner.Find(quote) == wxNOT_FOUND ? inner : value;
+}
+
 void PadWholePart(ibString& text, int width)
 {
 	size_t start = (!text.IsEmpty() && text[0] == L'-') ? 1 : 0;
@@ -343,7 +358,7 @@ bool ibFormatString::Parse(const ibString& fmt, ibFormatString& format)
 		const bool allSpace = !rightParam.IsEmpty() && ibString(rightParam).Trim(true).Trim(false).IsEmpty();
 		rightParam.Trim(true); rightParam.Trim(false);
 		// A later pair of the same code wins, as it did when the pairs went into a map.
-		const ibString value = allSpace ? ibString(ibT(" ")) : rightParam;
+		const ibString value = allSpace ? ibString(ibT(" ")) : Unfenced(rightParam);
 		bool replaced = false;
 		for (auto& pair : pairs) {
 			if (pair.first == leftParam) { pair.second = value; replaced = true; break; }

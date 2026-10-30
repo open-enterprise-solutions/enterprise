@@ -1224,6 +1224,21 @@ bool ibTranslateCode::Translate()
 				m_current_lex.m_strData = s;
 			}
 		}
+		// ⭐ `||` AFTER CODE IS C's OR, NOT A STRING. A bar opens a continued string only as the first thing on its
+		// line; met after an operand, `a || b` was read as a string and answered "constant string expected"
+		// (2026-10-30). Refused by name and read past, so the rest of the line is still checked.
+		else if (IsByte(ibT('|')) && m_currentPos + 1 < m_bufferSize && m_strBuffer[m_currentPos + 1] == ibT('|')
+			&& [this] {
+				unsigned int i = m_currentPos;
+				while (i > 0 && (m_strBuffer[i - 1] == ibT(' ') || m_strBuffer[i - 1] == ibT('\t')))
+					--i;
+				return i > 0 && m_strBuffer[i - 1] != ibT('\n') && m_strBuffer[i - 1] != ibT('\r');
+			}()) {
+			Refuse(ibScriptError_Expression, m_currentPos,
+				ibString(_("'||' is not an operator here - conditions join with the word Or")));
+			GetByte(); GetByte();
+			continue;
+		}
 		else if (IsNumber() || IsString() || IsDate()) {
 			m_current_lex.m_lexType = CONSTANT;
 			if (IsNumber()) {

@@ -8,6 +8,7 @@
 #include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase::GetRestructureInfo (the static ledger accessor)
 
 #include "backend/metaData.h"
+#include "backend/session/session.h"       // AccessTrusted — the trusted window lets every right through
 #include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — per-object id tracing is opt-in
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
@@ -139,6 +140,13 @@ bool ibValueMetaObject::IsFullAccess() const
 {
 	if (appData->DesignerMode())
 		return true;
+
+	// The trusted window — a privileged module's call, a role handler, the session parameters' handler —
+	// checks no right, as it applies no RLS (ibAccessTrustScope). The script's AccessRight and IsInRole do
+	// not ask here, so inside the window they still answer what the user may.
+	if (const ibSession* const session = ibSession::Current())
+		if (session->AccessTrusted())
+			return true;
 
 	return m_metaData->IsFullAccess();
 }
@@ -342,22 +350,23 @@ bool ibValueMetaObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 }
 
 #include "backend/backend_exception.h"
-#include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 
 namespace {
-	// True if the most recent RequireExclusiveForDDL on this thread
-	// auto-acquired exclusive mode. ReleaseAutoExclusive uses it to know
+	// True while the exclusive mode held on this thread was taken by
+	// RequireExclusiveForDDL. ReleaseAutoExclusive uses it to know
 	// whether to drop the flag (don't drop if the caller had it before).
 	thread_local bool ts_acquiredByGate = false;
 }
 
 void ibRestructureInfo::RequireExclusiveForDDL()
 {
-	ts_acquiredByGate = false;
-
-	// Already exclusive? Caller (or previous gate) holds it. Don't touch.
+	// Already exclusive? Caller (or previous gate) holds it. Don't touch — the flag included. Every batch of an
+	// apply asks (ibStructureBatch::Flush), and the second asking used to clear what the first had set, so the
+	// apply's end released nothing: the base stayed exclusive until the designer closed, and every later login
+	// parked behind it (2026-10-30, "registry did not answer to Add").
 	if (appData->ExclusiveMode()) return;
+	ts_acquiredByGate = false;
 
 	// Bootstrap path — no current session / no registry yet (e.g. first-open
 	// auto-save triggered by m_configNew during LoadDatabase before the

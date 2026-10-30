@@ -24,7 +24,6 @@
 #include "backend/metaCollection/metaSectionObject.h"
 #include "backend/metaCollection/metaCommandGroupObject.h"   // where on the section page an item stands
 #include "core/description/typeDescription.h"   // a command's ParameterType — what it is typed FOR
-#include "core/clsid.h"             // IsReference — read off the id, no lookup
 #include "backend/metadataConfiguration.h"
 #include "core/stringUtils.h"
 
@@ -500,29 +499,11 @@ public:
 				// a metatype added later answers for itself instead of being missed by a list
 				// somebody forgot to extend. The section test that used to be here was one entry
 				// of exactly such a list.
-				if (!object->IsInterfaceAllowed())
+				// …and of those, only what is reached ONLY from a section (`IsInterfaceRequired`): an enumeration is
+				// picked in the fields that hold it, a common command filed under the form command bar stands on forms.
+				// The object's answer, so the database audit (mcpToolDatabase) and this list cannot disagree.
+				if (!object->IsInterfaceRequired())
 					continue;
-
-				// ⭐ A COMMON COMMAND FILED UNDER A GROUP OF THE FORM COMMAND BAR IS REACHED FROM FORMS, not from a
-				// section: it stands in that group's submenu on every form of the object its ParameterType names.
-				// Reported here it read as "nobody can open it" about a print command that was one click away
-				// (measured 2026-09-22, the first common command filed under Print).
-				//
-				// ⚠ ONLY WHEN IT IS TYPED FOR SOMETHING. The forms it stands on are those of the objects its
-				// ParameterType names; left with the default String it names none, stands on no form and in no
-				// section — and is exactly the command this list exists to report (the audit, 2026-09-22).
-				if (object->GetClassType() == g_metaCommonCommandCLSID) {
-					const ibValueMetaObjectCommand* command = static_cast<const ibValueMetaObjectCommand*>(object);
-					const ibValueMetaObjectCommandGroup* group = command->GetCommandGroup();
-					bool typed = false;
-					for (const ibClassID& clsid : command->GetParameterType().GetClsidList())
-						if (IsReference(clsid)) {
-							typed = true;
-							break;
-						}
-					if (typed && group != nullptr && group->GetCategory() == ibCommandGroupCategory_FormCommandBar)
-						continue;
-				}
 
 				bool anywhere = false;
 

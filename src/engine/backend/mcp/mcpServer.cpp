@@ -46,6 +46,7 @@
 #include <mutex>
 
 #include "core/net/httpServer.h"   // the transport
+#include "core/net/webSocketFrame.h"   // ibIsUtf8 — a body that is not UTF-8 is refused before it is read
 
 namespace {
 
@@ -442,6 +443,18 @@ private:
 			wire.m_protocolVersion = headerOf("mcp-protocol-version");
 			wire.m_method          = headerOf("mcp-method");
 			wire.m_name            = headerOf("mcp-name");
+
+			// 🛑 THE BYTES ARE UTF-8, OR THE CALL IS REFUSED. GetText reads bytes that are not UTF-8 all the same,
+			// and a body a shell sent in its code page (curl's arguments on Windows, 2026-10-30) arrived as
+			// letters nobody typed - to be stored in a module or said to the person without a word.
+			if (!ibIsUtf8(req.m_body)) {
+				res.m_status = 400;
+				res.SetContent(ibRpcWriteError(ibDataValue(), ibRpcError::Parse,
+					_("The request is not UTF-8. Send its body as UTF-8 bytes - from a file or a pipe: a shell hands "
+					  "its arguments over in its own code page.")).ToUtf8(), "application/json");
+				respond(std::move(res));
+				return;
+			}
 
 			const ibString request = req.GetText();
 
@@ -2042,6 +2055,14 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	out << ibT(" Write in that one - the other is a different language to the compiler, and ")
 		<< ibT("`script_check` is how you find out before anyone runs it.\n");
 
+	// ⭐ WHERE THE BRACES STOP BEING C. Each of these cost a round of refusals to an assistant that read C in
+	// them (a payroll built from nothing, 2026-10-30); the last one compiles and fails only when it runs.
+	if (!ibConfigurationWritesInWords(metaData))
+		out << ibT("THE BRACES ARE NOT C: `=` compares and `<>` is not-equal; conditions join with `And` / `Or` ")
+			<< ibT("(`!` negates); a loop counts `for (i = 0 To n - 1)`; `Procedure Name() Public { }` is what ")
+			<< ibT("other code may call. NAMES ARE NOT CASE-SENSITIVE - a local `baseKinds` hides the function ")
+			<< ibT("`BaseKinds` of its module, and the call fails at run time, not in `script_check`.\n");
+
 	const std::vector<ibString> languages = ibListMetaObjectNames(metaData, ibT("Language"));
 
 	if (!languages.empty()) {
@@ -2085,14 +2106,21 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// "a Synonym without `language` goes to the configuration's own" - and the very next assistant
 	// to read it (the one that wrote it, 2026-09-03) still put Russian captions into the ENGLISH
 	// slot on fourteen objects and on the Russian language itself. A rule is read; a STEP is done.
-	out << ibT("CAPTIONS AND LANGUAGES, IN THREE STEPS - the third is where everybody slips:\n")
+	// ⚠ AND A FOURTH, because three were done right and the application still spoke English: every caption
+	// sat in the Russian slot of a configuration whose default language was English (a payroll built from
+	// nothing, 2026-10-30).
+	out << ibT("CAPTIONS AND LANGUAGES, IN FOUR STEPS - the third is where everybody slips, the fourth is ")
+		<< ibT("the one nobody is told:\n")
 		<< ibT(" 1. ASK which language the people USING this read. Not the developer's by default, ")
 		<< ibT("and possibly several.\n")
 		<< ibT(" 2. DECLARE IT FIRST - `metadata_create` {kind: \"Language\", name: \"Russian\"}, an ")
 		<< ibT("English name like any other, then set its `Code` (`ru`, `uk`, `en`).\n")
 		<< ibT(" 3. WRITE EVERY CAPTION WITH `language`. Omitting it is not \"all languages\": it ")
 		<< ibT("writes into the configuration's own - English in a fresh base - so a Russian caption ")
-		<< ibT("is stored as the English one and its reader sees nothing.\n\n");
+		<< ibT("is stored as the English one and its reader sees nothing.\n")
+		<< ibT(" 4. MAKE IT THE ONE THEY SEE: `metadata_set` DefaultLanguage on the configuration's root. A user ")
+		<< ibT("with no language of their own sees the DEFAULT one, so every caption written in step 3 stays ")
+		<< ibT("unseen while it is English - the application opens in English and nothing says why.\n\n");
 
 	if (who.IsOk() && !who.m_strLanguageName.IsEmpty())
 		out << ibT("The person is working in ") << who.m_strLanguageName

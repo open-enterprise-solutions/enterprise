@@ -1280,9 +1280,13 @@ struct ibDotWalkExpansionScope {
 // its aggregates against somebody else's query. Null everywhere else, which is what keeps the
 // ordinary refusal ("an expression over an aggregate's result") standing where there is nothing to
 // register against.
+// ⭐ …OR WHERE IT ALREADY WAS. A TOTALS figure made of figures (`SUM(Accrued) - SUM(Deducted) AS ToPay`) declares
+// each call itself, on the road a single figure takes — names, areas, a second fold over one column — and hands
+// the calls over here with the names they were declared under; the expression then only reads them.
 struct ibAggregateSink {
-	ibDataQueryBuilder* m_builder = nullptr;
-	int*                m_seq     = nullptr;
+	ibDataQueryBuilder*                               m_builder  = nullptr;
+	int*                                              m_seq      = nullptr;
+	const std::map<const ibQueryAstExpr*, ibString>* m_declared = nullptr;
 };
 static thread_local const ibAggregateSink* t_aggregateSink = nullptr;
 
@@ -2898,6 +2902,11 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 	// Only where a sink is armed (a projection that has somewhere to attach the finished expression).
 	// Elsewhere this falls through and is refused in the words it always was.
 	case ibQueryAstExprKind::Func:
+		if (t_aggregateSink != nullptr && t_aggregateSink->m_declared != nullptr) {
+			const auto declared = t_aggregateSink->m_declared->find(&e);
+			if (declared != t_aggregateSink->m_declared->end())
+				return ibQueryColumnExpr::OutputRef(declared->second);
+		}
 		if (t_aggregateSink != nullptr && t_aggregateSink->m_builder != nullptr
 		    && ibIsAggregateKeyword(e.m_func) && !e.m_over) {
 			const ibString aggAlias = ibString::Format(ibT("_agg%d"), (*t_aggregateSink->m_seq)++);
@@ -5175,12 +5184,22 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 		for (ibQueryTotalDim& d : s.m_levels)
 			for (ibQueryTotalField& f : d.m_fields)
 				f.m_expr = ontoOutput(f.m_expr);
+	// A figure's calls read their arguments one level up — the figure's own call, or each one a figure made of figures
+	// holds (`SUM(a) - SUM(b)`). The nodes on the way are copied, so the statement's own tree is left as written.
+	const std::function<ibQueryAstExprPtr(const ibQueryAstExprPtr&)> callsOntoOutput =
+		[&](const ibQueryAstExprPtr& e) -> ibQueryAstExprPtr {
+			if (!e || (e->m_kind == ibQueryAstExprKind::Func && !e->m_arg))
+				return e;
+			ibQueryAstExprPtr onto = std::make_shared<ibQueryAstExpr>(*e);
+			if (e->m_kind == ibQueryAstExprKind::Func)
+				onto->m_arg = ontoOutput(e->m_arg);
+			else
+				ibQueryForEachChild(*onto, [&callsOntoOutput](ibQueryAstExprPtr& child) { child = callsOntoOutput(child); });
+			return onto;
+		};
 	for (const ibQueryTotalAggregate& a : ast->m_totalsAggregates) {
 		ibQueryTotalAggregate onto = a;
-		if (a.m_expr && a.m_expr->m_arg) {
-			onto.m_expr = std::make_shared<ibQueryAstExpr>(*a.m_expr);
-			onto.m_expr->m_arg = ontoOutput(a.m_expr->m_arg);
-		}
+		onto.m_expr = callsOntoOutput(a.m_expr);
 		outer->m_totalsAggregates.push_back(onto);
 	}
 	for (const ibQueryOrderItem& o : ast->m_orderBy) {
@@ -6420,15 +6439,23 @@ void CheckTotalsNameSelectedFields(const ibQuerySelect& ast)
 		return false;
 	};
 
-	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates) {
-		const ibQueryAstExprPtr& agg = resource.m_expr;
-		if (!agg || agg->m_kind != ibQueryAstExprKind::Func || agg->m_star || !agg->m_arg)
-			continue;
+	// Every call of a figure — the figure itself, or each one a figure made of figures holds (`SUM(a) - SUM(b)`).
+	const std::function<void(const ibQueryAstExprPtr&)> check = [&](const ibQueryAstExprPtr& agg) {
+		if (!agg)
+			return;
+		if (agg->m_kind != ibQueryAstExprKind::Func) {
+			ibQueryForEachChild(*agg, check);
+			return;
+		}
+		if (agg->m_star || !agg->m_arg)
+			return;
 		if (!claimed(agg->m_arg))
 			ThrowQueryException(agg->m_arg->m_line, agg->m_arg->m_col,
 				_("TOTALS aggregates \"%s\", which the selection does not carry: add it to SELECT and total over it there"),
 				ibRenderQueryExpr(*agg->m_arg));
-	}
+	};
+	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates)
+		check(resource.m_expr);
 }
 
 void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<ibString, ibValue>& params)
@@ -8645,38 +8672,13 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// over one column already moves.
 	aggregatedCols.insert(levelCols.begin(), levelCols.end());
 
-	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates) {
-		const ibQueryAstExprPtr& agg = resource.m_expr;
-		if (!agg || agg->m_kind != ibQueryAstExprKind::Func)
-			ThrowQueryException(0, 0, _("TOTALS expects aggregate functions (SUM/COUNT/MIN/MAX/AVG)"));
+	// ⭐ ONE CALL, DECLARED — under `outName`, with everything a figure is: the column it folds, a second fold over one
+	// column moved to a column of its own, a balance, the area its resource names. What comes back is the column the
+	// report reads it by; publishing it is the caller's, because a call inside a figure made of figures is not
+	// published — only the figure is (lowerDerived).
+	const auto lowerCall = [&](const ibQueryAstExprPtr& agg, const ibQueryTotalAggregate& resource,
+	                           const ibString& outName) -> OutputColumn {
 		RefuseUnloweredWindow(*agg);
-
-		// Output name read back via res[name]: COUNT(*) -> the function name; a field -> its identifier.
-		// Qualified when that name is already spoken for — see uniqueOutputName.
-		const ibString wantedName = agg->m_star
-			? ibQueryKeywordText(agg->m_func)
-			: (agg->m_arg && !agg->m_arg->m_path.empty() ? agg->m_arg->m_path.back() : ibQueryKeywordText(agg->m_func));
-
-		// ⭐⭐ A NAME THE AUTHOR WROTE IS NOT A CANDIDATE — IT IS THE ANSWER. The qualifier below
-		// exists to settle a name the ENGINE derived; applying it to `AS Qty` would rename the very
-		// thing the author named, and `res["Qty"]` would then find nothing (the report reads the
-		// figure back by the name it was given).
-		//
-		// So a collision with an alias is REFUSED, out loud, instead of being papered over: two
-		// columns answering to one name is a query that cannot be read back, and the author is the
-		// only one who can decide which name to change.
-		ibString outName;
-		if (!resource.m_alias.IsEmpty()) {
-			for (const OutputColumn& used : outSchema)
-				if (used.m_name.IsSameAs(resource.m_alias, false))
-					ThrowQueryException(agg->m_line, agg->m_col,
-						_("TOTALS names the resource \"%s\", and a grouping level already answers to that name: give one of them another alias"),
-						resource.m_alias);
-			outName = resource.m_alias;
-		}
-		else {
-			outName = uniqueOutputName(wantedName, ibQueryKeywordText(agg->m_func));
-		}
 
 		const ibBackendQueryColumn*           col   = nullptr;   // the column the fold aggregates by metaID
 		std::shared_ptr<ibBackendQueryColumn> owned;             // set only for a synthetic computed measure
@@ -8842,7 +8844,118 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		oc.m_type = TypeOfFold(agg->m_func, argType);
 		if (col != nullptr) { oc.m_col = col; oc.m_ownedCol = owned; }   // real OR synthetic column — keyed by metaID
 		else { oc.m_alias = outName; oc.m_byAlias = true; }              // COUNT(*), or an area folded here — read by name
-		outSchema.push_back(oc);
+		return oc;
+	};
+
+	// ⭐⭐ A FIGURE MADE OF FIGURES — `SUM(Accrued) - SUM(Deducted) AS ToPay`. Each call is declared by the road above
+	// under a name nobody reads but the expression, and is not published; the expression reads them by those names
+	// and is worked out at every heading once the tree is folded (ApplyDerivedAggregates).
+	//
+	// ⭐ IT ANSWERS TO A FIELD BY ITS NAME, and that is the only name it has: two calls over two fields name nothing
+	// between them, so the author says which column of the result this is. A SELECTED field of that name IS the
+	// column — the headings carry the figure, a detail row the field's own value: one column, as `SUM(Number)` and
+	// `Number` are one (Max, 2026-10-30: "in the groupings themselves, it is needed").
+	const auto lowerDerived = [&](const ibQueryTotalAggregate& resource) -> OutputColumn {
+		const ibQueryAstExprPtr& figure = resource.m_expr;
+		if (resource.m_alias.IsEmpty())
+			ThrowQueryException(figure->m_line, figure->m_col,
+				_("TOTALS computes \"%s\" from other figures: name the field it answers to (AS Name)"),
+				ibRenderQueryExpr(*figure));
+		// A field outside every call has no one value on a heading — the rule GROUP BY states for a selection.
+		std::vector<const ibQueryAstExpr*> folded, free;
+		ibQueryCollectFoldedAndFree(figure, false, folded, free);
+		if (!free.empty())
+			ThrowQueryException(free.front()->m_line, free.front()->m_col,
+				_("TOTALS figure \"%s\" reads \"%s\" outside an aggregate: a heading holds no single value of it"),
+				resource.m_alias, ibRenderQueryExpr(*free.front()));
+
+		// THE FIELD IT ANSWERS TO, claimed BEFORE its calls: a call over that same field is then a second fold over
+		// one column and moves to a column of its own, so the figure never overwrites what it is computed from.
+		// Claimed already (an earlier figure rolls into it) or not a plain column — a slot of its own, read by name.
+		const ibBackendQueryColumn* field = nullptr;
+		const auto pit = selectByName.find(resource.m_alias);
+		if (pit != selectByName.end() && pit->second->m_expr->m_kind == ibQueryAstExprKind::Column) {
+			const std::vector<const ibBackendQueryColumn*> path = ResolvePath(sources, *pit->second->m_expr);
+			if (!path.empty() && path.back() != nullptr && aggregatedCols.insert(path.back()).second)
+				field = path.back();
+		}
+
+		// EACH CALL, on the road a single figure takes — the figure's area is each call's. What is inside a call is
+		// its argument, not another figure.
+		std::map<const ibQueryAstExpr*, ibString>          declared;
+		std::vector<std::shared_ptr<ibBackendQueryColumn>> measures;
+		const std::function<void(const ibQueryAstExprPtr&)> declare = [&](const ibQueryAstExprPtr& e) {
+			if (!e)
+				return;
+			if (e->m_kind != ibQueryAstExprKind::Func || !ibIsAggregateKeyword(e->m_func) || e->m_over) {
+				ibQueryForEachChild(*e, declare);
+				return;
+			}
+			const ibString name = ibString::Format(ibT("fig%u"), static_cast<unsigned>(nextSynthId++));
+			const OutputColumn call = lowerCall(e, resource, name);
+			if (call.m_ownedCol != nullptr)
+				measures.push_back(call.m_ownedCol);
+			declared[e.get()] = name;
+		};
+		declare(figure);
+
+		const ibAggregateSink sink{ nullptr, nullptr, &declared };
+		ibQueryColumnExprPtr expr;
+		{
+			const ibAggregateSinkScope armed(&sink);
+			expr = BuildColumnExprFromAst(sources, *figure, params);
+		}
+		b.AggregateDerived(field, resource.m_alias, std::move(expr), std::move(measures));
+		// …and the rows carry the field, so a detail row has its own value to show: the selection's loop below finds
+		// the name taken and projects nothing.
+		if (field != nullptr)
+			b.Select(field, resource.m_alias);
+
+		OutputColumn oc; oc.m_name = resource.m_alias;
+		oc.m_role = ibQueryLowering::ibColumnRole::Measure;   // a TOTALS figure — the report's resource
+		oc.m_available = IsExprAvailable(sources, figure);    // …available while everything it folds is
+		// What the expression answers with, where that is certain (TypeOfExpr). A name it reads that resolves nowhere
+		// claims nothing — empty is the honest "unknown".
+		try { oc.m_type = TypeOfExpr(sources, *figure, params); }
+		catch (const ibCoreException&) {}
+		if (field != nullptr) oc.m_col = field;                         // the field's own column — keyed by metaID
+		else { oc.m_alias = resource.m_alias; oc.m_byAlias = true; }   // a slot of its own — read by name
+		return oc;
+	};
+
+	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates) {
+		const ibQueryAstExprPtr& agg = resource.m_expr;
+		if (!agg || (agg->m_kind != ibQueryAstExprKind::Func && !ibQueryMentionsAggregate(agg)))
+			ThrowQueryException(0, 0, _("TOTALS expects aggregate functions (SUM/COUNT/MIN/MAX/AVG)"));
+
+		// ⭐⭐ A NAME THE AUTHOR WROTE IS NOT A CANDIDATE — IT IS THE ANSWER. The qualifier below
+		// exists to settle a name the ENGINE derived; applying it to `AS Qty` would rename the very
+		// thing the author named, and `res["Qty"]` would then find nothing (the report reads the
+		// figure back by the name it was given).
+		//
+		// So a collision with an alias is REFUSED, out loud, instead of being papered over: two
+		// columns answering to one name is a query that cannot be read back, and the author is the
+		// only one who can decide which name to change.
+		if (!resource.m_alias.IsEmpty())
+			for (const OutputColumn& used : outSchema)
+				if (used.m_name.IsSameAs(resource.m_alias, false))
+					ThrowQueryException(agg->m_line, agg->m_col,
+						_("TOTALS names the resource \"%s\", and a grouping level already answers to that name: give one of them another alias"),
+						resource.m_alias);
+
+		if (agg->m_kind != ibQueryAstExprKind::Func) {
+			outSchema.push_back(lowerDerived(resource));
+			continue;
+		}
+
+		// Output name read back via res[name]: COUNT(*) -> the function name; a field -> its identifier.
+		// Qualified when that name is already spoken for — see uniqueOutputName.
+		const ibString wantedName = agg->m_star
+			? ibQueryKeywordText(agg->m_func)
+			: (agg->m_arg && !agg->m_arg->m_path.empty() ? agg->m_arg->m_path.back() : ibQueryKeywordText(agg->m_func));
+		const ibString outName = !resource.m_alias.IsEmpty() ? resource.m_alias
+			: uniqueOutputName(wantedName, ibQueryKeywordText(agg->m_func));
+		outSchema.push_back(lowerCall(agg, resource, outName));
 	}
 
 	// ⭐⭐ AND THE SELECTed FIELDS — ALWAYS, whether or not the rows were asked for.

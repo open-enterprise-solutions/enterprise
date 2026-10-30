@@ -422,7 +422,7 @@ public:
 			"module_read shows what is there now. Compiled afterwards IN ITS OWN CONTEXT and "
 			"the diagnostics come back, so a mistake is known immediately. The text is kept "
 			"either way, exactly as it would be if a person typed it.\n"
-			"\xF0\x9F\x9B\x91 WHAT OTHER CODE MAY CALL IS WHAT SAYS `Public`. A procedure or "
+			"\U0001F6D1 WHAT OTHER CODE MAY CALL IS WHAT SAYS `Public`. A procedure or "
 			"function without it is reachable from inside its own module and NOWHERE ELSE - the "
 			"call from outside is answered 'field not found', which reads like a misspelling "
 			"rather than a visibility rule. It compiles cleanly either way, so nothing warns "

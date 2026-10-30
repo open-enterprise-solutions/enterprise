@@ -17,7 +17,6 @@
 #include "backend/metaCollection/partial/selector/objectSelector.h"
 #include "backend/appData.h"
 #include "backend/metaCollection/partial/enumeration.h"
-#include "backend/metaCollection/partial/enumerationManager.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 
 #include <wx/init.h>
@@ -263,27 +262,31 @@ TEST(EnumerationManager, EmptyRefReturnsTheEmptyReference) {
 	ASSERT_NE(retail, nullptr);
 	retail->SetName(wxT("Retail"));
 
-	// The factory is protected. The manager itself is what a script holds.
-	ibValueManagerDataObjectEnumeration manager(enumeration);
+	// The manager the enumeration hands out, as a script holds it — through the generic data's door, as the
+	// information register's test asks for its own. The manager class is not exported: built here, it did not link
+	// under the DLL build (CI, Windows x64).
+	const ibValueMetaObjectGenericData& data = *enumeration;
+	const ibValuePtr<ibValueManagerDataObject> manager = data.CreateManagerDataObjectValue();
+	ASSERT_TRUE(manager);
 
-	EXPECT_EQ(manager.FindProp(wxT("EmptyRef")), wxNOT_FOUND);
-	const long method = manager.FindMethod(wxT("EmptyRef"));
+	EXPECT_EQ(manager->FindProp(wxT("EmptyRef")), wxNOT_FOUND);
+	const long method = manager->FindMethod(wxT("EmptyRef"));
 	ASSERT_NE(method, wxNOT_FOUND);
-	EXPECT_NE(manager.FindMethod(wxT("GetForm")), wxNOT_FOUND);
-	EXPECT_EQ(manager.FindMethod(wxT("NoSuchMethod")), wxNOT_FOUND);
+	EXPECT_NE(manager->FindMethod(wxT("GetForm")), wxNOT_FOUND);
+	EXPECT_EQ(manager->FindMethod(wxT("NoSuchMethod")), wxNOT_FOUND);
 
 	ibValue result;
-	ASSERT_TRUE(manager.CallAsFunc(method, result, nullptr, 0));
+	ASSERT_TRUE(manager->CallAsFunc(method, result, nullptr, 0));
 	ibValueReferenceDataObject* empty = nullptr;
 	ASSERT_TRUE(result.ConvertToValue(empty));
 	ASSERT_NE(empty, nullptr);
 	EXPECT_TRUE(empty->IsEmpty());
 	EXPECT_EQ(empty->GetMetaObject(), enumeration);
 
-	const long retailProp = manager.FindProp(wxT("Retail"));
+	const long retailProp = manager->FindProp(wxT("Retail"));
 	ASSERT_NE(retailProp, wxNOT_FOUND);
 	ibValue named;
-	ASSERT_TRUE(manager.GetPropVal(retailProp, named));
+	ASSERT_TRUE(manager->GetPropVal(retailProp, named));
 	ibValueReferenceDataObject* namedRef = nullptr;
 	ASSERT_TRUE(named.ConvertToValue(namedRef));
 	ASSERT_NE(namedRef, nullptr);

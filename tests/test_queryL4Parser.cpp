@@ -1514,6 +1514,41 @@ TEST(QueryL4Parser, TotalsAggregateOverRoundTrips)
 	EXPECT_EQ(ibRenderQuery(*again), written);   // a second trip changes nothing
 }
 
+// ⭐ A FIGURE MADE OF FIGURES — the arithmetic between the calls is the figure, read whole; the area written after
+// it is the whole figure's, and the name is the field it answers to. The constructor edits what the render
+// writes, so all three survive the text.
+TEST(QueryL4Parser, TotalsFigureMadeOfFigures)
+{
+	auto sel = Parse(wxT("SELECT Employee, Accrued, Deducted, Accrued - Deducted AS ToPay FROM Document.Payroll "
+	                     "TOTALS SUM(Accrued), SUM(Accrued) - SUM(Deducted) OVER Employee AS ToPay BY Employee"));
+	ASSERT_EQ(sel->m_totalsAggregates.size(), 2u);
+	const ibQueryTotalAggregate& figure = sel->m_totalsAggregates[1];
+	ASSERT_TRUE(figure.m_expr);
+	EXPECT_EQ(figure.m_expr->m_kind, ibQueryAstExprKind::Arith);
+	EXPECT_EQ(figure.m_expr->m_arith, ibQueryArithOp::Sub);
+	EXPECT_EQ(figure.m_expr->m_lhs->m_func, ibQueryKeyword::Sum);
+	EXPECT_EQ(figure.m_expr->m_rhs->m_func, ibQueryKeyword::Sum);
+	EXPECT_EQ(figure.m_scope, wxT("Employee"));
+	EXPECT_EQ(figure.m_alias, wxT("ToPay"));
+
+	const ibString written = ibRenderQuery(*sel);
+	auto again = Parse(written);
+	ASSERT_EQ(again->m_totalsAggregates.size(), 2u);
+	EXPECT_EQ(again->m_totalsAggregates[1].m_expr->m_kind, ibQueryAstExprKind::Arith);
+	EXPECT_EQ(again->m_totalsAggregates[1].m_scope, wxT("Employee"));
+	EXPECT_EQ(again->m_totalsAggregates[1].m_alias, wxT("ToPay"));
+	EXPECT_EQ(ibRenderQuery(*again), written) << written.ToStdString();   // a second trip changes nothing
+}
+
+// …AND ONE FIGURE HAS ONE AREA: an OVER inside it is refused where it stands, not as "expected BY" about the
+// operator after it. A figure that folds nothing is not a figure.
+TEST(QueryL4Parser, TotalsFigureRefusals)
+{
+	EXPECT_THROW(Parse(wxT("SELECT Item, Amount, Qty FROM Document.Sales "
+	                       "TOTALS SUM(Amount) OVER Item / SUM(Qty) AS Price BY Item")), ibQueryRefusal);
+	EXPECT_THROW(Parse(wxT("SELECT Item, Amount FROM Document.Sales TOTALS Amount * 2 AS Twice BY Item")), ibQueryRefusal);
+}
+
 // ⚠ `OVER` HERE TAKES A NAME, NEVER A BRACKET. A window partitions ROWS and lives in the SELECT;
 // TOTALS runs after the ladder and folds NODES, so what follows is the name of a level. Refused
 // where it is written rather than lowered into something plausible.

@@ -810,6 +810,10 @@ public:
 	ibValueMetaObjectAttributePredefined* GetDataOrder() const { return m_propertyAttributeOrder->GetMetaObject(); }
 	bool IsDataOrder(const ibMetaID& id) const { return id == (*m_propertyAttributeOrder)->GetMetaID(); }
 
+	// ⭐ REACHED THROUGH THE FIELDS THAT HOLD IT — a section may list an enumeration, and nothing is lost when none does:
+	// its members are picked where a document or a catalog asks for one (the "in no section" audits ask this).
+	virtual bool IsInterfaceRequired() const override { return false; }
+
 	// THE ENUMERATION'S PAIR — its own queryable, typed to this kind, registered by this kind
 	// (OnAfterRun / OnBeforeClose in the .cpp).
 	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }

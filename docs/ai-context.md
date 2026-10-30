@@ -478,6 +478,18 @@ document by its moment (date, then reference), the reference settling ties — i
 groupings and in a hierarchy alike. Sort by the reference itself; do not write `Account.Code` to have accounts
 in order (query-language-arc § 38).
 
+### 5.4 A figure computed from figures
+
+```sql
+TOTALS SUM(Accrued), SUM(Deducted), SUM(Accrued) - SUM(Deducted) AS ToPay BY OVERALL, Employee
+```
+
+- Arithmetic between aggregates is one figure, worked out at every heading from that heading's folds.
+- `AS` is required and names the SELECT field the figure answers to; a column outside an aggregate is refused.
+- `OVER <level>` goes after the whole figure, not inside it.
+- A detail row keeps the field's own value.
+- In a report: `report_resource` with `name`. Design: query-language-arc § 40.
+
 ---
 
 ## 6. Concept glossary

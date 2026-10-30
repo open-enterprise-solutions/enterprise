@@ -56,21 +56,21 @@ public:
 	}
 } g_calcScheduleLoader;
 
-wxPGChoices ibPGCalcScheduleProperty::GetChoices(const std::vector<const ibDataNode*>& items)
+wxPGChoices ibPGCalcScheduleProperty::GetChoices(const std::vector<ibDataNode>& items)
 {
 	wxPGChoices choices;
 	choices.Add(_("<not set>"), 0);
-	for (const ibDataNode* item : items)
-		choices.Add(item->GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title), item->GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id));   // names, as the type row names its types
+	for (const ibDataNode& item : items)
+		choices.Add(item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title), item.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id));   // names, as the type row names its types
 	return choices;
 }
 
-std::vector<const ibDataNode*> ibPGCalcScheduleProperty::GetItems(std::int32_t kind) const
+std::vector<ibDataNode> ibPGCalcScheduleProperty::GetItems(std::int32_t kind) const
 {
-	std::vector<const ibDataNode*> items;
+	std::vector<ibDataNode> items;
 	for (const ibDataNode& item : m_lists.Children()) {
 		if (item.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Kind) == kind)
-			items.push_back(&item);
+			items.push_back(item);
 	}
 	return items;
 }
@@ -106,13 +106,13 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 
 	// the link rows of the register bound now — as many dimensions as the server listed, each with the fields that
 	// may answer for it (its children)
-	const std::vector<const ibDataNode*> links = GetItems(kListLink);
+	const std::vector<ibDataNode> links = GetItems(kListLink);
 	for (size_t idx = 0; idx < links.size(); idx++) {
-		const ibDataNode& link = *links[idx];
+		const ibDataNode& link = links[idx];
 		const ibMetaID dimension = link.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id);
-		std::vector<const ibDataNode*> fields;
+		std::vector<ibDataNode> fields;
 		for (const ibDataNode& field : link.Children())
-			fields.push_back(&field);
+			fields.push_back(field);
 		// Named as its neighbours are — what the row IS, not the field a configuration happens to link.
 		const wxString rowLabel = links.size() == 1 ? _("Schedule link")
 			: ibString::Format(_("Schedule link %u"), static_cast<unsigned>(idx + 1));

@@ -2748,7 +2748,7 @@ void ibDialogQueryConstructor::OnEditTotalsAggregate(wxCommandEvent&)
 	}
 	else {
 		// THE EXPRESSION CHANGES, THE NAME STAYS — the editor edits a figure, not what it is called.
-		select->m_totalsAggregates[index].m_expr = edited;
+		ibQuerySetTotalsExpression(select->m_totalsAggregates[index], edited);
 	}
 	FillAll();
 }

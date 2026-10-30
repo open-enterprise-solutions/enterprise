@@ -1,5 +1,6 @@
 #include "metaCommandObject.h"
 #include "metaCommandGroupObject.h"                 // ibValueMetaObjectCommandGroup — the declared groups Group offers
+#include "core/clsid.h"                             // IsReference — a command typed for an object (IsInterfaceRequired)
 
 #include "backend/metaData.h"                       // ibMetaData::GetAnyArrayObject
 #include "backend/session/session.h"                // ibSession::EditModuleManagerFor
@@ -187,6 +188,25 @@ ibInterfaceCommandSection ibValueMetaObjectCommand::GetCommandSection() const
 		if (key == area)
 			return area;
 	return ibInterfaceCommandSection_Default;   // a declared group, or one that is gone — see the header
+}
+
+// ⭐ A COMMON COMMAND FILED UNDER A GROUP OF THE FORM COMMAND BAR IS REACHED FROM FORMS, not from a section: it
+// stands in that group's submenu on every form of the object its ParameterType names. Reported as "in no section"
+// it read as "nobody can open it" about a print command that was one click away (measured 2026-09-22, the first
+// common command filed under Print).
+//
+// ⚠ ONLY WHEN IT IS TYPED FOR SOMETHING. The forms it stands on are those of the objects its ParameterType names;
+// left with the default String it names none, stands on no form and in no section — and is exactly the command
+// the audits exist to report (the audit, 2026-09-22).
+bool ibValueMetaObjectCommonCommand::IsInterfaceRequired() const
+{
+	const ibValueMetaObjectCommandGroup* group = GetCommandGroup();
+	if (group == nullptr || group->GetCategory() != ibCommandGroupCategory_FormCommandBar)
+		return true;
+	for (const ibClassID& clsid : GetParameterType().GetClsidList())
+		if (::IsReference(clsid))   // the free clsid classifier — ibValue has a same-named member that hides it
+			return false;
+	return true;
 }
 
 // THE CHOICES OF «Group», in the order a section shows them: the platform's groups first, then the declared

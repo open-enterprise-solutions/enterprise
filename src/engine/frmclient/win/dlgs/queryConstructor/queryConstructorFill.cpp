@@ -560,6 +560,26 @@ void queryctor::ibQueryDropTotals(ibQuerySelect& select)
 	select.m_totalsSplits.clear();
 }
 
+wxString queryctor::ibQueryTotalsFieldName(const ibQueryTotalAggregate& figure)
+{
+	if (!figure.m_alias.IsEmpty() || !figure.m_expr)
+		return figure.m_alias;
+	// The name the engine gives a call it is not told one for — its argument's own (the lowering's wantedName).
+	const ibQueryAstExpr& call = *figure.m_expr;
+	if (call.m_kind == ibQueryAstExprKind::Func && call.m_arg && call.m_arg->m_kind == ibQueryAstExprKind::Column
+	    && !call.m_arg->m_path.empty())
+		return call.m_arg->m_path.back();
+	return wxString();
+}
+
+void queryctor::ibQuerySetTotalsExpression(ibQueryTotalAggregate& figure, ibQueryAstExprPtr expr)
+{
+	const wxString field = ibQueryTotalsFieldName(figure);
+	figure.m_expr = std::move(expr);
+	if (figure.m_alias.IsEmpty() && figure.m_expr && figure.m_expr->m_kind != ibQueryAstExprKind::Func)
+		figure.m_alias = field;
+}
+
 // ⭐⭐ EVERY BRANCH SELECTS THE SAME FIELDS — the dialog makes that true rather than complaining.
 //
 // A union lines its branches up BY NAME, so a field one branch has and another lacks is not a

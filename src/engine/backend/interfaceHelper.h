@@ -43,6 +43,10 @@ public:
 	// No by default: what a section shows is a navigation surface, and something with no
 	// list and no command has nothing to contribute to one.
 	virtual bool IsInterfaceAllowed() const { return false; }
+	// …AND MUST IT BE, for a person to reach it? What a section may show is mostly reached ONLY from one — a list no
+	// menu leads to is a list nobody opens. Not all of it: an enumeration is reached through the fields that hold it,
+	// so a section listing it is a convenience, not its door. Asked by the audits that report "in no section".
+	virtual bool IsInterfaceRequired() const { return IsInterfaceAllowed(); }
 
 	virtual ~ibInterfaceObject() {}
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Default; }

@@ -27,9 +27,10 @@ class ibPGCalcScheduleProperty : public wxPGProperty {
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGCalcScheduleProperty);
 private:
 	// A list the row brought, as a row's choices — nothing chosen first.
-	static wxPGChoices GetChoices(const std::vector<const ibDataNode*>& items);
-	// The row's lists of one kind (`Schedule`'s children of that Kind).
-	std::vector<const ibDataNode*> GetItems(std::int32_t kind) const;
+	static wxPGChoices GetChoices(const std::vector<ibDataNode>& items);
+	// The row's lists of one kind (`Schedule`'s children of that Kind) — copies: a range hands each child out by value,
+	// so an address taken in its loop dies with the iteration.
+	std::vector<ibDataNode> GetItems(std::int32_t kind) const;
 public:
 
 	ibPGCalcScheduleProperty(ibBackendProperty* property = nullptr, const wxString& label = wxPG_LABEL,

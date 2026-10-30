@@ -14,5 +14,6 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanging(ibProperty*
 
 void ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
-	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
+	// Through the hierarchy, not past it — it restates Parent and IsFolder for a new HierarchyType.
+	ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanged(property, oldValue, newValue);
 }

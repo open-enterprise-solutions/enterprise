@@ -98,9 +98,10 @@ public:
 	// (BuildDimensionTree — "grand total in-place"), and this only decides whether anyone sees them
 	// as a row instead of having to ask GetTotal() for each column by hand.
 	ibSelector& WithTotals(const std::vector<ibTotalLevel>& levels,
-		const std::vector<ibDataQueryBuilder::AggregateItem>& aggs, bool overall)
+		const std::vector<ibDataQueryBuilder::AggregateItem>& aggs, bool overall,
+		const std::vector<ibDerivedAggregate>& derived = {})
 	{
-		m_totalLevels = levels; m_aggregates = aggs; m_totalsOverall = overall; return *this;
+		m_totalLevels = levels; m_aggregates = aggs; m_totalsOverall = overall; m_derived = derived; return *this;
 	}
 
 	// ⭐ THE SAME THING, SAID BY THE READER. `BY OVERALL` is how the QUERY asks for the root row; a
@@ -135,58 +136,16 @@ public:
 		return *this;
 	}
 
+	// ⭐⭐ EVERY ROAD'S TREE COMES OUT HERE — the DBMS's, the streamed fold's, the snapshot's — so the figures made of
+	// figures are worked out here, once, on whichever arrived (ibDerivedAggregate). A road of its own would be
+	// one more place for `SUM(Accrued) - SUM(Deducted)` to come out differently.
 	ibSelectorTree Build() const
 	{
-		// A tree the server already folded is the answer, whatever the walk kind: a flat walk over
-		// it still reads its nodes, which is what a caller asking for groups wants either way.
-		//
-		// ⚠ COPIED, NOT MOVED. The ready tree is SHARED — the result keeps it and hands the same
-		// shared_ptr to every selector it makes — so moving out of it emptied the tree for whoever
-		// asked second (a result read twice, a drill fetching a node's children).
-		if (m_readyTree)
-			return m_readyTree->Clone();
-
-		if (m_kind == ibSelectKind::ibSelectKind_Direct)
-			return BuildFlat();
-
-		// ⭐⭐ THE STREAMING ROAD — the ordinary report, and the reason the rows travel as a cursor.
-		// The dimension fold reads them one at a time (it drains the cursor itself, and says so, for
-		// the reference-hierarchy levels that cannot be folded in one pass), so nothing here holds the
-		// detail. The self-hierarchy fast path below is row-KEYED — a row IS a node there — so it
-		// takes the snapshot road, which is the same cost by construction.
-		if (m_rows && !SelfHierarchyFold() && (!m_totalLevels.empty() || m_totalsOverall)) {
-			ibSelectorTree folded = ibQueryComposer::BuildDimensionTree(*m_rows, m_totalLevels, m_aggregates,
-			                                                            m_holder, m_queryable);
-			m_rows.reset();   // read once, and a spent cursor must not read back as rows
-			return folded;
-		}
-
-		EnsureSnapshot();   // every fold below addresses rows by index — drain the cursor once
-
-		// ⚠ OVERALL ALONE IS STILL A TOTALS FOLD. `TOTALS COUNT(x) BY OVERALL` asks for one row over
-		// everything and names no dimension — so the levels are empty, and without this the walk fell
-		// through to the manual/unit-test fallback below and folded by a null column. The dimension
-		// tree handles it exactly: FoldDimLevel returns at once with nothing to fold, and the root
-		// still gets the whole-snapshot aggregates, which IS the row that was asked for.
-		if (!m_totalLevels.empty() || m_totalsOverall) {
-			// Self-hierarchy fast path: a SINGLE Hierarchy level on the source's OWN parent column is
-			// ROW-keyed (each catalog row is a node) — that is BuildHierarchyTree, rowKey from the
-			// queryable (already in the snapshot), NO extra query.
-			if (SelfHierarchyFold()) {
-				const std::vector<const ibBackendQueryColumn*> keys = m_queryable->GetPrimaryKeyColumns();
-				if (!keys.empty() && keys.front() != nullptr)
-					return ibQueryComposer::BuildHierarchyTree(m_snapshot, keys.front(), m_totalLevels[0].HeadCol(),
-					                                           m_aggregates, m_totalLevels[0].HeadDim());
-			}
-			// Everything else — Elements / cross-catalog ref-hierarchy / multi-level (in order, with
-			// per-level dimension unfold) → the general value-keyed combiner.
-			return ibQueryComposer::BuildDimensionTree(m_snapshot, m_totalLevels, m_aggregates, m_holder, m_queryable);
-		}
-
-		// direct-config / unit-test fallback
-		if (!m_groupFields.empty())
-			return ibQueryComposer::BuildTotalsTree(m_snapshot, m_groupFields, m_aggregates);
-		return ibQueryComposer::BuildHierarchyTree(m_snapshot, m_rowKeyCol, m_parentKeyCol, m_aggregates, m_dimKind);
+		ibSelectorTree tree = Fold();
+		// …a flat walk excepted: its nodes are the rows as they were read (BuildFlat), and a row has no figure to work out.
+		if (m_readyTree || m_kind != ibSelectKind::ibSelectKind_Direct)
+			ibQueryComposer::ApplyDerivedAggregates(tree, m_aggregates, m_derived);
+		return tree;
 	}
 
 	// --- iteration: selection = a CURSOR over the traversal -----------------------------------------
@@ -371,6 +330,61 @@ private:
 		}
 	}
 
+	// THE TREE, by whichever road this selection's rows take — what Build hands out, before the figures made of figures.
+	ibSelectorTree Fold() const
+	{
+		// A tree the server already folded is the answer, whatever the walk kind: a flat walk over
+		// it still reads its nodes, which is what a caller asking for groups wants either way.
+		//
+		// ⚠ COPIED, NOT MOVED. The ready tree is SHARED — the result keeps it and hands the same
+		// shared_ptr to every selector it makes — so moving out of it emptied the tree for whoever
+		// asked second (a result read twice, a drill fetching a node's children).
+		if (m_readyTree)
+			return m_readyTree->Clone();
+
+		if (m_kind == ibSelectKind::ibSelectKind_Direct)
+			return BuildFlat();
+
+		// ⭐⭐ THE STREAMING ROAD — the ordinary report, and the reason the rows travel as a cursor.
+		// The dimension fold reads them one at a time (it drains the cursor itself, and says so, for
+		// the reference-hierarchy levels that cannot be folded in one pass), so nothing here holds the
+		// detail. The self-hierarchy fast path below is row-KEYED — a row IS a node there — so it
+		// takes the snapshot road, which is the same cost by construction.
+		if (m_rows && !SelfHierarchyFold() && (!m_totalLevels.empty() || m_totalsOverall)) {
+			ibSelectorTree folded = ibQueryComposer::BuildDimensionTree(*m_rows, m_totalLevels, m_aggregates,
+			                                                            m_holder, m_queryable);
+			m_rows.reset();   // read once, and a spent cursor must not read back as rows
+			return folded;
+		}
+
+		EnsureSnapshot();   // every fold below addresses rows by index — drain the cursor once
+
+		// ⚠ OVERALL ALONE IS STILL A TOTALS FOLD. `TOTALS COUNT(x) BY OVERALL` asks for one row over
+		// everything and names no dimension — so the levels are empty, and without this the walk fell
+		// through to the manual/unit-test fallback below and folded by a null column. The dimension
+		// tree handles it exactly: FoldDimLevel returns at once with nothing to fold, and the root
+		// still gets the whole-snapshot aggregates, which IS the row that was asked for.
+		if (!m_totalLevels.empty() || m_totalsOverall) {
+			// Self-hierarchy fast path: a SINGLE Hierarchy level on the source's OWN parent column is
+			// ROW-keyed (each catalog row is a node) — that is BuildHierarchyTree, rowKey from the
+			// queryable (already in the snapshot), NO extra query.
+			if (SelfHierarchyFold()) {
+				const std::vector<const ibBackendQueryColumn*> keys = m_queryable->GetPrimaryKeyColumns();
+				if (!keys.empty() && keys.front() != nullptr)
+					return ibQueryComposer::BuildHierarchyTree(m_snapshot, keys.front(), m_totalLevels[0].HeadCol(),
+					                                           m_aggregates, m_totalLevels[0].HeadDim());
+			}
+			// Everything else — Elements / cross-catalog ref-hierarchy / multi-level (in order, with
+			// per-level dimension unfold) → the general value-keyed combiner.
+			return ibQueryComposer::BuildDimensionTree(m_snapshot, m_totalLevels, m_aggregates, m_holder, m_queryable);
+		}
+
+		// direct-config / unit-test fallback
+		if (!m_groupFields.empty())
+			return ibQueryComposer::BuildTotalsTree(m_snapshot, m_groupFields, m_aggregates);
+		return ibQueryComposer::BuildHierarchyTree(m_snapshot, m_rowKeyCol, m_parentKeyCol, m_aggregates, m_dimKind);
+	}
+
 	// Direct fold — each row becomes a leaf node under the root (no subtotals, no nesting). Straight
 	// off the cursor when there is one: a flat walk holds a node per row either way, and draining
 	// into a table first would hold every row TWICE.
@@ -553,6 +567,7 @@ private:
 	std::vector<ibTotalLevel>                      m_totalLevels;   // totals dimensions (from the door, via WithTotals)
 	bool                                           m_totalsOverall = false;  // walk the ROOT as a row (BY OVERALL)
 	std::vector<ibDataQueryBuilder::AggregateItem> m_aggregates;
+	std::vector<ibDerivedAggregate>                m_derived;   // …and the figures made of them, worked out on Build
 	// The tree the DBMS folded, when it did (see WithReadyTree). Shared because a selector is copied
 	// on its way from the result to the caller, and the tree must not be copied with it.
 	std::shared_ptr<ibSelectorTree>                m_readyTree;

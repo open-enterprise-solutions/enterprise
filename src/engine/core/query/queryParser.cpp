@@ -5,6 +5,7 @@
 #include "queryParser.h"
 
 #include "core/query/queryRefusal.h"   // ibQueryRefusal — the text does not read: where and why, as data
+#include "core/query/queryRewrite.h"   // ibQueryMentionsAggregate — a TOTALS figure has to fold something
 #include "core/description/typeDescription.h"   // ibTypeDescription — what a CAST to a primitive converts to
 #include "core/fiber/fiber.h"          // StackLow — a parenthesized expression is native recursion
 
@@ -885,11 +886,22 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 
 	if (!AcceptKw(ibQueryKeyword::By)) {
 		do {
-			if (!IsAggregateKw(Cur()))
-				ThrowQueryException(Cur(), _("expected an aggregate function (SUM/COUNT/MIN/MAX/AVG) or BY in TOTALS"));
+			// ⭐⭐ A FIGURE IS AN EXPRESSION OVER FOLDS — `SUM(Qty)`, and as well `SUM(Accrued) - SUM(Deducted)` or
+			// `100 * SUM(Margin) / SUM(Revenue)`. The shape used to be decided by the first token: the call was
+			// read, and the minus after it came back as "expected BY in TOTALS" — the hole SELECT had
+			// (ParseProjection), in the clause a report's resources are written into (2026-10-30). The arithmetic
+			// between the calls is worked out at every node after the fold (ApplyDerivedAggregates). A figure is a
+			// number, so it is read at the arithmetic level.
+			const ibQueryToken at = Cur();
 			ibQueryTotalAggregate resource;
-			resource.m_expr = ParseAggregate(/*allowWindow*/false);   // OVER here names the AREA — read below
-			// ⭐⭐ `OVER <level>` — over WHAT this figure is computed, read right after the call and
+			{
+				struct Restore { bool& m_flag; ~Restore() { m_flag = false; } } restore{ m_overNamesArea };
+				m_overNamesArea = true;   // OVER here names the AREA — read below, once, for the whole figure
+				resource.m_expr = ParseAddSub();
+			}
+			if (!ibQueryMentionsAggregate(resource.m_expr))
+				ThrowQueryException(at, _("expected an aggregate function (SUM/COUNT/MIN/MAX/AVG) or BY in TOTALS"));
+			// ⭐⭐ `OVER <level>` — over WHAT this figure is computed, read right after the figure and
 			// before the name, because it is part of what the figure IS rather than of what it is
 			// called. A level of a branch is addressed through it: `OVER ByCharacteristic.Series`.
 			//
@@ -932,6 +944,12 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 				} while (bracketed && AcceptPunct(ibT(',')));
 				if (bracketed)
 					ExpectPunct(ibT(')'), ibT("')' closing the OVER list"));
+				// ⚠ …AFTER THE WHOLE FIGURE, never inside it: the area is the figure's, so `SUM(a) OVER Item / SUM(b)`
+				// would be one figure with two areas, which this clause has no way to state. Said here, by name,
+				// instead of "expected BY" about the operator that follows.
+				for (const ibChar op : { ibT('+'), ibT('-'), ibT('*'), ibT('/'), ibT('%') })
+					if (Cur().IsPunct(op))
+						ThrowQueryException(Cur(), _("OVER is the area of the whole TOTALS figure and is written after it: SUM(a) - SUM(b) OVER Level"));
 			}
 			// [AS] alias — the name the FIGURE answers to, written exactly where a level writes its
 			// own (see the BY loop below): after the thing it names, with AS optional. One rule for
@@ -1557,7 +1575,7 @@ ibQueryAstExprPtr ibQueryParser::ParseAggregate(bool allowWindow)
 	}
 
 	ExpectPunct(ibT(')'), ibT("')'"));
-	if (allowWindow)
+	if (allowWindow && !m_overNamesArea)
 		ParseWindowSuffix(*e);   // …OVER (…) — the call folds a PARTITION instead of a group
 	return e;
 }

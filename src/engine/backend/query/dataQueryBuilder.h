@@ -123,6 +123,17 @@ struct ibAggregateItem { ibAggregateFn m_fn; const ibBackendQueryColumn* m_col; 
                          ibBalanceRole m_balance = ibBalanceRole::None;
                          std::vector<const ibBackendQueryColumn*> m_balanceMoments;
                          std::vector<const ibBackendQueryColumn*> m_balanceKeys; };
+// ⭐⭐ A FIGURE MADE OF FIGURES — `TOTALS SUM(Accrued) - SUM(Deducted) AS ToPay`. It folds nothing itself: each
+// call inside it is an ordinary aggregate of the same set, declared under a name of its own, and m_expr reads
+// them by those names (OutputRef). Worked out at every node once the tree is folded, on whichever road folded
+// it (ibQueryComposer::ApplyDerivedAggregates) — so no road's SQL learns of it, and none can disagree.
+// m_col = the SELECTED field it answers to, the column it is written into on every heading, while a detail row
+// keeps the field's own value — one column, as `SUM(Number)` and `Number` are one. Null = a slot of its own,
+// read by alias (a figure named after nothing the selection carries), as COUNT(*) is — and empty on a detail row.
+// m_measures = the synthetic columns its calls fold through (a second fold over one column, a computed argument):
+// a single figure's is held by its published column, and these calls publish none — so the figure holds them.
+struct ibDerivedAggregate { const ibBackendQueryColumn* m_col; ibString m_alias; ibQueryColumnExprPtr m_expr;
+                            std::vector<std::shared_ptr<ibBackendQueryColumn>> m_measures; };
 // ONE FIELD of a TotalBy level — the column to roll up by + how it unfolds.
 // ⭐ A LEVEL'S FIELD CARRIES ITS OWN PATH. A dot-walked dimension (`Producer.Region`) groups by a
 // SYNTHETIC column — one this door made up so the fold has a stable id to key the tree on — while
@@ -388,7 +399,7 @@ public:
 	// totals aggregate set — so result.Select(kind) folds by them automatically (no manual fold on
 	// the Selector). (docs/private/query-language-arc.md §22.1b)
 	void SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates,
-		bool overall = false);
+		bool overall = false, std::vector<ibDerivedAggregate> derived = {});
 
 	// ⭐ THE TOTALS TREE, ALREADY FOLDED BY THE DBMS. Stamped when the read was pushed down as
 	// `GROUP BY ROLLUP`: the result then has no detail cursor to walk, and Select(kind) hands this
@@ -403,6 +414,7 @@ public:
 	// The stamped totals config — read by result.Select(kind) to configure the Selector's fold.
 	const std::vector<ibTotalLevel>&    TotalLevels()     const { return m_totalLevels; }
 	const std::vector<ibAggregateItem>& TotalAggregates() const { return m_totalAggregates; }
+	const std::vector<ibDerivedAggregate>& TotalDerived() const { return m_totalDerived; }
 	bool                                TotalsOverall()   const { return m_totalsOverall; }
 
 	// The door also stamps the SOURCE (holder + queryable + select list + filter) so the Selector can
@@ -453,6 +465,7 @@ private:
 	std::map<ibMetaID, ibObjectRead> m_objectReads;
 	std::vector<ibTotalLevel>    m_totalLevels;              // totals dimensions (stamped by the door)
 	std::vector<ibAggregateItem> m_totalAggregates;          // common totals aggregate set
+	std::vector<ibDerivedAggregate> m_totalDerived;          // …and the figures made of them (ibDerivedAggregate)
 	bool                         m_totalsOverall = false;    // walk the tree's ROOT as a row (BY OVERALL)
 	// Set when the DBMS folded the levels itself — see SetReadyTree.
 	std::shared_ptr<class ibSelectorTree> m_readyTree;
@@ -930,6 +943,13 @@ public:
 	// FROM — this hands the aggregate a receiver, and the fold then reads it there.
 	ibDataQueryBuilder& AggregateReceiver(const ibString& alias, std::shared_ptr<ibBackendQueryColumn> receiver);
 
+	// …AND A FIGURE MADE OF THE OTHERS — `SUM(Accrued) - SUM(Deducted) AS ToPay` (ibDerivedAggregate). Its calls
+	// are declared first, by Aggregate, under names of their own; `expr` reads them through OutputRef. Totals only:
+	// a derived figure is worked out on the nodes of a folded tree, and only a TOTALS read has one. `col` = the
+	// selected field it answers to, null = a slot of its own; `measures` = what its calls fold through (ibDerivedAggregate).
+	ibDataQueryBuilder& AggregateDerived(const ibBackendQueryColumn* col, const ibString& alias, ibQueryColumnExprPtr expr,
+		std::vector<std::shared_ptr<ibBackendQueryColumn>> measures);
+
 	// ⭐ CAN THIS READ'S ENGINE COMPUTE A WINDOW? Asked of the connection THIS door was built on —
 	// never of the active database. Several are open at once (the base, a comparison, one from a
 	// file), and "the active one" is not necessarily mine: reaching for it is how a query comes to
@@ -1300,6 +1320,7 @@ private:
 	std::vector<HavingItem>       m_having;         // .Having()
 	std::vector<ibTotalLevel>     m_totals;         // .TotalBy(field, dim) — totals dimensions, in order
 	std::vector<AggregateItem>    m_totalAggregates;// .Totals().Sum()… — TotalBy common aggregate set
+	std::vector<ibDerivedAggregate> m_totalDerived; // .AggregateDerived() — the figures made of those
 	bool                          m_totalsOverall = false;   // .TotalsOverall() — the level above every dimension
 	bool                          m_aggInTotals = false;  // routing flag: .Aggregate → totals set when Totals() active
 	bool                          m_distinct    = false;  // .Distinct() — SELECT DISTINCT

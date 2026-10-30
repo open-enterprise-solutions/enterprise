@@ -40,7 +40,8 @@ bool ibValueMetaObjectChartOfAccounts::OnPropertyChanging(ibProperty* property, 
 
 void ibValueMetaObjectChartOfAccounts::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
-	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
+	// Through the hierarchy, not past it — it restates Parent and IsFolder for a new HierarchyType.
+	ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanged(property, oldValue, newValue);
 
 	// The number of analytical slots, and which values they may hold, are both declared HERE and
 	// both build columns THERE. Waiting for the next configuration run would leave a register

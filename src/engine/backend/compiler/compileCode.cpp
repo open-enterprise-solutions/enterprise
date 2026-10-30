@@ -9,6 +9,7 @@
 
 #include "system/systemManager.h"
 #include "backend/session/session.h"       // GetCompileState — the code style lives there
+//#include "backend/moduleInfo.h"          // g_aliasExport — for the commented filter in PrepareModuleData (TODO there)
 #include "core/fiber/fiber.h"              // StackLow — expression nesting is native recursion
 
 // The mark a filter writes on a comparison (procUnitLambda.h, LINQ_THREE_VALUED_NULL).
@@ -47,6 +48,9 @@ static constexpr std::array<int, 256> MakeOperPriority()
 	// `!` / `Not` as a PREFIX takes its operand up to the next `And` / `Or` — see the KEY_NOT branch of
 	// GetExpression. This entry is `!` met AFTER an operand, which the language refuses.
 	listPriority['!'] = 50;
+	// `&` likewise: C's `&&` met after an operand, refused by name in GetExpression. Without an entry the
+	// expression ended at it, and the author read "')' expected" about a line whose brackets are fine.
+	listPriority['&'] = 50;
 
 	listPriority[KEY_OR] = 1;
 	listPriority[KEY_AND] = 2;
@@ -236,6 +240,18 @@ void ibCompileCode::PrepareModuleData()
 		}
 
 		// add methods from context
+		// TODO(2026-10-30, open): A MODULE MEETS ITS OWN EXPORTS IN ITS CONTEXT — in the designer only. ThisObject /
+		// ThisForm is the module's own descriptor, and the descriptor hangs its module's Public methods on its member
+		// table (ExportThunk) for outside callers. At run time the module compiles before it has bytecode to offer them
+		// from; in the designer they are read off the text (ibExportNamesFromText), so SyntaxControl reports every
+		// Public procedure of an object module as "already defined". Filtering here by the descriptor's alias makes the
+		// compiler know moduleInfo's convention — the rule belongs to the descriptor, and where exactly is not decided
+		// yet. Kept commented, with its include above, until it is:
+		//
+		// const ibValue::ibMemberTable* const members = contextValue->GetPMethods();
+		// ...
+		//     if (members != nullptr && members->GetMethodAlias(i) == g_aliasExport)
+		//         continue;
 		for (unsigned int i = 0; i < contextValue->GetNMethods(); i++) {
 			// define the number and type of the function
 			mainContext->PushFunction(
@@ -4246,6 +4262,19 @@ delimOperation:
 							_("'==' is not an operator here - comparison is written with a single '='")));
 						return ibParamUnit();
 					}
+				}
+				// C's other spellings, refused by name as `==` is and for the same reason: `!=` was answered as a
+				// bare "!", `&&` as "')' expected" (an assistant building a payroll, 2026-10-30). `||` never gets
+				// here - a bar opens a continued string - and is refused by the lexer (ibTranslateCode).
+				else if (next_lex.m_numData == '!' && IsNextDelimiter('=')) {
+					Refuse(ibScriptError_Expression, ibString(
+						_("'!=' is not an operator here - inequality is written '<>'")));
+					return ibParamUnit();
+				}
+				else if (next_lex.m_numData == '&' && IsNextDelimiter('&')) {
+					Refuse(ibScriptError_Expression, ibString(
+						_("'&&' is not an operator here - conditions join with the word And")));
+					return ibParamUnit();
 				}
 				else {
 					// ⭐ SAY WHAT WAS FOUND. The message is "Error in expression:\n%s" and both raises

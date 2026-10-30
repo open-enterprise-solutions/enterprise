@@ -3410,6 +3410,29 @@ void AddSyntheticAggColumns(ibSelectorTree& tree, const std::vector<ibDataQueryB
 			tree.AddColumn(AggSlotId(aggs, i), aggs[i].m_alias, ibTypeDescription());
 }
 
+// ⭐ A NODE AS THE EVALUATOR SEES IT — the figures folded onto it, asked for by the names they were declared under
+// (a derived figure's OutputRef). The twin of ibResultRow: the one evaluator walks the expression, and only the row
+// it reads is a node of the tree.
+class ibTreeNodeRow : public ibQueryRow {
+public:
+	ibTreeNodeRow(const ibSelectorTree::Node& node, const std::vector<ibDataQueryBuilder::AggregateItem>& aggs)
+		: m_node(node), m_aggs(aggs) {}
+	ibValue Get(ibMetaID id) const override {
+		const auto it = m_node.m_values.find(id);
+		return it != m_node.m_values.end() ? it->second : ibValue();
+	}
+	// …and a figure by its name, from the slot it was folded into — the same slot every road writes (AggSlotId).
+	ibValue Get(const ibString& name) const override {
+		for (size_t i = 0; i < m_aggs.size(); ++i)
+			if (m_aggs[i].m_alias.IsSameAs(name, false))
+				return Get(AggSlotId(m_aggs, i));
+		return ibValue();
+	}
+private:
+	const ibSelectorTree::Node&                           m_node;
+	const std::vector<ibDataQueryBuilder::AggregateItem>& m_aggs;
+};
+
 // CellKey is GONE. Hierarchy linking keys by the VALUE itself now (ibValueHash / ibValueEqual,
 // value.h): a REFERENCE compares by its _RRRef there — a row's own data-reference and a parent-ref
 // pointing AT it are the same value, which is what the link needs — and no cell is rendered to text
@@ -5371,6 +5394,39 @@ void ibQueryComposer::PadPeriodLevels(ibSelectorTree& tree, const std::vector<ib
 	}
 }
 
+// ⭐ A FIGURE OVER FIGURES — `SUM(Accrued) - SUM(Deducted) AS ToPay`. Every road folds its own
+// figures (the DBMS, the stream, the snapshot, the hierarchy), and the expression between them is
+// computed here, on the finished tree, so there is one statement of it whichever road built the tree.
+void ibQueryComposer::ApplyDerivedAggregates(ibSelectorTree& tree, const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+                                             const std::vector<ibDerivedAggregate>& derived)
+{
+	for (size_t j = 0; j < derived.size(); ++j) {
+		// The selected field's own column — or a slot past every aggregate's own, of the same kind, so it is clear
+		// of every other minted id, as theirs are.
+		const ibBackendQueryColumn* const field = derived[j].m_col;
+		const ibMetaID slot = field != nullptr ? field->GetColumnId()
+			: ibSynthId(ibSynthKind::Aggregate, static_cast<ibMetaID>(aggregates.size() + j));
+		// Declared once: a selection builds again on a tree that already has it (a shared read's branches).
+		const std::vector<ibQueryRamColumn>& columns = tree.Columns();
+		if (std::none_of(columns.begin(), columns.end(), [slot](const ibQueryRamColumn& c) { return c.m_id == slot; }))
+			tree.AddColumn(slot, derived[j].m_alias, field != nullptr ? field->GetTypeDesc() : ibTypeDescription());
+
+		// ⚠ EVERY HEADING, a padded period's included: a figure its calls do not reach there (erased above an area)
+		// reads as NULL, which is what the evaluator makes of a missing operand — no figure, rather than a wrong one.
+		// A fork carries none, and neither does a DETAIL ROW: its calls' slots hold the row's own values, not folds
+		// of one row (`COUNT(Number)` there is the number, ibStreamingFold::AddDetail), so an expression over them
+		// would be one over readings. The row shows the selected field's own value, or nothing.
+		const std::function<void(ibSelectorTree::Node&)> walk = [&](ibSelectorTree::Node& node) {
+			if (node.m_kind == ibSelectorNodeKind::Group)
+				node.m_values[slot] = EvalColumnExprRow(derived[j].m_expr.get(), ibTreeNodeRow(node, aggregates));
+			for (const std::unique_ptr<ibSelectorTree::Node>& child : node.m_children)
+				if (child != nullptr)
+					walk(*child);
+		};
+		walk(tree.Root());
+	}
+}
+
 // totals fold over a combined row set -> a RAW totals TREE (L3's own ibQueryRamTable). L3
 // stops here — flat-vs-hierarchical rendering is the runtime's call. Group columns keyed by
 // GetColumnId; aggregates by a synthetic id (read by alias). Grand total = the root (level
@@ -6826,10 +6882,11 @@ void ibDataQueryResult::SetComputedSpreads(std::vector<ibComputedSpread> spreads
 }
 
 void ibDataQueryResult::SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates,
-	bool overall)
+	bool overall, std::vector<ibDerivedAggregate> derived)
 {
 	m_totalLevels     = std::move(levels);
 	m_totalAggregates = std::move(aggregates);
+	m_totalDerived    = std::move(derived);
 	m_totalsOverall   = overall;
 }
 
@@ -6929,7 +6986,7 @@ ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 	// exactly the rows the push-down exists to leave in the database.
 	if (m_readyTree) {
 		ibSelector s(ibQueryRamTable(), mode);
-		s.WithTotals(m_totalLevels, m_totalAggregates, m_totalsOverall);
+		s.WithTotals(m_totalLevels, m_totalAggregates, m_totalsOverall, m_totalDerived);
 		s.WithReadyTree(m_readyTree);
 		return s;
 	}
@@ -6944,7 +7001,8 @@ ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 	// query read directly (`Select()`, `Unload()`) came back as ONE row with every column blank, over a register as
 	// over a value table (2026-09-29). The totals are the grouped walk's.
 	s.WithTotals(m_totalLevels, m_totalAggregates,
-	             m_totalsOverall && mode != ibSelectKind::ibSelectKind_Direct);   // fold by the door's TotalBy config
+	             m_totalsOverall && mode != ibSelectKind::ibSelectKind_Direct,    // fold by the door's TotalBy config
+	             m_totalDerived);
 	s.WithSource(m_srcHolder, m_srcQueryable, m_srcSelectCols, m_srcConditions);  // enable lazy sub-selections
 	// ⚠ AND IT IS NOT FOLDED HERE. A selection is configured AFTER it is made — MakeChild adds
 	// ByParentRef / ByGroups / Aggregating to what this hands back — so folding at this point would

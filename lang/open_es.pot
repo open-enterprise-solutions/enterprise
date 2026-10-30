@@ -547,6 +547,15 @@ msgstr ""
 msgid "'==' is not an operator here - comparison is written with a single '='"
 msgstr ""
 
+msgid "'!=' is not an operator here - inequality is written '<>'"
+msgstr ""
+
+msgid "'&&' is not an operator here - conditions join with the word And"
+msgstr ""
+
+msgid "'||' is not an operator here - conditions join with the word Or"
+msgstr ""
+
 #: src/engine/backend/compiler/compileCodeLINQ.cpp:2523
 msgid "Single: the source has more than one element"
 msgstr ""
@@ -1456,6 +1465,10 @@ msgstr ""
 msgid "Background job FAILED: %s - %s"
 msgstr ""
 
+#, c-format
+msgid "%s (module %s, line %u)"
+msgstr ""
+
 #: src/engine/backend/job/jobBackground.cpp:525
 #, c-format
 msgid "Background job FAILED: %s - unknown error"
@@ -1743,6 +1756,9 @@ msgstr ""
 #: src/engine/backend/mcp/mcpServer.cpp:2465
 #, c-format
 msgid "unreadable message: %s"
+msgstr ""
+
+msgid "The request is not UTF-8. Send its body as UTF-8 bytes - from a file or a pipe: a shell hands its arguments over in its own code page."
 msgstr ""
 
 #: src/engine/backend/mcp/mcpServer.cpp:2657
@@ -2457,6 +2473,14 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/metaModuleObject.h:281
 msgid "Whether the module's exported methods are callable by bare name from any code, without the ModuleName. prefix. Off by default: a global module's names share one namespace with every other global name."
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaModuleObject.h:300
+msgid "Privileged module"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaModuleObject.h:301
+msgid "Whether a call into the module runs with no access checks - neither the rights on objects nor the record-level restrictions - for everything the call runs. For code that has to see past the user's rights, such as checking them. A module is global or privileged, not both: switching one on switches the other off."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaModuleObjectMenu.cpp:11
@@ -5820,6 +5844,14 @@ msgstr ""
 msgid "TOTALS names the resource \"%s\", and a grouping level already answers to that name: give one of them another alias"
 msgstr ""
 
+#, c-format
+msgid "TOTALS computes \"%s\" from other figures: name the field it answers to (AS Name)"
+msgstr ""
+
+#, c-format
+msgid "TOTALS figure \"%s\" reads \"%s\" outside an aggregate: a heading holds no single value of it"
+msgstr ""
+
 #: src/engine/backend/query/queryLowering.cpp:8855
 #, c-format
 msgid "OVER \"%s\": this TOTALS declares no such grouping: name a level of its own BY, qualifying it with the branch (Branch.Level) where two branches carry one name"
@@ -5928,6 +5960,9 @@ msgid "expected an aggregate function (SUM/COUNT/MIN/MAX/AVG) or BY in TOTALS"
 msgstr ""
 
 msgid "expected a grouping name after OVER: the level this figure is computed over"
+msgstr ""
+
+msgid "OVER is the area of the whole TOTALS figure and is written after it: SUM(a) - SUM(b) OVER Level"
 msgstr ""
 
 msgid "expected a grouping name after the branch name in OVER"

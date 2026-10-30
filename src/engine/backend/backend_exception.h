@@ -65,6 +65,11 @@ public:
 	// 2026-09-01). Not to be confused with IsErrorOutputProcessing(), which asks whether a report
 	// is on screen RIGHT NOW and is false again by the time the exception reaches the main loop.
 	bool IsErrorHandled() const { return m_errorHandled; }
+	// …AND WHERE IT WAS — the module and the 1-based line ProcessError found the failure at, riding the rethrow
+	// the same way. A reader told only the message (a background run's status, read later) could not say where to
+	// look. Empty / 0 = not a script's failure, or not reported yet.
+	const ibString& GetErrorModule() const { return m_errorModule; }
+	unsigned int GetErrorLine() const { return m_errorLine; }
 
 	//error from proc unit/compile module
 	static void ProcessError(const ibBackendException& err, const struct ibByteUnit& error);
@@ -165,7 +170,9 @@ private:
 		const ibDiagnosticKind kind
 	);
 
-	mutable bool m_errorHandled;
+	mutable bool         m_errorHandled;
+	mutable ibString     m_errorModule;      // set where m_errorHandled is (ProcessError)
+	mutable unsigned int m_errorLine = 0;
 };
 
 #pragma region _exception_h_
