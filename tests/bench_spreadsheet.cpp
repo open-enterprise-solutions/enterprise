@@ -115,7 +115,7 @@ TEST(SheetFormatBench, DISABLED_ReadWrite)
 //
 // WHAT IT SPLITS. The read above is the zip, the parser and the cells together; this is the parser alone, on the
 // part that holds the cells, two ways at a time: names resolved (kNamespaces — a URI made for every element and
-// attribute) or as written (kAsWritten — the tree's), and a part handed over as its bytes or made a string first.
+// attribute) or as written (kAsWritten — as the tree reads them), and a part handed over as its bytes or made a string first.
 // =============================================================================
 TEST(SheetFormatBench, DISABLED_ParseSheetPart)
 {

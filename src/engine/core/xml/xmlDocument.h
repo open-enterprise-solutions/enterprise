@@ -5,8 +5,7 @@
 #include "core/fstring.h"          // ibString - names, text
 #include "core/xml/xmlText.h"      // ibXmlParser - what the tree is read with; ibXmlNodeType - what a node is
 
-#include <deque>
-#include <vector>
+#include <memory>
 
 // ⭐ A WHOLE DOCUMENT AS A TREE - wxXmlDocument's shape, read with the core's own parser, so that the engine reads
 // a document held whole with no wx. A node is an element, a text (whitespace included: `<t xml:space="preserve"> </t>`
@@ -39,13 +38,14 @@ public:
 private:
 	friend class ibXmlDocument;
 
-	const ibXmlParser::ibAttribute* FindAttribute(const ibString& name) const;
+	struct ibAttribute;   // kept by the document, linked by its node (xmlDocument.cpp)
+	const ibAttribute* FindAttribute(const ibString& name) const;
 
 	ibXmlNodeType m_type = ibXmlNodeType_None;
 	ibString      m_name;
 	ibString      m_content;
 	unsigned long long m_line = 0;
-	std::vector<ibXmlParser::ibAttribute> m_attributeArray;
+	ibAttribute*  m_firstAttribute = nullptr;
 	ibXmlNode*    m_parent = nullptr;
 	ibXmlNode*    m_children = nullptr;
 	ibXmlNode*    m_lastChild = nullptr;
@@ -54,7 +54,8 @@ private:
 
 class CORE_API ibXmlDocument {
 public:
-	ibXmlDocument() = default;
+	ibXmlDocument();
+	~ibXmlDocument();
 	ibXmlDocument(const ibXmlDocument&) = delete;
 	ibXmlDocument& operator=(const ibXmlDocument&) = delete;
 
@@ -68,11 +69,13 @@ public:
 	ibXmlNode* GetRoot() const { return m_root; }
 
 private:
-	void Load(ibXmlParser& parser, const char* data, size_t size, const ibString& source);
+	struct ibStore;                    // every node and attribute of the tree (xmlDocument.cpp)
+
+	void Load(ibXmlParser::ibInput input, const char* data, size_t size, const ibString& source);
 	ibXmlNode& Append(ibXmlNode* parent, ibXmlNodeType type);
 
-	std::deque<ibXmlNode> m_nodeArray;   // every node; a deque, so that a node never moves once made
-	ibXmlNode*            m_root = nullptr;
+	std::unique_ptr<ibStore> m_store;  // null: nothing read
+	ibXmlNode*               m_root = nullptr;
 };
 
 #endif // !__XML_DOCUMENT_H__

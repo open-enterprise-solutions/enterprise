@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include <string>
+#include <vector>
 
 #include "core/exception.h"
 #include "core/xml/xmlDocument.h"
@@ -196,4 +197,115 @@ TEST(XmlDocument, ATextAcrossTheEdgeOfAChunkIsOneNode)
 	ASSERT_NE(v->GetChildren(), nullptr);
 	EXPECT_EQ(v->GetChildren()->GetNext(), nullptr);
 	EXPECT_EQ(v->GetNodeContent(), ibString((long_ + L"\U0001F600").c_str()));
+}
+
+TEST(XmlDocument, EveryAttributeOfAnElementIsFoundAndNoneOfItsNeighbours)
+{
+	ibXmlDocument xml;
+	xml.Load(ibT("<a x=\"1\" y=\"2\" z=\"3\"><b y=\"20\"/><c/></a>"));
+	const ibXmlNode* a = xml.GetRoot();
+	ASSERT_NE(a, nullptr);
+	EXPECT_EQ(a->GetAttribute(ibT("x")), ibString(ibT("1")));
+	EXPECT_EQ(a->GetAttribute(ibT("y")), ibString(ibT("2")));
+	EXPECT_EQ(a->GetAttribute(ibT("z")), ibString(ibT("3")));
+	const ibXmlNode* b = a->GetChildren();
+	EXPECT_EQ(b->GetAttribute(ibT("y")), ibString(ibT("20")));
+	EXPECT_FALSE(b->HasAttribute(ibT("x")));   // the parent's attributes are not the child's
+	EXPECT_FALSE(b->HasAttribute(ibT("z")));
+	EXPECT_FALSE(b->GetNext()->HasAttribute(ibT("y")));
+}
+
+// =============================================================================
+// The parser handing its events straight to a receiver (ibXmlParser::ibReceiver) - the road the tree is built on.
+// What the receiver should be told is written here by hand.
+// =============================================================================
+
+namespace {
+
+struct Recording : ibXmlParser::ibReceiver {
+	std::vector<std::string> m_eventArray;
+
+	virtual void Start(const char* name, const char* const* attributes, unsigned long long line) override
+	{
+		std::string event = "start " + std::string(name) + " @" + std::to_string(line);
+		for (const char* const* at = attributes; at[0] != nullptr; at += 2)
+			event += " " + std::string(at[0]) + "=" + at[1];
+		m_eventArray.push_back(event);
+	}
+	virtual void End() override { m_eventArray.push_back("end"); }
+	virtual void Content(ibXmlNodeType type, const char* name, const char* text, size_t size, unsigned long long line) override
+	{
+		const char* kind = type == ibXmlNodeType_Text ? "text" : type == ibXmlNodeType_Whitespace ? "space"
+			: type == ibXmlNodeType_CDATASection ? "cdata" : type == ibXmlNodeType_Comment ? "comment"
+			: type == ibXmlNodeType_ProcessingInstruction ? "pi" : "?";
+		m_eventArray.push_back(std::string(kind) + (name != nullptr ? " " + std::string(name) : std::string())
+			+ " [" + std::string(text, size) + "] @" + std::to_string(line));
+	}
+};
+
+void Parse(ibXmlParser& parser, const std::string& text)
+{
+	parser.Feed(text.data(), text.size(), true, ibString());
+}
+
+} // namespace
+
+TEST(XmlParserReceiver, EveryEventGoesToTheReceiverInOrderAndTheQueueStaysEmpty)
+{
+	Recording recording;
+	ibXmlParser parser(ibT("XML"), ibXmlParser::kBytes, recording);
+	Parse(parser, "<a x=\"1\" xmlns:p=\"u\">\n<!--c--><?go now?>t&amp;u<![CDATA[x<y]]> <p:b/></a>");
+	EXPECT_TRUE(parser.Queue().empty());
+	const std::vector<std::string> expected = {
+		"start a @1 x=1 xmlns:p=u",   // names as written: a declaration is an attribute like any other
+		"space [\n] @1",
+		"comment [c] @2",
+		"pi go [now] @2",
+		"text [t&u] @2",              // one text across the reference
+		"cdata [x<y] @2",
+		"space [ ] @2",
+		"start p:b @2",
+		"end",
+		"end",
+	};
+	EXPECT_EQ(recording.m_eventArray, expected);
+}
+
+TEST(XmlParserReceiver, AReceiverThatRaisesRefusesTheTextWhereItStands)
+{
+	struct Refusing : Recording {
+		virtual void Start(const char* name, const char* const* attributes, unsigned long long line) override
+		{
+			if (std::string(name) == "bad")
+				ibCoreException::Error(ibT("no bad elements"));
+			Recording::Start(name, attributes, line);
+		}
+	} refusing;
+	ibXmlParser parser(ibT("XML"), ibXmlParser::kBytes, refusing);
+	try {
+		Parse(parser, "<a>\n<bad/><c/></a>");
+		FAIL() << "the receiver's refusal did not reach the caller";
+	}
+	catch (const ibCoreException& error) {
+		const ibString what = error.GetErrorDescription();
+		EXPECT_NE(what.Find(ibT("no bad elements")), wxNOT_FOUND) << what;
+		EXPECT_NE(what.Find(ibT("line 2")), wxNOT_FOUND) << what;
+	}
+	EXPECT_EQ(refusing.m_eventArray, std::vector<std::string>({ "start a @1", "space [\n] @1" }));   // nothing after it
+}
+
+TEST(XmlParserQueue, ATextKeepsWhereItBeganWhileItIsHeldAsBytes)
+{
+	// The queue's road (XMLReader's): a text is held as bytes until it ends, and its node still says where it began.
+	ibXmlParser parser(ibT("XML"), ibXmlParser::kBytes, ibXmlParser::kAsWritten);
+	Parse(parser, "<a>\n<b/>  tail</a>");
+	const ibXmlParser::ibNode* tail = nullptr;
+	for (const ibXmlParser::ibNode& node : parser.Queue())
+		if (node.m_type == ibXmlNodeType_Text)
+			tail = &node;
+	ASSERT_NE(tail, nullptr);
+	EXPECT_EQ(tail->m_value, ibString(ibT("  tail")));
+	EXPECT_EQ(tail->m_line, 2ull);
+	EXPECT_EQ(tail->m_column, 5ull);   // right after `<b/>`, counted from 1
+	EXPECT_EQ(tail->m_depth, 1);
 }
