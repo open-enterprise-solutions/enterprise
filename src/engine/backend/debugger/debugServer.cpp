@@ -30,6 +30,8 @@
 #endif
 
 #include "backend/appData.h"
+#include "backend/appHost.h"
+#include "core/startProcess.h"   // ibStopProcess — the debugger's "end the program"
 
 ///////////////////////////////////////////////////////////////////////
 ibDebuggerServer* ibDebuggerServer::ms_debugServer = nullptr;
@@ -1134,6 +1136,10 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 		if (length == 0)
 			continue;
 		try {
+			// ⭐ A FRAME IS WORK FOR THE BASE THIS SERVER DEBUGS, session or none. This thread answers through the session
+			// of whoever is logged in, and with nobody logged in it worked for no base: `code_run` on a web server nobody
+			// had opened raised "works for no base" and the raise read as a bad frame, closing the debugger's connection.
+			const ibApplicationInstanceScope working(debugServer != nullptr ? debugServer->GetApplicationInstance() : nullptr);
 #ifdef __WXMSW__
 			ibValueOLE::GetInterfaceAndReleaseStream();
 #endif
@@ -2051,6 +2057,9 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		ms_debugServer->WakeAllDebugSessions();
 
 		ibDebuggerServerConnection::Disconnect();
+
+		// …and a process that lives for the debugger goes when it is let go (CommandId_Destroy says why).
+		ibStopProcess();
 	}
 	else if (commandFromClient == CommandId_Destroy) {
 
@@ -2081,6 +2090,12 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			stopped->Close(true);
 		else if (auto* s = ibSession::Current())
 			s->Close(true);
+
+		// ⭐ DESTROY IS THE SESSION'S — and a process that lives for the debugger goes with it (Max, 2026-10-30: "a web
+		// server held from the designer goes; one started by itself, naturally, does not"). A designer's web server closed
+		// the one session above and went on serving: `app_run restart` said it had ended it, and the process stood there
+		// holding the base and the libraries, re-attached by the next debugger.
+		ibStopProcess();
 	}
 	else if (commandFromClient == CommandId_DeleteAllBreakpoints) {
 		ms_debugServer->ClearCollectionBreakpoint();

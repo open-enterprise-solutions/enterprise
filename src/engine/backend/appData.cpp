@@ -1035,6 +1035,7 @@ bool ibApplicationInstance::DestroyAppDataEnv()
 
 ///////////////////////////////////////////////////////////////////////////////
 #include "backend/debugger/debugClient.h"
+#include "core/diagnostics/crashGuard.h"   // CurrentPidPortable — whom a debug run goes with
 #include "core/startProcess.h"   // ibStartProcess — a launch is asked for from a fiber too (app_run on the server)
 
 #pragma region execute 
@@ -1094,7 +1095,7 @@ long ibApplicationInstance::RunApplication(const ibString& strAppName, const ibS
 		}
 		add(executeCmd, ibT("file"), m_strFile);
 		if (searchDebug)
-			executeCmd += ibT(" --debug");
+			executeCmd += ibString::Format(ibT(" --debug --owner=%u"), ibCrashGuard::CurrentPidPortable());   // a debug run goes with whoever debugs it
 		add(executeCmd, ibT("locale"), GetLocale());   // the base's, else the process's: the child comes up as this base's clients do
 
 		// The wait is the core's (std::this_thread::sleep_for between its looks, up to five seconds). The page is the

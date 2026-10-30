@@ -36,6 +36,13 @@ CORE_API bool ibKillProcess(long pid);
 // …and whether it is still running.
 CORE_API bool ibProcessExists(long pid);
 
+// THIS PROCESS, ASKED TO GO — by the debugger letting go of it, which ends a session and knows nothing of what holds the
+// process. A host that lives only for the debugger says how it stops (a web server a designer started, its serving
+// loop: `stop` is called on any thread and has to return at once); false when none did - a thin client goes with its
+// window, a server started by itself serves on - and the process stays.
+CORE_API void ibOnStopProcess(void (*stop)());
+CORE_API bool ibStopProcess();
+
 // This process's environment, as a library it loads reads it (fbclient finds its folder by FIREBIRD).
 CORE_API bool ibSetEnv(const ibString& name, const ibString& value);
 

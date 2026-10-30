@@ -51,7 +51,7 @@ enum CommandId
 	CommandId_RemoveBreakpoint = 8,    // Remove a breakpoint on a line on and off.
 	CommandId_Pause = 9,    // Instructs the debugger to break on the next line of script code.
 	CommandId_Detach = 10,    // Soft stop: disconnect debug client + reset debug state, listener stays so the debugger can reattach.
-	CommandId_Destroy = 11,    // Hard stop: same as Detach plus a forced close of the stopped session (a thin client is told to go). The process's other sessions stay.
+	CommandId_Destroy = 11,    // Hard stop: same as Detach plus a forced close of the stopped session (a thin client is told to go). The process's other sessions stay, unless the process lives for the debugger (ibStopProcess: a web server a designer started; so does Detach there).
 
 	// 12–14 — the editor's patches (insert, delete, complete), which no runtime read: the edits are the editor's to count.
 

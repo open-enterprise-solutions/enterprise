@@ -26,6 +26,7 @@
 #include "core/net/webSocketFrame.h"
 #include "core/net/webSocketRelay.h"
 #include "core/fileSystem.h"   // ibDirExists
+#include "core/startProcess.h" // ibProcessExists
 
 namespace {
 
@@ -397,6 +398,10 @@ int ibWebServer::Run()
 #ifdef __WXMSW__
 	::SetConsoleCtrlHandler(OnConsoleClose, TRUE);   // after the signals: asked first, it passes on what is theirs
 #endif
+	// A SERVER A DEBUGGER STARTED LIVES WHILE IT IS ATTACHED: the debugger letting go or ending the session ends this
+	// process. One started by itself only loses the session, and serves on.
+	if (m_config.m_owner != 0)
+		ibOnStopProcess([]() { OnStopSignal(0); });
 
 	// However Run ends — served and stopped, or refused at any step — a console closing waits no longer.
 	struct ibStoppedMark { ~ibStoppedMark() { s_state.store(ibServeState::Stopped); } } stoppedMark;
@@ -508,8 +513,15 @@ int ibWebServer::Run()
 			ibWebServerSay(ibJournalMark::Error, ibT("the manifest %s was not written"), m_config.m_manifest);
 	}
 
-	while (s_state.load() == ibServeState::Serving)
+	// A DESIGNER'S DEBUG RUN GOES WITH THE DESIGNER, closed or fallen: nobody else knows this one is there, and it holds
+	// the base and the executable's libraries from whoever comes next.
+	while (s_state.load() == ibServeState::Serving) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
+		if (m_config.m_owner != 0 && !ibProcessExists(m_config.m_owner)) {
+			ibWebServerSay(ibJournalMark::Info, ibT("the process %ld that started this server has ended"), m_config.m_owner);
+			OnStopSignal(0);
+		}
+	}
 
 	ibWebServerSay(ibJournalMark::Info, ibT("stopping"));
 	Stop();

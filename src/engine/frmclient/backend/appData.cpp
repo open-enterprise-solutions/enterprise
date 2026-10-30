@@ -5,6 +5,7 @@
 #include "core/diagnostics/journal.h"
 #include "core/fileSystem.h"   // the binary next to this one — RunApplication
 #include "core/localization/dictionary.h"   // ibDictionary::GetProcessLanguage — the base's language, RunApplication
+#include "core/diagnostics/crashGuard.h"   // CurrentPidPortable — whom a debug run goes with
 #include "core/startProcess.h"   // ibStartWebServer
 
 #include "frmclient/backend/mcp/mcpServer.h"
@@ -40,7 +41,7 @@ long ibApplicationData::RunApplication(const ibString& strAppName, bool searchDe
 		else if (!m_strFile.IsEmpty()) {
 			executeCmd += ibString::Format(ibT(" --file=\"%s\""), m_strFile);
 			if (searchDebug)
-				executeCmd += ibT(" --debug");
+				executeCmd += ibString::Format(ibT(" --debug --owner=%u"), ibCrashGuard::CurrentPidPortable());   // a debug run goes with whoever debugs it
 		}
 		else {
 			ibJournalWarning(ibT("process"), ibT("%s publishes a file base or a base of an application server, not one on a DBMS server"),

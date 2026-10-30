@@ -31,6 +31,7 @@
 #include "backend/appData.h"
 #include "backend/debugger/debugClient.h"     // one debug session at a time — the menu's own guard
 #include "backend/metadataConfiguration.h"    // …and the configuration must already be in the base
+#include "core/startProcess.h"                // ibStopProcess — the process asked to close, before it is made to
 
 #include <wx/process.h>                       // wxProcess::Exists — has the previous run actually gone
 #include <chrono>
@@ -183,25 +184,21 @@ public:
 
 				ended = true;
 
-				// ⚠ AND WAIT FOR IT TO ACTUALLY GO. The command travels to another process, which
-				// then unwinds, closes its session and lets go of the base; starting the
-				// replacement before that is two processes on one file base — Firebird gives the
-				// second one a lock error that reads like a corrupt installation.
-				if (lastStarted != 0) {
-					for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
-						std::this_thread::sleep_for(std::chrono::milliseconds(50));
-				}
-				else {
+				if (lastStarted == 0)
 					std::this_thread::sleep_for(std::chrono::milliseconds(1000));   // started by somebody else - there is no pid to watch
-				}
 			}
 		}
-		// ⚠ …AND A RUN STARTED WITHOUT THE DEBUGGER HAS NO CONNECTION TO END, so the branch above never
-		// saw it: `restart` then started a SECOND application beside the first — two processes on one
-		// file base — and the old one had to be killed from outside (2026-09-10). A run THIS designer
-		// started has its pid, so it is asked to close, and then made to.
-		else if (restart && lastStarted != 0 && wxProcess::Exists((int)lastStarted)) {
-			wxProcess::Kill((int)lastStarted, wxSIGTERM, wxKILL_CHILDREN);
+		// ⚠ …AND THE PROCESS IS ASKED AS WELL, whatever the debugger was told: a run started without it has no
+		// connection to end (`restart` then started a SECOND application beside the first, 2026-09-10), and one with
+		// it may not have heard or may not go (`endedPrevious` was answered with the old web server alive, and the next
+		// run's commands went to both, 2026-10-30). A run THIS designer started has its pid, so it is asked to close,
+		// and then made to.
+		//
+		// ⚠ AND WAIT FOR IT TO ACTUALLY GO. It unwinds, closes its session and lets go of the base; starting the
+		// replacement before that is two processes on one file base — Firebird gives the second one a lock error
+		// that reads like a corrupt installation.
+		if (restart && lastStarted != 0 && wxProcess::Exists((int)lastStarted)) {
+			ibStopProcess(lastStarted);
 			for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
 				std::this_thread::sleep_for(std::chrono::milliseconds(50));
 			if (wxProcess::Exists((int)lastStarted))

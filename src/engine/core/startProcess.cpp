@@ -304,6 +304,26 @@ long ibStartWebServer(const ibString& command, ibString& url, const std::functio
 	return pid;
 }
 
+namespace {
+
+std::atomic<void (*)()> s_stopProcess{ nullptr };
+
+} // namespace
+
+void ibOnStopProcess(void (*stop)())
+{
+	s_stopProcess.store(stop);
+}
+
+bool ibStopProcess()
+{
+	void (*const stop)() = s_stopProcess.load();
+	if (stop == nullptr)
+		return false;
+	stop();
+	return true;
+}
+
 #ifdef __IBMSW__
 namespace {
 

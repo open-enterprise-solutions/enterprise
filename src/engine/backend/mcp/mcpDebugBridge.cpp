@@ -203,14 +203,14 @@ bool ibMcpDebugBridge::Screenshot(const ibString& reason, const ibString& area, 
 	if (debugClient == nullptr)
 		return false;
 
+	// ⚠ NO STOP REQUIRED, and that is the difference from everything else here. A parked runtime
+	// is needed to read a stack or evaluate in a session; a window can draw itself while the
+	// application is running, which is precisely when somebody is looking at the wrong list.
+	if (!GetStop().m_connected)
+		return false;
+
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
-
-		// ⚠ NO STOP REQUIRED, and that is the difference from everything else here. A parked runtime
-		// is needed to read a stack or evaluate in a session; a window can draw itself while the
-		// application is running, which is precisely when somebody is looking at the wrong list.
-		if (!m_stop.m_connected)
-			return false;
 
 		m_pending = Pending::Picture;
 		m_picture.SetDataLen(0);
@@ -274,13 +274,11 @@ bool ibMcpDebugBridge::SendJob(unsigned int which, const ibString& token,
 	const std::lock_guard<std::mutex> one(m_oneQuestion);
 	state = ibJobRunByteCodeState();
 
-	if (debugClient == nullptr)
+	if (debugClient == nullptr || !GetStop().m_connected)
 		return false;
 
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
-		if (!m_stop.m_connected)
-			return false;
 
 		m_pending   = Pending::Fill;
 		m_jobWhich  = which;
@@ -356,13 +354,11 @@ bool ibMcpDebugBridge::Compose(const ibDataNode& request, ibDataNode& result, bo
 	answered = false;
 	refusal.Clear();
 
-	if (debugClient == nullptr)
+	if (debugClient == nullptr || !GetStop().m_connected)
 		return false;
 
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
-		if (!m_stop.m_connected)
-			return false;
 
 		m_pending         = Pending::Composition;
 		m_composeAnswered = false;
@@ -477,10 +473,6 @@ void ibMcpDebugBridge::Announce(const ibString& text) const
 
 void ibMcpDebugBridge::OnSessionStart()
 {
-	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_stop.m_connected = true;
-	}
 	Announce(ibT("debugger: a runtime connected"));
 }
 
@@ -504,7 +496,6 @@ void ibMcpDebugBridge::OnEnterLoop(const ibDebugLineData& data)
 	ibString where;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
-		m_stop.m_connected = true;
 		m_stop.m_stopped = true;
 		// The module arrives as its guid — the only thing stable enough to send.
 		// A reader wants the name, and the stack that follows carries it, so the

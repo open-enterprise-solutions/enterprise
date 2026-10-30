@@ -93,6 +93,7 @@ struct ibWebConfig {
 	std::vector<ibWebPublication> m_publications;
 	ibString                      m_manifest;   // a file the page's address is written to once the port is open: the
 	                                            // last publication's - the command line's goes last (--manifest)
+	long                          m_owner = 0;  // the process this server goes with, 0 - none: a designer's debug run (--owner)
 
 	// web.conf in `folder`, when there is one; false with why in `error` — a port that is not one, a publication of
 	// no kind this server knows. No file is no error: nothing is published but what the command line says.
