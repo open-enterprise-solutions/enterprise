@@ -41,6 +41,18 @@ enum ibTextEncoding
 	ibTextEncoding_System
 };
 
+// What a DataHashing computes - the digest function, said with a member. MD5 and SHA1 are there for the other
+// systems that still ask for them (a signature to a payment service, a checksum in an exchange file), not as a
+// recommendation.
+enum ibHashFunction
+{
+	ibHashFunction_MD5 = 1,
+	ibHashFunction_SHA1,
+	ibHashFunction_SHA256,
+	ibHashFunction_SHA384,
+	ibHashFunction_SHA512
+};
+
 // What HTTPConnection.CallMethod is told to do - said with a member, not with a string a typo can change
 // (and a string is also how a second request gets written ahead of the real one).
 enum ibHttpMethod

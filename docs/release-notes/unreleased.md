@@ -39,6 +39,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   the empty date, where a date taken as a number is seconds: two of them apart are the time between,
   to the millisecond.
 - **An enumeration manager answers `EmptyRef()`**, as a catalog's, a document's and a chart's do.
+- **Hashing: `DataHashing` and `HashFunction`.** `New DataHashing(HashFunction.SHA256)` takes strings
+  (as UTF-8), `BinaryData` and files and gives `HashSum`, a `BinaryData`; MD5, SHA1, SHA256, SHA384
+  and SHA512. A second argument, the key, makes it an HMAC. The sum can be read midway.
+- **Bytes from text and back, as base64 and as hex** — `GetBinaryDataFromString(text, encoding,
+  byteOrderMark)`, `GetStringFromBinaryData`, `GetBase64StringFromBinaryData`,
+  `GetBinaryDataFromBase64String`, `GetHexStringFromBinaryData`, `GetBinaryDataFromHexString`. Text
+  that is not base64 or hex is refused, not read as no bytes.
 
 ## Fixes
 
