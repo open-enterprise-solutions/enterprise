@@ -75,11 +75,6 @@ public:
 	typedef std::vector<std::pair<ibString, ibString>> ibNamespaceArray;
 
 	enum ibInput { kBytes, kCharacters };
-	// kNamespaces: a name is resolved — its URI, local part and prefix beside it, the declarations in scope (XMLReader's);
-	// kAsWritten: a name is what the document wrote (`r:id`) and nothing else is made of it — no URI, local part or
-	// prefix, no scope, `xmlns` an attribute like any other, a prefix nobody declared not refused. A reader that keeps
-	// the names alone then pays for no URI on every element and attribute - a receiver (ibReceiver) always reads so.
-	enum ibNames { kNamespaces, kAsWritten };
 
 	struct ibAttribute { ibString m_name, m_local, m_prefix, m_uri, m_value; };
 	struct ibNode {
@@ -96,9 +91,11 @@ public:
 	};
 
 	// ⭐ ...OR STRAIGHT TO A RECEIVER: no node is made of an event and Queue() stays empty - for a reader that builds a
-	// tree of its own (ibXmlDocument), which would otherwise pay for a node it takes apart at once. Names as written
-	// (kAsWritten); every pointer is UTF-8 and lives until the call returns. With nothing queued the parser never
-	// pauses: Feed reads its whole chunk. A receiver that raises refuses the text.
+	// tree of its own (ibXmlDocument), which would otherwise pay for a node it takes apart at once. A name is what the
+	// document wrote (`r:id`) and nothing else is made of it: no URI, local part or prefix, no scope, `xmlns` an
+	// attribute like any other, a prefix nobody declared not refused. Every pointer is UTF-8 and lives until the call
+	// returns. With nothing queued the parser never pauses: Feed reads its whole chunk. A receiver that raises refuses
+	// the text.
 	class CORE_API ibReceiver {
 	public:
 		virtual ~ibReceiver() = default;
@@ -120,8 +117,9 @@ public:
 
 	// `who` begins every refusal ("XMLReader: ... at line N, column M"). kCharacters: the input is a string's,
 	// handed over as UTF-8 - an `encoding=` in its declaration is then not applied; kBytes: a file's, read in the
-	// encoding its mark or its declaration names. `names` - see ibNames.
-	ibXmlParser(const ibString& who, ibInput input, ibNames names = kNamespaces);
+	// encoding its mark or its declaration names. The nodes wait in Queue(), a name resolved: its URI, local part and
+	// prefix beside it, the declarations in scope.
+	ibXmlParser(const ibString& who, ibInput input);
 	// ...or every event handed straight to `receiver` (ibReceiver), names as written; Queue() then stays empty.
 	ibXmlParser(const ibString& who, ibInput input, ibReceiver& receiver);
 	~ibXmlParser();

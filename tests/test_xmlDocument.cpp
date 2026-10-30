@@ -63,7 +63,7 @@ TEST(XmlDocument, AnAttributeIsFoundByItsNameAsWrittenOrAnswersTheAbsentValue)
 
 TEST(XmlDocument, APrefixNobodyDeclaredIsPartOfTheNameAsWritten)
 {
-	// The tree resolves no namespace (ibXmlParser::kAsWritten): `x:` is two letters of the name, not a refusal.
+	// The tree resolves no namespace (ibXmlParser::ibReceiver): `x:` is two letters of the name, not a refusal.
 	ibXmlDocument xml;
 	xml.Load(ibT("<x:a y:b=\"1\"/>"));
 	ASSERT_NE(xml.GetRoot(), nullptr);
@@ -297,7 +297,7 @@ TEST(XmlParserReceiver, AReceiverThatRaisesRefusesTheTextWhereItStands)
 TEST(XmlParserQueue, ATextKeepsWhereItBeganWhileItIsHeldAsBytes)
 {
 	// The queue's road (XMLReader's): a text is held as bytes until it ends, and its node still says where it began.
-	ibXmlParser parser(ibT("XML"), ibXmlParser::kBytes, ibXmlParser::kAsWritten);
+	ibXmlParser parser(ibT("XML"), ibXmlParser::kBytes);
 	Parse(parser, "<a>\n<b/>  tail</a>");
 	const ibXmlParser::ibNode* tail = nullptr;
 	for (const ibXmlParser::ibNode& node : parser.Queue())

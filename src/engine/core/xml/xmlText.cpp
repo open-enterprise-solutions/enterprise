@@ -282,19 +282,19 @@ std::shared_ptr<const ibXmlParser::ibNamespaceArray> ibXmlParser::Resolve(const 
 // handler that fails writes down why and stops the parser; Settle raises once expat has returned.
 class ibXmlParser::ibExpat {
 public:
-	ibExpat(ibXmlParser& owner, const ibString& who, ibInput input, ibNames names, ibReceiver* receiver = nullptr)
-		: m_owner(owner), m_who(who), m_names(names), m_receiver(receiver)
+	ibExpat(ibXmlParser& owner, const ibString& who, ibInput input, ibReceiver* receiver)
+		: m_owner(owner), m_who(who), m_receiver(receiver)
 	{
 		// From a string the text is characters already, handed over as UTF-8: saying so here is what makes expat
 		// ignore an `encoding=` in the declaration, which would read those bytes a second time.
 		const XML_Char* const encoding = input == kCharacters ? "UTF-8" : nullptr;
-		m_parser = names == kNamespaces ? XML_ParserCreateNS(encoding, kNsSeparator) : XML_ParserCreate(encoding);
+		m_parser = receiver == nullptr ? XML_ParserCreateNS(encoding, kNsSeparator) : XML_ParserCreate(encoding);
 		if (m_parser == nullptr)
 			ibCoreException::Error(_("%s: no memory for the parser"), m_who);
 
 		XML_Parser p = m_parser;
 		XML_SetUserData(p, this);
-		if (names == kNamespaces) {
+		if (receiver == nullptr) {
 			XML_SetReturnNSTriplet(p, 1);
 			XML_SetNamespaceDeclHandler(p, OnNsStart, OnNsEnd);
 		}
@@ -393,51 +393,49 @@ private:
 		XML_StopParser(m_parser, XML_FALSE);
 	}
 
-	ibNode Begin(ibXmlNodeType type)
-	{
-		ibNode node;
-		Begin(node, type);
-		return node;
-	}
 	void Begin(ibNode& node, ibXmlNodeType type)
 	{
 		node.m_type = type;
 		node.m_depth = m_depth;
 		node.m_line = static_cast<unsigned long long>(XML_GetCurrentLineNumber64(m_parser));
 		node.m_column = static_cast<unsigned long long>(XML_GetCurrentColumnNumber64(m_parser)) + 1;
-		node.m_namespaces = m_scope;   // a text begun before the next element's declarations keeps the scope it began in
+		node.m_namespaces = m_scope;
 	}
 
-	// An element's or an attribute's name, as the parser was made to read names (ibNames): split into its URI, local
-	// part and prefix, or only as written.
-	void ReadName(const XML_Char* raw, ibString& uri, ibString& local, ibString& prefix, ibString& name) const
+	// A text or a CDATA section begun: where it began is kept, with no node of its own until it ends.
+	void BeginPending()
 	{
-		if (m_names == kAsWritten)
-			name = FromUtf8(raw);
-		else
-			SplitName(raw, uri, local, prefix, name);
+		m_pendingDepth = m_depth;
+		m_pendingLine = static_cast<unsigned long long>(XML_GetCurrentLineNumber64(m_parser));
+		m_pendingColumn = static_cast<unsigned long long>(XML_GetCurrentColumnNumber64(m_parser)) + 1;
+		m_pendingScope = m_scope;   // a text begun before the next element's declarations keeps the scope it began in
+		m_pendingOpen = true;
 	}
 
-	// The text gathered so far becomes its node: Whitespace when it is nothing else, Text otherwise.
+	// What was gathered goes on as what it turned out to be.
+	void FlushPending(ibXmlNodeType type)
+	{
+		if (m_receiver != nullptr) {
+			m_receiver->Content(type, nullptr, m_pending.data(), m_pending.size(), m_pendingLine);
+		}
+		else {
+			Enqueue([&](ibNode& node) {
+				node.m_type = type;
+				node.m_depth = m_pendingDepth;
+				node.m_line = m_pendingLine;
+				node.m_column = m_pendingColumn;
+				node.m_value = ibString::FromUTF8(m_pending.data(), m_pending.size());
+				node.m_namespaces = std::move(m_pendingScope);
+			});
+		}
+		ForgetPending();
+	}
+
+	// The text gathered so far: Whitespace when it is nothing else, Text otherwise.
 	void FlushText()
 	{
-		if (!m_pendingOpen)
-			return;
-		if (m_receiver != nullptr) {
-			m_receiver->Content(IsXmlSpace(m_pending) ? ibXmlNodeType_Whitespace : ibXmlNodeType_Text, nullptr,
-				m_pending.data(), m_pending.size(), m_pendingLine);
-			ForgetPending();
-			return;
-		}
-		Enqueue([&](ibNode& node) {
-			node.m_type = IsXmlSpace(m_pending) ? ibXmlNodeType_Whitespace : ibXmlNodeType_Text;
-			node.m_depth = m_pendingDepth;
-			node.m_line = m_pendingLine;
-			node.m_column = m_pendingColumn;
-			node.m_value = ibString::FromUTF8(m_pending.data(), m_pending.size());
-			node.m_namespaces = std::move(m_pendingScope);
-		});
-		ForgetPending();
+		if (m_pendingOpen)
+			FlushPending(IsXmlSpace(m_pending) ? ibXmlNodeType_Whitespace : ibXmlNodeType_Text);
 	}
 
 	// A node is made in its place at the end of the queue - not in a local moved in after, which in a checked build
@@ -477,7 +475,7 @@ private:
 			}
 			parser.Enqueue([&](ibNode& node) {
 				parser.Begin(node, ibXmlNodeType_StartElement);
-				parser.ReadName(name, node.m_uri, node.m_local, node.m_prefix, node.m_name);
+				SplitName(name, node.m_uri, node.m_local, node.m_prefix, node.m_name);
 
 				// The declarations first: in namespace mode expat takes them out of `atts`, before this handler - their
 				// place among the other attributes is not said. They are the innermost links of the scope, the last
@@ -502,7 +500,7 @@ private:
 
 				for (const XML_Char** at = atts; at[0] != nullptr; at += 2) {
 					ibAttribute attribute;
-					parser.ReadName(at[0], attribute.m_uri, attribute.m_local, attribute.m_prefix, attribute.m_name);
+					SplitName(at[0], attribute.m_uri, attribute.m_local, attribute.m_prefix, attribute.m_name);
 					attribute.m_value = FromUtf8(at[1]);
 					node.m_attributeArray.push_back(std::move(attribute));
 				}
@@ -528,7 +526,7 @@ private:
 				&& queue.back().m_type == ibXmlNodeType_StartElement && queue.back().m_depth == parser.m_depth;
 			parser.Enqueue([&](ibNode& node) {
 				parser.Begin(node, ibXmlNodeType_EndElement);
-				parser.ReadName(name, node.m_uri, node.m_local, node.m_prefix, node.m_name);
+				SplitName(name, node.m_uri, node.m_local, node.m_prefix, node.m_name);
 
 				// `<a/>` and `<a></a>` both come as start-then-end; only the first has no bytes of its own for the end.
 				// ⚠ Inside an entity's replacement text expat reports every event at the entity REFERENCE, so there
@@ -552,13 +550,8 @@ private:
 	static void XMLCALL OnText(void* self, const XML_Char* text, int length)
 	{
 		Guard(self, [&](ibExpat& parser) {
-			if (!parser.m_pendingOpen) {
-				parser.m_pendingDepth = parser.m_depth;
-				parser.m_pendingLine = static_cast<unsigned long long>(XML_GetCurrentLineNumber64(parser.m_parser));
-				parser.m_pendingColumn = static_cast<unsigned long long>(XML_GetCurrentColumnNumber64(parser.m_parser)) + 1;
-				parser.m_pendingScope = parser.m_scope;
-				parser.m_pendingOpen = true;
-			}
+			if (!parser.m_pendingOpen)
+				parser.BeginPending();
 			parser.m_pending.append(text, static_cast<size_t>(length));
 		});
 	}
@@ -567,8 +560,7 @@ private:
 	{
 		Guard(self, [&](ibExpat& parser) {
 			parser.FlushText();
-			parser.m_pendingNode = parser.Begin(ibXmlNodeType_CDATASection);
-			parser.m_pendingOpen = true;
+			parser.BeginPending();
 		});
 	}
 
@@ -576,16 +568,7 @@ private:
 	{
 		Guard(self, [&](ibExpat& parser) {
 			// A section of its own, never merged into the text before or after it - and never Whitespace.
-			if (parser.m_receiver != nullptr) {
-				parser.m_receiver->Content(ibXmlNodeType_CDATASection, nullptr, parser.m_pending.data(),
-					parser.m_pending.size(), parser.m_pendingNode.m_line);
-				parser.ForgetPending();
-				return;
-			}
-			parser.m_pendingNode.m_type = ibXmlNodeType_CDATASection;
-			parser.m_pendingNode.m_value = ibString::FromUTF8(parser.m_pending.data(), parser.m_pending.size());
-			parser.m_owner.m_queue.push_back(std::move(parser.m_pendingNode));
-			parser.ForgetPending();
+			parser.FlushPending(ibXmlNodeType_CDATASection);
 		});
 	}
 
@@ -600,9 +583,10 @@ private:
 					static_cast<unsigned long long>(XML_GetCurrentLineNumber64(parser.m_parser)));
 				return;
 			}
-			ibNode node = parser.Begin(ibXmlNodeType_Comment);
-			node.m_value = FromUtf8(data);
-			parser.m_owner.m_queue.push_back(std::move(node));
+			parser.Enqueue([&](ibNode& node) {
+				parser.Begin(node, ibXmlNodeType_Comment);
+				node.m_value = FromUtf8(data);
+			});
 		});
 	}
 
@@ -617,10 +601,11 @@ private:
 					static_cast<unsigned long long>(XML_GetCurrentLineNumber64(parser.m_parser)));
 				return;
 			}
-			ibNode node = parser.Begin(ibXmlNodeType_ProcessingInstruction);
-			node.m_name = node.m_local = FromUtf8(target);
-			node.m_value = FromUtf8(data);
-			parser.m_owner.m_queue.push_back(std::move(node));
+			parser.Enqueue([&](ibNode& node) {
+				parser.Begin(node, ibXmlNodeType_ProcessingInstruction);
+				node.m_name = node.m_local = FromUtf8(target);
+				node.m_value = FromUtf8(data);
+			});
 		});
 	}
 
@@ -732,13 +717,11 @@ private:
 
 	ibXmlParser&  m_owner;
 	ibString      m_who;
-	ibNames       m_names;
 	ibReceiver*   m_receiver = nullptr;         // set: the events go to it, and no node is made
 	XML_Parser    m_parser = nullptr;
 
 	std::string   m_pending;                    // text so far, as the parser handed it over (UTF-8)
-	ibNode        m_pendingNode;                // ...and where it began (a CDATA section's)
-	int           m_pendingDepth = 0;           // a text's: where it began, without a node of its own until it ends
+	int           m_pendingDepth = 0;           // ...and where it began
 	unsigned long long m_pendingLine = 0, m_pendingColumn = 0;
 	std::shared_ptr<const ibScope> m_pendingScope;
 	bool          m_pendingOpen = false;
@@ -751,13 +734,13 @@ private:
 	ibString      m_refusal;
 };
 
-ibXmlParser::ibXmlParser(const ibString& who, ibInput input, ibNames names)
-	: m_expat(std::make_unique<ibExpat>(*this, who, input, names))
+ibXmlParser::ibXmlParser(const ibString& who, ibInput input)
+	: m_expat(std::make_unique<ibExpat>(*this, who, input, nullptr))
 {
 }
 
 ibXmlParser::ibXmlParser(const ibString& who, ibInput input, ibReceiver& receiver)
-	: m_expat(std::make_unique<ibExpat>(*this, who, input, kAsWritten, &receiver))
+	: m_expat(std::make_unique<ibExpat>(*this, who, input, &receiver))
 {
 }
 

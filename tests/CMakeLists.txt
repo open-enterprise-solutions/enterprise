@@ -103,6 +103,7 @@ add_executable(oes_tests
     test_spreadsheetDocument.cpp
     test_spreadsheetDescriptionNode.cpp
     bench_spreadsheet.cpp
+    bench_xmlValue.cpp
     test_queryAccessPolicy.cpp
     test_queryParity.cpp
     test_queryJoinParity.cpp

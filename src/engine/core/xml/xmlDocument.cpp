@@ -89,7 +89,7 @@ ibXmlNode& ibXmlDocument::Append(ibXmlNode* parent, ibXmlNodeType type)
 	return node;
 }
 
-// ⭐ THE NAMES AS WRITTEN (ibXmlParser::kAsWritten): the tree keeps a name and nothing else of it, and a parser that
+// ⭐ THE NAMES AS WRITTEN (ibXmlParser::ibReceiver): the tree keeps a name and nothing else of it, and a parser that
 // resolved namespaces made a URI, a local part and a prefix for every element and attribute — a workbook's cell paid
 // for its namespace's URI twice over, at its start and at its end.
 void ibXmlDocument::Load(const ibString& text, const ibString& source)

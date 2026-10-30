@@ -114,8 +114,9 @@ TEST(SheetFormatBench, DISABLED_ReadWrite)
 //   oes_tests --gtest_also_run_disabled_tests --gtest_filter=*SheetFormatBench*
 //
 // WHAT IT SPLITS. The read above is the zip, the parser and the cells together; this is the parser alone, on the
-// part that holds the cells, two ways at a time: names resolved (kNamespaces — a URI made for every element and
-// attribute) or as written (kAsWritten — as the tree reads them), and a part handed over as its bytes or made a string first.
+// part that holds the cells, two ways at a time: into the queue (names resolved — a URI made for every element and
+// attribute) or to a receiver (names as written, as the tree reads them), and a part handed over as its bytes or made a
+// string first.
 // =============================================================================
 TEST(SheetFormatBench, DISABLED_ParseSheetPart)
 {
@@ -154,9 +155,13 @@ TEST(SheetFormatBench, DISABLED_ParseSheetPart)
 			printf("%-30s %8d %10lld %12zu\n", what, rows, best, part.size());
 		};
 
-		// The parser alone, its queue let go of as it fills.
-		const auto drain = [&](ibXmlParser::ibNames names) {
-			ibXmlParser parser(ibT("XML"), ibXmlParser::kBytes, names);
+		// The parser alone, its queue let go of as it fills, or a receiver that keeps nothing.
+		struct Ignoring : ibXmlParser::ibReceiver {
+			virtual void Start(const char*, const char* const*, unsigned long long) override {}
+			virtual void End() override {}
+			virtual void Content(ibXmlNodeType, const char*, const char*, size_t, unsigned long long) override {}
+		} ignoring;
+		const auto drain = [&](ibXmlParser& parser) {
 			size_t at = 0;
 			do {
 				const size_t chunk = std::min(ibXmlParser::kChunk, part.size() - at);
@@ -169,8 +174,14 @@ TEST(SheetFormatBench, DISABLED_ParseSheetPart)
 				}
 			} while (at < part.size());
 		};
-		measure("parser, names resolved", [&] { drain(ibXmlParser::kNamespaces); });
-		measure("parser, names as written", [&] { drain(ibXmlParser::kAsWritten); });
+		measure("parser, names resolved", [&] {
+			ibXmlParser parser(ibT("XML"), ibXmlParser::kBytes);
+			drain(parser);
+		});
+		measure("parser, names as written", [&] {
+			ibXmlParser parser(ibT("XML"), ibXmlParser::kBytes, ignoring);
+			drain(parser);
+		});
 
 		// The tree: from the part's bytes, and from a string made of them first (decoded whole, encoded back).
 		measure("tree, from the bytes", [&] {

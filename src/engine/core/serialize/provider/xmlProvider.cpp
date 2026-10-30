@@ -257,7 +257,7 @@ private:
 			}
 			if (item->GetName() == ibT("Field")) {
 				ibString name;
-				if (!AttributeOf(*item, m_nameName, name))
+				if (!AttributeOf(*item, m_fieldName, name))
 					ibCoreException::Error(_("ibXmlProvider: a Field with no Name, line %llu"), item->GetLine());
 				node.AddField(name, ReadValue(*item, depth + 1));
 			}
@@ -384,7 +384,7 @@ private:
 
 	const std::function<ibClassID(const ibString&)>& m_lookupType;
 	// The attributes' names, made once for the walk rather than for every lookup.
-	const ibString m_typeName = ibT("Type"), m_idName = ibT("Id"), m_nameName = ibT("Name"),
+	const ibString m_typeName = ibT("Type"), m_idName = ibT("Id"), m_fieldName = ibT("Name"),
 		m_kindName = ibT("Kind"), m_encodingName = ibT("Encoding");
 };
 
