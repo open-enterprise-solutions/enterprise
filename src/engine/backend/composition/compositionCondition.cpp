@@ -211,13 +211,13 @@ bool ibCompositionAttr::TextOf(const ibValue& value, ibString& text) const
 namespace {
 // A RULE'S APPEARANCE AS WHAT A CELL IS DRAWN WITH — every value unpacked, its Text read in the language in force,
 // its Format parsed: here, once per rule per run, and never per line.
-ibCompositionAttr AttrOfAppearance(const ibAppearanceDescription& appearance)
+ibCompositionAttr AttrOfAppearance(const ibAppearanceDescription& appearance, const ibMetaData* metaData)
 {
 	ibCompositionAttr attr;
 	for (const ibAppearanceValueDescription& said : appearance.m_values) {
 		if (!said.m_use)
 			continue;
-		ibValue stored = ibStoredValue(said.m_value, nullptr);
+		ibValue stored = ibStoredValue(said.m_value, metaData);
 		switch (said.m_parameter) {
 		case ibAppearanceParameter::BackgroundColour: {
 			ibValueColour* colour = nullptr;
@@ -253,12 +253,12 @@ ibCompositionAttr AttrOfAppearance(const ibAppearanceDescription& appearance)
 	}
 	// …AND WHAT THE CELL SAYS — its Text where one is ticked, else the Format its value is written in (applied by
 	// whoever writes the cell — ibCompositionAttr::TextOf), each read in the language in force.
-	const ibValue text = ibStoredValue(appearance.ValueInForce(ibAppearanceParameter::Text), nullptr);
+	const ibValue text = ibStoredValue(appearance.ValueInForce(ibAppearanceParameter::Text), metaData);
 	if (!text.IsEmpty())
 		attr.m_text = ibTranslateString(text.GetString()).GetString();
 	else {
 		const ibString written = ibTranslateString(
-			ibStoredValue(appearance.ValueInForce(ibAppearanceParameter::Format), nullptr).GetString()).GetString();
+			ibStoredValue(appearance.ValueInForce(ibAppearanceParameter::Format), metaData).GetString()).GetString();
 		std::shared_ptr<ibFormatString> format = std::make_shared<ibFormatString>();
 		if (!written.IsEmpty() && ibFormatString::Parse(written, *format))
 			attr.m_format = std::move(format);
@@ -267,7 +267,7 @@ ibCompositionAttr AttrOfAppearance(const ibAppearanceDescription& appearance)
 }
 } // namespace
 
-std::vector<ibCompositionRule> ibCompositionRulesOf(const ibConditionalAppearanceDescription& rules)
+std::vector<ibCompositionRule> ibCompositionRulesOf(const ibConditionalAppearanceDescription& rules, const ibMetaData* metaData)
 {
 	std::vector<ibCompositionRule> ready;
 	for (const ibConditionalAppearanceRuleDescription& rule : rules.m_rules) {
@@ -275,7 +275,7 @@ std::vector<ibCompositionRule> ibCompositionRulesOf(const ibConditionalAppearanc
 			continue;
 		ibCompositionRule made;
 		made.m_rule = &rule;
-		made.m_attr = AttrOfAppearance(rule.m_appearance);
+		made.m_attr = AttrOfAppearance(rule.m_appearance, metaData);
 		if (!made.m_attr.IsDefault())   // a rule that says nothing a cell shows is not read on any line
 			ready.push_back(std::move(made));
 	}
@@ -326,12 +326,12 @@ ibDataComposer::ConditionalAppearance ibDataComposer::ConditionalAppearanceFor(c
 {
 	// Every storey's rules made ready ONCE — a storey that declares none adds nothing, not even an allocation.
 	ConditionalAppearance ready;
-	ready.m_rules = ibCompositionRulesOf(GetCurrentConditionalAppearanceDesc());
-	std::vector<ibCompositionRule> outputs = ibCompositionRulesOf(output.m_settings.m_conditionalAppearance);
+	ready.m_rules = ibCompositionRulesOf(GetCurrentConditionalAppearanceDesc(), m_metaData);
+	std::vector<ibCompositionRule> outputs = ibCompositionRulesOf(output.m_settings.m_conditionalAppearance, m_metaData);
 	ready.m_rules.insert(ready.m_rules.end(), std::make_move_iterator(outputs.begin()), std::make_move_iterator(outputs.end()));
 	for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
 		for (const GroupNode& level : *axis) {
-			std::vector<ibCompositionRule> own = ibCompositionRulesOf(level.m_settings.m_conditionalAppearance);
+			std::vector<ibCompositionRule> own = ibCompositionRulesOf(level.m_settings.m_conditionalAppearance, m_metaData);
 			if (!own.empty())
 				ready.m_nodes.emplace(&level, std::move(own));
 		}

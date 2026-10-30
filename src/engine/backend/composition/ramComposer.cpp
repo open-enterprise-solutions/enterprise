@@ -235,6 +235,7 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 	// The schema, said in the vocabulary every driver already reads.
 	ibCompositionOutputInfo info;
 	info.m_kind = ibCompositionOutputKind::Grouping;
+	info.m_metaData = m_metaData;
 	for (const ibString& field : fields) {
 		// ⭐⭐ EVERY COLUMN IS AN ORDINARY ONE, the grouped ones included (Max, 2026-08-29: *"the same
 		// way they lie in the table now"*). A LIST IS A TABLE, and a table's columns are its columns:

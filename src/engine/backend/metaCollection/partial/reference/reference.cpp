@@ -1162,10 +1162,9 @@ bool ibValueReferenceDataObject::DoDeserialize(const ibDataNode& node)
 		&& storedMetaId != m_metaObject->GetMetaID())
 		return false;
 
-	// A malformed guid reads as the empty one rather than raising: the header
-	// was well formed, so this is data from a base that knew something we do
-	// not — degrade, do not fail the whole read.
-	const ibGuid restored(node.GetValue<ibString>(ibT("g")));
+	// The guid out of its text; "" and the nil guid's text are the empty reference, a text that
+	// names no guid raises (AsGuid) — an empty reference in its place would be another value.
+	const ibGuid restored = node.GetValue<ibGuid>(ibT("g"));
 	m_reference_impl->m_guid = restored;
 
 	// AND THE IDENTITY THE REST OF THE CLASS READS. Writing only the impl left the object

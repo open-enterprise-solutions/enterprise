@@ -291,10 +291,10 @@ public:
 	// caller answers with the platform's own. `node` may be null — the output itself is asked.
 	ibValue OutputParameterFor(const Output& output, const GroupNode* node, ibOutputParameter parameter) const {
 		if (node != nullptr && node->m_settings.m_outputParameters.Says(parameter))
-			return ibStoredValue(node->m_settings.m_outputParameters.ValueInForce(parameter), nullptr);
+			return ibStoredValue(node->m_settings.m_outputParameters.ValueInForce(parameter), GetMetaData());
 		if (output.m_settings.m_outputParameters.Says(parameter))
-			return ibStoredValue(output.m_settings.m_outputParameters.ValueInForce(parameter), nullptr);
-		return ibStoredValue(GetCurrentOutputParametersDesc().ValueInForce(parameter), nullptr);
+			return ibStoredValue(output.m_settings.m_outputParameters.ValueInForce(parameter), GetMetaData());
+		return ibStoredValue(GetCurrentOutputParametersDesc().ValueInForce(parameter), GetMetaData());
 	}
 	// …and the one a painter asks: the THEME in force there — the platform's first when nobody named one.
 	const ibCompositionTheme& ThemeFor(const Output& output, const GroupNode* node) const {

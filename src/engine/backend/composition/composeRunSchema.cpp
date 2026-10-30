@@ -293,7 +293,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, ibSt
 					// read a schema saw its parameters in exactly this form and can hand one straight
 					// back, which is what makes a REFERENCE or an enum member expressible at all: those
 					// are built by the metadata, and no scalar on a wire can carry one.
-					value     = ibStoredValue(*statedNode, activeMetaData);
+					value     = ibStoredValue(*statedNode, composer.GetMetaData());
 					haveValue = true;
 					expression.Clear();
 				}
@@ -328,7 +328,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, ibSt
 
 				// …and a packed node becomes a live value only NOW, with every metaobject in place —
 				// the only moment a reference can be built truthfully.
-				value     = ibStoredValue(*stored, activeMetaData);
+				value     = ibStoredValue(*stored, composer.GetMetaData());
 				haveValue = true;
 			}
 

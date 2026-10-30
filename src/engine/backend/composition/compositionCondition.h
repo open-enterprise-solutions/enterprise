@@ -58,8 +58,9 @@ struct ibCompositionRule {
 	const ibConditionalAppearanceRuleDescription* m_rule = nullptr;   // its condition and its fields
 	ibCompositionAttr                             m_attr;             // what it draws a cell with
 };
-// …a storey's rules made ready — the ticked ones that say anything a cell shows, in their order.
-BACKEND_API std::vector<ibCompositionRule> ibCompositionRulesOf(const ibConditionalAppearanceDescription& rules);
+// …a storey's rules made ready — the ticked ones that say anything a cell shows, in their order. `metaData` is the
+// configuration what they say is restored against (ibStoredValue) — the caller's, as for a condition above.
+BACKEND_API std::vector<ibCompositionRule> ibCompositionRulesOf(const ibConditionalAppearanceDescription& rules, const class ibMetaData* metaData);
 
 // ⭐ …AND WHAT THEY SAY OF ONE ROW — each rule whose condition holds on it (a condition it cannot read marks nothing)
 // said over the LINE where it names no field, else handed to `sayField` once per field it names: the caller knows

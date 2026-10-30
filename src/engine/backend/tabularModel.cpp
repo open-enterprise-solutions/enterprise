@@ -423,7 +423,7 @@ bool ibValueModel::GetCompositionAttrByRow(const ibDataViewItem& row, unsigned i
 	// the setting's rules made ready for the cell asked (a list asks for what fits on its screen, and can afford it),
 	// a field found among the model's columns by its name, a subtree by the composer that feeds this model.
 	const ibDataComposer& composer = GetModelComposer();
-	const std::vector<ibCompositionRule> rules = ibCompositionRulesOf(composer.GetCurrentConditionalAppearanceDesc());
+	const std::vector<ibCompositionRule> rules = ibCompositionRulesOf(composer.GetCurrentConditionalAppearanceDesc(), composer.GetMetaData());
 	std::deque<ibValue> read;   // what the engine is handed stays where it is while the condition is read
 	const ibCompositionValueOf valueOf = [this, node, &read](const ibString& path) -> const ibValue* {
 		const ibMetaID id = GetColumnIDByName(path);

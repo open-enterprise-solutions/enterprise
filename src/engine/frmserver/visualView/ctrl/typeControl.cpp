@@ -2,6 +2,7 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/objCtor.h"
 #include "backend/metaData.h"
+#include "backend/metadataSerialization.h"
 
 #include <algorithm>   // std::find — a type offered once, whichever "any" named it
 
@@ -66,7 +67,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 			return true;
 	}
 
-	if (ibTypeControlFactory::QuickChoice(ownerValue, clsid))
+	if (ibTypeControlFactory::QuickChoice(ownerValue, clsid, metaData))
 		return true;
 
 	const ibCtorMetaValueType* so = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
@@ -93,7 +94,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 	return false;
 }
 
-bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid)
+bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid, const ibMetaData* metaData)
 {
 	const ibValueTypes valType = ibValue::GetVTByID(clsid);
 	if (ownerValue == nullptr || (valType != ibValueTypes::TYPE_NUMBER && valType != ibValueTypes::TYPE_DATE))
@@ -113,20 +114,20 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 	ibDataNode response;
 	if (frame->Request(request, response)) {
 		if (const auto chosen = response.FindChild(ibProtocol::ibRequest::ibSimpleChoice::Value)) {
-			ibValue value = ibValue::FromNode(*chosen);
+			ibValue value = ibDeserializeValue(*chosen, metaData);
 			ownerValue->ChoiceProcessing(value);
 		}
 	}
 	return true;   // the type has its own window — shown, whatever the person did with it
 }
 
-bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid)
+bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid, const ibMetaData* metaData)
 {
 	if (ownerValue == nullptr || !ownerValue->HasQuickChoice())
 		return false;
 
 	// A number and a date first, on their own windows — the desktop's order.
-	if (ibTypeControlFactory::SimpleChoice(ownerValue, clsid))
+	if (ibTypeControlFactory::SimpleChoice(ownerValue, clsid, metaData))
 		return true;
 
 	ibValue current;

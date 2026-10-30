@@ -812,15 +812,15 @@ bool ibValueDataComposition::Compose(ibSpreadsheetObject* target)
 	// ⭐ …AND WHAT THE OTHER SETTINGS LET IT SAY (ibOutputParameter) — the report's own storey, the setting in
 	// force. `Auto` is what a heading does by itself: a title and the conditions print, the parameters do not.
 	const ibOutputParametersDescription& other = composer.GetCurrentOutputParametersDesc();
-	const auto shows = [&other](ibOutputParameter parameter, bool byItself) {
+	const auto shows = [this, &other](ibOutputParameter parameter, bool byItself) {
 		if (!other.Says(parameter))
 			return byItself;
-		const ibShowMode mode = static_cast<ibShowMode>(ibStoredValue(other.ValueInForce(parameter), nullptr).GetInteger());
+		const ibShowMode mode = static_cast<ibShowMode>(ibStoredValue(other.ValueInForce(parameter), GetSourceMetaData()).GetInteger());
 		return mode == ibShowMode::Auto ? byItself : mode == ibShowMode::Show;
 	};
 	if (shows(ibOutputParameter::ShowTitle, true)) {
 		// A title a person wrote, read in the reader's language — else what the report is called.
-		const ibString title = ibStoredValue(other.ValueInForce(ibOutputParameter::Title), nullptr).GetString();
+		const ibString title = ibStoredValue(other.ValueInForce(ibOutputParameter::Title), GetSourceMetaData()).GetString();
 		driver.SetTitle(title.IsEmpty() ? GetSourceCaption() : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), title));
 	}
 	// …THE VALUES THE READER FILLED IN, as the query was given them — only the ones offered to the reader: a

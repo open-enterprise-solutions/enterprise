@@ -4,30 +4,10 @@
 #include "backend/backend_exception.h"             // ibBackendCoreException — a setting that cannot apply is refused
 #include "backend/backend_localization.h"          // a variant's caption is read in the configuration's language
 #include "backend/compiler/valueSerialization.h"    // ibReadNodeType — whose value is in this node
+#include "backend/metadataSerialization.h"          // ibDeserializeValue — a stored value through the configuration
 #include "backend/system/value/composition/valueComposerField.h"   // the declared value this tier vends
 
 #include <algorithm>                               // std::none_of — is this value one the field admits?
-
-namespace {
-
-// ⭐⭐ A STORED VALUE COMES BACK THROUGH THE CONFIGURATION'S OWN DOOR, AND THE DOOR IS HANDED IN.
-// A filter compares against references and enum members, whose types exist only in the metadata's
-// own registry; asking the value factory for one raises "Unknown value type '<id>' in the data" on
-// a filter that was saved perfectly well. `ibMetaData::Deserialize` IS that door.
-//
-// ⚠ BUT NOBODY REACHES FOR IT (Max, 2026-08-23: "the metadata leaked into the description" — it was
-// calling `activeMetaData`). Reaching for the ACTIVE configuration is the worst way to get one: two are
-// open in the designer at once, so a value read while the other one is active comes back about somebody
-// else's metadata. Whoever restores a value knows which configuration it belongs to and says so; null
-// means there is none (tests, headless tools) and the value factory answers alone.
-//
-// ⚠ THE VALUE ITSELF ONLY. What a container holds - an array or a structure stored as a filter's value - is
-// read through ibDeserializeValue, the configuration the SESSION runs (Max, 2026-10-30: "at run time the
-// active metadata is enough"), not through the one handed in here.
-ibValue ReadStoredValue(const ibDataNode& node, const ibMetaData* metaData) {
-	return metaData != nullptr ? metaData->Deserialize(node) : ibValue::FromNode(node);
-}
-} // namespace
 
 // THE TWO DOORS — see the header. A stored node becomes a value only when somebody asks, with the
 // configuration to ask against; a value becomes a node by packing itself.
@@ -48,7 +28,11 @@ ibValue ibStoredValue(const ibDataNode& stored, const ibMetaData* metaData)
 		return ibValue(declared);
 	}
 
-	return ReadStoredValue(stored, metaData);
+	// ⭐⭐ A STORED VALUE COMES BACK THROUGH THE CONFIGURATION'S OWN DOOR. A filter compares against references and enum
+	// members, whose types exist only in the metadata's own registry; asking the value factory for one raises "Unknown
+	// value type '<id>' in the data" on a filter that was saved perfectly well. Whoever restores a value knows which
+	// configuration it belongs to and hands it in; none handed in, the door takes the session's.
+	return ibDeserializeValue(stored, metaData);
 }
 
 // ⭐ NOTHING IS WRITTEN ONLY FOR "NOTHING CHOSEN" — Undefined. `IsEmpty` asked instead, and the empty value of
@@ -58,7 +42,7 @@ ibValue ibStoredValue(const ibDataNode& stored, const ibMetaData* metaData)
 // …AND A VALUE OF A CONFIGURATION'S TYPE IS SAID AS IT READS, beside it (Presentation): a reference's name, an
 // enumeration member's word are the configuration's, and whoever shows a setting without one (a thin client's
 // settings window) has nothing else to show it by. Written afresh at every write, never read back — the value is
-// read through the configuration's door (ReadStoredValue).
+// read through the configuration's door (ibStoredValue).
 void ibStoreValue(ibDataNode& stored, const ibValue& value)
 {
 	stored = ibDataNode();

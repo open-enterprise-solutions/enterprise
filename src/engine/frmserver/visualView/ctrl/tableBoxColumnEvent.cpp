@@ -2,6 +2,7 @@
 #include "form.h"
 
 #include "backend/metaData.h"
+#include "backend/metadataSerialization.h"
 #include "backend/objCtor.h"
 #include "backend/backend_exception.h"       // ibBackendException — a value of a type the configuration lacks
 #include "core/serialize/dataBuilder.h"   // ibDataNode — the value as the client sent it
@@ -53,7 +54,7 @@ bool ibValueModelTableBoxColumn::ValueProcessing(const ibDataNode& node)
 		return false;
 	ibValue newValue;
 	try {
-		newValue = metaData->Deserialize(node);
+		newValue = ibDeserializeValue(node, metaData);
 	}
 	catch (const ibCoreException&) {
 		return false;   // a type this configuration does not have

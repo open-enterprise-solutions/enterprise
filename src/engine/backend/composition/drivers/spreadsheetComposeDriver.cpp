@@ -193,7 +193,7 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 	for (size_t i = 0; i < info.m_schema.size(); ++i) {
 		ibFormatString& format = m_formats[i];
 		const ibString said = ibTranslateString(
-			ibStoredValue(info.AppearanceOf(i).ValueInForce(ibAppearanceParameter::Format), nullptr).GetString()).GetString();
+			ibStoredValue(info.AppearanceOf(i).ValueInForce(ibAppearanceParameter::Format), info.m_metaData).GetString()).GetString();
 		if (said.IsEmpty() || !ibFormatString::Parse(said, format)) {
 			format = ibFormatString();
 			ibFormatString::FromTypeDesc(info.m_schema[i].GetTypeDesc(), format);

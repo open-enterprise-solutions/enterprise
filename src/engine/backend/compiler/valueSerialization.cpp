@@ -1,5 +1,6 @@
 ﻿#include "value.h"
 #include "valueSerialization.h"
+#include "backend/metadataSerialization.h"
 
 #include "core/serialize/dataBuilder.h"
 #include "backend/backend_exception.h"
@@ -88,10 +89,10 @@ ibValue ibValue::CloneValue() const
 			GetClassName());
 	}
 
-	// FromNode throws on its own terms — a type registered nowhere, a creation
-	// that fails, contents that cannot be read. Those are the same three
-	// failures, and they are reported once, here.
-	return FromNode(node);
+	// THROUGH THE CONFIGURATION, as a container's elements are: a reference passed by value is a type only it has, and
+	// the registry alone refused it (2026-10-30). The door throws on its own terms — a type registered nowhere, a
+	// creation that fails, contents that cannot be read — and they are reported once, there.
+	return ibDeserializeValue(node);
 }
 
 bool ibValue::Serialize(ibDataNode& node) const

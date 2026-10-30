@@ -1,3 +1,4 @@
+#include "metadataSerialization.h"
 #include "metaData.h"
 
 #include "core/serialize/dataBuilder.h"
@@ -12,14 +13,14 @@
 //
 // THE ENTRY POINT is here:
 //
-//   metaData->Serialize(value, node);         // a value in, a filled tree out
-//   value = metaData->Deserialize(node);      // a tree in, a live value out
+//   ibSerializeValue(value, node);            // a value in, a filled tree out
+//   value = ibDeserializeValue(node);         // a tree in, a live value out, by the session's configuration
+//   value = ibDeserializeValue(node, metaData);   // …by the one the caller knows
 //
-// A caller takes the metadata it wants — the active one, or any other — and
-// asks it. A value itself is blind to metadata and stays that way — save one
-// door: a container's elements (an array, a structure, a container) are read through
-// ibDeserializeValue, which asks the configuration the SESSION runs. So a
-// reference inside an array comes back at run time; a caller that passed
+// A value itself is blind to metadata and stays that way — save one door: a
+// container's elements (an array, a structure, a container) are read through
+// ibDeserializeValue with no configuration handed in, so by the one the SESSION
+// runs. A reference inside an array comes back at run time; a caller that passed
 // another configuration has it for the container, the session's for what the
 // container holds.
 //
@@ -42,14 +43,19 @@
 // explain.
 ////////////////////////////////////////////////////////////////////////////
 
-void ibMetaData::Serialize(const ibValue& cValue, ibDataNode& node) const
+void ibSerializeValue(const ibValue& value, ibDataNode& node)
 {
 	// Writing needs nothing from the configuration — a value knows its own type
 	// and its own contents. A refusal here is IsTransferable saying no (a form,
 	// an open object, a lambda) or a type with no packed form at all.
-	if (!cValue.Serialize(node))
+	if (!value.Serialize(node))
 		ibBackendCoreException::Error(_("The value '%s' cannot be serialized"),
-			cValue.GetClassName());
+			value.GetClassName());
+}
+
+void ibMetaData::Serialize(const ibValue& cValue, ibDataNode& node) const
+{
+	ibSerializeValue(cValue, node);
 }
 
 ibValue ibMetaData::Deserialize(const ibDataNode& node) const
@@ -88,9 +94,10 @@ ibValue ibMetaData::Deserialize(const ibDataNode& node) const
 	return createdValue;
 }
 
-ibValue ibDeserializeValue(const ibDataNode& node)
+ibValue ibDeserializeValue(const ibDataNode& node, const ibMetaData* metaData)
 {
 	// Asked, not required: a thread working for no base reads with the registry alone rather than refusing.
-	const ibMetaData* const metaData = ibApplicationInstance::GetActiveMetaData(ibApplicationInstance::Get(false));
+	if (metaData == nullptr)
+		metaData = ibApplicationInstance::GetActiveMetaData(ibApplicationInstance::Get(false));
 	return metaData != nullptr ? metaData->Deserialize(node) : ibValue::FromNode(node);
 }

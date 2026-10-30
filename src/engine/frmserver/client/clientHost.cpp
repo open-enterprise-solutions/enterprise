@@ -36,6 +36,7 @@
 #include "clientDebugger.h"
 #include "clientFrame.h"
 #include "clientInstance.h"
+#include "backend/metadataSerialization.h"
 #include "protocol/protocol.h"
 #include "clientPatch.h"
 
@@ -1185,7 +1186,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 					ibString text;
 					session->Submit([metaData, value, &format, &text, &done, &refuse]() {
 						try {
-							const ibValue presented = metaData->Deserialize(*value);
+							const ibValue presented = ibDeserializeValue(*value, metaData);
 							// Two statements, not `?:` — ibString and wxString convert both ways, and clang refuses to pick.
 							if (format.IsEmpty())
 								text = presented.GetString();

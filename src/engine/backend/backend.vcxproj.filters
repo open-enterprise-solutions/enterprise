@@ -282,6 +282,7 @@
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="backend_diagnostic.h" />
     <ClInclude Include="metadataConfiguration.h" />
+    <ClInclude Include="metadataSerialization.h" />
     <ClInclude Include="roleHelper.h" />
     <ClInclude Include="databaseLayer\postgres\engine\libpq-fe.h">
       <Filter>databaseLayer\postgres\engine</Filter>

@@ -4,7 +4,8 @@
 #include "backend/backend_mainFrame.h"
 #include "backend/backend_picture.h"       // ibBackendPicture::SendPicture — a field's picture, by its id
 #include "backend/backend_composition.h"   // ibValidateSettings — a setting the schema refuses
-#include "backend/metaData.h"              // the cell's value read and made, its type's quick choice
+#include "backend/metaData.h"              // the cell's value made, its type's quick choice
+#include "backend/metadataSerialization.h" // …and read
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 #include "backend/srcDataObject.h"                                    // ibSourceDataObject::ibSourceExplorer — a target's fields
@@ -215,7 +216,7 @@ void ibChooseSettingsValue(const ibDataNode& act, const ibMetaData* metaData, ib
 	ibValue value;
 	if (const auto written = act.FindChild(ibProtocol::ibRequest::ibListSettings::Value)) {
 		try {
-			value = metaData->Deserialize(*written);
+			value = ibDeserializeValue(*written, metaData);
 		}
 		catch (const ibCoreException&) {
 		}

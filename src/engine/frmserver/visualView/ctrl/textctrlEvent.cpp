@@ -3,6 +3,7 @@
 #include "backend/backend_exception.h"       // ibBackendException — a value of a type the configuration lacks
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaData.h"
+#include "backend/metadataSerialization.h"
 #include "frmserver/visualView/ctrl/form.h"
 
 // The typed text becomes a value of the field's type, or is refused. A refused text leaves the value
@@ -50,7 +51,7 @@ bool ibValueTextCtrl::ValueProcessing(const ibDataNode& node)
 		return false;
 	ibValue newValue;
 	try {
-		newValue = metaData->Deserialize(node);
+		newValue = ibDeserializeValue(node, metaData);
 	}
 	catch (const ibCoreException&) {
 		return false;   // a type this configuration does not have

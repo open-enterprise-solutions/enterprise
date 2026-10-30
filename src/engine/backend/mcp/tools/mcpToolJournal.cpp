@@ -40,7 +40,7 @@
 #include "backend/system/value/valueMap.h"   // ibValueStructure - what a sent object becomes
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerReader.h"
-#include "backend/compiler/valueSerialization.h"   // ibDeserializeValue - the door that knows configuration types
+#include "backend/metadataSerialization.h"   // ibDeserializeValue - the door that knows configuration types
 #include "core/fdatetime.h"           // ibDateTime - a line's moment
 #include "core/fileSystem.h"          // the journal lives in the diagnostic folder
 #include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload

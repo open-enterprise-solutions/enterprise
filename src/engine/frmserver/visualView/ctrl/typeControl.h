@@ -54,11 +54,11 @@ public:
 	// A NUMBER ON ITS CALCULATOR, A DATE ON ITS CALENDAR — the desktop's SimpleChoice, drawn by the client under the
 	// field pressed (ibProtocol::ibRequest::ibKind::SimpleChoice); the value chosen is handed to the field. False when the type
 	// is neither.
-	static bool SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid);
+	static bool SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid, const ibMetaData* metaData);
 
 	// The short list a value of this type is picked from (an enumeration's members, a boolean, a
 	// small reference list), put to the person as a choice. False when the type has none.
-	static bool QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid);
+	static bool QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid, const ibMetaData* metaData);
 	// …and the same list NARROWED BY WHAT WAS TYPED: one match is taken at once, several are put
 	// to the person; typed text that matches nothing changes nothing.
 	static void QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const ibString& strData);

@@ -11,6 +11,7 @@
 #include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/metadataConfiguration.h"
+#include "backend/metadataSerialization.h"
 #include "backend/metaCollection/partial/catalog.h"
 #include "backend/metaCollection/partial/enumeration.h"
 #include "backend/metaCollection/partial/reference/reference.h"
@@ -131,6 +132,16 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	ibValuePtr<ibValueReferenceDataObject> rate(ibValueReferenceDataObject::Create(cfg.get(), rates->GetMetaID(), vat20->GetGuid()));
 	EXPECT_TRUE(RoundTrip(rate).CompareValueEQ(rate));
 
+	// …copied, as a parameter passed by value is: the copy is the configuration's to make too.
+	EXPECT_TRUE(ibValue(item).CloneValue().CompareValueEQ(item));
+	EXPECT_TRUE(ibValue(rate).CloneValue().CompareValueEQ(rate));
+
+	// …and through the door both ways: the configuration handed in, and none - the one this thread works in.
+	ibDataNode packedItem;
+	ibSerializeValue(ibValue(item), packedItem);
+	EXPECT_TRUE(ibDeserializeValue(packedItem, cfg.get()).CompareValueEQ(item));
+	EXPECT_TRUE(ibDeserializeValue(packedItem).CompareValueEQ(item));
+
 	// An array and a structure come back with what they hold - a reference and a configuration's enumeration value
 	// among it, made by the configuration as the one at the top is: through XML, through JSON, and as a Val copy.
 	ibValuePtr<ibValueArray> list(new ibValueArray());
@@ -181,6 +192,11 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	ASSERT_EQ(listRead->Count(), 3u);
 	EXPECT_TRUE(listRead->Values()[1].CompareValueEQ(item));
 	EXPECT_TRUE(listRead->Values()[2].CompareValueEQ(rate));
+
+	// A reference inside that the configuration cannot read is refused, not read as the empty one.
+	ibString spoiled = ibValueSystemFunction::XMLString(list);
+	ASSERT_EQ(spoiled.Replace(key.str(), ibT("not-a-guid")), 1u);
+	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(spoiled); }).Find(ibT("'not-a-guid' is no guid")), wxNOT_FOUND);
 }
 
 TEST(XmlValueFunctions, WhatIsNotAValuesXmlIsRefused)

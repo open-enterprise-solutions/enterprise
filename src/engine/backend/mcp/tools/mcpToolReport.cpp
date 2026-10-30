@@ -1425,7 +1425,7 @@ public:
 		for (const auto& word : Words()) {
 			if (!said->Says(word.first))
 				continue;
-			const ibValue value = ibStoredValue(said->ValueInForce(word.first), nullptr);
+			const ibValue value = ibStoredValue(said->ValueInForce(word.first), composer->GetMetaData());
 			result.SetValue(word.second->Name(), ibOutputParameterShows(word.first)
 				? ShowWords()[std::min<size_t>(static_cast<size_t>(std::max(0, value.GetInteger())), 2)]
 				: ibString(value.GetString()));
@@ -1789,7 +1789,7 @@ public:
 			for (const auto& word : Words())
 				if (rule.m_appearance.Says(word.first))
 					entry->SetValue(word.second->Name(),
-						WordOfValue(word.first, ibStoredValue(rule.m_appearance.ValueInForce(word.first), nullptr)));
+						WordOfValue(word.first, ibStoredValue(rule.m_appearance.ValueInForce(word.first), composer->GetMetaData())));
 			shown.push_back(ibDataValue::Child(entry));
 		}
 		result.AddField(ibT("rules"), ibDataValue::Array(shown));
@@ -2285,7 +2285,7 @@ public:
 		if (field->m_useRole && field->m_periodRank > 0)
 			result.SetValue(ibT("period_number"), static_cast<std::int32_t>(field->m_periodRank));
 		result.SetValue(ibT("format"),
-			ibString(ibStoredValue(field->m_appearance.ValueInForce(ibAppearanceParameter::Format), nullptr).GetString()));
+			ibString(ibStoredValue(field->m_appearance.ValueInForce(ibAppearanceParameter::Format), composer->GetMetaData()).GetString()));
 		ibMcpSayComposerComplaints(composition, result);
 		return true;
 	}

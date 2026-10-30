@@ -24,6 +24,7 @@
 #include "backend/metaCollection/metaModuleObject.h"   // the standard handlers a module may implement
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metadataConfiguration.h"
+#include "backend/metadataSerialization.h"
 #include "backend/objCtor.h"                          // ibCtorMetaValueType — a reference type by name
 #include "backend/propertyManager/property/propertyList.h"   // a form is asked WHICH KIND — the owner fills the list
 #include "backend/propertyManager/propertyObject.h"   // GetProperty(idx) — what can be set
@@ -2896,7 +2897,7 @@ class ibMcpToolChoicePreview : public ibMcpTool {
 		const ibDataNode& values, const ibString& name)
 	{
 		if (auto packed = values.FindChild(name))
-			return metaData->Deserialize(*packed);
+			return ibDeserializeValue(*packed, metaData);
 
 		auto said = values.FindField(name);
 		if (!said)

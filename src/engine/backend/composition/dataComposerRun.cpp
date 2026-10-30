@@ -328,6 +328,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	info.m_kind   = output.Kind();   // read off its fields — a column grouping is what makes it a cross-table
 	info.m_schema = schema;
 	info.m_name   = output.m_name;
+	info.m_metaData = m_metaData;
 	// …and how many outputs this run draws: the ones Run reads (a driver, and something declared).
 	info.m_outputCount = std::max<size_t>(1, static_cast<size_t>(std::count_if(m_outputs.begin(), m_outputs.end(),
 		[this](const Output& other) { return other.m_driver != nullptr && Declares(other); })));

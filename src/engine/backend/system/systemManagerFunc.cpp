@@ -7,6 +7,7 @@
 
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
+#include "backend/metadataSerialization.h"           // a value as text and back — the configuration's door
 
 #include "backend/backend_mainFrame.h"
 #include "backend/backend_form.h"
@@ -712,6 +713,16 @@ bool ibValueSystemFunction::ValueIsFilled(const ibValue& cData)
 	return !cData.IsEmpty();
 }
 
+namespace {
+
+// A type's name in a text, as the running configuration knows it - what it does not know it refuses.
+ibClassID LookupType(const ibString& name)
+{
+	return activeMetaData != nullptr ? activeMetaData->GetIDObjectFromString(name) : ibClassID(0);
+}
+
+} // namespace
+
 // ⭐⭐ A VALUE, AS TEXT — WRITTEN WHERE THE VALUE IS. Everything under this was already built: a
 // value packs itself into an ibDataNode, the configuration's door adds the types only it can make
 // (references, enum members), and a provider writes that node as JSON. What was missing is the one
@@ -730,7 +741,7 @@ ibString ibValueSystemFunction::JSONString(const ibValue& cData)
 		ibBackendCoreException::Error(_("There is no open configuration to write this value against"));
 
 	ibDataNode node;
-	activeMetaData->Serialize(cData, node);   // raises on a value that cannot travel
+	ibSerializeValue(cData, node);   // raises on a value that cannot travel
 
 	ibJsonProvider provider;
 	provider.SetTypeResolver(ibMetaTypeResolver(activeMetaData));
@@ -758,9 +769,7 @@ ibValue ibValueSystemFunction::JSONValue(const ibString& strJson)
 		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
 
 	ibJsonProvider provider;
-	provider.SetTypeLookup([](const ibString& name) -> ibClassID {
-		return activeMetaData != nullptr
-			? activeMetaData->GetIDObjectFromString(name) : ibClassID(0); });
+	provider.SetTypeLookup(LookupType);
 
 	const std::string utf8 = strJson.ToUtf8();
 
@@ -772,7 +781,7 @@ ibValue ibValueSystemFunction::JSONValue(const ibString& strJson)
 	if (!provider.Read(reader, node))
 		ibBackendCoreException::Error(_("This text is not JSON a value can be read from"));
 
-	return activeMetaData->Deserialize(node);
+	return ibDeserializeValue(node, activeMetaData);
 }
 
 #include "core/serialize/provider/xmlProvider.h"   // the node as XML — the twins of the two verbs above
@@ -789,7 +798,7 @@ ibString ibValueSystemFunction::XMLString(const ibValue& value)
 		ibBackendCoreException::Error(_("There is no open configuration to write this value against"));
 
 	ibDataNode node;
-	activeMetaData->Serialize(value, node);   // raises on a value that cannot travel
+	ibSerializeValue(value, node);   // raises on a value that cannot travel
 
 	ibXmlProvider provider;
 	provider.SetTypeResolver(ibMetaTypeResolver(activeMetaData));
@@ -806,13 +815,11 @@ ibValue ibValueSystemFunction::XMLValue(const ibString& text)
 		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
 
 	ibXmlProvider provider;
-	provider.SetTypeLookup([](const ibString& name) -> ibClassID {
-		return activeMetaData != nullptr
-			? activeMetaData->GetIDObjectFromString(name) : ibClassID(0); });
+	provider.SetTypeLookup(LookupType);
 
 	ibDataNode node;
 	provider.Read(text, node);
-	return activeMetaData->Deserialize(node);
+	return ibDeserializeValue(node, activeMetaData);
 }
 
 ibValue ibValueSystemFunction::Evaluate(const ibString& strExpression)

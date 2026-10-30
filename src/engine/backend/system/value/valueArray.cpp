@@ -355,7 +355,7 @@ bool ibValueArray::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//a
 // would have had to encode by hand.
 
 #include "core/serialize/dataBuilder.h"
-#include "backend/compiler/valueSerialization.h"   // ibDeserializeValue — an element, as the configuration reads it
+#include "backend/metadataSerialization.h"   // ibDeserializeValue — an element, as the configuration reads it
 
 
 bool ibValueArray::DoSerialize(ibDataNode& node) const

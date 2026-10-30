@@ -62,6 +62,7 @@ struct ibCompositionOutputInfo
 	ibCompositionOutputKind                    m_kind = ibCompositionOutputKind::Grouping;
 	std::vector<ibQueryLowering::OutputColumn> m_schema;
 	ibString                                   m_name;   // what the output is called, when it is
+	const class ibMetaData*                    m_metaData = nullptr;   // the configuration its setting's values are read in
 	// …and HOW MANY OUTPUTS THE RUN DRAWS, this one among them. A caption tells one block from the others,
 	// and a run of one has nothing to tell apart (ibSpreadsheetComposeDriver::WriteOutputCaption).
 	size_t                                     m_outputCount = 1;
