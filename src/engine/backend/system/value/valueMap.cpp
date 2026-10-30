@@ -615,6 +615,7 @@ bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound
 // not in how it is written, and the header already says which of the two it was.
 
 #include "core/serialize/dataBuilder.h"
+#include "backend/compiler/valueSerialization.h"   // ibDeserializeValue — an entry, as the configuration reads it
 
 
 bool ibValueContainer::DoSerialize(ibDataNode& node) const
@@ -644,8 +645,8 @@ bool ibValueContainer::DoDeserialize(const ibDataNode& node)
 		return false;
 
 	for (auto at = children.begin(); at != children.end(); ) {
-		const ibValue key = ibValue::FromNode(*at++);
-		const ibValue value = ibValue::FromNode(*at++);
+		const ibValue key = ibDeserializeValue(*at++);
+		const ibValue value = ibDeserializeValue(*at++);
 		Insert(key, value);
 	}
 

@@ -19,12 +19,14 @@
 #include "backend/system/value/valueArray.h"
 #include "backend/system/value/valueBinaryData.h"
 #include "backend/system/value/valueGuid.h"
+#include "backend/system/value/valueMap.h"
 #include "core/clsid.h"
 #include "core/serialize/dataBuilder.h"
 
 #include <wx/init.h>
 
 #include <functional>
+#include <vector>
 
 namespace {
 
@@ -129,16 +131,56 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	ibValuePtr<ibValueReferenceDataObject> rate(ibValueReferenceDataObject::Create(cfg.get(), rates->GetMetaID(), vat20->GetGuid()));
 	EXPECT_TRUE(RoundTrip(rate).CompareValueEQ(rate));
 
-	// An array comes back with what it holds - and a reference inside one does not yet: its elements are read through
-	// the value registry alone (ibValueArray::DoDeserialize), as the help says.
+	// An array and a structure come back with what they hold - a reference and a configuration's enumeration value
+	// among it, made by the configuration as the one at the top is: through XML, through JSON, and as a Val copy.
 	ibValuePtr<ibValueArray> list(new ibValueArray());
 	list->Add(ibValue(1));
-	list->Add(ibValue(ibString(ibT("two"))));
-	const ibValue listBack = RoundTrip(list);
-	EXPECT_EQ(ibValueSystemFunction::XMLString(listBack), ibValueSystemFunction::XMLString(list));
-	ibValuePtr<ibValueArray> holdingRef(new ibValueArray());
-	holdingRef->Add(item);
-	EXPECT_NE(Refusal([&] { RoundTrip(holdingRef); }).Find(ibT("Unknown value type")), wxNOT_FOUND);
+	list->Add(item);
+	list->Add(rate);
+	ibValuePtr<ibValueStructure> record(new ibValueStructure());
+	record->Insert(ibValue(ibString(ibT("Item"))), item);
+	record->Insert(ibValue(ibString(ibT("Rate"))), rate);
+	record->Insert(ibValue(ibString(ibT("List"))), list);
+	ibValuePtr<ibValueContainer> byRef(new ibValueContainer());
+	byRef->Insert(item, ibValue(ibString(ibT("the item"))));
+	byRef->Insert(rate, ibValue(20));
+	for (const ibValue& holder : { ibValue(list), ibValue(record), ibValue(byRef) }) {
+		const ibString xml = ibValueSystemFunction::XMLString(holder);
+		const ibValue viaXml = ibValueSystemFunction::XMLValue(xml);
+		EXPECT_EQ(viaXml.GetClassType(), holder.GetClassType());
+		EXPECT_EQ(ibValueSystemFunction::XMLString(viaXml), xml);   // the references inside by their type and their guid
+
+		const ibString json = ibValueSystemFunction::JSONString(holder);
+		const ibValue viaJson = ibValueSystemFunction::JSONValue(json);
+		EXPECT_EQ(ibValueSystemFunction::XMLString(viaJson), xml);
+
+		const ibValue copy = holder.CloneValue();
+		EXPECT_EQ(ibValueSystemFunction::XMLString(copy), xml);
+	}
+	// A container keyed by references, past the size where it builds its index: each value is found again by the key
+	// as read back - a reference that hashes and compares as the one written.
+	ibValuePtr<ibValueContainer> indexed(new ibValueContainer());
+	std::vector<ibValue> keys;
+	for (int at = 0; at < 12; ++at) {
+		ibValuePtr<ibValueReferenceDataObject> key(ibValueReferenceDataObject::Create(cfg.get(), goods->GetMetaID(), ibGuid(ibGuid::newGuid())));
+		keys.push_back(key);
+		indexed->Insert(key, ibValue(at));
+	}
+	ibValuePtr<ibValueContainer> indexedBack(ibValueSystemFunction::XMLValue(ibValueSystemFunction::XMLString(indexed)));
+	ASSERT_TRUE(static_cast<bool>(indexedBack));
+	for (int at = 0; at < 12; ++at) {
+		ibValue found;
+		ASSERT_TRUE(indexedBack->Property(keys[at], found)) << at;
+		EXPECT_EQ(found.GetInteger(), at);
+	}
+
+	// The pieces themselves, read back: the reference inside is a reference of the catalog, with its guid.
+	const ibValue listBack = ibValueSystemFunction::XMLValue(ibValueSystemFunction::XMLString(list));
+	ibValuePtr<ibValueArray> listRead(listBack);
+	ASSERT_TRUE(static_cast<bool>(listRead));
+	ASSERT_EQ(listRead->Count(), 3u);
+	EXPECT_TRUE(listRead->Values()[1].CompareValueEQ(item));
+	EXPECT_TRUE(listRead->Values()[2].CompareValueEQ(rate));
 }
 
 TEST(XmlValueFunctions, WhatIsNotAValuesXmlIsRefused)

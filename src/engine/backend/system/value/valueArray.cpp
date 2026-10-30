@@ -355,6 +355,7 @@ bool ibValueArray::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//a
 // would have had to encode by hand.
 
 #include "core/serialize/dataBuilder.h"
+#include "backend/compiler/valueSerialization.h"   // ibDeserializeValue — an element, as the configuration reads it
 
 
 bool ibValueArray::DoSerialize(ibDataNode& node) const
@@ -383,7 +384,7 @@ bool ibValueArray::DoDeserialize(const ibDataNode& node)
 	const std::int32_t declared = node.GetValue<std::int32_t>(ibT("n"));
 
 	for (const ibDataNode& child : node.Children())
-		m_listValue.push_back(ibValue::FromNode(child));
+		m_listValue.push_back(ibDeserializeValue(child));
 
 	return (std::int32_t)m_listValue.size() == declared;
 }

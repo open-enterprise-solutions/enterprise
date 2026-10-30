@@ -20,6 +20,10 @@ namespace {
 // open in the designer at once, so a value read while the other one is active comes back about somebody
 // else's metadata. Whoever restores a value knows which configuration it belongs to and says so; null
 // means there is none (tests, headless tools) and the value factory answers alone.
+//
+// ⚠ THE VALUE ITSELF ONLY. What a container holds - an array or a structure stored as a filter's value - is
+// read through ibDeserializeValue, the configuration the SESSION runs (Max, 2026-10-30: "at run time the
+// active metadata is enough"), not through the one handed in here.
 ibValue ReadStoredValue(const ibDataNode& node, const ibMetaData* metaData) {
 	return metaData != nullptr ? metaData->Deserialize(node) : ibValue::FromNode(node);
 }
