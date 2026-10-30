@@ -17,11 +17,35 @@
 //	    <Children><Node …/></Children>
 //	  </Node>
 //
+//	A date is written for the years 1 to 9999 - four digits of a year - and refused outside them.
 //	A field's name is a value, not an element's name: a field may be called anything (`a:b`, a path) and named
 //	twice. A string XML 1.0 cannot hold (a NUL, a lone surrogate) is written `Kind="String" Encoding="base64"`, its
 //	UTF-8. A type is named as the JSON view names it — by the resolver, by number where it names none — and looked
 //	up by name on Read; a name nobody knows leaves clsid 0 and the word as the node's NodeType field, as the JSON
 //	view leaves it (ibJsonProvider::LookupTypes). Malformed or misplaced input throws, with its line.
+//
+//	⭐ A VALUE'S NODE says its type by XML Schema's own means. What a value writes first - its type, field `t`, the
+//	digits of a class id (ibValue::Serialize) - is not written as a field but as `xsi:type`: XML Schema's word for a
+//	primitive written as the element's text (one with nothing but its payload `v`, of its own kind), the type's name
+//	for the rest - by number where the name would read back as another type; a Null is `xsi:nil="true"`. The node's
+//	own type is not said again where it is the value's (an element of a list); where it is none (the root a value is
+//	packed into) the node says so with an empty `Type=""`.
+//
+//	  <Node xmlns:xs="…/XMLSchema" xmlns:xsi="…/XMLSchema-instance" xsi:type="Array">   declared on the outermost
+//	    <Field Name="n" Kind="Number">3</Field>
+//	    <Children>
+//	      <Node xsi:type="xs:decimal">5</Node>                 xs:string, xs:boolean, xs:dateTime (`T`, the
+//	      <Node xsi:nil="true"/>                               milliseconds when there are any)
+//	      <Node xsi:type="CatalogRef.Goods">…</Node>           its other fields as any node's
+//	    </Children>
+//	  </Node>
+//
+//	Read gives `t` back, first, and the node the value's type where no Type says otherwise, none where it is empty -
+//	the node that was written, byte for byte - but for a number's trailing zeros, which no form here keeps: its text
+//	is the number's own, so 1518500.10 reads back as 1518500.1, the same number. A type nobody knows, a
+//	prefix that does not stand for its namespace, text that is no xs: primitive are refused with their line. The
+//	`xsi` prefix is read as written (the tree hands over no list of attributes), and has to stand for XML Schema
+//	instance; a type's prefix is looked up where it is declared. The form with `Type` and a field `t` still reads.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "core/serialize/dataBuilder.h"

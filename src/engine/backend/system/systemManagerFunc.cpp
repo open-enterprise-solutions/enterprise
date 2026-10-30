@@ -802,6 +802,7 @@ ibString ibValueSystemFunction::XMLString(const ibValue& value)
 
 	ibXmlProvider provider;
 	provider.SetTypeResolver(ibMetaTypeResolver(activeMetaData));
+	provider.SetTypeLookup(LookupType);   // a value's type by name only where the name reads back as it
 	ibString text;
 	provider.Write(node, text);
 	return text;
