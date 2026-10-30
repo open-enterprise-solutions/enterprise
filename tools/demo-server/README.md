@@ -22,7 +22,9 @@ Not reachable from outside: the cluster's port (7373), MCP (7374, 7600–7699), 
 ## A base in the demo
 
 A folder in `examples/` with an `infobase.conf` and its database. The nightly packs every such folder
-(`.github/nightly/package-bases.sh`); its name is the address: `examples/ui-gallery` → `https://<name>/ui-gallery/`.
+(`.github/nightly/package-bases.sh`); its name is the address: `examples/fb_test_buh` → `https://<name>/fb_test_buh/`.
+The database is named `sys.fdb`, in lower case: Linux tells the cases apart. A base saved before OES-RPC 1.0 (2026-10-26)
+does not open and fails the whole nightly, so it does not carry an `infobase.conf`: `examples/ui-gallery` waits for that.
 
 ## Setting it up — Google Cloud, e2-micro
 
