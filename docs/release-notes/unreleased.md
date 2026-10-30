@@ -82,6 +82,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the
+  bytecode cache empty, each compiled the same modules. The first now holds the module's row in the
+  database, the others wait and read what it saved; if it fails, the next one compiles.
+
 - **A selection reads a row's standard attributes.** `Catalogs.X.Select()` and the selections of the
   charts published only `Ref` and the attributes a person added, so reading `Code`, `Description`,
   `DeletionMark` or `IsFolder` from a row was "field not found".

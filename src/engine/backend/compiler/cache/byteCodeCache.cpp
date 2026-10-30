@@ -70,6 +70,129 @@ ibString ibByteCodeCache::CacheKey(const ibString& configDigest)
 		(unsigned)kAOTFormatVersion, EngineFingerprint(), configDigest));
 }
 
+namespace {
+
+// The row written and committed in the transaction `q` has open; on a failure rolled back and thrown.
+void WriteRow(ibDatabaseQueryBuilder& q, const ibByteCode& bc, const ibMemoryBuffer& blob, const ibString& configMd5)
+{
+	const ibString descIdStr = bc.m_id;
+	const ibString bcVerStr  = bc.m_version;
+
+	// WEED THE PREVIOUS CONFIGURATIONS OUT, ONCE. Rows keyed on an older digest can never be found
+	// again — which is the whole point — but "never found" is not "gone". The table cannot GROW
+	// without bound (descriptor_id is its primary key, so one row per descriptor, and a recompile
+	// replaces it), yet a descriptor the new configuration never compiles — a module that was
+	// deleted, or simply one nobody has called yet — keeps a blob nothing can ever use. This is
+	// the first moment the new digest is known to be real: a compile just succeeded under it. The
+	// guard keeps it to one statement per digest per process, so the ordinary path stays a
+	// DELETE-by-key plus an INSERT.
+	// The guard is process-wide but reached from every session's compile path, so
+	// the compare-and-set takes a lock: two threads assigning one wxString is a
+	// torn string, not merely a duplicated DELETE. The statement itself runs
+	// outside the lock — it is a database round-trip, and correctness only needs
+	// "exactly one thread wins the digest".
+	static std::mutex s_weedMutex;
+	static ibString s_weededFor;
+
+	bool bWeedNow = false;
+	{
+		std::lock_guard<std::mutex> lock(s_weedMutex);
+		if (s_weededFor != configMd5) {
+			s_weededFor = configMd5;
+			bWeedNow = true;
+		}
+	}
+
+	try {
+		if (bWeedNow) {
+			try {
+				q.Execute(ibDelete(bytecode_cache_table,
+					ibBinOp(ibQueryBinOp::Ne, ibCol(ibT("config_md5")), ibConst(ibValue(configMd5)))));
+			} catch (...) { /* hygiene, not correctness — a stale row is unreachable either way */ }
+		}
+		q.Execute(ibDelete(bytecode_cache_table,
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("descriptor_id")), ibConst(ibValue(descIdStr)))));
+		q.Execute(ibInsert(bytecode_cache_table, {
+			{ ibT("descriptor_id"),    ibConst(ibValue(descIdStr)) },
+			{ ibT("bytecode_version"), ibConst(ibValue(bcVerStr)) },
+			{ ibT("config_md5"),       ibConst(ibValue(configMd5)) },
+			{ ibT("bc_blob"),          ibConstBlob(blob.GetData(),
+			                                       static_cast<size_t>(blob.GetDataLen())) },
+		}));
+		q.Commit();
+	}
+	catch (...) {
+		if (q.IsActiveTransaction())
+			q.RollBack();
+		throw;   // → the caller: not saved this time, recompiled next time
+	}
+
+	// THE OTHER HALF OF THE PAIR — see Load. Names the descriptor, the digest this row is written
+	// under, and the bytecode's own version guid, so a row that is later TAKEN can be traced back
+	// to the moment it was made. One line per save: a cache whose contents cannot be accounted for
+	// is where "it ran the previous text" hides, and that costs a crash rather than a wrong answer.
+	ibJournalInfo(ibT("bytecode.cache"), ibT("save %s md5=%s ver=%s bytes=%u"),
+		descIdStr, configMd5, bcVerStr, (unsigned)blob.GetDataLen());
+}
+
+} // namespace
+
+// The connection first: it outlives the builder on it, and the builder's going rolls back what is not committed.
+struct ibByteCodeCache::ibRowLock::ibHeld {
+	ibSingleConnectionHolder m_holder;
+	ibDatabaseQueryBuilder   m_query{ &m_holder };
+	ibString                 m_configMd5;
+};
+
+ibByteCodeCache::ibRowLock::ibRowLock() = default;
+ibByteCodeCache::ibRowLock::~ibRowLock() = default;
+
+bool ibByteCodeCache::ibRowLock::Acquire(const ibGuid& descId, const ibString& configDigest)
+{
+	if (db_query == nullptr) return false;
+
+	const ibString descIdStr = descId;
+	try {
+		std::unique_ptr<ibHeld> held = std::make_unique<ibHeld>();
+		held->m_configMd5 = CacheKey(configDigest);
+		ibDatabaseQueryBuilder& q = held->m_query;
+		if (!q.IsOpen() || !q.TableExists(bytecode_cache_table))
+			return false;   // the same connection asks — see Load
+
+		// A WAITING transaction — the waiting is what this is for. What it stands behind is another compile
+		// of this module, on a connection of its own, so it ends with that compile and never with somebody's
+		// business transaction (see Save). The row of an earlier configuration goes first: one row per
+		// descriptor, and it would otherwise read as somebody having finished.
+		q.BeginTransaction();
+		q.Execute(ibDelete(bytecode_cache_table,
+			ibBinOp(ibQueryBinOp::And,
+			        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("descriptor_id")), ibConst(ibValue(descIdStr))),
+			        ibBinOp(ibQueryBinOp::Ne, ibCol(ibT("config_md5")), ibConst(ibValue(held->m_configMd5))))));
+		q.Execute(ibInsert(bytecode_cache_table, {
+			{ ibT("descriptor_id"), ibConst(ibValue(descIdStr)) },
+			{ ibT("config_md5"),    ibConst(ibValue(held->m_configMd5)) },
+		}));
+		m_held = std::move(held);
+	}
+	catch (...) { return false; }   // the key conflicts: the row is there now, written by whoever held it
+	return true;
+}
+
+bool ibByteCodeCache::ibRowLock::Save(const ibByteCode& bc)
+{
+	// The row goes either way: committed with what was written, or back with the transaction.
+	const std::unique_ptr<ibHeld> held = std::move(m_held);
+	if (held == nullptr) return false;
+
+	ibWriterMemory writer;
+	if (!bc.SerializeAOT(writer)) return false;   // not cacheable: the next one compiles for itself
+	try {
+		WriteRow(held->m_query, bc, writer.buffer(), held->m_configMd5);
+	}
+	catch (...) { return false; }
+	return true;
+}
+
 bool ibByteCodeCache::Save(const ibByteCode& bc, const ibString& configDigest)
 {
 	if (db_query == nullptr) return false;
@@ -80,9 +203,6 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const ibString& configDigest)
 	ibWriterMemory writer;
 	if (!bc.SerializeAOT(writer)) return false;
 	const ibMemoryBuffer blob = writer.buffer();
-
-	const ibString descIdStr = bc.m_id;
-	const ibString bcVerStr  = bc.m_version;
 
 	const ibString configMd5 = CacheKey(configDigest);
 
@@ -109,64 +229,10 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const ibString& configDigest)
 		if (!q.IsOpen() || !q.TableExists(bytecode_cache_table))
 			return false;   // the same connection asks  see Load
 
-		// WEED THE PREVIOUS CONFIGURATIONS OUT, ONCE. Rows keyed on an older digest can never be found
-		// again — which is the whole point — but "never found" is not "gone". The table cannot GROW
-		// without bound (descriptor_id is its primary key, so one row per descriptor, and a recompile
-		// replaces it), yet a descriptor the new configuration never compiles — a module that was
-		// deleted, or simply one nobody has called yet — keeps a blob nothing can ever use. This is
-		// the first moment the new digest is known to be real: a compile just succeeded under it. The
-		// guard keeps it to one statement per digest per process, so the ordinary path stays a
-		// DELETE-by-key plus an INSERT.
-		// The guard is process-wide but reached from every session's compile path, so
-		// the compare-and-set takes a lock: two threads assigning one wxString is a
-		// torn string, not merely a duplicated DELETE. The statement itself runs
-		// outside the lock — it is a database round-trip, and correctness only needs
-		// "exactly one thread wins the digest".
-		static std::mutex s_weedMutex;
-		static ibString s_weededFor;
-
-		bool bWeedNow = false;
-		{
-			std::lock_guard<std::mutex> lock(s_weedMutex);
-			if (s_weededFor != configMd5) {
-				s_weededFor = configMd5;
-				bWeedNow = true;
-			}
-		}
-
 		ibDatabaseLayer::ibTxOptions txOpts;
 		txOpts.noWait = true;   // a row another session is writing right now is its save, not ours
 		q.BeginTransaction(txOpts);
-		try {
-			if (bWeedNow) {
-				try {
-					q.Execute(ibDelete(bytecode_cache_table,
-						ibBinOp(ibQueryBinOp::Ne, ibCol(ibT("config_md5")), ibConst(ibValue(configMd5)))));
-				} catch (...) { /* hygiene, not correctness — a stale row is unreachable either way */ }
-			}
-			q.Execute(ibDelete(bytecode_cache_table,
-				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("descriptor_id")), ibConst(ibValue(descIdStr)))));
-			q.Execute(ibInsert(bytecode_cache_table, {
-				{ ibT("descriptor_id"),    ibConst(ibValue(descIdStr)) },
-				{ ibT("bytecode_version"), ibConst(ibValue(bcVerStr)) },
-				{ ibT("config_md5"),       ibConst(ibValue(configMd5)) },
-				{ ibT("bc_blob"),          ibConstBlob(blob.GetData(),
-				                                       static_cast<size_t>(blob.GetDataLen())) },
-			}));
-			q.Commit();
-		}
-		catch (...) {
-			if (q.IsActiveTransaction())
-				q.RollBack();
-			throw;   // → the catch below: not saved this time, recompiled next time
-		}
-
-		// THE OTHER HALF OF THE PAIR — see Load. Names the descriptor, the digest this row is written
-		// under, and the bytecode's own version guid, so a row that is later TAKEN can be traced back
-		// to the moment it was made. One line per save: a cache whose contents cannot be accounted for
-		// is where "it ran the previous text" hides, and that costs a crash rather than a wrong answer.
-		ibJournalInfo(ibT("bytecode.cache"), ibT("save %s md5=%s ver=%s bytes=%u"),
-			descIdStr, configMd5, bcVerStr, (unsigned)blob.GetDataLen());
+		WriteRow(q, bc, blob, configMd5);
 	}
 	catch (...) { return false; }
 	return true;

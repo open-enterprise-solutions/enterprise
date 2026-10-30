@@ -41,11 +41,41 @@
 
 #include "backend/backend.h"
 
+#include <memory>
+
 struct ibByteCode;   // defined as struct in compiler/byteCode.h
 class ibGuid;
 
 class BACKEND_API ibByteCodeCache {
 public:
+	// ⭐ A MODULE NOBODY HAS COMPILED YET IS COMPILED ONCE, WHOEVER ELSE ASKS MEANWHILE. Ten sessions
+	// entering a base whose cache is empty all miss, and without this all ten compile the same module.
+	//
+	// The first to miss holds the module's row: inserted and not committed, on a connection of its own,
+	// so it holds nothing of its session's. The others' inserts stand behind that row in the database
+	// (a primary key waits for the transaction that holds it). Saved, the row is committed, their insert
+	// conflicts, Acquire answers false and they read what was saved. Not saved — the compile failed, the
+	// session died — the row goes back, and the next one in the queue holds it and compiles.
+	//
+	// Nobody reads an empty row: until it is written it is seen by nobody but its holder.
+	//
+	// ⚠ HELD ACROSS THE COMPILE ONLY, in the scope of that compile. Its transaction takes the thread's
+	// db_query channel when that is free (ibConnectionPool::SetActiveTxConnection), so what this thread
+	// reads meanwhile goes through it. A compile writes nothing, which is what makes that harmless.
+	class ibRowLock {
+	public:
+		ibRowLock();
+		~ibRowLock();
+		// true — the row is held, compile. false — it was not taken: somebody finished while this waited,
+		// or the database could not be asked. Either way read the cache again; a miss then compiles unheld.
+		bool Acquire(const ibGuid& descId, const ibString& configMd5);
+		// Writes the row and lets it go. false — nothing is held, or the write failed.
+		bool Save(const ibByteCode& bc);
+	private:
+		struct ibHeld;
+		std::unique_ptr<ibHeld> m_held;
+	};
+
 	// Persist a compiled bytecode. Identity (descriptor_id, bytecode
 	// version) is taken from `bc.m_id` / `bc.m_version`; the blob is
 	// produced by SerializeAOT. UPSERT semantics — re-saves overwrite

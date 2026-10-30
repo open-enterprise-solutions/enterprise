@@ -455,8 +455,9 @@ bool ibRuntimeModuleDataObject::Compile()
 	// the door.
 	const ibString configMd5 = owner != nullptr ? owner->GetConfigMD5() : ibString();
 
-	bool ready = false;
-	if (meta != nullptr && ibByteCodeCache::Load(bc, meta->GetGuid(), configMd5)) {
+	const auto loadCached = [&]() {
+		if (meta == nullptr || !ibByteCodeCache::Load(bc, meta->GetGuid(), configMd5))
+			return false;
 		if (bc.ResolveAndVerifyDependencies()) {
 			// Restore live pointers AOT skipped on serialize. m_parent
 			// points at the parent compile module's bytecode —
@@ -492,17 +493,28 @@ bool ibRuntimeModuleDataObject::Compile()
 			// every row of a previous configuration digest), and this branch may then trust what it
 			// gets (Max, 2026-09-04: a stale cache must be THROWN AWAY, not worked around).
 			m_compileModule->PrepareModuleData();
-			ready = true;
-		} else {
-			// (c) — dep registry missing the target or version drift.
-			// Clear the stale row and let the recompile branch
-			// repopulate. Reset() drops bc's body so
-			// m_compileModule->Compile() starts from a clean state
-			// instead of merging into the loaded layout.
-			ibByteCodeCache::Invalidate(meta->GetGuid());
-			bc.Reset();
+			return true;
 		}
-	}
+		// (c) — dep registry missing the target or version drift.
+		// Clear the stale row and let the recompile branch
+		// repopulate. Reset() drops bc's body so
+		// m_compileModule->Compile() starts from a clean state
+		// instead of merging into the loaded layout.
+		ibByteCodeCache::Invalidate(meta->GetGuid());
+		bc.Reset();
+		return false;
+	};
+
+	// ⭐ NOT WHAT WAS COMPILED UNDER AN EVAL — see below, where it is saved. It holds no row either.
+	const bool cacheable = meta != nullptr && ibBackendException::IsEvalMode() == eval_none;
+
+	// A miss holds the module's row: whoever misses with it stands in the database until this compile
+	// has saved it, and reads it then (ibByteCodeCache::ibRowLock). Let go at the end of this scope if
+	// the compile below did not get as far as the save, and the next one compiles.
+	ibByteCodeCache::ibRowLock rowLock;
+	bool ready = loadCached();
+	if (!ready && cacheable && !rowLock.Acquire(meta->GetGuid(), configMd5))
+		ready = loadCached();
 
 	if (!ready) {
 		if (!m_compileModule->Compile())
@@ -538,7 +550,7 @@ bool ibRuntimeModuleDataObject::Compile()
 		// "worked yesterday" (Max, 2026-09-04). A module first touched from a sandbox therefore
 		// compiles again next time — the cost of a recompile, against an address that is wrong
 		// for everybody else.
-		if (meta != nullptr && ibBackendException::IsEvalMode() == eval_none)
+		if (cacheable && !rowLock.Save(bc))
 			ibByteCodeCache::Save(bc, configMd5);
 	}
 
