@@ -21,10 +21,17 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
+
+#include <wx/init.h>
+
+#include "backend/appData.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaCommonAttributeObject.h"
 #include "backend/metaCollection/partial/catalog.h"
+#include "backend/metaCollection/partial/document.h"
+#include "backend/session/session.h"
 
 namespace {
 
@@ -219,4 +226,120 @@ TEST(Composition, DoesNotShareItsSetWithSections) {
 	f.catalog->SetComposition(id, false);
 	EXPECT_TRUE(f.catalog->IsSetInterface(id));    // untouched by the other mechanism
 	EXPECT_FALSE(f.catalog->IsInComposition(id));
+}
+
+// =============================================================================
+// A fresh start. The column is in the database (the session that checked the
+// object in already bound the declaration and applied the table). A process
+// that only LOADS the configuration has the source id and a null pointer.
+// RunSubtree refuses a deleted node, and the pointer is filled in only from
+// OnBeforeRun — so reading "null pointer" as deleted left the field off the
+// document and unknown to a query, with the column sitting in the table.
+// =============================================================================
+
+namespace {
+
+ibValueMetaObjectCommonAttributeColumn* ColumnNamed(ibValueMetaObject* owner, const wxString& name) {
+	if (owner == nullptr)
+		return nullptr;
+	for (unsigned int i = 0; i < owner->GetChildCount(); ++i) {
+		auto* column = dynamic_cast<ibValueMetaObjectCommonAttributeColumn*>(owner->GetChild(i));
+		if (column != nullptr && column->GetName() == name)
+			return column;
+	}
+	return nullptr;
+}
+
+} // namespace
+
+TEST(CommonAttribute, ReloadedCopyIsADocumentFieldAndQueryAttribute) {
+	wxInitializer wxInit;
+	if (!wxInit.IsOk())
+		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
+	const bool ownEnv = ibApplicationInstance::Get() == nullptr;
+	if (ownEnv && !ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
+		GTEST_SKIP() << "appData env unavailable headless";
+	if (ibApplicationInstance::Get() == nullptr)
+		GTEST_SKIP() << "appData env unavailable headless";
+	struct EnvGuard {
+		bool own = false;
+		~EnvGuard() {
+			if (own && ibApplicationInstance::Get() != nullptr)
+				ibApplicationInstance::DestroyAppDataEnv();
+		}
+	} env{ ownEnv };
+
+	const wxString field = wxT("AuthorEmployee");
+
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+	ibValueMetaObject* document = cfg.CreateMetaObject(g_metaDocumentCLSID, root, /*runObject*/ false);
+	auto* declaration = dynamic_cast<ibValueMetaObjectCommonAttribute*>(
+		cfg.CreateMetaObject(g_metaCommonAttributeCLSID, root, /*runObject*/ false));
+	ASSERT_NE(document, nullptr);
+	ASSERT_NE(declaration, nullptr);
+	declaration->SetName(field);
+	ASSERT_TRUE(declaration->SetCompositionObject(document, true));
+
+	wxMemoryBuffer saved;
+	ASSERT_TRUE(cfg.SaveConfigToBuffer(saved));
+
+	ibMetaDataConfigurationFile loaded;
+	ASSERT_TRUE(loaded.LoadConfigFromBuffer(saved));
+
+	const std::vector<ibValueMetaObject*> documents = loaded.GetAnyArrayObject(g_metaDocumentCLSID);
+	ASSERT_EQ(documents.size(), 1u);
+	auto* doc = dynamic_cast<ibValueMetaObjectDocument*>(documents.front());
+	ASSERT_NE(doc, nullptr);
+
+	ibValueMetaObjectCommonAttributeColumn* column = ColumnNamed(doc, field);
+	ASSERT_NE(column, nullptr);
+	// The id survived the save. The pointer did not — and that must not read as deleted,
+	// or the run below never reaches the bind.
+	EXPECT_EQ(column->GetSource(), nullptr);
+	EXPECT_NE(column->GetSourceMetaID(), 0);
+	EXPECT_FALSE(column->IsDeleted());
+
+	ASSERT_TRUE(loaded.RunDatabase()) << "the reloaded configuration did not run";
+
+	EXPECT_NE(column->GetSource(), nullptr);
+	EXPECT_TRUE(column->IsAllowed());
+	EXPECT_FALSE(column->IsDeleted());
+	EXPECT_EQ(column->GetName(), field);
+
+	bool listed = false;
+	for (const ibValueMetaObjectAttributeBase* attribute : doc->GetGenericAttributeArrayObject())
+		if (attribute != nullptr && attribute->GetName() == field)
+			listed = true;
+	EXPECT_TRUE(listed) << "the document's attribute list — what an object field is built from — omitted the copy";
+	EXPECT_NE(doc->FindAnyAttributeObjectByFilter(field), nullptr);
+	ASSERT_NE(doc->GetQueryable(), nullptr);
+	EXPECT_NE(doc->GetQueryable()->ResolveColumnByName(field), nullptr)
+		<< "a query naming the common attribute is refused as an unknown attribute";
+
+	// The same question a script asks: Documents.<Name>.CreateDocument().<Field>.
+	// The session root has to be compiled first — the object's module is compiled
+	// against it, and a root that has never run has no parent bytecode.
+	{
+		const auto session = std::make_shared<ibSession>(wxString(wxT("common-attribute")), ibSessionKind::Enterprise);
+		const ibSessionScope scope(session.get());
+		ASSERT_NE(session->CreateRoot(&loaded), nullptr);
+		ASSERT_TRUE(session->CompileRoot());
+
+		ibValuePtr<ibValueRecordDataObjectRef> created = doc->CreateObjectValue();
+		ibValueRecordDataObjectRef* object = created;
+		ASSERT_NE(object, nullptr);
+		const long prop = object->FindProp(field);
+		ASSERT_GE(prop, 0) << "the document object has no field AuthorEmployee";
+		ASSERT_TRUE(object->SetPropVal(prop, ibValue(wxT("clerk"))));
+		ibValue read;
+		ASSERT_TRUE(object->GetPropVal(prop, read));
+		EXPECT_EQ(read.GetString(), wxT("clerk"));
+		created = nullptr;
+	}
+
+	if (loaded.IsConfigOpen()) {
+		EXPECT_TRUE(loaded.CloseDatabase());
+	}
 }
