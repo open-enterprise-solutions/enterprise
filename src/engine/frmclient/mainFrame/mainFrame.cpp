@@ -70,6 +70,21 @@ constexpr int kLastMenuId               = wxID_HIGHEST + 6999;
 // mainFrameDesignerMenu.cpp names it as well).
 constexpr int kWindowCloseAllId = 4002;
 
+// The Window menu out of a bar BY THE MENU — wx's RemoveWindowMenu looks for it by `_("&Window")` as said at that moment.
+// ⚠ THE WORD CHANGES WITH THE THREAD'S LANGUAGE: put in as "Окно" under a base's, it is looked for as "Window" at the
+// exit, stays in the bar, and goes twice — by ~wxAuiMDIParentFrame, then by the bar (a fall at every such exit, 2026-10-30).
+void RemoveWindowMenuOf(wxMenuBar* bar, wxMenu* windowMenu)
+{
+	if (bar == nullptr || windowMenu == nullptr)
+		return;
+	for (size_t pos = 0; pos < bar->GetMenuCount(); pos++) {
+		if (bar->GetMenu(pos) == windowMenu) {
+			bar->Remove(pos);
+			return;
+		}
+	}
+}
+
 // The person's options file, beside the desktop designer's options.xml: the thin client's commands go by other ids.
 constexpr const wxChar* kOptionsFile = wxT("options-thin.xml");
 
@@ -316,6 +331,10 @@ ibFrontendMainFrame::~ibFrontendMainFrame()
 
 	// deinitialize the valueForm manager
 	m_mgr.UnInit();
+
+	// ~wxAuiMDIParentFrame deletes the Window menu itself: it leaves no bar still holding it. While a view's bar is shown,
+	// the window's own holds it (SetMenuBar).
+	RemoveWindowMenuOf(m_pMyMenuBar != nullptr ? m_pMyMenuBar : GetMenuBar(), GetWindowMenu());
 }
 
 wxAuiMDIClientWindow* ibFrontendMainFrame::OnCreateClient()
@@ -396,7 +415,7 @@ void ibFrontendMainFrame::SetMenuBar(wxMenuBar* pMenuBar)
 	if (m_pMyMenuBar == nullptr) {
 
 		//Remove the Window menu from the old menu bar
-		RemoveWindowMenu(GetMenuBar());
+		RemoveWindowMenuOf(GetMenuBar(), GetWindowMenu());
 
 		//Add the Window menu to the new menu bar.
 		AddWindowMenu(pMenuBar);
@@ -975,10 +994,20 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 		DrawMenu(frame.FindChild(ibProtocol::ibFrame::Menu));
 	if (whole || patch.Has(ibProtocol::ibFrame::Templates))
 		DrawTemplates(frame.FindChild(ibProtocol::ibFrame::Templates));
-	if (whole || patch.Has(ibProtocol::ibFrame::Tabs))
-		DrawTabs(frame.FindChild(ibProtocol::ibFrame::Tabs));
-	DrawFrame(frame, patch);
-	DrawView(frame.GetInt(ibProtocol::ibFrame::ActiveTab), frame.FindChild(ibProtocol::ibFrame::View), patch);
+
+	// ⭐ A TAB AND ITS VIEW COME UP AS ONE. A view is built when its first frame is drawn, after the tab: thawed between
+	// the two, the person watched the composer's panel be born — a dot in the corner, then its pages, then its layout.
+	{
+		wxWindowUpdateLocker freeze;
+		wxAuiMDIClientWindow* const client = GetClientWindow();
+		if (client != nullptr && (whole || patch.Has(ibProtocol::ibFrame::Tabs)))
+			freeze.Lock(client);
+
+		if (whole || patch.Has(ibProtocol::ibFrame::Tabs))
+			DrawTabs(frame.FindChild(ibProtocol::ibFrame::Tabs));
+		DrawFrame(frame, patch);
+		DrawView(frame.GetInt(ibProtocol::ibFrame::ActiveTab), frame.FindChild(ibProtocol::ibFrame::View), patch);
+	}
 
 	// THE EVENTS — what happened since the last answer: read from the answer, never kept in the frame. Exit done: the
 	// client goes once its call has settled (Call, AllowClose).
