@@ -473,19 +473,56 @@ oes-tablebox .grid.no-header .tabulator-header {
 	display: none;
 }
 
-/* A column's header: its picture, its caption, the arrow of the server's sort; one that sorts takes a click. */
+/* A text that loses its middle when it does not fit (src/tablebox/tablebox.js, cutInTheMiddle): both halves give up room,
+   the first cut at its end with the mark, the second held to the right and cut at its start. */
+oes-tablebox .cut {
+	display: inline-flex;
+	max-width: 100%;
+	vertical-align: top;
+}
+
+oes-tablebox .cut-start,
+oes-tablebox .cut-end {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	white-space: pre;
+}
+
+oes-tablebox .cut-start {
+	text-overflow: ellipsis;
+}
+
+oes-tablebox .cut-end {
+	display: flex;
+	justify-content: flex-end;
+}
+
+oes-tablebox .cut-end > span {
+	flex: none;
+}
+
+/* A column's header: its picture, its caption, the arrow of the server's sort; one that sorts takes a click. Its caption
+   gives up room, the picture and the arrow keep theirs. */
 oes-tablebox .column-header {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.25rem;
+	max-width: 100%;
+}
+
+oes-tablebox .column-header .cut {
+	min-width: 0;
 }
 
 oes-tablebox .column-header img {
+	flex: none;
 	width: 16px;
 	height: 16px;
 }
 
 oes-tablebox .column-header .sort-arrow {
+	flex: none;
 	font-size: 0.7em;
 	color: var(--oes-muted);
 }

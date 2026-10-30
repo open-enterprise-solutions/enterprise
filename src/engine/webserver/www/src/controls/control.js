@@ -63,9 +63,7 @@ export class Control extends HTMLElement {
 	async settled() {
 		const controls = [this, ...this.querySelectorAll('*')].filter((element) => element instanceof Control);
 		await Promise.all(controls.map((control) => /** @type {Control} */ (control).drawing));
-		const components = [...this.querySelectorAll('*')].filter((element) => element.localName.startsWith('wa-'));
-		await Promise.all([...new Set(components.map((one) => one.localName))].map((tag) => customElements.whenDefined(tag)));
-		await Promise.all(components.map((one) => /** @type {any} */ (one).updateComplete));
+		await componentsDrawn(this);
 	}
 
 	/**
@@ -160,6 +158,16 @@ export class UnknownControl extends Control {
 	}
 }
 customElements.define('oes-unknown', UnknownControl);
+
+/**
+ * The components under an element come and drawn: one is loaded the first time it is met, and draws itself after that.
+ * @param {Element} element
+ */
+export async function componentsDrawn(element) {
+	const components = [...element.querySelectorAll('*')].filter((one) => one.localName.startsWith('wa-'));
+	await Promise.all([...new Set(components.map((one) => one.localName))].map((tag) => customElements.whenDefined(tag)));
+	await Promise.all(components.map((one) => /** @type {any} */ (one).updateComplete));
+}
 
 /**
  * The node folded into the element that stood for it (or none): the element that stands for it now.

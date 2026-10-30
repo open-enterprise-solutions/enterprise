@@ -35,6 +35,27 @@ class FormArrives(PageTest):
         self.assertEqual([one for one in samples if one['forms'] != 1], [], 'not exactly one form was on show')
         self.assertEqual({one['title'] for one in samples}, {'100', '200'}, 'the first stays, then the second')
 
+    def test_a_new_tab_comes_with_its_form_in_one_frame(self):
+        opened = {'title': 'Second', 'table': table(rows=[row(n, f'Other {n}') for n in range(1, 4)])}
+        page = self.start({'tabs': [tab('First')], 'fetchLatency': 200})
+        page.evaluate("""() => {
+          window.apart = [];
+          const look = () => {
+            const shown = [...document.querySelectorAll('.views > oes-clientform:not([hidden])')].filter((form) =>
+              getComputedStyle(form).visibility !== 'hidden')[0]?.dataset.control;
+            const selected = document.querySelector('.tab[aria-selected="true"]')?.textContent.replace('×', '').trim();
+            if ((selected === 'Second') !== (shown === '200'))
+              window.apart.push([selected, shown]);
+            requestAnimationFrame(look);
+          };
+          look();
+        }""")
+        page.evaluate('(tab) => window.fake.open(tab)', opened)
+        self.wait_rows(3)
+        page.wait_for_function("document.querySelectorAll('.tab').length === 2")
+        page.wait_for_timeout(100)
+        self.assertEqual(page.evaluate('window.apart'), [], 'the tab and its form were on show apart')
+
     def test_a_new_form_is_never_on_show_before_its_fields_can_be_seen(self):
         # A component is loaded the first time it is met: the fields of the first form with any came after the form.
         self.serve_late('components/input/input.js', 0.3)

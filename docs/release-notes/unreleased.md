@@ -57,8 +57,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   beside the configuration's name.
 - **The start page**: the forms the configuration places on it, live, in its columns, with sashes to drag between them.
 - **A form comes whole**: one just opened is shown once it has its rows and its fields can be seen, the one before staying up
-  meanwhile, and it replaces that one in a single frame. The tabs are no longer drawn anew by every answer.
+  meanwhile, and it replaces that one in a single frame, its tab with it. The splash stays until the first window has its
+  rows, however long they take. The tabs are no longer drawn anew by every answer.
 - **A table's columns fold into their row only in a narrow window**; anywhere else those that do not fit scroll sideways.
+- **A text too long loses its middle**, in a table's cell and its header, as the thin client's cell: the first letters and the
+  last stay.
 - **Denser on a mouse**: a field, a row, a tool, the window's title and a table's header take about two thirds of the height
   they took. A touch screen keeps its targets.
 - **A table's three view modes**: List, Hierarchy with the folders it stands in frozen over the rows, and Tree with

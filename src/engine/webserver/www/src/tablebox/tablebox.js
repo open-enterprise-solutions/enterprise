@@ -1483,7 +1483,7 @@ function headerOf(owner, caption, header) {
 		image.alt = '';
 		element.append(image);
 	}
-	element.append(caption ?? '');
+	element.append(cutInTheMiddle(caption ?? ''));
 	if (header.sort !== 0) {
 		const arrow = document.createElement('span');
 		arrow.className = 'sort-arrow';
@@ -1700,7 +1700,33 @@ function drawPart(element, record, id) {
 	element.style.fontSize = look.fontSize ?? '';
 	const checked = record[`k${id}`];
 	// A flag is a tick, not a box: a list's cell is not ticked by a click (the thin client's).
-	return document.createTextNode(checked === undefined ? record[`c${id}`] ?? '' : checked ? '✓' : '');
+	return checked === undefined ? cutInTheMiddle(record[`c${id}`] ?? '') : document.createTextNode(checked ? '✓' : '');
+}
+
+/**
+ * A text that loses its middle when it does not fit, as the thin client's cell (wxELLIPSIZE_MIDDLE): a person reads the
+ * first letters and the last. Two halves, each giving up room as its length says, the first cut at its end, the second at
+ * its start, so no width is measured here and a column dragged needs nothing drawn. A text of several lines stays as it is.
+ * @param {string} text
+ * @returns {Node}
+ */
+function cutInTheMiddle(text) {
+	const letters = Array.from(text);
+	if (letters.length < 4 || text.includes('\n'))
+		return document.createTextNode(text);
+	const middle = Math.ceil(letters.length / 2);
+	const holder = document.createElement('span');
+	holder.className = 'cut';
+	holder.title = text;
+	const start = document.createElement('span');
+	start.className = 'cut-start';
+	start.textContent = letters.slice(0, middle).join('');
+	const end = document.createElement('span');
+	end.className = 'cut-end';
+	end.append(document.createElement('span'));
+	/** @type {HTMLElement} */ (end.firstChild).textContent = letters.slice(middle).join('');
+	holder.append(start, end);
+	return holder;
 }
 
 /**

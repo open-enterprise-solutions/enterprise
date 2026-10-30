@@ -93,6 +93,13 @@ class HomePage(PageTest):
         self.assertLess(float(min_height.removesuffix('px')), page.viewport_size['height'] * 0.5)
         self.assertEqual(page.locator('.tabulator-responsive-collapse').count(), 0)
 
+    def test_the_splash_stays_until_its_forms_have_their_rows(self):
+        # Past the second a form opened later is waited for: at the start nothing else is on show.
+        page = self.start({'tabs': [page_tab([[cell('Goods', 'Bolt')], [cell('Receipts', 'First')]])], 'fetchLatency': 1500}, wait=False)
+        page.wait_for_function("document.getElementById('splash')?.hidden === true || document.getElementById('splash')?.classList.contains('leaving')",
+                               timeout=15000)
+        self.assertEqual(page.locator('oes-homepage .tabulator-row').count(), 2, 'the splash went before the rows came')
+
     def test_escape_leaves_it_open(self):
         page = self.two_columns()
         self.row('First').wait_for()

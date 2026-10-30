@@ -4,7 +4,7 @@
 // commands). Each tab keeps the element its view was drawn into, so a tab gone back to finds its scroll and its table
 // where they were.
 
-import { reconcile, dispose } from '../controls/control.js';
+import { componentsDrawn, reconcile, dispose } from '../controls/control.js';
 import { Refusal } from '../protocol/connection.js';
 import { HomePage } from './homePage.js';
 import { Questions } from './questions.js';
@@ -29,6 +29,9 @@ const busyAfter = 800;
 
 // How long a form just opened is waited for, the one on show staying where it is: past this it comes as far as it has got.
 const arrivesWithin = 1000;
+
+// How long the first window is waited for, the splash up: nothing on show is held back by it, so it has the time its rows take.
+const startsWithin = 15000;
 
 // A message's level (ibMessage::ibLevel), as its line is marked.
 const information = 1;
@@ -176,8 +179,10 @@ export class ClientWindow {
 		this.title.textContent = frame.Title || document.title;
 		this.status.textContent = frame.Status ?? '';
 		this.drawMenu(frame.Menu);
-		this.drawTabs(frame);
 		this.drawView(frame);
+		// A tab comes with its form, in one frame: the strip waits for the one arriving.
+		if (this.arrival === null)
+			this.drawTabs(frame);
 		this.questions.ask(frame.Request);
 	}
 
@@ -421,6 +426,8 @@ export class ClientWindow {
 			if (this.arrival !== arrival)
 				return;
 			this.showView(id);
+			if (this.session.frame !== null)
+				this.drawTabs(this.session.frame);
 			this.focusTable(form);
 		});
 	}
@@ -447,11 +454,12 @@ export class ClientWindow {
 		}
 	}
 
-	/** The window as it is meant to be seen: its sections read, the form on show drawn. */
+	/** The first window as it is meant to be seen: its sections read, its menu and the view on show drawn. */
 	settled() {
-		const form = this.tabViews.get(this.session.frame?.ActiveTab ?? 0);
-		const drawn = /** @type {any} */ (form)?.settled?.() ?? Promise.resolve();
-		return Promise.race([Promise.all([this.sectionsRead, drawn]), new Promise((resolve) => setTimeout(resolve, arrivesWithin))]);
+		const view = this.tabViews.get(this.session.frame?.ActiveTab ?? 0);
+		const drawn = /** @type {any} */ (view)?.settled?.() ?? Promise.resolve();
+		return Promise.race([Promise.all([this.sectionsRead, componentsDrawn(this.menu), drawn]),
+			new Promise((resolve) => setTimeout(resolve, startsWithin))]);
 	}
 
 	/**

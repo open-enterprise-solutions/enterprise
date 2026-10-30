@@ -56,7 +56,7 @@ class Groups(PageTest):
         return [group(9, 'Goods', [column(NAME, 'Name'), column(STOCK, 'Stock')], grouping, show_title)]
 
     def headers(self):
-        return [text.strip() for text in self.page.locator('.tabulator-header .tabulator-col-title').all_inner_texts()]
+        return [text.strip() for text in self.page.locator('.tabulator-header .tabulator-col-title').all_text_contents()]
 
     def test_side_by_side_is_a_column_each_the_title_over_them(self):
         page = self.start({'tabs': [tab(columns=self.columns(SIDE_BY_SIDE, True))]})
@@ -78,7 +78,7 @@ class Groups(PageTest):
         page = self.start({'tabs': [tab(columns=self.columns(ONE_UNDER_ANOTHER))]})
         self.row('Item 1').wait_for()
         lines = page.locator('.tabulator-tableholder .joined.one-under-another').first.locator('[data-column]')
-        self.assertEqual(lines.all_inner_texts(), ['Item 1', '10'])
+        self.assertEqual(lines.all_text_contents(), ['Item 1', '10'])
         first, second = lines.nth(0).bounding_box(), lines.nth(1).bounding_box()
         self.assertGreater(second['y'], first['y'])
         whole = self.row('Item 1').bounding_box()
@@ -88,7 +88,7 @@ class Groups(PageTest):
         page = self.start({'tabs': [tab(columns=self.columns(IN_CELL))]})
         self.row('Item 1').wait_for()
         lines = page.locator('.tabulator-tableholder .joined.in-cell').first.locator('[data-column]')
-        self.assertEqual(lines.all_inner_texts(), ['Item 1', '10'])
+        self.assertEqual(lines.all_text_contents(), ['Item 1', '10'])
         self.assertEqual(lines.nth(1).bounding_box()['y'], lines.nth(0).bounding_box()['y'])
 
     def test_a_hidden_column_of_a_group_is_not_drawn(self):
@@ -231,6 +231,36 @@ class ContextMenu(PageTest):
         frame = page.locator('oes-tablebox .grid-frame').bounding_box()
         page.mouse.click(frame['x'] + 100, frame['y'] + frame['height'] - 20, button='right')
         page.wait_for_selector('.popup-menu:popover-open')
+
+    def test_a_text_too_long_loses_its_middle(self):
+        text = 'Limited liability company of fasteners and bolts'
+        page = self.start({'tabs': [tab(rows=[row(1, text)], columns=[column(NAME, 'A caption that does not fit into the width'), column(STOCK, 'Stock', Width=1100)])]})
+        cell = page.locator('.tabulator-row .cut').first
+        cell.wait_for()
+        self.assertEqual(cell.evaluate('(one) => one.textContent'), text, 'the whole text stands behind the cut')
+        self.assertEqual(cell.get_attribute('title'), text)
+        widths = cell.evaluate("""(one) => {
+            const start = one.querySelector('.cut-start'), end = one.querySelector('.cut-end');
+            return { cell: one.closest('.tabulator-cell').clientWidth, whole: one.getBoundingClientRect().width,
+                     start: start.clientWidth, end: end.clientWidth,
+                     startCut: start.scrollWidth > start.clientWidth, endCut: end.firstChild.getBoundingClientRect().width > end.clientWidth,
+                     endAtItsEnd: end.firstChild.getBoundingClientRect().right === end.getBoundingClientRect().right };
+        }""")
+        self.assertLessEqual(widths['whole'], widths['cell'])
+        self.assertTrue(widths['startCut'] and widths['endCut'], widths)
+        self.assertTrue(widths['endAtItsEnd'], widths)
+        self.assertAlmostEqual(widths['start'], widths['end'], delta=widths['cell'] * 0.15)
+        caption = page.locator('.tabulator-col .cut').first
+        self.assertLessEqual(caption.bounding_box()['width'], page.locator('.tabulator-col').first.bounding_box()['width'])
+
+    def test_a_text_that_fits_reads_as_one(self):
+        page = self.start({'tabs': [tab(rows=[row(1, 'Bolt M8')])]})
+        self.row('Bolt M8').wait_for()
+        box = page.locator('.tabulator-row .cut').first.bounding_box()
+        probe = page.evaluate("""() => { const one = document.createElement('span'); one.textContent = 'Bolt M8';
+            one.style.whiteSpace = 'pre'; document.querySelector('.tabulator-row .first-text').append(one);
+            const width = one.getBoundingClientRect().width; one.remove(); return width; }""")
+        self.assertAlmostEqual(box['width'], probe, delta=2)
 
     def test_asked_at_the_press_it_opens_at_the_release(self):
         # Linux and macOS ask for the menu as the button goes down, Windows as it comes up: here the first, on any OS.
