@@ -9,6 +9,7 @@
 #include <string>
 
 #include "backend/backend_exception.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/compiler/value.h"
 
 namespace {
@@ -53,4 +54,43 @@ TEST(ValueFactory, AnInitThatAnswersFalseIsStillCleanedUpAfter) {
 	ibValue* params[] = { &quiet };
 	EXPECT_THROW(ibValue::CreateObject(wxT("TestRefusingInit"), params, 1), ibBackendException);
 	EXPECT_EQ(g_alive, 0);
+}
+
+TEST(UserMessage, AConstructorKeepsTheTextTheFieldAndTheKey) {
+	ibValue text(wxT("Amount is empty"));
+	ibValue field(wxT("Amount"));
+	ibValue path(wxT("Object.Amount"));
+	ibValue key(wxT("row-1"));
+	ibValue* params[] = { &text, &field, &path, &key };
+	ibValue msg = ibValue::CreateObject(wxT("UserMessage"), params, 4);
+	ASSERT_FALSE(msg.IsEmpty());
+
+	ibValue got;
+	ASSERT_TRUE(msg.GetPropVal(msg.FindProp(wxT("Text")), got));
+	EXPECT_EQ(got.GetString(), wxT("Amount is empty"));
+	ASSERT_TRUE(msg.GetPropVal(msg.FindProp(wxT("Field")), got));
+	EXPECT_EQ(got.GetString(), wxT("Amount"));
+	ASSERT_TRUE(msg.GetPropVal(msg.FindProp(wxT("DataPath")), got));
+	EXPECT_EQ(got.GetString(), wxT("Object.Amount"));
+	ASSERT_TRUE(msg.GetPropVal(msg.FindProp(wxT("DataKey")), got));
+	EXPECT_EQ(got.GetString(), wxT("row-1"));
+
+	const long method = msg.FindMethod(wxT("Message"));
+	ASSERT_NE(method, wxNOT_FOUND);
+	EXPECT_TRUE(msg.CallAsProc(method, nullptr, 0));
+}
+
+TEST(UserMessage, TheNameCompiles) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Procedure Check()\n")
+		wxT("    var msg;\n")
+		wxT("    msg = New UserMessage(\"Amount is empty\", \"Amount\");\n")
+		wxT("    msg.Message();\n")
+		wxT("EndProcedure\n");
+	try {
+		ASSERT_TRUE(cc.Compile(src));
+	} catch (const ibBackendException& err) {
+		FAIL() << err.GetErrorDescription().ToStdString();
+	}
 }
