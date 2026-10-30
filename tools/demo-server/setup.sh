@@ -39,6 +39,13 @@ if ! command -v caddy > /dev/null; then
   apt-get install -y caddy
 fi
 
+# What the server's programs take from the system besides the C and C++ runtimes: GLib, for wx's base library.
+# The nightly is checked against exactly this on a clean Debian 12 (.github/nightly/package-linux.sh).
+if ! dpkg -s libglib2.0-0 > /dev/null 2>&1; then
+  apt-get update
+  apt-get install -y --no-install-recommends libglib2.0-0
+fi
+
 id oes > /dev/null 2>&1 || useradd --system --home-dir "$root" --shell /usr/sbin/nologin oes
 mkdir -p "$root/bin" "$root/releases" "$root/site"
 install -m 755 "$here/oes-demo-update.sh" "$root/bin/oes-demo-update.sh"

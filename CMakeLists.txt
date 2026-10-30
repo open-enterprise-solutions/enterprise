@@ -484,6 +484,16 @@ set(wxBUILD_SAMPLES  OFF CACHE BOOL "" FORCE)
 set(wxBUILD_DEMOS    OFF CACHE BOOL "" FORCE)
 set(wxBUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 
+# wx's own copies of the libraries whose name a user's system does not promise. On Linux wx takes the system's
+# when the build machine has them, and the build machine has what GTK's development packages pull in: the
+# 2026-10-29 nightly asked for libpcre2-32.so.0, which a fresh Debian 12 lacks (the demo's web server did not
+# start), and for libjpeg.so.8 and libtiff.so.5 - Ubuntu 22.04's names, where Debian 12 and Ubuntu 24.04 have
+# .62 and .6. Windows and macOS build these copies already. zlib, expat and libpng stay the system's: one name
+# everywhere.
+set(wxUSE_REGEX   builtin CACHE STRING "" FORCE)
+set(wxUSE_LIBJPEG builtin CACHE STRING "" FORCE)
+set(wxUSE_LIBTIFF builtin CACHE STRING "" FORCE)
+
 # Ensure the submodule directory exists (fetched when it does not - see oes_require_submodule)
 oes_require_submodule(wxWidgets CMakeLists.txt)
 

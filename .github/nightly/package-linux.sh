@@ -13,7 +13,8 @@
 # get it too — libwx_gtk3u_core finds libwx_baseu through its own entry, not the executable's.
 #
 # It REFUSES rather than packs a tree that would not start: after the rewrite, every library our own files
-# ask for has to resolve inside the package or on the system (ldd), or the job fails.
+# ask for has to resolve inside the package or on the system (ldd) - on this one, and on a clean Debian 12
+# (docker) - or the job fails.
 set -euo pipefail
 
 bin="$1"
@@ -89,6 +90,30 @@ if ! FIREBIRD="$stage/_fb" "$stage/_fb/bin/isql" -q -i "$smoke_dir/smoke.sql" > 
 fi
 echo "Firebird kit: an embedded UTF8 base created, written and read in place."
 rm -rf "$stage/_fb/bin" "$smoke_dir"
+
+# ⭐ AND THEY RESOLVE ON A CLEAN SYSTEM — the ldd above cannot say so. It runs on the build machine, whose
+# development packages answer for what a user's system lacks: libpcre2-32 resolved here, and the demo's web server
+# did not start on Debian 12 (2026-10-29). So the package is resolved again in a bare Debian 12, in two steps, as
+# the release note promises it: the server's programs - and libfileserver, which the web server loads when it
+# opens a file base - with GLib alone (wx's base library asks for it); then everything, with GTK 3 installed and
+# the two X libraries wx links beside it (session management, XTest), which every desktop has.
+clean_check='
+apt-get update -qq > /dev/null || { echo "apt: the package lists cannot be read"; exit 0; }
+apt-get install -y -qq --no-install-recommends libglib2.0-0 > /dev/null || { echo "apt: GLib cannot be installed"; exit 0; }
+for f in /oes/webserver /oes/appserver /oes/appcluster /oes/libfileserver.so; do ldd "$f"; done 2>&1 \
+  | grep "not found" | sed "s/^/server: /" | sort -u
+apt-get install -y -qq --no-install-recommends libgtk-3-0 libsm6 libxtst6 > /dev/null || { echo "apt: GTK 3 cannot be installed"; exit 0; }
+find /oes -path /oes/_fb -prune -o -type f -print | while read -r f; do
+  if [ "$(head -c 4 "$f" | od -An -tx1 | tr -d " ")" = "7f454c46" ]; then ldd "$f" 2>&1; fi
+done | grep "not found" | sed "s/^/desktop: /" | sort -u
+'
+missing="$(docker run --rm -v "$stage:/oes:ro" debian:12-slim sh -c "$clean_check")"
+if [ -n "$missing" ]; then
+  echo "::error::The package does not start on a clean Debian 12 - missing:"
+  echo "$missing"
+  exit 1
+fi
+echo "Clean Debian 12: the server's programs resolve with GLib alone, the rest with GTK 3."
 
 # What the user's system has to provide — everything the programs load from outside the package.
 {
