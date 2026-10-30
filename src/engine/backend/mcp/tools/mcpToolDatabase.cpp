@@ -415,8 +415,12 @@ public:
 		result.AddField(ibT("ledger"), ibDataValue::Array(ledger));
 		result.AddField(ibT("applied"), ibDataValue::Bool(applied));
 
-		if (applied)
+		if (applied) {
+			if (!decisionReached)
+				result.SetValue(ibT("note"), ibMcpText("Nothing to apply: the base already holds this configuration. "
+					"Nothing was written."));
 			return true;
+		}
 
 		// A DECLINE IS NOT A FAILURE, and the ledger above is the whole point of it — so this
 		// answers TRUE with the account, rather than refusing and throwing the account away.

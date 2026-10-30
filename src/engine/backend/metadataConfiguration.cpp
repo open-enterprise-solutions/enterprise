@@ -863,6 +863,14 @@ bool ibMetaDataConfigurationBase::ApplyConfiguration(ibString& refusal,
 		return false;
 	}
 
+	// ⭐ THE BASE HOLDS THIS CONFIGURATION ALREADY — the question app_run asks before it launches. Nothing to apply is
+	// nothing to do: it took the base exclusively, rewrote the whole configuration and restructured nothing, about eight
+	// seconds each, and the file grew by what it rewrote (measured 2026-10-30: 35.1 to 41.5 MB over three applies).
+	if (!IsModified() && IsConfigSave()) {
+		GetRestructureInfo().Clear();
+		return true;
+	}
+
 	try {
 		// 1 — the configuration itself, PERSISTED AND NOTHING MORE. The restructure is steps 2-5,
 		// and it is the whole reason this verb is separate from the save above.
