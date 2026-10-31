@@ -507,10 +507,14 @@ TEST(JsonProvider, TheNameBesideAValuesTypeIsDroppedOnRead_SoARoundTripDoesNotGr
 TEST(JsonProvider, AFieldCalledTypeAnywhereElseStaysAField)
 {
 	const ibString number = ibString::Format(ibT("%llu"), static_cast<unsigned long long>(g_valueNumberCLSID));
-	// Not beside a value's type; after it, but not right after; right after it, but no name.
+	// Not beside a value's type; after it, but not right after; right after it, but no name; right after a `t` that
+	// holds no class id, which no emitter names: a word, in either case, and a zero.
 	for (const ibString& text : { ibString(ibT("{\"Name\": \"x\", \"type\": \"text\"}")),
 			ibString(ibT("{\"t\": \"")) + number + ibT("\", \"v\": 5, \"type\": \"text\"}"),
-			ibString(ibT("{\"t\": \"")) + number + ibT("\", \"type\": 7}") }) {
+			ibString(ibT("{\"t\": \"")) + number + ibT("\", \"type\": 7}"),
+			ibString(ibT("{\"t\": \"hello\", \"type\": \"world\"}")),
+			ibString(ibT("{\"T\": \"abc\", \"type\": \"x\"}")),
+			ibString(ibT("{\"t\": \"0\", \"type\": \"x\"}")) }) {
 		ibDataNode read;
 		ASSERT_TRUE(NamingNumbers().Read(text, read));
 		EXPECT_TRUE(read.FindField(ibT("type")).has_value()) << text;

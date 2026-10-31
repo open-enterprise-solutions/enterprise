@@ -101,6 +101,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A Firebird connection caches 4 MB of pages, not 32.** Most of the memory of a busy server was this
   cache, committed at connect and hardly touched.
 
+- **A value read from JSON no longer gains a `type` field.** The type's name the JSON view writes
+  beside a value's type came back as a field, one more on each round.
+
 - **A selection reads a row's standard attributes.** `Catalogs.X.Select()` and the selections of the
   charts published only `Ref` and the attributes a person added, so reading `Code`, `Description`,
   `DeletionMark` or `IsFolder` from a row was "field not found".

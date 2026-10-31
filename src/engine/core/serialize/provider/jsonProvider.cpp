@@ -556,9 +556,11 @@ bool ibJsonProvider::Read(const ibString& text, ibDataNode& root) const
 namespace {
 
 // The courtesy is where EmitNode writes it, and nowhere else: a string right after a value's `t` (named so whatever
-// its case, as the emitter matches it; holding a number or a string of digits). Told by its place alone: a lookup is not asked, for a reader's lookup
-// may know no names at all (the thin client's requests are read before a base is known) and answer for none, and
-// asking would count every value as a type it did not know. No value writes a field of that name after its type.
+// its case, as the emitter matches it; holding a class id, a number or a string of digits, which is all it names - a
+// `t` holding anything else is somebody's own field, and so is what follows it). Told by its place alone: a lookup is
+// not asked, for a reader's lookup may know no names at all (the thin client's requests are read before a base is
+// known) and answer for none, and asking would count every value as a type it did not know. No value writes a field
+// of that name after its type.
 bool IsTheNameBesideAType(const ibDataNode& node, const ibDataValue& value)
 {
 	if (value.Kind() != ibDataKind::String)
@@ -567,8 +569,12 @@ bool IsTheNameBesideAType(const ibDataNode& node, const ibDataValue& value)
 	if (fields.empty())
 		return false;
 	const std::pair<ibString, ibDataValue> last = fields.back();
-	return last.first.IsSameAs(kValueFieldClsid, false)
-		&& (last.second.Kind() == ibDataKind::String || last.second.Kind() == ibDataKind::Number);
+	if (!last.first.IsSameAs(kValueFieldClsid, false))
+		return false;
+	if (last.second.Kind() == ibDataKind::Number)
+		return last.second.AsUInt() != 0;
+	unsigned long long clsid = 0;
+	return last.second.Kind() == ibDataKind::String && last.second.AsString().ToULongLong(&clsid) && clsid != 0;
 }
 
 } // namespace
