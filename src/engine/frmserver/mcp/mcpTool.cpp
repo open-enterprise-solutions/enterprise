@@ -2106,6 +2106,16 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			return false;
 		}
 
+		// ⭐ AND THE IMAGE A CONFIGURATION'S PICTURE OBJECT HOLDS has a verb too: picture_set takes it as base64
+		// PNG bytes or as SVG, and measures it itself - the {Name, Buffer, Width, Height} it reads back in is not
+		// a shape to assemble by hand (#190).
+		if (dynamic_cast<const ibPropertyExternalPicture*>(property) != nullptr) {
+			refusal = refused + ibT(' ') + ibString::Format(
+				ibMcpText("'%s' is the image itself: picture_set takes it, with `data` (base64 PNG bytes) or "
+				  "`svg`, and a `name`."), name);
+			return false;
+		}
+
 		// …and only the OTHER road needs to know what shape it holds.
 		const ibDataValue held = property->GetNodeValue();
 

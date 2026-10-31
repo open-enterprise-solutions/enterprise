@@ -215,17 +215,69 @@ ibPicture ImageFromBytes(const std::string& bytes)
 }
 
 // THE IMAGE A CONFIGURATION'S PICTURE OBJECT HOLDS, asked of its properties like the picture of any object is.
-const ibPropertyExternalPicture* HeldImage(const ibPropertyObject* object)
+ibPropertyExternalPicture* HeldImage(ibPropertyObject* object)
 {
 	if (object == nullptr)
 		return nullptr;
 
 	for (unsigned int idx = 0; idx < object->GetPropertyCount(); idx++) {
-		if (const ibPropertyExternalPicture* image = dynamic_cast<const ibPropertyExternalPicture*>(object->GetProperty(idx)))
+		if (ibPropertyExternalPicture* image = dynamic_cast<ibPropertyExternalPicture*>(object->GetProperty(idx)))
 			return image;
 	}
 
 	return nullptr;
+}
+
+const ibPropertyExternalPicture* HeldImage(const ibPropertyObject* object)
+{
+	return HeldImage(const_cast<ibPropertyObject*>(object));
+}
+
+// ⭐ AN IMAGE OF ITS OWN, from the caller: base64 PNG bytes in `data`, or SVG drawn here from `svg` - the two
+// roads that bring an image in rather than name one already there. Shared by an object's picture and by a
+// configuration's Picture object, which holds nothing BUT such an image.
+bool ImageGiven(const ibDataNode& params, ibExternalPictureDescription& external, ibString& refusal)
+{
+	const ibString name = ArgName().Text(params);
+
+	if (name.IsEmpty()) {
+		refusal = ibMcpText("An image handed over in `data` or drawn in `svg` needs a `name` to be "
+			"known by. Nothing was set.");
+		return false;
+	}
+
+	const ibString fromSvg = ArgSvg().Text(params);
+
+	if (!fromSvg.IsEmpty()) {
+		ibSize side;
+		return AskedSide(params, side, refusal) && DrawSvg(fromSvg, side, name, external, refusal);
+	}
+
+	ibMemoryBuffer bytes;
+
+	if (!ibBase64::Read(ArgData().Text(params), bytes) || bytes.GetDataLen() == 0) {
+		refusal = ibMcpText("`data` did not decode as base64, or decoded to nothing. "
+			"Nothing was set.");
+		return false;
+	}
+
+	// ⚠ MEASURED, NOT DECLARED. The description carries width and height, and a picture
+	// whose size reads 0 x 0 IS the empty picture (IsEmptyPicture) - so taking those from
+	// the caller would let a perfectly good image arrive and register as absent. They come
+	// from the image itself, which also proves the bytes are an image at all.
+	const ibSize measured = ibPicture(bytes).GetSize();
+	if (measured == ibSize()) {
+		refusal = ibMcpText("Those bytes are not a PNG - the one form the platform keeps a picture in. "
+			"Nothing was set.");
+		return false;
+	}
+
+	external.m_img_name   = std::string(name.utf8_str());
+	external.m_img_buffer = std::string(
+		static_cast<const char*>(bytes.GetData()), bytes.GetDataLen());
+	external.m_width      = (unsigned int)measured.m_width;
+	external.m_height     = (unsigned int)measured.m_height;
+	return true;
 }
 
 } // namespace
@@ -345,6 +397,9 @@ public:
 			"manner of the engine's set. Objects that carry "
 			"a picture are the ones that show one - commands, command groups and sections; an object with no "
 			"picture of its own is refused rather than quietly ignored.\n"
+			"A Picture object of the configuration (a COMMON picture, metadata_create {kind: \"Picture\"}) is "
+			"given its image the same way, with `data` or `svg` - it then appears in picture_list -> "
+			"configuration, and other objects take it through `configuration`.\n"
 			"The same picture can also be given through `value` of metadata_set or form_set in its OWN shape, "
 			"as metadata_properties / form_control read it - that is the road for a control on a form, and "
 			"picture_from_svg draws one in that shape.");
@@ -368,17 +423,6 @@ public:
 		if (object == nullptr)
 			return false;
 
-		ibPropertyPicture* property = PictureProperty(object);
-
-		// ⚠ NO PICTURE OF ITS OWN IS A REFUSAL. Setting nothing and answering true is how a caller
-		// comes to believe an icon was assigned to something that cannot show one.
-		if (property == nullptr) {
-			refusal = ibString::Format(
-				ibMcpText("'%s' has no picture of its own - commands, command groups and sections do. Nothing was set."),
-				object->GetName());
-			return false;
-		}
-
 		const ibString fromEngine = ArgEngine().Text(params);
 		const ibString fromConfig = ArgConfiguration().Text(params);
 		const ibString fromData   = ArgData().Text(params);
@@ -397,6 +441,26 @@ public:
 				? ibMcpText("Say where the picture comes from: `engine`, `configuration`, `data` with "
 					"base64 bytes, or `svg` drawn as text. Nothing was set.")
 				: ibMcpText("Say only ONE source - `engine`, `configuration`, `data` or `svg`. Nothing was set.");
+			return false;
+		}
+
+		// ⭐ A CONFIGURATION'S OWN PICTURE IS FILLED HERE TOO. It holds no reference - it IS the image that
+		// commands, sections and controls refer to by its Guid - so of the four sources only the two that
+		// bring an image in apply. Without this road a common picture could be declared over MCP and never
+		// given anything to show (#190): picture_set refused it, and its Picture property is a structure no
+		// caller assembles by hand.
+		if (ibPropertyExternalPicture* held = HeldImage(object))
+			return SetHeldImage(object, held, params, result, refusal);
+
+		ibPropertyPicture* property = PictureProperty(object);
+
+		// ⚠ NO PICTURE OF ITS OWN IS A REFUSAL. Setting nothing and answering true is how a caller
+		// comes to believe an icon was assigned to something that cannot show one.
+		if (property == nullptr) {
+			refusal = ibString::Format(
+				ibMcpText("'%s' has no picture of its own - commands, command groups, sections and the "
+					"configuration's Picture objects do. Nothing was set."),
+				object->GetName());
 			return false;
 		}
 
@@ -438,48 +502,9 @@ public:
 			description = ibPictureDescription(declared->GetGuid());
 		}
 		else {
-			const ibString name = ArgName().Text(params);
-
-			if (name.IsEmpty()) {
-				refusal = ibMcpText("An image handed over in `data` or drawn in `svg` needs a `name` to be "
-					"known by. Nothing was set.");
-				return false;
-			}
-
 			ibExternalPictureDescription external;
-
-			if (!fromSvg.IsEmpty()) {
-				ibSize side;
-				if (!AskedSide(params, side, refusal) || !DrawSvg(fromSvg, side, name, external, refusal))
-					return false;
-			}
-			else {
-				ibMemoryBuffer bytes;
-
-				if (!ibBase64::Read(fromData, bytes) || bytes.GetDataLen() == 0) {
-					refusal = ibMcpText("`data` did not decode as base64, or decoded to nothing. "
-						"Nothing was set.");
-					return false;
-				}
-
-				// ⚠ MEASURED, NOT DECLARED. The description carries width and height, and a picture
-				// whose size reads 0 x 0 IS the empty picture (IsEmptyPicture) - so taking those from
-				// the caller would let a perfectly good image arrive and register as absent. They come
-				// from the image itself, which also proves the bytes are an image at all.
-				const ibSize measured = ibPicture(bytes).GetSize();
-				if (measured == ibSize()) {
-					refusal = ibMcpText("Those bytes are not a PNG - the one form the platform keeps a picture in. "
-						"Nothing was set.");
-					return false;
-				}
-
-				external.m_img_name   = std::string(name.utf8_str());
-				external.m_img_buffer = std::string(
-					static_cast<const char*>(bytes.GetData()), bytes.GetDataLen());
-				external.m_width      = (unsigned int)measured.m_width;
-				external.m_height     = (unsigned int)measured.m_height;
-			}
-
+			if (!ImageGiven(params, external, refusal))
+				return false;
 			description = ibPictureDescription(external);
 		}
 
@@ -505,6 +530,48 @@ public:
 		ibMcpPictureIdAsText(described);   // the id crosses this door as digits — see mcpTool.h
 		result.AddField(ibT("picture"), described);
 		result.AddField(ibT("empty"), ibDataValue::Bool(stored.IsEmptyPicture()));
+
+		return true;
+	}
+
+private:
+
+	// THE IMAGE A PICTURE OBJECT HOLDS, from `data` or `svg`. An engine picture or another configuration
+	// one is refused rather than copied: the first is shown by naming it, the second already is a common
+	// picture, and a copy of either would be a second image kept under a new name.
+	static bool SetHeldImage(ibValueMetaObject* object, ibPropertyExternalPicture* held,
+		const ibDataNode& params, ibDataNode& result, ibString& refusal)
+	{
+		if (ArgData().Text(params).IsEmpty() && ArgSvg().Text(params).IsEmpty()) {
+			refusal = ibString::Format(
+				ibMcpText("'%s' is a picture of the configuration: it holds an image of its own rather than "
+					"naming one, so it takes `data` (base64 PNG bytes) or `svg`, each with a `name`. Nothing was set."),
+				object->GetName());
+			return false;
+		}
+
+		ibExternalPictureDescription external;
+		if (!ImageGiven(params, external, refusal))
+			return false;
+
+		held->SetValue(external);
+		activeMetaData->Modify(true);
+
+		result.SetValue(ibT("object"), object->GetName());
+		result.AddField(ibT("set"), ibDataValue::Bool(true));
+
+		// READ BACK OFF THE PROPERTY, in the shape it reads in - {Name, Buffer, Width, Height}, which is also
+		// what picture_to_svg takes for one of these.
+		const ibExternalPictureDescription& stored = held->GetValueAsPictureDesc();
+
+		ibDataValue described;
+		if (!ibExternalPictureDescriptionMemory::WriteNode(described, stored)) {
+			refusal = ibMcpText("The picture was set, but could not be read back to confirm it.");
+			return false;
+		}
+		result.AddField(ibT("picture"), described);
+		result.AddField(ibT("empty"), ibDataValue::Bool(stored.m_width == 0 || stored.m_height == 0));
+		result.SetValue(ibT("guid"), ibGuid(object->GetGuid()));
 
 		return true;
 	}
