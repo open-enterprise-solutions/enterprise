@@ -29,6 +29,7 @@
 #include "core/fiber/fiber.h"             // StackLow — a nested query is native recursion with no count
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — a field's empty value, for a NULL key
 #include "core/query/queryAggregates.h"   // ibQueryAggregatesFor — CheckNames refuses what a type does not admit
+#include "backend/system/value/valueList.h"   // IN (&list) takes a value list's values, not its items
 
 // ⚠ NAMED, NOT INHERITED. std::find / std::remove_if arrived in this file with the grouping and
 // prune passes; MSVC hands <algorithm> over transitively and GCC/Clang do not, so the Windows build
@@ -2146,6 +2147,11 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			// array works as an IN set. A scalar / literal goes in as-is (CreateIterator == null).
 			for (const ibQueryAstExprPtr& item : e.m_list) {
 				ibValue v = EvalValue(*item, params);
+				// A value list walks as its items. IN wants the values those items hold.
+				if (const ibValueValueList* const list = dynamic_cast<const ibValueValueList*>(v.GetRef())) {
+					list->AppendValues(values);
+					continue;
+				}
 				if (std::shared_ptr<ibValueIteratorState> it = v.CreateIterator()) {
 					ibValue elem;
 					while (it->MoveNext(elem))
