@@ -23,8 +23,9 @@
 //	     like a date, so it reads back as a String. So does a Guid's text; whoever asks for
 //	     a date or a guid reads one out of it (ibDataValue::AsDate, AsGuid).
 //	  2. NodeType emits the resolved type NAME (numeric clsid only as a fallback), and
-//	     TypeDesc is injected beside typeId with no node entry behind it. TypeDesc is
-//	     parsed and dropped; a name-form NodeType needs SetTypeLookup (below) to become a
+//	     TypeDesc is injected beside typeId, `type` beside a packed value's `t`, with no node
+//	     entry behind either. TypeDesc is dropped wherever it stands, `type` where it stands right
+//	     after `t`; a name-form NodeType needs SetTypeLookup (below) to become a
 //	     clsid again, and without one the node keeps clsid 0 rather than inventing a value —
 //	     and the word itself, as its field NodeType, for whoever can look it up (LookupTypes).
 //	Closing 1 means changing what WRITE emits — a separate lossless emitter, not more
@@ -56,7 +57,8 @@ public:
 	bool Write(const ibDataNode& root, ibString& text) const;
 	bool Read(const ibString& text, ibDataNode& root) const;
 	// …and what one key of an object is to its node, its value read by whoever read the text: the structural keys
-	// (NodeType — by the lookup below, NodeId, NodeRaw; TypeDesc dropped), a node a property, the rest fields. False when
+	// (NodeType — by the lookup below, NodeId, NodeRaw; TypeDesc, and the `type` right after a value's `t`, dropped),
+	// a node a property, the rest fields. False when
 	// a structural key holds what it cannot. NodeChildren are not one: the reader descends into them itself.
 	bool ReadEntry(ibDataNode& node, const ibString& key, ibDataValue value) const;
 

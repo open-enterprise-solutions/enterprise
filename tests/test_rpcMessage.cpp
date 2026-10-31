@@ -103,6 +103,24 @@ TEST(RpcMessage,ParseRequest_ArgumentsArriveWhereTheToolsLookForThem)
 		<< "an object argument must land in the node's properties";
 }
 
+TEST(RpcMessage,ParseRequest_AValuesTypeNamedBesideItIsNotAFieldOfIt)
+{
+	// What an answer wrote beside a packed value's type - `"type": "Number"` after its `t` - comes back in the next
+	// request, read before any base is known: it is no field of the value, and no type the request did not know.
+	ibRpcRequest request;
+	ibString error;
+	bool unknownType = true;
+	ASSERT_TRUE(ibRpcParseRequest(
+		wxT("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"call\",\"params\":")
+		wxT("{\"Value\":{\"t\":\"104754294576172486\",\"type\":\"Number\",\"v\":5}}}"),
+		request, error, unknownType)) << error.ToStdString();
+	const auto value = request.m_params.FindChild(ibT("Value"));
+	ASSERT_TRUE(value);
+	EXPECT_EQ(value->Fields().size(), 2u);
+	EXPECT_FALSE(value->FindField(ibT("type")).has_value());
+	EXPECT_FALSE(unknownType);
+}
+
 TEST(RpcMessage,ParseRequest_Rubbish_IsRefusedInWords)
 {
 	ibRpcRequest request;

@@ -12,6 +12,7 @@
 #include <string>
 
 #include "core/serialize/provider/jsonProvider.h"
+#include "core/core.h"                          // kValueFieldClsid / kValueFieldData, the primitives' class ids
 #include "backend/backend_exception.h"
 
 // After wx: windows.h first would leave its macros in wx's way.
@@ -457,4 +458,95 @@ TEST(JsonProvider, Nesting_AtTheLimit_FitsASmallThreadStack) {
 		}
 	});
 	EXPECT_TRUE(read);
+}
+
+// =============================================================================
+// The name written beside a value's type: a courtesy for whoever reads the text, dropped on the way back - so a node
+// read and written again is the same node and the same text, round after round.
+// =============================================================================
+
+namespace {
+
+ibJsonProvider NamingNumbers()
+{
+	ibJsonProvider provider;
+	provider.SetTypeResolver([](ibClassID clsid) {
+		return clsid == g_valueNumberCLSID ? ibString(ibT("Number")) : ibString();
+	});
+	provider.SetTypeLookup([](const ibString& name) {
+		return name == ibT("Number") ? g_valueNumberCLSID : ibClassID(0);
+	});
+	return provider;
+}
+
+ibDataNode AValueOfFive()
+{
+	ibDataNode node;
+	node.SetValue(kValueFieldClsid, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(g_valueNumberCLSID)));
+	node.SetValue(kValueFieldData, ibNumber(5));
+	return node;
+}
+
+} // namespace
+
+TEST(JsonProvider, TheNameBesideAValuesTypeIsDroppedOnRead_SoARoundTripDoesNotGrow)
+{
+	const ibJsonProvider provider = NamingNumbers();
+	ibString first;
+	ASSERT_TRUE(provider.Write(AValueOfFive(), first));
+	ASSERT_NE(first.Find(ibT("\"type\": \"Number\"")), wxNOT_FOUND) << first;   // the courtesy is written
+	ibDataNode read;
+	ASSERT_TRUE(provider.Read(first, read));
+	EXPECT_EQ(read.Fields().size(), 2u);   // t and v - no third field from the courtesy
+	EXPECT_FALSE(read.FindField(ibT("type")).has_value());
+	ibString second;
+	ASSERT_TRUE(provider.Write(read, second));
+	EXPECT_EQ(second, first);
+}
+
+TEST(JsonProvider, AFieldCalledTypeAnywhereElseStaysAField)
+{
+	const ibString number = ibString::Format(ibT("%llu"), static_cast<unsigned long long>(g_valueNumberCLSID));
+	// Not beside a value's type; after it, but not right after; right after it, but no name.
+	for (const ibString& text : { ibString(ibT("{\"Name\": \"x\", \"type\": \"text\"}")),
+			ibString(ibT("{\"t\": \"")) + number + ibT("\", \"v\": 5, \"type\": \"text\"}"),
+			ibString(ibT("{\"t\": \"")) + number + ibT("\", \"type\": 7}") }) {
+		ibDataNode read;
+		ASSERT_TRUE(NamingNumbers().Read(text, read));
+		EXPECT_TRUE(read.FindField(ibT("type")).has_value()) << text;
+	}
+}
+
+TEST(JsonProvider, ALookupThatKnowsNoNameStillDropsTheNameBesideAValuesType)
+{
+	// The thin client's requests are read with a lookup that knows no configuration's names: it answers 0 for Number,
+	// and the courtesy is still told by its place - and the lookup is not asked about it at all.
+	ibString first;
+	ASSERT_TRUE(NamingNumbers().Write(AValueOfFive(), first));
+	int asked = 0;
+	ibJsonProvider knowingNothing;
+	knowingNothing.SetTypeLookup([&asked](const ibString&) { ++asked; return ibClassID(0); });
+	ibDataNode read;
+	ASSERT_TRUE(knowingNothing.Read(first, read));
+	EXPECT_EQ(read.Fields().size(), 2u);
+	EXPECT_EQ(asked, 0);
+}
+
+TEST(JsonProvider, TheNameBesideATypeWrittenAsANumberIsDroppedToo)
+{
+	// `t` as a number, as a hand-written text may have it: the emitter names it all the same, and the reader drops that.
+	ibDataNode read;
+	const ibString number = ibString::Format(ibT("%llu"), static_cast<unsigned long long>(g_valueNumberCLSID));
+	const ibString text = ibString(ibT("{\"t\": ")) + number + ibT(", \"type\": \"Number\", \"v\": 5}");
+	ASSERT_TRUE(NamingNumbers().Read(text, read));
+	EXPECT_EQ(read.Fields().size(), 2u);
+}
+
+TEST(JsonProvider, WithNoLookupTheNameBesideAValuesTypeIsDroppedByItsPlace)
+{
+	ibString first;
+	ASSERT_TRUE(NamingNumbers().Write(AValueOfFive(), first));
+	ibDataNode read;
+	ASSERT_TRUE(ibJsonProvider().Read(first, read));
+	EXPECT_EQ(read.Fields().size(), 2u);
 }
