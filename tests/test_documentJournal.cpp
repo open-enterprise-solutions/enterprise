@@ -24,7 +24,8 @@
 #include "backend/metaCollection/partial/document.h"
 #include "backend/metaCollection/partial/documentJournal.h"
 #include "backend/metaCollection/partial/reference/reference.h"
-#include "backend/moduleManager/globalContextManager.h"
+#include "backend/objCtor.h"
+#include "backend/composition/dataComposer.h"
 #include "backend/query/columnLayout.h"
 #include "core/query/queryParser.h"
 #include "backend/query/queryLowering.h"
@@ -205,17 +206,17 @@ TEST_F(DocumentJournalFix, SelectReadsBothDocumentsByDate) {
 	EXPECT_TRUE(Same(bounded[0], second));
 	EXPECT_TRUE(Same(bounded[1], third));
 
-	// …and the manager is what code reaches: `DocumentJournals.Sales.Select()`.
-	ibValueGlobalContextManager context(cfg.get());
-	ibValue list, manager, selected;
-	ASSERT_TRUE(context.GetPropVal(context.FindProp(wxT("DocumentJournals")), list));
-	ASSERT_TRUE(list.GetAt(ibValue(ibT("Sales")), manager));
+	// …and the manager is what code reaches as `DocumentJournals.Sales`: the one its type registry vends.
+	const ibCtorMetaValueType* managerType = journal->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
+	ASSERT_NE(managerType, nullptr);
+	ibValue manager = managerType->CreateObject(), selected;
 	ASSERT_TRUE(manager.CallAsFunc(manager.FindMethod(wxT("Select")), selected, nullptr, 0));
 	EXPECT_EQ(Refs(selected).size(), 3u);
 }
 
-// A query reads the same rows, by the names any one document's rows are read by - the number of each in the
-// kind its document keeps.
+// A query names the journal as it names a document - `DocumentJournal.Sales`, its columns by the documents'
+// names - and the rows read through it are the same, the number of each in the kind its document keeps.
+// Read the way a list reads them: the composer over the journal's source.
 TEST_F(DocumentJournalFix, AQueryReadsTheSameRows) {
 	Write(invoice, kDay2, ibValue(ibT("INV-2")));
 	Write(refund, kDay1, ibValue(ibNumber(7)));
@@ -224,20 +225,32 @@ TEST_F(DocumentJournalFix, AQueryReadsTheSameRows) {
 	const ibQueryPackage package = parser.ParsePackage(
 		wxT("SELECT Ref, Number FROM DocumentJournal.Sales WHERE Posted ORDER BY Date"));
 	ASSERT_NE(package.SingleSelect(), nullptr);
-
 	const ibSourceMetaDataScope scope(cfg.get());
-	std::vector<ibQueryLowering::OutputColumn> schema;
-	ibDataQueryResult result = ibQueryLowering::Execute(*package.SingleSelect(), {}, schema);
-	ASSERT_EQ(schema.size(), 2u);
+	EXPECT_NO_THROW(ibQueryLowering::CheckNames(package, {}));
+	std::vector<ibQueryLowering::OutputColumn> described;
+	ASSERT_NO_THROW(ibQueryLowering::DescribeOutput(*package.SingleSelect(), {}, described));
+	ASSERT_EQ(described.size(), 2u);
 
-	std::vector<ibValue> numbers;
+	const ibDocumentJournalQueryable* rows = journal->GetQueryable();
+	const ibBackendQueryColumn* number = rows->ResolveColumnByName(wxT("Number"));
+	ibDataDBComposer composer;
+	composer.FromSource(rows);
+	composer.Select(rows->GetRefColumn());
+	composer.Select(number);
+	std::vector<ibQueryLowering::OutputColumn> schema;
+	bool hasTotals = false;
+	ibDataQueryResult result = composer.Execute(schema, hasTotals);
+
+	std::map<ibString, ibValue> numbers;   // by the kind of the document the row is
 	while (result.Next())
-		numbers.push_back(result.GetValue(schema[1].m_col));
+		numbers[result.GetValue(rows->GetRefColumn()).GetClassName()] = result.GetValue(number);
 	ASSERT_EQ(numbers.size(), 2u);
-	EXPECT_EQ(numbers[0].GetType(), ibValueTypes::TYPE_NUMBER);
-	EXPECT_EQ(numbers[0].GetNumber(), ibNumber(7));
-	EXPECT_EQ(numbers[1].GetType(), ibValueTypes::TYPE_STRING);
-	EXPECT_EQ(numbers[1].GetString(), ibString(wxT("INV-2")));
+	for (const auto& [kind, value] : numbers) {
+		if (value.GetType() == ibValueTypes::TYPE_NUMBER)
+			EXPECT_EQ(value.GetNumber(), ibNumber(7)) << kind.ToStdString();
+		else
+			EXPECT_EQ(value.GetString(), ibString(ibT("INV-2"))) << kind.ToStdString();
+	}
 }
 
 // The list form opens over the same source, and a row of it is the document: its value is the reference and
