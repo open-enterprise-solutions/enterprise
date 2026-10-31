@@ -16,6 +16,7 @@
 #include "backend/compiler/procUnit.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
+#include "backend/backend_localization.h"            // Tstr — the language a caption is read in
 
 #include "systemManagerEnum.h"
 
@@ -351,9 +352,15 @@ short ibValueSystemFunction::Asc(const ibValue& cSource)
 //
 // Since 2026-09-21 the reading itself says so — a source in no format is itself — and this function
 // no longer adds it back by hand.
+//
+// 🛑 NO LANGUAGE NAMED READ THE FIRST ONE WRITTEN. An empty code matches no language, so the reading
+// fell back to the first written, and `Tstr(text)` showed every user the same language whatever
+// theirs was (#612). Left unsaid, the language is the one every caption on the screen is read in.
 ibString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
 {
-	return ibLocalization::GetTranslateGetRawLocText(cLanguage.GetString(), cSource.GetString());
+	const ibString& language = cLanguage.GetString();
+	return ibLocalization::GetTranslateGetRawLocText(
+		!language.IsEmpty() ? language : ibBackendLocalization::GetUserLanguage(), cSource.GetString());
 }
 
 //--- Date and time:

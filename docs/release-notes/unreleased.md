@@ -19,6 +19,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Script language
 
+- **`Tstr(text)` without a language reads the user's language.** It read the first language
+  written in the text, so every user saw the same one. A language the text does not carry still
+  falls back to the first written; a named language is read as before.
 - **XML: `XMLReader`, `XMLWriter`, `XMLNamespaceContext`, `XMLNodeType`.** A script reads a document
   node by node and writes one, to a file or to a string, in UTF-8, UTF-16, windows-1251 or cp866.
   The parser is expat, built into the engine; an external entity is refused, not read. A file the
