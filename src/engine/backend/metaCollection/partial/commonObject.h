@@ -1897,12 +1897,6 @@ public:
 	virtual bool HasPeriod() const { return false; }
 	virtual bool HasRecorder() const { return true; }
 
-	// WHAT KEEPS THIS REGISTER FROM BEING SAVED, in the words the save refuses with - empty when nothing
-	// does. One question for both who ask it: the save (OnSaveMetaObject) and config_check, which asks it
-	// of every register before anybody saves, so a half-built one is found where it is and not behind a
-	// refusal of the whole configuration (#189).
-	ibString GetSaveRefusal() const;
-
 	// The unit a record's period is kept to — as written, to the second, unless the register says otherwise.
 	virtual ibTotalsPeriod GetPeriodicityUnit() const { return ibTotalsPeriod::Second; }
 

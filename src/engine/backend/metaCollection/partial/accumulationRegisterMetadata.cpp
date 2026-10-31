@@ -164,7 +164,6 @@ bool ibValueMetaObjectAccumulationRegister::OnSaveMetaObject(int flags)
 	if (!(*m_propertyObjectModule)->OnSaveMetaObject(flags))
 		return false;
 
-	// (A recorder is the base's question - GetSaveRefusal - asked by the save and by config_check alike.)
 	return ibValueMetaObjectRegisterData::OnSaveMetaObject(flags);
 }
 

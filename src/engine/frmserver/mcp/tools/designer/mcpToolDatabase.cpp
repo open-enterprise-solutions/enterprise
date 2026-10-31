@@ -728,9 +728,9 @@ public:
 	{
 		return ibMcpText("WHAT IS UNFINISHED IN THIS CONFIGURATION, object by object - the questions each "
 			"verb asks about the thing it just touched, asked of everything at once. Only faults "
-			"that BITE: what will refuse to save (a composer with a nameless variant), and what "
-			"produces silence for the person using it (a report showing no columns, an attribute "
-			"that can hold no type, a register with no resources). Ask it when picking up a base "
+			"that BITE: what will refuse to save (a composer with a nameless variant, a register "
+			"with no column or no recorder), and what produces silence for the person using it (a "
+			"report showing no columns, an attribute that can hold no type). Ask it when picking up a base "
 			"somebody else built, and before saving or applying.");
 	}
 
@@ -878,15 +878,14 @@ public:
 			}
 
 			// ⭐ A REGISTER THE SAVE WOULD REFUSE — no column at all, or written by a recorder and bound to
-			// none. Asked here in the save's own words (GetSaveRefusal), because the save refuses the WHOLE
-			// configuration over one of them: every other change of the session waited behind a sequence
-			// that was still being built, and nothing said so until the save (#189).
+			// none. The save itself is asked (ibMcpComplaints), because it refuses the WHOLE configuration over
+			// one of them: every other change of the session waited behind a sequence that was still being
+			// built, and nothing said so until the save (#189).
 			const ibValueMetaObjectRegisterData* registerData = nullptr;
 			if (object->ConvertToValue(registerData)) {
 
-				const ibString refusal = registerData->GetSaveRefusal();
-				if (!refusal.IsEmpty())
-					complain(object, refusal);
+				for (const ibString& one : ibMcpComplaints(object))
+					complain(object, one);
 
 				continue;
 			}
