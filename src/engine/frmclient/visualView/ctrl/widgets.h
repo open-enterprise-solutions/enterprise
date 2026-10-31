@@ -100,8 +100,9 @@ private:
 	ibControlCheckbox* m_checkbox = nullptr;
 };
 
-// A radio button — shown selected as the State says; it has no data source, and its click stays on the client, as the
-// desktop's did.
+// A radio button — shown selected as the State says, and only so: which one of a switch is selected is the server's
+// (its source's value, or its own Selected), so wx groups none of them. Clicked, it says so (Toggle); a read-only one
+// puts the click back itself.
 class ibValueRadioButton : public ibValueWindow {
 public:
 	ibValueRadioButton(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
@@ -112,6 +113,7 @@ public:
 
 private:
 	wxRadioButton* m_radioButton = nullptr;
+	bool m_readOnly = false;
 };
 
 // A slider between its ends, its thumb where the form put it; moved, it stays on the client, as the desktop's did. Its

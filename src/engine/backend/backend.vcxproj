@@ -322,6 +322,7 @@
     <ClInclude Include="propertyManager\property\propertyNumber.h" />
     <ClInclude Include="propertyManager\property\propertyList.h" />
     <ClInclude Include="propertyManager\property\propertyOwner.h" />
+    <ClInclude Include="propertyManager\property\propertyValue.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfCharacteristicTypes.h" />
     <ClInclude Include="propertyManager\property\propertyAccountingKind.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfAccounts.h" />
@@ -860,6 +861,7 @@
     <ClCompile Include="propertyManager\property\propertyNumber.cpp" />
     <ClCompile Include="propertyManager\property\propertyList.cpp" />
     <ClCompile Include="propertyManager\property\propertyOwner.cpp" />
+    <ClCompile Include="propertyManager\property\propertyValue.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfCharacteristicTypes.cpp" />
     <ClCompile Include="propertyManager\property\propertyAccountingKind.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfAccounts.cpp" />

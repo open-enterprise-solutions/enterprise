@@ -278,6 +278,7 @@
     <ClCompile Include="visualView\ctrl\notebookPage_res.cpp" />
     <ClCompile Include="visualView\ctrl\notebook_res.cpp" />
     <ClCompile Include="visualView\ctrl\radiobutton.cpp" />
+    <ClCompile Include="visualView\ctrl\radiobuttonEvent.cpp" />
     <ClCompile Include="visualView\ctrl\radiobutton_res.cpp" />
     <ClCompile Include="visualView\ctrl\sizer.cpp" />
     <ClCompile Include="visualView\ctrl\slider.cpp" />

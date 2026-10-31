@@ -4,6 +4,7 @@
 #include "window.h"
 #include "typeControl.h"
 #include "core/description/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
+#include "backend/propertyManager/property/propertyValue.h"           // ibPropertyValue — the value a radio button stands for
 #include "backend/propertyManager/property/propertyCommandSource.h"   // ibPropertyCommandSource — assign a COMMAND to the button
 #include "frmserver/visualView/layers/commandReceiver.h"             // ibFrontendCommandReceiver — the command door the button IS-A (IS-A ibBackendCommandReceiver too)
 
@@ -495,19 +496,69 @@ private:
 	friend class ibValueForm;
 };
 
-class ibValueRadioButton : public ibValueWindow {
+// ⭐ A RADIO BUTTON STANDS FOR ONE VALUE OF ITS SOURCE. Bound, it is selected while the source holds its ChoiceValue,
+// and a click writes that value in — so the buttons bound to the same field are one switch, each the value it
+// stands for (a number, a string, a member of an enumeration). Unbound, it is the plain button it always was: its
+// Selected decides, and a click selects it among the unbound buttons beside it.
+class ibValueRadioButton : public ibValueWindow,
+	public ibTypeControlFactory {
 	public:
 
 	void SetCaption(const ibString& caption) { return m_propertyTitle->SetValue(caption); }
 	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
+	////////////////////////////////////////////////////////////////////////////////////////
+	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); }
+	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); }
+	// The value it stands for among its source's.
+	void SetChoiceValue(const ibValue& value) { m_propertyChoiceValue->SetValue(value); }
+	ibValue GetChoiceValue() const { return m_propertyChoiceValue->GetValueAsValue(); }
+	////////////////////////////////////////////////////////////////////////////////////////
+
+	// Available sources = the owning form's attributes.
+	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const override;
+
+	//get source object
+	virtual ibSourceObject* GetSourceObject() const;
+
+	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
+
+	// NEVER "unbound" — a radio button with no source is the plain button, and it shows.
+	virtual bool IsUnbound() const override { return false; }
+	// Bound to a field this base does not use -> not available.
+	virtual bool IsAvailable() const override { return m_propertySource->IsAvailable() && ibValueWindow::IsAvailable(); }
+
+	// Read-only at run time: a binding that cannot be written (a dotted reference, a view-only form, a read-only
+	// source). Selected as the value says, a click is refused.
+	virtual bool IsReadOnly() const override;
+
+	//get source attribute
+	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {
+		return m_propertySource->GetSourceAttributeObject();
+	}
+
+	//get form owner
+	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
+
+	//get metaData
+	virtual const ibMetaData* GetMetaData() const;
+
+	//get type description
+	virtual ibTypeDescription& GetTypeDesc() const { return m_propertySource->GetValueAsTypeDesc(); }
+
 	ibValueRadioButton();
 
 	//get title
-	virtual ibString GetControlTitle() const { return GetCaption(); }
+	virtual ibString GetControlTitle() const;
 
-	// The caption in the session's language, and whether it is shown selected.
+	// Whether it shows selected: bound — the source holds its ChoiceValue; unbound — its Selected.
+	bool IsSelected() const;
+
+	// The caption in the session's language, whether it is shown selected and whether it is read-only.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
+
+	// Toggle — the button clicked (it is selected by it).
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 	//support icons
 	virtual ibPicture GetIcon() const;
@@ -517,12 +568,33 @@ class ibValueRadioButton : public ibValueWindow {
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;
 
+	virtual bool HasValueInControl() const { return !m_propertySource->IsEmptyProperty(); }
+	virtual bool GetControlValue(ibValue& pvarControlVal) const;
+
 private:
+
+	// The click: bound — its ChoiceValue written into the source; unbound — it selected, the unbound buttons beside
+	// it not. Then OnChange.
+	void OnClickedRadioButton();
+
 	ibPropertyCategory* m_categoryRadioButton = ibPropertyObject::CreatePropertyCategory(ibT("RadioButton"), _("Radio button"));
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryRadioButton, ibT("Title"), _("Title"),
 		_("The radio button's caption. Can be written per language."), ibT("Radio button"));
 	ibPropertyBoolean* m_propertySelected = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryRadioButton, ibT("Selected"), _("Selected"),
-		_("Whether the radio button is shown selected. A radio button has no data source of its own."));
+		_("Whether an unbound radio button is shown selected; a click selects it among the unbound radio buttons beside it. A bound one is selected by its source's value instead (Choice value)."));
+
+	ibPropertyCategory* m_categorySource = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
+	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categorySource, ibT("Source"), _("Source"),
+		_("Optional: the value the radio button stands among - a form attribute or a field of the form's object. Radio buttons bound to the same field are one switch: each is selected while the field holds its Choice value, and a click writes that value in. Bound through a reference path, or on a view-only form, it shows the value but cannot be clicked."),
+		ibValueTypes::TYPE_EMPTY);
+	ibPropertyValue* m_propertyChoiceValue = ibPropertyObject::CreateProperty<ibPropertyValue>(m_categorySource, ibT("ChoiceValue"), _("Choice value"),
+		_("The value this radio button stands for, of its source's type: a number, a string, a date, True or False, a member of an enumeration (chosen by its name)."),
+		m_propertySource);
+
+	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
+	ibEventControl* m_onChange = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("OnChange"), _("On change"), std::vector<ibString>{ ibT("Control") });
+
+	friend class ibValueForm;
 };
 
 class ibValueStaticLine : public ibValueWindow {
