@@ -49,6 +49,12 @@ public:
 	ibTypeDescription& GetTypesOfCharacteristics() const { return m_propertyTypesOfCharacteristics->GetValueAsTypeDesc(); }
 
 	ibValueMetaObjectAttributePredefined* GetDataType() const { return m_propertyAttributeType->GetMetaObject(); }
+
+	// ⭐ A PREDEFINED CHARACTERISTIC DECLARES ITS TYPE (#278) - the one thing code asks of it besides its name,
+	// and what a field typed by it holds.
+	virtual std::vector<ibValueMetaObjectAttributeBase*> GetPredefinedCellAttributes() const override {
+		return { GetDataType() };
+	}
 	virtual bool IsDataType(const ibMetaID& id) const { return id == (*m_propertyAttributeType)->GetMetaID(); }
 
 	// ⭐⭐ A KIND OF THIS CHART LIMITS WHAT ITS VALUE MAY BE, and here that is said to the runtime. The

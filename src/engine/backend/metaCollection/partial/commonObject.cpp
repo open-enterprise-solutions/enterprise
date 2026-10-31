@@ -1157,6 +1157,104 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::DeletePredefinedValue(const
 	m_metaData->Modify(true);
 }
 
+std::vector<ibValueMetaObjectAttributeBase*> ibValueMetaObjectRecordDataHierarchyMutableRef::GetPredefinedLineAttributes(
+	const ibValueMetaObjectTableData* table) const
+{
+	std::vector<ibValueMetaObjectAttributeBase*> columns;
+	if (table == nullptr)
+		return columns;
+	for (ibValueMetaObjectAttributeBase* column : table->GetGenericAttributeArrayObject())
+		if (column != nullptr && !column->IsDeleted() && column != table->GetNumberLine())
+			columns.push_back(column);
+	return columns;
+}
+
+namespace {
+const ibString kCellReferenceOf   = ibT("Of");     // the object a declared reference points into
+const ibString kCellReferenceItem = ibT("Item");   // …and the guid of what it points at
+
+// Declared cells, as written: an Array of { Id - the attribute's metaID, Value - its stored form }.
+ibDataValue WriteCells(const ibValueMetaObjectRecordDataHierarchyMutableRef::ibPredefinedCells& cells)
+{
+	std::vector<ibDataValue> written;
+	for (const auto& cell : cells) {
+		auto entry = std::make_shared<ibDataNode>();
+		entry->SetValue(ibT("Id"), (std::int32_t)cell.first);
+		entry->AddField(ibT("Value"), cell.second);
+		written.push_back(ibDataValue::Child(entry));
+	}
+	return ibDataValue::Array(written);
+}
+
+ibValueMetaObjectRecordDataHierarchyMutableRef::ibPredefinedCells ReadCells(const ibDataValue& written)
+{
+	ibValueMetaObjectRecordDataHierarchyMutableRef::ibPredefinedCells cells;
+	if (written.Kind() != ibDataKind::Array)
+		return cells;
+	for (const ibDataValue& item : written.AsArray()) {
+		const auto entry = item.AsChild();
+		const auto value = entry ? entry->FindField(ibT("Value")) : std::nullopt;
+		if (value && value->Kind() == ibDataKind::Child)
+			cells.insert_or_assign((ibMetaID)entry->GetValue<std::int32_t>(ibT("Id")), *value);
+	}
+	return cells;
+}
+}
+
+ibDataValue ibValueMetaObjectRecordDataHierarchyMutableRef::PackPredefinedCell(const ibValue& value) const
+{
+	std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+
+	ibValueReferenceDataObject* reference = nullptr;
+	if (value.ConvertToValue(reference) && reference != nullptr && reference->GetMetaObject() != nullptr) {
+		node->SetValue(kCellReferenceOf, (std::int32_t)reference->GetMetaObject()->GetMetaID());
+		node->SetValue(kCellReferenceItem, ibGuid(reference->GetGuid()));
+		return ibDataValue::Child(node);
+	}
+
+	m_metaData->Serialize(value, *node);
+	return ibDataValue::Child(node);
+}
+
+ibValue ibValueMetaObjectRecordDataHierarchyMutableRef::UnpackPredefinedCell(const ibDataValue& stored) const
+{
+	const std::optional<ibDataNode> node = stored.AsChild();
+	if (!node)
+		return ibValue();
+
+	// RAW, as the seed's own references are (commonObjectSchema.cpp): the identity, nothing read.
+	if (node->Has(kCellReferenceItem))
+		return ibValuePtr<ibValueReferenceDataObject>(ibValueReferenceDataObject::Create(m_metaData,
+			(ibMetaID)node->GetValue<std::int32_t>(kCellReferenceOf), node->GetValue<ibGuid>(kCellReferenceItem),
+			ibReferenceLoad::OnDemand));
+
+	return m_metaData->Deserialize(*node);
+}
+
+void ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedCells(const ibGuid& predefinedGuid,
+	const ibPredefinedCells& cells, const ibPredefinedLines& lines)
+{
+	const wxObjectDataPtr<ibPredefinedValueObject> item = FindPredefinedValue(predefinedGuid);
+	if (item == nullptr)
+		return;
+
+	for (const auto& cell : cells) {
+		if (cell.second.Kind() == ibDataKind::Child)
+			item->m_cells.insert_or_assign(cell.first, cell.second);
+		else
+			item->m_cells.erase(cell.first);
+	}
+
+	for (const auto& table : lines) {
+		if (table.second.empty())
+			item->m_lines.erase(table.first);
+		else
+			item->m_lines.insert_or_assign(table.first, table.second);
+	}
+
+	m_metaData->Modify(true);
+}
+
 //***************************************************************************
 //*                       Save & load metaData                              *
 //***************************************************************************
@@ -1174,6 +1272,27 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 		pv->SetValue(ibT("IsFolder"), (bool)value->IsPredefinedFolder());
 		if (value->GetPredefinedParent() != nullptr)
 			pv->SetValue(ibT("Parent"), value->GetPredefinedParent()->GetPredefinedGuid());
+		// What it declares beyond that (ibPredefinedCells) - absent where it declares nothing, so an item
+		// of a catalog is written exactly as before.
+		if (!value->GetPredefinedCells().empty())
+			pv->AddField(ibT("Cells"), WriteCells(value->GetPredefinedCells()));
+		if (!value->GetPredefinedLines().empty()) {
+			std::vector<ibDataValue> tables;
+			for (const auto& table : value->GetPredefinedLines()) {
+				std::vector<ibDataValue> rows;
+				for (const ibPredefinedLine& line : table.second) {
+					auto row = std::make_shared<ibDataNode>();
+					row->SetValue(ibT("Guid"), line.m_id);
+					row->AddField(ibT("Cells"), WriteCells(line.m_cells));
+					rows.push_back(ibDataValue::Child(row));
+				}
+				auto entry = std::make_shared<ibDataNode>();
+				entry->SetValue(ibT("Table"), (std::int32_t)table.first);
+				entry->AddField(ibT("Rows"), ibDataValue::Array(rows));
+				tables.push_back(ibDataValue::Child(entry));
+			}
+			pv->AddField(ibT("Lines"), ibDataValue::Array(tables));
+		}
 		predefined.push_back(ibDataValue::Child(pv));
 	}
 	node.SetProperty(ibT("Predefined"), ibDataValue::Array(predefined));
@@ -1208,6 +1327,26 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 			const bool valueIsFolder = pv->GetValue<bool>(ibT("IsFolder"));
 			m_predefinedObjectVector.emplace_back(
 				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription, valueIsFolder));
+			ibPredefinedValueObject* const read = m_predefinedObjectVector.back().get();
+			if (const auto cells = pv->FindField(ibT("Cells")))
+				read->m_cells = ReadCells(*cells);
+			if (const auto tables = pv->FindField(ibT("Lines")); tables && tables->Kind() == ibDataKind::Array) {
+				for (const ibDataValue& table : tables->AsArray()) {
+					const auto entry = table.AsChild();
+					const auto rows = entry ? entry->FindField(ibT("Rows")) : std::nullopt;
+					if (!rows || rows->Kind() != ibDataKind::Array)
+						continue;
+					std::vector<ibPredefinedLine>& lines = read->m_lines[(ibMetaID)entry->GetValue<std::int32_t>(ibT("Table"))];
+					for (const ibDataValue& row : rows->AsArray()) {
+						const auto line = row.AsChild();
+						if (!line)
+							continue;
+						const auto lineCells = line->FindField(ibT("Cells"));
+						lines.push_back({ line->GetValue<ibGuid>(ibT("Guid")),
+							lineCells ? ReadCells(*lineCells) : ibPredefinedCells() });
+					}
+				}
+			}
 			if (pv->Has(ibT("Parent")))
 				parents.emplace_back(m_predefinedObjectVector.back(), pv->GetValue<ibGuid>(ibT("Parent")));
 		}

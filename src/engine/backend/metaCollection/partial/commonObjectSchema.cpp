@@ -254,11 +254,12 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	//
 	// It is also the schema-authority rule (docs/private/schema-authority.md): what DDL to emit is decided by
 	// the two configurations, never by asking the database what it currently holds.
+	const std::vector<ibValueMetaObjectAttributeBase*> declarable = GetPredefinedCellAttributes();
 	for (const auto& object : m_predefinedObjectVector) {
 		const wxObjectDataPtr<ibPredefinedValueObject>& parent = object->GetPredefinedParent();
 
-		t.AddRow(object->GetPredefinedGuid(), object->GetPredefinedName())
-			.Set(GetDataReference()->GetQueryColumn(),
+		ibSchemaSeedRow& row = t.AddRow(object->GetPredefinedGuid(), object->GetPredefinedName());
+		row.Set(GetDataReference()->GetQueryColumn(),
 				ibValuePtr<ibValueReferenceDataObject>(
 					ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid(), ibReferenceLoad::OnDemand)))
 			.Set(m_propertyAttributePredefined->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedName()))
@@ -270,5 +271,50 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 				ibValuePtr<ibValueReferenceDataObject>(
 					ibValueReferenceDataObject::Create(this, parent != nullptr ? parent->GetPredefinedGuid() : wxNullGuid,
 						ibReferenceLoad::OnDemand)));
+
+		// …AND WHAT IT DECLARES BEYOND THAT, written the same way (ibPredefinedCells). Only the cells it
+		// names: a cell it never declared stays whatever the data holds, as before. A cell of an attribute
+		// that has since gone is not written - the item still says it, the table no longer has it.
+		for (const auto& cell : object->GetPredefinedCells())
+			for (const ibValueMetaObjectAttributeBase* attribute : declarable)
+				if (attribute != nullptr && attribute->GetMetaID() == cell.first && !attribute->IsDeleted())
+					row.Set(attribute->GetQueryColumn(), UnpackPredefinedCell(cell.second));
+		ContributePredefinedRow(row, *object);
+	}
+
+	ContributePredefinedLines(out);
+}
+
+// THE ROWS OF A SECTION THE DECLARATION OWNS - one seed row per line, OWNED by its item: a line has no key
+// of its own, so the apply replaces the lines of each item that declares any (ibSchemaSeedRow::OwnedBy).
+// An item that declares none is not touched, and its lines stay the data's.
+void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributePredefinedLines(ibSchemaSnapshot& out) const
+{
+	for (const ibValueMetaObjectTableDataRef* table : GetPredefinedLineTables()) {
+		if (table == nullptr || table->IsDeleted())
+			continue;
+
+		ibSchemaTable& lines = out.Shared(table->GetMetaID(), table->GetPhysicalTableName());
+		const std::vector<ibValueMetaObjectAttributeBase*> columns = GetPredefinedLineAttributes(table);
+
+		for (const auto& object : m_predefinedObjectVector) {
+			const auto declared = object->GetPredefinedLines().find(table->GetMetaID());
+			if (declared == object->GetPredefinedLines().end())
+				continue;
+
+			int number = 1;
+			for (const ibPredefinedLine& line : declared->second) {
+				ibSchemaSeedRow& row = lines.AddRow(line.m_id,
+					ibString::Format(ibT("%s.%s %i"), object->GetPredefinedName(), table->GetName(), number))
+					.OwnedBy(object->GetPredefinedGuid());
+				row.Set(table->GetNumberLine()->GetQueryColumn(), ibValue(number));
+				for (const ibValueMetaObjectAttributeBase* column : columns) {
+					const auto cell = line.m_cells.find(column->GetMetaID());
+					if (cell != line.m_cells.end())
+						row.Set(column->GetQueryColumn(), UnpackPredefinedCell(cell->second));
+				}
+				++number;
+			}
+		}
 	}
 }

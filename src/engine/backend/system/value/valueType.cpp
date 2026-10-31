@@ -19,6 +19,7 @@ ibValueType::ibValueType(const ibClassID& clsid) :
 
 #include "backend/metadataConfiguration.h"
 #include "core/stringTokenizer.h"   // ibSplit — the type names a call lists
+#include "core/serialize/dataBuilder.h"   // the packed form (DoSerialize / DoDeserialize)
 
 ibValueType::ibValueType(const ibString& typeName) :
 	ibValue(ibValueTypes::TYPE_VALUE, true)
@@ -423,6 +424,27 @@ ibValue ibValueTypeDescription::AdjustValue() const
 ibValue ibValueTypeDescription::AdjustValue(const ibValue& varValue) const
 {
 	return AdjustValue(m_typeDesc, varValue);
+}
+
+bool ibValueTypeDescription::DoSerialize(ibDataNode& node) const
+{
+	ibDataValue described;
+	if (!ibTypeDescriptionMemory::WriteNode(described, m_typeDesc))
+		return false;
+	node.AddField(kValueFieldData, described);   // the payload, as every value's is
+	return true;
+}
+
+bool ibValueTypeDescription::DoDeserialize(const ibDataNode& node)
+{
+	const auto described = node.FindField(kValueFieldData);
+	if (!described)
+		return false;
+	ibTypeDescription read;
+	if (!ibTypeDescriptionMemory::ReadNode(*described, read))
+		return false;
+	m_typeDesc = read;
+	return true;
 }
 
 ibValue ibValueTypeDescription::Types() const

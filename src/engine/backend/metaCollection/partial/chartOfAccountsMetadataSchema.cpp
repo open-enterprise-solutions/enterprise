@@ -78,3 +78,32 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 			return false;
 		};
 }
+
+// THE DECLARED ANALYTICS, UNFOLDED — column N takes the kind of row N, and a column past the last row is
+// written empty. The same rule an account's save follows (chartOfAccountsObject.cpp), so a declared account
+// reads exactly like one a person entered: a posting finds its kinds in the columns, a form in the section.
+void ibValueMetaObjectChartOfAccounts::ContributePredefinedRow(ibSchemaSeedRow& row, const ibPredefinedValueObject& item) const
+{
+	const ibValueMetaObjectAccountDimensionKindsTable* kindsTable = m_propertyAccountDimensionKindsTable->GetMetaObject();
+	if (kindsTable == nullptr || kindsTable->IsDeleted() || kindsTable->GetAccountDimensionKind() == nullptr)
+		return;
+
+	const auto declared = item.GetPredefinedLines().find(kindsTable->GetMetaID());
+	if (declared == item.GetPredefinedLines().end())
+		return;   // declares no analytics: the columns stay the data's
+
+	const ibMetaID kindId = kindsTable->GetAccountDimensionKind()->GetMetaID();
+	for (unsigned int idx = 0; idx < GetAccountDimensionKindColumnCount(); idx++) {
+		const ibValueMetaObjectAttributePredefined* column = GetAccountDimensionKindColumn(idx);
+		if (column == nullptr || column->IsDeleted())
+			continue;
+
+		ibValue kind;
+		if (idx < declared->second.size()) {
+			const auto cell = declared->second[idx].m_cells.find(kindId);
+			if (cell != declared->second[idx].m_cells.end())
+				kind = UnpackPredefinedCell(cell->second);
+		}
+		row.Set(column->GetQueryColumn(), kind);
+	}
+}

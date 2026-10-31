@@ -112,6 +112,18 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   to save.
 - **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
 
+## Metadata
+
+- **A predefined item declares what it is, not only what it is called.** A predefined characteristic
+  of a chart of characteristic types declares its value `Type`; a predefined account declares its
+  `AccountType`, whether it is `OffBalance`, the chart's accounting flags and its analytics — the rows
+  of its `AccountDimensionKinds` section, each naming a predefined characteristic. They are kept in
+  the configuration with the item and written by the apply, as its parent is: set only as data, they
+  did not travel with the configuration. The analytics are unfolded into the account's kind columns
+  as saving an account does, and an account that declares none keeps the rows its data holds. Over
+  MCP: `predefined_add` takes `values` and `lines`, `predefined_set` changes them on an item already
+  declared, `predefined_get` shows one item whole and what it may declare.
+
 ## Fixes
 
 - **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the
