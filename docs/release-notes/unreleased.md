@@ -146,6 +146,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   charts published only `Ref` and the attributes a person added, so reading `Code`, `Description`,
   `DeletionMark` or `IsFolder` from a row was "field not found".
 
+- **`config_check` names a register that the save would refuse**: a register with nothing in it, or one
+  written by a recorder that no document posts into, sequences included. The save refuses the whole
+  configuration over one of them, so every other change made in a session waited behind it, and the
+  first sign of it was that refusal. The check asks the question the save asks and reports it in the
+  same words, before anything is saved. A sequence with no dimensions has one border and is saved;
+  it is not reported.
+
 - **A list filtered by «contains» finds the rows that contain the value.** On a list read from the
   base the condition reached the database as `LIKE 'value'`, an exact match, so "Comment contains
   Оплат" showed nothing and only "%Оплат%" worked. The value is now wrapped as `%value%`, as the
