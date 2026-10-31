@@ -200,10 +200,8 @@ void ibCompileCode::PrepareModuleData()
 	for (auto& contextValue : m_listContextValue) {
 		m_rootContext->AddVariable(contextValue.first, 0, true, true);
 		ibClassID clsid = 0;
-		if (contextValue.second.m_value) {
-			contextValue.second.m_value->InvalidateNames();
+		if (contextValue.second.m_value)
 			clsid = contextValue.second.m_value->GetClassType();
-		}
 		stampOnContext(contextValue.first, [&](ibCompileContext::ibVariable& v) {
 			v.m_clsid = clsid;
 		});
@@ -215,7 +213,6 @@ void ibCompileCode::PrepareModuleData()
 
 		ibValue* contextValue = pair.second.m_value;
 		wxASSERT(contextValue);
-		contextValue->InvalidateNames();
 
 		// adding variables from context
 		for (unsigned int i = 0; i < contextValue->GetNProps(); i++) {

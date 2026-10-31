@@ -168,9 +168,13 @@ bool ibByteCodeCache::ibRowLock::Acquire(const ibGuid& descId, const ibString& c
 			ibBinOp(ibQueryBinOp::And,
 			        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("descriptor_id")), ibConst(ibValue(descIdStr))),
 			        ibBinOp(ibQueryBinOp::Ne, ibCol(ibT("config_md5")), ibConst(ibValue(held->m_configMd5))))));
+		// Every column is NOT NULL, so the held row carries something in each; nobody reads it, and Save replaces it.
+		const char placeholder = 0;
 		q.Execute(ibInsert(bytecode_cache_table, {
-			{ ibT("descriptor_id"), ibConst(ibValue(descIdStr)) },
-			{ ibT("config_md5"),    ibConst(ibValue(held->m_configMd5)) },
+			{ ibT("descriptor_id"),    ibConst(ibValue(descIdStr)) },
+			{ ibT("bytecode_version"), ibConst(ibValue(descIdStr)) },
+			{ ibT("config_md5"),       ibConst(ibValue(held->m_configMd5)) },
+			{ ibT("bc_blob"),          ibConstBlob(&placeholder, sizeof(placeholder)) },
 		}));
 		m_held = std::move(held);
 	}
