@@ -14,11 +14,13 @@
 
 #include "backend/appData.h"
 #include "backend/compiler/compileCode.h"
+#include "backend/compiler/scriptCheck.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "frmserver/mcp/mcpTool.h"
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metadataConfiguration.h"
+#include "backend/moduleManager/moduleManager.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 
@@ -165,4 +167,69 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 	auto empty = neverProblem->AsChild()->FindField(ibT("diagnostics"));
 	ASSERT_TRUE(empty);
 	EXPECT_TRUE(empty->Kind() == ibDataKind::Array && empty->AsArray().empty());
+}
+
+// A global module is a bind of the module manager, in the designer as in a running application: a text sees its names,
+// a broken line of it is reported under its own name, and removing it takes the names away.
+TEST_F(CommonModuleCheck, AGlobalModuleIsReadWithTheTextThatBindsIt)
+{
+	CodeStyleRestore style;
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
+	ASSERT_NE(registry, nullptr);
+	ibSessionHolder holder = registry->MintUnlisted(
+		std::make_shared<ibSession>(wxT("global-module-check"), ibSessionKind::Designer));
+	ibSession* const session = holder.Get();
+	ASSERT_NE(session, nullptr);
+	ibSessionScope scope(session);
+
+	registry->NotifyAuthenticated(session);
+	struct Leave {
+		ibSessionRegistry* m_registry;
+		ibSession* m_session;
+		~Leave() { m_registry->NotifyDisconnect(m_session); }
+	} leave{ registry, session };
+
+	ibMetaDataConfigurationBase* cfg = session->GetMetaData();
+	ASSERT_NE(cfg, nullptr);
+	if (cfg->IsConfigOpen()) {
+		ASSERT_TRUE(cfg->CloseDatabase(forceCloseFlag));
+	}
+
+	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	auto* global = dynamic_cast<ibValueMetaObjectCommonModule*>(
+		cfg->CreateMetaObject(g_metaCommonModuleCLSID, root, false));
+	auto* user = dynamic_cast<ibValueMetaObjectCommonModule*>(
+		cfg->CreateMetaObject(g_metaCommonModuleCLSID, root, false));
+	ASSERT_NE(global, nullptr);
+	ASSERT_NE(user, nullptr);
+
+	ibProperty* const isGlobal = global->GetProperty(wxT("GlobalModule"));
+	ASSERT_NE(isGlobal, nullptr);
+	isGlobal->SetValue(ibVariant(true));
+	ASSERT_TRUE(global->IsGlobalModule());
+
+	global->SetModuleText(wxT("Function GlobalDouble(x) Public {\n\treturn x * 2;\n}\n"));
+	user->SetModuleText(wxT("Function UseIt(x) Public {\n\treturn GlobalDouble(x);\n}\n"));
+
+	ASSERT_TRUE(cfg->RunDatabase());
+
+	const ibScriptCheckAnswer clean = ibCheckModule(user);
+	EXPECT_EQ(clean.m_outcome, ibScriptCheckOutcome::Checked);
+	EXPECT_TRUE(clean.m_diagnostics.empty());
+
+	global->SetModuleText(wxT("Function GlobalDouble(x) Public {\n\treturn x +;\n}\n"));
+	const ibScriptCheckAnswer broken = ibCheckModule(user);
+	ASSERT_FALSE(broken.m_diagnostics.empty());
+	EXPECT_TRUE(broken.m_diagnostics.front().m_moduleName.Contains(global->GetName()));
+	global->SetModuleText(wxT("Function GlobalDouble(x) Public {\n\treturn x * 2;\n}\n"));
+
+	auto* const manager = dynamic_cast<ibValueModuleManagerDesigner*>(ibSession::EditModuleManagerFor(cfg));
+	ASSERT_NE(manager, nullptr);
+	ASSERT_TRUE(manager->RemoveCommonModule(global));
+
+	const ibScriptCheckAnswer removed = ibCheckModule(user);
+	ASSERT_FALSE(removed.m_diagnostics.empty());
+	EXPECT_TRUE(removed.m_diagnostics.front().m_message.Contains(wxT("GlobalDouble")));
 }

@@ -276,14 +276,6 @@ ibValueCommandDataObject::ibValueCommandDataObject(const ibValueMetaObjectComman
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 
-	// ⚠ WIRE THE COMPILE MODULE EXPLICITLY. It is normally lazy-created by the first Bind… call, and
-	// a command binds NOTHING — CommandParameter / ExecuteParameters are the handler's ARGUMENTS,
-	// not context variables — so m_compileModule stayed null and GetCompileModule() answered
-	// nothing. In designer mode InitializeRuntime and Compile below both skip, so nothing else
-	// would have wired it either: the descriptor existed with no module to compile, and the
-	// designer's Syntax button walked straight into it.
-	EnsureCompileModule();
-
 	InitializeRuntime();
 	try {
 		Compile();

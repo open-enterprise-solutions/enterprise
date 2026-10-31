@@ -204,8 +204,8 @@ project that links `backend.lib` also links `core.lib`.
 
 **Resources (Windows).** Every program and library has a `<name>.rc` that names itself — description, file name,
 `VFT_APP` or `VFT_DLL`, a program's icon — and includes `core/version.rc2`, the one version resource: company,
-product, copyright, and the version, which is the platform's (`OES_VERSION_MAJOR/MINOR/RELEASE` in `core/build.h`,
-the same three `version_oes_last` is made of). Every program also merges `core/program.manifest` into the manifest
+product, copyright, and the version, which is the platform's (`OES_VERSION_MAJOR/MINOR/RELEASE` in `core/build.h`).
+Every program also merges `core/program.manifest` into the manifest
 the linker makes: Windows 10 and later, long paths. The linker adds asInvoker, wx the common controls 6 (its
 `defs.h`); per-monitor DPI awareness is not declared — wx's default. The vcxproj compiles them; CMake does not.
 `webserver.exe` is the web server: the site and the client protocol for browsers. `protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`, `enterprise-thin.exe` and

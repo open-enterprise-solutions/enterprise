@@ -135,7 +135,7 @@ ibString ibMetaDataDataProcessor::GetLangCode() const
 std::unique_ptr<ibCompileValueCache> ibMetaDataDataProcessor::CreateDesignerCache()
 {
 	// Designer mode only — the cache backs the code editor / form preview. Only an
-	// external (.epf) DP additionally owns a module-manager (bound to its object
+	// external (.otl) DP additionally owns a module-manager (bound to its object
 	// module); an embedded DP runs against the configuration's. Called by the image ctor.
 	if (!appData->DesignerMode())
 		return nullptr;

@@ -437,7 +437,9 @@ ibString ibBackendException::ProcessExceptionError(const ibString& strFileName,
 		// Null when no scope is active or session has no UI.
 		auto* frame = ibSession::CurrentFrame();
 
-		if (frame != nullptr) {
+		// Not while one is reporting already, or while the code's caller takes the failure itself (window_run: an
+		// assistant's mistake goes back to the assistant, not in front of the person).
+		if (frame != nullptr && !IsErrorOutputProcessing()) {
 			// The call-stack TEXT, rendered from the record above.
 			ibString strStackMessage;
 			for (std::size_t i = 0; i < diagnostic.m_stack.size(); i++) {

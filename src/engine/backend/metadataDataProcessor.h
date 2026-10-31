@@ -62,7 +62,7 @@ public:
 	virtual bool CloseDatabase(int flags = defaultFlag);
 
 	// Designer infrastructure (cache + manager) — built by the image ctor; cache in
-	// designer mode, manager only for an external (.epf) DP.
+	// designer mode, manager only for an external (.otl) DP.
 	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() override;
 
 	//load/save form file

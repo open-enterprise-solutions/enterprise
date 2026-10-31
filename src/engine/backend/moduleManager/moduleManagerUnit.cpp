@@ -13,7 +13,7 @@
 // A common module sits directly under the manager that owns it, and it is the ctor
 // that says so — for the runtime and the designer alike, because the chain does the
 // same work in both. Downwards it carries the scope a module compiles against
-// (ibCompileModule::Compile reads the parent's root context); upwards it is what
+// (the parent's bytecode, or its compiler in a chain); upwards it is what
 // GetSession() walks from a nested script, with no ambient ibSessionScope needed.
 //
 // This used to be two ctors, one of them managerless, and the designer got that one:
@@ -21,7 +21,7 @@
 // name in any common module while the runtime compiled the same text without a word.
 ibValueModuleManager::ibValueModuleUnit::ibValueModuleUnit(ibValueModuleManager *moduleManager, ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :
 	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
-	ibRuntimeModuleDataObject(m_members, this, new ibCompileCommonModule(moduleObject)),
+	ibRuntimeModuleDataObject(m_members, this, moduleObject),
 	m_moduleObject(moduleObject)
 {
 	SetParent(moduleManager);
@@ -60,7 +60,7 @@ bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateCommonModule()
 	};
 
 	// Exports changed after Compile — mark the surface stale so the next access
-	// rebuilds it (descriptor export tail) from the fresh compile module.
+	// rebuilds it (descriptor export tail).
 	m_members.Invalidate();
 	return true;
 }
@@ -70,7 +70,7 @@ bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::DestroyCommonModule(
 	wxASSERT(m_moduleManager != nullptr);
 
 	UnbindVariable(objectManager);
-	m_compileModule->Reset();
+	ResetByteCode();
 
 	m_procUnit.reset();
 	return true;

@@ -52,6 +52,22 @@ enum class ibLexemMode {
 
 class CORE_API ibTranslateCode;
 
+// What a compile is given to read: its names, its text and its kind.
+class CORE_API ibCompilableSourceCode {
+public:
+	virtual ~ibCompilableSourceCode() = default;
+
+	virtual ibString GetFullName() const = 0;
+	virtual ibString GetDocPath() const = 0;
+	virtual ibString GetFileName() const = 0;
+	virtual ibString GetModuleText() const = 0;
+
+	// Only functions: its text holds no statements of its own.
+	virtual bool IsCommonModule() const = 0;
+	// It has no compile of its own: its lexems are read in front of the text of whoever binds it.
+	virtual bool IsGlobalModule() const = 0;
+};
+
 //storing one primitive from the source code
 struct CORE_API ibLexem {
 
@@ -316,6 +332,7 @@ public:
 
 	//methods:
 	void Load(const ibString& strCode);
+	void Load(const ibCompilableSourceCode& sourceCode); // its names and its text
 
 	void AppendModule(ibTranslateCode* module);
 	void RemoveModule(ibTranslateCode* module);

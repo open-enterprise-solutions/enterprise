@@ -30,6 +30,9 @@ public:
 	// needed them inside GetPGProperty).
 	virtual ibPropertyChoiceList GetEnumList() const = 0;
 
+	// Has its enumeration registered this value? One it has not is refused as it is read (ReadNodeValue).
+	virtual bool HasEnumValue(long value) const = 0;
+
 	// THE SAME QUESTION THE FAMILY ASKS — an enumeration's answer is fixed by its type, which is why
 	// it had a name of its own and why nothing generic could reach it. One word for it now; the
 	// type-fixed list stays where it belongs, above.
@@ -77,6 +80,10 @@ public:
 	ibPropertyEnum(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
 		const valueEnumType& value) : ibPropertyEnumBase(cat, name, label, helpString, static_cast<long>(value))
 	{
+	}
+
+	virtual bool HasEnumValue(long value) const override {
+		return m_enumCreator->HasEnumValue(static_cast<valueEnumType>(value));
 	}
 
 	// set/get property data

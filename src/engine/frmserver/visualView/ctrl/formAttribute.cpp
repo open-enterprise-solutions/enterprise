@@ -92,11 +92,9 @@ ibMetaID ibValueForm::NextAttributeId() const
 
 void ibValueForm::WireAttribute(ibFormAttributeValue* entry)
 {
-	// Designer-time add (module already live) wires the variable immediately so script/editor see
-	// it; initial + load adds happen before the module exists (InitializeFormModule binds the set).
-	// The member surface (ThisForm.<attr>) is refreshed either way.
-	if (GetCompileModule() != nullptr)
-		BindAttributeVariable(entry);
+	// A bind is an entry in the form's maps, so it is made at once, whatever the form is in the middle of:
+	// script and editor see it from here. The member surface (ThisForm.<attr>) is refreshed with it.
+	BindAttributeVariable(entry);
 
 	InvalidateNames();
 }
@@ -458,9 +456,8 @@ void ibValueForm::SetMainAttribute(ibFormAttributeValue* entry)
 	}
 	// Re-point the exported DataSource at the new main's cell (BindExport overwrites the single
 	// "DataSource" slot, so the old main's ownership is dropped — no per-old unbind). Only when
-	// the module is already live AND there is a main; toggle-off leaves the last bind harmless
-	// (its cell is now empty).
-	if (GetCompileModule() != nullptr && entry != nullptr)
+	// there is a main; toggle-off leaves the last bind harmless (its cell is now empty).
+	if (entry != nullptr)
 		BindExportVariable(ibT("DataSource"), entry->GetBindValue());
 }
 

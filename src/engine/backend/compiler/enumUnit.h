@@ -368,6 +368,8 @@ public:
 		return it->first;
 	}
 
+	bool HasEnumValue(const valT& v) const { return m_listEnumData.contains(v); }
+
 	unsigned int GetEnumCount() const { return m_listEnumData.size(); }
 
 	// ⚠ THE PROPERTY NUMBER COUNTS IN DECLARATION ORDER (FillMembers lists m_listEnumStr), and the

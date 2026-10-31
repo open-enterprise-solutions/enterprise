@@ -3182,11 +3182,7 @@ public:
 	//get metaData from object
 	virtual const ibValueMetaObjectRegisterData* GetMetaObject() const { return m_metaObject; }
 
-	// Lazy compile-module creation: the record-set compiles against the
-	// register's record-set (object) module. The base GetMetaForCompile reads
-	// through m_compileModule — circular (null at the first Bind…), so name the
-	// module directly; otherwise EnsureCompileModule never builds the compile
-	// module and the designer editor / OnTextChange sees GetCompileModule()==null.
+	// The record-set compiles against the register's record-set (object) module.
 	virtual const class ibValueMetaObjectModuleBase* GetMetaForCompile() const override {
 		if (auto* m = GetMetaObject())
 			return m->GetObjectModule();

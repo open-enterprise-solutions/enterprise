@@ -6,6 +6,8 @@
 
 #include <memory>
 
+class BACKEND_API ibValueMetaObjectModuleBase;
+
 // Marker interface for descriptors that terminate a runtime tree.
 // Today: ibValueModuleManagerRuntimeConfiguration. Used by ibRuntimeModuleDataObject::GetRoot
 // parent walk to find "the root above this nested descriptor".
@@ -78,12 +80,16 @@ public:
 	// ProcUnit at session end. No-op if already empty.
 	void ResetRuntime() { m_procUnit.reset(); }
 
-	// Bind a value on this descriptor's compile module. The value is an
-	// ibValue that exposes its method table + attributes at compile time.
-	// Lazy-creates m_compileModule from the descriptor's meta-object when it
-	// isn't wired yet — subclass code reads like a recipe: Bind… → Compile → Run.
+	// Empty the bytecode where it stands: a child's m_parent and a ProcUnit keep pointing at it.
+	void ResetByteCode() { if (m_byteCode != nullptr) m_byteCode->Reset(); }
+
+	// Bind a value on this descriptor. The value is an ibValue that exposes
+	// its method table + attributes at compile time. A bind is an entry in the
+	// descriptor's maps (m_binds), module or no module: a compiler is given a
+	// copy, a run fills its binder from them, and the descriptor's own surface
+	// reads the exported ones. Subclass code reads like a recipe: Bind… → Compile → Run.
 	//
-	// Three flavours by editor-visibility / storage:
+	// The flavours by editor-visibility / storage:
 	//   BindContextVariable — named context (m_listContextValue, name VISIBLE
 	//     in autocomplete): the "full object" self-handles ThisObject / ThisForm.
 	//   BindScopeVariable   — transparent scope container (m_listContextValue,
@@ -94,21 +100,24 @@ public:
 	//   BindLocalVariable   — plain writable LOCAL (m_listLocalValue, kind=Local):
 	//     binder fills the frame slot at init, module reads/writes it as an ordinary
 	//     local — no required/type pre-flight, no member access. E.g. a constant's Value.
+	//   BindGlobalModule    — global module (m_listGlobalModule, no name of its own):
+	//     a compile here reads its lexems with its own text, and its names are this module's.
 	void BindContextVariable(const ibString& name, class ibValue* value);
 	void BindScopeVariable(const ibString& name, class ibValue* value);
 	void BindExportVariable(const ibString& name, class ibValue* value);
 	void BindLocalVariable(const ibString& name, class ibValue* value);
+	void BindGlobalModule(const ibString& name, const ibCompilableSourceCode* module);
 
-	// Symmetric teardown for the Bind… family. RemoveVariable erases the name
-	// from BOTH the extern and context maps, so one Unbind undoes any flavour
-	// of bind. No-op when no compile module is wired yet.
+	// Symmetric teardown for the Bind… family. Erases the name from every
+	// map, so one Unbind undoes any flavour of bind.
 	void UnbindVariable(const ibString& name);
 
-	// Compile this descriptor's module. Skips in Designer mode (the
-	// designer only wants AST-level compile state for intellisense and
-	// never emits runtime-reachable bytecode). Returns false when no
-	// compile module is wired. Backend compile errors propagate as
-	// ibBackendException — callers with swallow semantics wrap in
+	// Bring up this descriptor's bytecode: from the cache, and only when it
+	// has none there a compiler is made for it, and it goes when the
+	// bytecode is made. Skips in Designer mode (the designer
+	// never runs a module; it asks a compile chain, CreateCompiler).
+	// Returns false when there is no module to compile. Backend compile errors
+	// propagate as ibBackendException — callers with swallow semantics wrap in
 	// their own try/catch.
 	bool Compile();
 
@@ -126,41 +135,27 @@ public:
 
 	// Low-level execute — unconditional (no Designer guard). Prefer
 	// Run() in subclass code; Execute() remains for compatibility and
-	// for paths that re-Execute on already-compiled state.
-	//
-	// Two forms:
-	//   - Execute(binder): caller supplies a fully-populated ibByteBinder
-	//     (descriptor's runtime values for ThisObject / Reference / etc.
-	//     filled via SetVar). Preferred — descriptors fill bindings at
-	//     execution time, not at compile-time staging.
-	//   - Execute(delta): legacy fallback — builds binder from compile-
-	//     side maps (m_listExternValue / m_listContextValue /
-	//     m_listLocalValue) populated by the Bind*Variable calls at module
-	//     init. Kept for paths that haven't migrated to per-execute binding
-	//     yet. delta semantics as in Run() above.
-	void Execute(ibByteBinder& br);
+	// for paths that re-Execute on already-compiled state. Nothing compiled,
+	// nothing runs. The binder is made for the call, from the binds as they
+	// are now. delta semantics as in Run() above.
 	void Execute(bool delta = true);
 
 	// The ONLY ctor — a descriptor is always built by its owning value, which passes
-	// its already-constructed helper + itself (and, for the module manager, an eager
-	// compile module). Registering the export surface as the helper's TAIL here makes
-	// it impossible to construct a descriptor without wiring its exports "in the
-	// descriptor", and after the value's own fixed methods (stable CallAsFunc indices).
-	// No default / compile-module-only ctor: those would silently skip the export wiring.
+	// its already-constructed helper + itself (and, for the module manager and a module
+	// unit, the module it compiles). Registering the export surface as the helper's TAIL
+	// here makes it impossible to construct a descriptor without wiring its exports "in
+	// the descriptor", and after the value's own fixed methods (stable CallAsFunc indices).
+	// No default ctor: it would silently skip the export wiring.
 	ibRuntimeModuleDataObject(ibValue::ibMemberTable& helper, const ibValue* owner,
-		ibCompileModule* compileCode = nullptr)
-		: m_compileModule(compileCode) { helper.BindTail(&ExportThunk, owner); }
+		const ibValueMetaObjectModuleBase* metaForCompile = nullptr)
+		: m_metaForCompile(metaForCompile), m_binds(std::make_shared<ibBindTable>()) { helper.BindTail(&ExportThunk, owner); }
 	virtual ~ibRuntimeModuleDataObject();
 
-	// Module-object currently wired in m_compileModule. Thin post-
-	// compile accessor — only meaningful AFTER compile is created.
-	const ibValueMetaObjectModuleBase* GetMetaObject() const {
-		return GetCompileModule() ? GetCompileModule()->GetObjectModule() : nullptr;
-	}
+	// The module this descriptor compiles, under the descriptor's own name for it.
+	const ibValueMetaObjectModuleBase* GetMetaObject() const { return GetMetaForCompile(); }
 
 	// Compile-target — the single module this descriptor compiles
-	// scripts from. Used by BindContextVariable for lazy
-	// ibCompileModule creation BEFORE compile is wired.
+	// scripts from. Null when there is none: a form generated from its source.
 	//
 	// Different concept from the record-data hierarchy's GetMetaObject()
 	// which returns a CONTAINER (ibValueMetaObjectGenericData) that
@@ -172,14 +167,20 @@ public:
 	//     (usually container->GetObjectModule() for catalog/document
 	//     objects; form / common module are modules themselves and
 	//     return the metadata directly).
-	// Default reads through m_compileModule — works for eager-compile
-	// subclasses (Unit, Configuration, External DP) whose compile is
-	// wired in their ctor; lazy-compile subclasses override.
-	virtual const ibValueMetaObjectModuleBase* GetMetaForCompile() const {
-		return m_compileModule ? m_compileModule->GetObjectModule() : nullptr;
-	}
+	// Default reads what the ctor was given — subclasses (Unit, Configuration,
+	// External DP) that name their module there; the rest override.
+	virtual const ibValueMetaObjectModuleBase* GetMetaForCompile() const { return m_metaForCompile; }
 
-	virtual ibCompileModule* GetCompileModule() const { return m_compileModule; }
+	// What a child of this descriptor compiles against and its ProcUnit runs under.
+	// Null until Compile has brought it up, and always in the designer.
+	virtual const ibByteCode* GetByteCode() const { return m_byteCode.get(); }
+
+	// A compiler of this descriptor's module with what is bound here and a compiler for every
+	// descriptor above it, held by the one below; nothing else keeps them. Null when there is no
+	// module. It is what a question about the text asks where nothing is compiled: the designer's
+	// check and its hints. The first Compile on it compiles the whole chain, the root first.
+	virtual std::unique_ptr<ibCompileModule> CreateCompiler() const;
+
 	// Session-aware: when a ibSessionScope is active, first checks the
 	// session's ProcUnit map. Falls back to the descriptor-owned
 	// m_procUnit (legacy path, still in use on desktop until sessions
@@ -198,12 +199,9 @@ public:
 	// the only case where parent is a live runtime-executing node
 	// picked up via Current() at compile time.
 	//
-	// Side-effect: cascades to the descriptor's compile+runtime layer.
-	// If m_compileModule and parent->GetCompileModule() both exist, the
-	// compile module's parent is updated (scope chain for symbol
-	// resolution). Same for m_procUnit (call stack frame chain). This
-	// lets call sites set parent once at the descriptor level instead
-	// of separately wiring both compile and runtime parents.
+	// Side-effect: cascades to the runtime layer, m_procUnit (call stack
+	// frame chain). A compile asks for the parent when it happens. This
+	// lets call sites set parent once at the descriptor level.
 	void SetParent(const ibRuntimeModuleDataObject* parent);
 	const ibRuntimeModuleDataObject* GetParent() const { return m_parent; }
 
@@ -298,7 +296,7 @@ protected:
 	// filler does this by hand ("autobind in the descriptor"). This is the ONLY place
 	// the descriptor's own names are surfaced — a form/record contributor must NOT call
 	// ExportNamesToHelper / FillHelperFromBinds itself (those make an UNGUARDED virtual
-	// GetCompileModule() on `this`; here the cross-cast to the descriptor sibling is
+	// GetMetaForCompile() on `this`; here the cross-cast to the descriptor sibling is
 	// dynamic_cast-guarded, so a half-constructed / torn-down object degrades to "no
 	// names" instead of calling through a null vtable slot). Diamond-free → ibValue is
 	// polymorphic, the sibling cross-cast is well-defined.
@@ -322,11 +320,10 @@ protected:
 	// Controls / DataSource) into a value's method-helper, so member access
 	// (ThisObject.RegisterRecords / ThisForm.Controls) resolves through the same
 	// path as module exports: GetPropVal(alias=eProcUnit) → m_procUnit->
-	// GetPropVal(name) → the binder-filled frame slot. Reads the compile-module
-	// bind map (present in BOTH Designer and runtime) — unlike ExportNamesToHelper
+	// GetPropVal(name) → the binder-filled frame slot. Reads the bind map
+	// (present in BOTH Designer and runtime) — unlike ExportNamesToHelper
 	// which reads bytecode (runtime only). Context binds (ThisObject / ThisForm
 	// themselves) are skipped: they're the handles, not members of themselves.
-	// Out-of-line — needs the complete ibCompileModule (only fwd-declared here).
 	void FillHelperFromBinds(ibValue::ibMemberTable* helper, long alias) const;
 
 	// Live value of an EXPORT binding by name (the m_listExternValue entry —
@@ -340,24 +337,22 @@ protected:
 	// `out` is a failed read: true must not leave the previous value standing.
 	bool GetBoundValue(const ibString& name, ibValue& out) const;
 
-	// Lazy-create m_compileModule from the descriptor's meta-object (shared by
-	// all Bind* entry points). Propagates the parent's compile scope chain.
-	// Returns nullptr when GetMetaForCompile() has nothing to compile against.
-	ibCompileModule* EnsureCompileModule();
+	// The module named at construction — see GetMetaForCompile.
+	const ibValueMetaObjectModuleBase* m_metaForCompile;
 
-	ibCompileModule* m_compileModule;
+	// What is bound here — see the Bind… family. shared_ptr: an external object
+	// and its manager are one module, and share what it is bound to.
+	std::shared_ptr<ibBindTable> m_binds;
+
+	// What runs — made by Compile, null while there is no module or nothing has come up. The
+	// object stays through a recompile: a child's m_parent and a ProcUnit keep pointing at it.
+	// shared_ptr for the same two as m_binds.
+	std::shared_ptr<ibByteCode> m_byteCode;
+
 	// Descriptor owns its runtime slot. shared_ptr so a long-running
 	// CallAsProc can pin the ProcUnit alive even if concurrent teardown
 	// drops the descriptor (project_refresh_execute_crash.md).
 	std::shared_ptr<ibProcUnit> m_procUnit;
-
-	// Per-descriptor binding session — wraps bytecode's manifest +
-	// slot table. Created lazily after compile (manifest is finalized
-	// then). Subclasses populate via SetVar() at any point before
-	// Execute — typical pattern: BindContextVariable() forwards to
-	// m_binder->SetVar() so descriptor-instance values (ThisObject,
-	// Reference) are wired without compile-time staging.
-	std::unique_ptr<ibByteBinder> m_binder;
 
 	// Parent descriptor — set by creation paths (AddCommonModule,
 	// CreateNewForm, AddObject) so scope chain walks up correctly.

@@ -48,6 +48,36 @@ ibByteCode* ibByteCode::Find(const ibGuid& descId)
 	return it != g_byteCodeRegistry.end() ? it->second : nullptr;
 }
 
+void ibByteCode::Reset()
+{
+	// Emptied, it stops being where to look: m_id is the only way back to its entry, and the descriptor's teardown would
+	// find none and leave the pointer behind. Its own entry only: another session's bytecode may stand under the same id.
+	if (m_id.isValid()) {
+		std::unique_lock<std::shared_mutex> lk(g_byteCodeRegistryMutex);
+		const auto it = g_byteCodeRegistry.find(ibString(m_id));
+		if (it != g_byteCodeRegistry.end() && it->second == this)
+			g_byteCodeRegistry.erase(it);
+	}
+
+	m_id = ibGuid();
+	m_descriptorClsid = 0;
+	m_lStartModule = 0;
+	m_lVarCount = 0;
+	m_strModuleName = ibEmptyString;
+	m_bCompile = false;
+	m_bExpressionOnly = false;
+	m_parent = nullptr;
+	m_listCode.clear();
+	m_listConst.clear();
+	m_listVar.clear();
+	m_listFunc.clear();
+	m_dependencies.clear();
+	m_dependencyIds.clear();
+	m_dependencyVersions.clear();
+	m_version = ibGuid();
+	m_numCaretInstruction = -1;
+}
+
 bool ibByteCode::ResolveAndVerifyDependencies()
 {
 	// Parallel-vector invariant — Save/Load preserve it; defensive in

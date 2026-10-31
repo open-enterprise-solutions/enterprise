@@ -440,6 +440,25 @@ class CellEditor(PageTest):
         self.assertEqual(self.sent(CHANGE)[0]['Args'], {'Row': 1, 'Column': NAME, 'Text': 'Screw'})
         self.assertEqual(page.locator('.tabulator-cell wa-input').count(), 0)
 
+    def test_rows_read_anew_leave_the_open_editor_alone(self):
+        page = self.open()
+        page.keyboard.type('Scr')
+        page.evaluate("""() => { window.fake.tab().table.version = 2; window.fake.push(); }""")
+        page.wait_for_timeout(300)
+        self.assertEqual(page.locator('.tabulator-cell wa-input.cell-editor').count(), 1)
+        page.keyboard.type('ew')
+        page.keyboard.press('Enter')
+        page.wait_for_function('window.fake.events(5).length === 1')
+        self.assertEqual(self.sent(CHANGE)[0]['Args'], {'Row': 1, 'Column': NAME, 'Text': 'Screw'})
+
+    def test_rows_held_for_an_editor_are_read_as_it_closes(self):
+        page = self.open()
+        page.evaluate("""() => { window.fake.tab().table.version = 2; window.fake.push(); }""")
+        page.wait_for_timeout(300)
+        fetches = page.evaluate("window.fake.calls.filter((call) => call.method === 'fetch').length")
+        page.keyboard.press('Escape')
+        page.wait_for_function(f"window.fake.calls.filter((call) => call.method === 'fetch').length > {fetches}")
+
     def test_escape_lets_it_go(self):
         page = self.open()
         page.keyboard.type('Screw')

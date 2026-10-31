@@ -101,6 +101,9 @@ public:
 
 	ibString GetName() const override { return ibT("value_pack"); }
 
+	// The presentation of a reference is read from its row: data.
+	bool IsDataAssistant() const override { return true; }
+
 	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibString::Format(ibMcpText("packing a value of type '%s'"), ArgType().Text(params));
@@ -212,8 +215,7 @@ public:
 	}
 };
 
-// The presentation of a reference is read from its row: data.
-MCP_TOOL_REGISTER_DATA(ibMcpToolValuePack);
+MCP_TOOL_REGISTER(ibMcpToolValuePack);
 
 //---------------------------------------------------------------------------
 // value_unpack
@@ -222,6 +224,8 @@ class ibMcpToolValueUnpack : public ibMcpTool {
 public:
 
 	ibString GetName() const override { return ibT("value_unpack"); }
+
+	bool IsDataAssistant() const override { return true; }
 
 	ibString GetActivity(const ibDataNode& /*params*/) const override
 	{
@@ -279,6 +283,6 @@ public:
 	}
 };
 
-MCP_TOOL_REGISTER_DATA(ibMcpToolValueUnpack);
+MCP_TOOL_REGISTER(ibMcpToolValueUnpack);
 
 } // namespace

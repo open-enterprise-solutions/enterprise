@@ -103,7 +103,7 @@ typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
 #define MAX_STATIC_VAR 10ll
 #endif 
 
-// (The program's version — ibProgramVersion, version_oes_last — is the core's, beside its build: core/build.h.)
+// (The compatibility ladder — ibProgramVersion, version_oes_last — is the core's, beside its build: core/build.h.)
 
 // (The program's syntax — ibProgramSyntax — is the core's, beside the language it chooses: core/compiler/codeDef.h.)
 

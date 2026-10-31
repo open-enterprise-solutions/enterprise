@@ -21,6 +21,7 @@
 #include "backend/backend_localization.h"                      // a caption is an array by language
 #include "backend/metaCollection/metaLanguageObject.h"         // …and the languages are the config's own
 #include "backend/metaCollection/metaModuleObject.h"           // ibValueMetaObjectModuleBase — the module behind an id
+#include "backend/metaCollection/metaRoleObject.h"             // what an account's role is called
 
 #include "core/stringTokenizer.h"   // a query is words, and the finder counts how many of them landed
 #include <wx/regex.h>     // …unless it is written as a pattern, which is also a way to ask
@@ -271,22 +272,43 @@ bool ibIsMcpToolOffered(const ibMcpTool* tool)
 	if (mode == ibMcpToolMode::Common)
 		return true;
 
-	const ibSession* const session = ibSession::Current();
-	if (session == nullptr)
+	if (ibSession::Current() == nullptr)
 		return false;
-	if (!ibIsMcpInApplication())
-		return true;
-	if (mode == ibMcpToolMode::Designer)
-		return false;
-
-	const ibMetaDataConfigurationBase* const metaData = session->GetMetaData();
-	return metaData != nullptr && metaData->AccessRight_DataAssistant();
+	return ibIsMcpInApplication() == (mode == ibMcpToolMode::Runtime);
 }
 
 bool ibIsMcpInApplication()
 {
 	const ibSession* const session = ibSession::Current();
 	return session != nullptr && !IsDesignerSessionKind(session->GetKind());
+}
+
+std::vector<ibString> ibMcpRoleNames(const ibUserInfo& who)
+{
+	const ibSession* const session = ibSession::Current();
+	const ibMetaDataConfigurationBase* const metaData = session != nullptr ? session->GetMetaData() : nullptr;
+
+	std::vector<ibString> names;
+	for (const ibUserInfo::ibUserRole& role : who.m_roleArray) {
+		const ibValueMetaObjectRole* const object = metaData != nullptr
+			? metaData->FindAnyObjectByFilter<ibValueMetaObjectRole>(role.m_miRoleId) : nullptr;
+		ibString name = object != nullptr ? object->GetName()
+			: ibString::Format(ibMcpText("role %d, no longer in the configuration"), static_cast<int>(role.m_miRoleId));
+		if (role.m_mode == ibRoleCompositionMode_Intersection)
+			name << ibMcpText(" (restricting)");
+		names.push_back(std::move(name));
+	}
+	return names;
+}
+
+ibString ibMcpLanguageName(const ibUserInfo& who)
+{
+	const ibSession* const session = ibSession::Current();
+	if (const ibMetaDataConfigurationBase* const metaData = session != nullptr ? session->GetMetaData() : nullptr)
+		for (const auto object : metaData->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID))
+			if (object->GetDocPath() == who.m_strLanguageGuid)
+				return object->GetName();
+	return who.m_strLanguageCode;
 }
 
 void ibRegisterMcpTool(const ibMcpTool* tool, ibMcpToolMode mode)
@@ -310,7 +332,7 @@ void ibRegisterMcpTool(const ibMcpTool* tool, ibMcpToolMode mode)
 }
 
 // The application app_run started — see the header. An atomic, because the tools that wait on the
-// application run off the main thread (NeedsMainThread), and app_run on it.
+// application run on the connection's thread (IsSessionTask), and app_run as the session's task.
 static std::atomic<long>& StartedApplication()
 {
 	static std::atomic<long> s_pid{ 0 };
@@ -421,8 +443,8 @@ namespace {
 // valid pattern must not be re-attempted three hundred times.
 const wxRegEx* CompiledQuery(const ibString& query)
 {
-	// ⚠ PER THREAD. Tools run on the main thread or on the delivery thread depending on what they
-	// need, and a shared cache here would be two searches writing one pointer. A regular
+	// ⚠ PER THREAD. Tools run on the session's worker or on the connection's thread depending on what
+	// they need, and a shared cache here would be two searches writing one pointer. A regular
 	// expression compiles in microseconds, so a second copy costs nothing worth measuring.
 	//
 	// ⚠ AND THE OBJECT IS HELD BY VALUE, not through a pointer. A heap block that lives to the end

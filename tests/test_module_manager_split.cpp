@@ -50,7 +50,7 @@ TEST(ModuleManagerSplit, DesignerHolderDerivesLightweightBaseNotRuntime) {
 
 TEST(ModuleManagerSplit, ExternalManagersDeriveRuntimeManager) {
     // External data-processor / report managers are runtime managers (they run
-    // the .epf/.erf object's script).
+    // the .otl/.orp object's script).
     EXPECT_TRUE((std::is_base_of<ibValueModuleRuntimeManager, ibValueModuleRuntimeManagerExternalDataProcessor>::value));
     EXPECT_TRUE((std::is_base_of<ibValueModuleRuntimeManager, ibValueModuleRuntimeManagerExternalReport>::value));
 }

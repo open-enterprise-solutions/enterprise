@@ -1,24 +1,37 @@
 #include "compileModule.h"
-#include "backend/metaCollection/metaModuleObject.h"
-#include "appData.h"
+
+#include <stack>
 
 #pragma warning(push)
 #pragma warning(disable : 4018)
 
-ibCompileModule::ibCompileModule(const ibValueMetaObjectModuleBase* moduleObject, bool onlyFunction) :
-	ibCompileCode(moduleObject->GetFullName(), moduleObject->GetDocPath(), onlyFunction),
-	m_moduleObject(moduleObject)
+ibCompileModule::ibCompileModule(const ibCompilableSourceCode* sourceCode, const ibBindTable& binds, std::unique_ptr<ibCompileModule> parent) :
+	ibCompileCode(sourceCode->GetFullName(), sourceCode->GetDocPath(), sourceCode->IsCommonModule()),
+	m_sourceCode(sourceCode),
+	m_parentModule(std::move(parent))
 {
-	m_cByteCode.m_strModuleName = m_moduleObject->GetFullName();
+	m_binds = binds;
 
-	m_translateCode.SetModuleName(m_moduleObject->GetFullName());
-	m_translateCode.SetDocPath(m_moduleObject->GetDocPath());
-	m_translateCode.SetFileName(m_moduleObject->GetFileName());
+	// New, so it has compiled nothing: the walk over a chain of them (Compile) goes by this flag.
+	m_changedCode = true;
 
-	Load(m_moduleObject->GetModuleText());
+	m_cByteCode.m_strModuleName = m_sourceCode->GetFullName();
+
+	m_translateCode.Load(*m_sourceCode);
+
+	// A global module takes no compiler: its lexems are read in front of this text and compile with it.
+	for (const auto& kv : m_binds.m_listGlobalModule) {
+		auto translateCode = std::make_unique<ibTranslateCode>(GetCodeStyle());
+		translateCode->Load(*kv.second);
+		m_translateCode.AppendModule(translateCode.get());
+		m_listTranslateCode.emplace_back(std::move(translateCode));
+	}
 
 	//We don’t look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
+
+	if (m_parentModule != nullptr)
+		SetParent(m_parentModule.get());
 }
 
 /**
@@ -34,23 +47,19 @@ bool ibCompileModule::Compile()
 	//clear functions & variables 
 	Reset();
 
-	if (m_moduleObject != nullptr &&
-		m_moduleObject->IsGlobalModule()) {
-
-		m_translateCode.SetModuleName(m_moduleObject->GetFullName());
-		m_translateCode.SetDocPath(m_moduleObject->GetDocPath());
-		m_translateCode.SetFileName(m_moduleObject->GetFileName());
+	if (m_sourceCode != nullptr &&
+		m_sourceCode->IsGlobalModule()) {
 
 		m_changedCode = false;
 
-		Load(m_moduleObject->GetModuleText());
+		m_translateCode.Load(*m_sourceCode);
 
 		return m_parentModule != nullptr ?
 			m_parentModule->Compile() : true;
 	}
 
 	//recursively compile modules in case of any changes
-	if (m_parentModule != nullptr && appData->DesignerMode()) {
+	if (m_parentModule != nullptr) {
 
 		std::stack<ibCompileModule*> compileModule; bool callRecompile = false;
 
@@ -69,20 +78,16 @@ bool ibCompileModule::Compile()
 		}
 	}
 
-	if (m_moduleObject != nullptr) {
+	if (m_sourceCode != nullptr) {
 
-		m_cByteCode.m_strModuleName = m_moduleObject->GetFullName();
+		m_cByteCode.m_strModuleName = m_sourceCode->GetFullName();
 
 		if (m_parentModule != nullptr) {
 			m_cByteCode.m_parent = &m_parentModule->m_cByteCode;
 			m_rootContext->m_parentContext = m_parentModule->GetContext();
 		}
 
-		m_translateCode.SetModuleName(m_moduleObject->GetFullName());
-		m_translateCode.SetDocPath(m_moduleObject->GetDocPath());
-		m_translateCode.SetFileName(m_moduleObject->GetFileName());
-
-		Load(m_moduleObject->GetModuleText());
+		m_translateCode.Load(*m_sourceCode);
 	}
 
 	//prepare lexem
@@ -117,36 +122,28 @@ bool ibCompileModule::Recompile()
 
 	if (m_parentModule != nullptr) {
 
-		if (m_moduleObject != nullptr &&
-			m_moduleObject->IsGlobalModule()) {
-
-			m_translateCode.SetModuleName(m_moduleObject->GetFullName());
-			m_translateCode.SetDocPath(m_moduleObject->GetDocPath());
-			m_translateCode.SetFileName(m_moduleObject->GetFileName());
+		if (m_sourceCode != nullptr &&
+			m_sourceCode->IsGlobalModule()) {
 
 			m_changedCode = false;
 
-			Load(m_moduleObject->GetModuleText());
+			m_translateCode.Load(*m_sourceCode);
 
 			return m_parentModule != nullptr ?
 				m_parentModule->Compile() : true;
 		}
 	}
 
-	if (m_moduleObject != nullptr) {
+	if (m_sourceCode != nullptr) {
 
-		m_cByteCode.m_strModuleName = m_moduleObject->GetFullName();
+		m_cByteCode.m_strModuleName = m_sourceCode->GetFullName();
 
 		if (m_parentModule) {
 			m_cByteCode.m_parent = &m_parentModule->m_cByteCode;
 			m_rootContext->m_parentContext = m_parentModule->GetContext();
 		}
 
-		m_translateCode.SetModuleName(m_moduleObject->GetFullName());
-		m_translateCode.SetDocPath(m_moduleObject->GetDocPath());
-		m_translateCode.SetFileName(m_moduleObject->GetFileName());
-
-		Load(m_moduleObject->GetModuleText());
+		m_translateCode.Load(*m_sourceCode);
 	}
 
 	//prepare lexem 

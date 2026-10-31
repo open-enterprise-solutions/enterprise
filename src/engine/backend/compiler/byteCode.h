@@ -624,17 +624,17 @@ public:
 	// ----------------------------------------------------------------
 	// Process-wide bytecode registry — keyed by descriptor GUID
 	// (m_id). Populated by ibRuntimeModuleDataObject::Compile after
-	// every successful compile or cache load; cleared by descriptor
-	// teardown. Lookup is shared-locked, mutation is unique-locked.
+	// every successful compile or cache load; cleared by Reset and by
+	// descriptor teardown. Lookup is shared-locked, mutation is unique-locked.
 	//
 	// Used by ResolveAndVerifyDependencies (below) to walk
 	// m_dependencyIds and reach the live target ibByteCode for each
 	// dep, then verify the snapshotted m_dependencyVersions still
 	// matches the dep's current m_version.
 	// ----------------------------------------------------------------
-	static void Register(ibByteCode* bc);
+	BACKEND_API static void Register(ibByteCode* bc);
 	static void Unregister(const ibGuid& descId);
-	static ibByteCode* Find(const ibGuid& descId);
+	BACKEND_API static ibByteCode* Find(const ibGuid& descId);
 
 	// Walk m_dependencyIds, look each up via Find, populate
 	// m_dependencies with live pointers, and verify
@@ -644,25 +644,7 @@ public:
 	// graph moved underneath) and recompiles from source.
 	bool ResolveAndVerifyDependencies();
 
-	void Reset() {
-		m_id = ibGuid();
-		m_descriptorClsid = 0;
-		m_lStartModule = 0;
-		m_lVarCount = 0;
-		m_strModuleName = ibEmptyString;
-		m_bCompile = false;
-		m_bExpressionOnly = false;
-		m_parent = nullptr;
-		m_listCode.clear();
-		m_listConst.clear();
-		m_listVar.clear();
-		m_listFunc.clear();
-		m_dependencies.clear();
-		m_dependencyIds.clear();
-		m_dependencyVersions.clear();
-		m_version = ibGuid();
-		m_numCaretInstruction = -1;
-	}
+	BACKEND_API void Reset();
 
 	//Attributes:
 

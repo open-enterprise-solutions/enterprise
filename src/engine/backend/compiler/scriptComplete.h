@@ -63,7 +63,6 @@ enum class ibNameOrigin {
 	Declared = 0,   // written in this text — a `var`, a function, a parameter
 	Platform,       // the manager's context: Catalogs / Documents / Enumerations, and the system functions
 	Global,         // the manager's extern map: global constants, common modules reachable by name
-	GlobalModule,   // exported by a GLOBAL common module — flat, reachable with no prefix
 	Context,        // a context bind on this module's descriptor: ThisObject / ThisForm
 	Bound,          // an export or local bind: RegisterRecords / Filter / DataSource / a constant's Value
 	Member,         // the object's own surface: its attributes and tabular sections

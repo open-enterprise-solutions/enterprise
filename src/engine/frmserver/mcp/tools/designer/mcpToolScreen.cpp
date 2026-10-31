@@ -83,16 +83,15 @@ public:
 		return ibMcpText("asking the person for a picture of their window");
 	}
 
-	// 🛑⭐⭐ NOT ON THE MAIN THREAD — the third verb here to need this, and it deadlocks the same way
-	// the other two did. The request goes down the socket and the picture comes back through
-	// wxTheApp::CallAfter, so waiting for it ON the main thread is waiting for a message only that
-	// thread can dispatch: it never arrives, the deadline always expires, and the answer blames a
-	// runtime that replied at once.
+	// 🛑⭐⭐ NOT AS THE SESSION'S TASK — the third verb here to need this, and it deadlocks the same way
+	// the other two did. The request goes down the socket and the picture comes back through the
+	// session's queue, so waiting for it IN that queue is waiting for a task behind this one: it
+	// never runs, the deadline always expires, and the answer blames a runtime that replied at once.
 	//
 	// Measured 2026-09-04, and the symptom named the culprit exactly: during the wait the DESIGNER
 	// stopped responding while the application stayed responsive — the frozen process was the one
 	// asking, not the one being asked.
-	bool NeedsMainThread() const override { return false; }
+	bool IsSessionTask() const override { return false; }
 
 	ibString GetDescription() const override
 	{

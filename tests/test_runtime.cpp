@@ -98,20 +98,13 @@ struct BuiltInRuntime : ::testing::Test {
 	}
 }
 
-// A COMPILER THAT KEEPS ITS PARENT, assembled on the TEST side.
+// A COMPILER THAT TAKES ITS PARENT ON THE WAY IN, assembled on the TEST side.
 //
-// `Compile()` opens with `Reset()`, which clears the bytecode's parent link, so
-// SetParent-then-Compile resolves nothing across the boundary. In the product
-// `ibCompileModule::Compile` re-establishes the link mid-compile from its
-// metaobject; a test has no metaobject, and teaching the base class to remember
-// the parent was tried and reverted (it duplicates the bytecode's declared single
-// source of truth and trades a loud failure for a silent stale one).
-//
-// So the link is re-established here instead, in the one window where it is
-// correct — after Reset, before any name is resolved. This is the same five steps
-// ibCompileCode::Compile(strCode) runs, with SetParent inserted at step two; four
-// of the five are public and CompileModule() is protected, which a subclass may
-// call. Nothing in the compiler changes to make a test work.
+// `Compile()` opens with `Reset()`, which keeps the bytecode's parent link. This
+// is the same five steps ibCompileCode::Compile(strCode) runs, with SetParent
+// inserted at step two; four of the five are public and CompileModule() is
+// protected, which a subclass may call. Nothing in the compiler changes to make a
+// test work.
 class ParentedCompiler : public ibCompileCode {
 public:
 	explicit ParentedCompiler(const ibString& strName)
@@ -2553,8 +2546,7 @@ TEST(RuntimeTest, ALambdaInsideAPipelineLambdaSeesTheOuterParameter) {
 //
 // The two modules are assembled the way the DESCRIPTOR assembles them — compile
 // each, link them, hand the bytecode to a ProcUnit — rather than by teaching the
-// compiler a new trick. See ParentedCompiler above for the one window in which
-// the parent link has to be re-applied, and why it is done on this side.
+// compiler a new trick. See ParentedCompiler above.
 // ===========================================================================
 TEST(RuntimeTest, ALiteralArgumentToAParentModuleFunctionKeepsItsValue) {
 	// The PARENT. The three pads land in its pool ahead of anything else, so a
@@ -2578,8 +2570,7 @@ TEST(RuntimeTest, ALiteralArgumentToAParentModuleFunctionKeepsItsValue) {
 		wxT("EndFunction\n")
 		wxT("padA = \"WRONG-A\"; padB = \"WRONG-B\"; padC = \"WRONG-C\";\n")));
 
-	// The CHILD. Its parent survives its own Reset because CompileUnder re-applies
-	// the link after it, which is the window ibCompileModule::Compile uses too.
+	// The CHILD, compiled against the parent's live compile contexts.
 	ParentedCompiler ccLocal(wxT("local"));
 	ASSERT_TRUE(ccLocal.CompileUnder(&ccGlobal,
 		wxT("var r public;\n")
@@ -2597,6 +2588,44 @@ TEST(RuntimeTest, ALiteralArgumentToAParentModuleFunctionKeepsItsValue) {
 	ASSERT_TRUE(puLocal.GetPropVal(wxT("r"), r));
 	EXPECT_EQ(r.GetString(), wxT("CALLER"))
 		<< "a WRONG-* value here means the argument was read from the callee's pool";
+}
+
+// A MODULE IS COMPILED UNDER ITS PARENT'S BYTECODE: no compiler stands above it. The parent's name has one
+// address on that road, from the module body and from a function in it alike, and a second compile keeps the parent.
+TEST(RuntimeTest, AModuleCompiledUnderItsParentsByteCodeReadsItsNames) {
+	ibCompileCode ccParent(wxT("parent"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(ccParent,
+		wxT("var shared public;\n")
+		wxT("Function Twice(x) Public\n")
+		wxT("  Return x * 2;\n")
+		wxT("EndFunction\n")
+		wxT("shared = 21;\n")));
+
+	ibCompileCode ccChild(wxT("child"), wxT("memory"), false);
+	ccChild.SetParent(&ccParent.m_cByteCode);
+	const ibString text =
+		wxT("var fromBody public; var fromFunction public;\n")
+		wxT("Function Read()\n")
+		wxT("  Return shared;\n")
+		wxT("EndFunction\n")
+		wxT("fromBody = Twice(shared);\n")
+		wxT("fromFunction = Read();\n");
+	ASSERT_TRUE(TryCompile(ccChild, wxT("var first public; first = shared;\n")));
+	ASSERT_TRUE(TryCompile(ccChild, text));
+	EXPECT_EQ(ccChild.m_cByteCode.m_parent, &ccParent.m_cByteCode);
+
+	ibProcUnit puParent;
+	ASSERT_TRUE(TryExecute(puParent, ccParent.m_cByteCode));
+
+	ibProcUnit puChild;
+	puChild.SetParent(&puParent);
+	ASSERT_TRUE(TryExecute(puChild, ccChild.m_cByteCode));
+
+	ibValue fromBody, fromFunction;
+	ASSERT_TRUE(puChild.GetPropVal(wxT("fromBody"), fromBody));
+	ASSERT_TRUE(puChild.GetPropVal(wxT("fromFunction"), fromFunction));
+	EXPECT_EQ(fromBody.GetInteger(), 42);
+	EXPECT_EQ(fromFunction.GetInteger(), 21);
 }
 
 // An object module and its manager are different methods. The same exported
@@ -3416,10 +3445,7 @@ struct FramedSession : ibSession {
 };
 
 struct ReadableForm : ibValueForm {
-	// A form with no module meta cannot keep a bind: EnsureCompileModule
-	// has nothing to compile against and BindExportVariable does nothing.
-	ibValueMetaObjectModule m_module{ wxT("Form") };
-	const ibValueMetaObjectModuleBase* GetMetaForCompile() const override { return &m_module; }
+	// A form with no module meta keeps a bind as any form does: in its maps.
 	bool ReadBound(const ibString& name, ibValue& out) { return GetBoundValue(name, out); }
 };
 
@@ -3444,15 +3470,8 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	ibSessionScope scope(session.get());
 
 	// The call holds ThisForm and releases it when the frame goes. A form on
-	// the stack would be deleted by that release. The configuration outlives
-	// that release: the compile module asks it for a file name.
-	ibMetaDataConfigurationFile cfg;
+	// the stack would be deleted by that release.
 	ReadableForm* form = new ReadableForm();
-	form->m_module.SetMetaData(&cfg);
-	// Binding ThisForm is what a live form does first. That creates the
-	// compile module, and only then can the main attribute point DataSource
-	// at its cell.
-	form->BindContextVariable(wxT("ThisForm"), form);
 
 	ibValuePtr<ibValueStructure> object(new ibValueStructure());
 	object->Insert(ibValue(ibT("A")), ibValue(3));

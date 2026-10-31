@@ -63,7 +63,7 @@ BACKEND_API ibLogger* Logger();
 // appData. nullptr in launcher and in codeRunner (which opens metadata
 // lazily per-DataProcessor).
 //
-// External metadata (.epf DataProcessor files, .erf Report files, .obk
+// External metadata (.otl DataProcessor files, .orp Report files, .oap
 // snapshots opened from disk) are NOT covered by this accessor — they
 // live as runtime nodes under ibValueModuleRuntimeManagerExternalDataProcessor
 // / ibValueModuleRuntimeManagerExternalReport on each open session, with their

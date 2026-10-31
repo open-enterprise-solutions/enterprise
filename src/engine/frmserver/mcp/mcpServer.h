@@ -240,9 +240,9 @@ private:
 
 	void Publish(const ibString& method, const ibString& request, const ibString& answer);
 
-	// ⭐⭐ RUN A TOOL WHERE A MOUSE CLICK RUNS — through the session's worker pool, which on a
-	// desktop host is the wx main thread. The thread a message came on may not touch a widget or the tree, and
-	// what that cost was not a refusal but the process: see the note on the definition.
+	// ⭐⭐ RUN A TOOL WHERE A MOUSE CLICK RUNS — as a task of the session, through its worker pool. The
+	// thread a message came on may not touch the session's objects, and what that cost was not a refusal
+	// but the process: see the note on the definition.
 	//
 	// ⭐⭐ AND THERE ARE THREE OUTCOMES, NOT TWO. `outPending` is set when the wait expired with the
 	// call still QUEUED — it did not fail, and it did not finish; it will run. That is not a

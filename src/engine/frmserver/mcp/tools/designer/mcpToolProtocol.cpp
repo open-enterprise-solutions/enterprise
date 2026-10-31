@@ -27,8 +27,8 @@ public:
 
 	ibString GetName() const override { return ibT("client_call"); }
 
-	// It waits for a client's session — on that session's worker, never on this process's main thread.
-	bool NeedsMainThread() const override { return false; }
+	// It waits for a client's session, so it does not run as a task of that session: see ibMcpTool::IsSessionTask.
+	bool IsSessionTask() const override { return false; }
 
 	ibString GetActivity(const ibDataNode& params) const override
 	{

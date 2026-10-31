@@ -141,7 +141,7 @@ TEST(ByteCodeAOT, ListCodeRoundTrip) {
 	src.m_listCode.push_back(MakeUnit(/*OPER_ADD*/  1, 2, wxT("modB")));
 	src.m_listCode.push_back(MakeUnit(/*OPER_RET*/  8, 3, wxEmptyString));
 	src.m_listCode[2].m_strDocPath  = wxT("/Catalog/Object");
-	src.m_listCode[2].m_strFileName = wxT("external.epf");
+	src.m_listCode[2].m_strFileName = wxT("external.otl");
 
 	ibByteCode dst;
 	ASSERT_TRUE(RoundTrip(src, dst));
@@ -605,4 +605,35 @@ TEST(ByteCodeAOT, AChildSeesEverythingButPrivateLocals) {
 	EXPECT_FALSE(MakeVar(wxT("StockManagement"), ibVarKind::External,    3).IsLocal());
 	EXPECT_FALSE(MakeVar(wxT("Manager"),         ibVarKind::Context,     4).IsLocal());
 	EXPECT_FALSE(MakeVar(wxT("Catalogs"),        ibVarKind::ContextProp, 5).IsLocal());
+}
+
+// ===========================================================================
+// Registry — an emptied bytecode is no longer where to look
+// ===========================================================================
+
+TEST(ByteCodeRegistry, ResetTakesItsEntryOut) {
+	const ibGuid id = MakeGuid(60);
+	ibByteCode byteCode;
+	byteCode.m_id = id;
+	ibByteCode::Register(&byteCode);
+	ASSERT_EQ(ibByteCode::Find(id), &byteCode);
+
+	byteCode.Reset();
+	EXPECT_EQ(ibByteCode::Find(id), nullptr);
+}
+
+// The registry is one for the process, and a session's bytecode stands under the same id as another's.
+TEST(ByteCodeRegistry, ResetLeavesAnotherBytecodesEntry) {
+	const ibGuid id = MakeGuid(70);
+	ibByteCode first, second;
+	first.m_id = id;
+	second.m_id = id;
+	ibByteCode::Register(&first);
+	ibByteCode::Register(&second);
+
+	first.Reset();
+	EXPECT_EQ(ibByteCode::Find(id), &second);
+
+	second.Reset();
+	EXPECT_EQ(ibByteCode::Find(id), nullptr);
 }

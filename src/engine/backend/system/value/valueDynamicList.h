@@ -230,6 +230,9 @@ public:
 	// above is the LIST's own query-table identity — a different thing.
 	virtual ibUniqueKey GetItemKey(const ibDataViewItem& item) const override;
 
+	// The row's values — what the source descriptor's GetItemKey / GetSelectValue read, and a script's row (see the .cpp).
+	ibRowMetaValues GetRowValues(ibValueModel::ibComposerNode* node) const;
+
 	// The row's STATE PICTURE — the same bridge as the key: the row's cells handed to the source descriptor, which
 	// knows which of them say the state. Asked by the control once per row. A custom query has no source to ask,
 	// and its rows show none.
@@ -294,9 +297,6 @@ private:
 	// Rebuild the columns + composer from the current source (the Source property's
 	// queryable). Called when the source is (re)set / picked / loaded.
 	void RebuildSource();
-
-	// The row's values — what the source descriptor's GetItemKey / GetSelectValue read (see the .cpp).
-	ibRowMetaValues GetRowValues(ibValueModel::ibComposerNode* node) const;
 
 	// DROP THE FILTER / SORT / GROUPING LINES whose field the list no longer has — run after every
 	// rebuild, so removing the arbitrary query takes its columns' settings with it. By RESOLUTION,

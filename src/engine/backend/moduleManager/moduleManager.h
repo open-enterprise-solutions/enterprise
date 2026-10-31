@@ -40,7 +40,7 @@ public:
 	public:
 
 		// No default ctor — the ibRuntimeModuleDataObject base requires the owning
-		// value's helper + a compile module (no default descriptor ctor exists).
+		// value's helper + the module (no default descriptor ctor exists).
 		//
 		// The manager is not optional. A unit compiles against its parent's scope, so
 		// one built without a manager can only fail to resolve every name outside
@@ -266,11 +266,11 @@ public:
 	// agnostic.
 	virtual ibValueModuleUnit* FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const = 0;
 
-	//associated map — globals are the compile module's extern variables (single
-	// source; m_listGlConstValue registry removed). Values are owned by
+	//associated map — globals are the extern binds (single source;
+	// m_listGlConstValue registry removed). Values are owned by
 	// m_metaManager / m_listCommonModuleManager, the map only references them.
-	virtual std::map<ibString, ibValue*>& GetGlobalVariables() { return m_compileModule->m_listExternValue; }
-	virtual std::map<ibString, ibContextVar>& GetContextVariables() { return m_compileModule->m_listContextValue; }
+	virtual std::map<ibString, ibValue*>& GetGlobalVariables() { return m_binds->m_listExternValue; }
+	virtual std::map<ibString, ibContextVar>& GetContextVariables() { return m_binds->m_listContextValue; }
 
 	//return external module
 	virtual ibValue* GetObjectValue() const { return nullptr; }

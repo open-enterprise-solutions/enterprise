@@ -21,7 +21,7 @@
 #include "backend/metaCollection/metaIntrospect.h"  // ibMetaTypeResolver
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
-#include "backend/session/workerPool.h"             // the queue that reaches the main thread
+#include "backend/session/workerPool.h"             // the queue of the session's tasks
 
 #include <algorithm>
 #include <chrono>
@@ -738,11 +738,9 @@ bool ibMcpServer::AskModel(const ibString& question, ibString& refusal)
 // are "safe without a person" would be the same convention this replaces, kept by the attention of
 // whoever adds the next one.
 //
-// ⭐ NOTHING HAD TO BE BUILT. ibGUISession already holds an ibWorkerPoolGUI whose Submit hands the
-// task to wxTheApp::CallAfter — the main loop, which is where a click arrives — and it runs a task
-// INLINE when the caller is already on that thread, so nothing that worked before pays for this.
-// The pool is asked of the SESSION, so a headless host (appserver, tests) answers null and the tool
-// runs here, which is correct: there is no UI thread to reach.
+// ⭐ NOTHING HAD TO BE BUILT. A session runs its tasks through its worker pool, which is where a click
+// arrives too, and a tool is one more task there. The pool is asked of the SESSION, so a host that
+// has none (tests) answers null and the tool runs here.
 //
 // ⚠ THE STATE IS SHARED, NOT CAPTURED BY REFERENCE. A timeout does not cancel the task — it only
 // stops US waiting — so the task may still run after this function has returned and its stack is
@@ -759,9 +757,16 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	// pointer compare when nothing has changed, which is almost always.
 	WatchMetadata();
 
-	// ⚠ …UNLESS THE TOOL MUST NOT BE THERE. See ibMcpTool::NeedsMainThread: a verb that WAITS for
-	// something the main thread delivers cannot be run on it, and the debugger's evaluation is one.
-	ibWorkerPool* pool = m_session != nullptr && tool->NeedsMainThread()
+	// What touches the records needs the person's roles to give them to the assistant: see ibMcpTool::IsDataAssistant.
+	if (tool->IsDataAssistant() && ibIsMcpInApplication()) {
+		const ibMetaDataConfigurationBase* const metaData = ibSession::Current()->GetMetaData();
+		if (metaData == nullptr || !metaData->AccessRight_DataAssistant())
+			ibBackendAccessException::Error(ibString::Format(ibMcpText("the data, for '%s': a role's Data assistant right gives it"), tool->GetName()));
+	}
+
+	// ⚠ …UNLESS THE TOOL MUST NOT BE THERE. See ibMcpTool::IsSessionTask: a verb that WAITS for
+	// something the session's queue delivers cannot be run in it, and the debugger's evaluation is one.
+	ibWorkerPool* pool = m_session != nullptr && tool->IsSessionTask()
 		? m_session->GetWorkerPool() : nullptr;
 
 	if (pool == nullptr)
@@ -780,12 +785,12 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	call->m_arguments = arguments;
 
 	// ⭐ WRITTEN DOWN, BECAUSE WHEN THIS GOES WRONG THERE IS NOTHING ELSE TO READ. The journal
-	// carried no `mcp` channel at all until 2026-09-04, so a call that reached the main thread and
+	// carried no `mcp` channel at all until 2026-09-04, so a call that reached the session and
 	// never came back left the technology journal without a single line about it — the one place
-	// somebody would look. Two lines per main-thread call: what was asked, and what came of it
+	// somebody would look. Two lines per call: what was asked, and what came of it
 	// with how long it took. Enough to tell "slow" from "never ran" without a debugger.
 	const ibString toolName = tool->GetName();
-	ibJournalInfo(ibT("mcp"), ibT("%s: handed to the main thread"), toolName);
+	ibJournalInfo(ibT("mcp"), ibT("%s: handed to the session"), toolName);
 	const auto startedAt = std::chrono::steady_clock::now();
 
 	std::future<void> done = pool->Submit(m_session, [call]() {
@@ -794,8 +799,8 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 
 	// ⚠ FINITE, AND THE NUMBER IS A COMPROMISE STATED OUT LOUD. The wait is not there to bound the
 	// WORK — applying a configuration legitimately takes minutes and must not be cut off — it is
-	// there so a MODAL DIALOG cannot wedge the server for the rest of the day: the main thread is
-	// then busy until a person clicks, and nobody is watching this socket. Long enough for real
+	// there so a MODAL DIALOG cannot wedge the server for the rest of the day: the session's task is
+	// then waiting until a person clicks, and nobody is watching this socket. Long enough for real
 	// work, finite so a forgotten dialog is answered instead of hung on.
 	if (done.wait_for(std::chrono::minutes(5)) != std::future_status::ready) {
 		// ⚠ A WARNING — the journal's word for "nobody has to be stopped for this". Written as an error it
@@ -1056,16 +1061,13 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 
 		std::vector<ibDataValue> roles;
 
-		for (const ibUserInfo::ibUserRole& role : who.m_roleArray)
-			roles.push_back(ibDataValue::String(
-				role.m_mode == ibRoleCompositionMode_Intersection
-					? role.m_strRoleName + ibT(" (restricting)")
-					: role.m_strRoleName));
+		for (const ibString& name : ibMcpRoleNames(who))
+			roles.push_back(ibDataValue::String(name));
 
 		user.AddField(ibT("roles"), ibDataValue::Array(roles));
 
 		if (who.IsSetLanguage())
-			user.SetValue(ibT("language"), who.m_strLanguageName);
+			user.SetValue(ibT("language"), ibMcpLanguageName(who));
 	}
 
 	// The configuration of the session this is asked in — as the user above is that session's.
@@ -1301,16 +1303,14 @@ namespace {
 // configuration is never cut, small enough that a runaway one cannot make connecting expensive.
 const size_t kOrientationNotesLimit = 20000;
 
-// The person's roles in a line, a restricting one named as such.
+// The person's roles in a line.
 ibString RoleNames(const ibUserInfo& who)
 {
 	ibString names;
-	for (const ibUserInfo::ibUserRole& role : who.m_roleArray) {
+	for (const ibString& name : ibMcpRoleNames(who)) {
 		if (!names.IsEmpty())
 			names << ibT(", ");
-		names << role.m_strRoleName;
-		if (role.m_mode == ibRoleCompositionMode_Intersection)
-			names << ibT(" (restricting)");
+		names << name;
 	}
 	return names;
 }
@@ -1324,6 +1324,14 @@ void AppendTextEncoding(ibString& out)
 	out << ibT("TEXT TRAVELS AS UTF-8, ONCE - in arguments and in answers. A script that hands the ")
 		<< ibT("request BYTES where it means characters (Perl without `use utf8`) encodes every ")
 		<< ibT("non-Latin letter a second time, and such a call is refused.\n\n");
+}
+
+// The language to answer in, by name; said in both modes. Nothing is said for a person who has none set.
+void AppendPersonLanguage(ibString& out, const ibUserInfo& who)
+{
+	if (who.IsOk() && who.IsSetLanguage())
+		out << ibT("The person is working in ") << ibMcpLanguageName(who)
+			<< ibT(" - answer them in it, whatever language this text is in.\n");
 }
 
 // ⭐⭐ WHAT THE APPLICATION'S ASSISTANT IS TOLD — its own text, not the designer's with lines struck out: that one
@@ -1374,7 +1382,10 @@ ibString BuildApplicationOrientation(const ibApplicationInstance* applicationIns
 			<< ibT("AND YOU CAN WORK IN THEIR WINDOW - `window_run` runs code in this session: open a list ")
 			<< ibT("or a document, put the cursor on the row they should look at, add a value, correct ")
 			<< ibT("one. It really happens, under their roles and with no undo: say what you are about ")
-			<< ibT("to change and get their yes first.\n\n");
+			<< ibT("to change and get their yes first.\n\n")
+			<< ibT("LOOK THE LANGUAGE UP BEFORE YOU WRITE IT - the names are not those of any language you know. ")
+			<< ibT("`syntax_search` and `syntax_get` are the help, `type_members` what a value answers to, ")
+			<< ibT("`pattern_read` how a thing is usually done here, `query_fields` what a table holds.\n\n");
 	}
 	else {
 		out << ibT("YOU SEE THE CONFIGURATION, NOT THE DATA. This person's roles do not give the ")
@@ -1400,9 +1411,11 @@ ibString BuildApplicationOrientation(const ibApplicationInstance* applicationIns
 
 	out << ibT("THE CONVERSATION. The person types to you in the assistant window: `chat_take` collects ")
 		<< ibT("new messages (and EMPTIES the queue), `chat_history` reads the whole exchange back ")
-		<< ibT("without collecting, `chat_say` answers into their window. Answer in their language.\n\n");
+		<< ibT("without collecting, `chat_say` answers into their window. Answer in their language.\n");
 
-	out << ibT("FIRST THING, AND NOTHING ELSE RUNS UNTIL IT IS DONE. Until `chat_say` has happened, every ")
+	AppendPersonLanguage(out, who);
+
+	out << ibT("\nFIRST THING, AND NOTHING ELSE RUNS UNTIL IT IS DONE. Until `chat_say` has happened, every ")
 		<< ibT("other verb is refused; what runs before it is `chat_history`, `platform_state`, ")
 		<< ibT("`metadata_tree`, `mcp_search`, `chat_say`. Read `chat_history`, then `chat_say` a ")
 		<< ibT("greeting: which assistant and which model you are, the configuration you see, that here ")
@@ -1702,9 +1715,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("with no language of their own sees the DEFAULT one, so every caption written in step 3 stays ")
 		<< ibT("unseen while it is English - the application opens in English and nothing says why.\n\n");
 
-	if (who.IsOk() && !who.m_strLanguageName.IsEmpty())
-		out << ibT("The person is working in ") << who.m_strLanguageName
-			<< ibT(" - answer them in it, whatever language this text is in.\n");
+	AppendPersonLanguage(out, who);
 
 	// ⚠ THE VERSION A CONFIGURATION DECLARES is not decoration: it is what the platform gates
 	// behaviour on, both in what code may say and in what schema is produced. Raising it IS the

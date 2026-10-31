@@ -15,7 +15,7 @@
 #include "backend/system/systemManager.h"   // Message - telling the person; WriteJournalEvent - the run's own record
 #include "backend/compiler/compileCode.h"   // the code is COMPILED here, against this application
 #include "backend/compiler/compileModule.h" // ...parented to the root, which is what it must see
-#include "backend/moduleInfo.h"             // GetCompileModule - which is how the root is asked for
+#include "backend/moduleInfo.h"             // GetByteCode - which is how the root is asked for
 #include "core/stringUtils.h"            // IsSameAs - how this tree compares a NAME
 #include "core/memory/memoryStream.h"          // ibWriterMemory / ibReaderMemory - the wire format below
 
@@ -215,7 +215,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 		// compiler numbers something differently, sent bytecode points at the wrong thing and says
 		// nothing about it. Compiling where it will RUN retires all four (Max: *"bytecode can
 		// diverge… this way it is guaranteed to pull exactly what is needed"*).
-		ibCompileModule* const root = mm->GetCompileModule();
+		const ibByteCode* const root = mm->GetByteCode();
 		if (root == nullptr)
 			ibBackendCoreException::Error(
 				_("Running code: this session has no root module to compile against"));
@@ -232,33 +232,21 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 		// body here would execute the configuration's start-up code inside somebody's background
 		// job. That is exactly what a common module's unit does for the same reason
 		// (moduleManager.cpp).
-		if (unit->GetByteCode() != &root->m_cByteCode) {
-			if (!root->m_cByteCode.m_bCompile)
+		if (unit->GetByteCode() != root) {
+			if (!root->m_bCompile)
 				ibBackendCoreException::Error(
 					_("Running code: this application's root module is not compiled, so there is "
 					  "nothing for the code to resolve names against"));
-			unit->Execute(root->m_cByteCode, /*delta*/ false);
+			unit->Execute(*root, /*delta*/ false);
 		}
 
-		// ⚠ PARENTED BEFORE THE COMPILE, because that is what resolves the names, and RE-PARENTED
-		// after it — see below.
+		// ⚠ PARENTED BEFORE THE COMPILE, because that is what resolves the names.
 		ibCompileCode compiler(ibT("JobCode"), ibT("JobCode"));
 		compiler.SetParent(root);
 		if (!compiler.Compile(text))
 			ibBackendCoreException::Error(
 				_("Running code: it did not compile here. The application is running a different "
 				  "configuration than the one it was written against."));
-
-		// 🛑⭐⭐ AND PARENTED AGAIN, BECAUSE COMPILING FORGETS IT. `Compile` resets the bytecode and
-		// `ibByteCode::Reset` clears `m_parent`; only `ibCompileModule` puts it back, because that
-		// subclass is the one that keeps a typed parent for exactly this (compileModule.cpp). A
-		// plain ibCompileCode does not, and the syntax checker never noticed — it compiles and
-		// throws the result away, so a lost parent costs it nothing.
-		//
-		// MEASURED 2026-09-06: without this the engine refused with "Parent1:(none)" — the program's
-		// parent empty while the unit's was the configuration module. Which is the check doing its
-		// job, and a good deal better than the crash that preceded it.
-		compiler.m_cByteCode.m_parent = &root->m_cByteCode;
 
 		ibValue answer;
 		layer->BeginTransaction();

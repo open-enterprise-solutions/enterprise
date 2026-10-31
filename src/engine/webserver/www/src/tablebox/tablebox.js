@@ -166,6 +166,8 @@ class Tablebox extends Control {
 		this.drawing = new Promise((resolve) => { this.drawn = resolve; });
 		/** a row activated with no cell the client may edit: the editor the server opens is opened here */
 		this.awaitEdit = false;
+		/** rows read anew while a cell's editor stood open: read again as it closes */
+		this.awaitReload = false;
 		/** @type {ProtocolNode | undefined} the table's standard commands, as its State offers them */
 		this.contextMenu = undefined;
 		this.host.addEventListener('pointerdown', (event) => {
@@ -1193,6 +1195,12 @@ class Tablebox extends Control {
 			: { Direction: reset, Count: this.perPage() + slack, Before: 0 });
 		if (page === null || generation !== this.generation || this.table === null)
 			return;
+		// The grid draws its rows anew, and an editor among them would go, committing what was typed so far: the answer
+		// to one cell comes back while the person is already typing in the next.
+		if (this.host.querySelector('.cell-editor') !== null) {
+			this.awaitReload = true;
+			return;
+		}
 		const read = readPage(page);
 		await this.setRows(read.records, true);
 		this.take(read);
@@ -1575,6 +1583,10 @@ function cellEditor(owner) {
 			cancel();
 			if (commit && typed !== text)
 				owner.send(EventKind.Change, { Row: row, Column: part.id, Text: typed });
+			if (owner.awaitReload) {
+				owner.awaitReload = false;
+				owner.reload();
+			}
 		};
 		owner.awaitEdit = false;
 		owner.send(EventKind.Input, { Row: row, Column: part.id });

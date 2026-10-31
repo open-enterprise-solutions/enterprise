@@ -32,6 +32,7 @@
 #include <wx/filefn.h>     // wxRemoveFile
 
 #include "backend/metadataConfiguration.h"
+#include "core/build.h"   // version_generate, version_oes_last
 #include "core/clsid.h"   // metadata_to_clsid("MD_CAT")
 
 namespace {
@@ -217,6 +218,18 @@ TEST(MetadataSerialize, DefaultConfig_RoundTrip_Idempotent) {
 
 	EXPECT_TRUE(BuffersEqual(buf2, buf3))
 		<< "second reload diverged — load does not consume exactly what save wrote";
+}
+
+// A version its enumeration has not registered is not read: the property keeps what it was constructed with.
+TEST(MetadataSerialize, AVersionTheEnumerationHasNotRegisteredIsNotRead) {
+	ibMetaDataConfigurationFile saved;
+	saved.SetVersion(version_generate(99, 0, 0));
+	ibMemoryBuffer buffer;
+	ASSERT_TRUE(saved.SaveConfigToBuffer(buffer));
+
+	ibMetaDataConfigurationFile loaded;
+	ASSERT_TRUE(loaded.LoadConfigFromBuffer(buffer));
+	EXPECT_EQ(static_cast<ibVersionID>(version_oes_last), loaded.GetVersion());
 }
 
 // A blob that round-trips through file I/O (SaveConfigToFile → LoadConfigFromFile)

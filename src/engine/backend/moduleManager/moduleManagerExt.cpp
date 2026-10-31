@@ -14,11 +14,18 @@
 // These delegate to the CONFIGURATION's module manager (an external DP inherits
 // the active config's context) — designer manager in the Designer, session root
 // mm at runtime. Resolved against the active config metadata, not the DP's own.
-ibCompileModule* ibValueModuleRuntimeManagerExternalDataProcessor::GetCompileModule() const
+const ibByteCode* ibValueModuleRuntimeManagerExternalDataProcessor::GetByteCode() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
-	return moduleManager ? moduleManager->GetCompileModule() : nullptr;
+	return moduleManager ? moduleManager->GetByteCode() : nullptr;
+}
+
+std::unique_ptr<ibCompileModule> ibValueModuleRuntimeManagerExternalDataProcessor::CreateCompiler() const
+{
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
+	wxASSERT(moduleManager);
+	return moduleManager ? moduleManager->CreateCompiler() : nullptr;
 }
 
 std::shared_ptr<ibProcUnit> ibValueModuleRuntimeManagerExternalDataProcessor::GetProcUnit() const
@@ -34,7 +41,7 @@ std::map<ibString, ibContextVar>& ibValueModuleRuntimeManagerExternalDataProcess
 	wxASSERT(moduleManager);
 	// Returns a reference — no null fallback possible from the manager, so guard
 	// with a process-static empty map rather than dereferencing null in release
-	// (the sibling GetCompileModule/GetProcUnit return pointers and null-fold).
+	// (the sibling GetByteCode/GetProcUnit return pointers and null-fold).
 	if (moduleManager == nullptr) {
 		static std::map<ibString, ibContextVar> s_empty;
 		return s_empty;
@@ -63,9 +70,11 @@ ibValueModuleRuntimeManagerExternalDataProcessor::ibValueModuleRuntimeManagerExt
 	// itself, and at runtime the object holds it. In designer the document holds it, never the object.
 	m_objectValue = new ibValueRecordDataObjectExternalDataProcessor(
 		metaObject, appData->DesignerMode() ? nullptr : std::move(metadata));
-	//set complile module
+	// One module, so one set of binds and one bytecode: the object is the script-side wrapper around the same source.
+	m_byteCode = std::make_shared<ibByteCode>();
+	m_objectValue->m_binds = m_binds;
+	m_objectValue->m_byteCode = m_byteCode;
 	//set proc unit
-	m_objectValue->m_compileModule = m_compileModule;
 	m_objectValue->m_procUnit = m_procUnit;
 
 	if (appData->DesignerMode()) {
@@ -85,13 +94,6 @@ ibValueModuleRuntimeManagerExternalDataProcessor::~ibValueModuleRuntimeManagerEx
 	// cleanup if a caller (e.g. an ibValuePtr auto-release) skipped it.
 	DestroyMainModule();
 	if (m_objectValue) {
-		// m_objectValue BORROWS m_compileModule / m_procUnit from this manager (shared
-		// in the ctor, raw pointer). This manager's base dtor is about to wxDELETE
-		// m_compileModule, so the borrow must be cleared first or m_objectValue's dtor
-		// double-frees it. DestroyMainModule only clears it when m_initialized — a
-		// never-run manager (released by a detached-root swap) would skip that → the
-		// double free. Clear unconditionally here.
-		m_objectValue->m_compileModule = nullptr;
 		m_objectValue->m_procUnit = nullptr;
 	}
 	if (appData->DesignerMode()) {
@@ -117,16 +119,15 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 	m_objectValue->IncrRef();
 
 
-	// Imperative pipeline — SetParent cascades compile+procUnit parents
-	// to configuration root's; BindContextVariable wires thisObject;
+	// Imperative pipeline — SetParent wires the parent to configuration
+	// root; BindContextVariable wires thisObject;
 	// InitializeRuntime / Compile / Run drive the top-level.
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, m_objectValue);
 
-	// m_objectValue (the external DP's script-visible object) shares the
-	// same compile module — it's the script-side wrapper around the
-	// same source. Set before InitializeObject so the object sees it.
-	m_objectValue->m_compileModule = m_compileModule;
+	// m_objectValue (the external DP's script-visible object) stands where
+	// this manager stands: a compile chain of its forms goes up through it.
+	m_objectValue->ibRuntimeModuleDataObject::SetParent(moduleManager);
 
 	m_objectValue->InitializeObject();
 
@@ -178,12 +179,10 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::DestroyMainModule()
 	if (!m_initialized)
 		return true;
 
-	m_compileModule->Reset();
+	ResetByteCode();
 	m_procUnit.reset();
 
-	//set complile module 
 	//set proc unit
-	m_objectValue->m_compileModule = nullptr;
 	m_objectValue->m_procUnit = nullptr;
 
 	//Setup common modules — best-effort: destroy every module even if one
@@ -216,7 +215,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(bool forc
 	if (defFormObject != nullptr) {
 
 		ibBackendValueForm* cached = nullptr;
-		// Cache lives on the form's own metadata (external DP for .epf, main config
+		// Cache lives on the form's own metadata (external DP for .otl, main config
 		// for embedded DP) — m_metaManager->GetMetaData() is the configuration
 		// passed to base ctor and would miss for external DPs.
 		ibCompileValueCache* cc = defFormObject->GetMetaData()->GetCompileCache();
@@ -276,11 +275,18 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::ExitMainModule(bool force
 //////////////////////////////////////////////////////////////////////////////////
 
 // Delegate to the CONFIGURATION's module manager — see the DataProcessor variant.
-ibCompileModule* ibValueModuleRuntimeManagerExternalReport::GetCompileModule() const
+const ibByteCode* ibValueModuleRuntimeManagerExternalReport::GetByteCode() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
-	return moduleManager ? moduleManager->GetCompileModule() : nullptr;
+	return moduleManager ? moduleManager->GetByteCode() : nullptr;
+}
+
+std::unique_ptr<ibCompileModule> ibValueModuleRuntimeManagerExternalReport::CreateCompiler() const
+{
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
+	wxASSERT(moduleManager);
+	return moduleManager ? moduleManager->CreateCompiler() : nullptr;
 }
 
 std::shared_ptr<ibProcUnit> ibValueModuleRuntimeManagerExternalReport::GetProcUnit() const
@@ -296,7 +302,7 @@ std::map<ibString, ibContextVar>& ibValueModuleRuntimeManagerExternalReport::Get
 	wxASSERT(moduleManager);
 	// Returns a reference — no null fallback possible from the manager, so guard
 	// with a process-static empty map rather than dereferencing null in release
-	// (the sibling GetCompileModule/GetProcUnit return pointers and null-fold).
+	// (the sibling GetByteCode/GetProcUnit return pointers and null-fold).
 	if (moduleManager == nullptr) {
 		static std::map<ibString, ibContextVar> s_empty;
 		return s_empty;
@@ -323,9 +329,11 @@ ibValueModuleRuntimeManagerExternalReport::ibValueModuleRuntimeManagerExternalRe
 	// held by the object at runtime, never in designer.
 	m_objectValue = new ibValueRecordDataObjectExternalReport(
 		metaObject, appData->DesignerMode() ? nullptr : std::move(metadata));
-	//set complile module
+	// One module, so one set of binds and one bytecode: the object is the script-side wrapper around the same source.
+	m_byteCode = std::make_shared<ibByteCode>();
+	m_objectValue->m_binds = m_binds;
+	m_objectValue->m_byteCode = m_byteCode;
 	//set proc unit
-	m_objectValue->m_compileModule = m_compileModule;
 	m_objectValue->m_procUnit = m_procUnit;
 
 	if (appData->DesignerMode()) {
@@ -345,12 +353,6 @@ ibValueModuleRuntimeManagerExternalReport::~ibValueModuleRuntimeManagerExternalR
 	// if already destroyed and a cleanup if a caller skipped it.
 	DestroyMainModule();
 	if (m_objectValue) {
-		// m_objectValue BORROWS m_compileModule / m_procUnit from this manager (shared
-		// in the ctor, raw pointer). The base dtor is about to wxDELETE m_compileModule,
-		// so clear the borrow first or m_objectValue's dtor double-frees it. A never-run
-		// manager (released by a detached-root swap) skips this in DestroyMainModule
-		// (m_initialized false) → the double free. Clear unconditionally here.
-		m_objectValue->m_compileModule = nullptr;
 		m_objectValue->m_procUnit = nullptr;
 	}
 	if (appData->DesignerMode()) {
@@ -376,7 +378,7 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, m_objectValue);
 
-	m_objectValue->m_compileModule = m_compileModule;
+	m_objectValue->ibRuntimeModuleDataObject::SetParent(moduleManager);
 	m_objectValue->InitializeObject();
 
 	if (!appData->DesignerMode()) {
@@ -418,12 +420,10 @@ bool ibValueModuleRuntimeManagerExternalReport::DestroyMainModule()
 	if (!m_initialized)
 		return true;
 
-	m_compileModule->Reset();
+	ResetByteCode();
 	m_procUnit.reset();
 
-	//set complile module 
-	//set proc unit 
-	m_objectValue->m_compileModule = nullptr;
+	//set proc unit
 	m_objectValue->m_procUnit = nullptr;
 
 	//Setup common modules — best-effort: destroy every module even if one

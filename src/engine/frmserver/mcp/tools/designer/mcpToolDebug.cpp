@@ -527,11 +527,11 @@ public:
 
 	ibString GetName() const override { return ibT("debug_evaluate"); }
 
-	// 🛑 NOT ON THE MAIN THREAD — see ibMcpTool::NeedsMainThread. This asks the runtime and WAITS,
-	// and the answer comes back through wxTheApp::CallAfter: run here and the wait blocks the only
-	// thread that could deliver it. Nothing in this verb touches a window; it talks to a socket and
+	// 🛑 NOT AS THE SESSION'S TASK — see ibMcpTool::IsSessionTask. This asks the runtime and WAITS,
+	// and the answer comes back through the session's queue: run there and the wait blocks the
+	// task that delivers it. Nothing in this verb touches a window; it talks to a socket and
 	// a condition variable, both of which are indifferent to where they are called from.
-	bool NeedsMainThread() const override { return false; }
+	bool IsSessionTask() const override { return false; }
 
 	ibString GetActivity(const ibDataNode& params) const override
 	{
@@ -946,10 +946,10 @@ public:
 
 	ibString GetName() const override { return ibT("debug_sandbox"); }
 
-	// 🛑 NOT ON THE MAIN THREAD — the same reason debug_evaluate is not: this WAITS for an answer
-	// that arrives through wxTheApp::CallAfter, and waiting on the thread that delivers it is a
-	// deadlock rather than a slow call.
-	bool NeedsMainThread() const override { return false; }
+	// 🛑 NOT AS THE SESSION'S TASK — the same reason debug_evaluate is not: this WAITS for an answer
+	// that arrives through the session's queue, and waiting in that queue is a deadlock rather
+	// than a slow call.
+	bool IsSessionTask() const override { return false; }
 
 	ibString GetActivity(const ibDataNode& params) const override
 	{

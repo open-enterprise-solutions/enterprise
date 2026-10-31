@@ -272,16 +272,17 @@ public:
 
 	ibString GetName() const override { return ibT("compose_run"); }
 
-	// 🛑 NOT ON THE MAIN THREAD — see ibMcpTool::NeedsMainThread, which says this in as many words.
-	// The schema goes down the socket and the tables come back through the session's worker, which on
-	// the desktop IS the main loop: waiting here would be waiting for a message only this thread can
-	// dispatch. Measured, because it was not read: the designer hung with `ibMcpDebugBridge::Compose`
-	// blocked at the bottom of `wxEventLoopManual::DoRunLoop` (2026-09-06).
+	// 🛑 NOT AS THE SESSION'S TASK — see ibMcpTool::IsSessionTask, which says this in as many words.
+	// The schema goes down the socket and the tables come back through the session's queue: waiting
+	// in that queue is waiting for a task behind this one. Measured, because it was not read: the
+	// designer hung with `ibMcpDebugBridge::Compose` blocked in the desktop's event loop (2026-09-06).
 	//
 	// ⚠ A DEADLOCK BY CONSTRUCTION CANNOT BE FIXED BY A LONGER DEADLINE. Nothing in this verb touches
 	// a window — it talks to a socket and a condition variable, and both are indifferent to where
 	// they are called from. It is the WAITING that decides, not what is being waited for.
-	bool NeedsMainThread() const override { return false; }
+	bool IsSessionTask() const override { return false; }
+
+	bool IsDataAssistant() const override { return true; }
 
 	ibString GetActivity(const ibDataNode& params) const override
 	{
@@ -695,7 +696,7 @@ public:
 	}
 };
 
-MCP_TOOL_REGISTER_DATA(ibMcpToolComposeRun);
+MCP_TOOL_REGISTER(ibMcpToolComposeRun);
 
 //---------------------------------------------------------------------------
 // report_show
@@ -706,6 +707,8 @@ class ibMcpToolReportShow : public ibMcpTool {
 public:
 
 	ibString GetName() const override { return ibT("report_show"); }
+
+	bool IsDataAssistant() const override { return true; }
 
 	ibString GetActivity(const ibDataNode& /*params*/) const override
 	{
@@ -777,7 +780,7 @@ public:
 	}
 };
 
-MCP_TOOL_REGISTER_DATA(ibMcpToolReportShow);
+MCP_TOOL_REGISTER_RUNTIME(ibMcpToolReportShow);
 
 //---------------------------------------------------------------------------
 // compose_settings

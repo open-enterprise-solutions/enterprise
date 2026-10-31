@@ -605,10 +605,14 @@ void ibClientHost::Disconnect(const void* connection)
 	for (const std::shared_ptr<Client>& client : transportGone) {
 		const std::shared_ptr<ibSession> session = client->instance->ShareSession();
 		const ibSessionScope inThisSession(session.get());
-		std::lock_guard<std::mutex> lock(client->mcpMutex);
-		// Unless the client has already opened another in its place: that one is listening.
-		if (client->mcpServer != nullptr && client->mcpChannel.connection.load(std::memory_order_acquire) == nullptr)
-			client->mcpServer->Listen(nullptr);
+		{
+			std::lock_guard<std::mutex> lock(client->mcpMutex);
+			// Unless the client has already opened another in its place: that one is listening.
+			if (client->mcpServer != nullptr && client->mcpChannel.connection.load(std::memory_order_acquire) == nullptr)
+				client->mcpServer->Listen(nullptr);
+		}
+		// The assistant window's menu item stands on it (ibSchemaAssistant::AccessRight).
+		NotifyChanged(client->instance.get());
 	}
 
 	struct Held {
@@ -1585,6 +1589,9 @@ bool ibClientHost::Mcp(Client& client, const ibDataNode& params, ibDataNode& res
 			return false;
 		const ibClientInstance* const instance = client.instance.get();
 		server->Listen([this, instance](const ibString& message) { NotifyMcp(instance, message); });
+		// The assistant window's menu item stands on it (ibSchemaAssistant::AccessRight), and the login drew the menu before
+		// any transport came.
+		NotifyChanged(instance);
 		return true;
 	}
 

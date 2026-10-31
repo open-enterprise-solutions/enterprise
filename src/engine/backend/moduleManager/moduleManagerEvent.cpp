@@ -19,14 +19,9 @@
 // project_refresh_execute_crash.md.
 //
 // Handlers take m_runtimeMutex — same lock as Init/DetachRuntime
-// — because CallAsProc enters ibProcUnit::Execute which mutates shared
-// compileModule state (procUnit.cpp:1025 writes m_listConst[i].m_bReadOnly;
-// :1029 reads m_compileModule->m_rootContext). Two concurrent logins
-// under rapid F5 had one session's Execute hit operator[] on m_listCode
-// while another session's Execute was in the same function. Serializing
-// startup is cheap (login is rare) and eliminates the race class without
-// the full bytecode↔compileModule decoupling
-// (project_bytecode_compile_decoupling.md).
+// — because two concurrent logins under rapid F5 had one session's
+// Execute hit operator[] on m_listCode while another session's Execute
+// was in the same function. Serializing startup is cheap (login is rare).
 bool ibValueModuleManagerRuntimeConfiguration::BeforeStart()
 {
 	if (appData->DesignerMode())

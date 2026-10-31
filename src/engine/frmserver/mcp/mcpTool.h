@@ -144,20 +144,25 @@ public:
 	// (lower_snake_case): "script_check", "metadata_list".
 	virtual ibString GetName() const = 0;
 
-	// ⭐⭐ DOES THIS VERB BELONG ON THE MAIN THREAD? Almost every one does: it touches the
-	// configuration, the designer's objects, a window — all of which are the main thread's, which
-	// is why the server hands tools to it (ibMcpServer::RunTool).
+	// ⭐⭐ DOES THIS VERB RUN AS A TASK OF THE SESSION? Almost every one does: it touches the
+	// configuration, the session's objects, a window — all of which are the session's, which is why
+	// the server hands tools to its queue (ibMcpServer::RunTool). False runs it on the connection's thread.
 	//
-	// 🛑 AND ONE KIND MUST NOT BE THERE: a tool that WAITS for something the main thread itself has
-	// to deliver. The debugger's evaluation is exactly that — the request goes down the socket and
-	// the answer comes back through wxTheApp::CallAfter, so waiting for it ON the main thread is
-	// waiting for a message only that thread can dispatch. It never arrives; the wait always
-	// expires, and the caller is told "the runtime did not answer in time" about a runtime that
-	// answered at once (2026-09-01, measured at two different stops with a constant expression).
+	// 🛑 AND ONE KIND MUST NOT BE THERE: a tool that WAITS for something the session's queue itself
+	// has to deliver. The debugger's evaluation is exactly that — the request goes down the socket and
+	// the answer comes back through session->Submit, so waiting for it IN that queue is waiting for a
+	// task behind this one. It never runs; the wait always expires, and the caller is told "the runtime
+	// did not answer in time" about a runtime that answered at once (2026-09-01, measured at two
+	// different stops with a constant expression).
 	//
 	// A deadlock by construction cannot be fixed by a longer deadline; the tool has to say where it
 	// may run, and this is where it says it.
-	virtual bool NeedsMainThread() const { return true; }
+	virtual bool IsSessionTask() const { return true; }
+
+	// ⭐ THE TOOL WORKS WITH THE DATA, not with the schema. In an application's session the call then needs the person's
+	// roles to give the assistant the records (AccessRight_DataAssistant), and without that RunTool throws, before this
+	// tool has run. A designer's session is not asked.
+	virtual bool IsDataAssistant() const { return false; }
 
 	// One sentence, written for the CALLER — it is what a machine reads to
 	// decide whether this is the verb it wants.
@@ -653,19 +658,23 @@ FRMSERVER_API const std::vector<ibString>& ibMcpGreetingVerbs();
 // The registry. Registration happens during static construction, so the store
 // is a function-local static inside the .cpp — a namespace-scope container
 // would not be built yet when the first registrar runs.
-// Who may be offered a tool, said by how it is registered: anybody the assistant is given to, for what shows the schema
-// and no record of it (MCP_TOOL_REGISTER); whose roles give the data too, for what reads it (MCP_TOOL_REGISTER_DATA); the
-// designer alone (MCP_TOOL_REGISTER_DESIGNER), which sees every tool.
-enum class ibMcpToolMode { Common, Data, Designer };
+// Who may be offered a tool, said by how it is registered: anybody the assistant is given to (MCP_TOOL_REGISTER); the
+// designer alone (MCP_TOOL_REGISTER_DESIGNER); the application alone, for what acts in a person's window
+// (MCP_TOOL_REGISTER_RUNTIME). Whether the data may be touched is the tool's own word: ibMcpTool::IsDataAssistant.
+enum class ibMcpToolMode { Common, Designer, Runtime };
 
 FRMSERVER_API void ibRegisterMcpTool(const ibMcpTool* tool, ibMcpToolMode mode);
 FRMSERVER_API ibMcpToolMode ibGetMcpToolMode(const ibMcpTool* tool);
-// ⭐ IS IT THERE FOR THE ONE ASKING — the current session's: a designer's is offered every tool, a person's in the application
-// the common ones, and those that read data when their roles give that (AccessRight_DataAssistant). Unoffered is as good
-// as absent: it is not listed, not found by a search and not called.
+// ⭐ IS IT THERE FOR THE ONE ASKING — the current session's: a designer's is offered the common tools and its own, a person's
+// in the application the common ones and the runtime's. Unoffered is as good as absent: it is not listed, not found by a
+// search and not called.
 FRMSERVER_API bool ibIsMcpToolOffered(const ibMcpTool* tool);
 // In an application's session — its person's roles answer, and what is the designer's alone is refused.
 FRMSERVER_API bool ibIsMcpInApplication();
+// What an account's roles and language are called, asked of the session's configuration: the account's record keeps their
+// ids and no names. A restricting role says so: its name alone reads as "may do this" when it only subtracts.
+FRMSERVER_API std::vector<ibString> ibMcpRoleNames(const struct ibUserInfo& who);
+FRMSERVER_API ibString ibMcpLanguageName(const struct ibUserInfo& who);
 FRMSERVER_API const std::vector<const ibMcpTool*>& ibMcpTools();
 FRMSERVER_API const ibMcpTool* ibFindMcpTool(const ibString& name);
 
@@ -683,8 +692,8 @@ FRMSERVER_API void ibMcpLanguageTypes(const ibString& query, std::vector<ibDataV
 	static tool_class##Registrar s_##tool_class##Registrar;                  \
 	}
 #define MCP_TOOL_REGISTER(tool_class)          MCP_TOOL_REGISTER_AS(tool_class, ibMcpToolMode::Common)
-#define MCP_TOOL_REGISTER_DATA(tool_class)     MCP_TOOL_REGISTER_AS(tool_class, ibMcpToolMode::Data)
 #define MCP_TOOL_REGISTER_DESIGNER(tool_class) MCP_TOOL_REGISTER_AS(tool_class, ibMcpToolMode::Designer)
+#define MCP_TOOL_REGISTER_RUNTIME(tool_class)  MCP_TOOL_REGISTER_AS(tool_class, ibMcpToolMode::Runtime)
 
 //     MCP_AUDIT_REGISTER(ibMcpAuditForms);   — the same idiom, for a check rather than a verb
 #define MCP_AUDIT_REGISTER(audit_class)                                      \

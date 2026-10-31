@@ -959,6 +959,7 @@ public:
 			for (const ibDiagnostic& diagnostic : answer.m_diagnostics) {
 				std::shared_ptr<ibDataNode> line = std::make_shared<ibDataNode>();
 				line->AddField(ibT("line"), ibDataValue::Int(static_cast<std::int64_t>(diagnostic.m_line)));
+				line->SetValue(ibT("module"), diagnostic.m_moduleName);
 				line->SetValue(ibT("message"), diagnostic.m_message);
 				if (!diagnostic.m_codeLine.IsEmpty())
 					line->SetValue(ibT("codeLine"), diagnostic.m_codeLine);

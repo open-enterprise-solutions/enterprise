@@ -91,6 +91,8 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const ibString& text,
 
 		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 		entry->AddField(ibT("line"), ibDataValue::Int((std::int64_t)diagnostic.m_line));
+		// Whose line it is: a module compiles with the global modules' text, and a broken one answers here.
+		entry->SetValue(ibT("module"), diagnostic.m_moduleName);
 		entry->SetValue(ibT("message"), diagnostic.m_message);
 		if (!diagnostic.m_codeLine.IsEmpty())
 			entry->SetValue(ibT("codeLine"), diagnostic.m_codeLine);

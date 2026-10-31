@@ -269,6 +269,14 @@ void ibTranslateCode::Clear()
 #endif // UTF8_LEXEM_TRANSLATE
 }
 
+void ibTranslateCode::Load(const ibCompilableSourceCode& sourceCode)
+{
+	SetModuleName(sourceCode.GetFullName());
+	SetDocPath(sourceCode.GetDocPath());
+	SetFileName(sourceCode.GetFileName());
+	Load(sourceCode.GetModuleText());
+}
+
 /**
 * Load
 * Purpose:

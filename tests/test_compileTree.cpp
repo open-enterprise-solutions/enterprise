@@ -488,7 +488,7 @@ TEST(CompileTree, ADuplicateVisibleFunctionIsRejected) {
 }
 
 TEST(CompileTree, ACommonModuleTakesFunctionsOnly) {
-	// `onlyFunction` — the third ctor argument, what ibCompileCommonModule passes.
+	// `onlyFunction` — the third ctor argument, what ibCompileModule passes for a common module.
 	ibCompileCode moduleVar(wxT("test"), wxT("memory"), true);
 	EXPECT_FALSE(Build(moduleVar, wxT("var a;\nFunction F()\nEndFunction\n")));
 

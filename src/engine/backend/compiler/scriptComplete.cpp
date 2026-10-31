@@ -7,7 +7,7 @@
 #include "backend/system/value/valueTable.h"     // ibValueModelTable — and with a table when they are named
 #include "backend/metaData.h"                    // ibCompileValueCache::FindCompileModule
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject::GetMetaData
-#include "backend/moduleInfo.h"                  // ibRuntimeModuleDataObject::GetCompileModule
+#include "backend/moduleInfo.h"                  // ibRuntimeModuleDataObject::CreateCompiler
 #include "backend/moduleManager/moduleManager.h" // ibValueModuleManager — the context a snippet parents to
 #include "backend/session/session.h"             // ibSession::EditModuleManagerFor
 #include "core/description/typeDescription.h"             // ibTypeDescription - a type, possibly several
@@ -1229,11 +1229,11 @@ private:
 
 		for (const ibCompileCode* compile : m_chain) {
 
-			for (const auto& bind : compile->m_listExternValue)
+			for (const auto& bind : compile->m_binds.m_listExternValue)
 				if (bind.second != nullptr && bind.second->GetRef() == held)
 					return ibNameOrigin::Bound;
 
-			for (const auto& context : compile->m_listContextValue)
+			for (const auto& context : compile->m_binds.m_listContextValue)
 				if (context.second.m_value != nullptr && context.second.m_value->GetRef() == held)
 					return ibNameOrigin::Context;
 		}
@@ -1404,8 +1404,8 @@ private:
 
 		for (const ibCompileCode* compile : m_chain) {
 
-			const auto extern_ = compile->m_listExternValue.find(name);
-			if (extern_ != compile->m_listExternValue.end() && extern_->second != nullptr) {
+			const auto extern_ = compile->m_binds.m_listExternValue.find(name);
+			if (extern_ != compile->m_binds.m_listExternValue.end() && extern_->second != nullptr) {
 				out = *extern_->second;
 				if (outOrigin != nullptr)
 					*outOrigin = ibNameOrigin::Bound;
@@ -1413,8 +1413,8 @@ private:
 				return true;
 			}
 
-			const auto context = compile->m_listContextValue.find(name);
-			if (context != compile->m_listContextValue.end() && context->second.m_value != nullptr) {
+			const auto context = compile->m_binds.m_listContextValue.find(name);
+			if (context != compile->m_binds.m_listContextValue.end() && context->second.m_value != nullptr) {
 				out = *context->second.m_value;
 				if (outOrigin != nullptr)
 					*outOrigin = ibNameOrigin::Context;
@@ -1448,7 +1448,7 @@ private:
 // The compile the text is judged against — the module it LIVES in, whose own bindings (ThisObject,
 // the object's context) and whose parent chain (the common modules, the globals) are the language
 // the caret stands in. Null is ordinary: a text with no home is judged against the bare language.
-ibCompileModule* HostModuleOf(const ibValueMetaObject* moduleObject)
+std::unique_ptr<ibCompileModule> HostModuleOf(const ibValueMetaObject* moduleObject)
 {
 	if (moduleObject == nullptr)
 		return nullptr;
@@ -1465,7 +1465,7 @@ ibCompileModule* HostModuleOf(const ibValueMetaObject* moduleObject)
 	if (!cache->FindCompileModule(moduleObject, dataRef) || dataRef == nullptr)
 		return nullptr;
 
-	return dataRef->GetCompileModule();
+	return dataRef->CreateCompiler();
 }
 
 // ⭐⭐ THE ONE COMPILE BOTH DOORS ASK. A path and a list are two readings of a single artefact, so
@@ -1510,7 +1510,8 @@ public:
 
 		// 🛑 …AND THE HOST HAS TO HAVE BEEN COMPILED, the same trap the syntax check documents: a
 		// module nobody compiled carries an empty bytecode, so there is nothing to stand beside.
-		if (ibCompileModule* host = HostModuleOf(moduleObject)) {
+		m_host = HostModuleOf(moduleObject);
+		if (ibCompileModule* host = m_host.get()) {
 			try { host->Compile(); }
 			catch (const ibCoreException&) {
 				// A configuration whose own modules do not compile is not this walk's complaint to
@@ -1529,12 +1530,7 @@ public:
 			// and the handles the module was GIVEN — ThisObject, the object's own attributes,
 			// RegisterRecords — are carried over, because they belong to the module rather than to
 			// the text and the new version has them too.
-			for (const auto& kv : host->m_listExternValue)
-				m_compiler.AddVariable(kv.first, kv.second);
-			for (const auto& kv : host->m_listContextValue)
-				m_compiler.AddContextVariable(kv.first, kv.second.m_value, kv.second.m_scopeContext);
-			for (const auto& kv : host->m_listLocalValue)
-				m_compiler.AddLocalVariable(kv.first, kv.second);
+			m_compiler.m_binds = host->m_binds;
 
 			ibCompileModule* stand = host->GetParent();
 			if (stand != nullptr)
@@ -1598,6 +1594,9 @@ private:
 	// serves happens inside its lifetime; the mode has to as well.
 	const ibBackendException::ibEvalModeScope m_answering{ eval_complete };
 
+	// The module the text stands beside, and with it the chain above: m_chain reads them while this object lives.
+	std::unique_ptr<ibCompileModule> m_host;
+
 	ibCompileCode  m_compiler;
 	ibCompileChain m_chain;
 	unsigned int   m_at = 0;
@@ -1613,7 +1612,7 @@ private:
 // root entire and register themselves back on it → an object module, which adds its own exports and
 // contexts → a form on top. So `depth == 0` is the text being typed, the LAST link is the
 // configuration's own manager, and everything between is an ancestor module.
-ibNameOrigin OriginOfVar(ibVarKind kind, size_t depth, size_t chainSize, bool globalModule)
+ibNameOrigin OriginOfVar(ibVarKind kind, size_t depth, size_t chainSize)
 {
 	const bool own  = depth == 0;
 	const bool root = depth + 1 >= chainSize;
@@ -1634,12 +1633,11 @@ ibNameOrigin OriginOfVar(ibVarKind kind, size_t depth, size_t chainSize, bool gl
 
 	default:   // Local / Export / Protected — something somebody WROTE
 		if (own)          return ibNameOrigin::Declared;
-		if (globalModule) return ibNameOrigin::GlobalModule;
 		return root ? ibNameOrigin::Global : ibNameOrigin::Inherited;
 	}
 }
 
-ibNameOrigin OriginOfFunc(ibFnKind kind, size_t depth, size_t chainSize, bool globalModule)
+ibNameOrigin OriginOfFunc(ibFnKind kind, size_t depth, size_t chainSize)
 {
 	const bool root = depth + 1 >= chainSize;
 
@@ -1652,7 +1650,6 @@ ibNameOrigin OriginOfFunc(ibFnKind kind, size_t depth, size_t chainSize, bool gl
 		return root ? ibNameOrigin::Platform : ibNameOrigin::Member;
 
 	if (depth == 0)   return ibNameOrigin::Declared;
-	if (globalModule) return ibNameOrigin::GlobalModule;
 	return root ? ibNameOrigin::Global : ibNameOrigin::Inherited;
 }
 
@@ -1665,12 +1662,12 @@ const ibValue* BoundValueOf(const ibCompileChain& chain, const ibString& name)
 
 	for (const ibCompileCode* compile : chain) {
 
-		const auto context = compile->m_listContextValue.find(name);
-		if (context != compile->m_listContextValue.end() && context->second.m_value != nullptr)
+		const auto context = compile->m_binds.m_listContextValue.find(name);
+		if (context != compile->m_binds.m_listContextValue.end() && context->second.m_value != nullptr)
 			return context->second.m_value;
 
-		const auto extern_ = compile->m_listExternValue.find(name);
-		if (extern_ != compile->m_listExternValue.end() && extern_->second != nullptr)
+		const auto extern_ = compile->m_binds.m_listExternValue.find(name);
+		if (extern_ != compile->m_binds.m_listExternValue.end() && extern_->second != nullptr)
 			return extern_->second;
 	}
 	return nullptr;
@@ -1991,10 +1988,6 @@ bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 		const ibCompileCode* compile = chain[depth];
 		const ibByteCode& byteCode = compile->m_cByteCode;
 
-		// A GLOBAL common module's exports are reachable with no prefix at all — the one origin
-		// that cannot be told from the kind, and the class itself is what says it.
-		const bool globalModule = dynamic_cast<const ibCompileGlobalModule*>(compile) != nullptr;
-
 		for (const auto& var : byteCode.m_listVar) {
 
 			if (var.m_strRealName.IsEmpty())
@@ -2040,8 +2033,8 @@ bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 			// editor-facing fact — so it is asked of the module that was TOLD it, which is the one
 			// holding the binding.
 			if (var.IsContext()) {
-				const auto bound = compile->m_listContextValue.find(var.m_strRealName);
-				if (bound != compile->m_listContextValue.end() && bound->second.m_scopeContext)
+				const auto bound = compile->m_binds.m_listContextValue.find(var.m_strRealName);
+				if (bound != compile->m_binds.m_listContextValue.end() && bound->second.m_scopeContext)
 					continue;
 			}
 
@@ -2049,7 +2042,7 @@ bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 			entry.m_name      = var.m_strRealName;
 			entry.m_exported  = var.IsExport();
 			entry.m_protected = var.IsProtected();
-			entry.m_origin    = OriginOfVar(var.m_kind, depth, chain.size(), globalModule);
+			entry.m_origin    = OriginOfVar(var.m_kind, depth, chain.size());
 			offerOnce(std::move(entry));
 		}
 
@@ -2072,7 +2065,7 @@ bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 			entry.m_returnsValue  = fn.m_bCodeRet;
 			entry.m_exported      = fn.IsExport();
 			entry.m_protected     = fn.IsProtected();
-			entry.m_origin        = OriginOfFunc(fn.m_kind, depth, chain.size(), globalModule);
+			entry.m_origin        = OriginOfFunc(fn.m_kind, depth, chain.size());
 			offerOnce(std::move(entry));
 		}
 	}
@@ -2327,13 +2320,15 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const ibString& text, const i
 	// the context every module of it is parented to, and without it `Catalogs` is not a name. Same
 	// reasoning, and the same trap, as ibCheckScript documents: a manager nobody compiled carries
 	// an empty bytecode, so it is compiled first.
+	std::unique_ptr<ibCompileModule> host;
 	if (metaData != nullptr) {
 		if (ibValueModuleManager* manager = ibSession::EditModuleManagerFor(metaData)) {
-			if (ibCompileModule* host = manager->GetCompileModule()) {
+			host = manager->CreateCompiler();
+			if (host != nullptr) {
 				try { host->Compile(); }
 				catch (const ibCoreException&) { /* the snippet's own context, best effort */ }
-				compiler.SetParent(host);
-				for (const ibCompileModule* up = host; up != nullptr; up = up->GetParent())
+				compiler.SetParent(host.get());
+				for (const ibCompileModule* up = host.get(); up != nullptr; up = up->GetParent())
 					chain.push_back(up);
 			}
 		}

@@ -221,7 +221,7 @@ public:
 	// `ibMetaDataConfiguration` and `ibMetaDataConfigurationStorage`,
 	// which have private ctor + friend ibApplicationInstance). The File
 	// base is instantiated directly by designer document views that
-	// load a stand-alone .obk / XML / JSON for inspection — that is
+	// load a stand-alone .oap / XML / JSON for inspection — that is
 	// per-document scratch state, not a coordinator singleton.
 	ibMetaDataConfigurationFile();
 	virtual ~ibMetaDataConfigurationFile();

@@ -561,18 +561,29 @@ TEST(McpToolContract, EveryNameSaidInADescription_IsANameThatExists)
 	}
 }
 
-// Who may be offered a tool: what changes the configuration is the designer's alone, what reads data needs the roles to
-// give that too, and what shows the schema is anybody's the assistant is given to.
+// Who may be offered a tool: what changes the configuration is the designer's alone, what acts in a person's window the
+// application's alone, and the rest is anybody's the assistant is given to.
 TEST(McpToolContract, ToolMode_IsWhatItWasRegisteredAs)
 {
 	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("metadata_create"))), ibMcpToolMode::Designer);
 	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("client_call"))), ibMcpToolMode::Designer);
-	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("compose_run"))), ibMcpToolMode::Data);
-	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("value_pack"))), ibMcpToolMode::Data);
-	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("value_unpack"))), ibMcpToolMode::Data);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("form_get"))), ibMcpToolMode::Designer);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("window_run"))), ibMcpToolMode::Runtime);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("report_show"))), ibMcpToolMode::Runtime);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("compose_run"))), ibMcpToolMode::Common);
 	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("compose_settings"))), ibMcpToolMode::Common);
 	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("metadata_get"))), ibMcpToolMode::Common);
 	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("syntax_search"))), ibMcpToolMode::Common);
+}
+
+// What touches the records says so, and the call then needs the roles to give them to the assistant; what shows the
+// schema does not.
+TEST(McpToolContract, IsDataAssistant_IsSaidByWhatTouchesTheRecords)
+{
+	for (const wxChar* const name : { wxT("compose_run"), wxT("value_pack"), wxT("value_unpack"), wxT("window_run"), wxT("report_show") })
+		EXPECT_TRUE(ibFindMcpTool(name)->IsDataAssistant()) << name;
+	for (const wxChar* const name : { wxT("compose_settings"), wxT("metadata_get"), wxT("syntax_search") })
+		EXPECT_FALSE(ibFindMcpTool(name)->IsDataAssistant()) << name;
 }
 
 TEST(McpToolContract, EveryTool_SaysWhatItIsDoingInAPersonsWords)

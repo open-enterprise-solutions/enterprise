@@ -185,9 +185,8 @@ public:
 
 	virtual bool InitializeFormModule();
 
-	// Form's meta-object drives lazy compile-module creation inside
-	// ibRuntimeModuleDataObject::BindContextVariable. Form has m_metaFormObject
-	// set at InitializeForm time, long before m_compileModule exists.
+	// The module a form compiles is its meta-object, set at InitializeForm time.
+	// A form generated from its source has none.
 	virtual const class ibValueMetaObjectModuleBase* GetMetaForCompile() const override;
 
 	//get metaData

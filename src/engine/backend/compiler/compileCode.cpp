@@ -124,8 +124,7 @@ ibCompileCode::~ibCompileCode()
 {
 	Reset();
 
-	m_listExternValue.clear();
-	m_listContextValue.clear();
+	m_binds.Reset();
 }
 
 // THE CODE STYLE IS THE COMPILE STATE'S (ibCompileState) — the current session's, which holds its
@@ -146,7 +145,10 @@ short ibCompileCode::GetCodeStyle()
 
 void ibCompileCode::Reset()
 {
+	// The parent stays, as the root context's does: it is what the next compile resolves its names against.
+	const ibByteCode* const parent = m_cByteCode.m_parent;
 	m_cByteCode.Reset();
+	m_cByteCode.m_parent = parent;
 
 	if (m_rootContext != nullptr)
 		m_rootContext->Reset();
@@ -175,7 +177,7 @@ void ibCompileCode::PrepareModuleData()
 
 	// Pass 1: external values — kind=External on the bc mirror. Binder
 	// fills the slot at runtime; pre-flight verifies clsid match.
-	for (auto& externValue : m_listExternValue) {
+	for (auto& externValue : m_binds.m_listExternValue) {
 		m_rootContext->AddVariable(externValue.first, 0, true);
 		const ibClassID clsid = externValue.second ? externValue.second->GetClassType() : ibClassID(0);
 		stampOnContext(externValue.first, [&](ibCompileContext::ibVariable& v) {
@@ -188,7 +190,7 @@ void ibCompileCode::PrepareModuleData()
 	// m_bContext stamp → kind=Local). The binder fills the slot at runtime (no
 	// required/type pre-flight); the module reads/writes it as a normal local
 	// (e.g. a constant's Value backed by &m_constValue).
-	for (auto& localValue : m_listLocalValue) {
+	for (auto& localValue : m_binds.m_listLocalValue) {
 		m_rootContext->AddVariable(localValue.first, 0, false);
 	}
 
@@ -197,7 +199,7 @@ void ibCompileCode::PrepareModuleData()
 	// clsid onto the compile-context entry; the bc mirror then carries
 	// these into m_listVar with kind=Context so the binder treats them
 	// as required and resolve walks them visibility-aware.
-	for (auto& contextValue : m_listContextValue) {
+	for (auto& contextValue : m_binds.m_listContextValue) {
 		m_rootContext->AddVariable(contextValue.first, 0, true, true);
 		ibClassID clsid = 0;
 		if (contextValue.second.m_value)
@@ -209,7 +211,7 @@ void ibCompileCode::PrepareModuleData()
 
 	ibCompileContext* mainContext = GetContext();
 
-	for (auto& pair : m_listContextValue) {
+	for (auto& pair : m_binds.m_listContextValue) {
 
 		ibValue* contextValue = pair.second.m_value;
 		wxASSERT(contextValue);
@@ -655,43 +657,6 @@ const int ibCompileCode::GetConstString(const ibString& strConstName)
 }
 
 /**
- * AddVariable
- * Purpose:
- * Add the name and address of an external variable to a special array for later use
- */
-
-void ibCompileCode::AddVariable(const ibString& strVarName, const ibValue& vObject)
-{
-	if (strVarName.IsEmpty())
-		return;
-
-	// take into account external variables during compilation
-	m_listExternValue[strVarName] = vObject.IsReference()
-		? vObject.GetRef() : const_cast<ibValue*>(&vObject);
-
-	//set the flag for recompilation
-	m_changedCode = true;
-}
-
-/**
- * AddVariable
- * Purpose:
- * Add the name and address of an external variable to a special array for later use
- */
-
-void ibCompileCode::AddVariable(const ibString& strVarName, ibValue* pValue)
-{
-	if (strVarName.IsEmpty())
-		return;
-
-	// take into account external variables during compilation
-	m_listExternValue[strVarName] = pValue;
-
-	//set the flag for recompilation
-	m_changedCode = true;
-}
-
-/**
  * AddContextVariable
  * Purpose:
  * Add the name and address of an external variable to a special array for later use
@@ -703,58 +668,9 @@ void ibCompileCode::AddContextVariable(const ibString& strVarName, const ibValue
 		return;
 
 	//adding variables from context
-	m_listContextValue[strVarName] = {
+	m_binds.m_listContextValue[strVarName] = {
 		vObject.IsReference() ? vObject.GetRef() : const_cast<ibValue*>(&vObject),
 		scopeContext };  // {m_value, m_scopeContext}
-
-	//set the flag for recompilation
-	m_changedCode = true;
-}
-
-/**
- * AddContextVariable
- * Purpose:
- * Add the name and address of an external variable to a special array for later use
- */
-
-void ibCompileCode::AddContextVariable(const ibString& strVarName, ibValue* pValue, bool scopeContext)
-{
-	if (strVarName.IsEmpty())
-		return;
-
-	//adding variables from context
-	m_listContextValue[strVarName] = { pValue, scopeContext };
-
-	//set the flag for recompilation
-	m_changedCode = true;
-}
-
-// Bound LOCAL — the name resolves to a plain frame local (kind=Local), but the
-// binder fills its slot at init with pValue. The module body reads/writes it as a
-// normal local (e.g. a constant's Value, backed by &m_constValue).
-void ibCompileCode::AddLocalVariable(const ibString& strVarName, ibValue* pValue)
-{
-	if (strVarName.IsEmpty())
-		return;
-
-	m_listLocalValue[strVarName] = pValue;
-	m_changedCode = true;
-}
-
-/**
- * RemoveVariable
- * Purpose:
- * Remove the name and address of an external variable
- */
-
-void ibCompileCode::RemoveVariable(const ibString& strVarName)
-{
-	if (strVarName.IsEmpty())
-		return;
-
-	m_listExternValue.erase(strVarName);
-	m_listContextValue.erase(strVarName);
-	m_listLocalValue.erase(strVarName);   // local binds (e.g. form attribute cells) too
 
 	//set the flag for recompilation
 	m_changedCode = true;
@@ -4341,8 +4257,7 @@ delimOperation:
 
 void ibCompileCode::SetParent(ibCompileCode* setParent)
 {
-	// Single source of truth: bytecode parent. Compile-side GetParent()
-	// derives from m_cByteCode.m_parent->m_compileModule.
+	// Single source of truth: bytecode parent.
 	m_cByteCode.m_parent = nullptr;
 	m_rootContext->m_parentContext = nullptr;
 
@@ -4353,6 +4268,15 @@ void ibCompileCode::SetParent(ibCompileCode* setParent)
 	}
 
 	m_translateCode.OnSetParent(setParent != nullptr ? &setParent->m_translateCode : nullptr);
+}
+
+// With no compiler above, a name is found on the bytecode chain alone (ibCompileContext::GetVariable, step 3).
+void ibCompileCode::SetParent(const ibByteCode* setParent)
+{
+	m_cByteCode.m_parent = setParent;
+	m_rootContext->m_parentContext = nullptr;
+
+	m_translateCode.OnSetParent(nullptr);
 }
 
 #pragma warning(pop)

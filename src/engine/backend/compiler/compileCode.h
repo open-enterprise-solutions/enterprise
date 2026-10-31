@@ -14,6 +14,32 @@ struct ibContextVar {
 	bool m_scopeContext = false;
 };
 
+// What is bound by name, in the kinds a compile and a run tell apart. A descriptor holds its own
+// (ibRuntimeModuleDataObject) and a compiler made for it is given a copy; a run fills its binder from them.
+struct ibBindTable {
+	// matching external variables
+	std::map<ibString, ibValue*> m_listExternValue;
+
+	// matching context variables
+	std::map<ibString, ibContextVar> m_listContextValue;
+
+	// bound LOCAL variables — registered as plain frame locals (kind=Local, NOT
+	// External/Context), the binder fills the slot at init; the module body reads/
+	// writes them as ordinary locals (e.g. a constant's Value). No required/type
+	// pre-flight, no kind opcode — a normal slot.
+	std::map<ibString, ibValue*> m_listLocalValue;
+
+	// global modules — a compile reads their lexems with its own, so a run has nothing to fill from them
+	std::map<ibString, const ibCompilableSourceCode*> m_listGlobalModule;
+
+	void Reset() {
+		m_listExternValue.clear();
+		m_listContextValue.clear();
+		m_listLocalValue.clear();
+		m_listGlobalModule.clear();
+	}
+};
+
 //*******************************************************************
 //*							  Class: compiler                       *
 //*******************************************************************
@@ -57,17 +83,10 @@ public:
 
 	void PrepareModuleData();
 
-	void AddVariable(const ibString& strName, const ibValue& value);	// support for external variables
-	void AddVariable(const ibString& strName, ibValue* pValue);		// support for external variables
-
 	void AddContextVariable(const ibString& strName, const ibValue& value, bool scopeContext = false);
-	void AddContextVariable(const ibString& strName, ibValue* pValue, bool scopeContext = false);
-
-	void AddLocalVariable(const ibString& strName, ibValue* pValue);	// bound local — binder-filled frame slot
-
-	void RemoveVariable(const ibString& strName);
 
 	void SetParent(ibCompileCode* parent); // setting the parent module and prohibited max. ancestor
+	void SetParent(const ibByteCode* parent); // the same, when the parent exists only as its bytecode
 
 	// THE TEXT, through the compiler — the doors a module's owner goes through, so that whoever holds a
 	// compile does not reach for its translator.
@@ -77,10 +96,6 @@ public:
 	// runtime compile raises on the first refusal, a tolerant one notes them all.
 	bool Translate();
 	void ClearLexem() { m_translateCode.ClearLexem(); }
-
-	// A module read as a part of this one — the global modules under the configuration's module.
-	void AppendModule(ibCompileCode* module) { m_translateCode.AppendModule(&module->m_translateCode); }
-	void RemoveModule(ibCompileCode* module) { m_translateCode.RemoveModule(&module->m_translateCode); }
 
 	const ibString& GetModuleName() const { return m_translateCode.GetModuleName(); }
 
@@ -136,9 +151,9 @@ public:
 	// from its own registry, no compile-context staging).
 	ibByteBinder CreateBinder(bool delta = true) {
 		ibByteBinder br = m_cByteCode.CreateBinder(delta);
-		for (auto& kv : m_listExternValue)  br.SetVar(kv.first, kv.second);
-		for (auto& kv : m_listContextValue) br.SetVar(kv.first, kv.second.m_value);
-		for (auto& kv : m_listLocalValue)   br.SetVar(kv.first, kv.second);
+		for (auto& kv : m_binds.m_listExternValue)  br.SetVar(kv.first, kv.second);
+		for (auto& kv : m_binds.m_listContextValue) br.SetVar(kv.first, kv.second.m_value);
+		for (auto& kv : m_binds.m_listLocalValue)   br.SetVar(kv.first, kv.second);
 		return br;
 	}
 
@@ -289,23 +304,13 @@ public:
 	static const long kCaretNowhere = -2;
 	static const long kCaretAtModule = -1;
 
-	// matching external variables
-	std::map<ibString, ibValue*> m_listExternValue;
-
-	// matching context variables
-	std::map<ibString, ibContextVar> m_listContextValue;
-
-	// bound LOCAL variables — registered as plain frame locals (kind=Local, NOT
-	// External/Context), the binder fills the slot at init; the module body reads/
-	// writes them as ordinary locals (e.g. a constant's Value). No required/type
-	// pre-flight, no kind opcode — a normal slot.
-	std::map<ibString, ibValue*> m_listLocalValue;
+	ibBindTable m_binds;
 
 protected:
 
 	// THE ONE DOOR EVERY REFUSAL OF A COMPILE GOES THROUGH — the compiler's own (Refuse) and the
-	// translator's (Translate). `translateCode` holds the text the position points into — a module
-	// read as a part of this one (AppendModule) refuses in its own.
+	// translator's (Translate). `translateCode` holds the text the position points into — a global
+	// module read as a part of this one (m_listGlobalModule) refuses in its own.
 	void DoRefuse(int codeError,
 		const ibString& strFileName, const ibString& strModuleName, const ibString& strDocPath,
 		const ibTranslateCode& translateCode, unsigned int currPos, unsigned int currLine,

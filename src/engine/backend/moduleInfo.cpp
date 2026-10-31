@@ -20,15 +20,10 @@
 // BindTail). Only the dtor lives out-of-line.
 ibRuntimeModuleDataObject::~ibRuntimeModuleDataObject()
 {
-	// Drop this descriptor's bytecode from the process-wide registry
-	// before destroying the compile module. Dependents resolving by
-	// m_id mustn't see a dangling pointer.
-	if (m_compileModule != nullptr) {
-		const ibGuid& descId = m_compileModule->m_cByteCode.m_id;
-		if (descId.isValid())
-			ibByteCode::Unregister(descId);
-	}
-	delete m_compileModule;
+	// Drop this descriptor's bytecode from the process-wide registry.
+	// Dependents resolving by m_id mustn't see a dangling pointer.
+	if (m_byteCode != nullptr && m_byteCode->m_id.isValid())
+		ibByteCode::Unregister(m_byteCode->m_id);
 	// m_procUnit auto-destructs via shared_ptr when the last reference
 	// drops.
 }
@@ -170,22 +165,12 @@ void ibRuntimeModuleDataObject::InitializeRuntime()
 	}
 }
 
-ibCompileModule* ibRuntimeModuleDataObject::EnsureCompileModule()
+std::unique_ptr<ibCompileModule> ibRuntimeModuleDataObject::CreateCompiler() const
 {
-	// Lazy-create m_compileModule on first Bind… — subclass provides its
-	// meta-object via GetMetaForCompile() override.
-	if (m_compileModule == nullptr) {
-		if (const ibValueMetaObjectModuleBase* meta = GetMetaForCompile()) {
-			m_compileModule = new ibCompileModule(meta);
-			// Propagate parent's compile scope chain — SetParent can be
-			// called before the first Bind…; pick up parent compile here.
-			if (m_parent != nullptr) {
-				if (ibCompileModule* parentCompile = m_parent->GetCompileModule())
-					m_compileModule->SetParent(parentCompile);
-			}
-		}
-	}
-	return m_compileModule;
+	const ibValueMetaObjectModuleBase* const meta = GetMetaForCompile();
+	if (meta == nullptr)
+		return nullptr;
+	return std::make_unique<ibCompileModule>(meta, *m_binds, m_parent != nullptr ? m_parent->CreateCompiler() : nullptr);
 }
 
 // See header. Append the EXPORT bindings as eProcUnit-aliased props so member
@@ -320,18 +305,14 @@ void ibRuntimeModuleDataObject::ExportPropsToHelper(ibValue::ibMemberTable* help
 void ibRuntimeModuleDataObject::FillHelperFromBinds(ibValue::ibMemberTable* helper, long alias) const
 {
 	if (helper == nullptr) return;
-	const ibCompileModule* cm = GetCompileModule();
-	if (cm == nullptr) return;
-	for (const auto& kv : cm->m_listExternValue)
+	for (const auto& kv : m_binds->m_listExternValue)
 		helper->AppendProp(kv.first, wxNOT_FOUND, alias);
 }
 
 ibValue* ibRuntimeModuleDataObject::GetBoundValue(const ibString& name) const
 {
-	const ibCompileModule* cm = GetCompileModule();
-	if (cm == nullptr) return nullptr;
-	auto it = cm->m_listExternValue.find(name);
-	return (it != cm->m_listExternValue.end()) ? it->second : nullptr;
+	auto it = m_binds->m_listExternValue.find(name);
+	return (it != m_binds->m_listExternValue.end()) ? it->second : nullptr;
 }
 
 bool ibRuntimeModuleDataObject::GetBoundValue(const ibString& name, ibValue& out) const
@@ -352,35 +333,25 @@ bool ibRuntimeModuleDataObject::GetBoundValue(const ibString& name, ibValue& out
 // Named context variable — name VISIBLE in the editor (ThisObject / ThisForm).
 void ibRuntimeModuleDataObject::BindContextVariable(const ibString& name, ibValue* value)
 {
-	if (ibCompileModule* cm = EnsureCompileModule())
-		cm->AddContextVariable(name, value, /*scopeContext=*/false);
-	// If the runtime binder is already built (post-Compile), forward the
-	// value into its slot table too — keeps compile-time staging and runtime
-	// binder in sync without subclass plumbing.
-	if (m_binder != nullptr)
-		m_binder->SetVar(name, value);
+	if (!name.IsEmpty())
+		m_binds->m_listContextValue[name] = { value, /*scopeContext=*/false };
 }
 
 // Transparent scope container — name NOT an identifier, members surface into
-// scope (Manager / EnumManager / SystemManager).
+// scope (Manager / EnumManager / SystemManager). The scope flag is an editor-display
+// concern with no runtime slot, so at run time this is a context bind like the above.
 void ibRuntimeModuleDataObject::BindScopeVariable(const ibString& name, ibValue* value)
 {
-	if (ibCompileModule* cm = EnsureCompileModule())
-		cm->AddContextVariable(name, value, /*scopeContext=*/true);
-	// Binder is name→value only; the scope flag is an editor-display concern
-	// with no runtime slot, so the runtime binding is identical to context.
-	if (m_binder != nullptr)
-		m_binder->SetVar(name, value);
+	if (!name.IsEmpty())
+		m_binds->m_listContextValue[name] = { value, /*scopeContext=*/true };
 }
 
 // Export variable — name VISIBLE, stored in the extern map (global constants,
 // module-valued names).
 void ibRuntimeModuleDataObject::BindExportVariable(const ibString& name, ibValue* value)
 {
-	if (ibCompileModule* cm = EnsureCompileModule())
-		cm->AddVariable(name, value);
-	if (m_binder != nullptr)
-		m_binder->SetVar(name, value);
+	if (!name.IsEmpty())
+		m_binds->m_listExternValue[name] = value;
 }
 
 // Plain writable LOCAL — name resolves to an ordinary frame local (kind=Local),
@@ -388,22 +359,24 @@ void ibRuntimeModuleDataObject::BindExportVariable(const ibString& name, ibValue
 // no member access. E.g. a constant's Value backed by &m_constValue.
 void ibRuntimeModuleDataObject::BindLocalVariable(const ibString& name, ibValue* value)
 {
-	if (ibCompileModule* cm = EnsureCompileModule())
-		cm->AddLocalVariable(name, value);
-	if (m_binder != nullptr)
-		m_binder->SetVar(name, value);
+	if (!name.IsEmpty())
+		m_binds->m_listLocalValue[name] = value;
 }
 
-// Undo any Bind… for `name`. Does NOT lazy-create the compile module — there's
-// nothing to remove from a module that was never wired.
+// Global module — no value, only its text: a compile reads its lexems with this module's own.
+void ibRuntimeModuleDataObject::BindGlobalModule(const ibString& name, const ibCompilableSourceCode* module)
+{
+	if (!name.IsEmpty())
+		m_binds->m_listGlobalModule[name] = module;
+}
+
+// Undo any Bind… for `name`.
 void ibRuntimeModuleDataObject::UnbindVariable(const ibString& name)
 {
-	if (m_compileModule != nullptr)
-		m_compileModule->RemoveVariable(name);
-	// Binder has no slot-erase; nulling the slot unbinds the live value while
-	// leaving the bytecode-declared slot in place (re-bind via SetVar later).
-	if (m_binder != nullptr)
-		m_binder->SetVar(name, nullptr);
+	m_binds->m_listExternValue.erase(name);
+	m_binds->m_listContextValue.erase(name);
+	m_binds->m_listLocalValue.erase(name);
+	m_binds->m_listGlobalModule.erase(name);
 }
 
 void ibRuntimeModuleDataObject::Run(bool delta)
@@ -418,16 +391,20 @@ void ibRuntimeModuleDataObject::Run(bool delta)
 
 bool ibRuntimeModuleDataObject::Compile()
 {
-	if (m_compileModule == nullptr)
+	const ibValueMetaObjectModuleBase* const meta = GetMetaForCompile();
+	if (meta == nullptr)
 		return false;
-	// Designer never runs bytecode — keep compile state untouched so
-	// the intellisense walker sees a consistent AST without emit
-	// side-effects that only make sense at runtime.
+	// Designer never runs bytecode. What it asks about a text it asks
+	// a compile chain (CreateCompiler).
 	if (appData->DesignerMode())
 		return true;
 
-	ibByteCode& bc = m_compileModule->m_cByteCode;
-	const ibValueMetaObjectModuleBase* meta = GetMetaForCompile();
+	if (m_byteCode == nullptr)
+		m_byteCode = std::make_shared<ibByteCode>();
+	ibByteCode& bc = *m_byteCode;
+
+	// What this bytecode stands under, compiled or loaded alike.
+	const ibByteCode* const parent = m_parent != nullptr ? m_parent->GetByteCode() : nullptr;
 
 	// Phase A — find a usable bytecode.
 	//
@@ -444,7 +421,7 @@ bool ibRuntimeModuleDataObject::Compile()
 	//     care which arm produced bc.
 	// WHAT THIS BYTECODE WOULD BE COMPILED AGAINST, as one value. It is part of the cache KEY, so a
 	// row saved under any earlier state of the configuration is not found at all — see byteCodeCache.h.
-	const ibMetaData* const owner = meta != nullptr ? meta->GetMetaData() : nullptr;
+	const ibMetaData* const owner = meta->GetMetaData();
 
 	// ⚠ THE KEY IS THE CONFIGURATION'S DIGEST, and it stays that. Mixing the module's own text into
 	// it was tried on 2026-09-04 and taken back out: it patches the symptom at the reader's end,
@@ -456,83 +433,67 @@ bool ibRuntimeModuleDataObject::Compile()
 	const ibString configMd5 = owner != nullptr ? owner->GetConfigMD5() : ibString();
 
 	const auto loadCached = [&]() {
-		if (meta == nullptr || !ibByteCodeCache::Load(bc, meta->GetGuid(), configMd5))
+		if (!ibByteCodeCache::Load(bc, meta->GetGuid(), configMd5))
 			return false;
 		if (bc.ResolveAndVerifyDependencies()) {
-			// Restore live pointers AOT skipped on serialize. m_parent
-			// points at the parent compile module's bytecode —
-			// fresh-compile path sets this inside ibCompileModule::Compile
-			// (compileModule.cpp:79); the cache-hit path bypasses
-			// Compile, so we mirror the wire-up here. Without it
-			// runtime's parent-conformity check at procUnit.cpp:1115
-			// derefs nullptr.
-			if (ibCompileModule* parentCompile = m_compileModule->GetParent())
-				bc.m_parent = &parentCompile->m_cByteCode;
+			// Restore live pointers AOT skipped on serialize. Without
+			// m_parent runtime's parent-conformity check refuses the module.
+			bc.m_parent = parent;
 
-			// ⭐⭐ AND THE NAME SURFACE, which the cache-hit path used to leave unbuilt.
-			//
-			// A name is resolved by walking, and there are two walks: the live COMPILE CONTEXTS
-			// first, the parent BYTECODE chain after. They do not count the same number of rungs,
-			// and the rung count IS the address a receiver operand carries.
-			//
-			// So the same module compiled against a freshly-compiled parent and against a parent
-			// LOADED FROM CACHE gets two different addresses for the same name — because a loaded
-			// parent skips Compile(), and with it PrepareModuleData, so its context is empty and the
-			// search falls through to the second walk. Measured 2026-09-04: the first run after an
-			// apply posts a document; the next run, with the parent coming from the cache, fails in
-			// the posting handler with "'ValueIsFilled' is a global function - it is not a member of
-			// this value". Same text, same byte code (vars=68 funcs=101 both ways), different road.
-			//
-			// Building the surface here makes the two roads agree. It is the same call the compile
-			// path makes, it is idempotent, and it costs one pass over the bound values.
-			// ⚠ AND NO COMPARISON AGAINST THE LOADED TABLE HERE. Checking the surface against
+			// ⚠ NO COMPARISON AGAINST THE LOADED TABLE HERE. Checking the surface against
 			// bc.m_listVar on every hit was written and taken back out the same day: it turns the
 			// reader into the place that notices staleness, which is one place too late. A row that
 			// no longer matches the configuration must not be READABLE at all — it is thrown away
 			// where it goes stale (OnSaveMetaObject drops it on saveConfigFlag; the key retires
 			// every row of a previous configuration digest), and this branch may then trust what it
 			// gets (Max, 2026-09-04: a stale cache must be THROWN AWAY, not worked around).
-			m_compileModule->PrepareModuleData();
 			return true;
 		}
 		// (c) — dep registry missing the target or version drift.
 		// Clear the stale row and let the recompile branch
-		// repopulate. Reset() drops bc's body so
-		// m_compileModule->Compile() starts from a clean state
-		// instead of merging into the loaded layout.
+		// repopulate.
 		ibByteCodeCache::Invalidate(meta->GetGuid());
 		bc.Reset();
 		return false;
 	};
 
+	// An external report or data processor has no digest: a row under an empty one would outlive its file's text, and
+	// saving it weeds out every row of the base's configuration (WriteRow). It compiles when it is opened.
+	const bool hasDigest = !configMd5.IsEmpty();
+
 	// ⭐ NOT WHAT WAS COMPILED UNDER AN EVAL — see below, where it is saved. It holds no row either.
-	const bool cacheable = meta != nullptr && ibBackendException::IsEvalMode() == eval_none;
+	const bool cacheable = hasDigest && ibBackendException::IsEvalMode() == eval_none;
 
 	// A miss holds the module's row: whoever misses with it stands in the database until this compile
 	// has saved it, and reads it then (ibByteCodeCache::ibRowLock). Let go at the end of this scope if
 	// the compile below did not get as far as the save, and the next one compiles.
 	ibByteCodeCache::ibRowLock rowLock;
-	bool ready = loadCached();
+	bool ready = hasDigest && loadCached();
 	if (!ready && cacheable) {
 		rowLock.Acquire(meta->GetGuid(), configMd5);
 		ready = loadCached();
 	}
 
 	if (!ready) {
-		if (!m_compileModule->Compile())
+		// ⭐ THE ONE PLACE A COMPILER IS MADE TO BE RUN: no bytecode, so it makes it and goes. Under a parent that is
+		// bytecode alone there is one walk for a name (ibCompileContext::GetVariable, step 3), so one address
+		// for it, whether the parent itself came from a compile or from the cache. There used to be two:
+		// measured 2026-09-04, the first run after an apply posted a document and the next, the parent coming
+		// from the cache, failed in the posting handler with "'ValueIsFilled' is a global function".
+		ibCompileModule compiler(meta, *m_binds);
+		compiler.SetParent(parent);
+		if (!compiler.Compile())
 			return false;
+		// What stays is the base: the tree on the compiler's own form goes with the compiler (byteCode.h).
+		bc = std::move(static_cast<ibByteCode&>(compiler.m_cByteCode));
 		// Stamp the freshly-compiled bytecode with the descriptor
 		// identity. m_id is the descriptor's GUID — stable across
 		// renames in Designer; cache rows in sys_bytecode_cache key
 		// off it. m_descriptorClsid records the kind (CommonModule /
 		// FormModule / etc.) for sanity checks at AOT-load time and
-		// for diag tooling. Both are best-effort here: if
-		// GetMetaForCompile is null the bytecode keeps zeroed
-		// identity (treated as "any" by validators).
-		if (meta != nullptr) {
-			bc.m_id = meta->GetGuid();
-			bc.m_descriptorClsid = meta->GetClassType();
-		}
+		// for diag tooling.
+		bc.m_id = meta->GetGuid();
+		bc.m_descriptorClsid = meta->GetClassType();
 		// Per-compile version fingerprint. Random GUID for now —
 		// dependents snapshot it in m_dependencyVersions so any
 		// successful recompile makes their cached rows fail the dep
@@ -564,62 +525,41 @@ bool ibRuntimeModuleDataObject::Compile()
 	if (bc.m_id.isValid())
 		ibByteCode::Register(&bc);
 
-	// Phase B — assemble. Same code path for cache-hit and
-	// fresh-compile arms; bc.m_listVar is final after either, so the
-	// binder is built once. Compile-side staged context values
-	// (AddContextVariable / AddVariable calls before Compile, plus
-	// any future BindContextVariable forwarding) seed the binder.
+	return true;
+}
+
+void ibRuntimeModuleDataObject::Execute(bool delta)
+{
+	if (m_procUnit == nullptr || m_byteCode == nullptr || !m_byteCode->m_bCompile)
+		return;
+
+	// Made for this call: the frame takes the values out of it before the body runs (ibProcUnit::Execute).
 	//
 	// ⚠ A BOUND VALUE'S NAMES ARE NOT RESET HERE, nor in PrepareModuleData. They build themselves when first
 	// asked, and a value whose names change says so itself. A session bringing its modules up has no business
 	// resetting them: the system functions' table is one for the whole process (ibMemberTable::Shared), and a
 	// login rebuilt it under every session reading it — ten logins at once and the process was gone (2026-10-31).
-	m_binder = std::make_unique<ibByteBinder>(bc.m_listVar);
-	for (auto& kv : m_compileModule->m_listExternValue)
-		m_binder->SetVar(kv.first, kv.second);
-	for (auto& kv : m_compileModule->m_listContextValue)
-		m_binder->SetVar(kv.first, kv.second.m_value);
+	ibByteBinder binder(m_byteCode->m_listVar, delta);
+	for (const auto& kv : m_binds->m_listExternValue)
+		binder.SetVar(kv.first, kv.second);
+	for (const auto& kv : m_binds->m_listContextValue)
+		binder.SetVar(kv.first, kv.second.m_value);
 	// Bound locals (e.g. a constant's Value backed by &m_constValue): plain
 	// writable frame slots — no PrepareNames (they're values, not surfaced
 	// objects). To the binder a local is indistinguishable from an external:
 	// both just seed a slot; IsBindable() unifies them in SetVar / pre-flight.
-	for (auto& kv : m_compileModule->m_listLocalValue) {
-		m_binder->SetVar(kv.first, kv.second);
-	}
-	return true;
-}
-
-void ibRuntimeModuleDataObject::Execute(ibByteBinder& br)
-{
-	if (m_procUnit != nullptr && m_compileModule != nullptr)
-		m_procUnit->Execute(m_compileModule->m_cByteCode, br);
-}
-
-void ibRuntimeModuleDataObject::Execute(bool delta)
-{
-	// Use the descriptor's own binder — populated post-Compile from
-	// compile-side staging and kept in sync by BindContextVariable.
-	// Subclasses can also reach m_binder->SetVar() directly for
-	// per-execute live values.
-	if (m_procUnit != nullptr && m_compileModule != nullptr && m_binder != nullptr) {
-		m_binder->SetDelta(delta);
-		Execute(*m_binder);
-	}
+	for (const auto& kv : m_binds->m_listLocalValue)
+		binder.SetVar(kv.first, kv.second);
+	m_procUnit->Execute(*m_byteCode, binder);
 }
 
 void ibRuntimeModuleDataObject::SetParent(const ibRuntimeModuleDataObject* parent)
 {
 	m_parent = parent;
 
-	// Cascade to compile+runtime layers so callers don't have to wire
-	// them separately. Propagate only when both sides have the
-	// corresponding object — parent may be a bare descriptor without a
-	// compiled module (e.g. root in Designer mode) or without a
-	// ProcUnit (system session that never runs scripts).
-	if (m_compileModule != nullptr && parent != nullptr) {
-		if (ibCompileModule* parentCompile = parent->GetCompileModule())
-			m_compileModule->SetParent(parentCompile);
-	}
+	// Cascade to the runtime layer so callers don't have to wire it
+	// separately. Propagate only when both sides have a ProcUnit — parent
+	// may be a system session that never runs scripts.
 	if (m_procUnit != nullptr && parent != nullptr) {
 		if (auto parentPu = parent->GetProcUnit())
 			m_procUnit->SetParent(parentPu.get());

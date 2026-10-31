@@ -193,7 +193,6 @@ ibString ibOriginName(ibNameOrigin origin)
 	switch (origin) {
 	case ibNameOrigin::Platform:     return ibT("platform");
 	case ibNameOrigin::Global:       return ibT("global");
-	case ibNameOrigin::GlobalModule: return ibT("globalModule");
 	case ibNameOrigin::Context:      return ibT("context");
 	case ibNameOrigin::Bound:        return ibT("bound");
 	case ibNameOrigin::Member:       return ibT("member");
@@ -317,8 +316,8 @@ public:
 			"(Write / Fill / Lock on a document); `context` is the binding itself, ThisObject / "
 			"ThisForm; `bound` is a handle this module was given, such as a constant's Value; "
 			"`declared` is written in this text (with `local` true when it belongs to the body you "
-			"are standing in); `inherited` comes from a module above this one. `platform`, `global` "
-			"and `globalModule` are the ones you already know - the configuration's collections, "
+			"are standing in); `inherited` comes from a module above this one. `platform` and `global` "
+			"are the ones you already know - the configuration's collections, "
 			"the system functions, global constants and common modules.\n\n"
 			"EVERY NAME IN IT CAN BE WRITTEN HERE - it is what the runtime itself sees at that "
 			"point, not everything that exists. This text's own names, the globals, and from each "

@@ -108,8 +108,8 @@ Script-level data access goes through metaobject managers:
 ```c
 // CORRECT — OES script
 var found = Catalogs.Products.FindByCode("APPLE-01");
-var account = ChartsOfAccounts.Hozraschetnyi.FindByCode("62");
-var balance = AccountingRegisters.Hozraschetnyi.Balance(EndOfMonth(), account);
+var account = ChartsOfAccounts.Main.FindByCode("1100");
+var balance = AccountingRegisters.Main.Balance(EndOfMonth(), account);
 
 // WRONG — do not reach for SQL from script
 //   db_query(...)                          ← C++ only, not a script name at all

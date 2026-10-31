@@ -246,8 +246,8 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 	// are reachable through the creator. Form sits under the bound
 	// data-record descriptor (catalog/document/external DP object) if
 	// any; otherwise directly under the metadata's root. Subsequent
-	// BindVariable / InitializeRuntime pick up this parent to wire
-	// their compile / procUnit scope chain on creation.
+	// Compile / InitializeRuntime pick up this parent to wire
+	// their bytecode / procUnit scope chain.
 	ibRuntimeModuleDataObject* sourceDesc =
 		dynamic_cast<ibRuntimeModuleDataObject*>(srcObject);
 
@@ -283,8 +283,7 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 
 #include "backend/system/systemManager.h"
 
-// Form's meta-object drives lazy compile-module creation via
-// BindContextVariable when m_compileModule is not yet wired.
+// The module a form compiles is its meta-object; a generated form has none.
 const ibValueMetaObjectModuleBase* ibValueForm::GetMetaForCompile() const
 {
 	return m_metaFormObject;
@@ -316,20 +315,21 @@ bool ibValueForm::InitializeFormModule()
 
 	ibRestoreFormSettings(this);
 
-	if (m_metaFormObject != nullptr) {
+	// Every form binds: a bind is an entry in the form's maps, and a form generated from its source
+	// has names to offer with no module to compile.
+	// Parent is already wired in InitializeForm(). InitializeRuntime
+	// lazily creates the ProcUnit and picks up the parent's scope chain
+	// on creation. Run is Designer-guarded; Compile internally too. Session
+	// linkage flows through the parent chain (descriptor → root → session).
+	BindContextVariable(thisForm, this);                                          // contextual
+	BindExportVariable(ibT("Controls"), m_formCollectionControl);                 // exported
+	// Bind each source attribute as a form-module variable: its value cell as a LOCAL named
+	// <attrName>, and — for the MAIN — the exported DataSource. Same self-managed path that
+	// designer add / become-main reuse (BindAttributeVariable), so the wiring is one place.
+	for (const auto& av : m_attributes)
+		BindAttributeVariable(av);
 
-		// Parent is already wired in InitializeForm(). BindVariable +
-		// InitializeRuntime lazily create compile module / ProcUnit
-		// and pick up the parent's scope chain on creation. Run is
-		// Designer-guarded; Compile internally too. Session linkage
-		// flows through the parent chain (descriptor → root → session).
-		BindContextVariable(thisForm, this);                                          // contextual
-		BindExportVariable(ibT("Controls"), m_formCollectionControl);                 // exported
-		// Bind each source attribute as a form-module variable: its value cell as a LOCAL named
-		// <attrName>, and — for the MAIN — the exported DataSource. Same self-managed path that
-		// designer add / become-main reuse (BindAttributeVariable), so the wiring is one place.
-		for (const auto& av : m_attributes)
-			BindAttributeVariable(av);
+	if (m_metaFormObject != nullptr) {
 
 		InitializeRuntime();
 
@@ -342,9 +342,9 @@ bool ibValueForm::InitializeFormModule()
 				throw;
 			return false;
 		}
-
-		InvalidateNames();
 	}
+
+	InvalidateNames();
 
 #pragma region _control_guard_
 

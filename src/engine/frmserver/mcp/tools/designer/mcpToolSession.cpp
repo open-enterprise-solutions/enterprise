@@ -172,16 +172,8 @@ private:
 
 		std::vector<ibDataValue> roles;
 
-		for (const ibUserInfo::ibUserRole& role : info.m_roleArray) {
-
-			// ⭐ THE MODE TRAVELS WITH THE ROLE. A RESTRICTING role grants nothing of its own and
-			// only subtracts, so a name on its own reads as "may do this" when it may mean the
-			// exact opposite — see role_rights, which reports the same distinction.
-			roles.push_back(ibDataValue::String(
-				role.m_mode == ibRoleCompositionMode_Intersection
-					? role.m_strRoleName + ibMcpText(" (restricting)")
-					: role.m_strRoleName));
-		}
+		for (const ibString& name : ibMcpRoleNames(info))
+			roles.push_back(ibDataValue::String(name));
 
 		into.AddField(ibT("roles"), ibDataValue::Array(roles));
 
@@ -192,7 +184,7 @@ private:
 				ibMcpText("No roles are assigned - nothing narrows what this account may do."));
 
 		if (info.IsSetLanguage()) {
-			into.SetValue(ibT("language"), info.m_strLanguageName);
+			into.SetValue(ibT("language"), ibMcpLanguageName(info));
 			into.SetValue(ibT("languageCode"), info.m_strLanguageCode);
 		}
 	}

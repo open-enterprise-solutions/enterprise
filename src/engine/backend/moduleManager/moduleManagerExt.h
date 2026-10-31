@@ -8,7 +8,8 @@
 class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibValueModuleRuntimeManager {
 	public:
 
-	virtual ibCompileModule* GetCompileModule() const;
+	virtual const ibByteCode* GetByteCode() const override;
+	virtual std::unique_ptr<ibCompileModule> CreateCompiler() const override;
 	virtual std::shared_ptr<ibProcUnit> GetProcUnit() const;
 
 	virtual std::map<ibString, ibContextVar>& GetContextVariables();
@@ -53,7 +54,8 @@ private:
 class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModuleRuntimeManager {
 	public:
 
-	virtual ibCompileModule* GetCompileModule() const;
+	virtual const ibByteCode* GetByteCode() const override;
+	virtual std::unique_ptr<ibCompileModule> CreateCompiler() const override;
 	virtual std::shared_ptr<ibProcUnit> GetProcUnit() const;
 
 	virtual std::map<ibString, ibContextVar>& GetContextVariables();

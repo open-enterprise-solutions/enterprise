@@ -699,7 +699,7 @@ bool ibModuleTextDocument::SyntaxControl(bool throwMessage) const
 	if (cc && cc->FindCompileModule(metaObject, dataRef)) {
 
 		// A descriptor that answers the lookup carries a module (the desktop's editor says why it is asserted).
-		ibCompileModule* compileModule = dataRef->GetCompileModule();
+		const std::unique_ptr<ibCompileModule> compileModule = dataRef->CreateCompiler();
 		wxASSERT(compileModule);
 
 		try {

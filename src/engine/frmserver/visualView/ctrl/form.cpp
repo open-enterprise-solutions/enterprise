@@ -316,7 +316,7 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 	helper.AppendProc(ibT("Show"), ibT("Show()"));
 	helper.AppendProc(ibT("Activate"), ibT("Activate()"));
 	helper.AppendProc(ibT("Update"), ibT("Update()"));
-	helper.AppendProc(ibT("Close"), ibT("Close()"));
+	helper.AppendFunc(ibT("Close"), ibT("Close()"));
 	helper.AppendFunc(ibT("IsShown"), ibT("IsShown()"));
 	helper.AppendProc(ibT("AttachIdleHandler"), 3, ibT("AttachIdleHandler(procedureName : string, interval : number, single : boolean)"));
 	helper.AppendProc(ibT("DetachIdleHandler"), 1, ibT("DetachIdleHandler(procedureName : string)"));
@@ -328,7 +328,7 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 	// Module exports AND the context binds (ThisForm.Controls / DataSource) are
 	// surfaced as the helper's tail by the descriptor's ExportThunk (autobind under
 	// eProcUnit == g_aliasExport) — NOT here. Doing it manually made an unguarded
-	// virtual GetCompileModule() on a possibly half-alive `this` (crash on teardown /
+	// virtual call on a possibly half-alive `this` (crash on teardown /
 	// debugger-thread lazy build); the descriptor thunk is dynamic_cast-guarded.
 
 	// A button, a caption, or an HTML box holds no value and is still what a

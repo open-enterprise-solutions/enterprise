@@ -2,6 +2,7 @@
 #define _METAMODULE_OBJECT_H__
 
 #include "metaObject.h"
+#include "core/compiler/translateCode.h"  // ibCompilableSourceCode — what a compile is given to read
 #include "core/serialize/dataBuilder.h"   // ibDataNode — holder serializes its metaobject's node
 #include "protocol/protocol.h"            // ibProtocol::ibSchema::ibProperties::Object — what the holder's link opens
 
@@ -104,7 +105,7 @@ private:
 
 #pragma endregion
 
-class BACKEND_API ibValueMetaObjectModuleBase : public ibValueMetaObject {
+class BACKEND_API ibValueMetaObjectModuleBase : public ibValueMetaObject, public ibCompilableSourceCode {
 	public:
 
 	ibValueMetaObjectModuleBase(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString)
@@ -133,7 +134,12 @@ class BACKEND_API ibValueMetaObjectModuleBase : public ibValueMetaObject {
 	// that names which half is meant. What every one of them must do AFTER is the same, and that
 	// half is shared below.
 	virtual void SetModuleText(const ibString& moduleText) = 0;
-	virtual ibString GetModuleText() const = 0;
+	virtual ibString GetModuleText() const override = 0;
+
+	// What a compile asks of it (ibCompilableSourceCode).
+	virtual ibString GetFullName() const override { return ibValueMetaObject::GetFullName(); }
+	virtual ibString GetDocPath() const override { return ibValueMetaObject::GetDocPath(); }
+	virtual ibString GetFileName() const override { return ibValueMetaObject::GetFileName(); }
 
 protected:
 
@@ -184,7 +190,8 @@ public:
 	// offers the procedure of the event it is set to, and only that one.
 	void ClearDefaultProcedures() { m_contentHelper.clear(); }
 
-	virtual bool IsGlobalModule() const { return false; }
+	virtual bool IsCommonModule() const override { return false; }
+	virtual bool IsGlobalModule() const override { return false; }
 	virtual bool IsPrivilegedModule() const { return false; }
 
 private:
@@ -262,8 +269,11 @@ public:
 	//prepare menu for item
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
+	// Only functions: a common module's text holds no statements of its own.
+	virtual bool IsCommonModule() const override { return true; }
+
 	// check gm
-	virtual bool IsGlobalModule() const {
+	virtual bool IsGlobalModule() const override {
 		return m_propertyGlobalModule->GetValueAsBoolean();
 	}
 

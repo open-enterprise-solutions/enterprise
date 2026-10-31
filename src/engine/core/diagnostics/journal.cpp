@@ -2,7 +2,7 @@
 
 #include "crashGuard.h"          // the journal lives beside the dumps — same directory decision
 #include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — the house env-var switch
-#include "core/build.h"                    // GetBuildId, version_oes_last — what is running, said first
+#include "core/build.h"                    // GetBuildId, OES_VERSION_* — what is running, said first
 #include "core/fileSystem.h"               // journal/ sits with the dumps, in the diagnostic folder
 
 #include "core/exception.h"                // ibErrorText — the system's words for a code
@@ -158,9 +158,9 @@ void ibTechJournal::Open(const ibString& exeName)
 	Write(ibJournalMark::Info, ibT("start"), ibString::Format(
 		ibT("%s %d.%d.%d build %d (%s, %s, built %s %s)"),
 		exeName,
-		static_cast<int>(version_oes_last) / 1000,
-		(static_cast<int>(version_oes_last) % 1000) / 100,
-		static_cast<int>(version_oes_last) % 100,
+		OES_VERSION_MAJOR,
+		OES_VERSION_MINOR,
+		OES_VERSION_RELEASE,
 		// THE BUILD NUMBER — the compile itself, not the product version. Two binaries carrying
 		// `2.0.0` are the same release and may be different code; this is what tells them apart in
 		// a report. The SAME number the About box shows, deliberately: a person reading the journal

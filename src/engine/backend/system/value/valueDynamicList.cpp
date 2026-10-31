@@ -135,13 +135,25 @@ private:
 	std::vector<ColInfo*> m_cols;
 };
 
-// Script return-line over a row node — owner link (column-value Get/SetPropVal
-// mapping the node's values is harden).
+// Script return-line over a row node: its columns are read as fields. Through GetRowValues, because the row a script holds
+// may be the stub `CurrentRow = reference` stood on, with the key and no cells; a read here is one script's, not the
+// drawing's, so the point lookup that takes is allowed (GetValueByMetaID, asked for every cell drawn, must not).
 class ibDynamicListReturnLine : public ibValueModelCursor::ibValueModelReturnLine {
 public:
 	ibDynamicListReturnLine(ibValueDynamicList* owner, const ibDataViewItem& line)
 		: ibValueModelReturnLine(line), m_owner(owner) {}
 	virtual ibValueModel* GetOwnerModel() const override { return m_owner; }
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
+		ibValueModel::ibComposerNode* const node = m_owner->GetViewData<ibValueModel::ibComposerNode>(m_lineItem);
+		if (node == nullptr)
+			return false;
+		const ibRowMetaValues values = m_owner->GetRowValues(node);
+		const auto cell = values.find(DoGetPMethods()->GetPropData(lPropNum));
+		if (cell == values.end())
+			return false;
+		pvarPropVal = cell->second;
+		return true;
+	}
 private:
 	ibValueDynamicList* m_owner;
 };

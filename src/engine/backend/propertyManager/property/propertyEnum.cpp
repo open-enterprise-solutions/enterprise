@@ -5,7 +5,10 @@
 //load & save object in control 
 bool ibPropertyEnumBase::ReadNodeValue(const ibDataValue& value)
 {
-	ibPropertyEnumBase::SetValue((long)value.AsInt()); // AsInt validates kind (Empty -> default)
+	const long read = (long)value.AsInt(); // AsInt validates kind (Empty -> default)
+	if (!HasEnumValue(read))
+		return false;
+	ibPropertyEnumBase::SetValue(read);
 	return true;
 }
 

@@ -2358,8 +2358,8 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 		ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 		wxASSERT(moduleManager);
 
-		// Imperative: parent first, then lazy compile + runtime slot
-		// pick up parent automatically on creation.
+		// Imperative: parent first, then compile + runtime slot
+		// pick up parent automatically.
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
 		BindContextVariable(thisObject, this);
 		InitializeRuntime();
@@ -2465,7 +2465,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 		return false;
 	}
 
-	// Parent the object's compile module to the module manager whose context it
+	// Parent the object's module to the module manager whose context it
 	// should see — designer manager in the Designer, session root mm at runtime.
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 	wxASSERT(moduleManager);
@@ -2547,9 +2547,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 		wxASSERT(m_procUnit == nullptr);
 		InitializeRuntime();
 		// Re-apply descriptor SetParent so cascade picks up the now-
-		// existent procUnit and wires its parent too. Compile-side
-		// parent is already set from the first call above — rewriting
-		// to the same value.
+		// existent procUnit and wires its parent too.
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
 		Execute();
 		// OnCopy / Filling run user script with side effects. Skip them under a
@@ -3288,10 +3286,9 @@ void ibValueRecordDataObjectRecorderRef::InitRegisterRecords()
 }
 
 // RegisterRecords — EXPORTED context variable, bound BEFORE the base compiles so
-// the module resolves it. SetParent first so the lazily-built compile module gets
-// the scope chain; the base re-SetParents (idempotent), binds ThisObject and
-// compiles. The bind is the single source for both designer (compile module only —
-// m_binder null) and runtime (binder). Shared by all recorder/document-like objects.
+// the module resolves it. The base re-SetParents (idempotent), binds ThisObject and
+// compiles. The bind is the single source for both designer (a compile chain) and
+// runtime (binder). Shared by all recorder/document-like objects.
 bool ibValueRecordDataObjectRecorderRef::InitializeObject(const ibGuid& copyGuid)
 {
 	ibRuntimeModuleDataObject::SetParent(ibSession::EditModuleManagerFor(m_metaObject->GetMetaData()));

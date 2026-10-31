@@ -21,7 +21,7 @@
 
 ibValueModuleManager::ibValueModuleManager(ibMetaData* metadata, const ibValueMetaObjectModule* obj) :
 	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
-	ibRuntimeModuleDataObject(m_members, this, new ibCompileModule(obj)),
+	ibRuntimeModuleDataObject(m_members, this, obj),
 	m_objectManager(new ibValueGlobalContextManager(metadata)),
 	m_metaManager(new ibValueMetadataUnit(metadata)),
 	m_dataManager(new ibValueDataUnit(metadata))
@@ -118,7 +118,7 @@ bool ibValueModuleRuntimeManager::RuntimeRegisterCommonModule(ibValueMetaObjectC
 	else {
 		const ibString& strModuleName = commonModule->GetName();
 		UnbindVariable(strModuleName);
-		m_compileModule->AppendModule(moduleValue->GetCompileModule());
+		BindGlobalModule(strModuleName, commonModule);
 	}
 
 	if (compileNow) {
@@ -175,6 +175,10 @@ bool ibValueModuleRuntimeManager::RuntimeRenameCommonModule(ibValueMetaObjectCom
 				commonModule->GetName(), newName, err.GetErrorDescription());
 		};
 	}
+	else {
+		BindGlobalModule(newName, commonModule);
+		UnbindVariable(commonModule->GetName());
+	}
 
 	return true;
 }
@@ -189,15 +193,9 @@ bool ibValueModuleRuntimeManager::RuntimeUnregisterCommonModule(ibValueMetaObjec
 	if (iterator == m_listCommonModuleManager.end())
 		return false;
 
-	if (!commonModule->IsGlobalModule()) {
-		UnbindVariable(commonModule->GetName());
-	}
+	UnbindVariable(commonModule->GetName());
 
 	m_listCommonModuleManager.erase(iterator);
-
-	if (commonModule->IsGlobalModule()) {
-		m_compileModule->RemoveModule(moduleValue->GetCompileModule());
-	}
 
 	return true;
 }
@@ -237,7 +235,7 @@ void ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	if (kind == ibSessionKind::Launcher || kind == ibSessionKind::WebServer || IsDesignerSessionKind(kind))
 		return;
 	// Imperative pipeline — each descriptor owns its m_procUnit.
-	// CreateMainModule already compiled m_compileModule.
+	// CreateMainModule already brought up m_byteCode.
 	//
 	// SPLIT init from execution: create EVERY module's runtime first, run the
 	// main body only after. Otherwise the main module's top-level would execute
@@ -254,11 +252,11 @@ void ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	//
 	// Phase 1a — root: allocate the ProcUnit and register its functions WITHOUT
 	// running the body (Run(false)).
-	if (!appData->DesignerMode() && m_compileModule != nullptr) {
+	if (!appData->DesignerMode() && GetMetaForCompile() != nullptr) {
 		InitializeRuntime();     // ensure root's ProcUnit exists
 		Run(false);              // register functions; do NOT run the top-level yet
 	}
-	// Phase 1b — common / manager modules: each has its own compile + m_procUnit.
+	// Phase 1b — common / manager modules: each has its own bytecode + m_procUnit.
 	// Parent is wired in ibValueModuleUnit's ctor (SetParent(moduleManager)),
 	// which cascades procUnit->SetParent on creation inside InitializeRuntime().
 	// Run(false) registers their functions (a common module's top-level is just
@@ -266,7 +264,7 @@ void ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	for (auto& moduleValue : m_listCommonModuleManager) {
 		if (!moduleValue)
 			continue;
-		if (moduleValue->GetCompileModule() == nullptr)
+		if (moduleValue->GetMetaForCompile() == nullptr)
 			continue;
 		if (moduleValue->IsGlobalModule())
 			// Global modules are *inlined* into the main module at
@@ -296,7 +294,7 @@ void ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	// Phase 2 — every module's ProcUnit now exists and surfaces are invalidated;
 	// run the main body. The top-level can now reach any manager / common module
 	// export and resolve it against the live runtime.
-	if (!appData->DesignerMode() && m_compileModule != nullptr)
+	if (!appData->DesignerMode() && GetMetaForCompile() != nullptr)
 		Run(true);               // execute main module top-level
 }
 
@@ -327,7 +325,7 @@ ibValueModuleManagerRuntimeConfiguration::ibValueModuleManagerRuntimeConfigurati
 	: ibValueModuleRuntimeManager(metadata, metaObject ? metaObject->GetObjectModule() : nullptr)
 {
 	// ⭐ THE CONFIGURATION'S GLOBALS ARE THE EXPORTS OF ITS MODULE — and only of its module. "Metadata" is
-	// bound straight into the compile module's extern map (the single source for globals; m_metaManager
+	// bound straight into the extern map (the single source for globals; m_metaManager
 	// owns the value); "Data" is its queryable-source mirror (L4-2): same kind-namespace shape, leaves
 	// vend ibValueQueryable (lazy, inert — reading the value reads no data). An external data processor's
 	// or report's manager does NOT bind them: its module is the object's, and it reads globals from the
@@ -358,8 +356,8 @@ bool ibValueModuleManagerRuntimeConfiguration::CreateMainModule()
 		}
 	}
 
-	// Global constants (Metadata + common modules) are already in the compile
-	// module's extern map — bound at registration (ctor / RuntimeRegisterCommonModule)
+	// Global constants (Metadata + common modules) are already in the extern
+	// map — bound at registration (ctor / RuntimeRegisterCommonModule)
 	// and persistent across Reset. No materialization pass needed here.
 
 	// ⚠ THE ORDER HERE IS LOAD-BEARING, and reordering it is not a cleanup. Moving these binds
@@ -392,8 +390,8 @@ bool ibValueModuleManagerRuntimeConfiguration::CreateMainModule()
 	//does not start without it: every call into it would fail one at a time instead
 	for (auto& moduleValue : m_listCommonModuleManager) {
 		// A GLOBAL module has no bytecode of its own: its text is spliced into the root, and the root compiled
-		// just above with every global already in it (a unit loads its text when it is made, and the root's
-		// lexer walks the appended modules). Compiling a global here recompiled the WHOLE root once more per
+		// just above with every global already in it (bound at registration, and the root's compiler reads
+		// their lexems with its own). Compiling a global here recompiled the WHOLE root once more per
 		// global module, with nothing new to read — and gave the root a new id and version each time.
 		if (rootCompiled && moduleValue->IsGlobalModule())
 			continue;
@@ -435,7 +433,7 @@ bool ibValueModuleManagerRuntimeConfiguration::DestroyMainModule()
 	m_listContextManager.clear();
 
 	//reset global module
-	m_compileModule->Reset();
+	ResetByteCode();
 	// m_procUnit is no longer populated by CreateMainModule (compile-
 	// only since the runtime split 2026-04-19). Session ProcUnits are
 	// torn down by DetachRuntime, not here.
@@ -519,7 +517,7 @@ ibValueModuleManagerDesigner::ibValueModuleManagerDesigner(
 
 std::map<ibString, ibValue*>& ibValueModuleManagerDesigner::GetGlobalVariables()
 {
-	// Config-root holder: own globals (compile module's extern map). External
+	// Config-root holder: own globals (the extern map). External
 	// DP/Report holder: delegate to the configuration root so its editor sees the
 	// root's globals (Metadata + common modules surfaced as names), which aren't
 	// seeded into this holder's own extern map.
@@ -543,8 +541,8 @@ bool ibValueModuleManagerDesigner::CreateMainModule()
 	if (m_populated)
 		return true;
 
-	// Global constants (Metadata + common modules) already live in the compile
-	// module's extern map — bound at registration, persistent across Reset.
+	// Global constants (Metadata + common modules) already live in the extern
+	// map — bound at registration, persistent across Reset.
 
 	//singleton "manager" — scope-context (transparent container, name not an
 	// editor identifier; its props Catalogs / Documents / Enums surface).
@@ -583,8 +581,6 @@ bool ibValueModuleManagerDesigner::DestroyMainModule()
 	}
 	m_listContextManager.clear();
 
-	m_compileModule->Reset();
-
 	m_populated = false;
 	return true;
 }
@@ -609,6 +605,9 @@ bool ibValueModuleManagerDesigner::AddCommonModule(ibValueMetaObjectCommonModule
 	if (!commonModule->IsGlobalModule()) {
 		const ibString& strModuleName = commonModule->GetName();
 		BindExportVariable(strModuleName, moduleValue);
+	}
+	else {
+		BindGlobalModule(commonModule->GetName(), commonModule);
 	}
 
 	// ⭐⭐ AND THE SURFACE IS TOLD, because a bind is not only a map entry: FillHelperFromBinds
@@ -660,11 +659,12 @@ bool ibValueModuleManagerDesigner::RenameCommonModule(ibValueMetaObjectCommonMod
 	if (moduleValue == nullptr)
 		return true;
 
-	if (!commonModule->IsGlobalModule()) {
+	if (!commonModule->IsGlobalModule())
 		BindExportVariable(newName, moduleValue);
-		UnbindVariable(commonModule->GetName());
-		InvalidateNames();   // both halves of a rename change the surface — see AddCommonModule
-	}
+	else
+		BindGlobalModule(newName, commonModule);
+	UnbindVariable(commonModule->GetName());
+	InvalidateNames();   // both halves of a rename change the surface — see AddCommonModule
 
 	return true;
 }
@@ -688,8 +688,7 @@ bool ibValueModuleManagerDesigner::RemoveCommonModule(ibValueMetaObjectCommonMod
 	// process was one that builds a `JobCode` module for the duration, `JobCode` was still in the
 	// name list afterwards, though the metadata tree had never heard of it. Unbinding a name that
 	// was never bound is a no-op, so there is nothing to guard against by doing it late.
-	if (!commonModule->IsGlobalModule())
-		UnbindVariable(commonModule->GetName());
+	UnbindVariable(commonModule->GetName());
 
 	// The other half of the pair in AddCommonModule — see the note there for why unbinding alone
 	// is not enough.
@@ -707,10 +706,6 @@ bool ibValueModuleManagerDesigner::RemoveCommonModule(ibValueMetaObjectCommonMod
 		return false;
 
 	m_listCommonModule.erase(iterator);
-
-	if (commonModule->IsGlobalModule()) {
-		m_compileModule->RemoveModule(moduleValue->GetCompileModule());
-	}
 
 	return true;
 }
