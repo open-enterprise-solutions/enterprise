@@ -9,6 +9,8 @@
 //   3. A text that is not well-formed is refused with where it broke.
 //   4. The writer refuses what would not be XML (an element left open, an attribute after text).
 //   5. A writer's namespace context: what is bound where it stands.
+//   6. What a reader passes by or hands over: the declaration, the document type, comments; xml:lang and xml:space.
+//   7. The writer's attribute lines, its indentation and its document type.
 // ============================================================================
 
 var xsi = "http://www.w3.org/2001/XMLSchema-instance";
@@ -89,3 +91,44 @@ if (w.LookupPrefix("urn:p") <> "p") { Raise("prefix: " + w.LookupPrefix("urn:p")
 if (w.LookupPrefix("urn:none") <> Undefined) { Raise("no prefix is Undefined"); }
 w.WriteEndElement();
 if (w.Close() <> "<a xmlns=""urn:x"" xmlns:p=""urn:p""/>") { Raise("the namespaces written"); }
+
+// 6
+r = New XMLReader();
+r.IgnoreXMLDeclaration = False;
+r.IgnoreDocumentType = False;
+r.IgnoreComments = True;
+r.SetString("<?xml version=""1.0""?><!DOCTYPE a [<!ENTITY e ""x"">]><a xml:lang=""uk"" xml:space=""preserve""><!--c--> &e;</a>");
+r.Read();
+if (r.NodeType <> XMLNodeType.XMLDeclaration) { Raise("the declaration is a node"); }
+r.Read();
+if (r.NodeType <> XMLNodeType.DocumentTypeDefinition) { Raise("the document type is a node"); }
+if (r.Value <> "<!ENTITY e ""x"">") { Raise("the internal subset: " + r.Value); }
+r.Read();
+if (r.Language <> "uk") { Raise("the language: " + r.Language); }
+if (r.Space <> XMLSpace.Preserve) { Raise("the space"); }
+r.Read();
+if (r.Value <> " x") { Raise("the text after the comment passed by: " + r.Value); }
+r.Close();
+
+r = New XMLReader();
+r.CDATASectionAsText = True;
+r.SetString("<a>x<![CDATA[<y>]]>z</a>");
+r.Read();
+r.Read();
+if (r.Value <> "x<y>z") { Raise("CDATA as text: " + r.Value); }
+refusal = "";
+try { r.CDATASectionAsText = False; } except { refusal = ErrorDescription(); }
+if (Find(refusal, "before the first Read") = 0) { Raise("CDATASectionAsText after reading began: " + refusal); }
+r.Close();
+
+// 7
+w = New XMLWriter();
+w.IndentAttributes = True;
+w.IndentString = "  ";
+w.SetString();
+w.WriteDocumentType("a");
+w.WriteStartElement("a");
+w.WriteAttribute("x", "1");
+w.WriteEndElement();
+var laidOut = w.Close();
+if (laidOut <> "<!DOCTYPE a>" + Chars.LF + "<a" + Chars.LF + "  x=""1""/>") { Raise("the writer's layout: " + laidOut); }

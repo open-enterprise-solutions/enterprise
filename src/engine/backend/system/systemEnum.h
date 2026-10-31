@@ -98,4 +98,11 @@ enum ibJsonFormatting
 	ibJsonFormatting_Indented
 };
 
+// What `xml:space` says where an XMLReader stands: whitespace is the reader's to drop, or the document's to keep.
+enum ibXmlSpace
+{
+	ibXmlSpace_Default = 1,
+	ibXmlSpace_Preserve
+};
+
 #endif

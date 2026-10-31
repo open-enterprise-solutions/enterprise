@@ -15,7 +15,7 @@
         "xml"
       ],
       "signature": "New XMLReader()",
-      "description": "XML, який скрипт читає ВУЗОЛ ЗА ВУЗЛОМ, - податкова декларація, банківська виписка, прайс-лист постачальника. Кожен `Read()` переходить до наступного вузла, а властивості описують вузол, на якому він стоїть.\n\nДЖЕРЕЛО - файл (`OpenFile`) або рядок (`SetString`). До першого `Read()` нічого не розбирається, а файл читається частинами - документ будь-якого розміру обходиться, не тримаючись у пам'яті цілком. Те, що чекає на читання, теж обмежене: кількасот байтів вкладених сутностей, які розгортаються в мільйон елементів, віддаються в міру читання, а не будуються спершу в пам'яті.\n\nЩО ТАКЕ ВУЗОЛ: `<a/>` - це ПАРА, `StartElement`, а потім `EndElement`, - і `<a></a>` так само (розрізняє їх `IsEmptyElement`). Коментар та інструкція обробки - вузли. Секція CDATA - ОКРЕМИЙ вузол, ніколи не злитий із текстом поруч. Оголошення XML - НЕ вузол: його читають `XMLVersion`, `XMLEncoding` і `Standalone`. Текст між елементами, що складається лише з пробільних символів, відкидається, доки `IgnoreWhitespace` має значення True (усталено).\n\nАТРИБУТИ належать поточному елементу - за номером (від 0), за іменем або курсором (`ReadAttribute`), що стає на них по одному. Оголошення `xmlns` - теж атрибути, і вони йдуть ПЕРШИМИ. Атрибут, якого немає, - це `Undefined`, а не порожній рядок, яким був би `a=\"\"`.\n\nДОКУМЕНТ НЕ МОЖЕ СЯГАТИ ЗА СВОЇ МЕЖІ: зовнішню сутність (`<!ENTITY e SYSTEM \"file:///...\">`) або зовнішній DTD ВІДХИЛЕНО - не прочитано й не пропущено мовчки. Сутності, оголошені всередині документа, читаються, як і завжди.\n\nТекст, сформований неправильно, відхиляється ТАМ, ДЕ ВІН ЗЛАМАВСЯ, із рядком і стовпцем - після того як віддано вузли перед помилкою, тож обхід зупиняється в тому самому місці, хоч би як файл було поділено на частини.",
+      "description": "XML, який скрипт читає ВУЗОЛ ЗА ВУЗЛОМ, - податкова декларація, банківська виписка, прайс-лист постачальника. Кожен `Read()` переходить до наступного вузла, а властивості описують вузол, на якому він стоїть.\n\nДЖЕРЕЛО - файл (`OpenFile`) або рядок (`SetString`). До першого `Read()` нічого не розбирається, а файл читається частинами - документ будь-якого розміру обходиться, не тримаючись у пам'яті цілком. Те, що чекає на читання, теж обмежене: кількасот байтів вкладених сутностей, які розгортаються в мільйон елементів, віддаються в міру читання, а не будуються спершу в пам'яті.\n\nЩО ТАКЕ ВУЗОЛ: `<a/>` - це ПАРА, `StartElement`, а потім `EndElement`, - і `<a></a>` так само (розрізняє їх `IsEmptyElement`). Коментар та інструкція обробки - вузли, які минаються, доки `IgnoreComments` / `IgnoreProcessingInstructions` мають значення True. Секція CDATA - ОКРЕМИЙ вузол, ніколи не злитий із текстом поруч, - хіба що `CDATASectionAsText` зливає її з цим текстом. Оголошення XML і тип документа - вузли лише тоді, коли `IgnoreXMLDeclaration` / `IgnoreDocumentType` мають значення False (усталено True); `XMLVersion`, `XMLEncoding` і `Standalone` читають оголошення в будь-якому разі. Текст між елементами, що складається лише з пробільних символів, відкидається, доки `IgnoreWhitespace` має значення True (усталено), - але не під `xml:space=\"preserve\"`. `Language` і `Space` кажуть, що кажуть `xml:lang` і `xml:space` на вузлі.\n\nАТРИБУТИ належать поточному елементу - за номером (від 0), за іменем або курсором (`ReadAttribute`), що стає на них по одному. Оголошення `xmlns` - теж атрибути, і вони йдуть ПЕРШИМИ. Атрибут, якого немає, - це `Undefined`, а не порожній рядок, яким був би `a=\"\"`.\n\nДОКУМЕНТ НЕ МОЖЕ СЯГАТИ ЗА СВОЇ МЕЖІ: зовнішню сутність (`<!ENTITY e SYSTEM \"file:///...\">`) або зовнішній DTD ВІДХИЛЕНО - не прочитано й не пропущено мовчки. Сутності, оголошені всередині документа, читаються, як і завжди.\n\nТекст, сформований неправильно, відхиляється ТАМ, ДЕ ВІН ЗЛАМАВСЯ, із рядком і стовпцем - після того як віддано вузли перед помилкою, тож обхід зупиняється в тому самому місці, хоч би як файл було поділено на частини.",
       "syntax_block": "var Reader = New XMLReader();\nReader.OpenFile(Path);\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        Message(Reader.Name);\n    }\n}\nReader.Close();",
       "syntax_block_ves": "Reader = New XMLReader();\nReader.OpenFile(Path);\nWhile Reader.Read() Do\n    If Reader.NodeType = XMLNodeType.StartElement Then\n        Message(Reader.Name);\n    Endif;\nEndDo;\nReader.Close();",
       "parameters": "Немає - читач створюється порожнім, а джерело йому дають `OpenFile` або `SetString`.",
@@ -43,7 +43,7 @@
         "xml"
       ],
       "signature": "XMLReader.NodeType",
-      "description": "НА ЧОМУ СТОЇТЬ ЧИТАЧ - член `XMLNodeType`, лише для читання. Ним кермується обхід: `Read()` - щоб зробити крок, `NodeType` - щоб спитати, куди цей крок привів.\n\nДо першого `Read()`, після того як `Read()` відповів False, і після `Close()` це `XMLNodeType.None`. Доки курсор атрибутів стоїть на атрибуті, це `XMLNodeType.Attribute` - до `MoveToElement` або наступного `Read()`.\n\nВузли, які обхід справді зустрічає: `StartElement`, `EndElement`, `Text`, `Whitespace` (лише з `IgnoreWhitespace = False`), `CDATASection`, `Comment`, `ProcessingInstruction` - і `Attribute` через курсор. Оголошення XML і тип документа тут не вузли, а про сутності й нотації не повідомляється ніколи.",
+      "description": "НА ЧОМУ СТОЇТЬ ЧИТАЧ - член `XMLNodeType`, лише для читання. Ним кермується обхід: `Read()` - щоб зробити крок, `NodeType` - щоб спитати, куди цей крок привів.\n\nДо першого `Read()`, після того як `Read()` відповів False, і після `Close()` це `XMLNodeType.None`. Доки курсор атрибутів стоїть на атрибуті, це `XMLNodeType.Attribute` - до `MoveToElement` або наступного `Read()`.\n\nВузли, які обхід справді зустрічає: `StartElement`, `EndElement`, `Text`, `Whitespace` (з `IgnoreWhitespace = False` або під `xml:space=\"preserve\"`), `CDATASection` (якщо не `CDATASectionAsText`), `Comment`, `ProcessingInstruction` - і `Attribute` через курсор; `XMLDeclaration` і `DocumentTypeDefinition` - з `IgnoreXMLDeclaration` / `IgnoreDocumentType` = False. Про сутності й нотації не повідомляється ніколи.",
       "syntax_block": "if (Reader.NodeType = XMLNodeType.StartElement) {\n    // ...\n}",
       "parameters": "",
       "return_descr": "XMLNodeType.",
@@ -188,7 +188,7 @@
         "xml"
       ],
       "signature": "XMLReader.HasValue",
-      "description": "Чи МОЖЕ вузол тримати значення - лише для читання. True на `Attribute`, `Text`, `Whitespace`, `CDATASection`, `Comment` і `ProcessingInstruction`; False на початку чи кінці елемента і на `None`.\n\nІдеться про ВИД вузла, а не про текст: порожній атрибут `a=\"\"` має значення, і це \"\".",
+      "description": "Чи МОЖЕ вузол тримати значення - лише для читання. True на `Attribute`, `Text`, `Whitespace`, `CDATASection`, `Comment`, `ProcessingInstruction`, `XMLDeclaration` і `DocumentTypeDefinition`; False на початку чи кінці елемента і на `None`.\n\nІдеться про ВИД вузла, а не про текст: порожній атрибут `a=\"\"` має значення, і це \"\".",
       "syntax_block": "if (Reader.HasValue) {\n    Message(Reader.Value);\n}",
       "parameters": "",
       "return_descr": "Boolean.",
@@ -211,7 +211,7 @@
         "xml"
       ],
       "signature": "XMLReader.HasName",
-      "description": "Чи МАЄ вузол ім'я - лише для читання. True на `StartElement`, `EndElement`, `ProcessingInstruction` і `Attribute`; False на тексті, CDATA, пробільних символах, коментарі та `None`.",
+      "description": "Чи МАЄ вузол ім'я - лише для читання. True на `StartElement`, `EndElement`, `ProcessingInstruction`, `Attribute`, `XMLDeclaration` і `DocumentTypeDefinition`; False на тексті, CDATA, пробільних символах, коментарі та `None`.",
       "syntax_block": "if (Reader.HasName) {\n    Message(Reader.Name);\n}",
       "parameters": "",
       "return_descr": "Boolean.",
@@ -372,7 +372,7 @@
         "xml"
       ],
       "signature": "XMLReader.IgnoreWhitespace",
-      "description": "Чи ВІДКИДАЄТЬСЯ текст, що складається лише з пробільних символів, - для читання й запису, усталено True.\n\nTrue: розриви рядків і відступи між елементами документа, розкладеного для людини, не видно ніколи, і обхід іде від елемента до елемента. False: вони віддаються як вузли `Whitespace` - те, що потрібно копії, яка мусить зберегти розкладку, або значенню, що складається з пробілів.\n\nІдеться лише про текст ЦІЛКОМ із пробільних символів: `<b>x y</b>` зберігає свій пробіл за будь-якого значення, так само як і пробільні символи всередині тексту, що містить ще щось. Секція CDATA ніколи не є пробільними символами. Налаштування можна змінити будь-коли, і воно діє від наступного `Read()`.",
+      "description": "Чи ВІДКИДАЄТЬСЯ текст, що складається лише з пробільних символів, - для читання й запису, усталено True.\n\nTrue: розриви рядків і відступи між елементами документа, розкладеного для людини, не видно ніколи, і обхід іде від елемента до елемента. False: вони віддаються як вузли `Whitespace` - те, що потрібно копії, яка мусить зберегти розкладку, або значенню, що складається з пробілів.\n\nІдеться лише про текст ЦІЛКОМ із пробільних символів: `<b>x y</b>` зберігає свій пробіл за будь-якого значення, так само як і пробільні символи всередині тексту, що містить ще щось. Секція CDATA ніколи не є пробільними символами. А під `xml:space=\"preserve\"` документ каже, що його пробільні символи важливі: там вони віддаються, навіть коли це налаштування має значення True. Налаштування можна змінити будь-коли, і воно діє від наступного `Read()`.",
       "syntax_block": "Reader.IgnoreWhitespace = False;",
       "parameters": "",
       "return_descr": "Boolean.",
@@ -497,6 +497,169 @@
         "cls.XMLNamespaceContext",
         "cls.XMLReader.NamespaceURI",
         "cls.XMLReader.Depth"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Language",
+      "name_local": "Language",
+      "name_en": "Language",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Language",
+      "description": "Що КАЖЕ `xml:lang` НА ВУЗЛІ - лише для читання, рядок. Власний `xml:lang` елемента діє для самого елемента, для всього всередині нього і для його `EndElement`; після цього кінця - те, що сказано зовні. На курсорі атрибутів - мова елемента. \"\", де мову не сказано, - і там, де документ пише `xml:lang=\"\"`: так документ відкликає мову.\n\nЗначення - слово документа, як його написано (`uk`, `en-GB`): зі списком мов воно не звіряється.",
+      "syntax_block": "Lang = Reader.Language;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<doc xml:lang=\"\"de\"\"><p>Hallo</p><p xml:lang=\"\"en\"\">Hello</p></doc>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Text) {\n        Message(Reader.Language + \": \" + Reader.Value);   // de: Hallo, потім en: Hello\n    }\n}",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.XMLReader.Space",
+        "cls.XMLReader.NamespaceContext"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Space",
+      "name_local": "Space",
+      "name_en": "Space",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Space",
+      "description": "Що КАЖЕ `xml:space` НА ВУЗЛІ - лише для читання, член `XMLSpace`, за тим самим правилом, що й `Language`: власний атрибут елемента діє для нього, для того, що всередині нього, і для його кінця. `XMLSpace.Preserve` під `xml:space=\"preserve\"`; `XMLSpace.Default` під `xml:space=\"default\"` і там, де нічого не сказано. Значення, якого `xml:space` не має, не каже нічого: діє те, що сказано зовні.\n\nПід `Preserve` читач ЗБЕРІГАЄ пробільні символи, навіть коли `IgnoreWhitespace` має значення True, - документ каже, що там вони важливі.",
+      "syntax_block": "if (Reader.Space = XMLSpace.Preserve) {\n    // пробільні символи тут належать документу\n}",
+      "parameters": "",
+      "return_descr": "XMLSpace.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a><pre xml:space=\"\"preserve\"\">  </pre></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Whitespace) {\n        Message(Reader.Space = XMLSpace.Preserve);   // True: збережено, хоча IgnoreWhitespace має значення True\n    }\n}",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.XMLSpace",
+        "cls.XMLReader.IgnoreWhitespace",
+        "cls.XMLReader.Language"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IgnoreXMLDeclaration",
+      "name_local": "IgnoreXMLDeclaration",
+      "name_en": "IgnoreXMLDeclaration",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IgnoreXMLDeclaration",
+      "description": "Чи МИНАЄТЬСЯ оголошення XML - для читання й запису, усталено True. False: `<?xml ...?>` - перший вузол, `XMLNodeType.XMLDeclaration`: `Name` - це `xml`; його частини - його атрибути (`version`, а також `encoding` і `standalone`, коли вони в оголошенні є); `Value` - ці частини у формі `version=\"1.0\" encoding=\"UTF-8\"`, кожна в подвійних лапках, хоч би які лапки вжив документ.\n\n`XMLVersion`, `XMLEncoding` і `Standalone` читають оголошення в будь-якому разі. Налаштування можна змінити будь-коли, і воно діє від наступного `Read()`.",
+      "syntax_block": "Reader.IgnoreXMLDeclaration = False;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreXMLDeclaration = False;\nReader.SetString(\"<?xml version=\"\"1.0\"\" standalone=\"\"yes\"\"?><a/>\");\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.XMLDeclaration);   // True\nMessage(Reader.GetAttribute(\"standalone\"));             // yes",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.XMLNodeType.XMLDeclaration",
+        "cls.XMLReader.XMLVersion",
+        "cls.XMLWriter.WriteCurrent"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IgnoreDocumentType",
+      "name_local": "IgnoreDocumentType",
+      "name_en": "IgnoreDocumentType",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IgnoreDocumentType",
+      "description": "Чи МИНАЄТЬСЯ тип документа - для читання й запису, усталено True. False: `<!DOCTYPE ...>` - вузол, `XMLNodeType.DocumentTypeDefinition`: `Name` - ім'я кореневого елемента, яке він називає; `PUBLIC` і `SYSTEM` - його атрибути, коли він має ці ідентифікатори; `Value` - внутрішня підмножина, тобто те, що стоїть між `[` і `]`, ЯК НАПИСАНО, разом з її коментарями та інструкціями, \"\", коли її немає.\n\nСутності, оголошені в підмножині, розгортаються там, де їх ужито, в будь-якому разі. ⚠ Тип документа із SYSTEM-ідентифікатором читається лише в документі, що каже `standalone=\"yes\"`: інакше документ залежить від оголошень поза собою, і його відхилено. Задається ДО ПЕРШОГО `Read()` читання: внутрішня підмножина збирається, лише коли про неї просять. Зміна після цього відхиляється - `XMLReader: IgnoreDocumentType is set before the first Read - the reading has begun`; `Close()`, `OpenFile` чи `SetString` починають нове читання.",
+      "syntax_block": "Reader.IgnoreDocumentType = False;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreDocumentType = False;\nReader.SetString(\"<!DOCTYPE a [<!ENTITY e \"\"x\"\">]><a>&e;</a>\");\nReader.Read();\nMessage(Reader.Name);    // a\nMessage(Reader.Value);   // <!ENTITY e \"x\">",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.XMLNodeType.DocumentTypeDefinition",
+        "cls.XMLWriter.WriteDocumentType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IgnoreComments",
+      "name_local": "IgnoreComments",
+      "name_en": "IgnoreComments",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IgnoreComments",
+      "description": "Чи МИНАЮТЬСЯ коментарі - для читання й запису, усталено False. True: обхід ніколи не стає на `XMLNodeType.Comment`. Налаштування можна змінити будь-коли, і воно діє від наступного `Read()`. Коментар усередині типу документа - частина його внутрішньої підмножини, а не вузол, в будь-якому разі.",
+      "syntax_block": "Reader.IgnoreComments = True;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreComments = True;\nReader.SetString(\"<a><!-- note -->t</a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.Value);   // t",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.XMLReader.IgnoreProcessingInstructions",
+        "enum.XMLNodeType.Comment"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IgnoreProcessingInstructions",
+      "name_local": "IgnoreProcessingInstructions",
+      "name_en": "IgnoreProcessingInstructions",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IgnoreProcessingInstructions",
+      "description": "Чи МИНАЮТЬСЯ інструкції обробки (`<?target data?>`) - для читання й запису, усталено False. True: обхід ніколи не стає на `XMLNodeType.ProcessingInstruction`. Оголошення XML - не інструкція: що з ним відбувається, визначає `IgnoreXMLDeclaration`. Налаштування можна змінити будь-коли, і воно діє від наступного `Read()`.",
+      "syntax_block": "Reader.IgnoreProcessingInstructions = True;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreProcessingInstructions = True;\nReader.SetString(\"<a><?app data?>t</a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.Value);   // t",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.XMLReader.IgnoreComments",
+        "enum.XMLNodeType.ProcessingInstruction"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.CDATASectionAsText",
+      "name_local": "CDATASectionAsText",
+      "name_en": "CDATASectionAsText",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.CDATASectionAsText",
+      "description": "Чи ЧИТАЄТЬСЯ секція CDATA ЯК ТЕКСТ - для читання й запису, усталено False. True: секція зливається з текстом навколо неї в ОДИН вузол `Text` - `x<![CDATA[<y>]]>z` - це один вузол, чиє `Value` - `x<y>z`, тож `Read(); Value` читає все, - і те, що тримає секція, ніколи не робить вузол вузлом `Whitespace`; порожня секція - це взагалі ніщо. False: секція - окремий вузол `CDATASection`.\n\nЗадавайте його ДО ПЕРШОГО `Read()` читання - розбирач зливає текст під час читання. Зміну після цього відхилено: `XMLReader: CDATASectionAsText is set before the first Read - the reading has begun`. `Close()`, `OpenFile` чи `SetString` починають нове читання, і його можна задати знову.",
+      "syntax_block": "Reader.CDATASectionAsText = True;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.CDATASectionAsText = True;\nReader.SetString(\"<a>x<![CDATA[<y>]]>z</a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.Value);   // x<y>z",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.XMLNodeType.CDATASection",
+        "cls.XMLReader.IgnoreWhitespace"
       ],
       "reviewed": false
     },
@@ -946,7 +1109,7 @@
         "xml"
       ],
       "signature": "XMLWriter.Indent",
-      "description": "Чи РОЗКЛАДЕНО текст для людини - для читання й запису, усталено True.\n\nTrue: розрив рядка перед кожним елементом, коментарем, інструкцією і секцією CDATA та по одній табуляції на кожен відкритий рівень; кінець елемента, що містить елементи, стоїть на окремому рядку. НЕ всередині елемента, що містить текст, - `<b>t</b>`, `<m>x<i/>y</m>` лишаються в одному рядку, - бо там рядок і табуляції стали б частиною тексту. Перед найпершим записаним нічого не ставиться.\n\nFalse: усе в одному рядку, без жодного пробільного символу, якого не було записано.\n\nЙого можна змінити будь-коли, і воно діє на те, що записується відтоді.",
+      "description": "Чи РОЗКЛАДЕНО текст для людини - для читання й запису, усталено True.\n\nTrue: розрив рядка перед кожним елементом, коментарем, інструкцією і секцією CDATA та по одному `IndentString` (табуляції) на кожен відкритий рівень - `IndentAttributes` ставить на окремий рядок і кожен атрибут; кінець елемента, що містить елементи, стоїть на окремому рядку. НЕ всередині елемента, що містить текст, - `<b>t</b>`, `<m>x<i/>y</m>` лишаються в одному рядку, - бо там рядок і табуляції стали б частиною тексту. І не всередині елемента, записаного з `xml:space=\"preserve\"`: там пробільні символи належать документу, і копія такого документа читається так само; `xml:space=\"default\"` глибше повертає розкладку. Перед найпершим записаним нічого не ставиться.\n\nFalse: усе в одному рядку, без жодного пробільного символу, якого не було записано.\n\nЙого можна змінити будь-коли, і воно діє на те, що записується відтоді.",
       "syntax_block": "Writer.Indent = False;",
       "parameters": "",
       "return_descr": "Boolean.",
@@ -979,6 +1142,52 @@
         "cls.XMLNamespaceContext",
         "cls.XMLWriter.LookupPrefix",
         "cls.XMLWriter.WriteNamespaceMapping"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.IndentAttributes",
+      "name_local": "IndentAttributes",
+      "name_en": "IndentAttributes",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLWriter.IndentAttributes",
+      "description": "Чи стоїть кожен атрибут НА ОКРЕМОМУ РЯДКУ - для читання й запису, усталено False. True, і доки `Indent` має значення True: кожен атрибут, зокрема й оголошення простору імен, починає новий рядок на один рівень глибше, ніж його елемент. Усередині тегу розрив рядка - лише проміжок між атрибутами: читач прочитає той самий елемент. З `Indent = False` нічого не змінює. Елемент посеред рядка - усередині тексту чи під `xml:space=\"preserve\"` - лишає свої атрибути в цьому рядку.\n\nЙого можна змінити будь-коли, і воно діє на те, що записується відтоді.",
+      "syntax_block": "Writer.IndentAttributes = True;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Writer = New XMLWriter();\nWriter.IndentAttributes = True;\nWriter.SetString();\nWriter.WriteStartElement(\"item\");\nWriter.WriteAttribute(\"code\", \"42\");\nWriter.WriteAttribute(\"name\", \"Tea\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <item\n// \tcode=\"42\"\n// \tname=\"Tea\"/>",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.XMLWriter.Indent",
+        "cls.XMLWriter.IndentString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.IndentString",
+      "name_local": "IndentString",
+      "name_en": "IndentString",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLWriter.IndentString",
+      "description": "ОДИН РІВЕНЬ відступу - для читання й запису, усталено табуляція. `Indent` ставить його по разу на кожен відкритий рівень на початку рядка. Лише пробіли й табуляції, \"\" теж (рядки без відступу): усе інше стало б текстом між елементами, і його відхилено - `XMLWriter: an indentation is spaces and tabs - '-' would be text between the elements`; значення, що не є рядком, теж відхилено. Відхилене значення лишає чинним попереднє.\n\nЙого можна змінити будь-коли, і воно діє на те, що записується відтоді.",
+      "syntax_block": "Writer.IndentString = \"  \";",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Writer = New XMLWriter();\nWriter.IndentString = \"  \";\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteStartElement(\"b\");\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <a>\n//   <b/>\n// </a>",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.XMLWriter.Indent",
+        "cls.XMLWriter.IndentAttributes"
       ],
       "reviewed": false
     },
@@ -1073,6 +1282,30 @@
       "see_also": [
         "cls.XMLWriter.OpenFile",
         "cls.XMLWriter.SetString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteDocumentType",
+      "name_local": "WriteDocumentType",
+      "name_en": "WriteDocumentType",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteDocumentType(name : string, publicId : string, systemId : string, internalSubset : string)",
+      "description": "Записує ТИП ДОКУМЕНТА - `<!DOCTYPE name PUBLIC \"publicId\" \"systemId\" [internalSubset]>`, без частин, які дорівнюють \"\" або не передані: `<!DOCTYPE a>`, `<!DOCTYPE a SYSTEM \"a.dtd\">`, `<!DOCTYPE a [<!ENTITY e \"x\">]>`. ОДИН РАЗ і ДО ПЕРШОГО ЕЛЕМЕНТА - після оголошення, коментаря чи інструкції можна.\n\nВідхиляється: другий (`XMLWriter: a document has one document type, and it is written already`); тип після елемента (`XMLWriter: the document type comes before the first element`); публічний ідентифікатор без системного (`XMLWriter: a public identifier is written with a system one`); символ, якого публічний ідентифікатор не може тримати, - лише літери, цифри, пробіл, розриви рядка і `-'()+,./:=?;!*#@$_%` (`XMLWriter: the character U+0022 is not allowed in a public identifier`); системний ідентифікатор з лапками обох видів (`XMLWriter: a system identifier cannot hold both kinds of quotes` - його беруть у лапки того виду, якого він не містить). Відхилений запис нічого не змінює.\n\n⚠ ВНУТРІШНЯ ПІДМНОЖИНА ЙДЕ ЯК Є, як у `WriteRaw`: її символи перевіряються, її розмітка - ні; `]>` усередині неї закінчує тип документа на цьому місці й ламає документ.\n\n⚠ SYSTEM-ІДЕНТИФІКАТОР дає документ, який `XMLReader` відхиляє: такий тип документа він читає лише в документі, що каже `standalone=\"yes\"`, а `WriteXMLDeclaration` цього не пише (копія через `WriteCurrent` зберігає прочитаний `standalone`).",
+      "syntax_block": "Writer.WriteDocumentType(Name, PublicId, SystemId, InternalSubset);",
+      "parameters": "name - ім'я кореневого елемента.\npublicId - необов'язковий: публічний ідентифікатор; потребує системного.\nsystemId - необов'язковий: системний ідентифікатор.\ninternalSubset - необов'язковий: оголошення між `[` і `]`, як вони є.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteXMLDeclaration();\nWriter.WriteDocumentType(\"note\", \"\", \"\", \"<!ENTITY org \"\"OES\"\">\");\nWriter.WriteStartElement(\"note\");\nWriter.WriteRaw(\"&org;\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n// <!DOCTYPE note [<!ENTITY org \"OES\">]>\n// <note>&org;</note>",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.XMLReader.IgnoreDocumentType",
+        "cls.XMLWriter.WriteXMLDeclaration",
+        "cls.XMLWriter.WriteRaw"
       ],
       "reviewed": false
     },
@@ -1343,7 +1576,7 @@
         "xml"
       ],
       "signature": "WriteCurrent(reader : XMLReader)",
-      "description": "Записує вузол, на якому СТОЇТЬ `XMLReader`, - лише цей вузол, а не те, що всередині нього: початок елемента з його атрибутами (серед них і його оголошення просторів імен), кінець, текст, секцію CDATA, коментар, інструкцію; на курсорі атрибутів - цей атрибут, причому `xmlns` чи `xmlns:p` записується як оголошення, яким він і є. Початок елемента - ОДИН запис разом з усіма його атрибутами: якщо атрибут відхилено, елемент теж не починається. Тож цикл по читачу КОПІЮЄ документ, а цикл, що пропускає вузол або записує на його місце щось інше, перетворює його дорогою.\n\n`<a/>` лишається `<a/>`: початок записується закритим, а його кінець, прочитаний наступним, не записує нічого. До першого `Read()` і в кінці записувати нічого. Для копії, що є тим самим текстом, зберігайте пробільні символи через `IgnoreWhitespace = False` і `Indent = False`.\n\nУсе, крім читача, відхиляється: `XMLWriter: WriteCurrent writes what an XMLReader stands on - not a value of the type 'String'`.",
+      "description": "Записує вузол, на якому СТОЇТЬ `XMLReader`, - лише цей вузол, а не те, що всередині нього: початок елемента з його атрибутами (серед них і його оголошення просторів імен), кінець, текст, секцію CDATA, коментар, інструкцію; оголошення XML (власне оголошення цього записувача - з кодуванням, у якому він пише) і тип документа з його внутрішньою підмножиною; на курсорі атрибутів - цей атрибут, причому `xmlns` чи `xmlns:p` записується як оголошення, яким він і є. Початок елемента - ОДИН запис разом з усіма його атрибутами: якщо атрибут відхилено, елемент теж не починається. Тож цикл по читачу КОПІЮЄ документ, а цикл, що пропускає вузол або записує на його місце щось інше, перетворює його дорогою.\n\n`<a/>` лишається `<a/>`: початок записується закритим, а його кінець, прочитаний наступним, не записує нічого. До першого `Read()` і в кінці записувати нічого. Для копії, що є тим самим текстом, зберігайте пробільні символи через `IgnoreWhitespace = False` і `Indent = False`.\n\nОголошення XML записується як оголошення цього записувача - у його кодуванні - з тим `standalone`, що мало прочитане, тож тип документа із системним ідентифікатором лишається читабельним; за `IgnoreXMLDeclaration = False` цикл копіювання сам пише оголошення, і `WriteXMLDeclaration()` перед ним було б відхилено. На курсорі атрибутів оголошення чи типу документа - відмова: `XMLWriter: WriteCurrent writes an element's attribute - 'version' is a part of the XML declaration`.\n\nУсе, крім читача, відхиляється: `XMLWriter: WriteCurrent writes what an XMLReader stands on - not a value of the type 'String'`.",
       "syntax_block": "Writer.WriteCurrent(Reader);",
       "parameters": "reader - XMLReader, чий поточний вузол записується.",
       "return_descr": "",
@@ -1580,7 +1813,7 @@
         "xml"
       ],
       "signature": "XMLNodeType.<Member>",
-      "description": "НА ЧОМУ СТОЇТЬ XMLReader - `NodeType` відповідає одним із цих членів, і `MoveToContent` теж. У переліку всі п'ятнадцять видів, у незмінному порядку, щоб компілювався код, написаний під увесь перелік: `None, StartElement, EndElement, Text, Whitespace, CDATASection, Comment, ProcessingInstruction, XMLDeclaration, DocumentTypeDefinition, Attribute, EntityReference, Entity, EndEntity, Notation`.\n\nТЕ, ЩО ОБХІД СПРАВДІ ЗУСТРІЧАЄ, - менше: `StartElement`, `EndElement`, `Text`, `CDATASection`, `Comment`, `ProcessingInstruction`, `Whitespace` з `IgnoreWhitespace = False`, `Attribute` на курсорі атрибутів і `None` там, де читач не стоїть ні на чому. Оголошення XML і тип документа тут не вузли, а про сутності й нотації не повідомляється ніколи - сутності приходять уже заміненими.\n\nЧлен записується як `XMLNodeType.<Ім'я>` і порівнюється через `=` і `<>`.",
+      "description": "НА ЧОМУ СТОЇТЬ XMLReader - `NodeType` відповідає одним із цих членів, і `MoveToContent` теж. У переліку всі п'ятнадцять видів, у незмінному порядку, щоб компілювався код, написаний під увесь перелік: `None, StartElement, EndElement, Text, Whitespace, CDATASection, Comment, ProcessingInstruction, XMLDeclaration, DocumentTypeDefinition, Attribute, EntityReference, Entity, EndEntity, Notation`.\n\nТЕ, ЩО ОБХІД СПРАВДІ ЗУСТРІЧАЄ, - менше: `StartElement`, `EndElement`, `Text`, `CDATASection`, `Comment`, `ProcessingInstruction`, `Whitespace` з `IgnoreWhitespace = False` або під `xml:space=\"preserve\"`, `Attribute` на курсорі атрибутів, `XMLDeclaration` і `DocumentTypeDefinition`, коли читачеві сказано їх не минати, і `None` там, де читач не стоїть ні на чому. Про сутності й нотації не повідомляється ніколи - сутності приходять уже заміненими.\n\nЧлен записується як `XMLNodeType.<Ім'я>` і порівнюється через `=` і `<>`.",
       "syntax_block": "if (Reader.NodeType = XMLNodeType.StartElement) {\n    // ...\n}",
       "syntax_block_ves": "If Reader.NodeType = XMLNodeType.StartElement Then\n    // ...\nEndif;",
       "parameters": "",
@@ -1720,7 +1953,7 @@
         "xml"
       ],
       "signature": "XMLNodeType.CDATASection",
-      "description": "СЕКЦІЯ CDATA - `<![CDATA[...]]>`, - її текст у `Value`, без екранування. ОКРЕМИЙ вузол: ніколи не злитий із текстом перед ним чи після нього і ніколи не вузол `Whitespace`. `IsCharacters` на ньому True, як і на тексті.",
+      "description": "СЕКЦІЯ CDATA - `<![CDATA[...]]>`, - її текст у `Value`, без екранування. ОКРЕМИЙ вузол: ніколи не злитий із текстом перед ним чи після нього і ніколи не вузол `Whitespace`, - хіба що `CDATASectionAsText` має значення True: тоді секція - частина вузла `Text`. `IsCharacters` на ньому True, як і на тексті.",
       "syntax_block": "if (Reader.NodeType = XMLNodeType.CDATASection) {\n    Html = Reader.Value;\n}",
       "parameters": "",
       "return_descr": "",
@@ -1789,11 +2022,11 @@
         "xml"
       ],
       "signature": "XMLNodeType.XMLDeclaration",
-      "description": "ОГОЛОШЕННЯ XML, яке тут НЕ є вузлом: `<?xml version=\"1.0\" encoding=\"...\"?>` читається разом із початком документа, а повідомляють про нього `XMLVersion`, `XMLEncoding` і `Standalone`. ЧИТАЧ НІКОЛИ ЙОГО НЕ ВИДАЄ: член є в переліку, щоб компілювався код, написаний під увесь перелік; порівняння з ним тут просто ніколи не істинне.",
-      "syntax_block": "Encoding = Reader.XMLEncoding;   // не вузол",
+      "description": "ОГОЛОШЕННЯ XML - `<?xml version=\"1.0\" encoding=\"...\"?>`, вузол лише з `IgnoreXMLDeclaration = False`: перший вузол, `Name` - `xml`, його частини - атрибути `version`, `encoding`, `standalone` (ті, що є), `Value` - частини у формі `version=\"1.0\" encoding=\"UTF-8\"`. `XMLVersion`, `XMLEncoding` і `Standalone` читають його в будь-якому разі. `XMLWriter.WriteCurrent` записує на його місце оголошення ЗАПИСУВАЧА - з кодуванням, у якому той пише.",
+      "syntax_block": "// <?xml ...?> - вузол, коли читачеві сказано його не минати",
       "parameters": "",
       "return_descr": "",
-      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.XMLDeclaration) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - тут не трапляється ніколи",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreXMLDeclaration = False;\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><a/>\");\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.XMLDeclaration);   // True\nMessage(Reader.GetAttribute(\"version\"));                // 1.0",
       "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "enum.XMLNodeType",
@@ -1812,11 +2045,11 @@
         "xml"
       ],
       "signature": "XMLNodeType.DocumentTypeDefinition",
-      "description": "ТИП ДОКУМЕНТА - `<!DOCTYPE ...>`, який не віддається як вузол: його внутрішні сутності застосовуються, зовнішня відхиляється. ЧИТАЧ НІКОЛИ ЙОГО НЕ ВИДАЄ: член є в переліку, щоб компілювався код, написаний під увесь перелік; порівняння з ним тут просто ніколи не істинне.",
-      "syntax_block": "// <!DOCTYPE ...> тут не вузол",
+      "description": "ТИП ДОКУМЕНТА - `<!DOCTYPE ...>`, вузол лише з `IgnoreDocumentType = False`: `Name` - ім'я кореневого елемента, яке він називає, `PUBLIC` і `SYSTEM` - атрибути, коли вони в нього є, `Value` - внутрішня підмножина, як написано. Його внутрішні сутності застосовуються в будь-якому разі; зовнішню відхилено. `XMLWriter.WriteCurrent` записує його назад через `WriteDocumentType`.",
+      "syntax_block": "// <!DOCTYPE ...> - вузол, коли читачеві сказано його не минати",
       "parameters": "",
       "return_descr": "",
-      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.DocumentTypeDefinition) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - тут не трапляється ніколи",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreDocumentType = False;\nReader.SetString(\"<!DOCTYPE a [<!ENTITY e \"\"x\"\">]><a>&e;</a>\");\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.DocumentTypeDefinition);   // True\nMessage(Reader.Value);                                           // <!ENTITY e \"x\">",
       "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "enum.XMLNodeType",
@@ -1936,6 +2169,76 @@
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLSpace",
+      "name_local": "XMLSpace",
+      "name_en": "XMLSpace",
+      "kind": "enum_type",
+      "class_id": 409836384529251395,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLSpace.<Member>",
+      "description": "ЩО КАЖЕ `xml:space` там, де стоїть `XMLReader`, - `Space` відповідає одним із двох: `Default`, `Preserve`. Член записується як `XMLSpace.<Ім'я>` і порівнюється через `=` і `<>`.",
+      "syntax_block": "if (Reader.Space = XMLSpace.Preserve) {\n    // ...\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a xml:space=\"\"preserve\"\"/>\");\nReader.Read();\nMessage(Reader.Space = XMLSpace.Preserve);   // True",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.XMLReader.Space",
+        "cls.XMLReader.IgnoreWhitespace"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLSpace.Default",
+      "name_local": "Default",
+      "name_en": "Default",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLSpace.Default",
+      "description": "ПРОБІЛЬНІ СИМВОЛИ ЧИТАЧ МОЖЕ ВІДКИНУТИ - під `xml:space=\"default\"` і там, де документ не каже нічого: вирішує `IgnoreWhitespace`.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a/>\");\nReader.Read();\nMessage(Reader.Space = XMLSpace.Default);   // True: нічого не сказано",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.XMLSpace",
+        "cls.XMLReader.Space"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLSpace.Preserve",
+      "name_local": "Preserve",
+      "name_en": "Preserve",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLSpace.Preserve",
+      "description": "ПРОБІЛЬНІ СИМВОЛИ НАЛЕЖАТЬ ДОКУМЕНТУ - під `xml:space=\"preserve\"`. Читач віддає їх як вузли `Whitespace`, навіть коли `IgnoreWhitespace` має значення True.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a xml:space=\"\"preserve\"\"> </a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.Whitespace);   // True",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.XMLSpace",
+        "cls.XMLReader.Space"
       ],
       "reviewed": false
     }

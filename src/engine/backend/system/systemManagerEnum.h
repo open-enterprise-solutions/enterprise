@@ -174,4 +174,14 @@ class ibValueEnumXmlNodeType : public ibValueEnumeration<ibXmlNodeType> {
 	}
 };
 
+class ibValueEnumXmlSpace : public ibValueEnumeration<ibXmlSpace> {
+	public:
+	ibValueEnumXmlSpace() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibXmlSpace::ibXmlSpace_Default, ibT("Default"), _("Default"));
+		AddEnumeration(ibXmlSpace::ibXmlSpace_Preserve, ibT("Preserve"), _("Preserve"));
+	}
+};
+
 #endif

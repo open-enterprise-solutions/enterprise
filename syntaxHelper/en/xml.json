@@ -15,7 +15,7 @@
         "xml"
       ],
       "signature": "New XMLReader()",
-      "description": "XML read by a script NODE BY NODE - a tax return, a bank statement, a supplier's price list. Each `Read()` moves to the next node, and the properties describe the node it stands on.\n\nTHE SOURCE is a file (`OpenFile`) or a string (`SetString`). Nothing is parsed until the first `Read()`, and a file is read a chunk at a time - a document of any size is walked without being held whole. What waits to be read is bounded too: a few hundred bytes of nested entities that expand into a million elements are handed over as they are read, not built in memory first.\n\nWHAT A NODE IS: `<a/>` is a PAIR - `StartElement` and then `EndElement` - and so is `<a></a>` (`IsEmptyElement` tells them apart). A comment and a processing instruction are nodes. A CDATA section is a node of its OWN, never merged into the text beside it. The XML declaration is NOT a node: `XMLVersion`, `XMLEncoding` and `Standalone` read it. Text between elements that is only whitespace is dropped while `IgnoreWhitespace` is True, the default.\n\nTHE ATTRIBUTES are the current element's - by number (from 0), by name, or with a cursor (`ReadAttribute`) that stands on them one at a time. The `xmlns` declarations are attributes too, and come FIRST. An attribute that is not there is `Undefined` - not an empty string, which `a=\"\"` would be.\n\nA DOCUMENT MAY NOT REACH OUTSIDE ITSELF: an external entity (`<!ENTITY e SYSTEM \"file:///...\">`) or an external DTD is REFUSED - not read, and not quietly left out either. Entities declared inside the document are read as ever.\n\nA text that is not well-formed is refused WHERE IT BROKE, with the line and the column - after the nodes before the fault have been handed over, so a walk stops at the same place however the file was cut into chunks.",
+      "description": "XML read by a script NODE BY NODE - a tax return, a bank statement, a supplier's price list. Each `Read()` moves to the next node, and the properties describe the node it stands on.\n\nTHE SOURCE is a file (`OpenFile`) or a string (`SetString`). Nothing is parsed until the first `Read()`, and a file is read a chunk at a time - a document of any size is walked without being held whole. What waits to be read is bounded too: a few hundred bytes of nested entities that expand into a million elements are handed over as they are read, not built in memory first.\n\nWHAT A NODE IS: `<a/>` is a PAIR - `StartElement` and then `EndElement` - and so is `<a></a>` (`IsEmptyElement` tells them apart). A comment and a processing instruction are nodes, passed by while `IgnoreComments` / `IgnoreProcessingInstructions` are True. A CDATA section is a node of its OWN, never merged into the text beside it - unless `CDATASectionAsText` joins it into that text. The XML declaration and the document type are nodes only when `IgnoreXMLDeclaration` / `IgnoreDocumentType` are False (True by default); `XMLVersion`, `XMLEncoding` and `Standalone` read the declaration either way. Text between elements that is only whitespace is dropped while `IgnoreWhitespace` is True, the default - but not under `xml:space=\"preserve\"`. `Language` and `Space` say what `xml:lang` and `xml:space` say at the node.\n\nTHE ATTRIBUTES are the current element's - by number (from 0), by name, or with a cursor (`ReadAttribute`) that stands on them one at a time. The `xmlns` declarations are attributes too, and come FIRST. An attribute that is not there is `Undefined` - not an empty string, which `a=\"\"` would be.\n\nA DOCUMENT MAY NOT REACH OUTSIDE ITSELF: an external entity (`<!ENTITY e SYSTEM \"file:///...\">`) or an external DTD is REFUSED - not read, and not quietly left out either. Entities declared inside the document are read as ever.\n\nA text that is not well-formed is refused WHERE IT BROKE, with the line and the column - after the nodes before the fault have been handed over, so a walk stops at the same place however the file was cut into chunks.",
       "syntax_block": "var Reader = New XMLReader();\nReader.OpenFile(Path);\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        Message(Reader.Name);\n    }\n}\nReader.Close();",
       "syntax_block_ves": "Reader = New XMLReader();\nReader.OpenFile(Path);\nWhile Reader.Read() Do\n    If Reader.NodeType = XMLNodeType.StartElement Then\n        Message(Reader.Name);\n    Endif;\nEndDo;\nReader.Close();",
       "parameters": "None - a reader is made empty, and is given its source by `OpenFile` or `SetString`.",
@@ -43,7 +43,7 @@
         "xml"
       ],
       "signature": "XMLReader.NodeType",
-      "description": "WHAT THE READER STANDS ON, as an `XMLNodeType` member - read-only. A walk is steered by it: `Read()` to step, `NodeType` to ask what the step landed on.\n\nBefore the first `Read()`, once `Read()` has answered False, and after `Close()`, it is `XMLNodeType.None`. While the attribute cursor stands on an attribute it is `XMLNodeType.Attribute`, until `MoveToElement` or the next `Read()`.\n\nThe nodes a walk actually meets: `StartElement`, `EndElement`, `Text`, `Whitespace` (only with `IgnoreWhitespace = False`), `CDATASection`, `Comment`, `ProcessingInstruction` - and `Attribute` through the cursor. The XML declaration and the document type are not nodes here, and no entity or notation is ever reported.",
+      "description": "WHAT THE READER STANDS ON, as an `XMLNodeType` member - read-only. A walk is steered by it: `Read()` to step, `NodeType` to ask what the step landed on.\n\nBefore the first `Read()`, once `Read()` has answered False, and after `Close()`, it is `XMLNodeType.None`. While the attribute cursor stands on an attribute it is `XMLNodeType.Attribute`, until `MoveToElement` or the next `Read()`.\n\nThe nodes a walk actually meets: `StartElement`, `EndElement`, `Text`, `Whitespace` (with `IgnoreWhitespace = False`, or under `xml:space=\"preserve\"`), `CDATASection` (unless `CDATASectionAsText`), `Comment`, `ProcessingInstruction` - and `Attribute` through the cursor; `XMLDeclaration` and `DocumentTypeDefinition` with `IgnoreXMLDeclaration` / `IgnoreDocumentType` = False. No entity or notation is ever reported.",
       "syntax_block": "if (Reader.NodeType = XMLNodeType.StartElement) {\n    // ...\n}",
       "parameters": "",
       "return_descr": "XMLNodeType.",
@@ -188,7 +188,7 @@
         "xml"
       ],
       "signature": "XMLReader.HasValue",
-      "description": "Whether the node CAN hold a value - read-only. True on `Attribute`, `Text`, `Whitespace`, `CDATASection`, `Comment` and `ProcessingInstruction`; False on an element's start or end and on `None`.\n\nIt speaks of the KIND of node, not of the text: an empty attribute `a=\"\"` has a value, and it is \"\".",
+      "description": "Whether the node CAN hold a value - read-only. True on `Attribute`, `Text`, `Whitespace`, `CDATASection`, `Comment`, `ProcessingInstruction`, `XMLDeclaration` and `DocumentTypeDefinition`; False on an element's start or end and on `None`.\n\nIt speaks of the KIND of node, not of the text: an empty attribute `a=\"\"` has a value, and it is \"\".",
       "syntax_block": "if (Reader.HasValue) {\n    Message(Reader.Value);\n}",
       "parameters": "",
       "return_descr": "Boolean.",
@@ -211,7 +211,7 @@
         "xml"
       ],
       "signature": "XMLReader.HasName",
-      "description": "Whether the node HAS a name - read-only. True on `StartElement`, `EndElement`, `ProcessingInstruction` and `Attribute`; False on text, CDATA, whitespace, a comment and `None`.",
+      "description": "Whether the node HAS a name - read-only. True on `StartElement`, `EndElement`, `ProcessingInstruction`, `Attribute`, `XMLDeclaration` and `DocumentTypeDefinition`; False on text, CDATA, whitespace, a comment and `None`.",
       "syntax_block": "if (Reader.HasName) {\n    Message(Reader.Name);\n}",
       "parameters": "",
       "return_descr": "Boolean.",
@@ -372,7 +372,7 @@
         "xml"
       ],
       "signature": "XMLReader.IgnoreWhitespace",
-      "description": "Whether text that is nothing but whitespace is DROPPED - read and write, True by default.\n\nTrue: the line breaks and indents between elements of a document laid out for a person are never seen, and a walk goes from element to element. False: they are handed over as `Whitespace` nodes - what a copy that must keep the layout, or a value made of spaces, needs.\n\nOnly WHOLLY-whitespace text is concerned: `<b>x y</b>` keeps its space either way, and so does the whitespace inside a text that holds anything else. A CDATA section is never whitespace. The setting can be changed at any time and applies from the next `Read()` on.",
+      "description": "Whether text that is nothing but whitespace is DROPPED - read and write, True by default.\n\nTrue: the line breaks and indents between elements of a document laid out for a person are never seen, and a walk goes from element to element. False: they are handed over as `Whitespace` nodes - what a copy that must keep the layout, or a value made of spaces, needs.\n\nOnly WHOLLY-whitespace text is concerned: `<b>x y</b>` keeps its space either way, and so does the whitespace inside a text that holds anything else. A CDATA section is never whitespace. And under `xml:space=\"preserve\"` the document says its whitespace matters: there it is handed over even while this is True. The setting can be changed at any time and applies from the next `Read()` on.",
       "syntax_block": "Reader.IgnoreWhitespace = False;",
       "parameters": "",
       "return_descr": "Boolean.",
@@ -497,6 +497,169 @@
         "cls.XMLNamespaceContext",
         "cls.XMLReader.NamespaceURI",
         "cls.XMLReader.Depth"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Language",
+      "name_local": "Language",
+      "name_en": "Language",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Language",
+      "description": "What `xml:lang` SAYS AT THE NODE - read-only, a string. An element's own `xml:lang` counts for the element, for everything inside it and for its `EndElement`; past that end, what is said outside it. On the attribute cursor it is the element's. \"\" where no language is said - and where the document says `xml:lang=\"\"`, which is how a document takes a language back.\n\nThe value is the document's word, as written (`uk`, `en-GB`): it is not checked against a list of languages.",
+      "syntax_block": "Lang = Reader.Language;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<doc xml:lang=\"\"de\"\"><p>Hallo</p><p xml:lang=\"\"en\"\">Hello</p></doc>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Text) {\n        Message(Reader.Language + \": \" + Reader.Value);   // de: Hallo, then en: Hello\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.Space",
+        "cls.XMLReader.NamespaceContext"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Space",
+      "name_local": "Space",
+      "name_en": "Space",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Space",
+      "description": "What `xml:space` SAYS AT THE NODE - read-only, an `XMLSpace` member, by the same rule as `Language`: an element's own attribute counts for it, for what is inside it and for its end. `XMLSpace.Preserve` under `xml:space=\"preserve\"`; `XMLSpace.Default` under `xml:space=\"default\"` and where nothing is said. A value `xml:space` does not have says nothing: what is said outside goes on.\n\nUnder `Preserve` the reader KEEPS whitespace even while `IgnoreWhitespace` is True - the document says it matters there.",
+      "syntax_block": "if (Reader.Space = XMLSpace.Preserve) {\n    // whitespace here is the document's\n}",
+      "parameters": "",
+      "return_descr": "XMLSpace.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a><pre xml:space=\"\"preserve\"\">  </pre></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Whitespace) {\n        Message(Reader.Space = XMLSpace.Preserve);   // True: kept, though IgnoreWhitespace is True\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLSpace",
+        "cls.XMLReader.IgnoreWhitespace",
+        "cls.XMLReader.Language"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IgnoreXMLDeclaration",
+      "name_local": "IgnoreXMLDeclaration",
+      "name_en": "IgnoreXMLDeclaration",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IgnoreXMLDeclaration",
+      "description": "Whether the XML declaration is PASSED BY - read and write, True by default. False: `<?xml ...?>` is the first node, `XMLNodeType.XMLDeclaration`: `Name` is `xml`; its parts are its attributes (`version`, and `encoding` and `standalone` when the declaration has them); `Value` is those parts in the form `version=\"1.0\" encoding=\"UTF-8\"`, each in double quotes whatever quotes the document used.\n\n`XMLVersion`, `XMLEncoding` and `Standalone` read the declaration either way. It can be changed at any time and applies from the next `Read()` on.",
+      "syntax_block": "Reader.IgnoreXMLDeclaration = False;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreXMLDeclaration = False;\nReader.SetString(\"<?xml version=\"\"1.0\"\" standalone=\"\"yes\"\"?><a/>\");\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.XMLDeclaration);   // True\nMessage(Reader.GetAttribute(\"standalone\"));             // yes",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType.XMLDeclaration",
+        "cls.XMLReader.XMLVersion",
+        "cls.XMLWriter.WriteCurrent"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IgnoreDocumentType",
+      "name_local": "IgnoreDocumentType",
+      "name_en": "IgnoreDocumentType",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IgnoreDocumentType",
+      "description": "Whether the document type is PASSED BY - read and write, True by default. False: `<!DOCTYPE ...>` is a node, `XMLNodeType.DocumentTypeDefinition`: `Name` is the root element's name it gives; `PUBLIC` and `SYSTEM` are its attributes when it has those identifiers; `Value` is the internal subset - what stands between `[` and `]` - AS WRITTEN, its comments and instructions included, \"\" when there is none.\n\nThe entities declared in the subset are expanded where they are used either way. ⚠ A document type with a SYSTEM identifier is read only in a document that says `standalone=\"yes\"`: otherwise the document depends on declarations outside itself, and is refused. Set it BEFORE THE FIRST `Read()` of a reading: the internal subset is gathered only when it is asked for. Changed after that it is refused - `XMLReader: IgnoreDocumentType is set before the first Read - the reading has begun`; `Close()`, `OpenFile` or `SetString` begin a new reading.",
+      "syntax_block": "Reader.IgnoreDocumentType = False;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreDocumentType = False;\nReader.SetString(\"<!DOCTYPE a [<!ENTITY e \"\"x\"\">]><a>&e;</a>\");\nReader.Read();\nMessage(Reader.Name);    // a\nMessage(Reader.Value);   // <!ENTITY e \"x\">",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType.DocumentTypeDefinition",
+        "cls.XMLWriter.WriteDocumentType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IgnoreComments",
+      "name_local": "IgnoreComments",
+      "name_en": "IgnoreComments",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IgnoreComments",
+      "description": "Whether comments are PASSED BY - read and write, False by default. True: a walk never stands on an `XMLNodeType.Comment`. It can be changed at any time and applies from the next `Read()` on. A comment inside the document type is part of its internal subset, not a node, either way.",
+      "syntax_block": "Reader.IgnoreComments = True;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreComments = True;\nReader.SetString(\"<a><!-- note -->t</a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.Value);   // t",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.IgnoreProcessingInstructions",
+        "enum.XMLNodeType.Comment"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IgnoreProcessingInstructions",
+      "name_local": "IgnoreProcessingInstructions",
+      "name_en": "IgnoreProcessingInstructions",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IgnoreProcessingInstructions",
+      "description": "Whether processing instructions (`<?target data?>`) are PASSED BY - read and write, False by default. True: a walk never stands on an `XMLNodeType.ProcessingInstruction`. The XML declaration is not an instruction: `IgnoreXMLDeclaration` says what happens to it. It can be changed at any time and applies from the next `Read()` on.",
+      "syntax_block": "Reader.IgnoreProcessingInstructions = True;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreProcessingInstructions = True;\nReader.SetString(\"<a><?app data?>t</a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.Value);   // t",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.IgnoreComments",
+        "enum.XMLNodeType.ProcessingInstruction"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.CDATASectionAsText",
+      "name_local": "CDATASectionAsText",
+      "name_en": "CDATASectionAsText",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.CDATASectionAsText",
+      "description": "Whether a CDATA section is READ AS TEXT - read and write, False by default. True: a section is joined with the text around it into ONE `Text` node - `x<![CDATA[<y>]]>z` is one node whose `Value` is `x<y>z`, so `Read(); Value` reads all of it - and what a section holds never makes the node `Whitespace`; an empty section is nothing at all. False: a section is a `CDATASection` node of its own.\n\nSet it BEFORE THE FIRST `Read()` of a reading - the parser joins the text as it reads. Changed after that it is refused: `XMLReader: CDATASectionAsText is set before the first Read - the reading has begun`. `Close()`, `OpenFile` or `SetString` begin a new reading, and it can be set again.",
+      "syntax_block": "Reader.CDATASectionAsText = True;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.CDATASectionAsText = True;\nReader.SetString(\"<a>x<![CDATA[<y>]]>z</a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.Value);   // x<y>z",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType.CDATASection",
+        "cls.XMLReader.IgnoreWhitespace"
       ],
       "reviewed": false
     },
@@ -946,7 +1109,7 @@
         "xml"
       ],
       "signature": "XMLWriter.Indent",
-      "description": "Whether the text is LAID OUT for a person - read and write, True by default.\n\nTrue: a line break before every element, comment, instruction and CDATA section, and one tab per open level; the end of an element that holds elements stands on a line of its own. NOT inside an element that holds text - `<b>t</b>`, `<m>x<i/>y</m>` stay on one line - because there the line and the tabs would become part of the text. Nothing is put before the very first thing written.\n\nFalse: everything on one line, with no whitespace that was not written.\n\nIt can be changed at any time and applies to what is written from then on.",
+      "description": "Whether the text is LAID OUT for a person - read and write, True by default.\n\nTrue: a line break before every element, comment, instruction and CDATA section, and one `IndentString` (a tab) per open level - `IndentAttributes` puts each attribute on a line too; the end of an element that holds elements stands on a line of its own. NOT inside an element that holds text - `<b>t</b>`, `<m>x<i/>y</m>` stay on one line - because there the line and the tabs would become part of the text. Nor inside an element written with `xml:space=\"preserve\"`: there the whitespace is the document's, and a copy of such a document reads back the same; `xml:space=\"default\"` further in lets the layout back. Nothing is put before the very first thing written.\n\nFalse: everything on one line, with no whitespace that was not written.\n\nIt can be changed at any time and applies to what is written from then on.",
       "syntax_block": "Writer.Indent = False;",
       "parameters": "",
       "return_descr": "Boolean.",
@@ -979,6 +1142,52 @@
         "cls.XMLNamespaceContext",
         "cls.XMLWriter.LookupPrefix",
         "cls.XMLWriter.WriteNamespaceMapping"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.IndentAttributes",
+      "name_local": "IndentAttributes",
+      "name_en": "IndentAttributes",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLWriter.IndentAttributes",
+      "description": "Whether each attribute stands ON A LINE OF ITS OWN - read and write, False by default. True, and while `Indent` is True: every attribute, a namespace declaration too, begins a new line one level deeper than its element. Inside a tag a line break is only space between attributes - a reader reads the same element. With `Indent = False` it changes nothing. An element that stands in the middle of a line - inside text, or under `xml:space=\"preserve\"` - keeps its attributes on that line.\n\nIt can be changed at any time and applies to what is written from then on.",
+      "syntax_block": "Writer.IndentAttributes = True;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Writer = New XMLWriter();\nWriter.IndentAttributes = True;\nWriter.SetString();\nWriter.WriteStartElement(\"item\");\nWriter.WriteAttribute(\"code\", \"42\");\nWriter.WriteAttribute(\"name\", \"Tea\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <item\n// \tcode=\"42\"\n// \tname=\"Tea\"/>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.Indent",
+        "cls.XMLWriter.IndentString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.IndentString",
+      "name_local": "IndentString",
+      "name_en": "IndentString",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLWriter.IndentString",
+      "description": "ONE LEVEL of indentation - read and write, a tab by default. `Indent` puts it once per open level at the start of a line. Spaces and tabs only, \"\" too (lines with no indentation): anything else would become text between the elements, and is refused - `XMLWriter: an indentation is spaces and tabs - '-' would be text between the elements`; a value that is not a string is refused too. A refused value leaves the one in force.\n\nIt can be changed at any time and applies to what is written from then on.",
+      "syntax_block": "Writer.IndentString = \"  \";",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Writer = New XMLWriter();\nWriter.IndentString = \"  \";\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteStartElement(\"b\");\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <a>\n//   <b/>\n// </a>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.Indent",
+        "cls.XMLWriter.IndentAttributes"
       ],
       "reviewed": false
     },
@@ -1073,6 +1282,30 @@
       "see_also": [
         "cls.XMLWriter.OpenFile",
         "cls.XMLWriter.SetString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteDocumentType",
+      "name_local": "WriteDocumentType",
+      "name_en": "WriteDocumentType",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteDocumentType(name : string, publicId : string, systemId : string, internalSubset : string)",
+      "description": "Writes THE DOCUMENT TYPE - `<!DOCTYPE name PUBLIC \"publicId\" \"systemId\" [internalSubset]>`, the parts that are \"\" or not given left out: `<!DOCTYPE a>`, `<!DOCTYPE a SYSTEM \"a.dtd\">`, `<!DOCTYPE a [<!ENTITY e \"x\">]>`. ONCE, and BEFORE THE FIRST ELEMENT - after the declaration, a comment or an instruction is fine.\n\nRefused: a second one (`XMLWriter: a document has one document type, and it is written already`); one after an element (`XMLWriter: the document type comes before the first element`); a public identifier without a system one (`XMLWriter: a public identifier is written with a system one`); a character a public identifier cannot hold - letters, digits, space, line breaks and `-'()+,./:=?;!*#@$_%` only (`XMLWriter: the character U+0022 is not allowed in a public identifier`); a system identifier with both kinds of quotes (`XMLWriter: a system identifier cannot hold both kinds of quotes` - it is put in the kind it does not hold). A refused write changes nothing.\n\n⚠ THE INTERNAL SUBSET GOES AS IT IS, like `WriteRaw`: its characters are checked, its markup is not - a `]>` inside it ends the document type there and breaks the document.\n\n⚠ A SYSTEM IDENTIFIER makes a document `XMLReader` refuses: it reads such a document type only in a document that says `standalone=\"yes\"`, and `WriteXMLDeclaration` does not say it (a copy made with `WriteCurrent` keeps the `standalone` it read).",
+      "syntax_block": "Writer.WriteDocumentType(Name, PublicId, SystemId, InternalSubset);",
+      "parameters": "name - the root element's name.\npublicId - optional: the public identifier; needs a system one.\nsystemId - optional: the system identifier.\ninternalSubset - optional: the declarations between `[` and `]`, as they are.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteXMLDeclaration();\nWriter.WriteDocumentType(\"note\", \"\", \"\", \"<!ENTITY org \"\"OES\"\">\");\nWriter.WriteStartElement(\"note\");\nWriter.WriteRaw(\"&org;\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n// <!DOCTYPE note [<!ENTITY org \"OES\">]>\n// <note>&org;</note>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.IgnoreDocumentType",
+        "cls.XMLWriter.WriteXMLDeclaration",
+        "cls.XMLWriter.WriteRaw"
       ],
       "reviewed": false
     },
@@ -1343,7 +1576,7 @@
         "xml"
       ],
       "signature": "WriteCurrent(reader : XMLReader)",
-      "description": "Writes the node an `XMLReader` STANDS ON - that node only, not what is inside it: an element's start with its attributes (its namespace declarations among them), an end, a text, a CDATA section, a comment, an instruction; on the attribute cursor, that attribute - an `xmlns` or `xmlns:p` one written as the declaration it is. An element's start is ONE write, with all its attributes: an attribute refused, the element is not begun either. So a loop over a reader COPIES a document, and a loop that skips a node, or writes something else in its place, transforms it on the way.\n\n`<a/>` stays `<a/>`: the start is written closed, and its end, read next, writes nothing. Before the first `Read()` and at the end there is nothing to write. Keep the whitespace with `IgnoreWhitespace = False` and `Indent = False` for a copy that is the same text.\n\nAnything but a reader is refused: `XMLWriter: WriteCurrent writes what an XMLReader stands on - not a value of the type 'String'`.",
+      "description": "Writes the node an `XMLReader` STANDS ON - that node only, not what is inside it: an element's start with its attributes (its namespace declarations among them), an end, a text, a CDATA section, a comment, an instruction; the XML declaration (this writer's own - the encoding it writes in) and the document type with its internal subset; on the attribute cursor, that attribute - an `xmlns` or `xmlns:p` one written as the declaration it is. An element's start is ONE write, with all its attributes: an attribute refused, the element is not begun either. So a loop over a reader COPIES a document, and a loop that skips a node, or writes something else in its place, transforms it on the way.\n\n`<a/>` stays `<a/>`: the start is written closed, and its end, read next, writes nothing. Before the first `Read()` and at the end there is nothing to write. Keep the whitespace with `IgnoreWhitespace = False` and `Indent = False` for a copy that is the same text.\n\nThe XML declaration is written as this writer's - in the encoding it writes - with the `standalone` the read one had, so a document type with a system identifier stays readable; with `IgnoreXMLDeclaration = False` the copy loop writes the declaration itself, and a `WriteXMLDeclaration()` before it would be refused. On the attribute cursor of a declaration or a document type it is refused: `XMLWriter: WriteCurrent writes an element's attribute - 'version' is a part of the XML declaration`.\n\nAnything but a reader is refused: `XMLWriter: WriteCurrent writes what an XMLReader stands on - not a value of the type 'String'`.",
       "syntax_block": "Writer.WriteCurrent(Reader);",
       "parameters": "reader - the XMLReader whose current node is written.",
       "return_descr": "",
@@ -1580,7 +1813,7 @@
         "xml"
       ],
       "signature": "XMLNodeType.<Member>",
-      "description": "WHAT AN XMLReader STANDS ON - `NodeType` answers with one of these, and `MoveToContent` too. The list has all fifteen kinds, in a fixed order, so that code written against the whole list compiles: `None, StartElement, EndElement, Text, Whitespace, CDATASection, Comment, ProcessingInstruction, XMLDeclaration, DocumentTypeDefinition, Attribute, EntityReference, Entity, EndEntity, Notation`.\n\nWHAT A WALK ACTUALLY MEETS is fewer: `StartElement`, `EndElement`, `Text`, `CDATASection`, `Comment`, `ProcessingInstruction`, `Whitespace` with `IgnoreWhitespace = False`, `Attribute` on the attribute cursor, and `None` where the reader stands on nothing. The XML declaration and the document type are not nodes here, and no entity or notation is ever reported - entities arrive already replaced.\n\nA member is written `XMLNodeType.<Name>` and compared with `=` and `<>`.",
+      "description": "WHAT AN XMLReader STANDS ON - `NodeType` answers with one of these, and `MoveToContent` too. The list has all fifteen kinds, in a fixed order, so that code written against the whole list compiles: `None, StartElement, EndElement, Text, Whitespace, CDATASection, Comment, ProcessingInstruction, XMLDeclaration, DocumentTypeDefinition, Attribute, EntityReference, Entity, EndEntity, Notation`.\n\nWHAT A WALK ACTUALLY MEETS is fewer: `StartElement`, `EndElement`, `Text`, `CDATASection`, `Comment`, `ProcessingInstruction`, `Whitespace` with `IgnoreWhitespace = False` or under `xml:space=\"preserve\"`, `Attribute` on the attribute cursor, `XMLDeclaration` and `DocumentTypeDefinition` when the reader is told not to pass them by, and `None` where the reader stands on nothing. No entity or notation is ever reported - entities arrive already replaced.\n\nA member is written `XMLNodeType.<Name>` and compared with `=` and `<>`.",
       "syntax_block": "if (Reader.NodeType = XMLNodeType.StartElement) {\n    // ...\n}",
       "syntax_block_ves": "If Reader.NodeType = XMLNodeType.StartElement Then\n    // ...\nEndif;",
       "parameters": "",
@@ -1720,7 +1953,7 @@
         "xml"
       ],
       "signature": "XMLNodeType.CDATASection",
-      "description": "A CDATA SECTION - `<![CDATA[...]]>` - its text in `Value`, unescaped. A node of its OWN: never merged into the text before or after it, and never a `Whitespace` node. `IsCharacters` is True on it as on text.",
+      "description": "A CDATA SECTION - `<![CDATA[...]]>` - its text in `Value`, unescaped. A node of its OWN: never merged into the text before or after it, and never a `Whitespace` node - unless `CDATASectionAsText` is True, when it is part of a `Text` node instead. `IsCharacters` is True on it as on text.",
       "syntax_block": "if (Reader.NodeType = XMLNodeType.CDATASection) {\n    Html = Reader.Value;\n}",
       "parameters": "",
       "return_descr": "",
@@ -1789,11 +2022,11 @@
         "xml"
       ],
       "signature": "XMLNodeType.XMLDeclaration",
-      "description": "THE XML DECLARATION - which is NOT a node here: `<?xml version=\"1.0\" encoding=\"...\"?>` is read with the start of the document, and `XMLVersion`, `XMLEncoding` and `Standalone` report it. THE READER NEVER PRODUCES IT: the member is in the list so that code written against the whole list compiles; a comparison with it is simply never true here.",
-      "syntax_block": "Encoding = Reader.XMLEncoding;   // not a node",
+      "description": "THE XML DECLARATION - `<?xml version=\"1.0\" encoding=\"...\"?>`, a node only with `IgnoreXMLDeclaration = False`: the first node, `Name` `xml`, its parts as the attributes `version`, `encoding`, `standalone` (those it has), `Value` the parts as `version=\"1.0\" encoding=\"UTF-8\"`. `XMLVersion`, `XMLEncoding` and `Standalone` read it either way. `XMLWriter.WriteCurrent` writes the WRITER'S declaration for it - the encoding it writes in.",
+      "syntax_block": "// <?xml ...?> is a node when the reader is told not to pass it by",
       "parameters": "",
       "return_descr": "",
-      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.XMLDeclaration) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - never met here",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreXMLDeclaration = False;\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><a/>\");\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.XMLDeclaration);   // True\nMessage(Reader.GetAttribute(\"version\"));                // 1.0",
       "availability": "Thin client, Server",
       "see_also": [
         "enum.XMLNodeType",
@@ -1812,11 +2045,11 @@
         "xml"
       ],
       "signature": "XMLNodeType.DocumentTypeDefinition",
-      "description": "THE DOCUMENT TYPE - `<!DOCTYPE ...>`, which is not handed over as a node: its internal entities are applied, an external one is refused. THE READER NEVER PRODUCES IT: the member is in the list so that code written against the whole list compiles; a comparison with it is simply never true here.",
-      "syntax_block": "// <!DOCTYPE ...> is not a node here",
+      "description": "THE DOCUMENT TYPE - `<!DOCTYPE ...>`, a node only with `IgnoreDocumentType = False`: `Name` the root element's name it gives, `PUBLIC` and `SYSTEM` as attributes when it has them, `Value` the internal subset as written. Its internal entities are applied either way; an external one is refused. `XMLWriter.WriteCurrent` writes it back with `WriteDocumentType`.",
+      "syntax_block": "// <!DOCTYPE ...> is a node when the reader is told not to pass it by",
       "parameters": "",
       "return_descr": "",
-      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.DocumentTypeDefinition) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - never met here",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreDocumentType = False;\nReader.SetString(\"<!DOCTYPE a [<!ENTITY e \"\"x\"\">]><a>&e;</a>\");\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.DocumentTypeDefinition);   // True\nMessage(Reader.Value);                                           // <!ENTITY e \"x\">",
       "availability": "Thin client, Server",
       "see_also": [
         "enum.XMLNodeType",
@@ -1936,6 +2169,76 @@
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLSpace",
+      "name_local": "XMLSpace",
+      "name_en": "XMLSpace",
+      "kind": "enum_type",
+      "class_id": 409836384529251395,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLSpace.<Member>",
+      "description": "WHAT `xml:space` SAYS where an `XMLReader` stands - `Space` answers with one of the two: `Default`, `Preserve`. A member is written `XMLSpace.<Name>` and compared with `=` and `<>`.",
+      "syntax_block": "if (Reader.Space = XMLSpace.Preserve) {\n    // ...\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a xml:space=\"\"preserve\"\"/>\");\nReader.Read();\nMessage(Reader.Space = XMLSpace.Preserve);   // True",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.Space",
+        "cls.XMLReader.IgnoreWhitespace"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLSpace.Default",
+      "name_local": "Default",
+      "name_en": "Default",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLSpace.Default",
+      "description": "WHITESPACE IS THE READER'S TO DROP - under `xml:space=\"default\"`, and where the document says nothing: `IgnoreWhitespace` decides.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a/>\");\nReader.Read();\nMessage(Reader.Space = XMLSpace.Default);   // True: nothing is said",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLSpace",
+        "cls.XMLReader.Space"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLSpace.Preserve",
+      "name_local": "Preserve",
+      "name_en": "Preserve",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLSpace.Preserve",
+      "description": "WHITESPACE IS THE DOCUMENT'S - under `xml:space=\"preserve\"`. The reader hands it over as `Whitespace` nodes even while `IgnoreWhitespace` is True.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a xml:space=\"\"preserve\"\"> </a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.Whitespace);   // True",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLSpace",
+        "cls.XMLReader.Space"
       ],
       "reviewed": false
     }
