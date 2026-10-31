@@ -33,14 +33,14 @@ bool ibPropertyBoolean::ReadNodeValue(const ibDataValue& value)
 	// path existed; the exception jumped over it (found 2026-09-01, sweeping every tool).
 	if (value.Kind() == ibDataKind::String) {
 
-		const wxString word = value.AsString();
+		const ibString word = value.AsString();
 
-		if (word.IsSameAs(wxT("true"), false) || word.IsSameAs(wxT("1"))) {
+		if (word.IsSameAs(ibT("true"), false) || word.IsSameAs(ibT("1"))) {
 			ibPropertyBoolean::SetValue(true);
 			return true;
 		}
 
-		if (word.IsSameAs(wxT("false"), false) || word.IsSameAs(wxT("0"))) {
+		if (word.IsSameAs(ibT("false"), false) || word.IsSameAs(ibT("0"))) {
 			ibPropertyBoolean::SetValue(false);
 			return true;
 		}

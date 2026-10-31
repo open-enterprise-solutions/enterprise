@@ -36,7 +36,7 @@ public:
 //---------------------------------------------------------------------------
 class ibPluginScriptImpl : public ibPluginScript {
 public:
-	std::vector<ibDiagnostic> Check(const wxString& text, const wxString& moduleName) const override
+	std::vector<ibDiagnostic> Check(const ibString& text, const ibString& moduleName) const override
 	{
 		// A WINDOW, NOT THE MECHANISM. The body used to live here, which made
 		// this boundary the owner of the compile-and-report door; it has a
@@ -56,7 +56,7 @@ public:
 		return activeMetaData != nullptr && activeMetaData->IsConfigOpen();
 	}
 
-	std::vector<wxString> List(const wxString& kind) const override
+	std::vector<ibString> List(const ibString& kind) const override
 	{
 		// The plugin has no configuration of its own to name, so the window
 		// answers about the active one — see metaCollection/metaIntrospect.h for
@@ -64,7 +64,7 @@ public:
 		return ibListMetaObjectNames(activeMetaData, kind);
 	}
 
-	wxString Describe(const wxString& kind, const wxString& name) const override
+	ibString Describe(const ibString& kind, const ibString& name) const override
 	{
 		return ibDescribeMetaObject(activeMetaData, kind, name);
 	}
@@ -86,11 +86,15 @@ const void* HostQuery(const ibPluginHost* /*self*/, const char* capability, int 
 	// VERSION IS CHECKED PER CAPABILITY, not globally: the point of naming them
 	// is that "metadata" can reach v2 while "diagnostics" stays v1, and a plugin
 	// that only ever asked for the second keeps working untouched.
-	if (std::strcmp(capability, ibCapabilityDiagnostics) == 0 && version == 1)
+	//
+	// All three are v2 since 2026-10-27: their texts are ibString, not wxString (the diagnostic's fields and
+	// every argument and result). A v1 plugin read a wxString where the host wrote an ibString, and corrupted
+	// the host's memory instead of being told NULL.
+	if (std::strcmp(capability, ibCapabilityDiagnostics) == 0 && version == 2)
 		return static_cast<const ibPluginDiagnostics*>(&s_diagnostics);
-	if (std::strcmp(capability, ibCapabilityScript) == 0 && version == 1)
+	if (std::strcmp(capability, ibCapabilityScript) == 0 && version == 2)
 		return static_cast<const ibPluginScript*>(&s_script);
-	if (std::strcmp(capability, ibCapabilityMetadata) == 0 && version == 1)
+	if (std::strcmp(capability, ibCapabilityMetadata) == 0 && version == 2)
 		return static_cast<const ibPluginMetadata*>(&s_metadata);
 
 	// Unknown name or wrong version — NULL, and the plugin decides what that

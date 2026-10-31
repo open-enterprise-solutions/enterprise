@@ -1,5 +1,7 @@
 #include "roleHelper.h"
 
+#include "backend/session/session.h"   // whether this session has a user at all
+
 #define roleBlock 0x200000
 
 ////////////////////////////////////////////////////////////////////////
@@ -16,7 +18,7 @@ void ibRole::InitRole(ibAccessObject* obj, const bool& value)
 
 ibAccessObject::~ibAccessObject()
 {
-	for (auto& role : m_roles) { wxDELETE(role.second); }
+	for (auto& role : m_roles) { delete role.second; }
 	m_roles.clear();
 }
 
@@ -29,6 +31,12 @@ bool ibAccessObject::AccessRight(const ibRole* role, const ibRoleUserInfo& roleI
 {
 	if (role == nullptr || !DoAccessRight(role))
 		return false;
+
+	// A BASE WITH NO USERS IS OPEN ACCESS (ibApplicationInstance::AuthenticateUser): a session in it has nobody to keep
+	// out, so a right closed by default is open there too. A session in a base with users always has its user.
+	const ibSession* const session = ibSession::Current();
+	if (!roleInfo.IsSetRole() && session != nullptr && !session->GetUserInfo().IsOk())
+		return true;
 
 	// UNSET is not the same as DENIED, and the answer for it is not hard-wired here: every right
 	// DECLARES its own default where it is created (CreateRole(name, label, defValue) — allowed
@@ -47,7 +55,7 @@ bool ibAccessObject::AccessRight(const ibRole* role, const ibRoleUserInfo& roleI
 		if (iterator_role == m_valRoles.end())
 			return false;
 		const auto iterator = std::find_if(iterator_role->second.begin(), iterator_role->second.end(),
-			[role](const auto& pair) { return stringUtils::CompareString(role->GetName(), pair.first); });
+			[role](const auto& pair) { return stringUtils::IsSameAs(role->GetName(), pair.first); });
 		if (iterator == iterator_role->second.end())
 			return false;
 		stated = true;
@@ -97,10 +105,10 @@ bool ibAccessObject::SetRight(const ibRole* role, const ibRoleID& id, const bool
 	return true;
 }
 
-ibRole* ibAccessObject::GetRole(const wxString& nameParam) const
+ibRole* ibAccessObject::GetRole(const ibString& nameParam) const
 {
 	auto iterator = std::find_if(m_roles.begin(), m_roles.end(),
-		[nameParam](const std::pair<wxString, ibRole*>& pair) { return stringUtils::CompareString(nameParam, pair.first); });
+		[nameParam](const std::pair<ibString, ibRole*>& pair) { return stringUtils::IsSameAs(nameParam, pair.first); });
 
 	if (iterator != m_roles.end())
 		return &(*iterator->second);
@@ -127,7 +135,7 @@ ibRole* ibAccessObject::GetRole(unsigned int idx) const
 
 bool ibAccessObject::LoadRole(ibReaderMemory& dataReader)
 {
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	if (dataReader.r_chunk(roleBlock, buf)) {
 		std::shared_ptr<ibReaderMemory> dataRoleReader(new ibReaderMemory(buf));
 		unsigned int countRole = dataRoleReader->r_u32(); m_valRoles.clear();
@@ -135,7 +143,7 @@ bool ibAccessObject::LoadRole(ibReaderMemory& dataReader)
 			unsigned int countData = dataRoleReader->r_u32();
 			ibRoleID id = dataRoleReader->r_s32();
 			for (unsigned int idc = 0; idc < countData; idc++) {
-				wxString roleName = dataRoleReader->r_stringZ();
+				ibString roleName = dataRoleReader->r_stringZ();
 				bool roleValue = dataRoleReader->r_u8();
 				m_valRoles[id].insert_or_assign(roleName, roleValue);
 			}

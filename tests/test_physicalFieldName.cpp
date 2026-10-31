@@ -9,7 +9,7 @@
 // ids an int reads as negative.
 //
 // A metaID is an UNSIGNED 32-bit number: an int that reads negative is the upper
-// half of that range and is spelled as the u32 it is — there is no minus in a
+// half of that range and is spelled as the std::uint32_t it is — there is no minus in a
 // field name (Max, 2026-09-12: "-23456 -> fld + u32"). Pure.
 // =============================================================================
 
@@ -31,7 +31,7 @@ TEST(PhysicalFieldName, TheTopOfTheIntRangeFits) {
     EXPECT_EQ(ibPhysicalFieldName(2147483647), wxT("fld2147483647"));
 }
 
-// Read as negative, spelled as the u32 it is: ten digits at most, and never a sign.
+// Read as negative, spelled as the std::uint32_t it is: ten digits at most, and never a sign.
 TEST(PhysicalFieldName, ANegativeIntIsSpelledAsItsUnsignedValue) {
     EXPECT_EQ(ibPhysicalFieldName(-23456),          wxT("fld4294943840"));
     EXPECT_EQ(ibPhysicalFieldName(-1),              wxT("fld4294967295"));

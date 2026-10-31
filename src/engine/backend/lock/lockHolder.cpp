@@ -2,10 +2,10 @@
 
 #include <wx/utils.h>   // wxGetHostName
 
-ibSingleLockHolder::ibSingleLockHolder(const wxString& displayName,
-                                        const wxString& computer)
+ibSingleLockHolder::ibSingleLockHolder(const ibString& displayName,
+                                        const ibString& computer)
 	: m_identity(wxNewUniqueGuid)
 	, m_displayName(displayName)
-	, m_computer(computer.IsEmpty() ? wxGetHostName() : computer)
+	, m_computer(computer.IsEmpty() ? ibString(wxGetHostName()) : computer)
 {
 }

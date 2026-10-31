@@ -77,7 +77,7 @@ struct JobTenancyFix : ::testing::Test {
 		// The landlord. Held by shared_ptr because the tenant path takes a
 		// shared_from_this on whatever is Current(), and bound for the same reason
 		// a form's session is bound when it asks for a portion.
-		parent = std::make_shared<ibSession>(wxString(wxT("tenancy-parent")),
+		parent = std::make_shared<ibSession>(ibString(wxT("tenancy-parent")),
 		                                     ibSessionKind::Enterprise);
 		bound  = std::make_unique<ibSessionScope>(parent.get());
 		ready  = true;
@@ -169,7 +169,7 @@ TEST_F(JobTenancyFix, RentedRunLeavesNoRowInTheRegistry)
 
 	ibJobManager manager(ib::AppDataCtorToken{});
 
-	wxString tenantId;
+	ibString tenantId;
 	auto run = manager.StartBackground(
 		[&tenantId](ibSession* session) { tenantId = session->GetId(); return ibValue(); },
 		wxT("unlisted read"), ibJobTenancy::Tenant);
@@ -211,7 +211,7 @@ TEST_F(JobTenancyFix, RentedRunsDoNotExhaustTheConnectionPool)
 		ASSERT_NO_THROW(
 			run = manager.StartBackground(
 				[&ran](ibSession*) { ran.store(true); return ibValue(); },
-				wxString::Format(wxT("portion %d"), i), ibJobTenancy::Tenant))
+				ibString::Format(wxT("portion %d"), i), ibJobTenancy::Tenant))
 			<< "run " << i << " could not take a connection — the previous tenant "
 			   "never gave its own back";
 

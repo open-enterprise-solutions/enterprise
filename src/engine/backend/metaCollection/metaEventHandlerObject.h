@@ -40,7 +40,7 @@ constexpr ibCtorObjectMetaType g_eventSourceKinds[] = {
 class BACKEND_API ibValueMetaObjectEventHandler : public ibValueMetaObject, public ibBackendTypeConfigFactory {
 public:
 
-	ibValueMetaObjectEventHandler(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectEventHandler(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	// WHO RAISES IT — the types, a family among them.
 	const ibTypeDescription& GetSource() const { return m_propertySource->GetValueAsTypeDesc(); }
@@ -63,12 +63,12 @@ public:
 	// One event the source raises: the procedure's shape its own module is prepared with.
 	struct ibSourceEvent {
 		ibContentHelper       m_kind = ibContentHelper::eProcedureHelper;
-		std::vector<wxString> m_args;   // the event's own arguments, without Source
+		std::vector<ibString> m_args;   // the event's own arguments, without Source
 	};
 
 	// THE EVENTS THE SOURCE RAISES, by name — for several types, those every one of them raises by the same
 	// name and with as many arguments. Asked of each type's event module (ibCtorMetaValueType::GetEventModule).
-	std::map<wxString, ibSourceEvent> GetSourceEvents() const;
+	std::map<ibString, ibSourceEvent> GetSourceEvents() const;
 
 	// --- ibBackendTypeConfigFactory: the Source property's type resolves through its owner (as a
 	// command's parameter type does). The filter offers what raises events. ---
@@ -81,14 +81,14 @@ public:
 	virtual ibClassID ResolveChild(const ibClassID&) const override { return 0; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	// designer context menu — "Open handler module", as a job's module is opened.
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
 	// A new source or a new event prepares the module for the procedure that now applies.
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	//lifecycle — forward to the inner module (its own registration)
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -114,16 +114,16 @@ protected:
 
 private:
 
-	ibPropertyCategory* m_categoryHandler = ibPropertyObject::CreatePropertyCategory(wxT("Handler"), _("Event handler"));
-	ibPropertyType* m_propertySource = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryHandler, wxT("Source"), _("Source"),
+	ibPropertyCategory* m_categoryHandler = ibPropertyObject::CreatePropertyCategory(ibT("Handler"), _("Event handler"));
+	ibPropertyType* m_propertySource = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryHandler, ibT("Source"), _("Source"),
 		_("What raises the event: the objects, managers or record sets of one metaobject, or of every metaobject of a kind (DocumentObject - every document's object). Several may be named; the event is then one every one of them raises."), ibValueTypes::TYPE_EMPTY);
-	ibPropertyList* m_propertyEvent = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryHandler, wxT("Event"), _("Event"),
+	ibPropertyList* m_propertyEvent = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryHandler, ibT("Event"), _("Event"),
 		_("Which of the source's events is handled - the list is what the source raises. The handler module is prepared with its procedure, named as the event and taking Source first."), &ibValueMetaObjectEventHandler::FillEventList);
 
 	// The handler's module — a MANAGER module (registered, compiled with the session), as a job's is.
 	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyHandlerModule =
 		ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(
-			m_categoryContext, wxT("HandlerModule"), _("Handler module"), _("The handler's code: a procedure named as the event, taking Source - the value that raised it - before the event's own arguments. Called after the source's own module has handled the event, with the same arguments."));
+			m_categoryContext, ibT("HandlerModule"), _("Handler module"), _("The handler's code: a procedure named as the event, taking Source - the value that raised it - before the event's own arguments. Called after the source's own module has handled the event, with the same arguments."));
 
 	friend class ibMetaData;
 };

@@ -10,10 +10,10 @@
 #include "backend/moduleInfo.h"                  // ibRuntimeModuleDataObject::GetCompileModule
 #include "backend/moduleManager/moduleManager.h" // ibValueModuleManager — the context a snippet parents to
 #include "backend/session/session.h"             // ibSession::EditModuleManagerFor
-#include "backend/typeDescription.h"             // ibTypeDescription - a type, possibly several
+#include "core/description/typeDescription.h"             // ibTypeDescription - a type, possibly several
 #include "backend/objCtor.h"                     // ibCtorMetaValueType - one door: the metaobject AND the maker
 #include "backend/metaCollection/metaObjectComposite.h"   // where fields live: catalog, document, register, tabular section
-#include "backend/compiler/blockSyntaxLINQ.h"    // ibLinqClausesAfter - which query word may follow which
+#include "core/compiler/blockSyntaxLINQ.h"       // ibLinqClausesAfter - which query word may follow which
 
 #include <limits>   // the "no closing position" sentinel is named, not spelled as a cast
 #include <memory>
@@ -33,7 +33,7 @@ using ibCompileChain = std::vector<const ibCompileCode*>;
 // temp carries DEF_VAR_TEMP rather than a depth, and a variable reached through a block scope
 // carries it too (compileContext.cpp: `blockReturn ? DEF_VAR_TEMP : depth`), yet all three land on
 // the same cell. Reading the marker literally would make one cell look like three.
-wxLongLong_t FrameOf(const ibParamRunUnit& p)
+long long FrameOf(const ibParamRunUnit& p)
 {
 	return p.m_numArray <= 0 ? 0 : p.m_numArray;
 }
@@ -46,7 +46,7 @@ bool SameSlot(const ibParamRunUnit& a, const ibParamRunUnit& b)
 // ⭐⭐ THE TYPES A FIELD IS DECLARED WITH — the one lookup behind both the walk's widening and the
 // type printed beside each name in a listing (see ibFieldTypesOf in the header for why it is asked
 // here rather than of the value).
-bool FieldTypesOf(const ibMetaData* metaData, const ibValue& owner, const wxString& field,
+bool FieldTypesOf(const ibMetaData* metaData, const ibValue& owner, const ibString& field,
 	std::vector<ibFieldType>& outTypes)
 {
 	if (metaData == nullptr)
@@ -72,7 +72,7 @@ bool FieldTypesOf(const ibMetaData* metaData, const ibValue& owner, const wxStri
 		return false;
 
 	for (const ibValueMetaObjectAttributeBase* attribute : meta->GetGenericAttributeArrayObject()) {
-		if (attribute == nullptr || !stringUtils::CompareString(attribute->GetName(), field))
+		if (attribute == nullptr || !stringUtils::IsSameAs(attribute->GetName(), field))
 			continue;
 
 		for (const ibClassID& clsid : attribute->GetTypeValueDesc().m_listTypeClass) {
@@ -160,7 +160,7 @@ public:
 	}
 
 	// What the walk did, step by step — see StepOf.
-	const wxString& Trace() const { return m_trace; }
+	const ibString& Trace() const { return m_trace; }
 
 	// The ONE value a step wants when it wants one — the first of what the slot resolved to. Only a
 	// member access can branch, so every other step is asking a question it has no way to answer
@@ -195,7 +195,7 @@ public:
 		// that DID. Named apart because a trace that cannot tell them apart sends the next hour to
 		// the wrong place.
 		if (answered && values.empty())
-			m_trace << wxString::Format(wxT("  [(%d,%d) answered with nothing]"),
+			m_trace << ibString::Format(ibT("  [(%d,%d) answered with nothing]"),
 				(int)slot.m_numArray, (int)slot.m_numIndex);
 
 		if (!answered || values.empty())
@@ -227,9 +227,9 @@ public:
 		if (slot.m_numArray == DEF_VAR_CONST) {
 			if (slot.m_numIndex < 0 || (size_t)slot.m_numIndex >= m_byteCode.m_listConst.size())
 				return false;
-			out.emplace_back();
-			out.back().m_value = m_byteCode.m_listConst[(size_t)slot.m_numIndex];
-			out.back().m_origin = ibNameOrigin::Declared;   // written in this text, right here
+			auto& made = out.emplace_back();
+			made.m_value = m_byteCode.m_listConst[(size_t)slot.m_numIndex];
+			made.m_origin = ibNameOrigin::Declared;   // written in this text, right here
 			return true;
 		}
 
@@ -278,8 +278,8 @@ public:
 						// the bytecode entry this value names.
 						out.emplace_back(new ibValueFunction(&m_byteCode, funcIdx),
 							ibNameOrigin::Declared);
-						m_trace << wxString::Format(wxT("\n  %*sop %3d at %-5u -> lambda #%ld"),
-							depth * 2, wxT(""), (int)oper, code.m_numString, funcIdx);
+						m_trace << ibString::Format(ibT("\n  %*sop %3d at %-5u -> lambda #%ld"),
+							depth * 2, ibT(""), (int)oper, code.m_numString, funcIdx);
 						return true;
 					}
 				}
@@ -397,8 +397,8 @@ public:
 			&& ElementOfLambdaSource(out, depth))
 			return true;
 
-		out.emplace_back();
-		if (!BoundValue(NameOfSlot(slot), out.back().m_value, &out.back().m_origin)) {
+		auto& made = out.emplace_back();
+		if (!BoundValue(NameOfSlot(slot), made.m_value, &made.m_origin)) {
 			out.pop_back();
 			return false;
 		}
@@ -442,8 +442,8 @@ private:
 		const short oper = code.m_numOper % TYPE_DELTA1;
 
 		if (oper != OPER_GET_A && oper != OPER_GET_SCOPE) {
-			out.emplace_back();
-			const ibStep step = StepOf(code, ip, out.back().m_value, depth, &out.back().m_origin);
+			auto& made = out.emplace_back();
+			const ibStep step = StepOf(code, ip, made.m_value, depth, &made.m_origin);
 			if (step != ibStep::Value)
 				out.pop_back();
 			return step;
@@ -456,13 +456,13 @@ private:
 		// while it sat plainly on the tape — because the scan had started twenty places earlier.
 		std::vector<ibCaretValue> parents;
 		if (!ValuesOfSlot(code.m_param2, parents, depth + 1, ip)) {
-			m_trace << wxString::Format(wxT("  [receiver (%d,%d) did not resolve]"),
+			m_trace << ibString::Format(ibT("  [receiver (%d,%d) did not resolve]"),
 				(int)code.m_param2.m_numArray, (int)code.m_param2.m_numIndex);
 			return ibStep::Failed;
 		}
 
 		// An empty name is the caret's own dot — every branch is the answer, origin and all.
-		const wxString name = ConstName(code.m_param3.m_numIndex);
+		const ibString name = ConstName(code.m_param3.m_numIndex);
 		if (name.IsEmpty()) {
 			out = std::move(parents);
 			return ibStep::Value;
@@ -485,8 +485,8 @@ private:
 			if (declared && types.size() > 1 && Composite(types, out))
 				continue;
 
-			out.emplace_back();
-			if (!MemberOf(parent.m_value, name, out.back().m_value)) {
+			auto& made = out.emplace_back();
+			if (!MemberOf(parent.m_value, name, made.m_value)) {
 				out.pop_back();
 				continue;
 			}
@@ -494,13 +494,13 @@ private:
 			// Declared by the metadata — the object's own data. Otherwise it came off the value's
 			// own surface, and the surface holds two different kinds of thing: the platform's own
 			// members and whatever the module staged there.
-			out.back().m_origin = declared
+			made.m_origin = declared
 				? ibNameOrigin::Member
-				: OriginOfStaged(out.back().m_value);
+				: OriginOfStaged(made.m_value);
 		}
 
-		m_trace << wxString::Format(wxT("\n  %*sop %3d at %-5u `%s` -> %u of %u branch(es)"),
-			depth * 2, wxT(""), (int)oper, code.m_numString, name,
+		m_trace << ibString::Format(ibT("\n  %*sop %3d at %-5u `%s` -> %u of %u branch(es)"),
+			depth * 2, ibT(""), (int)oper, code.m_numString, name,
 			(unsigned)out.size(), (unsigned)parents.size());
 
 		return out.empty() ? ibStep::Failed : ibStep::Value;
@@ -539,9 +539,9 @@ private:
 	{
 		const ibStep step = DoStepOf(code, ip, out, depth, outOrigin);
 
-		m_trace << wxString::Format(wxT("\n  %*sop %3d at %-5u %s"),
-			depth * 2, wxT(""), (int)(code.m_numOper % TYPE_DELTA1), code.m_numString,
-			step == ibStep::Value ? wxT("-> value") : step == ibStep::Failed ? wxT("-> FAILED") : wxT("(not a step)"));
+		m_trace << ibString::Format(ibT("\n  %*sop %3d at %-5u %s"),
+			depth * 2, ibT(""), (int)(code.m_numOper % TYPE_DELTA1), code.m_numString,
+			step == ibStep::Value ? ibT("-> value") : step == ibStep::Failed ? ibT("-> FAILED") : ibT("(not a step)"));
 
 		return step;
 	}
@@ -563,7 +563,7 @@ private:
 			ibValue parent;
 			if (!ValueOfSlot(code.m_param2, parent, depth + 1, nullptr, ip)) {
 				// The receiver is the whole of an attribute step, so naming it names the failure.
-				m_trace << wxString::Format(wxT("  [receiver (%d,%d) did not resolve]"),
+				m_trace << ibString::Format(ibT("  [receiver (%d,%d) did not resolve]"),
 					(int)code.m_param2.m_numArray, (int)code.m_param2.m_numIndex);
 				return ibStep::Failed;
 			}
@@ -573,7 +573,7 @@ private:
 			// tolerant compile emits the step this way when the text ends there
 			// (compileCode.cpp, the attribute step), so the walk needs no notion of a caret: it
 			// reads what the compiler wrote down.
-			const wxString name = ConstName(code.m_param3.m_numIndex);
+			const ibString name = ConstName(code.m_param3.m_numIndex);
 			if (name.IsEmpty()) {
 				out = parent;
 				return ibStep::Value;
@@ -635,7 +635,7 @@ private:
 			// resolve" (measured 2026-09-08 — the trace said exactly that, once it was asked to).
 			std::vector<ibCaretValue> sources;
 			if (!ValuesOfSlot(code.m_param2, sources, depth + 1, ip) || sources.empty()) {
-				m_trace << wxT("  [foreach: the source slot did not resolve]");
+				m_trace << ibT("  [foreach: the source slot did not resolve]");
 				return ibStep::Failed;
 			}
 			ibValue collection = sources.front().m_value;
@@ -656,16 +656,16 @@ private:
 			// different columns that do not agree, and there is nothing single to offer).
 			const std::shared_ptr<ibValueIteratorState> state = collection.CreateIterator();
 			if (!state) {
-				m_trace << wxT("  [foreach: the source is not iterable]");
+				m_trace << ibT("  [foreach: the source is not iterable]");
 				return ibStep::Failed;
 			}
 
 			try {
 				if (state->PeekSample(out))
 					return ibStep::Value;
-				m_trace << wxT("  [foreach: the source yields no sample]");
+				m_trace << ibT("  [foreach: the source yields no sample]");
 			}
-			catch (...) { m_trace << wxT("  [foreach: asking for a sample raised]"); }
+			catch (...) { m_trace << ibT("  [foreach: asking for a sample raised]"); }
 
 			return ibStep::Failed;
 		}
@@ -690,7 +690,7 @@ private:
 			// have been missing, or found and unable to answer. Saying "found nothing" cost a round
 			// here — the trace was read as proof the instruction two places up was invisible, when
 			// it had been reached and had refused.
-			m_trace << wxString::Format(wxT("  [(%d,%d) did not resolve, searched from %ld down to %ld]"),
+			m_trace << ibString::Format(ibT("  [(%d,%d) did not resolve, searched from %ld down to %ld]"),
 				(int)code.m_param2.m_numArray, (int)code.m_param2.m_numIndex, ip, m_firstCode);
 			return ibStep::Failed;
 
@@ -700,7 +700,7 @@ private:
 		// number, which is the whole of what a reader standing after the dot needs.
 		case OPER_CONSTN: {
 			ibValue made;
-			SetTypeNumber(made, ibNumber((wxLongLong_t)code.m_param2.m_numIndex));
+			SetTypeNumber(made, ibNumber((long long)code.m_param2.m_numIndex));
 			out = made;
 			if (outOrigin != nullptr) *outOrigin = ibNameOrigin::Declared;
 			return ibStep::Value;
@@ -873,25 +873,25 @@ private:
 		}
 	}
 
-	wxString ConstName(wxLongLong_t index) const
+	ibString ConstName(long long index) const
 	{
 		if (index < 0 || (size_t)index >= m_byteCode.m_listConst.size())
-			return wxEmptyString;
+			return ibEmptyString;
 		return m_byteCode.m_listConst[(size_t)index].GetString();
 	}
 
 	// THE NAME AN UNWRITTEN SLOT WAS DECLARED UNDER, looked for where the runtime would look for
 	// the cell: the open function's own frame first, then the module's table, then each ancestor's.
 	// Only bind-required entries are considered — see the note at the call site.
-	wxString NameOfSlot(const ibParamRunUnit& slot) const
+	ibString NameOfSlot(const ibParamRunUnit& slot) const
 	{
-		const wxLongLong_t index = slot.m_numIndex;
+		const long long index = slot.m_numIndex;
 
 		auto inTable = [index](const std::vector<ibByteCode::ibByteCodeVarInfo>& table) {
 			for (const auto& var : table)
-				if (var.IsBindRequired() && (wxLongLong_t)var.m_slotIndex == index)
+				if (var.IsBindRequired() && (long long)var.m_slotIndex == index)
 					return var.m_strRealName;
-			return wxString();
+			return ibString();
 		};
 
 		// 🛑 THE OPERAND'S DEPTH IS NOT AN INDEX INTO THIS CHAIN, and it is worth writing down
@@ -904,7 +904,7 @@ private:
 		// So the name is found by SLOT across the ladder, nearest table first — the frame the caret
 		// stands in, then each module above it. It is a search, and it is honest about being one.
 		if (m_frame != nullptr) {
-			const wxString name = inTable(m_frame->m_listLocals);
+			const ibString name = inTable(m_frame->m_listLocals);
 			if (!name.IsEmpty())
 				return name;
 
@@ -920,22 +920,22 @@ private:
 			// cell zero of the module. So `NoSuchName.` and `Cancel.` both offered that object's
 			// members, which is how a name the language does not know produced a confident list.
 			if (FrameOf(slot) == 0)
-				return wxEmptyString;
+				return ibEmptyString;
 		}
 
 		for (const ibCompileCode* compile : m_chain) {
-			const wxString name = inTable(compile->m_cByteCode.m_listVar);
+			const ibString name = inTable(compile->m_cByteCode.m_listVar);
 			if (!name.IsEmpty())
 				return name;
 		}
 
-		return wxEmptyString;
+		return ibEmptyString;
 	}
 
 	// `.name` ASKED OF THE PARENT VALUE — a property when it is one, and otherwise the receiver
 	// passed through unchanged, because `res.Select()` spells as a call over a member and failing
 	// here would end the walk one step before the call that knows what to do with it.
-	static bool MemberOf(ibValue& parent, const wxString& name, ibValue& out)
+	static bool MemberOf(ibValue& parent, const ibString& name, ibValue& out)
 	{
 		if (name.IsEmpty())
 			return false;
@@ -1000,7 +1000,7 @@ private:
 	// beside it (procUnit.cpp, OPER_NEW).
 	bool NewObject(const ibByteUnit& code, ibValue& out, long callIp, int depth) const
 	{
-		const wxString className = ConstName(code.m_param2.m_numIndex);
+		const ibString className = ConstName(code.m_param2.m_numIndex);
 		if (className.IsEmpty())
 			return false;
 
@@ -1116,7 +1116,7 @@ private:
 			const ibByteCode::ibByteFunction* const callee = m_byteCode.FindFunctionByEntry(entry);
 			if (callee != nullptr && returned.m_numArray <= 0
 				&& returned.m_numIndex >= 0
-				&& returned.m_numIndex < (wxLongLong_t)callee->m_listParam.size()) {
+				&& returned.m_numIndex < (long long)callee->m_listParam.size()) {
 
 				ibValue passed;
 				if (argumentOf((long)returned.m_numIndex, passed)) {
@@ -1145,7 +1145,7 @@ private:
 	//
 	// Measured 2026-09-07: this one shape was 55 of the 96 positions still refusing in real modules —
 	// `template = GetCommonTemplate("DeliveryNote")` and everything downstream of it.
-	bool ReceiverOfContextMethod(const wxString& method, ibValue& out) const
+	bool ReceiverOfContextMethod(const ibString& method, ibValue& out) const
 	{
 		if (method.IsEmpty())
 			return false;
@@ -1153,7 +1153,7 @@ private:
 		for (const ibCompileCode* compile : m_chain)
 			for (const auto& fn : compile->m_cByteCode.m_listFunc)
 				if (fn.IsContextMethod() && !fn.m_strContext.IsEmpty()
-					&& stringUtils::CompareString(method, fn.m_strRealName))
+					&& stringUtils::IsSameAs(method, fn.m_strRealName))
 					return BoundValue(fn.m_strContext, out);
 
 		return false;
@@ -1161,7 +1161,7 @@ private:
 
 	bool CallMethod(const ibByteUnit& code, ibValue& out, int depth, long ip) const
 	{
-		const wxString method = ConstName(code.m_param3.m_numIndex);
+		const ibString method = ConstName(code.m_param3.m_numIndex);
 
 		ibValue receiver;
 		ValueOfSlot(code.m_param2, receiver, depth + 1);
@@ -1379,8 +1379,8 @@ private:
 			try {
 				if (state->PeekSample(out.back().m_value)) {
 					out.back().m_origin = ibNameOrigin::Declared;
-					m_trace << wxString::Format(wxT("\n  %*slambda row <- the source of the verb at %u"),
-						depth * 2, wxT(""), call.m_numString);
+					m_trace << ibString::Format(ibT("\n  %*slambda row <- the source of the verb at %u"),
+						depth * 2, ibT(""), call.m_numString);
 					return true;
 				}
 			}
@@ -1397,7 +1397,7 @@ private:
 	// `Filter`, a common module under its own name) against a CONTEXT handle of the module the caret
 	// stands in (`ThisObject`, `ThisForm`). Optional, because the steps that only want the value
 	// have nothing to do with the answer.
-	bool BoundValue(const wxString& name, ibValue& out, ibNameOrigin* outOrigin = nullptr) const
+	bool BoundValue(const ibString& name, ibValue& out, ibNameOrigin* outOrigin = nullptr) const
 	{
 		if (name.IsEmpty())
 			return false;
@@ -1409,7 +1409,7 @@ private:
 				out = *extern_->second;
 				if (outOrigin != nullptr)
 					*outOrigin = ibNameOrigin::Bound;
-				ibJournalInfo(wxT("complete"), wxT("  bound `%s` from the extern map"), name);
+				ibJournalInfo(ibT("complete"), ibT("  bound `%s` from the extern map"), name);
 				return true;
 			}
 
@@ -1418,7 +1418,7 @@ private:
 				out = *context->second.m_value;
 				if (outOrigin != nullptr)
 					*outOrigin = ibNameOrigin::Context;
-				ibJournalInfo(wxT("complete"), wxT("  bound `%s` from the context map, scope=%d"),
+				ibJournalInfo(ibT("complete"), ibT("  bound `%s` from the context map, scope=%d"),
 					name, (int)context->second.m_scopeContext);
 				return true;
 			}
@@ -1437,7 +1437,7 @@ private:
 	const ibMetaData*                  m_metaData = nullptr;
 
 	// See StepOf. Mutable because tracing what a walk did does not change what it IS.
-	mutable wxString                   m_trace;
+	mutable ibString                   m_trace;
 
 	// The earliest instruction this walk may look at. Zero for a caret; a function's entry when the
 	// walk has STEPPED INTO one, because that body's slots are its own frame's and reading past its
@@ -1489,14 +1489,14 @@ public:
 	// the caret is perfectly callable from above (Max, 2026-09-07). The precompiler never truncated
 	// for exactly this reason — it used the caret as a POSITION, never as an END, and gated only
 	// what genuinely depends on order.
-	ibCaretCompile(const wxString& text, unsigned int caret, const ibValueMetaObject* moduleObject,
+	ibCaretCompile(const ibString& text, unsigned int caret, const ibValueMetaObject* moduleObject,
 		bool upToCaret)
-		: m_compiler(wxT("caret"), wxT("caret"), false)
+		: m_compiler(ibT("caret"), ibT("caret"), false)
 	{
 		const unsigned int asked = caret < text.length() ? caret : (unsigned int)text.length();
 
 		m_at = asked;
-		while (m_at > 0 && (wxIsalnum(text[m_at - 1]) || text[m_at - 1] == wxT('_')))
+		while (m_at > 0 && (ibIsAlnum(text[m_at - 1]) || text[m_at - 1] == ibT('_')))
 			m_at--;
 
 		m_typed = text.Mid(m_at, asked - m_at);
@@ -1549,7 +1549,7 @@ public:
 		m_compiler.SetCaret((long)m_at);
 
 		// ⚠ NO GUARD. A tolerant compile reports nothing and keeps reading — it does not raise
-		// (compileCode.cpp, DoSetError) — so catching here would be catching nothing.
+		// (compileCode.cpp, DoRefuse) — so catching here would be catching nothing.
 		m_compiler.Compile(upToCaret ? text.Left(m_at) : text);
 	}
 
@@ -1568,7 +1568,7 @@ public:
 	// The identifier being typed — the text between where the caret's word starts and where the
 	// caret actually is. It is what a list FILTERS by, and the one name such a list must not offer:
 	// see the note where it is used.
-	const wxString& TypedWord() const { return m_typed; }
+	const ibString& TypedWord() const { return m_typed; }
 
 	const ibCompileChain& Chain() const { return m_chain; }
 	const ibByteCode& ByteCode() const { return m_compiler.m_cByteCode; }
@@ -1576,7 +1576,7 @@ public:
 	// The tokens this compile read, for the one question that is about the GRAMMAR of a position
 	// rather than about a value: which clause the caret is being typed into. Nothing is re-lexed —
 	// the stream is the one the compile just used.
-	const std::vector<ibLexem>& Lexems() const { return m_compiler.GetLexems(); }
+	const ibTranslateCode& TranslateCode() const { return m_compiler.m_translateCode; }
 
 	// ⭐ THE SAME TAPE, NOT SLICED. The question above wants the instructions, which the base type
 	// carries; the LINQ tree lives only on the compiler's own full form (byteCode.h), and a reader
@@ -1585,7 +1585,7 @@ public:
 
 	// What the compile refused, with a position on every line — enough to see roughly where the
 	// chain broke. Empty when the text compiled cleanly.
-	const wxString& Refusal() const { return m_compiler.GetRefusal(); }
+	const ibString& Refusal() const { return m_compiler.GetRefusal(); }
 
 private:
 	// ⭐⭐ THE KIND OF QUESTION, HELD FOR AS LONG AS IT IS BEING ANSWERED — and declared FIRST, so it
@@ -1601,7 +1601,7 @@ private:
 	ibCompileCode  m_compiler;
 	ibCompileChain m_chain;
 	unsigned int   m_at = 0;
-	wxString       m_typed;
+	ibString       m_typed;
 };
 
 // ⭐⭐ THE ORIGIN, READ OFF TWO FACTS THE BYTECODE ALREADY CARRIES: the entry's KIND, and WHICH
@@ -1658,7 +1658,7 @@ ibNameOrigin OriginOfFunc(ibFnKind kind, size_t depth, size_t chainSize, bool gl
 
 // The value a context binding holds, by name and nearest first — the same lookup the path walk
 // makes for the start of a chain, and for the same reason: the binding is what KNOWS.
-const ibValue* BoundValueOf(const ibCompileChain& chain, const wxString& name)
+const ibValue* BoundValueOf(const ibCompileChain& chain, const ibString& name)
 {
 	if (name.IsEmpty())
 		return nullptr;
@@ -1681,12 +1681,12 @@ const ibValue* BoundValueOf(const ibCompileChain& chain, const wxString& name)
 // A METHOD OF A CONTEXT BINDING has no declared parameters at all — it is native, and its shape
 // lives on the VALUE — so the value is asked, exactly as the members answer asks it. Building from
 // the empty list instead produced `Write(, )`, which is worse than saying nothing.
-wxString SignatureOf(const ibByteCode::ibByteFunction& fn, const ibCompileChain& chain)
+ibString SignatureOf(const ibByteCode::ibByteFunction& fn, const ibCompileChain& chain)
 {
 	if (fn.IsContextMethod()) {
 		const ibValue* owner = BoundValueOf(chain, fn.m_strContext);
 		if (owner == nullptr)
-			return wxEmptyString;
+			return ibEmptyString;
 
 		ibValue& value = *const_cast<ibValue*>(owner);
 		const long numMethod = value.FindMethod(fn.m_strRealName);
@@ -1698,18 +1698,18 @@ wxString SignatureOf(const ibByteCode::ibByteFunction& fn, const ibCompileChain&
 			? value.GetMethodHelper(numMethod) : ibString();
 	}
 
-	wxString signature = fn.m_strRealName + wxT("(");
+	ibString signature = fn.m_strRealName + ibT("(");
 	for (size_t i = 0; i < fn.m_listParam.size(); i++) {
-		if (i > 0) signature += wxT(", ");
+		if (i > 0) signature += ibT(", ");
 		signature += fn.m_listParam[i].m_strName;
 	}
-	return signature + wxT(")");
+	return signature + ibT(")");
 }
 
 } // namespace
 
-bool ibValueAtCaret(const wxString& text, unsigned int caret,
-	const ibValueMetaObject* moduleObject, std::vector<ibCaretValue>& outValues, wxString* outRefusal)
+bool ibValueAtCaret(const ibString& text, unsigned int caret,
+	const ibValueMetaObject* moduleObject, std::vector<ibCaretValue>& outValues, ibString* outRefusal)
 {
 	if (text.IsEmpty())
 		return false;
@@ -1719,7 +1719,7 @@ bool ibValueAtCaret(const wxString& text, unsigned int caret,
 	ibByteCode::ibCaretPoint point;
 	point.m_position = compiled.Caret();
 
-	wxString walkTrace;
+	ibString walkTrace;
 	bool resolved = false;
 	if (compiled.ByteCode().FindCaret(point) && point.m_instruction >= 0) {
 		const ibCaretWalk walk(compiled.Chain(), compiled.CaretFrame(), point.m_instruction,
@@ -1746,20 +1746,20 @@ bool ibValueAtCaret(const wxString& text, unsigned int caret,
 		const long windowTo   = resolved ? point.m_instruction + 1
 			: (long)std::min<size_t>(bc.m_listCode.size(), 80u) - 1;
 
-		wxString window;
+		ibString window;
 		for (long ip = windowFrom; ip <= windowTo; ip++) {
 			if (ip < 0 || (size_t)ip >= bc.m_listCode.size())
 				continue;
 			const ibByteUnit& code = bc.m_listCode[(size_t)ip];
 			// p3 spells the MEMBER NAME for an attribute step, and an empty one is what marks the
 			// caret's own dangling dot — so the walk's whole decision is unreadable without it.
-			wxString member;
+			ibString member;
 			if (code.m_param3.m_numIndex >= 0
 				&& (size_t)code.m_param3.m_numIndex < compiled.ByteCode().m_listConst.size())
 				member = compiled.ByteCode().m_listConst[(size_t)code.m_param3.m_numIndex].GetString();
 
-			window << wxString::Format(wxT("\n  %s%4ld  op %3d (%3d)  p1(%d,%d) p2(%d,%d) p3(%d,%d)=`%s`  at %u"),
-				ip == point.m_instruction ? wxT("->") : wxT("  "), ip,
+			window << ibString::Format(ibT("\n  %s%4ld  op %3d (%3d)  p1(%d,%d) p2(%d,%d) p3(%d,%d)=`%s`  at %u"),
+				ip == point.m_instruction ? ibT("->") : ibT("  "), ip,
 				(int)code.m_numOper, (int)(code.m_numOper % TYPE_DELTA1),
 				(int)code.m_param1.m_numArray, (int)code.m_param1.m_numIndex,
 				(int)code.m_param2.m_numArray, (int)code.m_param2.m_numIndex,
@@ -1768,10 +1768,10 @@ bool ibValueAtCaret(const wxString& text, unsigned int caret,
 		}
 
 		const ibByteCode::ibByteFunction* const caretFrame = compiled.CaretFrame();
-		ibJournalInfo(wxT("complete"), wxT("caret %u -> instruction %ld, %s [frame=%s params=%d]%s%s"),
+		ibJournalInfo(ibT("complete"), ibT("caret %u -> instruction %ld, %s [frame=%s params=%d]%s%s"),
 			compiled.Caret(), point.m_instruction,
-			resolved ? wxT("resolved") : wxT("REFUSED"),
-			caretFrame != nullptr ? caretFrame->m_strRealName : wxString(wxT("(module)")),
+			resolved ? ibT("resolved") : ibT("REFUSED"),
+			caretFrame != nullptr ? caretFrame->m_strRealName : ibString(ibT("(module)")),
 			caretFrame != nullptr ? (int)caretFrame->m_listParam.size() : -1,
 			window, walkTrace);
 	}
@@ -1787,9 +1787,9 @@ bool ibValueAtCaret(const wxString& text, unsigned int caret,
 		if (outRefusal != nullptr)
 			*outRefusal = compiled.Refusal();
 
-		ibJournalInfo(wxT("complete"), wxT("nothing resolves at %u%s%s"),
+		ibJournalInfo(ibT("complete"), ibT("nothing resolves at %u%s%s"),
 			compiled.Caret(),
-			compiled.Refusal().IsEmpty() ? wxT(" (the text compiled)") : wxT("; the compile refused:\n"),
+			compiled.Refusal().IsEmpty() ? ibT(" (the text compiled)") : ibT("; the compile refused:\n"),
 			compiled.Refusal());
 	}
 
@@ -1797,13 +1797,13 @@ bool ibValueAtCaret(const wxString& text, unsigned int caret,
 }
 
 bool ibFieldTypesOf(const ibValueMetaObject* moduleObject, const ibValue& owner,
-	const wxString& field, std::vector<ibFieldType>& outTypes)
+	const ibString& field, std::vector<ibFieldType>& outTypes)
 {
 	return moduleObject != nullptr
 		&& FieldTypesOf(moduleObject->GetMetaData(), owner, field, outTypes);
 }
 
-bool ibNamesAtCaret(const wxString& text, unsigned int caret,
+bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 	const ibValueMetaObject* moduleObject, std::vector<ibCaretName>& outNames)
 {
 	// ⚠ AN EMPTY TEXT IS AN ORDINARY QUESTION HERE, and the opposite of the one above: standing at
@@ -1824,7 +1824,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 	//
 	// ⚠ ONLY WHAT DEPENDS ON ORDER IS GATED. Parameters are visible throughout their body, and a
 	// FUNCTION is callable from above its own declaration — so neither is asked this question.
-	std::map<wxLongLong_t, unsigned int> declaredAt;
+	std::map<long long, unsigned int> declaredAt;
 
 	// ⭐⭐ AND WHERE A NAME THE COMPILER MADE UP FIRST APPEARS IN THE TEXT. `a = X;` with no `var`
 	// is an implicit local, and the compiler deliberately writes NO declarator for one — so the
@@ -1837,7 +1837,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 	// where the name first appears. The MINIMUM rather than the first one met, because a query's
 	// instructions are not emitted in text order (a join's build loop is emitted after the clauses
 	// that read its alias) — taking the first met would date such a name by its loop header.
-	std::map<wxLongLong_t, unsigned int> firstTouchAt;
+	std::map<long long, unsigned int> firstTouchAt;
 	{
 		const ibByteCode& bc = compiled.ByteCode();
 		long openEntry = -1;
@@ -1879,10 +1879,8 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 			for (const ibParamRunUnit* operand : operands) {
 				if (FrameOf(*operand) != 0 || operand->m_numIndex < 0)
 					continue;
-				const auto seen = firstTouchAt.find(operand->m_numIndex);
-				if (seen == firstTouchAt.end())
-					firstTouchAt.emplace(operand->m_numIndex, code.m_numString);
-				else if (code.m_numString < seen->second)
+				const auto [seen, inserted] = firstTouchAt.try_emplace(operand->m_numIndex, code.m_numString);
+				if (!inserted && code.m_numString < seen->second)
 					seen->second = code.m_numString;
 			}
 		}
@@ -1891,11 +1889,11 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 	// The open frame's formal parameters, by name — the one group the order gate must not judge
 	// (see the exemption inside it). Read off the frame's own record, which carries them beside the
 	// locals rather than mixed into them.
-	const auto isAParameter = [frame](const wxString& name) {
+	const auto isAParameter = [frame](const ibString& name) {
 		if (frame == nullptr)
 			return false;
 		for (const ibByteCode::ibByteParam& parameter : frame->m_listParam)
-			if (stringUtils::CompareString(parameter.m_strName, name))
+			if (stringUtils::IsSameAs(parameter.m_strName, name))
 				return true;
 		return false;
 	};
@@ -1919,7 +1917,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 		if (var.IsContext() || var.IsContextProp() || var.IsExternal())
 			return false;
 
-		const auto at = declaredAt.find((wxLongLong_t)var.m_slotIndex);
+		const auto at = declaredAt.find((long long)var.m_slotIndex);
 		if (at != declaredAt.end())
 			return at->second >= compiled.Caret();
 
@@ -1943,7 +1941,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 		// and it has no tape declarator either, so without this it would have been dated by its
 		// FIRST USE and hidden from every caret above that.
 		if (!isAParameter(var.m_strRealName)) {
-			const auto touched = firstTouchAt.find((wxLongLong_t)var.m_slotIndex);
+			const auto touched = firstTouchAt.find((long long)var.m_slotIndex);
 			if (touched != firstTouchAt.end())
 				return touched->second >= compiled.Caret();
 		}
@@ -1952,16 +1950,16 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 		// half-written word itself, which is never a candidate for its own completion — typing
 		// `cat` listed `cat` above `Catalogs` (measured 2026-09-07).
 		return !compiled.TypedWord().IsEmpty()
-			&& stringUtils::CompareString(var.m_strRealName, compiled.TypedWord());
+			&& stringUtils::IsSameAs(var.m_strRealName, compiled.TypedWord());
 	};
 
 	// Is this spelling one that a query in THIS text bound? The queries are on the tape's own record
 	// (byteCodeLINQ.h), so this asks the compile rather than re-reading the text. Used with the
 	// declarator test above — see there for why one alone is not enough.
-	const auto boundByAQuery = [&compiled](const wxString& name) {
+	const auto boundByAQuery = [&compiled](const ibString& name) {
 		for (const ibLinqQuery& query : compiled.FullByteCode().m_listLinq)
 			for (const ibLinqBinding& binding : query.m_bindings)
-				if (stringUtils::CompareString(binding.name, name))
+				if (stringUtils::IsSameAs(binding.name, name))
 					return true;
 		return false;
 	};
@@ -1977,7 +1975,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 	//
 	// ⚠ CASE-INSENSITIVELY, because the language is: `Data` and `data` are the same name here, and
 	// offering both would be the same defect wearing different letters.
-	std::set<wxString> alreadyOffered;
+	std::set<ibString> alreadyOffered;
 	const auto offerOnce = [&alreadyOffered, &outNames](ibCaretName&& entry) {
 		if (entry.m_name.IsEmpty())
 			return;
@@ -2021,7 +2019,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 			// (`x = 1` with no `var`), which is a real local; and a real local may legitimately share
 			// a query alias's spelling, in which case it HAS a declarator and stays.
 			if (depth == 0 && boundByAQuery(var.m_strRealName)
-				&& declaredAt.find((wxLongLong_t)var.m_slotIndex) == declaredAt.end())
+				&& declaredAt.find((long long)var.m_slotIndex) == declaredAt.end())
 				continue;
 
 			// ⭐⭐ A PARENT'S PRIVATE LOCAL IS NOT IN SCOPE HERE, and the runtime already says so in
@@ -2207,7 +2205,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 		// themselves are what `linq_methods` hands back, and that is where a whole grammar belongs.
 		{
 			const auto offerKeyword = [&offerOnce](int key) {
-				const wxString word = ibTranslateCode::GetKeyWord(key);
+				const ibString word = ibTranslateCode::GetKeyWord(key);
 				if (word.IsEmpty())
 					return;
 				ibCaretName entry;
@@ -2224,7 +2222,9 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 			// the whole of what this needs, and it is read off the compile's own token stream.
 			const int spoken = [&]() -> int {
 				int last = -1;
-				for (const ibLexem& lex : compiled.Lexems()) {
+				const ibTranslateCode& translateCode = compiled.TranslateCode();
+				for (size_t i = 0; i < translateCode.GetLexCount(); ++i) {
+					const ibLexem& lex = translateCode.GetLexAt(i);
 					if (lex.m_numString >= at)
 						break;
 					if (lex.m_lexType != KEYWORD)
@@ -2300,7 +2300,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 // The same compile, asked what it UNDERSTOOD about a QUERY.
 //---------------------------------------------------------------------------
 
-std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text, const wxString& moduleName,
+std::vector<ibQueryOutline> ibOutlineScriptQueries(const ibString& text, const ibString& moduleName,
 	const ibMetaData* metaData)
 {
 	std::vector<ibQueryOutline> outlines;
@@ -2317,7 +2317,7 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text, const w
 	// ⭐ TOLERANTLY, because a person writing a query is mid-text by definition. The queries read
 	// before the compiler stopped are still what it understood, and a refusal is a question for
 	// `ibCheckScript`, which is the door that answers it.
-	ibCompileCode compiler(moduleName, wxT("outline"), false);
+	ibCompileCode compiler(moduleName, ibT("outline"), false);
 	compiler.SetCompileMode(ibCompileCode::ibCompileMode::Tolerant);
 
 	ibCompileChain chain;
@@ -2377,11 +2377,11 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text, const w
 			said.m_name    = binding.name;
 			said.m_rowCell = binding.valueSlot.m_numIndex;
 			switch (binding.origin) {
-			case ibLinqBinding::FromSource:   said.m_origin = wxT("from");     break;
-			case ibLinqBinding::FromLet:      said.m_origin = wxT("let");      break;
-			case ibLinqBinding::FromJoin:     said.m_origin = wxT("join");     break;
-			case ibLinqBinding::FromGroup:    said.m_origin = wxT("group");    break;
-			case ibLinqBinding::FromRestrict: said.m_origin = wxT("restrict"); break;
+			case ibLinqBinding::FromSource:   said.m_origin = ibT("from");     break;
+			case ibLinqBinding::FromLet:      said.m_origin = ibT("let");      break;
+			case ibLinqBinding::FromJoin:     said.m_origin = ibT("join");     break;
+			case ibLinqBinding::FromGroup:    said.m_origin = ibT("group");    break;
+			case ibLinqBinding::FromRestrict: said.m_origin = ibT("restrict"); break;
 			}
 
 			// ⭐⭐ AND WHAT THE NAME OFFERS, asked of the instructions rather than of the text.

@@ -44,8 +44,8 @@
 // VALUE branches.
 struct ibMaterializeDelta
 {
-	wxString m_column;      // physical column of the derived table
-	wxString m_valueExpr;   // SQL over {row} — what this movement contributes
+	ibString m_column;      // physical column of the derived table
+	ibString m_valueExpr;   // SQL over {row} — what this movement contributes
 
 	// The same contribution as an IR expression over the SOURCE table (its columns qualified by
 	// m_source) — for a READ of the movements as they stand (RenderMovementRows). Null on a spec made
@@ -70,9 +70,9 @@ enum class ibMaterializeAgg
 
 struct ibMaterializeViewColumn
 {
-	wxString         m_alias;
-	wxString         m_columnA;                                 // the primary stored column
-	wxString         m_columnB;                                 // the second operand (Difference and the running forms)
+	ibString         m_alias;
+	ibString         m_columnA;                                 // the primary stored column
+	ibString         m_columnB;                                 // the second operand (Difference and the running forms)
 	ibMaterializeAgg m_agg = ibMaterializeAgg::Value;
 };
 
@@ -86,7 +86,7 @@ struct ibMaterializeViewColumn
 // maintained totals later.
 struct ibMaterializeView
 {
-	wxString m_name;
+	ibString m_name;
 	bool     m_withPeriod   = true;    // project the period + every coarser unit as its own column
 	bool     m_dropZeroRows = false;   // HAVING <any column> <> 0 — "no value means no row"
 	std::vector<ibMaterializeViewColumn> m_columns;
@@ -113,15 +113,15 @@ struct ibMaterializeView
 	// refuses the view with "expression evaluation not supported", and refuses it at COMMIT (that is
 	// when it compiles a CREATE VIEW), so the statement itself appears to succeed and the fault
 	// arrives detached from anything that names it. The placeholder is CAST to this type.
-	std::vector<std::pair<wxString, ibColumnType>> m_movementColumns;
+	std::vector<std::pair<ibString, ibColumnType>> m_movementColumns;
 };
 
 // Everything L2-2 needs to render the maintenance bundle. Pure names and SQL fragments: the
 // caller (L3-2) has already expanded logical columns into physical fields.
 struct ibMaterializeSpec
 {
-	wxString m_table;    // the derived table being maintained
-	wxString m_source;   // the table whose writes drive it — the triggers hang here
+	ibString m_table;    // the derived table being maintained
+	ibString m_source;   // the table whose writes drive it — the triggers hang here
 
 	// The read views to build over m_table. L2-2 does not know what any of them MEAN — it knows how
 	// to spell a shard fold, a difference and a running sum for this engine, and the caller composes
@@ -132,7 +132,7 @@ struct ibMaterializeSpec
 
 	// The derived table's KEY — the columns the delta upserts against. Physical field names, in
 	// order; the shard column (when split) is added by the renderer, not by the caller.
-	std::vector<wxString> m_keyColumns;
+	std::vector<ibString> m_keyColumns;
 
 	// ⭐ WHERE THE KEY'S UNIQUENESS LIVES WHEN AN INDEX CANNOT HOLD IT (ibKeyNeedsHash below).
 	//
@@ -143,19 +143,19 @@ struct ibMaterializeSpec
 	// becomes this column because there is nothing else it could name.
 	//
 	// Empty (the ordinary case) = the index holds the whole key and nothing here changes.
-	wxString m_keyHashColumn;
+	ibString m_keyHashColumn;
 
 	// The period key: which key column holds the truncated period, and the movement expression it
 	// is truncated FROM. Empty column = this table has no period dimension.
-	wxString       m_periodColumn;
-	wxString       m_periodSourceExpr;                  // SQL over {row}
+	ibString       m_periodColumn;
+	ibString       m_periodSourceExpr;                  // SQL over {row}
 	ibTotalsPeriod m_periodUnit = ibTotalsPeriod::Month; // the STORED grain — the floor on what can be read back
 
 	std::vector<ibMaterializeDelta> m_deltas;
 
 	// Optional guard over {row}: apply this delta only when the movement populates this side.
 	// Empty = unconditional.
-	wxString m_guard;
+	ibString m_guard;
 
 	// Split totals: how many shard rows one logical key spreads across. 1 = not split.
 	unsigned int m_shards = 1;
@@ -176,7 +176,7 @@ struct ibMaterializeSpec
 	ibQueryExprPtr m_periodIsDateIR;
 };
 
-// One rendered statement. A distinct TYPE rather than a bare wxString, so the schema door can
+// One rendered statement. A distinct TYPE rather than a bare ibString, so the schema door can
 // accept "something L2-2 produced" and nothing else — a plain string would make the applier look
 // like a general-purpose SQL channel, and the rule that only this renderer may feed it would rest
 // on a comment. Only RenderMaterialization can mint one (the ctor is private to it), which turns
@@ -187,17 +187,17 @@ public:
 	bool IsEmpty() const { return m_sql.IsEmpty(); }
 
 private:
-	explicit ibRenderedStatement(wxString sql, wxString guard = wxString())
+	explicit ibRenderedStatement(ibString sql, ibString guard = ibString())
 		: m_sql(std::move(sql)), m_guard(std::move(guard)) {}
-	const wxString& Sql() const { return m_sql; }
+	const ibString& Sql() const { return m_sql; }
 
-	wxString m_sql;
+	ibString m_sql;
 
 	// A statement may carry its own PRECONDITION: a query that must return a row before it runs.
 	// Used by drops on engines without IF EXISTS, where attempting to remove a missing object is
 	// not a harmless no-op — Firebird rolls the transaction back, so the first apply would destroy
 	// itself. Empty = run unconditionally.
-	wxString m_guard;
+	ibString m_guard;
 
 	friend struct ibMaterializeSql;   // MINTS and RUNS them — both stay inside this level
 };
@@ -212,11 +212,11 @@ struct BACKEND_API ibMaterializeSql
 
 	// Minting point — used by the renderer only; nothing else can construct a statement.
 	// A drop may carry a guard: the probe that decides whether the object is there to remove.
-	void AddDrop(wxString sql, wxString guard = wxString())
+	void AddDrop(ibString sql, ibString guard = ibString())
 	{
 		m_drop.push_back(ibRenderedStatement(std::move(sql), std::move(guard)));
 	}
-	void AddCreate(wxString sql) { m_create.push_back(ibRenderedStatement(std::move(sql))); }
+	void AddCreate(ibString sql) { m_create.push_back(ibRenderedStatement(std::move(sql))); }
 
 	// APPLY the bundle to a connection. Execution lives HERE, at the level that produced the text,
 	// exactly as ibDatabaseQueryBuilder runs the queries it builds — no SQL string ever leaves L2-2,
@@ -238,16 +238,16 @@ struct BACKEND_API ibMaterializeSql
 
 	// INSPECTION for tests and diagnostics — reading the text, never a way to run it: Apply above
 	// takes the bundle, not a string, so text obtained here cannot be fed back in.
-	wxString CreateText() const { return Join(m_create); }
-	wxString DropText()   const { return Join(m_drop); }
-	wxString LastCreate() const { return m_create.empty() ? wxString() : m_create.back().m_sql; }
-	wxString CreateAt(size_t i) const { return i < m_create.size() ? m_create[i].m_sql : wxString(); }
+	ibString CreateText() const { return Join(m_create); }
+	ibString DropText()   const { return Join(m_drop); }
+	ibString LastCreate() const { return m_create.empty() ? ibString() : m_create.back().m_sql; }
+	ibString CreateAt(size_t i) const { return i < m_create.size() ? m_create[i].m_sql : ibString(); }
 
 private:
-	static wxString Join(const std::vector<ibRenderedStatement>& v)
+	static ibString Join(const std::vector<ibRenderedStatement>& v)
 	{
-		wxString out;
-		for (const ibRenderedStatement& s : v) out += s.m_sql + wxT("\n");
+		ibString out;
+		for (const ibRenderedStatement& s : v) out += s.m_sql + ibT("\n");
 		return out;
 	}
 };
@@ -277,9 +277,9 @@ enum class ibMaterializeWhen
 
 struct ibMaterializeReadColumn
 {
-	wxString          m_alias;
-	wxString          m_columnA;
-	wxString          m_columnB;                             // second operand for Difference
+	ibString          m_alias;
+	ibString          m_columnA;
+	ibString          m_columnB;                             // second operand for Difference
 	ibMaterializeAgg  m_agg  = ibMaterializeAgg::Value;
 	ibMaterializeWhen m_when = ibMaterializeWhen::Always;
 	bool              m_aggregate = false;                   // wrap in SUM and GROUP BY the keys
@@ -300,7 +300,7 @@ enum class ibMaterializeGrain
 
 struct ibMaterializeReadSpec
 {
-	wxString m_view;                       // the relation to read — a view, or the totals table
+	ibString m_view;                       // the relation to read — a view, or the totals table
 
 	// ⭐⭐ THE ROWS AS THEY STAND — the stored rows and the movements as TWO RELATIONS, read in place of
 	// m_view by a reading that folds them itself (a balance, a turnover). Set, m_view is not read at all.
@@ -322,9 +322,9 @@ struct ibMaterializeReadSpec
 	// What the statement calls either relation of rows — the qualifier m_filters were lowered with. The
 	// two halves are separate SELECTs, so one name serves both, and a filter walking a reference (a
 	// correlated EXISTS) finds its outer row under it in each.
-	wxString m_rowsAlias;
+	ibString m_rowsAlias;
 
-	wxString m_periodColumn;               // empty = this surface carries no period
+	ibString m_periodColumn;               // empty = this surface carries no period
 
 	// The grain, and the unit it means when Calendar. A periodised read groups by the period
 	// (truncated or not) ALONGSIDE the keys, and evaluates its running columns over that order.
@@ -346,7 +346,7 @@ struct ibMaterializeReadSpec
 	// drop the very period the reader asked about. Invalid = report every period read.
 	ibValue  m_fromGrain;
 
-	std::vector<wxString> m_keyColumns;    // projected, and grouped by when any column aggregates
+	std::vector<ibString> m_keyColumns;    // projected, and grouped by when any column aggregates
 	// Conditions applied INSIDE. Whole predicates rather than column/value pairs: a logical column
 	// can be several physical fields, and which ones is a metadata question this floor cannot ask.
 	std::vector<ibQueryExprPtr> m_filters;
@@ -360,7 +360,7 @@ struct ibMaterializeReadSpec
 	// grain TWICE. These say where the cut goes, and the caller has resolved every value already.
 
 	// The column that is NULL on the stored arm — empty means this view has one arm and no cut.
-	wxString m_markColumn;
+	ibString m_markColumn;
 
 	// Where the stored arm ENDS: the start of the grain holding the upper boundary. INVALID is not
 	// "no boundary" — it means the question does not reach below the stored grain, so the movement
@@ -382,7 +382,7 @@ struct ibMaterializeReadSpec
 
 	// The lower boundary's tail past the period, when it names a document. Same shape and order as
 	// m_boundaryTail, compared the other way round.
-	std::vector<std::pair<wxString, ibQueryExprPtr>> m_boundaryHead;
+	std::vector<std::pair<ibString, ibQueryExprPtr>> m_boundaryHead;
 
 	// Whether each boundary's own position is OUTSIDE the interval — "everything BEFORE this
 	// document" rather than "up to and including it". It changes one operator per side, and getting
@@ -397,7 +397,7 @@ struct ibMaterializeReadSpec
 	// EXPRESSIONS rather than values, because a reference's key is bound as opaque BYTES: the caller
 	// decomposes the boundary through the same write codec the rows were stored with, and hands over
 	// what came out. L2-2 compares a column against a node and asks nothing about what is inside it.
-	std::vector<std::pair<wxString, ibQueryExprPtr>> m_boundaryTail;
+	std::vector<std::pair<ibString, ibQueryExprPtr>> m_boundaryTail;
 };
 
 // Build the relation for such a read. Returns a subquery relation — the caller drops it straight
@@ -405,7 +405,7 @@ struct ibMaterializeReadSpec
 // handles. Parameters ride INSIDE it, which is what keeps the selection on the server rather than
 // filtering an already-materialised result.
 BACKEND_API ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec,
-                                                 const wxString& alias);
+                                                 const ibString& alias);
 
 // ⭐ THE TWO ARMS OF `view`, AS RELATIONS RATHER THAN A CREATE VIEW — the rows as they stand, for
 // ibMaterializeReadSpec::m_storedRows / m_movedRows. The same columns under the same names the view
@@ -495,11 +495,11 @@ BACKEND_API unsigned int EffectiveShardCount(const ibMaterializeSpec& spec,
 
 // Name of the shard column on a split table. Fixed, not configurable: it is an implementation
 // detail the view absorbs, and nothing above L3 ever names it.
-BACKEND_API const wxChar* ShardColumnName();
+BACKEND_API const ibChar* ShardColumnName();
 
 // Name of the key-hash column. Fixed for the same reason as the shard column: nothing above L3 names
 // it, and a configurable name would be one more thing two layers could spell differently.
-BACKEND_API const wxChar* KeyHashColumnName();
+BACKEND_API const ibChar* KeyHashColumnName();
 
 // ⭐⭐ CAN AN INDEX ON THIS CONNECTION'S ENGINE HOLD A KEY THIS WIDE?
 //

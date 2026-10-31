@@ -2,9 +2,9 @@
 #define _FRMCLIENT_BACKEND_VALUE_SPREADSHEET_H__
 
 #include "frmclient/backend/compiler/value.h"
-#include "frmclient/backend/backend_spreadsheet.h"
+#include "core/spreadsheet/spreadsheetObject.h"
 #include "frmclient/backend/backend_localization.h"   // …and the reading of a sheet's texts, as the engine's brought it
-#include "core/fileSystem/fs.h"          // …and the sheet's byte form (the clipboard's)
+#include "core/memory/memoryStream.h"          // …and the sheet's byte form (the clipboard's)
 
 // THE SHEET'S ENUMERATIONS — the engine's (backend/system/value/valueSpreadsheet.h), as the editor's properties offer
 // their members. The document as a script's value is the server's.
@@ -18,8 +18,8 @@ class FRMCLIENT_API ibValueEnumSpreadsheetOrient :
 	ibValueEnumSpreadsheetOrient() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetOrientation::ibOrient_Horizontal, wxT("Horizontal"), _("Horizontal"));
-		AddEnumeration(ibSpreadsheetOrientation::ibOrient_Vertical, wxT("Vertical"), _("Vertical"));
+		AddEnumeration(ibSpreadsheetOrientation::ibOrient_Horizontal, ibT("Horizontal"), _("Horizontal"));
+		AddEnumeration(ibSpreadsheetOrientation::ibOrient_Vertical, ibT("Vertical"), _("Vertical"));
 	}
 
 private:
@@ -35,9 +35,9 @@ class FRMCLIENT_API ibValueEnumSpreadsheetHorizontalAlignment :
 	virtual ibClassID GetClassType() const override { return enum_to_clsid("EN_SHOAL"); }
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Left, wxT("Left"), _("Left"));
-		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Center, wxT("Center"), _("Center"));
-		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Right, wxT("Right"), _("Right"));
+		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Left, ibT("Left"), _("Left"));
+		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Center, ibT("Center"), _("Center"));
+		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Right, ibT("Right"), _("Right"));
 	}
 
 private:
@@ -50,9 +50,9 @@ class FRMCLIENT_API ibValueEnumSpreadsheetVerticalAlignment :
 	ibValueEnumSpreadsheetVerticalAlignment() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Top, wxT("Top"), _("Top"));
-		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Center, wxT("Center"), _("Center"));
-		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Bottom, wxT("Bottom"), _("Bottom"));
+		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Top, ibT("Top"), _("Top"));
+		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Center, ibT("Center"), _("Center"));
+		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Bottom, ibT("Bottom"), _("Bottom"));
 	}
 
 private:
@@ -65,9 +65,9 @@ class FRMCLIENT_API ibValueEnumSpreadsheetFitMode :
 	ibValueEnumSpreadsheetFitMode() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Overflow, wxT("Overflow"), _("Overflow"));
-		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Clip, wxT("Clip"), _("Clip"));
-		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Wrap, wxT("Wrap"), _("Wrap"));
+		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Overflow, ibT("Overflow"), _("Overflow"));
+		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Clip, ibT("Clip"), _("Clip"));
+		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Wrap, ibT("Wrap"), _("Wrap"));
 	}
 
 private:
@@ -80,12 +80,12 @@ class FRMCLIENT_API ibValueEnumSpreadsheetBorder :
 	ibValueEnumSpreadsheetBorder() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Transparent, wxT("None"), _("None"));
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Solid, wxT("Solid"), _("Solid"));
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Dot, wxT("Dotted"), _("Dotted"));
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_ShortDash, wxT("ThinDashed"), _("Thin dashed"));
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_DotDash, wxT("ThickDashed"), _("Thick dashed"));
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_LongDash, wxT("LargeDashed"), _("Large dashed"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Transparent, ibT("None"), _("None"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Solid, ibT("Solid"), _("Solid"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Dot, ibT("Dotted"), _("Dotted"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_ShortDash, ibT("ThinDashed"), _("Thin dashed"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_DotDash, ibT("ThickDashed"), _("Thick dashed"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_LongDash, ibT("LargeDashed"), _("Large dashed"));
 	}
 
 private:
@@ -99,9 +99,9 @@ class FRMCLIENT_API ibValueEnumSpreadsheetFillType :
 	ibValueEnumSpreadsheetFillType() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, wxT("Text"), _("Text"));
-		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter, wxT("Parameter"), _("Parameter"));
-		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate, wxT("Template"), _("Template"));
+		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, ibT("Text"), _("Text"));
+		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter, ibT("Parameter"), _("Parameter"));
+		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate, ibT("Template"), _("Template"));
 	}
 
 private:

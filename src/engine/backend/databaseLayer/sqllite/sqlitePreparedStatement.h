@@ -1,23 +1,13 @@
 #ifndef __SQLITE_PREPARED_STATEMENT_H__
 #define __SQLITE_PREPARED_STATEMENT_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
+#include <vector>
 
-#ifdef __BORLANDC__
-    #pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-    #include <wx/wx.h>
-#endif
-
-#include <wx/dynarray.h>
 #include "backend/databaseLayer/preparedStatement.h"
 
 #include "engine/sqlite3.h"
 
-WX_DEFINE_ARRAY_PTR(sqlite3_stmt*, StatementVector);
+typedef std::vector<sqlite3_stmt*> StatementVector;
 
 class ibDatabaseResultSet;
 

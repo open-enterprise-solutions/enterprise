@@ -2,7 +2,7 @@
 #define __OBJ_INFO_H__
 
 /////////////////////////////////////////////////////////////////////////////
-// Name:        frontend/docView/docView.h
+// Name:        frmclient/docView/docView.h
 // Purpose:     OES Doc/View — combined header.
 //
 //   Top half:   forked doc/view subsystem (ibFrontendDocument, ibFrontendView, ibFrontendDocTemplate,
@@ -13,7 +13,7 @@
 //               Originally:  Author: Julian Smart, (c) Julian Smart,
 //                            Licence: wxWindows licence.
 //
-//   The thin client's copy of frontend/docView: the metadata adapter
+//   The thin client's doc/view: the metadata adapter
 //   (ibMetaDocument, ibMetaDataDocument, ibValueModuleDocument, ibMetaView)
 //   is cut out, and the classes frmserver registers too are prefixed
 //   ibFrontend — the file base loads frmserver into this process, and wx
@@ -50,6 +50,7 @@
 #include <map>
 
 #include "frmclient/frmclient.h"          // FRMCLIENT_API
+#include "core/core.h"                    // ibMetaID
 
 // ----------------------------------------------------------------------------
 // Forward declarations
@@ -66,6 +67,7 @@ class FRMCLIENT_API ibFrontendDocTemplate;
 class FRMCLIENT_API ibFrontendDocManager;
 class ibDocChildFrameAnyBase;
 class WXDLLIMPEXP_FWD_AUI wxAuiToolBar;
+class ibMetaData;
 
 // ============================================================================
 //                          PART 1 — FORKED DOC/VIEW
@@ -294,7 +296,7 @@ protected:
 
     // View factory for the OnCreate pipeline. Default pulls the view class from
     // the document template (the wx-style path used by every templated doc).
-    // Template-less docs (e.g. ibFormVisualDocument, created directly without a
+    // Template-less docs (a tab's — ibFormVisualDocument, ibAuditLogDocument — created directly without a
     // template) override this to construct their view explicitly.
     virtual ibFrontendView* DoCreateView();
 
@@ -386,7 +388,7 @@ private:
 };
 
 // ibFrontendDocTemplate / ibMetaDocTemplate — full definitions in
-// frontend/docView/docManager.h. Kept out of this header so the wx-fork base
+// frmclient/docView/docManager.h. Kept out of this header so the wx-fork base
 // file holds only ibFrontendDocument / ibFrontendView / ibFrontendDocManager (the types that need to
 // be visible to every doc-aware TU). ibFrontendDocManager methods below only hand
 // back ibFrontendDocTemplate* / ibMetaDocTemplate*, so the forward-decls at the top
@@ -513,6 +515,11 @@ public:
         { return m_pageSetupDialogData; }
 #endif
 
+    // A METAOBJECT OPENS ON THE SERVER — the desktop's door (ibDocManager::OpenForm), by what the client holds of the
+    // object: its id and the configuration it is in (the tab); the server opens it as the tree's Edit does (schema
+    // MetaData, Open) and its document comes with the frame. False: not sent.
+    bool OpenForm(ibMetaID id, const ibMetaData& metaData);
+
     ibFrontendDocTemplate*     FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const;
 
     template <typename T, typename... Args>
@@ -581,8 +588,8 @@ protected:
 };
 
 // Shortcut to the process-wide doc manager singleton (set in ibFrontendDocManager
-// ctor, cleared in dtor). Previously hosted in frontend/docView/docManager.h
-// when ibMetaDocManager was a separate subclass; collapsed into the base.
+// ctor, cleared in dtor). Previously hosted in docManager.h when
+// ibMetaDocManager was a separate subclass; collapsed into the base.
 #define docManager ibFrontendDocManager::GetDocumentManager()
 
 // ----------------------------------------------------------------------------
@@ -965,7 +972,7 @@ inline ibDocVector ibFrontendDocManager::GetDocumentsVector() const
 #include "frmclient/backend/metaCollection/metaObject.h"
 
 // ============================================================================
-// THE METADATA DOCUMENT AND VIEW — the desktop's ibMetaDocument / ibMetaView (frontend/docView/docView.h) as the
+// THE METADATA DOCUMENT AND VIEW — the old desktop's ibMetaDocument / ibMetaView, as the
 // documents copied from the desktop call them. A document's metaobject is the server's: the client's has none, and
 // ConvertMetaObjectToType answers none.
 // ============================================================================

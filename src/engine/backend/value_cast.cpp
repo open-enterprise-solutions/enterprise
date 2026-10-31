@@ -4,12 +4,17 @@
 #include "backend/appData.h"
 
 #if defined(_USE_CONTROL_VALUECAST)
-void ThrowErrorTypeOperation(const wxString& fromType, const std::type_info& typeInfo)
+void ThrowErrorTypeOperation(const ibVariant* fromValue, const std::type_info& typeInfo)
 {
 	if (!appData->DesignerMode()) {
-		wxString className = wxEmptyString;
+		// The type it was — a runtime value's or a property's, named by the class it answers with.
+		const ibString fromType = fromValue != nullptr ? ibValue::GetNameObjectFromID(fromValue->GetClassType()) : ibString();
+		ibString className = ibEmptyString;
 
-		const ibClassID& clsid = ibValue::GetTypeIDByRef(typeInfo);
+		// Asked of the registry, not of GetTypeIDByRef, which asserts on a miss: the type asked for may have no name to
+		// say - the base an enumeration's member is cast to is registered under no class - and the refusal still goes.
+		const ibCtorAbstractType* const typeCtor = ibValue::GetAvailableCtor(typeInfo);
+		const ibClassID clsid = typeCtor != nullptr ? typeCtor->GetClassType() : 0;
 		if (clsid != 0) {
 			if (auto* md = appEnv::ActiveMetaData()) {
 				className = md->GetNameObjectFromID(clsid);
@@ -19,7 +24,9 @@ void ThrowErrorTypeOperation(const wxString& fromType, const std::type_info& typ
 			}
 		}
 
-		ibBackendCoreException::Error(ERROR_TYPE_OPERATION, fromType, className);
+		if (className.empty())
+			ibBackendCoreException::Error(_("A value of type '%s' does not support this operation"), fromType);
+		ibBackendCoreException::Error(_("A value of type '%s' is not a '%s'"), fromType, className);
 	}
 }
 #endif

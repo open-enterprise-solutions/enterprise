@@ -15,6 +15,10 @@ class ibValueManagerDataObjectEnumeration :
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectEnumeration* GetMetaObject() const { return m_metaObject; }
 
+	// The empty reference of this enumeration. Catalog and document managers
+	// already answer this; an enumeration value is a reference too.
+	ibValueReferenceDataObject* EmptyRef() const;
+
 	void FillManagerMethods(ibMemberTable& helper) const;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
 

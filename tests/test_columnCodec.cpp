@@ -15,11 +15,44 @@
 #include "backend/query/columnLayout.h"   // ibFieldSuffix / ibPersistedTypeTag / DescribeColumnLayout / ColumnFieldNames / ibColumnRole / ibColumnSlot
 #include "backend/query/queryColumn.h"    // ibBackendColumnRawDB + the ibFieldTypes_* wire tags
 
+// Every output's label is `out_` and the hash of the author's whole name, Latin or not: ASCII,
+// twelve characters, the same for the writer and the reader. Firebird does not take a Cyrillic
+// alias unquoted, and quoting is off because a quoted name becomes case-sensitive.
+TEST(ColumnLayout, EveryAliasIsTheSameAsciiLabel)
+{
+	const auto label = [](const ibString& alias) {
+		if (alias.length() != 12 || !alias.StartsWith(wxT("out_")))
+			return false;
+		for (const wxUniChar c : alias.Mid(4))
+			if (!((c >= wxT('0') && c <= wxT('9')) || (c >= wxT('a') && c <= wxT('f'))))
+				return false;
+		return true;
+	};
+
+	const ibString date = ibSqlAliasOf(wxT("Date"));
+	EXPECT_TRUE(label(date)) << date.ToStdString();
+	EXPECT_EQ(date, ibSqlAliasOf(wxT("Date")));
+	EXPECT_NE(date, ibSqlAliasOf(wxT("Flag")));
+
+	const ibString flag = ibSqlAliasOf(wxT("Флаг"));
+	EXPECT_TRUE(label(flag)) << flag.ToStdString();
+	EXPECT_NE(flag, date);
+
+	// A long name is the same twelve characters; a hyphen is not carried into the statement.
+	EXPECT_TRUE(label(ibSqlAliasOf(wxT("AccountingCurrencyAmountCorrespondingTurnoverCr"))));
+	EXPECT_TRUE(label(ibSqlAliasOf(wxT("a-b"))));
+
+	// A name that ends like a field suffix is still the author's name: `Price_N` is not field N of `Price`.
+	EXPECT_TRUE(label(ibSqlAliasOf(wxT("Price_N"))));
+	EXPECT_NE(ibSqlAliasOf(wxT("Price_N")), ibSqlAliasOf(wxT("Price")) + wxT("_N"));
+	EXPECT_TRUE(ibSqlAliasOf(ibString()).IsEmpty());
+}
+
 // The role -> physical-suffix table. These suffixes are the on-disk column names AND the wire spread;
 // they must never change silently. Raw carries no suffix (the column is its own single field).
 TEST(ColumnLayout, FieldSuffix_RoleTable)
 {
-	EXPECT_EQ(ibFieldSuffix(ibColumnRole::Raw),           wxString());
+	EXPECT_EQ(ibFieldSuffix(ibColumnRole::Raw),           ibString());
 	EXPECT_EQ(ibFieldSuffix(ibColumnRole::Discriminator), wxT("_TYPE"));
 	EXPECT_EQ(ibFieldSuffix(ibColumnRole::Boolean),       wxT("_B"));
 	EXPECT_EQ(ibFieldSuffix(ibColumnRole::Number),        wxT("_N"));
@@ -56,7 +89,7 @@ TEST(ColumnLayout, RawColumn_SingleSlot)
 	EXPECT_EQ(layout[0].m_name, wxT("uuid"));
 	EXPECT_EQ(layout[0].m_role, ibColumnRole::Raw);
 
-	const std::vector<wxString> fields = ColumnFieldNames(&col);
+	const std::vector<ibString> fields = ColumnFieldNames(&col);
 	ASSERT_EQ(fields.size(), 1u);
 	EXPECT_EQ(fields[0], wxT("uuid"));
 }

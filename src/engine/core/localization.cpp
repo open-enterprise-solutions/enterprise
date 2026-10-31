@@ -2,11 +2,11 @@
 
 #include <algorithm>
 
-#include "core/stringUtils.h"   // stringUtils::CompareString — a language code is matched without regard to case
+#include "core/stringUtils.h"   // stringUtils::IsSameAs — a language code is matched without regard to case
 
 ////////////////////////////////////////////////////////////////////////////////
 
-bool ibLocalization::CreateLocalizationArray(const wxString& strRawLocale, ibLocalizationEntryArray& array)
+bool ibLocalization::CreateLocalizationArray(const ibString& strRawLocale, ibLocalizationEntryArray& array)
 {
 	bool open_text = false,
 		open_symbol = false;
@@ -19,18 +19,18 @@ bool ibLocalization::CreateLocalizationArray(const wxString& strRawLocale, ibLoc
 	// POD scalar — no need for thread_local static; zero-init is free.
 	size_t reserve_count = 0;
 
-	for (const auto& c : strRawLocale.ToStdWstring()) {
+	for (const ibChar c : strRawLocale) {
 
-		if ((!open_text && (c == wxT(' ') || c == wxT('\n'))) || c == wxT('\'')) {
-			if (open_text && c == wxT('\''))
+		if ((!open_text && (c == ibT(' ') || c == ibT('\n'))) || c == ibT('\'')) {
+			if (open_text && c == ibT('\''))
 				open_symbol = !open_symbol;
 			continue;
 		}
-		else if (!open_text && !open_symbol && c == wxT('=')) {
+		else if (!open_text && !open_symbol && c == ibT('=')) {
 			open_text = true;
 			continue;
 		}
-		else if (open_text && !open_symbol && c == wxT(';')) {
+		else if (open_text && !open_symbol && c == ibT(';')) {
 			reserve_count++;
 			open_text = open_symbol = false;
 			continue;
@@ -55,10 +55,10 @@ bool ibLocalization::CreateLocalizationArray(const wxString& strRawLocale, ibLoc
 
 	// One language done — kept, or replacing an earlier one of the same code.
 	const auto commit = [&array]() {
-		const wxString& code = entry.m_code;
+		const ibString& code = entry.m_code;
 		const auto iterator = std::find_if(array.begin(), array.end(),
 			[code](const ibLocalizationEntry& e) {
-				return stringUtils::CompareString(code, e.m_code); });
+				return stringUtils::IsSameAs(code, e.m_code); });
 
 		if (iterator == array.end()) {
 			array.emplace_back(std::move(entry));
@@ -70,30 +70,30 @@ bool ibLocalization::CreateLocalizationArray(const wxString& strRawLocale, ibLoc
 		entry.m_data.Clear();
 	};
 
-	const std::wstring raw = strRawLocale.ToStdWstring();
+	const ibString& raw = strRawLocale;
 	for (size_t i = 0; i < raw.size(); ++i) {
-		const wchar_t c = raw[i];
+		const ibChar c = raw[i];
 
 		// ⭐ A DOUBLED QUOTE INSIDE THE TEXT IS AN APOSTROPHE — `en = 'the document''s movements';`.
 		// Read as two toggles it closed the text and opened it again, and the apostrophe vanished from
 		// every caption that had one (the payroll demo's English texts, 2026-09-10). GetRawLocText
 		// writes it back doubled.
-		if (open_text && open_symbol && c == wxT('\'') && i + 1 < raw.size() && raw[i + 1] == wxT('\'')) {
+		if (open_text && open_symbol && c == ibT('\'') && i + 1 < raw.size() && raw[i + 1] == ibT('\'')) {
 			entry.m_data += c;
 			++i;
 			continue;
 		}
 
-		if ((!open_text && (c == wxT(' ') || c == wxT('\n'))) || c == wxT('\'')) {
-			if (open_text && c == wxT('\''))
+		if ((!open_text && (c == ibT(' ') || c == ibT('\n'))) || c == ibT('\'')) {
+			if (open_text && c == ibT('\''))
 				open_symbol = !open_symbol;
 			continue;
 		}
-		else if (!open_text && !open_symbol && c == wxT('=')) {
+		else if (!open_text && !open_symbol && c == ibT('=')) {
 			open_text = true;
 			continue;
 		}
-		else if (open_text && !open_symbol && c == wxT(';')) {
+		else if (open_text && !open_symbol && c == ibT(';')) {
 			commit();
 			open_text = open_symbol = false;
 			continue;
@@ -115,17 +115,17 @@ bool ibLocalization::CreateLocalizationArray(const wxString& strRawLocale, ibLoc
 // 🛑 A STORED TEXT WAS TRANSLATED, A PLAIN ONE WRAPPED — two answers under one name, so what a cell held
 // depended on what it said, and a filled template landed in either form. It makes the stored form now:
 // one already in it is kept as it is (2026-09-21).
-wxString ibLocalization::CreateLocalizationRawLocText(const wxString& strLangCode, const wxString& strLocale)
+ibString ibLocalization::CreateLocalizationRawLocText(const ibString& strLangCode, const ibString& strLocale)
 {
 	if (IsLocalizationString(strLocale))
 		return strLocale;
 
-	wxString text = strLocale;
-	text.Replace(wxT("'"), wxT("''"));   // an apostrophe is written doubled (CreateLocalizationArray)
-	return wxString::Format(wxT("%s = '%s';"), strLangCode, text);
+	ibString text = strLocale;
+	text.Replace(ibT("'"), ibT("''"));   // an apostrophe is written doubled (CreateLocalizationArray)
+	return ibString::Format(ibT("%s = '%s';"), strLangCode, text);
 }
 
-bool ibLocalization::IsLocalizationString(const wxString& strRawLocale)
+bool ibLocalization::IsLocalizationString(const ibString& strRawLocale)
 {
 	if (strRawLocale.IsEmpty())
 		return false;
@@ -133,7 +133,7 @@ bool ibLocalization::IsLocalizationString(const wxString& strRawLocale)
 	// ⭐ NO `=`, NO LANGUAGE — and nothing to copy or walk. Every cell of a composed report is plain text
 	// read as it lands (PutArea), so this answer is asked hundreds of thousands of times on a large sheet,
 	// and almost always "no".
-	if (strRawLocale.find(wxT('=')) == wxString::npos)
+	if (strRawLocale.find(ibT('=')) == ibString::npos)
 		return false;
 
 	bool open_text = false,
@@ -142,10 +142,10 @@ bool ibLocalization::IsLocalizationString(const wxString& strRawLocale)
 	bool success = false;
 	bool closed  = false;   // the current language's text has been closed by its quote
 
-	for (const auto& c : strRawLocale.ToStdWstring()) {
+	for (const ibChar c : strRawLocale) {
 
-		if ((!open_text && (c == wxT(' ') || c == wxT('\n'))) || c == wxT('\'')) {
-			if (open_text && c == wxT('\'')) {
+		if ((!open_text && (c == ibT(' ') || c == ibT('\n'))) || c == ibT('\'')) {
+			if (open_text && c == ibT('\'')) {
 				open_symbol = !open_symbol;
 				if (!open_symbol)
 					closed = true;
@@ -153,13 +153,13 @@ bool ibLocalization::IsLocalizationString(const wxString& strRawLocale)
 			success = false;
 			continue;
 		}
-		else if (!open_text && !open_symbol && c == wxT('=')) {
+		else if (!open_text && !open_symbol && c == ibT('=')) {
 			open_text = true;
 			closed = false;
 			success = false;
 			continue;
 		}
-		else if (open_text && !open_symbol && c == wxT(';')) {
+		else if (open_text && !open_symbol && c == ibT(';')) {
 			open_text = open_symbol = false;
 			success = true;
 			continue;
@@ -176,21 +176,21 @@ bool ibLocalization::IsLocalizationString(const wxString& strRawLocale)
 	return success;
 }
 
-wxString ibLocalization::GetRawLocText(const ibLocalizationEntryArray& array)
+ibString ibLocalization::GetRawLocText(const ibLocalizationEntryArray& array)
 {
-	thread_local wxString strRawTranslate;
+	thread_local ibString strRawTranslate;
 	GetRawLocText(array, strRawTranslate);
 	return std::move(strRawTranslate);
 }
 
-bool ibLocalization::GetRawLocText(const ibLocalizationEntryArray& array, wxString& strResult)
+bool ibLocalization::GetRawLocText(const ibLocalizationEntryArray& array, ibString& strResult)
 {
 	strResult.Clear();
 	for (const auto& pair : array) {
-		wxString text = pair.m_data;
-		text.Replace(wxT("'"), wxT("''"));   // an apostrophe is written doubled (CreateLocalizationArray)
-		strResult += wxString::Format(
-			wxT("%s = '%s';"), pair.m_code, text);
+		ibString text = pair.m_data;
+		text.Replace(ibT("'"), ibT("''"));   // an apostrophe is written doubled (CreateLocalizationArray)
+		strResult += ibString::Format(
+			ibT("%s = '%s';"), pair.m_code, text);
 	}
 	return array.size() > 0;
 }
@@ -198,7 +198,7 @@ bool ibLocalization::GetRawLocText(const ibLocalizationEntryArray& array, wxStri
 // 🛑 IT ASKED ONLY THE LANGUAGE IN FORCE, with a parser of its own, so a caption written in another was
 // empty here while the screen showed it (GetTranslateFromArray falls back). Empty now means empty in
 // every language — the same array the reading uses.
-bool ibLocalization::IsEmptyLocalizationString(const wxString& strRawLocale)
+bool ibLocalization::IsEmptyLocalizationString(const ibString& strRawLocale)
 {
 	thread_local ibLocalizationEntryArray array;
 	if (!CreateLocalizationArray(strRawLocale, array))
@@ -225,7 +225,7 @@ bool ibLocalization::IsEmptyLocalizationString(const wxString& strRawLocale)
 // ⚠ HOT: every cell that lands (PutArea), every cell painted, every cell the content edge walks over — so
 // the array is a per-thread scratch, and a plain text, almost every cell of a composed report, is
 // answered without allocating anything but the answer (IsLocalizationString stops at the missing `=`).
-bool ibLocalization::GetTranslateGetRawLocText(const wxString& strLangCode, const wxString& strRawLocale, wxString& strResult)
+bool ibLocalization::GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strRawLocale, ibString& strResult)
 {
 	thread_local ibLocalizationEntryArray array;
 	if (CreateLocalizationArray(strRawLocale, array))
@@ -236,9 +236,9 @@ bool ibLocalization::GetTranslateGetRawLocText(const wxString& strLangCode, cons
 	return !strResult.IsEmpty();
 }
 
-wxString ibLocalization::GetTranslateGetRawLocText(const wxString& strLangCode, const wxString& strRawLocale)
+ibString ibLocalization::GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strRawLocale)
 {
-	wxString strResult;
+	ibString strResult;
 	GetTranslateGetRawLocText(strLangCode, strRawLocale, strResult);
 	return strResult;
 }
@@ -259,10 +259,10 @@ wxString ibLocalization::GetTranslateGetRawLocText(const wxString& strLangCode, 
 // ⚠ THE CODE IS MATCHED THE WAY IT IS READ — without regard to case, as the parser folds a repeated
 // language (CreateLocalizationArray) and FindTranslate finds one. An exact `==` here found `EN` for
 // a reader and missed it for a writer, which appended a second English cell beside the first.
-void ibLocalization::SetArrayTranslate(const wxString& strLangCode, ibLocalizationEntryArray& array, const wxString& strResult)
+void ibLocalization::SetArrayTranslate(const ibString& strLangCode, ibLocalizationEntryArray& array, const ibString& strResult)
 {
 	for (auto& entry : array) {
-		if (stringUtils::CompareString(entry.m_code, strLangCode)) {
+		if (stringUtils::IsSameAs(entry.m_code, strLangCode)) {
 			entry.m_data = strResult;
 			return;
 		}
@@ -271,18 +271,18 @@ void ibLocalization::SetArrayTranslate(const wxString& strLangCode, ibLocalizati
 	array.push_back(ibLocalizationEntry{ strLangCode, strResult });
 }
 
-wxString ibLocalization::GetTranslateFromArray(const wxString& strLangCode, const ibLocalizationEntryArray& array)
+ibString ibLocalization::GetTranslateFromArray(const ibString& strLangCode, const ibLocalizationEntryArray& array)
 {
-	thread_local wxString result;
+	thread_local ibString result;
 	GetTranslateFromArray(strLangCode, array, result);
 	return std::move(result);
 }
 
-bool ibLocalization::GetTranslateFromArray(const wxString& strLangCode, const ibLocalizationEntryArray& array, wxString& strResult)
+bool ibLocalization::GetTranslateFromArray(const ibString& strLangCode, const ibLocalizationEntryArray& array, ibString& strResult)
 {
 	const auto iterator = std::find_if(array.begin(), array.end(),
 		[&strLangCode](const ibLocalizationEntry& entry) {
-			return stringUtils::CompareString(entry.m_code, strLangCode); });
+			return stringUtils::IsSameAs(entry.m_code, strLangCode); });
 
 	if (iterator != array.end()) {
 		strResult = iterator->m_data;

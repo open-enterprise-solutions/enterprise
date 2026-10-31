@@ -62,8 +62,9 @@ ibValue ibValueManagerDataObjectCalculationRegister::Get(const ibValue& cPeriod,
 }
 
 // GetBase(Filter, Resources, Dimensions, Sections) — the base of the records the filter chooses: the recorder at
-// least, and any dimensions, each by equality. The records are read here, as they stand in the register, and asked
-// of the register's reading (ibCalcReadBase) in the order of their lines; nothing is computed in the manager.
+// least, and any dimensions, each by equality. The records are read and asked by the register's reading, as the
+// Base table reads them (ibCalcReadBase): the active ones, in the order of their lines. Nothing is computed in the
+// manager.
 ibValue ibValueManagerDataObjectCalculationRegister::GetBase(const ibValue& cFilter, const ibValue& cResources,
 	const ibValue& cDimensions, const ibValue& cSections)
 {
@@ -76,32 +77,7 @@ ibValue ibValueManagerDataObjectCalculationRegister::GetBase(const ibValue& cFil
 	if (std::none_of(leaves.begin(), leaves.end(), [recorder](const auto& leaf) { return leaf.first == recorder; }))
 		ibBackendCoreException::Error(_("GetBase: the filter must name the recorder"));
 
-	const ibCalcBaseAsked asked = ibCalcBaseAskedOf(m_metaObject, cResources, cDimensions, cSections);
-
-	std::vector<ibCalcBaseRecord> records;
-	{
-		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable());
-		q.Where(filter);
-		q.OrderBy(m_metaObject->GetRegisterLineNumber()->GetQueryColumn(), /*ascending*/ true);
-		ibReadPageRequest page;
-		page.m_count = 0;   // every record the filter chooses
-		ibDataQueryResult selection = q.Execute(page);
-		while (selection.Next()) {
-			ibCalcBaseRecord record;
-			record.m_line = selection.GetValue(m_metaObject->GetRegisterLineNumber()->GetQueryColumn());
-			record.m_type = selection.GetValue(m_metaObject->GetCalculationType()->GetQueryColumn());
-			if (m_metaObject->IsUseBasePeriod()) {   // without one they are not columns of the table (ibCalcReadBase)
-				record.m_from = selection.GetValue(m_metaObject->GetBasePeriodStart()->GetQueryColumn()).GetDate();
-				record.m_to = selection.GetValue(m_metaObject->GetBasePeriodEnd()->GetQueryColumn()).GetDate();
-			}
-			record.m_registration = selection.GetValue(m_metaObject->GetRegistrationPeriod()->GetQueryColumn()).GetDate();
-			for (const ibCalcBaseAsked::ibPairing& pairing : asked.m_dimensions)
-				record.m_dimensions.push_back(selection.GetValue(pairing.m_own->GetQueryColumn()));
-			records.push_back(std::move(record));
-		}
-	}
-	return ibCalcReadBase(m_metaObject, asked, records);
+	return ibCalcReadBase(m_metaObject, ibCalcBaseAskedOf(m_metaObject, cResources, cDimensions, cSections), filter);
 }
 
 //***********************************************************************

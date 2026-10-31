@@ -163,7 +163,7 @@ public:
 	static bool GetValueAttribute(const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = false);
 	// Read a NAMED field of a KNOWN variant type (a register reading a numeric balance / turnover
 	// column). Forwards to the codec's read leaf (ibColumnCodec::ReadField).
-	static bool GetValueAttribute(const wxString& fieldName, ibFieldTypes fieldType,
+	static bool GetValueAttribute(const ibString& fieldName, ibFieldTypes fieldType,
 	                              const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = false);
 
 	// ⭐⭐ WOULD THIS DOOR RENDER WHOLE, IF IT WERE DECLARED? Asked BEFORE `.With(name, inner)` by the
@@ -196,14 +196,14 @@ public:
 	// what the statement calls the table (empty: its own name).
 	static BACKEND_API ibQueryExprPtr BuildPredicateIR(const ibBackendQueryable* queryable,
 	                                                   const ibQueryPredicatePtr& predicate,
-	                                                   const wxString& qualifier = wxEmptyString);
+	                                                   const ibString& qualifier = ibEmptyString);
 
 	// …AND A COMPUTED VALUE, the same way — arithmetic, a CASE, a column read field by field — for the same
 	// caller: one that writes its own SELECT over this table and needs the value in its projection (the rows
 	// of a register's movements, each one's contribution to the totals, ibSchemaMaterialize::ToReadSpec).
 	static BACKEND_API ibQueryExprPtr BuildColumnExprIR(const ibBackendQueryable* queryable,
 	                                                    const ibQueryColumnExprPtr& expr,
-	                                                    const wxString& qualifier = wxEmptyString);
+	                                                    const ibString& qualifier = ibEmptyString);
 
 private:
 	// The GROUP BY, assembled into an L2 builder and not yet run. ONE assembly, two endings: the
@@ -240,7 +240,7 @@ private:
 // a query needs when the other side of a comparison turns out to be a number.
 // ==========================================================================
 BACKEND_API ibValue ibTypeValueOf(const ibClassID& clsid);
-BACKEND_API ibValue ibTypeValueByName(const wxString& typeName);
+BACKEND_API ibValue ibTypeValueByName(const ibString& typeName);
 BACKEND_API bool    ibTypeValueClsid(const ibValue& value, ibClassID& outClsid);
 
 // ⭐ A VALUE AS A TYPE — what `CAST(x AS …)` answers, through the same door for the same reason. A primitive is

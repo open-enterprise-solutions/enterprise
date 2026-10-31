@@ -144,10 +144,10 @@ std::vector<ibColumnSlot> ibBackendQueryColumn::DescribeLayout() const
 	// What a VALUE here may be — not what is declared. The two differ only for a characteristic, whose
 	// declaration names a class no value carries (backend_type.h).
 	const ibTypeDescription& td = GetTypeValueDesc();
-	const wxString base = GetPhysicalName();
+	const ibString base = GetPhysicalName();
 
 	// A slot named off its role through the one suffix table.
-	auto makeSlot = [&](ibColumnRole role, ibColumnType type, const wxString& def, bool notNull) {
+	auto makeSlot = [&](ibColumnRole role, ibColumnType type, const ibString& def, bool notNull) {
 		ibColumnSlot slot;
 		slot.m_name    = base + ibFieldSuffix(role);
 		slot.m_role    = role;
@@ -158,33 +158,33 @@ std::vector<ibColumnSlot> ibBackendQueryColumn::DescribeLayout() const
 	};
 
 	// _TYPE — the variant discriminator. Always present, DEFAULT 0 NOT NULL.
-	slots.push_back(makeSlot(ibColumnRole::Discriminator, ibTypeInteger(), wxT("0"), true));
+	slots.push_back(makeSlot(ibColumnRole::Discriminator, ibTypeInteger(), ibT("0"), true));
 
 	// Primitive value slots — in the FIXED order B, N, D, S, E (load-bearing: matches the keyset
 	// anchor + the write/read bind order).
-	auto pushPrim = [&](ibValueTypes vt, ibColumnRole role, const wxString& def) {
+	auto pushPrim = [&](ibValueTypes vt, ibColumnRole role, const ibString& def) {
 		if (td.ContainType(vt))
 			slots.push_back(makeSlot(role, PrimitiveType(vt, td), def, false));
 	};
-	pushPrim(ibValueTypes::TYPE_BOOLEAN, ibColumnRole::Boolean, wxString());
-	pushPrim(ibValueTypes::TYPE_NUMBER,  ibColumnRole::Number,  wxString());
-	pushPrim(ibValueTypes::TYPE_DATE,    ibColumnRole::Date,    wxString());
-	pushPrim(ibValueTypes::TYPE_STRING,  ibColumnRole::String,  wxString());
+	pushPrim(ibValueTypes::TYPE_BOOLEAN, ibColumnRole::Boolean, ibString());
+	pushPrim(ibValueTypes::TYPE_NUMBER,  ibColumnRole::Number,  ibString());
+	pushPrim(ibValueTypes::TYPE_DATE,    ibColumnRole::Date,    ibString());
+	pushPrim(ibValueTypes::TYPE_STRING,  ibColumnRole::String,  ibString());
 	// The enum's DEFAULT is the "no member" number, NOT zero: 0 is an ordinary member number, so a
 	// column defaulting to it hands every unfilled row a member as though someone had chosen it.
-	pushPrim(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum,    wxString::Format(wxT("%i"), emptyEnum));
+	pushPrim(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum,    ibString::Format(ibT("%i"), emptyEnum));
 
 	// _SCH — a schedule, serialised whole. A BLOB rather than fourteen columns: what people actually
 	// filter on is WHEN THIS RUNS NEXT, and that is a date column of its own on the job row
 	// (docs/private/scheduled-jobs.md § 5b).
 	if (td.ContainType(g_valueScheduleCLSID))
-		slots.push_back(makeSlot(ibColumnRole::Schedule, ibTypeBlob(), wxString(), false));
+		slots.push_back(makeSlot(ibColumnRole::Schedule, ibTypeBlob(), ibString(), false));
 
 	// _TD — a type description, serialised whole. This is what a characteristic's own Type is: a
 	// FILTER carrying admissible types and their qualifiers. Stored as one blob for the same reason
 	// the schedule is — nothing predicates on it in SQL.
 	if (td.ContainType(g_valueTypeDescriptionCLSID))
-		slots.push_back(makeSlot(ibColumnRole::TypeDescription, ibTypeBlob(), wxString(), false));
+		slots.push_back(makeSlot(ibColumnRole::TypeDescription, ibTypeBlob(), ibString(), false));
 
 	// Reference pair — _RTRef (target clsid, BIGINT) + _RRRef (pure guid blob, fixed-width BINARY so
 	// it is indexable for the dot-walk = join). Present when ANY clsid in the type is a reference.
@@ -192,8 +192,8 @@ std::vector<ibColumnSlot> ibBackendQueryColumn::DescribeLayout() const
 	for (const auto& clsid : td.GetClsidList())
 		if (IsReference(clsid)) { hasReference = true; break; }
 	if (hasReference) {
-		slots.push_back(makeSlot(ibColumnRole::ReferenceType, ibTypeBigInt(),                 wxString(), false));
-		slots.push_back(makeSlot(ibColumnRole::ReferenceId,   ibTypeBinary(reference_size_t), wxString(), false));
+		slots.push_back(makeSlot(ibColumnRole::ReferenceType, ibTypeBigInt(),                 ibString(), false));
+		slots.push_back(makeSlot(ibColumnRole::ReferenceId,   ibTypeBinary(reference_size_t), ibString(), false));
 	}
 
 	return slots;
@@ -202,7 +202,7 @@ std::vector<ibColumnSlot> ibBackendQueryColumn::DescribeLayout() const
 // ⭐ THE DEFAULT READ. It is the value codec, unchanged: the `_TYPE` tag says which field carries the
 // value, and the field is read accordingly. What moved is WHO IS ASKED — callers ask the column, and
 // this is the answer nearly all of them give.
-bool ibBackendQueryColumn::ReadValue(const wxString& fieldName, const ibMetaData* metaData,
+bool ibBackendQueryColumn::ReadValue(const ibString& fieldName, const ibMetaData* metaData,
                                      ibValue& retValue, ibQueryResult& result, bool createData) const
 {
 	return ibColumnCodec::ReadValue(fieldName, this, metaData, retValue, result, createData);
@@ -226,7 +226,7 @@ void ibBackendQueryColumn::BindValue(ibQueryStatement& statement, const ibMetaDa
 // ⭐ A RAW COLUMN READS ITSELF — one field, chosen by its declared RawType, with no TYPE discriminator
 // to consult. This is the switch that used to sit inside every reader that projects a raw column,
 // written once, where the column is.
-bool ibBackendColumnRawDB::ReadValue(const wxString& fieldName, const ibMetaData* metaData,
+bool ibBackendColumnRawDB::ReadValue(const ibString& fieldName, const ibMetaData* metaData,
                                      ibValue& retValue, ibQueryResult& result, bool /*createData*/) const
 {
 	switch (GetRawType()) {
@@ -238,7 +238,7 @@ bool ibBackendColumnRawDB::ReadValue(const wxString& fieldName, const ibMetaData
 		// ⭐⭐ THE WRITE SIDE'S TWIN — sixteen bytes back into A GUID, and handed on AS ONE. The text
 		// spelling is a PROJECTION: handing it out meant every caller that wanted the identity parsed
 		// it back, and nobody downstream could tell a key from any other string.
-		wxMemoryBuffer bytes;
+		ibMemoryBuffer bytes;
 		result.GetResultBlob(fieldName, bytes);
 		if (bytes.GetDataLen() < sizeof(ibReference))
 			return false;
@@ -251,7 +251,7 @@ bool ibBackendColumnRawDB::ReadValue(const wxString& fieldName, const ibMetaData
 		// only the row key — which KIND of row it points at is a property of the table, not of the row
 		// (a tabular section's owner reference is the case). The column knows its target and hands
 		// both to the assembly.
-		wxMemoryBuffer bytes;
+		ibMemoryBuffer bytes;
 		result.GetResultBlob(fieldName, bytes);
 		retValue = ReadSingleTargetReference(metaData, GetRawTarget(), bytes);
 		return true;

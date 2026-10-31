@@ -8,7 +8,7 @@
 #include "frmserver/schema/clientSchema.h"
 
 // The commands of All functions — a number on the wire (schema's Command), a type here.
-enum class ibSchemaAllFunctionsCommand : s32 {
+enum class ibSchemaAllFunctionsCommand : std::int32_t {
 	Open = 1,   // {Item[, Type]} — the item's object, as the navigation opens it (Type: ibInterfaceCommandType)
 };
 
@@ -21,11 +21,11 @@ public:
 	// THE TREE — the objects grouped by kind, in the dialog's order, each group with what this person may open:
 	// available (no functional option has switched it off — the gate the sections ask) and shown to them
 	// (AccessRight_Show — the right the form door asks before it opens anything). Each item by its Item id.
-	virtual void Build(const ibSession& session, ibDataNode& tree) const override;
+	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& tree) const override;
 
 	// Open — only an item the tree offers this person; anything else is refused, whatever its id names.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
-		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const override;
 };
 
 #endif

@@ -27,7 +27,7 @@ class BACKEND_API ibDesignerExclusivePolicy : public ibSessionPolicy {
 public:
 	explicit ibDesignerExclusivePolicy(ibSessionRegistry* registry);
 
-	bool CanAdd(const ibSession& session, wxString& reason) override;
+	bool CanAdd(const ibSession& session, ibString& reason) override;
 
 private:
 	ibSessionRegistry* m_registry;

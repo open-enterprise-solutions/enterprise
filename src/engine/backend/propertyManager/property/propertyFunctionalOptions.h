@@ -16,7 +16,7 @@
 // Edited by the same dialog every metaobject binding uses (advpropChartBinding): the options of the
 // configuration, any set of them — or ONE, for what an option itself requires.
 class BACKEND_API ibPropertyFunctionalOptions : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& metaDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& metaDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
@@ -29,10 +29,10 @@ public:
 	// configuration no longer has (functionalOptionGate.h).
 	bool IsAvailable() const;
 
-	ibPropertyFunctionalOptions(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyFunctionalOptions(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 	// …or ONE option — what an option itself requires (metaFunctionalOptionObject.h).
-	ibPropertyFunctionalOptions(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, ibPropertyChoiceMode mode)
+	ibPropertyFunctionalOptions(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, ibPropertyChoiceMode mode)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())), m_choiceMode(mode) {}
 
 	virtual bool IsEmptyProperty() const override { return GetValueAsMetaDesc().GetTypeCount() == 0; }
@@ -44,7 +44,7 @@ public:
 protected:
 
 	// The family rule — see propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 

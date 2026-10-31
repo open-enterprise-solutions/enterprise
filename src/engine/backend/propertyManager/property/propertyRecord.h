@@ -6,19 +6,19 @@
 
 //base property for "record"
 class BACKEND_API ibPropertyRecord : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
-	ibMetaDescription& GetValueAsMetaDesc(const wxVariant& val) const;
+	ibMetaDescription& GetValueAsMetaDesc(const ibVariant& val) const;
 	void SetValue(const ibMetaDescription& val);
 
 	// WHICH REGISTERS A DOCUMENT POSTS TO — information, accumulation and accounting registers.
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
-	ibPropertyRecord(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyRecord(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyRecord(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyRecord(ibPropertyCategory* cat, const ibString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyRecord(ibPropertyCategory* cat, const ibString& name, const ibString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyRecord(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
@@ -42,21 +42,21 @@ protected:
 	// and everything downstream raises "its value is not of the expected kind": the delete path,
 	// the diff, the save. One mis-set property made a whole configuration unsaveable.
 	//
-	// ⚠ AND IT ARRIVED THE HONEST WAY: CreateValueList builds every candidate as ibVariantDataOwner,
+	// ⚠ AND IT ARRIVED THE HONEST WAY: CreateValueList builds every candidate as ibVariantOwner,
 	// so a caller that did the right thing — read GetValueList, pick, place the value it was
 	// offered — was handed the neighbour's wrapper by the property system itself.
 	//
 	// So the property TAKES THE DESCRIPTION AND WRAPS IT ITSELF. Anything of the family is accepted;
 	// anything else falls through to the base, which stores it as before.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 
 };
 
 // ⭐⭐ THE SEQUENCES A DOCUMENT REGISTERS IN — a list of its own, BESIDE the registers it posts
-// movements to and not among them (Max, 2026-09-18: "последовательности живут у себя… есть
-// последовательность, а есть движение"). Two doors, because they are two acts: a movement is what the
+// movements to and not among them (Max, 2026-09-18: "sequences live on their own… there is a
+// sequence, and there is a movement"). Two doors, because they are two acts: a movement is what the
 // document DID, a registration is that the document STANDS in an order — and a solution turns them on
 // and off separately.
 //

@@ -6,32 +6,32 @@
 //*                            Command group                            *
 //***********************************************************************
 
-ibValueMetaObjectCommandGroup::ibValueMetaObjectCommandGroup(const wxString& name, const wxString& synonym, const wxString& comment) :
+ibValueMetaObjectCommandGroup::ibValueMetaObjectCommandGroup(const ibString& name, const ibString& synonym, const ibString& comment) :
 	ibValueMetaObject(name, synonym, comment)
 {
 }
 
-wxString ibCommandGroupCaption(ibInterfaceCommandSection area)
+ibString ibCommandGroupCaption(ibInterfaceCommandSection area)
 {
 	ibValuePtr<ibValueEnumInterfaceCommandSection> areas = ibValue::CreateObject<ibValueEnumInterfaceCommandSection>();
 	for (unsigned int idx = 0; idx < areas->GetEnumCount(); idx++)
 		if (areas->GetEnumValue(idx) == area)
 			return areas->GetEnumDesc(idx);
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
-wxString ibCommandGroupCategoryCaption(ibCommandGroupCategory category)
+ibString ibCommandGroupCategoryCaption(ibCommandGroupCategory category)
 {
 	ibValuePtr<ibValueEnumCommandGroupCategory> panels = ibValue::CreateObject<ibValueEnumCommandGroupCategory>();
 	for (unsigned int idx = 0; idx < panels->GetEnumCount(); idx++)
 		if (panels->GetEnumValue(idx) == category)
 			return panels->GetEnumDesc(idx);
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
-wxString ibCommandGroupLabel(ibInterfaceCommandSection area)
+ibString ibCommandGroupLabel(ibInterfaceCommandSection area)
 {
-	return ibCommandGroupCategoryCaption(ibCommandGroupCategoryOf(area)) + wxT(".") + ibCommandGroupCaption(area);
+	return ibCommandGroupCategoryCaption(ibCommandGroupCategoryOf(area)) + ibT(".") + ibCommandGroupCaption(area);
 }
 
 //***********************************************************************

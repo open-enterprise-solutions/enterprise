@@ -1,0 +1,48 @@
+// THE VERSION RESOURCE OF EVERY PROGRAM AND LIBRARY OF THE PLATFORM - one place: each one's .rc names itself and
+// includes this.
+//
+//   #define OES_FILE_DESCRIPTION "OES application cluster"
+//   #define OES_FILE_NAME        "appcluster.exe"
+//   #define OES_FILE_TYPE        VFT_APP              (a library: VFT_DLL)
+//   #include "../core/version.rc2"
+//
+// The version itself is the platform's (core/build.h). A program's manifest is core/program.manifest (a library has
+// none).
+
+#include "../core/build.h"
+
+#define OES_VERSION_TEXT_(major, minor, release) #major "." #minor "." #release ".0"
+#define OES_VERSION_TEXT(major, minor, release)  OES_VERSION_TEXT_(major, minor, release)
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION    OES_VERSION_MAJOR, OES_VERSION_MINOR, OES_VERSION_RELEASE, 0
+ PRODUCTVERSION OES_VERSION_MAJOR, OES_VERSION_MINOR, OES_VERSION_RELEASE, 0
+ FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS      VS_FF_DEBUG
+#else
+ FILEFLAGS      0x0L
+#endif
+ FILEOS         VOS_NT_WINDOWS32
+ FILETYPE       OES_FILE_TYPE
+ FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "Open Enterprise Solutions"
+            VALUE "FileDescription",  OES_FILE_DESCRIPTION
+            VALUE "FileVersion",      OES_VERSION_TEXT(OES_VERSION_MAJOR, OES_VERSION_MINOR, OES_VERSION_RELEASE)
+            VALUE "InternalName",     OES_FILE_NAME
+            VALUE "LegalCopyright",   "Copyright (C) 2022-2026 Maksym Korniienko"
+            VALUE "OriginalFilename", OES_FILE_NAME
+            VALUE "ProductName",      "OES Enterprise"
+            VALUE "ProductVersion",   OES_VERSION_TEXT(OES_VERSION_MAJOR, OES_VERSION_MINOR, OES_VERSION_RELEASE)
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

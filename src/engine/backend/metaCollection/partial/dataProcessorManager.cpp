@@ -23,9 +23,9 @@ enum Func {
 
 void ibValueManagerDataObjectDataProcessor::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Create"), wxT("Create()"));
-	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));   // the COUNT, not only the text - see Data.From
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(ibT("Create"), ibT("Create()"));
+	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(name : string, owner : any, id : guid)"));   // the COUNT, not only the text - see Data.From
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
 }
 
 bool ibValueManagerDataObjectDataProcessor::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -53,7 +53,7 @@ bool ibValueManagerDataObjectDataProcessor::CallAsFunc(const long lMethodNum, ib
 
 void ibValueManagerDataObjectExternalDataProcessor::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Create"), 1, wxT("Create(fullPath : string)"));
+	helper.AppendFunc(ibT("Create"), 1, ibT("Create(fullPath : string)"));
 }
 
 #include "backend/system/systemManager.h"

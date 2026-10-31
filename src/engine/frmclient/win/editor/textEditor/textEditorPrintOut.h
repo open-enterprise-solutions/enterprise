@@ -2,12 +2,13 @@
 #define __TEXT_EDIT_PRINT_H__
 
 #include "textEditor.h"
+#include "frmclient/frmclient.h"
 
 #if wxUSE_PRINTING_ARCHITECTURE
 
 //----------------------------------------------------------------------------
 //! EditPrint
-class ibTextEditorPrintout : public wxPrintout {
+class FRMCLIENT_API ibTextEditorPrintout : public wxPrintout {
 
 public:
 

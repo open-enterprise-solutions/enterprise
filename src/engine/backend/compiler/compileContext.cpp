@@ -1,6 +1,8 @@
 ﻿#include "compileContext.h"
 #include "compileCode.h"
 
+#include "backend/backend_exception.h"   // ibBackendCoreException
+
 ////////////////////////////////////////////////////////////////////////
 // ibCompileContext ibCompileContext ibCompileContext ibCompileContext//
 ////////////////////////////////////////////////////////////////////////
@@ -9,14 +11,14 @@
 * Create a new variable identifier
 */
 
-ibParamUnit ibCompileContext::CreateVariable(const wxString& strPrefix)
+ibParamUnit ibCompileContext::CreateVariable(const ibString& strPrefix)
 {
 	if (m_numReturn == RETURN_BLOCK) {
 		return m_parentContext->CreateVariable(strPrefix);
 	}
 
-	const wxString& strTempName =
-		wxString::Format(strPrefix + wxT("%d"), ++m_numTempVar); //@temp_ - to ensure the uniqueness of the name
+	const ibString& strTempName =
+		ibString::Format(strPrefix + ibT("%d"), ++m_numTempVar); //@temp_ - to ensure the uniqueness of the name
 
 	ibParamUnit variable =
 		GetVariable(strTempName, false, false, false, true); //we look for a temporary variable only in the local context
@@ -30,7 +32,7 @@ ibParamUnit ibCompileContext::CreateVariable(const wxString& strPrefix)
 * Returns the added variable as a ibParamUnit
 */
 
-ibParamUnit ibCompileContext::AddVariable(const wxString& strVarName,
+ibParamUnit ibCompileContext::AddVariable(const ibString& strVarName,
 	const ibClassID& typeVar, bool exportVar, bool contextVar, bool tempVar)
 {
 
@@ -39,9 +41,9 @@ ibParamUnit ibCompileContext::AddVariable(const wxString& strVarName,
 	// (parent module entries), which is wrong: declaring `Var X` here
 	// is allowed even if a parent module exports an X.
 	auto existing = std::find_if(m_listVariable.begin(), m_listVariable.end(),
-		[&strVarName](const auto& v) { return v && stringUtils::CompareString(strVarName, v->m_strRealName); });
+		[&strVarName](const auto& v) { return v && stringUtils::IsSameAs(strVarName, v->m_strRealName); });
 	if (existing != m_listVariable.end()) {
-		m_compileModule->SetError(ERROR_IDENTIFIER_DUPLICATE, strVarName);
+		m_compileModule->Refuse(ibScriptError_IdentifierDuplicate, strVarName);
 		return ibParamUnit();
 	}
 
@@ -62,7 +64,7 @@ ibParamUnit ibCompileContext::AddVariable(const wxString& strVarName,
 	}
 
 	unsigned int numVariable = m_listVariable.size();
-	PushVariable(strVarName, wxT(""), numVariable,
+	PushVariable(strVarName, ibT(""), numVariable,
 		typeVar, exportVar, contextVar, tempVar);
 
 	ibParamUnit variable;
@@ -82,7 +84,7 @@ ibParamUnit ibCompileContext::AddVariable(const wxString& strVarName,
 * If the required variable does not exist, then a new variable definition is created
 */
 
-ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFindInParent, bool bCheckError, bool contextVar, bool tempVar)
+ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFindInParent, bool bCheckError, bool contextVar, bool tempVar)
 {
 	int numCanUseLocalInParent = m_numFindLocalInParent;
 
@@ -228,7 +230,7 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 			if (auto* hostFn = m_compileModule->GetEvalHostFunction()) {
 				const auto& fn = *hostFn;
 				auto fIt = std::find_if(fn.m_listLocals.begin(), fn.m_listLocals.end(),
-					[&strVarName](const auto& v) { return stringUtils::CompareString(strVarName, v.m_strRealName); });
+					[&strVarName](const auto& v) { return stringUtils::IsSameAs(strVarName, v.m_strRealName); });
 				if (fIt != fn.m_listLocals.end()) {
 					ibParamUnit variable;
 					variable.m_numArray = (numParent - numContext) + 1;
@@ -307,7 +309,7 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 		}
 
 		if (bCheckError) {
-			m_compileModule->SetError(ERROR_VAR_NOT_FOUND, strVarName); //display an error message
+			m_compileModule->Refuse(ibScriptError_VarNotFound, strVarName); //display an error message
 			return ibParamUnit();
 		}
 
@@ -339,7 +341,7 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 	return variable;
 }
 
-void ibCompileContext::PushVariable(const wxString& strVarName, const wxString& strContextVar, unsigned int numVariable,
+void ibCompileContext::PushVariable(const ibString& strVarName, const ibString& strContextVar, unsigned int numVariable,
 	const ibClassID& typeVar, bool exportVar, bool contextVar, bool tempVar)
 {
 	// Entries are keyed by m_strRealName via case-insensitive find_if (no
@@ -379,14 +381,14 @@ void ibCompileContext::PushVariable(const wxString& strVarName, const wxString& 
 	// Vector storage with map-like upsert semantics: replace an existing
 	// same-named entry (was insert_or_assign's last-wins), else append.
 	auto itVar = std::find_if(m_listVariable.begin(), m_listVariable.end(),
-		[&](const auto& v) { return v && stringUtils::CompareString(currentVariable->m_strRealName, v->m_strRealName); });
+		[&](const auto& v) { return v && stringUtils::IsSameAs(currentVariable->m_strRealName, v->m_strRealName); });
 	if (itVar != m_listVariable.end())
 		*itVar = std::move(currentVariable);
 	else
 		m_listVariable.push_back(std::move(currentVariable));
 }
 
-void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString& strContextVar, const wxString& strShortDescription, unsigned int numFunction, bool hasRetVal, int argCount)
+void ibCompileContext::PushFunction(const ibString& strFuncName, const ibString& strContextVar, const ibString& strShortDescription, unsigned int numFunction, bool hasRetVal, int argCount)
 {
 	// No compile-context here. A context method has no body to compile, so the only thing the
 	// (name, context) ctor would do is wire the back-pointer on a context nobody then keeps:
@@ -401,7 +403,7 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
 	// m_bCodeRet defaults false and context methods have no compile finalize to run
 	// IsReturnFunction(m_numReturn) — set it straight from hasRetVal, otherwise every built-in
 	// function (TrimAll, Left, Right, ...) resolves as a procedure and using its result throws
-	// ERROR_USE_PROCEDURE_AS_FUNCTION.
+	// ibScriptError_UseProcedureAsFunction.
 	contextFunction->m_bCodeRet = hasRetVal;
 
 	contextFunction->m_strContext = strContextVar; //variable for which the attribute is called
@@ -427,7 +429,7 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
 
 	// Vector storage with map-like upsert semantics (see PushVariable).
 	auto itFunc = std::find_if(m_listFunction.begin(), m_listFunction.end(),
-		[&](const auto& f) { return f && stringUtils::CompareString(contextFunction->m_strRealName, f->m_strRealName); });
+		[&](const auto& f) { return f && stringUtils::IsSameAs(contextFunction->m_strRealName, f->m_strRealName); });
 	if (itFunc != m_listFunction.end())
 		*itFunc = std::move(contextFunction);
 	else
@@ -439,10 +441,10 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
  * Returns true - if the variable is found
  */
 
-bool ibCompileContext::FindVariable(const wxString& strVarName, std::shared_ptr<ibVariable>& foundedVar, bool contextVar)
+bool ibCompileContext::FindVariable(const ibString& strVarName, std::shared_ptr<ibVariable>& foundedVar, bool contextVar)
 {
 	auto it = std::find_if(m_listVariable.begin(), m_listVariable.end(),
-		[strVarName](const auto& v) {return v && stringUtils::CompareString(strVarName, v->m_strRealName); });
+		[strVarName](const auto& v) {return v && stringUtils::IsSameAs(strVarName, v->m_strRealName); });
 
 	if (contextVar) {
 
@@ -490,10 +492,10 @@ bool ibCompileContext::FindVariable(const wxString& strVarName, std::shared_ptr<
  * Returns true - if the variable is found
  */
 
-bool ibCompileContext::FindFunction(const wxString& strFuncName, std::shared_ptr<ibFunction>& foundedFunc, bool contextVar)
+bool ibCompileContext::FindFunction(const ibString& strFuncName, std::shared_ptr<ibFunction>& foundedFunc, bool contextVar)
 {
 	auto it = std::find_if(m_listFunction.begin(), m_listFunction.end(),
-		[strFuncName](const auto& f) { return f && stringUtils::CompareString(strFuncName, f->m_strRealName); });
+		[strFuncName](const auto& f) { return f && stringUtils::IsSameAs(strFuncName, f->m_strRealName); });
 
 	if (contextVar) {
 		if (it != m_listFunction.end() && *it) {
@@ -536,7 +538,7 @@ void ibCompileContext::CreateLabels()
 	wxASSERT(m_compileModule != nullptr);
 	for (unsigned int i = 0; i < m_listLabel.size(); i++) {
 
-		const wxString& strName = m_listLabel[i]->m_strName;
+		const ibString& strName = m_listLabel[i]->m_strName;
 		const int oldLine = m_listLabel[i]->m_numLine;
 
 		// PRESENCE, NOT VALUE. Zero was doing two jobs here: it is a legitimate
@@ -552,7 +554,7 @@ void ibCompileContext::CreateLabels()
 		const auto itLabel = m_listLabelDef.find(strName);
 		if (itLabel == m_listLabelDef.end()) {
 			m_compileModule->m_numCurrentCompile = m_listLabel[i]->m_numError;
-			m_compileModule->SetError(ERROR_LABEL_DEFINE, strName); // the label was never declared
+			m_compileModule->Refuse(ibScriptError_LabelDefine, strName); // the label was never declared
 			continue;
 		}
 

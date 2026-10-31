@@ -2,6 +2,7 @@
 #define __ROLE_HELPER_H__
 
 #include "backend_core.h"
+#include "core/roleCompositionMode.h"   // ibRoleCompositionMode — how a role combines; folded here (ibRoleUserInfo, AccessRight)
 
 //********************************************************************************************
 //*                                     Defines                                              *
@@ -10,44 +11,14 @@
 class BACKEND_API ibAccessObject;
 
 //********************************************************************************************
-//*                                  Role composition                                        *
-//********************************************************************************************
-
-// How a role COMBINES with the user's other roles. It lives HERE, at the top of the role layer,
-// because both users of it are below the metadata: the runtime role list (ibRoleUserInfo) and the
-// rights fold (ibAccessObject::AccessRight). The Role METAOBJECT only carries it as a property.
-//
-// Named after the SET operation rather than the boolean one, because that is what the fold does:
-//
-//   Union        - the role ADDS to what is permitted; one of them granting is enough. An ordinary
-//                  right, and the DEFAULT — anything that does not say otherwise is one, so an
-//                  existing configuration behaves exactly as it did.
-//   Intersection - the role GRANTS NOTHING and SUBTRACTS: what it denies stays denied whatever the
-//                  union roles granted, and no further role can widen past it. This is what a data
-//                  SEPARATOR is (organisation / division / clearance): declared once instead of
-//                  copied into every role, so rights and separators ADD (N+M) instead of
-//                  multiplying (N×M).
-//
-// The verdict is (union1 OR union2 …) AND intersection1 AND intersection2 …, so the ORDER roles are
-// assigned in never changes the answer — unlike an ACL with DENY, where it decides the outcome. A
-// third "deny" mode would add no expressive power: it is an intersection with a negated condition.
-//
-// A role that says NOTHING participates in neither fold. Without that neutrality a separator would
-// strip every right / hide every table it was never told about.
-enum ibRoleCompositionMode {
-	ibRoleCompositionMode_Union,
-	ibRoleCompositionMode_Intersection
-};
-
-//********************************************************************************************
 //*										 Role												 *
 //********************************************************************************************
 
 class BACKEND_API ibRole {
 public:
 
-	wxString GetName() const { return m_roleName; }
-	wxString GetLabel() const { return m_roleLabel.IsEmpty() ? m_roleName : m_roleLabel; }
+	const ibString& GetName() const { return m_roleName; }
+	ibString GetLabel() const { return m_roleLabel.IsEmpty() ? m_roleName : m_roleLabel; }
 
 	ibAccessObject* GetRoleObject() const { return m_owner; }
 
@@ -55,7 +26,7 @@ public:
 
 protected:
 
-	ibRole(ibAccessObject* metaObject, const wxString& roleName, const wxString& roleLabel,
+	ibRole(ibAccessObject* metaObject, const ibString& roleName, const ibString& roleLabel,
 		const bool& value = true) :
 		m_roleName(roleName),
 		m_roleLabel(roleLabel),
@@ -71,8 +42,8 @@ private:
 
 	void InitRole(ibAccessObject* obj, const bool& value = true);
 
-	wxString m_roleName;
-	wxString m_roleLabel;
+	ibString m_roleName;
+	ibString m_roleLabel;
 	ibAccessObject* m_owner; // pointer to the owner object
 	bool m_defValue;  // the answer when nothing was ever set for this right
 };
@@ -106,7 +77,7 @@ struct ibRoleUserInfo {
 	std::vector<ibUserRoleEntry> m_arrayRole;
 };
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 class BACKEND_API ibAccessObject {
 public:
@@ -119,23 +90,23 @@ public:
 	virtual ibRoleCompositionMode GetRoleCompositionMode() const { return ibRoleCompositionMode_Union; }
 
 	bool AccessRight(const ibRole* role) const { return AccessRight(role, GetUserRoleInfo()); }
-	bool AccessRight(const wxString& strRoleName) const { return AccessRight(strRoleName, GetUserRoleInfo()); }
+	bool AccessRight(const ibString& strRoleName) const { return AccessRight(strRoleName, GetUserRoleInfo()); }
 
 	bool AccessRight(const ibRole* role, const ibRoleUserInfo& roleInfo) const;
-	bool AccessRight(const wxString& strRoleName, const ibRoleUserInfo& roleInfo) const {
+	bool AccessRight(const ibString& strRoleName, const ibRoleUserInfo& roleInfo) const {
 		if (!strRoleName.IsEmpty()) {
 			auto iterator = std::find_if(m_roles.begin(), m_roles.end(),
-				[strRoleName](const auto& pair) { return stringUtils::CompareString(strRoleName, pair.first); });
+				[strRoleName](const auto& pair) { return stringUtils::IsSameAs(strRoleName, pair.first); });
 			if (iterator != m_roles.end()) return AccessRight(iterator->second, roleInfo);
 		}
 		return false;
 	}
 
 	bool SetRight(const ibRole* role, const ibRoleID& id, const bool& val);
-	bool SetRight(const wxString& strRoleName, const ibRoleID& id, const bool& val) {
+	bool SetRight(const ibString& strRoleName, const ibRoleID& id, const bool& val) {
 		if (!strRoleName.IsEmpty()) {
 			auto iterator = std::find_if(m_roles.begin(), m_roles.end(),
-				[strRoleName](const auto& pair) { return stringUtils::CompareString(strRoleName, pair.first); });
+				[strRoleName](const auto& pair) { return stringUtils::IsSameAs(strRoleName, pair.first); });
 			if (iterator != m_roles.end()) return SetRight(iterator->second, id, val);
 		}
 		return false;
@@ -147,7 +118,7 @@ public:
 	* @note Notar que no existe el método SetProperty, ya que la modificación
 	*       se hace a través de la referencia.
 	*/
-	ibRole* GetRole(const wxString& nameParam) const;
+	ibRole* GetRole(const ibString& nameParam) const;
 	ibRole* GetRole(unsigned int idx) const; // throws ...;
 
 	// Do this object's rights control a ROW, or the whole TABLE? A property of the OBJECT — one
@@ -198,10 +169,10 @@ protected:
 	}
 
 	std::map<ibRoleID,
-		std::map<wxString, bool>
+		std::map<ibString, bool>
 	> m_valRoles;
 
-	std::vector<std::pair<wxString, ibRole*>> m_roles;
+	std::vector<std::pair<ibString, ibRole*>> m_roles;
 };
 
 #endif

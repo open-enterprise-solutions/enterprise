@@ -15,7 +15,7 @@
 // variant via workerPool is a follow-up (Phase 5b).
 class BACKEND_API ibLoggerSweep {
 public:
-    static int RunOnce(const wxString& dir, int retentionDays);
+    static int RunOnce(const ibString& dir, int retentionDays);
 };
 
 #endif

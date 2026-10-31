@@ -23,30 +23,30 @@
 struct ibGitResult {
 	bool         ok = false;       // exit code 0
 	long         exitCode = -1;
-	wxString     output;           // joined stdout
-	wxString     error;            // joined stderr
+	ibString     output;           // joined stdout
+	ibString     error;            // joined stderr
 };
 
 // One porcelain status entry.
 struct ibGitStatusEntry {
-	wxString path;
-	wxString xy;                   // two-char XY code from `git status --porcelain` (e.g. " M", "??", "A ")
+	ibString path;
+	ibString xy;                   // two-char XY code from `git status --porcelain` (e.g. " M", "??", "A ")
 	bool     staged = false;       // X column non-space and not '?'
 	bool     untracked = false;    // "??"
 };
 
 // One log entry.
 struct ibGitLogEntry {
-	wxString hash;                 // short hash
-	wxString author;
-	wxString date;                 // ISO
-	wxString subject;
+	ibString hash;                 // short hash
+	ibString author;
+	ibString date;                 // ISO
+	ibString subject;
 };
 
 class BACKEND_API ibGitService {
 public:
 	// `workdir` is the configuration working copy (where XML/JSON is exported).
-	explicit ibGitService(const wxString& workdir);
+	explicit ibGitService(const ibString& workdir);
 
 	// `git` reachable on PATH at all?
 	static bool IsGitAvailable();
@@ -54,32 +54,32 @@ public:
 	// Repo lifecycle ------------------------------------------------------
 	bool      IsRepo() const;                          // workdir inside a git work-tree
 	ibGitResult Init();                                // git init
-	ibGitResult Clone(const wxString& url);            // git clone <url> into workdir
+	ibGitResult Clone(const ibString& url);            // git clone <url> into workdir
 
 	// Inspection ----------------------------------------------------------
 	std::vector<ibGitStatusEntry> Status() const;
 	std::vector<ibGitLogEntry>    Log(int maxCount = 50) const;
-	wxString    CurrentBranch() const;                 // empty on detached / non-repo
-	wxArrayString Branches() const;                    // local branch names
-	wxString    Diff(const wxString& path = wxEmptyString) const;  // unified diff, optionally one path
+	ibString    CurrentBranch() const;                 // empty on detached / non-repo
+	std::vector<ibString> Branches() const;                    // local branch names
+	ibString    Diff(const ibString& path = ibEmptyString) const;  // unified diff, optionally one path
 
 	// Mutation ------------------------------------------------------------
 	ibGitResult StageAll();                            // git add -A
-	ibGitResult Stage(const wxArrayString& paths);
-	ibGitResult Commit(const wxString& message);       // commits the staged set
-	ibGitResult CommitAll(const wxString& message);    // stage -A then commit
-	ibGitResult CreateBranch(const wxString& name, bool checkout = true);
-	ibGitResult Checkout(const wxString& branch);
-	ibGitResult Push(const wxString& remote = wxT("origin"), const wxString& branch = wxEmptyString);
-	ibGitResult Pull(const wxString& remote = wxT("origin"), const wxString& branch = wxEmptyString);
+	ibGitResult Stage(const std::vector<ibString>& paths);
+	ibGitResult Commit(const ibString& message);       // commits the staged set
+	ibGitResult CommitAll(const ibString& message);    // stage -A then commit
+	ibGitResult CreateBranch(const ibString& name, bool checkout = true);
+	ibGitResult Checkout(const ibString& branch);
+	ibGitResult Push(const ibString& remote = ibT("origin"), const ibString& branch = ibEmptyString);
+	ibGitResult Pull(const ibString& remote = ibT("origin"), const ibString& branch = ibEmptyString);
 
-	const wxString& Workdir() const { return m_workdir; }
+	const ibString& Workdir() const { return m_workdir; }
 
 private:
 	// Run `git -C <workdir> <args...>` synchronously, capturing stdout/stderr.
-	ibGitResult Run(const wxArrayString& args) const;
+	ibGitResult Run(const std::vector<ibString>& args) const;
 
-	wxString m_workdir;
+	ibString m_workdir;
 };
 
 #endif // _OES_GIT_SERVICE_H_

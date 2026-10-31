@@ -4,31 +4,16 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"
 
-class BACKEND_API ibVariantDataOwner : public ibVariantDataMetaDesc {
-	wxString MakeString() const;
+class BACKEND_API ibVariantOwner : public ibVariantMetaDesc {
 public:
 
 	ibValue GetDataValue() const;
 
-	ibVariantDataOwner(const ibPropertyObject* prop, const ibMetaDescription& typeDesc) : ibVariantDataMetaDesc(prop, typeDesc) {}
-	ibVariantDataOwner(const ibVariantDataOwner& src) : ibVariantDataMetaDesc(src.m_ownerProperty, src.m_metaDesc) {}
+	ibVariantOwner(const ibPropertyObject* prop, const ibMetaDescription& typeDesc) : ibVariantMetaDesc(prop, typeDesc) {}
+	ibVariantOwner(const ibVariantOwner& src) : ibVariantMetaDesc(src.m_ownerProperty, src.m_metaDesc) {}
 
-	virtual ibVariantDataOwner* Clone() const {
-		return new ibVariantDataOwner(*this);
-	}
+	virtual ibString GetString() const override;
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const { return wxT("ibVariantDataOwner"); }
 };
 
 // ⭐⭐ THE CANDIDATES FOR A RELATIONSHIP — every metaobject of the classes that may fill it, each
@@ -70,8 +55,8 @@ inline ibPropertyChoiceMode CreateValueList(ibPropertyObject* owner, ibPropertyC
 		// work out: it places this. A single metaID, because one choice is one relationship — a
 		// Mult-mode property composes the set from the ones that were picked.
 		list.Add((long)object->GetMetaID(), object->GetName(), object->GetSynonym(),
-			wxVariant(new ibVariantDataOwner(factory, ibMetaDescription(object->GetMetaID()))),
-			object->GetIcon());
+			ibVariant(new ibVariantOwner(factory, ibMetaDescription(object->GetMetaID()))),
+			object->GetClassType());
 	}
 
 	// THE MODE EVEN WHEN THE LIST CAME OUT EMPTY. "There is nothing of that kind in this

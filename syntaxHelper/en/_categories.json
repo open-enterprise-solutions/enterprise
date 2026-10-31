@@ -19,7 +19,9 @@
     "value_table": "Value table (Table)",
     "http": "HTTP — requests to another system",
     "json": "JSON — reading and writing",
+    "xml": "XML — reading and writing",
     "text_files": "Text files and bytes — reading and writing",
+    "hashing": "Hashing, base64 and hex",
     "runtime": "Runtime",
     "guide": "Guide"
   }

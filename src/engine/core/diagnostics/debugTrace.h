@@ -5,14 +5,11 @@
 // Debug tracing switches + a file sink
 ////////////////////////////////////////////////////////////////////////////
 
-#include <wx/string.h>
-#include <wx/utils.h>
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
+#include "core/fdatetime.h"
 
-#include <wx/filename.h>
-#include <wx/file.h>
-#include <wx/datetime.h>
-#include <wx/log.h>   // wxLogNull - creating the folder says nothing on failure
+#include <cstdlib>
+#include <fstream>
 
 // IS THIS TRACE ON? Read once, from the environment, so a build does not have to be repeated to
 // answer a question — and so the answer costs one bool test on the hot path rather than a string
@@ -21,12 +18,13 @@
 // compiler/valueFactory.cpp, whose counters run either way, only their output is conditional).
 inline bool ibDebugTraceEnabled(const char* envVar)
 {
-	wxString value;
-	if (!wxGetEnv(wxString::FromUTF8(envVar), &value))
+	const char* const set = std::getenv(envVar);
+	if (set == nullptr)
 		return false;
 
+	ibString value = ibString::FromUTF8(set);
 	value.Trim(true).Trim(false).MakeLower();
-	return !value.IsEmpty() && value != wxT("0") && value != wxT("false") && value != wxT("off");
+	return !value.IsEmpty() && value != ibT("0") && value != ibT("false") && value != ibT("off");
 }
 
 // DIAGNOSTICS THAT SOMEBODY CAN ACTUALLY READ. Writes one line to `oes-debug.log`, appending.
@@ -43,28 +41,16 @@ inline bool ibDebugTraceEnabled(const char* envVar)
 // Not a general logging facility and not meant to become one — no levels, no categories. Use it
 // for the answers a diagnostic pass must deliver (WHICH object, WHICH id, WHICH branch), and
 // remove the call when its question is answered.
-inline void ibTraceToFile(const wxString& text)
+inline void ibTraceToFile(const ibString& text)
 {
-	wxFileName traceFile = wxFileName::DirName(ibDiagnosticFolder());
-	traceFile.SetFullName(wxT("oes-debug.log"));
-
 	// Inside a macOS bundle the folder is ~/Library/Logs/OES, which nothing else may have made yet.
-	// Quietly: a failure here must not become a wx message box in a GUI process.
-	if (!traceFile.DirExists()) {
-		wxLogNull quiet;
-		traceFile.Mkdir(wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-	}
+	const std::filesystem::path folder = ibPathOf(ibDiagnosticFolder());
+	std::error_code error;
+	std::filesystem::create_directories(folder, error);
 
-	const wxString path = traceFile.GetFullPath();
-
-	wxFile file;
-	const bool opened = wxFileName::FileExists(path)
-		? file.Open(path, wxFile::write_append)
-		: file.Create(path, /*overwrite*/ false);
-	if (!opened)
-		return;
-
-	file.Write(wxDateTime::Now().FormatISOCombined(wxT(' ')) + wxT("  ") + text + wxT("\n"));
+	std::ofstream file(folder / "oes-debug.log", std::ios::binary | std::ios::app);
+	if (file)
+		file << (ibDateTime::Now().Format(ibT("%Y-%m-%d %H:%M:%S")) + ibT("  ") + text + ibT("\n")).ToUtf8();
 }
 
 #endif

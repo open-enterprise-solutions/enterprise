@@ -36,12 +36,15 @@ ibDialogGeneration::ibDialogGeneration(const ibProtocolNode& request) :
 		new wxImageList(ICON_SIZE, ICON_SIZE), wxIMAGE_LIST_SMALL
 	);
 
-	for (const ibProtocolNode& typeCtor : request.Children()) {
+	const std::vector<ibProtocolNode> typeCtors = request.Children();
+	ibProtocolPictureReceive(request);   // at once, not a call per type
+
+	for (const ibProtocolNode& typeCtor : typeCtors) {
 		wxImageList* imageList = m_listData->GetImageList(wxIMAGE_LIST_SMALL);
-		const wxBitmap icon = ibProtocolPicture(typeCtor.GetString(ibProtocolName::Picture));
-		long lSelectedItem = m_listData->InsertItem(m_listData->GetItemCount(), typeCtor.GetString(ibProtocolName::Caption),
+		const wxBitmap icon = ibProtocolPicture(typeCtor, ibProtocol::ibRequest::ibGeneration::Picture);
+		long lSelectedItem = m_listData->InsertItem(m_listData->GetItemCount(), typeCtor.GetString(ibProtocol::ibRequest::ibGeneration::Caption),
 			icon.IsOk() ? imageList->Add(icon) : -1);
-		m_listData->SetItemData(lSelectedItem, static_cast<long>(typeCtor.GetInt(ibProtocolName::Id)));
+		m_listData->SetItemData(lSelectedItem, static_cast<long>(typeCtor.GetInt(ibProtocol::ibRequest::ibGeneration::Id)));
 	}
 
 	// Connect Events
@@ -60,7 +63,7 @@ ibDialogGeneration::ibDialogGeneration(const ibProtocolNode& request) :
 	wxDialog::SetSizer(mainSizer);
 	wxDialog::Layout();
 
-	const wxBitmap picture = ibProtocolPicture(request.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(request, ibProtocol::ibRequest::ibGeneration::Picture);
 	if (picture.IsOk()) {
 		wxIcon dlg_icon;
 		dlg_icon.CopyFromBitmap(picture);

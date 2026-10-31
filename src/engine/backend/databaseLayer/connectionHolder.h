@@ -104,8 +104,8 @@ public:
 	// narrower "did this save CREATE it" — those are the only tables it may drop wholesale. When the
 	// shape question widened the single set, the compensation kept reading it as the created list,
 	// and a failed second phase dropped a table that had merely gained a column — with its data.
-	std::set<wxString>&                 DdlCreatedTables()  { return m_ddlCreated; }   // created by THIS save
-	std::set<wxString>&                 DdlShapedTables()   { return m_ddlShaped; }    // shape changed (deferral)
+	std::set<ibString>&                 DdlCreatedTables()  { return m_ddlCreated; }   // created by THIS save
+	std::set<ibString>&                 DdlShapedTables()   { return m_ddlShaped; }    // shape changed (deferral)
 	std::vector<std::function<bool()>>& DdlDeferredWrites() { return m_ddlDeferred; }
 
 	// The compensation ledger: for every DDL the first commit ran on a PRE-EXISTING object, the
@@ -118,8 +118,8 @@ protected:
 	class ibConnectionPool* m_pool = nullptr;
 
 private:
-	std::set<wxString>                 m_ddlCreated;
-	std::set<wxString>                 m_ddlShaped;
+	std::set<ibString>                 m_ddlCreated;
+	std::set<ibString>                 m_ddlShaped;
 	std::vector<std::function<bool()>> m_ddlDeferred;
 	std::vector<std::function<void(ibDatabaseLayer*)>> m_ddlUndo;
 };

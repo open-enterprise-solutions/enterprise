@@ -1,0 +1,8 @@
+// frmclient.dll - its version (core/version.rc2).
+
+#include <windows.h>
+
+#define OES_FILE_DESCRIPTION "OES form client library"
+#define OES_FILE_NAME        "frmclient.dll"
+#define OES_FILE_TYPE        VFT_DLL
+#include "../core/version.rc2"

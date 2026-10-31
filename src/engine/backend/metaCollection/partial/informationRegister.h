@@ -29,10 +29,10 @@ template <typename TSlice>
 class ibInfoRegisterSliceDescriptor : public ibQueryableSourceDescriptor
 {
 public:
-	ibInfoRegisterSliceDescriptor(ibValueMetaObjectInformationRegister* reg, const wxString& suffix)
+	ibInfoRegisterSliceDescriptor(ibValueMetaObjectInformationRegister* reg, const ibString& suffix)
 		: m_reg(reg), m_suffix(suffix) {}
-	wxString GetNamespace() const override;
-	wxString GetName() const override;
+	ibString GetNamespace() const override;
+	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	// ⭐ THE CONDITION IS CONSUMED — resolved against the register's own table (GetConditionScope) and applied
 	// while the slice is taken (ComputeSlice), not ANDed around the finished slice.
@@ -52,7 +52,7 @@ public:
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
 private:
 	ibValueMetaObjectInformationRegister* m_reg;
-	wxString                              m_suffix;
+	ibString                              m_suffix;
 	// (no companion member: the base owns what MakeCompanion builds — queryableFactory.h)
 };
 
@@ -67,8 +67,8 @@ private:
 
 	virtual ibFormTypeList GetFormType() const override {
 		ibFormTypeList formList;
-		formList.AppendItem(wxT("FormRecord"), _("Form record"), eFormRecord);
-		formList.AppendItem(wxT("FormList"), _("Form list"), eFormList);
+		formList.AppendItem(ibT("FormRecord"), _("Form record"), eFormRecord);
+		formList.AppendItem(ibT("FormList"), _("Form list"), eFormList);
 		return formList;
 	}
 
@@ -93,8 +93,8 @@ public:
 	}
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//events: 
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -151,7 +151,7 @@ public:
 	/**
 	* Property events
 	*/
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 protected:
 
@@ -237,7 +237,7 @@ private:
 				prop->AppendItem(
 					object->GetName(),
 					object->GetMetaID(),
-					object->GetIcon(),
+					object->GetClassType(),
 					object);
 			}
 		}
@@ -251,7 +251,7 @@ private:
 				prop->AppendItem(
 					object->GetName(),
 					object->GetMetaID(),
-					object->GetIcon(),
+					object->GetClassType(),
 					object);
 			}
 		}
@@ -260,16 +260,16 @@ private:
 
 	ibValueMetaObjectRecordManager* m_metaRecordManager;
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordSetModule"), _("Record set module"), _("Code that runs with a record set of the register: its BeforeWrite and OnWrite handlers, and the procedures they call - for a set written by a document, by the record form or by a script."));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the register as a whole rather than of one set: its exported procedures and functions are called on the manager, as InformationRegisters.<Name>.<Function>()."));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, ibT("RecordSetModule"), _("Record set module"), _("Code that runs with a record set of the register: its BeforeWrite and OnWrite handlers, and the procedures they call - for a set written by a document, by the record form or by a script."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, ibT("ManagerModule"), _("Manager module"), _("Code of the register as a whole rather than of one set: its exported procedures and functions are called on the manager, as InformationRegisters.<Name>.<Function>()."));
 
-	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
-	ibPropertyList* m_propertyDefFormRecord = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormRecord"), _("Default Record Form"), _("The form one record opens with (an independent register is edited record by record). Empty: the form is generated from the register's fields."), &ibValueMetaObjectInformationRegister::FillFormRecord);
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the register's list opens with. Empty: the list form is generated from the register's fields."), &ibValueMetaObjectInformationRegister::FillFormList);
+	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(ibT("PresetValues"), _("Preset values"));
+	ibPropertyList* m_propertyDefFormRecord = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormRecord"), _("Default Record Form"), _("The form one record opens with (an independent register is edited record by record). Empty: the form is generated from the register's fields."), &ibValueMetaObjectInformationRegister::FillFormRecord);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormList"), _("Default List Form"), _("The form the register's list opens with. Empty: the list form is generated from the register's fields."), &ibValueMetaObjectInformationRegister::FillFormList);
 
-	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertyEnum<ibValueEnumPeriodicity>* m_propertyPeriodicity = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumPeriodicity>>(m_categoryData, wxT("Periodicity"), _("Periodicity"), _("Whether the values have a history, and at what grain. Non-periodic (the default): one value per set of dimensions, no Period. Within a second, a day, a month, a quarter or a year: records carry a Period truncated to that grain, one record per key per period, and SliceLast / SliceFirst read the value as of a moment. A record written earlier with its time is still its period's."), ibPeriodicity::eNonPeriodic);
-	ibPropertyEnum<ibValueEnumWriteRegisterMode>* m_propertyWriteMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumWriteRegisterMode>>(m_categoryData, wxT("WriteMode"), _("Write mode"), _("Independent (the default): records are written on their own, by key, from the record form or code - the register has a record manager. Subordinate to recorder: records are movements of documents, written and cleared with their recorder like an accumulation register's."), ibWriteRegisterMode::eIndependent);
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
+	ibPropertyEnum<ibValueEnumPeriodicity>* m_propertyPeriodicity = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumPeriodicity>>(m_categoryData, ibT("Periodicity"), _("Periodicity"), _("Whether the values have a history, and at what grain. Non-periodic (the default): one value per set of dimensions, no Period. Within a second, a day, a month, a quarter or a year: records carry a Period truncated to that grain, one record per key per period, and SliceLast / SliceFirst read the value as of a moment. A record written earlier with its time is still its period's."), ibPeriodicity::eNonPeriodic);
+	ibPropertyEnum<ibValueEnumWriteRegisterMode>* m_propertyWriteMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumWriteRegisterMode>>(m_categoryData, ibT("WriteMode"), _("Write mode"), _("Independent (the default): records are written on their own, by key, from the record form or code - the register has a record manager. Subordinate to recorder: records are movements of documents, written and cleared with their recorder like an accumulation register's."), ibWriteRegisterMode::eIndependent);
 
 	// THE one place the period-slice is computed — the register's OWN SQL knowledge
 	// (table / dimensions / the boundary self-join). The slice companion queryable
@@ -286,8 +286,8 @@ private:
 	// L4 custom virtual-table descriptors — registered alongside the base records descriptor
 	// (RegisterData::m_queryable) on run, dropped on close. Reached as Information
 	// Register.<Name>.SliceLast / .SliceFirst.
-	ibInfoRegisterSliceDescriptor<ibSliceLastQueryable>  m_sliceLast { this, wxT("SliceLast") };
-	ibInfoRegisterSliceDescriptor<ibSliceFirstQueryable> m_sliceFirst{ this, wxT("SliceFirst") };
+	ibInfoRegisterSliceDescriptor<ibSliceLastQueryable>  m_sliceLast { this, ibT("SliceLast") };
+	ibInfoRegisterSliceDescriptor<ibSliceFirstQueryable> m_sliceFirst{ this, ibT("SliceFirst") };
 };
 
 //********************************************************************************************
@@ -385,15 +385,15 @@ public:
 
 // ibInfoRegisterSliceDescriptor — method bodies (the register + slice companions are complete here).
 template <typename TSlice>
-wxString ibInfoRegisterSliceDescriptor<TSlice>::GetNamespace() const
+ibString ibInfoRegisterSliceDescriptor<TSlice>::GetNamespace() const
 {
 	return ibValue::GetNameObjectFromID(m_reg->GetClassType());
 }
 
 template <typename TSlice>
-wxString ibInfoRegisterSliceDescriptor<TSlice>::GetName() const
+ibString ibInfoRegisterSliceDescriptor<TSlice>::GetName() const
 {
-	return m_reg->GetName() + wxT(".") + m_suffix;
+	return m_reg->GetName() + ibT(".") + m_suffix;
 }
 
 template <typename TSlice>
@@ -435,7 +435,7 @@ template <typename TSlice>
 void ibInfoRegisterSliceDescriptor<TSlice>::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
 {
 	ibQuerySourceParameter moment;
-	moment.m_name = wxT("Period");
+	moment.m_name = ibT("Period");
 	moment.m_description = _("The moment the slice is taken at - one row per set of dimensions, "
 	                         "carrying the record in force then. Left out, the slice is as of now "
 	                         "for a last slice, and as of the register's first record for a first "
@@ -445,7 +445,7 @@ void ibInfoRegisterSliceDescriptor<TSlice>::DescribeParameters(std::vector<ibQue
 	out.push_back(moment);
 
 	ibQuerySourceParameter condition;
-	condition.m_name      = wxT("Condition");
+	condition.m_name      = ibT("Condition");
 	condition.m_description = _("A condition applied while the slice is taken - on the DIMENSIONS it "
 	                            "chooses which keys are sliced, so only those are read; on anything "
 	                            "else it tests the record the slice found. Any predicate is taken: "

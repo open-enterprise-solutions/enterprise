@@ -25,12 +25,12 @@ namespace {
 // The caret is written INTO the source as `$` and removed before compiling. A
 // position counted by hand is a number that drifts the moment a line above it
 // is edited, and then the test measures a different caret than it reads as.
-std::vector<ibCaretName> NamesAt(const wxString& marked)
+std::vector<ibCaretName> NamesAt(const ibString& marked)
 {
 	const size_t at = marked.find(wxT('$'));
-	EXPECT_NE(at, wxString::npos) << "the source carries no $ caret marker";
+	EXPECT_NE(at, ibString::npos) << "the source carries no $ caret marker";
 
-	wxString text = marked;
+	ibString text = marked;
 	text.Remove(at, 1);
 
 	std::vector<ibCaretName> names;
@@ -38,7 +38,7 @@ std::vector<ibCaretName> NamesAt(const wxString& marked)
 	return names;
 }
 
-bool Offers(const std::vector<ibCaretName>& names, const wxString& name)
+bool Offers(const std::vector<ibCaretName>& names, const ibString& name)
 {
 	for (const ibCaretName& entry : names)
 		if (entry.m_name.IsSameAs(name, false))
@@ -48,12 +48,12 @@ bool Offers(const std::vector<ibCaretName>& names, const wxString& name)
 
 // Names its failure: a bare EXPECT_FALSE(Offers(...)) prints "Actual: true" and
 // leaves the list — the one thing worth reading — out of the report.
-::testing::AssertionResult DoesNotOffer(const std::vector<ibCaretName>& names, const wxString& name)
+::testing::AssertionResult DoesNotOffer(const std::vector<ibCaretName>& names, const ibString& name)
 {
 	if (!Offers(names, name))
 		return ::testing::AssertionSuccess();
 
-	wxString all;
+	ibString all;
 	for (const ibCaretName& entry : names)
 		all << entry.m_name << wxT(" ");
 	return ::testing::AssertionFailure()

@@ -18,8 +18,8 @@ ibValueMetaObjectStoredValue::ibValueMetaObjectStoredValue() : ibValueMetaObject
 	m_column = CreateMetaObjectAndSetParent<ibValueMetaObjectConstantColumn>(this);
 
 	//set default proc
-	m_propertyModule->GetMetaObject()->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	m_propertyModule->GetMetaObject()->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	m_propertyModule->GetMetaObject()->SetDefaultProcedure(ibT("BeforeWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	m_propertyModule->GetMetaObject()->SetDefaultProcedure(ibT("OnWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
 }
 
 ibValueMetaObjectStoredValue::~ibValueMetaObjectStoredValue()
@@ -172,7 +172,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectStoredValue::GetObjectForm() cons
 {
 	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(nullptr, nullptr, m_metaGuid);
 	if (foundedForm == nullptr)
-		return ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(wxString(), m_metaGuid), nullptr, nullptr, CreateRecordDataObjectValue());
+		return ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(ibString(), m_metaGuid), nullptr, nullptr, CreateRecordDataObjectValue());
 	return ibFormPtr<ibBackendValueForm>(foundedForm);   // the open one — its window holds it; this is one more reference
 }
 

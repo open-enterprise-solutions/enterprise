@@ -1,3 +1,6 @@
+#ifndef __META_DATA_REPORT_H__
+#define __META_DATA_REPORT_H__
+
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/partial/dataReport.h"
 #include "backend/moduleManager/moduleManagerExt.h"
@@ -18,22 +21,22 @@ public:
 	virtual void SetVersion(const ibVersionID& version) { m_version = version; }
 	virtual ibVersionID GetVersion() const { return m_version; }
 
-	virtual wxString GetFileName() const { return m_fullPath; }
+	virtual ibString GetFileName() const { return m_fullPath; }
 
 	//runtime support:
-	virtual bool IsRegisterCtor(const wxString& className) const;
-	virtual bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType) const;
-	virtual bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType, enum ibCtorObjectMetaType refType) const;
+	virtual bool IsRegisterCtor(const ibString& className) const;
+	virtual bool IsRegisterCtor(const ibString& className, ibCtorObjectType objectType) const;
+	virtual bool IsRegisterCtor(const ibString& className, ibCtorObjectType objectType, enum ibCtorObjectMetaType refType) const;
 
 	virtual bool IsRegisterCtor(const ibClassID& clsid) const;
 
-	virtual ibClassID GetIDObjectFromString(const wxString& className) const;
-	virtual wxString GetNameObjectFromID(const ibClassID& clsid, bool upper = false) const;
+	virtual ibClassID GetIDObjectFromString(const ibString& className) const;
+	virtual ibString GetNameObjectFromID(const ibClassID& clsid, bool upper = false) const;
 
 	virtual ibCtorMetaValueType* GetTypeCtor(const ibClassID& clsid) const;
 	virtual ibCtorMetaValueType* GetTypeCtor(const ibValueMetaObject* metaValue, enum ibCtorObjectMetaType refType) const;
 
-	virtual ibCtorAbstractType* GetAvailableCtor(const wxString& className) const;
+	virtual ibCtorAbstractType* GetAvailableCtor(const ibString& className) const;
 	virtual ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid) const;
 
 	virtual std::vector<ibCtorMetaValueType*> GetListCtorsByType() const;
@@ -55,7 +58,7 @@ public:
 	virtual bool ClearDatabase();
 
 	//get language code 
-	virtual wxString GetLangCode() const;
+	virtual ibString GetLangCode() const;
 
 	//run/close
 	virtual bool RunDatabase(int flags = defaultFlag);
@@ -66,10 +69,12 @@ public:
 	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() override;
 
 	//load/save form file
-	bool LoadFromFile(const wxString& strFileName);
+	bool LoadFromFile(const ibString& strFileName);
 	// …and from a file of the session's temporary storage, by its id — what a thin client handed the server.
-	bool LoadFromTempFile(const wxString& id);
-	bool SaveToFile(const wxString& strFileName);
+	bool LoadFromTempFile(const ibString& id);
+	bool SaveToFile(const ibString& strFileName);
+	// …and into one — what a thin client takes down to where the person keeps it.
+	bool SaveToTempFile(const ibString& id);
 
 	virtual const ibValueMetaObject* GetCommonMetaObject() const; // out-of-line: m_commonObject is ibValuePtr
 	virtual ibValueMetaObject* GetCommonMetaObject();
@@ -92,9 +97,11 @@ protected:
 private:
 
 	// The file's content in hand, loaded — the one load both roads come to, whatever the bytes were read from.
-	bool LoadFromBuffer(const wxMemoryBuffer& buffer, const wxString& fullPath);
+	bool LoadFromBuffer(const ibMemoryBuffer& buffer, const ibString& fullPath);
+	// …and the content written, the one write both roads take, whatever the bytes go to.
+	bool SaveToBuffer(ibWriterMemory& writerData, const ibString& fullPath);
 
-	wxString m_fullPath;
+	ibString m_fullPath;
 
 	ibMetaData* m_ownerMeta; //owner for saving/loading
 	ibValuePtr<ibValueModuleRuntimeManagerExternalReport> m_moduleManager; // owning handle; dtor runs DestroyMainModule (RAII)
@@ -102,3 +109,10 @@ private:
 	// open flag now lives in ibMetaData's open-image (IsConfigOpen / SetConfigOpened)
 	ibVersionID m_version;
 };
+
+// A SCHEMA OPENED AS A REPORT: a fresh external report in memory holding a copy of it, and the form it generates — a
+// cell's detail (ibValueGridBox), and what an assistant builds for a person (report_show). `name`, `synonym`: what its
+// window says; empty, a fresh report answers with the default name. False: it did not open.
+BACKEND_API bool ibOpenReportOver(const struct ibCompositionDescription& desc, const ibString& name, const ibString& synonym);
+
+#endif

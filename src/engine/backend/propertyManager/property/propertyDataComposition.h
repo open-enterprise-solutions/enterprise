@@ -2,7 +2,7 @@
 #define __PROPERTY_DATA_COMPOSITION_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/compositionDescription.h"   // what it stores — the SAME composer a list stores
+#include "core/description/compositionDescription.h"   // what it stores — the SAME composer a list stores
 
 // ---------------------------------------------------------------------------
 // ibPropertyDataComposition — backend half of the "data composer settings"
@@ -23,7 +23,7 @@
 class BACKEND_API ibPropertyDataComposition : public ibProperty {
 	// ONE maker with a default — the dynamic list's shape over the same description, because a list
 	// and a report SAVE the same thing.
-	static wxVariantData* CreateVariantData(ibPropertyObject* property,
+	static ibVariant CreateVariantData(ibPropertyObject* property,
 	                                        const ibCompositionDescription& val = ibCompositionDescription());
 public:
 
@@ -32,17 +32,17 @@ public:
 	// the composition serialised itself, so "what a report's settings are" was answered in two
 	// places. It is this property's cell now, read and written by the one pair that reads and
 	// writes a composition anywhere — the very same lines the dynamic list runs.
-	ibPropertyDataComposition(ibPropertyCategory* cat, const wxString& name)
+	ibPropertyDataComposition(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyDataComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyDataComposition(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyDataComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyDataComposition(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}

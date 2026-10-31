@@ -6,22 +6,22 @@
 
 //base property for "type"
 class BACKEND_API ibPropertyType : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibValueTypes type);
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibClassID& clsid);
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibTypeDescription& typeDesc);
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibValueTypes type);
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibClassID& clsid);
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibTypeDescription& typeDesc);
 public:
 
 	ibTypeDescription& GetValueAsTypeDesc() const;
 	ibTypeDescription& GetValueAsTypeValueDesc() const;
 	void SetValue(const ibTypeDescription& val);
 
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const ibValueTypes type) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), type)) {}
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const ibClassID& clsid) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibValueTypes type) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), type)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibValueTypes type) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), type)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibClassID& clsid) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibValueTypes type) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), type)) {}
 
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibClassID& clsid) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibValueTypes type) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), type)) {}
-	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibClassID& clsid) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibClassID& clsid) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibValueTypes type) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), type)) {}
+	ibPropertyType(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibClassID& clsid) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), clsid)) {}
 
 	virtual bool IsEmptyProperty() const { return !GetValueAsTypeDesc().IsOk(); }
 
@@ -35,6 +35,11 @@ public:
 	// number / date / string qualifier fields. The "set of values" case.
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// …and the types it may hold, as the desktop's picker offered them (ibShowTypeSelector): those the configuration
+	// offers a field of its shape, and those the value holds already — an editor does not drop what it was opened on;
+	// each by its class id (Type), named and drawn as it is offered. Several at once, but in a table's shape, one.
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 
 public:
 

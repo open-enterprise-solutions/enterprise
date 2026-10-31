@@ -21,7 +21,7 @@
       "parameters": "path — the file, as the file system names it. It has to be there when the value is made, and it is the name a later refusal carries.\npassword — opens the private key held in the file; left out, the file is taken to hold no key that needs one. Given once and never read back.",
       "return_descr": "CertificateFile — the path and the password it was made with.",
       "example": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar mine = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\n\nvar secure = New SecureConnection(mine, trust);      // show mine, trust that authority alone\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;                      // no port given: 443, once it is secure\n\ntry {\n    var response = bank.Get(New HTTPRequest(\"/v1/balance\"));\n    Message(response.StatusCode);\n}\nexcept {\n    Message(ErrorDescription());   // ...the certificate file 'C:\\certs\\client.pem' could not be read...\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.CertificateFile.Path",
         "cls.SecureConnection",
@@ -48,7 +48,7 @@
       "parameters": "",
       "return_descr": "String — the path.",
       "example": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar secure = New SecureConnection();\nsecure.TrustedCertificates = trust;\nMessage(secure.TrustedCertificates.Path);   // it comes back the same",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.CertificateFile",
         "cls.SecureConnection.TrustedCertificates",
@@ -74,7 +74,7 @@
       "parameters": "clientCertificate — the certificate this side shows, as a CertificateFile holding it and its key; left out or Undefined, nothing is shown.\ntrustedCertificates — the authority to trust, as a CertificateFile; left out or Undefined, the platform's own certificate store.",
       "return_descr": "SecureConnection — nothing shown, the platform's trust, the check on.",
       "example": "var secure = New SecureConnection();                 // trust the platform, check the server\nvar shop = New HTTPConnection(\"api.example\");\nshop.SecureConnection = secure;\nMessage(shop.Port);                                  // 443: nobody gave a port\n\nvar bank = New HTTPConnection(\"api.bank.example\");   // ...and this one trusts one authority alone\nbank.SecureConnection = New SecureConnection(\n    New CertificateFile(\"C:\\certs\\client.pem\", \"key password\"),\n    New CertificateFile(\"C:\\certs\\bank-ca.pem\"));\n\ntry {\n    var response = bank.Get(New HTTPRequest(\"/v1/balance\"));\n    Message(response.StatusCode);\n}\nexcept {\n    Message(ErrorDescription());   // the certificate is not trusted, not for this host, unreadable...\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.SecureConnection.ClientCertificate",
         "cls.SecureConnection.TrustedCertificates",
@@ -101,7 +101,7 @@
       "parameters": "",
       "return_descr": "CertificateFile, or Undefined when nothing is shown.",
       "example": "var secure = New SecureConnection();\nsecure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\nvar till = New HTTPConnection(\"api.till.example\");\ntill.SecureConnection = secure;\nvar response = till.Post(New HTTPRequest(\"/v1/shift\"));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.SecureConnection",
         "cls.CertificateFile",
@@ -126,7 +126,7 @@
       "parameters": "",
       "return_descr": "CertificateFile, or Undefined when the platform's store is what is trusted.",
       "example": "var secure = New SecureConnection();\nsecure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;\n// a certificate signed by anybody else is refused, however good it is",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.SecureConnection",
         "cls.SecureConnection.VerifyServerCertificate",
@@ -151,7 +151,7 @@
       "parameters": "",
       "return_descr": "Boolean — True unless it was set to False.",
       "example": "var secure = New SecureConnection();\nMessage(secure.VerifyServerCertificate);   // True: nobody said otherwise\n\n// A test stand whose certificate signs itself. In production, name the authority instead:\n//   secure.TrustedCertificates = New CertificateFile(\"C:\\certs\\stand-ca.pem\");\nsecure.VerifyServerCertificate = False;\nvar stand = New HTTPConnection(\"stand.local\");\nstand.SecureConnection = secure;",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.SecureConnection",
         "cls.SecureConnection.TrustedCertificates",
@@ -176,7 +176,7 @@
       "parameters": "",
       "return_descr": "SecureConnection, or Undefined for plain http://.",
       "example": "var bank = New HTTPConnection(\"api.bank.example\");   // NOT \"https://api.bank.example\"\nMessage(bank.Port);                                  // 80\nbank.SecureConnection = New SecureConnection();\nMessage(bank.Port);                                  // 443\n\nvar response = bank.Get(New HTTPRequest(\"/v1/balance\"));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.SecureConnection",

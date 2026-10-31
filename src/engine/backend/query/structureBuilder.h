@@ -15,13 +15,19 @@
 #include "backend/backend.h"
 #include "backend/restructureInfo.h"   // ibRestructureInfo — the builder OWNS its change log (member below)
 
+#include <memory>
+
 class ibSchemaSnapshot;
 class ibDatabaseLayer;
 class ibDatabaseConnectionHolder;
+class ibConnectionScope;
 
 class BACKEND_API ibStructureBuilder
 {
 public:
+	ibStructureBuilder();    // both out of line: m_scope's type is complete only in the .cpp
+	~ibStructureBuilder();
+
 	// Pick the holder the restructuring runs through (session / a dedicated restructuring holder).
 	// Null (default) => the local db_query channel. Set before OnBeforeSave.
 	void SetHolder(ibDatabaseConnectionHolder* holder) { m_holder = holder; }
@@ -39,8 +45,8 @@ public:
 	// writes deferred past the DDL commit, in their own transaction). The just-created tables are durable.
 	int  OnAfterSave(bool rollback);
 
-	// full rebuild (ReCreateDatabase): owns its whole transaction — drop all of `target`'s tables, then
-	// create + seed them all, commit. Rolls back on error.
+	// full rebuild (ReCreateDatabase): one apply over target -> empty -> target — OnBeforeSave, drop all of
+	// `target`'s tables, create + seed them all, OnAfterSave. Rolls back on error.
 	int  Recreate(const ibSchemaSnapshot& target);
 
 	// The structured record of what the last run changed — CREATE / ALTER / DROP table, add / change /
@@ -58,8 +64,9 @@ private:
 	// carrying the real one. See the body + connectionHolder.h for what stays irreversible.
 	void UndoAppliedDdl();
 
-	ibDatabaseConnectionHolder* m_holder = nullptr;
-	ibRestructureInfo           m_changes;
+	ibDatabaseConnectionHolder*        m_holder = nullptr;
+	std::unique_ptr<ibConnectionScope> m_scope;     // the apply's hold on m_holder's connection: OnBeforeSave .. OnAfterSave
+	ibRestructureInfo                  m_changes;
 };
 
 #endif // !__STRUCTURE_BUILDER_H__

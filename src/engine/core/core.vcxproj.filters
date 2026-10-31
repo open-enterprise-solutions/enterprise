@@ -1,29 +1,142 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <Filter Include="compiler">
+      <UniqueIdentifier>{62ae2c4b-b98b-425e-9e38-1eed289b6b90}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="composition">
+      <UniqueIdentifier>{7b2e4c91-3f58-4a0d-b6e2-9c1d8a5f3e47}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="crypto">
+      <UniqueIdentifier>{6e1b3d84-2f7a-4c95-b0d8-3a9e5c1f7b26}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="description">
+      <UniqueIdentifier>{5fd91569-04e3-42cc-a2eb-ab6104edba35}</UniqueIdentifier>
+    </Filter>
     <Filter Include="diagnostics">
       <UniqueIdentifier>{b908aefe-25b6-4f92-822f-12cb5562e048}</UniqueIdentifier>
     </Filter>
     <Filter Include="fiber">
       <UniqueIdentifier>{5d0c7a3e-6b1f-4e2a-9c84-1f7e2b9d4a60}</UniqueIdentifier>
     </Filter>
-    <Filter Include="fileSystem">
+    <Filter Include="graphics">
+      <UniqueIdentifier>{1c39467f-583e-4ee5-9fda-86472983e336}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="job">
+      <UniqueIdentifier>{8826834c-f717-4ebb-bcc7-5673b403a7b3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="localization">
+      <UniqueIdentifier>{6c0b8e41-2f7a-4d93-b5e8-0a91d3c47e25}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="logger">
+      <UniqueIdentifier>{fff455ab-3c8d-40ac-96c6-886fc7e01630}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="memory">
       <UniqueIdentifier>{3e658492-3710-4562-a676-5eecced213a9}</UniqueIdentifier>
     </Filter>
-    <Filter Include="fileSystem\lz">
+    <Filter Include="memory\lz">
       <UniqueIdentifier>{a606016d-466d-412e-ab20-5490f6a2e37f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="res">
-      <UniqueIdentifier>{3be40a77-37b2-4932-b674-ea437eebb065}</UniqueIdentifier>
+    <Filter Include="net">
+      <UniqueIdentifier>{3c1d7f52-8e4a-4b9d-a6f0-5e2b9c7d1a84}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="query">
+      <UniqueIdentifier>{a4a3bd23-8265-4eae-9b38-c123e23b3d1c}</UniqueIdentifier>
     </Filter>
     <Filter Include="serialize">
       <UniqueIdentifier>{8708f6ac-1c30-4368-8d4f-7555b0b5d7bf}</UniqueIdentifier>
     </Filter>
+    <Filter Include="serialize\provider">
+      <UniqueIdentifier>{3e7b1c52-9d04-4a6f-b2e8-5c1a7f0d9e36}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="server">
+      <UniqueIdentifier>{c2f8a4d1-6b3e-4f97-8d05-1e9a7b3c5f62}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="settings">
+      <UniqueIdentifier>{10784ba1-c126-4a67-b3e5-95e44376c8a6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="spreadsheet">
+      <UniqueIdentifier>{e4a19d36-82c7-4f5b-a0d3-6f2b7c8e91a5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="syntaxHelper">
+      <UniqueIdentifier>{1a4f8e02-7b66-4f9b-9d3a-6c2e8b1d5f04}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="tabular">
+      <UniqueIdentifier>{9c3f5e21-7a4d-4b86-8e1f-2d6b0a9c4f73}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils">
+      <UniqueIdentifier>{aee12374-94c8-4629-ad37-42f5f8911ad6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="json">
+      <UniqueIdentifier>{f2702bcd-c8c8-4a7e-836b-8633b098c71c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="xml">
+      <UniqueIdentifier>{b5d2e8f1-4c63-4e9a-8f17-2a9c6e3b0d48}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="anyValue.cpp" />
     <ClCompile Include="build.cpp" />
+    <ClCompile Include="compiler\blockSyntaxLINQ.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\scriptFoldCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\scriptParseCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\translateCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\compositionTheme.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
     <ClCompile Include="core.cpp" />
+    <ClCompile Include="crypto\fieldCipher.cpp">
+      <Filter>crypto</Filter>
+    </ClCompile>
+    <ClCompile Include="crypto\dataHash.cpp">
+      <Filter>crypto</Filter>
+    </ClCompile>
+    <ClCompile Include="crypto\sessionToken.cpp">
+      <Filter>crypto</Filter>
+    </ClCompile>
+    <ClCompile Include="crypto\sha256.cpp">
+      <Filter>crypto</Filter>
+    </ClCompile>
+    <ClCompile Include="description\calcScheduleDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\choiceLinkDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\commandDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\compositionDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\homePageDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\jobScheduleDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\pictureDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\sourceDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\spreadsheetDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\standardCommandDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\typeDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
     <ClCompile Include="diagnostics\crashGuard.cpp">
       <Filter>diagnostics</Filter>
     </ClCompile>
@@ -34,41 +147,238 @@
       <Filter>diagnostics</Filter>
     </ClCompile>
     <ClCompile Include="exception.cpp" />
+    <ClCompile Include="fboolean.cpp" />
     <ClCompile Include="fdatetime.cpp" />
+    <ClCompile Include="fdatetimeParse.cpp" />
     <ClCompile Include="fiber\fiber.cpp">
       <Filter>fiber</Filter>
     </ClCompile>
     <ClCompile Include="fiber\fiberLocals.cpp">
       <Filter>fiber</Filter>
     </ClCompile>
-    <ClCompile Include="fileSystem\fs.cpp">
-      <Filter>fileSystem</Filter>
-    </ClCompile>
-    <ClCompile Include="fileSystem\lz\lzhuf.cpp">
-      <Filter>fileSystem\lz</Filter>
-    </ClCompile>
+    <ClCompile Include="fileKind.cpp" />
+    <ClCompile Include="dynamicLibrary.cpp" />
+    <ClCompile Include="fileSystem.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="fstring.cpp" />
+    <ClCompile Include="graphics\colour.cpp">
+      <Filter>graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\font.cpp">
+      <Filter>graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\geometry.cpp">
+      <Filter>graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\picture.cpp">
+      <Filter>graphics</Filter>
+    </ClCompile>
     <ClCompile Include="guid.cpp" />
+    <ClCompile Include="job\jobScheduleRules.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
     <ClCompile Include="localization.cpp" />
-    <ClCompile Include="programFolder.cpp" />
+    <ClCompile Include="localization\dictionary.cpp">
+      <Filter>localization</Filter>
+    </ClCompile>
+    <ClCompile Include="memory\lz\lzhuf.cpp">
+      <Filter>memory\lz</Filter>
+    </ClCompile>
+    <ClCompile Include="memory\compression.cpp">
+      <Filter>memory</Filter>
+    </ClCompile>
+    <ClCompile Include="memory\memoryBuffer.cpp">
+      <Filter>memory</Filter>
+    </ClCompile>
+    <ClCompile Include="memory\memoryPool.cpp">
+      <Filter>memory</Filter>
+    </ClCompile>
+    <ClCompile Include="memory\memoryStream.cpp">
+      <Filter>memory</Filter>
+    </ClCompile>
+    <ClCompile Include="net\asio.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\httpClient.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\httpServer.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\httpStream.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\ioThreads.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\tlsStream.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\webSocketFrame.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="picturePredefined.cpp" />
+    <ClCompile Include="pictureRegistry.cpp" />
+    <ClCompile Include="launchTicket.cpp" />
+    <ClCompile Include="startProcess.cpp" />
+    <ClCompile Include="stringTokenizer.cpp" />
+    <ClCompile Include="typeName.cpp" />
+    <ClCompile Include="variant.cpp" />
+    <ClCompile Include="query\queryAggregates.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryKeywords.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryLexer.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRender.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryParser.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRewrite.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\anyQueryConstructorModel.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRefusal.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="serialize\dataBuilder.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
-    <ClCompile Include="serialize\jsonProvider.cpp">
-      <Filter>serialize</Filter>
+    <ClCompile Include="serialize\provider\fileProvider.cpp">
+      <Filter>serialize\provider</Filter>
     </ClCompile>
-    <ClCompile Include="serialize\jsonText.cpp">
-      <Filter>serialize</Filter>
+    <ClCompile Include="serialize\provider\jsonProvider.cpp">
+      <Filter>serialize\provider</Filter>
+    </ClCompile>
+    <ClCompile Include="serialize\provider\xmlProvider.cpp">
+      <Filter>serialize\provider</Filter>
+    </ClCompile>
+    <ClCompile Include="json\jsonText.cpp">
+      <Filter>json</Filter>
+    </ClCompile>
+    <ClCompile Include="xml\xmlDocument.cpp">
+      <Filter>xml</Filter>
+    </ClCompile>
+    <ClCompile Include="xml\xmlText.cpp">
+      <Filter>xml</Filter>
+    </ClCompile>
+    <ClCompile Include="server\listener.cpp">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="server\serverConfig.cpp">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="spreadsheet\sheetFormat.cpp">
+      <Filter>spreadsheet</Filter>
+    </ClCompile>
+    <ClCompile Include="spreadsheet\spreadsheetObject.cpp">
+      <Filter>spreadsheet</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpCorpus.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpLoader.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpResolver.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpService.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="tabular\tabularModelView.cpp">
+      <Filter>tabular</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\base64.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\md5.cpp">
+      <Filter>utils</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="anyValue.h" />
     <ClInclude Include="build.h" />
     <ClInclude Include="clsid.h" />
+    <ClInclude Include="compiler\blockSyntaxLINQ.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\codeDef.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\scriptFoldCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\scriptParseCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\translateCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\compositionTheme.h">
+      <Filter>composition</Filter>
+    </ClInclude>
     <ClInclude Include="core.h" />
+    <ClInclude Include="coreApi.h" />
+    <ClInclude Include="crypto\fieldCipher.h">
+      <Filter>crypto</Filter>
+    </ClInclude>
+    <ClInclude Include="crypto\dataHash.h">
+      <Filter>crypto</Filter>
+    </ClInclude>
+    <ClInclude Include="crypto\sessionToken.h">
+      <Filter>crypto</Filter>
+    </ClInclude>
+    <ClInclude Include="crypto\sha256.hpp">
+      <Filter>crypto</Filter>
+    </ClInclude>
+    <ClInclude Include="description\calcScheduleDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\choiceLinkDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\commandDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\compositionDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\homePageDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\jobScheduleDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\pictureDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\sourceDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\spreadsheetDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\standardCommandDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\typeDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
     <ClInclude Include="diagnostics\crashGuard.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="diagnostics\oesApp.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="diagnostics\oesConsole.h">
       <Filter>diagnostics</Filter>
     </ClInclude>
     <ClInclude Include="diagnostics\debugTrace.h">
@@ -81,6 +391,7 @@
       <Filter>diagnostics</Filter>
     </ClInclude>
     <ClInclude Include="exception.h" />
+    <ClInclude Include="fboolean.h" />
     <ClInclude Include="fdatetime.h" />
     <ClInclude Include="fiber\fiber.h">
       <Filter>fiber</Filter>
@@ -88,39 +399,212 @@
     <ClInclude Include="fiber\fiberLocals.h">
       <Filter>fiber</Filter>
     </ClInclude>
-    <ClInclude Include="fileSystem\fs.h">
-      <Filter>fileSystem</Filter>
-    </ClInclude>
-    <ClInclude Include="fileSystem\lz\lzhuf.h">
-      <Filter>fileSystem\lz</Filter>
-    </ClInclude>
-    <ClInclude Include="fileSystem\types.h">
-      <Filter>fileSystem</Filter>
-    </ClInclude>
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
     <ClInclude Include="fstring.h" />
+    <ClInclude Include="graphics\colour.h">
+      <Filter>graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\font.h">
+      <Filter>graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\geometry.h">
+      <Filter>graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\picture.h">
+      <Filter>graphics</Filter>
+    </ClInclude>
     <ClInclude Include="guid.h" />
+    <ClInclude Include="fileKind.h" />
+    <ClInclude Include="dynamicLibrary.h" />
+    <ClInclude Include="fileSystem.h" />
+    <ClInclude Include="job\jobSchedule.h">
+      <Filter>job</Filter>
+    </ClInclude>
     <ClInclude Include="localization.h" />
-    <ClInclude Include="programFolder.h" />
-    <ClInclude Include="res\resource.h">
-      <Filter>res</Filter>
+    <ClInclude Include="localization\dictionary.h">
+      <Filter>localization</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerQuery.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="memory\lz\lzhuf.h">
+      <Filter>memory\lz</Filter>
+    </ClInclude>
+    <ClInclude Include="memory\compression.h">
+      <Filter>memory</Filter>
+    </ClInclude>
+    <ClInclude Include="memory\memoryBuffer.h">
+      <Filter>memory</Filter>
+    </ClInclude>
+    <ClInclude Include="memory\memoryPool.h">
+      <Filter>memory</Filter>
+    </ClInclude>
+    <ClInclude Include="memory\memoryStream.h">
+      <Filter>memory</Filter>
+    </ClInclude>
+    <ClInclude Include="net\httpClient.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\httpServer.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\httpStream.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\ioThreads.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\ports.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\tlsStream.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\webSocketFrame.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\webSocketRelay.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="picturePredefined.h" />
+    <ClInclude Include="pictureRegistry.h" />
+    <ClInclude Include="launchTicket.h" />
+    <ClInclude Include="propertyChoiceMode.h" />
+    <ClInclude Include="roleCompositionMode.h" />
+    <ClInclude Include="selectorDataType.h" />
+    <ClInclude Include="startProcess.h" />
+    <ClInclude Include="typeName.h" />
+    <ClInclude Include="variant.h" />
+    <ClInclude Include="variant_ptr.h" />
+    <ClInclude Include="query\queryAggregates.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryAstExpr.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryBalanceRole.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryConstructorField.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\anyQueryConstructorModel.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\querySourceParameter.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryKeywords.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryPeriodUnits.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryLexer.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryAST.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRender.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryParser.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRewrite.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRefusal.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryUnfold.h">
+      <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="serialize\dataBuilder.h">
       <Filter>serialize</Filter>
     </ClInclude>
-    <ClInclude Include="serialize\jsonProvider.h">
-      <Filter>serialize</Filter>
+    <ClInclude Include="serialize\provider\fileProvider.h">
+      <Filter>serialize\provider</Filter>
     </ClInclude>
-    <ClInclude Include="serialize\jsonText.h">
-      <Filter>serialize</Filter>
+    <ClInclude Include="serialize\provider\jsonProvider.h">
+      <Filter>serialize\provider</Filter>
     </ClInclude>
+    <ClInclude Include="serialize\provider\xmlProvider.h">
+      <Filter>serialize\provider</Filter>
+    </ClInclude>
+    <ClInclude Include="json\jsonText.h">
+      <Filter>json</Filter>
+    </ClInclude>
+    <ClInclude Include="xml\xmlNodeType.h">
+      <Filter>xml</Filter>
+    </ClInclude>
+    <ClInclude Include="xml\xmlDocument.h">
+      <Filter>xml</Filter>
+    </ClInclude>
+    <ClInclude Include="xml\xmlText.h">
+      <Filter>xml</Filter>
+    </ClInclude>
+    <ClInclude Include="xml\expat\expat_config.h">
+      <Filter>xml</Filter>
+    </ClInclude>
+    <ClInclude Include="server\clusterControl.h">
+      <Filter>server</Filter>
+    </ClInclude>
+    <ClInclude Include="server\listener.h">
+      <Filter>server</Filter>
+    </ClInclude>
+    <ClInclude Include="server\serverConfig.h">
+      <Filter>server</Filter>
+    </ClInclude>
+    <ClInclude Include="settings\settingsShelf.h">
+      <Filter>settings</Filter>
+    </ClInclude>
+    <ClInclude Include="spreadsheet\sheetFormat.h">
+      <Filter>spreadsheet</Filter>
+    </ClInclude>
+    <ClInclude Include="spreadsheet\spreadsheetObject.h">
+      <Filter>spreadsheet</Filter>
+    </ClInclude>
+    <ClInclude Include="stringTokenizer.h" />
     <ClInclude Include="stringUtils.h" />
-    <ClInclude Include="types.h" />
+    <ClInclude Include="syntaxHelper\helpCategory.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpCorpus.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpEntry.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpLoader.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpLoadError.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpResolver.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpService.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="tabular\tabularModelView.h">
+      <Filter>tabular</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\base64.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\md5.hpp">
+      <Filter>utils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="res\core.rc">
-      <Filter>res</Filter>
-    </ResourceCompile>
+    <ResourceCompile Include="core.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="program.manifest" />
+    <None Include="version.rc2" />
   </ItemGroup>
 </Project>

@@ -7,8 +7,8 @@ class BACKEND_API ibValueMetaObjectEnum : public ibValueMetaObject {
 	public:
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save metaData from DB 
 };

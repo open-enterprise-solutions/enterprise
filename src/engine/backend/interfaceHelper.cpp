@@ -4,7 +4,7 @@
 
 bool ibInterfaceObject::LoadInterface(ibReaderMemory& dataReader)
 {
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	if (dataReader.r_chunk(interfaceBlock, buf)) {
 		std::shared_ptr<ibReaderMemory> dataInterfaceReader(new ibReaderMemory(buf));
 		unsigned int countInterface = dataInterfaceReader->r_u32(); m_interfaces.clear();

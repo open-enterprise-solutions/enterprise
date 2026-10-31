@@ -1,12 +1,12 @@
 #include "gridBox.h"
 #include "backend/system/value/valueDataComposition.h"    // the schema a detail copies
 #include "backend/system/value/valueSpreadsheetDetails.h"  // …and what the clicked cell was composed from
-#include "backend/metadataReport.h"                        // the in-memory external report
-#include "backend/metaCollection/metaComposerObject.h"     // …and the composer metaobject it declares
+#include "backend/metadataReport.h"                        // the in-memory external report a detail opens
 #include "backend/metaCollection/genericData.h"            // ibValueMetaObjectGenericData — the report a detail is named after
 #include "frmserver/visualView/ctrl/form.h"                 // ibValueForm::GetMetaObject — …reached through the grid's form
 #include "backend/backend_localization.h"                  // a title read in the reader's language
-#include "backend/query/queryable.h"                       // ibReadPeriodUnit — the word a period grouping says
+#include "core/query/queryPeriodUnits.h"                   // ibReadPeriodUnit — the word a period grouping says
+#include "backend/backend_composition.h"                   // ibStoreValue — a context value packed into its condition
 #include "frmserver/visualView/choiceRequest.h"            // ibMenuItem — the fields offered, as the click's submenu
 
 #include <algorithm>
@@ -29,16 +29,17 @@ namespace {
 // WHAT A CELL WAS COMPOSED FROM — asked TWICE about one click: once to offer the fields worth
 // breaking down by, once to narrow the detail itself. One lookup for both, so the choice and the
 // report it opens can never disagree about the same cell.
-void ibCollectCellContext(const ibBackendSpreadsheetObject* document, int row, int col,
+void ibCollectCellContext(const ibSpreadsheetObject* document, int row, int col,
 	std::vector<ibValueSpreadsheetDetails::ibSpreadsheetDetailsField>& into)
 {
 	if (document == nullptr)
 		return;
 
-	wxString bound;
+	ibString bound;
 	document->GetCellDetailsParameter(row, col, bound);
-	ibValue cellValue;   // held, not a temporary — From returns a pointer INTO it
-	if (!bound.IsEmpty() && document->GetParameter(bound, cellValue)) {
+	ibVariant held;
+	if (!bound.IsEmpty() && document->GetParameter(bound, held)) {
+		const ibValue cellValue(held);
 		if (ibValueSpreadsheetDetails* details = ibValueSpreadsheetDetails::From(cellValue))
 			details->CollectContext(into);
 	}
@@ -116,7 +117,7 @@ void ibForceAndRoot(ibFilterDescription& filter)
 // `Period = 01.08.2026 00:00:00` is a condition no record meets, so the detail came up empty (Max,
 // 2026-09-30). The unit is the grouping's own, on its line in the structure in force, so it is asked
 // there.
-bool ibPeriodUnitOfPath(const std::vector<ibLevelDescription>& levels, const wxString& path, ibTotalsPeriod& unit)
+bool ibPeriodUnitOfPath(const std::vector<ibLevelDescription>& levels, const ibString& path, ibTotalsPeriod& unit)
 {
 	for (const ibLevelDescription& level : levels) {
 		for (const ibGroupLineDescription& line : level.m_settings.m_group.m_lines)
@@ -128,7 +129,7 @@ bool ibPeriodUnitOfPath(const std::vector<ibLevelDescription>& levels, const wxS
 	return false;
 }
 
-bool ibPeriodUnitOfPath(const std::vector<ibOutputDescription>& structure, const wxString& path, ibTotalsPeriod& unit)
+bool ibPeriodUnitOfPath(const std::vector<ibOutputDescription>& structure, const ibString& path, ibTotalsPeriod& unit)
 {
 	for (const ibOutputDescription& output : structure)
 		if (ibPeriodUnitOfPath(output.m_rowGroups, path, unit) || ibPeriodUnitOfPath(output.m_columnGroups, path, unit))
@@ -171,11 +172,11 @@ void ibAppendContextConditions(ibFilterDescription& filter,
 		ibTotalsPeriod unit = ibTotalsPeriod::Month;
 		if (field.m_value.GetType() == ibValueTypes::TYPE_DATE && ibPeriodUnitOfPath(structure, field.m_path, unit)) {
 			const ibDateTime date = field.m_value.GetDate();
-			filter.Append(field.m_path, ibComparisonKind_GreaterEqual, ibValue(date.BeginOfPeriod(unit))).m_left = left;
-			filter.Append(field.m_path, ibComparisonKind_LessEqual, ibValue(date.EndOfPeriod(unit))).m_left = left;
+			filter.Append(field.m_path, ibComparisonKind_GreaterEqual, ibStoreValue(ibValue(date.BeginOfPeriod(unit)))).m_left = left;
+			filter.Append(field.m_path, ibComparisonKind_LessEqual, ibStoreValue(ibValue(date.EndOfPeriod(unit)))).m_left = left;
 		}
 		else
-			filter.Append(field.m_path, ibComparisonKind_Equal, field.m_value).m_left = left;
+			filter.Append(field.m_path, ibComparisonKind_Equal, ibStoreValue(field.m_value)).m_left = left;
 	}
 }
 
@@ -187,7 +188,7 @@ void ibAppendContextConditions(ibFilterDescription& filter,
 // ⚠ ONE OUTPUT, and that is not a guess about which output the cell belonged to: the cell does not
 // carry that today. Building one is the honest answer — pretending to know which of several the
 // reader clicked would be wrong exactly where it mattered.
-std::vector<ibOutputDescription> ibStructureByField(const wxString& path)
+std::vector<ibOutputDescription> ibStructureByField(const ibString& path)
 {
 	ibLevelDescription level;
 	level.m_kind = ibCompositionLevelKind::Grouping;
@@ -198,59 +199,6 @@ std::vector<ibOutputDescription> ibStructureByField(const wxString& path)
 	output.m_rowGroups.push_back(level);
 
 	return std::vector<ibOutputDescription>(1, output);
-}
-
-// ⭐⭐ DETAIL IS A NEW REPORT OVER THE SAME SCHEMA — not this report re-drawn.
-//
-// A form cannot be copied (Max, 2026-08-26), and it does not need to be: what a reader is asking is
-// "show me this figure broken down another way", and that is a COMPOSITION, not a window. So the
-// schema is copied into a FRESH external report living in memory, and that report opens its own form
-// — which it generates from its composer, so nothing has to be drawn.
-//
-// ⭐ THE WHOLE CYCLE ALREADY EXISTS. `ibMetaDataReport`'s constructor builds the root, registers it
-// and stands up the module manager — "so a freshly created (not-from-file) report already has it".
-// Opening from a file is the same path with `LoadCommonTree` in the middle; here the middle is a
-// composer carrying a copy of the schema.
-// `source` — the report the cell was composed in; the detail is named after it.
-void ibOpenReportOver(const ibCompositionDescription& desc, const ibValueMetaObject* source)
-{
-	// A report in memory, held from birth: the ctor has already made its root and its module manager.
-	const std::shared_ptr<ibMetaDataReport> detailMeta = ibMetaData::MakeShared<ibMetaDataReport>();
-	ibValueMetaObject* root = detailMeta->GetCommonMetaObject();
-	if (root == nullptr)
-		return;
-
-	// ⭐ …AND NAMED AFTER THE REPORT IT DETAILS. A detail is that report's figure broken down, so its window says
-	// whose it is (Max, 2026-09-30); a fresh report answers with the default name, "External report1".
-	if (source != nullptr) {
-		root->SetName(source->GetName());
-		root->SetSynonym(source->GetSynonym());
-	}
-
-	// …AND THE COMPOSER IT DECLARES. A report's main node IS its default composer, which is what puts
-	// a gridbox on the generated form without anybody drawing one.
-	ibValueMetaObjectComposer* composer =
-		root->CreateMetaObjectAndSetParent<ibValueMetaObjectComposer>();
-	if (composer == nullptr)
-		return;
-
-	// REGISTERED LIKE ANY OTHER METAOBJECT — an external report's tree is registered as it is built
-	// (Max: "as an external report it still has to be registered"), and a node that skipped it has no
-	// ctor behind its class.
-	composer->OnCreateMetaObject(detailMeta.get(), newObjectFlag);
-	composer->OnLoadMetaObject(detailMeta.get());
-	composer->SetCompositionDesc(desc);
-
-	if (!detailMeta->RunDatabase())
-		return;
-
-	// …and the object holds the container from its run on (the module manager RunDatabase builds hands it over), so
-	// this reference may go: the form's life is what keeps the report alive.
-	if (ibValueModuleRuntimeManagerExternalReport* manager = detailMeta->GetManagerModule()) {
-		if (ibValueRecordDataObjectReport* object =
-				dynamic_cast<ibValueRecordDataObjectReport*>(manager->GetObjectValue()))
-			object->ShowFormValue();
-	}
 }
 
 }   // namespace
@@ -268,9 +216,9 @@ void ibOpenReportOver(const ibCompositionDescription& desc, const ibValueMetaObj
 // ⭐ AND IT IS READ BY A PERSON, so the items say the TITLE — the same words that stand over the
 // column in the report. The technical name travels into the query and is not something a reader
 // should ever be shown.
-std::vector<wxString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>& menu, s32 firstId, int row, int col) const
+std::vector<ibString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>& menu, std::int32_t firstId, int row, int col) const
 {
-	std::vector<wxString> paths;
+	std::vector<ibString> paths;
 
 	ibValueDataComposition* composition = dynamic_cast<ibValueDataComposition*>(
 		static_cast<ibValueSpreadsheetModel*>(m_spreadsheetModel));
@@ -293,10 +241,10 @@ std::vector<wxString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>
 
 		// …in the reader's language: a title is kept in every language it was written in, and a sheet reads
 		// it as a cell lands (PutArea) — a menu is not a sheet, and printed it every language at once.
-		wxString title = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), desc.TitleForPath(field.m_name));
+		ibString title = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), desc.TitleForPath(field.m_name));
 		if (title.IsEmpty())
 			title = ibTitleFromName(field.m_name);
-		byMenu.items.push_back(ibMenuItem{ firstId + static_cast<s32>(paths.size()), title });
+		byMenu.items.push_back(ibMenuItem{ firstId + static_cast<std::int32_t>(paths.size()), title });
 		paths.push_back(field.m_name);
 	}
 
@@ -314,7 +262,7 @@ std::vector<wxString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>
 // ⚠ THE COPY IS THE POINT, and it must carry the PARAMETERS with it. A detail that re-read the data
 // with different parameters — another period, another organisation — would show figures that do not
 // add up to the one it was opened from, which is worse than showing nothing.
-void ibValueGridBox::ShowCellDetail(int row, int col, const wxString& byPath)
+void ibValueGridBox::ShowCellDetail(int row, int col, const ibString& byPath)
 {
 	ibValueDataComposition* composition = dynamic_cast<ibValueDataComposition*>(
 		static_cast<ibValueSpreadsheetModel*>(m_spreadsheetModel));
@@ -349,7 +297,10 @@ void ibValueGridBox::ShowCellDetail(int row, int col, const wxString& byPath)
 		detailDesc.GetCompositionSettingsDesc() = narrowed;
 	}
 
-	// …over the report this grid stands in — the form's own object (ibValueForm::GetMetaObject).
+	// …over the report this grid stands in — the form's own object (ibValueForm::GetMetaObject). ⭐ NAMED AFTER IT: a detail
+	// is that report's figure broken down, so its window says whose it is (Max, 2026-09-30).
 	const ibValueForm* form = GetOwnerForm();
-	ibOpenReportOver(detailDesc, form != nullptr ? form->GetMetaObject() : nullptr);
+	const ibValueMetaObject* const source = form != nullptr ? form->GetMetaObject() : nullptr;
+	ibOpenReportOver(detailDesc, source != nullptr ? source->GetName() : ibString(),
+		source != nullptr ? source->GetSynonym() : ibString());
 }

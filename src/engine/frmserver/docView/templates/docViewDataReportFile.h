@@ -30,7 +30,7 @@ public:
 		return m_metaData.get();
 	}
 
-	virtual bool OnCreate(const wxString& path, long flags) override;
+	virtual bool OnCreate(const ibString& path, long flags) override;
 	virtual bool OnNewDocument() override
 	{
 		// notice that there is no need to neither reset nor even check the
@@ -42,7 +42,7 @@ public:
 
 		SetDocumentSaved(false);
 
-		const wxString name =
+		const ibString name =
 			GetDocumentManager()->MakeNewDocumentName();
 
 		SetTitle(name);
@@ -65,10 +65,11 @@ public:
 
 protected:
 
-	virtual bool DoOpenDocument(const wxString& filename) override;
-	virtual bool DoSaveDocument(const wxString& filename) override;
+	virtual bool DoOpenDocument(const ibString& filename) override;
+	virtual bool DoSaveDocument(const ibString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibReportFileDocument);
+	ibReportFileDocument(const ibReportFileDocument&) = delete;
+	ibReportFileDocument& operator=(const ibReportFileDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibReportFileDocument);
 };
 

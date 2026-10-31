@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 #include "backend/backend_core.h"   // ibDateTime, and the ibString its text is
+#include "frmclient/win/dateconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 
 #include <wx/datetime.h>
 
@@ -183,8 +184,14 @@ TEST(DateTime, TheCalendarAgreesWithWxWhereWxIsAsked)
 // ------------------------------------------------------------- the bridge
 
 // A reading crosses to wxDateTime by its local parts and comes back the same reading; an invalid
-// wxDateTime comes over as the empty date. Asked at noon and at midnight, on days of every season,
-// so the machine's own clock change is not on the grid (it is the one thing the bridge cannot mirror).
+// wxDateTime comes over as the empty date.
+//
+// ⚠ WHETHER wx KEEPS A READING'S LOCAL PARTS IS THE MACHINE'S ZONE, not the bridge. Before 1970 wx makes a moment
+// with today's standard offset and reads it back with the C library's offset for then — the same in most zones, an
+// hour apart where the zone's offset then was another (Europe/London was UTC+1 all year from 1968 to 1971, so
+// 1969-12-31 12:00 came back as 13:00). So the bridge is held to what it does — it hands wx exactly the parts and
+// reads back exactly what wx reads — under any zone; and to the round trip wherever wx keeps the parts, which every
+// zone does at noon of a year wx asks the C library about (no zone changes its clocks at noon).
 TEST(DateTime, TheBridgeCarriesAReadingByItsParts)
 {
 	const ibDateTimeParts readings[] = {
@@ -194,30 +201,49 @@ TEST(DateTime, TheBridgeCarriesAReadingByItsParts)
 	};
 	for (const ibDateTimeParts& p : readings) {
 		const ibDateTime date = DateOf(p);
-		const wxDateTime dt = date.ToWxDateTime();
+		const wxDateTime dt = typeConv::DateTimeToWxDateTime(date);
 		ASSERT_TRUE(dt.IsValid()) << Text(p);
+
+		// The bridge hands wx the reading's parts, nothing else…
+		const wxDateTime made(static_cast<wxDateTime::wxDateTime_t>(p.m_day), static_cast<wxDateTime::Month>(p.m_month - 1),
+			static_cast<int>(p.m_year), static_cast<wxDateTime::wxDateTime_t>(p.m_hour),
+			static_cast<wxDateTime::wxDateTime_t>(p.m_minute), static_cast<wxDateTime::wxDateTime_t>(p.m_second),
+			static_cast<wxDateTime::wxDateTime_t>(p.m_millisecond));
+		EXPECT_EQ(made.GetValue().GetValue(), dt.GetValue().GetValue()) << Text(p);
+		// …and reads back the parts wx reads.
 		const wxDateTime::Tm tm = dt.GetTm();
-		EXPECT_EQ(p.m_year, tm.year) << Text(p);
-		EXPECT_EQ(p.m_month, static_cast<unsigned>(tm.mon) + 1) << Text(p);
-		EXPECT_EQ(p.m_day, static_cast<unsigned>(tm.mday)) << Text(p);
-		EXPECT_EQ(p.m_hour, static_cast<unsigned>(tm.hour)) << Text(p);
-		EXPECT_EQ(p.m_minute, static_cast<unsigned>(tm.min)) << Text(p);
-		EXPECT_EQ(p.m_second, static_cast<unsigned>(tm.sec)) << Text(p);
-		EXPECT_EQ(p.m_millisecond, static_cast<unsigned>(tm.msec)) << Text(p);
-		EXPECT_EQ(date, ibDateTime::OfWxDateTime(dt)) << Text(p);
+		ibDateTimeParts back;
+		back.m_year = tm.year;
+		back.m_month = static_cast<unsigned>(tm.mon) + 1;
+		back.m_day = tm.mday;
+		back.m_hour = tm.hour;
+		back.m_minute = tm.min;
+		back.m_second = tm.sec;
+		back.m_millisecond = tm.msec;
+		EXPECT_EQ(DateOf(back), typeConv::WxDateTimeToDateTime(dt)) << Text(p);
+
+		// THE ROUND TRIP, wherever wx keeps the parts in this zone — and at noon of a year it asks the C library about,
+		// it must.
+		const bool kept = SameParts(p, back);
+		if (p.m_hour == 12 && p.m_year >= 1970 && p.m_year <= 3000)
+			EXPECT_TRUE(kept) << Text(p);
+		if (kept)
+			EXPECT_EQ(date, typeConv::WxDateTimeToDateTime(dt)) << Text(p);
 	}
-	EXPECT_TRUE(ibDateTime::OfWxDateTime(wxDateTime()).IsEmpty());
-	EXPECT_TRUE(ibDateTime::OfWxDateTime(wxInvalidDateTime).IsEmpty());
-	EXPECT_FALSE(ibDateTime().ToWxDateTime().IsValid()) << "the empty date crosses back as no date";
+	EXPECT_TRUE(typeConv::WxDateTimeToDateTime(wxDateTime()).IsEmpty());
+	EXPECT_TRUE(typeConv::WxDateTimeToDateTime(wxInvalidDateTime).IsEmpty());
+	EXPECT_FALSE(typeConv::DateTimeToWxDateTime(ibDateTime()).IsValid()) << "the empty date crosses back as no date";
 }
 
 // "Now" is what the machine's clock on the wall shows - the same reading wx's local parts give, under
-// whichever of the three clocks the suite runs.
+// whichever of the three clocks the suite runs. wx's reading with its milliseconds (UNow): Now() is the
+// second alone, and on Windows its coarse clock may still show the second the precise one has left
+// (CI, 2026-10-20: `now` 4 ms past `after` + 1000).
 TEST(DateTime, NowIsWhatTheWallClockShows)
 {
-	const ibDateTime before = ibDateTime::OfWxDateTime(wxDateTime::Now());
+	const ibDateTime before = typeConv::WxDateTimeToDateTime(wxDateTime::UNow());
 	const ibDateTime now = ibDateTime::Now();
-	const ibDateTime after = ibDateTime::OfWxDateTime(wxDateTime::Now());
+	const ibDateTime after = typeConv::WxDateTimeToDateTime(wxDateTime::UNow());
 	EXPECT_FALSE(now.IsEmpty());
 	EXPECT_LE(before.AddMilliseconds(-1000), now);   // a second's slack: wx reads the clock by its own road
 	EXPECT_LE(now, after.AddMilliseconds(1000));
@@ -229,7 +255,7 @@ TEST(DateTime, NowIsWhatTheWallClockShows)
 TEST(DateTime, ElapsedSinceIsRealTimeOnThisMachine)
 {
 	const ibDateTime before(2026, 3, 29, 0, 30), after(2026, 3, 29, 4, 30);   // the European change is between them
-	const long long real = (after.ToWxDateTime() - before.ToWxDateTime()).GetMilliseconds().GetValue();
+	const long long real = (typeConv::DateTimeToWxDateTime(after) - typeConv::DateTimeToWxDateTime(before)).GetMilliseconds().GetValue();
 	EXPECT_EQ(real, after.ElapsedSince(before));
 	EXPECT_EQ(-real, before.ElapsedSince(after));
 	const ibDateTime quiet(2026, 7, 1, 12), later(2026, 7, 1, 12, 0, 1, 250);
@@ -276,8 +302,8 @@ TEST(DateTime, ATextSpellsAReadingByItsDigits)
 	EXPECT_FALSE(date.FromParts(2026, -1, 1));
 	EXPECT_EQ(ibDateTime(2024, 2, 29, 23, 59, 59), date);
 
-	EXPECT_EQ(wxString(wxT("29.03.2026 02:30:45")), ibDateTime(2026, 3, 29, 2, 30, 45).ToString());
-	EXPECT_EQ(wxString(wxT("01.01.0001 00:00:00")), ibDateTime().ToString());
+	EXPECT_EQ(ibString(wxT("29.03.2026 02:30:45")), ibDateTime(2026, 3, 29, 2, 30, 45).ToString());
+	EXPECT_EQ(ibString(wxT("01.01.0001 00:00:00")), ibDateTime().ToString());
 
 	static_assert(ibDateTime::IsADate(2024, 2, 29), "a leap day");
 	static_assert(!ibDateTime::IsADate(2023, 2, 29), "not in a common year");

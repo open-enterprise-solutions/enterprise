@@ -81,14 +81,14 @@ public:
 	}
 
 	// === pure virtuals on ibValueModelTableBase ===================
-	virtual void GetValueByRow(wxVariant& variant,
+	virtual void GetValueByRow(ibVariant& variant,
 	                           const ibDataViewItem& item,
 	                           unsigned int col) const override {
 		auto* node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr) return;
 		if (node->HasColumnValue(col)) node->GetValue(col, variant);
 	}
-	virtual bool SetValueByRow(const wxVariant& variant,
+	virtual bool SetValueByRow(const ibVariant& variant,
 	                           const ibDataViewItem& item,
 	                           unsigned int col) override {
 		auto* node = GetViewData<ibComposerNode>(item);

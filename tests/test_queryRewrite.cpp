@@ -12,14 +12,14 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/query/queryParser.h"
-#include "backend/query/queryRewrite.h"
+#include "core/query/queryParser.h"
+#include "core/query/queryRewrite.h"
 
 #include <algorithm>   // std::find — what the rows one level down carry
 
 namespace {
 
-ibQuerySelectPtr ParseAndRewrite(const wxString& text)
+ibQuerySelectPtr ParseAndRewrite(const ibString& text)
 {
 	ibQueryParser parser;
 	ibQuerySelectPtr ast = parser.Parse(text);
@@ -84,6 +84,7 @@ TEST(QueryRewrite, NotTruthyColumn_BecomesEqualsFalse)
 	EXPECT_EQ(sel->m_where->m_cmp, ibQueryCompareOp::Eq);
 	EXPECT_EQ(sel->m_where->m_lhs->m_path[0], wxT("IsFolder"));
 	ASSERT_EQ(sel->m_where->m_rhs->m_kind, ibQueryAstExprKind::Literal);
+	ASSERT_EQ(sel->m_where->m_rhs->m_literal.GetType(), ibValueTypes::TYPE_BOOLEAN);
 	EXPECT_FALSE(sel->m_where->m_rhs->m_literal.GetBoolean());
 }
 
@@ -269,12 +270,12 @@ TEST(QueryRewrite, CloneCarriesTheStatementWords)
 
 namespace {
 // The name a source is known by in the FROM list — the alias where there is one.
-wxString JoinedName(const ibQuerySelect& sel, size_t index)
+ibString JoinedName(const ibQuerySelect& sel, size_t index)
 {
 	const ibQuerySource& source = sel.m_joins[index].m_source;
 	if (!source.m_alias.IsEmpty())
 		return source.m_alias;
-	return source.m_name.empty() ? wxString() : source.m_name.back();
+	return source.m_name.empty() ? ibString() : source.m_name.back();
 }
 } // namespace
 
@@ -327,22 +328,22 @@ TEST(QueryRewrite, ACycleIsLeftExactlyAsWritten)
 
 namespace {
 // Every path the nested rows publish, as written — the fields the statement carried down.
-std::vector<wxString> CarriedDown(const ibQuerySelect& sel)
+std::vector<ibString> CarriedDown(const ibQuerySelect& sel)
 {
-	std::vector<wxString> out;
+	std::vector<ibString> out;
 	if (sel.m_from.m_subquery)
 		for (const ibQueryProjection& p : sel.m_from.m_subquery->m_projections)
 			if (p.m_expr && p.m_expr->m_kind == ibQueryAstExprKind::Column) {
-				wxString path;
-				for (const wxString& segment : p.m_expr->m_path)
-					path += (path.IsEmpty() ? wxString() : wxString(wxT("."))) + segment;
+				ibString path;
+				for (const ibString& segment : p.m_expr->m_path)
+					path += (path.IsEmpty() ? ibString() : ibString(wxT("."))) + segment;
 				out.push_back(path);
 			}
 	return out;
 }
-bool Carries(const ibQuerySelect& sel, const wxString& path)
+bool Carries(const ibQuerySelect& sel, const ibString& path)
 {
-	const std::vector<wxString> carried = CarriedDown(sel);
+	const std::vector<ibString> carried = CarriedDown(sel);
 	return std::find(carried.begin(), carried.end(), path) != carried.end();
 }
 } // namespace
@@ -439,7 +440,7 @@ TEST(QueryRewrite, WhatTheRowRoadComputesItself_StaysWhereItWasWritten)
 	};
 	for (const wxChar* text : standing) {
 		auto sel = ParseAndRewrite(text);
-		EXPECT_TRUE(sel->m_from.m_subquery == nullptr) << wxString(text).ToStdString();
+		EXPECT_TRUE(sel->m_from.m_subquery == nullptr) << ibString(text).ToStdString();
 	}
 }
 

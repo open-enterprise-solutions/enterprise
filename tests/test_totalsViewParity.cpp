@@ -55,8 +55,8 @@ ibMaterializeView TurnoverView()
 	v.m_name       = wxT("Reg7_Turnovers");
 	v.m_withPeriod = true;
 	v.m_columns = {
-		{ wxT("Qty_Receipt"),  wxT("qty_in"),  wxString(),     ibMaterializeAgg::Value },
-		{ wxT("Qty_Expense"),  wxT("qty_out"), wxString(),     ibMaterializeAgg::Value },
+		{ wxT("Qty_Receipt"),  wxT("qty_in"),  ibString(),     ibMaterializeAgg::Value },
+		{ wxT("Qty_Expense"),  wxT("qty_out"), ibString(),     ibMaterializeAgg::Value },
 		{ wxT("Qty_Turnover"), wxT("qty_in"),  wxT("qty_out"), ibMaterializeAgg::Difference },
 	};
 	return v;
@@ -79,15 +79,15 @@ ibMaterializeView BalanceAndTurnoverView()
 	v.m_withPeriod = true;
 	v.m_columns = {
 		{ wxT("Qty_OpeningBalance"), wxT("qty_in"), wxT("qty_out"), ibMaterializeAgg::RunningSumExcludingCurrent },
-		{ wxT("Qty_Receipt"),        wxT("qty_in"), wxString(),     ibMaterializeAgg::Value },
-		{ wxT("Qty_Expense"),        wxT("qty_out"),wxString(),     ibMaterializeAgg::Value },
+		{ wxT("Qty_Receipt"),        wxT("qty_in"), ibString(),     ibMaterializeAgg::Value },
+		{ wxT("Qty_Expense"),        wxT("qty_out"),ibString(),     ibMaterializeAgg::Value },
 		{ wxT("Qty_Turnover"),       wxT("qty_in"), wxT("qty_out"), ibMaterializeAgg::Difference },
 		{ wxT("Qty_ClosingBalance"), wxT("qty_in"), wxT("qty_out"), ibMaterializeAgg::RunningSum },
 	};
 	return v;
 }
 
-wxString RenderOne(const ibMaterializeView& view, unsigned int shards = 1)
+ibString RenderOne(const ibMaterializeView& view, unsigned int shards = 1)
 {
 	ibMaterializeSpec s = MakeSpec();
 	s.m_shards = shards;
@@ -106,7 +106,7 @@ wxString RenderOne(const ibMaterializeView& view, unsigned int shards = 1)
 // columns by these names: a mismatch is not an error anywhere — the reader simply finds no column
 // and hands back an empty value, so a report loses a column silently.
 TEST(TotalsViewParity, TurnoverColumnsMatchTheLiveNames) {
-	const wxString sql = RenderOne(TurnoverView());
+	const ibString sql = RenderOne(TurnoverView());
 	EXPECT_TRUE(sql.Contains(wxT("AS Qty_Receipt")));
 	EXPECT_TRUE(sql.Contains(wxT("AS Qty_Expense")));
 	EXPECT_TRUE(sql.Contains(wxT("AS Qty_Turnover")));
@@ -114,10 +114,10 @@ TEST(TotalsViewParity, TurnoverColumnsMatchTheLiveNames) {
 
 // Same contract for the five columns of balance-and-turnovers.
 TEST(TotalsViewParity, BalanceAndTurnoverReportsAllFiveColumns) {
-	const wxString sql = RenderOne(BalanceAndTurnoverView());
+	const ibString sql = RenderOne(BalanceAndTurnoverView());
 	for (const wxChar* c : { wxT("AS Qty_OpeningBalance"), wxT("AS Qty_Receipt"), wxT("AS Qty_Expense"),
 	                         wxT("AS Qty_Turnover"), wxT("AS Qty_ClosingBalance") })
-		EXPECT_TRUE(sql.Contains(c)) << "missing " << wxString(c).ToStdString();
+		EXPECT_TRUE(sql.Contains(c)) << "missing " << ibString(c).ToStdString();
 }
 
 // ---------------------------------------------------------------------------
@@ -128,7 +128,7 @@ TEST(TotalsViewParity, BalanceAndTurnoverReportsAllFiveColumns) {
 // ones are not merely empty: the information does not exist once movements are folded into daily
 // rows, and a column repeating the day under the name "hour" would be worse than its absence.
 TEST(TotalsViewParity, ProjectionsStopAtTheStoredGrain) {
-	const wxString sql = RenderOne(TurnoverView());
+	const ibString sql = RenderOne(TurnoverView());
 	EXPECT_TRUE(sql.Contains(wxT("AS period__Week")));
 	EXPECT_TRUE(sql.Contains(wxT("AS period__Month")));
 	EXPECT_TRUE(sql.Contains(wxT("AS period__Quarter")));
@@ -147,7 +147,7 @@ TEST(TotalsViewParity, ProjectionsStopAtTheStoredGrain) {
 // must do the same, or the two paths return different ROW COUNTS while every number in them
 // matches — a balance report that lists every item ever traded instead of the ones on hand.
 TEST(TotalsViewParity, BalanceDropsZeroRowsLikeTheLivePath) {
-	const wxString sql = RenderOne(BalanceView());
+	const ibString sql = RenderOne(BalanceView());
 	EXPECT_TRUE(sql.Contains(wxT("<> 0")));
 }
 
@@ -155,7 +155,7 @@ TEST(TotalsViewParity, BalanceDropsZeroRowsLikeTheLivePath) {
 // that cancelled are real, reportable figures for that period, and dropping the row would lose
 // them. This is the same asymmetry that decides a totals row may never be deleted.
 TEST(TotalsViewParity, TurnoversKeepCancellingPeriods) {
-	const wxString sql = RenderOne(TurnoverView());
+	const ibString sql = RenderOne(TurnoverView());
 	EXPECT_FALSE(sql.Contains(wxT("<> 0")));
 }
 
@@ -163,7 +163,7 @@ TEST(TotalsViewParity, TurnoversKeepCancellingPeriods) {
 // that it would report whichever single stored row the engine happened to return — a number
 // indistinguishable from a correct balance until someone reconciles it.
 TEST(TotalsViewParity, BalanceCollapsesEveryPeriod) {
-	const wxString sql = RenderOne(BalanceView());
+	const ibString sql = RenderOne(BalanceView());
 	EXPECT_TRUE(sql.Contains(wxT("SUM(qty_in)")));
 	EXPECT_TRUE(sql.Contains(wxT("SUM(qty_out)")));
 	EXPECT_TRUE(sql.Contains(wxT("GROUP BY")));
@@ -187,8 +187,8 @@ TEST(TotalsViewParity, PeriodViewsDoNotRegroup) {
 TEST(TotalsViewParity, SplitChangesNothingAConsumerCanSee) {
 	// SQLite collapses any split to one shard (single writer — nothing to relieve), so the
 	// rendered body is identical either way. That collapse IS the guarantee on this engine.
-	const wxString plain  = RenderOne(TurnoverView(), 1);
-	const wxString asked4 = RenderOne(TurnoverView(), 4);
+	const ibString plain  = RenderOne(TurnoverView(), 1);
+	const ibString asked4 = RenderOne(TurnoverView(), 4);
 	EXPECT_EQ(plain, asked4);
 	EXPECT_FALSE(asked4.Contains(ShardColumnName()));
 }
@@ -202,7 +202,7 @@ TEST(TotalsViewParity, SplitChangesNothingAConsumerCanSee) {
 // failure would be invisible until volume, which is precisely when it is expensive to discover.
 TEST(TotalsViewParity, ViewsReadTheTotalsTable) {
 	for (const ibMaterializeView& v : { TurnoverView(), BalanceView(), BalanceAndTurnoverView() }) {
-		const wxString sql = RenderOne(v);
+		const ibString sql = RenderOne(v);
 		EXPECT_TRUE(sql.Contains(wxT("FROM Reg7_T")));
 		EXPECT_FALSE(sql.Contains(wxT("FROM Reg7 ")));
 	}

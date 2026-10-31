@@ -1,7 +1,7 @@
 #include "backend/lock/lockKeyHash.h"
 
 #include "backend/backend_exception.h"
-#include "backend/utils/sha256.hpp"
+#include "core/crypto/sha256.hpp"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metaCollection/partial/commonObject.h"   // ibValueMetaObjectRecordDataRef::GetDocPath()
 
@@ -27,10 +27,10 @@ enum class FieldTag : std::uint8_t {
 // caller that intentionally repeats a name keeps order — though
 // duplicate names in keyFields is itself questionable, we don't
 // reject it here.
-std::vector<std::pair<wxString, ibValue>>
-SortByName(const std::vector<std::pair<wxString, ibValue>>& keyFields)
+std::vector<std::pair<ibString, ibValue>>
+SortByName(const std::vector<std::pair<ibString, ibValue>>& keyFields)
 {
-	std::vector<std::pair<wxString, ibValue>> sorted = keyFields;
+	std::vector<std::pair<ibString, ibValue>> sorted = keyFields;
 	std::stable_sort(sorted.begin(), sorted.end(),
 		[](const auto& a, const auto& b) {
 			return a.first.CmpNoCase(b.first) < 0;
@@ -40,7 +40,7 @@ SortByName(const std::vector<std::pair<wxString, ibValue>>& keyFields)
 
 // Append little-endian uint32 length prefix + raw UTF-8 bytes of the
 // string. Empty strings encode as 4 zero bytes.
-void AppendString(std::vector<std::uint8_t>& buf, const wxString& s)
+void AppendString(std::vector<std::uint8_t>& buf, const ibString& s)
 {
 	const auto utf8 = s.utf8_str();
 	const std::uint32_t len = static_cast<std::uint32_t>(utf8.length());
@@ -82,7 +82,7 @@ void EncodeValue(std::vector<std::uint8_t>& buf, const ibValue& v)
 		{
 			ibDateTimeParts p;
 			v.GetDate().ToParts(p);
-			AppendString(buf, wxString::Format(wxT("%04d-%02u-%02uT%02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second));
+			AppendString(buf, ibString::Format(ibT("%04d-%02u-%02uT%02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second));
 		}
 		break;
 	case ibValueTypes::TYPE_REFFER: {
@@ -95,8 +95,8 @@ void EncodeValue(std::vector<std::uint8_t>& buf, const ibValue& v)
 		}
 		buf.push_back(static_cast<std::uint8_t>(FieldTag::Ref));
 		const auto* meta = refData->GetMetaObjectRef();
-		AppendString(buf, meta != nullptr ? meta->GetDocPath() : wxString());
-		AppendString(buf, static_cast<wxString>(refData->GetGuid()));
+		AppendString(buf, meta != nullptr ? meta->GetDocPath() : ibString());
+		AppendString(buf, static_cast<ibString>(refData->GetGuid()));
 		break;
 	}
 	default:
@@ -106,10 +106,10 @@ void EncodeValue(std::vector<std::uint8_t>& buf, const ibValue& v)
 }
 
 // Hex-encode the 32-byte SHA-256 digest into 64 lowercase chars.
-wxString ToHex(const std::uint8_t digest[ibSHA256::DIGEST_SIZE])
+ibString ToHex(const std::uint8_t digest[ibSHA256::DIGEST_SIZE])
 {
 	static const char kHex[17] = "0123456789abcdef";
-	wxString out;
+	ibString out;
 	out.reserve(ibSHA256::DIGEST_SIZE * 2);
 	for (size_t i = 0; i < ibSHA256::DIGEST_SIZE; ++i) {
 		out += kHex[(digest[i] >> 4) & 0x0F];
@@ -122,14 +122,14 @@ wxString ToHex(const std::uint8_t digest[ibSHA256::DIGEST_SIZE])
 
 namespace ibLockKey {
 
-wxString Hash(const std::vector<std::pair<wxString, ibValue>>& keyFields)
+ibString Hash(const std::vector<std::pair<ibString, ibValue>>& keyFields)
 {
 	// Empty key → empty namespace lock — represented as a single
 	// well-known sentinel hash so all "whole namespace" acquires
 	// collide. SHA-256 of empty input would also work but the
 	// constant makes the intent explicit in DB inspection.
 	if (keyFields.empty())
-		return wxString(wxT("0000000000000000000000000000000000000000000000000000000000000000"));
+		return ibString(ibT("0000000000000000000000000000000000000000000000000000000000000000"));
 
 	const auto sorted = SortByName(keyFields);
 
@@ -146,19 +146,19 @@ wxString Hash(const std::vector<std::pair<wxString, ibValue>>& keyFields)
 	return ToHex(digest);
 }
 
-wxString Canonicalize(const std::vector<std::pair<wxString, ibValue>>& keyFields)
+ibString Canonicalize(const std::vector<std::pair<ibString, ibValue>>& keyFields)
 {
 	if (keyFields.empty())
-		return wxString();
+		return ibString();
 
 	const auto sorted = SortByName(keyFields);
 
-	wxString out;
+	ibString out;
 	for (const auto& kv : sorted) {
 		if (!out.IsEmpty())
-			out += wxT(";");
+			out += ibT(";");
 		out += kv.first;
-		out += wxT("=");
+		out += ibT("=");
 		// Re-use GetString() for the human-readable side — slightly
 		// different from EncodeValue's strict bytes (e.g. Date emits
 		// platform-default format) but acceptable for a diagnostic /
@@ -177,14 +177,14 @@ wxString Canonicalize(const std::vector<std::pair<wxString, ibValue>>& keyFields
 // stays in one translation unit; ibLockItem just owns the per-instance
 // cache so call sites and lockManager don't recompute on every Acquire.
 
-const wxString& ibLockItem::KeyHash() const
+const ibString& ibLockItem::KeyHash() const
 {
 	if (m_keyHashCached.IsEmpty())
 		m_keyHashCached = ibLockKey::Hash(keyFields);
 	return m_keyHashCached;
 }
 
-const wxString& ibLockItem::KeyData() const
+const ibString& ibLockItem::KeyData() const
 {
 	if (!m_keyDataValid) {
 		m_keyDataCached = ibLockKey::Canonicalize(keyFields);

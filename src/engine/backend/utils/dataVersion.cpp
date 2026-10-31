@@ -1,9 +1,7 @@
 #include "backend/utils/dataVersion.hpp"
 
-#include <wx/datetime.h>
-#include <wx/longlong.h>
-
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 
 namespace ibDataVersion {
@@ -29,7 +27,7 @@ inline std::uint16_t NextCounter() {
 // Encode a non-negative 72-bit value packed into a low + high uint64_t
 // pair into exactly kStampLen base-62 chars, zero-padded on the left.
 // We split 72 bits as: high 8 bits in `hi`, low 64 bits in `lo`.
-wxString Encode(std::uint64_t hi, std::uint64_t lo) {
+ibString Encode(std::uint64_t hi, std::uint64_t lo) {
     char buf[kStampLen + 1];
     buf[kStampLen] = '\0';
 
@@ -60,16 +58,16 @@ wxString Encode(std::uint64_t hi, std::uint64_t lo) {
         hi = hiQuot;
     }
 
-    return wxString::FromAscii(buf);
+    return ibString::FromUTF8(buf);
 }
 
 } // namespace
 
-wxString NewStamp() {
-    // Wall-clock milliseconds since Unix epoch. wxLongLong gives us a
-    // portable 64-bit value across the supported toolchains.
-    const wxLongLong ms = wxGetUTCTimeMillis();
-    const std::uint64_t msU = static_cast<std::uint64_t>(ms.GetValue());
+ibString NewStamp() {
+    // Wall-clock milliseconds since Unix epoch (system_clock's epoch on
+    // every supported toolchain).
+    const std::uint64_t msU = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
 
     const std::uint64_t counter = NextCounter();
 
@@ -82,11 +80,11 @@ wxString NewStamp() {
     return Encode(hi, lo);
 }
 
-bool IsValidStamp(const wxString& str) {
+bool IsValidStamp(const ibString& str) {
     if (str.length() != static_cast<size_t>(kStampLen))
         return false;
     for (size_t i = 0; i < str.length(); ++i) {
-        const wxChar c = str.GetChar(i);
+        const ibChar c = str.GetChar(i);
         const bool digit  = (c >= '0' && c <= '9');
         const bool upper  = (c >= 'A' && c <= 'Z');
         const bool lower  = (c >= 'a' && c <= 'z');

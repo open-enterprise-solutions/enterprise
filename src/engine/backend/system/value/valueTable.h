@@ -5,15 +5,14 @@
 #include "valueMap.h"
 
 #include "backend/tabularModel.h"
-#include "backend/picturePredefined.h"                 // g_pic*CLSID — this model emits its own standard command icons
+#include "backend/system/value/valueType.h"            // ibValueTypeDescription::AdjustValue — a cell takes its column's type
+#include "core/picturePredefined.h"                 // g_pic*CLSID — this model emits its own standard command icons
 #include "backend/srcDataObject.h"                    // ibSourceDataObject / ibSourceExplorer — the table IS a form data source
 #include "backend/propertyManager/propertyManager.h"  // ibPropertyObject / ibPropertyUString / ibPropertyType — columns surface / persist AND edit with the form attribute
 #include "core/stringUtils.h"                       // stringUtils::GenerateSynonym — Caption-empty header fallback (mirror ibFormAttribute)
 
 #include <memory>
 #include <vector>
-
-constexpr ibClassID g_valueTableCLSID = value_to_clsid("VL_TABL");
 
 class ibValueModelTable;
 
@@ -50,6 +49,12 @@ private:
 		// the numbers are positions in the member table (FillMembers), which is listed in this order.
 		enTotal,
 		enFindRows,
+		// The position of a row (0-based); -1 for a row of another table.
+		enIndex,
+		// Rows that agree on the group columns become one, the sum columns added up.
+		enGroupBy,
+		// Issue #435: one value into the listed columns of every row (all columns when none are listed).
+		enFillValues,
 	};
 	//attributes:
 	enum Prop {
@@ -82,17 +87,17 @@ public:
 		public:
 
 			ibValueModelTableColumnInfo();
-			ibValueModelTableColumnInfo(unsigned int colId, const wxString& colName, const ibTypeDescription& typeDescription, const wxString& caption, int width);
+			ibValueModelTableColumnInfo(unsigned int colId, const ibString& colName, const ibTypeDescription& typeDescription, const ibString& caption, int width);
 			virtual ~ibValueModelTableColumnInfo();
 
 			// --- column accessors — name / caption / type read & write THROUGH the property variant (the
 			// single source of truth); id + width are plain identity / layout members. ------------------------
 			virtual unsigned int GetColumnID() const { return m_columnID; }
 			virtual void SetColumnID(unsigned int col) { m_columnID = col; }
-			virtual wxString GetColumnName() const { return m_propertyName->GetValueAsString(); }
-			virtual void SetColumnName(const wxString& name) { m_propertyName->SetValue(name); }
-			virtual wxString GetColumnCaption() const { return m_propertyCaption->GetValueAsTranslateString(); }
-			virtual void SetColumnCaption(const wxString& caption) { m_propertyCaption->SetValue(caption); }
+			virtual ibString GetColumnName() const { return m_propertyName->GetValueAsString(); }
+			virtual void SetColumnName(const ibString& name) { m_propertyName->SetValue(name); }
+			virtual ibString GetColumnCaption() const { return m_propertyCaption->GetValueAsTranslateString(); }
+			virtual void SetColumnCaption(const ibString& caption) { m_propertyCaption->SetValue(caption); }
 			virtual const ibTypeDescription GetColumnType() const { return m_propertyType->GetValueAsTypeDesc(); }
 			virtual void SetColumnType(const ibTypeDescription& typeDescription) { m_propertyType->SetValue(typeDescription); }
 			virtual int GetColumnWidth() const { return m_columnWidth; }
@@ -108,8 +113,8 @@ public:
 
 			// --- ibPropertyObject — inspector identity. GetClassName resolves through the registered clsid
 			// (VL_TVCLI) and DISAMBIGUATES the two same-name bases (ibValue + ibPropertyObject). --------------
-			virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
-			virtual wxString GetObjectTypeName() const override { return GetColumnName(); }
+			virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
+			virtual ibString GetObjectTypeName() const override { return GetColumnName(); }
 			virtual bool IsEditable() const override { return true; }
 
 			// --- ibBackendTypeConfigFactory — the Type property's variant resolves through this (mirror
@@ -123,16 +128,16 @@ public:
 			// each column's descriptor, so the bound tablebox resolves the header (GetSynonym = Caption) and
 			// type through the same WalkColumns / GetSourceAbstractColumn seam a metadata field uses. GetComment
 			// stays the base default (empty) — a column carries no comment. ------------------------------------
-			virtual wxString GetName() const override { return m_propertyName->GetValueAsString(); }
+			virtual ibString GetName() const override { return m_propertyName->GetValueAsString(); }
 			// Header = the Caption; empty Caption falls back to the auto-generated synonym of the Name — the
 			// last priority level (Caption > metadata > auto-name), now truly mirroring ibFormAttribute::GetSynonym.
-			virtual wxString GetSynonym() const override {
+			virtual ibString GetSynonym() const override {
 				return !m_propertyCaption->IsEmptyProperty() ? m_propertyCaption->GetValueAsTranslateString() : stringUtils::GenerateSynonym(GetColumnName());
 			}
 
 			// --- Property events (fired by the inspector on an edit) — grouped last, per convention. Nothing
 			// to sync (the property variants ARE the storage); see the .cpp. ------------------------------------
-			virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+			virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 			// --- Serialization — through the UNIFIED property mechanism (each property's GetNodeValue /
 			// ReadNodeValue, exactly like ibFormAttribute), plus the non-property id / width. The value-table
@@ -149,11 +154,11 @@ public:
 			unsigned int m_columnID = 0;
 			int m_columnWidth = wxDVC_DEFAULT_WIDTH;
 
-			ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("General"));
-			ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("Column name"), wxT(""));
-			ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Caption"), _("Caption"), _("Column caption (header)"), wxT(""));
-			ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, wxT("Type"), _("Type"), _("Which values the column holds; a value of another type is converted to it when stored. String by default."), ibValueTypes::TYPE_STRING);
-			ibPropertyBoolean* m_propertyIndexed = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryCommon, wxT("Indexing"), _("Indexing"), _("Keep a lookup index on this column, so Find and an equality search stop scanning"), false);
+			ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(ibT("Common"), _("General"));
+			ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, ibT("Name"), _("Name"), _("Column name"), ibT(""));
+			ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, ibT("Caption"), _("Caption"), _("Column caption (header)"), ibT(""));
+			ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, ibT("Type"), _("Type"), _("Which values the column holds; a value of another type is converted to it when stored. String by default."), ibValueTypes::TYPE_STRING);
+			ibPropertyBoolean* m_propertyIndexed = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryCommon, ibT("Indexing"), _("Indexing"), _("Keep a lookup index on this column, so Find and an equality search stop scanning"), false);
 
 			friend ibValueModelTableColumnCollection;
 		};
@@ -167,9 +172,9 @@ public:
 		// ANSWERS — its columns are its own — but it no longer speaks for a table.
 		void DetachOwnerTable() { m_ownerTable = nullptr; }
 
-		ibValueModelColumnInfo* AddColumn(const wxString& colName,
+		ibValueModelColumnInfo* AddColumn(const ibString& colName,
 			const ibTypeDescription& typeData,
-			const wxString& caption,
+			const ibString& caption,
 			int width = wxDVC_DEFAULT_WIDTH) override {
 
 			// Adding a column WRITES a cell into every existing row, so it needs the table. Without
@@ -284,7 +289,7 @@ public:
 	// What is left on this side is the DECISION: this column declared `Indexing`, so ask the index;
 	// that column did not, so scan.
 
-	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const;
+	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const ibString& colName = ibEmptyString) const;
 
 	virtual bool AutoCreateColumn() const { return true; }
 
@@ -369,36 +374,35 @@ public:
 	// PHYSICAL — the rows are re-seated, and that is the order the table then IS. See the body.
 	void SortValue(const ibDataViewColumnItem& column, bool ascending);
 
-	// ⭐ THE TOTAL OF A COLUMN: its numbers added exactly (ibNumber, not a double), an empty cell adding nothing.
-	// A column that is not there raises - a wrong total that looks right is the worst answer a sum can give -
-	// and so does a cell holding something that is not a number, naming the row. An empty table totals zero.
-	ibValue TotalOf(const wxString& column) const;
-
 	// ⭐ THE ROWS THAT MATCH A FILTER, as an array of the table's own rows (change one and the table changes),
 	// in table order. The filter is a Structure of `column = value`; a row matches when EVERY term does, and an
 	// empty filter matches every row. A column the filter names that is not there raises rather than
 	// matching nothing: a typo in a filter would otherwise read as "no such rows".
 	ibValue FindRows(const ibValueContainer& filter);
+	// In place: rows equal in the group columns become one, the sum columns added up; only those columns remain.
+	void GroupBy(const ibString& groupColumns, const ibString& sumColumns);
+	// One value into the listed columns of every row; no columns listed means every column.
+	void FillValues(const ibValue& value, const ibString& columns);
 
 	// Command store (ibStandardCommandTabular): a table of values defines its OWN Add / Copy / Edit / Delete and runs
 	// them by id on the front-passed row (no shared base set — each model ships its own).
 	enum { eAddValue = 1, eCopyValue, eEditValue = 3 | eStartEditingFlag, eDeleteValue = 4,
 		eMoveUpValue = 5, eMoveDownValue, eSortAscValue, eSortDescValue };   // Edit's id carries the front-edit flag
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override {
-		commands.emplace_back(eAddValue,    wxT("Add"),    _("Add"),    g_picAddCLSID,    true);
-		commands.emplace_back(eCopyValue,    wxT("Copy"),   _("Copy"),   g_picCopyCLSID);
-		commands.emplace_back(eEditValue,    wxT("Edit"),   _("Edit"),   g_picEditCLSID);
-		commands.emplace_back(eDeleteValue,  wxT("Delete"), _("Delete"), g_picDeleteCLSID);
+		commands.emplace_back(eAddValue,    ibT("Add"),    _("Add"),    g_picAddCLSID,    true);
+		commands.emplace_back(eCopyValue,    ibT("Copy"),   _("Copy"),   g_picCopyCLSID);
+		commands.emplace_back(eEditValue,    ibT("Edit"),   _("Edit"),   g_picEditCLSID);
+		commands.emplace_back(eDeleteValue,  ibT("Delete"), _("Delete"), g_picDeleteCLSID);
 		commands.emplace_back();   // separator — what follows is about the ORDER, not about the rows
-		commands.emplace_back(eMoveUpValue,   wxT("MoveUp"),   _("Move up"),   g_picMoveUpCLSID);
-		commands.emplace_back(eMoveDownValue, wxT("MoveDown"), _("Move down"), g_picMoveDownCLSID);
+		commands.emplace_back(eMoveUpValue,   ibT("MoveUp"),   _("Move up"),   g_picMoveUpCLSID);
+		commands.emplace_back(eMoveDownValue, ibT("MoveDown"), _("Move down"), g_picMoveDownCLSID);
 		// …and a separator BETWEEN THE TWO PAIRS (Max, 2026-08-29): moving is done BY HAND to one row,
 		// ordering is done BY A COLUMN to all of them. Two questions, two groups — four equal buttons in
 		// a row would make a person read all four to find the one they meant.
 		commands.emplace_back();
 		// All four keep the DEFAULT modify flag (Max, 2026-08-29): in a view-only form they show and grey out.
-		commands.emplace_back(eSortAscValue,  wxT("SortAsc"),  _("Sort ascending"),  g_picSortAscCLSID);
-		commands.emplace_back(eSortDescValue, wxT("SortDesc"), _("Sort descending"), g_picSortDescCLSID);
+		commands.emplace_back(eSortAscValue,  ibT("SortAsc"),  _("Sort ascending"),  g_picSortAscCLSID);
+		commands.emplace_back(eSortDescValue, ibT("SortDesc"), _("Sort descending"), g_picSortDescCLSID);
 	}
 
 	// Flat table: no hierarchy, so only the SELECTED row matters — m_anchor (the tree-browse fallback) is ignored.
@@ -433,12 +437,15 @@ public:
 	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); // attribute value
+	// `T.GroupBy("cols", "sums")` compiles as the LINQ verb of the same name; a string first argument means the
+	// table's own GroupBy (by column names), anything else the LINQ one.
+	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       // method call
 
 	// implementation of base class virtuals to define model
-	virtual void GetValueByRow(wxVariant& variant,
+	virtual void GetValueByRow(ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) const override;
-	virtual bool SetValueByRow(const wxVariant& variant,
+	virtual bool SetValueByRow(const ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) override;
 
 	// FETCH: the value-table no longer overrides Get*Fetch. The thin wrappers existed ONLY to bypass the (now
@@ -479,7 +486,7 @@ public:
 
 	// A RAM table has no metaobject of its own; expose the active config so reference-typed columns still resolve.
 	virtual const ibMetaData* GetSourceMetaData() const override;
-	virtual wxString GetSourceCaption() const override { return GetClassName(); }
+	virtual ibString GetSourceCaption() const override { return GetClassName(); }
 
 	// The dropped tablebox's column picker reads the columns per-row through this explorer, built from the
 	// value-table's OWN column collection (a RAM table has no queryable / metaobject).
@@ -498,10 +505,10 @@ public:
 	// about "a value-table" (same seam as ibValueDynamicList's Source/Settings). -----------------------------
 	// GetClassName resolves by the object's own clsid (the factory) and DISAMBIGUATES the two same-name bases
 	// (ibValue + ibPropertyObject) — mandatory (mirror ibValueDynamicList).
-	virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
-	virtual wxString GetObjectTypeName() const override { return GetClassName(); }
+	virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
+	virtual ibString GetObjectTypeName() const override { return GetClassName(); }
 	virtual bool IsEditable() const override { return true; }
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 	virtual void OnChildChanged() override;
 
 	// The columns changed — added, removed, or one of them edited: the rows' names and the empty row a new row copies
@@ -517,8 +524,8 @@ public:
 #pragma endregion
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	// Iterator runtime path lives on ibValueModel — drives Get*Fetch
 	// in batches. GetEmptyRow yields the typed skeleton for the
@@ -531,6 +538,9 @@ public:
 	// nodes) directly — no per-table override / member here.
 
 private:
+
+	// The columns a comma-separated list names (GroupBy, FillValues); a name that is not a column raises.
+	std::vector<ibMetaID> ColumnsOf(const ibString& names) const;
 
 	ibValuePtr<ibValueModelTableColumnCollection> m_tableColumnCollection;
 

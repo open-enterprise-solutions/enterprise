@@ -44,9 +44,9 @@ namespace {
 
 // The three names a register's own scaffold columns carry in these tests. Real registers read them
 // off their attributes; the RULE takes them as arguments precisely so it never has to know.
-const wxString kPeriod   = wxT("Period");
-const wxString kRecorder = wxT("Recorder");
-const wxString kLine     = wxT("LineNumber");
+const ibString kPeriod   = wxT("Period");
+const ibString kRecorder = wxT("Recorder");
+const ibString kLine     = wxT("LineNumber");
 
 ibRegFold Fold(ibRegGranularity kind, ibTotalsPeriod unit = ibTotalsPeriod::Month)
 {
@@ -57,12 +57,12 @@ ibRegFold Fold(ibRegGranularity kind, ibTotalsPeriod unit = ibTotalsPeriod::Mont
 }
 
 // The question as both sides ask it — with the register's scaffold names supplied.
-bool Fits(const wxString& column, const ibRegFold& fold)
+bool Fits(const ibString& column, const ibRegFold& fold)
 {
 	return ibRegisterViewColumnFits(column, kPeriod, fold, kRecorder, kLine);
 }
 
-ibValue Word(const wxString& text)
+ibValue Word(const ibString& text)
 {
 	ibValue v;
 	v.SetString(text);
@@ -400,7 +400,7 @@ TEST(RegisterArmCut, TheBalanceBeforeMidnightLeavesOutTheDayThatStartsThere)
     ArmCutFix f;
     ASSERT_NE(f.reg, nullptr);
     // The mark is whatever the register's recorder lays out first - the movements carry it under that name.
-    const wxString mark = f.CutAt(kMidnight, true).m_markColumn;
+    const ibString mark = f.CutAt(kMidnight, true).m_markColumn;
     ASSERT_FALSE(mark.IsEmpty());
 
     ibMaterializeSpec spec;
@@ -439,7 +439,7 @@ TEST(RegisterArmCut, TheBalanceBeforeMidnightLeavesOutTheDayThatStartsThere)
         read.m_periodColumn = wxT("period_");
         read.m_keyColumns   = { wxT("wh") };
         read.m_to           = ibValue(upTo);
-        read.m_columns = { { wxT("Qty_Balance"), wxT("Qty_Turnover"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true } };
+        read.m_columns = { { wxT("Qty_Balance"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true } };
 
         ibDatabaseQueryBuilder q(ibConnectionPool::ThreadHolder());
         q.From(RenderMaterializedRead(read, wxT("b")));
@@ -480,12 +480,12 @@ TEST(RegisterSurface, EveryFigureWordHasACaption) {
     // The point is not WHICH words come back (they are translated), it is that every figure the
     // registers publish is IN the list. A figure that is not answers with its own name — legible,
     // and the signal that the list has fallen behind the vocabulary.
-    const wxChar* const figures[] = {
+    const ibChar* const figures[] = {
         ibRegFigure::Turnover, ibRegFigure::Receipt, ibRegFigure::Expense,
         ibRegFigure::Balance,  ibRegFigure::OpeningBalance, ibRegFigure::ClosingBalance,
     };
-    for (const wxChar* figure : figures)
-        EXPECT_FALSE(ibRegFigureCaption(figure).IsEmpty()) << "no caption for " << wxString(figure).ToStdString();
+    for (const ibChar* figure : figures)
+        EXPECT_FALSE(ibRegFigureCaption(figure).IsEmpty()) << "no caption for " << ibString(figure).ToStdString();
 
     EXPECT_EQ(wxT("SomethingNobodyCaptioned"), ibRegFigureCaption(wxT("SomethingNobodyCaptioned")));
 }
@@ -497,8 +497,8 @@ TEST(RegisterSurface, TheSideRidesTheCaptionTheSameWayItRidesTheName) {
     EXPECT_EQ(wxT("BalanceDr"), ibRegSidedFigure(ibRegFigure::Balance, /*credit*/ false));
     EXPECT_EQ(wxT("BalanceCr"), ibRegSidedFigure(ibRegFigure::Balance, /*credit*/ true));
 
-    const wxString dr = ibRegSidedCaption(ibRegFigure::Balance, /*credit*/ false);
-    const wxString cr = ibRegSidedCaption(ibRegFigure::Balance, /*credit*/ true);
+    const ibString dr = ibRegSidedCaption(ibRegFigure::Balance, /*credit*/ false);
+    const ibString cr = ibRegSidedCaption(ibRegFigure::Balance, /*credit*/ true);
     EXPECT_NE(dr, cr) << "the two sides must not read alike";
     EXPECT_TRUE(dr.StartsWith(ibRegFigureCaption(ibRegFigure::Balance)));
     EXPECT_TRUE(cr.StartsWith(ibRegFigureCaption(ibRegFigure::Balance)));
@@ -849,23 +849,23 @@ namespace {
 
 class ConditionColumn : public ibBackendQueryColumn {
 public:
-	ConditionColumn(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	ConditionColumn(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
 
 class ConditionSurface : public ibBackendQueryable {
 public:
-	explicit ConditionSurface(const wxString& name) : m_name(name) {}
+	explicit ConditionSurface(const ibString& name) : m_name(name) {}
 	void Add(const ibBackendQueryColumn* column) { m_columns.push_back(column); }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_columns; }
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* column : m_columns)
 			if (column->GetName().IsSameAs(name, false))
 				return column;
@@ -874,12 +874,12 @@ public:
 	bool OwnsColumn(const ibBackendQueryColumn* column) const override {
 		return std::find(m_columns.begin(), m_columns.end(), column) != m_columns.end();
 	}
-	wxString GetQueryTableName() const override { return m_name; }
+	ibString GetQueryTableName() const override { return m_name; }
 	ibMetaID GetQueryTableId() const override { return 1; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 private:
-	wxString m_name;
+	ibString m_name;
 	ibUniqueKey m_key;
 	std::vector<const ibBackendQueryColumn*> m_columns;
 };
@@ -911,7 +911,7 @@ TEST(VirtualTableCondition, TheWholeTreeIsFoundAgainOnTheSurfaceItReads) {
 	view.Add(&viewItem);
 
 	const ibQueryPredicatePtr written = ibQueryPredicate::Compose(ibQueryPredicateKind::Or,
-		ibQueryPredicate::Not(Equal(&warehouse, ibValue(wxT("Main")))),
+		ibQueryPredicate::Not(Equal(&warehouse, ibValue(ibT("Main")))),
 		ibQueryPredicate::Null(&item, /*negated*/ false));
 
 	const ibQueryPredicatePtr onView = ibRegConditionOn(&view, written, kDimensionsOnly);
@@ -933,7 +933,7 @@ TEST(VirtualTableCondition, AWalkThroughAReferenceStaysAWalkAndIsAskedAsExists) 
 	view.Add(&viewWarehouse);
 
 	const ibQueryPredicatePtr onView = ibRegConditionOn(&view,
-		Equal(&code, ibValue(wxT("01")), { &warehouse, &code }), kDimensionsOnly);
+		Equal(&code, ibValue(ibT("01")), { &warehouse, &code }), kDimensionsOnly);
 	ASSERT_TRUE(onView);
 	ASSERT_EQ(2u, onView->m_leaf.m_path.size());
 	EXPECT_EQ(&viewWarehouse, onView->m_leaf.m_path.front());   // the head is the surface's own column
@@ -955,11 +955,11 @@ TEST(VirtualTableCondition, WhatAConditionNamesDecidesWhereItMayStand) {
 	ConditionColumn warehouse(wxT("Warehouse"), kWarehouseId), item(wxT("Item"), kItemId), quantity(wxT("Quantity"), kQuantityId);
 
 	const ibQueryPredicatePtr keysOnly = ibQueryPredicate::Compose(ibQueryPredicateKind::And,
-		Equal(&warehouse, ibValue(wxT("Main"))), ibQueryPredicate::Not(Equal(&item, ibValue(wxT("Tea")))));
+		Equal(&warehouse, ibValue(ibT("Main"))), ibQueryPredicate::Not(Equal(&item, ibValue(ibT("Tea")))));
 	EXPECT_TRUE(ibRegConditionOnlyNames(keysOnly, kDimensionsOnly));
 
 	const ibQueryPredicatePtr withAFigure = ibQueryPredicate::Compose(ibQueryPredicateKind::Or,
-		Equal(&warehouse, ibValue(wxT("Main"))), Equal(&quantity, ibValue(0)));
+		Equal(&warehouse, ibValue(ibT("Main"))), Equal(&quantity, ibValue(0)));
 	EXPECT_FALSE(ibRegConditionOnlyNames(withAFigure, kDimensionsOnly));
 }
 

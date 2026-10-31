@@ -1,0 +1,273 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "cls.DataHashing",
+      "name_local": "DataHashing",
+      "name_en": "DataHashing",
+      "kind": "collection",
+      "class_id": 186398170078871391,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "New DataHashing(function : HashFunction [, key : string | BinaryData])",
+      "description": "Геш даних: будується для однієї геш-функції, отримує рядки, байти й файли, віддає суму. Підпис запиту до платіжного чи обмінного сервісу, перевірка підпису вебхука, контрольна сума файлу — усе це він.\n\nAppend(data) додає рядок або BinaryData, AppendFile(path) — вміст файлу цілком, HashSum — геш усього доданого на цю мить, BinaryData, а HashFunction — функція, для якої об'єкт побудовано.\n\nРЯДОК ГЕШУЄТЬСЯ ЯК ЙОГО БАЙТИ В UTF-8. Інше кодування кажуть так: спершу текст перетворюють на байти — New BinaryData(text, TextEncoding.ANSI), — і додають їх. Число, дата й усе, що не рядок і не BinaryData, відхиляється: вони не мають одного написання в байтах, і геш того написання, яке вони випадково показують, підписав би не те, що малося на увазі.\n\nКЛЮЧ РОБИТЬ ЙОГО HMAC (RFC 2104) — New DataHashing(HashFunction.SHA256, key); саме це — підпис вебхука й більшості запитів. Ключ — рядок (його байти в UTF-8) або BinaryData; ПОРОЖНІЙ ключ — теж ключ, і лише пропущений ключ дає простий геш.\n\nHashSum МОЖНА ЧИТАТИ НА ПІВДОРОЗІ, і додавання триває після нього: суму \"ab\" прочитано, додано \"c\", суму прочитано знову — це сума \"abc\".\n\nФУНКЦІЮ КАЖУТЬ ПІД ЧАС ПОБУДОВИ ОБ'ЄКТА, і лише значенням HashFunction: і New DataHashing(), і New DataHashing(\"SHA1\") відхиляються.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA256);\nHashing.Append(Text);\nSum = Hashing.HashSum;                 // BinaryData\n\nSigning = New DataHashing(HashFunction.SHA256, Key);   // HMAC",
+      "parameters": "function — значення HashFunction: MD5, SHA1, SHA256, SHA384 або SHA512.\nkey — рядок або BinaryData; якщо задано, об'єкт рахує з ним HMAC. Пропущено — простий геш.",
+      "return_descr": "DataHashing.",
+      "example": "// вебхук: HMAC-SHA256 тіла, порівняння в hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(HexString(Check.HashSum)) <> Signature) { Raise(\"підпис не збігся\"); }",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.DataHashing.Append",
+        "cls.DataHashing.AppendFile",
+        "cls.DataHashing.HashSum",
+        "enum.HashFunction",
+        "cls.BinaryData",
+        "fn.HexString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.DataHashing.Append",
+      "name_local": "Append",
+      "name_en": "Append",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "Hashing.Append(data : string | BinaryData)",
+      "description": "Додає дані після доданого раніше. Рядок іде своїми байтами в UTF-8, BinaryData — своїми байтами. Усе інше відхиляється — \"DataHashing.Append: the data is a string or a BinaryData\", — бо число чи дата не мають одного написання в байтах.\n\nШматки складаються в ціле: Append(\"a\"), потім Append(\"bc\") дають суму \"abc\".",
+      "syntax_block": "Hashing.Append(data);",
+      "parameters": "data — рядок (його байти в UTF-8) або BinaryData.",
+      "return_descr": "",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(Login + \":\" + Stamp);\nHashing.Append(New BinaryData(Note, TextEncoding.ANSI));",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.DataHashing",
+        "cls.DataHashing.AppendFile",
+        "cls.BinaryData"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.DataHashing.AppendFile",
+      "name_local": "AppendFile",
+      "name_en": "AppendFile",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "Hashing.AppendFile(path : string)",
+      "description": "Додає вміст файлу цілком і як є — нічого не декодується, мітка порядку байтів — його частина. Файл, який не відкривається, відхиляється, як і файл, завеликий, щоб поміститися в пам'ять: частина файлу ніколи не гешується замість цілого.",
+      "syntax_block": "Hashing.AppendFile(path);",
+      "parameters": "path — файл, що читається.",
+      "return_descr": "",
+      "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.AppendFile(\"C:\\in\\price.zip\");\nMessage(Lower(HexString(Hashing.HashSum)));",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.DataHashing",
+        "cls.DataHashing.Append",
+        "cls.BinaryData.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.DataHashing.HashSum",
+      "name_local": "HashSum",
+      "name_en": "HashSum",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "DataHashing.HashSum",
+      "description": "Геш усього доданого на цю мить, як BinaryData, — лише читання. 16 байтів для MD5, 20 для SHA1, 32, 48 і 64 для SHA256, SHA384 і SHA512.\n\nЧИТАННЯ НІЧОГО НЕ ЗАВЕРШУЄ: додавання триває після нього, і два читання без додавання між ними збігаються.\n\nТекстом BinaryData показується як base64; іншій системі геш зазвичай потрібен у hex — HexString(Hashing.HashSum), великими літерами, Lower() для малих, — або в base64 — String(Hashing.HashSum).",
+      "syntax_block": "Sum = Hashing.HashSum;",
+      "parameters": "",
+      "return_descr": "BinaryData.",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(HexString(Hashing.HashSum));   // A9993E36...\nMessage(String(Hashing.HashSum));      // qZk+NkcGgWq6PiVxeFDCbJzQ2J0=",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.DataHashing",
+        "fn.HexString",
+        "cls.BinaryData"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.DataHashing.HashFunction",
+      "name_local": "HashFunction",
+      "name_en": "HashFunction",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "DataHashing.HashFunction",
+      "description": "Геш-функція, для якої побудовано об'єкт, значенням HashFunction — лише читання. Чи було задано ключ, у ньому не видно: HMAC-SHA256 відповідає HashFunction.SHA256.",
+      "syntax_block": "Function = Hashing.HashFunction;",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "if (Hashing.HashFunction = HashFunction.MD5) { Message(\"MD5 - for a checksum only\"); }",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.DataHashing",
+        "enum.HashFunction"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction",
+      "name_local": "HashFunction",
+      "name_en": "HashFunction",
+      "kind": "enum_type",
+      "class_id": 396635086738039334,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.MD5, .SHA1, .SHA256, .SHA384, .SHA512",
+      "description": "Який геш рахує DataHashing, сказане значенням: п'ять значень, пишуться HashFunction.<Ім'я>. Скрипт не будує їх сам, і рядок \"SHA1\" — не значення.\n\nSHA256 — вибір, коли вибір за вами. MD5 і SHA1 є для інших систем, які їх ще вимагають, — контрольна сума в обмінному файлі, підпис, з яким описано платіжний сервіс, — і не захищають від того, хто підробляє дані навмисно.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA256);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(Hashing.HashFunction);",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.HashFunction.MD5",
+        "enum.HashFunction.SHA1",
+        "enum.HashFunction.SHA256",
+        "enum.HashFunction.SHA384",
+        "enum.HashFunction.SHA512",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction.MD5",
+      "name_local": "MD5",
+      "name_en": "MD5",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.MD5",
+      "description": "MD5 (RFC 1321), 16 байтів. Для підписів зламаний — два різні тексти з одним MD5 можна зробити навмисно, — і залишений для контрольних сум і систем, які його ще вимагають.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.MD5);",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 16",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.HashFunction",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction.SHA1",
+      "name_local": "SHA1",
+      "name_en": "SHA1",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.SHA1",
+      "description": "SHA-1 (FIPS 180), 20 байтів. З ним описано багато платіжних і обмінних сервісів; для нового — SHA256.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA1);",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 20",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.HashFunction",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction.SHA256",
+      "name_local": "SHA256",
+      "name_en": "SHA256",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.SHA256",
+      "description": "SHA-256 (FIPS 180), 32 байти. Вибір, коли вибір за вами, і те, чим зазвичай роблять підпис HMAC.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA256);",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "Hashing = New DataHashing(HashFunction.SHA256);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 32",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.HashFunction",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction.SHA384",
+      "name_local": "SHA384",
+      "name_en": "SHA384",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.SHA384",
+      "description": "SHA-384 (FIPS 180), 48 байтів.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA384);",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "Hashing = New DataHashing(HashFunction.SHA384);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 48",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.HashFunction",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HashFunction.SHA512",
+      "name_local": "SHA512",
+      "name_en": "SHA512",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "hashing"
+      ],
+      "signature": "HashFunction.SHA512",
+      "description": "SHA-512 (FIPS 180), 64 байти.",
+      "syntax_block": "Hashing = New DataHashing(HashFunction.SHA512);",
+      "parameters": "",
+      "return_descr": "HashFunction.",
+      "example": "Hashing = New DataHashing(HashFunction.SHA512);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 64",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.HashFunction",
+        "cls.DataHashing"
+      ],
+      "reviewed": false
+    }
+  ]
+}

@@ -4,12 +4,16 @@
 #include "backend/query/schemaBuilder.h"    // ibSchemaBuilder::Reset / Flush — per-save barrier + deferred drain
 #include "backend/databaseLayer/databaseLayer.h"        // ibDatabaseLayer — the connection it holds the TX on
 #include "backend/databaseLayer/connectionHolder.h"     // ibDatabaseConnectionHolder::EnsureConnection
+#include "backend/databaseLayer/connectionScope.h"      // ibConnectionScope — the apply's hold on its holder's connection
 #include "backend/databaseLayer/databaseQueryBuilder.h" // ibDdlCommitsBeforeData — the dialect's barrier, asked of L2
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/backend_exception.h"
 #include "backend/session/session.h"   // ibSession::Current()->Holder() — the DDL holder IS the session's
 #include "appData.h"                                     // db_query — the default connection
 #include "backend/logger/logger.h"          // ibLog->Warn — a compensation that cannot run is written down
+
+ibStructureBuilder::ibStructureBuilder() = default;
+ibStructureBuilder::~ibStructureBuilder() = default;
 
 ibDatabaseLayer* ibStructureBuilder::Conn() const
 {
@@ -45,6 +49,16 @@ bool ibStructureBuilder::OnBeforeSave()
 		if (ibSession* session = ibSession::Current())
 			m_holder = session->Holder();
 
+	// ⭐⭐ …AND ITS CONNECTION IS HELD FOR THE APPLY, NOT FOR THE SESSION'S LIFE. Asked with nothing bound, a
+	// holder binds what it checks out for good (EnsureConnection): the session kept the pool's connection
+	// after the apply, and with one connection in the pool every later read on the thread's channel waited
+	// out the checkout's 30 s (CommonModuleCheck: 211 s, the breakpoints' load among them). A scope binds it
+	// instead, and OnAfterSave lets it go. A leftover build's hold is kept: its connection is the one with
+	// the straggling transaction rolled back below.
+	std::unique_ptr<ibConnectionScope> scope = std::move(m_scope);
+	if (scope == nullptr && m_holder != nullptr)
+		scope = std::make_unique<ibConnectionScope>(m_holder);
+
 	// NO EXCLUSIVE DEMANDED HERE ANY MORE. It used to be taken unconditionally at this point, before the
 	// diff had run — so a save that touched only modules and forms was refused for the same reason as one
 	// that adds a column, and the refusal text contradicted itself by saying code-only changes need no
@@ -66,6 +80,7 @@ bool ibStructureBuilder::OnBeforeSave()
 		return false;
 	}
 #endif
+	m_scope = std::move(scope);   // held until OnAfterSave; a refusal above lets it go on the way out
 	return true;
 }
 
@@ -81,6 +96,8 @@ int ibStructureBuilder::OnAfterSave(bool rollback)
 {
 	// Pair the exclusive acquired in OnBeforeSave — released on EVERY exit (commit / rollback / error).
 	struct AutoRelease { ~AutoRelease() { ibRestructureInfo::ReleaseAutoExclusive(); } } autoRelease;
+	// …and the connection OnBeforeSave held, the same way: after the last statement below, on every exit.
+	const std::unique_ptr<ibConnectionScope> scope = std::move(m_scope);
 
 	if (rollback) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
@@ -213,12 +230,12 @@ void ibStructureBuilder::UndoAppliedDdl()
 		// run leaves the schema ahead of the baseline, and the next apply's refusal is then traceable
 		// only to this line. It used to be silent, which is how a failed apply could end with nothing
 		// in the journal about why the base no longer matches its configuration.
-		wxString why = wxT("an unknown failure");
+		ibString why = ibT("an unknown failure");
 		try { throw; }
 		catch (const ibCoreException& err) { why = err.GetErrorDescription(); }
 		catch (...) {}
-		ibLog->Warn(wxT("restructure"), wxT("compensation"), wxString::Format(
-			wxT("the compensation of a failed apply could not run (%s) - the schema is ahead of the configuration"), why));
+		ibLog->Warn(ibT("restructure"), ibT("compensation"), ibString::Format(
+			ibT("the compensation of a failed apply could not run (%s) - the schema is ahead of the configuration"), why));
 		if (Conn()->IsActiveTransaction()) {
 			try { Conn()->RollBack(); } catch (...) {}
 		}
@@ -228,40 +245,22 @@ void ibStructureBuilder::UndoAppliedDdl()
 
 int ibStructureBuilder::Recreate(const ibSchemaSnapshot& target)
 {
-	// Standalone full rebuild — owns its whole transaction.
-	m_changes.Clear();
-	if (Conn()->IsActiveTransaction())
-		Conn()->RollBack();
-	ibSchemaBuilder(m_holder).Reset();
+	// ⭐ THE APPLY'S OWN ROAD, not a copy of it: the same holder, transaction, barrier, exclusive and
+	// connection hold, opened and closed by the same two events. The copy this was had drifted — it took
+	// no session holder, so its connection stayed pinned to the session, and it never let the exclusive go.
+	if (!OnBeforeSave())
+		return DATABASE_LAYER_QUERY_RESULT_ERROR;
 
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-	Conn()->BeginTransaction();
-#endif
-
-	// Errors propagate as EXCEPTIONS now — on any failure roll the rebuild back and rethrow (mirrors the
-	// storage's OnSaveDatabase). A successful diff returns a non-error sentinel; affected-row counts (0 on
-	// DDL or an empty cleanup) are NOT failures.
+	// Errors propagate as EXCEPTIONS — on any failure roll the rebuild back and rethrow (as the storage's
+	// OnSaveDatabase does). A successful diff returns a non-error sentinel; affected-row counts (0 on DDL
+	// or an empty cleanup) are NOT failures.
 	try {
 		DiffSnapshots(&target, ibSchemaSnapshot(), m_holder, &m_changes);   // target -> empty: DROP every table
 		DiffSnapshots(nullptr, target, m_holder, &m_changes);              // empty -> target: CREATE + SEED every table
 	}
 	catch (...) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-		if (Conn()->IsActiveTransaction())
-			Conn()->RollBack();
-#endif
+		OnAfterSave(/*rollback*/ true);
 		throw;
 	}
-
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-	try {
-		Conn()->Commit();   // a refusal leaves the transaction open — ours to roll back
-	}
-	catch (...) {
-		Conn()->RollBack();
-		throw;
-	}
-	return FlushDeferred();   // a barrier dialect: drain the deferred writes in their own TX
-#endif
-	return 1;
+	return OnAfterSave(/*rollback*/ false);
 }

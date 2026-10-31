@@ -1,0 +1,10 @@
+# One look for a new nightly (oes-demo-update.sh); oes-demo-update.timer runs it every hour.
+
+[Unit]
+Description=OES demo - take the new nightly, if there is one
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/oes-demo/bin/oes-demo-update.sh

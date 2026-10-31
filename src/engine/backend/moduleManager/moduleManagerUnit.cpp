@@ -37,7 +37,7 @@ ibValueModuleManager::ibValueModuleUnit::~ibValueModuleUnit()
 {
 }
 
-#define objectManager wxT("Manager")
+#define objectManager ibT("Manager")
 
 //common module
 bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateCommonModule()
@@ -55,7 +55,7 @@ bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateCommonModule()
 		Compile();
 	}
 	catch (const ibCoreException& err) {
-		ibJournalWarning(wxT("module"),_("Common module init failed: %s"), err.GetErrorDescription());
+		ibJournalWarning(ibT("module"),_("Common module init failed: %s"), err.GetErrorDescription());
 		return false;
 	};
 
@@ -87,5 +87,12 @@ bool ibValueModuleManager::ibValueModuleUnit::CallAsFunc(const long lMethodNum, 
 {
 	return ibRuntimeModuleDataObject::ExecAsFunc(
 		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
+	);
+}
+
+bool ibValueModuleManager::ibValueModuleUnit::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	return ibRuntimeModuleDataObject::GetParamDefValue(
+		GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
 	);
 }

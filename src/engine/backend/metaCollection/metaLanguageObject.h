@@ -6,14 +6,14 @@
 class BACKEND_API ibValueMetaObjectLanguage : public ibValueMetaObject {
 	public:
 
-	wxString GetLangCode() const { return m_propertyCode->GetValueAsString(); }
-	void SetLangCode(const wxString& strCode) { m_propertyCode->SetValue(strCode); }
+	ibString GetLangCode() const { return m_propertyCode->GetValueAsString(); }
+	void SetLangCode(const ibString& strCode) { m_propertyCode->SetValue(strCode); }
 
-	ibValueMetaObjectLanguage(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectLanguage(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//events: 
 	virtual bool OnDeleteMetaObject();
@@ -26,19 +26,19 @@ class BACKEND_API ibValueMetaObjectLanguage : public ibValueMetaObject {
 	/**
 	* Property events
 	*/
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
 
 protected:
 
 	virtual bool ReadData(const ibDataNode& node) override;
 	virtual bool WriteData(ibDataNode& node) const override;
 
-	bool IsValidCode(const wxString& strLangCode);
+	bool IsValidCode(const ibString& strLangCode);
 
 private:
-	ibPropertyUString* m_propertyCode = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryContext, wxT("Code"), _("Code"),
+	ibPropertyUString* m_propertyCode = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryContext, ibT("Code"), _("Code"),
 		_("The language's code (en, ru, uk and so on): the key its texts are stored under in multi-language strings (synonyms, captions, spreadsheet cells) and the code the session's interface language is set by when this language is the configuration's default. Unique among the configuration's languages - a pasted duplicate gets a number appended."),
-		wxT("en"));
+		ibT("en"));
 };
 
 #endif 

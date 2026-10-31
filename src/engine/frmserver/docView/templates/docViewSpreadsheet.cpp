@@ -4,14 +4,14 @@
 #include "frmserver/visualView/ctrl/gridBox.h"   // the sheet drawn and read as a gridbox's
 
 // ----------------------------------------------------------------------------
-// ibSpreadsheetEditView implementation
+// ibSheetView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibSpreadsheetEditView, ibMetaView);
+wxIMPLEMENT_DYNAMIC_CLASS(ibSheetView, ibMetaView);
 
-void ibSpreadsheetEditView::OnDraw(ibDataNode& frame)
+void ibSheetView::OnDraw(ibDataNode& frame)
 {
-	const ibSpreadsheetDocument* const document = dynamic_cast<const ibSpreadsheetDocument*>(GetDocument());
+	const ibSheetDocument* const document = dynamic_cast<const ibSheetDocument*>(GetDocument());
 	if (document == nullptr)
 		return;
 
@@ -19,41 +19,43 @@ void ibSpreadsheetEditView::OnDraw(ibDataNode& frame)
 	// sheet is its own and is not replaced: no Version, read once. Its grid lines shown, as the desktop's document showed
 	// them; a report in a form has none.
 	frame.SetClsid(g_controlGridBoxCLSID);
-	ibDataNode& state = frame.Child(wxT("State"));
-	state.SetValue(wxT("GridLines"), true);
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibForm::ibSpreadsheet::GridLines, true);
 }
 
-bool ibSpreadsheetEditView::Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& response)
+bool ibSheetView::Fetch(const ibDataNode& /*request*/, ibDataNode& response)
 {
-	const ibSpreadsheetDocument* const document = dynamic_cast<const ibSpreadsheetDocument*>(GetDocument());
+	const ibSheetDocument* const document = dynamic_cast<const ibSheetDocument*>(GetDocument());
 	return document != nullptr && ibFetchSpreadsheet(document->GetSpreadsheet(), response);
 }
 
-bool ibSpreadsheetEditView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibSheetView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	ibSpreadsheetDocument* const document = dynamic_cast<ibSpreadsheetDocument*>(GetDocument());
+	ibSheetDocument* const document = dynamic_cast<ibSheetDocument*>(GetDocument());
 	if (document == nullptr)
 		return false;
 
 	switch (event) {
-	case ibProtocolEvent::Cell: {
+	case ibProtocol::ibEvent::ibKind::Cell: {
 		// A CELL BOUND TO A VALUE OPENS IT — the desktop editor's double click (ibGridEditor::OnMouseLeftDown): asked of
 		// the sheet, opened by the runtime; on a sheet being edited the click is the edit's. The cell as Fetch wrote it —
 		// from 1.
-		const ibBackendSpreadsheetObject& spreadsheet = document->GetSpreadsheet();
-		const int row = args.GetValue<s32>(wxT("Row")) - 1, col = args.GetValue<s32>(wxT("Col")) - 1;
+		const ibSpreadsheetObject& spreadsheet = document->GetSpreadsheet();
+		const int row = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Row) - 1, col = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Col) - 1;
 		if (spreadsheet.IsEditable() || row < 0 || col < 0)
 			return true;
-		wxString bound;
+		ibString bound;
 		spreadsheet.GetCellDetailsParameter(row, col, bound);
-		ibValue boundValue;
-		if (!bound.IsEmpty() && spreadsheet.GetParameter(bound, boundValue))
+		ibVariant held;
+		if (!bound.IsEmpty() && spreadsheet.GetParameter(bound, held)) {
+			ibValue boundValue = ibValue(held);
 			boundValue.ShowValue();
+		}
 		return true;
 	}
-	case ibProtocolEvent::Change: {
+	case ibProtocol::ibEvent::ibKind::Change: {
 		ibSpreadsheetDescription sheet;
-		if (!ibSpreadsheetDescriptionMemory::ReadNode(args.GetProperty(wxT("Sheet")), sheet))
+		if (!ibSpreadsheetDescriptionMemory::ReadNode(args.GetProperty(ibProtocol::ibForm::ibSpreadsheet::Sheet), sheet))
 			return false;
 		document->SetSpreadsheetDesc(std::move(sheet));
 		return true;
@@ -64,42 +66,42 @@ bool ibSpreadsheetEditView::OnClientEvent(ibProtocolEvent event, const ibDataNod
 }
 
 // ----------------------------------------------------------------------------
-// ibSpreadsheetDocument: ibDocument and its sheet married
+// ibSheetDocument: ibDocument and its sheet married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibSpreadsheetDocument, ibMetaDocument);
+wxIMPLEMENT_ABSTRACT_CLASS(ibSheetDocument, ibMetaDocument);
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibSpreadsheetFileDocument, ibSpreadsheetDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibSheetFileDocument, ibSheetDocument);
 
 // ----------------------------------------------------------------------------
-// ibSpreadsheetFileDocument: ibDocument and its sheet married
+// ibSheetFileDocument: ibDocument and its sheet married
 // ----------------------------------------------------------------------------
 
 // The sheet is the document's own, so it saves and loads it itself rather than through Save/LoadObject. Its file is the
 // session's temporary one (by its id), read and written in the format the name it came under says.
-bool ibSpreadsheetFileDocument::DoOpenDocument(const wxString& filename)
+bool ibSheetFileDocument::DoOpenDocument(const ibString& filename)
 {
 	return ibSheetFormatReadTempFile(filename, m_spreadSheetDocument->GetSpreadsheetDesc());
 }
 
-wxString ibSpreadsheetFileDocument::GetSaveFilter() const
+ibString ibSheetFileDocument::GetSaveFilter() const
 {
 	return ibSheetFormatSaveFilter();
 }
 
-bool ibSpreadsheetFileDocument::DoSaveDocument(const wxString& filename)
+bool ibSheetFileDocument::DoSaveDocument(const ibString& filename)
 {
 	return ibSheetFormatWriteTempFile(filename, m_spreadSheetDocument->GetSpreadsheetDesc());
 }
 
 // ----------------------------------------------------------------------------
-// ibSpreadsheetGridBoxDocument / View: the document a form's grid box holds, and its view
+// ibSheetGridBoxDocument / View: the document a form's grid box holds, and its view
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibSpreadsheetGridBoxDocument, ibSpreadsheetFileDocument);
-wxIMPLEMENT_DYNAMIC_CLASS(ibSpreadsheetGridBoxView, ibSpreadsheetEditView);
+wxIMPLEMENT_DYNAMIC_CLASS(ibSheetGridBoxDocument, ibSheetFileDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibSheetGridBoxView, ibSheetView);
 
-ibSpreadsheetGridBoxDocument::ibSpreadsheetGridBoxDocument() : ibSpreadsheetFileDocument()
+ibSheetGridBoxDocument::ibSheetGridBoxDocument() : ibSheetFileDocument()
 {
 	SetTitle(_("Spreadsheet document"));
 }

@@ -20,10 +20,10 @@ public:
 			metaObject->ConvertToValue(refValue) : false;
 	}
 
-	virtual wxIcon GetClassIcon() const {
+	virtual ibPicture GetClassIcon() const {
 		const ibValueMetaObject* metaObject = GetMetaObject();
 		return metaObject ?
-			metaObject->GetIcon() : wxNullIcon;
+			metaObject->GetIcon() : ibPicture();
 	}
 
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const = 0;
@@ -67,7 +67,7 @@ public:
 		m_classType = reference_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
+	virtual ibString GetClassName() const {
 		return m_metaObject->GetClassName() + prefixReference + m_metaObject->GetName();
 	}
 
@@ -97,7 +97,7 @@ public:
 		m_classType = object_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
+	virtual ibString GetClassName() const {
 		return m_metaObject->GetClassName() + prefixObject +
 			m_metaObject->GetName();
 	}
@@ -146,7 +146,7 @@ public:
 		m_classType = manager_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
+	virtual ibString GetClassName() const {
 		return m_metaObject->GetClassName() + prefixManager + m_metaObject->GetName();
 	}
 
@@ -189,7 +189,7 @@ public:
 		m_classType = selection_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
+	virtual ibString GetClassName() const {
 		return m_metaObject->GetClassName() + prefixSelection + m_metaObject->GetName();
 	}
 
@@ -217,8 +217,8 @@ public:
 		m_classType = tabularSection_to_clsid(m_metaTable->GetMetaID(), clsid_metaclass(m_metaTable->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
-		return m_metaObject->GetClassName() + prefixTabSection + m_metaObject->GetName() + wxT(".") + m_metaTable->GetName();
+	virtual ibString GetClassName() const {
+		return m_metaObject->GetClassName() + prefixTabSection + m_metaObject->GetName() + ibT(".") + m_metaTable->GetName();
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
@@ -263,8 +263,8 @@ public:
 		m_classType = tabularSectionString_to_clsid(m_metaTable->GetMetaID(), clsid_metaclass(m_metaTable->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
-		return m_metaObject->GetClassName() + prefixTabSectionStr + m_metaObject->GetName() + wxT(".") + m_metaTable->GetName();
+	virtual ibString GetClassName() const {
+		return m_metaObject->GetClassName() + prefixTabSectionStr + m_metaObject->GetName() + ibT(".") + m_metaTable->GetName();
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
@@ -292,7 +292,7 @@ public:
 		m_classType = recordKey_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
+	virtual ibString GetClassName() const {
 		return m_metaObject->GetClassName() + prefixRecordKey + m_metaObject->GetName();
 	}
 
@@ -320,7 +320,7 @@ public:
 		m_classType = recordManager_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
+	virtual ibString GetClassName() const {
 		return m_metaObject->GetClassName() + prefixRecordManager + m_metaObject->GetName();
 	}
 
@@ -348,7 +348,7 @@ public:
 		m_classType = recordSet_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
+	virtual ibString GetClassName() const {
 		return m_metaObject->GetClassName() + prefixRecordSet + m_metaObject->GetName();
 	}
 
@@ -377,7 +377,7 @@ public:
 		m_classType = recordSetString_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
+	virtual ibString GetClassName() const {
 		return m_metaObject->GetClassName() + prefixRecordSetStr + m_metaObject->GetName();
 	}
 

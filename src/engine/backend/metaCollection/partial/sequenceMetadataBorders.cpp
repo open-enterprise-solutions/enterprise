@@ -12,9 +12,9 @@
 //*        ibValueMetaObjectSequence::ibBackendColumnPointInTime        *
 //***********************************************************************
 
-wxString ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetName()         const { return m_seq->GetPointInTime()->GetName(); }
-wxString ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetSynonym()      const { return m_seq->GetPointInTime()->GetSynonym(); }
-wxString ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetPhysicalName() const { return m_seq->GetPointInTime()->GetPhysicalName(); }
+ibString ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetName()         const { return m_seq->GetPointInTime()->GetName(); }
+ibString ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetSynonym()      const { return m_seq->GetPointInTime()->GetSynonym(); }
+ibString ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetPhysicalName() const { return m_seq->GetPointInTime()->GetPhysicalName(); }
 ibMetaID ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetColumnId()     const { return m_seq->GetPointInTime()->GetColumnId(); }
 ibTypeDescription& ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetTypeDesc() const { return m_seq->GetPointInTime()->GetTypeDesc(); }
 bool     ibValueMetaObjectSequence::ibBackendColumnPointInTime::IsAvailable()     const { return m_seq->GetPointInTime()->IsAvailable(); }
@@ -41,7 +41,7 @@ std::vector<ibColumnSlot> ibValueMetaObjectSequence::ibBackendColumnPointInTime:
 	return slots;
 }
 
-bool ibValueMetaObjectSequence::ibBackendColumnPointInTime::ReadValue(const wxString& fieldName, const ibMetaData* metaData,
+bool ibValueMetaObjectSequence::ibBackendColumnPointInTime::ReadValue(const ibString& fieldName, const ibMetaData* metaData,
 	ibValue& retValue, ibQueryResult& result, bool createData) const
 {
 	const ibBackendQueryColumn* period = m_seq->GetRegisterPeriod()->GetQueryColumn();
@@ -63,8 +63,8 @@ bool ibValueMetaObjectSequence::ibBackendColumnPointInTime::ReadValue(const wxSt
 	// the period's and the recorder's. Taking it for a prefix sent the list looking for `fld1566_D`
 	// and the application said so in a box (Max, 2026-09-18). A prefix is a name that is NOT ours.
 	const bool aliased = !fieldName.IsEmpty() && !fieldName.IsSameAs(GetPhysicalName(), false);
-	const wxString periodBase   = aliased ? fieldName : period->GetPhysicalName();
-	const wxString recorderBase = aliased ? fieldName : recorder->GetPhysicalName();
+	const ibString periodBase   = aliased ? fieldName : period->GetPhysicalName();
+	const ibString recorderBase = aliased ? fieldName : recorder->GetPhysicalName();
 
 	ibValue vPeriod, vRecorder;
 	ibColumnCodec::ReadField(periodBase + ibFieldSuffix(ibColumnRole::Date), ibFieldTypes_Date,
@@ -127,7 +127,7 @@ ibSequenceQueryable::ibSequenceQueryable(const ibValueMetaObjectSequence* seq)
 // THE MOMENT ANSWERS FIRST. Its name is the predefined attribute's — that attribute TYPES it and
 // stores nothing, so letting the register's surface answer with the attribute's own column handed
 // back a column over fields no table has.
-const ibBackendQueryColumn* ibSequenceQueryable::ResolveColumnByName(const wxString& name) const
+const ibBackendQueryColumn* ibSequenceQueryable::ResolveColumnByName(const ibString& name) const
 {
 	const ibBackendQueryColumn* moment = m_seq->GetMomentColumn();
 	if (moment != nullptr && moment->GetName().IsSameAs(name, false))
@@ -197,7 +197,7 @@ std::vector<const ibBackendQueryColumn*> ibSequenceBordersQueryable::GetPrimaryK
 	return key;   // a sequence with no dimensions keeps exactly one border
 }
 
-const ibBackendQueryColumn* ibSequenceBordersQueryable::ResolveColumnByName(const wxString& name) const
+const ibBackendQueryColumn* ibSequenceBordersQueryable::ResolveColumnByName(const ibString& name) const
 {
 	for (const ibBackendQueryColumn* column : GetColumns())
 		if (column->GetName().IsSameAs(name, false))
@@ -205,9 +205,9 @@ const ibBackendQueryColumn* ibSequenceBordersQueryable::ResolveColumnByName(cons
 	return nullptr;
 }
 
-wxString ibSequenceBordersQueryable::GetQueryTableName() const { return m_seq->GetBordersTableName(); }
+ibString ibSequenceBordersQueryable::GetQueryTableName() const { return m_seq->GetBordersTableName(); }
 const ibUniqueKey& ibSequenceBordersQueryable::GetQueryTableGuid() const { return m_seq->GetBordersObject()->GetGuid(); }
-wxString ibSequenceBordersQueryable::GetQueryName() const { return m_seq->GetBordersObject()->GetName(); }
+ibString ibSequenceBordersQueryable::GetQueryName() const { return m_seq->GetBordersObject()->GetName(); }
 ibMetaID ibSequenceBordersQueryable::GetQueryTableId() const { return m_seq->GetBordersObject()->GetMetaID(); }
 const ibMetaData* ibSequenceBordersQueryable::GetMetaData() const { return m_seq->GetMetaData(); }
 
@@ -215,14 +215,14 @@ const ibMetaData* ibSequenceBordersQueryable::GetMetaData() const { return m_seq
 //*                 ibSequenceBordersSourceDescriptor                   *
 //***********************************************************************
 
-wxString ibSequenceBordersSourceDescriptor::GetNamespace() const
+ibString ibSequenceBordersSourceDescriptor::GetNamespace() const
 {
 	return ibValue::GetNameObjectFromID(m_meta->GetClassType());
 }
 
-wxString ibSequenceBordersSourceDescriptor::GetName() const
+ibString ibSequenceBordersSourceDescriptor::GetName() const
 {
-	return m_meta->GetName() + wxT(".") + m_meta->GetBordersObject()->GetName();
+	return m_meta->GetName() + ibT(".") + m_meta->GetBordersObject()->GetName();
 }
 
 const ibBackendQueryable* ibSequenceBordersSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/)
@@ -254,7 +254,7 @@ void ibValueMetaObjectSequence::ContributeTables(ibSchemaSnapshot& out) const
 			byKey.push_back(dimension->GetQueryColumn());
 		// The period CLOSES the index whatever is cut: what stands between the border and a registration is a
 		// RANGE on it, served only while it stands right after the key's equalities - the totals' `_DL` twin.
-		ibDeclareLookupIndex(t, t.m_name + wxT("_KIX"), byKey, /*closing*/ GetRegisterPeriod()->GetQueryColumn());
+		ibDeclareLookupIndex(t, t.m_name + ibT("_KIX"), byKey, /*closing*/ GetRegisterPeriod()->GetQueryColumn());
 	}
 
 	// …and the borders, one row per key.
@@ -269,6 +269,6 @@ void ibValueMetaObjectSequence::ContributeTables(ibSchemaSnapshot& out) const
 				continue;
 			t.Add(column);
 		}
-		ibDeclareLookupIndex(t, t.m_name + wxT("_LIX"), borders->GetPrimaryKeyColumns());
+		ibDeclareLookupIndex(t, t.m_name + ibT("_LIX"), borders->GetPrimaryKeyColumns());
 	}
 }

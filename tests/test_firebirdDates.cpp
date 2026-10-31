@@ -22,11 +22,11 @@ namespace {
 class FirebirdDates : public ::testing::Test {
 protected:
 	std::shared_ptr<ibDatabaseLayerFirebird> layer;
-	wxString dbPath;
+	ibString dbPath;
 
 	void SetUp() override {
 		const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-		dbPath = wxFileName(wxStandardPaths::Get().GetTempDir(), wxString::Format(wxT("oes_fb_dates_%s_%lld.fdb"),
+		dbPath = wxFileName(wxStandardPaths::Get().GetTempDir(), ibString::Format(wxT("oes_fb_dates_%s_%lld.fdb"),
 			::testing::UnitTest::GetInstance()->current_test_info()->name(), (long long)now)).GetFullPath();
 		try {
 			layer = std::make_shared<ibDatabaseLayerFirebird>();

@@ -1,6 +1,8 @@
 #ifndef _SELECT_DATA_WND_H__
 #define _SELECT_DATA_WND_H__
 
+#include <map>
+
 #include <wx/artprov.h>
 #include <wx/xrc/xmlres.h>
 #include <wx/listctrl.h>

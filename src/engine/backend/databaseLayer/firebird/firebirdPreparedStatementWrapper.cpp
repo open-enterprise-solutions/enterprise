@@ -4,7 +4,7 @@
 #include "backend/databaseLayer/databaseLayerException.h"
 #include "firebirdResultSet.h"
 
-ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL)
+ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const ibString& strSQL)
 	: ibDatabaseErrorReporter(), m_strSQL(strSQL)
 {
 	m_pInterface = pInterface;
@@ -13,7 +13,6 @@ ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfa
 
 	m_pStatement = 0;
 	m_pParameters = NULL;
-	m_pParameterCollection = NULL;
 	m_bManageStatement = true;
 	m_bManageTransaction = false;
 
@@ -23,8 +22,6 @@ ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfa
 ibPreparedStatementFirebirdWrapper::~ibPreparedStatementFirebirdWrapper()
 {
 	ResetErrorCodes();
-
-	if (m_pParameterCollection) { wxDELETE(m_pParameterCollection); }
 
 	if (m_pStatement && m_bManageStatement)
 	{
@@ -39,12 +36,12 @@ ibPreparedStatementFirebirdWrapper::~ibPreparedStatementFirebirdWrapper()
 			// the reason reach the caller. Freeing a server-side handle is cleanup and follows the
 			// project's cleanup rule: report, never throw.
 			InterpretErrorCodes();
-			ibJournalError(wxT("db.firebird"),wxT("Firebird: isc_dsql_free_statement failed (%s)"), GetErrorMessage());
+			ibJournalError(ibT("db.firebird"),ibT("Firebird: isc_dsql_free_statement failed (%s)"), GetErrorMessage());
 		}
 	}
 }
 
-bool ibPreparedStatementFirebirdWrapper::Prepare(const wxString& strSQL)
+bool ibPreparedStatementFirebirdWrapper::Prepare(const ibString& strSQL)
 {
 	m_strSQL = strSQL;
 	return Prepare();
@@ -74,8 +71,8 @@ bool ibPreparedStatementFirebirdWrapper::Prepare()
 	m_pParameters->version = SQLDA_VERSION1;
 	m_pParameters->sqln = 1;
 
-	wxCharBuffer sqlBuffer = ConvertToUnicodeStream(m_strSQL);
-	nReturn = m_pInterface->GetIscDsqlPrepare()(m_Status, &m_pTransaction, &m_pStatement, 0, (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, m_pParameters);
+	std::string sqlBuffer = ConvertToUnicodeStream(m_strSQL);
+	nReturn = m_pInterface->GetIscDsqlPrepare()(m_Status, &m_pTransaction, &m_pStatement, 0, (char*)sqlBuffer.c_str(), SQL_DIALECT_CURRENT, m_pParameters);
 	if (nReturn != 0)
 	{
 		InterpretErrorCodes();
@@ -102,7 +99,7 @@ bool ibPreparedStatementFirebirdWrapper::Prepare()
 		if (m_pParameters == NULL)
 		{
 			SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-			SetErrorMessage(wxT("Out of memory allocating the parameter descriptor"));
+			SetErrorMessage(ibT("Out of memory allocating the parameter descriptor"));
 			ThrowDatabaseException();
 			return false;
 		}
@@ -117,7 +114,7 @@ bool ibPreparedStatementFirebirdWrapper::Prepare()
 		}
 	}
 
-	m_pParameterCollection = new ibDatabaseParameterFirebirdCollection(m_pInterface, m_pParameters);
+	m_pParameterCollection = std::make_unique<ibDatabaseParameterFirebirdCollection>(m_pInterface, m_pParameters);
 
 	return true;
 }
@@ -232,7 +229,7 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 	if (pOutputSqlda == NULL)
 	{
 		SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-		SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+		SetErrorMessage(ibT("Out of memory allocating the result descriptor"));
 		ThrowDatabaseException();
 		return NULL;
 	}
@@ -256,7 +253,7 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 		if (pOutputSqlda == NULL)
 		{
 			SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
-			SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+			SetErrorMessage(ibT("Out of memory allocating the result descriptor"));
 			ThrowDatabaseException();
 			return NULL;
 		}
@@ -276,7 +273,7 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 	ibDatabaseResultSetFirebird* pResultSet = new ibDatabaseResultSetFirebird(m_pInterface, m_pDatabase, m_pTransaction, m_pStatement, pOutputSqlda);
 	if (pResultSet->GetErrorCode() != DATABASE_LAYER_OK)
 	{
-		SetErrorCode(pResultSet->GetErrorCode());
+		SetErrorCode(pResultSet->GetErrorCode(), pResultSet->GetErrorKind());
 		SetErrorMessage(pResultSet->GetErrorMessage());
 
 		// Swallow a possible throw from ~ibDatabaseResultSet — the
@@ -322,24 +319,25 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 // 2026-09-12, Debug). Same answer: leading white space skipped, then "SELECT " in any case.
 bool ibPreparedStatementFirebirdWrapper::IsSelectQuery()
 {
-	static const wchar_t kSelect[] = L"SELECT ";
-	const std::wstring& text = m_strSQL.ToStdWstring();
+	static const ibChar kSelect[] = ibT("SELECT ");
+	const ibString& text = m_strSQL;
 	size_t at = 0;
-	while (at < text.size() && wxIsspace(text[at]))
+	while (at < text.size() && ibIsSpace(text[at]))
 		++at;
-	for (size_t i = 0; kSelect[i] != L'\0'; ++i, ++at)
-		if (at >= text.size() || static_cast<wchar_t>(wxToupper(text[at])) != kSelect[i])
+	for (size_t i = 0; kSelect[i] != 0; ++i, ++at)
+		if (at >= text.size() || ibToUpper(text[at]) != kSelect[i])
 			return false;
 	return true;
 }
 
 void ibPreparedStatementFirebirdWrapper::InterpretErrorCodes()
 {
-	ibJournalInfo(wxT("db.firebird"),wxT("FirebirdPreparesStatementWrapper::InterpretErrorCodes()\n"));
+	ibJournalInfo(ibT("db.firebird"),ibT("FirebirdPreparesStatementWrapper::InterpretErrorCodes()\n"));
 
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
-	// A system error by its status code, as the layer records one (an interrupted statement is isc_cancelled).
-	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode < -900 ? (int)m_Status[1] : (int)nSqlCode));
+	// The primary gds code, as the layer records one (an interrupted statement is isc_cancelled).
+	const int code = ibDatabaseLayerFirebird::TranslateErrorCode(m_Status);
+	SetErrorCode(code, ibDatabaseLayerFirebird::ClassifyDatabaseError(code));
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, m_Status));
 }
 

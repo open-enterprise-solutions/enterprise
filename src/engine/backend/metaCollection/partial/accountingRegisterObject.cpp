@@ -69,15 +69,17 @@ enum dimensionFunc
 	eDimensionCount = 0,
 	eDimensionKind,
 	eDimensionClear,
+	eDimensionDelete,
 };
 
 } // namespace
 
 void ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
-	helper.AppendFunc(wxT("Kind"), 1, wxT("Kind(number)"));
-	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Kind"), 1, ibT("Kind(number)"));
+	helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
+	helper.AppendFunc(ibT("Delete"), 1, ibT("Delete(kind)"));
 }
 
 bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::CallAsFunc(
@@ -106,6 +108,11 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::CallAsF
 
 	case dimensionFunc::eDimensionClear:
 		Clear();
+		return true;
+
+	case dimensionFunc::eDimensionDelete:
+		if (lSizeArray > 0 && paParams[0] != nullptr)
+			Delete(*paParams[0]);
 		return true;
 	}
 
@@ -248,9 +255,83 @@ void ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::Clear()
 	}
 }
 
+// Deleting a kind the line does not carry is a no-op, as Map.Delete of a missing key is.
+bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::Delete(const ibValue& kind)
+{
+	const ibValueMetaObjectAccountingRegister* meta =
+		m_recordSet != nullptr ? m_recordSet->GetAccountingMetaObject() : nullptr;
+	if (meta == nullptr || kind.IsEmpty())
+		return false;
+
+	bool found = false;
+	for (unsigned int idx = 0; idx < meta->GetAccountDimensionCount(); idx++) {
+		const ibValueMetaObjectAttributeBase* kindSlot = meta->GetAccountDimensionKindSlot(m_creditSide, idx);
+		const ibValueMetaObjectAttributeBase* slot     = meta->GetAccountDimensionSlot(m_creditSide, idx);
+		if (kindSlot == nullptr)
+			continue;
+		ibValue current;
+		m_recordSet->GetValueByMetaID(m_line, kindSlot->GetMetaID(), current);
+		if (current.IsEmpty() || !(current == kind))
+			continue;
+		m_recordSet->SetValueByMetaID(m_line, kindSlot->GetMetaID(), ibValue());
+		if (slot != nullptr) m_recordSet->SetValueByMetaID(m_line, slot->GetMetaID(), ibValue());
+		found = true;
+	}
+	return found;
+}
+
+std::shared_ptr<ibValueIteratorState> ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::CreateIterator()
+{
+	using Pairs = std::vector<std::pair<ibValue, ibValue>>;
+	Pairs pairs;
+	const ibValueMetaObjectAccountingRegister* meta =
+		m_recordSet != nullptr ? m_recordSet->GetAccountingMetaObject() : nullptr;
+	if (meta != nullptr) {
+		for (unsigned int idx = 0; idx < meta->GetAccountDimensionCount(); idx++) {
+			const ibValueMetaObjectAttributeBase* kindSlot = meta->GetAccountDimensionKindSlot(m_creditSide, idx);
+			const ibValueMetaObjectAttributeBase* slot     = meta->GetAccountDimensionSlot(m_creditSide, idx);
+			if (kindSlot == nullptr || slot == nullptr)
+				continue;
+			ibValue kind, value;
+			m_recordSet->GetValueByMetaID(m_line, kindSlot->GetMetaID(), kind);
+			if (kind.IsEmpty())
+				continue;
+			m_recordSet->GetValueByMetaID(m_line, slot->GetMetaID(), value);
+			pairs.emplace_back(kind, value);
+		}
+	}
+
+	class State : public ibValueIteratorState {
+	public:
+		explicit State(Pairs&& p) : m_pairs(std::move(p)) {}
+		bool MoveNext(ibValue& current) override {
+			if (m_started) ++m_pos; else m_started = true;
+			if (m_pos >= m_pairs.size()) return false;
+			ibValue valueCopy = m_pairs[m_pos].second;
+			current = ibValue(static_cast<ibValue*>(
+				new ibValueContainer::ibValueReturnContainer(m_pairs[m_pos].first, valueCopy)));
+			return true;
+		}
+		void Reset() override { m_pos = 0; m_started = false; }
+		long Remaining() const override {
+			const size_t next = m_started ? m_pos + 1 : 0;
+			return next >= m_pairs.size() ? 0 : static_cast<long>(m_pairs.size() - next);
+		}
+		bool PeekSample(ibValue& current) const override {
+			current = ibValue(static_cast<ibValue*>(new ibValueContainer::ibValueReturnContainer()));
+			return true;
+		}
+	private:
+		Pairs  m_pairs;
+		size_t m_pos = 0;
+		bool   m_started = false;
+	};
+	return std::make_shared<State>(std::move(pairs));
+}
+
 ibString ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::GetString() const
 {
-	return m_creditSide ? wxT("AccountDimensionCr") : wxT("AccountDimension");
+	return m_creditSide ? ibT("AccountDimensionCr") : ibT("AccountDimension");
 }
 
 //****************************************************************************
@@ -299,7 +380,7 @@ std::vector<std::pair<ibString, ibValue>> KindsOfAccount(const ibValue& account)
 
 		// The characteristic's own description is the name. Asked of the element, not spelled here:
 		// a kind is an ordinary record of the chart of characteristic types.
-		wxString name;
+		ibString name;
 		ibValueReferenceDataObject* kindRef = nullptr;
 		if (kind.ConvertToValue(kindRef) && kindRef != nullptr) {
 			const ibValueMetaObjectChartOfCharacteristicTypes* kindChart = nullptr;
@@ -363,7 +444,7 @@ long ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::FindPro
 {
 	const std::vector<std::pair<ibString, ibValue>> kinds = DeclaredKinds();
 	for (size_t idx = 0; idx < kinds.size(); idx++)
-		if (stringUtils::CompareString(kinds[idx].first, strPropName))
+		if (stringUtils::IsSameAs(kinds[idx].first, strPropName))
 			return static_cast<long>(idx);
 	return wxNOT_FOUND;
 }
@@ -428,11 +509,11 @@ void ibValueRecordSetObjectAccountingRegister::DescribeReturnLine(ibMemberTable&
 		return;
 
 	if (meta->IsCorrespondence()) {
-		helper.AppendProp(wxT("AccountDimensionDr"), ibValueAccountingLine::ePropAccountDimensionDr);
-		helper.AppendProp(wxT("AccountDimensionCr"), ibValueAccountingLine::ePropAccountDimensionCr);
+		helper.AppendProp(ibT("AccountDimensionDr"), ibValueAccountingLine::ePropAccountDimensionDr);
+		helper.AppendProp(ibT("AccountDimensionCr"), ibValueAccountingLine::ePropAccountDimensionCr);
 	}
 	else {
-		helper.AppendProp(wxT("AccountDimension"), ibValueAccountingLine::ePropAccountDimension);
+		helper.AppendProp(ibT("AccountDimension"), ibValueAccountingLine::ePropAccountDimension);
 	}
 }
 
@@ -493,7 +574,7 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountingLine::SetPropVal
 
 void ibValueRecordSetObjectAccountingRegister::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Add"), wxT("Add()"));
+	helper.AppendFunc(ibT("Add"), ibT("Add()"));
 	// ⭐ THE VERB SETS THE SIDE, so the author never writes the flag by hand and it cannot be forgotten
 	// or contradicted by the account assigned next to it. They are ordinary verbs of the collection,
 	// not a second mode — and a correspondence register needs them too: an OFF-BALANCE account has no
@@ -503,17 +584,17 @@ void ibValueRecordSetObjectAccountingRegister::FillMembers(ibMemberTable& helper
 	// ⚠ The accumulation register has the same IDEA in its own words (AddReceipt / AddExpense) and the
 	// two sets do NOT meet: receipt/expense belongs there, debit/credit here, and neither vocabulary is
 	// a special case of the other. Similar in shape, separate in meaning — no shared verb.
-	helper.AppendFunc(wxT("AddDebit"), wxT("AddDebit()"));
-	helper.AppendFunc(wxT("AddCredit"), wxT("AddCredit()"));
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
-	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
-	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	helper.AppendFunc(wxT("Load"), 1, wxT("Load(value: table)"));
-	helper.AppendFunc(wxT("Unload"), wxT("Unload()"));
-	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
-	helper.AppendFunc(wxT("Read"), wxT("Read()"));
-	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendFunc(ibT("AddDebit"), ibT("AddDebit()"));
+	helper.AppendFunc(ibT("AddCredit"), ibT("AddCredit()"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
+	helper.AppendFunc(ibT("Write"), 1, ibT("Write(replace : boolean)"));
+	helper.AppendFunc(ibT("Load"), 1, ibT("Load(value: table)"));
+	helper.AppendFunc(ibT("Unload"), ibT("Unload()"));
+	helper.AppendFunc(ibT("Modified"), ibT("Modified()"));
+	helper.AppendFunc(ibT("Read"), ibT("Read()"));
+	helper.AppendFunc(ibT("Selected"), ibT("Selected()"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 
 	// `Filter` is NOT declared here — see informationRegisterObject.cpp: it is an export variable of
 	// the set, bound in InitializeObject, and that reaches this table on its own.

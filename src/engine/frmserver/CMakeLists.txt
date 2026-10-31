@@ -24,24 +24,21 @@ target_compile_definitions(frmserver
         NOPCH
 )
 
-# FRMSERVER_API resolves to dllexport only when FRMSERVER_EXPORTS is defined (frmserver.h) — frontend's rule.
+# FRMSERVER_API resolves to dllexport only when FRMSERVER_EXPORTS is defined (frmserver.h).
 if(WIN32)
     target_compile_definitions(frmserver PRIVATE FRMSERVER_EXPORTS)
 endif()
 
+# Of wx the base only, as the backend's (backend/CMakeLists.txt): a form on the server is data, drawn by a client.
+target_compile_definitions(frmserver PRIVATE wxUSE_GUI=0)
 target_link_libraries(frmserver
     PRIVATE
         backend
-        wx::core
-        wx::html
-        wx::adv
         wx::base
-        wx::net
-        wx::xml
 )
 
 set_target_properties(frmserver PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON
     OUTPUT_NAME "frmserver"

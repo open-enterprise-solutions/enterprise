@@ -1,18 +1,8 @@
 #ifndef __POSTGRESQL_INTERFACES_H__
 #define __POSTGRESQL_INTERFACES_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/dynlib.h>
+#include "core/fstring.h"   // ibString, ibT
+#include "core/dynamicLibrary.h"   // ibDynamicLibrary — the client library, loaded by name
 
 #include "engine/libpq-fe.h"
 
@@ -93,7 +83,7 @@ public:
 
 private:
 
-	wxDynamicLibrary m_PostgresDLL;
+	ibDynamicLibrary m_PostgresDLL;
 
 	PQstatusType m_pPQstatus;
 	PQsetdbLoginType m_pPQsetdbLogin;

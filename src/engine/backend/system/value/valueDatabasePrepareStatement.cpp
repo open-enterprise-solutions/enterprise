@@ -24,10 +24,10 @@ ibValuePreparedStatement::~ibValuePreparedStatement()
 
 void ibValuePreparedStatement_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProc(wxT("SetParam"), 2, wxT("SetParam(number: position, any: value)"));
+	helper.AppendProc(ibT("SetParam"), 2, ibT("SetParam(number: position, any: value)"));
 
-	helper.AppendFunc(wxT("RunQuery"), 1, wxT("RunQuery()"));
-	helper.AppendFunc(wxT("RunQueryWithResults"), 1, wxT("RunQueryWithResults()"));
+	helper.AppendFunc(ibT("RunQuery"), 1, ibT("RunQuery()"));
+	helper.AppendFunc(ibT("RunQueryWithResults"), 1, ibT("RunQueryWithResults()"));
 }
 
 #include "backend/backend_exception.h"

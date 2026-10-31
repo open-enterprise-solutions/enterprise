@@ -9,7 +9,7 @@
 // window that already exists (query / resources / output), not a second editor of its own.
 bool ibValueMetaObjectComposer::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	items.emplace_back(ibMetaMenuKind::Object, wxT("Composer"), _("Open data composer"), this);
+	items.emplace_back(ibMetaMenuKind::Object, ibT("Composer"), _("Open data composer"), this);
 	return false;
 }
 

@@ -4,15 +4,18 @@
 #include <map>
 #include <queue>
 #include <atomic>
+#include <memory>
 #include <mutex>
 #include <condition_variable>
-#include <wx/thread.h>
-#include <wx/socket.h>
+#include <shared_mutex>
+#include <thread>
 
 struct ibRunContext;
 class ibSession;
 class ibMetaDataConfiguration;
 class ibStandaloneDebuggerServer;
+class ibHttpServer;
+class ibWebSocket;
 
 // Lifecycle: owned by ibMetaDataConfiguration as a unique_ptr field
 // (private ctor + friend). Ctor/dtor maintain the `ms_debugServer`
@@ -25,50 +28,28 @@ class ibStandaloneDebuggerServer;
 
 class BACKEND_API ibDebuggerServer {
 
-	class BACKEND_API ibDebuggerServerConnection : public wxThread {
+	// ⭐ THE DEBUG THREAD, AND THE PORT BESIDE IT. The port is the core's (core/net): a WebSocket at /debugger, one
+	// designer at a time, each command one binary message. Its threads only move bytes — what arrives is handed to
+	// THIS thread, in order, and dispatched here, because this is the thread the session registry knows as the
+	// debugger's (RegisterDebugThread) and the one COM is initialised on for an OLE value.
+	class BACKEND_API ibDebuggerServerConnection {
 	public:
 
-		bool IsConnected() const {
-			if (m_socket == nullptr)
-				return false;
-			if (!m_socket->IsConnected())
-				return false;
-			if (!m_socket->IsOk())
-				return false;
-			// Don't include LastError() in the liveness check.
-			// wxSocketBase keeps LastError as per-socket state (NOT
-			// per-thread), so a transient WOULDBLOCK / TIMEDOUT /
-			// IOERR left by any operation on any thread (e.g. a
-			// session worker's SendCommand racing the connection
-			// thread's WaitForRead) leaks into the connection
-			// thread's next IsConnected() check and falsely declares
-			// the connection dead. Real disconnects flip IsConnected
-			// or IsOk to false above; ReadMsg / WriteMsg operations
-			// guard their own short-read / short-write cases via
-			// LastCount checks. This brittle filter caused the
-			// "designer detaches between F5s" reports under multi-tab
-			// breakpoint workloads.
-			return true;
-		}
+		// A designer is on the port.
+		bool IsConnected() const;
 
 		void WaitConnection();
 		void Disconnect();
 
 		ConnectionType GetConnectionType() const { return m_connectionType; }
 
-		ibDebuggerServerConnection(const wxString& hostName, unsigned short startPort);
-		virtual ~ibDebuggerServerConnection();
-
-		// entry point for the thread - called by Run() and executes in the context
-		// of this thread.
-		virtual ExitCode Entry() override;
-
-		// This one is called by Kill() before killing the thread and is executed
-		// in the context of the thread that called Kill().
-		virtual void OnKill() override;
+		ibDebuggerServerConnection(const ibString& hostName, unsigned short startPort);
+		~ibDebuggerServerConnection();
 
 	protected:
 
+		// The thread's own body (m_thread), and the loop it runs.
+		void Entry();
 		void EntryClient();
 
 		void RecvCommand(void* pointer, unsigned int length);
@@ -76,59 +57,58 @@ class BACKEND_API ibDebuggerServer {
 
 	private:
 
+		// From the port's thread: a designer came — its socket in the slot, and the queue what it says goes to; null
+		// when another one is on.
+		std::shared_ptr<ibDebugCommandQueue> AcceptConnection(const std::shared_ptr<ibWebSocket>& socket);
+
+		// The port, on the first free one from m_numHostPort up.
+		bool StartServer();
+
+		// The connection's thread (Entry), and the word that it is to end; it asks between reads. The connection's end
+		// says it and waits the thread out (~ibDebuggerServerConnection).
+		std::thread       m_thread;
+		std::atomic<bool> m_stop{ false };
+
 		std::atomic<bool> m_waitConnection;
 
 		ConnectionType m_connectionType;
 
-		wxString m_strHostName;
+		ibString m_strHostName;
 		unsigned short m_numHostPort;
 
-		// Worker thread sets true after Accept; main thread polls this
+		// The port's thread sets true in Accept; main thread polls this
 		// in CreateServer's wait loop. Plain bool was being kept in a
 		// register on the main thread → wait loop never observed the
 		// flip and the server hung until something else flushed cache
 		// (e.g. designer closing rewrote enough memory).
 		std::atomic<bool> m_acceptConnection;
 
-		// Worker thread sets true once a wxSocketServer has successfully
-		// bound a port (the listener is now Listening). Used by
+		// Worker thread sets true once StartServer has answered — the port up,
+		// or none free in the diapason. Used by
 		// CreateServer(wait=false) to make the manifest-write path
 		// deterministic — without it, the designer's SearchServer can
 		// race with wes's bind-loop and the connect refused that
 		// follows leaves the loop reaching round-budget exhaustion.
 		std::atomic<bool> m_bindReady{false};
 
-		wxSocketServer* m_socketServer;
-		wxSocketBase* m_socket;
+		std::unique_ptr<ibHttpServer> m_socketServer;
 
-		// ⭐⭐ ONE THREAD AT A TIME USES THE SOCKET — writing AND reading.
-		//
-		// Writes were the first half: SendCommand does two consecutive WriteMsg
-		// calls (length header + payload), and without a lock concurrent senders
-		// interleave their bytes — a hot path when several web sessions hit
-		// breakpoints in parallel and each emits LeaveLoop on F5 destroy.
-		//
-		// Reads are the other half, and cost a detach a day until 2026-09-25.
-		// wxSocketBase keeps its blocking FLAGS on the object: a read raises
-		// WAITALL for its duration and a write does the same for its own,
-		// restoring what it found. Overlap them and one restores the other's
-		// flags mid-frame, so a read obliged to wait for every byte returns
-		// short — on a socket that is connected and healthy. See the read loop
-		// in EntryClient for what that looked like in the journal.
-		//
-		// Plain mutex: socket I/O is syscall-bound, and contention is dwarfed by
-		// the cost of the call it guards. The WAIT for data is NOT held — only
-		// the frame that has begun to arrive.
-		std::mutex m_socketMutex;
+		// ⭐ A MESSAGE IS WHOLE, so the socket needs no lock of its own: the two writes of a frame that interleaved
+		// between senders, and the blocking flags a read and a write restored over each other (2026-09-25), were
+		// wxSocketBase's. This lock only guards the slot — which socket is the designer's, and its queue.
+		mutable std::mutex                   m_socketMutex;
+		std::shared_ptr<ibWebSocket>         m_socket;
+		std::shared_ptr<ibDebugCommandQueue> m_commandQueue;
 
 		friend class ibDebuggerServer;
+		friend class ibStandaloneDebuggerServer;   // the port the system chose for a test (test_debugServer.cpp)
 	};
 
 	// metaData — the configuration that made it and owns it; the debugger asks ITS base through it, never
 	// "the current one" (docs/private/multi-base-process.md).
 	explicit ibDebuggerServer(class ibMetaDataConfigurationBase* metaData);
 	friend class ibMetaDataConfiguration;
-	friend class ibStandaloneDebuggerServer;   // a test's server with no configuration around it (test_socketLock.cpp)
+	friend class ibStandaloneDebuggerServer;   // a test's server with no configuration around it (test_debugServer.cpp)
 
 public:
 
@@ -151,7 +131,7 @@ public:
 			!m_socketConnectionThread->m_waitConnection : true;
 	}
 
-	bool CreateServer(const wxString& hostName = defaultHost, unsigned short startPort = defaultDebuggerPort, bool wait = false);
+	bool CreateServer(const ibString& hostName = defaultHost, unsigned short startPort = ibPort::Debugger.m_first, bool wait = false);
 	void ShutdownServer();
 
 	// Session is read out of runContext → GetProcUnit() → GetSession()
@@ -166,7 +146,7 @@ public:
 	// run, by the channel below (Max, 2026-09-04: *"this is an error that reaches me in the designer,
 	// and I can see it really is an error; and there are messages that should reach you, not me — I
 	// do not need them"*).
-	void SendErrorToClient(const wxString& strFileName, const wxString& strDocPath, unsigned int numLine, const wxString& strErrorMessage);
+	void SendErrorToClient(const ibString& strFileName, const ibString& strDocPath, unsigned int numLine, const ibString& strErrorMessage);
 
 	// ⭐ WHAT EVALUATED CODE PRINTED — up the eval channel, to whoever asked for the evaluation.
 	//
@@ -184,7 +164,7 @@ public:
 	// person's pane with somebody else's narration (Max, 2026-09-04).
 	//
 	// The level rides along, so a reader can tell "the document did not post" from "posted 12".
-	void SendEvalMessage(const wxString& strMessage, MessageType type = MessageType_Normal);
+	void SendEvalMessage(const ibString& strMessage, MessageType type = MessageType_Normal);
 
 	// "Is the debug-thread-current session parked in DoDebugLoop?" Resolves
 	// the per-session m_debugLoop via ibSession::Current() (body in .cpp —
@@ -202,10 +182,6 @@ public:
 
 protected:
 
-	void SetConnectSocket(ibDebuggerServerConnection* socketConnectionThread) {
-		m_socketConnectionThread = socketConnectionThread;
-	}
-
 	void ResetDebugger() {
 
 		m_bUseDebug = false;
@@ -221,17 +197,17 @@ protected:
 	}
 
 	void WakeAllDebugSessions();
-	void WakeDebugSession(const wxString& sessionGuid);
+	void WakeDebugSession(const ibString& sessionGuid);
 
 	void ClearCollectionBreakpoint();
 
 	//main loop
-	inline void DoDebugLoop(const wxString& strDocPath, const wxString& strModuleName, int numLine, ibRunContext* runContext);
+	inline void DoDebugLoop(const ibString& strDocPath, const ibString& strModuleName, int numLine, ibRunContext* runContext);
 
 	//special functions:
 	// Both take the parked frame explicitly — sourced from the per-session
-	// dbg->m_runContext at the call site (worker owns it in DoDebugLoop; the
-	// SetStack handler resolves + holds dbg->m_mutex). No server-global mirror.
+	// dbg.m_runContext at the call site (worker owns it in DoDebugLoop; the
+	// SetStack handler resolves + holds dbg.m_mutex). No server-global mirror.
 	inline void SendExpressions(ibRunContext* runContext);
 	inline void SendLocalVariables(ibRunContext* runContext);
 	inline void SendStack();
@@ -253,7 +229,12 @@ private:
 
 	// module -> (line -> condition). An empty condition stops always; any other stops only where it is true
 	// in the frame that reaches the line (EnterDebugger).
-	std::map<wxString, std::map<unsigned int, wxString>> m_listBreakpoint;
+	//
+	// 🛑 UNDER ITS LOCK, every touch: read shared by each script thread on every line it runs while debugged
+	// (EnterDebugger), changed exclusively by the debug thread's commands and by a reset, which a script's thread
+	// reaches too (ResetDebugger).
+	std::map<ibString, std::map<unsigned int, ibString>> m_listBreakpoint;
+	std::shared_mutex m_breakpointsMutex;
 
 	// WHAT IS WATCHED HERE, AND FOR WHOM — refreshed at every stop by SendExpressions, which answers each
 	// asker in its own name. See ibWatchedExpression (debugDefs.h) for why the name is kept and not
@@ -264,9 +245,7 @@ private:
 	std::map <unsigned int, ibWatchedExpression> m_listExpression;
 #endif
 
-	wxCriticalSection m_clearBreakpointsCS;
-
-	ibDebuggerServerConnection* m_socketConnectionThread;
+	std::unique_ptr<ibDebuggerServerConnection> m_socketConnectionThread;
 
 	friend class ibBackendException;
 };

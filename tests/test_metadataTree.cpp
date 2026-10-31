@@ -14,6 +14,13 @@
 #include <iterator>
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject + g_meta*CLSID
+#include "backend/metaCollection/partial/selector/objectSelector.h"
+#include "backend/appData.h"
+#include "backend/metaCollection/partial/enumeration.h"
+#include "backend/metaCollection/partial/reference/reference.h"
+
+#include <wx/init.h>
+#include <wx/log.h>
 
 TEST(MetadataTree, FreshConfigHasNoBusinessObjects) {
     ibMetaDataConfigurationFile cfg;
@@ -168,4 +175,122 @@ TEST(MetadataTree, CreatingEveryHostedKindTwiceKeepsBothAndNamesThemApart) {
 			<< "two " << candidate.name
 			<< " objects were created with the same name";
 	}
+}
+
+namespace {
+
+// The selector's constructor asks whether this is the designer, which reads
+// appData. A host always has it; a bare test has to bring it up.
+bool EnsureAppData()
+{
+	if (ibApplicationInstance::Get() != nullptr)
+		return true;
+	if (wxLog::GetActiveTarget() != nullptr)
+		delete wxLog::SetActiveTarget(new wxLogStderr());
+	return ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE);
+}
+
+void ExpectSelectionMember(ibValueMetaObjectRecordDataMutableRef* meta, const wxString& name, bool present)
+{
+	ibValueSelectorRecordDataObject selection(meta);
+	const long prop = selection.FindProp(name);
+	if (!present) {
+		EXPECT_EQ(prop, wxNOT_FOUND) << name;
+		return;
+	}
+	ASSERT_NE(prop, wxNOT_FOUND) << name;
+	ibValue value;
+	ASSERT_TRUE(selection.GetPropVal(prop, value)) << name;
+	EXPECT_FALSE(selection.SetPropVal(prop, ibValue(ibString(wxT("x"))))) << name << " is read-only";
+}
+
+} // namespace
+
+// Catalogs.X.Select() and ChartsOfCharacteristicTypes.X.Select() published
+// only Ref. Code, Description, DeletionMark and IsFolder are attributes of
+// the row, the same ones a reference already exposes, and a script read was
+// "field not found". A custom attribute stays, and the cells stay read-only.
+TEST(RecordSelection, StandardAttributesAreMembers) {
+	wxInitializer wx;
+	if (ibApplicationInstance::Get() == nullptr && !wx.IsOk())
+		GTEST_SKIP() << "wxBase init failed";
+	if (!EnsureAppData())
+		GTEST_SKIP() << "appData env unavailable";
+
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	auto* catalog = dynamic_cast<ibValueMetaObjectRecordDataMutableRef*>(
+		cfg.CreateMetaObject(g_metaCatalogCLSID, root, false));
+	ASSERT_NE(catalog, nullptr);
+	ibValueMetaObject* note = cfg.CreateMetaObject(g_metaAttributeCLSID, catalog, false);
+	ASSERT_NE(note, nullptr);
+	note->SetName(wxT("Note"));
+
+	const wxString catalogNames[] = {
+		wxT("Code"), wxT("Description"), wxT("DeletionMark"),
+		wxT("IsFolder"), wxT("Parent"), wxT("Ref"), wxT("Note")
+	};
+	for (const wxString& name : catalogNames)
+		ExpectSelectionMember(catalog, name, true);
+	ExpectSelectionMember(catalog, wxT("NoSuch"), false);
+
+	auto* chart = dynamic_cast<ibValueMetaObjectRecordDataMutableRef*>(
+		cfg.CreateMetaObject(g_metaChartOfCharacteristicTypesCLSID, root, false));
+	ASSERT_NE(chart, nullptr);
+	const wxString chartNames[] = { wxT("Code"), wxT("Description"), wxT("DeletionMark"), wxT("Ref") };
+	for (const wxString& name : chartNames)
+		ExpectSelectionMember(chart, name, true);
+}
+
+// Enumerations.X.EmptyRef() was "Aggregate object field not found". Catalog,
+// document and chart managers already return the empty reference of their
+// type. An enumeration value is a reference too, so the manager answers the
+// same way, and a declared value stays a property beside that method.
+TEST(EnumerationManager, EmptyRefReturnsTheEmptyReference) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	auto* enumeration = dynamic_cast<ibValueMetaObjectEnumeration*>(
+		cfg.CreateMetaObject(g_metaEnumerationCLSID, root, false));
+	ASSERT_NE(enumeration, nullptr);
+	enumeration->SetName(wxT("Modifiers"));
+
+	ibValueMetaObject* retail = cfg.CreateMetaObject(g_metaEnumCLSID, enumeration, false);
+	ASSERT_NE(retail, nullptr);
+	retail->SetName(wxT("Retail"));
+
+	// The manager the enumeration hands out, as a script holds it — through the generic data's door, as the
+	// information register's test asks for its own. The manager class is not exported: built here, it did not link
+	// under the DLL build (CI, Windows x64).
+	const ibValueMetaObjectGenericData& data = *enumeration;
+	const ibValuePtr<ibValueManagerDataObject> manager = data.CreateManagerDataObjectValue();
+	ASSERT_TRUE(manager);
+
+	EXPECT_EQ(manager->FindProp(wxT("EmptyRef")), wxNOT_FOUND);
+	const long method = manager->FindMethod(wxT("EmptyRef"));
+	ASSERT_NE(method, wxNOT_FOUND);
+	EXPECT_NE(manager->FindMethod(wxT("GetForm")), wxNOT_FOUND);
+	EXPECT_EQ(manager->FindMethod(wxT("NoSuchMethod")), wxNOT_FOUND);
+
+	ibValue result;
+	ASSERT_TRUE(manager->CallAsFunc(method, result, nullptr, 0));
+	ibValueReferenceDataObject* empty = nullptr;
+	ASSERT_TRUE(result.ConvertToValue(empty));
+	ASSERT_NE(empty, nullptr);
+	EXPECT_TRUE(empty->IsEmpty());
+	EXPECT_EQ(empty->GetMetaObject(), enumeration);
+
+	const long retailProp = manager->FindProp(wxT("Retail"));
+	ASSERT_NE(retailProp, wxNOT_FOUND);
+	ibValue named;
+	ASSERT_TRUE(manager->GetPropVal(retailProp, named));
+	ibValueReferenceDataObject* namedRef = nullptr;
+	ASSERT_TRUE(named.ConvertToValue(namedRef));
+	ASSERT_NE(namedRef, nullptr);
+	EXPECT_FALSE(namedRef->IsEmpty());
+	EXPECT_EQ(namedRef->GetGuid(), retail->GetGuid());
+	EXPECT_NE(namedRef->GetGuid(), empty->GetGuid());
 }

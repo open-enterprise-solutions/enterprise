@@ -18,16 +18,16 @@ ibValueMetaObjectAccumulationRegister::ibValueMetaObjectAccumulationRegister() :
 	// GenerateNewID walks every child in the tree, so from this point on nothing else can be handed
 	// the same number. They carry no state beyond that identity, so there is no property to hang them
 	// on; the reference is the whole of what the register needs.
-	m_totalsBalances = CreateMetaObjectAndSetParent<ibValueMetaObjectTotals>(wxT("BalanceTotals"), _("Balance totals"));
-	m_totalsTurnovers = CreateMetaObjectAndSetParent<ibValueMetaObjectTotals>(wxT("TurnoverTotals"), _("Turnover totals"));
+	m_totalsBalances = CreateMetaObjectAndSetParent<ibValueMetaObjectTotals>(ibT("BalanceTotals"), _("Balance totals"));
+	m_totalsTurnovers = CreateMetaObjectAndSetParent<ibValueMetaObjectTotals>(ibT("TurnoverTotals"), _("Turnover totals"));
 
 	//set default proc
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel"), ibT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel"), ibT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
 	
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("Form"), ibT("Cancel") });
 }
 
 ibValueMetaObjectAccumulationRegister::~ibValueMetaObjectAccumulationRegister()
@@ -73,8 +73,8 @@ bool ibValueMetaObjectAccumulationRegister::WriteData(ibDataNode& node) const
 	// metaID, which is what makes the id survive a save and what the schema differ matches the
 	// physical table by. Losing them here would hand every register the same (zero) id on the next
 	// load, and ibSchemaSnapshot::Shared would then pour one register's columns into another's table.
-	m_totalsBalances->SaveNode(node.Child(wxT("BalanceTotals")));
-	m_totalsTurnovers->SaveNode(node.Child(wxT("TurnoverTotals")));
+	m_totalsBalances->SaveNode(node.Child(ibT("BalanceTotals")));
+	m_totalsTurnovers->SaveNode(node.Child(ibT("TurnoverTotals")));
 
 	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
 	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
@@ -86,7 +86,7 @@ bool ibValueMetaObjectAccumulationRegister::ReadData(const ibDataNode& node)
 {
 	m_propertyAttributeRecordType->SetNodeValue(node.GetProperty(m_propertyAttributeRecordType->GetName()));
 
-	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormList->GetName())));
 
 	m_propertyRegisterType->SetNodeValue(node.GetProperty(m_propertyRegisterType->GetName()));
 
@@ -94,9 +94,9 @@ bool ibValueMetaObjectAccumulationRegister::ReadData(const ibDataNode& node)
 
 	// Absent sub-node = a configuration written before the totals tables existed. The object keeps
 	// the id it was given at construction rather than being left at zero.
-	if (const ibDataNode* totals = node.FindChild(wxT("BalanceTotals")))
+	if (auto totals = node.FindChild(ibT("BalanceTotals")))
 		m_totalsBalances->LoadNode(*totals);
-	if (const ibDataNode* totals = node.FindChild(wxT("TurnoverTotals")))
+	if (auto totals = node.FindChild(ibT("TurnoverTotals")))
 		m_totalsTurnovers->LoadNode(*totals);
 
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));

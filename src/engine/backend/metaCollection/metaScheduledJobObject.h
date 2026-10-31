@@ -24,12 +24,12 @@
 
 #include "metaModuleObject.h"   // ibPropertyInnerModule + ibValueMetaObjectManagerModule
 #include "backend/propertyManager/property/propertySchedule.h"
-#include "backend/job/jobSchedule.h"
+#include "core/description/jobScheduleDescription.h"
 
 class BACKEND_API ibValueMetaObjectScheduledJob : public ibValueMetaObject {
 public:
 
-	ibValueMetaObjectScheduledJob(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectScheduledJob(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	bool AccessRight_Use() const { return IsFullAccess() || AccessRight(m_roleUse); }
 
@@ -37,7 +37,7 @@ public:
 	// which is also what lets the same handler be exercised by hand while debugging.
 	const ibValueMetaObjectManagerModule* GetJobModule() const { return m_propertyJobModule->GetMetaObject(); }
 
-	// WHEN it is due. The description is the engine's own (backend/job/jobSchedule.h), so the
+	// WHEN it is due. The description is the core's (core/description/jobScheduleDescription.h), so the
 	// designer edits exactly the structure the manager evaluates.
 	ibJobScheduleDescription& GetSchedule() const { return m_propertySchedule->GetValueAsSchedule(); }
 
@@ -56,15 +56,15 @@ public:
 	// The name this job is registered under — and therefore the key of its cross-process claim
 	// (sys_lock, `Job.<name>`) and of its shared clock (sys_job). A metaobject name cannot contain a
 	// dot, so it can never collide with the platform's own jobs (`totals.fold`).
-	wxString GetJobName() const { return GetName(); }
+	ibString GetJobName() const { return GetName(); }
 
 	// Hosts no children — a predefined job is code plus a schedule, and admitting forms or commands
 	// here would change the designer tree rather than add a feature.
 	virtual ibClassID ResolveChild(const ibClassID&) const override { return 0; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	// designer context menu — "Open job module" opens the handler's code editor, exactly as a
 	// common module or a command does.
@@ -94,22 +94,22 @@ protected:
 
 private:
 
-	ibPropertyCategory* m_categoryJob = ibPropertyObject::CreatePropertyCategory(wxT("Job"), _("Job"));
-	ibPropertyBoolean*  m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryJob, wxT("Use"), _("Use"), _("Whether the job runs by its schedule. Off: the job stays declared and can still be started by hand, but the job manager never starts it."), true);
-	ibPropertySchedule* m_propertySchedule = ibPropertyObject::CreateProperty<ibPropertySchedule>(m_categoryJob, wxT("Schedule"), _("Schedule"), _("When the job runs: the days, times and repeats the job manager starts it by. It runs on the server in a background session of its own."));
+	ibPropertyCategory* m_categoryJob = ibPropertyObject::CreatePropertyCategory(ibT("Job"), _("Job"));
+	ibPropertyBoolean*  m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryJob, ibT("Use"), _("Use"), _("Whether the job runs by its schedule. Off: the job stays declared and can still be started by hand, but the job manager never starts it."), true);
+	ibPropertySchedule* m_propertySchedule = ibPropertyObject::CreateProperty<ibPropertySchedule>(m_categoryJob, ibT("Schedule"), _("Schedule"), _("When the job runs: the days, times and repeats the job manager starts it by. It runs on the server in a background session of its own."));
 
 	// Retry on failure — the pair the manager reads (jobManager.h). Default 0 attempts: repeating
 	// work that failed is only safe when the author says it is.
-	ibPropertyInteger* m_propertyRetryCount = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, wxT("RetryCount"), _("Retry count on failure"), _("How many more times a run that failed is started again. 0 (the default) never repeats it - the honest setting for work that is not safe to do twice."), 0);
-	ibPropertyInteger* m_propertyRetryInterval = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, wxT("RetryInterval"), _("Retry interval on failure"), _("Seconds to wait before starting a failed run again (used only when the retry count is above 0)."), 10);
+	ibPropertyInteger* m_propertyRetryCount = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, ibT("RetryCount"), _("Retry count on failure"), _("How many more times a run that failed is started again. 0 (the default) never repeats it - the honest setting for work that is not safe to do twice."), 0);
+	ibPropertyInteger* m_propertyRetryInterval = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, ibT("RetryInterval"), _("Retry interval on failure"), _("Seconds to wait before starting a failed run again (used only when the retry count is above 0)."), 10);
 
 	// The handler module — a MANAGER module (registered, compiled with the session), unlike a
 	// command's private one.
 	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyJobModule =
 		ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(
-			m_categoryContext, wxT("JobModule"), _("Job module"), _("The job's code: the handler the job manager calls when the job runs, compiled with the session's modules so it can call common modules like any other code."));
+			m_categoryContext, ibT("JobModule"), _("Job module"), _("The job's code: the handler the job manager calls when the job runs, compiled with the session's modules so it can call common modules like any other code."));
 
-	ibRole* m_roleUse = ibValueMetaObject::CreateRole(wxT("Use"), wxGETTEXT_IN_CONTEXT("access right", "Use"));
+	ibRole* m_roleUse = ibValueMetaObject::CreateRole(ibT("Use"), ibGETTEXT_IN_CONTEXT("access right", "Use"));
 
 	friend class ibMetaData;
 };

@@ -1,6 +1,6 @@
 #include "tableBox.h"
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"   // the SAME driver a report's sheet is drawn by
-#include "backend/backend_spreadsheet.h"        // ibBackendSpreadsheetObject — the document the list is printed into
+#include "core/spreadsheet/spreadsheetObject.h"  // ibSpreadsheetObject — the document the list is printed into
 #include "backend/session/session.h"            // ibSession::CurrentFrame — the door a finished document is shown through
 #include "backend/system/systemManager.h"       // ibValueSystemFunction::Message — the platform's own way to speak
 #include "backend/backend_mainFrame.h"          // ibBackendDocFrame — ShowSpreadsheetDocument lives on it
@@ -9,14 +9,15 @@
 #include <functional>
 #include <memory>
 #include "backend/metaCollection/partial/commonObject.h"
-#include "backend/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
-#include "backend/compositionDescription.h"     // the description the quick filter writes into
+#include "core/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
+#include "backend/backend_picture.h"           // ibBackendPicture::SendPicture — a request's picture, by its id
+#include "backend/backend_composition.h"        // the description the quick filter writes into + ibStoreValue
 #include "backend/appData.h"
 #include "backend/settings/settingsComposer.h"  // the reader's shelf — ibSettingsCategory::List, restore / save
 #include "frmserver/visualView/choiceRequest.h" // ibRequestChoice — the columns printed
 #include "frmserver/win/dlgs/settings/savedSettings.h"   // ibDialogSavedSettings — the reader's shelf
 #include "frmserver/win/dlgs/settings/list/listSettings.h"   // ibDialogListSettings — the reader's settings window
-#include "protocol/protocol.h"     // ibProtocolRequestKind::ViewMode — the client's window of the view mode
+#include "protocol/protocol.h"     // ibProtocol::ibRequest::ibKind::ViewMode — the client's window of the view mode
 #include "core/serialize/dataBuilder.h"      // ibDataNode — a request and its answer
 #include "form.h"
 
@@ -75,7 +76,7 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 	// 1) Select — always FIRST, only when this table is a picker (the TableBox's own affordance). View-state,
 	//    not a data change → stays live in a view-only form.
 	if (IsChoiceMode())
-		actionData.AddAction(wxT("Select"), _("Select"), g_picSelectCLSID, true, enTableSelect).SetModify(false);
+		actionData.AddAction(ibT("Select"), _("Select"), g_picSelectCLSID, true, enTableSelect).SetModify(false);
 
 	// 2) The model's OWN command set, merged in — the model is just a command STORE (GetCommandCollection), the TableBox
 	//    lays it out into the real action (name / caption / picture / separators), carrying each command's modify flag.
@@ -92,32 +93,32 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 	// 3) The standard view-state band — Filter / by-column / clear, ViewMode — never changes DATA, so it stays
 	//    live in a view-only form (only the model's Add / Delete / Copy row greys out).
 	actionData.AddSeparator();
-	actionData.AddAction(wxT("Filter"), _("Filter"), g_picFilterCLSID, false, enTableFilter).SetModify(false);
+	actionData.AddAction(ibT("Filter"), _("Filter"), g_picFilterCLSID, false, enTableFilter).SetModify(false);
 	// (⚠ NO VARIANTS HERE, and it is a fact about the ENTITY rather than a gap in this band. A
 	//  variant is a setting the AUTHOR named and put in the configuration, and there is nowhere to
 	//  name one for a list: the variants are edited in the composition's own window, which is the
 	//  report's. A list's setting is what the reader themselves narrowed to, and there is one of it.
 	//  Max, 2026-08-26, arriving at it while the button was being built: "for a report it is needed,
 	//  truly" — so the verb lives on the composition and not on every control that shows rows.)
-	actionData.AddAction(wxT("FilterByColumn"), _("Filter by column"), g_picFilterSetCLSID, false, enTableFilterByColumn).SetModify(false);
-	actionData.AddAction(wxT("FilterClear"), _("Filter clear"), g_picFilterClearCLSID, false, enTableFilterClear).SetModify(false);
+	actionData.AddAction(ibT("FilterByColumn"), _("Filter by column"), g_picFilterSetCLSID, false, enTableFilterByColumn).SetModify(false);
+	actionData.AddAction(ibT("FilterClear"), _("Filter clear"), g_picFilterClearCLSID, false, enTableFilterClear).SetModify(false);
 
 	// …and the shelf: what this person kept, and where to put what they have now. Two verbs, because
 	// they are opposite acts and a person reaches for one of them knowing which. View-state, like
 	// everything in this band — a saved setting narrows what is READ and stores nothing of the data.
 	actionData.AddSeparator();
-	actionData.AddAction(wxT("RestoreSettings"), _("Restore settings"), g_picSelectCLSID, false, enTableSettingsRestore).SetModify(false);
-	actionData.AddAction(wxT("SaveSettings"), _("Save settings"), g_picSaveCLSID, false, enTableSettingsSave).SetModify(false);
+	actionData.AddAction(ibT("RestoreSettings"), _("Restore settings"), g_picSelectCLSID, false, enTableSettingsRestore).SetModify(false);
+	actionData.AddAction(ibT("SaveSettings"), _("Save settings"), g_picSaveCLSID, false, enTableSettingsSave).SetModify(false);
 
 	// ⭐⭐ …AND WHAT IS ON THE SCREEN, AS A DOCUMENT. Every list and every table of values gets this for
 	// nothing, because it asks the composition already in force — the same rows, the same filter, the same
 	// order, the same groupings — and prints them the way a report is printed (Max, 2026-08-29). It READS,
 	// so it stays live in a view-only form.
 	actionData.AddSeparator();
-	actionData.AddAction(wxT("OutputList"), _("Output list"), g_picPrintCLSID, false, enTableOutputList).SetModify(false);
+	actionData.AddAction(ibT("OutputList"), _("Output list"), g_picPrintCLSID, false, enTableOutputList).SetModify(false);
 
 	actionData.AddSeparator();
-	actionData.AddAction(wxT("ViewMode"), _("View mode"), g_picHierarchyCLSID, false, enTableViewMode).SetModify(false);
+	actionData.AddAction(ibT("ViewMode"), _("View mode"), g_picHierarchyCLSID, false, enTableViewMode).SetModify(false);
 
 	return actionData;
 }
@@ -261,7 +262,7 @@ void ibValueModelTableBox::Command_FilterByCurrentColumn()
 	const unsigned int colId = static_cast<unsigned int>(col->GetModelColumn());
 	ibValue value;
 	m_tableModel->GetValueByMetaID(sel, colId, value);      // reading a cell value is a plain data op
-	const wxString name = m_tableModel->GetColumnNameByID(colId);
+	const ibString name = m_tableModel->GetColumnNameByID(colId);
 	if (!name.empty()) {
 		// ⭐ THROUGH THE SETTINGS, NEVER THROUGH THE COMPOSER'S OWN VERBS. This control says WHAT to
 		// show; the model turns that into a read. So: take a COPY OF WHAT IS IN FORCE — the reader's
@@ -270,7 +271,7 @@ void ibValueModelTableBox::Command_FilterByCurrentColumn()
 		// condition, and hand the whole of it back as the user's. The list's own description, what the
 		// configuration saved, is untouched.
 		ibSettingsDescription settings = m_tableModel->GetModelComposer().GetCurrentSettingsDesc();
-		settings.m_filter.Append(name, ibComparisonKind_Equal, value);
+		settings.m_filter.Append(name, ibComparisonKind_Equal, ibStoreValue(value));
 		m_tableModel->GetModelComposer().SetUserSettingsDesc(settings);
 		m_tableModel->RefetchAll();   // the row whose value this filter is stays current — and in view
 	}
@@ -343,7 +344,7 @@ void ibValueModelTableBox::Command_OutputList()
 		if (column == nullptr || !column->GetVisibleColumn() || column->GetSourceFieldName().IsEmpty())
 			continue;   // a hidden column is not on the screen; a column bound to nothing has no field to print
 		ibChoiceItem item;
-		item.id = static_cast<s32>(offered.size());
+		item.id = static_cast<std::int32_t>(offered.size());
 		item.caption = column->GetCaption().IsEmpty() ? column->GetSourceFieldName() : column->GetCaption();
 		item.selected = true;   // everything shown, ticked — the answer most people want is the default
 		names.push_back(item);
@@ -352,12 +353,12 @@ void ibValueModelTableBox::Command_OutputList()
 	if (offered.empty())
 		return;
 
-	std::vector<s32> chosen;
+	std::vector<std::int32_t> chosen;
 	if (!ibRequestChoice(_("Which columns do you want to see?"), names, chosen))
 		return;
 
 	std::vector<ibValueModelTableBoxColumn*> printed;
-	for (const s32 index : chosen)
+	for (const std::int32_t index : chosen)
 		printed.push_back(offered[static_cast<std::size_t>(index)]);
 
 	// The settings in force, with the chosen columns as the fields to print.
@@ -460,16 +461,16 @@ void ibValueModelTableBox::Command_OutputList()
 		for (size_t at = 0; at < path.size() && at < rungs.size(); ++at) {
 			if (rungs[at].m_path.IsEmpty())
 				continue;
-			settings.m_filter.Append(rungs[at].m_path, ibComparisonKind_Equal, path[at]);
+			settings.m_filter.Append(rungs[at].m_path, ibComparisonKind_Equal, ibStoreValue(path[at]));
 			fixed++;
 		}
 
 		// The probe separates the ways this comes back empty, because they want different answers:
 		// no current item, a row standing at the root, and a group that is not a node.
-		ibJournalInfo(wxT("ui.list"),
-			wxT("output list: item %s, in %s, %u rung(s) deep, %u grouping line(s), %u filter(s)"),
-			where.IsOk() ? wxT("ok") : wxT("none"),
-			!in.IsOk() ? wxT("the root") : node != nullptr ? wxT("a group") : wxT("not a node"),
+		ibJournalInfo(ibT("ui.list"),
+			ibT("output list: item %s, in %s, %u rung(s) deep, %u grouping line(s), %u filter(s)"),
+			where.IsOk() ? ibT("ok") : ibT("none"),
+			!in.IsOk() ? ibT("the root") : node != nullptr ? ibT("a group") : ibT("not a node"),
 			static_cast<unsigned>(path.size()), static_cast<unsigned>(rungs.size()), static_cast<unsigned>(fixed));
 
 		// 🛑 …AND ONLY WHEN WHAT WE ARE INSIDE IS A ROW. `InHierarchy` below is stated over the
@@ -492,7 +493,7 @@ void ibValueModelTableBox::Command_OutputList()
 					ibValuePtr<ibValueModel::ibValueModelReturnLine> folder(m_tableModel->GetRowAt(drilled));
 					if (folder != nullptr)
 						settings.m_filter.Append(key.front()->GetName(),
-							ibComparisonKind_InHierarchy, folder->GetSelectValue());
+							ibComparisonKind_InHierarchy, ibStoreValue(folder->GetSelectValue()));
 				}
 			}
 	}
@@ -513,10 +514,10 @@ void ibValueModelTableBox::Command_OutputList()
 
 	// The sheet is titled by the FORM it was output from — that is what a person will call this page a
 	// week later; the control's own name means nothing outside the designer.
-	const wxString title = m_formOwner != nullptr && !m_formOwner->GetCaption().IsEmpty()
-		? m_formOwner->GetCaption() : wxString(_("List"));
+	const ibString title = m_formOwner != nullptr && !m_formOwner->GetCaption().IsEmpty()
+		? m_formOwner->GetCaption() : ibString(_("List"));
 
-	wxObjectDataPtr<ibBackendSpreadsheetObject> sheet(new ibBackendSpreadsheetObject());
+	std::shared_ptr<ibSpreadsheetObject> sheet = std::make_shared<ibSpreadsheetObject>();
 	ibSpreadsheetComposeDriver driver(sheet.get());
 	driver.SetTitle(title);
 
@@ -540,15 +541,15 @@ void ibValueModelTableBox::Command_ShowViewMode()
 		return;
 
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::ViewMode));
-	request.SetValue(wxT("Picture"), wxString(ibBackendPicture::GetServerPicture(g_picHierarchyCLSID).GetData()));
-	request.SetValue(wxT("Mode"), static_cast<s32>(m_propertyViewMode->GetValueAsEnum()));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::ViewMode));
+	request.SetValue(ibProtocol::ibRequest::ibViewMode::Picture, ibBackendPicture::SendPicture(g_picHierarchyCLSID));
+	request.SetValue(ibProtocol::ibRequest::ibViewMode::Mode, static_cast<std::int32_t>(m_propertyViewMode->GetValueAsEnum()));
 
 	ibDataNode response;
-	if (!frame->Request(request, response) || response.FindField(wxT("Mode")) == nullptr)
+	if (!frame->Request(request, response) || !response.FindField(ibProtocol::ibRequest::ibViewMode::Mode))
 		return;   // cancelled
 
-	const s32 chosen = response.GetValue<s32>(wxT("Mode"));
+	const std::int32_t chosen = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibViewMode::Mode);
 	if (chosen >= ibDataViewTree && chosen <= ibDataViewList)
 		OnViewModeChanged(static_cast<ibDataViewViewMode>(chosen));
 }

@@ -1,7 +1,7 @@
 // =============================================================================
 // OES Enterprise — MD5 tests
 //
-// ibMD5 (backend/utils/md5.hpp) is retained for metadata integrity only —
+// ibMD5 (core/utils/md5.hpp) is retained for metadata integrity only —
 // NEVER for passwords (see test_passwordHash.cpp). These tests pin the
 // algorithm to the standard RFC 1321 vectors and guard the cross-platform
 // determinism the macOS port depended on:
@@ -12,13 +12,13 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
-#include "backend/utils/md5.hpp"
+#include "core/utils/md5.hpp"
 
 namespace {
 // Compare case-insensitively so the test does not depend on the hex case the
 // implementation happens to emit.
-::testing::AssertionResult HexEq(const wxString& got, const char* expected) {
-    if (got.IsSameAs(wxString::FromAscii(expected), false))
+::testing::AssertionResult HexEq(const ibString& got, const char* expected) {
+    if (got.IsSameAs(ibString::FromUTF8(expected), false))
         return ::testing::AssertionSuccess();
     return ::testing::AssertionFailure()
            << "got " << got.ToStdString() << " expected " << expected;
@@ -72,9 +72,9 @@ TEST(Md5, DifferentInputsDiffer) {
 // string — and distinct from a near-miss — every run / platform. The inputs
 // are the UTF-8 byte sequences for the Cyrillic words "test" and "tesu".
 TEST(Md5, UnicodeStableAndDistinct) {
-    const wxString test1 = wxString::FromUTF8("\xD1\x82\xD0\xB5\xD1\x81\xD1\x82"); // t e s t
-    const wxString test2 = wxString::FromUTF8("\xD1\x82\xD0\xB5\xD1\x81\xD1\x83"); // t e s u
-    const wxString cyr = ibMD5::ComputeMd5(test1);
+    const ibString test1 = ibString::FromUTF8("\xD1\x82\xD0\xB5\xD1\x81\xD1\x82"); // t e s t
+    const ibString test2 = ibString::FromUTF8("\xD1\x82\xD0\xB5\xD1\x81\xD1\x83"); // t e s u
+    const ibString cyr = ibMD5::ComputeMd5(test1);
     EXPECT_EQ(cyr.length(), 32u);
     EXPECT_EQ(cyr, ibMD5::ComputeMd5(test1));   // deterministic across calls
     EXPECT_NE(cyr, ibMD5::ComputeMd5(test2));   // one code point apart -> differs
@@ -85,7 +85,7 @@ TEST(Md5, UnicodeStableAndDistinct) {
 // ---------------------------------------------------------------------------
 
 TEST(Md5, KeyedDeterministicAndKeyDependent) {
-    const wxString k1 = ibMD5::ComputeKeyedMd5(wxT("data"), wxT("key1"));
+    const ibString k1 = ibMD5::ComputeKeyedMd5(wxT("data"), wxT("key1"));
     EXPECT_EQ(k1.length(), 32u);
     EXPECT_EQ(k1, ibMD5::ComputeKeyedMd5(wxT("data"), wxT("key1")));   // deterministic
     EXPECT_NE(k1, ibMD5::ComputeKeyedMd5(wxT("data"), wxT("key2")));   // key matters

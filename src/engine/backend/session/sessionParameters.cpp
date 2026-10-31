@@ -26,7 +26,7 @@
 #include "backend/metaCollection/metaModuleObject.h"       // ibValueMetaObjectManagerModule
 #include "backend/moduleManager/moduleManager.h"
 
-ibValue ibSession::GetSessionParameter(const wxString& name) const
+ibValue ibSession::GetSessionParameter(const ibString& name) const
 {
 	const auto found = m_sessionParameters.find(name);
 	// UNSET READS AS UNDEFINED here, and the caller decides what that means. The
@@ -36,7 +36,7 @@ ibValue ibSession::GetSessionParameter(const wxString& name) const
 	return found != m_sessionParameters.end() ? found->second : ibValue();
 }
 
-void ibSession::SetSessionParameter(const wxString& name, const ibValue& value)
+void ibSession::SetSessionParameter(const ibString& name, const ibValue& value)
 {
 	if (!m_sessionParametersOpen) {
 		ibBackendCoreException::Error(
@@ -57,8 +57,17 @@ void ibSession::SetSessionParameters()
 	if (appData->DesignerMode())
 		return;   // the designer runs no application code
 
-	ibValueMetaObjectConfiguration* const config = GetMetaData() != nullptr
-		? GetMetaData()->GetCommonMetaObject() : nullptr;
+	// THE CONFIGURATION THIS SESSION COMPILED, not only the one it was let in on.
+	// CompileRoot builds the root against that configuration when the session has
+	// not acquired one yet (a test, a root created first), and the policy reads it
+	// the same way. The session module lives there. Looking only at GetMetaData()
+	// skipped the module, so the parameters were never filled and a question in
+	// the module was never asked.
+	ibMetaDataConfigurationBase* meta = GetMetaData();
+	if (meta == nullptr && m_root && m_root->GetMetaManager() != nullptr)
+		meta = dynamic_cast<ibMetaDataConfigurationBase*>(m_root->GetMetaManager()->GetMetaData());
+	ibValueMetaObjectConfiguration* const config = meta != nullptr
+		? meta->GetCommonMetaObject() : nullptr;
 	if (config == nullptr)
 		return;
 
@@ -75,24 +84,19 @@ void ibSession::SetSessionParameters()
 	ibAccessTrustScope trusted(this);
 
 	// THE WRITE WINDOW, opened exactly around the one call that may write and closed
-	// on every path out of it — including the exceptional ones, which is why it is a
-	// guard object and not two assignments.
-	struct WriteWindow {
-		explicit WriteWindow(bool& flag) : m_flag(flag) { m_flag = true; }
-		~WriteWindow() { m_flag = false; }
-		bool& m_flag;
-	} window(m_sessionParametersOpen);
+	// on every path out of it — including the exceptional ones.
+	ibSessionParameterWriteWindow window(this);
 
 	try {
-		unit->ExecAsProc(wxT("SetSessionParameters"));
+		unit->ExecAsProc(ibT("SetSessionParameters"));
 	}
 	catch (const ibCoreException& err) {
-		ibJournalWarning(wxT("session.params"),_("SetSessionParameters: %s"), err.GetErrorDescription());
+		ibJournalWarning(ibT("session.params"),_("SetSessionParameters: %s"), err.GetErrorDescription());
 	}
 	catch (const std::exception& err) {
-		ibJournalWarning(wxT("session.params"),wxT("SetSessionParameters: %s"), err.what());
+		ibJournalWarning(ibT("session.params"),ibT("SetSessionParameters: %s"), err.what());
 	}
 	catch (...) {
-		ibJournalWarning(wxT("session.params"),wxT("SetSessionParameters: unknown exception"));
+		ibJournalWarning(ibT("session.params"),ibT("SetSessionParameters: unknown exception"));
 	}
 }

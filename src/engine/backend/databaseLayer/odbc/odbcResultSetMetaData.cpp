@@ -101,9 +101,9 @@ int ibDatabaseResultSetMetaDataODBC::GetColumnSize(int i)
 	return returnSize;
 }
 
-wxString ibDatabaseResultSetMetaDataODBC::GetColumnName(int i)
+ibString ibDatabaseResultSetMetaDataODBC::GetColumnName(int i)
 {
-	wxString columnName;
+	ibString columnName;
 
 	SQLTCHAR      col_name[8192];
 	SQLSMALLINT   col_name_length;
@@ -123,8 +123,7 @@ wxString ibDatabaseResultSetMetaDataODBC::GetColumnName(int i)
 
 	if (nRet == SQL_SUCCESS)
 	{
-		//return wxString((wxChar*)col_name);
-		columnName = ConvertFromUnicodeStream((const char*)(wxChar*)col_name);
+		columnName = ConvertFromUnicodeStream((const char*)(ibChar*)col_name);
 	}
 
 	return columnName;

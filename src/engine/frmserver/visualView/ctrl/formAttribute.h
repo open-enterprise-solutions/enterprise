@@ -65,7 +65,7 @@ class FRMSERVER_API ibFormAttributeValue :
 
 	// ── ibFormAttribute — PRIVATE nested Impl ────────────────────────────────────────────────
 	// The amorphous description (Name / Type / FillCheck) — the holder's OWN entity, invisible
-	// outside (like ibValueModelColumnInfo / ibVariantDataValueImpl). A no-register internal value
+	// outside (like ibValueModelColumnInfo). A no-register internal value
 	// type: never handed out bare, never serialized by its own clsid; the holder owns and drives it.
 	class ibFormAttribute :
 		public ibValueDynamicMembers,
@@ -76,8 +76,8 @@ class FRMSERVER_API ibFormAttributeValue :
 		ibFormAttribute(ibValueForm* ownerForm = nullptr);
 		virtual ~ibFormAttribute();
 
-		virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
-		virtual wxString GetObjectTypeName() const override { return GetName(); }
+		virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
+		virtual ibString GetObjectTypeName() const override { return GetName(); }
 		// A form attribute is only editable when its owner form is (a form opened over a read-only metadata — a DB /
 		// file config — is view-only). Out-of-line: ibValueForm is only forward-declared here.
 		virtual bool IsEditable() const override;
@@ -89,25 +89,25 @@ class FRMSERVER_API ibFormAttributeValue :
 		virtual const ibMetaData* GetMetaData() const override;
 
 		// the description's OWN name / id / main — the holder's facade forwards to these:
-		wxString GetName() const { return m_propertyName->GetValueAsString(); }
+		ibString GetName() const { return m_propertyName->GetValueAsString(); }
 		// The inspector field is labelled "Caption", but the abstract-column base returns it as GetSynonym —
 		// SAME Name / Synonym / Comment trio as ibValueMetaObject, so a control reads the header uniformly.
 		// Caption is a TRANSLATE string (read the RESOLVED current-language text, not the raw loc container);
 		// empty -> derive from the Name, exactly as ibValueMetaObject::GetSynonym does.
-		wxString GetSynonym() const {
+		ibString GetSynonym() const {
 			return !m_propertyCaption->IsEmptyProperty() ?
 				m_propertyCaption->GetValueAsTranslateString() : stringUtils::GenerateSynonym(GetName());
 		}
 		// A form attribute carries NO comment — the abstract-column presentation returns empty (a control's
 		// tooltip comes from the field synonym, not a per-attribute comment). Its header IS the Synonym.
-		wxString GetComment() const { return wxEmptyString; }
+		ibString GetComment() const { return ibEmptyString; }
 		bool     IsMain() const { return m_isMain; }
 		ibMetaID GetId() const { return m_attributeId; }
 
 		// Holder-only (NOT on the interface) — reached through friendship from the holder / form:
 		ibSourceDataType GetSourceDataType() const; // table (List type) / attribute
 		bool IsTypeProperty(const ibProperty* prop) const { return prop == m_propertyType; }
-		void SetAttributeName(const wxString& name) { m_propertyName->SetValue(name); }
+		void SetAttributeName(const ibString& name) { m_propertyName->SetValue(name); }
 		void SetMainAttribute(bool main) { m_isMain = main; }
 		ibValueForm* GetOwnerForm() const { return m_ownerForm; }
 		void SetOwnerForm(ibValueForm* ownerForm) { m_ownerForm = ownerForm; }
@@ -135,13 +135,13 @@ class FRMSERVER_API ibFormAttributeValue :
 		bool         m_isMain = false;
 		ibMetaID     m_attributeId = wxNOT_FOUND;
 
-		ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("General"));
-		ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("The attribute's name: how the form module reads and writes it (by bare name) and how a control's data path names it. Unique on the form."), wxT(""));
-		ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Caption"), _("Caption"), _("The attribute's caption: the label of a control bound to it and its column header. Empty: made from the name. Can be written per language."), wxT(""));
-		ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, wxT("Type"), _("Type"),
+		ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(ibT("Common"), _("General"));
+		ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, ibT("Name"), _("Name"), _("The attribute's name: how the form module reads and writes it (by bare name) and how a control's data path names it. Unique on the form."), ibT(""));
+		ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, ibT("Caption"), _("Caption"), _("The attribute's caption: the label of a control bound to it and its column header. Empty: made from the name. Can be written per language."), ibT(""));
+		ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, ibT("Type"), _("Type"),
 			_("Which values the attribute holds: a primitive, a reference, an object, or a list type such as a dynamic list or a value table. The type decides which controls can be bound to it and what they edit."),
 			ibValueTypes::TYPE_STRING);
-		ibPropertyList* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryCommon, wxT("FillCheck"), _("Fill check"),
+		ibPropertyList* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryCommon, ibT("FillCheck"), _("Fill check"),
 			_("Whether the attribute must be filled. Show error: ThisForm.CheckFilling() reports it when empty and answers False. Checked only when code calls CheckFilling() - the form does not check on its own."),
 			&ibFormAttribute::FillFillCheck, 0);
 	};
@@ -166,8 +166,8 @@ public:
 	~ibFormAttributeValue();   // source is not held separately (lives in m_value) — trivial
 
 	// --- ibPropertyObject (accumulator: attaches attribute + value) ---------
-	virtual wxString GetClassName() const override { return ibValue::GetClassName(); }   // registered value type
-	virtual wxString GetObjectTypeName() const override { return m_attribute->GetObjectTypeName(); }
+	virtual ibString GetClassName() const override { return ibValue::GetClassName(); }   // registered value type
+	virtual ibString GetObjectTypeName() const override { return m_attribute->GetObjectTypeName(); }
 	virtual bool IsEditable() const override { return m_attribute->IsEditable(); }   // → attribute → owner form
 	// Metadata flows THROUGH the form. The holder is the attach-owner a held dynamic list reaches from its
 	// GetSourceMetaData(); forward to the attribute, which reads m_ownerForm->GetMetaData() (active-config
@@ -177,7 +177,7 @@ public:
 	// Single interception point (the holder is what the inspector selects): forward the change
 	// to the property's REAL owner (attribute / value — each reacts to its own), and on the
 	// attribute's Type change re-materialise the value + re-accumulate.
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 	// A nested value (a value-table column-info) changed — the holder is the frontend end of the attach
 	// chain, so it re-renders the bound control live.
 	virtual void OnChildChanged() override;
@@ -192,9 +192,9 @@ public:
 
 	// ibBackendFormAttributeValue FAÇADE — outside code reads name / id / type through the HOLDER;
 	// the concrete description (ibFormAttribute) is never exposed. The holder forwards internally.
-	wxString GetName() const override { return m_attribute->GetName(); }
-	wxString GetSynonym() const override { return m_attribute->GetSynonym(); }
-	wxString GetComment() const override { return m_attribute->GetComment(); }
+	ibString GetName() const override { return m_attribute->GetName(); }
+	ibString GetSynonym() const override { return m_attribute->GetSynonym(); }
+	ibString GetComment() const override { return m_attribute->GetComment(); }
 	ibMetaID GetId() const override { return m_attribute->GetId(); }
 	bool     IsMain() const override { return m_attribute->IsMain(); }
 	const ibTypeDescription& GetTypeDesc() const override { return m_attribute->GetTypeDesc(); }

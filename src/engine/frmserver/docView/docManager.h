@@ -34,40 +34,40 @@ friend class FRMSERVER_API ibDocManager;
 
 public:
 	ibDocTemplate(ibDocManager *manager,
-	              const wxString& descr,
-	              const wxString& filter,
-	              const wxString& dir,
-	              const wxString& ext,
-	              const wxString& docTypeName,
-	              const wxString& viewTypeName,
+	              const ibString& descr,
+	              const ibString& filter,
+	              const ibString& dir,
+	              const ibString& ext,
+	              const ibString& docTypeName,
+	              const ibString& viewTypeName,
 	              wxClassInfo *docClassInfo = nullptr,
 	              wxClassInfo *viewClassInfo = nullptr,
 	              long flags = ibDEFAULT_TEMPLATE_FLAGS);
 
 	virtual ~ibDocTemplate();
 
-	virtual ibDocument *CreateDocument(const wxString& path, long flags = 0);
+	virtual ibDocument *CreateDocument(const ibString& path, long flags = 0);
 	virtual ibView *CreateView(ibDocument *doc, long flags = 0);
 
 	virtual bool InitDocument(ibDocument* doc,
-	                          const wxString& path,
+	                          const ibString& path,
 	                          long flags = 0);
 
-	wxString GetDefaultExtension() const { return m_defaultExt; }
-	wxString GetDescription() const { return m_description; }
-	wxString GetDirectory() const { return m_directory; }
+	const ibString& GetDefaultExtension() const { return m_defaultExt; }
+	const ibString& GetDescription() const { return m_description; }
+	const ibString& GetDirectory() const { return m_directory; }
 	ibDocManager *GetDocumentManager() const { return m_documentManager; }
 	void SetDocumentManager(ibDocManager *manager)
 		{ m_documentManager = manager; }
-	wxString GetFileFilter() const { return m_fileFilter; }
+	const ibString& GetFileFilter() const { return m_fileFilter; }
 	long GetFlags() const { return m_flags; }
-	virtual wxString GetViewName() const { return m_viewTypeName; }
-	virtual wxString GetDocumentName() const { return m_docTypeName; }
+	virtual ibString GetViewName() const { return m_viewTypeName; }
+	virtual ibString GetDocumentName() const { return m_docTypeName; }
 
-	void SetFileFilter(const wxString& filter) { m_fileFilter = filter; }
-	void SetDirectory(const wxString& dir) { m_directory = dir; }
-	void SetDescription(const wxString& descr) { m_description = descr; }
-	void SetDefaultExtension(const wxString& ext) { m_defaultExt = ext; }
+	void SetFileFilter(const ibString& filter) { m_fileFilter = filter; }
+	void SetDirectory(const ibString& dir) { m_directory = dir; }
+	void SetDescription(const ibString& descr) { m_description = descr; }
+	void SetDefaultExtension(const ibString& ext) { m_defaultExt = ext; }
 	void SetFlags(long flags) { m_flags = flags; }
 
 	bool IsVisible() const { return (m_flags & ibTEMPLATE_VISIBLE) != 0; }
@@ -82,16 +82,16 @@ public:
 	ibPictureID GetPictureID() const { return m_pictureID; }
 	void SetPictureID(const ibPictureID& id) { m_pictureID = id; }
 
-	virtual bool FileMatchesTemplate(const wxString& path);
+	virtual bool FileMatchesTemplate(const ibString& path);
 
 protected:
 	long              m_flags;
-	wxString          m_fileFilter;
-	wxString          m_directory;
-	wxString          m_description;
-	wxString          m_defaultExt;
-	wxString          m_docTypeName;
-	wxString          m_viewTypeName;
+	ibString          m_fileFilter;
+	ibString          m_directory;
+	ibString          m_description;
+	ibString          m_defaultExt;
+	ibString          m_docTypeName;
+	ibString          m_viewTypeName;
 	ibDocManager*     m_documentManager;
 
 	wxClassInfo*      m_docClassInfo;
@@ -104,7 +104,8 @@ protected:
 
 private:
 	wxDECLARE_CLASS(ibDocTemplate);
-	wxDECLARE_NO_COPY_CLASS(ibDocTemplate);
+	ibDocTemplate(const ibDocTemplate&) = delete;
+	ibDocTemplate& operator=(const ibDocTemplate&) = delete;
 };
 
 // ----------------------------------------------------------------------------
@@ -122,18 +123,18 @@ class FRMSERVER_API ibMetaDocTemplate : public ibDocTemplate
 {
 public:
 	ibMetaDocTemplate(ibDocManager* manager,
-	                  const wxString& descr,
-	                  const wxString& filter,
-	                  const wxString& dir,
-	                  const wxString& ext,
-	                  const wxString& docTypeName,
-	                  const wxString& viewTypeName,
+	                  const ibString& descr,
+	                  const ibString& filter,
+	                  const ibString& dir,
+	                  const ibString& ext,
+	                  const ibString& docTypeName,
+	                  const ibString& viewTypeName,
 	                  wxClassInfo* docClassInfo = nullptr,
 	                  wxClassInfo* viewClassInfo = nullptr,
 	                  long flags = ibDEFAULT_TEMPLATE_FLAGS);
 
 	virtual bool InitDocument(ibDocument* doc,
-	                          const wxString& path,
+	                          const ibString& path,
 	                          long flags = 0) override;
 
 	const ibClassID& GetClassID()      const { return m_clsid; }

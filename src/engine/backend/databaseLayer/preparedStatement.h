@@ -1,18 +1,7 @@
 #ifndef __PREPARED_STATEMENT_H__
 #define __PREPARED_STATEMENT_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/hashset.h>
+#include <unordered_set>
 
 #include "databaseLayerDef.h"
 #include "databaseErrorReporter.h"
@@ -20,7 +9,7 @@
 #include "databaseResultSet.h"
 #include "databaseQueryParser.h"
 
-WX_DECLARE_HASH_SET(ibDatabaseResultSet*, wxPointerHash, wxPointerEqual, StatementResultSetHashSet);
+typedef std::unordered_set<ibDatabaseResultSet*> StatementResultSetHashSet;
 
 class BACKEND_API ibPreparedStatement : public ibDatabaseErrorReporter, public ibDatabaseStringConverter,
 	public ibDatabaseResultSetOwner
@@ -56,14 +45,14 @@ public:
 	/// Set the parameter at the 1-based position to a number value
 	virtual void SetParamNumber(int nPosition, const ibNumber& dblValue) = 0;
 	/// Set the parameter at the 1-based position to a string - the engine's own text (fstring.h), encoded
-	/// from its own characters; a wxString crosses into one on the way in
+	/// from its own characters
 	virtual void SetParamString(int nPosition, const ibString& strValue) = 0;
 	/// Set the parameter at the 1-based position to a nullptr  value
 	virtual void SetParamNull(int nPosition) = 0;
 	/// Set the parameter at the 1-based position to a Blob value.
 	///
 	/// ⭐⭐ IT FORWARDS. This was an empty body — a binder that silently bound NOTHING — and no driver
-	/// overrides it, so every caller that happened to hold a wxMemoryBuffer picked this overload and
+	/// overrides it, so every caller that happened to hold a buffer picked this overload and
 	/// lost its value with no error anywhere. The audit log did exactly that: `loggerSinkSqlite.cpp`
 	/// binds `ibLogEntry::details` here, so the details of every logged event were dropped at the
 	/// parameter and the row was written without them.
@@ -71,7 +60,7 @@ public:
 	/// An empty virtual is the worst shape for this: it is not abstract (nobody is forced to implement
 	/// it), and it is not correct (it does not do the thing its name promises), so the failure is a
 	/// silent wrong answer instead of a link error or an exception.
-	virtual void SetParamBlob(int nPosition, const wxMemoryBuffer& buffer) {
+	virtual void SetParamBlob(int nPosition, const ibMemoryBuffer& buffer) {
 		SetParamBlob(nPosition, buffer.GetData(), (long)buffer.GetDataLen());
 	}
 	/// Set the parameter at the 1-based position to a Blob value

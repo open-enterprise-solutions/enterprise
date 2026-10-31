@@ -4,7 +4,7 @@
 #include <wx/wx.h>
 #include <wx/stc/stc.h>
 
-#include "protocol/protocol.h"   // ibProtocolMessageLevel
+#include "protocol/protocol.h"   // ibProtocol::ibFrame::ibMessage::ibLevel
 
 #include "frmclient/frmclient.h"
 
@@ -22,7 +22,7 @@ public:
 	void SetFontColorSettings(const ibFontColorSettings& settings);
 
 	// A message at the end — the view follows it when it was at the end already.
-	void Output(const wxString& message, ibProtocolMessageLevel level);
+	void Output(const wxString& message, ibProtocol::ibFrame::ibMessage::ibLevel level);
 	void Clear();
 
 private:

@@ -12,15 +12,15 @@
 
 void ibValueDataComposer_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(1, wxT("DataComposer(source : string)"));
-	helper.AppendProc(wxT("SetParameter"), 2, wxT("SetParameter(name : string, value)"));
-	helper.AppendFunc(wxT("Execute"), wxT("Execute()"));
-	helper.AppendFunc(wxT("QueryText"), wxT("QueryText()"));
+	helper.AppendConstructor(1, ibT("DataComposer(source : string)"));
+	helper.AppendProc(ibT("SetParameter"), 2, ibT("SetParameter(name : string, value)"));
+	helper.AppendFunc(ibT("Execute"), ibT("Execute()"));
+	helper.AppendFunc(ibT("QueryText"), ibT("QueryText()"));
 }
 
 bool ibValueDataComposer::Init(ibValue** paParams, const long lSizeArray)
 {
-	const wxString source = (lSizeArray >= 1) ? paParams[0]->GetString() : ibString();
+	const ibString source = (lSizeArray >= 1) ? paParams[0]->GetString() : ibString();
 
 	// A source-less composer is a valid, empty object (designer introspection keeps the
 	// method chain reachable); Execute() on it yields an empty QueryResult.
@@ -35,12 +35,12 @@ bool ibValueDataComposer::Init(ibValue** paParams, const long lSizeArray)
 	// Any whitespace => the author's verbatim query text; otherwise a registered source
 	// `Kind.Name` (the name may be composite — a register's virtual table). A dot-less
 	// token falls through to the text path so the query parser reports it with a span.
-	if (source.find_first_of(wxT(" \t\r\n")) != wxString::npos) {
+	if (source.find_first_of(ibT(" \t\r\n")) != ibString::npos) {
 		m_composer.FromText(source);
 		return true;
 	}
-	const size_t dot = source.find(wxT('.'));
-	if (dot == wxString::npos || dot == 0 || dot + 1 >= source.length()) {
+	const size_t dot = source.find(ibT('.'));
+	if (dot == ibString::npos || dot == 0 || dot + 1 >= source.length()) {
 		m_composer.FromText(source);
 		return true;
 	}
@@ -76,7 +76,7 @@ bool ibValueDataComposer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValu
 					throw;
 			}
 		}
-		pvarRetValue = ibValue(wxString());
+		pvarRetValue = ibValue(ibString());
 		return true;
 
 	case enExecute:

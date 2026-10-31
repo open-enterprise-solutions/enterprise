@@ -1,11 +1,11 @@
 // A secure connection for the script's HTTP client - CertificateFile, SecureConnection, and what an
-// HTTPConnection does with them. The first half needs no wire; the second brings the library's own TLS server up
-// on 127.0.0.1 inside the test, with the identities in tests/certs/ (made once, self-signed, good for a century -
-// its README says how), and asks what a client sees: an answer, or a refusal with the reason in the sentence,
-// and never a request that reached a server it should not have trusted.
+// HTTPConnection does with them. The first half needs no wire; the second brings a TLS server up on 127.0.0.1
+// inside the test, with the identities in tests/certs/ (made once, self-signed, good for a century - its README
+// says how), and asks what a client sees: an answer, or a refusal with the reason in the sentence, and never a
+// request that reached a server it should not have trusted.
 //
-// ⚠ The server is the same library as the client. What that proves is that the roads in THIS code lead where
-// they say; that the library's TLS agrees with other servers is what the library's own tests are for.
+// ⚠ The server is cpp-httplib's, the client the core's (core/net/httpClient.h): another library on the other
+// side, so what passes here is two TLS implementations agreeing, not one agreeing with itself.
 
 #include <gtest/gtest.h>
 
@@ -39,36 +39,36 @@
 
 namespace {
 
-std::string Utf8(const wxString& text)
+std::string Utf8(const ibString& text)
 {
-	const wxScopedCharBuffer utf8 = text.utf8_str();
+	const std::string utf8 = text.utf8_str();
 	return std::string(utf8.data(), utf8.length());
 }
 
 template <class Call>
-wxString Refusal(Call call)
+ibString Refusal(Call call)
 {
 	try {
 		call();
 	}
 	catch (const ibBackendException& refusal) {
-		const wxString why = refusal.GetErrorDescription();
-		return why.empty() ? wxString(wxT("(a refusal with no sentence)")) : why;
+		const ibString why = refusal.GetErrorDescription();
+		return why.empty() ? ibString(wxT("(a refusal with no sentence)")) : why;
 	}
-	return wxString();
+	return ibString();
 }
 
 // tests/certs, beside this file's directory - the same way the script corpus finds tests/scripts.
-wxString CertPath(const wxChar* name)
+ibString CertPath(const wxChar* name)
 {
-	wxFileName here(wxString::FromUTF8(__FILE__));
+	wxFileName here(ibString::FromUTF8(__FILE__));
 	here.SetFullName(wxEmptyString);
 	here.AppendDir(wxT("certs"));
 	here.SetFullName(name);
 	return here.GetFullPath();
 }
 
-ibValuePtr<ibValueCertificateFile> Certificate(const wxChar* name, const wxString& password = wxString())
+ibValuePtr<ibValueCertificateFile> Certificate(const wxChar* name, const ibString& password = ibString())
 {
 	ibValuePtr<ibValueCertificateFile> file(new ibValueCertificateFile());
 	file->Open(CertPath(name), password);
@@ -97,18 +97,18 @@ TEST(HttpSecureValues, ThisBuildHasTls)
 #ifdef CPPHTTPLIB_SSL_ENABLED
 	SUCCEED();
 #else
-	FAIL() << "CPPHTTPLIB_MBEDTLS_SUPPORT is not set for this build - the root CMakeLists.txt says it for every target";
+	FAIL() << "CPPHTTPLIB_MBEDTLS_SUPPORT is not set for this binary - tests/CMakeLists.txt says it for its reference servers";
 #endif
 }
 
 TEST(HttpSecureValues, ACertificateFileIsAFileThatIsThere)
 {
 	ibValueCertificateFile file;
-	const wxString why = Refusal([&] { file.Open(wxT("C:\\no\\such\\file.pem"), wxString()); });
+	const ibString why = Refusal([&] { file.Open(wxT("C:\\no\\such\\file.pem"), ibString()); });
 	ASSERT_FALSE(why.empty());
 	EXPECT_TRUE(why.Contains(wxT("file.pem"))) << "the refusal names the file: " << Utf8(why);
 	EXPECT_TRUE(file.IsEmpty());
-	EXPECT_FALSE(Refusal([&] { file.Open(wxString(), wxString()); }).empty());
+	EXPECT_FALSE(Refusal([&] { file.Open(ibString(), ibString()); }).empty());
 
 	file.Open(CertPath(wxT("server.pem")), wxT("pass"));
 	EXPECT_FALSE(file.IsEmpty());
@@ -136,7 +136,7 @@ TEST(HttpSecureValues, ASecureConnectionTrustsTheSystemAndChecksUnlessSaid)
 	EXPECT_EQ(secure.TrustedCertificates(), static_cast<const ibValueCertificateFile*>(trusted));
 
 	// Through the script's door: a string is not a certificate, a number is not a switch, Undefined clears.
-	EXPECT_FALSE(Refusal([&] { secure.SetPropVal(secure.FindProp(wxT("ClientCertificate")), ibValue(wxString(wxT("x.pem")))); }).empty());
+	EXPECT_FALSE(Refusal([&] { secure.SetPropVal(secure.FindProp(wxT("ClientCertificate")), ibValue(ibString(wxT("x.pem")))); }).empty());
 	EXPECT_EQ(secure.ClientCertificate(), static_cast<const ibValueCertificateFile*>(mine)) << "a refused assignment leaves what stood";
 	EXPECT_FALSE(Refusal([&] { secure.SetPropVal(secure.FindProp(wxT("VerifyServerCertificate")), ibValue(0)); }).empty());
 	EXPECT_TRUE(secure.VerifyServerCertificate());
@@ -149,7 +149,7 @@ TEST(HttpSecureValues, ASecureConnectionTrustsTheSystemAndChecksUnlessSaid)
 TEST(HttpSecureValues, ThePortNobodyGaveFollowsTheConnectionsKind)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("api.example"), 80, wxString(), wxString(), 30, /*portGiven*/ false);
+	connection.Open(wxT("api.example"), 80, ibString(), ibString(), 30, /*portGiven*/ false);
 	EXPECT_EQ(connection.Port(), 80);
 	const ibValuePtr<ibValueSecureConnection> secure(new ibValueSecureConnection());
 	connection.SetSecureConnection(secure);
@@ -158,11 +158,11 @@ TEST(HttpSecureValues, ThePortNobodyGaveFollowsTheConnectionsKind)
 	EXPECT_EQ(connection.Port(), 80);
 
 	ibValueHttpConnection given;
-	given.Open(wxT("api.example"), 8443, wxString(), wxString(), 30);
+	given.Open(wxT("api.example"), 8443, ibString(), ibString(), 30);
 	given.SetSecureConnection(secure);
 	EXPECT_EQ(given.Port(), 8443) << "a port that was given is the port";
 
-	EXPECT_FALSE(Refusal([&] { connection.SetSecureConnection(ibValue(wxString(wxT("yes")))); }).empty()) << "a string is not a SecureConnection";
+	EXPECT_FALSE(Refusal([&] { connection.SetSecureConnection(ibValue(ibString(wxT("yes")))); }).empty()) << "a string is not a SecureConnection";
 	ibValue out;
 	ASSERT_TRUE(given.GetPropVal(given.FindProp(wxT("SecureConnection")), out));
 	EXPECT_EQ(dynamic_cast<ibValueSecureConnection*>(out.GetRef()), static_cast<ibValueSecureConnection*>(secure));
@@ -175,7 +175,7 @@ TEST(HttpSecureValues, ThePortNobodyGaveFollowsTheConnectionsKind)
 TEST(HttpSecureValues, AHostWithASchemeIsToldWhereHttpsLives)
 {
 	ibValueHttpConnection connection;
-	const wxString why = Refusal([&] { connection.Open(wxT("https://api.bank.example"), 443, wxString(), wxString(), 30, true); });
+	const ibString why = Refusal([&] { connection.Open(wxT("https://api.bank.example"), 443, ibString(), ibString(), 30, true); });
 	ASSERT_FALSE(why.empty()) << "a host with a scheme was taken";
 	EXPECT_TRUE(why.Contains(wxT("the host is a name"))) << Utf8(why);
 	EXPECT_TRUE(why.Contains(wxT("SecureConnection"))) << "the refusal does not say where https goes: " << Utf8(why);
@@ -269,21 +269,21 @@ protected:
 TEST_F(HttpSecure, AServerWhoseCertificateIsTrustedAnswers)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	connection.SetSecureConnection(Secure(kNone, Certificate(wxT("server.pem"))));
 	const ibValuePtr<ibValueHttpResponse> response = Ask(connection, wxT("/balance"));
 	ASSERT_TRUE(response != nullptr);
 	EXPECT_EQ(response->StatusCode(), 200);
-	EXPECT_EQ(response->BodyAsString(ibTextEncoding_UTF8), wxString(wxT("secret answer")));
+	EXPECT_EQ(response->BodyAsString(ibTextEncoding_UTF8), ibString(wxT("secret answer")));
 	EXPECT_EQ(Count(), 1u);
 }
 
 TEST_F(HttpSecure, AServerTheSystemDoesNotTrustIsRefusedBeforeAnyRequestReachesIt)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	connection.SetSecureConnection(ibValuePtr<ibValueSecureConnection>(new ibValueSecureConnection()));   // the system's store
-	const wxString why = Refusal([&] { Ask(connection); });
+	const ibString why = Refusal([&] { Ask(connection); });
 	ASSERT_FALSE(why.empty()) << "a self-signed certificate was trusted";
 	EXPECT_TRUE(why.Contains(wxT("not trusted"))) << Utf8(why);
 	EXPECT_TRUE(why.Contains(wxT("https://127.0.0.1"))) << Utf8(why);
@@ -291,7 +291,7 @@ TEST_F(HttpSecure, AServerTheSystemDoesNotTrustIsRefusedBeforeAnyRequestReachesI
 
 	// ...and a certificate from another self-signed root is not trusted either: trust is the file named, not "any".
 	connection.SetSecureConnection(Secure(kNone, Certificate(wxT("other.pem"))));
-	const wxString other = Refusal([&] { Ask(connection); });
+	const ibString other = Refusal([&] { Ask(connection); });
 	ASSERT_FALSE(other.empty());
 	EXPECT_TRUE(other.Contains(wxT("not trusted"))) << Utf8(other);
 	EXPECT_EQ(Count(), 0u);
@@ -300,7 +300,7 @@ TEST_F(HttpSecure, AServerTheSystemDoesNotTrustIsRefusedBeforeAnyRequestReachesI
 TEST_F(HttpSecure, TheSwitchDropsTheCheckAndOnlyTheSwitchDoes)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	connection.SetSecureConnection(Secure(kNone, kNone, /*verify*/ false));
 	const ibValuePtr<ibValueHttpResponse> response = Ask(connection);
 	ASSERT_TRUE(response != nullptr) << "with the check off, a self-signed server answers";
@@ -313,9 +313,9 @@ TEST_F(HttpSecure, ACertificateForAnotherNameIsRefused)
 	// server.pem is for the address 127.0.0.1 and no name; asked for as "localhost" it is the wrong certificate,
 	// even though it is trusted.
 	ibValueHttpConnection connection;
-	connection.Open(wxT("localhost"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("localhost"), m_port, ibString(), ibString(), 10);
 	connection.SetSecureConnection(Secure(kNone, Certificate(wxT("server.pem"))));
-	const wxString why = Refusal([&] { Ask(connection); });
+	const ibString why = Refusal([&] { Ask(connection); });
 	ASSERT_FALSE(why.empty()) << "a certificate for another name was taken";
 	EXPECT_TRUE(why.Contains(wxT("not for this host"))) << Utf8(why);
 	EXPECT_EQ(Count(), 0u);
@@ -325,7 +325,7 @@ TEST_F(HttpSecure, AServerThatAsksForTheClientsCertificateGetsItOrRefuses)
 {
 	StartStrict();
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_strictPort, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_strictPort, ibString(), ibString(), 10);
 
 	connection.SetSecureConnection(Secure(Certificate(wxT("client.pem"), wxT("secret")), Certificate(wxT("server.pem"))));
 	const ibValuePtr<ibValueHttpResponse> shown = Ask(connection);
@@ -335,7 +335,7 @@ TEST_F(HttpSecure, AServerThatAsksForTheClientsCertificateGetsItOrRefuses)
 	connection.SetSecureConnection(Secure(kNone, Certificate(wxT("server.pem"))));
 	EXPECT_FALSE(Refusal([&] { Ask(connection); }).empty()) << "no certificate shown, and the server let it in";
 
-	const wxString wrong = Refusal([&] { connection.SetSecureConnection(Secure(Certificate(wxT("client.pem"), wxT("not it")), Certificate(wxT("server.pem")))); Ask(connection); });
+	const ibString wrong = Refusal([&] { connection.SetSecureConnection(Secure(Certificate(wxT("client.pem"), wxT("not it")), Certificate(wxT("server.pem")))); Ask(connection); });
 	ASSERT_FALSE(wrong.empty()) << "a key that did not open was shown";
 	EXPECT_TRUE(wrong.Contains(wxT("certificate file")) || wrong.Contains(wxT("password"))) << Utf8(wrong);
 }
@@ -348,9 +348,9 @@ TEST_F(HttpSecure, AServerThatAsksForTheClientsCertificateGetsItOrRefuses)
 TEST_F(HttpSecure, TheWrongKindOfServerIsASentenceWithinTheTimeAllowed)
 {
 	ibValueHttpConnection plain;
-	plain.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 5);
+	plain.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 5);
 	const auto started = std::chrono::steady_clock::now();
-	const wxString why = Refusal([&] { Ask(plain); });
+	const ibString why = Refusal([&] { Ask(plain); });
 	const double took = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
 	ASSERT_FALSE(why.empty());
 	EXPECT_LT(took, 4.5) << "a plain client on a TLS port: " << Utf8(why);
@@ -371,10 +371,10 @@ TEST_F(HttpSecure, TheWrongKindOfServerIsASentenceWithinTheTimeAllowed)
 	open.wait_until_ready();
 
 	ibValueHttpConnection secure;
-	secure.Open(wxT("127.0.0.1"), openPort, wxString(), wxString(), 5);
+	secure.Open(wxT("127.0.0.1"), openPort, ibString(), ibString(), 5);
 	secure.SetSecureConnection(Secure(kNone, kNone, false));
 	const auto began = std::chrono::steady_clock::now();
-	const wxString spoken = Refusal([&] { Ask(secure); });
+	const ibString spoken = Refusal([&] { Ask(secure); });
 	const double waited = std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
 	ASSERT_FALSE(spoken.empty()) << "a plain server was taken for a TLS one";
 	EXPECT_TRUE(spoken.Contains(wxT("does not speak TLS")) || spoken.Contains(wxT("within the 5 s"))) << Utf8(spoken);
@@ -384,7 +384,7 @@ TEST_F(HttpSecure, TheWrongKindOfServerIsASentenceWithinTheTimeAllowed)
 TEST_F(HttpSecure, TheConnectionFollowsItsPropertyRequestByRequest)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	connection.SetSecureConnection(Secure(kNone, kNone, false));
 	ASSERT_TRUE(Ask(connection) != nullptr);
 	connection.SetSecureConnection(Secure(kNone, kNone, true));                      // now the check is on: refused
@@ -402,12 +402,12 @@ TEST_F(HttpSecure, ASecureConnectionChangedInPlaceIsObeyedByTheNextRequest)
 {
 	const ibValuePtr<ibValueSecureConnection> secure = Secure(kNone, kNone, /*verify*/ false);
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	connection.SetSecureConnection(secure);
 	ASSERT_TRUE(Ask(connection) != nullptr) << "with the check off, a self-signed server answers";
 
 	secure->SetVerifyServerCertificate(true);                  // the object, not the property of the connection
-	const wxString why = Refusal([&] { Ask(connection); });
+	const ibString why = Refusal([&] { Ask(connection); });
 	ASSERT_FALSE(why.empty()) << "the check was turned back on and the old transport went on without it";
 	EXPECT_TRUE(why.Contains(wxT("not trusted"))) << Utf8(why);
 
@@ -416,7 +416,7 @@ TEST_F(HttpSecure, ASecureConnectionChangedInPlaceIsObeyedByTheNextRequest)
 
 	// ...and one SecureConnection held by two connections is read by both, each for itself.
 	ibValueHttpConnection second;
-	second.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	second.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	second.SetSecureConnection(secure);
 	ASSERT_TRUE(Ask(second) != nullptr);
 	secure->SetTrustedCertificates(Certificate(wxT("other.pem")));
@@ -428,7 +428,7 @@ TEST_F(HttpSecure, ASecureConnectionChangedInPlaceIsObeyedByTheNextRequest)
 	StartStrict();
 	const ibValuePtr<ibValueSecureConnection> shown = Secure(kNone, Certificate(wxT("server.pem")));
 	ibValueHttpConnection strict;
-	strict.Open(wxT("127.0.0.1"), m_strictPort, wxString(), wxString(), 10);
+	strict.Open(wxT("127.0.0.1"), m_strictPort, ibString(), ibString(), 10);
 	strict.SetSecureConnection(shown);
 	EXPECT_FALSE(Refusal([&] { Ask(strict); }).empty()) << "the server demands a certificate and was given none";
 
@@ -442,16 +442,15 @@ TEST_F(HttpSecure, ASecureConnectionChangedInPlaceIsObeyedByTheNextRequest)
 	EXPECT_FALSE(Refusal([&] { Ask(strict); }).empty()) << "the certificate was taken away and went on being shown";
 }
 
-// A certificate file that cannot be read is said once - and said again, because the library loads its trusted
-// certificates under a std::call_once that never fires twice: a transport kept after that failure would go on
-// with an empty chain, refusing every server for a reason its sentence no longer names.
+// A certificate file that cannot be read is said - and said again on the next request: a transport kept after
+// that failure would go on with an empty chain, refusing every server for a reason its sentence no longer names.
 TEST_F(HttpSecure, AFileThatCannotBeReadIsSaidEveryTimeItIsAsked)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	connection.SetSecureConnection(Secure(kNone, Certificate(wxT("README"))));
 	for (int attempt = 0; attempt < 2; attempt++) {
-		const wxString why = Refusal([&] { Ask(connection); });
+		const ibString why = Refusal([&] { Ask(connection); });
 		ASSERT_FALSE(why.empty()) << "attempt " << attempt;
 		EXPECT_TRUE(why.Contains(wxT("certificate file"))) << "attempt " << attempt << ": " << Utf8(why);
 	}
@@ -465,9 +464,9 @@ TEST_F(HttpSecure, AFileThatCannotBeReadIsSaidEveryTimeItIsAsked)
 TEST_F(HttpSecure, AFileThatIsNotACertificateIsSaidByName)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	connection.SetSecureConnection(Secure(kNone, Certificate(wxT("README"))));
-	const wxString why = Refusal([&] { Ask(connection); });
+	const ibString why = Refusal([&] { Ask(connection); });
 	ASSERT_FALSE(why.empty()) << "a README was taken for a certificate";
 	EXPECT_TRUE(why.Contains(wxT("certificate file"))) << Utf8(why);
 	EXPECT_TRUE(why.Contains(wxT("README"))) << "the file that could not be read is not named: " << Utf8(why);

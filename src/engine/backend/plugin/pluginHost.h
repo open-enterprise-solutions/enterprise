@@ -9,7 +9,7 @@
 // capability, each with its own name and version so the host can grow (or
 // retire) one without disturbing plugins that never asked for it.
 //
-//   const void* raw = host->query(host, ibCapabilityScript, 1);
+//   const void* raw = host->query(host, ibCapabilityScript, 2);
 //   auto* script = static_cast<const ibPluginScript*>(raw);
 //
 // WHY CAPABILITIES AND NOT ONE BIG "HOST SERVICES" CLASS. A single class means
@@ -83,8 +83,8 @@ public:
 	//
 	// This is the call that closes the loop for a code-generating assistant: it
 	// can find its own mistakes in a language that exists nowhere but here.
-	virtual std::vector<ibDiagnostic> Check(const wxString& text,
-		const wxString& moduleName = wxT("module")) const = 0;
+	virtual std::vector<ibDiagnostic> Check(const ibString& text,
+		const ibString& moduleName = ibT("module")) const = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ public:
 	// Names of every metaobject of a kind — "Catalog", "Document",
 	// "InformationRegister"… Kind names are the ones the metatypes register
 	// themselves under, i.e. what a script writes.
-	virtual std::vector<wxString> List(const wxString& kind) const = 0;
+	virtual std::vector<ibString> List(const ibString& kind) const = 0;
 
 	// One metaobject as JSON: its properties, attributes with their types,
 	// tabular sections. Empty string when not found.
@@ -109,7 +109,7 @@ public:
 	// JSON because it is what already exists (ibJsonProvider) and because the
 	// reader is as likely to be a tool as a person. ⚠ READ ONLY: the JSON view
 	// is lossy by design and is not a way back in.
-	virtual wxString Describe(const wxString& kind, const wxString& name) const = 0;
+	virtual ibString Describe(const ibString& kind, const ibString& name) const = 0;
 };
 
 #endif // _IB_PLUGIN_HOST_H_

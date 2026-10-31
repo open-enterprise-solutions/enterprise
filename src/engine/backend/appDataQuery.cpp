@@ -5,6 +5,7 @@
 #include "backend/backend_exception.h"
 
 #include "backend/session/sessionRegistry.h"
+#include "core/diagnostics/journal.h"
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -27,16 +28,16 @@ void ibApplicationInstance::CreateTableUser()
 		// One CreateTable for every driver — the dialect TYPE-MAP renders binaryData's BLOB as
 		// BYTEA on PostgreSQL and BLOB everywhere else, so the old per-driver fork is gone.
 		q.Execute(ibCreateTable(user_table, {
-			{ wxT("guid"),       ibTypeString(36),  /*notNull*/false, /*pk*/true,  wxEmptyString },
-			{ wxT("name"),       ibTypeString(64),  /*notNull*/true,  /*pk*/false, wxEmptyString },
-			{ wxT("fullName"),   ibTypeString(128), /*notNull*/true,  /*pk*/false, wxEmptyString },
-			{ wxT("changed"),    ibTypeDate(),      /*notNull*/true,  /*pk*/false, wxEmptyString },
-			{ wxT("dataSize"),   ibTypeInteger(),   /*notNull*/true,  /*pk*/false, wxEmptyString },
-			{ wxT("binaryData"), ibTypeBlob(),      /*notNull*/true,  /*pk*/false, wxEmptyString },
+			{ ibT("guid"),       ibTypeString(36),  /*notNull*/false, /*pk*/true,  ibEmptyString },
+			{ ibT("name"),       ibTypeString(64),  /*notNull*/true,  /*pk*/false, ibEmptyString },
+			{ ibT("fullName"),   ibTypeString(128), /*notNull*/true,  /*pk*/false, ibEmptyString },
+			{ ibT("changed"),    ibTypeDate(),      /*notNull*/true,  /*pk*/false, ibEmptyString },
+			{ ibT("dataSize"),   ibTypeInteger(),   /*notNull*/true,  /*pk*/false, ibEmptyString },
+			{ ibT("binaryData"), ibTypeBlob(),      /*notNull*/true,  /*pk*/false, ibEmptyString },
 		}));
 		// The index rides with the just-created table, so the old "if not exists" was redundant
 		// (and let Firebird choke on that syntax) — a plain CREATE INDEX is correct here.
-		q.Execute(ibCreateIndex(user_table, wxT("user_index"), { wxT("guid"), wxT("name") }));
+		q.Execute(ibCreateIndex(user_table, ibT("user_index"), { ibT("guid"), ibT("name") }));
 	}
 }
 
@@ -53,25 +54,29 @@ void ibApplicationInstance::CreateTableSession()
 		//                     Cluster-aware exclusive gate reads this column from peer rows to block
 		//                     new Connects when another process is exclusive.
 		q.Execute(ibCreateTable(session_table, {
-			{ wxT("session"),         ibTypeString(36),  false, true,  wxEmptyString },
-			{ wxT("userName"),        ibTypeString(64),  true,  false, wxEmptyString },
-			{ wxT("application"),     ibTypeInteger(),   true,  false, wxEmptyString },
-			{ wxT("started"),         ibTypeDate(),      true,  false, wxEmptyString },
-			{ wxT("lastActive"),      ibTypeDate(),      true,  false, wxEmptyString },
-			{ wxT("computer"),        ibTypeString(128), true,  false, wxEmptyString },
-			{ wxT("pid"),             ibTypeInteger(),   false, false, wxEmptyString },
-			{ wxT("address"),         ibTypeString(256), false, false, wxEmptyString },
-			{ wxT("currentActivity"), ibTypeString(ibSessionRegistry::kActivityWidth), false, false, wxEmptyString },
+			{ ibT("session"),         ibTypeString(36),  false, true,  ibEmptyString },
+			{ ibT("userName"),        ibTypeString(64),  true,  false, ibEmptyString },
+			{ ibT("application"),     ibTypeInteger(),   true,  false, ibEmptyString },
+			{ ibT("started"),         ibTypeDate(),      true,  false, ibEmptyString },
+			{ ibT("lastActive"),      ibTypeDate(),      true,  false, ibEmptyString },
+			{ ibT("computer"),        ibTypeString(128), true,  false, ibEmptyString },
+			{ ibT("pid"),             ibTypeInteger(),   false, false, ibEmptyString },
+			{ ibT("address"),         ibTypeString(256), false, false, ibEmptyString },
+			{ ibT("currentActivity"), ibTypeString(ibSessionRegistry::kActivityWidth), false, false, ibEmptyString },
 			// NOT NULL with a default: "not exclusive" gets ONE spelling, decided by the column rather
 			// than by whoever wrote the row. A nullable flag has two (NULL and 0) and they agree only
 			// as long as every reader remembers to make them agree.
-			{ wxT("exclusive"),       ibTypeInteger(),   true,  false, wxT("0") },
+			{ ibT("exclusive"),       ibTypeInteger(),   true,  false, ibT("0") },
+			// tokenHash — SHA-256 hex of the thin client's bearer token. The token itself is never stored.
+			// Null: a session with nothing to resume (every kind but a thin client that has logged in).
+			{ ibT("tokenHash"),       ibTypeString(64),  false, false, ibEmptyString },
 		}));
 		// Indexes ride with the just-created table — no "if not exists" (redundant here, and
 		// unsupported by Firebird), so the per-driver fork collapses to three plain CREATE INDEX.
-		q.Execute(ibCreateIndex(session_table, wxT("session_index_1"), { wxT("session"), wxT("userName") }));
-		q.Execute(ibCreateIndex(session_table, wxT("session_index_2"), { wxT("session") }));
-		q.Execute(ibCreateIndex(session_table, wxT("session_index_3"), { wxT("lastActive") }));
+		q.Execute(ibCreateIndex(session_table, ibT("session_index_1"), { ibT("session"), ibT("userName") }));
+		q.Execute(ibCreateIndex(session_table, ibT("session_index_2"), { ibT("session") }));
+		q.Execute(ibCreateIndex(session_table, ibT("session_index_3"), { ibT("lastActive") }));
+		q.Execute(ibCreateIndex(session_table, ibT("session_index_4"), { ibT("tokenHash") }));
 	}
 }
 
@@ -88,26 +93,41 @@ void ibApplicationInstance::CreateTableEvent()
 // session end / on zombie sweep. Index on (namespace, keyHash) drives
 // the per-acquire conflict-check; index on sessionGuid drives the
 // session-end cascade.
+//
+// sys_lock_key is the mutex for one key. It is created on every open, including a
+// base that already has sys_lock: the first acquire of a key inserts the header
+// under the primary key, so nothing is copied out of the old rows. The sweep
+// deletes a header once nobody holds the key. An old binary on the same base
+// still acquires without the row, so two processes can both be granted the key
+// until every process is upgraded.
 void ibApplicationInstance::CreateTableLock()
 {
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(lock_table)) {
 
 		q.Execute(ibCreateTable(lock_table, {
-			{ wxT("lockGuid"),    ibTypeString(36),   false, true,  wxEmptyString },
-			{ wxT("sessionGuid"), ibTypeString(36),   true,  false, wxEmptyString },   // owner identity (session.GUID or custom holder)
-			{ wxT("namespace"),   ibTypeString(128),  true,  false, wxEmptyString },   // e.g. "Catalog.Products"
-			{ wxT("keyHash"),     ibTypeString(64),   true,  false, wxEmptyString },   // SHA-256 hex of canonical key bytes
-			{ wxT("keyData"),     ibTypeString(1024), false, false, wxEmptyString },   // canonical human-readable key for conflict messages
-			{ wxT("lockMode"),    ibTypeInteger(),    true,  false, wxEmptyString },   // 0=Shared, 1=Exclusive
-			{ wxT("acquiredAt"),  ibTypeDate(),       true,  false, wxEmptyString },
-			{ wxT("userName"),    ibTypeString(128),  false, false, wxEmptyString },   // holder's display name (snapshot at acquire)
-			{ wxT("computer"),    ibTypeString(128),  false, false, wxEmptyString },
+			{ ibT("lockGuid"),    ibTypeString(36),   false, true,  ibEmptyString },
+			{ ibT("sessionGuid"), ibTypeString(36),   true,  false, ibEmptyString },   // owner identity (session.GUID or custom holder)
+			{ ibT("namespace"),   ibTypeString(128),  true,  false, ibEmptyString },   // e.g. "Catalog.Products"
+			{ ibT("keyHash"),     ibTypeString(64),   true,  false, ibEmptyString },   // SHA-256 hex of canonical key bytes
+			{ ibT("keyData"),     ibTypeString(1024), false, false, ibEmptyString },   // canonical human-readable key for conflict messages
+			{ ibT("lockMode"),    ibTypeInteger(),    true,  false, ibEmptyString },   // 0=Shared, 1=Exclusive
+			{ ibT("acquiredAt"),  ibTypeDate(),       true,  false, ibEmptyString },
+			{ ibT("userName"),    ibTypeString(128),  false, false, ibEmptyString },   // holder's display name (snapshot at acquire)
+			{ ibT("computer"),    ibTypeString(128),  false, false, ibEmptyString },
 		}));
 		// Index on (namespace, keyHash) drives the per-acquire conflict-check; index on
 		// sessionGuid drives the session-end cascade. No per-driver fork — see CreateTableSession.
-		q.Execute(ibCreateIndex(lock_table, wxT("lock_index_1"), { wxT("namespace"), wxT("keyHash") }));
-		q.Execute(ibCreateIndex(lock_table, wxT("lock_index_2"), { wxT("sessionGuid") }));
+		q.Execute(ibCreateIndex(lock_table, ibT("lock_index_1"), { ibT("namespace"), ibT("keyHash") }));
+		q.Execute(ibCreateIndex(lock_table, ibT("lock_index_2"), { ibT("sessionGuid") }));
+	}
+
+	// The header outlives the lock. Release does not delete it.
+	if (!q.TableExists(lock_key_table)) {
+		q.Execute(ibCreateTable(lock_key_table, {
+			{ ibT("namespace"), ibTypeString(128), true, true, ibEmptyString },
+			{ ibT("keyHash"),   ibTypeString(64),  true, true, ibEmptyString },
+		}));
 	}
 }
 
@@ -137,8 +157,8 @@ void ibApplicationInstance::CreateTableJob()
 			// looking at — and keying by the display name would orphan a renamed job's settings
 			// and its clock, leaving a row that still says "switched off" pointing at nothing.
 			// Native UUID on PostgreSQL, CHAR(36) elsewhere — the dialect TYPE-MAP picks.
-			{ wxT("jobKey"),   ibTypeGuid(),      false, true,  wxEmptyString },
-			{ wxT("jobName"),  ibTypeString(128), true,  false, wxEmptyString },   // display name, for a person reading the table
+			{ ibT("jobKey"),   ibTypeGuid(),      false, true,  ibEmptyString },
+			{ ibT("jobName"),  ibTypeString(128), true,  false, ibEmptyString },   // display name, for a person reading the table
 			// ⚠⚠ THE THIRD FLAG IS `m_notNull`, NOT "nullable" — and the four columns below were
 			// written as though it were the latter. Every one of them describes something a job
 			// that has NEVER RUN does not have, so every one of them must ACCEPT NULL:
@@ -151,14 +171,14 @@ void ibApplicationInstance::CreateTableJob()
 			// died on the first one: "validation error for column SYS_JOB.LASTRUN, value *** null
 			// ***". Which is to say enterprise.exe could not open a database at all — the flags said
 			// the opposite of what the comments beside them promised.
-			{ wxT("lastRun"),  ibTypeDate(),      false, false, wxEmptyString },   // wall clock, shared across processes
-			{ wxT("computer"), ibTypeString(128), false, false, wxEmptyString },   // who ran it last, for diagnostics
+			{ ibT("lastRun"),  ibTypeDate(),      false, false, ibEmptyString },   // wall clock, shared across processes
+			{ ibT("computer"), ibTypeString(128), false, false, ibEmptyString },   // who ran it last, for diagnostics
 			// The two SETTINGS a base holds — what the enterprise may change without opening the
 			// Designer. They are here and not in the metadata because switching a misbehaving job
 			// off at 3 a.m. must not mean editing the configuration on a production base; and for
 			// the engine's OWN jobs there is no configuration to edit at all.
-			{ wxT("active"),   ibTypeBoolean(),   false, false, wxEmptyString },   // NULL = on (a row older than the column)
-			{ wxT("schedule"), ibTypeBlob(),      false, false, wxEmptyString },   // ibJobScheduleDescriptionMemory blob
+			{ ibT("active"),   ibTypeBoolean(),   false, false, ibEmptyString },   // NULL = on (a row older than the column)
+			{ ibT("schedule"), ibTypeBlob(),      false, false, ibEmptyString },   // ibJobScheduleDescriptionMemory blob
 		}));
 	}
 }
@@ -191,25 +211,25 @@ void ibApplicationInstance::CreateTableSettings()
 	if (!q.TableExists(settings_table)) {
 
 		q.Execute(ibCreateTable(settings_table, {
-			{ wxT("entryKey"),   ibTypeString(64),  false, true,  wxEmptyString },   // SHA-256 hex of the four parts below
-			{ wxT("category"),   ibTypeInteger(),   true,  false, wxEmptyString },   // ibSettingsCategory, BY NUMBER
-			{ wxT("objectKey"),  ibTypeString(128), true,  false, wxEmptyString },   // metaobject guid, or a name of the caller's own
+			{ ibT("entryKey"),   ibTypeString(64),  false, true,  ibEmptyString },   // SHA-256 hex of the four parts below
+			{ ibT("category"),   ibTypeInteger(),   true,  false, ibEmptyString },   // ibSettingsCategory, BY NUMBER
+			{ ibT("objectKey"),  ibTypeString(128), true,  false, ibEmptyString },   // metaobject guid, or a name of the caller's own
 			// NOT NULL with a default: "this object has only one setting" and "this row is
 			// everybody's" get ONE spelling each, decided by the column rather than by whoever
 			// wrote the row. A nullable key column has two (NULL and ''), and they agree only as
 			// long as every reader remembers to make them agree — while the hash above already
 			// took the empty string as its input.
-			{ wxT("settingKey"), ibTypeString(128), true,  false, wxT("''") },       // which setting of that object; '' = the only one
-			{ wxT("userKey"),    ibTypeString(36),  true,  false, wxT("''") },       // whose; '' = shared by everybody
-			{ wxT("changed"),    ibTypeDate(),      true,  false, wxEmptyString },
-			{ wxT("dataSize"),   ibTypeInteger(),   true,  false, wxEmptyString },
-			{ wxT("binaryData"), ibTypeBlob(),      true,  false, wxEmptyString },   // the packed value; BYTEA on PostgreSQL via the TYPE-MAP
+			{ ibT("settingKey"), ibTypeString(128), true,  false, ibT("''") },       // which setting of that object; '' = the only one
+			{ ibT("userKey"),    ibTypeString(36),  true,  false, ibT("''") },       // whose; '' = shared by everybody
+			{ ibT("changed"),    ibTypeDate(),      true,  false, ibEmptyString },
+			{ ibT("dataSize"),   ibTypeInteger(),   true,  false, ibEmptyString },
+			{ ibT("binaryData"), ibTypeBlob(),      true,  false, ibEmptyString },   // the packed value; BYTEA on PostgreSQL via the TYPE-MAP
 		}));
 		// The readable address, for "everything this user saved about that object" — the query an
 		// administrator's "reset this person's settings" and a form's own cleanup both make. The
 		// index rides with the just-created table, so no "if not exists" (which Firebird rejects).
-		q.Execute(ibCreateIndex(settings_table, wxT("settings_index_1"),
-			{ wxT("category"), wxT("objectKey"), wxT("userKey") }));
+		q.Execute(ibCreateIndex(settings_table, ibT("settings_index_1"),
+			{ ibT("category"), ibT("objectKey"), ibT("userKey") }));
 	}
 }
 
@@ -228,18 +248,18 @@ void ibApplicationInstance::CreateTableFile()
 	if (!q.TableExists(file_table)) {
 
 		q.Execute(ibCreateTable(file_table, {
-			{ wxT("partKey"),     ibTypeString(48),  false, true,  wxEmptyString },   // fileKey:partIndex
-			{ wxT("fileKey"),     ibTypeString(36),  true,  false, wxEmptyString },   // the file's id
-			{ wxT("partIndex"),   ibTypeInteger(),   true,  false, wxEmptyString },   // 0 the header, then 1, 2, … in the order written
-			{ wxT("sessionGuid"), ibTypeString(36),  true,  false, wxEmptyString },   // the owner
-			{ wxT("fileName"),    ibTypeString(260), false, false, wxEmptyString },   // the header's: the name the file came under
-			{ wxT("changed"),     ibTypeDate(),      true,  false, wxEmptyString },
-			{ wxT("dataSize"),    ibTypeInteger(),   true,  false, wxEmptyString },
-			{ wxT("binaryData"),  ibTypeBlob(),      false, false, wxEmptyString },   // a content part's bytes; the header has none
+			{ ibT("partKey"),     ibTypeString(48),  false, true,  ibEmptyString },   // fileKey:partIndex
+			{ ibT("fileKey"),     ibTypeString(36),  true,  false, ibEmptyString },   // the file's id
+			{ ibT("partIndex"),   ibTypeInteger(),   true,  false, ibEmptyString },   // 0 the header, then 1, 2, … in the order written
+			{ ibT("sessionGuid"), ibTypeString(36),  true,  false, ibEmptyString },   // the owner
+			{ ibT("fileName"),    ibTypeString(260), false, false, ibEmptyString },   // the header's: the name the file came under
+			{ ibT("changed"),     ibTypeDate(),      true,  false, ibEmptyString },
+			{ ibT("dataSize"),    ibTypeInteger(),   true,  false, ibEmptyString },
+			{ ibT("binaryData"),  ibTypeBlob(),      false, false, ibEmptyString },   // a content part's bytes; the header has none
 		}));
 		// A file's parts in order; and the owner's, for the session-end cascade.
-		q.Execute(ibCreateIndex(file_table, wxT("file_index_1"), { wxT("fileKey"), wxT("partIndex") }));
-		q.Execute(ibCreateIndex(file_table, wxT("file_index_2"), { wxT("sessionGuid") }));
+		q.Execute(ibCreateIndex(file_table, ibT("file_index_1"), { ibT("fileKey"), ibT("partIndex") }));
+		q.Execute(ibCreateIndex(file_table, ibT("file_index_2"), { ibT("sessionGuid") }));
 	}
 }
 
@@ -257,9 +277,9 @@ void ibApplicationInstance::MigrateTableJob()
 	if (!qi.TableExists(job_table))
 		return;
 
-	wxArrayString cols = qi.GetColumns(job_table);
-	for (const wxString& c : cols)
-		if (c.IsSameAs(wxT("jobKey"), false))
+	std::vector<ibString> cols = qi.GetColumns(job_table);
+	for (const ibString& c : cols)
+		if (c.IsSameAs(ibT("jobKey"), false))
 			return;   // already on the keyed schema
 
 	qi.Execute(ibDropTable(job_table));
@@ -278,32 +298,48 @@ void ibApplicationInstance::MigrateTableSession()
 	if (!qi.TableExists(session_table))
 		return;
 
-	wxArrayString cols = qi.GetColumns(session_table);
-	auto has = [&](const wxString& col) {
-		for (std::size_t i = 0; i < cols.GetCount(); ++i)
+	std::vector<ibString> cols = qi.GetColumns(session_table);
+	auto has = [&](const ibString& col) {
+		for (std::size_t i = 0; i < cols.size(); ++i)
 			if (cols[i].CmpNoCase(col) == 0) return true;
 		return false;
 	};
 
 	// Each ADD is best-effort and independent — a fresh builder per column so one driver's
 	// rejection (caught below) never poisons the next column's statement.
-	auto addColumn = [&](const wxString& name, ibColumnType type) {
-		try { ibDatabaseQueryBuilder q; q.Execute(ibAddColumn(session_table, { name, type, false, false, wxEmptyString })); }
+	auto addColumn = [&](const ibString& name, ibColumnType type) {
+		try { ibDatabaseQueryBuilder q; q.Execute(ibAddColumn(session_table, { name, type, false, false, ibEmptyString })); }
 		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
 	};
 
-	if (!has(wxT("pid")))             addColumn(wxT("pid"),             ibTypeInteger());
-	if (!has(wxT("address")))         addColumn(wxT("address"),         ibTypeString(256));
-	if (!has(wxT("currentActivity"))) addColumn(wxT("currentActivity"), ibTypeString(ibSessionRegistry::kActivityWidth));
+	if (!has(ibT("pid")))             addColumn(ibT("pid"),             ibTypeInteger());
+	if (!has(ibT("address")))         addColumn(ibT("address"),         ibTypeString(256));
+	if (!has(ibT("currentActivity"))) addColumn(ibT("currentActivity"), ibTypeString(ibSessionRegistry::kActivityWidth));
 	// kind — ibSessionKind session-level role (WebServer=5, WebClient=100; desktop kinds share
 	// numeric values with ibRunMode). Distinct from `application` (process-level ibRunMode).
-	if (!has(wxT("kind")))            addColumn(wxT("kind"),            ibTypeInteger());
+	if (!has(ibT("kind")))            addColumn(ibT("kind"),            ibTypeInteger());
 	// signal — admin → registry control channel; picked up on the next JobCheckSignal tick, then
 	// cleared by the handler. "kick" is the first supported value (reload / refresh may follow).
-	if (!has(wxT("signal")))          addColumn(wxT("signal"),          ibTypeString(32));
+	if (!has(ibT("signal")))          addColumn(ibT("signal"),          ibTypeString(32));
 	// exclusive — process-wide monopoly marker; cluster-aware gate in ProcessAdd /
 	// ProcessSetExclusive reads peer rows to detect another process holding it.
-	if (!has(wxT("exclusive")))       addColumn(wxT("exclusive"),       ibTypeInteger());
+	if (!has(ibT("exclusive")))       addColumn(ibT("exclusive"),       ibTypeInteger());
+	// tokenHash — the bearer token's SHA-256, never the token. Added with the resume window. Null on a
+	// row that predates it, and that row cannot be resumed.
+	if (!has(ibT("tokenHash"))) {
+		addColumn(ibT("tokenHash"), ibTypeString(64));
+		try {
+			ibDatabaseQueryBuilder q;
+			q.Execute(ibCreateIndex(session_table, ibT("session_index_4"), { ibT("tokenHash") }));
+		}
+		catch (const ibCoreException& err) {
+			// The column is enough to resume. The index is only the lookup, and a driver that refuses it is said.
+			ibJournalWarning(ibT("engine"), ibT("sys_session tokenHash index was not created: %s"), err.GetErrorDescription());
+		}
+		catch (...) {
+			ibJournalWarning(ibT("engine"), ibT("sys_session tokenHash index was not created"));
+		}
+	}
 
 	// NO BACK-FILL FOR THE ROWS. A column added to a populated table arrives NULL everywhere, which
 	// normally means an old base carries two spellings of one fact for good — but not this table: every
@@ -330,10 +366,10 @@ void ibApplicationInstance::MigrateTableBytecodeCache()
 		// recomputed from the source it was derived from, so a table that predates `config_md5` is
 		// DROPPED and rebuilt rather than ALTERed. One statement, no back-fill, and no base can carry
 		// rows whose validity nothing can judge.
-		wxArrayString cols = q.GetColumns(bytecode_cache_table);
+		std::vector<ibString> cols = q.GetColumns(bytecode_cache_table);
 		bool hasFingerprint = false;
-		for (std::size_t i = 0; i < cols.GetCount(); ++i)
-			if (cols[i].CmpNoCase(wxT("config_md5")) == 0) { hasFingerprint = true; break; }
+		for (std::size_t i = 0; i < cols.size(); ++i)
+			if (cols[i].CmpNoCase(ibT("config_md5")) == 0) { hasFingerprint = true; break; }
 		if (hasFingerprint)
 			return;
 		try { q.Execute(ibDropTable(bytecode_cache_table)); }
@@ -344,13 +380,13 @@ void ibApplicationInstance::MigrateTableBytecodeCache()
 		// bc_blob's BLOB renders as BYTEA on PostgreSQL and BLOB on every other driver
 		// (Firebird embedded, SQLite, ODBC) via the dialect TYPE-MAP — no fork here.
 		q.Execute(ibCreateTable(bytecode_cache_table, {
-			{ wxT("descriptor_id"),    ibTypeString(36), false, true,  wxEmptyString },
-			{ wxT("bytecode_version"), ibTypeString(36), true,  false, wxEmptyString },
+			{ ibT("descriptor_id"),    ibTypeString(36), false, true,  ibEmptyString },
+			{ ibT("bytecode_version"), ibTypeString(36), true,  false, ibEmptyString },
 			// WHAT THE BYTECODE WAS COMPILED AGAINST — the configuration's own digest, recomputed on
 			// every save. It is part of the LOOKUP, not a field somebody has to remember to compare:
 			// a row written under an earlier configuration is simply not found. See byteCodeCache.h.
-			{ wxT("config_md5"),       ibTypeString(32), true,  false, wxEmptyString },
-			{ wxT("bc_blob"),          ibTypeBlob(),     true,  false, wxEmptyString },
+			{ ibT("config_md5"),       ibTypeString(32), true,  false, ibEmptyString },
+			{ ibT("bc_blob"),          ibTypeBlob(),     true,  false, ibEmptyString },
 		}));
 	}
 	catch (...) {
@@ -371,7 +407,7 @@ bool ibApplicationInstance::ClearTableUser()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 // User-record DB I/O moved onto ibUserInfo as static factories; see
 // backend/userInfo.{h,cpp}. ibApplicationInstance no longer mediates the
@@ -380,11 +416,11 @@ bool ibApplicationInstance::ClearTableUser()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibApplicationInstance::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
+bool ibApplicationInstance::LoadUserInfoFromBuffer(ibMemoryBuffer& buffer)
 {
 	ibReaderMemory reader = buffer;
 
-	ibReaderMemory* prevReaderMemory = nullptr; u64 meta_id = 0;
+	ibReaderMemory* prevReaderMemory = nullptr; std::uint64_t meta_id = 0;
 
 	while (!reader.eof()) {
 
@@ -400,19 +436,19 @@ bool ibApplicationInstance::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
 	return true;
 }
 
-bool ibApplicationInstance::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
+bool ibApplicationInstance::SaveUserInfoToBuffer(ibMemoryBuffer& buffer) const
 {
 	// SELECT guid FROM sys_user
 	try {
 		ibDatabaseQueryBuilder q;
-		ibQueryIR ir(ibProject(ibScan(user_table), { { ibCol(wxT("guid")), wxEmptyString } }));
+		ibQueryIR ir(ibProject(ibScan(user_table), { { ibCol(ibT("guid")), ibEmptyString } }));
 		ibQueryResult result = q.ExecuteIR(ir);
 
 		ibWriterMemory writer; unsigned int idx = 0;
 
 		while (result.Next()) {
 			ibWriterMemory userWriter;
-			ibUserInfo::Read(ibGuid(result.GetResultString(wxT("guid"))))
+			ibUserInfo::Read(ibGuid(result.GetResultString(ibT("guid"))))
 				.Serialize(userWriter);
 			writer.w_chunk(idx++, userWriter.buffer());
 		}

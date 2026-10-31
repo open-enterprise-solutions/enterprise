@@ -1,0 +1,134 @@
+// ============================================================================
+// XML from a script - 2026-10-28
+//
+// XMLReader / XMLWriter / XMLNamespaceContext, and the XMLNodeType enumeration.
+// The suite CHECKS ITSELF: a mismatch raises, and a corpus script that raises fails its run.
+//
+//   1. A document written into a string: a declaration, a namespace, escaped text, an empty element.
+//   2. The same text read back node by node, and its attributes by name and by namespace.
+//   3. A text that is not well-formed is refused with where it broke.
+//   4. The writer refuses what would not be XML (an element left open, an attribute after text).
+//   5. A writer's namespace context: what is bound where it stands.
+//   6. What a reader passes by or hands over: the declaration, the document type, comments; xml:lang and xml:space.
+//   7. The writer's attribute lines, its indentation and its document type.
+// ============================================================================
+
+var xsi = "http://www.w3.org/2001/XMLSchema-instance";
+
+// 1
+var w = New XMLWriter();
+w.SetString();
+w.Indent = False;
+w.WriteXMLDeclaration();
+w.WriteStartElement("DECLAR");
+w.WriteNamespaceMapping("xsi", xsi);
+w.WriteAttribute("xsi:noNamespaceSchemaLocation", "J0100117.xsd");
+w.WriteStartElement("HNAME");
+w.WriteText("ТОВ ""Їжак"" & Co");
+w.WriteEndElement();
+w.WriteStartElement("EMPTY");
+w.WriteEndElement();
+w.WriteEndElement();
+var text = w.Close();
+var want = "<?xml version=""1.0"" encoding=""UTF-8""?><DECLAR xmlns:xsi=""" + xsi + """ xsi:noNamespaceSchemaLocation=""J0100117.xsd""><HNAME>ТОВ ""Їжак"" &amp; Co</HNAME><EMPTY/></DECLAR>";
+if (text <> want) { Raise("written: " + text); }
+
+// 2
+var r = New XMLReader();
+r.SetString(text);
+var names = "";
+var hname = "";
+while (r.Read()) {
+    if (r.NodeType = XMLNodeType.StartElement) { names = names + r.Name + ";"; }
+    if (r.NodeType = XMLNodeType.Text) { hname = r.Value; }
+}
+if (names <> "DECLAR;HNAME;EMPTY;") { Raise("elements: " + names); }
+if (hname <> "ТОВ ""Їжак"" & Co") { Raise("text: " + hname); }
+if (r.XMLVersion <> "1.0") { Raise("version: " + r.XMLVersion); }
+
+r.SetString(text);
+if (r.MoveToContent() <> XMLNodeType.StartElement) { Raise("MoveToContent stops on the root"); }
+if (r.GetAttribute("xsi:noNamespaceSchemaLocation") <> "J0100117.xsd") { Raise("attribute by its name"); }
+if (r.AttributeValue("noNamespaceSchemaLocation", xsi) <> "J0100117.xsd") { Raise("attribute by its namespace"); }
+if (r.GetAttribute("missing") <> Undefined) { Raise("a missing attribute is Undefined"); }
+if (r.NamespaceContext.LookupNamespaceURI("xsi") <> xsi) { Raise("the reader's context"); }
+r.Close();
+
+// 3
+var refusal = "";
+try {
+    r.SetString("<a>" + Chars.LF + "<b></a>");
+    while (r.Read()) { }
+} except {
+    refusal = ErrorDescription();
+}
+if (Find(refusal, "line 2") = 0) { Raise("a broken text is refused where it broke: " + refusal); }
+
+// 4
+var bad = New XMLWriter();
+bad.SetString();
+bad.WriteStartElement("a");
+refusal = "";
+try { bad.Close(); } except { refusal = ErrorDescription(); }
+if (Find(refusal, "still open") = 0) { Raise("an open element: " + refusal); }
+
+bad = New XMLWriter();
+bad.SetString();
+bad.WriteStartElement("a");
+bad.WriteText("t");
+refusal = "";
+try { bad.WriteAttribute("b", "1"); } except { refusal = ErrorDescription(); }
+if (refusal = "") { Raise("an attribute after text is refused"); }
+
+// 5
+w = New XMLWriter();
+w.SetString();
+w.WriteStartElement("a", "urn:x");
+w.WriteNamespaceMapping("p", "urn:p");
+var context = w.NamespaceContext;
+if (context.DefaultNamespace <> "urn:x") { Raise("default: " + context.DefaultNamespace); }
+if (w.LookupPrefix("urn:p") <> "p") { Raise("prefix: " + w.LookupPrefix("urn:p")); }
+if (w.LookupPrefix("urn:none") <> Undefined) { Raise("no prefix is Undefined"); }
+w.WriteEndElement();
+if (w.Close() <> "<a xmlns=""urn:x"" xmlns:p=""urn:p""/>") { Raise("the namespaces written"); }
+
+// 6
+r = New XMLReader();
+r.IgnoreXMLDeclaration = False;
+r.IgnoreDocumentType = False;
+r.IgnoreComments = True;
+r.SetString("<?xml version=""1.0""?><!DOCTYPE a [<!ENTITY e ""x"">]><a xml:lang=""uk"" xml:space=""preserve""><!--c--> &e;</a>");
+r.Read();
+if (r.NodeType <> XMLNodeType.XMLDeclaration) { Raise("the declaration is a node"); }
+r.Read();
+if (r.NodeType <> XMLNodeType.DocumentTypeDefinition) { Raise("the document type is a node"); }
+if (r.Value <> "<!ENTITY e ""x"">") { Raise("the internal subset: " + r.Value); }
+r.Read();
+if (r.Language <> "uk") { Raise("the language: " + r.Language); }
+if (r.Space <> XMLSpace.Preserve) { Raise("the space"); }
+r.Read();
+if (r.Value <> " x") { Raise("the text after the comment passed by: " + r.Value); }
+r.Close();
+
+r = New XMLReader();
+r.CDATASectionAsText = True;
+r.SetString("<a>x<![CDATA[<y>]]>z</a>");
+r.Read();
+r.Read();
+if (r.Value <> "x<y>z") { Raise("CDATA as text: " + r.Value); }
+refusal = "";
+try { r.CDATASectionAsText = False; } except { refusal = ErrorDescription(); }
+if (Find(refusal, "before the first Read") = 0) { Raise("CDATASectionAsText after reading began: " + refusal); }
+r.Close();
+
+// 7
+w = New XMLWriter();
+w.IndentAttributes = True;
+w.IndentString = "  ";
+w.SetString();
+w.WriteDocumentType("a");
+w.WriteStartElement("a");
+w.WriteAttribute("x", "1");
+w.WriteEndElement();
+var laidOut = w.Close();
+if (laidOut <> "<!DOCTYPE a>" + Chars.LF + "<a" + Chars.LF + "  x=""1""/>") { Raise("the writer's layout: " + laidOut); }

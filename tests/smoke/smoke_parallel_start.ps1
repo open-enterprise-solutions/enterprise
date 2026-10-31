@@ -1,5 +1,6 @@
-# Smoke test -- parallel start of two enterprise.exe instances against
-# the same database file. Verifies the FB driver's multi-process
+# Smoke test -- parallel start of two enterprise-thin.exe instances against
+# the same database file (each opens it as a file base in its own
+# process). Verifies the FB driver's multi-process
 # scenario (SuperClassic embedded for local paths, leader-mode +
 # follower attach for UNC paths) does not regress.
 #
@@ -34,7 +35,7 @@
 # leader.
 
 param(
-    [string]$ExePath  = "F:\projects\oes-work\enterprise\bin\Win32\Debug\enterprise.exe",
+    [string]$ExePath  = "F:\projects\oes-work\enterprise\bin\Win32\Debug\enterprise-thin.exe",
     [string]$DbPath   = "F:\projects\oes-bin\examples\fb_test253\SYS.FDB",
     [string]$IbUser   = "",
     [string]$IbPwd    = "",
@@ -42,7 +43,7 @@ param(
 )
 
 if (-not (Test-Path $ExePath)) {
-    Write-Host "[FAIL] enterprise.exe not found at $ExePath" -ForegroundColor Red
+    Write-Host "[FAIL] enterprise-thin.exe not found at $ExePath" -ForegroundColor Red
     exit 1
 }
 if (-not (Test-Path $DbPath)) {
@@ -50,10 +51,10 @@ if (-not (Test-Path $DbPath)) {
     exit 1
 }
 
-# Clean slate: any leftover enterprise.exe from a prior test or a
+# Clean slate: any leftover enterprise-thin.exe from a prior test or a
 # crashed Debug session would skew the multi-process count.
-Get-Process -Name enterprise -ErrorAction SilentlyContinue | ForEach-Object {
-    Write-Host "Killing leftover enterprise.exe PID $($_.Id)"
+Get-Process -Name enterprise-thin -ErrorAction SilentlyContinue | ForEach-Object {
+    Write-Host "Killing leftover enterprise-thin.exe PID $($_.Id)"
     Stop-Process -Id $_.Id -Force
 }
 Start-Sleep -Milliseconds 500

@@ -1,7 +1,7 @@
 // =============================================================================
 // OES Enterprise — ibTypeDescription tests
 //
-// ibTypeDescription (backend/typeDescription.h) is the attribute type model:
+// ibTypeDescription (core/description/typeDescription.h) is the attribute type model:
 // a list of allowed type CLSIDs + number/date/string qualifiers (precision,
 // scale, length). Every attribute, query column and DDL column carries one, so
 // its predicates (ContainType), qualifiers and value-equality are load-bearing.
@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 #include <vector>
-#include "backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 
 // ---------------------------------------------------------------------------
 // Construction + validity

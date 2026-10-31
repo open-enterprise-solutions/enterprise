@@ -37,7 +37,7 @@
 
 struct BACKEND_API ibRpcRequest {
 
-	wxString    m_method;
+	ibString    m_method;
 	ibDataValue m_id;       // Number or String; Empty means a notification
 	ibDataNode  m_params;   // an empty node when the request carried none
 
@@ -79,7 +79,21 @@ enum class ibRpcError {
 
 // Reads one request. Answers false and fills `error` when the text is not a
 // JSON-RPC request — malformed JSON, or well-formed JSON that is not one.
-BACKEND_API bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& error);
+// THE TEXT IS THE ENGINE'S, AND IT IS READ WHERE IT LIES (ibJsonProvider::Read): a transport that holds bytes makes
+// it once (ibString::FromUTF8), one that holds the text — a file base's client — hands it over as it is.
+BACKEND_API bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, ibString& error);
+// …read before its caller is known: only a composition's own parts are turned back into classes, and a node that names
+// its type by any other word keeps the word (`unknownType`) — for the caller's session to look up (ibRpcLookupTypes).
+BACKEND_API bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, ibString& error, bool& unknownType);
+// …and the request as a PACKET (OES-RPC 1.0, serialize/dataBuilder.h) — the client protocol's: its bytes checked and
+// taken as the node they are, nothing parsed; the envelope's words are JSON-RPC's (method, id, params), with no jsonrpc.
+BACKEND_API bool ibRpcParseRequest(const ibMemoryBuffer& packet, ibRpcRequest& request, ibString& error);
+// The words a reading kept, looked up in THAT configuration — the caller's session's: the text is not read again.
+BACKEND_API void ibRpcLookupTypes(ibDataNode& node, const class ibMetaData* metaData);
+// ⭐ A PACKET'S TYPES IN WORDS — a node's header says its clsid, and a client knows no classes: the answer carries the
+// names of the types its nodes are, once each (`types`: a field per clsid, named by its digits, holding the name), as
+// the JSON view says them (ibRpcRenderNode's resolver).
+BACKEND_API void ibRpcNameTypes(ibDataNode& answer);
 
 // A MESSAGE THAT IS AN ANSWER, not a call. Once the server can ask the client
 // something (sampling), the same endpoint starts receiving both — and they are
@@ -89,15 +103,16 @@ BACKEND_API bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, 
 //
 // `payload` is the result (or the error) rendered back to text: what came back
 // is the client's business, and this layer does not pretend to know its shape.
-BACKEND_API bool ibRpcParseResponse(const wxString& text, ibDataValue& id,
-	wxString& payload, bool& isError);
+BACKEND_API bool ibRpcParseResponse(const ibString& text, ibDataValue& id,
+	ibString& payload, bool& isError);
 
 // ANY node as JSON text. `typeResolver` turns config-specific class ids into
 // the portable names a configuration writes (metaIntrospect.h) — without one a
 // described object answers with numbers that mean nothing outside this process.
 // The envelope itself needs no resolver: it carries no types.
-BACKEND_API wxString ibRpcRenderNode(const ibDataNode& node,
-	const std::function<wxString(ibClassID)>& typeResolver = {});
+// Written straight into the engine's text (ibJsonProvider::Write); bytes are the socket's to make.
+BACKEND_API ibString ibRpcRenderNode(const ibDataNode& node,
+	const std::function<ibString(ibClassID)>& typeResolver = {});
 
 // ⭐⭐ THE MIRROR OF THAT RESOLVER, installed on a provider that is about to READ. A node's type goes
 // out as a word; without this it comes back as clsid 0, and a schema read, edited and returned loses
@@ -107,18 +122,19 @@ BACKEND_API void ibRpcInstallTypeLookup(class ibJsonProvider& provider);
 
 // The two answers. `id` is the request's, verbatim: the protocol matches a
 // reply to its call by that value and by nothing else.
-BACKEND_API wxString ibRpcWriteResult(const ibDataValue& id, const ibDataNode& result);
-BACKEND_API wxString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message);
+// `result` is taken, not copied, by a caller done with it (std::move): it goes into the envelope as it is.
+BACKEND_API ibString ibRpcWriteResult(const ibDataValue& id, ibDataNode result);
+BACKEND_API ibString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const ibString& message);
 
 // The same, with the `data` member a few refusals owe the caller — chiefly the list
 // of versions this server speaks, which is what makes a version refusal answerable
 // rather than merely final.
-BACKEND_API wxString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message,
+BACKEND_API ibString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const ibString& message,
 	const ibDataNode* data);
 
 // An APPLICATION'S OWN refusal — a code of its own numbering, outside the range JSON-RPC reserves for itself
 // (-32768..-32000), which the specification leaves to the application: the client protocol's reasons
-// (frmserver's ibProtocolRefusal), which a client branches on.
-BACKEND_API wxString ibRpcWriteError(const ibDataValue& id, s32 code, const wxString& message);
+// (frmserver's ibProtocol::ibRefusal), which a client branches on.
+BACKEND_API ibString ibRpcWriteError(const ibDataValue& id, std::int32_t code, const ibString& message);
 
 #endif // _IB_RPC_MESSAGE_H_

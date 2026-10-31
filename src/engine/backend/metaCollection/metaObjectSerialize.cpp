@@ -13,6 +13,8 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — universal structure bridge (BuildDataNode/ApplyDataNode)
 
+#include <algorithm>   // std::any_of — a field name written twice
+
 
 namespace {
 
@@ -20,16 +22,16 @@ namespace {
 // LoadNode, and nothing but attention was keeping the two spellings equal — a name changed on one
 // side reads back empty on the other, silently, for every configuration already saved. Named here
 // they are one thing, and a rename is one edit the compiler checks.
-const wxString kTagGuid        = wxT("Guid");
-const wxString kTagId          = wxT("Id");
-const wxString kTagDeleted     = wxT("Deleted");
-const wxString kTagHelp        = wxT("Help");
-const wxString kTagNote        = wxT("Note");
-const wxString kTagPredefined  = wxT("NodePredefined");
-const wxString kTagInterface   = wxT("Interface");
-const wxString kTagRoles       = wxT("Roles");
-const wxString kTagComposition = wxT("Composition");
-const wxString kTagFunctionalOptions = wxT("FunctionalOptions");
+const ibString kTagGuid        = ibT("Guid");
+const ibString kTagId          = ibT("Id");
+const ibString kTagDeleted     = ibT("Deleted");
+const ibString kTagHelp        = ibT("Help");
+const ibString kTagNote        = ibT("Note");
+const ibString kTagPredefined  = ibT("NodePredefined");
+const ibString kTagInterface   = ibT("Interface");
+const ibString kTagRoles       = ibT("Roles");
+const ibString kTagComposition = ibT("Composition");
+const ibString kTagFunctionalOptions = ibT("FunctionalOptions");
 
 } // namespace
 
@@ -40,7 +42,7 @@ bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 {
 	// intrinsics → fields
 	node.SetValue(kTagGuid, m_metaGuid.GetGuid());
-	node.SetValue(kTagId, (s32)m_metaId);
+	node.SetValue(kTagId, (std::int32_t)m_metaId);
 	node.SetValue(kTagDeleted, IsDeleted());
 	node.SetValue(kTagHelp, m_strHelpContent);
 	node.SetValue(kTagNote, m_strNoteContent);
@@ -79,7 +81,22 @@ bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 		return false;
 	node.SetValue(kTagFunctionalOptions, functionalOptionWriter.buffer());
 
-	return WriteData(node);
+	if (!WriteData(node))
+		return false;
+
+	// ⭐ ONE NAME, ONE FIELD. A property is written into the same node as the intrinsics above, and a reader finds
+	// the FIRST field under a name: a property that shares one with an intrinsic reads the intrinsic's value back.
+	// A role's mode was named like the composition every object carries, so every configuration holding a role
+	// saved and then refused to load ("expected 2, got 5", 2026-10-28). Refused here, it is the writer that is named.
+	std::vector<ibString> names;
+	for (const auto& field : node.Fields()) {
+		if (std::any_of(names.begin(), names.end(), [&field](const ibString& name) { return name == field.first; }))
+			ibBackendCoreException::Error(
+				_("'%s' writes the field '%s' twice - a property named like one of the object's own fields "
+				  "reads the other one back"), GetName(), field.first);
+		names.push_back(field.first);
+	}
+	return true;
 }
 
 // LoadNode — read this object from a CONST node. Mirror of SaveNode.
@@ -87,11 +104,11 @@ bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 {
 	// intrinsics ← fields
 	m_metaGuid = node.GetValue<ibGuid>(kTagGuid);
-	m_metaId = (ibMetaID)node.GetValue<s32>(kTagId);
+	m_metaId = (ibMetaID)node.GetValue<std::int32_t>(kTagId);
 	if (node.GetValue<bool>(kTagDeleted))
 		MarkAsDeleted();
-	m_strHelpContent = node.GetValue<wxString>(kTagHelp);
-	m_strNoteContent = node.GetValue<wxString>(kTagNote);
+	m_strHelpContent = node.GetValue<ibString>(kTagHelp);
+	m_strNoteContent = node.GetValue<ibString>(kTagNote);
 
 	// editable property values ← props (owner names them inline; the property takes the value)
 	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
@@ -99,25 +116,25 @@ bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 	m_propertyComment->SetNodeValue(node.GetProperty(m_propertyComment->GetName()));
 
 	// interface / roles ← fields
-	wxMemoryBuffer interfaceBuf = node.GetValue<wxMemoryBuffer>(kTagInterface);
+	ibMemoryBuffer interfaceBuf = node.GetValue<ibMemoryBuffer>(kTagInterface);
 	if (interfaceBuf.GetDataLen()) {
 		ibReaderMemory reader(interfaceBuf);
 		if (!LoadInterface(reader))
 			return false;
 	}
-	wxMemoryBuffer roleBuf = node.GetValue<wxMemoryBuffer>(kTagRoles);
+	ibMemoryBuffer roleBuf = node.GetValue<ibMemoryBuffer>(kTagRoles);
 	if (roleBuf.GetDataLen()) {
 		ibReaderMemory reader(roleBuf);
 		if (!LoadRole(reader))
 			return false;
 	}
-	wxMemoryBuffer compositionBuf = node.GetValue<wxMemoryBuffer>(kTagComposition);
+	ibMemoryBuffer compositionBuf = node.GetValue<ibMemoryBuffer>(kTagComposition);
 	if (compositionBuf.GetDataLen()) {
 		ibReaderMemory reader(compositionBuf);
 		if (!LoadComposition(reader))
 			return false;
 	}
-	wxMemoryBuffer functionalOptionBuf = node.GetValue<wxMemoryBuffer>(kTagFunctionalOptions);
+	ibMemoryBuffer functionalOptionBuf = node.GetValue<ibMemoryBuffer>(kTagFunctionalOptions);
 	if (functionalOptionBuf.GetDataLen()) {
 		ibReaderMemory reader(functionalOptionBuf);
 		if (!LoadFunctionalOptions(reader))
@@ -270,7 +287,7 @@ bool ibValueMetaObject::RunSubtree(int flags, ibRunPhase phase)
 	// ⭐ WHAT A PROPERTY DERIVES IS DERIVED HERE, ONCE — the choices of a list, the types a type description stands
 	// for, the fields a choice link names — in the resolve phase, its children resolved too, and the load sequential.
 	// Every session of the base reads this object; from now on such a read only reads (ibPropertyList,
-	// ibVariantDataAttribute, ibVariantDataChoiceLink).
+	// ibVariantAttribute, ibVariantChoiceLink).
 	if (phase == ibRunPhase::After) {
 		for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
 			ibProperty* const property = GetPropertyByIndex(idx);

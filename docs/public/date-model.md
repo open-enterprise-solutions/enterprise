@@ -37,8 +37,9 @@ drivers by parts, tests under three clocks.
 - **Parts.** `FromParts` checks them against the calendar: a 30th of February is refused, never
   rolled over into March. A script's `Date(y, m, d, …)` comes this way.
 - **Text.** One door, `FromString`: `dd.mm.yyyy hh:mm:ss`, `yyyymmddhhmmss`, `yyyymmdd` and ISO 8601
-  are read by their digits; any other spelling goes to wx's free-form reader and comes back by its
-  local parts. `ToString` writes `dd.mm.yyyy hh:mm:ss`.
+  are read by their digits. Any other spelling is read free-form (`fdatetimeParse.cpp`, ported from
+  wx's reader): numbers and month or weekday names in any order, `today`, `noon`, an AM/PM time.
+  Names are read in English and in the thread's language. `ToString` writes `dd.mm.yyyy hh:mm:ss`.
 - **The database.** A driver writes and reads a date by its parts - `SetParamDate` takes an
   `ibDateTime`, `GetResultDate` gives one. Firebird encodes a `struct tm`, SQLite and PostgreSQL spell
   the parts the ISO way, ODBC fills `TIMESTAMP_STRUCT`. No clock stands on that road. `NULL` reads as
@@ -46,9 +47,13 @@ drivers by parts, tests under three clocks.
   second.
 - **Now.** `ibDateTime::Now()`: the machine's clock by its parts, to the millisecond. The one door
   "now" is asked through.
-- **The bridge.** `OfWxDateTime` / `ToWxDateTime` carry a reading to a `wxDateTime` and back by its
-  local parts - for a window (a picker, a list that prints a time) and for a stored form older than
-  this model. The empty date and an invalid `wxDateTime` are each other's. The bridge cannot hold a
+- **An instant.** `OfInstant`: milliseconds since 1970 UTC, read through the machine's zone - a file's
+  time, a stored form older than this model. Before 1970 the zone's standard distance is used, as wx did.
+- **Names.** `MonthName`, `MonthShortName`, `WeekDayName`, `WeekDayShortName`: in the thread's
+  language, through the engine's dictionary ([translations.md](translations.md)).
+- **The bridge.** `typeConv::DateTimeToWxDateTime` / `WxDateTimeToDateTime` (`frmclient/win/typeconv.h`)
+  carry a reading to a `wxDateTime` and back by its local parts - for a window (a picker, a list that
+  prints a time). The core does not know `wxDateTime`. The empty date and an invalid `wxDateTime` are each other's. The bridge cannot hold a
   skipped hour, which is why nothing of the value's goes over it.
 
 ## Stored forms

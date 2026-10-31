@@ -34,27 +34,27 @@
 
 namespace {
 
-std::string Utf8(const wxString& text)
+std::string Utf8(const ibString& text)
 {
-	const wxScopedCharBuffer utf8 = text.utf8_str();
+	const std::string utf8 = text.utf8_str();
 	return std::string(utf8.data(), utf8.length());
 }
 
 // What a refusal says, or "" when the call went through.
 template <class Call>
-wxString Refusal(Call call)
+ibString Refusal(Call call)
 {
 	try {
 		call();
 	}
 	catch (const ibBackendException& refusal) {
-		const wxString why = refusal.GetErrorDescription();
-		return why.empty() ? wxString(wxT("(a refusal with no sentence)")) : why;
+		const ibString why = refusal.GetErrorDescription();
+		return why.empty() ? ibString(wxT("(a refusal with no sentence)")) : why;
 	}
-	return wxString();
+	return ibString();
 }
 
-ibValue Text(const wxString& text) { return ibValue(text); }
+ibValue Text(const ibString& text) { return ibValue(text); }
 
 } // namespace
 
@@ -68,17 +68,17 @@ TEST(HttpValues, AHostIsANameNotAnAddress)
 			wxT("user@api.example"), wxT("api.example?x"), wxT("api.example#x"), wxT("api\\example"),
 			wxT("api.example:8080"), wxT("[::1]") }) {
 		ibValueHttpConnection connection;
-		const wxString why = Refusal([&] { connection.Open(host, 80, wxString(), wxString(), 30); });
+		const ibString why = Refusal([&] { connection.Open(host, 80, ibString(), ibString(), 30); });
 		EXPECT_FALSE(why.empty()) << "taken for a host: '" << Utf8(host) << "'";
 	}
 	ibValueHttpConnection connection;
-	EXPECT_TRUE(Refusal([&] { connection.Open(wxT("api.example"), 8080, wxString(), wxString(), 30); }).empty());
-	EXPECT_TRUE(Refusal([&] { connection.Open(wxT("127.0.0.1"), 8080, wxString(), wxString(), 30); }).empty());
-	EXPECT_TRUE(Refusal([&] { connection.Open(wxT("::1"), 8080, wxString(), wxString(), 30); }).empty());
+	EXPECT_TRUE(Refusal([&] { connection.Open(wxT("api.example"), 8080, ibString(), ibString(), 30); }).empty());
+	EXPECT_TRUE(Refusal([&] { connection.Open(wxT("127.0.0.1"), 8080, ibString(), ibString(), 30); }).empty());
+	EXPECT_TRUE(Refusal([&] { connection.Open(wxT("::1"), 8080, ibString(), ibString(), 30); }).empty());
 	EXPECT_FALSE(Refusal([&] { connection.Open(wxT("api.example"), 80, wxT("user:name"), wxT("p"), 30); }).empty()) << "a ':' in a user name is what parts it from the password";
 
 	// An international name goes to the resolver as bytes it does not read: its ASCII form is asked for, by name.
-	const wxString why = Refusal([&] { connection.Open(wxString::FromUTF8("\xD0\xBA\xD0\xB0\xD1\x81\xD0\xB0.example"), 80, wxString(), wxString(), 30); });
+	const ibString why = Refusal([&] { connection.Open(ibString::FromUTF8("\xD0\xBA\xD0\xB0\xD1\x81\xD0\xB0.example"), 80, ibString(), ibString(), 30); });
 	ASSERT_FALSE(why.empty());
 	EXPECT_TRUE(why.Contains(wxT("xn--"))) << Utf8(why);
 }
@@ -86,13 +86,13 @@ TEST(HttpValues, AHostIsANameNotAnAddress)
 TEST(HttpValues, ThePortAndTheTimeAllowedAreRefusedWhenTheyMeanNothing)
 {
 	ibValueHttpConnection connection;
-	EXPECT_FALSE(Refusal([&] { connection.Open(wxT("h"), 0, wxString(), wxString(), 30); }).empty());
-	EXPECT_FALSE(Refusal([&] { connection.Open(wxT("h"), 65536, wxString(), wxString(), 30); }).empty());
-	EXPECT_FALSE(Refusal([&] { connection.Open(wxT("h"), 80, wxString(), wxString(), 0); }).empty()) << "zero is not 'forever'";
-	EXPECT_FALSE(Refusal([&] { connection.Open(wxT("h"), 80, wxString(), wxString(), -5); }).empty());
+	EXPECT_FALSE(Refusal([&] { connection.Open(wxT("h"), 0, ibString(), ibString(), 30); }).empty());
+	EXPECT_FALSE(Refusal([&] { connection.Open(wxT("h"), 65536, ibString(), ibString(), 30); }).empty());
+	EXPECT_FALSE(Refusal([&] { connection.Open(wxT("h"), 80, ibString(), ibString(), 0); }).empty()) << "zero is not 'forever'";
+	EXPECT_FALSE(Refusal([&] { connection.Open(wxT("h"), 80, ibString(), ibString(), -5); }).empty());
 	EXPECT_TRUE(connection.IsEmpty()) << "a refused Open leaves nothing behind";
 
-	connection.Open(wxT("h"), 80, wxString(), wxString(), 30);
+	connection.Open(wxT("h"), 80, ibString(), ibString(), 30);
 	EXPECT_FALSE(connection.IsEmpty());
 	EXPECT_FALSE(Refusal([&] { connection.SetTimeout(0); }).empty());
 
@@ -105,13 +105,13 @@ TEST(HttpValues, ThePortAndTheTimeAllowedAreRefusedWhenTheyMeanNothing)
 
 TEST(HttpValues, ABodyIsBytesInTheEncodingSaid)
 {
-	const wxString text = wxString::FromUTF8("\xD0\x91\xD0\xBE\xD1\x80\xD1\x89");   // four Cyrillic letters
+	const ibString text = ibString::FromUTF8("\xD0\x91\xD0\xBE\xD1\x80\xD1\x89");   // four Cyrillic letters
 	ibValueHttpRequest request;
 	request.SetBodyText(text, ibTextEncoding_UTF8);
 	EXPECT_EQ(request.Body(), std::string("\xD0\x91\xD0\xBE\xD1\x80\xD1\x89")) << "UTF-8, and no byte-order mark in front";
 	request.SetBodyText(text, ibTextEncoding_UTF16);
 	EXPECT_EQ(request.Body().size(), 8u) << "two bytes a letter, and no mark";
-	request.SetBodyText(wxString(), ibTextEncoding_UTF8);
+	request.SetBodyText(ibString(), ibTextEncoding_UTF8);
 	EXPECT_TRUE(request.Body().empty());
 
 	const char zeros[] = { 'a', '\0', 'b', '\0', '\0' };
@@ -122,17 +122,17 @@ TEST(HttpValues, ABodyIsBytesInTheEncodingSaid)
 TEST(HttpValues, AResourceAddressIsAPathAndNothingThatBreaksTheRequestLine)
 {
 	ibValueHttpRequest request;
-	EXPECT_EQ(request.ResourceAddress(), wxString(wxT("/"))) << "a request nobody addressed asks for the root";
+	EXPECT_EQ(request.ResourceAddress(), ibString(wxT("/"))) << "a request nobody addressed asks for the root";
 	request.SetResourceAddress(wxT("/v1/sales?shift=42"));
-	EXPECT_EQ(request.ResourceAddress(), wxString(wxT("/v1/sales?shift=42")));
-	request.SetResourceAddress(wxString());
-	EXPECT_EQ(request.ResourceAddress(), wxString(wxT("/")));
+	EXPECT_EQ(request.ResourceAddress(), ibString(wxT("/v1/sales?shift=42")));
+	request.SetResourceAddress(ibString());
+	EXPECT_EQ(request.ResourceAddress(), ibString(wxT("/")));
 
 	EXPECT_FALSE(Refusal([&] { request.SetResourceAddress(wxT("v1/sales")); }).empty()) << "no leading slash";
 	EXPECT_FALSE(Refusal([&] { request.SetResourceAddress(wxT("/a\r\nHost: evil")); }).empty()) << "a line break";
 	EXPECT_FALSE(Refusal([&] { request.SetResourceAddress(wxT("http://other/a")); }).empty()) << "an address with a scheme";
 	EXPECT_FALSE(Refusal([&] { request.SetResourceAddress(wxT("/a#section")); }).empty()) << "a fragment is never sent to a server";
-	EXPECT_EQ(request.ResourceAddress(), wxString(wxT("/"))) << "a refused address leaves the one that stood";
+	EXPECT_EQ(request.ResourceAddress(), ibString(wxT("/"))) << "a refused address leaves the one that stood";
 }
 
 TEST(HttpValues, HeadersAreAStructureAndFoldCaseAsHttpDoes)
@@ -155,16 +155,16 @@ TEST(HttpValues, AResponseSaysItsBytesAreNotTextRatherThanHandingOverGarbage)
 	EXPECT_EQ(broken->Body().size(), 3u) << "and the bytes are still there to be taken as bytes";
 
 	const ibValuePtr<ibValueHttpResponse> marked(new ibValueHttpResponse(200, headers, std::string("\xEF\xBB\xBFok")));
-	EXPECT_EQ(marked->BodyAsString(ibTextEncoding_UTF8), wxString(wxT("ok"))) << "a byte-order mark is a mark, not text";
+	EXPECT_EQ(marked->BodyAsString(ibTextEncoding_UTF8), ibString(wxT("ok"))) << "a byte-order mark is a mark, not text";
 
 	const ibValuePtr<ibValueHttpResponse> empty(new ibValueHttpResponse(204, headers, std::string()));
 	EXPECT_TRUE(empty->BodyAsString(ibTextEncoding_UTF8).empty()) << "no body is an empty text, not a refusal";
 
 	// UTF-16 either way round, its mark read as a mark - the same door a TextReader reads a file through.
 	const ibValuePtr<ibValueHttpResponse> little(new ibValueHttpResponse(200, headers, std::string("\xFF\xFEo\0k\0", 6)));
-	EXPECT_EQ(little->BodyAsString(ibTextEncoding_UTF16), wxString(wxT("ok")));
+	EXPECT_EQ(little->BodyAsString(ibTextEncoding_UTF16), ibString(wxT("ok")));
 	const ibValuePtr<ibValueHttpResponse> big(new ibValueHttpResponse(200, headers, std::string("\xFE\xFF\0o\0k", 6)));
-	EXPECT_EQ(big->BodyAsString(ibTextEncoding_UTF16), wxString(wxT("ok")));
+	EXPECT_EQ(big->BodyAsString(ibTextEncoding_UTF16), ibString(wxT("ok")));
 }
 
 // 🛑 A STRING WHERE AN OBJECT IS EXPECTED IS REFUSED, NOT DEREFERENCED. The first version took its arguments
@@ -186,7 +186,7 @@ TEST(HttpValues, AStringWhereAnObjectIsExpectedIsRefusedThroughTheScriptsDoor)
 	EXPECT_FALSE(Refusal([&] { request.CallAsFunc(fromBinary, out, args, 1); }).empty());
 
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), 9, wxString(), wxString(), 1);
+	connection.Open(wxT("127.0.0.1"), 9, ibString(), ibString(), 1);
 	const long get = connection.FindMethod(wxT("Get"));
 	ASSERT_GE(get, 0);
 	EXPECT_FALSE(Refusal([&] { connection.CallAsFunc(get, out, args, 1); }).empty()) << "and nothing was sent anywhere";
@@ -317,7 +317,7 @@ TEST_F(HttpClient, EveryMethodArrivesAsItselfWithItsPathAndItsBytes)
 		{ ibHttpMethod_Head, "HEAD", false }, { ibHttpMethod_Options, "OPTIONS", false } };
 
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	const char bytes[] = { 'a', '\0', 'b' };
 	for (const ibCase& one : cases) {
 		ibValueHttpRequest request;
@@ -339,12 +339,12 @@ TEST_F(HttpClient, EveryMethodArrivesAsItselfWithItsPathAndItsBytes)
 	EXPECT_EQ(Count(), sizeof(cases) / sizeof(cases[0])) << "one request each, over one connection object";
 }
 
-// What the header's comment and the help say about a body nobody typed: the library sends it as text/plain.
-// Pinned, because it is the library's decision and an update of the library is where it would change.
+// What the header's comment and the help say about a body nobody typed: it goes as text/plain. Pinned, because a
+// script reads the help and the client is where it would change.
 TEST_F(HttpClient, ABodyWithNoContentTypeGoesAsPlainTextAndTheOneGivenArrivesOnce)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	ibValueHttpRequest request;
 	request.SetBodyText(wxT("{}"), ibTextEncoding_UTF8);
 	Ask(connection, ibHttpMethod_Post, request);
@@ -371,7 +371,7 @@ TEST_F(HttpClient, ABodyWithNoContentTypeGoesAsPlainTextAndTheOneGivenArrivesOnc
 TEST_F(HttpClient, AHeaderThatWouldBreakTheMessageIsRefusedBeforeAnythingIsSent)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	const std::pair<const wxChar*, const wxChar*> bad[] = {
 		{ wxT("X-A"), wxT("v\r\nX-Evil: 1") }, { wxT("Bad Name"), wxT("v") }, { wxT("X:B"), wxT("v") },
 		// ...and the fields that say how the message is framed and carried, which are the engine's: a
@@ -385,26 +385,25 @@ TEST_F(HttpClient, AHeaderThatWouldBreakTheMessageIsRefusedBeforeAnythingIsSent)
 		headers->Insert(Text(one.first), Text(one.second));
 		request.SetHeaders(headers);
 		const size_t before = Count();
-		const wxString why = Refusal([&] { Ask(connection, ibHttpMethod_Get, request); });
+		const ibString why = Refusal([&] { Ask(connection, ibHttpMethod_Get, request); });
 		EXPECT_FALSE(why.empty()) << Utf8(one.first);
-		// The library refuses a bad field as well, with two words for the whole request. Ours is there to say WHICH.
-		EXPECT_TRUE(why.Contains(wxString(wxT("'")) + one.first + wxT("'"))) << "the refusal does not name the header: " << Utf8(why);
+		// The refusal says WHICH: a Structure filled from a file has many entries.
+		EXPECT_TRUE(why.Contains(ibString(wxT("'")) + one.first + wxT("'"))) << "the refusal does not name the header: " << Utf8(why);
 		EXPECT_EQ(Count(), before) << "nothing reached the server";
 	}
 }
 
-// A value pasted with a space at its end goes out without it - the library would refuse the whole request for
-// that, in two words - and a value that is not a string or a number is refused by name rather than sent as the
-// name of its type.
+// A value pasted with a space at its end goes out without it, and a value that is not a string or a number is
+// refused by name rather than sent as the name of its type.
 TEST_F(HttpClient, AHeaderValueIsTrimmedAndHasToBeAStringOrANumber)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	ibValueHttpRequest request;
 	const ibValuePtr<ibValueStructure> headers(new ibValueStructure());
 	headers->Insert(Text(wxT("Authorization")), Text(wxT("  Bearer t0ken \t")));
 	headers->Insert(Text(wxT("X-Count")), ibValue(42));
-	headers->Insert(Text(wxT("X-Name")), Text(wxString::FromUTF8("\xD0\x91\xD0\xBE\xD1\x80\xD1\x89")));
+	headers->Insert(Text(wxT("X-Name")), Text(ibString::FromUTF8("\xD0\x91\xD0\xBE\xD1\x80\xD1\x89")));
 	request.SetHeaders(headers);
 	Ask(connection, ibHttpMethod_Get, request);
 	const ibSeen seen = Last();
@@ -415,41 +414,39 @@ TEST_F(HttpClient, AHeaderValueIsTrimmedAndHasToBeAStringOrANumber)
 	const ibValuePtr<ibValueStructure> inner(new ibValueStructure());
 	headers->Insert(Text(wxT("X-Object")), inner);
 	const size_t before = Count();
-	const wxString why = Refusal([&] { Ask(connection, ibHttpMethod_Get, request); });
+	const ibString why = Refusal([&] { Ask(connection, ibHttpMethod_Get, request); });
 	ASSERT_FALSE(why.empty());
 	EXPECT_TRUE(why.Contains(wxT("'X-Object'"))) << Utf8(why);
 	EXPECT_EQ(Count(), before);
 }
 
-// The library adds `Expect: 100-continue` to a body of 1 KB or more by itself, and against a server that does
-// not speak it - an older proxy, a register's firmware - the body waits a second before it goes. Switched
-// off for the whole build (CPPHTTPLIB_EXPECT_100_THRESHOLD=0 in the root CMakeLists.txt and in
-// ConfigurationDefs.props): a body goes when the request goes, and a script cannot be surprised by a header
-// it may not set.
+// A client that adds `Expect: 100-continue` to a large body by itself makes it wait, against a server that does not
+// speak it - an older proxy, a register's firmware - a second before it goes. This one does not: a body goes when the
+// request goes, and a script cannot be surprised by a header it may not set.
 TEST_F(HttpClient, ALargeBodyGoesWithoutAnExpectTheScriptCouldNotSet)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	ibValueHttpRequest request;
 	const std::string body(4096, 'x');
 	request.SetBodyBytes(body.data(), body.size());
 	const ibValuePtr<ibValueHttpResponse> response = Ask(connection, ibHttpMethod_Post, request);
 	ASSERT_TRUE(response != nullptr);
 	EXPECT_EQ(response->StatusCode(), 200);
-	EXPECT_EQ(Last().m_headers.count("Expect"), 0u) << "the library added the header on its own";
+	EXPECT_EQ(Last().m_headers.count("Expect"), 0u) << "the client added the header on its own";
 	EXPECT_EQ(Last().m_body.size(), body.size());
 }
 
 TEST_F(HttpClient, AnErrorStatusIsAnAnswerNotAFailure)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	ibValueHttpRequest request;
 	request.SetResourceAddress(wxT("/status/404"));
 	const ibValuePtr<ibValueHttpResponse> missing = Ask(connection, ibHttpMethod_Get, request);
 	ASSERT_TRUE(missing != nullptr);
 	EXPECT_EQ(missing->StatusCode(), 404);
-	EXPECT_EQ(missing->BodyAsString(ibTextEncoding_UTF8), wxString(wxT("no such thing")));
+	EXPECT_EQ(missing->BodyAsString(ibTextEncoding_UTF8), ibString(wxT("no such thing")));
 
 	request.SetResourceAddress(wxT("/status/500"));
 	const ibValuePtr<ibValueHttpResponse> failed = Ask(connection, ibHttpMethod_Get, request);
@@ -460,7 +457,7 @@ TEST_F(HttpClient, AnErrorStatusIsAnAnswerNotAFailure)
 TEST_F(HttpClient, ARepeatedResponseHeaderIsJoinedAndTheLastCookieStays)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	ibValueHttpRequest request;
 	request.SetResourceAddress(wxT("/twice"));
 	const ibValuePtr<ibValueHttpResponse> response = Ask(connection, ibHttpMethod_Get, request);
@@ -469,11 +466,11 @@ TEST_F(HttpClient, ARepeatedResponseHeaderIsJoinedAndTheLastCookieStays)
 
 	const long tag = headers.FindProp(wxT("x-tag"));
 	ASSERT_GE(tag, 0) << "and a header's name folds case";
-	EXPECT_EQ(headers.Entries()[static_cast<size_t>(tag)].value.GetString(), wxString(wxT("a, b")));
+	EXPECT_EQ(headers.Entries()[static_cast<size_t>(tag)].value.GetString(), ibString(wxT("a, b")));
 
 	const long cookie = headers.FindProp(wxT("Set-Cookie"));
 	ASSERT_GE(cookie, 0);
-	EXPECT_EQ(headers.Entries()[static_cast<size_t>(cookie)].value.GetString(), wxString(wxT("second=2")));
+	EXPECT_EQ(headers.Entries()[static_cast<size_t>(cookie)].value.GetString(), ibString(wxT("second=2")));
 }
 
 TEST_F(HttpClient, BasicAuthorizationGoesWithEveryRequestUnlessTheRequestSaysItsOwn)
@@ -497,14 +494,13 @@ TEST_F(HttpClient, BasicAuthorizationGoesWithEveryRequestUnlessTheRequestSaysIts
 TEST_F(HttpClient, TextThatIsNotAsciiInAnAddressArrivesAsTheSameText)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	ibValueHttpRequest request;
-	request.SetResourceAddress(wxString::FromUTF8("/echo/a,b;c+d?name=\xD0\x91\xD0\xBE\xD1\x80\xD1\x89&pair=a%20b"));
+	request.SetResourceAddress(ibString::FromUTF8("/echo/a,b;c+d?name=\xD0\x91\xD0\xBE\xD1\x80\xD1\x89&pair=a%20b"));
 	Ask(connection, ibHttpMethod_Get, request);
 	const ibSeen seen = Last();
-	// The request line as it went out: what is not ASCII is %XX of its UTF-8, and NOTHING ELSE is touched - the
-	// library's own encoder would also rewrite ',' ';' and '+', and an address encoded by two rules is one
-	// nobody can predict. Its encoding is switched off; this is what says it stays off.
+	// The request line as it went out: what is not ASCII is %XX of its UTF-8, and NOTHING ELSE is touched - an
+	// encoder that also rewrote ',' ';' and '+' would make an address encoded by two rules, one nobody can predict.
 	EXPECT_EQ(seen.m_target, std::string("/echo/a,b;c+d?name=%D0%91%D0%BE%D1%80%D1%89&pair=a%20b"));
 	EXPECT_EQ(seen.m_path, std::string("/echo/a,b;c+d"));
 	ASSERT_EQ(seen.m_params.count("name"), 1u);
@@ -516,14 +512,14 @@ TEST_F(HttpClient, TextThatIsNotAsciiInAnAddressArrivesAsTheSameText)
 TEST_F(HttpClient, AServerThatSaysNothingIsLeftAfterTheTimeAllowedAndTheConnectionLivesOn)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 1);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 1);
 	ibValueHttpRequest request;
 	request.SetResourceAddress(wxT("/quiet"));
 	const auto started = std::chrono::steady_clock::now();
-	const wxString why = Refusal([&] { Ask(connection, ibHttpMethod_Get, request); });
+	const ibString why = Refusal([&] { Ask(connection, ibHttpMethod_Get, request); });
 	const double took = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
 	ASSERT_FALSE(why.empty()) << "a late answer was taken";
-	EXPECT_TRUE(why.Contains(wxT("127.0.0.1")) && why.Contains(wxString::Format(wxT("%d"), m_port))) << Utf8(why);
+	EXPECT_TRUE(why.Contains(wxT("127.0.0.1")) && why.Contains(ibString::Format(wxT("%d"), m_port))) << Utf8(why);
 	EXPECT_TRUE(why.Contains(wxT("within the 1 s"))) << "it is time that ran out, and the sentence says how much: " << Utf8(why);
 	EXPECT_GE(took, 0.9);
 	EXPECT_LT(took, 2.8) << "the time allowed bounds the whole request";
@@ -540,11 +536,11 @@ TEST_F(HttpClient, AServerThatSaysNothingIsLeftAfterTheTimeAllowedAndTheConnecti
 TEST_F(HttpClient, AServerThatDripsIsLeftAfterTheTimeAllowedToo)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 1);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 1);
 	ibValueHttpRequest request;
 	request.SetResourceAddress(wxT("/drip"));
 	const auto started = std::chrono::steady_clock::now();
-	const wxString why = Refusal([&] { Ask(connection, ibHttpMethod_Get, request); });
+	const ibString why = Refusal([&] { Ask(connection, ibHttpMethod_Get, request); });
 	const double took = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
 	ASSERT_FALSE(why.empty()) << "ten bytes over four seconds were waited for, with one second allowed";
 	EXPECT_TRUE(why.Contains(wxT("within the 1 s"))) << Utf8(why);
@@ -554,7 +550,7 @@ TEST_F(HttpClient, AServerThatDripsIsLeftAfterTheTimeAllowedToo)
 	const ibValuePtr<ibValueHttpResponse> after = Ask(connection, ibHttpMethod_Get, request);
 	ASSERT_TRUE(after != nullptr);
 	EXPECT_EQ(after->StatusCode(), 404) << "the next answer is the next request's, not the tail of the old one";
-	EXPECT_EQ(after->BodyAsString(ibTextEncoding_UTF8), wxString(wxT("no such thing")));
+	EXPECT_EQ(after->BodyAsString(ibTextEncoding_UTF8), ibString(wxT("no such thing")));
 }
 
 TEST_F(HttpClient, AClosedPortIsSaidWithTheHostAndThePort)
@@ -566,19 +562,19 @@ TEST_F(HttpClient, AClosedPortIsSaidWithTheHostAndThePort)
 		ASSERT_GT(closed, 0);
 	}
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), closed, wxString(), wxString(), 3);
+	connection.Open(wxT("127.0.0.1"), closed, ibString(), ibString(), 3);
 	ibValueHttpRequest request;
-	const wxString why = Refusal([&] { Ask(connection, ibHttpMethod_Get, request); });
+	const ibString why = Refusal([&] { Ask(connection, ibHttpMethod_Get, request); });
 	ASSERT_FALSE(why.empty());
-	EXPECT_TRUE(why.Contains(wxT("127.0.0.1")) && why.Contains(wxString::Format(wxT("%d"), closed))) << Utf8(why);
+	EXPECT_TRUE(why.Contains(wxT("127.0.0.1")) && why.Contains(ibString::Format(wxT("%d"), closed))) << Utf8(why);
 }
 
-// A redirect is an answer. Followed by the library it decoded the Location before sending it, turned a POST
-// into a GET on a 303 without a word, and raised for a server that DID answer when it could not go on.
+// A redirect is an answer. Followed behind the script's back it decoded the Location before sending it, turned a
+// POST into a GET on a 303 without a word, and raised for a server that DID answer when it could not go on.
 TEST_F(HttpClient, ARedirectIsAnAnswerWithItsLocationNotARoadTakenBehindTheScriptsBack)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 5);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 5);
 	ibValueHttpRequest request;
 	request.SetResourceAddress(wxT("/moved"));
 	const ibValuePtr<ibValueHttpResponse> moved = Ask(connection, ibHttpMethod_Get, request);
@@ -586,7 +582,7 @@ TEST_F(HttpClient, ARedirectIsAnAnswerWithItsLocationNotARoadTakenBehindTheScrip
 	EXPECT_EQ(moved->StatusCode(), 302);
 	const long location = moved->Headers().FindProp(wxT("location"));
 	ASSERT_GE(location, 0);
-	EXPECT_EQ(moved->Headers().Entries()[static_cast<size_t>(location)].value.GetString(), wxString(wxT("/echo")));
+	EXPECT_EQ(moved->Headers().Entries()[static_cast<size_t>(location)].value.GetString(), ibString(wxT("/echo")));
 	EXPECT_EQ(Last().m_path, std::string("/moved")) << "one request went out, and it was this one";
 
 	request.SetResourceAddress(wxT("/see-other"));
@@ -602,7 +598,7 @@ TEST_F(HttpClient, ARedirectIsAnAnswerWithItsLocationNotARoadTakenBehindTheScrip
 TEST_F(HttpClient, WhatTheScriptsDoorAndTheOddAnswersDo)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 10);
 	ibValueHttpRequest request;
 	ibValue out;
 
@@ -646,9 +642,9 @@ TEST_F(HttpClient, WhatTheScriptsDoorAndTheOddAnswersDo)
 }
 
 // A peer that hangs up while the body is still on its way. Off Windows the write raises SIGPIPE, whose default
-// ends the process - the daemon, on a bank that dropped the line - unless the send says MSG_NOSIGNAL (Linux, on
-// the whole target) or the socket says SO_NOSIGPIPE (macOS). The library's Server ignores the signal in its
-// constructor, which is why a test binary would never see this: the default is put back for the duration.
+// ends the process - the daemon, on a bank that dropped the line - unless the send says MSG_NOSIGNAL (Linux) or
+// the socket says SO_NOSIGPIPE (macOS), as Asio's do. cpp-httplib's Server, the reference here, ignores the signal
+// in its constructor, which is why a test binary would never see this: the default is put back for the duration.
 TEST_F(HttpClient, APeerThatHangsUpMidUploadIsASentenceNotTheEndOfTheProcess)
 {
 	httplib::Server tight;
@@ -667,12 +663,12 @@ TEST_F(HttpClient, APeerThatHangsUpMidUploadIsASentenceNotTheEndOfTheProcess)
 #endif
 
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), port, wxString(), wxString(), 10);
+	connection.Open(wxT("127.0.0.1"), port, ibString(), ibString(), 10);
 	ibValueHttpRequest request;
 	const std::string big(8u * 1024u * 1024u, 'x');
 	request.SetBodyBytes(big.data(), big.size());
 	ibValuePtr<ibValueHttpResponse> answer;
-	const wxString why = Refusal([&] { answer = Ask(connection, ibHttpMethod_Post, request); });
+	const ibString why = Refusal([&] { answer = Ask(connection, ibHttpMethod_Post, request); });
 	// Either the 413 got through before the line dropped, or the drop is a sentence. Never a dead process.
 	EXPECT_TRUE(!why.empty() || (answer != nullptr && answer->StatusCode() == 413)) << Utf8(why);
 
@@ -689,7 +685,7 @@ TEST_F(HttpClient, EightMegabytesGoThereAndBackByteForByte)
 		c = static_cast<char>(state >> 24);
 	}
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 60);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 60);
 	ibValueHttpRequest request;
 	request.SetBodyBytes(big.data(), big.size());
 	const ibValuePtr<ibValueHttpResponse> response = Ask(connection, ibHttpMethod_Post, request);
@@ -702,7 +698,7 @@ TEST_F(HttpClient, EightMegabytesGoThereAndBackByteForByte)
 TEST_F(HttpClient, BytesThatAreNotTextAreBytes)
 {
 	ibValueHttpConnection connection;
-	connection.Open(wxT("127.0.0.1"), m_port, wxString(), wxString(), 5);
+	connection.Open(wxT("127.0.0.1"), m_port, ibString(), ibString(), 5);
 	ibValueHttpRequest request;
 	request.SetResourceAddress(wxT("/not-text"));
 	const ibValuePtr<ibValueHttpResponse> response = Ask(connection, ibHttpMethod_Get, request);

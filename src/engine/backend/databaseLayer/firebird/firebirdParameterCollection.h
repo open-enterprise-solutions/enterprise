@@ -1,22 +1,8 @@
 #ifndef __FIREBIRD_PARAMETER_COLLECTION_H__
 #define __FIREBIRD_PARAMETER_COLLECTION_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/dynarray.h>
-
 #include <utility>
 #include <vector>
-
 
 #include "backend/databaseLayer/databaseStringConverter.h"
 #include "firebirdParameter.h"
@@ -24,7 +10,7 @@
 
 #include "engine/ibase.h"
 
-WX_DEFINE_ARRAY_PTR(ibDatabaseParameterFirebird*, FirebirdParameterArray);
+typedef std::vector<ibDatabaseParameterFirebird*> FirebirdParameterArray;
 
 class ibDatabaseParameterFirebirdCollection : public ibDatabaseStringConverter
 {

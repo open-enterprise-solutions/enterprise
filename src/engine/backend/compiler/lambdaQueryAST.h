@@ -21,13 +21,14 @@
 // invisible.
 //
 // See docs/private/query-language-arc.md §23.5 (L4-2) and docs/private/linq.md §0.
-#include "translateCode.h"   // ibLexem
+#include "backend/backend.h"                // BACKEND_API
+#include "core/compiler/translateCode.h"   // ibLexem
 
 #include <functional>
 #include <memory>
 #include <vector>
 
-struct ibQueryAstExpr;   // backend/query/queryAST.h — fwd only (the .cpp includes it)
+struct ibQueryAstExpr;   // core/query/queryAST.h — fwd only (the .cpp includes it)
 
 // Record the body span [from, to) of a single-parameter lambda into the L4
 // query AST. rowParamName = the lambda's first parameter (the row variable);
@@ -58,8 +59,8 @@ struct ibQueryAstExpr;   // backend/query/queryAST.h — fwd only (the .cpp incl
 // (valueQueryable.cpp, ResolveCapturedByName) — a search for something the compiler had in its hand.
 // Carrying the coordinates INTO the tree removes both the name and the search. (docs/private/linq.md §0.2e)
 BACKEND_API std::shared_ptr<ibQueryAstExpr> ibBuildLambdaQueryAstFromCode(
-	const struct ibByteCode& byteCode, long funcIndex, wxString* outRefusal = nullptr,
-	const std::function<wxString(long framesOut, long slot)>& nameOfOuter = nullptr);
+	const struct ibByteCode& byteCode, long funcIndex, ibString* outRefusal = nullptr,
+	const std::function<ibString(long framesOut, long slot)>& nameOfOuter = nullptr);
 
 // ⭐⭐ THE SAME READ, OVER A PLAIN RANGE OF INSTRUCTIONS. A chain compiled as a loop has no lambda
 // and no function record: its predicate is a stretch of ordinary instructions in the enclosing
@@ -75,8 +76,8 @@ BACKEND_API std::shared_ptr<ibQueryAstExpr> ibBuildLambdaQueryAstFromCode(
 BACKEND_API std::shared_ptr<ibQueryAstExpr> ibBuildQueryAstFromRange(
 	const struct ibByteCode& byteCode, long from, long to,
 	const struct ibParamRunUnit& rowSlot, const struct ibParamRunUnit& resultSlot,
-	wxString* outRefusal = nullptr,
-	const std::function<wxString(long, long)>& nameOfSlot = nullptr);
+	ibString* outRefusal = nullptr,
+	const std::function<ibString(long, long)>& nameOfSlot = nullptr);
 
 
 
@@ -94,7 +95,7 @@ BACKEND_API std::shared_ptr<ibQueryAstExpr> ibBuildQueryAstFromRange(
 // `withAddresses` false leaves a capture's coordinate out — for comparing two readers, only one of
 // which can know it. Comparing WITH it would report a disagreement on every captured lambda and
 // bury the disagreements that mean something.
-BACKEND_API wxString ibDescribeQueryAst(const std::shared_ptr<ibQueryAstExpr>& expr,
+BACKEND_API ibString ibDescribeQueryAst(const std::shared_ptr<ibQueryAstExpr>& expr,
 	bool withAddresses = true);
 
 #endif

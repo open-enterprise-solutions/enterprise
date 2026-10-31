@@ -1,0 +1,31 @@
+# The demo's web server: every base of the running nightly, published on the loopback (web.conf, written by
+# oes-demo-update.sh); Caddy is its door to the world. A stop is its TERM: it closes its bases and exits.
+
+[Unit]
+Description=OES demo - the web server and its bases
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=oes
+Group=oes
+Environment=HOME=/opt/oes-demo
+WorkingDirectory=/opt/oes-demo/current/oes
+ExecStart=/opt/oes-demo/current/oes/webserver --dir=/opt/oes-demo/current/oes/web
+TimeoutStopSec=30
+Restart=always
+RestartSec=5
+# ⭐ STRANGERS LOG IN HERE, and a client can hand the server a file to open, so what runs here is held to the loopback
+# (Caddy's only way in; the bases need no way out, nor does anything reach the metadata server's token), to writing
+# in the releases, and to what memory leaves the machine alive.
+IPAddressDeny=any
+IPAddressAllow=localhost
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/oes-demo/releases
+MemoryMax=768M
+
+[Install]
+WantedBy=multi-user.target

@@ -104,19 +104,19 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyCreated(ibProperty
 			void* value = m_view->GetTable()->GetValueAsCustom(coords.GetTopRow(), coords.GetLeftCol(), s_strTypeTextOrString);
 			wxSharedPtr<wxString> textString =
 				wxSharedPtr<wxString>(static_cast<wxString*>(value));
-			m_propertyText->SetValue(*textString);
+			m_propertyText->SetValue(ibString(*textString));
 		}
 		else if (m_propertyFillType->GetValueAsEnum() == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate) {
 			void* value = m_view->GetTable()->GetValueAsCustom(coords.GetTopRow(), coords.GetLeftCol(), s_strTypeTemplate);
 			wxSharedPtr<wxString> textString =
 				wxSharedPtr<wxString>(static_cast<wxString*>(value));
-			m_propertyText->SetValue(*textString);
+			m_propertyText->SetValue(ibString(*textString));
 		}
 		else if (m_propertyFillType->GetValueAsEnum() == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
 			void* value = m_view->GetTable()->GetValueAsCustom(coords.GetTopRow(), coords.GetLeftCol(), s_strTypeParameter);
 			wxSharedPtr<wxString> textString =
 				wxSharedPtr<wxString>(static_cast<wxString*>(value));
-			m_propertyText->SetValue(*textString);
+			m_propertyText->SetValue(ibString(*textString));
 		}
 	}
 	else if (m_propertyParameter == property) {

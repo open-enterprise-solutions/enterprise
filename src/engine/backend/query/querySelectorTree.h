@@ -65,16 +65,16 @@ public:
 		// WHAT THIS BRANCH IS CALLED — `SPLIT … ONTO ByCharacteristic`, and empty on every other kind
 		// of node. A branch written without a name is read by position, so the absence is an answer
 		// rather than a gap: there is nothing to ask for it by.
-		wxString                           m_branch;
+		ibString                           m_branch;
 
 		// Room for a few is made with the first child: a heading of a table has a cell per column key, and
 		// growing the list one at a time reallocated it twice for every employee of a payroll sheet.
 		Node* AddChild(int level) {
 			if (m_children.empty())
 				m_children.reserve(4);
-			m_children.push_back(std::make_unique<Node>());
-			m_children.back()->m_level = level;
-			return m_children.back().get();
+			Node* const child = m_children.emplace_back(std::make_unique<Node>()).get();
+			child->m_level = level;
+			return child;
 		}
 
 		// ⭐ A CHILD AT A POSITION — what a CROSS-TABLE needs and an ordinary report never asks for.
@@ -140,7 +140,7 @@ public:
 
 	// The columns the nodes carry (names/types for rendering) — the source snapshot's columns plus
 	// the aggregate columns the fold adds.
-	void AddColumn(ibMetaID id, const wxString& name, const ibTypeDescription& type) { m_columns.push_back({ id, name, type }); }
+	void AddColumn(ibMetaID id, const ibString& name, const ibTypeDescription& type) { m_columns.push_back({ id, name, type }); }
 	const std::vector<ibQueryRamColumn>& Columns() const { return m_columns; }
 
 private:
@@ -159,8 +159,7 @@ private:
 		for (const std::unique_ptr<Node>& child : from.m_children) {
 			if (child == nullptr)
 				continue;
-			to.m_children.push_back(std::make_unique<Node>());
-			CopyNode(*child, *to.m_children.back());
+			CopyNode(*child, *to.m_children.emplace_back(std::make_unique<Node>()));
 		}
 	}
 

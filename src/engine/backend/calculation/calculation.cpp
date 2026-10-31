@@ -165,7 +165,7 @@ std::vector<size_t> ibFindLedRecords(const std::vector<ibRecalcFact>& changed,
 		for (const ibRecalcFact& y : changed) {
 			if (y.type < 0 || y.key != candidate.key)
 				continue;
-			if (edge.count({ candidate.type, y.type }) == 0)
+			if (!edge.contains({ candidate.type, y.type }))
 				continue;
 			if (!MeetInTime(candidate, y, baseByRegistration))
 				continue;

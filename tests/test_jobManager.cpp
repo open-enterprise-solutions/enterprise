@@ -29,48 +29,48 @@ constexpr int At(int hour, int minute = 0) { return hour * 60 + minute; }
 }
 
 TEST(JobSchedule, NoWindowIsAlwaysInside) {
-    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(-1, -1, At(0)));
-    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(-1, -1, At(13)));
+    EXPECT_TRUE(ibJobScheduleRules::IsInsideWindow(-1, -1, At(0)));
+    EXPECT_TRUE(ibJobScheduleRules::IsInsideWindow(-1, -1, At(13)));
     // One bound unset is still "no window" — a half-declared window is not a
     // window, and treating it as one would silently gate the job.
-    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(2), -1, At(20)));
-    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(-1, At(5), At(20)));
+    EXPECT_TRUE(ibJobScheduleRules::IsInsideWindow(At(2), -1, At(20)));
+    EXPECT_TRUE(ibJobScheduleRules::IsInsideWindow(-1, At(5), At(20)));
 }
 
 TEST(JobSchedule, DaytimeWindowIsHalfOpen) {
     // [10:00, 15:00): the start is in, the end is out — half-open so consecutive
     // windows cannot both claim the boundary minute.
-    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(10), At(15), At(10)));
-    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(10), At(15), At(14, 59)));
-    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(10), At(15), At(15)));
-    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(10), At(15), At(9, 59)));
+    EXPECT_TRUE(ibJobScheduleRules::IsInsideWindow(At(10), At(15), At(10)));
+    EXPECT_TRUE(ibJobScheduleRules::IsInsideWindow(At(10), At(15), At(14, 59)));
+    EXPECT_FALSE(ibJobScheduleRules::IsInsideWindow(At(10), At(15), At(15)));
+    EXPECT_FALSE(ibJobScheduleRules::IsInsideWindow(At(10), At(15), At(9, 59)));
 }
 
 TEST(JobSchedule, WindowResolvesMinutes) {
     // Minutes, not hours — "from 02:30" has to be expressible.
-    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(2, 30), At(5), At(2, 29)));
-    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(2, 30), At(5), At(2, 30)));
+    EXPECT_FALSE(ibJobScheduleRules::IsInsideWindow(At(2, 30), At(5), At(2, 29)));
+    EXPECT_TRUE(ibJobScheduleRules::IsInsideWindow(At(2, 30), At(5), At(2, 30)));
 }
 
 TEST(JobSchedule, NightWindowWrapsMidnight) {
     // [22:00, 05:00) — the night window a heavy housekeeping job declares. Read
     // as a plain range this would match no minute at all.
-    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(22), At(5), At(22)));
-    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(22), At(5), At(0)));
-    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(22), At(5), At(4, 59)));
-    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(22), At(5), At(5)));
-    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(22), At(5), At(12)));
+    EXPECT_TRUE(ibJobScheduleRules::IsInsideWindow(At(22), At(5), At(22)));
+    EXPECT_TRUE(ibJobScheduleRules::IsInsideWindow(At(22), At(5), At(0)));
+    EXPECT_TRUE(ibJobScheduleRules::IsInsideWindow(At(22), At(5), At(4, 59)));
+    EXPECT_FALSE(ibJobScheduleRules::IsInsideWindow(At(22), At(5), At(5)));
+    EXPECT_FALSE(ibJobScheduleRules::IsInsideWindow(At(22), At(5), At(12)));
 }
 
 TEST(JobSchedule, EqualBoundsMatchNothing) {
     // [3, 3) is empty, not "all day" — and IsValid refuses it, so a job declared
     // this way is rejected at registration rather than never running.
-    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(3), At(3), At(3)));
+    EXPECT_FALSE(ibJobScheduleRules::IsInsideWindow(At(3), At(3), At(3)));
 
     ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(60);
     s.m_startMinute = At(3);
     s.m_endMinute   = At(3);
-    EXPECT_FALSE(s.IsValid());
+    EXPECT_FALSE(ibJobScheduleRules::IsValid(s));
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ TEST(JobSchedule, ValidityRangeBounds) {
 
     // Inverted range names no moment at all — refused rather than silent.
     std::swap(s.m_activeFrom, s.m_activeTo);
-    EXPECT_FALSE(s.IsValid());
+    EXPECT_FALSE(ibJobScheduleRules::IsValid(s));
 }
 
 TEST(JobSchedule, NextAllowedSkipsToTheWindow) {
@@ -161,7 +161,7 @@ TEST(JobSchedule, ImpossibleCalendarHasNoNextRun) {
 }
 
 TEST(JobSchedule, ToStringNamesOnlyWhatWasSet) {
-    const wxString plain = ibJobScheduleRules::Describe(ibJobScheduleDescription::EverySeconds(600));
+    const ibString plain = ibJobScheduleRules::Describe(ibJobScheduleDescription::EverySeconds(600));
     EXPECT_FALSE(plain.IsEmpty());
     // Defaults are not restated — a description that lists "any day, any month"
     // is one nobody finishes reading.
@@ -190,7 +190,7 @@ TEST(JobManager, EmptyArgumentArrayTravels) {
 TEST(JobManager, PlainValuesTravel) {
     std::vector<ibValue> args;
     args.push_back(ibValue(42));
-    args.push_back(ibValue(wxT("text")));
+    args.push_back(ibValue(ibT("text")));
     args.push_back(ibValue(true));
     args.push_back(ibValue());            // undefined
     EXPECT_EQ(-1, ibJobManager::FindNonTransferable(args));
@@ -206,7 +206,7 @@ TEST(JobManager, IteratorRefusesToTravel) {
 TEST(JobManager, CheckPassesOnPlainValues) {
     std::vector<ibValue> args;
     args.push_back(ibValue(1));
-    args.push_back(ibValue(wxT("ok")));
+    args.push_back(ibValue(ibT("ok")));
     EXPECT_NO_THROW(ibJobManager::CheckTransferable(args));
 }
 
@@ -341,7 +341,7 @@ TEST(JobManager, TheCapCountsRunsNotDeclarations) {
 
     for (int i = 0; i < 5; ++i) {
         ibJobDescription desc;
-        desc.m_name = wxString::Format(wxT("job-%d"), i);
+        desc.m_name = ibString::Format(wxT("job-%d"), i);
         desc.m_body = [](ibSession*) { return false; };
         EXPECT_TRUE(manager.Register(desc)) << "declaration " << i << " was refused by the run cap";
     }
@@ -426,7 +426,7 @@ TEST(JobManager, UnregisterByPrefixWithdrawsEveryRowOfOneMetaobject) {
 
     for (int i = 0; i < 3; ++i) {
         ibJobDescription row;
-        row.m_name = wxString::Format(wxT("Exchange.%d"), i);
+        row.m_name = ibString::Format(wxT("Exchange.%d"), i);
         row.m_key  = wxNewUniqueGuid;
         row.m_body = [](ibSession*) { return false; };
         ASSERT_TRUE(manager.Register(row));

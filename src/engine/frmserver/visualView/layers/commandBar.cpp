@@ -7,20 +7,22 @@
 #include "backend/metaCollection/metaCommandObject.h" // ibValueMetaObjectCommand::GetModifiesData (view-only greying)
 #include "backend/metaData.h"                   // ibMetaData::FindAnyObjectByFilter
 #include "frmserver/visualView/ctrl/typeControl.h" // ibTypeControlFactory::GetSourceDesc — find the control a table-command's source hop points at
-#include "backend/sourceDescription.h"          // ibSourceHop — the bound control's source path (source-hop match)
+#include "core/description/sourceDescription.h"          // ibSourceHop — the bound control's source path (source-hop match)
 #include "backend/metaCollection/metaObject.h"  // g_metaCommandCLSID — general (root) commands
 #include "backend/metaCollection/metaSectionObject.h" // ibValueMetaObjectSection — walk sections like the menu builder
 #include "backend/metaCollection/metaCommandGroupObject.h" // the platform's groups + the declared ones, in order
 #include <functional>                            // std::function — the recursive section walk
 #include "frmserver/visualView/ctrl/tableBox.h"  // g_controlTableBoxCLSID — the form's tables (their own commands)
-#include "frmserver/visualView/visualHost.h"    // ibVisualHost::SendPicture — every command's picture, by its id
+#include "backend/backend_picture.h"            // ibBackendPicture::SendPicture — every command's picture, by its id
 #include "backend/srcDataObject.h"              // ibSourceDataObject / ibSourceExplorer + IsReference — the form's data types (parameterized-command filter)
-#include "backend/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
+#include "core/description/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
 #include "backend/tabularModel.h"               // ibValueModel::GetModelComposer — the setting a quick filter edits
 #include "backend/composition/dataComposer.h"   // the two settings sections + GetCurrentFilterDesc
 #include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate — commands of a part this base does not use
-#include "backend/compositionDescription.h"     // ibFilterNodeDescription / ibFilterDisplayMode_QuickAccess
+#include "backend/backend_composition.h"        // ibFilterNodeDescription / ibFilterDisplayMode_QuickAccess + ibStoredValue
 #include <set>                                  // std::set — the form's reference-type set
+#include <map>
+#include "protocol/protocol.h"                  // ibProtocol::ibForm::ibCommandBar — the command tree's rows
 
 // Command bar — a CONTAINER layer object (the shared runtime/property/metadata base is
 // ibValueLayerObject). Holds its commands + the AutoFill flag; a client draws it from the frame.
@@ -39,7 +41,7 @@ static void CollectTableboxes(ibValueFrame* frame, std::vector<ibValueFrame*>& o
 // The three command sections of a form, in display order. GatherFormCommands labels its entries with
 // exactly these, and the navigator / picker pre-create all three so they show even when empty. ONE source of the
 // names -> the surfaces can't drift.
-std::vector<wxString> GetCommandSections()
+std::vector<ibString> GetCommandSections()
 {
 	// Three command SOURCES: [0] the form's own commands, [1] standard actions (form + tables),
 	// [2] global commands (config-wide: general commands + every object's own commands, by full name).
@@ -127,8 +129,8 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 		return cmd->IsEmptyPicture() ? ibPictureDescription() : cmd->GetPictureDesc();
 	};
 
-	const std::vector<wxString> sections = GetCommandSections();
-	const wxString& sForm = sections[0], sStd = sections[1], sGlobal = sections[2];
+	const std::vector<ibString> sections = GetCommandSections();
+	const ibString& sForm = sections[0], sStd = sections[1], sGlobal = sections[2];
 
 	// (Section 1's form commands are ibFormCommandValue, NOT command metaobjects, so section 3's by-classid pull of
 	// ibValueMetaObjectCommand can never re-emit them — no cross-section dedup is needed.)
@@ -143,7 +145,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 			continue;
 		const ibCommandDescription desc(fc->GetId());   // 1-hop [id] — the form command's own id
 		const ibPictureDescription picture = fc->IsEmptyPicture() ? ibPictureDescription() : fc->GetPictureDesc();
-		out.push_back({ sForm, fc->GetName(), desc, picture, wxEmptyString, fc->GetFullName() });   // tree: name; cell: Form.<name>
+		out.push_back({ sForm, fc->GetName(), desc, picture, ibEmptyString, fc->GetFullName() });   // tree: name; cell: Form.<name>
 	}
 
 	// 2 — STANDARD COMMANDS: the standard actions of the form's source AND of every tablebox control, all under
@@ -154,12 +156,12 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 		for (unsigned int i = 0; i < actions.GetCount(); i++) {
 			const ibActionID id = actions.GetID(i);
 			if (id != wxNOT_FOUND) {
-				const wxString caption = actions.GetCaptionByID(id);   // tree label — the readable action text
-				const wxString name    = actions.GetNameByID(id);
+				const ibString caption = actions.GetCaptionByID(id);   // tree label — the readable action text
+				const ibString name    = actions.GetNameByID(id);
 				// cell PATH = "Form.<action>" — by NAME (the configurator addresses by name), but a standard action
 				// with no name falls back to the caption so the path never ends up crooked ("Form." with an empty leaf).
 				out.push_back({ sStd, caption, ibCommandDescription(id), actions.GetPictureByID(id), _("Form"),
-				                wxT("Form.") + (name.IsEmpty() ? caption : name) });
+				                ibT("Form.") + (name.IsEmpty() ? caption : name) });
 			}
 		}
 	}
@@ -178,7 +180,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 		if (srcPath.empty())
 			continue;
 		auto actions = table->GetStandardCommands(table->GetTypeForm());
-		const wxString tableName = table->GetControlName();
+		const ibString tableName = table->GetControlName();
 		for (unsigned int i = 0; i < actions.GetCount(); i++) {
 			const ibActionID id = actions.GetID(i);
 			if (id == wxNOT_FOUND)
@@ -186,11 +188,11 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 			ibCommandDescription desc;
 			desc.AppendCommand(srcPath.front().m_id);   // hop 1: the table's source
 			desc.AppendCommand(id);                     // leaf: the action on it (resolved at walk time)
-			const wxString caption = actions.GetCaptionByID(id);   // tree label — the readable action text
+			const ibString caption = actions.GetCaptionByID(id);   // tree label — the readable action text
 			// cell PATH = "Form.<table>.<action NAME>" — the FULL route to the command by NAME (configurator uses
 			// names, not synonyms), so you can see WHERE a table command lives, not just its bare caption.
 			out.push_back({ sStd, caption, desc, actions.GetPictureByID(id), tableName,
-			                wxT("Form.") + tableName + wxT(".") + actions.GetNameByID(id) });
+			                ibT("Form.") + tableName + ibT(".") + actions.GetNameByID(id) });
 		}
 	}
 
@@ -204,7 +206,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 	if (globalMeta != nullptr)
 		for (ibValueMetaObjectCommand* cmd : globalMeta->GetAnyArrayObject<ibValueMetaObjectCommand>({ g_metaCommonCommandCLSID, g_metaCommandCLSID }, /*use_child_filter*/ true))
 			if (cmd != nullptr && !cmd->IsDeleted() && !CommandExcludedByType(cmd, formTypes))
-				out.push_back({ sGlobal, cmd->GetName(), ibCommandDescription(cmd->GetMetaID()), commandPicture(cmd), wxEmptyString, cmd->GetFullName() });
+				out.push_back({ sGlobal, cmd->GetName(), ibCommandDescription(cmd->GetMetaID()), commandPicture(cmd), ibEmptyString, cmd->GetFullName() });
 
 	// 4 — SECTION COMMANDS: the form sees sections EXACTLY as the runtime menu builder does (mainFrameEnterpriseInterface)
 	// — each section's items laid out by AREA through the SAME method, GetInterfaceItemArrayObject (membership by
@@ -218,7 +220,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 		// else open the list), so the SAME object in Normal vs Create is a DISTINCT binding that runs the right thing
 		// (Execute by command type), exactly as clicking it in the menu does.
 		auto addItems = [&out](const ibValueMetaObjectSection* section, const std::vector<ibValueMetaObject*>& items,
-			ibInterfaceCommandType groupType, const wxString& groupLabel) {
+			ibInterfaceCommandType groupType, const ibString& groupLabel) {
 			for (ibValueMetaObject* item : items) {
 				if (item == nullptr || item->IsDeleted())
 					continue;
@@ -227,9 +229,9 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 				// NAME only (the group is already known from the tree — no redundant "Class.Name"), but a CREATE-area
 				// item carries the ": Create" tag so the SAME object reads distinctly from its Normal-area "open list"
 				// binding — on the navigator AND on a dropped button / bar item.
-				wxString name = item->GetName();
+				ibString name = item->GetName();
 				if (groupType == ibInterfaceCommandType_Create)
-					name += wxT(": ") + wxString(_("Create"));
+					name += ibT(": ") + ibString(_("Create"));
 				out.push_back({ section->GetName(), name, desc, ibPictureDescription(item->GetClassType()), groupLabel, name });
 			}
 		};
@@ -280,18 +282,18 @@ namespace {
 // HOW ONE LINE READS ON THE BAR — its own wording when a person gave it one, else «field: value».
 // The same rule the settings window and the report heading print a condition by, so one condition
 // is not worded three ways depending on where it is shown.
-wxString ibQuickFilterCaption(const ibFilterNodeDescription& node)
+ibString ibQuickFilterCaption(const ibFilterNodeDescription& node, const ibMetaData* metaData)
 {
 	if (!node.m_presentation.IsEmpty())
 		return node.m_presentation;
-	const wxString field = node.m_left.m_presentation.IsEmpty()
+	const ibString field = node.m_left.m_presentation.IsEmpty()
 		? node.m_left.m_path : node.m_left.m_presentation;
-	const wxString value = node.m_right.IsField()
+	const ibString value = node.m_right.IsField()
 		? (node.m_right.m_presentation.IsEmpty() ? node.m_right.m_path : node.m_right.m_presentation)
-		: node.m_right.m_value.GetString().ToWxString();
+		: ibStoredValue(node.m_right.m_value, metaData).GetString();
 	// AN UNSET VALUE STILL READS AS THE FIELD IT NARROWS — a bare field name says "click me to
 	// narrow by this", which is what an unfilled quick filter is for.
-	return value.IsEmpty() ? field : field + wxT(": ") + value;
+	return value.IsEmpty() ? field : field + ibT(": ") + value;
 }
 }   // namespace
 
@@ -323,7 +325,7 @@ void ibValueCommandBar::BuildQuickFilters()
 		 || node.m_display != ibFilterDisplayMode_QuickAccess
 		 || !composer.IsAvailable(node.m_left.m_path) || !composer.IsAvailable(node.m_right.m_path))
 			continue;
-		ibCommandEntry entry(id++, ibQuickFilterCaption(node), ibPictureDescription(),
+		ibCommandEntry entry(id++, ibQuickFilterCaption(node, m_owner->GetMetaData()), ibPictureDescription(),
 			ibRepresentation_Text);
 		entry.kind = ibCommandEntryKind_QuickFilter;
 		entry.filterLine = i;
@@ -412,7 +414,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 					fileUnder(group, item);
 					continue;
 				}
-				wxString caption = cmd->GetSynonym();
+				ibString caption = cmd->GetSynonym();
 				if (caption.IsEmpty()) caption = cmd->GetName();
 				const bool modifies = cmd->GetModifiesData();
 				ownCommands.emplace_back(cmdId++, caption, ibPictureDescription(cmd->GetClassType()),   // the command determines its picture
@@ -522,10 +524,10 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 		// (ResolveCommand on the door): walk + reliable gather fallback -> existence + caption + picture + modifies, the
 		// SAME decision the button and the inspector cell use. A truly gone command misses BOTH -> drop the projection
 		// entirely (nothing to click). The item's own caption / picture only OVERRIDE the look where set.
-		wxString cmdCaption; ibPictureDescription cmdPicture; bool cmdModifies = true; bool cmdPicAndText = true;
+		ibString cmdCaption; ibPictureDescription cmdPicture; bool cmdModifies = true; bool cmdPicAndText = true;
 		if (!ResolveCommand(bindDesc, cmdCaption, cmdPicture, &cmdModifies, nullptr, &cmdPicAndText))
 			continue;
-		const wxString caption = item->GetCaption().IsEmpty() ? cmdCaption : item->GetCaption();
+		const ibString caption = item->GetCaption().IsEmpty() ? cmdCaption : item->GetCaption();
 		const ibPictureDescription pic = item->IsEmptyPicture() ? cmdPicture : item->GetPictureDesc();   // the command's when the item sets none
 		const bool enabled = item->IsEnabled() && !(viewOnly && cmdModifies);   // greyed per the COMMAND's flag
 		// The item's OWN Representation wins; left on Auto it takes the COMMAND's default (a standard action like
@@ -569,19 +571,19 @@ public:
 	ibQuickFilterValueFrame(ibFilterNodeDescription& node, ibValueForm* form, const ibMetaData* metaData)
 		: m_node(node), m_form(form), m_metaData(metaData) {}
 
-	virtual bool GetControlValue(ibValue& value) const override { value = m_node.m_right.m_value; return true; }
+	virtual bool GetControlValue(ibValue& value) const override { value = ibStoredValue(m_node.m_right.m_value, m_metaData); return true; }
 	virtual bool SetControlValue(const ibValue& value = ibValue()) override {
-		m_node.m_right.m_value = value; m_node.m_right.m_path.Clear(); return true;
+		ibStoreValue(m_node.m_right.m_value, value); m_node.m_right.m_path.Clear(); return true;
 	}
 	virtual ibValueForm* GetOwnerForm() const override { return m_form; }
-	virtual ibClassID GetClassType() const override { return m_node.m_right.m_value.GetClassType(); }
+	virtual ibClassID GetClassType() const override { return ibStoredValue(m_node.m_right.m_value, m_metaData).GetClassType(); }
 	// ⚠ THE METADATA IS HANDED IN, AND THERE IS NO FALLBACK. Several configurations are open at once
 	// (the base, a compared one, one from a file), so reaching for the "active" one would quietly
 	// answer out of somebody else's — the filter cell still does exactly that. No metadata means no
 	// ctor to ask, which is a truthful "no quick choice" rather than a guess.
 	virtual bool HasQuickChoice() const override {
 		const ibCtorAbstractType* ctor = m_metaData != nullptr
-			? m_metaData->GetAvailableCtor(m_node.m_right.m_value.GetClassType()) : nullptr;
+			? m_metaData->GetAvailableCtor(GetClassType()) : nullptr;
 		return ::HasQuickChoice(ctor);
 	}
 	virtual void ChoiceProcessing(ibValue& selected) override { SetControlValue(selected); }
@@ -624,14 +626,15 @@ bool ibValueCommandBar::ExecuteQuickFilter(const ibActionID& id, ibValueForm* fo
 	if (line >= settings.m_filter.m_nodes.size())
 		return true;
 
-	ibQuickFilterValueFrame holder(settings.m_filter.m_nodes[line], form,
-		form != nullptr ? form->GetMetaData() : nullptr);
+	const ibMetaData* metaData = form != nullptr ? form->GetMetaData() : nullptr;
+	ibQuickFilterValueFrame holder(settings.m_filter.m_nodes[line], form, metaData);
 	if (!ibTypeControlFactory::ChooseValue(&holder))
 		return true;   // the person closed the picker — nothing was chosen, nothing changes
 
 	// A LINE THAT NOW HAS A VALUE IS ON. Picking a value and having to tick the line as well is the
 	// second act nobody expects; clearing it is what turns the line off again.
-	settings.m_filter.m_nodes[line].m_use = !settings.m_filter.m_nodes[line].m_right.m_value.IsEmpty();
+	settings.m_filter.m_nodes[line].m_use =
+		!ibStoredValue(settings.m_filter.m_nodes[line].m_right.m_value, metaData).IsEmpty();
 	model->GetModelComposer().SetUserSettingsDesc(settings);
 	model->RefetchAll();
 	// …AND THE BAR RE-READS ITSELF. The tool's caption IS the line's value, so a pick that refetched
@@ -678,42 +681,55 @@ void ibValueCommandBar::ExecuteCommand(const ibActionID& id, size_t member)
 	if (entry == nullptr || entry->kind != ibCommandEntryKind_Group || member >= entry->members.size())
 		return;
 	const ibCommandDescription desc = entry->members[member]->GetBindingDesc();
-	wxString caption; ibPictureDescription picture;
+	ibString caption; ibPictureDescription picture;
 	if (ResolveCommand(desc, caption, picture))
 		ExecuteValueByPath(desc);
 }
 
-void ibValueCommandBar::Update(ibDataNode& state, ibVisualHost* host)
+void ibValueCommandBar::Update(ibDataNode& state)
 {
 	ibValueForm* form = m_owner != nullptr ? m_owner->GetOwnerForm() : nullptr;
 	const bool viewOnly = form != nullptr && form->IsViewOnly();
 
 	for (const ibCommandEntry& c : BuildCommands()) {
 		ibDataNode& entry = state.AddChild(0, 0);
-		entry.SetValue(wxT("Id"), c.id);
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Id, c.id);
 		if (c.id == wxNOT_FOUND) {
-			entry.SetValue(wxT("Separator"), true);
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Separator, true);
 			continue;
 		}
 
 		// The representation decides which of the two a client shows — said here once, not left to each client.
-		entry.SetValue(wxT("Caption"), c.representation == ibRepresentation_Picture ? wxString() : c.caption);
-		entry.SetValue(wxT("Picture"), c.representation == ibRepresentation_Text ? wxString() : host->SendPicture(c.picture));
-		entry.SetValue(wxT("Tooltip"), c.tooltip.IsEmpty() ? c.caption : c.tooltip);
-		entry.SetValue(wxT("Enabled"), c.enabled);
-		entry.SetValue(wxT("Kind"), static_cast<s32>(c.kind));
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, c.representation == ibRepresentation_Picture ? ibString() : c.caption);
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, c.representation == ibRepresentation_Text ? ibDataValue() : ibBackendPicture::SendPicture(c.picture, GetMetaData()));
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Tooltip, c.tooltip.IsEmpty() ? c.caption : c.tooltip);
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, c.enabled);
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<std::int32_t>(c.kind));
+
+		// An item of the bar's own — its place among them, as its node is written (WriteData): what the designer selects
+		// it by when its tool is pressed (the desktop's FindItemByCommandId).
+		if (c.item != nullptr) {
+			std::int32_t position = 0;
+			for (const auto& item : m_items) {
+				if (item == c.item)
+					break;
+				if (item != nullptr)
+					++position;
+			}
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Position, position);
+		}
 
 		// A GROUP carries its submenu: its commands in the order they were gathered, each with the caption,
 		// picture and "modifies data" the command itself answers — the same resolve every projection uses.
 		for (const ibValueCommandBarItem* item : c.members) {
-			wxString caption; ibPictureDescription picture; bool modifies = true;
+			ibString caption; ibPictureDescription picture; bool modifies = true;
 			ibDataNode& member = entry.AddChild(0, 0);
 			const bool resolved = ResolveCommand(item->GetBindingDesc(), caption, picture, &modifies);
-			member.SetValue(wxT("Caption"), caption);
-			member.SetValue(wxT("Picture"), host->SendPicture(picture));
+			member.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, caption);
+			member.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(picture, GetMetaData()));
 			// A member gone since the bar was built is listed, disabled, so the places stay the places
 			// ExecuteCommand(id, member) counts.
-			member.SetValue(wxT("Enabled"), resolved && !(viewOnly && modifies));
+			member.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, resolved && !(viewOnly && modifies));
 		}
 	}
 }
@@ -728,7 +744,7 @@ ibValueFrame* ibValueCommandBarItem::GetOwnerFrame() const
 	return m_bar != nullptr ? m_bar->GetOwnerFrame() : nullptr;
 }
 
-bool ibValueCommandBarItem::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueCommandBarItem::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	// Name must stay unique among the bar's items.
 	if (property == m_propertyName && m_bar != nullptr && m_bar->HasItemName(newValue.GetString(), this))
@@ -802,3 +818,54 @@ bool ibValueCommandBar::ReadData(const ibDataNode& node)
 // A runtime value must be registered. It is a SYSTEM type (clsid = system_to_clsid("CommandBar")).
 SYSTEM_TYPE_REGISTER(ibValueCommandBar, "CommandBar");
 SYSTEM_TYPE_REGISTER(ibValueCommandBarItem, "CommandBarItem");
+
+void WriteCommandTree(ibDataNode& node, ibValueForm* form)
+{
+	if (form == nullptr)
+		return;
+
+	// ALL three sections first (form / standard / global), in order, so they show even when EMPTY — GatherFormCommands
+	// labels its entries with exactly these strings. Rows are kept as AddChild gives them: a handle stays on its row as
+	// the tree grows around it (ibDataNode::Handle).
+	const auto addGroup = [](ibDataNode& parent, const ibString& name) {
+		ibDataNode& group = parent.AddChild(0, 0);
+		group.SetValue(ibProtocol::ibSchema::ibProperties::Name, name);
+		return &group;
+	};
+	std::map<ibString, ibDataNode*> sections;
+	for (const ibString& section : GetCommandSections())
+		sections[section] = addGroup(node, section);
+	std::map<ibString, ibDataNode*> subgroups;   // "section\x1fsubgroup" -> its row in the section (Standard nests per source)
+
+	for (const ibCommandSourceEntry& entry : GatherFormCommands(form)) {
+		auto section = sections.find(entry.group);
+		if (section == sections.end())   // defensive: an unexpected section -> appended at the end
+			section = sections.emplace(entry.group, addGroup(node, entry.group)).first;
+		ibDataNode* parent = section->second;
+		if (!entry.subgroup.IsEmpty()) {   // nested under a per-source SUB-group (the form / a table)
+			const ibString key = entry.group + ibT("\x1f") + entry.subgroup;
+			auto sub = subgroups.find(key);
+			if (sub == subgroups.end())
+				sub = subgroups.emplace(key, addGroup(*parent, entry.subgroup)).first;
+			parent = sub->second;
+		}
+
+		// A form command's row is known by its id — the inspector's rows of it are; any other's, by its path only.
+		const ibFormCommandValue* const formCommand = entry.desc.IsOk() && !entry.desc.IsHop()
+			? form->FindFormCommandById(entry.desc.GetLeaf()) : nullptr;
+		ibDataNode& row = parent->AddChild(0, formCommand != nullptr ? formCommand->GetId() : 0);
+		row.SetValue(ibProtocol::ibSchema::ibProperties::Name, entry.label);
+		const ibDataValue picture = ibBackendPicture::SendPicture(entry.picture, form->GetMetaData());   // the command's own picture, else the tree's default
+		if (!picture.IsEmpty())
+			row.SetValue(ibProtocol::ibSchema::ibProperties::Picture, picture);
+
+		std::vector<ibDataValue> hops;
+		for (const ibCommandHop& hop : entry.desc.GetPath()) {
+			std::shared_ptr<ibDataNode> hopNode = std::make_shared<ibDataNode>();
+			hopNode->SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(hop.m_id));
+			hops.push_back(ibDataValue::Child(hopNode));
+		}
+		row.AddField(ibProtocol::ibSchema::ibProperties::CommandPath, ibDataValue::Array(std::move(hops)));
+		row.SetValue(ibProtocol::ibSchema::ibProperties::Kind, static_cast<std::int32_t>(entry.desc.GetCommandType()));
+	}
+}

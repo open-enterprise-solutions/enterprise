@@ -7,12 +7,13 @@ void ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyCreated(ibProperty* 
 	ibValueMetaObjectRecordDataMutableRef::OnPropertyCreated(property);
 }
 
-bool ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
 }
 
-void ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
-	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
+	// Through the hierarchy, not past it — it restates Parent and IsFolder for a new HierarchyType.
+	ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanged(property, oldValue, newValue);
 }

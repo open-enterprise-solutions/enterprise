@@ -2,11 +2,12 @@
 
 Start with **[development.md](development.md)**, which describes how the platform is built:
 branches and pull requests, code rules, the design rules changes are reviewed against, tests and
-CI.
+CI. Then **[writing-code.md](writing-code.md)**, how the code itself is written.
 
 | Document | What it holds |
 |---|---|
 | [development.md](development.md) | How we work: pull requests, commits, code, design rules, tests, speed, documentation |
+| [writing-code.md](writing-code.md) | How we write code: names, classes, casts, holders, one copy of a fact, refusals, threads, the client/server wire, the diff |
 | [BUILD.md](BUILD.md) | Building on Windows, macOS and Linux, database drivers, CI |
 | [portability.md](portability.md) | The rules for code that must compile on MSVC, Clang and GCC, and what breaking them cost |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The system, directory by directory |

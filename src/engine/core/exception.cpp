@@ -1,9 +1,13 @@
 #include "core/exception.h"
 
-#include <cstdarg>
+#include <cstring>
 
-ibCoreException::ibCoreException(const wxString& description)
-	: m_descriptionUtf8(description.utf8_string())
+#ifdef __IBMSW__
+#include <windows.h>
+#endif
+
+ibCoreException::ibCoreException(const ibString& description)
+	: m_descriptionUtf8(description.ToUtf8())
 {
 }
 
@@ -13,29 +17,27 @@ const char* ibCoreException::what() const noexcept
 	return m_descriptionUtf8.c_str();
 }
 
-const wxString ibCoreException::GetErrorDescription() const
+const ibString ibCoreException::GetErrorDescription() const
 {
-	return wxString::FromUTF8(m_descriptionUtf8);
+	return ibString::FromUTF8(m_descriptionUtf8.data(), m_descriptionUtf8.size());
 }
 
-#if !wxUSE_UTF8_LOCALE_ONLY
-void ibCoreException::DoErrorWchar(const wxChar* format, ...)
+std::string ibErrorText(const std::error_code& code)
 {
-	va_list args;
-	va_start(args, format);
-	const wxString description = wxString::FormatV(format, args);
-	va_end(args);
-	throw ibCoreException(description);
-}
+#ifdef __IBMSW__
+	// The standard library asks FormatMessageA: the ANSI code page, Cyrillic on a Russian Windows, which read as UTF-8
+	// is nothing at all — "Assistant access did not start: ." (2026-10-23). Asked here in Unicode. So for asio's,
+	// under a category of its own ("asio.system") for the same codes — every socket's error is of it: "the server's
+	// socket dropped: " said nothing more (2026-10-24, a cluster's server killed).
+	if (code.category() == std::system_category() || std::strcmp(code.category().name(), "asio.system") == 0) {
+		wchar_t* text = nullptr;
+		const DWORD length = ::FormatMessageW(
+			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr,
+			static_cast<DWORD>(code.value()), 0, reinterpret_cast<wchar_t*>(&text), 0, nullptr);
+		ibString said = text != nullptr ? ibString(text, length) : ibString();
+		::LocalFree(text);
+		return said.Trim().ToUtf8();   // the system ends its sentence with a line break
+	}
 #endif
-
-#if wxUSE_UNICODE_UTF8
-void ibCoreException::DoErrorUtf8(const wxChar* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	const wxString description = wxString::FormatV(format, args);
-	va_end(args);
-	throw ibCoreException(description);
+	return code.message();
 }
-#endif

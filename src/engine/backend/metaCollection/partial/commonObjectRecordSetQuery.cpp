@@ -99,7 +99,7 @@ bool ibValueRecordSetObject::BeginRecordSetWriteScope(ibConnectionScope& scope)
 	if (!m_metaObject->AccessRight_Write()) {
 		// Name the register AND the right: during a posting cascade several objects are gated in a
 		// row, and "not enough access rights" alone does not say which one closed the door.
-		ibBackendAccessException::Error(wxString::Format(_("writing to register '%s'"),
+		ibBackendAccessException::Error(ibString::Format(_("writing to register '%s'"),
 			m_metaObject->GetSynonym()));
 		return false;
 	}
@@ -120,7 +120,7 @@ bool ibValueRecordSetObject::BeginRecordSetDeleteScope(ibConnectionScope& scope)
 		&& !ibBackendException::IsEvalSandbox()) return false;
 
 	if (!m_metaObject->AccessRight_Delete()) {
-		ibBackendAccessException::Error(wxString::Format(_("clearing register '%s'"),
+		ibBackendAccessException::Error(ibString::Format(_("clearing register '%s'"),
 			m_metaObject->GetSynonym()));
 		return false;
 	}
@@ -188,10 +188,10 @@ bool ibValueRecordSetObject::ExistData(ibNumber& lastNum)
 				continue;
 			ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
 		}
-		q.Max(m_metaObject->GetRegisterLineNumber()->GetQueryColumn(), wxT("maxLine"));
+		q.Max(m_metaObject->GetRegisterLineNumber()->GetQueryColumn(), ibT("maxLine"));
 		ibDataQueryResult selection = q.SelectAggregate();
 		if (selection.Next()) {
-			const ibValue maxLine = selection.GetColumn(wxT("maxLine"));
+			const ibValue maxLine = selection.GetColumn(ibT("maxLine"));
 			if (!maxLine.IsEmpty()) {
 				lastNum = maxLine.GetNumber();
 				return true;
@@ -287,18 +287,18 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	// asked per line it was a pass over the register's attributes for every one of a payroll's 72 234 movements.
 	const auto attributes = m_metaObject->GetGenericAttributeArrayObject();
 	bool fillCheck = true; long currLine = 1;
-	wxString fillErrors;
+	ibString fillErrors;
 	for (long row = 0; row < GetRowCount(); row++) {
 		const ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
 		wxASSERT(node);
 		for (const auto object : attributes) {
 			if (object->FillCheck()) {
 				if (node->IsEmptyValue(object->GetMetaID())) {
-					wxString fillError =
-						wxString::Format(_("The %s is required on line %i of the %s"), object->GetSynonym(), currLine, m_metaObject->GetSynonym());
+					ibString fillError =
+						ibString::Format(_("The %s is required on line %ld of the %s"), object->GetSynonym(), currLine, m_metaObject->GetSynonym());
 					ibValueSystemFunction::Message(fillError, ibStatusMessage::ibStatusMessage_Information);
 					if (!fillErrors.IsEmpty())
-						fillErrors += wxT("; ");
+						fillErrors += ibT("; ");
 					fillErrors += fillError;
 					fillCheck = false;
 				}
@@ -308,7 +308,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	}
 
 	if (!fillCheck)
-		ibBackendCoreException::Error(wxT("%s"), fillErrors);   // an assembled sentence is DATA, not a format
+		ibBackendCoreException::Error(ibT("%s"), fillErrors);   // an assembled sentence is DATA, not a format
 
 	ibNumber numberLine = 1, oldNumberLine = 1;
 
@@ -432,7 +432,7 @@ bool ibValueRecordSetObject::DeleteData()
 	// journal is where it is found afterwards. The accident it used to follow — a record manager deleting with no
 	// key — is closed where it happened (ibValueRecordManagerObject::DeleteData).
 	if (!keyed)
-		ibJournalInfo(wxT("register"), wxT("Register '%s': the record set carries no key, so writing it clears every record"),
+		ibJournalInfo(ibT("register"), ibT("Register '%s': the record set carries no key, so writing it clears every record"),
 			m_metaObject->GetSynonym());
 
 	// A FAILED DELETE RAISES, AND IT SAYS THAT IT WAS THE DELETE.

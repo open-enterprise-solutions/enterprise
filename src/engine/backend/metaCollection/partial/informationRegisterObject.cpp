@@ -58,7 +58,7 @@ bool ibValueRecordSetObjectInformationRegister::SaveData(bool replace, bool clea
 const ibSourceExplorer* ibValueRecordManagerObjectInformationRegister::GetSourceExplorer() const
 {
 	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
-		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+		ibT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false, false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
@@ -161,7 +161,7 @@ bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 				if (!SaveData(replace)) {   // Write(False) adds and nothing else — SaveData refuses a taken key
 					scope.SafeRollBackTransaction();
 					ibBackendCoreException::Error(_("Register '%s': failed to store the record"),
-						m_metaObject != nullptr ? m_metaObject->GetSynonym() : wxString());
+						m_metaObject != nullptr ? m_metaObject->GetSynonym() : ibString());
 					return false;
 				}
 
@@ -211,7 +211,7 @@ bool ibValueRecordManagerObjectInformationRegister::DeleteRegister()
 					if (!DeleteData()) {
 						scope.SafeRollBackTransaction();
 						ibBackendCoreException::Error(_("Register '%s': failed to delete the record"),
-							m_metaObject != nullptr ? m_metaObject->GetSynonym() : wxString());
+							m_metaObject != nullptr ? m_metaObject->GetSynonym() : ibString());
 						return false;
 					}
 
@@ -265,16 +265,16 @@ enum recordSet
 
 void ibValueRecordSetObjectInformationRegister::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Add"), wxT("Add()"));
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
-	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
-	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	helper.AppendFunc(wxT("Load"), 1, wxT("Load(value : any table)"));
-	helper.AppendFunc(wxT("Unload"), wxT("Unload()"));
-	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
-	helper.AppendFunc(wxT("Read"), wxT("Read()"));
-	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendFunc(ibT("Add"), ibT("Add()"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
+	helper.AppendFunc(ibT("Write"), 1, ibT("Write(replace : boolean)"));
+	helper.AppendFunc(ibT("Load"), 1, ibT("Load(value : any table)"));
+	helper.AppendFunc(ibT("Unload"), ibT("Unload()"));
+	helper.AppendFunc(ibT("Modified"), ibT("Modified()"));
+	helper.AppendFunc(ibT("Read"), ibT("Read()"));
+	helper.AppendFunc(ibT("Selected"), ibT("Selected()"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 
 	// `Filter` is NOT declared here: it is an EXPORT VARIABLE of the set, bound in InitializeObject
 	// (commonObject.cpp), and module exports reach this same table on their own. Naming it twice put
@@ -284,18 +284,18 @@ void ibValueRecordSetObjectInformationRegister::FillMembers(ibMemberTable& helpe
 
 void ibValueRecordManagerObjectInformationRegister::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
-	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	helper.AppendFunc(wxT("Delete"), wxT("Delete()"));
-	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
-	helper.AppendFunc(wxT("Read"), wxT("Read()"));
-	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
-	helper.AppendFunc(wxT("GetFormRecord"), 3, wxT("GetFormRecord(name : string, owner : any, id : guid)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("getMetadata()"));
+	helper.AppendFunc(ibT("Copy"), ibT("Copy()"));
+	helper.AppendFunc(ibT("Write"), 1, ibT("Write(replace : boolean)"));
+	helper.AppendFunc(ibT("Delete"), ibT("Delete()"));
+	helper.AppendFunc(ibT("Modified"), ibT("Modified()"));
+	helper.AppendFunc(ibT("Read"), ibT("Read()"));
+	helper.AppendFunc(ibT("Selected"), ibT("Selected()"));
+	helper.AppendFunc(ibT("GetFormRecord"), 3, ibT("GetFormRecord(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("getMetadata()"));
 
 	//set object name
-	wxString objectName;
+	ibString objectName;
 
 	//fill custom object
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {

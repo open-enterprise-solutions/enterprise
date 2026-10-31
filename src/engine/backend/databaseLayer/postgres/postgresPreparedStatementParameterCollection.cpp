@@ -1,12 +1,8 @@
 #include "postgresPreparedStatementParameterCollection.h"
 
-#include <wx/arrimpl.cpp>
-
-WX_DEFINE_OBJARRAY(ArrayOfPostgresParameters);
-
 ibPreparedStatementPostgresParameterCollection::~ibPreparedStatementPostgresParameterCollection()
 {
-	m_Parameters.Clear();
+	m_Parameters.clear();
 }
 
 int ibPreparedStatementPostgresParameterCollection::GetSize()

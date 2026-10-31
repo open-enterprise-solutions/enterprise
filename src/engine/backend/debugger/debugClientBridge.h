@@ -2,7 +2,6 @@
 #define _DEBUG_CLIENT_BRIDGE_H__
 
 #include <wx/wx.h>
-#include <wx/socket.h>
 
 #include "backend/backend_core.h"
 #include "debugDefs.h"
@@ -31,7 +30,7 @@ public:
 	//
 	// Generated once, here, and handed out as TEXT — which is what a question carries and what an
 	// answer brings back. Nothing takes it apart; it is only ever compared.
-	const wxString& GetBridgeId() const { return m_bridgeId; }
+	const ibString& GetBridgeId() const { return m_bridgeId; }
 
 	// (⛔ NO SESSION HERE. A bridge briefly carried the one it was built under, so a reply could be
 	//  routed to its worker — and every bridge answered with the SAME one, because they are all
@@ -40,19 +39,19 @@ public:
 	//  Max, 2026-09-06: *"remove the sessions from the bridges, they duplicate"*.)
 
 	//commands 
-	virtual void OnSessionStart(wxSocketClient* sock) = 0;
-	virtual void OnSessionEnd(wxSocketClient* sock) = 0;
+	virtual void OnSessionStart() = 0;
+	virtual void OnSessionEnd() = 0;
 
-	virtual void OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data) = 0;
-	virtual void OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data) = 0;
+	virtual void OnEnterLoop(const ibDebugLineData& data) = 0;
+	virtual void OnLeaveLoop(const ibDebugLineData& data) = 0;
 
 	virtual void OnAutoComplete(const ibDebugAutoCompleteData& data) = 0;
 	// ⚠ THE LEVEL IS NOT A SEVERITY OF THE PLATFORM. A document refusing to post says so at
 	// `MessageType_Error` — and that is a business rule declining, not the engine failing. A real
 	// fault arrives by a different road entirely (ProcessExceptionError), so a listener must not
 	// read this level as "something broke".
-	virtual void OnMessageFromServer(const ibDebugLineData& data, const wxString& message) = 0;
-	virtual void OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr) = 0;
+	virtual void OnMessageFromServer(const ibDebugLineData& data, const ibString& message) = 0;
+	virtual void OnSetToolTip(const ibDebugExpressionData& data, const ibString& resultStr) = 0;
 
 	virtual void OnSetStack(const ibStackData& stackData) = 0;
 
@@ -69,15 +68,15 @@ public:
 	// ⭐ `microseconds` is how long the code itself ran, measured in the process that ran it — the
 	// only place holding both edges. The platform's own clock answers to the second (a business
 	// date), so code cannot time itself, and timing it from this end would measure the socket.
-	virtual void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, wxLongLong_t microseconds) {}
+	virtual void OnSandboxResult(bool ran, const ibString& answer, const ibString& json, long long microseconds) {}
 
 	// A line printed by evaluated code. Not shown to the person: the designer drops these, and
 	// whoever asked for the evaluation reads them.
-	virtual void OnEvalMessage(const wxString& message, MessageType type) {}
+	virtual void OnEvalMessage(const ibString& message, MessageType type) {}
 
 	// A picture of the running application's window, sent because its user allowed it. Empty bytes
 	// mean they declined — the one outcome a listener must not mistake for a broken transfer.
-	virtual void OnScreenshot(const wxMemoryBuffer& png, const wxString& focus) {}
+	virtual void OnScreenshot(const ibMemoryBuffer& png, const ibString& focus) {}
 
 	// The state of a filling run over there: one shape for start, status and cancel alike, since all
 	// three ask about the same run. `which` is the CommandId being answered, so a waiter can tell an
@@ -92,12 +91,12 @@ public:
 	// What a composition answered: `answered` true and the tables in `result`, or false and the
 	// reason in `refusal`. One or the other, and never silence — a read that produced nothing
 	// because a parameter was not set is a sentence, not an empty table.
-	virtual void OnComposed(bool answered, const wxString& refusal, const wxMemoryBuffer& result) {}
+	virtual void OnComposed(bool answered, const ibString& refusal, const ibMemoryBuffer& result) {}
 
 private:
 	// Its own, from birth — see the constructor. Nothing hands it in, so two bridges cannot be given
 	// the same one and a bridge cannot be created without one.
-	wxString m_bridgeId;
+	ibString m_bridgeId;
 };
 
 

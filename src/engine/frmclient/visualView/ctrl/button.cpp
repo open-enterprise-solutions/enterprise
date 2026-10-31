@@ -1,10 +1,9 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, wxFormBuilder
+//	Author		: Maxim Kornienko
 //	Description : a button of a view
 ////////////////////////////////////////////////////////////////////////////
 
 #include "widgets.h"
-#include "core/serialize/dataBuilder.h"   // the properties, as the frame carries them
 
 #include <functional>
 
@@ -26,20 +25,20 @@ void ibValueButton::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 
 void ibValueButton::Update(const ibProtocolNode& node)
 {
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 
 	// The server has resolved what is shown — the button's own caption and picture, or its command's — and which of
 	// the two; the caption names the button even when only the picture is shown.
-	const wxString caption = state.GetString(ibProtocolName::Caption);
-	const wxBitmap picture = ibProtocolPicture(state.GetString(ibProtocolName::Picture));
-	const ibProtocolRepresentation representation = static_cast<ibProtocolRepresentation>(
-		state.GetInt(ibProtocolName::Representation, static_cast<long long>(ibProtocolRepresentation::PictureAndText)));
+	const wxString caption = state.GetString(ibProtocol::ibForm::ibState::Caption);
+	const wxBitmap picture = ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture);
+	const ibProtocol::ibForm::ibState::ibRepresentation representation = static_cast<ibProtocol::ibForm::ibState::ibRepresentation>(
+		state.GetInt(ibProtocol::ibForm::ibState::Representation, static_cast<long long>(ibProtocol::ibForm::ibState::ibRepresentation::PictureAndText)));
 
-	if (representation == ibProtocolRepresentation::Picture) {
+	if (representation == ibProtocol::ibForm::ibState::ibRepresentation::Picture) {
 		m_button->SetLabel(wxEmptyString);
 		m_button->SetBitmap(picture);
 	}
-	else if (representation == ibProtocolRepresentation::Text) {
+	else if (representation == ibProtocol::ibForm::ibState::ibRepresentation::Text) {
 		m_button->SetLabel(caption);
 		m_button->SetBitmap(wxNullBitmap);
 	}
@@ -48,7 +47,7 @@ void ibValueButton::Update(const ibProtocolNode& node)
 		m_button->SetBitmap(picture);
 	}
 
-	const ibProtocolNode members = state.FindChild(ibProtocolName::Members);
+	const ibProtocolNode members = state.FindChild(ibProtocol::ibForm::ibButton::Members);
 	m_members = members.IsNode() ? members.Clone() : ibProtocolNode();
 
 	// Shown and enabled as State says — hidden with no live command, greyed on a view-only form for one that modifies.
@@ -68,7 +67,7 @@ void ibValueButton::OnButtonPressed(wxCommandEvent& WXUNUSED(event))
 {
 	// A plain command is run by the press.
 	if (m_members.Children().empty()) {
-		Send(ibProtocolEvent::Press);
+		Send(ibProtocol::ibEvent::ibKind::Press);
 		return;
 	}
 
@@ -77,7 +76,7 @@ void ibValueButton::OnButtonPressed(wxCommandEvent& WXUNUSED(event))
 	int next = kFirstMemberId;
 	std::function<void(wxMenu*, const ibProtocolNode&)> fill = [&fill, &next](wxMenu* into, const ibProtocolNode& members) {
 		for (const ibProtocolNode& member : members.Children()) {
-			const wxString caption = member.GetString(ibProtocolName::Caption);
+			const wxString caption = member.GetString(ibProtocol::ibForm::ibButton::Caption);
 			if (!member.Children().empty()) {
 				wxMenu* const submenu = new wxMenu();
 				fill(submenu, member);
@@ -85,7 +84,7 @@ void ibValueButton::OnButtonPressed(wxCommandEvent& WXUNUSED(event))
 				continue;
 			}
 			wxMenuItem* const item = new wxMenuItem(into, next++, caption);
-			const wxBitmap picture = ibProtocolPicture(member.GetString(ibProtocolName::Picture));
+			const wxBitmap picture = ibProtocolPicture(member, ibProtocol::ibForm::ibButton::Picture);
 			if (picture.IsOk())
 				item->SetBitmap(picture);
 			into->Append(item);
@@ -99,27 +98,7 @@ void ibValueButton::OnButtonPressed(wxCommandEvent& WXUNUSED(event))
 		return;
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Member, chosen - kFirstMemberId);
-	Send(ibProtocolEvent::Press, args);
-}
-
-//*******************************************************************************************
-//*                  The properties — the desktop's ReadData / WriteData                          *
-//*******************************************************************************************
-
-bool ibValueButton::ReadData(const ibDataNode& node)
-{
-	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
-
-	return ibValueWindow::ReadData(node);
-}
-
-bool ibValueButton::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
-	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
-
-	return ibValueWindow::WriteData(node);
+	args.SetValue(ibProtocol::ibEvent::Member, chosen - kFirstMemberId);
+	Send(ibProtocol::ibEvent::ibKind::Press, args);
 }
 

@@ -9,47 +9,32 @@
 // Eq() is what makes the diff work, and it is one line because the description already has value
 // semantics — two schedules are equal when every field is.
 
+#include "core/variant.h"
 #include "backend/backend.h"
-#include "backend/job/jobSchedule.h"
+#include "core/job/jobSchedule.h"
 
 #include <wx/variant.h>
 
-class BACKEND_API ibVariantDataSchedule : public wxVariantData {
-	wxString MakeString() const;
+class BACKEND_API ibVariantSchedule : public ibVariant {
 public:
 
 	ibJobScheduleDescription& GetSchedule() { return m_schedule; }
 	const ibJobScheduleDescription& GetSchedule() const { return m_schedule; }
 
-	ibVariantDataSchedule() : wxVariantData() {}
-	explicit ibVariantDataSchedule(const ibJobScheduleDescription& schedule)
-		: wxVariantData(), m_schedule(schedule) {}
-	ibVariantDataSchedule(const ibVariantDataSchedule& src)
-		: wxVariantData(), m_schedule(src.m_schedule) {}
-
-	virtual ibVariantDataSchedule* Clone() const {
-		return new ibVariantDataSchedule(*this);
-	}
+	ibVariantSchedule() : ibVariant(ibValueTypes::TYPE_VALUE) {}
+	explicit ibVariantSchedule(const ibJobScheduleDescription& schedule)
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_schedule(schedule) {}
+	ibVariantSchedule(const ibVariantSchedule& src)
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_schedule(src.m_schedule) {}
 
 	// Value equality, straight through the description — this is what the configuration
 	// compare reads (docs/private/property-system.md § 6.1).
-	virtual bool Eq(wxVariantData& data) const {
-		const ibVariantDataSchedule* src = dynamic_cast<const ibVariantDataSchedule*>(&data);
+	virtual bool CompareValueEQ(const ibVariant& data) const override {
+		const ibVariantSchedule* src = dynamic_cast<const ibVariantSchedule*>(data.GetRef());
 		return src != nullptr && src->m_schedule == m_schedule;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const { return wxT("ibVariantDataSchedule"); }
+	virtual ibString GetString() const override;
 
 protected:
 	ibJobScheduleDescription m_schedule;

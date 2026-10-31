@@ -35,10 +35,10 @@ namespace {
 // sidecar attaches to. The lease writes `<dbPath>.lease`, so we
 // don't need the .fdb itself to exist — the lease class only cares
 // about the sidecar.
-wxString MakeUniqueDbPath(const char* testName) {
-	const wxString base = wxStandardPaths::Get().GetTempDir();
+ibString MakeUniqueDbPath(const char* testName) {
+	const ibString base = wxStandardPaths::Get().GetTempDir();
 	const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-	return wxFileName(base, wxString::Format(
+	return wxFileName(base, ibString::Format(
 		wxT("oes_test_lease_%s_%lld.fdb"),
 		testName, (long long)now)).GetFullPath();
 }
@@ -47,7 +47,7 @@ wxString MakeUniqueDbPath(const char* testName) {
 // sidecar in TearDown so re-runs don't inherit stale state.
 class FirebirdLeaseTest : public ::testing::Test {
 protected:
-	wxString dbPath;
+	ibString dbPath;
 
 	void SetUp() override {
 		dbPath = MakeUniqueDbPath(::testing::UnitTest::GetInstance()
@@ -55,7 +55,7 @@ protected:
 	}
 
 	void TearDown() override {
-		const wxString leasePath = dbPath + wxT(".lease");
+		const ibString leasePath = dbPath + wxT(".lease");
 		if (wxFileExists(leasePath))
 			wxRemoveFile(leasePath);
 	}

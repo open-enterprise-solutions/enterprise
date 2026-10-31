@@ -22,7 +22,7 @@ protected:
 	// The section panel — the server's sections, once the start has run.
 	virtual void CreateStartupPage() override;
 
-	virtual void ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown) override;
+	virtual void ShowSchema(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown) override;
 
 	// The section panel on the left (mainFrameEnterpriseInterface.cpp), as the desktop's window docks it.
 	void CreateSubSystem();

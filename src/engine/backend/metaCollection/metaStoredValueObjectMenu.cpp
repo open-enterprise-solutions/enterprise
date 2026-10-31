@@ -8,7 +8,7 @@
 
 bool ibValueMetaObjectStoredValue::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	items.emplace_back(ibMetaMenuKind::Module, wxT("ConstantModule"), _("Open constant module"), m_propertyModule->GetMetaObject());
+	items.emplace_back(ibMetaMenuKind::Module, ibT("ConstantModule"), _("Open constant module"), m_propertyModule->GetMetaObject());
 	return false;
 }
 

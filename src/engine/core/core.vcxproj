@@ -19,10 +19,11 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="res\resource.h" />
+    <ResourceCompile Include="core.rc" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="res\core.rc" />
+    <None Include="program.manifest" />
+    <None Include="version.rc2" />
   </ItemGroup>
   <!-- THE CORE — the shared meanings under the engine (backend) and its clients (frmclient): the class ids and the ids
        of the configuration, the kinds of a value, a text, a number, a date, a guid, a block of bytes read and written,
@@ -87,18 +88,20 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_USRDLL;CORE_EXPORTS;_WIN32_WINNT=0x0A00;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>false</ConformanceMode>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_USRDLL;CORE_EXPORTS;_WIN32_WINNT=0x0A00;ASIO_STANDALONE;ASIO_SEPARATE_COMPILATION;ASIO_NO_DEPRECATED;XML_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(oesEngine);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oesEngine);$(oes3rdParty)asio\asio\include;$(oes3rdParty)llhttp\include;$(oes3rdParty)lodepng;$(oes3rdParty)expat\expat\lib;$(oes3rdParty)mbedtls\include;$(oesEngine)core\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <!-- Asio's templates (net\) make more sections than an object file holds by default. -->
+      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;crypt32.lib;bcrypt.lib;mbedtls.lib;llhttp.lib;lodepng.lib;expat.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -154,55 +157,228 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="anyValue.cpp" />
     <ClCompile Include="build.cpp" />
+    <ClCompile Include="compiler\blockSyntaxLINQ.cpp" />
+    <ClCompile Include="compiler\scriptFoldCode.cpp" />
+    <ClCompile Include="compiler\scriptParseCode.cpp" />
+    <ClCompile Include="compiler\translateCode.cpp" />
+    <ClCompile Include="composition\compositionTheme.cpp" />
     <ClCompile Include="core.cpp" />
+    <ClCompile Include="crypto\fieldCipher.cpp" />
+    <ClCompile Include="crypto\dataHash.cpp" />
+    <ClCompile Include="crypto\sessionToken.cpp" />
+    <ClCompile Include="crypto\sha256.cpp" />
+    <ClCompile Include="description\calcScheduleDescription.cpp" />
+    <ClCompile Include="description\choiceLinkDescription.cpp" />
+    <ClCompile Include="description\commandDescription.cpp" />
+    <ClCompile Include="description\compositionDescription.cpp" />
+    <ClCompile Include="description\homePageDescription.cpp" />
+    <ClCompile Include="description\jobScheduleDescription.cpp" />
+    <ClCompile Include="description\pictureDescription.cpp" />
+    <ClCompile Include="description\sourceDescription.cpp" />
+    <ClCompile Include="description\spreadsheetDescription.cpp" />
+    <ClCompile Include="description\standardCommandDescription.cpp" />
+    <ClCompile Include="description\typeDescription.cpp" />
     <ClCompile Include="diagnostics\crashGuard.cpp" />
     <ClCompile Include="diagnostics\journal.cpp" />
     <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="exception.cpp" />
+    <ClCompile Include="fboolean.cpp" />
     <ClCompile Include="fdatetime.cpp" />
+    <ClCompile Include="fdatetimeParse.cpp" />
     <ClCompile Include="fiber\fiber.cpp" />
     <ClCompile Include="fiber\fiberLocals.cpp" />
-    <ClCompile Include="fileSystem\fs.cpp" />
-    <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
+    <ClCompile Include="fileKind.cpp" />
+    <ClCompile Include="dynamicLibrary.cpp" />
+    <ClCompile Include="fileSystem.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="fstring.cpp" />
+    <ClCompile Include="graphics\colour.cpp" />
+    <ClCompile Include="graphics\font.cpp" />
+    <ClCompile Include="graphics\geometry.cpp" />
+    <ClCompile Include="graphics\picture.cpp" />
+    <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="guid.cpp" />
+    <ClCompile Include="job\jobScheduleRules.cpp" />
     <ClCompile Include="localization.cpp" />
-    <ClCompile Include="programFolder.cpp" />
+    <ClCompile Include="localization\dictionary.cpp" />
+    <ClCompile Include="memory\lz\lzhuf.cpp" />
+    <ClCompile Include="memory\compression.cpp" />
+    <ClCompile Include="memory\memoryBuffer.cpp" />
+    <ClCompile Include="memory\memoryPool.cpp" />
+    <ClCompile Include="memory\memoryStream.cpp" />
+    <ClCompile Include="net\asio.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\httpClient.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\httpServer.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\httpStream.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\ioThreads.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\tlsStream.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\webSocketFrame.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="pictureRegistry.cpp" />
+    <ClCompile Include="launchTicket.cpp" />
+    <ClCompile Include="query\queryAggregates.cpp" />
+    <ClCompile Include="query\queryKeywords.cpp" />
+    <ClCompile Include="query\queryLexer.cpp" />
+    <ClCompile Include="query\queryRender.cpp" />
+    <ClCompile Include="query\queryParser.cpp" />
+    <ClCompile Include="query\queryRewrite.cpp" />
+    <ClCompile Include="query\anyQueryConstructorModel.cpp" />
+    <ClCompile Include="query\queryRefusal.cpp" />
     <ClCompile Include="serialize\dataBuilder.cpp" />
-    <ClCompile Include="serialize\jsonProvider.cpp" />
-    <ClCompile Include="serialize\jsonText.cpp" />
+    <ClCompile Include="serialize\provider\fileProvider.cpp" />
+    <ClCompile Include="serialize\provider\jsonProvider.cpp" />
+    <ClCompile Include="serialize\provider\xmlProvider.cpp" />
+    <ClCompile Include="server\listener.cpp" />
+    <ClCompile Include="server\serverConfig.cpp" />
+    <ClCompile Include="spreadsheet\sheetFormat.cpp" />
+    <ClCompile Include="spreadsheet\spreadsheetObject.cpp" />
+    <ClCompile Include="startProcess.cpp" />
+    <ClCompile Include="stringTokenizer.cpp" />
+    <ClCompile Include="syntaxHelper\helpCorpus.cpp" />
+    <ClCompile Include="syntaxHelper\helpLoader.cpp" />
+    <ClCompile Include="syntaxHelper\helpResolver.cpp" />
+    <ClCompile Include="syntaxHelper\helpService.cpp" />
+    <ClCompile Include="tabular\tabularModelView.cpp" />
+    <ClCompile Include="typeName.cpp" />
+    <ClCompile Include="variant.cpp" />
+    <ClCompile Include="utils\base64.cpp" />
+    <ClCompile Include="utils\md5.cpp" />
+    <ClCompile Include="json\jsonText.cpp" />
+    <ClCompile Include="xml\xmlDocument.cpp" />
+    <ClCompile Include="xml\xmlText.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="anyValue.h" />
     <ClInclude Include="build.h" />
     <ClInclude Include="clsid.h" />
+    <ClInclude Include="compiler\blockSyntaxLINQ.h" />
+    <ClInclude Include="compiler\codeDef.h" />
+    <ClInclude Include="compiler\scriptFoldCode.h" />
+    <ClInclude Include="compiler\scriptParseCode.h" />
+    <ClInclude Include="compiler\translateCode.h" />
+    <ClInclude Include="composition\compositionTheme.h" />
     <ClInclude Include="core.h" />
+    <ClInclude Include="coreApi.h" />
+    <ClInclude Include="crypto\fieldCipher.h" />
+    <ClInclude Include="crypto\dataHash.h" />
+    <ClInclude Include="crypto\sessionToken.h" />
+    <ClInclude Include="crypto\sha256.hpp" />
+    <ClInclude Include="description\calcScheduleDescription.h" />
+    <ClInclude Include="description\choiceLinkDescription.h" />
+    <ClInclude Include="description\commandDescription.h" />
+    <ClInclude Include="description\compositionDescription.h" />
+    <ClInclude Include="description\homePageDescription.h" />
+    <ClInclude Include="description\jobScheduleDescription.h" />
+    <ClInclude Include="description\pictureDescription.h" />
+    <ClInclude Include="description\sourceDescription.h" />
+    <ClInclude Include="description\spreadsheetDescription.h" />
+    <ClInclude Include="description\standardCommandDescription.h" />
+    <ClInclude Include="description\typeDescription.h" />
     <ClInclude Include="diagnostics\crashGuard.h" />
     <ClInclude Include="diagnostics\debugTrace.h" />
     <ClInclude Include="diagnostics\journal.h" />
+    <ClInclude Include="diagnostics\oesConsole.h" />
+    <ClInclude Include="diagnostics\oesApp.h" />
     <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="exception.h" />
+    <ClInclude Include="fboolean.h" />
     <ClInclude Include="fdatetime.h" />
     <ClInclude Include="fiber\fiber.h" />
     <ClInclude Include="fiber\fiberLocals.h" />
-    <ClInclude Include="fileSystem\fs.h" />
-    <ClInclude Include="fileSystem\lz\lzhuf.h" />
-    <ClInclude Include="fileSystem\types.h" />
+    <ClInclude Include="fileKind.h" />
+    <ClInclude Include="dynamicLibrary.h" />
+    <ClInclude Include="fileSystem.h" />
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
     <ClInclude Include="fstring.h" />
+    <ClInclude Include="graphics\colour.h" />
+    <ClInclude Include="graphics\font.h" />
+    <ClInclude Include="graphics\geometry.h" />
+    <ClInclude Include="graphics\picture.h" />
+    <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="guid.h" />
+    <ClInclude Include="job\jobSchedule.h" />
     <ClInclude Include="localization.h" />
-    <ClInclude Include="programFolder.h" />
+    <ClInclude Include="localization\dictionary.h" />
+    <ClInclude Include="logger\loggerQuery.h" />
+    <ClInclude Include="memory\lz\lzhuf.h" />
+    <ClInclude Include="memory\compression.h" />
+    <ClInclude Include="memory\memoryBuffer.h" />
+    <ClInclude Include="memory\memoryPool.h" />
+    <ClInclude Include="memory\memoryStream.h" />
+    <ClInclude Include="net\httpClient.h" />
+    <ClInclude Include="net\httpServer.h" />
+    <ClInclude Include="net\httpStream.h" />
+    <ClInclude Include="net\ioThreads.h" />
+    <ClInclude Include="net\ports.h" />
+    <ClInclude Include="net\tlsStream.h" />
+    <ClInclude Include="net\webSocketFrame.h" />
+    <ClInclude Include="net\webSocketRelay.h" />
+    <ClInclude Include="pictureRegistry.h" />
+    <ClInclude Include="launchTicket.h" />
+    <ClInclude Include="propertyChoiceMode.h" />
+    <ClInclude Include="query\queryAggregates.h" />
+    <ClInclude Include="query\queryAstExpr.h" />
+    <ClInclude Include="query\queryBalanceRole.h" />
+    <ClInclude Include="query\queryConstructorField.h" />
+    <ClInclude Include="query\anyQueryConstructorModel.h" />
+    <ClInclude Include="query\querySourceParameter.h" />
+    <ClInclude Include="query\queryKeywords.h" />
+    <ClInclude Include="query\queryPeriodUnits.h" />
+    <ClInclude Include="query\queryLexer.h" />
+    <ClInclude Include="query\queryAST.h" />
+    <ClInclude Include="query\queryRender.h" />
+    <ClInclude Include="query\queryParser.h" />
+    <ClInclude Include="query\queryRewrite.h" />
+    <ClInclude Include="query\queryRefusal.h" />
+    <ClInclude Include="query\queryUnfold.h" />
+    <ClInclude Include="roleCompositionMode.h" />
+    <ClInclude Include="selectorDataType.h" />
     <ClInclude Include="serialize\dataBuilder.h" />
-    <ClInclude Include="serialize\jsonProvider.h" />
-    <ClInclude Include="serialize\jsonText.h" />
+    <ClInclude Include="serialize\provider\fileProvider.h" />
+    <ClInclude Include="serialize\provider\jsonProvider.h" />
+    <ClInclude Include="serialize\provider\xmlProvider.h" />
+    <ClInclude Include="server\clusterControl.h" />
+    <ClInclude Include="server\listener.h" />
+    <ClInclude Include="server\serverConfig.h" />
+    <ClInclude Include="settings\settingsShelf.h" />
+    <ClInclude Include="spreadsheet\sheetFormat.h" />
+    <ClInclude Include="spreadsheet\spreadsheetObject.h" />
+    <ClInclude Include="startProcess.h" />
+    <ClInclude Include="stringTokenizer.h" />
     <ClInclude Include="stringUtils.h" />
-    <ClInclude Include="types.h" />
+    <ClInclude Include="syntaxHelper\helpCategory.h" />
+    <ClInclude Include="syntaxHelper\helpCorpus.h" />
+    <ClInclude Include="syntaxHelper\helpEntry.h" />
+    <ClInclude Include="syntaxHelper\helpLoader.h" />
+    <ClInclude Include="syntaxHelper\helpLoadError.h" />
+    <ClInclude Include="syntaxHelper\helpResolver.h" />
+    <ClInclude Include="syntaxHelper\helpService.h" />
+    <ClInclude Include="tabular\tabularModelView.h" />
+    <ClInclude Include="typeName.h" />
+    <ClInclude Include="variant.h" />
+    <ClInclude Include="variant_ptr.h" />
+    <ClInclude Include="utils\base64.h" />
+    <ClInclude Include="utils\md5.hpp" />
+    <ClInclude Include="json\jsonText.h" />
+    <ClInclude Include="xml\xmlNodeType.h" />
+    <ClInclude Include="xml\xmlDocument.h" />
+    <ClInclude Include="xml\xmlText.h" />
+    <ClInclude Include="xml\expat\expat_config.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

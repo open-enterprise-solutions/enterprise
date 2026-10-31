@@ -26,9 +26,9 @@ private:
 
 	virtual ibFormTypeList GetFormType() const override {
 		ibFormTypeList formList;
-		formList.AppendItem(wxT("FormObject"), _("Form object"), eFormObject);
-		formList.AppendItem(wxT("FormList"), _("Form list"), eFormList);
-		formList.AppendItem(wxT("FormSelect"), _("Form select"), eFormSelect);
+		formList.AppendItem(ibT("FormObject"), _("Form object"), eFormObject);
+		formList.AppendItem(ibT("FormList"), _("Form list"), eFormList);
+		formList.AppendItem(ibT("FormSelect"), _("Form select"), eFormSelect);
 		return formList;
 	}
 
@@ -36,6 +36,13 @@ public:
 
 	// (The record description, the number and the date live on the RECORDER base — see it for why.)
 	ibValueMetaObjectAttributePredefined* GetDocumentPosted() const { return m_propertyAttributePosted->GetMetaObject(); }
+
+	// Year / quarter / month / day: the next number is the next one inside that period of the
+	// document's date. Nonperiodical (the default, and every document saved before the setting
+	// existed) keeps the one series the document already had.
+	virtual ibNumberPeriodicity GetNumberPeriodicity() const override {
+		return m_propertyNumberPeriodicity->GetValueAsEnum();
+	}
 
 
 	//default constructor
@@ -55,15 +62,15 @@ public:
 	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	/**
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 	//events: 
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -136,7 +143,7 @@ private:
 				prop->AppendItem(
 					object->GetName(),
 					object->GetMetaID(),
-					object->GetIcon(),
+					object->GetClassType(),
 					object);
 			}
 		}
@@ -150,7 +157,7 @@ private:
 				prop->AppendItem(
 					object->GetName(),
 					object->GetMetaID(),
-					object->GetIcon(),
+					object->GetClassType(),
 					object);
 			}
 		}
@@ -164,26 +171,28 @@ private:
 				prop->AppendItem(
 					object->GetName(),
 					object->GetMetaID(),
-					object->GetIcon(),
+					object->GetClassType(),
 					object);
 			}
 		}
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"), _("Code of one document: its handlers - BeforeWrite, OnWrite, Posting (forms the movements in RegisterRecords), UndoPosting, SetNewNumber, filling on generation - and the procedures they call. Runs wherever the document is written or posted: a form, a script or a background job."));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the document kind as a whole rather than of one document: its exported procedures and functions are called on the manager, as Documents.<Name>.<Function>()."));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, ibT("ObjectModule"), _("Object module"), _("Code of one document: its handlers - BeforeWrite, OnWrite, Posting (forms the movements in RegisterRecords), UndoPosting, SetNewNumber, filling on generation - and the procedures they call. Runs wherever the document is written or posted: a form, a script or a background job."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, ibT("ManagerModule"), _("Manager module"), _("Code of the document kind as a whole rather than of one document: its exported procedures and functions are called on the manager, as Documents.<Name>.<Function>()."));
 
-	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
+	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(ibT("PresetValues"), _("Preset values"));
 
-	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), _("The form a document opens with. Empty: the form is generated from the document's attributes and tabular sections."), &ibValueMetaObjectDocument::FillFormObject);
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the document list opens with. Empty: the list form is generated."), &ibValueMetaObjectDocument::FillFormList);
-	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), _("The form used to choose a document for a field of this type. Empty: the list form opens in choice mode."), &ibValueMetaObjectDocument::FillFormSelect);
+	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormObject"), _("Default Object Form"), _("The form a document opens with. Empty: the form is generated from the document's attributes and tabular sections."), &ibValueMetaObjectDocument::FillFormObject);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormList"), _("Default List Form"), _("The form the document list opens with. Empty: the list form is generated."), &ibValueMetaObjectDocument::FillFormList);
+	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormSelect"), _("Default Select Form"), _("The form used to choose a document for a field of this type. Empty: the list form opens in choice mode."), &ibValueMetaObjectDocument::FillFormSelect);
 
 	// (the record description, the number and the date are the RECORDER's — see the base class)
 
 	//create default attributes
-	ibPropertyContainer<>* m_propertyAttributePosted = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("Posted"), _("Posted"), _("Set by the platform while the document is posted - its movements stand in the registers. Written by posting and by undoing it, never by hand.")));
+	ibPropertyContainer<>* m_propertyAttributePosted = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(ibT("Posted"), _("Posted"), _("Set by the platform while the document is posted - its movements stand in the registers. Written by posting and by undoing it, never by hand.")));
+
+	ibPropertyEnum<ibValueEnumNumberPeriodicity>* m_propertyNumberPeriodicity = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumNumberPeriodicity>>(m_categoryData, ibT("NumberPeriodicity"), _("Number periodicity"), _("When the document's numbers start again. Nonperiodical (the default): one series for the life of the document. Year, quarter, month or day: the next number is the next one inside that period of the document's date, and a new period starts again at one. A document saved before this setting existed stays nonperiodical, on the series it already has."), ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical);
 
 	friend class ibValueRecordDataObjectDocument;
 	friend class ibMetaData;
@@ -193,7 +202,7 @@ private:
 //*                                      Object                                              *
 //********************************************************************************************
 
-class ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRef {
+class BACKEND_API ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRef {
 	public:
 	ibValueRecordDataObjectDocument(const ibValueMetaObjectDocument* metaObject = nullptr, const ibGuid& guid = wxNullGuid);
 	ibValueRecordDataObjectDocument(const ibValueRecordDataObjectDocument& source);
@@ -237,6 +246,9 @@ protected:
 	virtual ibFormID GetCurrentObjectFormID() const override {
 		return ibValueMetaObjectDocument::eFormObject;
 	}
+
+	// The series the next number is taken from: the document's date, folded to its periodicity.
+	virtual ibNumberSeriesKey NumberSeriesKey() const override;
 public:
 
 	//support actionData

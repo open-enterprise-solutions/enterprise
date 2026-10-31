@@ -46,9 +46,9 @@ public:
 	virtual bool IsEmpty() const { return m_date.IsEmpty(); }
 
 	// The date, then the reference. See the .cpp for what an absent reference means.
-	virtual int CompareValueLS(const ibValue& cParam) const;
-	virtual bool CompareValueEQ(const ibValue& cParam) const;
-	virtual bool CompareValueNE(const ibValue& cParam) const;
+	virtual int CompareValueLS(const ibVariant& cParam) const;
+	virtual bool CompareValueEQ(const ibVariant& cParam) const;
+	virtual bool CompareValueNE(const ibVariant& cParam) const;
 	// A moment ORDERS with a plain date, so it must HASH with one too — see the
 	// contract on ibValue::GetValueHash. Defined in the .cpp beside the order it
 	// has to agree with.

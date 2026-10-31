@@ -21,7 +21,7 @@
       "parameters": "path - the file to read. One that cannot be opened is refused, and the message names it.\nencoding - a member of TextEncoding; left out or given empty it is UTF8, which is STRICT: bytes that are not UTF-8 are refused rather than read with holes in them.",
       "return_descr": "TextReader.",
       "example": "Reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {              // Undefined, not \"\": an empty line is a line\n    if (Line <> \"\") {\n        Cut = Find(Line, \";\");\n        Code = Left(Line, Cut - 1);      // the first field\n    }\n    Line = Reader.ReadLine();\n}\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader.ReadLine",
         "cls.TextReader.Read",
@@ -49,7 +49,7 @@
       "parameters": "path - the file to read.\nencoding - a member of TextEncoding; left out or given empty it is UTF8.",
       "return_descr": "",
       "example": "Reader = New TextReader(first);\nMessage(Reader.ReadLine());\nReader.Open(second);          // the first file is let go; the reader stands at line 1 of the second\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Close",
@@ -73,7 +73,7 @@
       "parameters": "None.",
       "return_descr": "String - or Undefined at the end of the file.",
       "example": "Line = Reader.ReadLine();\nwhile (Line <> Undefined) {       // not while (Line <> \"\")\n    Message(Line);\n    Line = Reader.ReadLine();\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Read",
@@ -98,7 +98,7 @@
       "parameters": "None.",
       "return_descr": "String - \"\" when nothing is left.",
       "example": "Header = Reader.ReadLine();       // the first line on its own\nBody = Reader.Read();             // everything after it, line breaks and all\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.ReadLine",
@@ -122,7 +122,7 @@
       "parameters": "None.",
       "return_descr": "Number.",
       "example": "Reader = New TextReader(path);\nfor (n = 1 To Reader.LineCount()) {\n    Message(Reader.GetLine(n));\n}\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.GetLine",
@@ -147,7 +147,7 @@
       "parameters": "line - the line's number, counted from one. Below one, or past the last, the answer is Undefined.",
       "return_descr": "String - or Undefined when there is no such line.",
       "example": "Reader = New TextReader(path);\nMessage(Reader.GetLine(1));                    // the header line\nMessage(Reader.GetLine(Reader.LineCount()));   // the last one\nMessage(Reader.ReadLine());                    // still line 1: GetLine did not move it\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.LineCount",
@@ -172,7 +172,7 @@
       "parameters": "None.",
       "return_descr": "",
       "example": "Reader.Close();\nReader.Open(nextFile);        // the same reader, another file",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Open"
@@ -196,7 +196,7 @@
       "parameters": "path - the file to write. One that cannot be opened for writing is refused, and the message names it.\nencoding - a member of TextEncoding; left out or given empty it is UTF8.\nappend - True adds to the end of the file; False, the default, replaces it.",
       "return_descr": "TextWriter.",
       "example": "Writer = New TextWriter(GetTempDir() + \"sales.csv\", TextEncoding.UTF8);\nWriter.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"00001;Paper;12\");\nWriter.Close();                      // the export is whole only once this returned",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextWriter.Write",
         "cls.TextWriter.WriteLine",
@@ -223,7 +223,7 @@
       "parameters": "path - the file to write.\nencoding - a member of TextEncoding; left out or given empty it is UTF8.\nappend - True adds to the end of the file; False, the default, replaces it.",
       "return_descr": "",
       "example": "Writer = New TextWriter(first);\nWriter.WriteLine(\"one\");\nWriter.Open(second);          // the first file is CLOSED here - and a close that failed is told here\nWriter.WriteLine(\"two\");\nWriter.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Close",
@@ -247,7 +247,7 @@
       "parameters": "text - what to put down, as it is.",
       "return_descr": "",
       "example": "Writer.Write(\"00001;\");\nWriter.Write(\"Paper;\");\nWriter.WriteLine(\"12\");        // the break that ends the row",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.WriteLine",
@@ -272,7 +272,7 @@
       "parameters": "text - what to put down; the line break after it is added by this verb.",
       "return_descr": "",
       "example": "Writer.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"\");           // an empty line is a line - just the break",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Write",
@@ -296,7 +296,7 @@
       "parameters": "None.",
       "return_descr": "",
       "example": "try {\n    Writer.Close();\n} except {\n    Message(\"the export did not reach the disk: \" + ErrorDescription());\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Write",
@@ -315,18 +315,25 @@
         "runtime",
         "text_files"
       ],
-      "signature": "New BinaryData([base64 : string])",
-      "description": "Bytes, held as a value - an image, a PDF, a zip, a file whose content is not text at all. A string would not do: text reads back in an encoding, compares as text, and quietly mangles whatever is not valid in it.\n\nRead(path) takes a file's content whole, Write(path) puts the content into a file, Size() says how many bytes there are. Those three are the whole surface - a binary value has no properties.\n\nTHE CONSTRUCTOR'S STRING IS BASE64, NOT A PATH, which is why reading a file is a method: one argument meaning two things is a file that silently fails to decode. A string that is not strict base64 is refused when the value is built - \"Error initializing object 'BinaryData'\" - and another BinaryData handed to the constructor is copied.\n\nTEXT IS A PROJECTION OF THE BYTES, not their storage: written into a string, a BinaryData shows as base64, and an empty one as \"\". Two of them are EQUAL when they hold the same bytes - the comparison reads the content, not its text - and against anything else it is the text that is compared. ValueIsFilled answers whether there are any bytes at all.\n\nA file that cannot be opened is a refusal, and so is one too large to be held in memory: a part of a file is never handed over as the whole of it.",
-      "syntax_block": "Bytes = New BinaryData();\nBytes.Read(path);\nMessage(Bytes.Size());\nBytes.Write(otherPath);\n\nSame = New BinaryData(Text);      // the constructor's string is BASE64, never a path",
-      "parameters": "base64 - the bytes written as base64, the same form the value shows as text; strict, and anything else is refused. Another BinaryData is copied instead. Left out, the value holds no bytes.",
+      "signature": "New BinaryData([base64 : string])\nNew BinaryData(text : string, encoding : TextEncoding [, byteOrderMark : boolean])",
+      "description": "Bytes, held as a value - an image, a PDF, a zip, a file whose content is not text at all. A string would not do: text reads back in an encoding, compares as text, and quietly mangles whatever is not valid in it.\n\nRead(path) takes a file's content whole, Write(path) puts the content into a file, Size() says how many bytes there are, GetString(encoding) reads them as text. Those four are the whole surface - a binary value has no properties.\n\nA TEXT IN AN ENCODING: New BinaryData(text, encoding) holds the bytes the text spells, and a character the encoding has no bytes for is a refusal, not a question mark. NO BYTE-ORDER MARK UNLESS ASKED FOR - in front of JSON or of the first field of a CSV it is what the reader at the other end breaks on. True as the third argument puts one in front for UTF8 (EF BB BF) and UTF16 (FF FE); the other encodings have none. UTF16 is little-endian.\n\nHex and base64 are the global functions HexString and HexValue, Base64String and Base64Value. A digest of the bytes is DataHashing's.\n\nA LONE STRING IS BASE64, NOT A PATH, which is why reading a file is a method: one argument meaning two things is a file that silently fails to decode. Spaces and line breaks in it are skipped. A string that is not base64 is refused when the value is built - \"BinaryData: the text is not base64\" - and another BinaryData handed to the constructor is copied.\n\nTEXT IS A PROJECTION OF THE BYTES, not their storage: written into a string, a BinaryData shows as base64, padded, with no line breaks, and an empty one as \"\". Two of them are EQUAL when they hold the same bytes - the comparison reads the content, not its text - and against anything else it is the text that is compared. ValueIsFilled answers whether there are any bytes at all.\n\nA file that cannot be opened is a refusal, and so is one too large to be held in memory: a part of a file is never handed over as the whole of it.",
+      "syntax_block": "Bytes = New BinaryData();\nBytes.Read(path);\nMessage(Bytes.Size());\nBytes.Write(otherPath);\n\nSame = New BinaryData(Text);      // the constructor's string is BASE64, never a path\n\nSpelled = New BinaryData(Text, TextEncoding.UTF8);\nMessage(Spelled.GetString(TextEncoding.UTF8));",
+      "parameters": "base64 - the bytes written as base64, the same form the value shows as text; anything else is refused. Another BinaryData is copied instead. Left out, the value holds no bytes.\ntext - the string to spell in bytes.\nencoding - a member of TextEncoding; a string is refused.\nbyteOrderMark - True to put the mark in front; left out, False.",
       "return_descr": "BinaryData.",
       "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\logo.png\");\nMessage(Bytes.Size());\nBytes.Write(GetTempDir() + \"logo.png\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.BinaryData.Size",
         "cls.BinaryData.Read",
         "cls.BinaryData.Write",
+        "cls.BinaryData.GetString",
         "cls.TextReader",
+        "enum.TextEncoding",
+        "fn.HexString",
+        "fn.HexValue",
+        "fn.Base64String",
+        "fn.Base64Value",
+        "cls.DataHashing",
         "guide.textFiles"
       ],
       "reviewed": false
@@ -347,7 +354,7 @@
       "parameters": "None.",
       "return_descr": "Number.",
       "example": "Bytes.Read(path);\nif (Bytes.Size() = 0) { Message(\"the file is empty\"); }",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Read"
@@ -370,7 +377,7 @@
       "parameters": "path - the file to read.",
       "return_descr": "",
       "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\price.zip\");\nMessage(Bytes.Size());",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Write",
@@ -395,11 +402,35 @@
       "parameters": "path - the file to write; it is replaced.",
       "return_descr": "",
       "example": "Bytes.Write(GetTempDir() + \"answer.bin\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Read",
         "cls.TextWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BinaryData.GetString",
+      "name_local": "GetString",
+      "name_en": "GetString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Bytes.GetString(encoding : TextEncoding) : string",
+      "description": "The text the bytes spell in the encoding. A byte-order mark at the head is read as a mark and never handed over as text, and a UTF-16 mark says which end comes first.\n\nBytes that do not spell text in the encoding are a REFUSAL, not a text with holes in it.\n\nTHE ENCODING IS ASKED FOR because String(Bytes) is something else: base64, the one text that gives the same bytes back whatever they are.",
+      "syntax_block": "Text = Bytes.GetString(encoding);",
+      "parameters": "encoding - a member of TextEncoding; a string is refused.",
+      "return_descr": "String.",
+      "example": "Answer = Response.GetBodyAsBinaryData();\nText = Answer.GetString(TextEncoding.ANSI);",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.BinaryData",
+        "enum.TextEncoding",
+        "cls.TextReader"
       ],
       "reviewed": false
     },
@@ -415,19 +446,20 @@
         "text_files"
       ],
       "signature": "TextEncoding.UTF8, .UTF16, .ANSI, .OEM, .System",
-      "description": "How bytes spell text, said as a value: TextEncoding has five members - UTF8, UTF16, ANSI, OEM and System - and a member is written TextEncoding.<Name>. A script never builds one, and the string \"utf-8\" is not one either: the enumeration is there instead of it.\n\nIT IS READ WHEREVER BYTES MEET TEXT - New TextReader(path, encoding) and TextReader.Open, New TextWriter(path, encoding, append) and TextWriter.Open. Left out, or given empty, it is UTF8.\n\nUTF-8 IS STRICT: bytes that are not UTF-8 are a refusal, not a text with holes in it. On reading, a byte-order mark at the head of a UTF-8 or UTF-16 file is read as a mark and never handed over as text, and a UTF-16 mark says which end comes first; on writing, UTF-16 gets a mark and UTF-8 gets none.\n\nANSI, OEM AND System ARE THE MACHINE'S OWN, ASKED OF IT rather than assumed, so a base moved from one machine to another reads the files of the machine it runs on. On Windows they are code pages taken by NUMBER: ANSI and System are both the system's ANSI page, OEM is the console's. Away from Windows there is only one such encoding - the current locale's - and all three of them are it. A byte a page has no character for, and a character it has no bytes for, are refusals.",
+      "description": "How bytes spell text, said as a value: TextEncoding has five members - UTF8, UTF16, ANSI, OEM and System - and a member is written TextEncoding.<Name>. A script never builds one, and the string \"utf-8\" is not one either: the enumeration is there instead of it.\n\nIT IS READ WHEREVER BYTES MEET TEXT - New TextReader(path, encoding) and TextReader.Open, New TextWriter(path, encoding, append) and TextWriter.Open, New BinaryData(text, encoding) and BinaryData.GetString(encoding). Left out, or given empty, it is UTF8.\n\nUTF-8 IS STRICT: bytes that are not UTF-8 are a refusal, not a text with holes in it. On reading, a byte-order mark at the head of a UTF-8 or UTF-16 file is read as a mark and never handed over as text, and a UTF-16 mark says which end comes first; on writing, UTF-16 gets a mark and UTF-8 gets none.\n\nANSI, OEM AND System ARE THE MACHINE'S OWN, ASKED OF IT rather than assumed, so a base moved from one machine to another reads the files of the machine it runs on. On Windows they are code pages taken by NUMBER: ANSI and System are both the system's ANSI page, OEM is the console's. Away from Windows there is only one such encoding - the current locale's - and all three of them are it. A byte a page has no character for, and a character it has no bytes for, are refusals.",
       "syntax_block": "Reader = New TextReader(path, TextEncoding.ANSI);\nWriter = New TextWriter(path, TextEncoding.UTF16);",
       "parameters": "",
       "return_descr": "",
       "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.OEM);   // a file from a console program\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding.UTF8",
         "enum.TextEncoding.UTF16",
         "enum.TextEncoding.ANSI",
         "cls.TextReader",
         "cls.TextWriter",
-        "guide.textFiles"
+        "guide.textFiles",
+        "cls.BinaryData"
       ],
       "reviewed": false
     },
@@ -447,7 +479,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(path, TextEncoding.UTF8);   // the same as New TextReader(path)",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding",
         "cls.TextReader",
@@ -471,7 +503,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Writer = New TextWriter(path, TextEncoding.UTF16);\nWriter.WriteLine(\"code;name;qty\");\nWriter.Close();\nReader = New TextReader(path, TextEncoding.UTF16);   // the mark says which end comes first",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding",
         "cls.TextReader",
@@ -495,7 +527,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.ANSI);\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.OEM",
@@ -519,7 +551,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(\"C:\\in\\report.txt\", TextEncoding.OEM);   // written by a console program\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.ANSI",
@@ -543,7 +575,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(path, TextEncoding.System);   // whatever this machine writes\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.ANSI",

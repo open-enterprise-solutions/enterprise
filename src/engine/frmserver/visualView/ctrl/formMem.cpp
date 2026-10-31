@@ -7,7 +7,7 @@
 // provider owns the on-wire layout (kMetaBlock / kChildBlock per node), so an
 // unregistered child clsid is skipped by NewObject == nullptr inside LoadNode.
 
-bool ibValueForm::LoadForm(const wxMemoryBuffer& data)
+bool ibValueForm::LoadForm(const ibMemoryBuffer& data)
 {
 	if (data.GetDataLen() == 0)
 		return false;
@@ -28,7 +28,7 @@ bool ibValueForm::LoadForm(const wxMemoryBuffer& data)
 	return true;
 }
 
-bool ibValueForm::SaveForm(wxMemoryBuffer& data) const
+bool ibValueForm::SaveForm(ibMemoryBuffer& data) const
 {
 	ibWriterMemory writerData;
 	if (!SaveControl(m_metaFormObject, writerData))   // SaveNode recurses the whole subtree

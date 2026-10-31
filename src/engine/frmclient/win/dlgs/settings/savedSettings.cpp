@@ -182,7 +182,7 @@ bool ibDialogSavedSettings::ActOnSelected()
 		// A REFUSAL IS SPOKEN. The row may hold a value whose type this configuration no longer has —
 		// the read says so and the row stays; the person is told rather than left pressing an entry
 		// that does nothing.
-		wxMessageBox(wxString::Format(_("The settings named \"%s\" could not be restored."), m_entries[at].m_name),
+		wxMessageBox(ibString::Format(_("The settings named \"%s\" could not be restored."), m_entries[at].m_name),
 			_("Saved settings"), wxOK | wxICON_ERROR, this);
 		return false;
 	}
@@ -214,7 +214,7 @@ void ibDialogSavedSettings::OnNew(wxCommandEvent& WXUNUSED(event))
 	// otherwise two entries wear one caption and only their ids tell them apart.
 	for (const ibComposerSettingsEntry& entry : m_entries)
 		if (entry.m_name.IsSameAs(name, false)) {
-			if (wxMessageBox(wxString::Format(_("Settings named \"%s\" already exist. Replace them?"), name),
+			if (wxMessageBox(ibString::Format(_("Settings named \"%s\" already exist. Replace them?"), name),
 					_("Save settings"), wxYES_NO | wxICON_QUESTION, this) != wxYES)
 				return;
 			if (SaveInto(entry.m_id, name))
@@ -272,7 +272,7 @@ void ibDialogSavedSettings::OnRemove(wxCommandEvent& WXUNUSED(event))
 	if (at == wxNOT_FOUND || static_cast<size_t>(at) >= m_entries.size())
 		return;
 
-	if (wxMessageBox(wxString::Format(_("Delete the settings named \"%s\"?"), m_entries[at].m_name),
+	if (wxMessageBox(ibString::Format(_("Delete the settings named \"%s\"?"), m_entries[at].m_name),
 			_("Delete settings"), wxYES_NO | wxICON_QUESTION, this) != wxYES)
 		return;
 

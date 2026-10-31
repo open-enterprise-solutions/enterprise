@@ -22,41 +22,32 @@ target_include_directories(protocol
 target_compile_definitions(protocol
     PRIVATE
         NOPCH
+        wxUSE_GUI=0   # of wx the base only — a GUI type here is a compile error
 )
 
-# PROTOCOL_API resolves to dllexport only when PROTOCOL_EXPORTS is defined (protocolApi.h) — frontend's rule.
+# PROTOCOL_API resolves to dllexport only when PROTOCOL_EXPORTS is defined (protocolApi.h).
 if(WIN32)
     target_compile_definitions(protocol PRIVATE PROTOCOL_EXPORTS)
 endif()
 
-# Nothing of the server: a side speaks the wire's text (its tree is nlohmann's, behind protocolNode.h), and a file base
-# is opened by fileserver, LOADED when one is (connectionFile). The connection to a server is cpp-httplib's WebSocket
-# client, compiled with the build's TLS — which the backend carries for everyone else, and this library, linking no
-# backend, carries itself.
+# Nothing of the server: a side speaks the wire's packets (its tree is the packet's ibDataNode, the core's), and a file base
+# is opened by fileserver, LOADED when one is (connectionFile). The connection to a server is the core's WebSocket
+# client (core/net), and its sockets are the core's.
 target_link_libraries(protocol
     PUBLIC
         # The core's journal — one per process, the client's and the protocol's lines alike (core/diagnostics).
         core
     PRIVATE
         wx::base
-        mbedtls
-        mbedx509
-        mbedcrypto
 )
-if(WIN32)
-    target_link_libraries(protocol PRIVATE crypt32 ws2_32)
-endif()
-if(APPLE)
-    target_link_libraries(protocol PRIVATE "-framework Security" "-framework CoreFoundation")
-endif()
 
 find_package(Threads REQUIRED)
 target_link_libraries(protocol PRIVATE Threads::Threads)
 
-# WHAT IT EXPORTS, AND NOTHING ELSE — as a DLL does: hidden by default, PROTOCOL_API shows what is meant to be seen;
-# the static Mbed TLS is kept in as well (see frmclient/CMakeLists.txt).
+# WHAT IT EXPORTS, AND NOTHING ELSE — as a DLL does: hidden by default, PROTOCOL_API shows what is meant to be seen
+# (see frmclient/CMakeLists.txt).
 set_target_properties(protocol PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON
     CXX_VISIBILITY_PRESET hidden

@@ -36,9 +36,12 @@ add_executable(oes_tests
     bench_string.cpp
     test_number.cpp
     test_fdatetime.cpp
+    test_dictionary.cpp
     test_driverDates.cpp
     test_formatString.cpp
+    test_tstr.cpp
     test_blockSyntaxLINQ.cpp
+    test_scriptFoldCode.cpp
     test_byteCodeAOT.cpp
     test_byteCodeFormat.cpp
     test_compiler.cpp
@@ -54,12 +57,14 @@ add_executable(oes_tests
     test_session.cpp
     test_jobManager.cpp
     test_jobSchedule.cpp
+    test_choiceLinkDescription.cpp
     test_module_manager_split.cpp
     # test_pagingRamTable.cpp  # API-rotted (ibValueModelTableBase renamed) — excluded until updated
     test_blobCompression.cpp
     test_firebirdLease.cpp
     test_firebirdBatchInsert.cpp
     test_firebirdDates.cpp
+    test_firebirdZoneRules.cpp
     test_logger.cpp
     test_dbTaxonomy.cpp
     test_gitService.cpp
@@ -67,6 +72,8 @@ add_executable(oes_tests
     test_metadataPasteIdentity.cpp
     test_propertySerialized.cpp
     test_metadataTree.cpp
+    test_numberPeriodicity.cpp
+    test_pictureVersion.cpp
     test_commonAttribute.cpp
     test_documentJournal.cpp
     test_roleComposition.cpp
@@ -74,9 +81,17 @@ add_executable(oes_tests
     test_dataNode.cpp
     test_dataMover.cpp
     test_pointInTime.cpp
+    test_fileProvider.cpp
     test_jsonProvider.cpp
     test_valueJson.cpp
+    test_valueXml.cpp
+    test_sheetFormatXlsxRead.cpp
+    test_xmlDocument.cpp
+    test_xmlEncoding.cpp
+    test_xmlValue.cpp
+    test_xmlProvider.cpp
     test_queryRenderer.cpp
+    test_queryStringConcat.cpp
     test_queryLifecycle.cpp
     test_queryBuilderShowcase.cpp
     test_queryTotals.cpp
@@ -85,17 +100,21 @@ add_executable(oes_tests
     test_compositionSettings.cpp
     test_rpcMessage.cpp
     test_mcpToolContract.cpp
+    test_backupRestore.cpp
     test_spreadsheetCompose.cpp
     test_spreadsheetDocument.cpp
     test_spreadsheetDescriptionNode.cpp
     bench_spreadsheet.cpp
+    bench_xmlValue.cpp
     test_queryAccessPolicy.cpp
     test_queryParity.cpp
     test_queryJoinParity.cpp
     test_queryL3Vocab.cpp
     test_queryL4Lexer.cpp
     test_queryL4Parser.cpp
+    test_queryCoreData.cpp
     test_queryConstructor.cpp
+    test_queryConstructorRequest.cpp
     test_queryNaming.cpp
     test_queryRoundTrip.cpp
     test_jsonRoundTrip.cpp
@@ -118,12 +137,19 @@ add_executable(oes_tests
     test_databaseMaterializeBuilder.cpp
     test_periodFold.cpp
     test_registerReadRules.cpp
+    test_informationRegisterGet.cpp
     test_totalsViewParity.cpp
     test_totalsNumericParity.cpp
     test_totalsKeyHash.cpp
     test_totalsFold.cpp
+    test_totalsTypeLoss.cpp
     test_accountingTotals.cpp
     test_sequenceBorder.cpp
+    test_typeChangeLedger.cpp
+    test_acceptanceCatalogs.cpp
+    test_tabularEnumPersist.cpp
+    test_acceptanceAccumulation.cpp
+    test_sqliteBlobLifetime.cpp
     test_calcDisplacement.cpp
     test_calcRecalculation.cpp
     test_calcSchedule.cpp
@@ -142,19 +168,27 @@ add_executable(oes_tests
     test_valueTextFile.cpp
     test_valueHttp.cpp
     test_valueHttpSecure.cpp
+    test_listener.cpp
+    test_sessionTokenText.cpp
     test_metaDescription.cpp
     test_backendColumnRawDB.cpp
     test_rowValues.cpp
     test_queryRamTable.cpp
     test_physicalFieldName.cpp
+    test_schemaIndex.cpp
     test_databaseStringConverter.cpp
     test_readerWriterMemory.cpp
+    test_openAccess.cpp
     test_passwordHash.cpp
+    test_launchTicket.cpp
+    test_loginName.cpp
+    test_sessionThrottle.cpp
     test_programFolder.cpp
     test_md5.cpp
     test_sha256.cpp
+    test_dataHashing.cpp
     test_stringUtils.cpp
-    # test_guid.cpp  # API-rotted (ibGuidImpl::isValid/str/bytes gone) — excluded until updated
+    test_guid.cpp
     test_dbTransaction.cpp
     test_propertyObject.cpp
     test_propertyDefaults.cpp
@@ -165,37 +199,69 @@ add_executable(oes_tests
     test_modelFetchDoor.cpp
     test_workerPoolDrop.cpp
     test_workerPoolFiber.cpp
+    test_fiberStopJoin.cpp
     test_fiberTsan.cpp
+    test_fiberTrust.cpp
+    test_fiberFp.cpp
+    test_fiberStack.cpp
+    test_stopSignals.cpp
     test_typeFamilyAdjust.cpp
     test_eventHandler.cpp
     test_functionalOption.cpp
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
-    test_socketLock.cpp
+    test_debugServer.cpp
+    test_commonModuleCheck.cpp
+    test_lockRace.cpp
+    test_clientListener.cpp
 )
 
 target_link_libraries(oes_tests
     PRIVATE
         backend
+        frmserver
         GTest::gtest
         GTest::gtest_main
+)
+
+# The client listener is the application server's, not a library. This one file
+# is what accepts the sockets; frmserver is ibClientHost, which answers them.
+target_sources(oes_tests PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/engine/appserver/clientListener.cpp"
 )
 
 # Tests need to construct app-owned subsystems directly (no full appData
 # bring-up). OES_TESTING opens ib::AppDataCtorToken's default ctor; see
 # backend/appDataCtorToken.h.
 target_compile_definitions(oes_tests PRIVATE OES_TESTING)
+# The cmake that configured this tree: test_byteCodeFormat runs the engine fingerprint script with it, the way the
+# build does, and a machine need not have one on PATH.
+target_compile_definitions(oes_tests PRIVATE OES_CMAKE_COMMAND="${CMAKE_COMMAND}")
+
+# THE REFERENCE SERVERS ARE cpp-httplib's, TLS among them (test_valueHttpSecure, test_listener): another library than
+# the core's client and server they are put against. So this binary is a user of Mbed TLS in its own right, with a copy
+# of its own (core/tls/oes_mbedtls_threading.h) - the one module besides the core. The trust stores httplib reads by
+# itself: the Windows store, the macOS keychain.
+target_compile_definitions(oes_tests PRIVATE CPPHTTPLIB_MBEDTLS_SUPPORT)
+target_link_libraries(oes_tests PRIVATE mbedtls mbedx509 mbedcrypto)
+if(WIN32)
+    target_link_libraries(oes_tests PRIVATE crypt32)
+endif()
+if(APPLE)
+    target_link_libraries(oes_tests PRIVATE "-framework Security" "-framework CoreFoundation")
+endif()
 
 target_include_directories(oes_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_SOURCE_DIR}/src/engine"
     "${CMAKE_SOURCE_DIR}/src/engine/backend"
+    "${CMAKE_SOURCE_DIR}/src/engine/appserver"
 )
 
 # On non-Windows the backend is a .dylib/.so; ensure the test can find it
 # at runtime by setting the RPATH to the build output directory.
 set_target_properties(oes_tests PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -237,7 +303,7 @@ oes_discover_tests(oes_tests)
 # which hour of which March morning does not exist. The hour itself is checked by a test that sets a
 # clock of its own (DriverDates.TheSkippedHourIsHeldEvenWhereTheMachineSkipsIt).
 set(oes_date_suites
-    "ValueTest.*Date*:ValueTest.TheEmptyDate*:ValueTest.AText*:DateTime.*:DriverDates.*:DataNode.ADate*:DataNode.AFormat*:DataMover.*:JobSchedule.Buffer_ReadsAVersion*:PointInTime.*:*ScriptCorpusRun*date_reading*")
+    "ValueTest.*Date*:ValueTest.TheEmptyDate*:ValueTest.AText*:DateTime.*:DriverDates.*:DataNode.ADate*:DataNode.AFormat*:DataMover.*:JobSchedule.Buffer_ReadsAVersion*:PointInTime.*:*ScriptCorpusRun*date_reading*:AcceptanceAccumulation.*")
 foreach(clock IN ITEMS "utc;UTC0" "east;EET-2EEST,M3.5.0/3,M10.5.0/4" "west;CET-1CEST,M3.5.0/2,M10.5.0/3")
     list(GET clock 0 zone_name)
     list(GET clock 1 zone_rule)
@@ -263,8 +329,9 @@ set_tests_properties(oes_cross_zone_read PROPERTIES
 # Lightweight string-layer tests — ibString/fstring only.
 #
 # fstring.h is the facade and fstring.cpp the module behind it; both depend on
-# nothing but wxBase, so this target compiles the module IN (as if it were
-# core, CORE_EXPORTS) and does NOT link (or recompile) core.dll. Use it
+# nothing but wxBase and the pool a text's block is made in (memoryPool.cpp),
+# so this target compiles the two IN (as if they were core, CORE_EXPORTS) and
+# does NOT link (or recompile) core.dll. Use it
 # for fast iteration on the string type — it builds in seconds even after
 # touching core backend headers:
 #
@@ -277,6 +344,7 @@ add_executable(oes_string_tests
     test_string.cpp
     bench_string.cpp
     "${CMAKE_SOURCE_DIR}/src/engine/core/fstring.cpp"
+    "${CMAKE_SOURCE_DIR}/src/engine/core/memory/memoryPool.cpp"
 )
 target_compile_definitions(oes_string_tests PRIVATE CORE_EXPORTS)
 
@@ -292,7 +360,7 @@ target_include_directories(oes_string_tests PRIVATE
 )
 
 set_target_properties(oes_string_tests PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -325,7 +393,7 @@ target_include_directories(oes_query_totals_test PRIVATE
 )
 
 set_target_properties(oes_query_totals_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -358,7 +426,7 @@ target_include_directories(oes_query_parity_test PRIVATE
 )
 
 set_target_properties(oes_query_parity_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -390,7 +458,7 @@ target_include_directories(oes_query_join_parity_test PRIVATE
 )
 
 set_target_properties(oes_query_join_parity_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -425,7 +493,7 @@ target_include_directories(oes_temp_db_sqlite_test PRIVATE
 )
 
 set_target_properties(oes_temp_db_sqlite_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -462,7 +530,7 @@ target_include_directories(oes_job_tenancy_test PRIVATE
 )
 
 set_target_properties(oes_job_tenancy_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -498,7 +566,7 @@ target_include_directories(oes_multi_base_test PRIVATE
 )
 
 set_target_properties(oes_multi_base_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -513,7 +581,10 @@ oes_discover_tests(oes_multi_base_test)
 #   cmake --build build --target oes_protocol_test --config Debug
 #   ./bin/oes_protocol_test
 # ---------------------------------------------------------------------------
-add_executable(oes_protocol_test test_clientFrameApply.cpp)
+add_executable(oes_protocol_test
+    test_clientFrameApply.cpp
+    test_sessionFailover.cpp
+)
 
 target_link_libraries(oes_protocol_test
     PRIVATE
@@ -535,66 +606,13 @@ target_include_directories(oes_protocol_test PRIVATE
 )
 
 set_target_properties(oes_protocol_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
 )
 
 oes_discover_tests(oes_protocol_test)
-
-# ---------------------------------------------------------------------------
-# Frontend GUI harness — STEP 1. Links the DESKTOP frontend.dll (real wx
-# widgets: ibVisualHost : wxScrolledCanvas) + backend into a gtest target and
-# proves a live GUI wxApp + a runtime-mode appData env come up together in the
-# test process — the seam every later form/control test stands on.
-#
-# Desktop controls are wxWindow subclasses, so this needs a live GUI toolkit (a
-# display); the harness GTEST_SKIPs on a headless box. Kept as its OWN target
-# (like oes_temp_db_sqlite_test) so its wxApp / appData bring-up can't perturb
-# the main oes_tests run, and so its heavy wx link stays off the fast suites.
-#   cmake --build build --target oes_frontend_runtime_test --config Debug
-#   ./bin/oes_frontend_runtime_test
-# ---------------------------------------------------------------------------
-add_executable(oes_frontend_runtime_test
-    test_frontendRuntime.cpp
-    test_frontendForm.cpp
-    test_frontendDocView.cpp
-    test_frontendVisualHost.cpp
-    test_frontendControls.cpp
-    test_frontendQueryConstructor.cpp
-    test_frontendTranslateConstructor.cpp
-    test_frontendFormatConstructor.cpp
-    test_frontendDebugIcons.cpp
-)
-
-target_link_libraries(oes_frontend_runtime_test
-    PRIVATE
-        backend
-        frontend
-        wx::core wx::aui wx::html wx::propgrid wx::adv
-        wx::stc  wx::xrc wx::qa  wx::base wx::net wx::xml
-        GTest::gtest
-        GTest::gtest_main
-)
-
-target_compile_definitions(oes_frontend_runtime_test PRIVATE OES_TESTING)
-
-target_include_directories(oes_frontend_runtime_test PRIVATE
-    "${CMAKE_SOURCE_DIR}/src"
-    "${CMAKE_SOURCE_DIR}/src/engine"
-    "${CMAKE_SOURCE_DIR}/src/engine/backend"
-    "${CMAKE_SOURCE_DIR}/src/engine/frontend"
-)
-
-set_target_properties(oes_frontend_runtime_test PROPERTIES
-    CXX_STANDARD          17
-    CXX_STANDARD_REQUIRED ON
-    BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
-    INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
-)
-
-oes_discover_tests(oes_frontend_runtime_test)
 
 # ---------------------------------------------------------------------------
 # PostgreSQL dialect — EXECUTED against a real server (integration scope).
@@ -614,7 +632,7 @@ oes_discover_tests(oes_frontend_runtime_test)
 # the layer is absent and the target would not link.
 # ---------------------------------------------------------------------------
 if(OES_USE_POSTGRESQL)
-    add_executable(oes_pg_dialect_test test_postgresDialect.cpp)
+    add_executable(oes_pg_dialect_test test_postgresDialect.cpp test_lockRace.cpp)
 
     target_link_libraries(oes_pg_dialect_test
         PRIVATE
@@ -623,7 +641,7 @@ if(OES_USE_POSTGRESQL)
             GTest::gtest_main
     )
 
-    target_compile_definitions(oes_pg_dialect_test PRIVATE OES_TESTING)
+    target_compile_definitions(oes_pg_dialect_test PRIVATE OES_TESTING OES_LOCK_RACE_POSTGRES_ONLY)
 
     target_include_directories(oes_pg_dialect_test PRIVATE
         "${CMAKE_SOURCE_DIR}/src"
@@ -632,7 +650,7 @@ if(OES_USE_POSTGRESQL)
     )
 
     set_target_properties(oes_pg_dialect_test PROPERTIES
-        CXX_STANDARD          17
+        CXX_STANDARD          20
         CXX_STANDARD_REQUIRED ON
         BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
         INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"

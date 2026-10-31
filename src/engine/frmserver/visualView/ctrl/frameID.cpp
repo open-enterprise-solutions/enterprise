@@ -7,7 +7,7 @@
 #include "form.h"
 
 
-ibValueFrame* ibValueFrame::DoFindControlByName(const wxString& controlName, ibValueFrame* top) const
+ibValueFrame* ibValueFrame::DoFindControlByName(const ibString& controlName, ibValueFrame* top) const
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
 		ibValueFrame* child = top->GetChild(idx);
@@ -18,14 +18,14 @@ ibValueFrame* ibValueFrame::DoFindControlByName(const wxString& controlName, ibV
 		}
 	}
 
-	if (stringUtils::CompareString(controlName, top->GetControlName())) {
+	if (stringUtils::IsSameAs(controlName, top->GetControlName())) {
 		return top;
 	}
 
 	return nullptr;
 }
 
-ibValueFrame* ibValueFrame::FindControlByName(const wxString& controlName) const
+ibValueFrame* ibValueFrame::FindControlByName(const ibString& controlName) const
 {
 	return DoFindControlByName(controlName, GetOwnerForm());
 }

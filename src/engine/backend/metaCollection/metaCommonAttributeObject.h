@@ -46,8 +46,8 @@ class BACKEND_API ibValueMetaObjectCommonAttribute : public ibValueMetaObjectAtt
 		: ibValueMetaObjectAttribute(valType) {}
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	// Context menu — "Open composition", the same gesture a section offers for its own.
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
@@ -76,8 +76,8 @@ class BACKEND_API ibValueMetaObjectCommonAttribute : public ibValueMetaObjectAtt
 
 	// A change here — the type above all — has to reach every object that carries a copy.
 	virtual void OnPropertyChanged(class ibProperty* property,
-		const wxVariant& oldValue, const wxVariant& newValue) override;
-	virtual bool OnRenameMetaObject(const wxString& sNewName) override;
+		const ibVariant& oldValue, const ibVariant& newValue) override;
+	virtual bool OnRenameMetaObject(const ibString& sNewName) override;
 	virtual bool OnDeleteMetaObject() override;
 };
 
@@ -156,8 +156,8 @@ class BACKEND_API ibValueMetaObjectCommonAttributeColumn : public ibValueMetaObj
 	}
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	// NOT REMOVABLE WHERE IT SITS — refused in the DELETE event, not the close one (the
 	// close phase runs on every metaobject when a configuration closes; refusing there

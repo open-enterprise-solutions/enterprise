@@ -67,7 +67,7 @@ bool ibValueMetaObjectFormBase::LoadFormData(ibBackendValueForm* valueForm) cons
 }
 
 bool ibValueMetaObjectFormBase::SaveFormData(ibBackendValueForm* valueForm) {
-	wxMemoryBuffer memoryBuffer;
+	ibMemoryBuffer memoryBuffer;
 	if (valueForm->SaveForm(memoryBuffer)) {
 		SetFormData(memoryBuffer);
 		// Designer's form-edit commit — invalidate this form's compile-cache
@@ -152,7 +152,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectFormBase::CreateAndBuildForm(cons
 			ibValue form = result;
 			ibValue cancel = false;
 			ibValue* params[] = { &form, &cancel };
-			ibRuntimeModuleDataObject::ExecAsManagerEvent(owner, wxT("FormGetProcessing"), params, 2);
+			ibRuntimeModuleDataObject::ExecAsManagerEvent(owner, ibT("FormGetProcessing"), params, 2);
 			if (cancel.GetBoolean())
 				return nullptr;
 		}
@@ -169,7 +169,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectFormBase::CreateAndBuildForm(cons
 
 // node <-> runtime-blob shim. The form blob IS the binary-provider node format (each
 // control's SaveNode subtree), so the adapter is a straight provider round-trip.
-ibDataValue ibValueMetaObjectFormBase::FormBlobToNode(const wxMemoryBuffer& blob)
+ibDataValue ibValueMetaObjectFormBase::FormBlobToNode(const ibMemoryBuffer& blob)
 {
 	if (blob.GetDataLen() == 0)
 		return ibDataValue();
@@ -179,13 +179,13 @@ ibDataValue ibValueMetaObjectFormBase::FormBlobToNode(const wxMemoryBuffer& blob
 	return ibDataValue::Child(node);
 }
 
-wxMemoryBuffer ibValueMetaObjectFormBase::FormNodeToBlob(const ibDataValue& formNode)
+ibMemoryBuffer ibValueMetaObjectFormBase::FormNodeToBlob(const ibDataValue& formNode)
 {
 	if (formNode.Kind() != ibDataKind::Child)
-		return wxMemoryBuffer();
-	const std::shared_ptr<ibDataNode>& node = formNode.AsChild();
+		return ibMemoryBuffer();
+	const auto node = formNode.AsChild();
 	if (!node)
-		return wxMemoryBuffer();
+		return ibMemoryBuffer();
 	ibWriterMemory writer;
 	ibBinaryProvider().Write(*node, writer);
 	return writer.buffer();
@@ -199,7 +199,7 @@ ibDataValue ibValueMetaObjectFormBase::CopyFormData() const
 	ibBackendValueForm* valueForm = nullptr;
 	auto* cc = m_metaData->GetCompileCache();
 	if (cc && cc->FindCompileModule(this, valueForm)) {
-		wxMemoryBuffer blob;
+		ibMemoryBuffer blob;
 		if (valueForm->SaveForm(blob))
 			return FormBlobToNode(blob);
 	}
@@ -217,18 +217,18 @@ bool ibValueMetaObjectFormBase::PasteFormData()
 
 ///////////////////////////////////////////////////////////////////////////
 
-ibValueMetaObjectFormBase::ibValueMetaObjectFormBase(const wxString& name, const wxString& synonym, const wxString& comment) :
+ibValueMetaObjectFormBase::ibValueMetaObjectFormBase(const ibString& name, const ibString& synonym, const ibString& comment) :
 	ibValueMetaObjectModuleBase(name, synonym, comment)
 {
 	//set default proc
-	SetDefaultProcedure(wxT("BeforeOpen"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	SetDefaultProcedure(wxT("OnOpen"), ibContentHelper::eProcedureHelper);
-	SetDefaultProcedure(wxT("BeforeClose"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	SetDefaultProcedure(wxT("OnClose"), ibContentHelper::eProcedureHelper);
+	SetDefaultProcedure(ibT("BeforeOpen"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	SetDefaultProcedure(ibT("OnOpen"), ibContentHelper::eProcedureHelper);
+	SetDefaultProcedure(ibT("BeforeClose"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	SetDefaultProcedure(ibT("OnClose"), ibContentHelper::eProcedureHelper);
 
-	SetDefaultProcedure(wxT("OnReOpen"), ibContentHelper::eProcedureHelper);
-	SetDefaultProcedure(wxT("ChoiceProcessing"), ibContentHelper::eProcedureHelper, { { wxT("SelectedValue") }, { wxT("ChoiceSource") } });
-	SetDefaultProcedure(wxT("RefreshDisplay"), ibContentHelper::eProcedureHelper);
+	SetDefaultProcedure(ibT("OnReOpen"), ibContentHelper::eProcedureHelper);
+	SetDefaultProcedure(ibT("ChoiceProcessing"), ibContentHelper::eProcedureHelper, { { ibT("SelectedValue") }, { ibT("ChoiceSource") } });
+	SetDefaultProcedure(ibT("RefreshDisplay"), ibContentHelper::eProcedureHelper);
 }
 
 
@@ -236,7 +236,7 @@ ibValueMetaObjectFormBase::ibValueMetaObjectFormBase(const wxString& name, const
 //*                            Metaform                                 *
 //***********************************************************************
 
-ibValueMetaObjectForm::ibValueMetaObjectForm(const wxString& name, const wxString& synonym, const wxString& comment) : ibValueMetaObjectFormBase(name, synonym, comment)
+ibValueMetaObjectForm::ibValueMetaObjectForm(const ibString& name, const ibString& synonym, const ibString& comment) : ibValueMetaObjectFormBase(name, synonym, comment)
 {
 }
 
@@ -270,7 +270,7 @@ bool ibValueMetaObjectForm::FillGenericFormType(ibPropertyList* prop)
 				formList.GetItemLabel(idx),
 				formList.GetItemHelp(idx),
 				formList.GetItemId(idx),
-				GetIcon(),
+				GetClassType(),
 				formList.GetItemName(idx)
 			);
 		}
@@ -388,7 +388,7 @@ bool ibValueMetaObjectForm::OnAfterCloseMetaObject()
 //***********************************************************************
 
 
-ibValueMetaObjectCommonForm::ibValueMetaObjectCommonForm(const wxString& name, const wxString& synonym, const wxString& comment) : ibValueMetaObjectFormBase(name, synonym, comment) {}
+ibValueMetaObjectCommonForm::ibValueMetaObjectCommonForm(const ibString& name, const ibString& synonym, const ibString& comment) : ibValueMetaObjectFormBase(name, synonym, comment) {}
 
 bool ibValueMetaObjectCommonForm::ReadData(const ibDataNode& node)
 {
@@ -407,12 +407,12 @@ bool ibValueMetaObjectCommonForm::WriteData(ibDataNode& node) const
 ibFormPtr<ibBackendValueForm> ibValueMetaObjectCommonForm::GetObjectForm(ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	if (!AccessRight_Use()) {
-		ibBackendAccessException::Error(wxString::Format(_("opening form '%s'"), GetSynonym()));
+		ibBackendAccessException::Error(ibString::Format(_("opening form '%s'"), GetSynonym()));
 		return nullptr;
 	}
 
 	return ibValueMetaObjectFormBase::CreateAndBuildForm(
-		ibFormRequest(wxString(), formGuid),
+		ibFormRequest(ibString(), formGuid),
 		this,
 		ownerControl,
 		nullptr

@@ -28,11 +28,11 @@
 #include "backend/query/structureBatch.h"                         // ibStructureBatch — per-table DDL/seed batch the Process* fill
 #include "backend/query/schemaSnapshot.h"                         // ibSchemaSnapshot / SnapshotOf — declarative structure (the differ's input)
 
-wxString ibValueMetaObjectRecordDataRef::GetPhysicalTableName() const
+ibString ibValueMetaObjectRecordDataRef::GetPhysicalTableName() const
 {
-	const wxString& className = GetClassName();
+	const ibString& className = GetClassName();
 	wxASSERT(m_metaId != 0);
-	return wxString::Format(wxT("%s%i"),
+	return ibString::Format(ibT("%s%i"),
 		className, GetMetaID());
 }
 
@@ -41,7 +41,7 @@ wxString ibValueMetaObjectRecordDataRef::GetPhysicalTableName() const
 // exception, so the error carries the query source span — Max). The GENERIC metaobject has no constants; a
 // reference record vends EmptyRef; the hierarchy level adds predefined items. No throw here.
 
-bool ibValueMetaObjectGenericData::ResolveQueryConstant(const wxString& /*member*/, ibValue& /*out*/) const
+bool ibValueMetaObjectGenericData::ResolveQueryConstant(const ibString& /*member*/, ibValue& /*out*/) const
 {
 	return false;
 }
@@ -69,7 +69,7 @@ bool ibValueMetaObjectGenericData::AdjustOutValue(const ibValueDataObject& /*ele
 	return false;
 }
 
-bool ibValueMetaObjectRecordDataRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
+bool ibValueMetaObjectRecordDataRef::ResolveQueryConstant(const ibString& member, ibValue& out) const
 {
 	if (member.CmpNoCase(ibRefMember::EmptyRef) != 0)
 		return false;
@@ -80,7 +80,7 @@ bool ibValueMetaObjectRecordDataRef::ResolveQueryConstant(const wxString& member
 // ADDITIVE, like every other override in this family: the parent answers what it declares
 // (EmptyRef, spelled ONCE where the reference itself lives) and the level below adds what it has.
 // Re-spelling the base's own constant here would be a second place to change it.
-bool ibValueMetaObjectRecordDataEnumRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
+bool ibValueMetaObjectRecordDataEnumRef::ResolveQueryConstant(const ibString& member, ibValue& out) const
 {
 	if (ibValueMetaObjectRecordDataRef::ResolveQueryConstant(member, out))
 		return true;
@@ -95,7 +95,7 @@ bool ibValueMetaObjectRecordDataEnumRef::ResolveQueryConstant(const wxString& me
 	return false;
 }
 
-bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const ibString& member, ibValue& out) const
 {
 	if (ibValueMetaObjectRecordDataRef::ResolveQueryConstant(member, out))
 		return true;
@@ -113,11 +113,11 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const 
 //  ContributeTables snapshot through the L3-3 mover. See ibMetaDataConfigurationStorage::Dump/
 //  RestoreDataFromBuffer in metadataConfiguration.cpp.)
 
-wxString ibValueMetaObjectRegisterData::GetPhysicalTableName() const
+ibString ibValueMetaObjectRegisterData::GetPhysicalTableName() const
 {
-	const wxString& className = GetClassName();
+	const ibString& className = GetClassName();
 	wxASSERT(m_metaId != 0);
-	return wxString::Format(wxT("%s%i"),
+	return ibString::Format(ibT("%s%i"),
 		className, GetMetaID());
 }
 
@@ -155,9 +155,9 @@ wxString ibValueMetaObjectRegisterData::GetPhysicalTableName() const
 
 // ⭐⭐ THE ORDER OF A REFERENCE KIND, AS A COLUMN (commonObject.h) — ONE NAME for the whole family, so a walk through
 // a reference of several kinds finds each kind's own.
-wxString ibBackendColumnSortOrder::GetName()         const { return wxT("SortOrder"); }
-wxString ibBackendColumnSortOrder::GetSynonym()      const { return _("Sort order"); }
-wxString ibBackendColumnSortOrder::GetPhysicalName() const { return GetName(); }   // none of its own — see the layout
+ibString ibBackendColumnSortOrder::GetName()         const { return ibT("SortOrder"); }
+ibString ibBackendColumnSortOrder::GetSynonym()      const { return _("Sort order"); }
+ibString ibBackendColumnSortOrder::GetPhysicalName() const { return GetName(); }   // none of its own — see the layout
 
 // Nothing declared it, so its id is minted over what it belongs to: its kind's own number, which no other column of
 // any source carries (queryColumn.h, SyntheticId).
@@ -184,7 +184,7 @@ std::vector<ibColumnSlot> ibBackendColumnSortOrder::DescribeLayout() const
 // …and it reads as its parts' values, in that order — each by the part's own field name and role, no tag
 // consulted, exactly as the moment reads its halves. An ARRAY orders element by element, so in memory a sort by
 // this column compares what the server's ORDER BY compares.
-bool ibBackendColumnSortOrder::ReadValue(const wxString& /*fieldName*/, const ibMetaData* metaData,
+bool ibBackendColumnSortOrder::ReadValue(const ibString& /*fieldName*/, const ibMetaData* metaData,
 	ibValue& retValue, ibQueryResult& result, bool createData) const
 {
 	std::vector<ibValue> values;
@@ -226,7 +226,7 @@ ibRecorderQueryable::ibRecorderQueryable(const ibValueMetaObjectRecordDataRecord
 // The MOMENT answers first, then the attributes: a query naming it resolves to the column that knows
 // how to build it. Without this the field tree offered a name the query could not resolve — a field
 // that exists only on screen. (The tabular section answers `Ref` the same way.)
-const ibBackendQueryColumn* ibRecorderQueryable::ResolveColumnByName(const wxString& name) const
+const ibBackendQueryColumn* ibRecorderQueryable::ResolveColumnByName(const ibString& name) const
 {
 	if (name.IsSameAs(m_momentColumn.GetName(), false))
 		return &m_momentColumn;
@@ -274,14 +274,14 @@ std::vector<ibColumnSlot> ibRecorderQueryable::ibBackendColumnPointInTime::Descr
 	return slots;
 }
 
-wxString ibRecorderQueryable::ibBackendColumnPointInTime::GetName() const { return m_owner->GetPointInTime()->GetName(); }
-wxString ibRecorderQueryable::ibBackendColumnPointInTime::GetSynonym() const { return m_owner->GetPointInTime()->GetSynonym(); }
-wxString ibRecorderQueryable::ibBackendColumnPointInTime::GetPhysicalName() const { return m_owner->GetPointInTime()->GetPhysicalName(); }
+ibString ibRecorderQueryable::ibBackendColumnPointInTime::GetName() const { return m_owner->GetPointInTime()->GetName(); }
+ibString ibRecorderQueryable::ibBackendColumnPointInTime::GetSynonym() const { return m_owner->GetPointInTime()->GetSynonym(); }
+ibString ibRecorderQueryable::ibBackendColumnPointInTime::GetPhysicalName() const { return m_owner->GetPointInTime()->GetPhysicalName(); }
 ibMetaID ibRecorderQueryable::ibBackendColumnPointInTime::GetColumnId() const { return m_owner->GetPointInTime()->GetColumnId(); }
 ibTypeDescription& ibRecorderQueryable::ibBackendColumnPointInTime::GetTypeDesc() const { return m_owner->GetPointInTime()->GetTypeDesc(); }
 bool ibRecorderQueryable::ibBackendColumnPointInTime::IsAvailable() const { return m_owner->GetPointInTime()->IsAvailable(); }
 
-bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const wxString& fieldName,
+bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const ibString& fieldName,
 	const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData) const
 {
 	const ibBackendQueryColumn* date = m_owner->GetDocumentDate()->GetQueryColumn();
@@ -404,7 +404,7 @@ const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetH
 // carried as real attributes; the consumer assembles the row identity. No reference.
 // ⭐ Answered with the attribute's QUERY FACE throughout this file: an attribute is not a query
 // column, it holds one (docs/private/ownership-authority.md). The signatures are untouched.
-const ibBackendQueryColumn* ibRegisterDataQueryable::ResolveColumnByName(const wxString& name) const {
+const ibBackendQueryColumn* ibRegisterDataQueryable::ResolveColumnByName(const ibString& name) const {
 	const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(name);
 	return attribute != nullptr ? attribute->GetQueryColumn() : nullptr;
 }
@@ -418,8 +418,8 @@ std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetColumns() c
 		if (a != nullptr) cols.push_back(a->GetQueryColumn());
 	return cols;
 }
-wxString ibRegisterDataQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
-wxString ibRegisterDataQueryable::GetQueryName()      const { return m_meta->GetName(); }
+ibString ibRegisterDataQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+ibString ibRegisterDataQueryable::GetQueryName()      const { return m_meta->GetName(); }
 const ibMetaData* ibRegisterDataQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
 const ibValueMetaObjectGenericData* ibRegisterDataQueryable::GetSourceMetaObject() const { return m_meta; }   // the metaobject behind the source (front reads its icon)
 // Uniqueness key (UPSERT match): recorder + line number + period for a recorder-based register

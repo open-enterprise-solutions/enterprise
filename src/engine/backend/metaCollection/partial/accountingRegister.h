@@ -38,24 +38,24 @@ class ibValueMetaObjectChartOfAccounts;
 // one side of an entry. Writing "BalanceDr" out here would be a second spelling of a word that already
 // exists, and the two would drift the first time either changed.
 namespace ibAcctFigure {
-	inline const wxString BalanceDr        = ibRegSidedFigure(ibRegFigure::Balance, false);
-	inline const wxString BalanceCr        = ibRegSidedFigure(ibRegFigure::Balance, true);
-	inline const wxString TurnoverDr       = ibRegSidedFigure(ibRegFigure::Turnover, false);
-	inline const wxString TurnoverCr       = ibRegSidedFigure(ibRegFigure::Turnover, true);
-	inline const wxString Turnover         = ibRegFigure::Turnover;   // DrCrTurnovers — one figure per PAIR of accounts
-	inline const wxString CorrTurnoverDr   = ibRegSidedFigure(ibRegFigure::CorrTurnover, false);
-	inline const wxString CorrTurnoverCr   = ibRegSidedFigure(ibRegFigure::CorrTurnover, true);
-	inline const wxString OpeningBalanceDr = ibRegSidedFigure(ibRegFigure::OpeningBalance, false);
-	inline const wxString OpeningBalanceCr = ibRegSidedFigure(ibRegFigure::OpeningBalance, true);
-	inline const wxString ClosingBalanceDr = ibRegSidedFigure(ibRegFigure::ClosingBalance, false);
-	inline const wxString ClosingBalanceCr = ibRegSidedFigure(ibRegFigure::ClosingBalance, true);
+	inline const ibString BalanceDr        = ibRegSidedFigure(ibRegFigure::Balance, false);
+	inline const ibString BalanceCr        = ibRegSidedFigure(ibRegFigure::Balance, true);
+	inline const ibString TurnoverDr       = ibRegSidedFigure(ibRegFigure::Turnover, false);
+	inline const ibString TurnoverCr       = ibRegSidedFigure(ibRegFigure::Turnover, true);
+	inline const ibString Turnover         = ibRegFigure::Turnover;   // DrCrTurnovers — one figure per PAIR of accounts
+	inline const ibString CorrTurnoverDr   = ibRegSidedFigure(ibRegFigure::CorrTurnover, false);
+	inline const ibString CorrTurnoverCr   = ibRegSidedFigure(ibRegFigure::CorrTurnover, true);
+	inline const ibString OpeningBalanceDr = ibRegSidedFigure(ibRegFigure::OpeningBalance, false);
+	inline const ibString OpeningBalanceCr = ibRegSidedFigure(ibRegFigure::OpeningBalance, true);
+	inline const ibString ClosingBalanceDr = ibRegSidedFigure(ibRegFigure::ClosingBalance, false);
+	inline const ibString ClosingBalanceCr = ibRegSidedFigure(ibRegFigure::ClosingBalance, true);
 	// The same three pairs BEFORE the fold by account type — see ibRegFigure::GrossBalance.
-	inline const wxString GrossBalanceDr        = ibRegSidedFigure(ibRegFigure::GrossBalance, false);
-	inline const wxString GrossBalanceCr        = ibRegSidedFigure(ibRegFigure::GrossBalance, true);
-	inline const wxString OpeningGrossBalanceDr = ibRegSidedFigure(ibRegFigure::OpeningGrossBalance, false);
-	inline const wxString OpeningGrossBalanceCr = ibRegSidedFigure(ibRegFigure::OpeningGrossBalance, true);
-	inline const wxString ClosingGrossBalanceDr = ibRegSidedFigure(ibRegFigure::ClosingGrossBalance, false);
-	inline const wxString ClosingGrossBalanceCr = ibRegSidedFigure(ibRegFigure::ClosingGrossBalance, true);
+	inline const ibString GrossBalanceDr        = ibRegSidedFigure(ibRegFigure::GrossBalance, false);
+	inline const ibString GrossBalanceCr        = ibRegSidedFigure(ibRegFigure::GrossBalance, true);
+	inline const ibString OpeningGrossBalanceDr = ibRegSidedFigure(ibRegFigure::OpeningGrossBalance, false);
+	inline const ibString OpeningGrossBalanceCr = ibRegSidedFigure(ibRegFigure::OpeningGrossBalance, true);
+	inline const ibString ClosingGrossBalanceDr = ibRegSidedFigure(ibRegFigure::ClosingGrossBalance, false);
+	inline const ibString ClosingGrossBalanceCr = ibRegSidedFigure(ibRegFigure::ClosingGrossBalance, true);
 }
 
 // WHICH ACCOUNT DECIDES WHETHER A FIGURE HAS A PLACE — asked at write (a line's field) and at read (a row's
@@ -245,8 +245,8 @@ public:
 		: m_reg(reg), m_shape(shape) {}
 	~ibAcctSourceDescriptor() override;
 
-	wxString GetNamespace() const override;
-	wxString GetName() const override;
+	ibString GetNamespace() const override;
+	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 
 	// ⭐⭐ THE SAME CALL, WITH THE ACCOUNT CONDITIONS THIS SOURCE CONSUMES ITSELF. They do not reach a
@@ -273,7 +273,7 @@ public:
 	                        const std::vector<ibValue>& args) const override;
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
 	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
-	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer, const wxString& slot) const override;
+	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer, const ibString& slot) const override;
 
 private:
 	ibValueMetaObjectAccountingRegister* m_reg;
@@ -305,7 +305,7 @@ private:
 
 	virtual ibFormTypeList GetFormType() const override {
 		ibFormTypeList formList;
-		formList.AppendItem(wxT("FormList"), _("Form list"), eFormList);
+		formList.AppendItem(ibT("FormList"), _("Form list"), eFormList);
 		return formList;
 	}
 
@@ -333,9 +333,9 @@ public:
 		// left out here; its column stays, because the schema reads the dimensions itself.
 		// …and only once its sides exist: a copy that mirrors a database written before them still reads
 		// the field itself.
-		array.erase(std::remove_if(array.begin(), array.end(), [this](const ibValueMetaObjectAttributeBase* attribute) {
+		std::erase_if(array, [this](const ibValueMetaObjectAttributeBase* attribute) {
 			return attribute != nullptr && IsKeptPerSide(attribute) && GetFieldSide(/*creditSide*/ false, attribute) != nullptr;
-		}), array.end());
+		});
 
 		return array;
 	}
@@ -382,9 +382,9 @@ public:
 	//
 	// Only the slots have one. WHICH columns are slots comes from the one description of
 	// them (ForEachOwnAttribute), never from reading a role back out of a name.
-	wxString GetSourceGroupOf(const ibValueMetaObjectAttributeBase* attribute) const {
+	ibString GetSourceGroupOf(const ibValueMetaObjectAttributeBase* attribute) const {
 		if (attribute == nullptr)
-			return wxEmptyString;
+			return ibEmptyString;
 
 		bool numbered = false;
 		ForEachOwnAttribute([&](const ibValueMetaObjectAttributePredefined* own, ibOwnAttributeRole role) {
@@ -397,15 +397,15 @@ public:
 		});
 
 		if (!numbered)
-			return wxEmptyString;
+			return ibEmptyString;
 
-		wxString group;
-		for (const wxUniChar& ch : attribute->GetName()) {
-			if (ch < wxUniChar('0') || ch > wxUniChar('9'))
+		ibString group;
+		for (const ibChar& ch : attribute->GetName()) {
+			if (ch < ibChar('0') || ch > ibChar('9'))
 				group += ch;
 		}
 
-		return group + wxT("Group");
+		return group + ibT("Group");
 	}
 	// ⭐ AVAILABLE, BUT NOT SHOWN — the kinds. A movement's meaning is its VALUES; opening a list with
 	// the kind beside every value doubles the columns to repeat what the value already says, and the
@@ -567,8 +567,8 @@ public:
 	// counterparty and column 1 is the contract, ask for nothing and column 1 is whatever the ACCOUNT
 	// declared first. Naming the column after the kind would put a data value (a characteristic's
 	// presentation, in the user's own language, spaces and all) into the field list of a query.
-	static wxString AccountDimensionColumnName(const wxString& sidePrefix, unsigned int no);
-	static wxString AccountDimensionKindColumnName(const wxString& sidePrefix, unsigned int no);
+	static ibString AccountDimensionColumnName(const ibString& sidePrefix, unsigned int no);
+	static ibString AccountDimensionKindColumnName(const ibString& sidePrefix, unsigned int no);
 
 	// ⭐ THE SIDE IS PART OF THE NAME — for the ACCOUNT exactly as it already is for its dimensions.
 	//
@@ -579,7 +579,7 @@ public:
 	// which of the two the bare one was could only be learnt from documentation.
 	//
 	// Spelled here, beside the dimension's own rule, so a side added or a prefix changed is one edit.
-	static wxString AccountColumnName(const wxString& sidePrefix) { return wxT("Account") + sidePrefix; }
+	static ibString AccountColumnName(const ibString& sidePrefix) { return ibT("Account") + sidePrefix; }
 
 	// ⭐ THE CORRESPONDENT, as a turnover row about one account names it — the account it moved against,
 	// that account's breakdown, and the other side of a field kept per side. The reference's words.
@@ -590,19 +590,19 @@ public:
 			? parent->ConvertToType<ibValueMetaObjectAccountingRegister>() : nullptr;
 	}
 
-	static wxString CorrAccountColumnName() { return wxT("Corr") + AccountColumnName(wxEmptyString); }
-	static wxString CorrAccountDimensionColumnName(unsigned int no) { return wxT("Corr") + AccountDimensionColumnName(wxEmptyString, no); }
-	static wxString CorrFieldColumnName(const wxString& field) { return field + wxT("Corr"); }
-	static wxString AccountColumnSynonym(const wxString& sidePrefix) {
-		if (sidePrefix == wxT("Dr")) return _("Debit account");
-		if (sidePrefix == wxT("Cr")) return _("Credit account");
+	static ibString CorrAccountColumnName() { return ibT("Corr") + AccountColumnName(ibEmptyString); }
+	static ibString CorrAccountDimensionColumnName(unsigned int no) { return ibT("Corr") + AccountDimensionColumnName(ibEmptyString, no); }
+	static ibString CorrFieldColumnName(const ibString& field) { return field + ibT("Corr"); }
+	static ibString AccountColumnSynonym(const ibString& sidePrefix) {
+		if (sidePrefix == ibT("Dr")) return _("Debit account");
+		if (sidePrefix == ibT("Cr")) return _("Credit account");
 		return _("Account");
 	}
 
 	// The prefix THIS register's debit side currently carries — empty unless a line names both
 	// accounts. Asked rather than recomputed at each site: it is the same question the dimension
 	// slots are named from, and the two must never disagree.
-	wxString GetDebitSidePrefix() const { return IsCorrespondence() ? wxT("Dr") : wxEmptyString; }
+	ibString GetDebitSidePrefix() const { return IsCorrespondence() ? ibT("Dr") : ibEmptyString; }
 
 	// ⭐ WHAT AN OWN ATTRIBUTE IS, handed over BESIDE it rather than left to be guessed.
 	//
@@ -731,10 +731,10 @@ public:
 
 	///////////////////////////////////////////////////////////////////
 
-	wxString GetRegisterTableNameDB() const {
-		wxString className = GetClassName();
+	ibString GetRegisterTableNameDB() const {
+		ibString className = GetClassName();
 		wxASSERT(m_metaId != 0);
-		return wxString::Format("%s%i_T", className, GetMetaID());
+		return ibString::Format("%s%i_T", className, GetMetaID());
 	}
 
 	// ============================================================================
@@ -774,18 +774,18 @@ public:
 	// performs. Nothing reads the old spelling any more, so an old base must be re-created.
 	// (A second grain — the same tables per account alone — stood here from 2026-09-16 and was removed the
 	// same day: no reading stood on it, and a total per account is the breakdown grain summed.)
-	wxString GetTotalsTableNameDB(bool creditSide) const {
+	ibString GetTotalsTableNameDB(bool creditSide) const {
 		wxASSERT(m_metaId != 0);
 		const ibValueMetaObjectRegisterTotals* totals = GetTotalsObject(creditSide);
 		wxASSERT(totals != nullptr);   // a side without its totals object is refused before this (schema)
-		return wxString::Format(wxT("%s%i_%s"), GetClassName(), GetMetaID(),
-			totals != nullptr ? totals->GetName() : wxString(creditSide ? wxT("CreditTotals") : wxT("DebitTotals")));
+		return ibString::Format(ibT("%s%i_%s"), GetClassName(), GetMetaID(),
+			totals != nullptr ? totals->GetName() : ibString(creditSide ? ibT("CreditTotals") : ibT("DebitTotals")));
 	}
 
 	// The read view over a side's totals. A view is an ordinary named relation, so nothing upstream
 	// learns that the numbers come from a trigger-maintained table.
-	wxString GetTurnoverViewName(bool creditSide) const {
-		return GetTotalsTableNameDB(creditSide) + wxT("_Turnovers");
+	ibString GetTurnoverViewName(bool creditSide) const {
+		return GetTotalsTableNameDB(creditSide) + ibT("_Turnovers");
 	}
 
 	// The two totals objects, one per side. Named, predefined children, which is what gives every table
@@ -830,8 +830,8 @@ public:
 	virtual ~ibValueMetaObjectAccountingRegister();
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -878,7 +878,7 @@ public:
 	/**
 	* Property events
 	*/
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 protected:
 
@@ -971,21 +971,21 @@ private:
 		for (auto object : GetFormArrayObject()) {
 			if (!object->IsAllowed()) continue;
 			if (eFormList == object->GetTypeForm()) {
-				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetIcon(), object);
+				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetClassType(), object);
 			}
 		}
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordSetModule"), _("Record set module"), _("Code that runs with a record set of the register: its BeforeWrite and OnWrite handlers, and the procedures they call. It runs for every set written, whoever writes it - a document's posting or a script."));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the register as a whole rather than of one set: its exported procedures and functions are called on the manager, as AccountingRegisters.<Name>.<Function>()."));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, ibT("RecordSetModule"), _("Record set module"), _("Code that runs with a record set of the register: its BeforeWrite and OnWrite handlers, and the procedures they call. It runs for every set written, whoever writes it - a document's posting or a script."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, ibT("ManagerModule"), _("Manager module"), _("Code of the register as a whole rather than of one set: its exported procedures and functions are called on the manager, as AccountingRegisters.<Name>.<Function>()."));
 
-	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the register's list of postings opens with. Empty: the list form is generated from the register's fields."), &ibValueMetaObjectAccountingRegister::FillFormList);
+	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(ibT("PresetValues"), _("Preset values"));
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormList"), _("Default List Form"), _("The form the register's list of postings opens with. Empty: the list form is generated from the register's fields."), &ibValueMetaObjectAccountingRegister::FillFormList);
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Chart of Accounts binding — determines the type of Account field
-	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
 	// CORRESPONDENCE — whether a line is one SIDE or a whole POSTING.
 	//
 	// Off: the line carries RecordType (Debit/Credit) and one Account; a posting is two rows under
@@ -998,9 +998,9 @@ private:
 	// ON by default: double entry is what an accounting register is FOR, and a one-sided one is the
 	// special case (a register of quantities, a memo book). Defaulting to off meant every new register
 	// started as the exception and had to be corrected into the rule.
-	ibPropertyBoolean* m_propertyCorrespondence = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("Correspondence"), _("Correspondence"), _("Whether a line is a whole posting or one side of it. On (the default): a line carries AccountDr and AccountCr with one amount, and the dimension slots double - each side has its own analytics; correspondence turnovers and a chessboard can be read. Off: a line carries RecordType and one Account, a posting is two lines."), true);
+	ibPropertyBoolean* m_propertyCorrespondence = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, ibT("Correspondence"), _("Correspondence"), _("Whether a line is a whole posting or one side of it. On (the default): a line carries AccountDr and AccountCr with one amount, and the dimension slots double - each side has its own analytics; correspondence turnovers and a chessboard can be read. Off: a line carries RecordType and one Account, a posting is two lines."), true);
 
-	ibPropertyChartOfAccounts* m_propertyChartOfAccounts = ibPropertyObject::CreateProperty<ibPropertyChartOfAccounts>(m_categoryData, wxT("ChartOfAccounts"), _("Chart of accounts"), _("The chart of accounts the register is kept by: Account (or AccountDr / AccountCr) is a reference into it, and its account dimension kinds decide the register's dimension slots and what each may hold. Required."));
+	ibPropertyChartOfAccounts* m_propertyChartOfAccounts = ibPropertyObject::CreateProperty<ibPropertyChartOfAccounts>(m_categoryData, ibT("ChartOfAccounts"), _("Chart of accounts"), _("The chart of accounts the register is kept by: Account (or AccountDr / AccountCr) is a reference into it, and its account dimension kinds decide the register's dimension slots and what each may hold. Required."));
 
 	// SPLIT TOTALS — spread one logical totals row across several physical ones, so concurrent posters
 	// stop queueing on the same row. OFF by default, and deliberately a switch rather than anything
@@ -1015,15 +1015,15 @@ private:
 	// posting at once stop queueing behind the same row; the cost is rows that a read folds back
 	// together, which the read does anyway. A register is written to concurrently as the ordinary
 	// case, so the contended shape is the one to start from.
-	ibPropertyBoolean* m_propertySplitTotals = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("SplitTotals"), _("Split totals"), _("Spread one logical totals row over several physical ones, so sessions posting at the same time stop queueing on the same row (cash, revenue and VAT accounts are hit by every document). A read sums the parts back, as it reads anyway. On by default; switching it changes the totals tables."), true);
+	ibPropertyBoolean* m_propertySplitTotals = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, ibT("SplitTotals"), _("Split totals"), _("Spread one logical totals row over several physical ones, so sessions posting at the same time stop queueing on the same row (cash, revenue and VAT accounts are hit by every document). A read sums the parts back, as it reads anyway. On by default; switching it changes the totals tables."), true);
 
 	// Predefined attributes: RecordType (Debit/Credit)
 	ibPropertyContainer<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
-		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("RecordType"), _("Record type"), _("Debit or credit - the side of the account a line moves, in a register without correspondence (one side per line)."), g_enumAccountingRecordTypeCLSID, false, ibValueEnumAccountingRegisterRecordType::CreateDefEnumValue()));
+		ibValueMetaObjectCompositeData::CreateSpecialType(ibT("RecordType"), _("Record type"), _("Debit or credit - the side of the account a line moves, in a register without correspondence (one side per line)."), g_enumAccountingRecordTypeCLSID, false, ibValueEnumAccountingRegisterRecordType::CreateDefEnumValue()));
 
 	// Predefined attribute: Account (reference to Chart of Accounts - polymorphic)
 	ibPropertyContainer<>* m_propertyAttributeAccount = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
-		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Account"), _("Account"), _("The account a line is posted to - an account of the register's chart; its dimension kinds decide what the line's dimension slots hold."), false, ibItemMode::ibItemMode_Item));
+		ibValueMetaObjectCompositeData::CreateEmptyType(ibT("Account"), _("Account"), _("The account a line is posted to - an account of the register's chart; its dimension kinds decide what the line's dimension slots hold."), false, ibItemMode::ibItemMode_Item));
 
 	// THE DIMENSION SLOTS — created by SyncAccountDimensionSlots, not declared here.
 	//
@@ -1100,9 +1100,9 @@ private:
 	// GCC and Clang refuse the whole translation unit. Direct-initialisation is the portable
 	// spelling of the same thing (docs/portability.md).
 	ibValuePtr<ibValueMetaObjectRegisterTotals> m_totalsDr {
-		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(wxT("DebitTotals"), _("Debit totals")) };
+		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(ibT("DebitTotals"), _("Debit totals")) };
 	ibValuePtr<ibValueMetaObjectRegisterTotals> m_totalsCr {
-		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(wxT("CreditTotals"), _("Credit totals")) };
+		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(ibT("CreditTotals"), _("Credit totals")) };
 
 	// Built surfaces — the per-call shapes AND the two turnover views, in one cache: they are the same
 	// kind of thing under two names, and both are keyed by a string the builder chooses (the whole
@@ -1227,7 +1227,7 @@ public:
 	// the neighbour's spec is a JOIN: how the two sides fold is a rule the CHART holds, not the
 	// surface, so the relation is built AROUND the materialised read rather than inside it.
 	virtual bool CanReadOnServer() const override;
-	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 private:
 	ibRegBound          m_bound;      // the moment — a date, or a date AND the document at it
 	ibQueryPredicatePtr m_accountDr;   // a CONDITION over the account, consumed by this reading
@@ -1259,7 +1259,7 @@ public:
 	// turnovers up to THIS document" is a comparison over that order — which the spec already
 	// carries (m_boundaryTail) and a column-shaped predicate cannot express at all.
 	virtual bool CanReadOnServer() const override;
-	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 private:
 	ibRegBound          m_begin, m_end;
 	ibQueryPredicatePtr m_accountDr, m_accountCr;   // conditions, consumed here
@@ -1287,7 +1287,7 @@ public:
 	// server. What it gains here is the ENDING: a relation instead of materialised rows, so a query
 	// that joins to it or filters over it stays one statement.
 	virtual bool CanReadOnServer() const override;
-	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 private:
 	ibRegBound          m_begin, m_end;
 	ibQueryPredicatePtr m_accountDr, m_accountCr;   // conditions, consumed here
@@ -1314,7 +1314,7 @@ public:
 	// (`BeforeFrom`), what moved (`InRange`), what remains (`UpToTo`). One pass, no join between them
 	// and no window; the only join is the one the balance halves need, to the chart of accounts.
 	virtual bool CanReadOnServer() const override;
-	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 private:
 	ibRegBound          m_begin, m_end;
 	ibQueryPredicatePtr m_accountDr, m_accountCr;   // conditions, consumed here
@@ -1371,7 +1371,7 @@ public:
 	// ⭐ A PROJECTION, SO IT NEVER NEEDED THE TOTALS — and now it does not need RAM either. The rows
 	// were always read from the movements on the server; what they gained is the ending.
 	virtual bool CanReadOnServer() const override { return m_reg != nullptr; }
-	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 private:
 	ibRegBound          m_begin, m_end;
 	ibQueryPredicatePtr m_filter;
@@ -1428,6 +1428,9 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 		// beside the value, which is what makes a stored movement self-describing.
 		virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
 		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
+		// `For Each Item In row.AccountDimensionDr` yields Key (kind) / Value pairs, the filled slots in
+		// slot order, as a Map does. A snapshot: deleting while walking is safe.
+		virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
 
 		// ⭐⭐ AND BY NAME, LIKE A STRUCTURE: `row.AccountDimensionDr.Contractor = value`.
 		//
@@ -1452,6 +1455,10 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 		// Empty the whole side — every kind and every value of it. Reached as `Clear()` from a script,
 		// and as the meaning of assigning nothing to the collection.
 		void Clear();
+
+		// `Delete(kind)` empties the slot holding that kind (both halves of the pair). Returns false when
+		// the line carries no such kind.
+		bool Delete(const ibValue& kind);
 
 	private:
 		// The account THIS ROW names on this side — the debit account on the debit side, the credit one on

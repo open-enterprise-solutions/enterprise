@@ -31,8 +31,8 @@ public:
 	ibValueMetaObjectFunctionalOption();
 
 	//support icons
-	virtual wxIcon GetIcon() const override;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const override;
+	static ibPicture GetIconGroup();
 
 	// ⚠ THE TYPE IS PART OF THE METATYPE — Boolean, always; the value column asks this. (The fill check stays
 	// the base's "no": False is an answer, not an empty field.)
@@ -79,10 +79,10 @@ private:
 
 	// THE VALUE'S OWN GROUP, named as the constant names its (partial/constant.h): what the value starts as,
 	// and what it works under.
-	ibPropertyCategory* m_categoryValue = ibPropertyObject::CreatePropertyCategory(wxT("Value"), _("Value"));
+	ibPropertyCategory* m_categoryValue = ibPropertyObject::CreatePropertyCategory(ibT("Value"), _("Value"));
 	// ON by default: a working part of the system must not disappear by itself when an option arrives.
-	ibPropertyBoolean* m_propertyInitialValue = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryValue, wxT("InitialValue"), _("Initial value"), _("The value the option has in a base where nobody has switched it yet - an option arriving with an update. On by default, so a working part of the system does not disappear by itself; off for a new part the base should switch on deliberately."), true);
-	ibPropertyFunctionalOptions* m_propertyRequires = ibPropertyObject::CreateProperty<ibPropertyFunctionalOptions>(m_categoryValue, wxT("Requires"), _("Requires"), _("The option this one works under. While that one is off, this one counts as off too, whatever its own value - what belongs to it is not shown."), ibPropertyChoiceMode::Single);
+	ibPropertyBoolean* m_propertyInitialValue = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryValue, ibT("InitialValue"), _("Initial value"), _("The value the option has in a base where nobody has switched it yet - an option arriving with an update. On by default, so a working part of the system does not disappear by itself; off for a new part the base should switch on deliberately."), true);
+	ibPropertyFunctionalOptions* m_propertyRequires = ibPropertyObject::CreateProperty<ibPropertyFunctionalOptions>(m_categoryValue, ibT("Requires"), _("Requires"), _("The option this one works under. While that one is off, this one counts as off too, whatever its own value - what belongs to it is not shown."), ibPropertyChoiceMode::Single);
 };
 
 #endif // !__META_FUNCTIONAL_OPTION_OBJECT_H__

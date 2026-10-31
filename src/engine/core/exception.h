@@ -3,10 +3,10 @@
 
 #include <exception>
 #include <string>
-
-#include <wx/string.h>
+#include <system_error>
 
 #include "core/core.h"
+#include "core/fstring.h"
 
 // A REFUSAL — what was wrong, as text, and the base of every refusal of the platform: the engine's (ibBackendException,
 // carrying the rest of what the engine knows of it) and the client's alike. The core raises it itself — a read that
@@ -19,24 +19,25 @@ public:
 	virtual ~ibCoreException() = default;
 
 	const char* what() const noexcept override;
-	const wxString GetErrorDescription() const;
+	const ibString GetErrorDescription() const;
 
-	WX_DEFINE_VARARG_FUNC(static void, Error, 1, (const wxFormatString&), DoErrorWchar, DoErrorUtf8);
+	// The refusal raised, its message made of its own arguments (ibString::Format).
+	template <class... Args>
+	[[noreturn]] static void Error(const ibString& format, const Args&... args) {
+		throw ibCoreException(ibString::Format(format, args...));
+	}
 
 protected:
 
-	explicit ibCoreException(const wxString& description);
+	explicit ibCoreException(const ibString& description);
 
 private:
 
-#if !wxUSE_UTF8_LOCALE_ONLY
-	static void DoErrorWchar(const wxChar* format, ...);
-#endif
-#if wxUSE_UNICODE_UTF8
-	static void DoErrorUtf8(const wxChar* format, ...);
-#endif
-
 	std::string m_descriptionUtf8;
 };
+
+// WHY A CALL FAILED, as a refusal says it — UTF-8, as every one of them is read (ibString::FromUTF8). Not
+// error_code::message(): on Windows that is the system's text in the ANSI code page.
+std::string ibErrorText(const std::error_code& code);
 
 #endif

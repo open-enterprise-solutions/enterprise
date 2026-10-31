@@ -39,8 +39,8 @@ class BACKEND_API ibValueMetaObjectResource : public ibValueMetaObjectAttribute 
 	const class ibValueMetaObjectChartOfAccounts* GetChartOfAccounts() const;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//get data selector
 	virtual ibSelectorDataType GetFilterDataType() const;
@@ -57,21 +57,21 @@ private:
 	// declared for first. A quantity is the exception and its author says so — which is the way round
 	// that leaves the check working out of the box instead of silently doing nothing until somebody
 	// finds the switch.
-	ibPropertyCategory* m_categoryAccounting = ibPropertyObject::CreatePropertyCategory(wxT("Accounting"), _("Accounting"));
+	ibPropertyCategory* m_categoryAccounting = ibPropertyObject::CreatePropertyCategory(ibT("Accounting"), _("Accounting"));
 	ibPropertyAccountingKind* m_propertyAccountingKind = ibPropertyObject::CreateProperty<ibPropertyAccountingKind>(
 		m_categoryAccounting, ibPropertyAccountingKind::Level::Account,
 		[this] { return GetChartOfAccounts(); },
-		wxT("AccountingKind"), _("Accounting kind"),
+		ibT("AccountingKind"), _("Accounting kind"),
 		_("Accounting registers only: the kind of accounting this figure belongs to. Empty - kept for every account; named - kept only for accounts that keep that kind, and absent on the rest."));
 
 	ibPropertyAccountingKind* m_propertyAccountDimensionAccountingKind = ibPropertyObject::CreateProperty<ibPropertyAccountingKind>(
 		m_categoryAccounting, ibPropertyAccountingKind::Level::AccountDimension,
 		[this] { return GetChartOfAccounts(); },
-		wxT("AccountDimensionAccountingKind"), _("Account dimension accounting kind"),
+		ibT("AccountDimensionAccountingKind"), _("Account dimension accounting kind"),
 		_("Accounting registers only: the breakdown's kind of accounting this figure is kept BY. Empty - kept for the account as a whole; named - kept against each breakdown that keeps that kind."));
 
 	ibPropertyBoolean*  m_propertyBalance = ibPropertyObject::CreateProperty<ibPropertyBoolean>(
-		m_categoryAccounting, wxT("Balance"), _("Balance"),
+		m_categoryAccounting, ibT("Balance"), _("Balance"),
 		_("Accounting registers only: whether this figure holds ONE value for the whole entry, which the two sides must agree on. On by default - the amount is what a posting is. Cleared, it is kept per side - a debit figure and a credit figure - which is what a quantity or an amount in currency is: three pieces left one account and an amount in dollars reached the other."),
 		true);
 };

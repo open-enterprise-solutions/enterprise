@@ -2,9 +2,8 @@
 // OES Enterprise — ibValuePoint / ibValueSize / ibValueColour tests
 //
 // The thin geometric script value types (backend/system/value/value{Point,
-// Size,Colour}.h): each wraps a wx type, round-trips through its conversion
-// operator, formats via GetString and reports IsEmpty for the wx "default/invalid"
-// value. Pure (no DB).
+// Size,Colour}.h): each holds the core's data (core/graphics), formats via
+// GetString and reports IsEmpty for the "default/unset" value. Pure (no DB).
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -16,16 +15,15 @@
 // ibValuePoint
 // ---------------------------------------------------------------------------
 
-TEST(ValuePoint, RoundTripsThroughOperator) {
-    ibValuePoint p(wxPoint(3, 4));
-    EXPECT_EQ(static_cast<wxPoint>(p), wxPoint(3, 4));
-    EXPECT_EQ(p.m_point, wxPoint(3, 4));
+TEST(ValuePoint, HoldsThePoint) {
+    ibValuePoint p(ibPoint(3, 4));
+    EXPECT_TRUE(p.m_point == ibPoint(3, 4));
     EXPECT_FALSE(p.IsEmpty());
     EXPECT_FALSE(p.GetString().IsEmpty());
 }
 
 TEST(ValuePoint, DefaultPositionIsEmpty) {
-    ibValuePoint p(wxDefaultPosition);
+    ibValuePoint p(ibDefaultPosition);
     EXPECT_TRUE(p.IsEmpty());
 }
 
@@ -33,16 +31,15 @@ TEST(ValuePoint, DefaultPositionIsEmpty) {
 // ibValueSize
 // ---------------------------------------------------------------------------
 
-TEST(ValueSize, RoundTripsThroughOperator) {
-    ibValueSize s(wxSize(10, 20));
-    EXPECT_EQ(static_cast<wxSize>(s), wxSize(10, 20));
-    EXPECT_EQ(s.m_size, wxSize(10, 20));
+TEST(ValueSize, HoldsTheSize) {
+    ibValueSize s(ibSize(10, 20));
+    EXPECT_TRUE(s.m_size == ibSize(10, 20));
     EXPECT_FALSE(s.IsEmpty());
     EXPECT_FALSE(s.GetString().IsEmpty());
 }
 
 TEST(ValueSize, DefaultSizeIsEmpty) {
-    ibValueSize s(wxDefaultSize);
+    ibValueSize s(ibDefaultSize);
     EXPECT_TRUE(s.IsEmpty());
 }
 
@@ -50,14 +47,14 @@ TEST(ValueSize, DefaultSizeIsEmpty) {
 // ibValueColour
 // ---------------------------------------------------------------------------
 
-TEST(ValueColour, RoundTripsThroughOperator) {
-    ibValueColour c(wxColour(255, 0, 0));
-    EXPECT_EQ(static_cast<wxColour>(c), wxColour(255, 0, 0));
+TEST(ValueColour, HoldsTheColour) {
+    ibValueColour c(ibColour(255, 0, 0));
+    EXPECT_TRUE(c.m_colour == ibColour(255, 0, 0));
     EXPECT_FALSE(c.IsEmpty());
     EXPECT_FALSE(c.GetString().IsEmpty());
 }
 
-TEST(ValueColour, InvalidColourIsEmpty) {
-    ibValueColour c(wxColour{});   // default-constructed wxColour is not Ok
+TEST(ValueColour, UnsetColourIsEmpty) {
+    ibValueColour c(ibColour{});   // a default ibColour is no colour at all
     EXPECT_TRUE(c.IsEmpty());
 }

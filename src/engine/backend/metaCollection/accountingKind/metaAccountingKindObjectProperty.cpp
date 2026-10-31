@@ -8,5 +8,5 @@
 void ibValueMetaObjectAccountingKind::OnPropertyRefresh()
 {
 	ibValueMetaObjectAttribute::OnPropertyRefresh();
-	HideProperty(GetProperty(wxT("Type")));
+	HideProperty(GetProperty(ibT("Type")));
 }
