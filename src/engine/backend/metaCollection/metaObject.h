@@ -220,8 +220,8 @@ struct ibMetaMenuItem {
 	// never translated — and the CAPTION is what a person reads, which is translated and may be
 	// reworded any day. One field for both means either the assistant addresses a translation or the
 	// person reads an identifier.
-	wxString           m_name;                   // "ObjectModule"
-	wxString           m_caption;                // "Open object module"
+	ibString           m_name;                   // "ObjectModule"
+	ibString           m_caption;                // "Open object module"
 
 	// The remainder — see ProcessCommand. An item with an id and no metaobject stands for one of the
 	// two modal editors that have no metaobject to name. wxNOT_FOUND otherwise.
@@ -242,10 +242,10 @@ struct ibMetaMenuItem {
 	// editor has nothing but its number. It is given anyway where a caller has to pick ONE item
 	// out of the list — a toolbar button with a single meaning — because matching the name would
 	// be matching a string.
-	ibMetaMenuItem(ibMetaMenuKind kind, const wxString& name, const wxString& caption,
+	ibMetaMenuItem(ibMetaMenuKind kind, const ibString& name, const ibString& caption,
 		ibValueMetaObject* metaObject, const ibClassID& picture = 0, int id = wxNOT_FOUND)
 		: m_kind(kind), m_name(name), m_caption(caption), m_id(id), m_metaObject(metaObject), m_picture(picture) {}
-	ibMetaMenuItem(const wxString& name, const wxString& caption, int id, const ibClassID& picture = 0)
+	ibMetaMenuItem(const ibString& name, const ibString& caption, int id, const ibClassID& picture = 0)
 		: m_kind(ibMetaMenuKind::Editor), m_name(name), m_caption(caption), m_id(id), m_picture(picture) {}
 };
 
@@ -292,7 +292,7 @@ class BACKEND_API ibValueMetaObject :
 public:
 
 	// get object name as string 
-	bool GetObjectNameAsString(wxString& result) const {
+	bool GetObjectNameAsString(ibString& result) const {
 		return m_propertyName->GetValueAsString(result);
 	}
 
@@ -300,11 +300,11 @@ public:
 	ibMetaID GetMetaID() const { return m_metaId; }
 	void SetMetaID(const ibMetaID& id) { m_metaId = id; }
 
-	wxString GetName() const { return m_propertyName->GetValueAsString(); }
+	ibString GetName() const { return m_propertyName->GetValueAsString(); }
 	// THE ONE DOOR THE STORED NAME CHANGES THROUGH — so it is where the metadata registry is told
 	// its by-name cache no longer matches what the ctors compute. Out of line: it reaches into
 	// ibMetaData, which is not complete here.
-	void SetName(const wxString& strName);
+	void SetName(const ibString& strName);
 
 	// Typed parent — the parent metaobject cast to parentType through CastValue (the value cast):
 	// a dynamic_cast that, with _USE_CONTROL_VALUECAST, RAISES immediately (ThrowErrorTypeOperation)
@@ -317,14 +317,14 @@ public:
 		return CastValue<parentType>(GetParent());
 	}
 
-	virtual wxString GetSynonym() const {
+	virtual ibString GetSynonym() const {
 		return !m_propertySynonym->IsEmptyProperty() ?
 			m_propertySynonym->GetValueAsTranslateString() : stringUtils::GenerateSynonym(GetName());
 	}
-	virtual void SetSynonym(const wxString& synonym) { m_propertySynonym->SetValue(synonym); }
+	virtual void SetSynonym(const ibString& synonym) { m_propertySynonym->SetValue(synonym); }
 
-	wxString GetComment() const { return m_propertyComment->GetValueAsString(); }
-	void SetComment(const wxString& comment) { m_propertyComment->SetValue(comment); }
+	ibString GetComment() const { return m_propertyComment->GetValueAsString(); }
+	void SetComment(const ibString& comment) { m_propertyComment->SetValue(comment); }
 
 	// ⭐ TWO TEXTS, TWO AUDIENCES, AND THAT IS WHY THERE ARE TWO.
 	//
@@ -338,11 +338,11 @@ public:
 	//
 	// Folding them into one field would force one of the two to be written wrong: user help
 	// carrying design arguments, or design notes shipped to a user who wanted to know what to type.
-	wxString GetHelpContent() const { return m_strHelpContent; }
-	void SetHelpContent(const wxString& strHelpContent) { m_strHelpContent = strHelpContent; }
+	const ibString& GetHelpContent() const { return m_strHelpContent; }
+	void SetHelpContent(const ibString& strHelpContent) { m_strHelpContent = strHelpContent; }
 
-	wxString GetNoteContent() const { return m_strNoteContent; }
-	void SetNoteContent(const wxString& strNoteContent) { m_strNoteContent = strNoteContent; }
+	const ibString& GetNoteContent() const { return m_strNoteContent; }
+	void SetNoteContent(const ibString& strNoteContent) { m_strNoteContent = strNoteContent; }
 
 	virtual void SetMetaData(ibMetaData* metaData) { m_metaData = metaData; }
 	virtual const ibMetaData* GetMetaData() const override { return m_metaData; }
@@ -353,9 +353,9 @@ public:
 	// Restructure-ledger facade — one short call instead of the static ledger accessor at every save /
 	// validation site. STATIC (the ledger pulls the active config), so it works in this-less contexts too
 	// (the static scaffold methods). Defined in metaObject.cpp.
-	static void RestructureInfo   (const wxString& message);
-	static void RestructureWarning(const wxString& message);
-	static void RestructureError  (const wxString& message);
+	static void RestructureInfo   (const ibString& message);
+	static void RestructureWarning(const ibString& message);
+	static void RestructureError  (const ibString& message);
 
 	void ResetGuid();
 	void ResetId();
@@ -435,9 +435,9 @@ public:
 	bool BuildNewName();
 
 	ibValueMetaObject(
-		const wxString& strName = wxEmptyString,
-		const wxString& synonym = wxEmptyString,
-		const wxString& comment = wxEmptyString
+		const ibString& strName = ibEmptyString,
+		const ibString& synonym = ibEmptyString,
+		const ibString& comment = ibEmptyString
 	);
 
 	virtual ~ibValueMetaObject();
@@ -445,8 +445,8 @@ public:
 	//system override 
 	virtual int GetComponentType() const final { return COMPONENT_TYPE_METADATA; }
 
-	virtual wxString GetClassName() const final { return ibValue::GetClassName(); }
-	virtual wxString GetObjectTypeName() const final { return ibValue::GetClassName(); }
+	virtual ibString GetClassName() const final { return ibValue::GetClassName(); }
+	virtual ibString GetObjectTypeName() const final { return ibValue::GetClassName(); }
 
 	const ibUniqueKey& GetGuid() const { return m_metaGuid; }
 
@@ -486,11 +486,11 @@ public:
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	wxString GetFileName() const;
-	wxString GetFullName() const;
+	ibString GetFileName() const;
+	ibString GetFullName() const;
 
-	wxString GetModuleName() const;
-	wxString GetDocPath() const { return m_metaGuid.GetGuid().str(); }
+	ibString GetModuleName() const;
+	ibString GetDocPath() const { return m_metaGuid.GetGuid().str(); }
 
 	// Resolve a child's clsid against THIS owner: returns the canonical clsid the owner hosts
 	// (possibly remapped) or 0 if it does not host this child. ibClassID is UNSIGNED, so 0 — not
@@ -551,8 +551,8 @@ public:
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;                   //attribute value
 
 	//support icons
-	virtual wxIcon GetIcon() const override { return wxNullIcon; }
-	static wxIcon GetIconGroup() { return wxNullIcon; }
+	virtual ibPicture GetIcon() const override { return ibPicture(); }
+	static ibPicture GetIconGroup() { return ibPicture(); }
 
 	// Recursive tree (de)serialization into/from the universal ibDataNode structure
 	// (serialize/dataBuilder.h). The ibMetaData containers drive the whole tree through
@@ -604,7 +604,7 @@ public:
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
 	virtual bool OnSaveMetaObject(int flags) { return true; }
 	virtual bool OnDeleteMetaObject();
-	virtual bool OnRenameMetaObject(const wxString& sNewName) { return true; }
+	virtual bool OnRenameMetaObject(const ibString& sNewName) { return true; }
 
 	//for designer 
 	virtual bool OnReloadMetaObject() { return true; }
@@ -670,8 +670,8 @@ public:
 	*/
 	virtual void OnPropertyCreated(ibProperty* property) override;
 	virtual void OnPropertySelected(ibProperty* property) override;
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	// THE DOOR FOR THE ORDER OF THE CHILDREN — `pos` is where `obj` ends up. Refused on a read-only
 	// configuration; a move that happened marks the configuration modified and is announced as `Moved`.
@@ -829,7 +829,7 @@ protected:
 #pragma region __filter_h__
 
 	template<typename _T1>
-	_T1* FindObjectByFilter(const wxString& name,
+	_T1* FindObjectByFilter(const ibString& name,
 		const std::initializer_list<ibClassID> filter,
 		const bool use_child_filter = false) const
 	{
@@ -848,7 +848,7 @@ protected:
 			if (!child->IsAllowed())
 				continue;
 
-			if (stringUtils::CompareString(name, child->GetName())) {
+			if (stringUtils::IsSameAs(name, child->GetName())) {
 
 				if (filter.size() == 0)
 					return dynamic_cast<_T1*>(child);
@@ -881,7 +881,7 @@ protected:
 		}
 
 		//self
-		if (stringUtils::CompareString(name, GetName()))
+		if (stringUtils::IsSameAs(name, GetName()))
 			return dynamic_cast<_T1*>(const_cast<ibValueMetaObject*>(this));
 
 		return nullptr;
@@ -1004,16 +1004,16 @@ protected:
 
 	ibMetaData* m_metaData;
 
-	wxString m_strHelpContent;
-	wxString m_strNoteContent;  // the engineering intent, in markdown — see the accessors above
+	ibString m_strHelpContent;
+	ibString m_strNoteContent;  // the engineering intent, in markdown — see the accessors above
 
 protected:
 
-	ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("Common"));
-	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("The name code and queries refer to the object by - Catalogs.<Name> in a script, Catalog.<Name> in a query. Letters, digits and underscores, starting with a letter; unique among the objects beside it. Renaming changes what code must call it."), wxEmptyString);
-	ibPropertyTString* m_propertySynonym = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Synonym"), _("Synonym"), _("The caption people see - in the interface, form and list titles, report columns - one text per declared language. Empty: the name is shown."), wxEmptyString);
-	ibPropertyString* m_propertyComment = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryCommon, wxT("Comment"), _("Comment"), _("A note for developers; the interface never shows it. For a predefined attribute or a built-in module it is also the help its property shows."), wxEmptyString);
-	ibPropertyCategory* m_categoryContext = ibPropertyObject::CreatePropertyCategory(wxT("Context"), _("Context"));
+	ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(ibT("Common"), _("Common"));
+	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, ibT("Name"), _("Name"), _("The name code and queries refer to the object by - Catalogs.<Name> in a script, Catalog.<Name> in a query. Letters, digits and underscores, starting with a letter; unique among the objects beside it. Renaming changes what code must call it."), ibEmptyString);
+	ibPropertyTString* m_propertySynonym = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, ibT("Synonym"), _("Synonym"), _("The caption people see - in the interface, form and list titles, report columns - one text per declared language. Empty: the name is shown."), ibEmptyString);
+	ibPropertyString* m_propertyComment = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryCommon, ibT("Comment"), _("Comment"), _("A note for developers; the interface never shows it. For a predefined attribute or a built-in module it is also the help its property shows."), ibEmptyString);
+	ibPropertyCategory* m_categoryContext = ibPropertyObject::CreatePropertyCategory(ibT("Context"), _("Context"));
 };
 
 #endif

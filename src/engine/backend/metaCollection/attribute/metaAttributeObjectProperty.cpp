@@ -52,14 +52,14 @@ void ibValueMetaObjectAttribute::OnPropertyRefresh()
 	// would decide, which is an answer a person can read.
 }
 
-bool ibValueMetaObjectAttribute::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueMetaObjectAttribute::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	//if (m_propertyType == property && !ibValueMetaObjectAttribute::LoadFromVariant(newValue))
 	//	return false;
 	return ibValueMetaObjectAttributeBase::OnPropertyChanging(property, newValue);
 }
 
-void ibValueMetaObjectAttribute::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObjectAttribute::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	// ⭐ THE OWNER'S ROW IS DECIDED WHEN THE TYPE IS — the one moment at which it can be known, and the
 	// one moment at which it is not an argument with the author. A field that has just been pointed at a

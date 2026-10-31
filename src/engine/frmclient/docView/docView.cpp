@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////////
-// Name:        frontend/docView/ibDocView.cpp
+// Name:        frmclient/docView/docView.cpp
 // Purpose:     OES Doc/View fork — copied from wx/src/common/docview.cpp,
 //              renamed wx*→ib*. Originally:
 //                Author:      Julian Smart
@@ -85,8 +85,8 @@
 // Used by the 5 OES overrides of inherited wx handlers that remain in this
 // file (OnFileSave / OnUpdateFileSave / OnUpdateFileSaveAs / SelectDocumentPath
 // / SelectDocumentType); all are cross-platform-safe. The metadata-aware
-// "wiring" (Find/Replace, OpenForm, meta-template registry) lives in the
-// desktop-only frontend/docView/docManager.cpp.
+// "wiring" (Find/Replace, OpenForm, meta-template registry) lives in
+// docManager.cpp.
 #include "frmclient/docView/docManager.h"   // ibFrontendDocTemplate
 #include "frmclient/win/dlgs/choiceTemplate.h"
 
@@ -590,7 +590,7 @@ bool ibFrontendDocument::OnSaveModified()
             return true;   // no frame → no prompt → treat as "ok to close"
 
         const int rc = wxMessageBox(
-            wxString::Format(_("Do you want to save changes to %s?"),
+            ibString::Format(_("Do you want to save changes to %s?"),
                              GetUserReadableName()),
             wxTheApp ? wxTheApp->GetAppDisplayName() : wxString(),
             wxYES_NO | wxCANCEL | wxICON_QUESTION | wxCENTRE);
@@ -620,7 +620,7 @@ void ibFrontendDocument::OnSaveBeforeForceClose()
         const wxString caption = wxTheApp ? wxTheApp->GetAppDisplayName()
                                           : wxString();
         const int rc = wxMessageBox(
-            wxString::Format(
+            ibString::Format(
                 _("Do you want to save changes to %s before closing it?"),
                 GetUserReadableName()),
             caption,
@@ -630,7 +630,7 @@ void ibFrontendDocument::OnSaveBeforeForceClose()
             while ( !Save() )
             {
                 const int retry = wxMessageBox(
-                    wxString::Format(
+                    ibString::Format(
                         _("Saving %s failed, would you like to retry?"),
                         GetUserReadableName()),
                     caption,
@@ -878,12 +878,8 @@ void ibFrontendView::OnChangeFilename()
     ibFrontendDocument *doc = GetDocument();
     if (!doc) return;
 
-    wxString label = doc->GetUserReadableName();
-    if (doc->IsModified())
-    {
-       label += "*";
-    }
-    win->SetLabel(label);
+    // ⚠ AS GIVEN — a tab's title is the server's, its "*" already in it (ibClientChildFrame::GetTitle).
+    win->SetLabel(doc->GetUserReadableName());
 }
 
 void ibFrontendView::SetDocument(ibFrontendDocument *doc)
@@ -917,7 +913,7 @@ wxPrintout *ibFrontendView::OnCreatePrintout()
 }
 #endif // wxUSE_PRINTING_ARCHITECTURE
 
-// ibFrontendDocTemplate implementation moved to frontend/docView/docManager.cpp
+// ibFrontendDocTemplate implementation moved to frmclient/docView/docManager.cpp
 // alongside its class declaration in docManager.h.
 
 // ----------------------------------------------------------------------------
@@ -1703,7 +1699,7 @@ wxString ibFrontendDocManager::MakeNewDocumentName()
 {
     wxString name;
 
-    name.Printf(_("unnamed%d"), m_defaultDocumentNameCounter);
+    name = ibString::Format(_("unnamed%d"), m_defaultDocumentNameCounter);
     m_defaultDocumentNameCounter++;
 
     return name;
@@ -2480,7 +2476,7 @@ ibFrontendView* ibFrontendDocument::DoCreateView()
 
 // Unified doc/view creation pipeline. Lifted up from ibMetaDocument so any
 // document — templated (meta editors, Text/Help/AuditLog) or template-less
-// (ibFormVisualDocument, which overrides DoCreateView) — gets a view + child
+// (a tab's — ibFormVisualDocument, ibAuditLogDocument — each overriding DoCreateView) — gets a view + child
 // frame without needing a document template. Replaces the old one-liner that
 // delegated to ibFrontendDocTemplate::CreateView.
 bool ibFrontendDocument::OnCreate(const wxString& WXUNUSED(path), long flags)

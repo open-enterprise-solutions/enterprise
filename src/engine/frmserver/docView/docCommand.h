@@ -13,9 +13,9 @@
 
 #include <wx/string.h>
 
-#include "core/fileSystem/types.h"   // s32
+#include <cstdint>   // std::int32_t
 
-enum class ibDocCommand : s32 {
+enum class ibDocCommand : std::int32_t {
 	Undo      = 1,    // the document's last command undone (its command processor)
 	Redo      = 2,    // …and done again
 	Save      = 3,    // the document saved — a form's object written
@@ -29,12 +29,14 @@ enum class ibDocCommand : s32 {
 	SelectAll = 11,   // …wxID_SELECTALL
 	SaveAs    = 12,   // the document saved as a file of the name the client chose (Name) — in the session's temporary
 	                  // storage, its tab's File, taken down by the client to where the person keeps it
+	CloseAll  = 13,   // every tab but the locked ones closed — each may keep itself, and the rest stay with it: the
+	                  // desktop's Window → Close All (wxAuiMDIParentFrame::CloseAll); Exit's first half
 };
 
 // THE PICTURE A COMMAND IS SHOWN WITH — one of the client's own stock pictures (the desktop's wxArtProvider ids, which
 // its art provider draws), named: a client draws its platform's, as it maps a key to its platform's. One command,
 // one picture, wherever it is pressed from — the menu and the toolbar alike. A number on the wire, never renumbered.
-enum class ibClientStockPicture : s32 {
+enum class ibClientStockPicture : std::int32_t {
 	None   = 0,    // shown by its title alone
 	New    = 1,    // wxART_NEW
 	Open   = 2,    // wxART_FILE_OPEN
@@ -52,11 +54,12 @@ enum class ibClientStockPicture : s32 {
 	Print  = 14,   // wxART_PRINT
 };
 
-// What a client is told of a command: its name, the key that gives it — modifiers Ctrl / Alt / Shift and the key,
-// "Ctrl+Z"; a client maps them to its own platform's (Ctrl to Cmd on a Mac) — and its picture.
+// What a client is told of a command: its name, the key it gives it BY DEFAULT — modifiers Ctrl / Alt / Shift and the
+// key, "Ctrl+Z"; a client maps them to its own platform's (Ctrl to Cmd on a Mac) — and its picture. The key a person
+// actually presses is theirs: the client puts what they chose, kept in their own directory, over this default.
 struct ibDocCommandInfo {
-	wxString             title;
-	wxString             shortcut;
+	ibString             title;
+	ibString             shortcut;
 	ibClientStockPicture picture = ibClientStockPicture::None;
 };
 

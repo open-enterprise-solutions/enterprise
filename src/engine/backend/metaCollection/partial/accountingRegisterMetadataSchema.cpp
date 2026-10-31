@@ -24,7 +24,7 @@
 // through (GetTurnoverViewQueryable). The twin of ibAccumFigureField, and the same story: cb1edbae moved
 // the view's columns from the resource's user name to its field and left the source asking for
 // `AmountTurnoverDr`, which no view applied since then has.
-static wxString ibAcctTurnoverField(const wxString& resourceField, bool credit)
+static ibString ibAcctTurnoverField(const ibString& resourceField, bool credit)
 {
 	return resourceField + ibRegSidedFigure(ibRegFigure::Turnover, credit);
 }
@@ -76,7 +76,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 	// nor the register. A rule attached to the declaration runs before any statement, so a refusal
 	// costs nothing and says what it is about.
 	{
-		const wxString registerName = GetName();
+		const ibString registerName = GetName();
 		const unsigned int chartCount = m_propertyChartOfAccounts->GetValueAsMetaDesc().GetTypeCount();
 
 		out.Shared(GetMetaID(), GetPhysicalTableName()).m_beforeChange =
@@ -85,8 +85,8 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 					return true;
 				if (report != nullptr) {
 					report->AppendError(chartCount == 0
-						? wxString::Format(_("accounting register '%s': a chart of accounts is required - the account type, the number of analytics and their type all come from it"), registerName)
-						: wxString::Format(_("accounting register '%s': only ONE chart of accounts may be used - two would answer the same questions twice"), registerName));
+						? ibString::Format(_("accounting register '%s': a chart of accounts is required - the account type, the number of analytics and their type all come from it"), registerName)
+						: ibString::Format(_("accounting register '%s': only ONE chart of accounts may be used - two would answer the same questions twice"), registerName));
 				}
 				return false;
 			};
@@ -98,7 +98,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 	// WARN rather than refuse — it is a legitimate intermediate state (a register is built up over
 	// several edits), and it is also a state nobody wants to KEEP. Silence about it is how one ships.
 	if (GetResourceArrayObject().empty()) {
-		RestructureWarning(wxString::Format(
+		RestructureWarning(ibString::Format(
 			_("Register '%s' has no resources: no totals are maintained for it"), GetName()));
 		return;
 	}
@@ -132,12 +132,12 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 				++untyped;
 		}
 		if (untyped != 0)
-			RestructureWarning(wxString::Format(
+			RestructureWarning(ibString::Format(
 				_("Register '%s': %u analytics slot(s) have no type - the chart of accounts names no characteristic chart, so nothing can be written into them"),
 				GetName(), untyped));
 	}
 
-	const wxString periodField = ibRegValueField(GetRegisterPeriod());
+	const ibString periodField = ibRegValueField(GetRegisterPeriod());
 	const bool correspondence = IsCorrespondence();
 
 	// ONE SIDE'S TABLE. Called once for a one-sided register (which keeps both figures in it) and
@@ -177,7 +177,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 				creditSide ? _("credit") : _("debit"),
 				totals == nullptr ? _("totals table") : _("account"));
 
-		const wxString totalsName = GetTotalsTableNameDB(creditSide);
+		const ibString totalsName = GetTotalsTableNameDB(creditSide);
 		ibSchemaTable& t = out.Shared(totals->GetMetaID(), totalsName);
 
 		// --- structure: the period, the account, its breakdown, the register's dimensions ----------
@@ -237,10 +237,10 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// (§ above) as much as the value does — so the identity is carried by a hash column instead, and
 		// ibDeclareDerivedKey decides which of the two shapes this engine gets.
 		//
-		// The totals object's metaID names that column, through the high band no metaID occupies — the
-		// same arrangement the shard column uses one paragraph up, and for the same reason: the column
+		// The totals object's metaID names that column as a VIRTUAL column of it (ibRegDerivedColumnId) —
+		// an identity, as the shard column's one paragraph up is, and for the same reason: the column
 		// has to be ADDABLE to a table that already exists.
-		ibDeclareDerivedKey(t, totalsName, keyCols, totals->GetMetaID() | 0x40000000);
+		ibDeclareDerivedKey(t, totalsName, keyCols, ibRegDerivedColumnId(totals->GetMetaID()));
 
 		// A SIDE IS DECLARED WHOLE — table, columns, triggers and all — or not at all: the credit side
 		// exists in correspondence mode only (see the declaration at the end). Which movements land in a
@@ -251,7 +251,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// STORED GRANULARITY = DAY. It is the FLOOR on what can be read back — a projection is
 		// derivable only into a unit no finer than the stored one — and everything below it (an hour, a
 		// recorder, a line) is answered from the MOVEMENTS, which is where those questions belong.
-		m.Period(periodField, GetRegisterPeriod()->GetQueryColumn(), wxT("{row}.") + periodField, GetTotalsPeriodUnit());
+		m.Period(periodField, GetRegisterPeriod()->GetQueryColumn(), ibT("{row}.") + periodField, GetTotalsPeriodUnit());
 
 		// ⭐⭐ AN INACTIVE MOVEMENT EXISTS AND COUNTS FOR NOTHING. Active separates a record that is
 		// THERE from a record that is IN FORCE: an entry written but not in effect occupies its row and
@@ -296,15 +296,15 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// reference of the account's type, and not an unwritten cell.
 		{
 			// The fields are asked by their ROLE — the layout names them, this does not spell them.
-			const wxString typeRefField = ibRegFieldOfRole(account->GetQueryColumn(), ibColumnRole::ReferenceType);
-			const wxString idField      = ibRegFieldOfRole(account->GetQueryColumn(), ibColumnRole::ReferenceId);
+			const ibString typeRefField = ibRegFieldOfRole(account->GetQueryColumn(), ibColumnRole::ReferenceType);
+			const ibString idField      = ibRegFieldOfRole(account->GetQueryColumn(), ibColumnRole::ReferenceId);
 
 			if (!typeRefField.IsEmpty() && !idField.IsEmpty()) {
-				const wxString zeroId(wxT('0'), sizeof(ibReference) * 2);
+				const ibString zeroId(ibT('0'), sizeof(ibReference) * 2);
 				// The empty account of THIS register's configuration - the one the schema is declared for, which
 				// in the designer is not necessarily the active one.
 				const ibValue emptyAccount = ibValueTypeDescription::AdjustValue(account->GetQueryColumn()->GetTypeDesc(), account->GetMetaData());
-				m.Guard(wxT("({row}.") + typeRefField + wxT(" <> 0) AND ({row}.") + idField + wxT(" <> {binary:") + zeroId + wxT("})"),
+				m.Guard(ibT("({row}.") + typeRefField + ibT(" <> 0) AND ({row}.") + idField + ibT(" <> {binary:") + zeroId + ibT("})"),
 					ibRegSideNamed(account->GetQueryColumn(), emptyAccount));
 			}
 		}
@@ -326,7 +326,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		}
 
 		// --- the stored columns + what a movement contributes to each ------------------------------
-		struct Figure { wxString m_field, m_name; bool m_credit; };
+		struct Figure { ibString m_field, m_name; bool m_credit; };
 		std::vector<Figure> figures;
 
 		for (const auto res : GetResourceArrayObject()) {
@@ -347,15 +347,16 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			// breakdown, the reference's shape): then a figure belongs in the sets whose kinds keep it,
 			// and the account's own kinds table — a tick per row — is what says which. The maintenance
 			// can carry that: its guard is free SQL over the movement row.
-			const wxString resField = ibRegValueField(res);
+			const ibString resField = ibRegValueField(res);
 
 			// Accumulating columns carry an IDENTITY (not scaffold), so the differ can add and drop
 			// them as the register gains resources. The two ids derive from the resource's own metaID —
-			// the second through a HIGH bit, the only range no metaID occupies (they are small
-			// sequential integers, so a low-bit tweak lands on the neighbouring metaobject's id).
+			// the credit one a VIRTUAL column's, synthetic (ibRegDerivedColumnId): negative, so no metaID
+			// can be it. (It was the metaID with a high bit set, a range nobody had claimed yet rather than
+			// one nobody can; the id is not stored, both snapshots compute it, so the change moved no column.)
 			const auto declareColumn = [&](bool credit) {
-				const wxString name = resField + (credit ? wxT("_Cr") : wxT("_Dr"));
-				const ibMetaID id   = credit ? (res->GetMetaID() | 0x40000000) : res->GetMetaID();
+				const ibString name = resField + (credit ? ibT("_Cr") : ibT("_Dr"));
+				const ibMetaID id   = credit ? ibRegDerivedColumnId(res->GetMetaID()) : res->GetMetaID();
 				// The figure is stored in the RESOURCE's own precision (ibRegAccumulatorColumn) — declared
 				// flat, the column was NUMERIC(18,0) and a resource carrying kopecks lost them on the way
 				// INTO the totals, whatever the movements held.
@@ -377,13 +378,13 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			// side's already (that is what a side's totals table is), and the figure in it is the same
 			// figure, whichever field of the movement fed it.
 			const ibBackendQueryColumn* movField = GetRegisterResource(creditSide, res);
-			const wxString movValueField = ibRegValueField(movField);
+			const ibString movValueField = ibRegValueField(movField);
 
 			if (correspondence) {
 				// The row IS a posting: what it contributes to THIS table is the whole amount, and which
 				// side that is was decided by which account keyed the table.
 				const ibBackendQueryColumn* c = declareColumn(creditSide);
-				m.Accumulate(c, wxT("{row}.") + movValueField, ibQueryColumnExpr::Col(movField));
+				m.Accumulate(c, ibT("{row}.") + movValueField, ibQueryColumnExpr::Col(movField));
 				continue;
 			}
 
@@ -399,9 +400,9 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			if (recordType == nullptr)
 				continue;
 
-			const wxString recField = ibRegValueField(recordType);
+			const ibString recField = ibRegValueField(recordType);
 			const int debitTag = static_cast<int>(ibAccountingRecordType::eDebit);
-			const wxString debitTagText = wxString::Format(wxT("%i"), debitTag);
+			const ibString debitTagText = ibString::Format(ibT("%i"), debitTag);
 			// The rebuild's condition is a TYPED comparison through the query layer — it needs the enum's
 			// VALUE, not its ordinal (a number's tag is on no movement, so every row fell to the credit
 			// side on a rebuild). The neighbouring register measured it: accumulationRegisterMetadataSchema.
@@ -415,17 +416,17 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			// credit field. Balanced, both halves are the same column and this reads as it always did.
 			const ibBackendQueryColumn* movDr = GetRegisterResource(/*creditSide*/ false, res);
 			const ibBackendQueryColumn* movCr = GetRegisterResource(/*creditSide*/ true,  res);
-			const wxString movDrField = ibRegValueField(movDr);
-			const wxString movCrField = ibRegValueField(movCr);
+			const ibString movDrField = ibRegValueField(movDr);
+			const ibString movCrField = ibRegValueField(movCr);
 
 			m.Accumulate(cDr,
-				wxT("CASE WHEN {row}.") + recField + wxT(" = ") + debitTagText + wxT(" THEN {row}.") + movDrField + wxT(" ELSE 0 END"),
+				ibT("CASE WHEN {row}.") + recField + ibT(" = ") + debitTagText + ibT(" THEN {row}.") + movDrField + ibT(" ELSE 0 END"),
 				ibQueryColumnExpr::Case(
 					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType->GetQueryColumn(), ibQueryFilterOp::Equal, debit }),
 					    ibQueryColumnExpr::Col(movDr) } },
 					ibQueryColumnExpr::Const(ibValue(0.0))));
 			m.Accumulate(cCr,
-				wxT("CASE WHEN {row}.") + recField + wxT(" = ") + debitTagText + wxT(" THEN 0 ELSE {row}.") + movCrField + wxT(" END"),
+				ibT("CASE WHEN {row}.") + recField + ibT(" = ") + debitTagText + ibT(" THEN 0 ELSE {row}.") + movCrField + ibT(" END"),
 				ibQueryColumnExpr::Case(
 					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType->GetQueryColumn(), ibQueryFilterOp::Equal, debit }),
 					    ibQueryColumnExpr::Const(ibValue(0.0)) } },
@@ -468,7 +469,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 
 			for (const Figure& figure : figures)
 				v.m_columns.push_back({ ibAcctTurnoverField(figure.m_name, figure.m_credit),
-				                        figure.m_field, wxString(), ibMaterializeAgg::Value });
+				                        figure.m_field, ibString(), ibMaterializeAgg::Value });
 		}
 	};
 
@@ -495,12 +496,12 @@ bool ibValueMetaObjectAccountingRegister::HasMaterializedViews() const
 
 const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetTurnoverViewQueryable(bool creditSide) const
 {
-	const wxString viewName = GetTurnoverViewName(creditSide);
+	const ibString viewName = GetTurnoverViewName(creditSide);
 
 	// Cached beside the shapes, and keyed by WHAT IT WAS BUILT FROM as they are: a view built before
 	// the register's attributes were read would otherwise be kept, empty, for the life of the session —
 	// the neighbour's own scar, and the cheapest way not to repeat it is the same signature check.
-	wxString builtFrom;
+	ibString builtFrom;
 	ibRegSignAttribute(builtFrom, GetRegisterPeriod());
 	ibRegSignAttribute(builtFrom, creditSide && IsCorrespondence() ? GetRegisterAccountCr() : GetRegisterAccount());
 	for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
@@ -575,7 +576,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetTurnoverViewQu
 		// the resource's FIELD (`fld1217_NTurnoverDr`, ibAcctTurnoverField) and the word is only what a
 		// query writes — so the two names part here: the query name from the word, the stored one from
 		// the function the view's CREATE is spelled with.
-		const wxString figureName =
+		const ibString figureName =
 			resource->GetName() + ibRegSidedFigure(ibRegFigure::Turnover, credit);
 
 		columns.push_back(ibTempColumn(
@@ -585,7 +586,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetTurnoverViewQu
 			// …and the caption, from the same pair the name is built from.
 			ibRegColumnCaptionOf(resource->GetSynonym(), ibRegSidedCaption(ibRegFigure::Turnover, credit)),
 			// …and the picture of what it is a figure OF — its resource, and what it stands for.
-			ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource));
+			ibBackendQueryColumn::Kind::Computed, resource->GetColumnPicture()).StandsFor(resource));
 	};
 
 	for (const auto resource : GetResourceArrayObject()) {

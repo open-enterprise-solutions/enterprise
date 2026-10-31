@@ -17,7 +17,7 @@
       "parameters": "Немає.",
       "return_descr": "Table — порожня, без колонок.",
       "example": "Sales = New Table();\nSales.Columns.AddColumn(\"Item\", New TypeDescription(\"String\"));\nSales.Columns.AddColumn(\"Amount\", New TypeDescription(\"Number\"));\nRow = Sales.Add();\nRow.Item = \"Папір\";\nRow.Amount = 12;\nMessage(Sales.Total(\"Amount\"));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table.Columns", "cls.Table.Add", "cls.Table.Row", "cls.Table.FindRows", "guide.linq"],
       "reviewed": false
     },
@@ -33,7 +33,7 @@
       "parameters": "",
       "return_descr": "Колекція колонок.",
       "example": "Table.Columns.AddColumn(\"Code\", New TypeDescription(\"String\"));\nTable.Columns[0].Indexing = True;   // Find / FindRows за Code йдуть через індекс",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table.AddColumn", "cls.Table.RemoveColumn", "cls.Table.Find"],
       "reviewed": false
     },
@@ -49,7 +49,7 @@
       "parameters": "name — ім'я колонки, за яким її читають рядки (`Row.<name>`).\ntype — TypeDescription; якщо не вказано, колонка зберігає рядки.\ncaption — заголовок на формі; якщо не вказано — ім'я.\nwidth — ширина на формі.",
       "return_descr": "Опис колонки (Name, Types, Caption, Width, Indexing).",
       "example": "Table.Columns.AddColumn(\"Amount\", New TypeDescription(\"Number\"), \"Сума, грн\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table.Columns", "cls.Table.RemoveColumn", "cls.Table.Total"],
       "reviewed": false
     },
@@ -65,7 +65,7 @@
       "parameters": "name — ім'я колонки.",
       "return_descr": "",
       "example": "Table.Columns.RemoveColumn(\"Draft\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table.Columns", "cls.Table.AddColumn"],
       "reviewed": false
     },
@@ -81,7 +81,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Row = Table.Find(\"Папір\", \"Item\");\nRow.Amount = Row.Amount + 1;   // змінюється рядок самої таблиці",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table", "cls.Table.Add", "cls.Table.Find"],
       "reviewed": false
     },
@@ -97,7 +97,7 @@
       "parameters": "Немає.",
       "return_descr": "Новий рядок.",
       "example": "Row = Table.Add();\nRow.Item = \"Папір\";",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table.Row", "cls.Table.Delete"],
       "reviewed": false
     },
@@ -113,7 +113,7 @@
       "parameters": "Немає.",
       "return_descr": "Число.",
       "example": "Last = Table[Table.Count() - 1];",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table"],
       "reviewed": false
     },
@@ -129,7 +129,7 @@
       "parameters": "row — рядок цієї таблиці або його індекс, рахуючи з 0.",
       "return_descr": "",
       "example": "Row = Table.Find(\"Draft\", \"Status\");\nTable.Delete(Row);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table.Clear", "cls.Table.Add"],
       "reviewed": false
     },
@@ -145,7 +145,7 @@
       "parameters": "Немає.",
       "return_descr": "",
       "example": "Table.Clear();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table.Delete"],
       "reviewed": false
     },
@@ -161,7 +161,7 @@
       "parameters": "value — чому має дорівнювати поле.\ncolumn — ім'я колонки.",
       "return_descr": "Рядок або Undefined.",
       "example": "Row = Table.Find(\"Папір\", \"Item\");   // Undefined, якщо в жодному рядку такого немає",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table.FindRows", "cls.Table.Columns"],
       "reviewed": false
     },
@@ -177,7 +177,7 @@
       "parameters": "filter — Structure виду колонка = значення.",
       "return_descr": "Array рядків.",
       "example": "Rows = Sales.FindRows(New Structure(\"Item\", \"Папір\"));\nMessage(Rows.Count());",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table.Find", "cls.Table.Columns", "guide.linq"],
       "reviewed": false
     },
@@ -193,7 +193,7 @@
       "parameters": "column — ім'я колонки.",
       "return_descr": "Число.",
       "example": "Message(Sales.Total(\"Amount\"));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table.AddColumn", "cls.Table.UnloadColumn"],
       "reviewed": false
     },
@@ -209,7 +209,7 @@
       "parameters": "column — ім'я колонки.\nascending — True (за замовчуванням) за зростанням, False за спаданням.",
       "return_descr": "",
       "example": "Sales.Sort(\"Amount\", False);   // спочатку найбільші",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["kw.OrderBy", "guide.linq"],
       "reviewed": false
     },
@@ -225,7 +225,7 @@
       "parameters": "column — ім'я колонки.",
       "return_descr": "Array.",
       "example": "Items = Sales.UnloadColumn(\"Item\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["cls.Table.Total"],
       "reviewed": false
     }

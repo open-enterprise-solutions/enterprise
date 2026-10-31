@@ -7,8 +7,10 @@
 
 #include <vector>
 
-#include "frmclient/backend/typeDescription.h"
-#include "frmclient/backend/sourceDescription.h"   // ibSourceDescription — control's bound source path (GetSourceDesc)
+#include "frmclient/backend/compiler/value.h"      // ibValue — what a factory makes and adjusts; FRMCLIENT_API
+#include "core/description/typeDescription.h"
+#include "core/description/sourceDescription.h"    // ibSourceDescription — control's bound source path (GetSourceDesc)
+#include "core/selectorDataType.h"                 // ibSelectorDataType — the shape a type is picked in (GetFilterDataType)
 
 class FRMCLIENT_API ibMetaData;
 class ibBackendSourceColumn;
@@ -33,15 +35,6 @@ public:
 	virtual ibTypeDescription& GetTypeValueDesc() const { return GetTypeDesc(); }
 
 	bool IsEmptyTypeDesc() const { return !GetTypeDesc().IsOk(); }
-};
-
-enum ibSelectorDataType {
-	ibSelectorDataType_any,
-	ibSelectorDataType_boolean,
-	ibSelectorDataType_reference,
-	ibSelectorDataType_table,
-	ibSelectorDataType_resource,
-	ibSelectorDataType_eventSource,
 };
 
 class FRMCLIENT_API ibBackendTypeConfigFactory :

@@ -12,12 +12,12 @@ void ibValueModelTableBox::OnPropertyCreated(ibProperty* property)
 	//}
 }
 
-bool ibValueModelTableBox::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueModelTableBox::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	return ibValueWindow::OnPropertyChanging(property, newValue);
 }
 
-void ibValueModelTableBox::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueModelTableBox::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	// A NEW SOURCE, A NEW MODEL. Whether the columns are refilled from it is the person's to answer — the
 	// columns may be hand-made — so it is not decided here: the question is the client's to put, and a yes
@@ -55,7 +55,7 @@ void ibValueModelTableBox::RefillFromSource()
 				if (colInfo == nullptr)
 					continue;
 				ibValueModelTableBoxColumn* tableBoxColumn =
-					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), this));
+					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(ibT("TableboxColumn"), this));
 				wxASSERT(tableBoxColumn);
 				const ibTypeDescription columnType = colInfo->GetColumnType();
 				if (columnType.IsOk())
@@ -82,7 +82,7 @@ void ibValueModelTableBox::RefillFromSource()
 			// source, whose GetSourceExplorer()->Reset() CLEARS the helper vector this loop reads through
 			// (GetHelper returns &m_arraySource[idx]) -> the live nodes dangle mid-loop (freed, 0xDD fill), so
 			// only the FIRST column reads real data. Read the explorer ONCE while stable, then build from the copy.
-			struct ColumnSnap { ibSourceId id; wxString name; wxString synonym; wxString group; bool visible; };
+			struct ColumnSnap { ibSourceId id; ibString name; ibString synonym; ibString group; bool visible; };
 			std::vector<ColumnSnap> snaps;
 			for (unsigned int idx = 0; idx < explorer->GetHelperCount(); idx++) {
 				const ibSourceExplorer* columnPtr = explorer->GetHelper(idx);
@@ -99,7 +99,7 @@ void ibValueModelTableBox::RefillFromSource()
 				ibValueFrame* holderControl = GetColumnGroupHolder(snap.group);
 
 				ibValueModelTableBoxColumn* tableBoxColumn =
-					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), holderControl));
+					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(ibT("TableboxColumn"), holderControl));
 				wxASSERT(tableBoxColumn);
 				tableBoxColumn->SetControlName(GetControlName() + snap.name);
 				tableBoxColumn->SetCaption(snap.synonym);

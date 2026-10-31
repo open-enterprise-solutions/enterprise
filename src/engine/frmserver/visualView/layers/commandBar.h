@@ -4,7 +4,7 @@
 #include <vector>
 #include "frmserver/visualView/layerObject.h"   // ibValueLayerObject — the common runtime+property base
 #include "backend/standardCommand.h"          // ibActionID, ibPictureDescription, ibStandardCommandDescription
-#include "backend/commandDescription.h"  // ibCommandDescription — the command-hop path a button binds to
+#include "core/description/commandDescription.h"  //ibCommandDescription — the command-hop path a button binds to
 #include "backend/propertyManager/property/propertyCommandSource.h" // ibPropertyCommandSource — the button's command SOURCE property (real picker)
 #include "backend/backend_command.h"                                // ibBackendCommandReceiver — a bar item is a receiver (via the door it inherits)
 #include "backend/propertyManager/property/propertyPicture.h"// ibPropertyPicture
@@ -40,7 +40,7 @@ enum ibCommandEntryKind {
 
 struct ibCommandEntry {
 	ibActionID              id;
-	wxString                caption;
+	ibString                caption;
 	ibPictureDescription    picture;
 	ibRepresentation        representation;
 	bool                    enabled;
@@ -54,10 +54,10 @@ struct ibCommandEntry {
 	// owned by the bar's AutoFill set (m_autoItems), rebuilt with it. Empty for every other kind.
 	std::vector<ibValueCommandBarItem*> members;
 	// The hint on the tool. Empty: the caption.
-	wxString                tooltip;
+	ibString                tooltip;
 	ibCommandEntry() : id(wxNOT_FOUND), representation(ibRepresentation_Auto), enabled(true), item(nullptr),
 		kind(ibCommandEntryKind_Command), filterLine(0) {}
-	ibCommandEntry(const ibActionID& i, const wxString& c, const ibPictureDescription& p, ibRepresentation r, bool en = true, ibValueCommandBarItem* it = nullptr)
+	ibCommandEntry(const ibActionID& i, const ibString& c, const ibPictureDescription& p, ibRepresentation r, bool en = true, ibValueCommandBarItem* it = nullptr)
 		: id(i), caption(c), picture(p), representation(r), enabled(en), item(it),
 		  kind(ibCommandEntryKind_Command), filterLine(0) {}
 };
@@ -74,16 +74,16 @@ public:
 	// (the owner frame's form). WalkCommand (the backend receiver's validate) is inherited from the door.
 	virtual ibValueForm* GetCommandGateForm() const override;
 
-	wxString GetName() const { wxString s; m_propertyName->GetValueAsString(s); return s; }
-	void SetName(const wxString& name) { m_propertyName->SetValue(name); }
-	wxString GetCaption() const { return m_propertyCaption->GetValueAsTranslateString(); }
-	void SetCaption(const wxString& caption) { m_propertyCaption->SetValue(caption); }
+	ibString GetName() const { ibString s; m_propertyName->GetValueAsString(s); return s; }
+	void SetName(const ibString& name) { m_propertyName->SetValue(name); }
+	ibString GetCaption() const { return m_propertyCaption->GetValueAsTranslateString(); }
+	void SetCaption(const ibString& caption) { m_propertyCaption->SetValue(caption); }
 	ibRepresentation GetRepresentation() const { return m_propertyRepresentation->GetValueAsEnum(); }
 
 	// Picture / tooltip / Enabled / Visible, mirroring a toolbar item.
 	bool IsEmptyPicture() const { return m_propertyPicture->IsEmptyProperty(); }
 	ibPictureDescription GetPictureDesc() const { return m_propertyPicture->GetValueAsPictureDesc(); }
-	wxString GetToolTip() const { return m_propertyTooltip->GetValueAsTranslateString(); }
+	ibString GetToolTip() const { return m_propertyTooltip->GetValueAsTranslateString(); }
 	bool IsEnabled() const { return m_propertyEnabled->GetValueAsBoolean(); }
 	bool IsVisible() const { return m_propertyVisible->GetValueAsBoolean(); }
 	// Available by the functional options it names — false while all of them are off in this base. Beside
@@ -100,7 +100,7 @@ public:
 	// command-door twin of a control's ibPropertySource. A drag from the navigator OR a pick in the inspector
 	// dialog both set this ONE property; the button binds to and renders from it.
 	ibCommandDescription GetBindingDesc() const { return m_propertyCommand->GetValueAsCommandDesc(); }
-	void SetCommandDesc(const ibCommandDescription& desc, const wxString& display = wxEmptyString) { m_propertyCommand->SetValue(desc, display); }
+	void SetCommandDesc(const ibCommandDescription& desc, const ibString& display = ibEmptyString) { m_propertyCommand->SetValue(desc, display); }
 	const ibCommandDescription& GetCommandDesc() const { return m_propertyCommand->GetValueAsCommandDesc(); }
 
 	// legacy command accessors — the AutoFill transient items set a plain command metaId; it flows into the
@@ -122,11 +122,11 @@ public:
 
 	// ibValue / ibPropertyObject concrete requirements specific to the item.
 	virtual ibString GetString() const override { return GetCaption(); }
-	virtual wxString GetClassName() const override { return wxT("CommandBarItem"); }
-	virtual wxString GetObjectTypeName() const override { return wxT("CommandBarItem"); }
+	virtual ibString GetClassName() const override { return ibT("CommandBarItem"); }
+	virtual ibString GetObjectTypeName() const override { return ibT("CommandBarItem"); }
 	virtual bool IsEditable() const override { return true; }
 	// Reject a duplicate Name — unique among the bar's items (like a control's name).
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
 
 	// Serialization — the item's own fields (mirrors a toolbar item's Read/WriteData).
 	bool WriteData(ibDataNode& node) const;
@@ -136,33 +136,33 @@ private:
 
 	class ibValueCommandBar* m_bar = nullptr;
 
-	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(wxT("Command"), _("Command"));
-	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_category, wxT("Name"), _("Name"),
+	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(ibT("Command"), _("Command"));
+	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_category, ibT("Name"), _("Name"),
 		_("The item's name, unique among the command bar's items. It identifies the item in the designer; the user never sees it."), _("Command"));
 	// Empty by default ON PURPOSE: an unset caption lets the bound command provide the DEFAULT (BuildCommands
 	// fills it via the command door). A designer who types one overrides that — own caption on top.
-	ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, wxT("Caption"), _("Caption"),
-		_("The item's caption on the bar. Empty: the bound command's own caption. Can be written per language."), wxT(""));
-	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_category, wxT("Representation"), _("Representation"),
+	ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, ibT("Caption"), _("Caption"),
+		_("The item's caption on the bar. Empty: the bound command's own caption. Can be written per language."), ibT(""));
+	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_category, ibT("Representation"), _("Representation"),
 		_("What the item shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text)."),
 		ibRepresentation::ibRepresentation_Auto);
-	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_category, wxT("Picture"), _("Picture"),
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_category, ibT("Picture"), _("Picture"),
 		_("The item's icon. Empty: the bound command's own picture."));
-	ibPropertyTString* m_propertyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, wxT("Tooltip"), _("Tooltip"),
-		_("Saved with the form, but the bar does not show it yet: an item's tooltip is always its caption."), wxEmptyString);
-	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("Enabled"), _("Enabled"),
+	ibPropertyTString* m_propertyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, ibT("Tooltip"), _("Tooltip"),
+		_("Saved with the form, but the bar does not show it yet: an item's tooltip is always its caption."), ibEmptyString);
+	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, ibT("Enabled"), _("Enabled"),
 		_("Whether the item can be pressed. Off: it is shown greyed out."), true);
-	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("Visible"), _("Visible"),
+	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, ibT("Visible"), _("Visible"),
 		_("Whether the item is shown on the bar."), true);
 	// The button's COMMAND-SOURCE property — the real picker (registered frontend editor ibPGCommandSourceProperty:
 	// a type glyph + a dialog of the form's command sources), the command-door twin of a control's ibPropertySource.
 	// Internal name MUST differ from the category name ("Command") — wxPropertyGrid keys categories and
 	// properties in ONE per-page name map (a collision asserts in PrepareToAddItem). Label stays _("Command").
-	ibPropertyCommandSource* m_propertyCommand = ibPropertyObject::CreateProperty<ibPropertyCommandSource>(m_category, wxT("BoundCommand"), _("Command"),
+	ibPropertyCommandSource* m_propertyCommand = ibPropertyObject::CreateProperty<ibPropertyCommandSource>(m_category, ibT("BoundCommand"), _("Command"),
 		_("The command the item runs: a form command, a standard command of the form or of one of its tables, or a command of the form's object or of the configuration."));
 	// USER VISIBILITY — a group of its own, as on an element of a form (control.h).
-	ibPropertyCategory* m_categoryUserVisibility = ibPropertyObject::CreatePropertyCategory(wxT("UserVisibility"), _("User visibility"));
-	ibPropertyFunctionalOptions* m_propertyFunctionalOptions = ibPropertyObject::CreateProperty<ibPropertyFunctionalOptions>(m_categoryUserVisibility, wxT("FunctionalOptions"), _("Functional options"),
+	ibPropertyCategory* m_categoryUserVisibility = ibPropertyObject::CreatePropertyCategory(ibT("UserVisibility"), _("User visibility"));
+	ibPropertyFunctionalOptions* m_propertyFunctionalOptions = ibPropertyObject::CreateProperty<ibPropertyFunctionalOptions>(m_categoryUserVisibility, ibT("FunctionalOptions"), _("Functional options"),
 		_("The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."));
 };
 
@@ -205,16 +205,16 @@ public:
 			return;
 		}
 	}
-	bool HasItemName(const wxString& name, const ibValueCommandBarItem* except = nullptr) const {
+	bool HasItemName(const ibString& name, const ibValueCommandBarItem* except = nullptr) const {
 		for (const auto& it : m_items) {
 			if (it != nullptr && it != except && it->GetName() == name)
 				return true;
 		}
 		return false;
 	}
-	wxString GenerateItemName() const {
+	ibString GenerateItemName() const {
 		for (int n = 1; ; ++n) {
-			const wxString name = wxString::Format(wxT("Command%d"), n);
+			const ibString name = ibString::Format(ibT("Command%d"), n);
 			if (!HasItemName(name)) return name;
 		}
 	}
@@ -246,8 +246,8 @@ public:
 	// caption and picture as the representation chooses them, whether it is enabled, its tooltip, its kind —
 	// and for a group, its members with the same, greyed where a view-only form forbids a command that changes
 	// data. Everything a client needs to draw the bar and its submenus without asking again — the pictures by their
-	// ids, as the host sends them (ibVisualHost::SendPicture).
-	void Update(ibDataNode& state, class ibVisualHost* host);
+	// ids (ibBackendPicture::SendPicture).
+	void Update(ibDataNode& state);
 
 	// Reverse-lookup the child that produced the command with this id (built by BuildCommands).
 	// nullptr for an AutoFill command (no child). Used by the designer to select on tool click.
@@ -270,8 +270,8 @@ public:
 
 	// ibValue / ibPropertyObject concrete requirements specific to the bar.
 	virtual ibString GetString() const override { return _("Command bar"); }
-	virtual wxString GetClassName() const override { return wxT("CommandBar"); }
-	virtual wxString GetObjectTypeName() const override { return wxT("CommandBar"); }
+	virtual ibString GetClassName() const override { return ibT("CommandBar"); }
+	virtual ibString GetObjectTypeName() const override { return ibT("CommandBar"); }
 	virtual bool IsEditable() const override { return true; }
 
 private:
@@ -293,8 +293,8 @@ private:
 	std::vector<ibValuePtr<ibValueCommandBarItem>> m_autoItems; // TRANSIENT AutoFill items for the owner object's own commands — rebuilt each BuildCommands, never serialized
 	bool                        m_treeExpanded = true;        // designer tree node open-state
 
-	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(wxT("CommandBar"), _("Command bar"));
-	ibPropertyBoolean* m_propertyAutoFill = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("AutoFill"), _("Auto fill"),
+	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(ibT("CommandBar"), _("Command bar"));
+	ibPropertyBoolean* m_propertyAutoFill = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, ibT("AutoFill"), _("Auto fill"),
 		_("Whether the bar fills itself with its owner's standard commands (the form's or the table's: Add, Copy, Delete, Write and so on) and the commands of the owner's object. On by default. Off: the bar holds only the items added to it by hand."),
 		true);
 };
@@ -305,23 +305,23 @@ private:
 // path (a table command carries [source, action], a command a 1-hop path). Symmetric to the source explorer's
 // columns feeding the data-source picker.
 struct ibCommandSourceEntry {
-	wxString             group;
-	wxString             label;   // the TREE LEAF text — the command's own NAME (the tree's sub-folders already carry
+	ibString             group;
+	ibString             label;   // the TREE LEAF text — the command's own NAME (the tree's sub-folders already carry
 	                              // the path, and the configurator works with NAMES, not synonyms).
 	ibCommandDescription desc;
 	ibPictureDescription picture;   // THE COMMAND'S picture — the command determines it (a command's own picture; an
 	                                // action-command's own picture) and every surface (navigator / picker / button)
 	                                // reads it from HERE, never from a separate action lookup.
-	wxString             subgroup;   // optional SUB-group WITHIN the section (empty = directly under it). Used by
+	ibString             subgroup;   // optional SUB-group WITHIN the section (empty = directly under it). Used by
 	                                 // the Standard section to nest actions per source: the form vs each tablebox.
-	wxString             fullName;   // the FLAT full PATH name (GetFullName) — shown where there is NO tree to give
+	ibString             fullName;   // the FLAT full PATH name (GetFullName) — shown where there is NO tree to give
 	                                 // the path: the bound button's command-source CELL. Empty = fall back to label.
 };
 // The THREE command sections of a form, in display order. The navigator / picker ALWAYS show
 // these three (even empty), and GatherFormCommands labels its entries with exactly these strings, so the two
 // can't drift. [0] Form commands (manually added), [1] Standard commands (from the form's sources), [2] Global
 // commands (common + section commands).
-FRMSERVER_API std::vector<wxString> GetCommandSections();
+FRMSERVER_API std::vector<ibString> GetCommandSections();
 
 // Gather every command available to `form`, grouped into the three sections above:
 //   [0] the form's own object commands (manually-added commands),
@@ -329,5 +329,10 @@ FRMSERVER_API std::vector<wxString> GetCommandSections();
 //   [2] every OTHER command metaobject in the config (common + section commands, recursive by classid).
 // The command-door twin of walking the form's source explorers. Empty when form is null.
 FRMSERVER_API std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form);
+
+// The same gather as the rows a client draws (the form editor's command tree, the inspector's command-source row): the
+// three sections, each with a row per sub-group and per command — Name, Picture, CommandPath (children Id), Kind; a
+// form command's row its node id the command's. Nothing for no form.
+FRMSERVER_API void WriteCommandTree(class ibDataNode& node, ibValueForm* form);
 
 #endif

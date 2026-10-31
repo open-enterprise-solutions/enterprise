@@ -46,11 +46,11 @@ wxString ConditionText(ibFilterGroupKind kind, const std::vector<ibFilterNodeDes
 	return text;
 }
 
-wxString FieldsText(const std::vector<wxString>& fields)
+ibString FieldsText(const std::vector<ibString>& fields)
 {
-	wxString text;
-	for (const wxString& field : fields)
-		text += (text.IsEmpty() ? wxString() : wxString(wxT(", "))) + field;
+	ibString text;
+	for (const ibString& field : fields)
+		text += (text.IsEmpty() ? ibString() : ibString(ibT(", "))) + field;
 	return text;
 }
 
@@ -88,7 +88,7 @@ private:
 // ⭐ THE FIELDS A RULE DRESSES — a list, each picked from the field tree; none = the whole row.
 class ibDialogFields : public wxDialog {
 public:
-	ibDialogFields(wxWindow* parent, const std::vector<wxString>& fields, ibSettingsFieldTree* source, bool readOnly)
+	ibDialogFields(wxWindow* parent, const std::vector<ibString>& fields, ibSettingsFieldTree* source, bool readOnly)
 		: wxDialog(parent, wxID_ANY, _("Fields"), wxDefaultPosition, wxDefaultSize,
 			wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 		  m_fields(fields), m_source(source)
@@ -104,7 +104,7 @@ public:
 		sizer->Add(toolbar, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, FromDIP(4));
 
 		m_list = new wxListBox(this, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(320, 220)));
-		for (const wxString& field : m_fields)
+		for (const ibString& field : m_fields)
 			m_list->Append(field);
 		sizer->Add(m_list, 1, wxEXPAND | wxALL, FromDIP(4));
 		sizer->Add(CreateStdDialogButtonSizer(wxOK | wxCANCEL), 0, wxEXPAND | wxALL, FromDIP(6));
@@ -118,8 +118,8 @@ public:
 			if (chosen == nullptr)
 				return;
 			const ibValue owner(chosen);   // the picker mints the field; the value is what disposes of it
-			const wxString path = chosen->GetPath();
-			for (const wxString& field : m_fields)
+			const ibString path = chosen->GetPath();
+			for (const ibString& field : m_fields)
 				if (field.IsSameAs(path, false))
 					return;   // named once
 			m_fields.push_back(path);
@@ -133,10 +133,10 @@ public:
 			m_list->Delete(static_cast<unsigned int>(at));
 		}, wxID_REMOVE);
 	}
-	const std::vector<wxString>& GetFields() const { return m_fields; }
+	const std::vector<ibString>& GetFields() const { return m_fields; }
 
 private:
-	std::vector<wxString> m_fields;
+	std::vector<ibString> m_fields;
 	ibSettingsFieldTree*  m_source = nullptr;
 	wxListBox*            m_list = nullptr;
 };
@@ -160,7 +160,7 @@ public:
 		return rules != nullptr && row < rules->m_rules.size() ? &rules->m_rules[row] : nullptr;
 	}
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		const ibConditionalAppearanceRuleDescription* rule = RuleAt(row);
 		if (rule == nullptr)
 			return;
@@ -175,14 +175,14 @@ public:
 	}
 
 	// ONLY THE TICK IS WRITTEN HERE — every other part is edited in its own window, through the cell's "...".
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override {
 		if (m_editor->m_readOnly || col != kColUse || m_editor->m_rules == nullptr
 		 || row >= m_editor->m_rules->m_rules.size())
 			return false;
 		ibConditionalAppearanceRuleDescription& rule = m_editor->m_rules->m_rules[row];
-		if (rule.m_use == variant.GetBool())
+		if (rule.m_use == variant.GetBoolean())
 			return false;
-		rule.m_use = variant.GetBool();
+		rule.m_use = variant.GetBoolean();
 		m_editor->Changed();
 		return true;
 	}

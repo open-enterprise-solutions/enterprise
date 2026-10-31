@@ -37,9 +37,10 @@
 
 #include <gtest/gtest.h>
 
+#include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/system/systemManager.h"
-#include "backend/compiler/codeDef.h"
+#include "core/compiler/codeDef.h"
 
 namespace {
 
@@ -47,7 +48,7 @@ namespace {
 // so every red line costs a re-run by hand to learn what the compiler objected
 // to. ::testing::AssertionResult streams the reason into the report and still
 // converts to bool, so no callsite changes.
-::testing::AssertionResult Build(ibCompileCode& compiler, const wxString& src)
+::testing::AssertionResult Build(ibCompileCode& compiler, const ibString& src)
 {
 	try {
 		if (compiler.Compile(src))
@@ -77,9 +78,9 @@ int FindOpcode(const ibByteCode& bc, short oper, int from = 0)
 
 // A compact rendering, so a failure says what was emitted instead of which
 // EXPECT missed.
-wxString Listing(const ibByteCode& bc)
+ibString Listing(const ibByteCode& bc)
 {
-	wxString out;
+	ibString out;
 	for (size_t i = 0; i < bc.m_listCode.size(); i++) {
 		const ibByteUnit& unit = bc.m_listCode[i];
 		out << (long)i << wxT(": op=") << unit.m_numOper
@@ -392,7 +393,7 @@ TEST(CompileTree, MethodCallEmitsTheOwnerAndTheName) {
 TEST(CompileTree, EveryOpcodeCarriesItsSourceLine) {
 	// A tree-driven emitter is exactly the kind of change that drops line stamps
 	// quietly, and a debugger with no line map is a debugger that lies.
-	const wxString src =
+	const ibString src =
 		wxT("var a;\n")
 		wxT("a = 1;\n")
 		wxT("a = 2;\n")
@@ -446,7 +447,7 @@ TEST(CompileTree, ADeclaredFunctionIsRegisteredSoACallResolves) {
 
 	const ibByteCode& bc = compiler.m_cByteCode;
 	ASSERT_EQ(bc.m_listFunc.size(), 1u);
-	EXPECT_STREQ(bc.m_listFunc[0].m_strRealName.c_str(), wxT("Twice"));
+	EXPECT_EQ(bc.m_listFunc[0].m_strRealName, ibT("Twice"));
 	EXPECT_TRUE(bc.m_listFunc[0].m_bCodeRet);
 	EXPECT_EQ(bc.m_listFunc[0].m_listParam.size(), 1u);
 	EXPECT_GT(CountOpcode(bc, OPER_CALL) + CountOpcode(bc, OPER_CALL_CLOSURE), 0u)

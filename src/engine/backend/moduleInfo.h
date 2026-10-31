@@ -94,15 +94,15 @@ public:
 	//   BindLocalVariable   — plain writable LOCAL (m_listLocalValue, kind=Local):
 	//     binder fills the frame slot at init, module reads/writes it as an ordinary
 	//     local — no required/type pre-flight, no member access. E.g. a constant's Value.
-	void BindContextVariable(const wxString& name, class ibValue* value);
-	void BindScopeVariable(const wxString& name, class ibValue* value);
-	void BindExportVariable(const wxString& name, class ibValue* value);
-	void BindLocalVariable(const wxString& name, class ibValue* value);
+	void BindContextVariable(const ibString& name, class ibValue* value);
+	void BindScopeVariable(const ibString& name, class ibValue* value);
+	void BindExportVariable(const ibString& name, class ibValue* value);
+	void BindLocalVariable(const ibString& name, class ibValue* value);
 
 	// Symmetric teardown for the Bind… family. RemoveVariable erases the name
 	// from BOTH the extern and context maps, so one Unbind undoes any flavour
 	// of bind. No-op when no compile module is wired yet.
-	void UnbindVariable(const wxString& name);
+	void UnbindVariable(const ibString& name);
 
 	// Compile this descriptor's module. Skips in Designer mode (the
 	// designer only wants AST-level compile state for intellisense and
@@ -249,25 +249,36 @@ protected:
 	// public variadic forms above. External callers should use the
 	// variadic — this raw form stays protected because the array shape
 	// is a derived-class implementation detail.
+	//
+	// ⭐ THE DOOR EVERY CALL INTO A MODULE PASSES, and so where a privileged module's call opens the
+	// session's trusted window. Out of line: the window is the session's, and this header is included
+	// nearly everywhere.
 	bool ExecAsProc(const ibString& strMethodName,
-		ibValue** paParams, const long lSizeArray) const
-	{
-		if (auto pu = GetProcUnit())
-			return pu->CallAsProc(strMethodName, paParams, lSizeArray);
-		return false;
-	}
-
+		ibValue** paParams, const long lSizeArray) const;
 	bool ExecAsFunc(const ibString& strMethodName,
-		ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) const
+		ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) const;
+
+	// The declared default of a parameter of the module's function — the answer a derived class's
+	// GetParamDefValue gives for a method it calls through ExecAsProc / ExecAsFunc, when a call left
+	// that argument out. False for a parameter without one, or a name that is not the module's.
+	bool GetParamDefValue(const ibString& strMethodName, const long lParamNum, ibValue& pvarParamDefValue) const
 	{
-		if (auto pu = GetProcUnit())
-			return pu->CallAsFunc(strMethodName, pvarRetValue, paParams, lSizeArray);
+		if (auto pu = GetProcUnit()) {
+			const ibByteCode* const bc = pu->GetByteCode();
+			return bc != nullptr && bc->GetParamDefValue(bc->FindMethod(strMethodName), lParamNum, pvarParamDefValue);
+		}
 		return false;
 	}
 
 	// The event's array form — see the variadic above. Out of line: it asks the configuration for its
 	// event handlers, and this header is included nearly everywhere.
 	void ExecAsEvent(const ibString& strEventName, ibValue** paParams, const long lSizeArray) const;
+
+	// Every event handler of `metaData` for this event of `source`, called with `source` and the event's
+	// arguments — the second half of an owner's event (ExecAsEvent) and of a manager's (ExecAsManagerEvent).
+	// A member so that a handler's module is called through ExecAsProc, the door every other call passes.
+	static void ExecEventHandlers(const class ibMetaData* metaData, const ibValue* source,
+		const ibString& strEventName, ibValue** paParams, const long lSizeArray);
 
 	// Populate a value's method-helper from this descriptor's bytecode —
 	// every kind=Export entry in m_listFunc / m_listVar is appended as
@@ -322,7 +333,12 @@ protected:
 	// the same stable object/proxy BindExportVariable staged). Present in BOTH
 	// Designer and runtime, so it resolves ThisForm.Controls / ThisObject.
 	// RegisterRecords without a ProcUnit. Returns nullptr if not a bound name.
-	ibValue* GetBoundValue(const wxString& name) const;
+	ibValue* GetBoundValue(const ibString& name) const;
+
+	// The same binding, copied into `out`. A cell that already holds a reference
+	// hands that reference over, so a mutable one stays mutable. A read-only
+	// `out` is a failed read: true must not leave the previous value standing.
+	bool GetBoundValue(const ibString& name, ibValue& out) const;
 
 	// Lazy-create m_compileModule from the descriptor's meta-object (shared by
 	// all Bind* entry points). Propagates the parent's compile scope chain.

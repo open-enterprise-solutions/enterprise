@@ -57,19 +57,9 @@ bool ibUniqueKey::operator==(const ibUniqueKey& other) const
 	return EqualsImpl(other);
 }
 
-bool ibUniqueKey::operator!=(const ibUniqueKey& other) const
-{
-	return !EqualsImpl(other);
-}
-
 bool ibUniqueKey::operator==(const ibGuid& other) const
 {
 	return m_objGuid == other;
-}
-
-bool ibUniqueKey::operator!=(const ibGuid& other) const
-{
-	return m_objGuid != other;
 }
 
 bool ibUniqueKey::EqualsImpl(const ibUniqueKey& other) const

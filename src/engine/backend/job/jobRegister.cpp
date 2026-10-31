@@ -40,8 +40,8 @@ ibDateTime ibJobManager::ReadSharedLastRun(const ibGuid& key, const ibApplicatio
 		own.SetPool(ibApplicationInstance::GetConnectionPool(applicationInstance));
 		ibDatabaseQueryBuilder q = applicationInstance != nullptr ? ibDatabaseQueryBuilder(&own) : ibDatabaseQueryBuilder();
 		ibQueryResult rs = q.From(job_table)
-			.Select({ wxT("lastRun") })
-			.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("jobKey")), ibParam(0)))
+			.Select({ ibT("lastRun") })
+			.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("jobKey")), ibParam(0)))
 			.Execute({ ibValue(key.str()) });
 
 		// Columns are 1-based, and a NULL comes back as TYPE_NULL rather than as
@@ -60,7 +60,7 @@ ibDateTime ibJobManager::ReadSharedLastRun(const ibGuid& key, const ibApplicatio
 	return ibDateTime();
 }
 
-void ibJobManager::WriteSharedLastRun(const ibGuid& key, const wxString& name, const ibDateTime& when)
+void ibJobManager::WriteSharedLastRun(const ibGuid& key, const ibString& name, const ibDateTime& when)
 {
 	try {
 		// UPDATE, deliberately — NOT an upsert.
@@ -76,15 +76,15 @@ void ibJobManager::WriteSharedLastRun(const ibGuid& key, const wxString& name, c
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibUpdate(job_table,
 			{
-				{ wxT("jobName"),  ibParam(0) },
-				{ wxT("lastRun"),  ibParam(1) },
-				{ wxT("computer"), ibParam(2) },
+				{ ibT("jobName"),  ibParam(0) },
+				{ ibT("lastRun"),  ibParam(1) },
+				{ ibT("computer"), ibParam(2) },
 			},
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("jobKey")), ibParam(3))),
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("jobKey")), ibParam(3))),
 			{
 				ibValue(name),
 				ibValue(when),
-				ibValue(appData != nullptr ? appData->GetComputerName() : wxString()),
+				ibValue(appData != nullptr ? appData->GetComputerName() : ibString()),
 				ibValue(key.str()),
 			});
 	}
@@ -114,8 +114,8 @@ ibJobManager::ibJobSettings ibJobManager::ReadSharedSettings(const ibGuid& key)
 	try {
 		ibDatabaseQueryBuilder q;
 		ibQueryResult rs = q.From(job_table)
-			.Select({ wxT("lastRun"), wxT("computer"), wxT("active"), wxT("schedule"), wxT("jobName") })
-			.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("jobKey")), ibParam(0)))
+			.Select({ ibT("lastRun"), ibT("computer"), ibT("active"), ibT("schedule"), ibT("jobName") })
+			.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("jobKey")), ibParam(0)))
 			.Execute({ ibValue(key.str()) });
 
 		if (rs.Next()) {
@@ -140,8 +140,8 @@ ibJobManager::ibJobSettings ibJobManager::ReadSharedSettings(const ibGuid& key)
 
 			// The schedule rides as opaque bytes — read through the blob door, not as a value: it
 			// is a description, and its format belongs to ibJobScheduleDescriptionMemory alone.
-			wxMemoryBuffer blob;
-			rs.GetResultBlob(wxT("schedule"), blob);
+			ibMemoryBuffer blob;
+			rs.GetResultBlob(ibT("schedule"), blob);
 			if (blob.GetDataLen() > 0)
 				ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), settings.m_schedule);
 		}
@@ -160,7 +160,7 @@ ibJobManager::ibWriteOutcome ibJobManager::WriteSharedSettings(const ibJobSettin
 		return ibWriteOutcome::Refused;   // no key, no record — there is nothing this row would be about
 
 	try {
-		wxMemoryBuffer blob;
+		ibMemoryBuffer blob;
 		ibJobScheduleDescriptionMemory::WriteBuffer(blob, settings.m_schedule);
 
 		// UPSERT for the same reason the clock uses one: the dialects spell it differently, and
@@ -168,14 +168,14 @@ ibJobManager::ibWriteOutcome ibJobManager::WriteSharedSettings(const ibJobSettin
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibUpsert(job_table,
 			{
-				{ wxT("jobKey"),   ibParam(0) },
-				{ wxT("jobName"),  ibParam(1) },
-				{ wxT("active"),   ibParam(2) },
+				{ ibT("jobKey"),   ibParam(0) },
+				{ ibT("jobName"),  ibParam(1) },
+				{ ibT("active"),   ibParam(2) },
 				// Opaque bytes, bound as a blob constant — L2 never interprets them, which is
 				// exactly right for a description whose format lives one level up.
-				{ wxT("schedule"), ibConstBlob(blob.GetData(), blob.GetDataLen()) },
+				{ ibT("schedule"), ibConstBlob(blob.GetData(), blob.GetDataLen()) },
 			},
-			{ wxT("jobKey") }),
+			{ ibT("jobKey") }),
 			{
 				ibValue(settings.m_key.str()),
 				ibValue(settings.m_name),
@@ -212,7 +212,7 @@ void ibJobManager::ForgetSharedState(const ibGuid& key)
 	try {
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibDelete(job_table,
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("jobKey")), ibParam(0))),
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("jobKey")), ibParam(0))),
 			{ ibValue(key.str()) });
 	}
 	catch (...) {
@@ -236,7 +236,7 @@ std::size_t ibJobManager::PurgeSharedState(const std::vector<ibGuid>& alsoLive)
 {
 	// WHO IS ALIVE — everything registered right now, everything NOTED as existing but not
 	// scheduled (a switched-off row), plus whatever the caller adds.
-	std::vector<wxString> live;
+	std::vector<ibString> live;
 	{
 		std::lock_guard<std::mutex> lk(m_mtx);
 		for (const auto& slot : m_entries)
@@ -258,21 +258,21 @@ std::size_t ibJobManager::PurgeSharedState(const std::vector<ibGuid>& alsoLive)
 	try {
 		// Read first, delete by key: a NOT IN over a long list is the kind of statement that hits
 		// a driver's parameter limit, and the row count here is jobs, not documents.
-		std::vector<wxString> orphans;
+		std::vector<ibString> orphans;
 		{
 			ibDatabaseQueryBuilder q;
-			ibQueryResult rs = q.From(job_table).Select({ wxT("jobKey") }).Execute();
+			ibQueryResult rs = q.From(job_table).Select({ ibT("jobKey") }).Execute();
 			while (rs.Next()) {
-				const wxString key = rs.GetValue(1).GetString();
+				const ibString key = rs.GetValue(1).GetString();
 				if (std::find(live.begin(), live.end(), key) == live.end())
 					orphans.push_back(key);
 			}
 		}
 
-		for (const wxString& key : orphans) {
+		for (const ibString& key : orphans) {
 			ibDatabaseQueryBuilder q;
 			q.Execute(ibDelete(job_table,
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("jobKey")), ibParam(0))),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("jobKey")), ibParam(0))),
 				{ ibValue(key) });
 		}
 

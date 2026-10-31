@@ -33,7 +33,7 @@
 namespace {
 
 // A fast table of untyped columns, filled row by row the way a read fills it.
-ibQueryRamTable Rows(const std::vector<wxString>& names, const std::vector<std::vector<ibValue>>& rows)
+ibQueryRamTable Rows(const std::vector<ibString>& names, const std::vector<std::vector<ibValue>>& rows)
 {
 	ibQueryRamTable table;
 	for (size_t i = 0; i < names.size(); ++i)
@@ -55,7 +55,7 @@ ibValuePtr<ibValueModelTable> TableOf(const ibValue& value)
 }
 
 // The rows as a script reads them: by column name, in order.
-std::vector<std::vector<ibValue>> ReadRows(ibValueModelTable* table, const std::vector<wxString>& names)
+std::vector<std::vector<ibValue>> ReadRows(ibValueModelTable* table, const std::vector<ibString>& names)
 {
 	std::vector<std::vector<ibValue>> out;
 	const std::shared_ptr<ibValueIteratorState> walk = table->CreateIterator();
@@ -64,7 +64,7 @@ std::vector<std::vector<ibValue>> ReadRows(ibValueModelTable* table, const std::
 	ibValue row;
 	while (walk->MoveNext(row)) {
 		std::vector<ibValue> cells;
-		for (const wxString& name : names) {
+		for (const ibString& name : names) {
 			ibValue cell;
 			const long prop = row.FindProp(name);
 			if (prop >= 0)
@@ -76,7 +76,7 @@ std::vector<std::vector<ibValue>> ReadRows(ibValueModelTable* table, const std::
 	return out;
 }
 
-ibValue Str(const wxString& text) { return ibValue(text); }
+ibValue Str(const ibString& text) { return ibValue(text); }
 
 } // namespace
 

@@ -11,7 +11,7 @@
 //*                           Metamodule                                *
 //***********************************************************************
 
-ibValueMetaObjectSection::ibValueMetaObjectSection(const wxString& name, const wxString& synonym, const wxString& comment) :
+ibValueMetaObjectSection::ibValueMetaObjectSection(const ibString& name, const ibString& synonym, const ibString& comment) :
 	ibValueMetaObject(name, synonym, comment)
 {
 }

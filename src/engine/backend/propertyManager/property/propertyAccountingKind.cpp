@@ -3,14 +3,14 @@
 #include "backend/propertyManager/property/variant/variantOwner.h"
 #include "backend/metaCollection/partial/chartOfAccounts.h"   // the chart whose kinds these are
 
-wxVariantData* ibPropertyAccountingKind::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
+ibVariant ibPropertyAccountingKind::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
-	return new ibVariantDataOwner(property, typeDesc);
+	return ibVariant(new ibVariantOwner(property, typeDesc));
 }
 
 ibMetaDescription& ibPropertyAccountingKind::GetValueAsMetaDesc() const
 {
-	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
+	return get_cell_variant<ibVariantMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyAccountingKind::SetValue(const ibMetaDescription& val)
@@ -19,9 +19,9 @@ void ibPropertyAccountingKind::SetValue(const ibMetaDescription& val)
 }
 
 // The family rule — see propertyRecord.cpp.
-void ibPropertyAccountingKind::DoSetValue(const wxVariant& val)
+void ibPropertyAccountingKind::DoSetValue(const ibVariant& val)
 {
-	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+	if (const ibVariantMetaDesc* carried = find_cell_variant<ibVariantMetaDesc>(val)) {
 		SetValue(carried->GetMetaDesc());
 		return;
 	}
@@ -46,8 +46,8 @@ ibPropertyChoiceMode ibPropertyAccountingKind::GetValueList(ibPropertyChoiceList
 		if (kind == nullptr || kind->IsDeleted())
 			return;
 		list.Add((long)kind->GetMetaID(), kind->GetName(), kind->GetSynonym(),
-			wxVariant(new ibVariantDataOwner(owner, ibMetaDescription(kind->GetMetaID()))),
-			kind->GetIcon());
+			ibVariant(new ibVariantOwner(owner, ibMetaDescription(kind->GetMetaID()))),
+			kind->GetClassType());
 	};
 
 	if (m_level == Level::Account) {
@@ -66,7 +66,7 @@ bool ibPropertyAccountingKind::SetDataValue(const ibValue& varPropVal) { return 
 
 bool ibPropertyAccountingKind::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibVariantDataOwner* owner = get_cell_variant<ibVariantDataOwner>();
+	const ibVariantOwner* owner = get_cell_variant<ibVariantOwner>();
 	wxASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;
@@ -74,12 +74,12 @@ bool ibPropertyAccountingKind::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyAccountingKind::ReadNodeValue(const ibDataValue& value)
 {
-	ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
+	ibBackendMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
 	return true;
 }
 
 bool ibPropertyAccountingKind::WriteNodeValue(ibDataValue& value) const
 {
-	const ibPropertyObject* owner = m_owner;   // CONST overload — see propertyObject.h
-	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
+	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
+	return ibBackendMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

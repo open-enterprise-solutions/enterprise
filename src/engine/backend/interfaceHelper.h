@@ -2,18 +2,10 @@
 #define __INTERFACE_HELPER_H__
 
 #include "backend_core.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
+#include "core/description/commandDescription.h"   // ibInterfaceCommandType — kept with the description that stores it
 
 #include <set>   // m_interfaces — arrived transitively while propgrid was in backend_core's chain
-
-enum ibInterfaceCommandType {
-
-	ibInterfaceCommandType_Default = 100,
-
-	ibInterfaceCommandType_Create = 150,
-	ibInterfaceCommandType_List,
-	ibInterfaceCommandType_Select,
-};
 
 // The interface AREAS an object / command can occupy inside a section (subsystem) — the command-interface panels:
 // Important (top, with the main items) + Normal make the navigation panel; Create / Reports / Service make the
@@ -42,7 +34,7 @@ public:
 		DoSetInterface(id, set);
 	}
 
-	bool IsSetInterface(const ibMetaID& id) const { return m_interfaces.find(id) != m_interfaces.end(); }
+	bool IsSetInterface(const ibMetaID& id) const { return m_interfaces.contains(id); }
 
 	// MAY THIS BE CHECKED INTO A SECTION? Asked of the object, so the section editor builds
 	// its tree by walking the metadata instead of naming every branch by hand — a metatype
@@ -51,6 +43,10 @@ public:
 	// No by default: what a section shows is a navigation surface, and something with no
 	// list and no command has nothing to contribute to one.
 	virtual bool IsInterfaceAllowed() const { return false; }
+	// …AND MUST IT BE, for a person to reach it? What a section may show is mostly reached ONLY from one — a list no
+	// menu leads to is a list nobody opens. Not all of it: an enumeration is reached through the fields that hold it,
+	// so a section listing it is a convenience, not its door. Asked by the audits that report "in no section".
+	virtual bool IsInterfaceRequired() const { return IsInterfaceAllowed(); }
 
 	virtual ~ibInterfaceObject() {}
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Default; }

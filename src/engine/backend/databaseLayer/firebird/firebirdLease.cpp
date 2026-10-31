@@ -1,13 +1,11 @@
 #include "firebirdLease.h"
 #include "firebirdCommon.h"
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
-
-#include <wx/file.h>
-#include <wx/log.h>
+#include "core/diagnostics/crashGuard.h"   // ibCrashGuard::CurrentPidPortable
 
 #include <cstring>
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 #include <windows.h>
 #else
 #include <fcntl.h>
@@ -50,14 +48,14 @@ constexpr uint32_t kVersion = 1;
 using ibFb::NowUnixMs;
 
 bool ReadLeaseFile(
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	HANDLE h,
 #else
 	int fd,
 #endif
 	LeaseFileV1& out)
 {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	LARGE_INTEGER zero{}; zero.QuadPart = 0;
 	if (!SetFilePointerEx(h, zero, nullptr, FILE_BEGIN))
 		return false;
@@ -73,14 +71,14 @@ bool ReadLeaseFile(
 }
 
 bool WriteLeaseFile(
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	HANDLE h,
 #else
 	int fd,
 #endif
 	const LeaseFileV1& in)
 {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	LARGE_INTEGER zero{}; zero.QuadPart = 0;
 	if (!SetFilePointerEx(h, zero, nullptr, FILE_BEGIN))
 		return false;
@@ -92,8 +90,8 @@ bool WriteLeaseFile(
 		// followers' next-read sees consistent state. Log to surface
 		// SMB-disconnect / disk-full conditions that would otherwise
 		// leave followers reading the prior generation forever.
-		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: FlushFileBuffers failed: %lu - ")
-		             wxT("followers may see stale state until next write"),
+		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: FlushFileBuffers failed: %lu - ")
+		             ibT("followers may see stale state until next write"),
 		             (unsigned long)GetLastError());
 	}
 	return wrote == kLeaseFileSize;
@@ -101,8 +99,8 @@ bool WriteLeaseFile(
 	if (lseek(fd, 0, SEEK_SET) < 0) return false;
 	ssize_t wrote = write(fd, &in, kLeaseFileSize);
 	if (fsync(fd) < 0) {
-		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: fsync failed: %d - followers ")
-		             wxT("may see stale state until next write"), errno);
+		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: fsync failed: %d - followers ")
+		             ibT("may see stale state until next write"), errno);
 	}
 	return wrote == (ssize_t)kLeaseFileSize;
 #endif
@@ -116,9 +114,9 @@ bool LookValid(const LeaseFileV1& f) {
 
 } // namespace
 
-ibFirebirdLease::ibFirebirdLease(const wxString& dbPath)
+ibFirebirdLease::ibFirebirdLease(const ibString& dbPath)
 	: m_dbPath(dbPath)
-	, m_leasePath(dbPath + wxT(".lease"))
+	, m_leasePath(dbPath + ibT(".lease"))
 {
 }
 
@@ -129,7 +127,7 @@ ibFirebirdLease::~ibFirebirdLease() {
 ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 	if (m_holdsLock) return AcquireResult::AcquiredLock;
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	// CreateFileW with FILE_SHARE_READ | FILE_SHARE_WRITE. Both flags
 	// matter — *exclusivity* between processes is enforced by the
 	// byte-range LockFileEx call below, not by the file-handle
@@ -150,7 +148,7 @@ ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 		nullptr);
 	if (m_hFile == INVALID_HANDLE_VALUE) {
 		const DWORD err = GetLastError();
-		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: CreateFile(%s) failed: %lu"),
+		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: CreateFile(%s) failed: %lu"),
 		             m_leasePath, (unsigned long)err);
 		return AcquireResult::IOError;
 	}
@@ -180,7 +178,7 @@ ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 			m_hFile = INVALID_HANDLE_VALUE;
 			return AcquireResult::AnotherLeaderActive;
 		}
-		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: LockFileEx failed: %lu"),
+		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: LockFileEx failed: %lu"),
 		             (unsigned long)err);
 		CloseHandle(m_hFile);
 		m_hFile = INVALID_HANDLE_VALUE;
@@ -191,9 +189,9 @@ ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 #else
 	// POSIX path — fcntl F_SETLK on the byte-range. On Linux this
 	// honours NFS locks via lockd; samba-mounted CIFS works too.
-	m_fd = open(m_leasePath.mb_str(), O_RDWR | O_CREAT, 0644);
+	m_fd = open(m_leasePath.ToUtf8().c_str(), O_RDWR | O_CREAT, 0644);
 	if (m_fd < 0) {
-		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: open(%s) failed: %d"),
+		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: open(%s) failed: %d"),
 		             m_leasePath, errno);
 		return AcquireResult::IOError;
 	}
@@ -229,7 +227,7 @@ ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 			m_fd = -1;
 			return AcquireResult::AnotherLeaderActive;
 		}
-		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdLease: fcntl F_SETLK failed: %d"), errno);
+		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: fcntl F_SETLK failed: %d"), errno);
 		close(m_fd);
 		m_fd = -1;
 		return AcquireResult::IOError;
@@ -239,7 +237,7 @@ ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 #endif
 }
 
-bool ibFirebirdLease::WriteSelfAsLeader(const wxString& host, uint16_t port) {
+bool ibFirebirdLease::WriteSelfAsLeader(const ibString& host, uint16_t port) {
 	if (!m_holdsLock) return false;
 
 	// Read current state to preserve generation; bump on every
@@ -247,7 +245,7 @@ bool ibFirebirdLease::WriteSelfAsLeader(const wxString& host, uint16_t port) {
 	// distinguish "same leader, refreshed heartbeat" from "new
 	// leader took over".
 	LeaseFileV1 cur{};
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	const bool hadOld = ReadLeaseFile(m_hFile, cur);
 #else
 	const bool hadOld = ReadLeaseFile(m_fd, cur);
@@ -264,7 +262,7 @@ bool ibFirebirdLease::WriteSelfAsLeader(const wxString& host, uint16_t port) {
 	fresh.version          = kVersion;
 	fresh.generation       = nextGen;
 	fresh.heartbeatUnixMs  = NowUnixMs();
-	fresh.leaderPid        = (uint32_t)wxGetProcessId();
+	fresh.leaderPid        = (uint32_t)ibCrashGuard::CurrentPidPortable();
 	fresh.leaderPort       = port;
 	// host: zero-pad / truncate to 63 + NUL.
 	const auto hostUtf8 = host.utf8_str();
@@ -273,7 +271,7 @@ bool ibFirebirdLease::WriteSelfAsLeader(const wxString& host, uint16_t port) {
 	// remainder already zero from value-init
 	fresh.reserved = 0;
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	return WriteLeaseFile(m_hFile, fresh);
 #else
 	return WriteLeaseFile(m_fd, fresh);
@@ -284,7 +282,7 @@ bool ibFirebirdLease::WriteVacating() {
 	if (!m_holdsLock) return false;
 
 	LeaseFileV1 cur{};
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	if (!ReadLeaseFile(m_hFile, cur)) return false;
 #else
 	if (!ReadLeaseFile(m_fd, cur)) return false;
@@ -296,7 +294,7 @@ bool ibFirebirdLease::WriteVacating() {
 	// without waiting out the heartbeat staleness timeout.
 	cur.leaderPid       = 0;
 	cur.heartbeatUnixMs = NowUnixMs();
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	return WriteLeaseFile(m_hFile, cur);
 #else
 	return WriteLeaseFile(m_fd, cur);
@@ -307,7 +305,7 @@ bool ibFirebirdLease::RefreshHeartbeat() {
 	if (!m_holdsLock) return false;
 
 	LeaseFileV1 cur{};
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	if (!ReadLeaseFile(m_hFile, cur)) return false;
 #else
 	if (!ReadLeaseFile(m_fd, cur)) return false;
@@ -315,7 +313,7 @@ bool ibFirebirdLease::RefreshHeartbeat() {
 	if (!LookValid(cur)) return false;
 
 	cur.heartbeatUnixMs = NowUnixMs();
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	return WriteLeaseFile(m_hFile, cur);
 #else
 	return WriteLeaseFile(m_fd, cur);
@@ -326,7 +324,7 @@ ibFirebirdLease::State ibFirebirdLease::ReadCurrentState() {
 	State s;
 	// Followers don't hold the lock; they open the file shared-read
 	// just to peek at the current leader's coordinates.
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	HANDLE h = CreateFileW(
 		m_leasePath.wc_str(),
 		GENERIC_READ,
@@ -341,7 +339,7 @@ ibFirebirdLease::State ibFirebirdLease::ReadCurrentState() {
 	CloseHandle(h);
 	if (!ok) return s;
 #else
-	int fd = open(m_leasePath.mb_str(), O_RDONLY);
+	int fd = open(m_leasePath.ToUtf8().c_str(), O_RDONLY);
 	if (fd < 0) return s;
 	LeaseFileV1 f{};
 	const bool ok = ReadLeaseFile(fd, f);
@@ -355,7 +353,7 @@ ibFirebirdLease::State ibFirebirdLease::ReadCurrentState() {
 	s.heartbeatUnixMs = f.heartbeatUnixMs;
 	s.leaderPid       = f.leaderPid;
 	s.leaderPort      = f.leaderPort;
-	s.leaderHost      = wxString::FromUTF8(f.leaderHost,
+	s.leaderHost      = ibString::FromUTF8(f.leaderHost,
 		strnlen(f.leaderHost, sizeof(f.leaderHost)));
 	s.valid           = true;
 	return s;
@@ -363,7 +361,7 @@ ibFirebirdLease::State ibFirebirdLease::ReadCurrentState() {
 
 void ibFirebirdLease::Release() {
 	if (m_holdsLock) {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 		if (m_hFile != INVALID_HANDLE_VALUE) {
 			// Match the sentinel-byte lock range used in
 			// TryAcquireExclusive (kLockSentinelOffset, length 1).
@@ -390,7 +388,7 @@ void ibFirebirdLease::Release() {
 #endif
 		m_holdsLock = false;
 	}
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	if (m_hFile != INVALID_HANDLE_VALUE) {
 		CloseHandle(m_hFile);
 		m_hFile = INVALID_HANDLE_VALUE;

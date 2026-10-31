@@ -9,24 +9,24 @@
 
 void ibValueFile_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(1, wxT("File(path : string)"));
+	helper.AppendConstructor(1, ibT("File(path : string)"));
 
-	helper.AppendProp(wxT("BaseName"));
-	helper.AppendProp(wxT("Extension"));
-	helper.AppendProp(wxT("FullName"));
-	helper.AppendProp(wxT("Name"));
-	helper.AppendProp(wxT("Path"));
+	helper.AppendProp(ibT("BaseName"));
+	helper.AppendProp(ibT("Extension"));
+	helper.AppendProp(ibT("FullName"));
+	helper.AppendProp(ibT("Name"));
+	helper.AppendProp(ibT("Path"));
 
-	helper.AppendFunc(wxT("Exist"), wxT("Exist()"));
+	helper.AppendFunc(ibT("Exist"), ibT("Exist()"));
 	//helper.AppendMethod(wxT("GetHidden"), wxT("GetHidden()"));
-	helper.AppendFunc(wxT("GetModificationTime"), wxT("GetModificationTime()"));
-	helper.AppendFunc(wxT("GetReadOnly"), wxT("GetReadOnly()"));
-	helper.AppendFunc(wxT("IsDirectory"), wxT("IsDirectory()"));
-	helper.AppendFunc(wxT("IsFile"), wxT("IsFile()"));
+	helper.AppendFunc(ibT("GetModificationTime"), ibT("GetModificationTime()"));
+	helper.AppendFunc(ibT("GetReadOnly"), ibT("GetReadOnly()"));
+	helper.AppendFunc(ibT("IsDirectory"), ibT("IsDirectory()"));
+	helper.AppendFunc(ibT("IsFile"), ibT("IsFile()"));
 	//helper.AppendMethod("SetHidden", "SetHidden(bool)");
 	//helper.AppendMethod("SetModificationTime", "SetModificationTime(date)");
 	//helper.AppendMethod("SetReadOnly", "SetReadOnly(bool)");
-	helper.AppendFunc(wxT("Size"), wxT("Size()"));
+	helper.AppendFunc(ibT("Size"), ibT("Size()"));
 }
 
 
@@ -47,8 +47,12 @@ bool ibValueFile::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVal
 			((!strFileName.IsDir() && strFileName.Exists()) || (strFileName.IsDir() && strFileName.DirExists()));
 		return true;
 		//case enGetHidden: break;
-	case enGetModificationTime: pvarRetValue = ibDateTime::OfWxDateTime(strFileName.GetModificationTime());   // the file system's instant, by its local parts
+	case enGetModificationTime: {
+		// The file system's instant, by its local parts; none (no such file) - the empty date.
+		const wxDateTime modified = strFileName.GetModificationTime();
+		pvarRetValue = modified.IsValid() ? ibDateTime::OfInstant(modified.GetValue().GetValue()) : ibDateTime();
 		return true;
+	}
 	case enGetReadOnly: pvarRetValue = m_fileName.Length() > 0 &&
 		((!strFileName.IsDir() && strFileName.IsFileReadable()) || (strFileName.IsDir() && strFileName.IsDirReadable()));
 		return true;
@@ -81,19 +85,19 @@ bool ibValueFile::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	switch (lPropNum)
 	{
 	case enBaseName:
-		pvarPropVal = strFileName.GetName();
+		pvarPropVal = ibString(strFileName.GetName());
 		return true;
 	case enExtension:
-		pvarPropVal = strFileName.GetExt();
+		pvarPropVal = ibString(strFileName.GetExt());
 		return true;
 	case enFullName:
-		pvarPropVal = strFileName.GetFullPath();
+		pvarPropVal = ibString(strFileName.GetFullPath());
 		return true;
 	case enName:
-		pvarPropVal = strFileName.GetFullName();
+		pvarPropVal = ibString(strFileName.GetFullName());
 		return true;
 	case enPath:
-		pvarPropVal = strFileName.GetPath();
+		pvarPropVal = ibString(strFileName.GetPath());
 		return true;
 	}
 

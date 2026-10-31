@@ -13,32 +13,50 @@
 
 #include <memory>
 
+class ibMetaData;
+
 class FRMSERVER_API ibAuditLogDocument : public ibDocument {
 public:
-	ibAuditLogDocument();
+	// The configuration a row's object is opened in (GetMetaData): handed in by whoever opens the journal, never
+	// reached for.
+	explicit ibAuditLogDocument(const ibMetaData* metaData = nullptr);
 
 	ibLoggerReader* GetReader() const { return m_reader.get(); }
+	const ibMetaData* GetMetaData() const { return m_metaData; }
 
 	// The journal is read-only — never prompts on close, never tracks dirty state.
 	bool IsModified() const override { return false; }
 	void Modify(bool) override {}
 
 protected:
-	bool DoSaveDocument(const wxString&) override { return true; }
-	bool DoOpenDocument(const wxString&) override { return true; }
+	bool DoSaveDocument(const ibString&) override { return true; }
+	bool DoOpenDocument(const ibString&) override { return true; }
 
 private:
 	std::unique_ptr<ibLoggerReader> m_reader;
+	const ibMetaData* m_metaData;
 
-	wxDECLARE_NO_COPY_CLASS(ibAuditLogDocument);
+	ibAuditLogDocument(const ibAuditLogDocument&) = delete;
+	ibAuditLogDocument& operator=(const ibAuditLogDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibAuditLogDocument);
 };
 
+// THE JOURNAL AS A CLIENT DRAWS IT — with a view of its own (the tab's Kind), the desktop's filter strip, toolbar and
+// table: the rows are read here, a page at a time, and a row's object is opened here, where the configuration is.
 class FRMSERVER_API ibAuditLogView : public ibView {
 public:
 	ibAuditLogView() : ibView() {}
 
-	void OnDraw(ibDataNode& frame) override;
+	// Nothing of the journal is drawn — the client's view is its own, its toolbar's pictures the engine's.
+	virtual void OnDraw(ibDataNode& /*frame*/) override {}
+
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::AuditLog; }
+	// The rows the filter selects, newest first: {From, To, Level, User, Session, Source, Event, Ref, Search, Offset,
+	// Count} → a child a row {Time, Level, Session, User, Host, Source, Event, Message, Ref, RefMeta}.
+	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;
+
+	// Open {Ref, RefMeta} — the row's object, opened as the desktop's journal opened it.
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 private:
 	wxDECLARE_DYNAMIC_CLASS(ibAuditLogView);

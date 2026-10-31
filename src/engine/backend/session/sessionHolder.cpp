@@ -1,5 +1,6 @@
 #include "sessionHolder.h"
 #include "session.h"
+#include "core/diagnostics/journal.h"
 
 ibSessionWatch::ibSessionWatch(const ibSessionHolder& holder)
 {
@@ -35,5 +36,17 @@ void ibSessionHolder::Reset()
 	// strong reference to the session until that request is processed —
 	// so the session outlives our reference drop by exactly as long as
 	// the teardown needs.
-	session->Teardown();
+	//
+	// ⚠ THIS IS A DESTRUCTOR'S ROAD, and a throw past here is std::terminate. With the process at its memory limit a
+	// teardown does throw. What it left undone stays for the stale sweep, as a killed session's does.
+	try {
+		session->Teardown();
+	}
+	catch (...) {
+		try {
+			ibTechJournal::Print(ibJournalMark::Warning, ibT("session"), ibT("a session's teardown ended with an exception"));
+		}
+		catch (...) {
+		}
+	}
 }

@@ -1,4 +1,5 @@
 #include "typeControl.h"
+#include "frmclient/win/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 
 #include <algorithm>
 
@@ -417,7 +418,7 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 				pos.x += (m_parent->GetSize().x - GetSize().x + 2);
 				pos.y += (m_parent->GetSize().y);
 				wxPopupTransientWindow::SetPosition(pos);
-				const wxDateTime dateTime = vSelected.GetDate().ToWxDateTime();   // the empty date: invalid, the picker keeps its own
+				const wxDateTime dateTime = typeConv::DateTimeToWxDateTime(vSelected.GetDate());   // the empty date: invalid, the picker keeps its own
 				if (dateTime.IsValid() &&
 					dateTime.GetYear() > 1600 &&
 					dateTime.GetYear() <= 9999) {
@@ -445,7 +446,7 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 			}
 
 			void OnOKButtonClicked(wxCommandEvent&) {
-				ibValue cDateTime = ibDateTime::OfWxDateTime(GetDateTime());
+				ibValue cDateTime = typeConv::WxDateTimeToDateTime(GetDateTime());
 				if (m_ownerValue != nullptr)
 					m_ownerValue->ChoiceProcessing(cDateTime);
 				Dismiss();

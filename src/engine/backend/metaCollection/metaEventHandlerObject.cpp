@@ -7,14 +7,13 @@
 #include "backend/metaData.h"
 #include "backend/objCtor.h"                    // ibCtorMetaValueType::GetEventModule
 #include "backend/system/value/valueType.h"     // ibValueTypeDescription::AllowValue — the source's gates
-#include "backend/backend_picture.h"            // ibBackendPicture::GetPicture — an event's picture in the Event list
-#include "backend/picturePredefined.h"          // g_picEventCLSID
+#include "core/picturePredefined.h"          // g_picEventCLSID — an event's picture in the Event list
 
 //***********************************************************************
 //*                            Event handler                            *
 //***********************************************************************
 
-ibValueMetaObjectEventHandler::ibValueMetaObjectEventHandler(const wxString& name, const wxString& synonym, const wxString& comment)
+ibValueMetaObjectEventHandler::ibValueMetaObjectEventHandler(const ibString& name, const ibString& synonym, const ibString& comment)
 	: ibValueMetaObject(name, synonym, comment)
 {
 	// NOTHING IS HANDLED until the source is said: the property's constructor wants a type to start
@@ -38,15 +37,15 @@ bool ibValueMetaObjectEventHandler::Handles(const ibClassID& sourceType, long ev
 {
 	// The number the property keeps, as it is kept: the door asks this on every event raised, and the
 	// property's own reading refills its list from the source first.
-	const wxVariant& event = m_propertyEvent->GetValue();
-	if (event.IsNull() || event.GetLong() != eventId)
+	const ibVariant& event = m_propertyEvent->GetValue();
+	if (event.GetType() == ibValueTypes::TYPE_EMPTY || event.GetInteger() != eventId)
 		return false;
 	return ibValueTypeDescription::AllowValue(GetSource(), sourceType, m_metaData);
 }
 
-std::map<wxString, ibValueMetaObjectEventHandler::ibSourceEvent> ibValueMetaObjectEventHandler::GetSourceEvents() const
+std::map<ibString, ibValueMetaObjectEventHandler::ibSourceEvent> ibValueMetaObjectEventHandler::GetSourceEvents() const
 {
-	std::map<wxString, ibSourceEvent> events;
+	std::map<ibString, ibSourceEvent> events;
 	if (m_metaData == nullptr || !GetSource().IsOk())
 		return events;
 
@@ -58,7 +57,7 @@ std::map<wxString, ibValueMetaObjectEventHandler::ibSourceEvent> ibValueMetaObje
 			if (!ibValueTypeDescription::AllowValue(GetSource(), type->GetClassType(), m_metaData))
 				continue;
 
-			std::map<wxString, ibSourceEvent> own;
+			std::map<ibString, ibSourceEvent> own;
 			if (const ibValueMetaObjectModuleBase* const module = type->GetEventModule()) {
 				for (size_t idx = 0; idx < module->GetDefaultProcedureCount(); idx++) {
 					ibSourceEvent& event = own[module->GetDefaultProcedureName(idx)];
@@ -87,9 +86,8 @@ std::map<wxString, ibValueMetaObjectEventHandler::ibSourceEvent> ibValueMetaObje
 
 bool ibValueMetaObjectEventHandler::FillEventList(ibPropertyList* prop)
 {
-	const wxBitmap picture = ibBackendPicture::GetPicture(g_picEventCLSID);   // the platform's picture of an event
-	for (const auto& event : GetSourceEvents())
-		prop->AppendItem(event.first, EventId(event.first), picture);
+	for (const auto& event : GetSourceEvents())   // each with the platform's picture of an event
+		prop->AppendItem(event.first, EventId(event.first), g_picEventCLSID);
 	return true;
 }
 
@@ -109,7 +107,7 @@ void ibValueMetaObjectEventHandler::PrepareModule()
 	for (const auto& event : GetSourceEvents()) {
 		if (EventId(event.first) != id)
 			continue;
-		std::vector<wxString> args = { wxT("Source") };
+		std::vector<ibString> args = { ibT("Source") };
 		args.insert(args.end(), event.second.m_args.begin(), event.second.m_args.end());
 		if (event.second.m_kind == ibContentHelper::eFunctionHelper)
 			module->SetDefaultFunction(event.first, args);
@@ -119,7 +117,7 @@ void ibValueMetaObjectEventHandler::PrepareModule()
 	}
 }
 
-void ibValueMetaObjectEventHandler::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObjectEventHandler::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	if (property == m_propertySource || property == m_propertyEvent)
 		PrepareModule();

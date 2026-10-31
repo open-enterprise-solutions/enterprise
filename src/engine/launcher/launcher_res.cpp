@@ -1,5 +1,5 @@
 #include "launcher.h"
-#include "backend/backend_picture.h"   // ibBackendPicture::GetBitmapFromBase64
+#include "core/graphics/picture.h"   // ibPicture — a master read and scaled by the core
 
 // The launcher's pictures (see launcher.h). Each is a drawing the set already has for the same act — the
 // application is STARTED (run without debugging), the designer opens the CONFIGURATION, a base is added,
@@ -29,8 +29,11 @@ wxBitmapBundle ibGetLauncherPicture(ibLauncherPicture which)
 	if (png == nullptr)
 		return wxBitmapBundle();
 
-	// The master is 64 px; offered at 16 and at 32, so a display scaled to 200 % gets a sharp one as well.
-	return wxBitmapBundle::FromBitmaps(
-		ibBackendPicture::GetBitmapFromBase64(*png, wxSize(16, 16)),
-		ibBackendPicture::GetBitmapFromBase64(*png, wxSize(32, 32)));
+	// The master is 64 px; offered at 16 and at 32, so a display scaled to 200 % gets a sharp one as well — scaled by
+	// the core, the PNG that comes out read by wx.
+	const auto bitmap = [png](int side) {
+		const ibPicture picture = ibPicture::FromBase64(*png, ibSize(side, side));
+		return wxBitmap::NewFromPNGData(picture.GetData().GetData(), picture.GetData().GetDataLen());
+	};
+	return wxBitmapBundle::FromBitmaps(bitmap(16), bitmap(32));
 }

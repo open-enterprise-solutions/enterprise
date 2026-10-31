@@ -2,6 +2,7 @@
 #include "form.h"
 
 #include "backend/metaData.h"
+#include "backend/metadataSerialization.h"
 #include "backend/objCtor.h"
 #include "backend/backend_exception.h"       // ibBackendException — a value of a type the configuration lacks
 #include "core/serialize/dataBuilder.h"   // ibDataNode — the value as the client sent it
@@ -9,7 +10,7 @@
 // The typed text becomes a value of the cell's type, or is refused. A refused text leaves the cell as it
 // was, and the next fetch of the row shows that value again in place of what was typed. A read-only
 // column (IsReadOnly) takes no text at all.
-bool ibValueModelTableBoxColumn::TextProcessing(const wxString& strData)
+bool ibValueModelTableBoxColumn::TextProcessing(const ibString& strData)
 {
 	if (IsReadOnly())
 		return false;
@@ -53,7 +54,7 @@ bool ibValueModelTableBoxColumn::ValueProcessing(const ibDataNode& node)
 		return false;
 	ibValue newValue;
 	try {
-		newValue = metaData->Deserialize(node);
+		newValue = ibDeserializeValue(node, metaData);
 	}
 	catch (const ibCoreException&) {
 		return false;   // a type this configuration does not have
@@ -84,7 +85,7 @@ void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& vSelected)
 ///////////////////////////////////////////////////////////////////////
 
 // Enter — the text as it stands is committed into the current row's cell.
-void ibValueModelTableBoxColumn::OnTextEnter(const wxString& text)
+void ibValueModelTableBoxColumn::OnTextEnter(const ibString& text)
 {
 	TextProcessing(text);
 }

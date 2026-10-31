@@ -6,7 +6,7 @@
 
 bool ibFunctionalOptionObject::LoadFunctionalOptions(ibReaderMemory& dataReader)
 {
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	if (dataReader.r_chunk(functionalOptionBlock, buf)) {
 		std::shared_ptr<ibReaderMemory> dataOptionReader(new ibReaderMemory(buf));
 		unsigned int countOption = dataOptionReader->r_u32(); m_functionalOptions.clear();

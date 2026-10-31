@@ -33,7 +33,7 @@
 
 namespace {
 
-const wxString kRows = wxT("r"), kBorder = wxT("b");
+const ibString kRows = ibT("r"), kBorder = ibT("b");
 
 // One registration of the recorder: the key it names, and the moment it stands at.
 struct ibSequenceRegistration {
@@ -41,7 +41,7 @@ struct ibSequenceRegistration {
 	ibValue              m_moment;
 };
 
-wxString PeriodField(const ibValueMetaObjectSequence* seq)
+ibString PeriodField(const ibValueMetaObjectSequence* seq)
 {
 	return ibRegFieldOfRole(seq->GetRegisterPeriod()->GetQueryColumn(), ibColumnRole::Date);
 }
@@ -49,13 +49,13 @@ wxString PeriodField(const ibValueMetaObjectSequence* seq)
 // ⭐ A REGISTRATION COUNTS WHILE IT IS ACTIVE — the same question every register reading asks of a
 // row. An inactive registration stays in the table and takes part in nothing: a border must not come
 // to stand on a row that says it does not count.
-ibQueryExprPtr Counts(const ibValueMetaObjectSequence* seq, const wxString& alias)
+ibQueryExprPtr Counts(const ibValueMetaObjectSequence* seq, const ibString& alias)
 {
 	return ibBinOp(ibQueryBinOp::Ne, ibCol(alias, ibRegValueField(seq->GetRegisterActive()->GetQueryColumn())),
 		ibConst(ibValue(0)));
 }
 
-ibQueryExprPtr AndCounts(const ibValueMetaObjectSequence* seq, ibQueryExprPtr where, const wxString& alias)
+ibQueryExprPtr AndCounts(const ibValueMetaObjectSequence* seq, ibQueryExprPtr where, const ibString& alias)
 {
 	const ibQueryExprPtr counts = Counts(seq, alias);
 	return where ? ibBinOp(ibQueryBinOp::And, where, counts) : counts;
@@ -72,7 +72,7 @@ ibValue PeriodOf(const ibValue& moment)
 }
 
 // `key` said as a condition over `alias`: every dimension equal to the value the registration holds.
-ibQueryExprPtr SameKey(const ibValueMetaObjectSequence* seq, const std::vector<ibValue>& key, const wxString& alias)
+ibQueryExprPtr SameKey(const ibValueMetaObjectSequence* seq, const std::vector<ibValue>& key, const ibString& alias)
 {
 	const ibMetaData* metaData = seq->GetMetaData();
 	ibQueryExprPtr all;
@@ -88,13 +88,13 @@ ibQueryExprPtr SameKey(const ibValueMetaObjectSequence* seq, const std::vector<i
 }
 
 // The period and the recorder, projected under their own field names — what a moment is read out of.
-std::vector<ibQueryProjItem> MomentProjection(const ibValueMetaObjectSequence* seq, const wxString& alias)
+std::vector<ibQueryProjItem> MomentProjection(const ibValueMetaObjectSequence* seq, const ibString& alias)
 {
 	std::vector<ibQueryProjItem> proj;
-	std::set<wxString> projected;
+	std::set<ibString> projected;
 	for (const ibBackendQueryColumn* part : { seq->GetRegisterPeriod()->GetQueryColumn(),
 	                                          seq->GetRegisterRecorder()->GetQueryColumn() })
-		for (const wxString& field : ColumnFieldNames(part))
+		for (const ibString& field : ColumnFieldNames(part))
 			if (projected.insert(field).second)
 				proj.push_back(ibQueryProjItem{ ibCol(alias, field), field });
 	return proj;
@@ -111,11 +111,11 @@ std::vector<ibSequenceRegistration> RegistrationsOf(const ibValueMetaObjectSeque
 		return rows;
 
 	std::vector<ibQueryProjItem> proj = MomentProjection(seq, kRows);
-	std::set<wxString> projected;
+	std::set<ibString> projected;
 	for (const ibQueryProjItem& item : proj)
 		projected.insert(item.m_alias);
 	for (const ibValueMetaObjectDimension* dimension : seq->GetDimensionArrayObject())
-		for (const wxString& field : ColumnFieldNames(dimension->GetQueryColumn()))
+		for (const ibString& field : ColumnFieldNames(dimension->GetQueryColumn()))
 			if (projected.insert(field).second)
 				proj.push_back(ibQueryProjItem{ ibCol(kRows, field), field });
 
@@ -132,7 +132,7 @@ std::vector<ibSequenceRegistration> RegistrationsOf(const ibValueMetaObjectSeque
 			column->ReadValue(column->GetPhysicalName(), metaData, value, rs);
 			one.m_key.push_back(value);
 		}
-		if (seq->GetMomentColumn()->ReadValue(wxEmptyString, metaData, one.m_moment, rs))
+		if (seq->GetMomentColumn()->ReadValue(ibEmptyString, metaData, one.m_moment, rs))
 			rows.push_back(std::move(one));
 	}
 	return rows;
@@ -152,7 +152,7 @@ ibValue BorderOf(const ibValueMetaObjectSequence* seq, const std::vector<ibValue
 	q.Project(MomentProjection(seq, kBorder));
 	ibQueryResult rs = q.Execute();
 	if (rs.Next())
-		seq->GetMomentColumn()->ReadValue(wxEmptyString, seq->GetMetaData(), moment, rs);
+		seq->GetMomentColumn()->ReadValue(ibEmptyString, seq->GetMetaData(), moment, rs);
 	return moment;
 }
 
@@ -174,7 +174,7 @@ std::vector<ibValue> MomentsAt(const ibValueMetaObjectSequence* seq, const std::
 	ibQueryResult rs = q.Execute();
 	while (rs.Next()) {
 		ibValue moment;
-		if (seq->GetMomentColumn()->ReadValue(wxEmptyString, metaData, moment, rs))
+		if (seq->GetMomentColumn()->ReadValue(ibEmptyString, metaData, moment, rs))
 			moments.push_back(moment);
 	}
 	return moments;
@@ -195,7 +195,7 @@ ibValue PeriodBefore(const ibValueMetaObjectSequence* seq, const std::vector<ibV
 	ibDatabaseQueryBuilder q;
 	q.From(ibScan(seq->GetQueryable()->GetQueryTableName(), kRows));
 	q.Where(AndCounts(seq, where, kRows));
-	q.Project({ ibQueryProjItem{ ibFunc(wxT("MAX"), { ibCol(kRows, PeriodField(seq)) }), PeriodField(seq) } });
+	q.Project({ ibQueryProjItem{ ibFunc(ibT("MAX"), { ibCol(kRows, PeriodField(seq)) }), PeriodField(seq) } });
 	ibQueryResult rs = q.Execute();
 	// 🛑 READ AS THE DATE IT IS, NOT THROUGH THE COLUMN'S CODEC. The projection above is one field — MAX over
 	// the period's date — and the codec reads a TAGGED cell: finding no `_TYPE` beside it, it answers "field
@@ -263,9 +263,9 @@ bool AnythingBetween(const ibValueMetaObjectSequence* seq, const std::vector<ibV
 	ibDatabaseQueryBuilder q;
 	q.From(ibScan(seq->GetQueryable()->GetQueryTableName(), kRows));
 	q.Where(AndCounts(seq, where, kRows));
-	q.Project({ ibQueryProjItem{ ibFunc(wxT("COUNT"), { ibCol(kRows, PeriodField(seq)) }), wxT("ib_between") } });
+	q.Project({ ibQueryProjItem{ ibFunc(ibT("COUNT"), { ibCol(kRows, PeriodField(seq)) }), ibT("ib_between") } });
 	ibQueryResult rs = q.Execute();
-	if (rs.Next() && rs.GetResultNumber(wxT("ib_between")) > 0)
+	if (rs.Next() && rs.GetResultNumber(ibT("ib_between")) > 0)
 		return true;
 
 	// …and the rows standing at the two edge periods, where only a moment can tell.
@@ -288,12 +288,12 @@ std::vector<ibDmlAssign> AssignmentsFor(const ibBackendQueryColumn* column, cons
 {
 	std::vector<ibDmlAssign> out;
 	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(column);
-	std::vector<wxString> fields;
+	std::vector<ibString> fields;
 	fields.reserve(slots.size());
 	for (const ibColumnSlot& slot : slots)
 		fields.push_back(slot.m_name);
 
-	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 	int pos = 1;
 	ibColumnCodec::WriteValue(column, metaData, value, &capture, pos);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
@@ -344,11 +344,11 @@ void ibSequenceBorderSet(const ibValueMetaObjectSequence* seq, const std::vector
 	if (seq == nullptr || !seq->HasBorders())
 		return;
 	const ibMetaData* metaData = seq->GetMetaData();
-	const wxString table = seq->GetBordersTableName();
+	const ibString table = seq->GetBordersTableName();
 
 	if (moment.IsEmpty()) {
 		ibDatabaseQueryBuilder drop;
-		drop.Execute(ibDelete(table, SameKey(seq, key, wxEmptyString)));
+		drop.Execute(ibDelete(table, SameKey(seq, key, ibEmptyString)));
 		return;
 	}
 
@@ -362,7 +362,7 @@ void ibSequenceBorderSet(const ibValueMetaObjectSequence* seq, const std::vector
 	}
 
 	std::vector<ibDmlAssign> assignments;
-	std::vector<wxString> matchKeys;
+	std::vector<ibString> matchKeys;
 	size_t at = 0;
 	for (const ibValueMetaObjectDimension* dimension : seq->GetDimensionArrayObject()) {
 		if (at >= key.size())

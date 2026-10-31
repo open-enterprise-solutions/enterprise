@@ -4,7 +4,7 @@
 #include "frmclient/win/typeconv.h"   // FontToString / StringToFont — the engine's text of a font
 
 namespace {
-const wxString kFontText = wxT("v");
+const ibString kFontText = ibT("v");
 }
 
 ibString ibValueFont::GetString() const
@@ -14,12 +14,12 @@ ibString ibValueFont::GetString() const
 
 bool ibValueFont::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(kFontText, typeConv::FontToString(m_font));
+	node.SetValue(kFontText, ibString(typeConv::FontToString(m_font)));
 	return true;
 }
 
 bool ibValueFont::DoDeserialize(const ibDataNode& node)
 {
-	m_font = typeConv::StringToFont(node.GetValue<wxString>(kFontText));
+	m_font = typeConv::StringToFont(node.GetValue<ibString>(kFontText));
 	return true;
 }

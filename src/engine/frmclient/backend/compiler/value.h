@@ -2,114 +2,56 @@
 #define _FRMCLIENT_BACKEND_VALUE_H__
 
 #include <cstddef>
-#include <memory>
+#include <cstdint>
 #include <utility>
 #include <vector>
 
 #include <wx/icon.h>
 
 #include "frmclient/backend/backend_core.h"   // …as the engine's value.h brings it to those who include it
-#include "core/anyValue.h"   // ibAnyValue — what every value answers, the engine's and the client's
-#include "core/fileSystem/types.h"
-#include "core/types.h"   // kValueFieldClsid / kValueFieldData — the fields a value is written into a node by
+#include "core/variant.h"                     // ibVariant — the value itself: its word, its count, its lifecycle
+#include "core/serialize/dataBuilder.h"       // ibDataNode — what a value of the server's is, as it wrote it
+#include "core/core.h"                        // kValueFieldClsid / kValueFieldData, ibCtorObjectType
 
 template <class T> class ibValuePtr;
-class ibDataNode;
 class ibCtorAbstractType;
+class ibProtocolNode;
 
-// THE VALUE — the engine's ibValue (backend/compiler/value.h) as the client holds one. There is no runtime here and no
-// base: a PRIMITIVE — a text, a number, a date, a flag — is data a person types, and is held as it is; a value of a type
-// the SERVER has (a reference, an enum member) is held as the server wrote it — its node, carried and given back
-// untouched — and read as the server presents it. An object of the client's own a property reads its choices from (an
-// enumeration) is one too. What it answers is what every value answers (core/anyValue.h); how it holds it, its own.
-class ibValue : public ibAnyValue {
+// THE VALUE — the engine's ibValue (backend/compiler/value.h) as the client holds one, and lighter: THE VALUE ITSELF IS
+// THE VARIANT'S (core/variant.h) — a primitive, or an object held by its count. What this class adds is the client's
+// small factory: what it makes of a node the server wrote (a primitive, an object of its own, or the server's value kept
+// as it came), the types the server named, and an enumeration's member.
+class FRMCLIENT_API ibValue : public ibVariant {
 public:
 
 	ibValue() = default;
-	ibValue(const wxString& text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
-	ibValue(const wxChar* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
+	ibValue(const ibString& text) : ibVariant(text) {}
+	ibValue(const ibChar* text) : ibVariant(text) {}
 	// A narrow literal is a text too — without this one `ibValue("x")` is the flag TRUE (pointer-to-bool beats the
 	// conversion to wxString), the trap the engine's ctors name.
-	ibValue(const char* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
-	ibValue(bool flag) : m_typeClass(ibValueTypes::TYPE_BOOLEAN), m_text(flag ? wxT("True") : wxT("False")), m_number(flag ? 1 : 0) {}
-	ibValue(int number) : m_typeClass(ibValueTypes::TYPE_NUMBER), m_text(wxString::Format(wxT("%d"), number)), m_number(number), m_numeric(number) {}
-	ibValue(long number) : m_typeClass(ibValueTypes::TYPE_NUMBER), m_text(wxString::Format(wxT("%ld"), number)), m_number(number), m_numeric(number) {}
-	ibValue(unsigned int number) : m_typeClass(ibValueTypes::TYPE_NUMBER), m_text(wxString::Format(wxT("%u"), number)), m_number(static_cast<long>(number)), m_numeric(number) {}
-	ibValue(const ibNumber& number);
-	ibValue(const ibDateTime& date);
-	// AN OBJECT HELD — the engine's TYPE_REFFER: a value of the client's own kind (a field of a composition) carried in a
-	// value, counted while it is.
-	ibValue(ibValue* pParam);
+	ibValue(const char* text) : ibVariant(text) {}
+	// …and a wx text, the one a window hands in (a cell of a dialog's grid): without it `ibValue(wxs)` is ambiguous
+	// on GCC and Clang — wxString reaches ibString, `const wchar_t*` and bool alike, each one user conversion away.
+	ibValue(const wxString& text) : ibVariant(text) {}
+	ibValue(bool flag) : ibVariant(flag) {}
+	ibValue(int number) : ibVariant(number) {}
+	ibValue(long number) : ibVariant(number) {}
+	ibValue(unsigned int number) : ibVariant(number) {}
+	ibValue(const ibNumber& number) : ibVariant(number) {}
+	ibValue(const ibDateTime& date) : ibVariant(date) {}
+	// AN OBJECT HELD — the engine's TYPE_REFFER: a value of the client's own kind (a field of a composition), counted
+	// while it is held.
+	ibValue(ibValue* pParam) : ibVariant(static_cast<ibVariant*>(pParam)) {}
 	// …and the base of such an object, of its kind.
-	ibValue(ibValueTypes nType, bool WXUNUSED(readOnly) = false) : m_typeClass(nType) {}
-	ibValue(const ibValue& rhs) { Assign(rhs); }
-	ibValue& operator=(const ibValue& rhs) { Release(); Assign(rhs); return *this; }
-	virtual ~ibValue() { Release(); }
+	ibValue(ibValueTypes nType, bool readOnly = false) : ibVariant(nType, readOnly) {}
+	// A VARIANT AS IT IS — a cell's, a sheet's parameter read back.
+	explicit ibValue(const ibVariant& variant) : ibVariant(variant) {}
 
-	// What it is — a primitive, Undefined, or a type of the server's (GetClassType says which).
-	virtual ibValueTypes GetType() const override { return m_typeClass; }
-	virtual ibClassID GetClassType() const;
-	virtual bool IsEmpty() const override;
+	// THE CLIENT'S SMALL FACTORY.
 
-	virtual bool CompareValueEQ(const ibValue& cParam) const;
-	virtual bool CompareValueNE(const ibValue& cParam) const { return !CompareValueEQ(cParam); }
-	bool operator==(const ibValue& rhs) const { return CompareValueEQ(rhs); }
-	bool operator!=(const ibValue& rhs) const { return CompareValueNE(rhs); }
-
-	// The object it holds — the engine's: itself when it holds none.
-	inline bool IsReference() const {
-		return m_typeClass == ibValueTypes::TYPE_REFFER || m_typeClass == ibValueTypes::TYPE_CONST_REFFER;
-	}
-	virtual ibValue* GetRef() const;
-
-	//convert to value
-	template <typename T> inline bool ConvertToValue(T*& ptr) const {
-		if (IsReference()) {
-			ptr = dynamic_cast<T*>(GetRef());
-			return ptr != nullptr;
-		}
-		else if (m_typeClass != ibValueTypes::TYPE_EMPTY) {
-			ptr = dynamic_cast<T*>(const_cast<ibValue*>(this));
-			return ptr != nullptr;
-		}
-		return false;
-	}
-	template <class T>
-	T* ConvertToType() const { T* ptr = nullptr; return ConvertToValue(ptr) ? ptr : nullptr; }
-
-	virtual ibString GetString() const override;
-	// …and AS another primitive — the engine's conversions: a text typed into a cell read as the number, the date or the
-	// flag it spells.
-	virtual bool GetBoolean() const override;
-	long GetInteger() const { return m_number; }
-	unsigned int GetUInteger() const { return static_cast<unsigned int>(m_number); }
-	virtual ibNumber GetNumber() const override;
-	virtual ibDateTime GetDate() const override;
-
-	// INTO A NODE AND BACK — the engine's form ({t, v}): a primitive writes its payload, a value of the server's writes
-	// back the node it came in; FromNode makes a primitive of a primitive's node and keeps any other as it was written.
-	bool Serialize(ibDataNode& node) const;
+	// INTO A NODE AND BACK — the engine's form ({t, v}): FromNode makes a primitive of a primitive's node, the client's
+	// own object of its own (a field of a composition, a colour, a font), and keeps any other as the server wrote it.
 	static ibValue FromNode(const ibDataNode& node);
-
-	// The primitives' types by their class ids, both ways — the engine's; a type of the server's is none of them.
-	static ibClassID GetIDByVT(const ibValueTypes& valueType);
-	static ibValueTypes GetVTByID(const ibClassID& clsid);
-	// The client has no registry of types: a primitive's is known, the rest are the server's.
-	static bool IsRegisterCtor(const ibClassID& clsid) { return GetVTByID(clsid) != ibValueTypes::TYPE_VALUE; }
-	// …and their NAMES are the ones the server wrote with them (a type description's TypeName) — kept as they come, what
-	// a type is offered by (the type picker).
-	static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
-	static void RegisterCtor(const ibClassID& clsid, const wxString& className);
-	template <typename valT>
-	valT ConvertToEnumValue() const {
-		if (IsReference() && m_pRef != nullptr)
-			return m_pRef->ConvertToEnumValue<valT>();
-		return static_cast<valT>(m_number);
-	}
-
-	// THE VALUES THIS ONE IS PICKED AMONG — the engine's FindValue with nothing typed (a quick choice): a flag's two, an
-	// enumeration's members. A text typed is looked for among them; what a base holds is the server's to find.
-	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& foundedObjects) const;
 
 	// A MEMBER OF AN ENUMERATION as a value — the engine's: it reads as its word, is its number, and is written as the
 	// enumeration's class and that number (enumUnit.h, where T is complete).
@@ -123,90 +65,107 @@ public:
 		made->Init();
 		return ibValuePtr<T>(made);
 	}
-	// …and one made of what it holds (a font, a colour).
-	template <class T, class... Args>
-	static ibValuePtr<T> CreateObjectValue(Args&&... args) {
-		return ibValuePtr<T>(new T(std::forward<Args>(args)...));
-	}
-	virtual bool Init() { return true; }
 
-	// Opened — a cell's details drilled into: the server's to do (the grid box sends the cell it was asked on).
-	void ShowValue() const {}
+	// The types the server named — their NAMES and PICTURES as it wrote them with them (a type property's offer), what a
+	// type is offered by (the type picker). The client has no registry of types.
+	static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
+	static void RegisterCtor(const ibClassID& clsid, const ibString& className, const wxIcon& classIcon = wxNullIcon);
+	// …a list of them as the server writes it (Classes: Type, Name, Picture — a composer's view and its answers), each
+	// under its name; one held under that name already is not made again: its picture is a GDI icon each time.
+	static void ReadClasses(const ibProtocolNode& classes);
 
-	// Counted, as the engine's: whoever holds it (ibValuePtr) keeps it.
-	void IncrRef() { m_refCount++; }
-	void DecrRef() { if (--m_refCount == 0) delete this; }
+	// The registered types of a kind — the engine's registry; the client's are the ones the server's question named (a
+	// form editor's Classes: the controls' names and pictures). Held until the next ask.
+	static std::vector<ibCtorAbstractType*> GetListCtorsByType(ibCtorObjectType objectType = ibCtorObjectType::ibCtorObjectType_object_value);
 
 	// The engine's own picture of a value (value_res.cpp) — what a field of a settings window wears.
 	static wxIcon GetIconGroup();
 
-	// The registered types of a kind — the engine's registry; the client's are the ones the server's question named (a
-	// form editor's Classes: the controls' names and pictures). Held until the next ask.
-	static std::vector<class ibCtorAbstractType*> GetListCtorsByType(ibCtorObjectType objectType = ibCtorObjectType::ibCtorObjectType_object_value);
+	// THE VALUES THIS ONE IS PICKED AMONG — a quick choice: a flag's two, a text read as this kind, an enumeration's members.
+	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const;
+
+	// Opened — a cell's details drilled into: the server's to do (the grid box sends the cell it was asked on).
+	void ShowValue() const {}
+};
+
+// A VALUE OF A TYPE OF THE SERVER'S — a reference, a value of a type the client does not know: held as the server wrote
+// it, its node given back untouched, read as the server presents it (Presentation: the server's GetString — a
+// reference's name is the configuration's).
+class ibValueSerializable : public ibValue {
+public:
+
+	ibValueSerializable(const ibClassID& clsid, const ibDataNode& node, const ibString& presentation)
+		: ibValue(ibValueTypes::TYPE_VALUE), m_classType(clsid), m_node(node), m_presentation(presentation) {}
+
+	virtual ibClassID GetClassType() const override { return m_classType; }
+	virtual ibString GetString() const override { return m_presentation; }
+
+	// Two are the same when the server wrote them the same: their class, and their payloads as written — of any kind
+	// (a Guid's is its 16 bytes).
+	virtual bool CompareValueEQ(const ibVariant& value) const override;
 
 protected:
 
-	// How an object of the client's own writes itself into a node and reads itself back — the engine's.
-	virtual bool DoSerialize(class ibDataNode& node) const;
-	virtual bool DoDeserialize(const class ibDataNode& WXUNUSED(node)) { return false; }
-
-	// A member of an enumeration — the base of one (ibValueEnumerationVariant, enumUnit.h).
-	ibValue(const ibClassID& enumClass, long member, const wxString& word)
-		: m_typeClass(ibValueTypes::TYPE_ENUM), m_classType(enumClass), m_text(word), m_number(member) {}
+	// The server's node, given back as it came.
+	virtual bool DoSerialize(ibDataNode& node) const override { node = m_node; return true; }
 
 private:
 
-	// Everything but the count — a copy is not held by whoever held the original; the object it holds is, once more.
-	void Assign(const ibValue& rhs);
-	void Release();
-
-	ibValueTypes m_typeClass = ibValueTypes::TYPE_EMPTY;
-	ibClassID    m_classType = 0;   // a type of the server's — its node is kept in m_stored
-	wxString     m_text;            // the text, or how the value reads
-	long         m_number = 0;
-	ibNumber     m_numeric;
-	ibDateTime   m_date;
-	std::shared_ptr<const ibDataNode> m_stored;   // a value of the server's type, as it wrote it
-	ibValue*     m_pRef = nullptr;  // TYPE_REFFER — the object held
-	unsigned     m_refCount = 0;
+	ibClassID  m_classType;
+	ibDataNode m_node;
+	ibString   m_presentation;
 };
 
 // A REGISTERED TYPE — the engine's ibCtorAbstractType (backend/compiler/typeCtor.h) as far as a window lists one: its
 // name and its picture.
 class ibCtorAbstractType {
 public:
-	ibCtorAbstractType(const wxString& className, const wxIcon& classIcon) : m_className(className), m_classIcon(classIcon) {}
+	ibCtorAbstractType(const ibString& className, const wxIcon& classIcon) : m_className(className), m_classIcon(classIcon) {}
 
-	wxString GetClassName() const { return m_className; }
+	const ibString& GetClassName() const { return m_className; }
 	wxIcon GetClassIcon() const { return m_classIcon; }
 
 private:
-	wxString m_className;
+	ibString m_className;
 	wxIcon   m_classIcon;
 };
 
-// A HELD OBJECT — the engine's ibValuePtr (backend/value_ptr.h): the value counted while it is held.
+// A HELD OBJECT — the engine's ibValuePtr (backend/value_ptr.h) as it is: a value that holds a T by its count and gives
+// typed access to it.
 template <class T>
 class ibValuePtr : public ibValue {
+
+	inline void OnSetValueT(ibVariant* ptr) {
+		// Self-assignment guard: skip when already bound to the same referent.
+		if (m_pRef != ptr && !m_bReadOnly) {
+			Reset();
+			if (ptr != nullptr) {
+				m_typeClass = ibValueTypes::TYPE_REFFER;
+				m_pRef = ptr;
+				m_pRef->IncrRef();
+			}
+		}
+	}
+
 public:
 
 	ibValuePtr() = default;
-	ibValuePtr(T* ref) : m_pRef(ref) { if (m_pRef != nullptr) m_pRef->IncrRef(); }
-	ibValuePtr(const ibValuePtr& rhs) : ibValue(rhs), m_pRef(rhs.m_pRef) { if (m_pRef != nullptr) m_pRef->IncrRef(); }
-	ibValuePtr& operator=(const ibValuePtr& rhs) {
-		if (rhs.m_pRef != nullptr) rhs.m_pRef->IncrRef();
-		if (m_pRef != nullptr) m_pRef->DecrRef();
-		m_pRef = rhs.m_pRef;
-		return *this;
-	}
-	virtual ~ibValuePtr() { if (m_pRef != nullptr) m_pRef->DecrRef(); }
+	ibValuePtr(std::nullptr_t) {}
+	explicit ibValuePtr(T* ptr) { OnSetValueT(ptr); }
+	ibValuePtr(const ibValuePtr& to_copy) : ibValue() { OnSetValueT(to_copy.Ptr()); }
 
-	T* operator->() const { return m_pRef; }
-	operator T* () const { return m_pRef; }
+	inline T& operator*() const { return *Ptr(); }
+	inline T* operator->() const { return Ptr(); }
+
+	inline operator T* () const { return Ptr(); }
+	inline explicit operator bool() const noexcept { return m_pRef != nullptr; }
+
+	void operator = (T* ptr) { OnSetValueT(ptr); }
+	void operator = (const ibValuePtr& other) { OnSetValueT(other.Ptr()); }
 
 private:
 
-	T* m_pRef = nullptr;
+	inline T* Ptr() const { return static_cast<T*>(m_pRef); }
 };
 
 // HELD OBJECTS COMPARED AS POINTERS — the engine's (backend/value_ptr.h): a held object is a value too, and without these
@@ -216,49 +175,14 @@ inline bool operator==(const ibValuePtr<_Ty1>& _Left, const ibValuePtr<_Ty2>& _R
 	return static_cast<_Ty1*>(_Left) == static_cast<_Ty2*>(_Right);
 }
 
-template <class _Ty1, class _Ty2>
-inline bool operator!=(const ibValuePtr<_Ty1>& _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return static_cast<_Ty1*>(_Left) != static_cast<_Ty2*>(_Right);
-}
-
-template <class _Ty>
-inline bool operator==(std::nullptr_t, const ibValuePtr<_Ty>& _Right) noexcept {
-	return static_cast<_Ty*>(_Right) == nullptr;
-}
-
-template <class _Ty>
-inline bool operator!=(std::nullptr_t, const ibValuePtr<_Ty>& _Right) noexcept {
-	return static_cast<_Ty*>(_Right) != nullptr;
-}
-
 template <class _Ty>
 inline bool operator==(const ibValuePtr<_Ty>& _Left, std::nullptr_t) noexcept {
 	return static_cast<_Ty*>(_Left) == nullptr;
 }
 
-template <class _Ty>
-inline bool operator!=(const ibValuePtr<_Ty>& _Left, std::nullptr_t) noexcept {
-	return static_cast<_Ty*>(_Left) != nullptr;
-}
-
 template <class _Ty1, class _Ty2>
 inline bool operator==(const ibValuePtr<_Ty1>& _Left, _Ty2* _Right) noexcept {
 	return static_cast<_Ty1*>(_Left) == _Right;
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator==(_Ty1* _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return _Left == static_cast<_Ty2*>(_Right);
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator!=(_Ty1* _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return _Left != static_cast<_Ty2*>(_Right);
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator!=(const ibValuePtr<_Ty1>& _Left, _Ty2* _Right) noexcept {
-	return static_cast<_Ty1*>(_Left) != _Right;
 }
 
 #endif

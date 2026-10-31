@@ -6,10 +6,10 @@
 #include "queryLowering.h"
 
 #include "queryException.h"                // ibBackendQuerySourceException — L3 refuses in its own variety
-#include "queryRewrite.h"                 // ibQueryRewrite — optimizer pass (AST -> AST)
-#include "queryRender.h"                  // ibQueryOutputName — the ONE answer to "what is this field called"
-#include "queryLexer.h"                   // ibQueryLexer::ParamNames — which words of a query are its parameters
-#include "queryParser.h"                  // ibQueryCastType — the primitive a CAST converts to, as the parser read it
+#include "core/query/queryRewrite.h"                 // ibQueryRewrite — optimizer pass (AST -> AST)
+#include "core/query/queryRender.h"                  // ibQueryOutputName — the ONE answer to "what is this field called"
+#include "core/query/queryLexer.h"                   // ibQueryLexer::ParamNames — which words of a query are its parameters
+#include "core/query/queryParser.h"                  // ibQueryCastType — the primitive a CAST converts to, as the parser read it
 #include "queryRamTable.h"                // ibQueryRamTable — a package's temp table IS a snapshot
 #include "queryTempStore.h"               // ibQueryTempTableStore — WHO keeps the temp tables alive
 #include "tempTableQueryable.h"           // ibTempTableQueryable — a table handed in as a PARAMETER is a source
@@ -26,7 +26,9 @@
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::ResolveQueryConstant (value(...) resolution)
 #include "backend/tabularModel.h"     // ibComparisonType
 #include "backend/backend_exception.h"    // ibBackendCoreException
+#include "core/fiber/fiber.h"             // StackLow — a nested query is native recursion with no count
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — a field's empty value, for a NULL key
+#include "core/query/queryAggregates.h"   // ibQueryAggregatesFor — CheckNames refuses what a type does not admit
 #include "backend/system/value/valueList.h"   // IN (&list) takes a value list's values, not its items
 
 // ⚠ NAMED, NOT INHERITED. std::find / std::remove_if arrived in this file with the grouping and
@@ -38,15 +40,15 @@
 #include <functional>   // FiltersAroundVirtualTables — the walks over a select and its conditions
 #include <unordered_set>                  // the link step matches rows by a key tuple
 
-#include <wx/tokenzr.h>   // the OVER area may name several groupings, comma-separated
+#include "core/stringTokenizer.h"   // the OVER area may name several groupings, comma-separated
 
 // --- the AUXILIARY per-query temp-source registry (decl in queryable.h) ------------
 // Thread-local so concurrent sessions don't see each other's transient sources; RAII so a
 // query leaves no trace once it finishes. ResolveSource consults it before the metaobject
 // factory, returning a registered RAM / temp queryable directly. (Max: L5 registers at L4.)
-static thread_local const std::map<wxString, const ibBackendQueryable*>* t_tempSources = nullptr;
+static thread_local const std::map<ibString, const ibBackendQueryable*>* t_tempSources = nullptr;
 
-ibTempSourceScope::ibTempSourceScope(const std::map<wxString, const ibBackendQueryable*>& sources)
+ibTempSourceScope::ibTempSourceScope(const std::map<ibString, const ibBackendQueryable*>& sources)
 	: m_prev(t_tempSources)
 {
 	t_tempSources = &sources;
@@ -57,7 +59,7 @@ ibTempSourceScope::~ibTempSourceScope()
 	t_tempSources = m_prev;
 }
 
-const ibBackendQueryable* ibTempSourceScope::Find(const wxString& name)
+const ibBackendQueryable* ibTempSourceScope::Find(const ibString& name)
 {
 	if (t_tempSources == nullptr)
 		return nullptr;
@@ -69,9 +71,9 @@ const ibBackendQueryable* ibTempSourceScope::Find(const wxString& name)
 // Same shape and the same lifetime as the temp sources above, and separate from them for a reason:
 // a temp table HAS rows, a named result is a QUERY — and which of the two roads a reader takes
 // (declare it to the server, or take its rows) is decided by the reader's own lowering.
-static thread_local const std::map<wxString, const ibQuerySelect*>* t_namedResults = nullptr;
+static thread_local const std::map<ibString, const ibQuerySelect*>* t_namedResults = nullptr;
 
-ibNamedResultScope::ibNamedResultScope(const std::map<wxString, const ibQuerySelect*>& results)
+ibNamedResultScope::ibNamedResultScope(const std::map<ibString, const ibQuerySelect*>& results)
 	: m_prev(t_namedResults)
 {
 	t_namedResults = &results;
@@ -82,7 +84,7 @@ ibNamedResultScope::~ibNamedResultScope()
 	t_namedResults = m_prev;
 }
 
-const ibQuerySelect* ibNamedResultScope::Find(const wxString& name)
+const ibQuerySelect* ibNamedResultScope::Find(const ibString& name)
 {
 	if (t_namedResults == nullptr || name.IsEmpty())
 		return nullptr;
@@ -135,7 +137,7 @@ namespace {
 // Total … TOTALS SUM(total)` then refuses a field the query plainly carries.
 struct ibNoCaseLess
 {
-	bool operator()(const wxString& a, const wxString& b) const { return a.CmpNoCase(b) < 0; }
+	bool operator()(const ibString& a, const ibString& b) const { return a.CmpNoCase(b) < 0; }
 };
 
 // ⭐ THE NAME A GROUPED WALK IS PROJECTED AND READ BACK UNDER — spelled from the walk itself, so the GROUP BY
@@ -143,12 +145,12 @@ struct ibNoCaseLess
 // Two walks ending in one field (`AccountDr.Code`, `AccountCr.Code`) are one COLUMN, and a grouped read
 // that asked the result by the column read the first twice; by the walk they are `gw_AccountDr_Code` and
 // `gw_AccountCr_Code` (measured 2026-09-16, the ledger's correspondence matrix grouped by codes).
-wxString GroupedWalkAlias(const std::vector<const ibBackendQueryColumn*>& path)
+ibString GroupedWalkAlias(const std::vector<const ibBackendQueryColumn*>& path)
 {
-	wxString alias = wxT("gw");
+	ibString alias = ibT("gw");
 	for (const ibBackendQueryColumn* col : path)
 		if (col != nullptr)
-			alias += wxT("_") + col->GetName();
+			alias += ibT("_") + col->GetName();
 	return alias;
 }
 
@@ -163,7 +165,7 @@ using OutputColumn = ibQueryLowering::OutputColumn;
 // Typed as Core it could only be caught by catching everything, which is the same as not being able
 // to catch it at all: a script's Try/Except around a query, a tool that wants to show the author
 // where the query is wrong, and a caller that must let real faults through were all indistinguishable.
-void ThrowQueryException(unsigned int line, unsigned int col, const wxString& msg)
+void ThrowQueryException(unsigned int line, unsigned int col, const ibString& msg)
 {
 	// ⚠ NO PLACE IS SAID AS NO PLACE. A refusal raised without a span used to print "(line 0,
 	// position 0)", which reads as a place — the first line of the query, where the mistake
@@ -189,12 +191,20 @@ void ThrowQueryException(unsigned int line, unsigned int col, const wxString& ms
 // the assembly are one decision, and spreading `wxString::Format` through the file is the same
 // decision made again in twenty places.
 template <typename... Args>
-void ThrowQueryException(unsigned int line, unsigned int col, const wxString& fmt, Args&&... args)
+void ThrowQueryException(unsigned int line, unsigned int col, const ibString& fmt, Args&&... args)
 {
-	ThrowQueryException(line, col, wxString::Format(fmt, std::forward<Args>(args)...));
+	ThrowQueryException(line, col, ibString::Format(fmt, std::forward<Args>(args)...));
 }
 
-ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
+// A nested predicate, expression or subquery is native recursion. The
+// interpreter's count does not see it. Refuse while the refusal still fits.
+static void RefuseIfQueryStackLow(unsigned int line, unsigned int col)
+{
+	if (ibFiber::StackLow())
+		ThrowQueryException(line, col, _("it is nested deeper than the stack allows"));
+}
+
+ibValue EvalValue(const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params);   // defined below
 
 // `DATETIME(y, m, d[, h, mi, s])` as the date it denotes - the wall-clock reading of the parts
 // (fdatetime.h), settled once for the two roads that fold it (a parameter's value and a projected
@@ -217,7 +227,7 @@ static ibValue DateTimeOfParts(const int parts[6], const ibQueryAstExpr& e)
 // ResolveSource. (Its full role is described where the resolver's column lookup uses it, below.)
 struct ibSourceBinding
 {
-	wxString                    m_alias;
+	ibString                    m_alias;
 	const ibBackendQueryable*   m_q = nullptr;
 	// ⭐ THE SHARE, when this binding is one this lowering MINTED — an alias twin for a repeated
 	// reading of one table. Held because the NEXT reading of that table takes THIS one as its origin
@@ -235,7 +245,7 @@ struct ibSourceBinding
 enum class ibHierarchyAnswer { Door, Here, Source };
 
 ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sources,
-                                        const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params,
+                                        const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params,
                                         bool allowDotWalk, ibHierarchyAnswer answer = ibHierarchyAnswer::Door);   // defined below
 
 // ⭐ THE NAMES ONE SELECT READS OF ONE OF ITS SOURCES — ibQueryReadColumns, taken from the text.
@@ -245,12 +255,12 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 // another source only makes the list longer, and a longer list is the safe mistake — it can cut a row
 // finer than asked, never answer a column the reading did not fill. A nested SELECT is read for the
 // paths qualified by this source (the rest are its own). `*` in any form reads everything.
-void CollectReadNames(const ibQueryAstExprPtr& e, const wxString& sourceName, bool qualifiedOnly,
+void CollectReadNames(const ibQueryAstExprPtr& e, const ibString& sourceName, bool qualifiedOnly,
                       ibQueryReadColumns& read);
 
 // Every expression of one SELECT's clauses that can name a column — one list, for the select itself and for a
 // select nested inside it, so the two readings cannot come to walk different clauses.
-void CollectReadNamesOfSelect(const ibQuerySelect& select, const wxString& sourceName, bool qualifiedOnly,
+void CollectReadNamesOfSelect(const ibQuerySelect& select, const ibString& sourceName, bool qualifiedOnly,
                               ibQueryReadColumns& read)
 {
 	const auto walk = [&](const ibQueryAstExprPtr& e) { CollectReadNames(e, sourceName, qualifiedOnly, read); };
@@ -263,7 +273,7 @@ void CollectReadNamesOfSelect(const ibQuerySelect& select, const wxString& sourc
 	for (const ibQueryAstExprPtr& key : select.m_indexBy) walk(key);
 }
 
-void CollectReadNames(const ibQueryAstExprPtr& e, const wxString& sourceName, bool qualifiedOnly,
+void CollectReadNames(const ibQueryAstExprPtr& e, const ibString& sourceName, bool qualifiedOnly,
                       ibQueryReadColumns& read)
 {
 	if (!e || read.m_all)
@@ -280,7 +290,7 @@ void CollectReadNames(const ibQueryAstExprPtr& e, const wxString& sourceName, bo
 	ibQueryForEachOperand(*e, [&](const ibQueryAstExprPtr& child) { CollectReadNames(child, sourceName, qualifiedOnly, read); });
 }
 
-ibQueryReadColumns ReadColumnsOf(const ibQuerySelect* ast, const wxString& sourceName)
+ibQueryReadColumns ReadColumnsOf(const ibQuerySelect* ast, const ibString& sourceName)
 {
 	ibQueryReadColumns read;
 	if (ast == nullptr || ast->m_selectAll)
@@ -303,7 +313,7 @@ ibQueryReadColumns ReadColumnsOf(const ibQuerySelect* ast, const wxString& sourc
 // instance, only wants to know whether the source resolves at all.
 // `readBy` is the select that reads the source, for a table whose rows depend on what is read of it
 // (ReadColumnsOf); null reads everything.
-const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map<wxString, ibValue>& params,
+const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map<ibString, ibValue>& params,
                                         std::vector<ibQueryAstExprPtr>* conditionsOut = nullptr,
                                         const ibQuerySelect* readBy = nullptr)
 {
@@ -348,7 +358,7 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 				ibValue                               m_value;   // keeps the table the wrap reads alive
 				std::shared_ptr<ibTempTableQueryable> m_wrap;
 			};
-			static thread_local std::map<wxString, ibBoundTable> s_boundTables;
+			static thread_local std::map<ibString, ibBoundTable> s_boundTables;
 			ibValueModelTable* table = nullptr;
 			bound->second.ConvertToValue(table);
 			const unsigned int columns = table != nullptr && table->GetColumnCollection() != nullptr
@@ -378,10 +388,10 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	// register); the rest join into the object name, so a virtual table reads as
 	// <Kind>.<Object>.<Table> -> name="Object.Table" (the register's balance / turnover / slice
 	// descriptor registers under that composite name).
-	const wxString& ns = src.m_name[0];
-	wxString name = src.m_name[1];
+	const ibString& ns = src.m_name[0];
+	ibString name = src.m_name[1];
 	for (size_t i = 2; i < src.m_name.size(); ++i)
-		name += wxT(".") + src.m_name[i];
+		name += ibT(".") + src.m_name[i];
 
 	// Resolve through the config the query runs ON BEHALF OF — see ibSourceMetaDataScope::GetFactory for the order.
 	ibQueryableFactory* factory = ibSourceMetaDataScope::GetFactory();
@@ -413,9 +423,9 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 		// configuration is still loading finds it missing and the same read succeeds seconds later
 		// (measured 2026-08-23: `ChartOfCharacteristicTypes` unregistered at 16:42:25, resolving at
 		// 16:42:28 in the same session). Naming the object says whose load order it is.
-		ibJournalInfo(wxT("query.road"), wxT("source '%s.%s': kind '%s' is not registered with this configuration"),
+		ibJournalInfo(ibT("query.road"), ibT("source '%s.%s': kind '%s' is not registered with this configuration"),
 		              ns, name, ns);
-		ThrowQueryException(0, 0, wxString::Format(_("unknown metaobject kind '%s'"), ns));
+		ThrowQueryException(0, 0, ibString::Format(_("unknown metaobject kind '%s'"), ns));
 		return nullptr;
 	}
 
@@ -442,12 +452,12 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	// uncut, and read as an answer (measured 2026-09-21) - an ignored ORDER BY is the kind of wrong nobody
 	// notices. A source that declares nothing is not judged here: it has not said what it takes.
 	if (!declared.empty() && src.m_args.size() > declared.size()) {
-		wxString names;
+		ibString names;
 		for (const ibQuerySourceParameter& parameter : declared)
-			names += (names.IsEmpty() ? wxString() : wxString(wxT(", "))) + parameter.m_name;
+			names += (names.IsEmpty() ? ibString() : ibString(ibT(", "))) + parameter.m_name;
 		ibBackendQueryNameException::ErrorAt(src.m_line, src.m_col,
 			_("'%s' takes %d arguments (%s), and %d were given. How its rows are ordered and how many are taken is said in the query around it: ORDER BY, TOP."),
-			ns + wxT(".") + name, static_cast<int>(declared.size()), names, static_cast<int>(src.m_args.size()));
+			ns + ibT(".") + name, static_cast<int>(declared.size()), names, static_cast<int>(src.m_args.size()));
 	}
 
 	// ⚠ A CONDITION SLOT TAKES EITHER SHAPE, and the shape decides the road — not the declaration.
@@ -516,7 +526,7 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 			&& src.m_args[i] && isPredicate(*src.m_args[i]);
 		if (isCondition) {
 			if (i < declared.size() && declared[i].m_consumedBySource && conditionScope != nullptr) {
-				const std::vector<ibSourceBinding> scope{ ibSourceBinding{ wxString(), conditionScope } };
+				const std::vector<ibSourceBinding> scope{ ibSourceBinding{ ibString(), conditionScope } };
 				consumed[i] = BuildWherePredicate(scope, *src.m_args[i], params,
 					/*allowDotWalk*/ true, ibHierarchyAnswer::Source);
 				anyConsumed = anyConsumed || consumed[i] != nullptr;
@@ -583,7 +593,7 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 			argPtrs.empty() ? nullptr : argPtrs.data(), static_cast<long>(argPtrs.size()));
 	if (q == nullptr) {
 		ThrowQueryException(src.m_line, src.m_col,
-			wxString::Format(_("metaobject '%s.%s' not found or cannot be queried"), ns, name));
+			ibString::Format(_("metaobject '%s.%s' not found or cannot be queried"), ns, name));
 		return nullptr;
 	}
 	return q;
@@ -603,7 +613,7 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 // answers null to both and the two mean opposite things: one is a table that is GONE (say so, loudly)
 // and the other is a table that is THERE (say nothing). Conflating them is how a perfectly good field
 // of a nested query got reported as left over from a table the query does not read.
-bool SourceIsOpaque(const std::vector<ibSourceBinding>& sources, const wxString& name)
+bool SourceIsOpaque(const std::vector<ibSourceBinding>& sources, const ibString& name)
 {
 	if (name.IsEmpty())
 		return false;
@@ -614,7 +624,7 @@ bool SourceIsOpaque(const std::vector<ibSourceBinding>& sources, const wxString&
 }
 
 // Find the source an alias names, or null if the first path segment is not a known alias.
-const ibBackendQueryable* SourceForAlias(const std::vector<ibSourceBinding>& sources, const wxString& alias)
+const ibBackendQueryable* SourceForAlias(const std::vector<ibSourceBinding>& sources, const ibString& alias)
 {
 	if (!alias.empty())
 		for (const ibSourceBinding& s : sources)
@@ -665,7 +675,7 @@ bool SharesColumnNumbers(const std::vector<ibSourceBinding>& sources, const ibBa
 			for (const ibBackendQueryColumn* c : s.m_q->GetColumns())
 				if (c != nullptr) taken.insert(c->GetColumnId());
 	for (const ibBackendQueryColumn* c : q.GetColumns())
-		if (c != nullptr && taken.count(c->GetColumnId()) != 0)
+		if (c != nullptr && taken.contains(c->GetColumnId()))
 			return true;
 	return false;
 }
@@ -708,7 +718,7 @@ bool SharesColumnNumbers(const std::vector<ibSourceBinding>& sources, const ibBa
 // The single source that OWNS a bare (unqualified) column. Fails on AMBIGUITY — a bare column that
 // exists in more than one joined source must be qualified with an alias (SQL "ambiguous column"). Returns
 // null only when no source owns it (the caller reports "unknown attribute") or sources is empty.
-const ibBackendQueryable* OwnerOfBareColumn(const std::vector<ibSourceBinding>& sources, const wxString& name,
+const ibBackendQueryable* OwnerOfBareColumn(const std::vector<ibSourceBinding>& sources, const ibString& name,
                                             int line, int col)
 {
 	const ibBackendQueryable* owner = nullptr;
@@ -717,7 +727,7 @@ const ibBackendQueryable* OwnerOfBareColumn(const std::vector<ibSourceBinding>& 
 		// guard in ResolvePath: this runs over queries that are still being written.
 		if (s.m_q != nullptr && s.m_q->ResolveColumnByName(name) != nullptr) {
 			if (owner != nullptr)
-				ThrowQueryException(line, col, wxString::Format(
+				ThrowQueryException(line, col, ibString::Format(
 					_("ambiguous attribute '%s': it is in more than one source: qualify it with an alias (e.g. a.%s)"),
 					name, name));
 			owner = s.m_q;
@@ -728,10 +738,10 @@ const ibBackendQueryable* OwnerOfBareColumn(const std::vector<ibSourceBinding>& 
 // Reject a DUPLICATE source alias — the same alias on two FROM/JOIN sources makes every `alias.col`
 // reference ambiguous (SQL "table name specified more than once"). Synthetic dot-walk / ref-join aliases
 // are unique by construction, so only user-written aliases can collide here.
-void RequireAliasFree(const std::vector<ibSourceBinding>& sources, const wxString& alias, int line, int col)
+void RequireAliasFree(const std::vector<ibSourceBinding>& sources, const ibString& alias, int line, int col)
 {
 	if (!alias.empty() && SourceForAlias(sources, alias) != nullptr)
-		ThrowQueryException(line, col, wxString::Format(
+		ThrowQueryException(line, col, ibString::Format(
 			_("duplicate source alias '%s': each FROM / JOIN source needs a distinct alias"), alias));
 }
 
@@ -744,11 +754,11 @@ void RequireAliasFree(const std::vector<ibSourceBinding>& sources, const wxStrin
 // exists to prevent. The room is deep (a table read four times uses three wrappings, an ordinary
 // attribute id carries six), so this refuses what nobody is expected to write, out loud rather than
 // by handing back a number that lies about what it is.
-void RequireAnotherReadingFits(const ibBackendQueryable& source, const wxString& alias, int line, int col)
+void RequireAnotherReadingFits(const ibBackendQueryable& source, const ibString& alias, int line, int col)
 {
 	for (const ibBackendQueryColumn* c : source.GetColumns())
 		if (c != nullptr && !ibBackendQueryColumn::CanComposeSyntheticId(c->GetColumnId()))
-			ThrowQueryException(line, col, wxString::Format(
+			ThrowQueryException(line, col, ibString::Format(
 				_("too many readings of one table in one query (at '%s'): a column id cannot carry another"),
 				alias));
 }
@@ -761,12 +771,12 @@ void RequireAnotherReadingFits(const ibBackendQueryable& source, const wxString&
 // (ibQuerySourceName) — so the refusal points at the FROM the reader can see (2026-09-02).
 //
 // The storage name is not lost: it is what the SQL and the journal carry, where it belongs.
-wxString SpokenSourceName(const std::vector<ibSourceBinding>& sources, const ibBackendQueryable* q)
+ibString SpokenSourceName(const std::vector<ibSourceBinding>& sources, const ibBackendQueryable* q)
 {
 	for (const ibSourceBinding& s : sources)
 		if (s.m_q == q && !s.m_alias.empty())
 			return s.m_alias;
-	return q != nullptr ? q->GetQueryName() : wxString();
+	return q != nullptr ? q->GetQueryName() : ibString();
 }
 
 // A SINGLE column (for WHERE / ORDER / aggregate arg / GROUP BY): `alias.col` -> the aliased
@@ -774,7 +784,7 @@ wxString SpokenSourceName(const std::vector<ibSourceBinding>& sources, const ibB
 // paths are rejected here (only the projection resolves them, via ResolvePath).
 const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& e)
 {
-	const std::vector<wxString>& path = e.m_path;
+	const std::vector<ibString>& path = e.m_path;
 
 	if (path.size() == 2) {
 		const ibBackendQueryable* q = SourceForAlias(sources, path[0]);
@@ -785,7 +795,7 @@ const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBindin
 			// document has a moment, a register or a wrapped subquery does not, and the answer to
 			// that decides whether the field or the table is the thing to change (2026-08-23).
 			if (col == nullptr)
-				ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+				ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 					_("unknown attribute '%s' on source '%s'"), path[1], SpokenSourceName(sources, q)));
 			return col;
 		}
@@ -796,11 +806,11 @@ const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBindin
 		if (q == nullptr) {
 			// A BARE name belongs to NO source here, so the thing to say is which ones were asked —
 			// the reader can then see whether the table they meant is even in the query.
-			wxString asked;
+			ibString asked;
 			for (const ibSourceBinding& s : sources)
 				if (s.m_q != nullptr)
-					asked += (asked.IsEmpty() ? wxT("") : wxT(", ")) + SpokenSourceName(sources, s.m_q);
-			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+					asked += (asked.IsEmpty() ? ibT("") : ibT(", ")) + SpokenSourceName(sources, s.m_q);
+			ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 				_("unknown attribute '%s': no source of this query has it (asked: %s)"), path[0], asked));
 		}
 		return q->ResolveColumnByName(path[0]);
@@ -812,22 +822,22 @@ const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBindin
 	// in this clause), or a two-segment path whose FIRST word names no source of this query at all —
 	// a misspelled alias, or one that was never written. The old text announced a dot-walk for both,
 	// so an author whose alias was simply wrong went looking for a missing feature (2026-09-04).
-	wxString written;
-	for (const wxString& segment : path)
-		written += (written.IsEmpty() ? wxString() : wxT(".")) + segment;
+	ibString written;
+	for (const ibString& segment : path)
+		written += (written.IsEmpty() ? ibString() : ibString(ibT("."))) + segment;
 
 	if (path.size() == 2) {
-		wxString asked;
+		ibString asked;
 		for (const ibSourceBinding& s : sources)
 			if (s.m_q != nullptr)
-				asked += (asked.IsEmpty() ? wxString() : wxT(", ")) + SpokenSourceName(sources, s.m_q);
-		ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+				asked += (asked.IsEmpty() ? ibString() : ibString(ibT(", "))) + SpokenSourceName(sources, s.m_q);
+		ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 			_("'%s': this query has no source called '%s' (it reads: %s). If '%s' is a field to walk "
 			  "THROUGH, this clause does not carry a walk yet."),
 			written, path[0], asked, path[0]));
 	}
 
-	ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+	ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 		_("'%s' walks through a reference, which this clause does not carry yet: name the field on a "
 		  "source of the query, or join the table it walks to"), written));
 	return nullptr;
@@ -847,8 +857,8 @@ const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBindin
 // twins live as long as the door that reads them.
 struct ibDotWalkTwins {
 	ibDataQueryBuilder*                                    m_builder = nullptr;
-	std::map<const ibBackendQueryable*, wxString>          m_firstPrefix;   // table -> the way it was reached first
-	std::map<wxString, const ibBackendQueryable*>          m_twinOf;        // another way -> its twin
+	std::map<const ibBackendQueryable*, ibString>          m_firstPrefix;   // table -> the way it was reached first
+	std::map<ibString, const ibBackendQueryable*>          m_twinOf;        // another way -> its twin
 };
 static thread_local ibDotWalkTwins* t_dotWalkTwins = nullptr;
 
@@ -858,23 +868,21 @@ struct ibDotWalkTwinsScope {
 	ibDotWalkTwins* m_prev;
 };
 
-const ibBackendQueryable* TwinForDotWalk(const ibBackendQueryable* target, const wxString& prefix)
+const ibBackendQueryable* TwinForDotWalk(const ibBackendQueryable* target, const ibString& prefix)
 {
 	ibDotWalkTwins* const twins = t_dotWalkTwins;
 	if (twins == nullptr || twins->m_builder == nullptr || target == nullptr)
 		return target;
-	const auto first = twins->m_firstPrefix.find(target);
-	if (first == twins->m_firstPrefix.end()) {
-		twins->m_firstPrefix.emplace(target, prefix);
+	const auto [first, inserted] = twins->m_firstPrefix.try_emplace(target, prefix);
+	if (inserted)
 		return target;
-	}
 	if (first->second == prefix)
 		return target;
 	const auto known = twins->m_twinOf.find(prefix);
 	if (known != twins->m_twinOf.end())
 		return known->second;
 	const ibBackendQueryable* twin = twins->m_builder->AdoptOwnedSource(std::make_shared<ibAliasQueryable>(
-		target, wxString::Format(wxT("_wr%u"), static_cast<unsigned>(twins->m_twinOf.size()))));
+		target, ibString::Format(ibT("_wr%u"), static_cast<unsigned>(twins->m_twinOf.size()))));
 	twins->m_twinOf.emplace(prefix, twin);
 	return twin;
 }
@@ -892,7 +900,7 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 	if (e.m_path.empty() && e.m_kind != ibQueryAstExprKind::Column)
 		ThrowQueryException(e.m_line, e.m_col, _("expected a field here, not a computed expression"));
 
-	const std::vector<wxString>& path = e.m_path;
+	const std::vector<ibString>& path = e.m_path;
 	size_t i = 0;
 	const ibBackendQueryable* cur = sources.empty() ? nullptr : sources[0].m_q;
 
@@ -920,9 +928,9 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 		// ⚠ A WALK NEEDS A TABLE, and a one-word target is not one. `CAST(Code AS Number)` CONVERTS — a value
 		// answered over the row (CastTargetType, the AsType question) — and a number has no fields to walk into.
 		if (cast.m_path.size() == 1) {
-			ThrowQueryException(cast.m_line, cast.m_col, wxString::Format(
+			ThrowQueryException(cast.m_line, cast.m_col, ibString::Format(
 				_("a walk after CAST continues into a table a reference points at (%s); '%s' has no fields"),
-				wxT("Catalog.Products"), cast.m_path[0]));
+				ibT("Catalog.Products"), cast.m_path[0]));
 			return cols;
 		}
 
@@ -931,14 +939,14 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 		// cannot name something the language could not have named after FROM.
 		ibQuerySource target;
 		target.m_name = cast.m_path;
-		cur = ResolveSource(target, std::map<wxString, ibValue>());
+		cur = ResolveSource(target, std::map<ibString, ibValue>());
 		if (cur == nullptr)
 			return cols;   // ResolveSource has already raised, in its own words
 		i = 0;   // the whole trailing path is walked on the target
 		for (size_t k = 0; k < path.size(); ++k) {
 			const ibBackendQueryColumn* col = cur->ResolveColumnByName(path[k]);
 			if (col == nullptr) {
-				ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+				ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 					_("unknown attribute '%s' on source '%s'"), path[k], SpokenSourceName(sources, cur)));
 				return cols;
 			}
@@ -952,7 +960,7 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 			if (k + 1 < path.size()) {
 				const ibBackendQueryable* next = cur->GetProvider().ResolveReferenceTarget(cur, col);
 				if (next == nullptr) {
-					ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+					ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 						_("'%s' is not a single-target reference (cannot walk)"), path[k]));
 					return cols;
 				}
@@ -965,30 +973,40 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 	if (path.size() >= 2) {
 		const ibBackendQueryable* aliased = SourceForAlias(sources, path[0]);
 		if (aliased != nullptr) { cur = aliased; i = 1; }
+		else if (SourceIsOpaque(sources, path[0]))
+			return cols;   // a field of the table this resolver cannot see into — see the silence below
 	}
 	if (i == 0) {   // unqualified — start on the source that owns the first segment
 		if (const ibBackendQueryable* q = OwnerOfBareColumn(sources, path[0], e.m_line, e.m_col)) {
 			cur = q;   // ambiguous -> Fail, inside
 		}
-		else if (path.size() >= 2 && !SourceIsOpaque(sources, path[0])) {
-			// ⭐ A QUALIFIED NAME WHOSE QUALIFIER IS NOTHING — `SliceLast.Dimension2` in a query that
-			// no longer reads SliceLast. The first segment is neither a source alias nor a column of
-			// any source, so this is not a dot-walk that went wrong somewhere in the middle: it is a
-			// FIELD LEFT OVER from a table that is gone.
-			//
-			// ⚠ …AND NOT ONE THIS RESOLVER MERELY CANNOT SEE INTO. `SDFGH.Dimension1` over a nested
-			// query named SDFGH is the table standing right there in the FROM; accusing it of being
-			// gone painted the verdict line red over a query with nothing wrong with it.
-			//
-			// Said as itself, and with what to do about it. "unknown attribute 'SliceLast'" named the
-			// segment the resolver happened to stop on and left the reader to work out that the thing
-			// to delete is the whole field — which is the one thing the message could have said.
-			wxString field;
-			for (size_t k = 0; k < path.size(); ++k)
-				field += (k > 0 ? wxT(".") : wxT("")) + path[k];
-			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
-				_("'%s' is left over from a table this query does not read: remove the field, or add "
-				  "'%s' back to the tables"), field, path[0]));
+		else {
+			// ⭐⭐ A NAME NO VISIBLE SOURCE PLACES, IN A QUERY WITH A SOURCE THIS RESOLVER CANNOT SEE INTO
+			// (a nested select a check holds opaque): it may perfectly well be that table's — `SDFGH.Dimension1`
+			// over a nested query named SDFGH, a bare field of it, a walk from one — and silence is the only
+			// honest answer. Said HERE, once, for every question a check asks: walking on from the first
+			// source instead accused THAT table of the name (2026-10-22: "unknown attribute 'NestedQuery1'
+			// on source 'Catalog1'", from the rule that a folded column is no group key, which resolves
+			// every projection and was not among the callers that knew to skip it).
+			for (const ibSourceBinding& binding : sources)
+				if (binding.m_q == nullptr)
+					return cols;
+			if (path.size() >= 2) {
+				// ⭐ A QUALIFIED NAME WHOSE QUALIFIER IS NOTHING — `SliceLast.Dimension2` in a query that
+				// no longer reads SliceLast. The first segment is neither a source alias nor a column of
+				// any source, so this is not a dot-walk that went wrong somewhere in the middle: it is a
+				// FIELD LEFT OVER from a table that is gone.
+				//
+				// Said as itself, and with what to do about it. "unknown attribute 'SliceLast'" named the
+				// segment the resolver happened to stop on and left the reader to work out that the thing
+				// to delete is the whole field — which is the one thing the message could have said.
+				ibString field;
+				for (size_t k = 0; k < path.size(); ++k)
+					field += (k > 0 ? ibT(".") : ibT("")) + path[k];
+				ThrowQueryException(e.m_line, e.m_col, ibString::Format(
+					_("'%s' is left over from a table this query does not read: remove the field, or add "
+					  "'%s' back to the tables"), field, path[0]));
+			}
 		}
 	}
 
@@ -1002,20 +1020,15 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 	// An error is the honest answer and the window already knows how to show one — the verdict line
 	// under the tabs, in the engine's own words.
 	if (cur == nullptr) {
-		// Same distinction one more time: with an unreadable source in the query, a name this resolver
-		// cannot place may perfectly well be that table's, and silence is the only honest answer.
-		for (const ibSourceBinding& binding : sources)
-			if (binding.m_q == nullptr)
-				return cols;
-		ThrowQueryException(e.m_line, e.m_col, wxString::Format(_("'%s' belongs to no table of this query"),
-			path.empty() ? wxString() : path[0]));
+		ThrowQueryException(e.m_line, e.m_col, ibString::Format(_("'%s' belongs to no table of this query"),
+			path.empty() ? ibString() : path[0]));
 		return {};
 	}
 
 	// The segment just walked through, when it held SEVERAL types — see the absent leaf below.
-	wxString composite;
+	ibString composite;
 	// The references walked so far, by identity — which way a table was reached (TwinForDotWalk).
-	wxString prefix;
+	ibString prefix;
 
 	for (size_t k = i; k < path.size(); ++k) {
 		const ibBackendQueryColumn* col = cur->ResolveColumnByName(path[k]);
@@ -1030,7 +1043,7 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 			// walk, so the old message pointed at a table the query never mentioned and read as
 			// though that one table were at fault.
 			if (!composite.IsEmpty()) {
-				ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+				ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 					_("unknown attribute '%s' - none of the types '%s' may hold has it"),
 					path[k], composite));
 				return {};
@@ -1040,7 +1053,7 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 			// most, because a WALK moves from table to table: the name that failed may belong to the
 			// third hop, and without saying where it was asked the message points at the query rather
 			// than at the step.
-			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+			ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 				_("unknown attribute '%s' on source '%s'"), path[k], SpokenSourceName(sources, cur)));
 			return {};
 		}
@@ -1056,7 +1069,7 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 				const std::vector<const ibBackendQueryable*> targets = cur->GetProvider().ResolveReferenceTargets(cur, col);
 				if (targets.empty()) {
 					ThrowQueryException(e.m_line, e.m_col,
-						wxString::Format(_("'%s' is not a single-target reference (cannot walk)"), path[k]));
+						ibString::Format(_("'%s' is not a single-target reference (cannot walk)"), path[k]));
 					return {};
 				}
 
@@ -1082,7 +1095,7 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 
 				composite = path[k];   // so a refusal one segment on names the FIELD, not a stand-in
 			}
-			prefix += wxString::Format(wxT("%p|"), (const void*)col);
+			prefix += ibString::Format(ibT("%p|"), (const void*)col);
 			cur = TwinForDotWalk(next, prefix);
 		}
 	}
@@ -1092,11 +1105,11 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 // ⭐ THE REFERENCE TYPE OF A TABLE NAMED IN THE TEXT — `x REFS Catalog.Goods`, `CAST(x AS Catalog.Goods)`: resolved
 // as a FROM resolves it, and typed by the table's own empty reference. 0 = no reference points at that table; the
 // caller says so in its own words.
-ibClassID ReferenceTypeOfTable(const std::vector<wxString>& path)
+ibClassID ReferenceTypeOfTable(const std::vector<ibString>& path)
 {
 	ibQuerySource target;
 	target.m_name = path;
-	const ibBackendQueryable* const q = ResolveSource(target, std::map<wxString, ibValue>());
+	const ibBackendQueryable* const q = ResolveSource(target, std::map<ibString, ibValue>());
 	const ibValueMetaObjectGenericData* const meta = q != nullptr ? q->GetSourceMetaObject() : nullptr;
 	ibValue emptyRef;
 	if (meta == nullptr || !meta->ResolveQueryConstant(ibRefMember::EmptyRef, emptyRef))
@@ -1111,16 +1124,16 @@ ibTypeDescription CastTargetType(const ibQueryAstExpr& cast)
 	ibTypeDescription type;
 	if (ibQueryCastType(cast, type))
 		return type;
-	wxString named;
-	for (const wxString& segment : cast.m_path)
-		named += (named.IsEmpty() ? wxString() : wxT(".")) + segment;
+	ibString named;
+	for (const ibString& segment : cast.m_path)
+		named += (named.IsEmpty() ? ibString() : ibString(ibT("."))) + segment;
 	if (cast.m_path.size() < 2)
-		ThrowQueryException(cast.m_line, cast.m_col, wxString::Format(
+		ThrowQueryException(cast.m_line, cast.m_col, ibString::Format(
 			_("CAST takes a primitive type (Number(15, 2), String(50), Date, Boolean) or a table a reference points at (%s); '%s' is neither"),
-			wxT("Catalog.Products"), named));
+			ibT("Catalog.Products"), named));
 	const ibClassID reference = ReferenceTypeOfTable(cast.m_path);
 	if (reference == 0)
-		ThrowQueryException(cast.m_line, cast.m_col, wxString::Format(
+		ThrowQueryException(cast.m_line, cast.m_col, ibString::Format(
 			_("CAST takes a table a reference can point at; '%s' is not one"), named));
 	return ibTypeDescription(reference);
 }
@@ -1130,7 +1143,7 @@ ibTypeDescription CastTargetType(const ibQueryAstExpr& cast)
 // that owns the first segment. (Used to expand a dot-walk over a multi-source builder.)
 const ibBackendQueryable* RootForPath(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& e)
 {
-	const std::vector<wxString>& path = e.m_path;
+	const std::vector<ibString>& path = e.m_path;
 	if (path.size() >= 2) {
 		const ibBackendQueryable* aliased = SourceForAlias(sources, path[0]);
 		if (aliased != nullptr) return aliased;
@@ -1165,7 +1178,7 @@ const ibBackendQueryable* OwnerOfPathLeaf(const std::vector<ibSourceBinding>& so
 const ibBackendQueryColumn* ExpandDotWalkJoins(
 	ibDataQueryBuilder& b, const std::vector<ibSourceBinding>& sources, const ibBackendQueryable* rootQ,
 	const std::vector<const ibBackendQueryColumn*>& pathCols,
-	std::map<wxString, const ibBackendQueryable*>& joined, int& aliasSeq, const ibQueryAstExpr& e)
+	std::map<ibString, const ibBackendQueryable*>& joined, int& aliasSeq, const ibQueryAstExpr& e)
 {
 	// The stitch routes a column to the table that OWNS it. The path was resolved on the tables themselves, and a
 	// hop may be read through a twin (below) or stand as the field a CAST reached (ibDbTableProvider::CastLeaf) —
@@ -1187,11 +1200,11 @@ const ibBackendQueryColumn* ExpandDotWalkJoins(
 			return true;
 		std::vector<ibSourceBinding> walked;
 		for (const auto& j : joined)
-			walked.push_back({ wxString(), j.second });
+			walked.push_back({ ibString(), j.second });
 		return SharesColumnNumbers(walked, *reading);
 	};
 	const ibBackendQueryable* curQ = rootQ;
-	wxString prefixKey;
+	ibString prefixKey;
 	for (size_t i = 0; i + 1 < pathCols.size(); ++i) {
 		const ibBackendQueryColumn* refCol = owned(curQ, pathCols[i]);
 		const ibBackendQueryable* tgtQ = (curQ != nullptr) ? curQ->GetProvider().ResolveReferenceTarget(curQ, refCol) : nullptr;
@@ -1202,11 +1215,11 @@ const ibBackendQueryColumn* ExpandDotWalkJoins(
 		if (tgtQ == nullptr || tgtKeys.empty())
 			ThrowQueryException(e.m_line, e.m_col,
 				_("a dot-walk segment over a JOIN/UNION must be a single-target catalog/document reference"));
-		prefixKey += wxString::Format(wxT("%p|"), (const void*)refCol);
+		prefixKey += ibString::Format(ibT("%p|"), (const void*)refCol);
 		const auto known = joined.find(prefixKey);
 		if (known == joined.end()) {
 			// A word an engine takes as an identifier: a joined twin qualifies its columns by it in the statement.
-			const wxString alias = wxString::Format(wxT("wj%d"), aliasSeq++);
+			const ibString alias = ibString::Format(ibT("wj%d"), aliasSeq++);
 			const ibBackendQueryable* reading = tgtQ;
 			while (taken(reading)) {
 				RequireAnotherReadingFits(*reading, alias, e.m_line, e.m_col);
@@ -1242,7 +1255,7 @@ const ibBackendQueryColumn* ExpandDotWalkJoins(
 // road that has no builder in hand (name checking, a nested lowering that only resolves).
 struct ibDotWalkExpansion {
 	ibDataQueryBuilder*                            m_builder = nullptr;
-	std::map<wxString, const ibBackendQueryable*>* m_joined  = nullptr;
+	std::map<ibString, const ibBackendQueryable*>* m_joined  = nullptr;
 	int*                                           m_seq     = nullptr;
 };
 static thread_local const ibDotWalkExpansion* t_dotWalkExpansion = nullptr;
@@ -1266,9 +1279,13 @@ struct ibDotWalkExpansionScope {
 // its aggregates against somebody else's query. Null everywhere else, which is what keeps the
 // ordinary refusal ("an expression over an aggregate's result") standing where there is nothing to
 // register against.
+// ⭐ …OR WHERE IT ALREADY WAS. A TOTALS figure made of figures (`SUM(Accrued) - SUM(Deducted) AS ToPay`) declares
+// each call itself, on the road a single figure takes — names, areas, a second fold over one column — and hands
+// the calls over here with the names they were declared under; the expression then only reads them.
 struct ibAggregateSink {
-	ibDataQueryBuilder* m_builder = nullptr;
-	int*                m_seq     = nullptr;
+	ibDataQueryBuilder*                               m_builder  = nullptr;
+	int*                                              m_seq      = nullptr;
+	const std::map<const ibQueryAstExpr*, ibString>* m_declared = nullptr;
 };
 static thread_local const ibAggregateSink* t_aggregateSink = nullptr;
 
@@ -1372,8 +1389,8 @@ ibQueryJoinKind MapJoinKind(ibQueryJoinKindAst k)
 // column. Every segment is a single-target reference; intermediate targets get synthetic aliases, the last
 // gets the user's alias. Reuses ExpandDotWalkJoins' key derivation (segment ref col, target self-reference).
 void ExpandRefJoinAlias(ibDataQueryBuilder& b, std::vector<ibSourceBinding>& sources,
-	const ibBackendQueryable* rootQ, const std::vector<wxString>& segs,
-	const wxString& finalAlias, ibQueryJoinKind kind, int& aliasSeq)
+	const ibBackendQueryable* rootQ, const std::vector<ibString>& segs,
+	const ibString& finalAlias, ibQueryJoinKind kind, int& aliasSeq)
 {
 	const ibBackendQueryable* curQ = rootQ;
 	for (size_t i = 0; i < segs.size(); ++i) {
@@ -1382,9 +1399,9 @@ void ExpandRefJoinAlias(ibDataQueryBuilder& b, std::vector<ibSourceBinding>& sou
 		const std::vector<const ibBackendQueryColumn*> tgtKeys = (tgtQ != nullptr) ? tgtQ->GetPrimaryKeyColumns()
 		                                                                           : std::vector<const ibBackendQueryColumn*>{};
 		if (refCol == nullptr || tgtQ == nullptr || tgtKeys.empty())
-			ThrowQueryException(0, 0, wxString::Format(_("'%s' is not a single-target reference for a named ref-join (AS)"), segs[i]));
+			ThrowQueryException(0, 0, ibString::Format(_("'%s' is not a single-target reference for a named ref-join (AS)"), segs[i]));
 		const bool last = (i + 1 == segs.size());
-		const wxString alias = last ? finalAlias : wxString::Format(wxT("_rj%d"), aliasSeq++);
+		const ibString alias = last ? finalAlias : ibString::Format(ibT("_rj%d"), aliasSeq++);
 		b.Join(tgtQ, refCol, tgtKeys.front(), last ? kind : ibQueryJoinKind::Left, alias);
 		sources.push_back({ alias, tgtQ });
 		curQ = tgtQ;
@@ -1404,7 +1421,7 @@ ibJoinCompareOp MapJoinOp(ibQueryCompareOp op)
 	}
 }
 
-const ibValue* FindParam(const std::map<wxString, ibValue>& params, const wxString& name)
+const ibValue* FindParam(const std::map<ibString, ibValue>& params, const ibString& name)
 {
 	for (const auto& kv : params)
 		if (kv.first.CmpNoCase(name) == 0) return &kv.second;
@@ -1426,22 +1443,23 @@ const ibValue* FindParam(const std::map<wxString, ibValue>& params, const wxStri
 //
 // The names are the lexer's (ParamNames), the one reading of which words are parameters; the text is
 // the renderer's, the one walk that reaches every part of a query.
-std::map<wxString, ibValue> WithEveryParameter(const wxString& text, const std::map<wxString, ibValue>& params)
+std::map<ibString, ibValue> WithEveryParameter(const ibString& text, const std::map<ibString, ibValue>& params)
 {
-	std::map<wxString, ibValue> every = params;
-	for (const wxString& name : ibQueryLexer::ParamNames(text))
+	std::map<ibString, ibValue> every = params;
+	for (const ibString& name : ibQueryLexer::ParamNames(text))
 		if (FindParam(every, name) == nullptr)
 			every.emplace(name, ibValue());
 	return every;
 }
 
-ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+ibValue EvalValue(const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params)
 {
-	if (e.m_kind == ibQueryAstExprKind::Literal) return e.m_literal;
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
+	if (e.m_kind == ibQueryAstExprKind::Literal) return ibValue(e.m_literal);
 	if (e.m_kind == ibQueryAstExprKind::Param) {
 		const ibValue* v = FindParam(params, e.m_paramName);
 		if (v == nullptr) {
-			ThrowQueryException(e.m_line, e.m_col, wxString::Format(_("parameter '&%s' is not set"), e.m_paramName));
+			ThrowQueryException(e.m_line, e.m_col, ibString::Format(_("parameter '&%s' is not set"), e.m_paramName));
 			return ibValue();
 		}
 		return *v;
@@ -1468,16 +1486,16 @@ ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& pa
 	// is resolved by name, so `TYPE(Catalog.Goods)` is folded into REFS before reaching this function);
 	// what lands here is a type NAMED IN ONE WORD — a primitive.
 	if (e.m_kind == ibQueryAstExprKind::ScalarCall && e.m_scalar == ibQueryScalarFn::Type) {
-		wxString named;
+		ibString named;
 		if (!e.m_args.empty() && e.m_args.front()->m_kind == ibQueryAstExprKind::Column)
-			for (const wxString& segment : e.m_args.front()->m_path)
-				named += (named.IsEmpty() ? wxString() : wxT(".")) + segment;
+			for (const ibString& segment : e.m_args.front()->m_path)
+				named += (named.IsEmpty() ? ibString() : ibString(ibT("."))) + segment;
 		if (named.IsEmpty())
 			ThrowQueryException(e.m_line, e.m_col, _("TYPE takes a type name"));
 		// Made through the door in typeDescription.h — this tier names no runtime value class.
 		const ibValue type = ibTypeValueByName(named);
 		if (type.IsEmpty())
-			ThrowQueryException(e.m_line, e.m_col, wxString::Format(_("TYPE: '%s' is not a type"), named));
+			ThrowQueryException(e.m_line, e.m_col, ibString::Format(_("TYPE: '%s' is not a type"), named));
 		return type;
 	}
 	if (e.m_kind == ibQueryAstExprKind::Value) {
@@ -1503,28 +1521,28 @@ ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& pa
 			const long member = made ? enumeration.FindProp(e.m_path[1]) : wxNOT_FOUND;
 			ibValue out;
 			if (member == wxNOT_FOUND || !enumeration.GetPropVal(member, out))
-				ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+				ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 					_("value(%s.%s): '%s' is not a member of a system enumeration '%s'"),
 					e.m_path[0], e.m_path[1], e.m_path[1], e.m_path[0]));
 			return out;
 		}
 		if (e.m_path.size() < 3)
 			ThrowQueryException(e.m_line, e.m_col, _("value(...) needs <Kind>.<Name>.<Member>, or <Enumeration>.<Member> for a system one"));
-		const wxString& ns     = e.m_path.front();
-		const wxString& member = e.m_path.back();
-		wxString name = e.m_path[1];
-		for (size_t i = 2; i + 1 < e.m_path.size(); ++i) name += wxT(".") + e.m_path[i];
+		const ibString& ns     = e.m_path.front();
+		const ibString& member = e.m_path.back();
+		ibString name = e.m_path[1];
+		for (size_t i = 2; i + 1 < e.m_path.size(); ++i) name += ibT(".") + e.m_path[i];
 
 		ibQueryableFactory* factory = ibSourceMetaDataScope::GetFactory();
 		if (factory == nullptr)
 			ThrowQueryException(e.m_line, e.m_col, _("the query engine is not available (no application data)"));
 		const ibBackendQueryable* q = factory->Resolve(ns, name);
 		if (q == nullptr)
-			ThrowQueryException(e.m_line, e.m_col, wxString::Format(_("value(): metaobject '%s.%s' not found"), ns, name));
+			ThrowQueryException(e.m_line, e.m_col, ibString::Format(_("value(): metaobject '%s.%s' not found"), ns, name));
 		const ibValueMetaObjectGenericData* meta = q->GetSourceMetaObject();
 		ibValue out;
 		if (meta == nullptr || !meta->ResolveQueryConstant(member, out))
-			ThrowQueryException(e.m_line, e.m_col, wxString::Format(_("value(): '%s.%s' has no '%s' (an empty reference or a predefined item)"), ns, name, member));
+			ThrowQueryException(e.m_line, e.m_col, ibString::Format(_("value(): '%s.%s' has no '%s' (an empty reference or a predefined item)"), ns, name, member));
 		return out;
 	}
 	ThrowQueryException(e.m_line, e.m_col, _("expected a literal or a parameter as the comparison value"));
@@ -1591,7 +1609,7 @@ ibAggregateFn AggFn(ibQueryKeyword kw)
 // them alive by holding the source, not by knowing which class it is.
 using ibSubqueryOwner = std::vector<std::shared_ptr<const ibBackendQueryable>>;
 std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& sel,
-                                                const std::map<wxString, ibValue>& params, ibSubqueryOwner& owner);
+                                                const std::map<ibString, ibValue>& params, ibSubqueryOwner& owner);
 
 // --- WHERE-leaf condition builders. `path` (size > 1) = a reference dot-walk; the provider joins it
 // and qualifies the LEAF (== path.back()) by the join alias. A plain column passes path = {col}. ------
@@ -1618,9 +1636,11 @@ std::vector<const ibBackendQueryColumn*> ResolveFieldOperand(const std::vector<i
                                                              const ibQueryAstExpr& e, bool allowDotWalk);  // defined below
 
 ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& sources,
-                                            const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
+                                            const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params);   // defined below
 ibQueryColumnExprPtr BuildWindowExprFromAst(const std::vector<ibSourceBinding>& sources,
-                                            const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
+                                            const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params);   // defined below
+static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
+                                    const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params);   // defined below
 
 // Is this AST expression a COMPUTED WHERE / aggregate-input lhs (arithmetic or CASE)?
 // A CONDITION — what a WHERE is made of. Standing where a VALUE is asked for (`Qty > 100 AS Big`, a CASE
@@ -1674,6 +1694,7 @@ void GateComputedExpr(const std::vector<ibSourceBinding>& sources, const ibQuery
 // Does this side of a comparison read a field of the row — anywhere inside it, not only as itself?
 bool NamesAField(const ibQueryAstExpr& e)
 {
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
 	if (e.m_kind == ibQueryAstExprKind::Column)
 		return true;
 	bool found = false;
@@ -1711,8 +1732,9 @@ bool IsConstantSide(const ibQueryAstExpr& e)
 	        && (e.m_scalar == ibQueryScalarFn::DateTime || e.m_scalar == ibQueryScalarFn::Type));
 }
 
-std::optional<bool> KnownBeforeRows(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+std::optional<bool> KnownBeforeRows(const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params)
 {
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
 	switch (e.m_kind) {
 	case ibQueryAstExprKind::Compare: {
 		if (!e.m_lhs || !e.m_rhs || !IsConstantSide(*e.m_lhs) || !IsConstantSide(*e.m_rhs))
@@ -1759,7 +1781,7 @@ ibQueryCondition ConditionThatIs(bool truth)
 }
 
 ibQueryCondition ComputedComparison(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& e,
-                                    const std::map<wxString, ibValue>& params)
+                                    const std::map<ibString, ibValue>& params)
 {
 	GateComputedExpr(sources, *e.m_lhs);
 	ibQueryCondition c;
@@ -1818,10 +1840,10 @@ static bool MentionsSemiJoin(const ibQueryPredicatePtr& p)
 // go back to the rows road, which says or applies them in its own words.
 static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBinding>& sources,
 	const std::vector<const ibBackendQueryColumn*>& cols, const ibQuerySelect& sel,
-	const std::map<wxString, ibValue>& params, bool negated)
+	const std::map<ibString, ibValue>& params, bool negated)
 {
 	auto plainTable = [](const ibBackendQueryable* q) {
-		return q != nullptr && !q->IsComputedInRam() && q->GetSourceRelation(wxString()) == nullptr
+		return q != nullptr && !q->IsComputedInRam() && q->GetSourceRelation(ibString()) == nullptr
 			&& !q->GetQueryTableName().IsEmpty();
 	};
 	auto rowKeyOf = [](const ibBackendQueryable* q) -> const ibBackendQueryColumn* {
@@ -1912,9 +1934,10 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 // allowDotWalk; the provider joins it (single-source non-aggregate read). IN / IS NULL stay plain-column
 // (no path leaf on those nodes yet). Used for single-source queries + co-located JOIN booleans.
 ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sources,
-                                        const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params,
+                                        const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params,
                                         bool allowDotWalk, ibHierarchyAnswer answer)
 {
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
 	// A condition known before any row is read is one of the two answers (KnownBeforeRows).
 	if (const std::optional<bool> known = KnownBeforeRows(e, params))
 		return ibQueryPredicate::Leaf(ConditionThatIs(*known));
@@ -2215,16 +2238,16 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			ibClassID family = 0;
 			if (ibTypeValueClsid(ibTypeValueByName(e.m_path.front()), family) && IsReference(family) && clsid_is_any(family))
 				return ibQueryPredicate::RefType(cols.back(), family, e.m_negated, cols);
-			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+			ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 				_("REFS takes a type: <Kind>.<Name>, or a family of them (CatalogRef, AnyRef); '%s' is neither"), e.m_path.front()));
 		}
 
 		const ibClassID reference = ReferenceTypeOfTable(e.m_path);
 		if (reference == 0) {
-			wxString named;
-			for (const wxString& segment : e.m_path)
-				named += (named.IsEmpty() ? wxString() : wxT(".")) + segment;
-			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+			ibString named;
+			for (const ibString& segment : e.m_path)
+				named += (named.IsEmpty() ? ibString() : ibString(ibT("."))) + segment;
+			ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 				_("REFS takes a table a reference can point at, or a family of them (CatalogRef, AnyRef); '%s' is neither"), named));
 		}
 
@@ -2244,7 +2267,7 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 		// when the condition spans lines. The engine can already write an expression back out
 		// (ibRenderQueryExpr), so the refusal quotes the author's own text.
 		ThrowQueryException(e.m_line, e.m_col,
-			wxString::Format(_("unsupported WHERE expression: %s"), ibRenderQueryExpr(e)));
+			ibString::Format(_("unsupported WHERE expression: %s"), ibRenderQueryExpr(e)));
 		return nullptr;
 	}
 }
@@ -2282,7 +2305,7 @@ std::vector<const ibBackendQueryColumn*> ResolveFieldOperand(const std::vector<i
                                                              const ibQueryAstExpr& e, bool allowDotWalk)
 {
 	if (e.m_kind != ibQueryAstExprKind::Column)
-		ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+		ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 			_("'%s' is not a field, and this condition reads one. In a WHERE the engine reads such a value one level "
 			  "down itself when the query names its fields (not SELECT *, not FOR UPDATE, not inside a table's own "
 			  "parameters)"),
@@ -2324,7 +2347,7 @@ static void Conjuncts(const ibQueryAstExpr& e, std::vector<const ibQueryAstExpr*
 }
 
 static std::optional<ibReferenceTest> TestThroughReference(const std::vector<ibSourceBinding>& sources,
-                                                           const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+                                                           const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params)
 {
 	if (e.m_kind != ibQueryAstExprKind::Compare || e.m_cmp != ibQueryCompareOp::Eq || !e.m_lhs || !e.m_rhs
 	    || e.m_lhs->m_kind != ibQueryAstExprKind::Column || ComparesComputed(e) || KnownBeforeRows(e, params).has_value())
@@ -2387,7 +2410,7 @@ static bool ReferencesPassing(const std::vector<ibReferenceTest>& tests, std::ve
 		// (2026-10-05).
 		const ibBackendQueryColumn* key = read.first->GetPrimaryKeyColumns().front();
 		ibDataQueryBuilder q;
-		q.From(read.first).Select(key, wxEmptyString).Distinct({ key });
+		q.From(read.first).Select(key, ibEmptyString).Distinct({ key });
 		for (size_t i = 0; i < tests.size(); ++i)
 			q.Where(CondEq({ read.second[i] }, tests[i].m_value, /*notEqual*/ filled));
 		ibReadPageRequest page;   // the whole set — or one past `most`
@@ -2419,7 +2442,7 @@ static ibQueryPredicatePtr ReferenceIn(const ibBackendQueryColumn* hop, std::vec
 // itself (appended to `asked`): the values TOGETHER as one IN, each empty one as NOT IN the filled. The rest go to
 // `rest`, to be lowered as before. False — nothing was asked, and the WHERE is lowered whole.
 static bool AskThroughReferences(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& where,
-	const std::map<wxString, ibValue>& params, std::vector<ibQueryPredicatePtr>& asked,
+	const std::map<ibString, ibValue>& params, std::vector<ibQueryPredicatePtr>& asked,
 	std::vector<const ibQueryAstExpr*>& rest)
 {
 	std::vector<const ibQueryAstExpr*> parts;
@@ -2452,7 +2475,7 @@ static bool AskThroughReferences(const std::vector<ibSourceBinding>& sources, co
 			bound += refs;
 			return true;
 		}
-		ibJournalInfo(wxT("query.road"), wxT("SERVER: more references through '%s' than one statement binds - the walk stays a join"),
+		ibJournalInfo(ibT("query.road"), ibT("SERVER: more references through '%s' than one statement binds - the walk stays a join"),
 			hop->GetName());
 		return false;
 	};
@@ -2470,7 +2493,7 @@ static bool AskThroughReferences(const std::vector<ibSourceBinding>& sources, co
 			std::vector<ibValue> filled;
 			if (!ReferencesPassing({ g.m_tests[k] }, filled, /*filled*/ true, room()) || !fits(hop, filled.size()))
 				continue;
-			ibJournalInfo(wxT("query.road"), wxT("SERVER: '%s.%s' is empty - asked as NOT IN the %u reference(s) it is filled in"),
+			ibJournalInfo(ibT("query.road"), ibT("SERVER: '%s.%s' is empty - asked as NOT IN the %u reference(s) it is filled in"),
 				hop->GetName(), g.m_tests[k].m_field->GetName(), static_cast<unsigned>(filled.size()));
 			if (!filled.empty())   // filled nowhere — empty everywhere, and the condition asks nothing
 				asked.push_back(ibQueryPredicate::Not(ReferenceIn(hop, std::move(filled))));
@@ -2479,7 +2502,7 @@ static bool AskThroughReferences(const std::vector<ibSourceBinding>& sources, co
 		std::vector<ibValue> refs;
 		if (values.empty() || !ReferencesPassing(values, refs, /*filled*/ false, room()) || !fits(hop, refs.size()))
 			continue;
-		ibJournalInfo(wxT("query.road"), wxT("SERVER: %u condition(s) through '%s' asked of the tables it points into - %u reference(s)"),
+		ibJournalInfo(ibT("query.road"), ibT("SERVER: %u condition(s) through '%s' asked of the tables it points into - %u reference(s)"),
 			static_cast<unsigned>(values.size()), hop->GetName(), static_cast<unsigned>(refs.size()));
 		asked.push_back(ReferenceIn(hop, std::move(refs)));
 		for (const size_t i : valueParts)
@@ -2496,7 +2519,7 @@ static bool AskThroughReferences(const std::vector<ibSourceBinding>& sources, co
 // flat JOIN WHERE (dot-walk rejected — the composer has no per-leaf dot-walk join yet). OR / NOT / IN
 // / IS NULL never reach here (IsFlatAndWhere routes them to the predicate tree).
 void LowerFlatWhere(ibDataQueryBuilder& b, const std::vector<ibSourceBinding>& sources,
-                    const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params, bool allowDotWalk)
+                    const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params, bool allowDotWalk)
 {
 	switch (e.m_kind) {
 	case ibQueryAstExprKind::Logical:
@@ -2630,8 +2653,9 @@ bool IsFlatAndWhere(const ibQueryAstExpr& e)
 // obligation the RAM twins carry is stated all over this file; this is it, honoured in the one place
 // the frame is settled, so neither road has to be bent to meet the other.
 ibQueryColumnExprPtr BuildWindowExprFromAst(const std::vector<ibSourceBinding>& sources,
-                                            const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+                                            const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params)
 {
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
 	std::vector<ibQueryColumnExprPtr> partition;
 	std::vector<std::pair<ibQueryColumnExprPtr, bool>> order;
 	ibQueryWindowFrame frame = ibQueryWindowFrame::Whole;
@@ -2659,23 +2683,23 @@ ibQueryColumnExprPtr BuildWindowExprFromAst(const std::vector<ibSourceBinding>& 
 // taught these words (queryKeywords.h says why). Read here, against the one vocabulary the language
 // has for calendar units, so `Turnovers(&A, &B, Month)` and `BEGINOFPERIOD(x, Month)` cannot come to
 // mean different things by the same word.
-ibTotalsPeriod ReadUnitArgument(const ibQueryAstExpr& call, size_t index, const wxString& what)
+ibTotalsPeriod ReadUnitArgument(const ibQueryAstExpr& call, size_t index, const ibString& what)
 {
 	if (index >= call.m_args.size() || !call.m_args[index])
-		ThrowQueryException(call.m_line, call.m_col, wxString::Format(
+		ThrowQueryException(call.m_line, call.m_col, ibString::Format(
 			_("%s needs a period: Second, Minute, Hour, Day, Week, Month, Quarter, HalfYear or Year"), what));
 
 	const ibQueryAstExpr& arg = *call.m_args[index];
 	ibTotalsPeriod unit = ibTotalsPeriod::Month;
 	if (arg.m_kind != ibQueryAstExprKind::Column || arg.m_path.size() != 1 || !ibReadPeriodUnit(arg.m_path.front(), unit))
-		ThrowQueryException(arg.m_line, arg.m_col, wxString::Format(
+		ThrowQueryException(arg.m_line, arg.m_col, ibString::Format(
 			_("'%s' is not a period. %s takes one of: Second, Minute, Hour, Day, Week, Month, Quarter, HalfYear, Year"),
-			arg.m_path.empty() ? wxString() : arg.m_path.front(), what));
+			arg.m_path.empty() ? ibString() : arg.m_path.front(), what));
 	// ⚠ TENDAYS IS A BUCKET, NOT A LENGTH — its third one runs to the end of the month, so "one
 	// ten-day later" names nothing. Refused HERE, once, rather than left to each dialect to be
 	// missing from: a unit the engine silently substituted would be a wrong date that still runs.
 	if (unit == ibTotalsPeriod::TenDays)
-		ThrowQueryException(arg.m_line, arg.m_col, wxString::Format(
+		ThrowQueryException(arg.m_line, arg.m_col, ibString::Format(
 			_("TenDays cannot be moved by or counted in: its last bucket is not ten days long. %s takes a unit of fixed meaning"), what));
 	return unit;
 }
@@ -2703,7 +2727,7 @@ bool ReadDatePartOf(ibQueryScalarFn fn, ibDatePart& part)
 // The value a question is put to (PRESENTATION, VALUETYPE, a CAST) may be a WALK — see ibValueAskWalk: its leaf
 // stands in the tree, and the walk is left for the projection to bring into the row.
 ibQueryColumnExprPtr AskedOfValue(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& a,
-                                  const std::map<wxString, ibValue>& params)
+                                  const std::map<ibString, ibValue>& params)
 {
 	if (t_valueAskWalks != nullptr && a.m_kind == ibQueryAstExprKind::Column
 	    && (a.m_path.size() > 1 || (a.m_arg && a.m_arg->m_kind == ibQueryAstExprKind::Cast))) {
@@ -2717,9 +2741,9 @@ ibQueryColumnExprPtr AskedOfValue(const std::vector<ibSourceBinding>& sources, c
 }
 
 ibQueryColumnExprPtr BuildScalarCallFromAst(const std::vector<ibSourceBinding>& sources,
-                                            const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+                                            const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params)
 {
-	const wxString word = ibQueryScalarFnText(e.m_scalar);
+	const ibString word = ibQueryScalarFnText(e.m_scalar);
 	auto arg = [&](size_t i) {
 		return BuildColumnExprFromAst(sources, *e.m_args[i], params);
 	};
@@ -2784,15 +2808,16 @@ ibQueryColumnExprPtr BuildScalarCallFromAst(const std::vector<ibSourceBinding>& 
 	default:
 		// The type tests, PRESENTATION and GROUPING are answered elsewhere (or not yet at all) — say
 		// which call it was rather than "unsupported expression", so the reader knows what to look up.
-		ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+		ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 			_("%s cannot be used as a computed value here"), word));
 		return nullptr;
 	}
 }
 
 ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& sources,
-                                            const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+                                            const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params)
 {
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
 	switch (e.m_kind) {
 	case ibQueryAstExprKind::Column: {
 		const std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, e);
@@ -2801,14 +2826,20 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 		return ibQueryColumnExpr::Col(cols[0]);
 	}
 	case ibQueryAstExprKind::Literal:
-		return ibQueryColumnExpr::Const(e.m_literal);
+		return ibQueryColumnExpr::Const(ibValue(e.m_literal));
 	case ibQueryAstExprKind::Param:
 	case ibQueryAstExprKind::Value:   // value(...) resolves to a constant, exactly like a &parameter
 		return ibQueryColumnExpr::Const(EvalValue(e, params));
 
 	case ibQueryAstExprKind::Arith: {
+		// A '+' that answers a string is concatenation. The one typing says so, the same that types
+		// the output (TypeOfExpr); nothing downstream guesses it again.
+		const auto concat = [&]() {
+			const ibTypeDescription t = TypeOfExpr(sources, e, params);
+			return t.GetClsidCount() == 1 && t.ContainType(ibValueTypes::TYPE_STRING);
+		};
 		const ibQueryColumnArithOp op =
-			e.m_arith == ibQueryArithOp::Add ? ibQueryColumnArithOp::Add
+			e.m_arith == ibQueryArithOp::Add ? (concat() ? ibQueryColumnArithOp::Concat : ibQueryColumnArithOp::Add)
 			: e.m_arith == ibQueryArithOp::Sub ? ibQueryColumnArithOp::Sub
 			: e.m_arith == ibQueryArithOp::Mul ? ibQueryColumnArithOp::Mul
 			: e.m_arith == ibQueryArithOp::Div ? ibQueryColumnArithOp::Div
@@ -2875,9 +2906,14 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 	// Only where a sink is armed (a projection that has somewhere to attach the finished expression).
 	// Elsewhere this falls through and is refused in the words it always was.
 	case ibQueryAstExprKind::Func:
+		if (t_aggregateSink != nullptr && t_aggregateSink->m_declared != nullptr) {
+			const auto declared = t_aggregateSink->m_declared->find(&e);
+			if (declared != t_aggregateSink->m_declared->end())
+				return ibQueryColumnExpr::OutputRef(declared->second);
+		}
 		if (t_aggregateSink != nullptr && t_aggregateSink->m_builder != nullptr
 		    && ibIsAggregateKeyword(e.m_func) && !e.m_over) {
-			const wxString aggAlias = wxString::Format(wxT("_agg%d"), (*t_aggregateSink->m_seq)++);
+			const ibString aggAlias = ibString::Format(ibT("_agg%d"), (*t_aggregateSink->m_seq)++);
 			ibDataQueryBuilder& ab = *t_aggregateSink->m_builder;
 			if (e.m_star)
 				ab.Aggregate(AggFn(e.m_func), (const ibBackendQueryColumn*)nullptr, aggAlias, e.m_distinctArg);
@@ -2897,12 +2933,12 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 		}
 		// Named, like the WHERE one: the author's own fragment, not just the category it fell into.
 		ThrowQueryException(e.m_line, e.m_col,
-			wxString::Format(_("unsupported expression in a computed column: %s"), ibRenderQueryExpr(e)));
+			ibString::Format(_("unsupported expression in a computed column: %s"), ibRenderQueryExpr(e)));
 		return nullptr;
 
 	default:
 		ThrowQueryException(e.m_line, e.m_col,
-			wxString::Format(_("unsupported expression in a computed column: %s"), ibRenderQueryExpr(e)));
+			ibString::Format(_("unsupported expression in a computed column: %s"), ibRenderQueryExpr(e)));
 		return nullptr;
 	}
 }
@@ -2924,7 +2960,7 @@ class ibSyntheticScalarColumn : public ibBackendColumnRawDB
 public:
 	// Takes the ordinary running number and stamps its own kind on it inside, like every synthetic
 	// column here — the caller hands a plain ordinal and knows nothing about the layout.
-	ibSyntheticScalarColumn(const wxString& alias, ibMetaID id, RawType type = RawType::Number)
+	ibSyntheticScalarColumn(const ibString& alias, ibMetaID id, RawType type = RawType::Number)
 		: ibBackendColumnRawDB(alias, type), m_id(SyntheticId(SyntheticKind::Output, id)) {}
 	ibMetaID GetColumnId() const override { return m_id; }
 private:
@@ -2940,7 +2976,7 @@ private:
 // the payroll demo on 2026-09-10, where reports declaring one resource twice came back empty; the
 // composer's own reports had kept working only because they read such a field as a COLUMN of the
 // nested author query. The RAM road reads a column by its id, so the spelling asks nothing of it.
-std::shared_ptr<ibSyntheticScalarColumn> ProjectionHandle(const wxString& alias, ibMetaID id,
+std::shared_ptr<ibSyntheticScalarColumn> ProjectionHandle(const ibString& alias, ibMetaID id,
 	ibBackendColumnRawDB::RawType type = ibBackendColumnRawDB::RawType::Number)
 {
 	return std::make_shared<ibSyntheticScalarColumn>(ibSqlAliasOf(alias), id, type);
@@ -2971,11 +3007,11 @@ public:
 	// clsid separates a reference from an object from a manager (clsid.h). The caller hands a plain
 	// number and knows nothing about the layout; the class is what knows which kind it is.
 	// `available` — whether what it is computed from may be shown (IsExprAvailable), taken when it is minted.
-	ibSyntheticOutputColumn(const wxString& name, const ibTypeDescription& type, ibMetaID id, bool available = true)
+	ibSyntheticOutputColumn(const ibString& name, const ibTypeDescription& type, ibMetaID id, bool available = true)
 		: m_name(name), m_type(type), m_id(SyntheticId(SyntheticKind::Output, id)), m_available(available) {}
 
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }   // the interface hands back a non-const ref
 	ibMetaID           GetColumnId()     const override { return m_id; }
 	// COMPUTED: it exists in the result and nowhere else — minted for an output that has no column
@@ -2984,7 +3020,7 @@ public:
 	bool               IsAvailable()     const override { return m_available; }
 
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	mutable ibTypeDescription m_type;   // mutable: GetTypeDesc() is const and returns a non-const ref
 	ibMetaID                  m_id;
 	bool                      m_available;
@@ -3052,7 +3088,7 @@ static ibTypeDescription TypeOfFold(ibQueryKeyword func, const ibTypeDescription
 // a value nobody vouched for. So mixed arithmetic, disagreeing CASE arms and everything not listed
 // return {} on purpose.
 static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
-	const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+	const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params)
 {
 	const ibTypeDescription number(g_valueNumberCLSID);
 
@@ -3090,6 +3126,14 @@ static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
 		const bool shift = e.m_arith == ibQueryArithOp::Add || e.m_arith == ibQueryArithOp::Sub;
 		if (shift && l.GetClsidCount() == 1 && l.ContainType(ibValueTypes::TYPE_DATE) && rNum)
 			return l;
+		// A string added to a string is a string. One side may be untyped (a carried column this
+		// select cannot see); a number or a date on either side is not concatenation, and stays
+		// unclaimed the way mixed arithmetic always has.
+		const bool lStr = l.GetClsidCount() == 1 && l.ContainType(ibValueTypes::TYPE_STRING);
+		const bool rStr = r.GetClsidCount() == 1 && r.ContainType(ibValueTypes::TYPE_STRING);
+		if (e.m_arith == ibQueryArithOp::Add && (lStr || rStr)
+		    && (lStr || l.GetClsidCount() == 0) && (rStr || r.GetClsidCount() == 0))
+			return ibTypeDescription(g_valueStringCLSID);
 		return ibTypeDescription();
 	}
 
@@ -3270,7 +3314,7 @@ ibDataQueryResult RefoldOverRow(ibDataQueryResult rows, std::vector<OutputColumn
 			_("HAVING cannot stand beside a grouping answered over the finished row: the groups it would judge "
 			  "are formed only after the engine has read them. Filter in an outer query instead"));
 
-	auto projectionNamed = [&ast](const wxString& name) -> const ibQueryProjection* {
+	auto projectionNamed = [&ast](const ibString& name) -> const ibQueryProjection* {
 		for (const ibQueryProjection& p : ast.m_projections)
 			if (p.m_expr && ibQueryOutputName(p).CmpNoCase(name) == 0)
 				return &p;
@@ -3294,7 +3338,7 @@ ibDataQueryResult RefoldOverRow(ibDataQueryResult rows, std::vector<OutputColumn
 			else if (e.m_kind == ibQueryAstExprKind::Func && !e.m_over && e.m_func == ibQueryKeyword::Max)
 				fold = Fold::Max;
 			else if (ibQueryMentionsAggregate(p->m_expr))
-				ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+				ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 					_("'%s' cannot be grouped by a key answered over the finished row: only SUM, COUNT, MIN and "
 					  "MAX give the same figure when groups are folded together"), oc.m_name));
 		}
@@ -3382,7 +3426,7 @@ ibDataQueryResult RefoldOverRow(ibDataQueryResult rows, std::vector<OutputColumn
 		for (const ibQueryOrderItem& item : ast.m_orderBy) {
 			const OutputColumn* named = nullptr;
 			if (item.m_expr) {
-				const wxString written = ibRenderQueryExpr(*item.m_expr);
+				const ibString written = ibRenderQueryExpr(*item.m_expr);
 				for (const OutputColumn* oc : outputs) {
 					const ibQueryProjection* p = projectionNamed(oc->m_name);
 					if (oc->m_name.CmpNoCase(written) == 0 || (p != nullptr && ibRenderQueryExpr(*p->m_expr) == written)) {
@@ -3492,18 +3536,18 @@ bool ScalarRawType(const ibBackendQueryColumn* col, ibBackendColumnRawDB::RawTyp
 // WHAT TO CALL AN OUTPUT COLUMN AT EXECUTION. The proposal first — the SAME answer every host uses
 // when it adds a field, so a query assembled in the constructor and one typed by hand produce the
 // same column names — and only where there is no proposal does this invent one.
-wxString OutputNameFor(const ibQuerySelect& select, const ibQueryProjection& p, int idx)
+ibString OutputNameFor(const ibQuerySelect& select, const ibQueryProjection& p, int idx)
 {
-	const wxString named = ibQueryProposedName(select, p);
+	const ibString named = ibQueryProposedName(select, p);
 	if (!named.IsEmpty()) return named;
 
 	const ibQueryAstExpr& e = *p.m_expr;
 	if (e.m_kind == ibQueryAstExprKind::Func) {
-		const wxString f = ibQueryKeywordText(e.m_func);
-		if (e.m_star) return f + wxT("_all");
-		return f + wxT("_") + (e.m_arg && !e.m_arg->m_path.empty() ? e.m_arg->m_path.back() : wxString());
+		const ibString f = ibQueryKeywordText(e.m_func);
+		if (e.m_star) return f + ibT("_all");
+		return f + ibT("_") + (e.m_arg && !e.m_arg->m_path.empty() ? e.m_arg->m_path.back() : ibString());
 	}
-	return wxString::Format(wxT("col%d"), idx);
+	return ibString::Format(ibT("col%d"), idx);
 }
 
 // ⭐ THE ROLES A SELECT SAYS ITSELF (`<expr> ROLE OPENING AS Opening`) — stamped on its outputs by the name each
@@ -3515,7 +3559,7 @@ static void StampDeclaredRoles(const ibQuerySelect& sel, std::vector<OutputColum
 	for (const ibQueryProjection& p : sel.m_projections) {
 		if (p.m_star || !p.m_expr)
 			continue;
-		const wxString name = OutputNameFor(sel, p, idx++);
+		const ibString name = OutputNameFor(sel, p, idx++);
 		if (!p.m_roleSaid)
 			continue;
 		for (OutputColumn& oc : schema)
@@ -3528,10 +3572,69 @@ static void StampDeclaredRoles(const ibQuerySelect& sel, std::vector<OutputColum
 	}
 }
 
+// ⭐ A MOMENT READ WITHOUT THE ONES ABOVE IT IS NO MOMENT. A register read by recorder publishes its period, its
+// recorder and its line as one moment, the senior first; a select that takes the recorder and leaves the period
+// hands on documents ordered by their reference, and a balance totalled over them opened at whichever document
+// sorted first rather than the earliest (2026-10-28, an item's opening 35 where nothing had come before it). So
+// the seniors it left out go along as outputs nobody reads, the way a level's field does (WithSelectOneLevelDown).
+// Null when nothing is missing - and where the select folds, DISTINCTs or says its roles itself, since an output
+// added there would change its rows or overrule its word.
+static ibQuerySelectPtr WithSeniorMomentsCarried(const ibQuerySelect& sel, const std::vector<ibSourceBinding>& sources)
+{
+	if (sel.m_selectAll || sel.m_distinct || !sel.m_groupBy.empty())
+		return nullptr;
+	for (const ibQueryProjection& p : sel.m_projections)
+		if (p.m_star || !p.m_expr || p.m_roleSaid || p.m_expr->m_kind == ibQueryAstExprKind::Func)
+			return nullptr;
+
+	ibQuerySelectPtr carried;
+	int index = 0;
+	for (const ibSourceBinding& s : sources) {
+		if (s.m_q == nullptr)
+			continue;
+		// What the select reads of this source, and the rank of the most junior moment among it.
+		std::vector<ibString> read;
+		int juniorRead = 0;
+		for (const ibQueryProjection& p : sel.m_projections) {
+			const ibQueryAstExpr& e = *p.m_expr;
+			if (e.m_kind != ibQueryAstExprKind::Column || e.m_arg)
+				continue;
+			ibString column;
+			if (e.m_path.size() == 2 && e.m_path[0].CmpNoCase(s.m_alias) == 0)
+				column = e.m_path[1];
+			else if (e.m_path.size() == 1 && sources.size() == 1)
+				column = e.m_path[0];
+			else
+				continue;
+			read.push_back(column);
+			if (const ibBackendQueryColumn* c = s.m_q->ResolveColumnByName(column))
+				if (c->GetBalanceRole() == ibBalanceRole::Moment)
+					juniorRead = std::max(juniorRead, c->GetPeriodRank());
+		}
+		if (juniorRead == 0)
+			continue;
+		for (const ibBackendQueryColumn* c : s.m_q->GetColumns()) {
+			if (c == nullptr || c->GetBalanceRole() != ibBalanceRole::Moment
+			    || c->GetPeriodRank() <= 0 || c->GetPeriodRank() >= juniorRead)
+				continue;
+			if (std::any_of(read.begin(), read.end(), [c](const ibString& name) { return name.CmpNoCase(c->GetName()) == 0; }))
+				continue;
+			if (!carried)
+				carried = std::make_shared<ibQuerySelect>(sel);
+			ibQueryProjection senior;
+			senior.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+			senior.m_expr->m_path = { s.m_alias, c->GetName() };
+			senior.m_alias = ibString::Format(ibT("q_moment%d"), index++);
+			carried->m_projections.push_back(std::move(senior));
+		}
+	}
+	return carried;
+}
+
 // ibSubqueryOwner owns the ibSubqueryQueryable instances built for a single Execute — they must outlive
 // the door's terminal call (declared above for IN-subquery). RAM-materialised on Execute, so a local
 // list living to the return statement is enough (no cross-call lifetime). (docs §22 / §23)
-bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
+bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>& params,
                      const std::vector<ibSourceBinding>& sources, ibDataQueryBuilder& b,
                      std::vector<OutputColumn>& outSchema, bool asSubquery,
                      const std::vector<ibQueryAstExprPtr>& sourceConditions = std::vector<ibQueryAstExprPtr>(),
@@ -3548,7 +3651,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 // query's WHERE it stands among every other source, so each path gets the source's name in front.
 // Works on a CLONE: the author's AST keeps what they wrote, and the text goes on rendering it inside
 // the brackets where they put it.
-ibQueryAstExprPtr QualifyToSource(const ibQueryAstExprPtr& expr, const wxString& sourceName)
+ibQueryAstExprPtr QualifyToSource(const ibQueryAstExprPtr& expr, const ibString& sourceName)
 {
 	if (!expr)
 		return nullptr;
@@ -3598,19 +3701,19 @@ ibQueryAstExprPtr QualifyToSource(const ibQueryAstExprPtr& expr, const wxString&
 // nested source, materialised in RAM). Nothing here refuses a query: it either has a server-side
 // form or it does not.
 std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBuilder& outer,
-	const wxString& name, const ibQuerySelect& sel,
-	const std::map<wxString, ibValue>& params, ibSubqueryOwner& owner);
+	const ibString& name, const ibQuerySelect& sel,
+	const std::map<ibString, ibValue>& params, ibSubqueryOwner& owner);
 
 // FROM + every JOIN into one door and one set of bindings — defined below, beside the read that
 // first needed it. A DECLARED query opens its sources exactly the same way (see
 // DeclareNamedResultAsCte): "which tables does this select read" has one answer, wherever the
 // select is going to be written.
-void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
+void BuildSourceTree(const ibQuerySelect& ast, const std::map<ibString, ibValue>& params,
                      ibSubqueryOwner& owner, std::vector<ibSourceBinding>& sources, ibDataQueryBuilder& b,
                      std::vector<ibQueryAstExprPtr>* sourceConditions);
 
 std::shared_ptr<const ibBackendQueryable> ResolveFrom(const ibQuerySource& src,
-                                      const std::map<wxString, ibValue>& params,
+                                      const std::map<ibString, ibValue>& params,
                                       ibSubqueryOwner& owner,
                                       std::vector<ibQueryAstExprPtr>* conditionsOut = nullptr,
                                       ibDataQueryBuilder* declareOn = nullptr,
@@ -3664,7 +3767,7 @@ std::shared_ptr<const ibBackendQueryable> ResolveFrom(const ibQuerySource& src,
 	// this one is declared first and counted, so the two cannot be handed the same name.
 	if (declareOn != nullptr) {
 		if (std::shared_ptr<const ibBackendQueryable> cte =
-		        DeclareNamedResultAsCte(*declareOn, wxString(), *src.m_subquery, params, owner))
+		        DeclareNamedResultAsCte(*declareOn, ibString(), *src.m_subquery, params, owner))
 			return cte;
 	}
 	return WrapSelectAsQueryable(*src.m_subquery, params, owner);   // FROM (SELECT …) AS alias
@@ -3693,23 +3796,23 @@ const ibQueryAstExprPtr& SortTargetOf(const ibQuerySelect& ast, const ibQueryAst
 
 // THE OUTPUT AN ORDER KEY NAMES — by the name the selection gave it (SortTargetOf) or written out as its
 // expression; empty when the key sorts by something the query does not select.
-wxString OrderedOutputName(const ibQuerySelect& ast, const ibQueryAstExprPtr& key)
+ibString OrderedOutputName(const ibQuerySelect& ast, const ibQueryAstExprPtr& key)
 {
 	const ibQueryAstExprPtr& target = SortTargetOf(ast, key);
 	if (!target)
-		return wxString();
-	const wxString written = ibRenderQueryExpr(*target);
+		return ibString();
+	const ibString written = ibRenderQueryExpr(*target);
 	for (const ibQueryProjection& p : ast.m_projections)
 		if (p.m_expr && (p.m_expr == target || ibRenderQueryExpr(*p.m_expr) == written))
 			return ibQueryOutputName(p);
-	return wxString();
+	return ibString();
 }
 
 // …and whether one of the keys names an output answered over the finished row — then no engine can sort.
 bool SortsOverRow(const ibQuerySelect& ast, const std::vector<ibQueryColumnSelect>& overRow)
 {
 	for (const ibQueryOrderItem& o : ast.m_orderBy) {
-		const wxString name = OrderedOutputName(ast, o.m_expr);
+		const ibString name = OrderedOutputName(ast, o.m_expr);
 		if (!name.IsEmpty() && std::any_of(overRow.begin(), overRow.end(),
 		        [&name](const ibQueryColumnSelect& over) { return over.m_alias.CmpNoCase(name) == 0; }))
 			return true;
@@ -3725,7 +3828,7 @@ bool GroupsOverRow(const ibQuerySelect& ast, const std::vector<ibQueryColumnSele
 	for (const ibQueryAstExprPtr& g : ast.m_groupBy) {
 		if (!g || !IsComputedExprAst(*g))
 			continue;
-		const wxString written = ibRenderQueryExpr(*g);
+		const ibString written = ibRenderQueryExpr(*g);
 		for (const ibQueryProjection& p : ast.m_projections) {
 			if (!p.m_expr || ibRenderQueryExpr(*p.m_expr) != written)
 				continue;
@@ -3746,14 +3849,14 @@ ibDataQueryResult SortOverRow(ibDataQueryResult rows, std::vector<OutputColumn>&
 {
 	std::vector<std::pair<const ibBackendQueryColumn*, bool>> keys;
 	for (const ibQueryOrderItem& o : ast.m_orderBy) {
-		const wxString name = OrderedOutputName(ast, o.m_expr);
+		const ibString name = OrderedOutputName(ast, o.m_expr);
 		const auto output = std::find_if(schema.begin(), schema.end(), [&name](const OutputColumn& oc) {
 			return oc.m_col != nullptr && !name.IsEmpty() && oc.m_name.CmpNoCase(name) == 0;
 		});
 		if (output == schema.end())
-			ThrowQueryException(o.m_expr ? o.m_expr->m_line : 0, o.m_expr ? o.m_expr->m_col : 0, wxString::Format(
+			ThrowQueryException(o.m_expr ? o.m_expr->m_line : 0, o.m_expr ? o.m_expr->m_col : 0, ibString::Format(
 				_("ORDER BY '%s' beside a value computed over the finished row: sort by fields the query selects"),
-				o.m_expr ? ibRenderQueryExpr(*o.m_expr) : wxString()));
+				o.m_expr ? ibRenderQueryExpr(*o.m_expr) : ibString()));
 		keys.emplace_back(output->m_col, o.m_ascending);
 	}
 
@@ -3801,7 +3904,7 @@ ibDataQueryResult SortOverRow(ibDataQueryResult rows, std::vector<OutputColumn>&
 // totals query read its SELECT * one level down, every cell asked for `out_Quantity` from a statement that wrote
 // `fld1189_N` — a total of 0, and a swallowed "not found in the resultset" per cell in the journal (2026-09-29).
 void ProjectPlainColumn(ibDataQueryBuilder& b, OutputColumn& oc, const ibBackendQueryColumn* c,
-                        const wxString& alias, bool multiSource)
+                        const ibString& alias, bool multiSource)
 {
 	b.Select(c, alias);
 	oc.m_type = c->GetTypeDesc();   // read by alias or not, it is still THAT column
@@ -3827,7 +3930,7 @@ void RefuseUngrouped(const ibQuerySelect& ast, const std::vector<ibSourceBinding
 // query OR any multi-source query) PROJECTS plain columns via Select(col, alias) so the output schema
 // is explicit; a plain single-source query instead records them in outSchema and reads the result
 // column directly. Returns whether the query is in aggregate mode (GROUP BY / aggregate projection).
-bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
+bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>& params,
                      const std::vector<ibSourceBinding>& sources, ibDataQueryBuilder& b,
                      std::vector<OutputColumn>& outSchema, bool asSubquery,
                      const std::vector<ibQueryAstExprPtr>& sourceConditions,
@@ -3840,7 +3943,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// push a path leaf as a plain column (silently wrong rows).
 	const bool computedPrimary  = sources.size() == 1 && sources[0].m_q != nullptr
 	                              && sources[0].m_q->IsComputedInRam();
-	std::map<wxString, const ibBackendQueryable*> dwJoined; int dwAliasSeq = 0;   // dot-walk join dedup (multi-source projection)
+	std::map<ibString, const ibBackendQueryable*> dwJoined; int dwAliasSeq = 0;   // dot-walk join dedup (multi-source projection)
 
 	// ⭐⭐ THE EXPANSION, ARMED FOR THE WHOLE LOWERING — one door, every clause (ExpandDotWalkHere).
 	//
@@ -3927,7 +4030,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 		int idx = 0;
 		for (const ibQueryProjection& p : ast.m_projections) {
 			const ibQueryAstExpr& e = *p.m_expr;
-			const wxString alias = OutputNameFor(ast, p, idx++);
+			const ibString alias = OutputNameFor(ast, p, idx++);
 			OutputColumn oc;
 			oc.m_name = alias;
 			// Whether it may be shown, whichever branch below reads it: every column the expression reads,
@@ -4013,7 +4116,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 					// A WALK over one physical source is grouped under a name of its own (GroupedWalkAlias) and
 					// read back by it — the flat read's own reading of a walk: a plain scalar by the name, an
 					// object reassembled from its spread under the name as a prefix.
-					const wxString keyAlias = GroupedWalkAlias(pathCols);
+					const ibString keyAlias = GroupedWalkAlias(pathCols);
 					const ibTypeDescription& ltd = pathCols.back()->GetTypeDesc();
 					oc.m_alias   = keyAlias;
 					oc.m_byAlias = true;
@@ -4129,7 +4232,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 					ours.m_alias = alias;
 					// The name an input is projected under goes into the STATEMENT when the read is rendered: a word an
 					// engine takes as an identifier — no sign, no leading underscore (`out__vin-1` was a syntax error).
-					auto inputAlias = [&nextOutputId]() { return wxString::Format(wxT("vin%d"), static_cast<int>(nextOutputId())); };
+					auto inputAlias = [&nextOutputId]() { return ibString::Format(ibT("vin%d"), static_cast<int>(nextOutputId())); };
 					for (const ibBackendQueryColumn* in : inputs) {
 						// ⭐ A WALKED INPUT ARRIVES AS A WALK IN THE SELECTION WOULD — joined, grouped by where the query
 						// folds, and read back the way that road reads it: by its column over a computed source or a
@@ -4141,15 +4244,15 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 								const ibBackendQueryColumn* const leaf = ExpandDotWalkHere(sources, walked->m_path, *walked->m_written);
 								if (aggregate) b.GroupBy(leaf);
 								else           b.Select(leaf, inputAlias());
-								ours.m_inputs.push_back({ leaf, wxString(), false });
+								ours.m_inputs.push_back({ leaf, ibString(), false });
 							}
 							else if (computedPrimary) {
 								if (aggregate) b.GroupBy(walked->m_path);
 								else           b.SelectPath(walked->m_path, inputAlias());
-								ours.m_inputs.push_back({ in, wxString(), false });
+								ours.m_inputs.push_back({ in, ibString(), false });
 							}
 							else {
-								const wxString walkAlias = aggregate ? GroupedWalkAlias(walked->m_path)
+								const ibString walkAlias = aggregate ? GroupedWalkAlias(walked->m_path)
 								                                     : inputAlias();
 								if (aggregate) b.GroupBy(walked->m_path, walkAlias);
 								else           b.SelectPath(walked->m_path, walkAlias);
@@ -4171,7 +4274,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 						// the one naming it something the reader could not find.
 						if (aggregate) {
 							b.GroupBy(in);
-							ours.m_inputs.push_back({ in, wxString(), false });
+							ours.m_inputs.push_back({ in, ibString(), false });
 							continue;
 						}
 						// ⭐⭐ …AND OUTSIDE A FOLD IT IS READ BY ITS COLUMN TOO. It was remembered under a projection
@@ -4183,7 +4286,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 						// is still TOLD about the input, or its projection would not bring it at all.
 						if (explicitProjection)
 							b.Select(in, inputAlias());
-						ours.m_inputs.push_back({ in, wxString(), false });
+						ours.m_inputs.push_back({ in, ibString(), false });
 					}
 					outComputedOverRow->push_back(std::move(ours));
 					oc.m_alias   = alias;
@@ -4272,7 +4375,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				// that quotes what it refused is the one that makes such a case obvious on sight
 				// rather than after a bisect.
 				ThrowQueryException(e.m_line, e.m_col,
-					wxString::Format(_("unsupported projection expression: %s"), ibRenderQueryExpr(e)));
+					ibString::Format(_("unsupported projection expression: %s"), ibRenderQueryExpr(e)));
 			}
 			giveIdentity(oc);
 			outSchema.push_back(oc);
@@ -4296,7 +4399,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			// key is added here only when the author grouped by something they did not also select.
 			// The two are compared as TEXT, through the renderer that writes this language — the same
 			// answer the person sees, and cheaper than an equality over trees.
-			const wxString written = ibRenderQueryExpr(*g);
+			const ibString written = ibRenderQueryExpr(*g);
 			bool alreadyProjected = false;
 			int keyIndex = 0;
 			for (const ibQueryProjection& p : ast.m_projections) {
@@ -4308,7 +4411,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			}
 			if (!alreadyProjected)
 				b.GroupByExpr(BuildColumnExprFromAst(sources, *g, params),
-					wxString::Format(wxT("gk%d"), keyIndex));
+					ibString::Format(ibT("gk%d"), keyIndex));
 			groupKeys.push_back({});
 			continue;
 		}
@@ -4485,7 +4588,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			// A value answered over the row that the query does not select has nothing to be sorted by here: no
 			// engine can compute it, and the finished row does not hold it.
 			if (ExprIsAnsweredHere(sortBy.get()))
-				ThrowQueryException(oe.m_line, oe.m_col, wxString::Format(
+				ThrowQueryException(oe.m_line, oe.m_col, ibString::Format(
 					_("ORDER BY %s: select it, and sort by its name"), ibRenderQueryExpr(oe)));
 			b.OrderByExpr(std::move(sortBy), o.m_ascending);
 			continue;
@@ -4529,11 +4632,11 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 		if (aggregate && !allowOrderDotWalk && !ridesAGroupKey
 			&& oe.m_kind == ibQueryAstExprKind::Column && oe.m_path.size() > 1) {
 
-			wxString path;
-			for (const wxString& segment : oe.m_path)
-				path += (path.IsEmpty() ? wxString() : wxT(".")) + segment;
+			ibString path;
+			for (const ibString& segment : oe.m_path)
+				path += (path.IsEmpty() ? ibString() : ibString(ibT("."))) + segment;
 
-			ThrowQueryException(oe.m_line, oe.m_col, wxString::Format(
+			ThrowQueryException(oe.m_line, oe.m_col, ibString::Format(
 				_("ORDER BY '%s' needs that path among the GROUP BY keys - a grouped query can only "
 				  "sort by what it grouped by. Add it to GROUP BY, or sort by one of the keys."),
 				path));
@@ -4549,7 +4652,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 		// Matched against the OUTPUT, which is the only place an aggregate has a name: by the alias
 		// when the author sorted by one, and by the rendered call when they repeated it.
 		if (aggregate) {
-			wxString folded;
+			ibString folded;
 			if (oe.m_kind == ibQueryAstExprKind::Column && oe.m_path.size() == 1) {
 				// ⚠ ASKED OF THE PROJECTION, NOT OF THE SCHEMA. Every output carries a column by now
 				// (an aggregate gets a synthetic one), so "has no source column" no longer tells a fold
@@ -4557,12 +4660,12 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				for (const ibQueryProjection& p : ast.m_projections) {
 					if (!p.m_expr || !ibQueryMentionsAggregate(p.m_expr))
 						continue;
-					const wxString name = p.m_alias.IsEmpty() ? ibQueryOutputName(p) : p.m_alias;
+					const ibString name = p.m_alias.IsEmpty() ? ibQueryOutputName(p) : p.m_alias;
 					if (name.IsSameAs(oe.m_path.front(), false)) { folded = name; break; }
 				}
 			}
 			else if (ibQueryMentionsAggregate(o.m_expr)) {
-				const wxString written = ibRenderQueryExpr(oe);
+				const ibString written = ibRenderQueryExpr(oe);
 				for (const ibQueryProjection& p : ast.m_projections)
 					if (p.m_expr && ibRenderQueryExpr(*p.m_expr).IsSameAs(written, false)) {
 						folded = p.m_alias.IsEmpty() ? ibQueryOutputName(p) : p.m_alias;
@@ -4646,7 +4749,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 // showed half its rows: the payroll demo's statement lost its whole income-tax branch and summed to the
 // accruals alone (2026-09-10). A `Query` over the same text was right, which is what made it look like
 // the report's fault.
-std::shared_ptr<ibSubqueryQueryable> BuildUnionStack(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
+std::shared_ptr<ibSubqueryQueryable> BuildUnionStack(const ibQuerySelect& ast, const std::map<ibString, ibValue>& params,
                                                      ibDataQueryBuilder& b, std::vector<OutputColumn>& outSchema,
                                                      ibSubqueryOwner& owner)
 {
@@ -4714,12 +4817,12 @@ std::shared_ptr<ibSubqueryQueryable> BuildUnionStack(const ibQuerySelect& ast, c
 			if (c != nullptr) width++;
 
 		if (width != outSchema.size())
-			ThrowQueryException(0, 0, wxString::Format(
+			ThrowQueryException(0, 0, ibString::Format(
 				_("UNION branch %d selects %u column(s) while the first selects %u - every branch of a "
 				  "union must select the same columns, in the same order"),
 				branchNumber, static_cast<unsigned int>(width), static_cast<unsigned int>(outSchema.size())));
 
-		b.Union(bn, wxEmptyString, /*keepDuplicates*/ u->m_unionAll);
+		b.Union(bn, ibEmptyString, /*keepDuplicates*/ u->m_unionAll);
 	}
 	return b0;
 }
@@ -4757,7 +4860,7 @@ ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result, const std::vector<O
 class ibStatementRowsQueryable : public ibBackendQueryable
 {
 public:
-	ibStatementRowsQueryable(const ibQuerySelect& sel, const std::map<wxString, ibValue>& params,
+	ibStatementRowsQueryable(const ibQuerySelect& sel, const std::map<ibString, ibValue>& params,
 	                         const std::vector<OutputColumn>& schema, const ibMetaData* metaData)
 		: m_sel(std::make_shared<ibQuerySelect>(sel)), m_params(params), m_metaData(metaData)
 	{
@@ -4773,7 +4876,7 @@ public:
 			out.push_back(c.get());
 		return out;
 	}
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
 	{
 		for (const std::shared_ptr<ibTempColumn>& c : m_columns)
 			if (c->GetName().IsSameAs(name, false))
@@ -4791,7 +4894,7 @@ public:
 	bool IsComputedInRam() const override { return true; }
 	ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }
 	const ibMetaData* GetMetaData() const override { return m_metaData; }   // the query's, as a temp table's
-	wxString GetQueryTableName() const override { return wxEmptyString; }
+	ibString GetQueryTableName() const override { return ibEmptyString; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
 
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override
@@ -4804,13 +4907,13 @@ public:
 
 private:
 	std::shared_ptr<const ibQuerySelect>        m_sel;
-	std::map<wxString, ibValue>                 m_params;
+	std::map<ibString, ibValue>                 m_params;
 	const ibMetaData*                           m_metaData = nullptr;
 	std::vector<std::shared_ptr<ibTempColumn>>  m_columns;
 };
 
 std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& sel,
-                                                const std::map<wxString, ibValue>& params,
+                                                const std::map<ibString, ibValue>& params,
                                                 ibSubqueryOwner& owner)
 {
 	// ⭐⭐ A JOIN IS NO LONGER REFUSED HERE EITHER, and the CTE road's own note says why it never
@@ -4868,8 +4971,10 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 	// the list (ibSubqueryQueryable::SetComputedOverRow) and the column is read back by its name. It was
 	// refused here ("cannot be read back"), so the outer query could not filter by a column it had typed.
 	std::vector<ibQueryColumnSelect> overRow;
-	PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
-	StampDeclaredRoles(sel, innerSchema);   // what the select says its fields are, published with them
+	const ibQuerySelectPtr carried = WithSeniorMomentsCarried(sel, innerSources);
+	const ibQuerySelect& read = carried ? *carried : sel;
+	PopulateBuilder(read, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
+	StampDeclaredRoles(read, innerSchema);   // what the select says its fields are, published with them
 	// …and where it also DISTINCTs or groups by one, the statement road reads it whole (ibStatementRowsQueryable)
 	// and the wrapper stands over those rows, published as the statement names them. (No ORDER BY reaches here:
 	// the parser keeps it to a statement.)
@@ -4909,7 +5014,7 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 		ibSubqueryOutput out;
 		out.m_name         = oc.m_name;
 		out.m_col          = oc.m_col;
-		out.m_alias        = oc.m_byAlias ? oc.m_alias : wxString();
+		out.m_alias        = oc.m_byAlias ? oc.m_alias : ibString();
 		out.m_objectPrefix = oc.m_objectPrefix;
 		out.m_type         = oc.m_type;
 		out.m_owned        = oc.m_ownedCol;   // …and its storage, when the schema minted the column
@@ -4946,7 +5051,7 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 //
 // FOR UPDATE is refused beside TOTALS: the lock is the table's own rows, which a declared query does not hold and a
 // nested read does not take — carried down, it would be lost without a word.
-ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::map<wxString, ibValue>& params)
+ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::map<ibString, ibValue>& params)
 {
 	if (ast->m_forUpdate)
 		ThrowQueryException(0, 0, _("FOR UPDATE cannot stand beside TOTALS: lock the rows with a plain query first, "
@@ -4968,11 +5073,11 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 	inner->m_indexBy.clear();
 
 	// Each output published under the name the totals take, and read by it one level up.
-	const wxString rows = wxT("q_rows");
+	const ibString rows = ibT("q_rows");
 	auto outer = std::make_shared<ibQuerySelect>();
 	outer->m_from.m_subquery = inner;
 	outer->m_from.m_alias    = rows;
-	std::vector<std::pair<wxString, wxString>> written;   // (the output's expression as written, its name)
+	std::vector<std::pair<ibString, ibString>> written;   // (the output's expression as written, its name)
 	bool star = ast->m_selectAll;
 	int idx = 0;
 	for (size_t i = 0; i < inner->m_projections.size(); ++i) {
@@ -4981,7 +5086,7 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 			star = true;
 		if (p.m_star || !p.m_expr)
 			continue;
-		const wxString name = OutputNameFor(*ast, ast->m_projections[i], idx++);   // the name the totals take
+		const ibString name = OutputNameFor(*ast, ast->m_projections[i], idx++);   // the name the totals take
 		written.emplace_back(ibRenderQueryExpr(*p.m_expr), name);
 		p.m_alias = name;
 	}
@@ -4999,7 +5104,7 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 		PopulateBuilder(*inner, params, sources, described, schema, /*asSubquery*/true, conditions, &overRow);
 		written.clear();
 		for (const OutputColumn& oc : schema)
-			written.emplace_back(wxString(), oc.m_name);   // no expression of its own: the star wrote it
+			written.emplace_back(ibString(), oc.m_name);   // no expression of its own: the star wrote it
 	}
 	for (const auto& w : written) {
 		ibQueryProjection read;
@@ -5010,12 +5115,12 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 	}
 
 	// The sources' own names, which a path under SELECT * is written against.
-	std::vector<wxString> sourceNames{ ibQuerySourceName(ast->m_from) };
+	std::vector<ibString> sourceNames{ ibQuerySourceName(ast->m_from) };
 	for (const ibQueryAstJoin& j : ast->m_joins)
 		sourceNames.push_back(ibQuerySourceName(j.m_source));
 
 	// Named one level up by the field's own name — the name the totals take, and the only source there is.
-	const auto readUp = [](const ibQueryAstExprPtr& at, const std::vector<wxString>& path) {
+	const auto readUp = [](const ibQueryAstExprPtr& at, const std::vector<ibString>& path) {
 		ibQueryAstExprPtr onto = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
 		onto->m_path = path;
 		onto->m_line = at->m_line;   // the diagnostics point at what was WRITTEN
@@ -5038,22 +5143,22 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 			for (size_t take = e->m_path.size(); take > 0; --take) {
 				ibQueryAstExpr prefix = *e;
 				prefix.m_path.assign(e->m_path.begin(), e->m_path.begin() + static_cast<long>(take));
-				const wxString spelled = ibRenderQueryExpr(prefix);
+				const ibString spelled = ibRenderQueryExpr(prefix);
 				for (const auto& w : written)
 					if (w.first == spelled) {
-						std::vector<wxString> path{ w.second };
+						std::vector<ibString> path{ w.second };
 						path.insert(path.end(), e->m_path.begin() + static_cast<long>(take), e->m_path.end());
 						return readUp(e, path);
 					}
 			}
 			if (star) {   // every field is an output already — named without the source it was written against
 				const bool qualified = e->m_path.size() > 1 && std::any_of(sourceNames.begin(), sourceNames.end(),
-					[&e](const wxString& s) { return s.CmpNoCase(e->m_path.front()) == 0; });
-				return qualified ? readUp(e, std::vector<wxString>(e->m_path.begin() + 1, e->m_path.end())) : e;
+					[&e](const ibString& s) { return s.CmpNoCase(e->m_path.front()) == 0; });
+				return qualified ? readUp(e, std::vector<ibString>(e->m_path.begin() + 1, e->m_path.end())) : e;
 			}
 		}
 		else {
-			const wxString spelled = ibRenderQueryExpr(*e);
+			const ibString spelled = ibRenderQueryExpr(*e);
 			for (const auto& w : written)
 				if (w.first == spelled)
 					return readUp(e, { w.second });
@@ -5063,7 +5168,7 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 			                                           "the fields the query selects"));
 		ibQueryProjection hidden;
 		hidden.m_expr  = e;
-		hidden.m_alias = wxString::Format(wxT("q_carried%d"), carried++);
+		hidden.m_alias = ibString::Format(ibT("q_carried%d"), carried++);
 		inner->m_projections.push_back(hidden);
 		// …ONCE. A field a sort and a level both name (`ORDER BY Account … BY Account HIERARCHY`) was carried twice,
 		// and the declaration published the second copy of a reference under a spelling its body never wrote —
@@ -5083,12 +5188,22 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 		for (ibQueryTotalDim& d : s.m_levels)
 			for (ibQueryTotalField& f : d.m_fields)
 				f.m_expr = ontoOutput(f.m_expr);
+	// A figure's calls read their arguments one level up — the figure's own call, or each one a figure made of figures
+	// holds (`SUM(a) - SUM(b)`). The nodes on the way are copied, so the statement's own tree is left as written.
+	const std::function<ibQueryAstExprPtr(const ibQueryAstExprPtr&)> callsOntoOutput =
+		[&](const ibQueryAstExprPtr& e) -> ibQueryAstExprPtr {
+			if (!e || (e->m_kind == ibQueryAstExprKind::Func && !e->m_arg))
+				return e;
+			ibQueryAstExprPtr onto = std::make_shared<ibQueryAstExpr>(*e);
+			if (e->m_kind == ibQueryAstExprKind::Func)
+				onto->m_arg = ontoOutput(e->m_arg);
+			else
+				ibQueryForEachChild(*onto, [&callsOntoOutput](ibQueryAstExprPtr& child) { child = callsOntoOutput(child); });
+			return onto;
+		};
 	for (const ibQueryTotalAggregate& a : ast->m_totalsAggregates) {
 		ibQueryTotalAggregate onto = a;
-		if (a.m_expr && a.m_expr->m_arg) {
-			onto.m_expr = std::make_shared<ibQueryAstExpr>(*a.m_expr);
-			onto.m_expr->m_arg = ontoOutput(a.m_expr->m_arg);
-		}
+		onto.m_expr = callsOntoOutput(a.m_expr);
 		outer->m_totalsAggregates.push_back(onto);
 	}
 	for (const ibQueryOrderItem& o : ast->m_orderBy) {
@@ -5113,11 +5228,11 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 			    && !p.m_expr->m_over;
 		});
 	if (!star && !groupsItself) {
-		std::vector<std::pair<wxString, wxString>> kept;   // (the source, its field): a period or a key
+		std::vector<std::pair<ibString, ibString>> kept;   // (the source, its field): a period or a key
 		bool folds = false;
 		for (const ibQueryProjection& p : inner->m_projections)
 			folds = folds || (p.m_roleSaid && (p.m_role == ibBalanceRole::Opening || p.m_role == ibBalanceRole::Closing));
-		const auto sort = [&](const wxString& source, const wxString& field, ibBalanceRole role) {
+		const auto sort = [&](const ibString& source, const ibString& field, ibBalanceRole role) {
 			if (role == ibBalanceRole::Opening || role == ibBalanceRole::Closing)
 				folds = true;
 			else if (role == ibBalanceRole::Moment || role == ibBalanceRole::Dimension)
@@ -5127,7 +5242,7 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 		for (const ibQueryAstJoin& j : ast->m_joins)
 			cut.push_back(&j.m_source);
 		for (const ibQuerySource* src : cut) {
-			const wxString source = ibQuerySourceName(*src);
+			const ibString source = ibQuerySourceName(*src);
 			if (src->m_subquery) {
 				std::vector<OutputColumn> schema;
 				ibQueryLowering::DescribeOutput(*src->m_subquery, params, schema);
@@ -5144,8 +5259,8 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 		if (!folds)
 			kept.clear();   // no balance is folded: nothing is kept apart
 		for (const auto& k : kept) {
-			const wxString qualified = k.first + wxT(".") + k.second;
-			const bool read = std::any_of(written.begin(), written.end(), [&](const std::pair<wxString, wxString>& w) {
+			const ibString qualified = k.first + ibT(".") + k.second;
+			const bool read = std::any_of(written.begin(), written.end(), [&](const std::pair<ibString, ibString>& w) {
 				return w.first.CmpNoCase(k.second) == 0 || w.first.CmpNoCase(qualified) == 0;
 			});
 			if (read)
@@ -5171,24 +5286,24 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 // literals are one literal, so there is one format string and one pass. `name` is the declaration's
 // own subject, so it is filled in here and the callsite writes only its reason.
 #define CteDecline(fmt, ...) \
-	do { ibJournalInfo(wxT("query.road"), wxT("nested source '%s' not declared to the server: ") fmt, \
+	do { ibJournalInfo(ibT("query.road"), ibT("nested source '%s' not declared to the server: ") fmt, \
 	                   name, ##__VA_ARGS__); return nullptr; } while (false)
 
 // A NAMED RESULT, DECLARED ON THE READER'S DOOR (the decision is in ResolveFrom — see there).
 std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBuilder& outer,
-	const wxString& given, const ibQuerySelect& sel,
-	const std::map<wxString, ibValue>& params, ibSubqueryOwner& owner)
+	const ibString& given, const ibQuerySelect& sel,
+	const std::map<ibString, ibValue>& params, ibSubqueryOwner& owner)
 {
 	// ⚠ AN ANONYMOUS SOURCE IS NUMBERED ONCE WHAT IT READS IS BUILT (below). Numbered before, a nested source
 	// INSIDE it was numbered from the same count and took the same name — `WITH q_sub0 AS (…), q_sub0 AS (…
 	// FROM q_sub0)`, refused by the engine ("alias Q_SUB0 conflicts"): every composition, once its totals read
 	// its query one level down (2026-09-29).
-	wxString name = given.IsEmpty() ? wxString(wxT("a nested query")) : given;
+	ibString name = given.IsEmpty() ? ibString(ibT("a nested query")) : given;
 
 	// THE ENGINE MUST BE ABLE TO READ ONE. Asked of the connected driver through L2's own question,
 	// never of its dictionary — and a driver that cannot simply sends this back to the rows road.
 	if (!ibQueryComposer::CanDeclareNamedQuery(outer.GetHolder()))
-		CteDecline(wxT("this engine has no WITH"));
+		CteDecline(ibT("this engine has no WITH"));
 
 	// WHAT THE SERVER CANNOT READ FOR US goes back the other way rather than being half-translated:
 	// a named query whose own source is computed in RAM (a register slice, a nested subquery, a temp
@@ -5196,8 +5311,8 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	//
 	// ⚠ ASKED FIRST, BEFORE ANY WORK. A refusal costs nothing when it is the first thing said, and
 	// the rows road resolves the same sources over again after one.
-	if (sel.m_hasTotals)          CteDecline(wxT("it has TOTALS, which is a tree and not a table"));
-	if (!sel.m_unions.empty())    CteDecline(wxT("it has a UNION (the inner door is built as one relation)"));
+	if (sel.m_hasTotals)          CteDecline(ibT("it has TOTALS, which is a tree and not a table"));
+	if (!sel.m_unions.empty())    CteDecline(ibT("it has a UNION (the inner door is built as one relation)"));
 
 	// 🛑⭐⭐ AND A FOLD, BECAUSE THIS ROAD DOES NOT WRITE ONE. The body of a declaration is rendered by
 	// BuildPageIR — an ordinary paged READ, `SELECT * FROM <table> ORDER BY <key>` — and an aggregate
@@ -5215,11 +5330,11 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// on the server. Teaching this road to render a fold (BuildAggregateQuery + its own projection,
 	// instead of BuildPageIR) is the work that would win it back — worth doing, and not to be done
 	// blind: composition renders EVERY report's source as a nested query, so this road carries them.
-	if (!sel.m_groupBy.empty())   CteDecline(wxT("it has a GROUP BY, and a declaration's body is written as a plain read"));
-	if (sel.m_having)             CteDecline(wxT("it has a HAVING, which only a folded body could apply"));
+	if (!sel.m_groupBy.empty())   CteDecline(ibT("it has a GROUP BY, and a declaration's body is written as a plain read"));
+	if (sel.m_having)             CteDecline(ibT("it has a HAVING, which only a folded body could apply"));
 	for (const ibQueryProjection& p : sel.m_projections)
 		if (ibQueryMentionsAggregate(p.m_expr))
-			CteDecline(wxT("it projects an aggregate, and a declaration's body is written as a plain read"));
+			CteDecline(ibT("it projects an aggregate, and a declaration's body is written as a plain read"));
 
 	// ⭐ A JOIN IS NO LONGER REFUSED HERE, because the refusal was about the door and not about the
 	// query: this road built its inner door single-source, so a joined select had nowhere to put the
@@ -5239,8 +5354,8 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// body from an empty page request and dropped `m_topCount` on the floor — not of `WITH`, which
 	// takes a limited body in every engine that has it. The body now carries its own limit
 	// (AttachNamedQueries, both roads), so the declaration says what the author wrote.
-	if (sel.m_forUpdate)          CteDecline(wxT("it has FOR UPDATE, and a declaration holds nothing"));
-	if (!sel.m_intoTemp.IsEmpty()) CteDecline(wxT("it has INTO, which materialises rather than declares"));
+	if (sel.m_forUpdate)          CteDecline(ibT("it has FOR UPDATE, and a declaration holds nothing"));
+	if (!sel.m_intoTemp.IsEmpty()) CteDecline(ibT("it has INTO, which materialises rather than declares"));
 
 	ibDataQueryBuilder inner;
 	// SELECT ALLOWED travels DOWN, to the door that reads the restricted source. It is the quiet form
@@ -5267,8 +5382,10 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// here, the rows road resolves it the same way and reports it there if it is one.
 	try {
 		BuildSourceTree(sel, params, owner, innerSources, inner, &innerSourceConditions);
-		PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
-		StampDeclaredRoles(sel, innerSchema);   // what the select says its fields are, declared with them
+		const ibQuerySelectPtr carried = WithSeniorMomentsCarried(sel, innerSources);
+		const ibQuerySelect& read = carried ? *carried : sel;
+		PopulateBuilder(read, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
+		StampDeclaredRoles(read, innerSchema);   // what the select says its fields are, declared with them
 		// ⭐ AND THE AUTHOR'S LIMIT IS PUT ON THE DOOR, because a declaration has no terminal to put it
 		// on. An ordinary read carries TOP in its PAGE REQUEST — the limit is asked for at the moment
 		// the rows are fetched — and a declared query is never fetched: it is written into a `WITH` and
@@ -5282,28 +5399,28 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		// ⚠ THE DESCRIPTION IS DATA, never the format — a message carrying a stray `%` would be read
 		// as a conversion and print whatever happened to be next (CLAUDE.md, the same rule wxLogError
 		// follows).
-		CteDecline(wxT("%s"), err.GetErrorDescription());
+		CteDecline(ibT("%s"), err.GetErrorDescription());
 	}
 	// ⭐ AN OUTPUT ANSWERED OVER THE FINISHED ROW (a CAST re-typing, PRESENTATION, VALUETYPE) is ASKED of the build
 	// the way every other reader of the projection asks it, not thrown out of it: the throw was this road's alone,
 	// caught one line up on every such nested query, and it stood in the journal as an exception each time.
 	if (!overRow.empty())
-		CteDecline(wxT("its output '%s' is answered over the finished row, which a declaration cannot write"),
+		CteDecline(ibT("its output '%s' is answered over the finished row, which a declaration cannot write"),
 		           overRow.front().m_alias);
 	if (innerSources.empty() || innerSources.front().m_q == nullptr)
-		CteDecline(wxT("its own source did not resolve"));
+		CteDecline(ibT("its own source did not resolve"));
 	if (given.IsEmpty())   // numbered now, after every source inside it took its number (see the top)
-		name = wxString::Format(wxT("q_sub%d"), static_cast<int>(owner.size()));
+		name = ibString::Format(ibT("q_sub%d"), static_cast<int>(owner.size()));
 	for (const ibSourceBinding& src : innerSources)
 		if (src.m_q != nullptr && src.m_q->IsComputedInRam())
-			CteDecline(wxT("its source '%s' is computed in RAM"), src.m_q->GetQueryName());
+			CteDecline(ibT("its source '%s' is computed in RAM"), src.m_q->GetQueryName());
 
 	// …AND WOULD IT RENDER? Asked of the tier that writes the SQL, because that is where the answer
 	// lives: one source always renders, a join renders when its tree co-locates. Asked HERE, while
 	// there is still a road back — after `outer.With(...)` the statement would name a table nothing
 	// wrote.
 	if (!ibDbTableProvider::CanDeclareAsNamedQuery(inner))
-		CteDecline(wxT("its source tree has no single server-side form (a join that does not co-locate)"));
+		CteDecline(ibT("its source tree has no single server-side form (a join that does not co-locate)"));
 
 	// ⚠ A DOT-WALKED OUTPUT IS FINE HERE, and this is worth saying because it was refused outright
 	// for one build. The declaration publishes it and AttachNamedQueries writes it — BuildPageIR
@@ -5329,7 +5446,7 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		innerKeys = innerSources[0].m_q->GetPrimaryKeyColumns();
 	// Every physical field this declaration actually writes, so the synthetic columns below can be
 	// asked the only question that decides them: are the fields you are made of in here?
-	std::vector<wxString> writtenFields;
+	std::vector<ibString> writtenFields;
 	std::vector<const OutputColumn*> synthetic;
 	for (const OutputColumn& oc : innerSchema) {
 		// Nothing to write into a SELECT means nothing to publish.
@@ -5424,7 +5541,7 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		// What this output really puts in the statement — the spread of the column behind it. A
 		// repeated alias writes the SAME fields under its own name, so it adds nothing here.
 		if (oc.m_col != nullptr && !repeated && !spelledByAlias)
-			for (const wxString& f : ColumnFieldNames(oc.m_col))
+			for (const ibString& f : ColumnFieldNames(oc.m_col))
 				writtenFields.push_back(f);
 	}
 
@@ -5451,20 +5568,20 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		// what the column calls itself; an output that renamed it (`PointInTime AS Moment`) would be
 		// published under a name it does not answer to.
 		if (oc->m_col == nullptr || !oc->m_name.IsSameAs(oc->m_col->GetName(), false))
-			CteDecline(wxT("it renames '%s', a column read out of others — a declaration publishes such a column under its own name or not at all"),
+			CteDecline(ibT("it renames '%s', a column read out of others — a declaration publishes such a column under its own name or not at all"),
 				oc->m_name);
-		const std::vector<wxString> parts = ColumnFieldNames(oc->m_col);
+		const std::vector<ibString> parts = ColumnFieldNames(oc->m_col);
 		if (parts.empty())
-			CteDecline(wxT("'%s' is read out of other columns and names none of them"), oc->m_name);
+			CteDecline(ibT("'%s' is read out of other columns and names none of them"), oc->m_name);
 		// …AND ITS PARTS MUST BE IN THE STATEMENT, each under the name the read looks for. In a JOIN
 		// every output is written under its ALIAS (two sources may carry one physical field), so the
 		// parts are there under other names and this column cannot be read from outside.
-		const bool allWritten = std::all_of(parts.begin(), parts.end(), [&](const wxString& p) {
+		const bool allWritten = std::all_of(parts.begin(), parts.end(), [&](const ibString& p) {
 			return std::any_of(writtenFields.begin(), writtenFields.end(),
-				[&](const wxString& w) { return w.IsSameAs(p, false); });
+				[&](const ibString& w) { return w.IsSameAs(p, false); });
 		});
 		if (!allWritten)
-			CteDecline(wxT("'%s' is read out of columns this declaration writes under other names"), oc->m_name);
+			CteDecline(ibT("'%s' is read out of columns this declaration writes under other names"), oc->m_name);
 		if (std::any_of(fields.begin(), fields.end(), [&](const ibCteQueryable::Field& f) {
 				return f.m_name.IsSameAs(oc->m_name, false); }))
 			continue;
@@ -5475,7 +5592,7 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	}
 
 	if (fields.empty())
-		CteDecline(wxT("it publishes no fields to be read by name"));
+		CteDecline(ibT("it publishes no fields to be read by name"));
 
 	// ⚠ AND EVERY PUBLISHED NAME MUST BE ITS OWN. A declaration is read BY NAME, so two outputs called
 	// the same thing are not a preference — the engine refuses the statement outright ("column X was
@@ -5488,9 +5605,9 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	for (size_t i = 0; i < fields.size(); ++i)
 		for (size_t j = i + 1; j < fields.size(); ++j)
 			if (fields[i].m_name.IsSameAs(fields[j].m_name, false))
-				CteDecline(wxT("two outputs publish the same name '%s'"), fields[i].m_name);
+				CteDecline(ibT("two outputs publish the same name '%s'"), fields[i].m_name);
 
-	ibJournalInfo(wxT("query.road"), wxT("SERVER: nested source declared as WITH %s (%u fields)"),
+	ibJournalInfo(ibT("query.road"), ibT("SERVER: nested source declared as WITH %s (%u fields)"),
 	              name, static_cast<unsigned>(fields.size()));
 	outer.With(name, inner);   // …and the declaration lands on the READER's statement
 
@@ -5518,7 +5635,7 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 // UNION — every branch (the first SELECT's core + each m_unions branch) is wrapped as a queryable and
 // stacked vertically; the trailing ORDER BY applies to the whole. The composer realizes the stack
 // (RAM union today, co-located where possible). Columns match BY NAME across branches.
-ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
+ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<ibString, ibValue>& params,
                             std::vector<OutputColumn>& outSchema, ibSubqueryOwner& owner)
 {
 	// First branch = ast's CORE (strip the whole-union ORDER / TOTALS / the union list itself).
@@ -5535,7 +5652,7 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, 
 	const std::shared_ptr<ibSubqueryQueryable> b0 = BuildUnionStack(ast, params, b, outSchema, owner);
 
 	// ORDER BY on the whole union — resolve against the first branch's columns (by name).
-	const std::vector<ibSourceBinding> usrc{ { wxEmptyString, b0.get() } };
+	const std::vector<ibSourceBinding> usrc{ { ibEmptyString, b0.get() } };
 	std::vector<std::pair<const ibBackendQueryColumn*, bool>> order;
 	bool walks = false;
 	for (const ibQueryOrderItem& o : ast.m_orderBy) {
@@ -5571,7 +5688,7 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, 
 // hash/theta, a computed side -> RAM theta), or an auto-join by reference (no ON). Shared by the read
 // (ExecuteImpl) and the totals (ExecuteTotals) single-/JOIN-source paths, so every JOIN feature lives in ONE
 // place. The caller has already taken the UNION path (its own vertical stack) before calling this.
-void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
+void BuildSourceTree(const ibQuerySelect& ast, const std::map<ibString, ibValue>& params,
                      ibSubqueryOwner& owner, std::vector<ibSourceBinding>& sources, ibDataQueryBuilder& b,
                      std::vector<ibQueryAstExprPtr>* sourceConditions)
 {
@@ -5649,13 +5766,13 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			if (j.m_source.m_alias.empty())
 				ThrowQueryException(0, 0, _("a reference-path JOIN (alias.field) needs an explicit alias (AS)"));
 			ExpandRefJoinAlias(b, sources, refRoot,
-				std::vector<wxString>(j.m_source.m_name.begin() + 1, j.m_source.m_name.end()),
+				std::vector<ibString>(j.m_source.m_name.begin() + 1, j.m_source.m_name.end()),
 				j.m_source.m_alias, kind, refJoinSeq);
 			continue;
 		}
 
 		const std::shared_ptr<const ibBackendQueryable> resolved = ResolveFrom(j.m_source, params, owner, sourceConditions, declareOn, &ast);
-		const wxString alias = ibQuerySourceName(j.m_source);   // same one name — see the FROM above
+		const ibString alias = ibQuerySourceName(j.m_source);   // same one name — see the FROM above
 		// ⚠ ASKED OF THE WRITTEN ALIAS, not of the name it falls back to. This rule is about an author
 		// writing one `AS` twice; two unaliased reads of the same table are a different (and older)
 		// shape, and refusing them here would be this change picking up a quarrel that is not its own.
@@ -5891,7 +6008,7 @@ void CollectColumns(const ibQueryAstExprPtr& e, std::vector<const ibQueryAstExpr
 	ibQueryForEachOperand(*e, [&out](const ibQueryAstExprPtr& child) { CollectColumns(child, out); });
 }
 
-void CheckSelectNames(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params);
+void CheckSelectNames(const ibQuerySelect& ast, const std::map<ibString, ibValue>& params);
 
 // The sources of one select, resolved for CHECKING. Anything that cannot be resolved without
 // RUNNING — a package's temp table, a nested query — makes this select unverifiable and the check
@@ -5928,7 +6045,7 @@ ibSourceBinding Opaque(const ibQuerySource& source)
 // `tolerateOpaque` keeps the unverifiable source IN THE LIST instead, with no queryable behind it:
 // its position is preserved (the join rules read sources by position), its columns are left alone,
 // and every other source is checked exactly as strictly as before.
-bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
+bool BuildCheckSources(const ibQuerySelect& ast, const std::map<ibString, ibValue>& params,
                        std::vector<ibSourceBinding>& out, bool reportMissing = true,
                        bool tolerateOpaque = false)
 {
@@ -6015,93 +6132,8 @@ bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValu
 // WHICH PROJECTIONS ARE NEITHER A GROUP KEY NOR INSIDE AN AGGREGATE — the rule itself, over sources
 // that are already resolved. Its two readings (a refusal, and the work still to do) are the public
 // entries; this is what both of them ask. See ibQueryLowering::UngroupedProjections.
-// ⭐ ONE WALK, AND IT ANSWERS BOTH HALVES: which columns a projection FOLDS, and which it reads
-// FREE. A column under an aggregate is accounted for; a column outside every aggregate has to be a
-// group key. That is the whole grouping rule, and it is one question about one tree.
-//
-// ⚠ IT IS NOT A QUESTION ABOUT THE TOP OF THE PROJECTION. Both halves used to look only at what a
-// projection IS — a bare Column, or a Func — which is right for `Qty` and for `SUM(Qty)` and wrong
-// for everything in between. `SUM(Price * Qty) / COUNT(*) * 1.2` is neither: it belongs in no list
-// the constructor shows, and both collectors skipped it whole. So the columns inside it were held to
-// no rule at all — a free `Price` beside a folded `Qty` in one expression, and the check silent on
-// both. An expression is a TREE; the rule reads it as one.
-void CollectFoldedAndFree(const ibQueryAstExprPtr& e, bool insideAggregate,
-                          std::vector<const ibQueryAstExpr*>& folded,
-                          std::vector<const ibQueryAstExpr*>& free,
-                          const std::vector<wxString>* groupedExprs = nullptr)
-{
-	if (!e)
-		return;
-	if (e->m_kind == ibQueryAstExprKind::Column) {
-		(insideAggregate ? folded : free).push_back(e.get());
-		return;
-	}
-	// ⭐ A SUBTREE THAT IS ITSELF A GROUP KEY reads nothing free. `SELECT BEGINOFPERIOD(Date, Month) AS M,
-	// COUNT(*) … GROUP BY BEGINOFPERIOD(Date, Month)` groups by the month, and `Date` inside it is fixed
-	// for the group by that key — the execution matches the two as TEXT (the GROUP BY branch of
-	// PopulateBuilder), so the check does too. Refused here, it was the check against the engine, and the
-	// constructor's "complete the grouping" would have added the raw date — a different query.
-	if (!insideAggregate && groupedExprs != nullptr && IsComputedExprAst(*e)) {
-		const wxString written = ibRenderQueryExpr(*e);
-		for (const wxString& key : *groupedExprs)
-			if (key.IsSameAs(written, false))
-				return;
-	}
-	// A GROUP aggregate folds everything beneath it, however deep. A WINDOW aggregate does not fold
-	// the SELECT: it keeps one answer per input row, so its argument is free with respect to any
-	// ordinary GROUP BY beside it. Treating SUM(x) OVER (...) as a group aggregate made an otherwise
-	// non-grouping window query demand every plain projection in GROUP BY.
-	const bool fold = insideAggregate
-		|| (e->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(e->m_func) && !e->m_over);
-
-	ibQueryForEachOperand(*e, [&](const ibQueryAstExprPtr& child) {
-		CollectFoldedAndFree(child, fold, folded, free, groupedExprs);
-	});
-	// Window keys live beside the ordinary operand tree. In a SELECT that also has a GROUP BY they
-	// must obey the same rule as the window argument: the window runs over grouped rows, so a raw key
-	// cannot escape grouping merely because it is written inside OVER (...).
-	if (e->m_over) {
-		for (const ibQueryAstExprPtr& partition : e->m_over->m_partitionBy)
-			CollectFoldedAndFree(partition, insideAggregate, folded, free, groupedExprs);
-		for (const ibQueryOrderItem& order : e->m_over->m_orderBy)
-			CollectFoldedAndFree(order.m_expr, insideAggregate, folded, free, groupedExprs);
-	}
-}
-
-// THE OTHER HALF OF THE SAME RULE: the columns that live INSIDE an aggregate.
-//
-// A column being folded is already accounted for — it is not "missing from GROUP BY", and it must
-// not be ADDED to it either. `SELECT SUM(Parent) ... GROUP BY Parent` folds each group over a single
-// row, so the sum is the value itself: legal to write, and never what anybody meant. The window let
-// exactly that happen — the same field standing in the grouping list and in the aggregates list at
-// once — because nothing anywhere said the two lists are disjoint.
-//
-// One collector, two readings, like CollectUngrouped beside it: the check reads it as a refusal, the
-// constructor reads it as "do not offer this one".
-// A COLUMN NODE STANDING ON ITS OWN — the caller gets a path it can resolve and report without
-// holding the projection alive.
-ibQueryAstExprPtr ColumnCopy(const ibQueryAstExpr& column)
-{
-	ibQueryAstExprPtr copy = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
-	copy->m_path = column.m_path;
-	copy->m_line = column.m_line;
-	copy->m_col  = column.m_col;
-	return copy;
-}
-
-std::vector<ibQueryAstExprPtr> CollectAggregated(const ibQuerySelect& ast)
-{
-	std::vector<ibQueryAstExprPtr> out;
-	for (const ibQueryProjection& projection : ast.m_projections) {
-		std::vector<const ibQueryAstExpr*> folded, free;
-		CollectFoldedAndFree(projection.m_expr, false, folded, free);
-		for (const ibQueryAstExpr* column : folded)
-			if (column != nullptr && !column->m_path.empty())
-				out.push_back(ColumnCopy(*column));
-	}
-	return out;
-}
-
+// The walk is the core's (ibQueryCollectFoldedAndFree, queryRewrite.h): which columns a projection folds and which it
+// reads free, one question about one tree — the constructor's windows ask it too.
 std::vector<ibQueryAstExprPtr> CollectUngrouped(const ibQuerySelect& ast,
                                                 const std::vector<ibSourceBinding>& sources)
 {
@@ -6118,8 +6150,8 @@ std::vector<ibQueryAstExprPtr> CollectUngrouped(const ibQuerySelect& ast,
 	// itself; for `SUM(Qty)` there are none; for `SUM(Qty) / Price` it is Price alone — exactly the
 	// field that has to be a group key, and the one the old shape never looked at.
 	bool grouping = !ast.m_groupBy.empty();
-	// The COMPUTED keys, in the text the execution matches them by (see CollectFoldedAndFree).
-	std::vector<wxString> groupedExprs;
+	// The COMPUTED keys, in the text the execution matches them by (see ibQueryCollectFoldedAndFree).
+	std::vector<ibString> groupedExprs;
 	for (const ibQueryAstExprPtr& key : ast.m_groupBy)
 		if (key && IsComputedExprAst(*key))
 			groupedExprs.push_back(ibRenderQueryExpr(*key));
@@ -6127,7 +6159,7 @@ std::vector<ibQueryAstExprPtr> CollectUngrouped(const ibQuerySelect& ast,
 	freePerProjection.reserve(ast.m_projections.size());
 	for (const ibQueryProjection& projection : ast.m_projections) {
 		std::vector<const ibQueryAstExpr*> folded, free;
-		CollectFoldedAndFree(projection.m_expr, false, folded, free, &groupedExprs);
+		ibQueryCollectFoldedAndFree(projection.m_expr, false, folded, free, &groupedExprs);
 		if (!folded.empty())
 			grouping = true;
 		freePerProjection.push_back(std::move(free));
@@ -6180,7 +6212,7 @@ std::vector<ibQueryAstExprPtr> CollectUngrouped(const ibQuerySelect& ast,
 				grouped = same;
 			}
 			if (!grouped)
-				out.push_back(ColumnCopy(*column));
+				out.push_back(ibQueryColumnCopy(*column));
 		}
 	}
 	return out;
@@ -6195,7 +6227,7 @@ void RefuseUngrouped(const ibQuerySelect& ast, const std::vector<ibSourceBinding
 	if (ungrouped.empty())
 		return;
 	const ibQueryAstExprPtr& first = ungrouped.front();
-	ThrowQueryException(first->m_line, first->m_col, wxString::Format(
+	ThrowQueryException(first->m_line, first->m_col, ibString::Format(
 		_("'%s' is neither grouped nor aggregated: add it to GROUP BY, or wrap it in an aggregate"),
 		first->m_path.back()));
 }
@@ -6280,7 +6312,7 @@ void CheckJoinsAreConsistent(const ibQuerySelect& ast, const std::vector<ibSourc
 			// see the difference — both look like a table of the same query — so the ORDER is what
 			// makes two tables compatible here, and the engine is the one that knows it.
 			if (root > bound)
-				ThrowQueryException(join.m_on->m_line, join.m_on->m_col, wxString::Format(
+				ThrowQueryException(join.m_on->m_line, join.m_on->m_col, ibString::Format(
 					_("the link on '%s' refers to '%s', which this query reads AFTER it: a link can "
 					  "only relate tables that are already read — move the table earlier, or write "
 					  "this as a condition"),
@@ -6295,13 +6327,13 @@ void CheckJoinsAreConsistent(const ibQuerySelect& ast, const std::vector<ibSourc
 			continue;   // nothing resolved — say nothing rather than guess
 
 		if (!mentionsJoined)
-			ThrowQueryException(join.m_on->m_line, join.m_on->m_col, wxString::Format(
+			ThrowQueryException(join.m_on->m_line, join.m_on->m_col, ibString::Format(
 				_("this link says nothing about '%s': a condition that does not relate the joined "
 				  "table is a filter, and belongs in the conditions"),
 				ibQuerySourceName(join.m_source)));
 
 		if (!mentionsOther)
-			ThrowQueryException(join.m_on->m_line, join.m_on->m_col, wxString::Format(
+			ThrowQueryException(join.m_on->m_line, join.m_on->m_col, ibString::Format(
 				_("'%s' is linked to itself: a link relates TWO tables, so each side has to stand "
 				  "on a different one"),
 				ibQuerySourceName(join.m_source)));
@@ -6333,38 +6365,38 @@ void CheckJoinsAreConsistent(const ibQuerySelect& ast, const std::vector<ibSourc
 // qualified by the separator for the levels that sit on one.
 void CheckTotalsScopeNames(const ibQuerySelect& ast)
 {
-	std::vector<wxString> known;
-	const auto nameOf = [](const ibQueryTotalDim& level) -> wxString {
+	std::vector<ibString> known;
+	const auto nameOf = [](const ibQueryTotalDim& level) -> ibString {
 		if (!level.m_alias.IsEmpty())
 			return level.m_alias;
 		const ibQueryTotalField* head = level.Head();
 		return head != nullptr && head->m_expr != nullptr && !head->m_expr->m_path.empty()
-			? head->m_expr->m_path.back() : wxString();
+			? head->m_expr->m_path.back() : ibString();
 	};
 	for (const ibQueryTotalDim& level : ast.m_totalsBy)
-		if (const wxString name = nameOf(level); !name.IsEmpty())
+		if (const ibString name = nameOf(level); !name.IsEmpty())
 			known.push_back(name);
 	for (const ibQueryTotalSplit& node : ast.m_totalsSplits)
 		for (const ibQueryTotalDim& level : node.m_levels) {
-			const wxString name = nameOf(level);
+			const ibString name = nameOf(level);
 			if (name.IsEmpty())
 				continue;
 			known.push_back(name);
 			if (!node.m_name.IsEmpty())
-				known.push_back(node.m_name + wxT(".") + name);
+				known.push_back(node.m_name + ibT(".") + name);
 		}
 
 	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates) {
 		if (resource.m_scope.IsEmpty())
 			continue;
-		wxStringTokenizer names(resource.m_scope, wxT(","));
+		ibStringTokenizer names(resource.m_scope, ibT(","));
 		while (names.HasMoreTokens()) {
-			wxString one = names.GetNextToken();
+			ibString one = names.GetNextToken();
 			one.Trim(true).Trim(false);
 			if (one.IsEmpty())
 				continue;
 			bool found = false;
-			for (const wxString& had : known)
+			for (const ibString& had : known)
 				if (had.IsSameAs(one, false)) { found = true; break; }
 			if (!found)
 				ThrowQueryException(0, 0,
@@ -6379,7 +6411,7 @@ void CheckTotalsNameSelectedFields(const ibQuerySelect& ast)
 	if (ast.m_totalsAggregates.empty() || ast.m_selectAll)
 		return;
 
-	std::map<wxString, const ibQueryProjection*, ibNoCaseLess> byOutputName;
+	std::map<ibString, const ibQueryProjection*, ibNoCaseLess> byOutputName;
 	{
 		int idx = 0;
 		for (const ibQueryProjection& p : ast.m_projections) {
@@ -6405,24 +6437,32 @@ void CheckTotalsNameSelectedFields(const ibQuerySelect& ast)
 			if (p.m_expr->m_path.size() > expr->m_path.size())
 				continue;
 			if (std::equal(p.m_expr->m_path.begin(), p.m_expr->m_path.end(), expr->m_path.begin(),
-			               [](const wxString& a, const wxString& b) { return a.IsSameAs(b, false); }))
+			               [](const ibString& a, const ibString& b) { return a.IsSameAs(b, false); }))
 				return true;                                // spelled the way the SELECT spelled it
 		}
 		return false;
 	};
 
-	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates) {
-		const ibQueryAstExprPtr& agg = resource.m_expr;
-		if (!agg || agg->m_kind != ibQueryAstExprKind::Func || agg->m_star || !agg->m_arg)
-			continue;
+	// Every call of a figure — the figure itself, or each one a figure made of figures holds (`SUM(a) - SUM(b)`).
+	const std::function<void(const ibQueryAstExprPtr&)> check = [&](const ibQueryAstExprPtr& agg) {
+		if (!agg)
+			return;
+		if (agg->m_kind != ibQueryAstExprKind::Func) {
+			ibQueryForEachChild(*agg, check);
+			return;
+		}
+		if (agg->m_star || !agg->m_arg)
+			return;
 		if (!claimed(agg->m_arg))
 			ThrowQueryException(agg->m_arg->m_line, agg->m_arg->m_col,
 				_("TOTALS aggregates \"%s\", which the selection does not carry: add it to SELECT and total over it there"),
 				ibRenderQueryExpr(*agg->m_arg));
-	}
+	};
+	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates)
+		check(resource.m_expr);
 }
 
-void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString, ibValue>& params)
+void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<ibString, ibValue>& params)
 {
 	// ⭐ JUDGE WHAT WILL RUN, NOT WHAT WAS TYPED. The execution reorders a run of INNER joins so a
 	// link may name a table added after it (ibQueryRewrite::ReorderJoins — an OUTER join never moves,
@@ -6501,10 +6541,10 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 				CollectColumns(projection.m_expr, columns);
 			for (const ibQueryAstExpr* column : columns)
 				if (column != nullptr && column->m_path.size() >= 2) {
-					wxString field;
+					ibString field;
 					for (size_t k = 0; k < column->m_path.size(); ++k)
-						field += (k > 0 ? wxT(".") : wxT("")) + column->m_path[k];
-					ThrowQueryException(column->m_line, column->m_col, wxString::Format(
+						field += (k > 0 ? ibT(".") : ibT("")) + column->m_path[k];
+					ThrowQueryException(column->m_line, column->m_col, ibString::Format(
 						_("this query reads no table, yet '%s' is selected from one: remove the field, "
 						  "or add '%s' to the tables"), field, column->m_path[0]));
 				}
@@ -6556,37 +6596,11 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 	for (const ibQueryOrderItem& item : ast.m_orderBy)
 		CollectColumns(item.m_expr, ordering);
 	// THE SAME RESOLVER THE EXECUTION USES. Its words are the ones the user sees — there is no
-	// second definition here of what a known field is.
-	// ⚠ A COLUMN THIS CHECK CANNOT ATTRIBUTE TO A VERIFIABLE SOURCE IS LEFT ALONE. With an opaque
-	// source in the query (a nested select), a name it does not recognise may perfectly well be one of
-	// THAT table's columns — inventing an error about it would be the old blanket silence's mistake
-	// made in the other direction. Everything that DOES land on a source this check knows is checked.
-	bool anyOpaque = false;
-	for (const ibSourceBinding& binding : sources)
-		if (binding.m_q == nullptr)
-			anyOpaque = true;
-
-	const auto checkable = [&sources, anyOpaque](const ibQueryAstExpr& column) {
-		if (!anyOpaque)
-			return true;   // nothing to be uncertain about
-		if (column.m_path.empty())
-			return false;
-		// Qualified: the source it names decides — known table, checked; opaque one, silent.
-		for (const ibSourceBinding& binding : sources)
-			if (!binding.m_alias.IsEmpty() && binding.m_alias.IsSameAs(column.m_path[0], false))
-				return binding.m_q != nullptr;
-		// Unqualified: checked only if a source this check KNOWS owns it. Otherwise it may be the
-		// opaque table's, and nothing can be said.
-		for (const ibSourceBinding& binding : sources)
-			if (binding.m_q != nullptr && binding.m_q->ResolveColumnByName(column.m_path[0]) != nullptr)
-				return true;
-		return false;
-	};
-
+	// second definition here of what a known field is. A column of a source this check cannot see into
+	// (a nested select) is left alone by the resolver itself (ResolvePath), for this loop and every
+	// question below alike.
 	for (const ibQueryAstExpr* column : strict) {
 		if (column == nullptr || column->m_path.empty())
-			continue;
-		if (!checkable(*column))
 			continue;
 		ResolvePath(sources, *column);   // raises "unknown attribute" / "ambiguous attribute"
 	}
@@ -6594,9 +6608,9 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 	// ⚠ ASKED, NOT RESPELLED. This is the gate that refuses duplicate output names, so the name it
 	// compares MUST be the name everything else uses — a second spelling here would refuse queries
 	// the constructor generates, or pass ones it should refuse, and only when the two drifted.
-	std::vector<wxString> outputs;
+	std::vector<ibString> outputs;
 	for (const ibQueryProjection& projection : ast.m_projections) {
-		const wxString name = ibQueryOutputName(projection);
+		const ibString name = ibQueryOutputName(projection);
 		if (!name.IsEmpty())
 			outputs.push_back(name);
 	}
@@ -6613,7 +6627,7 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 	for (size_t i = 0; i < outputs.size(); ++i)
 		for (size_t k = i + 1; k < outputs.size(); ++k)
 			if (!outputs[i].IsEmpty() && outputs[i].IsSameAs(outputs[k], false))
-				ThrowQueryException(0, 0, wxString::Format(
+				ThrowQueryException(0, 0, ibString::Format(
 					_("two output fields are called '%s': give one of them a different alias"), outputs[i]));
 
 	for (const ibQueryAstExpr* column : ordering) {
@@ -6621,9 +6635,9 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 			continue;
 		bool namesAnOutput = false;
 		if (column->m_path.size() == 1)
-			for (const wxString& name : outputs)
+			for (const ibString& name : outputs)
 				if (name.IsSameAs(column->m_path[0], false)) { namesAnOutput = true; break; }
-		if (!namesAnOutput && checkable(*column))
+		if (!namesAnOutput)
 			ResolvePath(sources, *column);
 	}
 
@@ -6658,10 +6672,10 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 		// ⚠ THE SAME LIST THE CONSTRUCTOR OFFERS. Read here as a refusal, read there as what to put
 		// in the dropdown — one answer, so a person is never shown a choice their engine rejects.
 		const std::vector<ibQueryKeyword> allowed =
-			ibQueryLowering::AggregatesFor(argCols.back()->GetTypeDesc());
+			ibQueryAggregatesFor(argCols.back()->GetTypeDesc());
 		if (std::find(allowed.begin(), allowed.end(), expr->m_func) == allowed.end()) {
 			const bool sumLike = expr->m_func == ibQueryKeyword::Sum || expr->m_func == ibQueryKeyword::Avg;
-			ThrowQueryException(expr->m_line, expr->m_col, wxString::Format(
+			ThrowQueryException(expr->m_line, expr->m_col, ibString::Format(
 				_("%s cannot be taken over '%s': the field is not %s"),
 				ibQueryKeywordText(expr->m_func), expr->m_arg->m_path.back(),
 				sumLike ? _("a number") : _("an ordered value")));
@@ -6675,7 +6689,7 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 	// doing it inside the pairing loop cost (folded × keys) walks of the same two paths — and this
 	// runs on every check, which is every keystroke in the constructor.
 	{
-		const std::vector<ibQueryAstExprPtr> foldedList = CollectAggregated(ast);
+		const std::vector<ibQueryAstExprPtr> foldedList = ibQueryAggregatedColumns(ast);
 		std::vector<std::vector<const ibBackendQueryColumn*>> keyCols;
 		keyCols.reserve(ast.m_groupBy.size());
 		for (const ibQueryAstExprPtr& key : ast.m_groupBy)
@@ -6703,7 +6717,7 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 				// SAME COLUMN, whichever way it is written — the resolved leaf, as everywhere else.
 				if (keyCols[i].empty() || keyCols[i] != foldedCols)
 					continue;
-				ThrowQueryException(ast.m_groupBy[i]->m_line, ast.m_groupBy[i]->m_col, wxString::Format(
+				ThrowQueryException(ast.m_groupBy[i]->m_line, ast.m_groupBy[i]->m_col, ibString::Format(
 					_("'%s' is already aggregated, so it cannot also be a grouping field"),
 					ast.m_groupBy[i]->m_path.back()));
 			}
@@ -6729,7 +6743,7 @@ bool StillResolves(const std::vector<ibSourceBinding>& sources, const ibQueryAst
 	return true;
 }
 
-int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
+int PruneSelect(ibQuerySelect& ast, const std::map<ibString, ibValue>& params)
 {
 	int dropped = 0;
 	for (const ibQuerySelectPtr& branch : ast.m_unions)
@@ -6741,31 +6755,30 @@ int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
 
 	auto gone = [&](bool resolves) { if (!resolves) ++dropped; return !resolves; };
 
-	ast.m_projections.erase(std::remove_if(ast.m_projections.begin(), ast.m_projections.end(),
-		[&](const ibQueryProjection& p) { return gone(StillResolves(sources, p.m_expr)); }),
-		ast.m_projections.end());
+	std::erase_if(ast.m_projections,
+		[&](const ibQueryProjection& p) { return gone(StillResolves(sources, p.m_expr)); });
 
-	ast.m_groupBy.erase(std::remove_if(ast.m_groupBy.begin(), ast.m_groupBy.end(),
-		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); }), ast.m_groupBy.end());
+	std::erase_if(ast.m_groupBy,
+		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); });
 
-	ast.m_orderBy.erase(std::remove_if(ast.m_orderBy.begin(), ast.m_orderBy.end(),
-		[&](const ibQueryOrderItem& o) { return gone(StillResolves(sources, SortTargetOf(ast, o.m_expr))); }), ast.m_orderBy.end());
+	std::erase_if(ast.m_orderBy,
+		[&](const ibQueryOrderItem& o) { return gone(StillResolves(sources, SortTargetOf(ast, o.m_expr))); });
 
-	ast.m_indexBy.erase(std::remove_if(ast.m_indexBy.begin(), ast.m_indexBy.end(),
-		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); }), ast.m_indexBy.end());
+	std::erase_if(ast.m_indexBy,
+		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); });
 
-	ast.m_totalsAggregates.erase(std::remove_if(ast.m_totalsAggregates.begin(), ast.m_totalsAggregates.end(),
-		[&](const ibQueryTotalAggregate& r) { return gone(StillResolves(sources, r.m_expr)); }), ast.m_totalsAggregates.end());
+	std::erase_if(ast.m_totalsAggregates,
+		[&](const ibQueryTotalAggregate& r) { return gone(StillResolves(sources, r.m_expr)); });
 
 	// A LEVEL LOSES THE FIELDS THAT NO LONGER RESOLVE, and only then, having none left, loses itself.
 	// Dropping the whole level because one of its fields died would take the grouping away over a
 	// field the author never touched.
 	for (ibQueryTotalDim& d : ast.m_totalsBy)
-		d.m_fields.erase(std::remove_if(d.m_fields.begin(), d.m_fields.end(),
-			[&](const ibQueryTotalField& f) { return gone(StillResolves(sources, f.m_expr)); }), d.m_fields.end());
+		std::erase_if(d.m_fields,
+			[&](const ibQueryTotalField& f) { return gone(StillResolves(sources, f.m_expr)); });
 
-	ast.m_totalsBy.erase(std::remove_if(ast.m_totalsBy.begin(), ast.m_totalsBy.end(),
-		[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }), ast.m_totalsBy.end());
+	std::erase_if(ast.m_totalsBy,
+		[](const ibQueryTotalDim& d) { return d.m_fields.empty(); });
 
 	// ⚠ THE NODES ARE PRUNED THE SAME WAY — a level whose field stopped resolving goes, and a node
 	// left with nothing goes with it. Skipped here, a removed attribute would live on inside a
@@ -6773,10 +6786,10 @@ int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
 	// to prevent.
 	for (ibQueryTotalSplit& node : ast.m_totalsSplits) {
 		for (ibQueryTotalDim& d : node.m_levels)
-			d.m_fields.erase(std::remove_if(d.m_fields.begin(), d.m_fields.end(),
-				[&](const ibQueryTotalField& f) { return gone(StillResolves(sources, f.m_expr)); }), d.m_fields.end());
-		node.m_levels.erase(std::remove_if(node.m_levels.begin(), node.m_levels.end(),
-			[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }), node.m_levels.end());
+			std::erase_if(d.m_fields,
+				[&](const ibQueryTotalField& f) { return gone(StillResolves(sources, f.m_expr)); });
+		std::erase_if(node.m_levels,
+			[](const ibQueryTotalDim& d) { return d.m_fields.empty(); });
 	}
 
 	bool nodesHoldLevels = false;
@@ -6796,8 +6809,8 @@ int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
 		std::vector<ibQueryAstExprPtr> rows;
 		ibQueryFlattenAnd(ast.m_where, rows);
 		const size_t before = rows.size();
-		rows.erase(std::remove_if(rows.begin(), rows.end(),
-			[&](const ibQueryAstExprPtr& e) { return !StillResolves(sources, e); }), rows.end());
+		std::erase_if(rows,
+			[&](const ibQueryAstExprPtr& e) { return !StillResolves(sources, e); });
 		dropped += static_cast<int>(before - rows.size());
 		ast.m_where = ibQueryFoldAnd(rows);
 	}
@@ -6810,7 +6823,7 @@ int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
 
 } // namespace
 
-int ibQueryLowering::PruneUnresolved(ibQueryPackage& package, const std::map<wxString, ibValue>& params)
+int ibQueryLowering::PruneUnresolved(ibQueryPackage& package, const std::map<ibString, ibValue>& params)
 {
 	int dropped = 0;
 	for (ibQueryAstStatement& statement : package.m_statements)
@@ -6819,17 +6832,17 @@ int ibQueryLowering::PruneUnresolved(ibQueryPackage& package, const std::map<wxS
 	return dropped;
 }
 
-void ibQueryLowering::CheckNames(const ibQueryPackage& package, const std::map<wxString, ibValue>& set)
+void ibQueryLowering::CheckNames(const ibQueryPackage& package, const std::map<ibString, ibValue>& set)
 {
-	const std::map<wxString, ibValue> params = WithEveryParameter(ibRenderQueryPackage(package), set);
+	const std::map<ibString, ibValue> params = WithEveryParameter(ibRenderQueryPackage(package), set);
 	for (const ibQueryAstStatement& statement : package.m_statements)
 		if (statement.m_select)
 			CheckSelectNames(*statement.m_select, params);
 }
 
-std::vector<wxString> ibQueryLowering::FiltersAroundVirtualTables(const ibQueryPackage& package)
+std::vector<ibString> ibQueryLowering::FiltersAroundVirtualTables(const ibQueryPackage& package)
 {
-	std::vector<wxString> out;
+	std::vector<ibString> out;
 	ibQueryableFactory* factory = ibSourceMetaDataScope::GetFactory();
 	if (factory == nullptr)
 		return out;
@@ -6837,9 +6850,9 @@ std::vector<wxString> ibQueryLowering::FiltersAroundVirtualTables(const ibQueryP
 	// A virtual table this select reads, and what each of its condition parameters is offered.
 	struct Table
 	{
-		wxString m_alias;
-		wxString m_written;
-		std::vector<std::pair<wxString, std::vector<wxString>>> m_slots;   // parameter -> the fields it takes
+		ibString m_alias;
+		ibString m_written;
+		std::vector<std::pair<ibString, std::vector<ibString>>> m_slots;   // parameter -> the fields it takes
 	};
 
 	std::function<void(const ibQuerySelect&)> visit = [&](const ibQuerySelect& ast) {
@@ -6855,9 +6868,9 @@ std::vector<wxString> ibQueryLowering::FiltersAroundVirtualTables(const ibQueryP
 			}
 			if (source->m_name.size() < 3)
 				continue;   // a virtual table is <Kind>.<Object>.<Table>
-			wxString name = source->m_name[1];
+			ibString name = source->m_name[1];
 			for (size_t i = 2; i < source->m_name.size(); ++i)
-				name += wxT(".") + source->m_name[i];
+				name += ibT(".") + source->m_name[i];
 			ibQueryableSourceDescriptor* descriptor = factory->FindDescriptor(source->m_name[0], name);
 			if (descriptor == nullptr)
 				continue;
@@ -6866,13 +6879,13 @@ std::vector<wxString> ibQueryLowering::FiltersAroundVirtualTables(const ibQueryP
 			descriptor->DescribeParameters(declared);
 			Table table;
 			table.m_alias   = ibQuerySourceName(*source);
-			table.m_written = source->m_name[0] + wxT(".") + name;
+			table.m_written = source->m_name[0] + ibT(".") + name;
 			for (const ibQuerySourceParameter& parameter : declared) {
 				if (!parameter.m_condition || !parameter.m_consumedBySource)
 					continue;
 				ibSourceDataObject::ibSourceExplorer explorer;
 				descriptor->FillConditionExplorer(explorer, parameter.m_name);
-				std::vector<wxString> fields;
+				std::vector<ibString> fields;
 				for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i)
 					if (const ibSourceDataObject::ibSourceExplorer* node = explorer.GetHelper(i))
 						fields.push_back(node->GetSourceName());
@@ -6905,7 +6918,7 @@ std::vector<wxString> ibQueryLowering::FiltersAroundVirtualTables(const ibQueryP
 		const bool oneSource = sources.size() == 1;
 		for (const ibQueryAstExpr* conjunct : conjuncts) {
 			for (const Table& table : tables) {
-				std::vector<wxString> named;
+				std::vector<ibString> named;
 				bool elsewhere = false;
 				// The fields the condition names, and whether it names anything that is not this table's field
 				// (another table, a fold, a word such as DATEDIFF's unit) — which leaves it where it is.
@@ -6933,13 +6946,13 @@ std::vector<wxString> ibQueryLowering::FiltersAroundVirtualTables(const ibQueryP
 					continue;
 
 				for (const auto& slot : table.m_slots) {
-					const bool takes = std::all_of(named.begin(), named.end(), [&slot](const wxString& field) {
+					const bool takes = std::all_of(named.begin(), named.end(), [&slot](const ibString& field) {
 						return std::any_of(slot.second.begin(), slot.second.end(),
-							[&field](const wxString& offered) { return offered.IsSameAs(field, false); });
+							[&field](const ibString& offered) { return offered.IsSameAs(field, false); });
 					});
 					if (!takes)
 						continue;
-					out.push_back(wxString::Format(
+					out.push_back(ibString::Format(
 						_("WHERE %s filters %s AS %s after the table has read and folded everything - write it "
 						  "into the table's own parameter %s (without the '%s.' prefix), so the rows are "
 						  "selected before the fold and the table arrives already narrowed"),
@@ -6956,62 +6969,10 @@ std::vector<wxString> ibQueryLowering::FiltersAroundVirtualTables(const ibQueryP
 	return out;
 }
 
-std::vector<ibQueryKeyword> ibQueryLowering::AggregatesFor(const ibTypeDescription& type)
-{
-	// COUNT is always in — it asks nothing of the type, and a list with nothing in it would be a
-	// cell a person cannot fill.
-	std::vector<ibQueryKeyword> out{ ibQueryKeyword::Count };
-
-	// UNKNOWN OR COMPOSITE: offer everything. Which type a row holds is the row's business, and
-	// narrowing here on a guess would take away a choice the query can perfectly well make.
-	if (type.GetClsidCount() != 1) {
-		out.push_back(ibQueryKeyword::Sum);
-		out.push_back(ibQueryKeyword::Min);
-		out.push_back(ibQueryKeyword::Max);
-		out.push_back(ibQueryKeyword::Avg);
-		return out;
-	}
-
-	const bool numeric = type.ContainType(ibValueTypes::TYPE_NUMBER);
-	const bool ordered = numeric || type.ContainType(ibValueTypes::TYPE_DATE)
-	                             || type.ContainType(ibValueTypes::TYPE_STRING);
-
-	if (numeric) out.push_back(ibQueryKeyword::Sum);
-	if (ordered) { out.push_back(ibQueryKeyword::Min); out.push_back(ibQueryKeyword::Max); }
-	if (numeric) out.push_back(ibQueryKeyword::Avg);
-	return out;
-}
-
-std::vector<wxString> ibQueryLowering::AggregateCallsFor(const ibTypeDescription& type, const wxString& field)
-{
-	std::vector<wxString> calls;
-	if (field.IsEmpty())
-		return calls;
-
-	for (const ibQueryKeyword keyword : AggregatesFor(type)) {
-		calls.push_back(ibQueryKeywordText(keyword) + wxT("(") + field + wxT(")"));
-
-		// …AND ITS DISTINCT FORM where that asks a DIFFERENT question — `COUNT(DISTINCT x)` counts how
-		// many different values there are, `COUNT(x)` how many rows have one. WHICH functions get the
-		// twin is the keyword table's answer (ibDistinctMattersFor), so MIN and MAX do not: their
-		// result is the same value however often it occurs, and a padded list is one people stop
-		// reading. The same rule the expression editor already follows.
-		if (ibDistinctMattersFor(keyword))
-			calls.push_back(ibQueryKeywordText(keyword) + wxT("(")
-				+ ibQueryKeywordText(ibQueryKeyword::Distinct) + wxT(" ") + field + wxT(")"));
-	}
-	return calls;
-}
-
-std::vector<ibQueryAstExprPtr> ibQueryLowering::AggregatedColumns(const ibQuerySelect& ast)
-{
-	return CollectAggregated(ast);
-}
-
 std::vector<ibQueryAstExprPtr> ibQueryLowering::UngroupedProjections(
-	const ibQuerySelect& ast, const std::map<wxString, ibValue>& set)
+	const ibQuerySelect& ast, const std::map<ibString, ibValue>& set)
 {
-	const std::map<wxString, ibValue> params = WithEveryParameter(ibRenderQuery(ast), set);   // describing — see WithEveryParameter
+	const std::map<ibString, ibValue> params = WithEveryParameter(ibRenderQuery(ast), set);   // describing — see WithEveryParameter
 	// UNVERIFIABLE IS EMPTY, not a guess — the same promise CheckNames and PruneUnresolved make. A
 	// host reading this as "the work still to do" would otherwise add group keys to a query nobody
 	// could resolve.
@@ -7037,11 +6998,11 @@ std::vector<ibQueryAstExprPtr> ibQueryLowering::UngroupedProjections(
 
 ibQueryPredicatePtr ibQueryLowering::LowerLambdaPredicate(const ibBackendQueryable* source,
                                                           const ibQueryAstExpr& expr,
-                                                          const std::map<wxString, ibValue>& captured)
+                                                          const std::map<ibString, ibValue>& captured)
 {
 	if (source == nullptr)
 		return nullptr;
-	const std::vector<ibSourceBinding> sources{ { wxEmptyString, source } };
+	const std::vector<ibSourceBinding> sources{ { ibEmptyString, source } };
 	try {
 		// Dot-walk leaves ride only on a physical single source (same gate as text).
 		return BuildWherePredicate(sources, expr, captured, /*allowDotWalk*/ !source->IsComputedInRam());
@@ -7056,7 +7017,7 @@ std::vector<const ibBackendQueryColumn*> ibQueryLowering::LowerLambdaColumnPath(
 {
 	if (source == nullptr || expr.m_kind != ibQueryAstExprKind::Column)
 		return {};
-	const std::vector<ibSourceBinding> sources{ { wxEmptyString, source } };
+	const std::vector<ibSourceBinding> sources{ { ibEmptyString, source } };
 	try {
 		std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, expr);
 		if (cols.size() > 1 && source->IsComputedInRam())
@@ -7070,11 +7031,11 @@ std::vector<const ibBackendQueryColumn*> ibQueryLowering::LowerLambdaColumnPath(
 
 ibQueryColumnExprPtr ibQueryLowering::LowerLambdaColumnExpr(
 	const ibBackendQueryable* source, const ibQueryAstExpr& expr,
-	const std::map<wxString, ibValue>& captured)
+	const std::map<ibString, ibValue>& captured)
 {
 	if (source == nullptr || !IsComputedExprAst(expr))
 		return nullptr;   // only arithmetic / CASE; a plain column / dot-walk / structure is handled elsewhere
-	const std::vector<ibSourceBinding> sources{ { wxEmptyString, source } };
+	const std::vector<ibSourceBinding> sources{ { ibEmptyString, source } };
 	try {
 		GateComputedExpr(sources, expr);   // single physical source only (no JOIN, no computed / RAM source)
 		return BuildColumnExprFromAst(sources, expr, captured);
@@ -7089,14 +7050,14 @@ ibQueryColumnExprPtr ibQueryLowering::LowerLambdaColumnExpr(
 //////////////////////////////////////////////////////////////////////
 
 ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
-                                           const std::map<wxString, ibValue>& params,
+                                           const std::map<ibString, ibValue>& params,
                                            std::vector<OutputColumn>& outSchema)
 {
 	return ExecuteImpl(astIn, params, outSchema, ibReadPageRequest{}, nullptr, nullptr);
 }
 
 ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
-                                           const std::map<wxString, ibValue>& params,
+                                           const std::map<ibString, ibValue>& params,
                                            std::vector<OutputColumn>& outSchema,
                                            const ibReadPageRequest& page)
 {
@@ -7104,7 +7065,7 @@ ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
 }
 
 ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
-                                           const std::map<wxString, ibValue>& params,
+                                           const std::map<ibString, ibValue>& params,
                                            std::vector<OutputColumn>& outSchema,
                                            const ibReadPageRequest& page,
                                            ibRenderedPageCache& cache, const ibPageSignature& signature)
@@ -7135,7 +7096,7 @@ ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result,
 		const ibMetaID id = static_cast<ibMetaID>(i + 1);
 		ids.push_back(id);
 		// …with whether what it was made from may be shown, which the table keeps: its rows outlive the select.
-		table.AddColumn(id, schema[i].m_name, schema[i].GetTypeDesc(), wxString(), schema[i].m_available);
+		table.AddColumn(id, schema[i].m_name, schema[i].GetTypeDesc(), ibString(), schema[i].m_available);
 	}
 
 	while (result.Next()) {
@@ -7166,13 +7127,13 @@ ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result,
 // That is why a link relates names and never tables, and why this function executes one of the two
 // and passes the other by.
 void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
-	const std::map<wxString, ibValue>& params,
+	const std::map<ibString, ibValue>& params,
 	ibQueryTempTableStore& store,
-	std::map<wxString, const ibBackendQueryable*>& sources)
+	std::map<ibString, const ibBackendQueryable*>& sources)
 {
 	// The names declared SO FAR — a preparing statement may read a selection named above it, which
 	// is an ordinary thing to write and costs nothing here (the lowering resolves it).
-	std::map<wxString, const ibQuerySelect*> named;
+	std::map<ibString, const ibQuerySelect*> named;
 	ibNamedResultScope namedScope(named);
 
 	for (const ibQueryAstStatement& statement : package.m_statements) {
@@ -7180,7 +7141,7 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 		if (statement.IsDrop()) {
 			// Releasing EARLY — said out loud instead of left to scope, exactly as a package does.
 			if (!store.Drop(statement.m_dropTemp))
-				ThrowQueryException(0, 0, wxString::Format(
+				ThrowQueryException(0, 0, ibString::Format(
 					_("temporary table '%s' does not exist"), statement.m_dropTemp));
 			sources.erase(statement.m_dropTemp);   // …and out of the registry with it, not left dangling
 			continue;
@@ -7197,13 +7158,13 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 			// ⚠ Registered AFTER it is passed, for the reason ExecutePackage states at length: a
 			// name visible while its own statement is lowered resolves to itself, without end.
 			if (!ast.m_ontoName.IsEmpty() && !named.emplace(ast.m_ontoName.Lower(), statement.m_select.get()).second)
-				ThrowQueryException(0, 0, wxString::Format(
+				ThrowQueryException(0, 0, ibString::Format(
 					_("two statements of this package name their result '%s'"), ast.m_ontoName));
 			continue;
 		}
 
 		if (store.Has(ast.m_intoTemp))
-			ThrowQueryException(0, 0, wxString::Format(
+			ThrowQueryException(0, 0, ibString::Format(
 				_("temporary table '%s' already exists"), ast.m_intoTemp));
 
 		std::vector<OutputColumn> schema;
@@ -7216,7 +7177,7 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 
 		// INDEX BY — the columns the store builds a lookup over, named as the OUTPUT names, because
 		// that is what the statements after it select by.
-		std::vector<wxString> indexed;
+		std::vector<ibString> indexed;
 		for (const ibQueryAstExprPtr& column : ast.m_indexBy)
 			if (column && !column->m_path.empty())
 				indexed.push_back(column->m_path.back());
@@ -7229,7 +7190,7 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 		if (made != store.Sources().end())
 			sources[made->first] = made->second;
 
-		ibJournalInfo(wxT("query"), wxT("prepared '%s': %ld rows"), ast.m_intoTemp, rows);
+		ibJournalInfo(ibT("query"), ibT("prepared '%s': %ld rows"), ast.m_intoTemp, rows);
 	}
 }
 
@@ -7237,12 +7198,12 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 // working the tree out is this function's whole job. It answers for BOTH readers of it: the package
 // running here, and the COMPOSER writing its settings over a linked package as text.
 ibQueryLowering::FromTree ibQueryLowering::PlacePackageLinks(
-	const std::vector<ibQueryPackageLink>& links, const std::vector<wxString>& declared)
+	const std::vector<ibQueryPackageLink>& links, const std::vector<ibString>& declared)
 {
 	FromTree tree;
 
-	auto isDeclared = [&declared](const wxString& name) {
-		for (const wxString& had : declared)
+	auto isDeclared = [&declared](const ibString& name) {
+		for (const ibString& had : declared)
 			if (had.IsSameAs(name, false))
 				return true;
 		return false;
@@ -7258,18 +7219,18 @@ ibQueryLowering::FromTree ibQueryLowering::PlacePackageLinks(
 	for (const ibQueryPackageLink& link : links) {
 		if (link.m_left.IsEmpty() || link.m_right.IsEmpty() || !link.m_on)
 			continue;
-		for (const wxString& side : { link.m_left, link.m_right })
+		for (const ibString& side : { link.m_left, link.m_right })
 			if (!isDeclared(side))
-				ThrowQueryException(0, 0, wxString::Format(
+				ThrowQueryException(0, 0, ibString::Format(
 					_("the link names '%s', which is not a result this package names"), side));
 		pending.push_back(&link);
 	}
 	if (pending.empty())
 		return tree;
 
-	std::vector<wxString> present;
-	auto reads = [&present](const wxString& name) {
-		for (const wxString& had : present)
+	std::vector<ibString> present;
+	auto reads = [&present](const ibString& name) {
+		for (const ibString& had : present)
 			if (had.IsSameAs(name, false))
 				return true;
 		return false;
@@ -7334,7 +7295,7 @@ ibQueryLowering::FromTree ibQueryLowering::PlacePackageLinks(
 		// not reach — a second, disconnected group. Joining it in would be a cross product
 		// nobody asked for, so the package says so instead.
 		if (!placed) {
-			ThrowQueryException(0, 0, wxString::Format(
+			ThrowQueryException(0, 0, ibString::Format(
 				_("the link between '%s' and '%s' relates selections this package does not join to the rest"),
 				pending.front()->m_left, pending.front()->m_right));
 		}
@@ -7362,14 +7323,14 @@ struct LinkedSide
 {
 	ibQueryLowering::PackageResult* m_result = nullptr;
 	ibQueryRamTable                 m_rows;
-	std::vector<wxString>           m_keyColumns;   // in step with the other side's list
+	std::vector<ibString>           m_keyColumns;   // in step with the other side's list
 };
 
 // The columns each side is matched on, read off the ON condition: an AND-chain of `A.x = B.y`.
 // Anything else is refused out loud — a link nobody can evaluate must not pass as a link that
 // removed nothing.
-bool ReadLinkKeys(const ibQueryPackageLink& link, std::vector<wxString>& leftCols,
-                  std::vector<wxString>& rightCols, wxString& refusal)
+bool ReadLinkKeys(const ibQueryPackageLink& link, std::vector<ibString>& leftCols,
+                  std::vector<ibString>& rightCols, ibString& refusal)
 {
 	if (!link.m_on) {
 		refusal = _("a link needs its ON condition before it can reconcile anything");
@@ -7387,8 +7348,8 @@ bool ReadLinkKeys(const ibQueryPackageLink& link, std::vector<wxString>& leftCol
 			            "(Sales.Item = Plan.Item), joined by AND");
 			return false;
 		}
-		const wxString& lq = term->m_lhs->m_path[0];
-		const wxString& rq = term->m_rhs->m_path[0];
+		const ibString& lq = term->m_lhs->m_path[0];
+		const ibString& rq = term->m_rhs->m_path[0];
 		if (lq.IsSameAs(link.m_left, false) && rq.IsSameAs(link.m_right, false)) {
 			leftCols.push_back(term->m_lhs->m_path[1]);
 			rightCols.push_back(term->m_rhs->m_path[1]);
@@ -7398,7 +7359,7 @@ bool ReadLinkKeys(const ibQueryPackageLink& link, std::vector<wxString>& leftCol
 			rightCols.push_back(term->m_lhs->m_path[1]);
 		}
 		else {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				_("this link relates '%s' and '%s', and its condition names something else"),
 				link.m_left, link.m_right);
 			return false;
@@ -7408,7 +7369,7 @@ bool ReadLinkKeys(const ibQueryPackageLink& link, std::vector<wxString>& leftCol
 }
 
 // One side's cell, by the OUTPUT name the selection published.
-ibValue LinkCell(const ibQueryRamTable& rows, long row, const wxString& column)
+ibValue LinkCell(const ibQueryRamTable& rows, long row, const ibString& column)
 {
 	for (const ibQueryRamColumn& c : rows.Columns())
 		if (c.m_name.IsSameAs(column, false))
@@ -7418,11 +7379,11 @@ ibValue LinkCell(const ibQueryRamTable& rows, long row, const wxString& column)
 
 // …and the whole key of a row: the tuple its side is matched by. Compared as VALUES (ibValueSeqHash),
 // never as rendered text — two references that display alike are still two references.
-std::vector<ibValue> LinkKey(const ibQueryRamTable& rows, long row, const std::vector<wxString>& columns)
+std::vector<ibValue> LinkKey(const ibQueryRamTable& rows, long row, const std::vector<ibString>& columns)
 {
 	std::vector<ibValue> key;
 	key.reserve(columns.size());
-	for (const wxString& c : columns)
+	for (const ibString& c : columns)
 		key.push_back(LinkCell(rows, row, c));
 	return key;
 }
@@ -7430,7 +7391,7 @@ std::vector<ibValue> LinkKey(const ibQueryRamTable& rows, long row, const std::v
 // Keep the rows whose key is in `wanted`; returns how many were dropped. The schema is rewritten to
 // read BY NAME, because what is handed back is now this table and not the source the rows came from.
 long KeepMatched(ibQueryLowering::PackageResult& side, const ibQueryRamTable& rows,
-                 const std::vector<wxString>& keyColumns,
+                 const std::vector<ibString>& keyColumns,
                  const std::unordered_set<std::vector<ibValue>, ibValueSeqHash, ibValueSeqEqual>& wanted)
 {
 	ibQueryRamTable kept;
@@ -7458,7 +7419,7 @@ long KeepMatched(ibQueryLowering::PackageResult& side, const ibQueryRamTable& ro
 } // namespace
 
 std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
-	const ibQueryPackage& package, const std::map<wxString, ibValue>& params,
+	const ibQueryPackage& package, const std::map<ibString, ibValue>& params,
 	ibQueryTempTableStore* store)
 {
 	std::vector<PackageResult> results;
@@ -7472,7 +7433,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 	// So the AST is RENDERED BACK to text rather than the source being echoed. What is journalled is
 	// then what the engine is about to run — after rewriting, after the settings were folded in —
 	// which is the query a person actually needs to see when the answer looks wrong.
-	ibJournalInfo(wxT("query"), wxT("run:\n%s"), ibRenderQueryPackage(package));
+	ibJournalInfo(ibT("query"), ibT("run:\n%s"), ibRenderQueryPackage(package));
 
 	// WHO KEEPS THE TABLES ALIVE. Without a store the package owns one for its own run: a single
 	// query's temp scope is RAII-bound to ONE execution, so statement 3 would never see what
@@ -7492,7 +7453,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 	// THE RESULTS THIS PACKAGE HAS NAMED so far, by their ONTO name (lower-cased: names in this
 	// language are matched without regard to case). A later statement may read one of them, and
 	// reading it is what a RESULT LINK is.
-	std::map<wxString, const ibQuerySelect*> named;
+	std::map<ibString, const ibQuerySelect*> named;
 
 	for (const ibQueryAstStatement& statement : package.m_statements) {
 
@@ -7501,7 +7462,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 			// never made is an error, not a shrug: it is either a typo or a statement that was
 			// expected to run and did not.
 			if (!temps.Drop(statement.m_dropTemp))
-				ThrowQueryException(0, 0, wxString::Format(_("temporary table '%s' does not exist"), statement.m_dropTemp));
+				ThrowQueryException(0, 0, ibString::Format(_("temporary table '%s' does not exist"), statement.m_dropTemp));
 			PackageResult r;
 			r.m_dropTemp = statement.m_dropTemp;
 			results.push_back(std::move(r));
@@ -7524,7 +7485,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 			// text, and it left the second relation of a chain with nobody to execute it once the
 			// statement became the section's (2026-09-04).
 			const std::size_t firstLink = static_cast<std::size_t>(statement.m_linkIndex);
-			const wxString sectionHead = package.m_links[firstLink].m_left;
+			const ibString sectionHead = package.m_links[firstLink].m_left;
 
 			long removedInSection = 0;
 
@@ -7534,7 +7495,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 			if (!link.m_left.IsSameAs(sectionHead, false))
 				break;
 
-			auto findNamed = [&results](const wxString& name) -> PackageResult* {
+			auto findNamed = [&results](const ibString& name) -> PackageResult* {
 				for (PackageResult& done : results)
 					if (!done.m_name.IsEmpty() && done.m_name.IsSameAs(name, false) && done.m_result)
 						return &done;
@@ -7546,12 +7507,12 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 			// ⚠ SAID, NOT SHRUGGED: a link naming a selection that has not run (or was never named)
 			// is a mistake in the text, and answering "removed nothing" would hide it.
 			if (left == nullptr || right == nullptr)
-				ThrowQueryException(0, 0, wxString::Format(
+				ThrowQueryException(0, 0, ibString::Format(
 					_("the link names '%s' and '%s'; a link reconciles selections this package NAMED with "
 					  "ONTO, and they must be written before it"), link.m_left, link.m_right));
 
-			std::vector<wxString> leftCols, rightCols;
-			wxString refusal;
+			std::vector<ibString> leftCols, rightCols;
+			ibString refusal;
 			if (!ReadLinkKeys(link, leftCols, rightCols, refusal))
 				ThrowQueryException(0, 0, refusal);
 
@@ -7576,7 +7537,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 
 			removedInSection += removed;
 
-			ibJournalInfo(wxT("query"), wxT("link %s <-> %s: %ld row(s) removed"),
+			ibJournalInfo(ibT("query"), ibT("link %s <-> %s: %ld row(s) removed"),
 			              link.m_left, link.m_right, removed);
 			}
 
@@ -7584,12 +7545,12 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 			// selections it reconciled (Max, 2026-09-04: *"a link returns either Undefined, or how
 			// many rows it filtered out"*).
 			ibQueryRamTable counted;
-			counted.AddColumn(1, wxT("Count"), ibTypeDescription());
+			counted.AddColumn(1, ibT("Count"), ibTypeDescription());
 			counted.SetCell(counted.AppendRow(), 1, ibValue(static_cast<int>(removedInSection)));
 			r.m_result = std::make_unique<ibDataQueryResult>(std::move(counted), nullptr);
 
 			OutputColumn oc;
-			oc.m_name = wxT("Count"); oc.m_alias = wxT("Count"); oc.m_byAlias = true;
+			oc.m_name = ibT("Count"); oc.m_alias = ibT("Count"); oc.m_byAlias = true;
 			r.m_schema.push_back(oc);
 
 			results.push_back(std::move(r));
@@ -7668,7 +7629,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		// until the stack ends — a crash, not an error message. The window checks uniqueness as a
 		// name is typed; text written by hand and packages built by script come in through here.
 		if (!ast.m_ontoName.IsEmpty() && !named.emplace(ast.m_ontoName.Lower(), statement.m_select.get()).second)
-			ThrowQueryException(0, 0, wxString::Format(
+			ThrowQueryException(0, 0, ibString::Format(
 				_("two statements of this package name their result '%s'"), ast.m_ontoName));
 
 		if (ast.m_intoTemp.IsEmpty()) {
@@ -7684,7 +7645,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		// (With a shared store the clash can also be against a table an EARLIER query left, which
 		// is the same mistake seen from further away.)
 		if (temps.Has(ast.m_intoTemp))
-			ThrowQueryException(0, 0, wxString::Format(_("temporary table '%s' already exists"), ast.m_intoTemp));
+			ThrowQueryException(0, 0, ibString::Format(_("temporary table '%s' already exists"), ast.m_intoTemp));
 
 		ibQueryRamTable snapshot = DrainIntoSnapshot(read, schema);
 		r.m_rowCount = snapshot.RowCount();
@@ -7693,7 +7654,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		// INDEX BY — the columns the store builds a lookup over, named as the OUTPUT names, because
 		// that is what the later statements select by. A name the projection did not produce simply
 		// is not there to index.
-		std::vector<wxString> indexed;
+		std::vector<ibString> indexed;
 		for (const ibQueryAstExprPtr& column : ast.m_indexBy)
 			if (column && !column->m_path.empty())
 				indexed.push_back(column->m_path.back());
@@ -7712,13 +7673,13 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		{
 			ibQueryRamTable counted;
 			auto column = std::make_shared<ibSyntheticScalarColumn>(
-				wxT("Count"), 0, ibBackendColumnRawDB::RawType::Number);
-			counted.AddColumn(column->GetColumnId(), wxT("Count"), ibTypeDescription());
+				ibT("Count"), 0, ibBackendColumnRawDB::RawType::Number);
+			counted.AddColumn(column->GetColumnId(), ibT("Count"), ibTypeDescription());
 			const long row = counted.AppendRow();
 			counted.SetCell(row, column->GetColumnId(), ibValue(static_cast<signed int>(r.m_rowCount)));
 
 			OutputColumn oc;
-			oc.m_name     = wxT("Count");
+			oc.m_name     = ibT("Count");
 			oc.m_col      = column.get();
 			oc.m_ownedCol = column;   // the schema travels with the selection — the column must outlive both
 
@@ -7744,12 +7705,12 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 
 		// WHERE EACH SELECTION STANDS — worked out by the placer, which is also what the COMPOSER
 		// asks when it writes its settings over a linked package. One answer to one question.
-		std::vector<wxString> declared;
+		std::vector<ibString> declared;
 		for (const auto& entry : named)
 			declared.push_back(entry.first);
 		const FromTree tree = PlacePackageLinks(package.m_links, declared);
 
-		auto asSource = [](const wxString& name) {
+		auto asSource = [](const ibString& name) {
 			ibQuerySource source;
 			source.m_name.push_back(name);
 			// NAMED BY ITS OWN NAME, because that is what a link's condition qualifies its fields
@@ -7760,7 +7721,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		};
 
 		ibQuerySelect final;
-		std::vector<wxString> present;
+		std::vector<ibString> present;
 
 		if (!tree.m_head.IsEmpty()) {
 			final.m_from = asSource(tree.m_head);
@@ -7788,7 +7749,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 		// here, and what a select publishes is what its projections are called. No constructor model
 		// is asked: that is the window's view of a query, and this is the engine running one.
 		bool everyNameKnown = true;
-		for (const wxString& name : present) {
+		for (const ibString& name : present) {
 			const auto found = named.find(name.Lower());
 			const ibQuerySelect* source = found != named.end() ? found->second : nullptr;
 			if (source == nullptr || source->m_selectAll || source->m_projections.empty()) {
@@ -7799,12 +7760,12 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 			for (const ibQueryProjection& projection : source->m_projections) {
 				if (projection.m_star || !projection.m_expr)
 					continue;
-				const wxString field = OutputNameFor(*source, projection, index++);
+				const ibString field = OutputNameFor(*source, projection, index++);
 				if (field.IsEmpty())
 					continue;
 				ibQueryProjection qualified;
-				qualified.m_expr  = ibQueryColumnFromPath(name + wxT(".") + field);
-				qualified.m_alias = name + wxT("_") + field;
+				qualified.m_expr  = ibQueryColumnFromPath(name + ibT(".") + field);
+				qualified.m_alias = name + ibT("_") + field;
 				final.m_projections.push_back(std::move(qualified));
 			}
 		}
@@ -7848,7 +7809,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 // The columns are SYNTHETIC (the same ibSyntheticScalarColumn the totals measures use), so the
 // result is read back exactly like any other — by name, through the normal schema.
 ibDataQueryResult ibQueryLowering::ExecuteSourceless(const ibQuerySelect& ast,
-                                                    const std::map<wxString, ibValue>& params,
+                                                    const std::map<ibString, ibValue>& params,
                                                     std::vector<OutputColumn>& outSchema)
 {
 	if (ast.m_selectAll || ast.m_projections.empty())
@@ -7863,14 +7824,14 @@ ibDataQueryResult ibQueryLowering::ExecuteSourceless(const ibQuerySelect& ast,
 		if (!projection.m_expr)
 			continue;
 		if (projection.m_expr->m_kind == ibQueryAstExprKind::Column)
-			ThrowQueryException(projection.m_expr->m_line, projection.m_expr->m_col, wxString::Format(
+			ThrowQueryException(projection.m_expr->m_line, projection.m_expr->m_col, ibString::Format(
 				_("'%s' is a field, and this query reads no table: name one after FROM"),
-				projection.m_expr->m_path.empty() ? wxString() : projection.m_expr->m_path.back()));
+				projection.m_expr->m_path.empty() ? ibString() : projection.m_expr->m_path.back()));
 
 		// EvalValue answers a literal, a parameter and the arithmetic / CASE built out of them —
 		// which is exactly the set a query with no rows behind it can mean.
 		const ibValue value = EvalValue(*projection.m_expr, params);
-		const wxString name = OutputNameFor(ast, projection, index++);
+		const ibString name = OutputNameFor(ast, projection, index++);
 
 		auto column = std::make_shared<ibSyntheticScalarColumn>(name, nextId++, ibBackendColumnRawDB::RawType::String);
 		table.AddColumn(column->GetColumnId(), name, ibTypeDescription());
@@ -7895,11 +7856,11 @@ ibDataQueryResult ibQueryLowering::ExecuteSourceless(const ibQuerySelect& ast,
 //////////////////////////////////////////////////////////////////////
 
 void ibQueryLowering::DescribeOutput(const ibQuerySelect& astIn,
-                                     const std::map<wxString, ibValue>& set,
+                                     const std::map<ibString, ibValue>& set,
                                      std::vector<OutputColumn>& outSchema)
 {
 	outSchema.clear();
-	const std::map<wxString, ibValue> params = WithEveryParameter(ibRenderQuery(astIn), set);   // describing — see WithEveryParameter
+	const std::map<ibString, ibValue> params = WithEveryParameter(ibRenderQuery(astIn), set);   // describing — see WithEveryParameter
 
 	// TOTALS describes its DETAIL. A totals query answers with a TREE, and the levels of that tree are
 	// made at the fold — but what a host asks this question for is "which fields does this query put
@@ -7929,11 +7890,11 @@ void ibQueryLowering::DescribeOutput(const ibQuerySelect& astIn,
 			if (!projection.m_expr)
 				continue;
 			if (projection.m_expr->m_kind == ibQueryAstExprKind::Column)
-				ThrowQueryException(projection.m_expr->m_line, projection.m_expr->m_col, wxString::Format(
+				ThrowQueryException(projection.m_expr->m_line, projection.m_expr->m_col, ibString::Format(
 					_("'%s' is a field, and this query reads no table: name one after FROM"),
-					projection.m_expr->m_path.empty() ? wxString() : projection.m_expr->m_path.back()));
+					projection.m_expr->m_path.empty() ? ibString() : projection.m_expr->m_path.back()));
 
-			const wxString name = OutputNameFor(ast, projection, index++);
+			const ibString name = OutputNameFor(ast, projection, index++);
 			auto column = std::make_shared<ibSyntheticScalarColumn>(name, nextId++, ibBackendColumnRawDB::RawType::String);
 
 			OutputColumn oc;
@@ -7967,11 +7928,12 @@ void ibQueryLowering::DescribeOutput(const ibQuerySelect& astIn,
 }
 
 ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
-                                               const std::map<wxString, ibValue>& params,
+                                               const std::map<ibString, ibValue>& params,
                                                std::vector<OutputColumn>& outSchema,
                                                const ibReadPageRequest& pageIn,
                                                ibRenderedPageCache* cache, const ibPageSignature* signature)
 {
+	RefuseIfQueryStackLow(0, 0);
 	// Optimizer pass — negation normalization + FROM-subquery flattening. Works on a
 	// deep clone; the Query value object's cached parse is never mutated. (queryRewrite.h)
 	const ibQuerySelectPtr astOpt = ibQueryRewrite::Rewrite(astIn);
@@ -8072,7 +8034,7 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 //////////////////////////////////////////////////////////////////////
 
 ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
-                                                 const std::map<wxString, ibValue>& params,
+                                                 const std::map<ibString, ibValue>& params,
                                                  std::vector<OutputColumn>& outSchema,
                                                  const ibReadPageRequest& page,
                                                  bool* outServerGroupedLevel,
@@ -8144,7 +8106,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		struct PagedMeasure {
 			ibAggregateFn               m_fn;
 			const ibBackendQueryColumn* m_col = nullptr;   // null = COUNT(*)
-			wxString                    m_name;
+			ibString                    m_name;
 			bool                        m_distinct = false;
 			ibTypeDescription           m_type;            // what the figure is — TypeOfFold, as the fold's resources say
 		};
@@ -8154,7 +8116,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		// A vector, not a set: <set> is not included here and this file has already been bitten once by
 		// a container MSVC hands over transitively and GCC/Clang do not (see <algorithm> at the top).
 		// The list is a handful of names and it is walked once per measure.
-		std::vector<wxString> projectionNames;
+		std::vector<ibString> projectionNames;
 		{
 			int idx = 0;
 			for (const ibQueryProjection& p : ast.m_projections)
@@ -8274,7 +8236,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// It used to be built AFTER the dimension loop and served the aggregates alone, so a dimension
 	// could only ever be a source path — and the constructor compensated by writing source paths into
 	// the Totals tab, which is a shim standing in for a missing resolution.
-	std::map<wxString, const ibQueryProjection*, ibNoCaseLess> selectByName;
+	std::map<ibString, const ibQueryProjection*, ibNoCaseLess> selectByName;
 	{
 		int idx = 0;
 		for (const ibQueryProjection& p : ast.m_projections) {
@@ -8337,7 +8299,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		// the value exists under the OUTPUT's own name, so the name is what to sort by; it is
 		// resolved against the query's source at the moment the sort is spent, which is the first
 		// point where that source is known.
-		wxString                                 m_name;
+		ibString                                 m_name;
 	};
 	std::vector<LevelSort> levelOrder;
 	// The columns the LEVELS group by — collected as they resolve, spent where the aggregates are
@@ -8354,7 +8316,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// figure), the prefix is what the SERVER needs (`PARTITION BY <these>`). Deriving the prefix later
 	// would mean re-walking the ladder with the branch rules in hand — a second reading of one thing.
 	struct ibScopeAddress {
-		wxString                                 m_name;
+		ibString                                 m_name;
 		std::shared_ptr<ibTotalBranch>           m_branch;
 		int                                      m_depth = 0;
 		std::vector<const ibBackendQueryColumn*> m_prefix;   // the levels from the root down to it
@@ -8477,9 +8439,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		for (const ibQueryTotalField& dimField : d.m_fields) {
 			// The word that was WRITTEN — kept for the level's name — and the expression it stands
 			// for, which is the SELECTed one when the word is an output field's alias.
-			const wxString                 dimWritten = (dimField.m_expr && dimField.m_expr->m_kind == ibQueryAstExprKind::Column
+			const ibString                 dimWritten = (dimField.m_expr && dimField.m_expr->m_kind == ibQueryAstExprKind::Column
 			                                            && dimField.m_expr->m_path.size() == 1)
-			                                            ? dimField.m_expr->m_path.back() : wxString();
+			                                            ? dimField.m_expr->m_path.back() : ibString();
 			// ⭐ A LEVEL MAY GROUP BY A FIELD NOBODY SELECTED, and that is not a loophole — it is what
 			// levels are for. The skeleton is INVISIBLE: an unselected dimension adds DEPTH and no
 			// column, so the tree gains a tier that shows the first column again and looks, to a
@@ -8565,7 +8527,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				ibBackendColumnRawDB::RawType rt;
 				const bool scalarLeaf = ScalarRawType(leaf, rt);
 				if (!scalarLeaf) {
-					const wxString alias = wxString::Format(wxT("dim%u"), static_cast<unsigned>(nextSynthId));
+					const ibString alias = ibString::Format(ibT("dim%u"), static_cast<unsigned>(nextSynthId));
 					// Every hop of the walk answers for the dimension — one the options take away, and it goes.
 					auto synth = std::make_shared<ibSyntheticOutputColumn>(alias, leaf->GetTypeDesc(), nextSynthId++,
 						ibIsWalkAvailable(pathCols));
@@ -8573,7 +8535,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 					oc.m_col = synth.get(); oc.m_ownedCol = synth;
 				}
 				else {
-					const wxString alias = wxString::Format(wxT("dim%u"), static_cast<unsigned>(nextSynthId));
+					const ibString alias = ibString::Format(ibT("dim%u"), static_cast<unsigned>(nextSynthId));
 					auto synth = std::make_shared<ibSyntheticScalarColumn>(alias, nextSynthId++, rt);
 					// provider joins path, projects leaf scalar AS alias
 					level.m_fields.push_back(b.DeclareDimDotWalk(pathCols, synth.get(), alias, dim));
@@ -8583,11 +8545,11 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// This level's key joins the detail read's sort — by its PATH when it was reached through
 			// one, so the sort goes down the same join the projection did.
 			if (pathCols.size() > 1)
-				levelOrder.push_back(LevelSort{ pathCols, nullptr, wxString() });
+				levelOrder.push_back(LevelSort{ pathCols, nullptr, ibString() });
 			else if (oc.m_byAlias && !oc.m_name.IsEmpty())
 				levelOrder.push_back(LevelSort{ {}, nullptr, oc.m_name });   // read by alias — sort by the NAME
 			else if (oc.m_col != nullptr)
-				levelOrder.push_back(LevelSort{ {}, oc.m_col, wxString() });
+				levelOrder.push_back(LevelSort{ {}, oc.m_col, ibString() });
 			outSchema.push_back(oc);
 		}
 
@@ -8609,7 +8571,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			if (field.m_col != nullptr)
 				prefixCols.push_back(field.m_col);
 		{
-			wxString levelName = d.m_alias;
+			ibString levelName = d.m_alias;
 			if (levelName.IsEmpty() && d.Head() != nullptr && d.Head()->m_expr != nullptr
 			    && !d.Head()->m_expr->m_path.empty())
 				levelName = d.Head()->m_expr->m_path.back();
@@ -8621,7 +8583,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				if (!taken)                                       // first wins; a duplicate needs qualifying
 					scopeByName.push_back(ibScopeAddress{ levelName, branch, depth, prefixCols });
 				if (branch != nullptr && !branch->m_name.IsEmpty())
-					scopeByName.push_back(ibScopeAddress{ branch->m_name + wxT(".") + levelName,
+					scopeByName.push_back(ibScopeAddress{ branch->m_name + ibT(".") + levelName,
 					                                     branch, depth, prefixCols });
 			}
 		}
@@ -8647,7 +8609,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// The TOTALS aggregate set is COMMON across all dimension levels (each level rolls them IN-PLACE, so
 	// the aggregate reads back off its own column — GetValue(col), same as a dimension).
 	b.Totals();
-	std::map<wxString, const ibBackendQueryColumn*> measureCol;   // computed alias -> its synthetic measure (projected once)
+	std::map<ibString, const ibBackendQueryColumn*> measureCol;   // computed alias -> its synthetic measure (projected once)
 
 	// ⭐⭐ A NAME STANDS FOR ONE COLUMN. A resource is named after its ARGUMENT — `SUM(Amount)` reads
 	// back as `Amount` — so a report that GROUPS BY Amount and also sums it produced two columns
@@ -8664,8 +8626,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// record"). That is what makes a total READ like the field it totals. So the SELECT names are NOT
 	// counted as taken here; only what is already in outSchema is, which is the DIMENSIONS — and a
 	// level and a measure over the same column genuinely are two different figures.
-	auto uniqueOutputName = [&outSchema](const wxString& wanted, const wxString& funcName) {
-		auto taken = [&outSchema](const wxString& name) {
+	auto uniqueOutputName = [&outSchema](const ibString& wanted, const ibString& funcName) {
+		auto taken = [&outSchema](const ibString& name) {
 			for (const OutputColumn& used : outSchema)
 				if (used.m_name.IsSameAs(name, false))
 					return true;
@@ -8678,12 +8640,12 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		// person then reads in the report header and writes in `res["COUNTDate"]` (Max, 2026-08-25:
 		// "the name is stupid"). An output name is read by people, so the qualifier is written the
 		// way a name is written: `CountDate`, `SumAmount`.
-		const wxString qualified =
+		const ibString qualified =
 			funcName.Left(1).Upper() + funcName.Mid(1).Lower() + wanted;
 		if (!taken(qualified))
 			return qualified;
 		for (int seq = 2; ; ++seq) {
-			const wxString candidate = qualified + wxString::Format(wxT("%d"), seq);
+			const ibString candidate = qualified + ibString::Format(ibT("%d"), seq);
 			if (!taken(candidate))
 				return candidate;
 		}
@@ -8698,7 +8660,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 	// ⭐ THE BALANCES — figures over a field that is an opening or a closing. Their period and KEYS are worked out
 	// once every figure is known, below the loop: a key is what the rows carry BESIDES figures.
-	struct PendingBalance { wxString m_alias; ibBalanceRole m_edge; };
+	struct PendingBalance { ibString m_alias; ibBalanceRole m_edge; };
 	std::vector<PendingBalance>           balances;
 	std::set<const ibBackendQueryColumn*> figureCols;   // what the figures fold — never part of a key
 
@@ -8713,38 +8675,13 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// over one column already moves.
 	aggregatedCols.insert(levelCols.begin(), levelCols.end());
 
-	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates) {
-		const ibQueryAstExprPtr& agg = resource.m_expr;
-		if (!agg || agg->m_kind != ibQueryAstExprKind::Func)
-			ThrowQueryException(0, 0, _("TOTALS expects aggregate functions (SUM/COUNT/MIN/MAX/AVG)"));
+	// ⭐ ONE CALL, DECLARED — under `outName`, with everything a figure is: the column it folds, a second fold over one
+	// column moved to a column of its own, a balance, the area its resource names. What comes back is the column the
+	// report reads it by; publishing it is the caller's, because a call inside a figure made of figures is not
+	// published — only the figure is (lowerDerived).
+	const auto lowerCall = [&](const ibQueryAstExprPtr& agg, const ibQueryTotalAggregate& resource,
+	                           const ibString& outName) -> OutputColumn {
 		RefuseUnloweredWindow(*agg);
-
-		// Output name read back via res[name]: COUNT(*) -> the function name; a field -> its identifier.
-		// Qualified when that name is already spoken for — see uniqueOutputName.
-		const wxString wantedName = agg->m_star
-			? ibQueryKeywordText(agg->m_func)
-			: (agg->m_arg && !agg->m_arg->m_path.empty() ? agg->m_arg->m_path.back() : ibQueryKeywordText(agg->m_func));
-
-		// ⭐⭐ A NAME THE AUTHOR WROTE IS NOT A CANDIDATE — IT IS THE ANSWER. The qualifier below
-		// exists to settle a name the ENGINE derived; applying it to `AS Qty` would rename the very
-		// thing the author named, and `res["Qty"]` would then find nothing (the report reads the
-		// figure back by the name it was given).
-		//
-		// So a collision with an alias is REFUSED, out loud, instead of being papered over: two
-		// columns answering to one name is a query that cannot be read back, and the author is the
-		// only one who can decide which name to change.
-		wxString outName;
-		if (!resource.m_alias.IsEmpty()) {
-			for (const OutputColumn& used : outSchema)
-				if (used.m_name.IsSameAs(resource.m_alias, false))
-					ThrowQueryException(agg->m_line, agg->m_col,
-						_("TOTALS names the resource \"%s\", and a grouping level already answers to that name: give one of them another alias"),
-						resource.m_alias);
-			outName = resource.m_alias;
-		}
-		else {
-			outName = uniqueOutputName(wantedName, ibQueryKeywordText(agg->m_func));
-		}
 
 		const ibBackendQueryColumn*           col   = nullptr;   // the column the fold aggregates by metaID
 		std::shared_ptr<ibBackendQueryColumn> owned;             // set only for a synthetic computed measure
@@ -8758,7 +8695,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			if (pit != selectByName.end() && pit->second->m_expr->m_kind != ibQueryAstExprKind::Column) {
 				// COMPUTED / constant SELECT field — project the expression once, aggregate it through a
 				// synthetic measure column that reads the projected field (unique id for the metaID fold).
-				const wxString alias = pit->first;
+				const ibString alias = pit->first;
 				auto mit = measureCol.find(alias);
 				if (mit != measureCol.end())
 					col = mit->second;   // already projected for an earlier aggregate over the same field
@@ -8778,7 +8715,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// name to resolve in a CASE and refused with "'' walks through a reference" about the
 			// composer's own text (a receivables report folding only what is owed, 2026-09-11).
 			else if (IsComputedExprAst(*agg->m_arg)) {
-				const wxString alias = wxString::Format(wxT("expr%u"), static_cast<unsigned>(nextSynthId));
+				const ibString alias = ibString::Format(ibT("expr%u"), static_cast<unsigned>(nextSynthId));
 				b.SelectExpr(BuildColumnExprFromAst(sources, *agg->m_arg, params), alias);
 				owned = ProjectionHandle(alias, nextSynthId++);   // RawType::Number measure
 				col   = owned.get();
@@ -8810,7 +8747,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// at all. (Better a shared slot than a column the reader cannot read.)
 			ibBackendColumnRawDB::RawType aggRaw = ibBackendColumnRawDB::RawType::Number;
 			if (col != nullptr && ScalarRawType(col, aggRaw) && !aggregatedCols.insert(col).second) {
-				const wxString alias = wxString::Format(wxT("agg%u"),
+				const ibString alias = ibString::Format(ibT("agg%u"),
 					static_cast<unsigned>(nextSynthId));
 				b.SelectExpr(BuildColumnExprFromAst(sources, *agg->m_arg, params), alias);
 				// ⭐ CARRYING THE INPUT'S TYPE. The synthetic column defaults to Number, and a default
@@ -8846,9 +8783,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// and their columns together are what the server partitions by.
 			const ibScopeAddress* found = nullptr;
 			std::vector<const ibBackendQueryColumn*> scopeCols;
-			wxStringTokenizer names(resource.m_scope, wxT(","));
+			ibStringTokenizer names(resource.m_scope, ibT(","));
 			while (names.HasMoreTokens()) {
-				wxString one = names.GetNextToken();
+				ibString one = names.GetNextToken();
 				one.Trim(true).Trim(false);
 				if (one.IsEmpty())
 					continue;
@@ -8890,7 +8827,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				std::vector<ibQueryColumnExprPtr> partition;
 				for (const ibBackendQueryColumn* key : scopeCols)
 					partition.push_back(ibQueryColumnExpr::Col(key));
-				const wxString windowAlias = wxString::Format(wxT("over%u"),
+				const ibString windowAlias = ibString::Format(ibT("over%u"),
 					static_cast<unsigned>(nextSynthId));
 				b.SelectExpr(ibQueryColumnExpr::WindowAgg(WindowFnOf(agg->m_func),
 				                                          ibQueryColumnExpr::Col(col), std::move(partition)),
@@ -8910,7 +8847,118 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		oc.m_type = TypeOfFold(agg->m_func, argType);
 		if (col != nullptr) { oc.m_col = col; oc.m_ownedCol = owned; }   // real OR synthetic column — keyed by metaID
 		else { oc.m_alias = outName; oc.m_byAlias = true; }              // COUNT(*), or an area folded here — read by name
-		outSchema.push_back(oc);
+		return oc;
+	};
+
+	// ⭐⭐ A FIGURE MADE OF FIGURES — `SUM(Accrued) - SUM(Deducted) AS ToPay`. Each call is declared by the road above
+	// under a name nobody reads but the expression, and is not published; the expression reads them by those names
+	// and is worked out at every heading once the tree is folded (ApplyDerivedAggregates).
+	//
+	// ⭐ IT ANSWERS TO A FIELD BY ITS NAME, and that is the only name it has: two calls over two fields name nothing
+	// between them, so the author says which column of the result this is. A SELECTED field of that name IS the
+	// column — the headings carry the figure, a detail row the field's own value: one column, as `SUM(Number)` and
+	// `Number` are one (Max, 2026-10-30: "in the groupings themselves, it is needed").
+	const auto lowerDerived = [&](const ibQueryTotalAggregate& resource) -> OutputColumn {
+		const ibQueryAstExprPtr& figure = resource.m_expr;
+		if (resource.m_alias.IsEmpty())
+			ThrowQueryException(figure->m_line, figure->m_col,
+				_("TOTALS computes \"%s\" from other figures: name the field it answers to (AS Name)"),
+				ibRenderQueryExpr(*figure));
+		// A field outside every call has no one value on a heading — the rule GROUP BY states for a selection.
+		std::vector<const ibQueryAstExpr*> folded, free;
+		ibQueryCollectFoldedAndFree(figure, false, folded, free);
+		if (!free.empty())
+			ThrowQueryException(free.front()->m_line, free.front()->m_col,
+				_("TOTALS figure \"%s\" reads \"%s\" outside an aggregate: a heading holds no single value of it"),
+				resource.m_alias, ibRenderQueryExpr(*free.front()));
+
+		// THE FIELD IT ANSWERS TO, claimed BEFORE its calls: a call over that same field is then a second fold over
+		// one column and moves to a column of its own, so the figure never overwrites what it is computed from.
+		// Claimed already (an earlier figure rolls into it) or not a plain column — a slot of its own, read by name.
+		const ibBackendQueryColumn* field = nullptr;
+		const auto pit = selectByName.find(resource.m_alias);
+		if (pit != selectByName.end() && pit->second->m_expr->m_kind == ibQueryAstExprKind::Column) {
+			const std::vector<const ibBackendQueryColumn*> path = ResolvePath(sources, *pit->second->m_expr);
+			if (!path.empty() && path.back() != nullptr && aggregatedCols.insert(path.back()).second)
+				field = path.back();
+		}
+
+		// EACH CALL, on the road a single figure takes — the figure's area is each call's. What is inside a call is
+		// its argument, not another figure.
+		std::map<const ibQueryAstExpr*, ibString>          declared;
+		std::vector<std::shared_ptr<ibBackendQueryColumn>> measures;
+		const std::function<void(const ibQueryAstExprPtr&)> declare = [&](const ibQueryAstExprPtr& e) {
+			if (!e)
+				return;
+			if (e->m_kind != ibQueryAstExprKind::Func || !ibIsAggregateKeyword(e->m_func) || e->m_over) {
+				ibQueryForEachChild(*e, declare);
+				return;
+			}
+			const ibString name = ibString::Format(ibT("fig%u"), static_cast<unsigned>(nextSynthId++));
+			const OutputColumn call = lowerCall(e, resource, name);
+			if (call.m_ownedCol != nullptr)
+				measures.push_back(call.m_ownedCol);
+			declared[e.get()] = name;
+		};
+		declare(figure);
+
+		const ibAggregateSink sink{ nullptr, nullptr, &declared };
+		ibQueryColumnExprPtr expr;
+		{
+			const ibAggregateSinkScope armed(&sink);
+			expr = BuildColumnExprFromAst(sources, *figure, params);
+		}
+		b.AggregateDerived(field, resource.m_alias, std::move(expr), std::move(measures));
+		// …and the rows carry the field, so a detail row has its own value to show: the selection's loop below finds
+		// the name taken and projects nothing.
+		if (field != nullptr)
+			b.Select(field, resource.m_alias);
+
+		OutputColumn oc; oc.m_name = resource.m_alias;
+		oc.m_role = ibQueryLowering::ibColumnRole::Measure;   // a TOTALS figure — the report's resource
+		oc.m_available = IsExprAvailable(sources, figure);    // …available while everything it folds is
+		// What the expression answers with, where that is certain (TypeOfExpr). A name it reads that resolves nowhere
+		// claims nothing — empty is the honest "unknown".
+		try { oc.m_type = TypeOfExpr(sources, *figure, params); }
+		catch (const ibCoreException&) {}
+		if (field != nullptr) oc.m_col = field;                         // the field's own column — keyed by metaID
+		else { oc.m_alias = resource.m_alias; oc.m_byAlias = true; }   // a slot of its own — read by name
+		return oc;
+	};
+
+	for (const ibQueryTotalAggregate& resource : ast.m_totalsAggregates) {
+		const ibQueryAstExprPtr& agg = resource.m_expr;
+		if (!agg || (agg->m_kind != ibQueryAstExprKind::Func && !ibQueryMentionsAggregate(agg)))
+			ThrowQueryException(0, 0, _("TOTALS expects aggregate functions (SUM/COUNT/MIN/MAX/AVG)"));
+
+		// ⭐⭐ A NAME THE AUTHOR WROTE IS NOT A CANDIDATE — IT IS THE ANSWER. The qualifier below
+		// exists to settle a name the ENGINE derived; applying it to `AS Qty` would rename the very
+		// thing the author named, and `res["Qty"]` would then find nothing (the report reads the
+		// figure back by the name it was given).
+		//
+		// So a collision with an alias is REFUSED, out loud, instead of being papered over: two
+		// columns answering to one name is a query that cannot be read back, and the author is the
+		// only one who can decide which name to change.
+		if (!resource.m_alias.IsEmpty())
+			for (const OutputColumn& used : outSchema)
+				if (used.m_name.IsSameAs(resource.m_alias, false))
+					ThrowQueryException(agg->m_line, agg->m_col,
+						_("TOTALS names the resource \"%s\", and a grouping level already answers to that name: give one of them another alias"),
+						resource.m_alias);
+
+		if (agg->m_kind != ibQueryAstExprKind::Func) {
+			outSchema.push_back(lowerDerived(resource));
+			continue;
+		}
+
+		// Output name read back via res[name]: COUNT(*) -> the function name; a field -> its identifier.
+		// Qualified when that name is already spoken for — see uniqueOutputName.
+		const ibString wantedName = agg->m_star
+			? ibQueryKeywordText(agg->m_func)
+			: (agg->m_arg && !agg->m_arg->m_path.empty() ? agg->m_arg->m_path.back() : ibQueryKeywordText(agg->m_func));
+		const ibString outName = !resource.m_alias.IsEmpty() ? resource.m_alias
+			: uniqueOutputName(wantedName, ibQueryKeywordText(agg->m_func));
+		outSchema.push_back(lowerCall(agg, resource, outName));
 	}
 
 	// ⭐⭐ AND THE SELECTed FIELDS — ALWAYS, whether or not the rows were asked for.
@@ -8936,7 +8984,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		for (const ibQueryProjection& p : ast.m_projections) {
 			if (p.m_star || !p.m_expr)
 				continue;
-			const wxString name = OutputNameFor(ast, p, projectionIndex++);
+			const ibString name = OutputNameFor(ast, p, projectionIndex++);
 
 			// Already in the schema — a dimension or a resource of that name prints it, and a
 			// second column under one name would be the same field twice.
@@ -8993,21 +9041,21 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		std::vector<std::pair<const ibBackendQueryColumn*, int>> periods;   // …each with the rank it is compared by
 		std::vector<const ibBackendQueryColumn*> dimensions, unspoken;
 		std::set<const ibBackendQueryColumn*> decided;   // …by the SELECT, which the rows below do not overrule
-		const auto read = [&b](const ibBackendQueryColumn* c, const wxString& name) {
+		const auto read = [&b](const ibBackendQueryColumn* c, const ibString& name) {
 			for (const auto& selected : b.GetSelectColumns())
 				if (selected.first == c)
 					return;
-			b.Select(c, name + wxT("_read"));   // …a field a balance reads its moment or its key from rides into the read
+			b.Select(c, name + ibT("_read"));   // …a field a balance reads its moment or its key from rides into the read
 		};
 		int projectionIndex = 0;
 		for (const ibQueryProjection& p : ast.m_projections) {
 			if (p.m_star || !p.m_expr)
 				continue;
-			const wxString name = OutputNameFor(ast, p, projectionIndex++);
+			const ibString name = OutputNameFor(ast, p, projectionIndex++);
 			if (p.m_expr->m_kind != ibQueryAstExprKind::Column)
 				continue;   // a computed field is neither a moment nor a key
 			const std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, *p.m_expr);
-			if (cols.size() != 1 || cols.front() == nullptr || figureCols.count(cols.front()) != 0)
+			if (cols.size() != 1 || cols.front() == nullptr || figureCols.contains(cols.front()))
 				continue;
 			const ibBackendQueryColumn* c = cols.front();
 			decided.insert(c);
@@ -9031,7 +9079,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			if (s.m_q == nullptr)
 				continue;
 			for (const ibBackendQueryColumn* c : s.m_q->GetColumns()) {
-				if (c == nullptr || figureCols.count(c) != 0 || decided.count(c) != 0)
+				if (c == nullptr || figureCols.contains(c) || decided.contains(c))
 					continue;
 				switch (c->GetBalanceRole()) {
 				case ibBalanceRole::Moment:    periods.emplace_back(c, c->GetPeriodRank()); read(c, c->GetName()); break;
@@ -9172,8 +9220,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			}
 			// Nothing of that name out here — say so rather than sort by something else. A level whose
 			// key the source does not publish is a defect in the declaration, not a preference.
-			ibJournalInfo(wxT("query.road"),
-				wxT("level sort '%s' is not published by the source it reads - the level is left unsorted"),
+			ibJournalInfo(ibT("query.road"),
+				ibT("level sort '%s' is not published by the source it reads - the level is left unsorted"),
 				ls.m_name);
 			continue;
 		}
@@ -9208,10 +9256,10 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			continue;
 		}
 
-		ibJournalInfo(wxT("query.road"),
-			wxT("level sort '%s' is not owned by the source this read has - the level is left "
+		ibJournalInfo(ibT("query.road"),
+			ibT("level sort '%s' is not owned by the source this read has - the level is left "
 			    "unsorted rather than ordering by a name the statement never writes"),
-			ls.m_col != nullptr ? ls.m_col->GetName() : wxString(wxT("(no column)")));
+			ls.m_col != nullptr ? ls.m_col->GetName() : ibString(ibT("(no column)")));
 	}
 
 	// ⭐ SAID IN THE JOURNAL, AS TWO NUMBERS — because "the sort does not react" is a complaint about
@@ -9224,8 +9272,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		for (size_t oi = 0; oi < ast.m_orderBy.size(); ++oi)
 			if (!orderConsumed[oi])
 				++authorKeys;
-		ibJournalInfo(wxT("query.order"),
-			wxT("totals: %u author key(s) first, then %u level key(s)"),
+		ibJournalInfo(ibT("query.order"),
+			ibT("totals: %u author key(s) first, then %u level key(s)"),
 			static_cast<unsigned>(authorKeys), static_cast<unsigned>(levelOrder.size()));
 	}
 
@@ -9256,24 +9304,24 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		// The result has no default state — an empty one is made the way every empty result is.
 		ibDataQueryResult folded = ibMakeEmptyQueryResult(nullptr);
 		if (b.TryTotalsPushdown(folded)) {
-			ibJournalInfo(wxT("query.totals"), wxT("%u level(s), %u resource(s): folded by the DBMS"),
+			ibJournalInfo(ibT("query.totals"), ibT("%u level(s), %u resource(s): folded by the DBMS"),
 				static_cast<unsigned>(ast.m_totalsBy.size()),
 				static_cast<unsigned>(ast.m_totalsAggregates.size()));
 			DetachSchemaFromRunSources(outSchema, owner);
 			return folded;
 		}
-		ibJournalInfo(wxT("query.totals"), wxT("%u level(s), %u resource(s): folded in memory ")
-			wxT("- the engine or the driver refused the shape"),
+		ibJournalInfo(ibT("query.totals"), ibT("%u level(s), %u resource(s): folded in memory ")
+			ibT("- the engine or the driver refused the shape"),
 			static_cast<unsigned>(ast.m_totalsBy.size()),
 			static_cast<unsigned>(ast.m_totalsAggregates.size()));
 	}
 	else {
-		ibJournalInfo(wxT("query.totals"), wxT("%u level(s), %u resource(s): folded in memory - %s"),
+		ibJournalInfo(ibT("query.totals"), ibT("%u level(s), %u resource(s): folded in memory - %s"),
 			static_cast<unsigned>(ast.m_totalsBy.size()),
 			static_cast<unsigned>(ast.m_totalsAggregates.size()),
-			withDetails      ? wxT("the rows were asked for")
-			: ast.m_forUpdate ? wxT("FOR UPDATE must touch the rows it locks")
-			                  : wxT("TOP caps the detail rows the fold runs over"));
+			withDetails      ? ibT("the rows were asked for")
+			: ast.m_forUpdate ? ibT("FOR UPDATE must touch the rows it locks")
+			                  : ibT("TOP caps the detail rows the fold runs over"));
 	}
 
 	ibDataQueryResult detail = b.Execute(topPage);

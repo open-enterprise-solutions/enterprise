@@ -3,92 +3,61 @@
 #include <map>
 #include <mutex>
 
-#include <wx/base64.h>
-#include <wx/mstream.h>
+#include <wx/file.h>
+#include <wx/filename.h>
+
+#include "core/serialize/dataBuilder.h"     // ibDataValue — a picture as an answer names it
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// The registry keeps each picture as the server does; a wx image is made from it when one is asked for
-// (GetPicture), so no two sessions copy one shared wx object.
-struct ibRegisteredPicture {
-	wxString        m_name;
-	ibPictureID     m_id;
-	ibServerPicture m_picture;
-};
-
-static std::vector<ibRegisteredPicture> s_arrayPicture;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-bool RegisterBackendPicture(const wxString name, const ibPictureID& id, const char* const* data)
+bool ibBackendPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibPictureDescription& pictureDesc)
 {
-	if (!ibBackendPicture::IsRegisterPicture(id)) {
-		ibBackendPicture::RegisterPicture(name, id, wxImage(data));
-		return true;
-	}
+	// READ WHOLE, THEN TAKEN — a refusal below leaves the description it was reading into as it was.
+	ibPictureDescription read;
+	if (!ibPictureDescriptionMemory::ReadNode(value, read))
+		return false;
 
-	wxASSERT_MSG(false, "Picture is register");
-	return false;
-}
+	// 🛑 A PICTURE THE ENGINE HAS, ASKED OF THE PICTURE FACTORY — 0 is the empty picture and is one.
+	// Any other id nobody registered was taken without a word and drew nothing (measured 2026-09-22: a
+	// rounded Print id, sent back through `value`). On loading it refuses only what could not be drawn
+	// here anyway: the pictures register when the DLLs load, before any configuration is read, and a
+	// process without the front's controls (the daemon) never writes a configuration back.
+	if (read.m_type == ibPictureType::eFromBackend && read.m_class_identifier != 0
+		&& !ibBackendPicture::IsRegisterPicture(read.m_class_identifier))
+		return false;
 
-bool RegisterBackendPicture(const wxString name, const ibPictureID& id, const wxString& base64)
-{
-	if (!ibBackendPicture::IsRegisterPicture(id)) {
-		// The string is a MASTER, drawn larger than it is shown (tools/pictures/render.js); a registered picture is
-		// handed out as it is kept, and every reader of one shows it at 16 - so it is kept at 16, scaled down once here.
-		ibBackendPicture::RegisterPicture(name, id, ibBackendPicture::GetImageFromBase64(base64, wxSize(16, 16)));
-		return true;
-	}
-
-	wxASSERT_MSG(false, "Picture is register");
-	return false;
-}
-
-bool RegisterBackendPicture(const wxString name, const ibPictureID& id, const wxBitmap& bitmap)
-{
-	if (!ibBackendPicture::IsRegisterPicture(id)) {
-		ibBackendPicture::RegisterPicture(name, id, bitmap);
-		return true;
-	}
-
-	wxASSERT_MSG(false, "Picture is register");
-	return false;
+	pictureDesc = read;
+	return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibBackendPicture::LoadFromFile(const wxString& strFileName, ibExternalPictureDescription& pictureDesc)
+bool ibBackendPicture::LoadFromFile(const ibString& strFileName, ibExternalPictureDescription& pictureDesc)
 {
-	wxFileName filename = strFileName;
+	const wxFileName filename(strFileName);
+	if (!filename.FileExists())
+		return false;
 
-	// Cache the image
-	if (filename.FileExists()) {
+	wxFile file(filename.GetFullPath());
+	const wxFileOffset length = file.IsOpened() ? file.Length() : wxInvalidOffset;
+	if (length <= 0)
+		return false;
+	std::string bytes(static_cast<size_t>(length), '\0');
+	if (file.Read(bytes.data(), bytes.size()) != static_cast<ssize_t>(bytes.size()))
+		return false;
 
-		wxImage image(filename.GetFullPath());
-		wxMemoryOutputStream outputStream;
+	const ibSize size = ibPicture(ibMemoryBuffer(bytes.data(), bytes.size())).GetSize();
+	if (size.m_width <= 0 || size.m_height <= 0)
+		return false;
 
-		if (image.SaveFile(outputStream, wxBitmapType::wxBITMAP_TYPE_PNG)) {
-
-			// Get the data from the output stream's buffer
-			// The output stream manages the memory buffer internally.
-			const size_t buffer_len = outputStream.GetLength();
-
-			pictureDesc.m_img_name = filename.GetFullPath();
-			pictureDesc.m_img_buffer.resize(buffer_len, '\0');
-
-			outputStream.CopyTo(pictureDesc.m_img_buffer.data(), buffer_len);
-
-			pictureDesc.m_width = image.GetWidth();
-			pictureDesc.m_height = image.GetHeight();
-
-			return true;
-		}
-	}
-
-	return false;
+	pictureDesc.m_img_name = filename.GetFullPath();
+	pictureDesc.m_img_buffer = std::move(bytes);
+	pictureDesc.m_width = size.m_width;
+	pictureDesc.m_height = size.m_height;
+	return true;
 }
 
-bool ibBackendPicture::LoadFromFile(const wxString& strFileName, ibPictureDescription& pictureDesc)
+bool ibBackendPicture::LoadFromFile(const ibString& strFileName, ibPictureDescription& pictureDesc)
 {
 	if (ibBackendPicture::LoadFromFile(strFileName, pictureDesc.m_img_data)) {
 		pictureDesc.m_type = ibPictureType::eFromFile;
@@ -98,113 +67,105 @@ bool ibBackendPicture::LoadFromFile(const wxString& strFileName, ibPictureDescri
 	return false;
 }
 
-wxBitmap ibBackendPicture::CreatePicture(const ibExternalPictureDescription& pictureDesc, const wxSize& size)
+ibPicture ibBackendPicture::CreatePicture(const ibExternalPictureDescription& pictureDesc, const ibSize& size)
 {
-	if (!pictureDesc.m_img_buffer.empty()) {
-		wxMemoryInputStream inputStream(
-			pictureDesc.m_img_buffer.data(),
-			pictureDesc.m_img_buffer.size()
-		);
-		const wxImage image(inputStream);
-		if (size != image.GetSize())
-			return image.Scale(size.x, size.y, wxIMAGE_QUALITY_HIGH);
-		return image;
-	}
-
-	return wxNullBitmap;
+	if (pictureDesc.m_img_buffer.empty())
+		return ibPicture();
+	return ibPicture(ibMemoryBuffer(pictureDesc.m_img_buffer.data(), pictureDesc.m_img_buffer.size())).Scale(size);
 }
 
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaPictureObject.h"
 
-wxBitmap ibBackendPicture::CreatePicture(const ibPictureDescription& pictureDesc, const ibMetaData* metaData, const wxSize& size)
+// A CONFIGURATION'S PICTURE, where the configuration keeps it: in the one it extends when it extends one, else its own.
+static const ibValueMetaObjectPicture* FindConfigurationPicture(const ibMetaData& metaData, const ibGuid& guid)
+{
+	ibMetaData* metaDataOwner = nullptr;
+	const ibMetaData& source = metaData.GetOwner(metaDataOwner) && metaDataOwner != nullptr ? *metaDataOwner : metaData;
+	return source.FindAnyObjectByFilter<ibValueMetaObjectPicture>(guid);
+}
+
+ibPicture ibBackendPicture::CreatePicture(const ibPictureDescription& pictureDesc, const ibMetaData* metaData, const ibSize& size)
 {
 	if (pictureDesc.m_type == ibPictureType::eFromBackend) {
 		return ibBackendPicture::GetPicture(pictureDesc.m_class_identifier);
 	}
 	else if (pictureDesc.m_type == ibPictureType::eFromConfiguration) {
 		if (metaData != nullptr && pictureDesc.m_meta_guid.isValid()) {
-			ibMetaData* metaDataOwner = nullptr;
-			if (metaData != nullptr && metaData->GetOwner(metaDataOwner) && metaDataOwner != nullptr) {
-				const ibValueMetaObjectPicture* picture =
-					metaDataOwner->FindAnyObjectByFilter<ibValueMetaObjectPicture>(pictureDesc.m_meta_guid);
-				return picture != nullptr && picture->IsAllowed() ? picture->GetValueAsBitmap() : wxNullBitmap;
-			}
-			else if (metaData != nullptr) {
-				const ibValueMetaObjectPicture* picture =
-					metaData->FindAnyObjectByFilter<ibValueMetaObjectPicture>(pictureDesc.m_meta_guid);
-				return picture != nullptr && picture->IsAllowed() ? picture->GetValueAsBitmap() : wxNullBitmap;
-			}
+			const ibValueMetaObjectPicture* picture = FindConfigurationPicture(*metaData, pictureDesc.m_meta_guid);
+			return picture != nullptr && picture->IsAllowed() ? picture->GetValueAsPicture() : ibPicture();
 		}
 	}
 	else if (pictureDesc.m_type == ibPictureType::eFromFile) {
 		return ibBackendPicture::CreatePicture(pictureDesc.m_img_data, size);
 	}
 
-	return wxNullBitmap;
+	return ibPicture();
 }
 
-ibServerPicture ibBackendPicture::GetServerPicture(const ibPictureDescription& pictureDesc, const ibMetaData* metaData)
+ibPicture ibBackendPicture::GetServerPicture(const ibPictureDescription& pictureDesc, const ibMetaData* metaData)
 {
 	if (pictureDesc.IsEmptyPicture())
-		return ibServerPicture();
+		return ibPicture();
 
-	// A backend picture is the process's: a registered one is kept as it is sent; a class's icon is made at its
-	// first asking, under the lock, and only read after that.
+	// A backend picture is the process's: made at its first asking at the size it is shown (a registered one is a
+	// master), under the lock, and only read after that.
 	if (pictureDesc.m_type == ibPictureType::eFromBackend) {
-		const auto registered = std::find_if(s_arrayPicture.begin(), s_arrayPicture.end(),
-			[&pictureDesc](const auto& entry) { return entry.m_id == pictureDesc.m_class_identifier; });
-		if (registered != s_arrayPicture.end())
-			return registered->m_picture;
-
 		static std::mutex s_madeMutex;
-		static std::map<ibPictureID, ibServerPicture> s_made;
+		static std::map<ibPictureID, ibPicture> s_made;
 		const std::lock_guard<std::mutex> lock(s_madeMutex);
 		const auto found = s_made.find(pictureDesc.m_class_identifier);
 		if (found != s_made.end())
 			return found->second;
-		const wxBitmap bitmap = GetPicture(pictureDesc.m_class_identifier);
-		return s_made.emplace(pictureDesc.m_class_identifier,
-			bitmap.IsOk() ? ibServerPicture(bitmap.ConvertToImage()) : ibServerPicture()).first->second;
+		const ibPicture picture = GetPicture(pictureDesc.m_class_identifier);
+		if (picture.IsOk() || metaData == nullptr)
+			return s_made.emplace(pictureDesc.m_class_identifier, picture).first->second;
+		// …a type of the configuration's own (a catalog's reference) — its class's icon, as the configuration's
+		// constructor of it gives it: made anew, the configuration's only.
+		const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(pictureDesc.m_class_identifier);
+		return ctor != nullptr ? ctor->GetClassIcon() : ibPicture();
 	}
 
 	// A configuration's picture and a file's are made from the bytes they keep — anew, shared with nobody.
-	const wxBitmap bitmap = CreatePicture(pictureDesc, metaData);
-	return bitmap.IsOk() ? ibServerPicture(bitmap.ConvertToImage()) : ibServerPicture();
+	return CreatePicture(pictureDesc, metaData);
+}
+
+ibDataValue ibBackendPicture::SendPicture(const ibPictureDescription& pictureDesc, const ibMetaData* metaData)
+{
+	if (pictureDesc.IsEmptyPicture())
+		return ibDataValue();
+	// A picture held as a file's bytes has no name of its own: it goes as itself.
+	if (pictureDesc.m_type == ibPictureType::eFromFile) {
+		const ibPicture picture = GetServerPicture(pictureDesc, metaData);
+		return picture.IsOk() ? ibDataValue::Binary(picture.GetData()) : ibDataValue();
+	}
+
+	if (pictureDesc.m_type == ibPictureType::eFromBackend) {
+		const ibString id = SendPicture(pictureDesc.m_class_identifier);
+		return !id.IsEmpty() ? ibDataValue::String(id) : ibDataValue();
+	}
+
+	// A configuration picture's guid and the version of what it holds now: a client keeps a picture by its guid with the
+	// version it was given, and asks anew for one named by another. One no configuration has — none given, or the
+	// one given has none of it — is no picture.
+	const ibValueMetaObjectPicture* const picture =
+		metaData != nullptr ? FindConfigurationPicture(*metaData, pictureDesc.m_meta_guid) : nullptr;
+	if (picture == nullptr)
+		return ibDataValue();
+	return ibDataValue::String(pictureDesc.m_meta_guid.str() + ibT('#') + picture->GetValueAsVersion().str());
+}
+
+ibString ibBackendPicture::SendPicture(const ibPictureID& id)
+{
+	return id != 0 ? ibString::Format(ibT("%llu"), static_cast<unsigned long long>(id)) : ibString();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ibServerPicture::ibServerPicture(const wxString& base64, const wxSize& size)
-	: ibServerPicture(ibBackendPicture::GetImageFromBase64(base64, size))
-{
-}
-
-ibServerPicture::ibServerPicture(const wxImage& image)
-	: m_data(image.IsOk() ? ibBackendPicture::CreateBase64Image(image) : wxString())
-{
-}
-
-wxBitmap ibServerPicture::ToBitmap() const
-{
-	return IsOk() ? wxBitmap(ibBackendPicture::GetImageFromBase64(m_data)) : wxNullBitmap;
-}
-
-wxIcon ibServerPicture::ToIcon() const
-{
-	wxIcon icon;
-	if (IsOk())
-		icon.CopyFromBitmap(ToBitmap());
-	return icon;
-}
-
 #pragma region __picture_factory_h__
 bool ibBackendPicture::IsRegisterPicture(const ibPictureID& id)
 {
-	auto iterator = std::find_if(s_arrayPicture.begin(), s_arrayPicture.end(),
-		[id](const auto& entry) { return entry.m_id == id; });
-
-	if (iterator != s_arrayPicture.end())
+	if (ibPictureRegistry::IsRegisterPicture(id))
 		return true;
 
 	const ibCtorAbstractType* so = ibValue::GetAvailableCtor(id);
@@ -214,102 +175,37 @@ bool ibBackendPicture::IsRegisterPicture(const ibPictureID& id)
 	return false;
 }
 
-void ibBackendPicture::RegisterPicture(const wxString name, const ibPictureID& id, const wxBitmap& bitmap)
+ibPicture ibBackendPicture::GetPicture(const ibPictureID& id)
 {
-	s_arrayPicture.push_back({ name, id, ibServerPicture(bitmap.ConvertToImage()) });
-}
-
-wxBitmap ibBackendPicture::GetPicture(const ibPictureID& id)
-{
-	// By reference: a list asks for a row's picture on every paint, and a copy of each entry passed over (its
-	// name and its bitmap) was the whole cost of the search.
-	auto iterator = std::find_if(s_arrayPicture.begin(), s_arrayPicture.end(),
-		[id](const auto& entry) { return entry.m_id == id; });
-
-	if (iterator != s_arrayPicture.end())
-		return iterator->m_picture.ToBitmap();
+	const ibPicture registered = ibPictureRegistry::GetPicture(id);
+	if (registered.IsOk())
+		return registered.Scale(ibSize(16, 16));
 
 	const ibCtorAbstractType* so = ibValue::GetAvailableCtor(id);
 	if (so != nullptr)
 		return so->GetClassIcon();
-	
-	return wxNullBitmap;
+
+	return ibPicture();
 }
 
-wxIcon ibBackendPicture::GetPictureAsIcon(const ibPictureID& id)
+std::vector<ibPictureEntry> ibBackendPicture::GetArrayPicture()
 {
-	auto iterator = std::find_if(s_arrayPicture.begin(), s_arrayPicture.end(),
-		[id](const auto& entry) { return entry.m_id == id; });
-
-	if (iterator != s_arrayPicture.end())
-		return iterator->m_picture.ToIcon();
-
-	const ibCtorAbstractType* so = ibValue::GetAvailableCtor(id);
-	if (so != nullptr)
-		return so->GetClassIcon();
-	
-	return wxNullIcon;
-}
-
-std::vector<ibBackendPictureEntry> ibBackendPicture::GetArrayPicture()
-{
-	std::vector<ibBackendPictureEntry> arrayPicture;
-	for (const ibRegisteredPicture& registered : s_arrayPicture)
-		arrayPicture.push_back({ registered.m_name, registered.m_picture.ToBitmap(), registered.m_id });
+	std::vector<ibPictureEntry> arrayPicture;
+	for (const ibPictureEntry& registered : ibPictureRegistry::GetArrayPicture())
+		arrayPicture.push_back({ registered.m_name, registered.m_id, registered.m_picture.Scale(ibSize(16, 16)) });
 
 	for (auto so : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_metadata)) {
-		const wxIcon backend_icon = so->GetClassIcon();
-		if (backend_icon.IsOk()) {
-			ibBackendPictureEntry entry;
-			entry.m_name = so->GetClassName();
-			entry.m_id = so->GetClassType();
-			entry.m_data = backend_icon;
-			arrayPicture.push_back(entry);
-		}
+		const ibPicture icon = so->GetClassIcon();
+		if (icon.IsOk())
+			arrayPicture.push_back({ so->GetClassName(), so->GetClassType(), icon });
 	}
 
 	for (auto so : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_control)) {
-		const wxIcon backend_icon = so->GetClassIcon();
-		if (backend_icon.IsOk()) {
-			ibBackendPictureEntry entry;
-			entry.m_name = so->GetClassName();
-			entry.m_id = so->GetClassType();
-			entry.m_data = backend_icon;
-			arrayPicture.push_back(entry);
-		}
+		const ibPicture icon = so->GetClassIcon();
+		if (icon.IsOk())
+			arrayPicture.push_back({ so->GetClassName(), so->GetClassType(), icon });
 	}
 
 	return arrayPicture;
 }
 #pragma endregion
-#pragma region __picture_conv_h__
-wxString ibBackendPicture::CreateBase64Image(const wxImage& image) {
-	wxMemoryOutputStream outputStream;
-	if (image.SaveFile(outputStream, wxBitmapType::wxBITMAP_TYPE_PNG)) {
-		const wxStreamBuffer* buffer =
-			outputStream.GetOutputStreamBuffer();
-		return wxBase64Encode(buffer->GetBufferStart(), buffer->GetLastAccess());
-	}
-	return wxEmptyString;
-}
-
-wxImage ibBackendPicture::GetImageFromBase64(const wxString& src, const wxSize& size) {
-	const wxMemoryBuffer buffer = wxBase64Decode(src);
-	wxMemoryInputStream stream(buffer.GetData(), buffer.GetDataLen());
-	wxImage image(stream);
-	return size != wxDefaultSize ? image.Scale(
-		size.x, size.y, wxIMAGE_QUALITY_HIGH) : image;
-}
-
-wxBitmap ibBackendPicture::GetBitmapFromBase64(const wxString& src, const wxSize& size)
-{
-	return GetImageFromBase64(src, size);
-}
-
-wxIcon ibBackendPicture::GetIconFromBase64(const wxString& src, const wxSize& size)
-{
-	wxIcon icon;
-	icon.CopyFromBitmap(GetBitmapFromBase64(src, size));
-	return icon;
-}
-#pragma endregion 

@@ -23,7 +23,7 @@
 //
 // See docs/private/query-language-arc.md §14 / §22 / §23.
 
-#include "queryAST.h"
+#include "core/query/queryAST.h"
 #include "dataQueryBuilder.h"   // ibDataQueryResult / ibDataQueryBuilder
 #include "queryable.h"          // ibBackendQueryColumn
 
@@ -51,7 +51,7 @@ public:
 	// is read either by source column (GetValue) or by door alias (GetColumn).
 	struct OutputColumn
 	{
-		wxString                    m_name;             // script-visible output name
+		ibString                    m_name;             // script-visible output name
 		// (⚠ AND NO TITLE HERE. What a column is CALLED belongs to the composition, not to the query:
 		//  this tier names columns so they can be READ BACK — uniquely, in one word — while a title
 		//  is written for a person, may repeat, and is a setting an author edits. It is held in the
@@ -65,7 +65,7 @@ public:
 		// page entirely. The level is stated here rather than counted there.
 		int                         m_level = -1;
 		const ibBackendQueryColumn* m_col   = nullptr;  // source column (GetValue) — null when by-alias
-		wxString                    m_alias;            // door alias (GetColumn) — dot-walk / aggregate / explicit
+		ibString                    m_alias;            // door alias (GetColumn) — dot-walk / aggregate / explicit
 		bool                        m_byAlias = false;  // read via GetColumn(alias) vs GetValue(col)
 
 		// ⭐ WHAT THIS COLUMN HOLDS — carried even when the value is read BY ALIAS.
@@ -83,7 +83,7 @@ public:
 		// Non-empty for a dot-walk leaf that is a reference / enum / composite: read via
 		// GetColumn(m_objectPrefix, m_col), which reassembles the object from its prefixed field spread
 		// (the provider projects it so). Empty => a plain scalar leaf / aggregate / column read by alias.
-		wxString                    m_objectPrefix;
+		ibString                    m_objectPrefix;
 		// A SYNTHETIC source column (a computed TOTALS measure) the lowering built — owned HERE so it
 		// outlives the door AND the result: the schema travels with the selection, and m_col points into
 		// this. Null for a real metadata column (owned by the metadata) or a by-alias read.
@@ -122,7 +122,7 @@ public:
 	// ibBackendException on a resolution failure, a missing &parameter, or an
 	// unsupported construct (with the AST source span). Returns the move-only selection.
 	static ibDataQueryResult Execute(const ibQuerySelect& ast,
-	                                 const std::map<wxString, ibValue>& params,
+	                                 const std::map<ibString, ibValue>& params,
 	                                 std::vector<OutputColumn>& outSchema);
 
 	// RESOLVE THE NAMES, RUN NOTHING. Parsing this language cannot tell a field that exists from one
@@ -143,7 +143,7 @@ public:
 	// backend DLL (the constructor's verdict line), and exporting the whole class would drag its
 	// nested PackageResult — a move-only type holding unique_ptr — across the boundary for nothing.
 	BACKEND_API static void CheckNames(const ibQueryPackage& package,
-	                                   const std::map<wxString, ibValue>& params);
+	                                   const std::map<ibString, ibValue>& params);
 
 	// DROP WHAT NO LONGER RESOLVES, and answer how much went. The other half of the same idea: a
 	// path is not chased down and deleted when its table is removed — removal simply BREAKS it, and
@@ -156,7 +156,7 @@ public:
 	// ⚠ Same promise as CheckNames: what cannot be VERIFIED is never touched. A select whose source
 	// cannot be resolved without running (a package temp table, a nested query) is left whole.
 	BACKEND_API static int PruneUnresolved(ibQueryPackage& package,
-	                                       const std::map<wxString, ibValue>& params);
+	                                       const std::map<ibString, ibValue>& params);
 
 	// ⭐ WHAT IS FILTERED AROUND A VIRTUAL TABLE THAT ITS OWN PARAMETERS WOULD TAKE — one sentence per such
 	// condition, saying which table, which condition and which parameter it belongs in.
@@ -166,34 +166,7 @@ public:
 	// inside it the rows are selected before the fold (Max, 2026-09-17: "a virtual table hands you the
 	// filtered table at once"). A condition qualifies when every field it names is one the table offers
 	// for that parameter (FillConditionExplorer — the same list the constructor's mouse picks from).
-	BACKEND_API static std::vector<wxString> FiltersAroundVirtualTables(const ibQueryPackage& package);
-
-	// WHICH AGGREGATES CAN BE TAKEN OVER A VALUE OF THIS TYPE — the ONE door, read two ways.
-	//
-	//   SUM / AVG — a NUMBER. There is no sum of dates and no average of references.
-	//   MIN / MAX — anything ORDERED: number, date, string. A reference has no order of its own
-	//               (it keys by guid), so folding one would rank rows by an internal identity.
-	//   COUNT     — anything at all. Counting asks nothing of the type.
-	//
-	// ⚠ CheckNames reads it as a REFUSAL ("SUM cannot be taken over 'Description'"); a host reads it
-	// as WHAT TO OFFER — the constructor's function cell lists exactly these, so a person is never
-	// shown a choice their own engine would then reject. Written twice, the two would drift, and the
-	// drift is a dropdown that offers something the query cannot do.
-	//
-	// A COMPOSITE type (several clsids) yields the full set: which type a row holds is a fact about
-	// the ROW, and narrowing on "it might be a string" would be this answer inventing one.
-	BACKEND_API static std::vector<ibQueryKeyword> AggregatesFor(const ibTypeDescription& type);
-	// ⭐ THE READY CALLS OVER A FIELD, as TEXT — what a window offers in a cell.
-	//
-	// AggregatesFor answers in KEYWORDS, and a window then wraps each one around the field itself.
-	// Two windows did that wrapping (the constructor's Totals tab and the composition's Resources),
-	// and the moment an offer stopped being one plain keyword the two had to be taught separately —
-	// which is how `COUNT(DISTINCT x)` ended up in the LANGUAGE (the parser reads it) and in neither
-	// list. DISTINCT is not an aggregate of its own; it is a modifier on one, so it cannot come back
-	// through the keyword list at all.
-	//
-	// So the ENGINE composes the offers: it knows what the type admits AND what forms a call may take.
-	BACKEND_API static std::vector<wxString> AggregateCallsFor(const ibTypeDescription& type, const wxString& field);
+	BACKEND_API static std::vector<ibString> FiltersAroundVirtualTables(const ibQueryPackage& package);
 
 	// WHICH PROJECTIONS THIS QUERY STILL HAS TO GROUP BY — the ONE door for "can this be grouped".
 	//
@@ -217,22 +190,11 @@ public:
 	// Matching is on the RESOLVED leaf, not on the text: `Products.Code` and `Code` are one column
 	// when one table owns it.
 	BACKEND_API static std::vector<ibQueryAstExprPtr> UngroupedProjections(
-		const ibQuerySelect& ast, const std::map<wxString, ibValue>& params);
+		const ibQuerySelect& ast, const std::map<ibString, ibValue>& params);
 
-	// THE COLUMNS THIS QUERY ALREADY FOLDS — the ones living inside an aggregate call.
-	//
-	// The mirror of the above, and the same two readings. A folded column is accounted for: it is
-	// not missing from GROUP BY, and it must not be PUT there — `SUM(Parent) … GROUP BY Parent`
-	// leaves one row per group, so the fold returns the value itself.
-	//   * CheckNames reads it as a refusal — grouped and aggregated at once is wrong, and it says
-	//     which field. It refuses NARROWLY: a column the query also selects plainly is exempt,
-	//     because the completeness rule above demands that very key and the two must not disagree;
-	//   * a host that assembles a query reads it as "do not offer this one", which is what stops
-	//     the same field standing in the grouping list and the aggregates list together.
-	//
-	// Needs no sources and cannot fail: it reads the written expressions, not what they resolve to.
-	// The caller that has to COMPARE it against a group key resolves both (CheckNames does).
-	BACKEND_API static std::vector<ibQueryAstExprPtr> AggregatedColumns(const ibQuerySelect& ast);
+	// (Its mirror — the columns the query already FOLDS — needs no sources, so it is the core's:
+	//  ibQueryAggregatedColumns, queryRewrite.h. CheckNames reads it as a refusal, a host as "do not
+	//  offer this one".)
 
 	// WHAT COLUMNS DOES THIS QUERY PRODUCE — resolved, and NOT RUN.
 	//
@@ -258,7 +220,7 @@ public:
 	// Throws exactly what Execute throws, with the same words and the same source span — so a host
 	// showing the query's fields and a host running it cannot disagree about whether it is sound.
 	BACKEND_API static void DescribeOutput(const ibQuerySelect& ast,
-	                                       const std::map<wxString, ibValue>& params,
+	                                       const std::map<ibString, ibValue>& params,
 	                                       std::vector<OutputColumn>& outSchema);
 
 	// === A PACKAGE — several statements as ONE trip (docs/private/query-constructor.md §5) ===
@@ -280,9 +242,9 @@ public:
 		// It is the whole reason ONTO exists: a caller asks for "Sales" instead of "the third
 		// statement", and a position is exactly the thing that changes when somebody inserts a
 		// statement above it.
-		wxString m_name;
-		wxString m_intoTemp;                                 // non-empty: this statement materialised that temp table
-		wxString m_dropTemp;                                 // non-empty: this statement released that temp table
+		ibString m_name;
+		ibString m_intoTemp;                                 // non-empty: this statement materialised that temp table
+		ibString m_dropTemp;                                 // non-empty: this statement released that temp table
 		long     m_rowCount = -1;                            // rows materialised by an INTO statement (-1 = not one)
 		bool     m_hasTotals = false;                        // the statement had a TOTALS clause (the result folds)
 		// ⛔ THERE IS NO "FINAL" RESULT ANY MORE, and the flag that marked one is gone with it. The
@@ -318,7 +280,7 @@ public:
 	// LATER query attached to the same store reads what this one left. Same mechanism, different
 	// holder — which is the whole difference between "a batch" and "a set of tables I am keeping".
 	static std::vector<PackageResult> ExecutePackage(const ibQueryPackage& package,
-	                                                 const std::map<wxString, ibValue>& params,
+	                                                 const std::map<ibString, ibValue>& params,
 	                                                 class ibQueryTempTableStore* store = nullptr);
 
 	// ⭐⭐ WHERE EACH LINKED SELECTION STANDS IN THE FINAL QUERY — the placement, and the ONE answer
@@ -336,17 +298,17 @@ public:
 	// Empty head = nothing to place (no usable link).
 	struct JoinStep
 	{
-		wxString           m_name;   // the selection joined at this step
+		ibString           m_name;   // the selection joined at this step
 		ibQueryJoinKindAst m_kind = ibQueryJoinKindAst::Inner;
 		ibQueryAstExprPtr  m_on;     // the condition, ANDed if two links relate the same pair
 	};
 	struct FromTree
 	{
-		wxString              m_head;    // the selection the tree starts from
+		ibString              m_head;    // the selection the tree starts from
 		std::vector<JoinStep> m_steps;   // …and what hangs off it, in the order it must be written
 	};
 	static FromTree PlacePackageLinks(const std::vector<ibQueryPackageLink>& links,
-	                                  const std::vector<wxString>& declared);
+	                                  const std::vector<ibString>& declared);
 
 	// ⭐⭐ RUN WHAT PREPARES, AND ONLY THAT — every `INTO` statement of this package, in order, into
 	// `store`. Nothing else is executed and nothing is returned.
@@ -360,9 +322,9 @@ public:
 	// to it as it is made (and a DROP takes one back out), so the statement after sees it, which is
 	// the batch contract. The caller opens the scope; this fills it.
 	static void PreparePackage(const ibQueryPackage& package,
-	                           const std::map<wxString, ibValue>& params,
+	                           const std::map<ibString, ibValue>& params,
 	                           class ibQueryTempTableStore& store,
-	                           std::map<wxString, const ibBackendQueryable*>& sources);
+	                           std::map<ibString, const ibBackendQueryable*>& sources);
 
 	// The PAGED read — the same lowering with an external page ENVELOPE (anchor /
 	// direction / count) threaded into the door's terminal. This is how a paged
@@ -371,7 +333,7 @@ public:
 	// applies to the plain SELECT path only — an aggregate / UNION read ignores it
 	// (no row cursor to anchor).
 	static ibDataQueryResult Execute(const ibQuerySelect& ast,
-	                                 const std::map<wxString, ibValue>& params,
+	                                 const std::map<ibString, ibValue>& params,
 	                                 std::vector<OutputColumn>& outSchema,
 	                                 const ibReadPageRequest& page);
 
@@ -380,7 +342,7 @@ public:
 	// The caller owns the cache and the signature (it must capture every
 	// SQL-determining input — the L5 composer signs its rendered text + params).
 	static ibDataQueryResult Execute(const ibQuerySelect& ast,
-	                                 const std::map<wxString, ibValue>& params,
+	                                 const std::map<ibString, ibValue>& params,
 	                                 std::vector<OutputColumn>& outSchema,
 	                                 const ibReadPageRequest& page,
 	                                 ibRenderedPageCache& cache, const ibPageSignature& signature);
@@ -388,7 +350,7 @@ public:
 private:
 	// `cache` and `signature` go together: both null for a read that is not cached.
 	static ibDataQueryResult ExecuteImpl(const ibQuerySelect& ast,
-	                                     const std::map<wxString, ibValue>& params,
+	                                     const std::map<ibString, ibValue>& params,
 	                                     std::vector<OutputColumn>& outSchema,
 	                                     const ibReadPageRequest& page,
 	                                     ibRenderedPageCache* cache, const ibPageSignature* signature);
@@ -398,7 +360,7 @@ private:
 	// query is refused with what is actually wrong ("this query reads no table"), not with "unknown
 	// attribute" — the name is not unknown, there is nowhere to read it from.
 	static ibDataQueryResult ExecuteSourceless(const ibQuerySelect& ast,
-	                                           const std::map<wxString, ibValue>& params,
+	                                           const std::map<ibString, ibValue>& params,
 	                                           std::vector<OutputColumn>& outSchema);
 
 public:
@@ -425,7 +387,7 @@ public:
 	// the same reason `withDetails` is: the text of a cross-table is an ordinary TOTALS whose keys
 	// were written rows-first, and the shape belongs to whoever is laying it out.
 	static ibDataQueryResult ExecuteTotals(const ibQuerySelect& ast,
-	                                       const std::map<wxString, ibValue>& params,
+	                                       const std::map<ibString, ibValue>& params,
 	                                       std::vector<OutputColumn>& outSchema,
 	                                       const ibReadPageRequest& page = ibReadPageRequest{},
 	                                       bool* outServerGroupedLevel = nullptr,
@@ -443,7 +405,7 @@ public:
 	// ibDbTableProvider::Can* gates) — see tests/test_queryLINQExec.cpp.
 	static BACKEND_API ibQueryPredicatePtr LowerLambdaPredicate(const ibBackendQueryable* source,
 	                                                const ibQueryAstExpr& expr,
-	                                                const std::map<wxString, ibValue>& captured);
+	                                                const std::map<ibString, ibValue>& captured);
 	// A pure column / dot-walk path lambda body (OrderBy / aggregate selectors).
 	static std::vector<const ibBackendQueryColumn*> LowerLambdaColumnPath(
 	                                                const ibBackendQueryable* source,
@@ -451,10 +413,10 @@ public:
 	// A computed (arithmetic / CASE) projection lambda body (x => x.A * 2, x => IIF(c, a, b)) —
 	// lowered to a server-side output-column expr, read back by its alias. Returns null for a plain
 	// column / dot-walk path / structure / chained projection (the caller handles those / falls to RAM).
-	static ibQueryColumnExprPtr LowerLambdaColumnExpr(
+	static BACKEND_API ibQueryColumnExprPtr LowerLambdaColumnExpr(
 	                                                const ibBackendQueryable* source,
 	                                                const ibQueryAstExpr& expr,
-	                                                const std::map<wxString, ibValue>& captured);
+	                                                const std::map<ibString, ibValue>& captured);
 };
 
 #endif

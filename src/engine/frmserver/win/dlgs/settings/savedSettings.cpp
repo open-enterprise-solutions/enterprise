@@ -4,7 +4,7 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 
-#include "protocol/protocol.h"   // ibProtocolRequestKind::SavedSettings, ibProtocolSettingsAct
+#include "protocol/protocol.h"   // ibProtocol::ibRequest::ibKind::SavedSettings, ibProtocol::ibRequest::ibSavedSettings::ibAct
 
 namespace {
 
@@ -12,16 +12,17 @@ namespace {
 ibDataNode ShelfRequest(ibDialogSavedSettings::Mode mode, ibSettingsCategory category, const ibGuid& objectKey)
 {
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::SavedSettings));
-	request.SetValue(wxT("Mode"), static_cast<s32>(mode));
-	request.SetValue(wxT("Key"), objectKey.str());
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::SavedSettings));
+	request.SetValue(ibProtocol::ibRequest::ibSavedSettings::Mode, static_cast<std::int32_t>(mode == ibDialogSavedSettings::Mode::Save
+		? ibProtocol::ibRequest::ibSavedSettings::ibMode::Save : ibProtocol::ibRequest::ibSavedSettings::ibMode::Restore));
+	request.SetValue(ibProtocol::ibRequest::ibSavedSettings::Key, objectKey.str());
 	const ibGuid defaultId = ibGetDefaultComposerSettings(objectKey);
 	if (defaultId.isValid())
-		request.SetValue(wxT("Default"), defaultId.str());
+		request.SetValue(ibProtocol::ibRequest::ibSavedSettings::Default, defaultId.str());
 	for (const ibComposerSettingsEntry& entry : ibListComposerSettings(category, objectKey)) {
 		ibDataNode& item = request.AddChild(0, 0);
-		item.SetValue(wxT("Id"), entry.m_id.str());
-		item.SetValue(wxT("Caption"), entry.m_name);
+		item.SetValue(ibProtocol::ibRequest::ibSavedSettings::Id, entry.m_id.str());
+		item.SetValue(ibProtocol::ibRequest::ibSavedSettings::Caption, entry.m_name);
 	}
 	return request;
 }
@@ -44,28 +45,28 @@ bool ibDialogSavedSettings::Show(ibDataComposer& composer, Mode mode, ibSettings
 	ibDataNode request = ShelfRequest(mode, category, objectKey);
 	for (;;) {
 		ibDataNode response;
-		if (!frame->Request(request, response) || response.FindField(wxT("Act")) == nullptr)
+		if (!frame->Request(request, response) || !response.FindField(ibProtocol::ibRequest::ibSavedSettings::Act))
 			return changed;   // closed
 
 		// No Id — a new entry with a new identity (save), or no mark at all (default).
-		const ibGuid id = response.FindField(wxT("Id")) != nullptr ? response.GetValue<ibGuid>(wxT("Id")) : wxNullGuid;
-		const wxString name = response.GetValue<wxString>(wxT("Name"));
+		const ibGuid id = response.Has(ibProtocol::ibRequest::ibSavedSettings::Id) ? response.GetValue<ibGuid>(ibProtocol::ibRequest::ibSavedSettings::Id) : wxNullGuid;
+		const ibString name = response.GetValue<ibString>(ibProtocol::ibRequest::ibSavedSettings::Name);
 
 		bool done = false;
-		switch (static_cast<ibProtocolSettingsAct>(response.GetValue<s32>(wxT("Act")))) {
-		case ibProtocolSettingsAct::Save:
+		switch (static_cast<ibProtocol::ibRequest::ibSavedSettings::ibAct>(response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibSavedSettings::Act))) {
+		case ibProtocol::ibRequest::ibSavedSettings::ibAct::Save:
 			done = ibSaveComposerSettings(category, objectKey, id, name, composer).isValid();
 			break;
-		case ibProtocolSettingsAct::Restore:
+		case ibProtocol::ibRequest::ibSavedSettings::ibAct::Restore:
 			done = ibRestoreComposerSettings(category, objectKey, id, composer, metaData);
 			break;
-		case ibProtocolSettingsAct::Default:
+		case ibProtocol::ibRequest::ibSavedSettings::ibAct::Default:
 			done = ibSetDefaultComposerSettings(objectKey, id);
 			break;
-		case ibProtocolSettingsAct::Rename:
+		case ibProtocol::ibRequest::ibSavedSettings::ibAct::Rename:
 			done = ibRenameComposerSettings(category, objectKey, id, name);
 			break;
-		case ibProtocolSettingsAct::Remove:
+		case ibProtocol::ibRequest::ibSavedSettings::ibAct::Remove:
 			done = ibRemoveComposerSettings(category, objectKey, id);
 			break;
 		default:
@@ -74,6 +75,6 @@ bool ibDialogSavedSettings::Show(ibDataComposer& composer, Mode mode, ibSettings
 
 		changed = changed || done;
 		request = ShelfRequest(mode, category, objectKey);
-		request.SetValue(wxT("Done"), done);
+		request.SetValue(ibProtocol::ibRequest::ibSavedSettings::Done, done);
 	}
 }

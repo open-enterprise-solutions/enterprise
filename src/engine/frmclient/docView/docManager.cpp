@@ -2,22 +2,23 @@
 //	Author		: Maxim Kornienko
 //	Description : OES doc-manager wiring — bodies that the collapsed
 //	              ibFrontendDocManager class (declared in docView.h) needs on top of
-//	              the wx-fork base in docView.cpp. The file lives in both
-//	              frontend (desktop) and wfrontend (web) builds; the few
-//	              desktop-specific bodies (Find/Replace dialog parented on
-//	              the AUI mainFrame) are reduced to stubs under OES_USE_WEB.
+//	              the wx-fork base in docView.cpp (Find/Replace dialog
+//	              parented on the AUI mainFrame among them).
 ////////////////////////////////////////////////////////////////////////////
 
 #include "frmclient/docView/docManager.h"  // also brings docView.h transitively
 
 #include "frmclient/win/dlgs/choiceTemplate.h"
 
-// Desktop-only: Find/Replace dialog parents the wxFindReplaceDialog against
+// Find/Replace dialog parents the wxFindReplaceDialog against
 // the main frame singleton. mainFrame.h pulls in ibFrontendMainFrame
-// + AUI + objectInspector — none of which exist on wfrontend.dll. Also the
-// home of ibFrontendMainFrame::CreateChildFrame used below to wire
+// + AUI + objectInspector. Also the home of ibFrontendMainFrame::CreateChildFrame used below to wire
 // m_viewFrame on every view going through the template path.
 #include "frmclient/mainFrame/mainFrame.h"
+
+#include "frmclient/backend/metaData.h"   // the configuration a metaobject opens in — its tab
+#include "protocol/protocol.h"
+#include "protocol/protocolNode.h"
 
 #if wxUSE_DOC_VIEW_ARCHITECTURE
 
@@ -244,6 +245,24 @@ void ibFrontendDocManager::OnFind(wxFindDialogEvent& event)
 			firstView->ProcessEvent(event);
 		}
 	}
+}
+
+bool ibFrontendDocManager::OpenForm(ibMetaID id, const ibMetaData& metaData)
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr)
+		return false;
+
+	ibProtocolNode args;
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, static_cast<long long>(id));
+	if (metaData.GetTabId() != 0)
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Tab, metaData.GetTabId());
+
+	ibProtocolNode params, answer;
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::MetaData));
+	params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibMetaData::ibCommand::Open));
+	params.SetValue(ibProtocol::ibSchema::Args, args);
+	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
 ibFrontendDocTemplate* ibFrontendDocManager::FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const

@@ -3,10 +3,11 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include "passwordHash.hpp"
-#include "sha256.hpp"
-#include "md5.hpp"
+#include "core/crypto/sha256.hpp"
+#include "core/fstring.h"
+#include "core/utils/base64.h"
+#include "core/utils/md5.hpp"
 
-#include <wx/base64.h>
 #include <wx/string.h>
 
 #include <cstdint>
@@ -142,19 +143,19 @@ bool ConstTimeEqual(const uint8_t* a, const uint8_t* b, size_t len)
 
 } // namespace
 
-bool ibPasswordHash::IsLegacy(const wxString& storedHash)
+bool ibPasswordHash::IsLegacy(const ibString& storedHash)
 {
 	if (storedHash.length() != 32)
 		return false;
 	for (size_t i = 0; i < 32; ++i) {
-		const wxChar c = storedHash[i];
+		const ibChar c = storedHash[i];
 		const bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 		if (!hex) return false;
 	}
 	return true;
 }
 
-bool ibPasswordHash::NeedsRehash(const wxString& storedHash)
+bool ibPasswordHash::NeedsRehash(const ibString& storedHash)
 {
 	if (IsLegacy(storedHash))
 		return true;
@@ -165,7 +166,7 @@ bool ibPasswordHash::NeedsRehash(const wxString& storedHash)
 	// Parse the iteration count out of $pbkdf2-sha256$<iter>$<salt>$<hash>.
 	// Treat a malformed hash as "no rehash" — verification will fail on its
 	// own and we'd rather not overwrite something we don't understand.
-	const wxString rest = storedHash.Mid(wxString(kPrefix).length());
+	const ibString rest = storedHash.Mid(ibString(kPrefix).length());
 	const int p1 = rest.Find('$');
 	if (p1 == wxNOT_FOUND) return false;
 	unsigned long iterations = 0;
@@ -173,9 +174,9 @@ bool ibPasswordHash::NeedsRehash(const wxString& storedHash)
 	return iterations < kIterations;
 }
 
-wxString ibPasswordHash::Hash(const wxString& password)
+ibString ibPasswordHash::Hash(const ibString& password)
 {
-	const wxScopedCharBuffer pwd_utf8 = password.utf8_str();
+	const std::string pwd_utf8 = password.ToUtf8();
 
 	uint8_t salt[kSaltLen];
 	FillRandom(salt, kSaltLen);
@@ -184,13 +185,27 @@ wxString ibPasswordHash::Hash(const wxString& password)
 	Pbkdf2HmacSha256(reinterpret_cast<const uint8_t*>(pwd_utf8.data()), pwd_utf8.length(),
 	                 salt, kSaltLen, kIterations, derived, kKeyLen);
 
-	const wxString saltB64 = wxBase64Encode(salt, kSaltLen);
-	const wxString hashB64 = wxBase64Encode(derived, kKeyLen);
-	return wxString::Format("%s%u$%s$%s", kPrefix, kIterations, saltB64, hashB64);
+	ibString saltB64, hashB64;
+	ibBase64::Append(saltB64, salt, kSaltLen);
+	ibBase64::Append(hashB64, derived, kKeyLen);
+	return ibString::Format("%s%u$%s$%s", kPrefix, kIterations, saltB64, hashB64);
 }
 
-bool ibPasswordHash::Verify(const wxString& password, const wxString& storedHash)
+ibString ibPasswordHash::PasswordToStore(const ibString& stored, bool touched, const ibString& text)
 {
+	// The box never holds the stored password, so whether it was edited is
+	// the only sign: no text the person can type means "keep it".
+	if (!touched)
+		return stored;
+	if (text.IsEmpty())
+		return ibEmptyString;
+	return Hash(text);
+}
+
+bool ibPasswordHash::Verify(const ibString& password, const ibString& storedHash)
+{
+	// An empty column means the account has no password. An empty password
+	// logs that user in. A non-empty password does not.
 	if (storedHash.IsEmpty())
 		return password.IsEmpty();
 
@@ -202,26 +217,26 @@ bool ibPasswordHash::Verify(const wxString& password, const wxString& storedHash
 		return false;
 
 	// Parse $pbkdf2-sha256$<iter>$<saltB64>$<hashB64>
-	const wxString rest = storedHash.Mid(wxString(kPrefix).length());
+	const ibString rest = storedHash.Mid(ibString(kPrefix).length());
 	const int p1 = rest.Find('$');
 	if (p1 == wxNOT_FOUND) return false;
-	const wxString iterStr = rest.Left(p1);
-	const wxString afterIter = rest.Mid(p1 + 1);
+	const ibString iterStr = rest.Left(p1);
+	const ibString afterIter = rest.Mid(p1 + 1);
 	const int p2 = afterIter.Find('$');
 	if (p2 == wxNOT_FOUND) return false;
-	const wxString saltB64 = afterIter.Left(p2);
-	const wxString hashB64 = afterIter.Mid(p2 + 1);
+	const ibString saltB64 = afterIter.Left(p2);
+	const ibString hashB64 = afterIter.Mid(p2 + 1);
 
 	unsigned long iterations = 0;
 	if (!iterStr.ToULong(&iterations) || iterations == 0 || iterations > 10000000u)
 		return false;
 
-	const wxMemoryBuffer salt = wxBase64Decode(saltB64);
-	const wxMemoryBuffer stored = wxBase64Decode(hashB64);
-	if (salt.GetDataLen() == 0 || stored.GetDataLen() == 0)
+	ibMemoryBuffer salt, stored;
+	if (!ibBase64::Read(saltB64, salt) || !ibBase64::Read(hashB64, stored)
+		|| salt.GetDataLen() == 0 || stored.GetDataLen() == 0)
 		return false;
 
-	const wxScopedCharBuffer pwd_utf8 = password.utf8_str();
+	const std::string pwd_utf8 = password.ToUtf8();
 	std::vector<uint8_t> derived(stored.GetDataLen());
 	Pbkdf2HmacSha256(reinterpret_cast<const uint8_t*>(pwd_utf8.data()), pwd_utf8.length(),
 	                 static_cast<const uint8_t*>(salt.GetData()), salt.GetDataLen(),

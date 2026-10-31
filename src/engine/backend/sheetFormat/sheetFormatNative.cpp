@@ -1,16 +1,16 @@
 #include "backend/sheetFormat/sheetFormatNative.h"
 
-#include "backend/fileKind.h"           // the one table that names our files
-#include "core/fileSystem/fs.h"      // ibReaderMemory / ibWriterMemory
+#include "core/fileKind.h"           // the one table that names our files
+#include "core/memory/memoryStream.h"      // ibReaderMemory / ibWriterMemory
 
 #include <wx/mstream.h>
 
-wxString ibSheetFormatNative::GetName() const
+ibString ibSheetFormatNative::GetName() const
 {
 	return _("Spreadsheet document");
 }
 
-wxString ibSheetFormatNative::GetExtension() const
+ibString ibSheetFormatNative::GetExtension() const
 {
 	// NOT A LITERAL. What our files are called is fileKind.h's answer, and it stays
 	// the only one — that table exists because ".oxl" used to be typed in eight
@@ -24,7 +24,7 @@ bool ibSheetFormatNative::Read(wxInputStream& input, ibSpreadsheetDescription& s
 	wxMemoryOutputStream whole;
 	input.Read(whole);
 
-	wxMemoryBuffer buffer(whole.GetLength());
+	ibMemoryBuffer buffer(whole.GetLength());
 	whole.CopyTo(buffer.GetWriteBuf(whole.GetLength()), whole.GetLength());
 	buffer.UngetWriteBuf(whole.GetLength());
 

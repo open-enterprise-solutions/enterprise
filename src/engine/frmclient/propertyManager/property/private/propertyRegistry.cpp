@@ -1,57 +1,55 @@
-﻿#include "propertyRegistry.h"
+#include "propertyRegistry.h"
 
-#include <algorithm>
-#include <typeinfo>
+#include <wx/propgrid/props.h>   // wxStringProperty — what a property of no registered type is shown by
 
-// Function-local static: the makers register from static initialisers across the DLL, so
-// the vector must exist on first touch regardless of translation-unit order.
-std::vector<ibPropertyRegistry::ibPropertyEntry>& ibPropertyRegistry::GetEntries()
+namespace {
+
+// A PROPERTY OF NO REGISTERED TYPE — a string, read-only, as it reads. A property is never dropped, and never guessed
+// from its shape: a type nobody taught the client says what it holds, and shows that it is not done.
+wxPGProperty* CreateAsString(ibBackendProperty* property)
 {
-	static std::vector<ibPropertyEntry> s_entries;
+	wxPGProperty* const shown = new wxStringProperty(property->GetLabel(), property->GetName(),
+		property->GetValue().GetString());
+	shown->ChangeFlag(wxPGFlags::ReadOnly, true);
+	return shown;
+}
+
+} // namespace
+
+std::map<wxString, ibPropertyRegistry::ibPropertyMaker>& ibPropertyRegistry::GetEntries()
+{
+	static std::map<wxString, ibPropertyMaker> s_entries;
 	return s_entries;
 }
 
-std::vector<ibPropertyRegistry::ibPropertySilent>& ibPropertyRegistry::GetSilent()
+void ibPropertyRegistry::Register(const wxString& type, ibPropertyMaker maker)
 {
-	static std::vector<ibPropertySilent> s_silent;
-	return s_silent;
+	wxASSERT_MSG(GetEntries().find(type) == GetEntries().end(),
+		wxString::Format(wxT("ibPropertyRegistry: '%s' is registered twice"), type));
+	GetEntries()[type] = std::move(maker);
 }
 
 wxPGProperty* ibPropertyRegistry::Create(ibBackendProperty* property)
 {
-	if (property == nullptr)
-		return nullptr;
+	wxPGProperty* result = nullptr;
+	const auto found = GetEntries().find(property->GetType());
+	if (found != GetEntries().end())
+		result = found->second(property);
+	if (result == nullptr)
+		result = CreateAsString(property);
 
-	std::vector<ibPropertyEntry>& entries = GetEntries();
+	result->SetHelpString(property->GetHelp());
+	if (!property->IsEditable())
+		result->ChangeFlag(wxPGFlags::ReadOnly, true);
+	return result;
+}
 
-	// Sorted on demand, not at registration: every maker is in place by the time the first
-	// property is rendered. stable_sort keeps registration order within one priority, so
-	// only the base-after-derived intent reorders anything.
-	static bool s_sorted = false;
-	if (!s_sorted) {
-		std::stable_sort(entries.begin(), entries.end(),
-			[](const ibPropertyEntry& lhs, const ibPropertyEntry& rhs) { return lhs.m_priority < rhs.m_priority; });
-		s_sorted = true;
-	}
-
-	for (const ibPropertyEntry& entry : entries) {
-		if (wxPGProperty* pgProperty = entry.m_maker(property))
-			return pgProperty;
-	}
-
-	// Declared editor-less on purpose? Then a null is the right answer, not a bug.
-	for (const ibPropertySilent& silent : GetSilent()) {
-		if (silent(property))
-			return nullptr;
-	}
-
-	// Nothing matched. If the front is loaded at all, this is a property type nobody taught
-	// the inspector to draw — it would silently vanish from the grid, and the missing
-	// Register is the bug. Say so loudly instead of returning a quiet null.
-	wxFAIL_MSG(wxString::Format(
-		wxT("ibPropertyRegistry: no frontend property registered for '%s' (property '%s'). ")
-		wxT("Add a Register() for it in frontend/propertyManager/property/advprop/."),
-		wxString::FromAscii(typeid(*property).name()), property->GetName()));
-
-	return nullptr;
+wxPGChoices ibPropertyRegistry::GetChoices(ibBackendProperty* property)
+{
+	ibPropertyChoiceList list;
+	property->GetValueList(list);
+	wxPGChoices choices;
+	for (unsigned int index = 0; index < list.GetCount(); ++index)
+		choices.Add(list.GetLabel(index), static_cast<int>(list.GetId(index)));
+	return choices;
 }

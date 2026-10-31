@@ -62,7 +62,7 @@ static ibValue ibFindRefByAttribute(const ibValueMetaObjectRecordDataHierarchyMu
 		if (exact)
 			q.Where(attribute->GetQueryColumn(), attribute->AdjustValue(value));
 		else
-			q.WhereLike(attribute->GetQueryColumn(), ibValue(value.GetString() + wxT("%")));
+			q.WhereLike(attribute->GetQueryColumn(), ibValue(value.GetString() + ibT("%")));
 		ibReadPageRequest page;
 		page.m_count = 1;
 		ibDataQueryResult sel = q.Execute(page);
@@ -185,7 +185,7 @@ bool ibValueRecordManagerObject::SaveData(bool replace)
 	if (!replace && ExistData()) {
 		ibBackendCoreException::Error(
 			_("Register '%s': a record with these key values already exists. Write(True) replaces it."),
-			m_metaObject != nullptr ? m_metaObject->GetSynonym() : wxString());
+			m_metaObject != nullptr ? m_metaObject->GetSynonym() : ibString());
 		return false;
 	}
 

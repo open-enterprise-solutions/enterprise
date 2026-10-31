@@ -43,7 +43,7 @@ public:
 
 	virtual ~ibCtorAbstractType() {}
 
-	virtual wxString GetClassName() const = 0;
+	virtual ibString GetClassName() const = 0;
 	// std::type_info replaces the former wxClassInfo* GetClassInfo() — it is the
 	// registry's runtime type key (matched against typeid(*liveValue)).
 	// Default = typeid(void) for ctors that carry no concrete C++ type
@@ -53,7 +53,7 @@ public:
 	virtual const std::type_info& GetTypeInfo() const { return typeid(void); }
 	virtual ibClassID GetClassType() const = 0;
 
-	virtual wxIcon GetClassIcon() const { return wxNullIcon; }
+	virtual ibPicture GetClassIcon() const { return ibPicture(); }
 
 	virtual ibCtorObjectType GetObjectTypeCtor() const = 0;
 
@@ -115,9 +115,10 @@ value_register<typeCtor>::value_register(typeCtor* so) : m_so(so) {
 	}
 	catch (...) {
 #ifdef DEBUG
-		ibJournalError(wxT("value"), wxT("failed to register class: %s"), m_so->GetClassName());
+		ibJournalError(ibT("value"), ibT("failed to register class: %s"), m_so->GetClassName());
 #endif
-		wxDELETE(m_so);
+		delete m_so;
+		m_so = nullptr;
 	}
 }
 
@@ -130,27 +131,27 @@ value_register<typeCtor>::~value_register() {
 	}
 	catch (...) {
 #ifdef DEBUG
-		ibJournalError(wxT("value"), wxT("failed to unregister class: %s"), m_so->GetClassName());
+		ibJournalError(ibT("value"), ibT("failed to unregister class: %s"), m_so->GetClassName());
 #endif
-		wxDELETE(m_so);
+		delete m_so;
 	}
 }
 
 /////////////////////////////////////////////////////////////////////////
 
 class ibCtorValueTypeBase : public ibCtorAbstractType {
-	wxString m_className;
+	ibString m_className;
 	const std::type_info* m_typeInfo;   // typeid(T) — registry runtime type key
 	ibClassID m_clsid;
 public:
 
 	virtual ~ibCtorValueTypeBase() {}
 
-	virtual wxString GetClassName() const { return m_className; }
+	virtual ibString GetClassName() const { return m_className; }
 	virtual const std::type_info& GetTypeInfo() const { return *m_typeInfo; }
 	virtual ibClassID GetClassType() const { return m_clsid; }
 
-	ibCtorValueTypeBase(const wxString& className, const std::type_info& typeInfo, const ibClassID& clsid)
+	ibCtorValueTypeBase(const ibString& className, const std::type_info& typeInfo, const ibClassID& clsid)
 		: m_className(className), m_typeInfo(&typeInfo), m_clsid(clsid) {
 	}
 
@@ -161,7 +162,7 @@ public:
 class ibCtorSingleType : public ibCtorValueTypeBase {
 public:
 
-	ibCtorSingleType(const wxString& className, const std::type_info& typeInfo, const ibClassID& clsid)
+	ibCtorSingleType(const ibString& className, const std::type_info& typeInfo, const ibClassID& clsid)
 		: ibCtorValueTypeBase(className, typeInfo, clsid)
 	{
 	}
@@ -176,11 +177,11 @@ class ibCtorPrimitiveType : public ibCtorSingleType {
 
 public:
 
-	ibCtorPrimitiveType(const wxString& className, ibValueTypes valType, const ibClassID& clsid) :
+	ibCtorPrimitiveType(const ibString& className, ibValueTypes valType, const ibClassID& clsid) :
 		ibCtorSingleType(className, typeid(T), clsid), m_valType(valType) {
 	}
 
-	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
+	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibValueTypes GetValueType() const { return m_valType; }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_primitive; }
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {
@@ -195,7 +196,7 @@ public:
 
 // 4-arg (legacy): explicit clsid.
 #define PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, clsid)\
-GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_s_), new ibCtorPrimitiveType<class_info>(wxT(class_name), class_type, clsid))
+GENERATE_REGISTER(class_name, wxMAKE_UNIQUE_NAME(s_cs_reg_s_), new ibCtorPrimitiveType<class_info>(ibString(class_name), class_type, clsid))
 // 3-arg (new): clsid = ib_clsid_hash(class_name).
 #define PRIMITIVE_TYPE_REGISTER_3(class_info, class_name, class_type)\
 PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, primitive_to_clsid(class_name))
@@ -207,11 +208,11 @@ class ibCtorValueType : public ibCtorValueTypeBase {
 
 public:
 
-	ibCtorValueType(const wxString& className, const ibClassID& clsid) :
+	ibCtorValueType(const ibString& className, const ibClassID& clsid) :
 		ibCtorValueTypeBase(className, typeid(T), clsid) {
 	}
 
-	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
+	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_value; }
 	// Forward the table trait to the concrete type — T::IsTableValue() resolves (via name
 	// lookup) to ibValueModel's gate for models, to ibValue's default otherwise. Pure
@@ -229,7 +230,7 @@ public:
 
 // 3-arg (legacy): explicit clsid.
 #define VALUE_TYPE_REGISTER_3(class_info, class_name, clsid)\
-GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_val_), new ibCtorValueType<class_info>(wxT(class_name), clsid))
+GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_val_), new ibCtorValueType<class_info>(ibT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define VALUE_TYPE_REGISTER_2(class_info, class_name)\
 VALUE_TYPE_REGISTER_3(class_info, class_name, value_to_clsid(class_name))
@@ -241,11 +242,11 @@ class ibCtorSystemType : public ibCtorValueTypeBase {
 
 public:
 
-	ibCtorSystemType(const wxString& className, const ibClassID& clsid) :
+	ibCtorSystemType(const ibString& className, const ibClassID& clsid) :
 		ibCtorValueTypeBase(className, typeid(T), clsid) {
 	}
 
-	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
+	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_system; }
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {
 		if (event == ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register)
@@ -285,7 +286,7 @@ public:
 
 // 3-arg (legacy): explicit clsid.
 #define SYSTEM_TYPE_REGISTER_3(class_info, class_name, clsid)\
-GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_so_), new ibCtorSystemType<class_info>(wxT(class_name), clsid))
+GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_so_), new ibCtorSystemType<class_info>(ibT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define SYSTEM_TYPE_REGISTER_2(class_info, class_name)\
 SYSTEM_TYPE_REGISTER_3(class_info, class_name, system_to_clsid(class_name))
@@ -296,11 +297,11 @@ template <class T>
 class ibCtorEnumType : public ibCtorSingleType {
 
 public:
-	ibCtorEnumType(const wxString& className, const ibClassID& clsid) :
+	ibCtorEnumType(const ibString& className, const ibClassID& clsid) :
 		ibCtorSingleType(className, typeid(T), clsid) {
 	}
 
-	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
+	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibValueTypes GetValueType() const { return ibValueTypes::TYPE_ENUM; }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_enum; }
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {
@@ -319,44 +320,43 @@ public:
 
 // 3-arg (legacy): explicit clsid.
 #define ENUM_TYPE_REGISTER_3(class_info, class_name, clsid)\
-GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_e_), new ibCtorEnumType<class_info>(wxT(class_name), clsid))
+GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_e_), new ibCtorEnumType<class_info>(ibT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define ENUM_TYPE_REGISTER_2(class_info, class_name)\
 ENUM_TYPE_REGISTER_3(class_info, class_name, enum_to_clsid(class_name))
 #define ENUM_TYPE_REGISTER(...) IB_DISPATCH(ENUM_TYPE_REGISTER_, __VA_ARGS__)
 
+// A CONTEXT TYPE's object (EnumManager, SystemManager) is MADE for whoever asks — a module manager, for its main module —
+// never kept in here: one object per process was every session's and every configuration's at once, and 1000 sessions
+// raced on it (2026-10-20).
 template <class T>
 class ibCtorContextType : public ibCtorSingleType {
-	T* m_innerObject = nullptr;
 public:
-	ibCtorContextType(const wxString& className, const ibClassID& clsid) :
+	ibCtorContextType(const ibString& className, const ibClassID& clsid) :
 		ibCtorSingleType(className, typeid(T), clsid) {
 	}
 
-	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
+	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibValueTypes GetValueType() const { return ibValueTypes::TYPE_VALUE; }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_context; }
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {
 		switch (event)
 		{
 		case ibCtorObjectTypeEvent_Register:
-			m_innerObject = new T();
-			m_innerObject->IncrRef();
 			T::OnRegisterObject(GetClassName(), this);
 			break;
 		case ibCtorObjectTypeEvent_UnRegister:
 			T::OnUnRegisterObject(GetClassName());
-			m_innerObject->DecrRef();
 			break;
 		}
 	}
 
-	virtual ibValue CreateObject() const { return m_innerObject; }
+	virtual ibValue CreateObject() const { return new T(); }
 };
 
 // 3-arg (legacy): explicit clsid.
 #define CONTEXT_TYPE_REGISTER_3(class_info, class_name, clsid)\
-GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_ctx_), new ibCtorContextType<class_info>(wxT(class_name), clsid))
+GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_ctx_), new ibCtorContextType<class_info>(ibT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define CONTEXT_TYPE_REGISTER_2(class_info, class_name)\
 CONTEXT_TYPE_REGISTER_3(class_info, class_name, context_to_clsid(class_name))

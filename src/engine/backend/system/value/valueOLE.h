@@ -73,7 +73,7 @@ public:
 #ifdef __WXMSW__
 	ibValueOLE();
 private:
-	ibValueOLE(const CLSID& clsId, IDispatch* dispatch, const wxString& objectName);
+	ibValueOLE(const CLSID& clsId, IDispatch* dispatch, const ibString& objectName);
 public:
 #else
 	ibValueOLE();
@@ -81,7 +81,7 @@ public:
 
 	virtual ~ibValueOLE();
 
-	bool Create(const wxString& strOleName);
+	bool Create(const ibString& strOleName);
 
 	virtual bool Init() {
 		return false;
@@ -92,7 +92,7 @@ public:
 	virtual ibString GetString() const { return m_objectName; }
 
 	//operator '=='
-	virtual bool CompareValueEQ(const ibValue& cParam) const {
+	virtual bool CompareValueEQ(const ibVariant& cParam) const {
 #ifdef __WXMSW__
 		ibValueOLE* m_pValueOLE = dynamic_cast<ibValueOLE*>(cParam.GetRef());
 		if (m_pValueOLE) return m_dispatch == m_pValueOLE->m_dispatch;
@@ -101,7 +101,7 @@ public:
 	}
 
 	//operator '!='
-	virtual bool CompareValueNE(const ibValue& cParam) const {
+	virtual bool CompareValueNE(const ibVariant& cParam) const {
 #ifdef __WXMSW__
 		ibValueOLE* m_pValueOLE = dynamic_cast<ibValueOLE*>(cParam.GetRef());
 		if (m_pValueOLE) return m_dispatch != m_pValueOLE->m_dispatch;

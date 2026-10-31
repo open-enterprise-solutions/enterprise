@@ -1,18 +1,19 @@
 #include "propertyDataComposition.h"
 
 #include "backend/propertyManager/property/variant/variantComposition.h"
+#include "backend/backend_composition.h"   // ibBackendCompositionDescriptionMemory — read against the configuration
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyDataComposition::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc)
+ibVariant ibPropertyDataComposition::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc)
 {
-	return new ibVariantDataComposition(property, desc);
+	return ibVariant(new ibVariantComposition(property, desc));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibCompositionDescription& ibPropertyDataComposition::GetValueAsCompositionDesc() const {
-	return get_cell_variant<ibVariantDataComposition>()->GetCompositionDesc();
+	return get_cell_variant<ibVariantComposition>()->GetCompositionDesc();
 }
 
 void ibPropertyDataComposition::SetValue(const ibCompositionDescription& val) {
@@ -28,11 +29,11 @@ bool ibPropertyDataComposition::ReadNodeValue(const ibDataValue& value)
 	// …AND THE CONFIGURATION IT IS READ AGAINST — see ibPropertyComposition::ReadNodeValue for what
 	// goes wrong without it, and why the owner is taken CONST here.
 	const ibPropertyObject* owner = m_owner;
-	return ibCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
+	return ibBackendCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
 		owner != nullptr ? owner->GetMetaData() : nullptr);
 }
 
 bool ibPropertyDataComposition::WriteNodeValue(ibDataValue& value) const
 {
-	return ibCompositionDescriptionMemory::WriteNode(value, GetValueAsCompositionDesc());
+	return ibBackendCompositionDescriptionMemory::WriteNode(value, GetValueAsCompositionDesc());
 }

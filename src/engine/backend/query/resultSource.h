@@ -29,7 +29,7 @@ public:
 	// a value on one road and an empty cell on the other, with nothing anywhere to say which road it took
 	// (measured 2026-09-24, a CASE over a reference). One door, no default, and every backing has to say
 	// what it does about both shapes.
-	virtual ibValue  Column(const wxString& name, const ibBackendQueryColumn* col = nullptr) const = 0;
+	virtual ibValue  Column(const ibString& name, const ibBackendQueryColumn* col = nullptr) const = 0;
 	// ⭐ A BACKING THAT ALREADY IS A TABLE hands the table over, to a caller that was about to copy every
 	// row of it cell by cell into a table of its own: the rows are moved out of it. Only before the first
 	// Next(); null — a cursor's answer, and the default — means the rows are read one by one.

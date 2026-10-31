@@ -23,6 +23,8 @@
 
 #include "backend/backend_exception.h"
 #include "backend/system/value/valueTable.h"
+#include "backend/system/value/valueType.h"
+#include "core/core.h"
 
 #include <string>
 #include <vector>
@@ -38,7 +40,7 @@ protected:
         m_holder = m_table;
     }
 
-    ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* Column(const wxString& name) {
+    ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* Column(const ibString& name) {
         auto* column = m_table->GetColumnCollection()->AddColumn(name, ibTypeDescription(), name);
         EXPECT_NE(column, nullptr);
         return column;
@@ -54,7 +56,7 @@ protected:
     }
 
     // A script's call: the method by its name, the arguments as given.
-    ibValue Call(const wxString& method, std::vector<ibValue> args) {
+    ibValue Call(const ibString& method, std::vector<ibValue> args) {
         const long number = m_table->FindMethod(method);
         EXPECT_GE(number, 0) << method.ToStdString();
         std::vector<ibValue*> pointers;
@@ -66,7 +68,7 @@ protected:
     }
 
     // The cell of a row a script would read: `row.Name`.
-    static wxString Cell(ibValue row, const wxString& column) {
+    static ibString Cell(ibValue row, const ibString& column) {
         ibValue cell;
         const long prop = row.FindProp(column);
         if (prop >= 0)
@@ -75,8 +77,8 @@ protected:
     }
 
     // The whole table, top to bottom, one column.
-    std::vector<wxString> ColumnInOrder(const wxString& column) {
-        std::vector<wxString> out;
+    std::vector<ibString> ColumnInOrder(const ibString& column) {
+        std::vector<ibString> out;
         const std::shared_ptr<ibValueIteratorState> walk = m_table->CreateIterator();
         ibValue row;
         while (walk != nullptr && walk->MoveNext(row))
@@ -84,17 +86,17 @@ protected:
         return out;
     }
 
-    ibValue Text(const wxString& text) { return ibValue(text); }
+    ibValue Text(const ibString& text) { return ibValue(text); }
 
     ibValue            m_holder;
     ibValueModelTable* m_table = nullptr;
 };
 
-wxString Joined(const std::vector<wxString>& items)
+ibString Joined(const std::vector<ibString>& items)
 {
-    wxString out;
-    for (const wxString& item : items)
-        out += (out.empty() ? wxString() : wxString(wxT(","))) + item;
+    ibString out;
+    for (const ibString& item : items)
+        out += (out.empty() ? ibString() : ibString(wxT(","))) + item;
     return out;
 }
 
@@ -191,7 +193,7 @@ TEST_F(ValueTableVerbs, Total_OverACellThatIsNotANumber_RaisesNamingTheRow)
 // ----------------------------------- FindRows ---------------------------------------
 
 namespace {
-ibValue MakeFilter(const std::vector<std::pair<wxString, ibValue>>& terms)
+ibValue MakeFilter(const std::vector<std::pair<ibString, ibValue>>& terms)
 {
     ibValueStructure* filter = new ibValueStructure();
     ibValue holder;
@@ -287,7 +289,7 @@ TEST_F(ValueTableVerbs, FindRows_OnAnIndexedColumn_AnswersAsTheScanDoes)
 
     const ibValue filter = MakeFilter({ { wxT("Priority"), ibValue(1.0) }, { wxT("Level"), ibValue(1.0) } });
     const auto namesFound = [&]() {
-        std::vector<wxString> names;
+        std::vector<ibString> names;
         const ibValue found = Call(wxT("FindRows"), { filter });
         ibValueArray* const rows = found.ConvertToType<ibValueArray>();
         if (rows == nullptr)
@@ -300,9 +302,9 @@ TEST_F(ValueTableVerbs, FindRows_OnAnIndexedColumn_AnswersAsTheScanDoes)
         return names;
     };
 
-    const std::vector<wxString> scanned = namesFound();
+    const std::vector<ibString> scanned = namesFound();
     priority->SetColumnIndexed(true);
-    const std::vector<wxString> indexed = namesFound();
+    const std::vector<ibString> indexed = namesFound();
 
     EXPECT_EQ(Joined(scanned), wxT("a,d"));
     EXPECT_EQ(Joined(indexed), Joined(scanned)) << "the index answers what the scan answered";
@@ -350,8 +352,9 @@ TEST_F(ValueTableVerbs, Clone_CopiesColumnsAndRows_AndSharesNothing)
     EXPECT_EQ(m_table->GetColumnCollection()->GetColumnCount(), 2u);
 }
 
-// A column added with no type holds a string of ANY length: it carried the designer's default of ten
-// characters, and a cell kept the first ten of whatever was written into it (2026-09-21).
+// A column added with no type keeps a string of ANY length. It used to be a string column, and before
+// that the designer's ten-character default, so a cell kept the first ten of whatever was written
+// (2026-09-21). Text written into an untyped column is still that text.
 TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsTextOfAnyLength)
 {
     ibValueModelTable::ibValueModelColumnCollection* const columns = m_table->GetColumnCollection();
@@ -364,7 +367,7 @@ TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsTextOfAnyLength)
     ibValue row = Call(wxT("Add"), {});
     const long prop = row.FindProp(wxT("Note"));
     ASSERT_GE(prop, 0);
-    const wxString text = wxT("abcdefghijklmnopqrstuvwxyz");
+    const ibString text = wxT("abcdefghijklmnopqrstuvwxyz");
     row.SetPropVal(prop, Text(text));
     EXPECT_EQ(Cell(row, wxT("Note")), text);
 }
@@ -388,4 +391,207 @@ TEST(ValueTableColumns, OutliveTheTableThatMadeThem)
     ASSERT_NE(columns, nullptr);
     EXPECT_EQ(columns->GetColumnCount(), 2u) << "the collection still answers for its own columns";
     held = ibValue();   // the collection and its columns go now - after the table, without touching it
+}
+
+// What a script reads back from a cell.
+static ibValue CellValue(ibValue row, const ibString& column)
+{
+    ibValue cell;
+    const long prop = row.FindProp(column);
+    EXPECT_GE(prop, 0);
+    if (prop >= 0)
+        row.GetPropVal(prop, cell);
+    return cell;
+}
+
+// `Columns.AddColumn("A")` named a string, so a number written there came back as text. An omitted
+// type names no type, and the cell keeps the value.
+TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsANumberAsANumber)
+{
+    ibValueModelTable::ibValueModelColumnCollection* const columns = m_table->GetColumnCollection();
+    const long add = columns->FindMethod(wxT("AddColumn"));
+    ASSERT_GE(add, 0);
+    ibValue name = Text(wxT("A")), made;
+    ibValue* args[] = { &name };
+    ASSERT_TRUE(columns->CallAsFunc(add, made, args, 1));
+    EXPECT_EQ(columns->GetColumnCount(), 1u);
+    EXPECT_FALSE(columns->GetColumnInfo(0)->GetColumnType().IsOk());
+
+    ibValue row = Call(wxT("Add"), {});
+    const long prop = row.FindProp(wxT("A"));
+    ASSERT_GE(prop, 0);
+    ASSERT_TRUE(row.SetPropVal(prop, ibValue(5)));
+    const ibValue cell = CellValue(row, wxT("A"));
+    EXPECT_EQ(cell.GetType(), ibValueTypes::TYPE_NUMBER);
+    EXPECT_EQ(cell.GetInteger(), 5);
+}
+
+// `AddColumn("U", Undefined)` refused the call. Undefined is the same as leaving the type out.
+TEST_F(ValueTableVerbs, AColumnAddedWithUndefined_KeepsANumberAsANumber)
+{
+    ibValueModelTable::ibValueModelColumnCollection* const columns = m_table->GetColumnCollection();
+    const long add = columns->FindMethod(wxT("AddColumn"));
+    ASSERT_GE(add, 0);
+    ibValue name = Text(wxT("U")), omitted, made;
+    ibValue* args[] = { &name, &omitted };
+    ASSERT_TRUE(columns->CallAsFunc(add, made, args, 2));
+
+    ibValue row = Call(wxT("Add"), {});
+    const long prop = row.FindProp(wxT("U"));
+    ASSERT_GE(prop, 0);
+    ASSERT_TRUE(row.SetPropVal(prop, ibValue(5)));
+    const ibValue cell = CellValue(row, wxT("U"));
+    EXPECT_EQ(cell.GetType(), ibValueTypes::TYPE_NUMBER);
+    EXPECT_EQ(cell.GetInteger(), 5);
+}
+
+// A caller who still wants text comparison says so. A number written into that column comes back text.
+TEST_F(ValueTableVerbs, AStringColumn_NarrowsANumberToText)
+{
+    ibValueModelTable::ibValueModelColumnCollection* const columns = m_table->GetColumnCollection();
+    const long add = columns->FindMethod(wxT("AddColumn"));
+    ASSERT_GE(add, 0);
+    ibValue name = Text(wxT("Note"));
+    ibValueTypeDescription text(std::vector<ibClassID>{ g_valueStringCLSID });
+    ibValue made;
+    ibValue* args[] = { &name, &text };
+    ASSERT_TRUE(columns->CallAsFunc(add, made, args, 2));
+    EXPECT_TRUE(columns->GetColumnInfo(0)->GetColumnType().ContainType(g_valueStringCLSID));
+
+    ibValue row = Call(wxT("Add"), {});
+    const long prop = row.FindProp(wxT("Note"));
+    ASSERT_GE(prop, 0);
+    ASSERT_TRUE(row.SetPropVal(prop, ibValue(5)));
+    const ibValue cell = CellValue(row, wxT("Note"));
+    EXPECT_EQ(cell.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_EQ(cell.GetString(), wxT("5"));
+}
+
+// `New TypeDescription("Number, String")` was one constructor name and failed to initialise.
+TEST(TypeDescriptionList, ACommaSeparatedStringNamesEachType)
+{
+    ibValueTypeDescription described;
+    ibValue names(ibT("Number, String"));
+    ibValue* args[] = { &names };
+    ASSERT_TRUE(described.Init(args, 1));
+    EXPECT_EQ(described.GetTypeDesc().GetClsidCount(), 2u);
+    EXPECT_TRUE(described.GetTypeDesc().ContainType(g_valueNumberCLSID));
+    EXPECT_TRUE(described.GetTypeDesc().ContainType(g_valueStringCLSID));
+}
+
+// One name, with the qualifier that belongs to it, is the same description it was.
+TEST(TypeDescriptionList, ASingleNameStillTakesItsQualifier)
+{
+    ibValueTypeDescription described;
+    ibValue name(ibT("Number"));
+    ibValueQualifierNumber qualifier(15, 2);
+    ibValue* args[] = { &name, &qualifier };
+    ASSERT_TRUE(described.Init(args, 2));
+    EXPECT_EQ(described.GetTypeDesc().GetClsidCount(), 1u);
+    EXPECT_TRUE(described.GetTypeDesc().ContainType(g_valueNumberCLSID));
+    EXPECT_EQ(described.GetTypeDesc().GetPrecision(), 15);
+    EXPECT_EQ(described.GetTypeDesc().GetScale(), 2);
+}
+
+TEST(TypeDescriptionList, AnUnknownNameDoesNotInitialise)
+{
+    ibValueTypeDescription described;
+    ibValue name(ibT("Number, NotAType"));
+    ibValue* args[] = { &name };
+    EXPECT_FALSE(described.Init(args, 1));
+    EXPECT_EQ(described.GetTypeDesc().GetClsidCount(), 0u);
+
+    ibValueTypeDescription alone;
+    ibValue unknown(ibT("NotAType"));
+    ibValue* one[] = { &unknown };
+    EXPECT_FALSE(alone.Init(one, 1));
+}
+
+// ------------------------------------- Index ------------------------------------------
+
+// The RAM base's - a tabular section answers it the same way. A value that is not one of the rows is -1.
+TEST_F(ValueTableVerbs, Index_IsTheRowsPosition)
+{
+    Column(wxT("A"));
+    Call(wxT("Add"), {});
+    const ibValue second = Call(wxT("Add"), {});
+    EXPECT_EQ(Call(wxT("Index"), { second }).GetInteger(), 1);
+    EXPECT_EQ(Call(wxT("Index"), { ibValue(5) }).GetInteger(), -1);
+}
+
+// ------------------------------------- GroupBy ----------------------------------------
+
+// Equal group cells become one row, sum columns are added up, other columns go; first-met order.
+TEST_F(ValueTableVerbs, GroupBy_FoldsEqualRows_SumsAndDropsTheRest)
+{
+    Column(wxT("Item")); Column(wxT("Qty")); Column(wxT("Note"));
+    AddRow({ Text(wxT("b")), ibValue(2), Text(wxT("x")) });
+    AddRow({ Text(wxT("a")), ibValue(1), Text(wxT("y")) });
+    AddRow({ Text(wxT("b")), ibValue(3), Text(wxT("z")) });
+    Call(wxT("GroupBy"), { Text(wxT("Item")), Text(wxT("Qty")) });
+    EXPECT_EQ(m_table->GetRowCount(), 2);
+    EXPECT_EQ(Joined(ColumnInOrder(wxT("Item"))), wxT("b,a"));
+    EXPECT_EQ(Joined(ColumnInOrder(wxT("Qty"))), wxT("5,1"));
+    EXPECT_EQ(m_table->GetColumnCollection()->GetColumnByName(wxT("Note")), nullptr);
+}
+
+TEST_F(ValueTableVerbs, GroupBy_WithoutSums_KeepsTheDistinctGroups)
+{
+    Column(wxT("Item")); Column(wxT("Qty"));
+    AddRow({ Text(wxT("a")), ibValue(1) });
+    AddRow({ Text(wxT("a")), ibValue(2) });
+    Call(wxT("GroupBy"), { Text(wxT(" Item ")) });
+    EXPECT_EQ(m_table->GetRowCount(), 1);
+    EXPECT_EQ(m_table->GetColumnCollection()->GetColumnByName(wxT("Qty")), nullptr);
+}
+
+TEST_F(ValueTableVerbs, GroupBy_NamingAMissingColumn_Raises)
+{
+    Column(wxT("Item"));
+    AddRow({ Text(wxT("a")) });
+    EXPECT_ANY_THROW(Call(wxT("GroupBy"), { Text(wxT("Item")), Text(wxT("Nope")) }));
+    EXPECT_EQ(m_table->GetRowCount(), 1);
+}
+
+// A script's `T.GroupBy("Item", "Qty")` is compiled as the LINQ verb; with string arguments it is the table's own.
+TEST_F(ValueTableVerbs, GroupBy_AsTheScriptCompilesIt_IsTheTablesOwn)
+{
+    Column(wxT("Item")); Column(wxT("Qty"));
+    AddRow({ Text(wxT("a")), ibValue(1) });
+    AddRow({ Text(wxT("a")), ibValue(2) });
+    ibValue group = Text(wxT("Item")), sums = Text(wxT("Qty")), ret;
+    ibValue* args[] = { &group, &sums };
+    m_table->DispatchLinqMethod(ibValue::ibLinqMethod::GroupBy, ret, args, 2);
+    EXPECT_EQ(m_table->GetRowCount(), 1);
+    EXPECT_EQ(Joined(ColumnInOrder(wxT("Qty"))), wxT("3"));
+}
+
+// ------------------------------------- FillValues -------------------------------------
+
+TEST_F(ValueTableVerbs, FillValues_FillsOnlyTheListedColumns)
+{
+    Column(wxT("A")); Column(wxT("B")); Column(wxT("C"));
+    AddRow({ ibValue(ibT("a1")), ibValue(ibT("b1")), ibValue(ibT("c1")) });
+    AddRow({ ibValue(ibT("a2")), ibValue(ibT("b2")), ibValue(ibT("c2")) });
+    Call(wxT("FillValues"), { ibValue(ibT("x")), ibValue(ibT(" A , C")) });
+    EXPECT_EQ(ColumnInOrder(wxT("A")), (std::vector<ibString>{ wxT("x"), wxT("x") }));
+    EXPECT_EQ(ColumnInOrder(wxT("B")), (std::vector<ibString>{ wxT("b1"), wxT("b2") }));
+    EXPECT_EQ(ColumnInOrder(wxT("C")), (std::vector<ibString>{ wxT("x"), wxT("x") }));
+}
+
+TEST_F(ValueTableVerbs, FillValues_WithoutColumns_FillsEveryColumn)
+{
+    Column(wxT("A")); Column(wxT("B"));
+    AddRow({ ibValue(ibT("a1")), ibValue(ibT("b1")) });
+    Call(wxT("FillValues"), { ibValue(ibT("y")) });
+    EXPECT_EQ(ColumnInOrder(wxT("A")), (std::vector<ibString>{ wxT("y") }));
+    EXPECT_EQ(ColumnInOrder(wxT("B")), (std::vector<ibString>{ wxT("y") }));
+}
+
+TEST_F(ValueTableVerbs, FillValues_UnknownColumn_RaisesAndWritesNothing)
+{
+    Column(wxT("A"));
+    AddRow({ ibValue(ibT("a1")) });
+    EXPECT_ANY_THROW(Call(wxT("FillValues"), { ibValue(ibT("z")), ibValue(ibT("A, Missing")) }));
+    EXPECT_EQ(ColumnInOrder(wxT("A")), (std::vector<ibString>{ wxT("a1") }));
 }

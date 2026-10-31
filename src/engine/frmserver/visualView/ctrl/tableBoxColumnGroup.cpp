@@ -48,7 +48,7 @@ const ibMetaData* ibValueModelTableBoxColumnGroup::GetMetaData() const
 	return m_formOwner != nullptr ? m_formOwner->GetMetaData() : nullptr;
 }
 
-wxString ibValueModelTableBoxColumnGroup::GetControlTitle() const
+ibString ibValueModelTableBoxColumnGroup::GetControlTitle() const
 {
 	if (!m_propertyTitle->IsEmptyProperty())
 		return m_propertyTitle->GetValueAsTranslateString();
@@ -70,8 +70,8 @@ void ibValueModelTableBoxColumnGroup::OnUpdate(ibDataNode& state, ibVisualHost* 
 	// The title in the header (its own, else its name — shown only when ShowTitle is on, or always for an
 	// in-cell group), and whether the group and everything it holds is shown. The geometry it decides — row
 	// bands, header depth — is the client's to derive from the kinds as saved.
-	state.SetValue(wxT("Caption"), GetControlTitle());
-	state.SetValue(wxT("Visible"), IsGroupShown());
+	state.SetValue(ibProtocol::ibForm::ibState::Caption, GetControlTitle());
+	state.SetValue(ibProtocol::ibForm::ibState::Visible, IsGroupShown());
 }
 
 //***********************************************************************************

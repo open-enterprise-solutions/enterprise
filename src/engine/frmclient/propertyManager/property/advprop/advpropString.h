@@ -10,10 +10,35 @@
 #include "frmclient/win/dlgs/translateConstructor/translateConstructor.h"   // the window both translated properties open
 
 // -----------------------------------------------------------------------
+// ibStringProperty
+// -----------------------------------------------------------------------
+
+// The grid's string cell over the property's value: what it shows and takes is the grid's text, read from the node and
+// written back as one.
+class ibStringProperty : public wxStringProperty {
+public:
+
+	ibStringProperty(const wxString& label = wxPG_LABEL,
+		const wxString& name = wxPG_LABEL,
+		const wxVariant& value = wxNullVariant);
+
+	virtual wxString ValueToString(wxVariant& value,
+		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+
+	virtual bool StringToValue(wxVariant& variant,
+		const wxString& text,
+		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+
+private:
+
+	WX_PG_DECLARE_PROPERTY_CLASS(ibStringProperty);
+};
+
+// -----------------------------------------------------------------------
 // ibUStringProperty
 // -----------------------------------------------------------------------
 
-class ibUStringProperty : public wxStringProperty {
+class ibUStringProperty : public ibStringProperty {
 public:
 
 	enum {
@@ -23,13 +48,10 @@ public:
 
 	ibUStringProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const wxString& value = wxEmptyString, const int flags = string_default) :
-		wxStringProperty(label, name, value), m_strFlags(flags)
+		const wxVariant& value = wxNullVariant, const int flags = string_default) :
+		ibStringProperty(label, name, value), m_strFlags(flags)
 	{
 	}
-
-	virtual wxString ValueToString(wxVariant& value,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
 
 	virtual bool StringToValue(wxVariant& variant,
 		const wxString& text,
@@ -51,7 +73,7 @@ public:
 
 	ibUEStringProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const wxString& value = wxEmptyString, const int flags = allow_empty) :
+		const wxVariant& value = wxNullVariant, const int flags = allow_empty) :
 		ibUStringProperty(label, name, value, flags)
 	{
 	}
@@ -66,12 +88,12 @@ public:
 class wxTStringProperty : public wxLongStringProperty {
 
 public:
-	// ⭐ IT CARRIES THE TRANSLATIONS, NOT THE FORMAT. The grid holds the same cell the property
-	// holds (ibVariantDataTranslate), so the editor reads and writes languages instead of taking
-	// apart `en = '…';` and putting it back together in three different places.
+	// ⭐ IT CARRIES THE TRANSLATIONS, NOT THE FORMAT. The grid holds the value the property holds — its node the raw
+	// text, every language — and the editor reads and writes languages (ibTranslateString) instead of taking apart
+	// `en = '…';` and putting it back together in three different places.
 	wxTStringProperty(const class FRMCLIENT_API ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const ibTranslateString& value = ibTranslateString());
+		const wxVariant& value = wxNullVariant);
 
 	virtual wxString ValueToString(wxVariant& value,
 		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
@@ -103,7 +125,7 @@ class wxFormatStringProperty : public wxTStringProperty {
 public:
 	wxFormatStringProperty(const class FRMCLIENT_API ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const ibTranslateString& value = ibTranslateString()) :
+		const wxVariant& value = wxNullVariant) :
 		wxTStringProperty(property, label, name, value)
 	{
 	}
@@ -122,10 +144,14 @@ class wxMStringProperty : public wxLongStringProperty {
 public:
 	wxMStringProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const wxString& value = wxEmptyString) :
-		wxLongStringProperty(label, name, value)
-	{
-	}
+		const wxVariant& value = wxNullVariant);
+
+	virtual wxString ValueToString(wxVariant& value,
+		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+
+	virtual bool StringToValue(wxVariant& variant,
+		const wxString& text,
+		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
 
 protected:
 

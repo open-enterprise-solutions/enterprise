@@ -2,7 +2,7 @@
 
 #include "frmclient/docView/docManager.h"   // full ibFrontendDocTemplate type
 #include "frmclient/mainFrame/mainFrame.h"
-#include "frmclient/visualView/visualHostClient.h"   // ibFormVisualDocument — the tab a file opened in
+#include "frmclient/docView/tabDocument.h"   // ibTabDocument — the tab a file opened in
 
 // ----------------------------------------------------------------------------
 // ibFrontendFileDocument
@@ -23,8 +23,8 @@ bool ibFrontendFileDocument::OnNewDocument()
 
 	// Its first format: the first the template names.
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Extension, GetDocumentTemplate()->GetDefaultExtension().BeforeFirst(wxT(';')));
-	frame->Call(ibProtocolMethod::Open, params, answer);
+	params.SetValue(ibProtocol::ibFile::Extension, GetDocumentTemplate()->GetDefaultExtension().BeforeFirst(wxT(';')));
+	frame->Call(ibProtocol::ibMethod::Open, params, answer);
 
 	//We must delete document after initialization
 	return false;
@@ -40,10 +40,10 @@ bool ibFrontendFileDocument::DoOpenDocument(const wxString& filename)
 		return false;
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::File, uploaded);
+	params.SetValue(ibProtocol::ibFile::File, uploaded);
 	// …and the tab it shows in keeps where it came from: Save puts it back there.
-	if (frame->Call(ibProtocolMethod::Open, params, answer)) {
-		if (ibFormVisualDocument* const opened = frame->FindDocument(frame->GetActiveTab()))
+	if (frame->Call(ibProtocol::ibMethod::Open, params, answer)) {
+		if (ibTabDocument* const opened = frame->FindDocument(frame->GetActiveTab()))
 			opened->SetFilename(filename);
 	}
 

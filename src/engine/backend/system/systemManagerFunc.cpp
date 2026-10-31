@@ -7,18 +7,20 @@
 
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
+#include "backend/metadataSerialization.h"           // a value as text and back — the configuration's door
 
 #include "backend/backend_mainFrame.h"
 #include "backend/backend_form.h"
 
-#include "backend/compiler/translateCode.h"
+#include "core/compiler/translateCode.h"
 #include "backend/compiler/procUnit.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
+#include "backend/backend_localization.h"            // Tstr — the language a caption is read in
 
 #include "systemManagerEnum.h"
 
-#include "core/serialize/jsonProvider.h"          // a value as text — the two verbs below
+#include "core/serialize/provider/jsonProvider.h"          // a value as text — the two verbs below
 #include "backend/metaCollection/metaIntrospect.h"   // …and the type names the writing needs
 
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
@@ -47,21 +49,19 @@ ibDateTime ibValueSystemFunction::Date(int year, int month, int day, int hour, i
 	// January of the next year — a date nobody wrote, in a figure somebody will reconcile against.
 	// The month is named because that is the one people get wrong by writing the day first.
 	if (month < 1 || month > 12)
-		ibBackendCoreException::Error(_("Date: '%s' is not a month"), wxString::Format(wxT("%d"), month));
+		ibBackendCoreException::Error(_("Date: '%s' is not a month"), ibString::Format(ibT("%d"), month));
 
 	if (year < 1 || year > 9999)
-		ibBackendCoreException::Error(_("Date: '%s' is not a year"), wxString::Format(wxT("%d"), year));
-
-	const wxDateTime::Month wxMonth = static_cast<wxDateTime::Month>(wxDateTime::Jan + (month - 1));
+		ibBackendCoreException::Error(_("Date: '%s' is not a year"), ibString::Format(ibT("%d"), year));
 
 	if (day < 1 || day > static_cast<int>(ibDateTime::DaysInMonth(year, static_cast<unsigned>(month))))
 		ibBackendCoreException::Error(_("Date: %s has no day %s"),
-			wxDateTime::GetMonthName(wxMonth) + wxString::Format(wxT(" %d"), year),
-			wxString::Format(wxT("%d"), day));
+			ibDateTime::MonthName(static_cast<unsigned>(month)) + ibString::Format(ibT(" %d"), year),
+			ibString::Format(ibT("%d"), day));
 
 	if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)
 		ibBackendCoreException::Error(_("Date: '%s' is not a time of day"),
-			wxString::Format(wxT("%d:%02d:%02d"), hour, minute, second));
+			ibString::Format(ibT("%d:%02d:%02d"), hour, minute, second));
 
 	// The reading of these parts (fdatetime.h) - the same on every machine, `Date(1, 1, 1)` the empty
 	// date among them.
@@ -69,7 +69,7 @@ ibDateTime ibValueSystemFunction::Date(int year, int month, int day, int hour, i
 		static_cast<unsigned>(hour), static_cast<unsigned>(minute), static_cast<unsigned>(second));
 }
 
-wxString ibValueSystemFunction::String(const ibValue& cValue)
+ibString ibValueSystemFunction::String(const ibValue& cValue)
 {
 	return cValue.GetString();
 }
@@ -249,36 +249,36 @@ int ibValueSystemFunction::StrCountOccur(const ibValue& cSource, const ibValue& 
 // so the two functions agree about what a line is.
 int ibValueSystemFunction::StrLineCount(const ibValue& cSource)
 {
-	const wxString src = cSource.GetString();
+	const ibString src = cSource.GetString();
 
 	int lines = 1;   // text always has a first line, empty included
 	for (size_t pos = 0; pos < src.length(); ++pos) {
-		const wxChar ch = src[pos];
-		if (ch == wxT('\r')) {
-			if (pos + 1 < src.length() && src[pos + 1] == wxT('\n'))
+		const ibChar ch = src[pos];
+		if (ch == ibT('\r')) {
+			if (pos + 1 < src.length() && src[pos + 1] == ibT('\n'))
 				++pos;   // CRLF is a single break
 			++lines;
 		}
-		else if (ch == wxT('\n')) {
+		else if (ch == ibT('\n')) {
 			++lines;
 		}
 	}
 	return lines;
 }
 
-wxString ibValueSystemFunction::StrGetLine(const ibValue& cValue, unsigned int nLine)
+ibString ibValueSystemFunction::StrGetLine(const ibValue& cValue, unsigned int nLine)
 {
-	if (nLine == 0) return wxEmptyString;
+	if (nLine == 0) return ibEmptyString;
 
-	const wxString src = cValue.GetString();
-	if (src.IsEmpty()) return wxEmptyString;
+	const ibString src = cValue.GetString();
+	if (src.IsEmpty()) return ibEmptyString;
 
 	// Per-thread cache: callers usually iterate lines sequentially (1, 2, 3...);
 	// remember where the last requested line started so the next call resumes
 	// from there instead of rescanning from offset 0. Worker-pool-safe: no
 	// shared static state across threads.
 	struct Cache {
-		wxString     source;
+		ibString     source;
 		size_t       startPos = 0;
 		unsigned int line     = 1;
 	};
@@ -294,8 +294,8 @@ wxString ibValueSystemFunction::StrGetLine(const ibValue& cValue, unsigned int n
 	const size_t len = src.length();
 	while (true) {
 		// Find next line break — handles \r\n, \n, and lone \r.
-		const size_t brk = src.find_first_of(wxT("\r\n"), pos);
-		const size_t lineEnd = (brk == wxString::npos) ? len : brk;
+		const size_t brk = src.find_first_of(ibT("\r\n"), pos);
+		const size_t lineEnd = (brk == ibString::npos) ? len : brk;
 
 		if (curLine == nLine) {
 			// Refresh cache for the most likely next call (line nLine+1).
@@ -305,11 +305,11 @@ wxString ibValueSystemFunction::StrGetLine(const ibValue& cValue, unsigned int n
 			return src.Mid(pos, lineEnd - pos);
 		}
 
-		if (brk == wxString::npos) return wxEmptyString; // beyond last line
+		if (brk == ibString::npos) return ibEmptyString; // beyond last line
 
 		// Advance past the line break (handle CRLF as a single break).
 		pos = brk + 1;
-		if (src[brk] == wxT('\r') && pos < len && src[pos] == wxT('\n'))
+		if (src[brk] == ibT('\r') && pos < len && src[pos] == ibT('\n'))
 			++pos;
 		++curLine;
 	}
@@ -325,9 +325,9 @@ ibString ibValueSystemFunction::Lower(const ibValue& cSource)
 	return cSource.GetString().Lower();
 }
 
-wxString ibValueSystemFunction::Chr(short nCode)
+ibString ibValueSystemFunction::Chr(short nCode)
 {
-	return wxString(static_cast<wchar_t>(nCode));
+	return ibString(static_cast<wchar_t>(nCode));
 }
 
 short ibValueSystemFunction::Asc(const ibValue& cSource)
@@ -352,9 +352,15 @@ short ibValueSystemFunction::Asc(const ibValue& cSource)
 //
 // Since 2026-09-21 the reading itself says so — a source in no format is itself — and this function
 // no longer adds it back by hand.
-wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
+//
+// 🛑 NO LANGUAGE NAMED READ THE FIRST ONE WRITTEN. An empty code matches no language, so the reading
+// fell back to the first written, and `Tstr(text)` showed every user the same language whatever
+// theirs was (#612). Left unsaid, the language is the one every caption on the screen is read in.
+ibString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
 {
-	return ibLocalization::GetTranslateGetRawLocText(cLanguage.GetString(), cSource.GetString());
+	const ibString& language = cLanguage.GetString();
+	return ibLocalization::GetTranslateGetRawLocText(
+		!language.IsEmpty() ? language : ibBackendLocalization::GetUserLanguage(), cSource.GetString());
 }
 
 //--- Date and time:
@@ -394,6 +400,8 @@ ibValue ibValueSystemFunction::BegOfWeek(const ibValue& cData)   { return ibValu
 ibValue ibValueSystemFunction::EndOfWeek(const ibValue& cData)   { return ibValue(cData.GetDate().EndOfPeriod(ibTotalsPeriod::Week)); }
 ibValue ibValueSystemFunction::BegOfDay(const ibValue& cData)    { return ibValue(cData.GetDate().BeginOfPeriod(ibTotalsPeriod::Day)); }
 ibValue ibValueSystemFunction::EndOfDay(const ibValue& cData)    { return ibValue(cData.GetDate().EndOfPeriod(ibTotalsPeriod::Day)); }
+ibValue ibValueSystemFunction::BegOfHour(const ibValue& cData)   { return ibValue(cData.GetDate().BeginOfPeriod(ibTotalsPeriod::Hour)); }
+ibValue ibValueSystemFunction::EndOfHour(const ibValue& cData)   { return ibValue(cData.GetDate().EndOfPeriod(ibTotalsPeriod::Hour)); }
 
 int ibValueSystemFunction::GetYear(const ibValue& cData)         { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Year)); }
 int ibValueSystemFunction::GetMonth(const ibValue& cData)        { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Month)); }
@@ -401,6 +409,7 @@ int ibValueSystemFunction::GetDay(const ibValue& cData)          { return static
 int ibValueSystemFunction::GetHour(const ibValue& cData)         { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Hour)); }
 int ibValueSystemFunction::GetMinute(const ibValue& cData)       { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Minute)); }
 int ibValueSystemFunction::GetSecond(const ibValue& cData)       { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Second)); }
+ibNumber ibValueSystemFunction::GetMillisecond(const ibValue& cData) { return ibNumber(cData.GetDate().GetValue()); }
 int ibValueSystemFunction::GetWeekOfYear(const ibValue& cData)   { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::Week)); }
 int ibValueSystemFunction::GetDayOfYear(const ibValue& cData)    { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::DayOfYear)); }
 int ibValueSystemFunction::GetDayOfWeek(const ibValue& cData)    { return static_cast<int>(cData.GetDate().GetPart(ibDatePart::WeekDay)); }
@@ -410,25 +419,27 @@ int ibValueSystemFunction::GetQuartOfYear(const ibValue& cData)  { return static
 
 #include <wx/filename.h>
 
-bool ibValueSystemFunction::CopyFile(const wxString& src, const wxString& dst)
+#include "core/fileSystem.h"   // ibCopyFile, ibRemoveFile
+
+bool ibValueSystemFunction::CopyFile(const ibString& src, const ibString& dst)
 {
-	return wxCopyFile(src, dst);
+	return ibCopyFile(src, dst);
 }
 
-bool ibValueSystemFunction::DeleteFile(const wxString& file)
+bool ibValueSystemFunction::DeleteFile(const ibString& file)
 {
-	return wxRemoveFile(file);
+	return ibRemoveFile(file);
 }
 
-wxString ibValueSystemFunction::GetTempDir()
+ibString ibValueSystemFunction::GetTempDir()
 {
 	return wxFileName::GetTempDir();
 }
 
-wxString ibValueSystemFunction::GetTempFileName()
+ibString ibValueSystemFunction::GetTempFileName()
 {
 	return wxFileName::CreateTempFileName(
-		wxEmptyString
+		ibEmptyString
 	);
 }
 
@@ -450,8 +461,8 @@ ibBackendValueForm* ibValueSystemFunction::ActiveWindow()
 // and the OBJECT a line is about; nothing here is a shape invented for the occasion. The session is
 // NOT among them — the logger stamps it, because a caller naming its own session could name somebody
 // else's.
-void ibValueSystemFunction::WriteJournalEvent(const wxString& strMessage, ibStatusMessage status,
-	const wxString& strEvent, const ibValue& objectValue)
+void ibValueSystemFunction::WriteJournalEvent(const ibString& strMessage, ibStatusMessage status,
+	const ibString& strEvent, const ibValue& objectValue)
 {
 	ibLogger* const logger = ibApplicationInstance::GetLogger();
 	if (logger == nullptr)
@@ -459,8 +470,8 @@ void ibValueSystemFunction::WriteJournalEvent(const wxString& strMessage, ibStat
 
 	// The category a caller did not give: "script" is where code written in the configuration lands,
 	// which is what a person filters by when they want to see what an assistant's run did.
-	const wxString source = wxT("script");
-	const wxString event  = strEvent.IsEmpty() ? wxT("script.event") : strEvent;
+	const ibString source = ibT("script");
+	const ibString event  = strEvent.IsEmpty() ? ibString(ibT("script.event")) : strEvent;
 
 	// 🛑⭐⭐ THE OBJECT IS APPENDED TO THE TEXT, and that is a RETREAT from what this first did — for
 	// a measured reason. The obvious road was `Audit`'s details overload, which takes an ibValue and
@@ -474,9 +485,9 @@ void ibValueSystemFunction::WriteJournalEvent(const wxString& strMessage, ibStat
 	// So the level is honoured always, and the object goes in as its PRESENTATION — visible, findable
 	// by `contains`, and honest about being text rather than a link. When the details column is
 	// filled in for real, this is the one place that changes.
-	const wxString text = objectValue.IsEmpty()
+	const ibString text = objectValue.IsEmpty()
 		? strMessage
-		: wxString::Format(wxT("%s [%s]"), strMessage, objectValue.GetString());
+		: ibString::Format(ibT("%s [%s]"), strMessage, objectValue.GetString());
 
 	switch (status) {
 	case ibStatusMessage::ibStatusMessage_Error:   logger->Error(source, event, text); break;
@@ -485,7 +496,7 @@ void ibValueSystemFunction::WriteJournalEvent(const wxString& strMessage, ibStat
 	}
 }
 
-void ibValueSystemFunction::Message(const wxString& strMessage, ibStatusMessage status)
+void ibValueSystemFunction::Message(const ibString& strMessage, ibStatusMessage status)
 {
 	// 🛑⭐⭐ IN EVAL MODE IT USED TO GO NOWHERE, AND THAT IS WHY A SANDBOX PRINTED INTO SILENCE.
 	// Returning here is right for what eval mode was built for — a watch expression, a tooltip, an
@@ -541,7 +552,7 @@ void ibValueSystemFunction::Message(const wxString& strMessage, ibStatusMessage 
 	//  otherwise.)
 }
 
-void ibValueSystemFunction::Alert(const wxString& strMessage) //Alert
+void ibValueSystemFunction::Alert(const ibString& strMessage) //Alert
 {
 	// ⭐ A DIALOG THAT CANNOT OPEN STILL SAID SOMETHING. Evaluated code raising an alert gets no
 	// window — correctly: a probe must not stop the person's session with a box they did not ask
@@ -551,7 +562,7 @@ void ibValueSystemFunction::Alert(const wxString& strMessage) //Alert
 	if (ibBackendException::IsEvalMode()) {
 
 		if (debugServer != nullptr && debugServer->IsDebugging())
-			debugServer->SendEvalMessage(wxT("(alert, not shown) ") + strMessage);
+			debugServer->SendEvalMessage(ibT("(alert, not shown) ") + strMessage);
 
 		return;
 	}
@@ -564,7 +575,7 @@ void ibValueSystemFunction::Alert(const wxString& strMessage) //Alert
 		frame->ShowModalMessage(strMessage, _("Warning"), wxICON_WARNING | wxOK);
 }
 
-ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMode mode)//Question
+ibValue ibValueSystemFunction::Question(const ibString& strMessage, ibQuestionMode mode)//Question
 {
 	// …AND THE SAME FOR A QUESTION, whose answer nobody can give here: the code gets the empty
 	// return code it always got, and the person who ran it learns that the code STOPPED TO ASK —
@@ -573,7 +584,7 @@ ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMo
 	if (ibBackendException::IsEvalMode()) {
 
 		if (debugServer != nullptr && debugServer->IsDebugging())
-			debugServer->SendEvalMessage(wxT("(question, not asked) ") + strMessage);
+			debugServer->SendEvalMessage(ibT("(question, not asked) ") + strMessage);
 
 		return ibValue::CreateObject<ibValueEnumQuestionReturnCode>();
 	}
@@ -620,7 +631,7 @@ ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMo
 	return ibValue::CreateEnumObject<ibValueEnumQuestionReturnCode>(code);
 }
 
-void ibValueSystemFunction::SetStatus(const wxString& sStatus)
+void ibValueSystemFunction::SetStatus(const ibString& sStatus)
 {
 	if (ibBackendException::IsEvalMode())
 		return;
@@ -663,7 +674,7 @@ static bool ErrorsAreSilencedHere()
 	return ibBackendException::IsEvalMode() && !ibBackendException::IsEvalSandbox();
 }
 
-void ibValueSystemFunction::SetError(const wxString& strError)
+void ibValueSystemFunction::SetError(const ibString& strError)
 {
 	if (ErrorsAreSilencedHere())
 		return;
@@ -671,7 +682,7 @@ void ibValueSystemFunction::SetError(const wxString& strError)
 	ibBackendCoreException::Error(strError);
 }
 
-void ibValueSystemFunction::Raise(const wxString& strError)
+void ibValueSystemFunction::Raise(const ibString& strError)
 {
 	if (ErrorsAreSilencedHere())
 		return;
@@ -681,10 +692,10 @@ void ibValueSystemFunction::Raise(const wxString& strError)
 	ibBackendCoreException::Error(strError);
 }
 
-wxString ibValueSystemFunction::ErrorDescription()
+ibString ibValueSystemFunction::ErrorDescription()
 {
 	if (ErrorsAreSilencedHere())
-		return wxEmptyString;
+		return ibEmptyString;
 
 	return ibBackendException::GetLastError();
 }
@@ -709,6 +720,16 @@ bool ibValueSystemFunction::ValueIsFilled(const ibValue& cData)
 	return !cData.IsEmpty();
 }
 
+namespace {
+
+// A type's name in a text, as the running configuration knows it - what it does not know it refuses.
+ibClassID LookupType(const ibString& name)
+{
+	return activeMetaData != nullptr ? activeMetaData->GetIDObjectFromString(name) : ibClassID(0);
+}
+
+} // namespace
+
 // ⭐⭐ A VALUE, AS TEXT — WRITTEN WHERE THE VALUE IS. Everything under this was already built: a
 // value packs itself into an ibDataNode, the configuration's door adds the types only it can make
 // (references, enum members), and a provider writes that node as JSON. What was missing is the one
@@ -719,7 +740,7 @@ bool ibValueSystemFunction::ValueIsFilled(const ibValue& cData)
 // Printing answers what a value LOOKS like; this answers what it IS. A structure survives the trip,
 // which is the difference between reading a report and reading a sentence about one. Coverage grows
 // with the types: whatever learns to pack itself is in here the day it does, with nothing to add.
-wxString ibValueSystemFunction::SerializeValue(const ibValue& cData)
+ibString ibValueSystemFunction::JSONString(const ibValue& cData)
 {
 	// THE CONFIGURATION IS THE RUNNING ONE — the same one every other function in this file asks
 	// for. A value's references mean nothing without it: their types exist in its registry alone.
@@ -727,7 +748,7 @@ wxString ibValueSystemFunction::SerializeValue(const ibValue& cData)
 		ibBackendCoreException::Error(_("There is no open configuration to write this value against"));
 
 	ibDataNode node;
-	activeMetaData->Serialize(cData, node);   // raises on a value that cannot travel
+	ibSerializeValue(cData, node);   // raises on a value that cannot travel
 
 	ibJsonProvider provider;
 	provider.SetTypeResolver(ibMetaTypeResolver(activeMetaData));
@@ -736,7 +757,7 @@ wxString ibValueSystemFunction::SerializeValue(const ibValue& cData)
 	if (!provider.Write(node, writer))
 		ibBackendCoreException::Error(_("This value could not be written as JSON"));
 
-	return wxString::FromUTF8(reinterpret_cast<const char*>(writer.pointer()), writer.size());
+	return ibString::FromUTF8(reinterpret_cast<const char*>(writer.pointer()), writer.size());
 }
 
 // …AND BACK, which is the half that lets a value be MADE from outside. Text arrives — typed by
@@ -745,26 +766,21 @@ wxString ibValueSystemFunction::SerializeValue(const ibValue& cData)
 //
 // ⚠ NOT EVERY WRITING SURVIVES THE RETURN TRIP. The JSON view is a rendering: a date becomes an
 // ISO string, a type description is written out by name, and fields and properties flatten into one
-// set (serialize/jsonProvider.h says so in its own words). What comes back is what the text can
+// set (serialize/provider/jsonProvider.h says so in its own words). What comes back is what the text can
 // carry, so a value that must return EXACTLY as it left travels as the binary form instead. Said
 // here rather than discovered: a lossy round trip that nobody warned about is read as a defect in
 // whatever used it next.
-ibValue ibValueSystemFunction::DeserializeValue(const wxString& strJson)
+ibValue ibValueSystemFunction::JSONValue(const ibString& strJson)
 {
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
 		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
 
 	ibJsonProvider provider;
-	provider.SetTypeLookup([](const wxString& name) -> ibClassID {
-		return activeMetaData != nullptr
-			? activeMetaData->GetIDObjectFromString(name) : ibClassID(0); });
+	provider.SetTypeLookup(LookupType);
 
-	// ⚠ THE BUFFER OUTLIVES THE READER, deliberately — a reader BORROWS its bytes (fs.h), and
-	// handing it a temporary leaves it reading freed memory.
-	const wxScopedCharBuffer utf8 = strJson.utf8_str();
+	const std::string utf8 = strJson.ToUtf8();
 
-	wxMemoryBuffer bytes;
-	bytes.AppendData(utf8.data(), utf8.length());
+	const ibMemoryBuffer bytes(utf8.data(), utf8.length());
 
 	ibReaderMemory reader(bytes);
 
@@ -772,10 +788,49 @@ ibValue ibValueSystemFunction::DeserializeValue(const wxString& strJson)
 	if (!provider.Read(reader, node))
 		ibBackendCoreException::Error(_("This text is not JSON a value can be read from"));
 
-	return activeMetaData->Deserialize(node);
+	return ibDeserializeValue(node, activeMetaData);
 }
 
-ibValue ibValueSystemFunction::Evaluate(const wxString& strExpression)
+#include "core/serialize/provider/xmlProvider.h"   // the node as XML — the twins of the two verbs above
+
+// ⭐ A VALUE AS XML — JSONString's twin, with the XML provider where that one has the JSON view: the value packs
+// itself into a node, the configuration's door adds what only it can make (references, enumeration members), and
+// the provider writes the node. The XML form keeps every kind the node holds, so XMLValue reads the value back as
+// it went - a structure or an array too, its elements read through the configuration (ibDeserializeValue), a
+// reference among them. A value that cannot pack itself is refused by the door; the
+// provider refuses on its own what it cannot write or read.
+ibString ibValueSystemFunction::XMLString(const ibValue& value)
+{
+	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
+		ibBackendCoreException::Error(_("There is no open configuration to write this value against"));
+
+	ibDataNode node;
+	ibSerializeValue(value, node);   // raises on a value that cannot travel
+
+	ibXmlProvider provider;
+	provider.SetTypeResolver(ibMetaTypeResolver(activeMetaData));
+	provider.SetTypeLookup(LookupType);   // a value's type by name only where the name reads back as it
+	ibString text;
+	provider.Write(node, text);
+	return text;
+}
+
+// …AND BACK: the text XMLString wrote, read into a node and the node into a value — of the type the node names, as
+// JSONValue reads its own.
+ibValue ibValueSystemFunction::XMLValue(const ibString& text)
+{
+	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
+		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
+
+	ibXmlProvider provider;
+	provider.SetTypeLookup(LookupType);
+
+	ibDataNode node;
+	provider.Read(text, node);
+	return ibDeserializeValue(node, activeMetaData);
+}
+
+ibValue ibValueSystemFunction::Evaluate(const ibString& strExpression)
 {
 	auto* puState = ibSession::GetPUState();
 	ibValue retValue;
@@ -783,7 +838,7 @@ ibValue ibValueSystemFunction::Evaluate(const wxString& strExpression)
 	return retValue;
 }
 
-void ibValueSystemFunction::Execute(const wxString& strExpression)
+void ibValueSystemFunction::Execute(const ibString& strExpression)
 {
 	if (ibBackendException::IsEvalMode())
 		return;
@@ -796,7 +851,7 @@ void ibValueSystemFunction::Execute(const wxString& strExpression)
 
 // THE FORMAT STRING IS A VALUE of its own now (formatString.h) — read once, and applied by the same
 // code the format string constructor prints its sample with. The reading here was the only one.
-wxString ibValueSystemFunction::Format(ibValue& cData, const wxString& fmt)
+ibString ibValueSystemFunction::Format(ibValue& cData, const ibString& fmt)
 {
 	return ibFormatString::Parse(fmt).Apply(cData);
 }
@@ -810,7 +865,7 @@ ibValue ibValueSystemFunction::Type(const ibValue& cTypeName)
 		return ibValue();
 	}
 
-	const wxString& strTypeName = cTypeName.GetString();
+	const ibString& strTypeName = cTypeName.GetString();
 	if (!activeMetaData->IsRegisterCtor(strTypeName))
 		ibBackendCoreException::Error(_("Type not found '%s'"), strTypeName);
 
@@ -836,7 +891,7 @@ int ibValueSystemFunction::ArgCount()//ArgCount
 #endif
 }
 
-wxString ibValueSystemFunction::ArgValue(int n)//ArgValue
+ibString ibValueSystemFunction::ArgValue(int n)//ArgValue
 {
 	int count = ArgCount();
 	if (n < 0 || n > count)
@@ -845,24 +900,26 @@ wxString ibValueSystemFunction::ArgValue(int n)//ArgValue
 	return __wargv[n];
 #else
 	if (wxTheApp)
-		return wxString(wxTheApp->argv[n]);
-	return wxString();
+		return ibString(wxTheApp->argv[n]);
+	return ibString();
 #endif
 }
 
-wxString ibValueSystemFunction::ComputerName()//ComputerName
+ibString ibValueSystemFunction::ComputerName()//ComputerName
 {
 	return wxGetHostName();
 }
 
-void ibValueSystemFunction::RunApp(const wxString& sCommand)//RunApp
+#include "core/startProcess.h"   // a script on the server runs on a fiber, where wxExecute asserts
+
+void ibValueSystemFunction::RunApp(const ibString& sCommand)//RunApp
 {
 	if (ibBackendException::IsEvalMode())
 		return;
-	wxExecute(sCommand);
+	ibStartProcess(sCommand);
 }
 
-void ibValueSystemFunction::SetAppTitle(const wxString& sTitle)//SetAppTitle
+void ibValueSystemFunction::SetAppTitle(const ibString& sTitle)//SetAppTitle
 {
 	if (ibBackendException::IsEvalMode())
 		return;
@@ -870,15 +927,15 @@ void ibValueSystemFunction::SetAppTitle(const wxString& sTitle)//SetAppTitle
 		frame->SetTitle(sTitle);
 }
 
-wxString ibValueSystemFunction::UserDir() {
-	return wxEmptyString;
+ibString ibValueSystemFunction::UserDir() {
+	return ibEmptyString;
 }
 
-wxString ibValueSystemFunction::UserName() {
+ibString ibValueSystemFunction::UserName() {
 	return appData->GetUserName();
 }
 
-wxString ibValueSystemFunction::UserPassword() {
+ibString ibValueSystemFunction::UserPassword() {
 	return appData->GetUserPassword();
 }
 
@@ -896,7 +953,7 @@ void ibValueSystemFunction::SetExclusive(bool on) {
 	s->SetExclusive(on);
 }
 
-wxString ibValueSystemFunction::GeneralLanguage() {
+ibString ibValueSystemFunction::GeneralLanguage() {
 	return appData->GetUserLanguageCode();
 }
 
@@ -915,11 +972,14 @@ void ibValueSystemFunction::EndJob(bool force) //EndJob
 
 void ibValueSystemFunction::UserInterruptProcessing()
 {
-	if (wxGetKeyState(WXK_CONTROL) && wxGetKeyState(WXK_CANCEL))
+	// THE PERSON'S BREAK IS THE SESSION'S CANCEL (ibSession::Cancel), heard here as the interpreter hears it between
+	// opcodes. The keyboard this process could read is the server's, not the person's.
+	const ibSession* session = ibSession::Current();
+	if (session != nullptr && ibRunCancelled(session->RunState()))
 		ibBackendInterruptException::Error();
 }
 
-bool ibValueSystemFunction::AccessRight(const wxString& strRoleName, const ibValue& cData)
+bool ibValueSystemFunction::AccessRight(const ibString& strRoleName, const ibValue& cData)
 {
 	const ibValueMetaObject* creator = cData.ConvertToType<ibValueMetaObject>();
 	return creator != nullptr ?
@@ -969,7 +1029,7 @@ void ibValueSystemFunction::ShowCommonForm(const ibFormRequest& request, ibBacke
 
 #include "backend/system/value/valueSpreadsheet.h"
 
-ibValue ibValueSystemFunction::GetCommonTemplate(const wxString& strTemplateName)
+ibValue ibValueSystemFunction::GetCommonTemplate(const ibString& strTemplateName)
 {
 	if (!strTemplateName.IsEmpty()) {
 
@@ -1025,8 +1085,6 @@ void ibValueSystemFunction::RollBackTransaction()
 //*                                  Jobs                                    *
 //****************************************************************************
 
-#include "backend/job/jobManager.h"
-
 int ibValueSystemFunction::RunScheduledJobs()
 {
 	// Evaluating a watch expression in the debugger must not start work — the
@@ -1043,7 +1101,7 @@ int ibValueSystemFunction::RunScheduledJobs()
 	return manager->Tick();
 }
 
-bool ibValueSystemFunction::RunJob(const wxString& strJobName)
+bool ibValueSystemFunction::RunJob(const ibString& strJobName)
 {
 	if (ibBackendException::IsEvalMode())
 		return false;
@@ -1058,7 +1116,7 @@ bool ibValueSystemFunction::RunJob(const wxString& strJobName)
 #include "backend/system/value/valueArray.h"
 #include "backend/system/value/valueBackgroundJob.h"
 
-ibValue ibValueSystemFunction::RunBackground(const wxString& strProcedureName, ibValue* pArgs)
+ibValue ibValueSystemFunction::RunBackground(const ibString& strProcedureName, ibValue* pArgs)
 {
 	// Starting work from a watch expression would be a side effect of LOOKING at
 	// something — the same reason the transaction verbs guard on this.
@@ -1079,13 +1137,13 @@ ibValue ibValueSystemFunction::RunBackground(const wxString& strProcedureName, i
 			ibBackendCoreException::Error(_("Background job: the second argument must be an Array"));
 
 		ibValue count;
-		array->CallAsFunc(array->FindMethod(wxT("Count")), count, nullptr, 0);
+		array->CallAsFunc(array->FindMethod(ibT("Count")), count, nullptr, 0);
 		const long n = count.GetInteger();
 		args.reserve(static_cast<std::size_t>(n > 0 ? n : 0));
 		for (long i = 0; i < n; ++i) {
 			ibValue item, index(static_cast<signed int>(i));
 			ibValue* params[] = { &index, nullptr };
-			array->CallAsFunc(array->FindMethod(wxT("Get")), item, params, 1);
+			array->CallAsFunc(array->FindMethod(ibT("Get")), item, params, 1);
 			args.push_back(item);
 		}
 	}

@@ -2,7 +2,7 @@
 #define __PROPERTY_CALC_SCHEDULE_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/calcScheduleDescription.h"
+#include "core/description/calcScheduleDescription.h"
 
 class ibValueMetaObjectRegisterData;
 
@@ -14,7 +14,7 @@ class ibValueMetaObjectRegisterData;
 // ⭐ WHAT EACH PART MAY BE IS ANSWERED HERE, and nowhere else: the inspector's rows and metadata_set_schedule both
 // ask. The fields a link may name are the owner register's own (GetScheduleFieldList).
 class BACKEND_API ibPropertyCalcSchedule : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibCalcScheduleDescription& scheduleDesc = ibCalcScheduleDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibCalcScheduleDescription& scheduleDesc = ibCalcScheduleDescription());
 	const ibValueMetaObjectRegisterData* GetScheduleRegister(const ibCalcScheduleDescription& scheduleDesc) const;
 public:
 
@@ -33,7 +33,7 @@ public:
 	// meets the schedule dimension's — a dimension for a dimension.
 	void GetScheduleFieldList(ibMetaID dimension, ibPropertyChoiceList& list) const;
 
-	ibPropertyCalcSchedule(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyCalcSchedule(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
 	// NOTHING CHOSEN — a register whose calculations read no schedule.
@@ -46,13 +46,18 @@ public:
 protected:
 
 	// The family rule — a value arrives in whichever wrapper the caller was handed. See propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 
 	// readable node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// …and the lists its sub-rows choose from, for the register bound now, as the desktop's cell asked them
+	// (ibPGCalcScheduleProperty) — Schedule: Kind 1 the resources that may be the value, 2 the dimensions that may be
+	// the date, 3 each dimension to link, its children the fields that may answer for it.
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 };
 
 #endif

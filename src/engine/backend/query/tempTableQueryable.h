@@ -20,7 +20,7 @@
 class ibTempColumn : public ibBackendQueryColumn
 {
 public:
-	ibTempColumn(const wxString& name, const ibTypeDescription& type, ibMetaID modelId)
+	ibTempColumn(const ibString& name, const ibTypeDescription& type, ibMetaID modelId)
 		: m_name(name), m_physical(name), m_type(type), m_modelId(modelId) {}
 
 	// ⭐ THE NAME A QUERY WRITES AND THE NAME THE STORAGE KEEPS ARE TWO DIFFERENT NAMES.
@@ -34,26 +34,28 @@ public:
 	// One string became two: the renderer keeps asking for the PHYSICAL name (that is the contract
 	// with the generated table, and it must not drift), everybody who shows or resolves a field asks
 	// for the ordinary one.
-	ibTempColumn(const wxString& name, const wxString& physical,
-	             const ibTypeDescription& type, ibMetaID modelId, const wxString& synonym = wxEmptyString,
-	             Kind kind = Kind::Composite, const wxIcon& icon = wxNullIcon)
+	ibTempColumn(const ibString& name, const ibString& physical,
+	             const ibTypeDescription& type, ibMetaID modelId, const ibString& synonym = ibEmptyString,
+	             Kind kind = Kind::Composite, const ibPictureDescription& picture = ibPictureDescription())
 		: m_name(name), m_physical(physical), m_type(type), m_modelId(modelId), m_synonym(synonym),
-		  m_kind(kind), m_icon(icon) {}
+		  m_kind(kind), m_picture(picture) {}
 
 	// ⭐ THE PICTURE THIS COLUMN IS DRAWN WITH, handed over by whoever published it. A derived surface's
 	// column is computed — a balance, a turnover, a side of a dimension — and stands for something the
 	// configuration declared; the publisher knows which, so it hands the picture over at that moment.
 	// None given, the base's default stands, which is right for an ordinary temp table: its columns are
 	// made by whoever filled it and stand for nothing.
-	wxIcon GetColumnIcon() const override { return m_icon.IsOk() ? m_icon : ibBackendQueryColumn::GetColumnIcon(); }
+	ibPictureDescription GetColumnPicture() const override {
+		return !m_picture.IsEmptyPicture() ? m_picture : ibBackendQueryColumn::GetColumnPicture();
+	}
 
 	// ⭐ A TEMP TABLE'S COLUMN IS COMPOSITE — it has real fields and spreads into them. A DECLARED
 	// query's may not: an output with no column behind it is COMPUTED, one field read by name, and
 	// saying so is what stops the reader looking for a `_TYPE` a constant cannot have.
 	Kind GetColumnKind() const override { return m_kind; }
 
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_physical; }
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_physical; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }   // interface returns a non-const ref
 	ibMetaID           GetColumnId()      const override { return m_modelId; }
 
@@ -65,7 +67,7 @@ public:
 	//
 	// Empty = the name, which is the base class's own answer and right for an ordinary temp table:
 	// its columns are named by whoever made it, and that name IS the caption.
-	wxString           GetSynonym()      const override { return m_synonym.IsEmpty() ? m_name : m_synonym; }
+	ibString           GetSynonym()      const override { return m_synonym.IsEmpty() ? m_name : m_synonym; }
 
 	// ⭐ WHAT IT STANDS FOR, when that is something the configuration declared — a register's dimension,
 	// resource or analytics slot published into a view. Handed over by the publisher at the moment it hands
@@ -85,13 +87,13 @@ public:
 	bool IsAvailable() const override { return m_standsFor == nullptr || m_standsFor->IsAvailable(); }
 
 private:
-	wxString                  m_name;
-	wxString                  m_physical;   // == m_name unless the storage spells it differently
+	ibString                  m_name;
+	ibString                  m_physical;   // == m_name unless the storage spells it differently
 	mutable ibTypeDescription m_type;     // mutable: GetTypeDesc() is const but returns a non-const ref
 	ibMetaID                  m_modelId;
-	wxString                  m_synonym;    // empty = the name
+	ibString                  m_synonym;    // empty = the name
 	Kind                      m_kind = Kind::Composite;   // see GetColumnKind
-	wxIcon                    m_icon;       // none = the base's default
+	ibPictureDescription      m_picture;    // none = the base's default
 	const ibBackendSourceColumn* m_standsFor = nullptr;   // see StandsFor
 	ibBalanceRole                m_balanceRole = ibBalanceRole::None;   // see PlaysInBalance
 	int                          m_periodRank  = 0;
@@ -122,7 +124,7 @@ public:
 	}
 
 	// A column to reference in Where / OrderBy / GetValue (by its name). Null if absent.
-	const ibBackendQueryColumn* Column(const wxString& name) const
+	const ibBackendQueryColumn* Column(const ibString& name) const
 	{
 		for (const auto& c : m_columns)
 			if (c->GetName() == name) return c.get();
@@ -139,7 +141,7 @@ public:
 	}
 
 	// Temp columns aren't attributes — resolve a UNION branch's column by name here.
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return Column(name); }
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return Column(name); }
 
 	// All exposed columns — for SELECT * over this temp source (nested subquery).
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override
@@ -188,7 +190,7 @@ public:
 	// --- queryable interface — trivial for a non-metaobject temp source ------------
 	// (No attribute resolution / DB-row materialisation here — a temp source is computed
 	//  in RAM, so those concerns do not exist; the base interface names none of them.)
-	wxString GetQueryTableName() const override { return wxEmptyString; }
+	ibString GetQueryTableName() const override { return ibEmptyString; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
 
 	// ⭐ THE CONFIGURATION ITS REFERENCES BELONG TO — handed in by whoever wraps the table (the query it is
@@ -220,15 +222,15 @@ private:
 class ibDbTempTableQueryable : public ibBackendQueryable
 {
 public:
-	ibDbTempTableQueryable(wxString tableName, std::vector<ibTempColumn> columns, const ibMetaData* metaData = nullptr)
+	ibDbTempTableQueryable(ibString tableName, std::vector<ibTempColumn> columns, const ibMetaData* metaData = nullptr)
 		: m_tableName(std::move(tableName)), m_tableGuid(wxNewUniqueGuid), m_columns(std::move(columns)), m_metaData(metaData) {}
 
-	wxString          GetQueryTableName() const override { return m_tableName; }
+	ibString          GetQueryTableName() const override { return m_tableName; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_tableGuid; }
 	ibMetaID          GetQueryTableId()    const override { return 0; }                 // not a metaobject
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }        // reference / enum reconstruction context
 
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
 	{
 		for (const ibTempColumn& c : m_columns)
 			if (c.GetName() == name) return &c;
@@ -251,7 +253,7 @@ public:
 	// read by an ordinary physical scan. That is the whole point — it is just another DB source.
 
 private:
-	wxString                  m_tableName;   // the real temp table name (the manager owns its DB lifetime)
+	ibString                  m_tableName;   // the real temp table name (the manager owns its DB lifetime)
 	ibUniqueKey				  m_tableGuid;   // the real temp table GUID (the manager owns its DB lifetime)	
 	std::vector<ibTempColumn> m_columns;     // metadata-format columns (real type), read via the DB spread
 	const ibMetaData*         m_metaData;    // reference / enum reconstruction context
@@ -285,7 +287,7 @@ private:
 class ibSchemaTableQueryable : public ibBackendQueryable
 {
 public:
-	ibSchemaTableQueryable(wxString tableName, ibMetaID tableId,
+	ibSchemaTableQueryable(ibString tableName, ibMetaID tableId,
 	                       std::vector<const ibBackendQueryColumn*> columns,
 	                       const ibMetaData* metaData = nullptr,
 	                       std::vector<const ibBackendQueryColumn*> keyColumns = {})
@@ -294,14 +296,14 @@ public:
 
 	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_keyColumns; }
 
-	wxString          GetQueryTableName() const override { return m_tableName; }
+	ibString          GetQueryTableName() const override { return m_tableName; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_tableGuid; }
 	ibMetaID          GetQueryTableId()   const override { return m_tableId; }
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }
 	// No row key and no keyset: a derived table is addressed by its declared key columns, never
 	// scrolled. An identity sort would invent an ordering nothing stores.
 
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
 	{
 		for (const ibBackendQueryColumn* c : m_columns)
 			if (c->GetName() == name) return c;
@@ -316,7 +318,7 @@ public:
 	}
 
 private:
-	wxString                                 m_tableName;
+	ibString                                 m_tableName;
 	ibUniqueKey                              m_tableGuid;
 	ibMetaID                                 m_tableId;
 	std::vector<const ibBackendQueryColumn*> m_columns;    // NOT owned — the schema table / the config own them
@@ -374,8 +376,8 @@ public:
 	// the run (the same rule ibSubqueryQueryable states for the columns it publishes but did not
 	// allocate).
 	struct Field {
-		wxString                    m_name;
-		wxString                    m_physical;
+		ibString                    m_name;
+		ibString                    m_physical;
 		ibTypeDescription           m_type;
 		ibBackendQueryColumn::Kind  m_kind = ibBackendQueryColumn::Kind::Composite;
 		const ibBackendQueryColumn* m_borrowed = nullptr;   // published as-is; the four above are then unused
@@ -399,7 +401,7 @@ public:
 	// ANOTHER KIND — so the first declaration's columns came out as Subquery(0), GroupKey(0),
 	// Aggregate(0), Stitch(0), Alias(0), Output(0), and then 0, 1, 2… : from the seventh field on,
 	// POSITIVE ids, indistinguishable from the metaIDs of declared attributes.
-	ibCteQueryable(wxString name, const std::vector<Field>& fields, ibMetaID firstOrdinal,
+	ibCteQueryable(ibString name, const std::vector<Field>& fields, ibMetaID firstOrdinal,
 	               const ibMetaData* metaData = nullptr)
 		: m_name(std::move(name)), m_guid(wxNewUniqueGuid), m_metaData(metaData)
 	{
@@ -419,7 +421,7 @@ public:
 			m_owned.push_back(std::make_shared<ibTempColumn>(field.m_name,
 				field.m_physical.IsEmpty() ? field.m_name : field.m_physical, field.m_type,
 				ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Subquery, ordinal++),
-				wxEmptyString, field.m_kind));
+				ibEmptyString, field.m_kind));
 			m_owned.back()->PlaysInBalance(field.m_balanceRole, field.m_periodRank);
 			m_columns.push_back(m_owned.back().get());
 			if (field.m_isKey) m_keys.push_back(m_columns.back());
@@ -435,7 +437,7 @@ public:
 		return nullptr;
 	}
 
-	wxString          GetQueryTableName() const override { return m_name; }
+	ibString          GetQueryTableName() const override { return m_name; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_guid; }
 	ibMetaID          GetQueryTableId()   const override { return 0; }          // not a metaobject
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }
@@ -455,7 +457,7 @@ public:
 	// new column identities, so the answer has to be in the identities the outer query will see.
 	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_keys; }
 
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
 	{
 		for (const ibBackendQueryColumn* c : m_columns)
 			if (c != nullptr && c->GetName() == name) return c;
@@ -470,7 +472,7 @@ public:
 	}
 
 private:
-	wxString                                 m_name;
+	ibString                                 m_name;
 	ibUniqueKey                              m_guid;
 	std::vector<std::shared_ptr<ibTempColumn>> m_owned;    // the columns this source publishes — minted here, SHARED so a reader may keep one
 	std::vector<const ibBackendQueryColumn*> m_columns;    // …and the same ones as the interface hands them out

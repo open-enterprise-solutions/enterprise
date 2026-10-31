@@ -28,7 +28,7 @@ void ibPreparedStatementFirebird::Close()
 	while (start != stop)
 	{
 		ibPreparedStatementFirebirdWrapper* pWrapper = (ibPreparedStatementFirebirdWrapper*)(*start);
-		wxDELETE(pWrapper);
+		delete pWrapper;
 		(*start) = NULL;
 		start++;
 	}
@@ -46,7 +46,7 @@ void ibPreparedStatementFirebird::Close()
 	}
 }
 
-bool ibPreparedStatementFirebird::AddPreparedStatement(const wxString& strSQL)
+bool ibPreparedStatementFirebird::AddPreparedStatement(const ibString& strSQL)
 {
 	ibPreparedStatementFirebirdWrapper* pWrapper = new ibPreparedStatementFirebirdWrapper(m_pInterface, m_pDatabase, m_pTransaction, strSQL);
 
@@ -60,12 +60,12 @@ bool ibPreparedStatementFirebird::AddPreparedStatement(const wxString& strSQL)
 	return false;
 }
 
-ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL)
+ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const ibString& strSQL)
 {
-	wxArrayString Queries = ParseQueries(strSQL);
+	std::vector<ibString> Queries = ParseQueries(strSQL);
 
-	wxArrayString::iterator start = Queries.begin();
-	wxArrayString::iterator stop = Queries.end();
+	std::vector<ibString>::iterator start = Queries.begin();
+	std::vector<ibString>::iterator stop = Queries.end();
 
 	ibPreparedStatementFirebird *pStatement = NULL;
 
@@ -74,17 +74,17 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 		pStatement = new ibPreparedStatementFirebird(pInterface, pDatabase, pTransaction);
 
 		pStatement->SetErrorCode(DATABASE_LAYER_ERROR);
-		pStatement->SetErrorMessage(wxT("No SQL Statements found"));
+		pStatement->SetErrorMessage(ibT("No SQL Statements found"));
 
 		const int      nCode = pStatement->GetErrorCode();
-		const wxString msg   = pStatement->GetErrorMessage();
+		const ibString msg   = pStatement->GetErrorMessage();
 		// Swallow a possible throw from the statement dtor — original
 		// "no SQL statements" error is the user-visible one; a secondary
 		// cleanup exception would mask it.
 		try { delete pStatement; } catch (const ibCoreException&) {}
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
-			nCode, wxEmptyString, msg);
+			nCode, ibEmptyString, msg);
 		return NULL;
 	}
 
@@ -100,17 +100,15 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 		if (nReturn != 0)
 		{
 			long nSqlCode = pInterface->GetIscSqlcode()(status);
-			pStatement->SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));
+			pStatement->SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(status));
 			pStatement->SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(pInterface, nSqlCode, status));
 
 			const int      nCode = pStatement->GetErrorCode();
-			const wxString msg   = pStatement->GetErrorMessage();
+			const ibString msg   = pStatement->GetErrorMessage();
 			// Swallow a possible throw from the statement dtor — the
 			// isc_start_transaction failure is what we want surfaced.
 			try { delete pStatement; } catch (const ibCoreException&) {}
-			ibDatabaseLayerException::Throw(
-				ibBackendDatabaseException::Kind::Unknown,
-				nCode, wxEmptyString, msg);
+			ibDatabaseLayerException::Throw(ibDatabaseLayerFirebird::ClassifyDatabaseError(nCode), nCode, ibEmptyString, msg);
 		}
 
 		pStatement->SetManageTransaction(true);
@@ -132,8 +130,8 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 			bool succesStatement = pStatement->AddPreparedStatement((*start));
 			if (!succesStatement)
 			{
-				wxDELETE(pStatement); //It's probably better to manually iterate over the list and close the statements, but for now just let close do it
-				return pStatement;
+				delete pStatement; //It's probably better to manually iterate over the list and close the statements, but for now just let close do it
+				return nullptr;
 			}
 		}
 		catch (const ibCoreException&) {
@@ -144,14 +142,14 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 		if (pStatement->GetErrorCode() != DATABASE_LAYER_OK)
 		{
 			const int      nCode = pStatement->GetErrorCode();
-			const wxString msg   = pStatement->GetErrorMessage();
+			const ibString msg   = pStatement->GetErrorMessage();
 			// Swallow a possible throw from the statement dtor — the
 			// per-fragment AddPreparedStatement failure recorded above
 			// is the original error and must reach the caller.
 			try { delete pStatement; } catch (const ibCoreException&) {}
 			ibDatabaseLayerException::Throw(
 				ibBackendDatabaseException::Kind::Unknown,
-				nCode, wxEmptyString, msg);
+				nCode, ibEmptyString, msg);
 }
 		start++;
 }
@@ -261,7 +259,8 @@ int ibPreparedStatementFirebird::RunQuery()
 		rows = ((ibPreparedStatementFirebirdWrapper*)(*start))->DoRunQuery();
 		if (((ibPreparedStatementFirebirdWrapper*)(*start))->GetErrorCode() != DATABASE_LAYER_OK)
 		{
-			SetErrorCode(((ibPreparedStatementFirebirdWrapper*)(*start))->GetErrorCode());
+			SetErrorCode(((ibPreparedStatementFirebirdWrapper*)(*start))->GetErrorCode(),
+				((ibPreparedStatementFirebirdWrapper*)(*start))->GetErrorKind());
 			SetErrorMessage(((ibPreparedStatementFirebirdWrapper*)(*start))->GetErrorMessage());
 			return DATABASE_LAYER_QUERY_RESULT_ERROR;
 		}
@@ -297,7 +296,7 @@ ibDatabaseResultSet* ibPreparedStatementFirebird::RunQueryWithResults()
 			m_Statements[i]->DoRunQuery();
 			if (m_Statements[i]->GetErrorCode() != DATABASE_LAYER_OK)
 			{
-				SetErrorCode(m_Statements[i]->GetErrorCode());
+				SetErrorCode(m_Statements[i]->GetErrorCode(), m_Statements[i]->GetErrorKind());
 				SetErrorMessage(m_Statements[i]->GetErrorMessage());
 				return NULL;
 			}
@@ -337,7 +336,7 @@ ibDatabaseResultSet* ibPreparedStatementFirebird::RunQueryWithResults()
 		ibDatabaseResultSet* pResultSet = pLastStatement->DoRunQueryWithResults();
 		if (pLastStatement->GetErrorCode() != DATABASE_LAYER_OK)
 		{
-			SetErrorCode(pLastStatement->GetErrorCode());
+			SetErrorCode(pLastStatement->GetErrorCode(), pLastStatement->GetErrorKind());
 			SetErrorMessage(pLastStatement->GetErrorMessage());
 
 			// Swallow a possible throw from ~ibDatabaseResultSet — the
@@ -389,7 +388,7 @@ int ibPreparedStatementFirebird::FindStatementAndAdjustPositionIndex(int* pPosit
 void ibPreparedStatementFirebird::SetInvalidParameterPositionError(int nPosition)
 {
 	SetErrorCode(DATABASE_LAYER_ERROR);
-	SetErrorMessage(wxT("Invalid Prepared Statement Parameter"));
+	SetErrorMessage(ibT("Invalid Prepared Statement Parameter"));
 
 	ThrowDatabaseException();
 }
@@ -399,8 +398,10 @@ void ibPreparedStatementFirebird::InterpretErrorCodes()
 	// "I'm in this function" — see firebirdResultSet for the same
 	// strip rationale.
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
-	// A system error by its status code, as the layer records one (an interrupted statement is isc_cancelled).
-	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode < -900 ? (int)m_Status[1] : (int)nSqlCode));
+	// The primary gds code, as the layer records one (an interrupted statement is isc_cancelled).
+	// The SQLCODE still words the message.
+	const int code = ibDatabaseLayerFirebird::TranslateErrorCode(m_Status);
+	SetErrorCode(code, ibDatabaseLayerFirebird::ClassifyDatabaseError(code));
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, m_Status));
 }
 

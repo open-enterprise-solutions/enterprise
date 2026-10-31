@@ -1,18 +1,7 @@
 #ifndef __FIREBIRD_INTERFACES_H__
 #define __FIREBIRD_INTERFACES_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/dynlib.h>
+#include "core/dynamicLibrary.h"   // ibDynamicLibrary — fbclient, loaded by name
 
 #include "engine/ibase.h"
 
@@ -127,7 +116,7 @@ public:
 	fb_cancel_operationType GetFbCancelOperation() { return m_pFbCancelOperation; }
 
 private:
-	wxDynamicLibrary m_FirebirdDLL;
+	ibDynamicLibrary m_FirebirdDLL;
 
 	// Default-init to nullptr so a partial Init() (DLL loads but a symbol
 	// is missing) leaves uninitialised pointers as nullptr instead of

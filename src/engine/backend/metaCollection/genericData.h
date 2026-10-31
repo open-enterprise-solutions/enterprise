@@ -22,9 +22,9 @@ class BACKEND_API ibFormTypeList {
 
 	struct ibFormTypeItem {
 		bool m_isOk;
-		wxString m_strName;
-		wxString m_strLabel;
-		wxString m_strHelp;
+		ibString m_strName;
+		ibString m_strLabel;
+		ibString m_strHelp;
 		long m_id;
 	public:
 
@@ -33,17 +33,17 @@ class BACKEND_API ibFormTypeList {
 		{
 		}
 
-		ibFormTypeItem(const wxString& name, const long& l) :
+		ibFormTypeItem(const ibString& name, const long& l) :
 			m_isOk(true), m_strName(name), m_strLabel(name), m_id(l)
 		{
 		}
 
-		ibFormTypeItem(const wxString& name, const wxString& label, const long& l) :
+		ibFormTypeItem(const ibString& name, const ibString& label, const long& l) :
 			m_isOk(true), m_strName(name), m_strLabel(label), m_id(l)
 		{
 		}
 
-		ibFormTypeItem(const wxString& name, const wxString& label, const wxString& help, const long& l) :
+		ibFormTypeItem(const ibString& name, const ibString& label, const ibString& help, const long& l) :
 			m_isOk(true), m_strName(name), m_strLabel(label), m_strHelp(help), m_id(l)
 		{
 		}
@@ -76,13 +76,13 @@ public:
 
 	void ResetListItem() { m_listTypeForm.clear(); }
 
-	void AppendItem(const wxString& name, const int& l) { (void)m_listTypeForm.emplace_back(name, l); }
-	void AppendItem(const wxString& name, const wxString& label, const int& l) { (void)m_listTypeForm.emplace_back(name, label, l); }
-	void AppendItem(const wxString& name, const wxString& label, const wxString& help, const int& l) { (void)m_listTypeForm.emplace_back(label, help, l); }
+	void AppendItem(const ibString& name, const int& l) { (void)m_listTypeForm.emplace_back(name, l); }
+	void AppendItem(const ibString& name, const ibString& label, const int& l) { (void)m_listTypeForm.emplace_back(name, label, l); }
+	void AppendItem(const ibString& name, const ibString& label, const ibString& help, const int& l) { (void)m_listTypeForm.emplace_back(label, help, l); }
 
-	wxString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
-	wxString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }
-	wxString GetItemHelp(const unsigned int idx) const { return GetItemAt(idx).m_strHelp; }
+	ibString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
+	ibString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }
+	ibString GetItemHelp(const unsigned int idx) const { return GetItemAt(idx).m_strHelp; }
 	long GetItemId(const unsigned int idx) const { return GetItemAt(idx).m_id; }
 
 	unsigned int GetItemCount() const { return (unsigned int)m_listTypeForm.size(); }
@@ -126,7 +126,7 @@ public:
 	// `out` when the member resolves; FALSE otherwise (the query engine raises the exception, it owns the source
 	// span). The GENERIC base has no constants → false; the record level resolves the empty reference, the
 	// hierarchy level adds predefined items.
-	virtual bool ResolveQueryConstant(const wxString& member, ibValue& out) const;
+	virtual bool ResolveQueryConstant(const ibString& member, ibValue& out) const;
 
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaFormCLSID ||
@@ -257,7 +257,7 @@ public:
 
 #pragma region _template_builder_h_
 
-	class ibValueSpreadsheetDocument* GetTemplate(const wxString& strTemplateName) const;
+	class ibValueSpreadsheetDocument* GetTemplate(const ibString& strTemplateName) const;
 
 #pragma endregion
 
@@ -279,7 +279,7 @@ protected:
 // exists. It lives HERE, beside the resolver that answers to it, so a caller needs no metaobject
 // header to say the name.
 namespace ibRefMember {
-	inline constexpr const wxChar* EmptyRef = wxT("EmptyRef");
+	inline constexpr const ibChar* EmptyRef = ibT("EmptyRef");
 }
 
 #endif

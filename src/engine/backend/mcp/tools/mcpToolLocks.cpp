@@ -37,21 +37,21 @@
 //---------------------------------------------------------------------------
 namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
-const ibArg& ArgObject() { static const ibArg a(wxT("object"), ibArg::Kind::Text, ibMcpText("Only locks on this object - its full name as a lock names it, e.g. 'Catalog.Products'. Omit for everything held.")); return a; }
+const ibArg& ArgObject() { static const ibArg a(ibT("object"), ibArg::Kind::Text, ibMcpText("Only locks on this object - its full name as a lock names it, e.g. 'Catalog.Products'. Omit for everything held.")); return a; }
 } // namespace
 
 
 class ibMcpToolLockList : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("lock_list"); }
+	ibString GetName() const override { return ibT("lock_list"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("looking at what is locked");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Every long-held lock on this base right now: what is locked, who holds it, "
 			"from which machine and since when. This is the answer to 'why can this person not "
@@ -67,7 +67,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (appData == nullptr) {
 			refusal = ibMcpText("The application is not up.");
@@ -80,7 +80,7 @@ public:
 			return false;
 		}
 
-		const wxString wanted = ArgObject().Text(params);
+		const ibString wanted = ArgObject().Text(params);
 
 		// The snapshot is a COPY — the manager says so at the declaration, and the filtering
 		// below is therefore this tool's own business rather than a second query.
@@ -97,32 +97,32 @@ public:
 
 			// WHAT IS LOCKED, in words a person recognises. keyData is kept in the row precisely
 			// so a conflict can be explained rather than shown as a hash.
-			entry->SetValue(wxT("object"), row.namespaceName);
-			entry->SetValue(wxT("key"), row.keyData);
+			entry->SetValue(ibT("object"), row.namespaceName);
+			entry->SetValue(ibT("key"), row.keyData);
 
 			// The mode is answered as a WORD. A caller acts on the difference between a shared
 			// and an exclusive hold, and a bare number makes them go and look it up.
-			entry->SetValue(wxT("mode"),
-				wxString(row.lockMode == ibLockMode::Exclusive ? wxT("exclusive") : wxT("shared")));
+			entry->SetValue(ibT("mode"),
+				ibString(row.lockMode == ibLockMode::Exclusive ? ibT("exclusive") : ibT("shared")));
 
 			// WHO, snapshotted when the lock was taken — so the holder is still nameable after
 			// their session row has gone.
-			entry->SetValue(wxT("user"), row.userName);
-			entry->SetValue(wxT("computer"), row.computer);
-			entry->SetValue(wxT("since"), row.acquiredAt);
+			entry->SetValue(ibT("user"), row.userName);
+			entry->SetValue(ibT("computer"), row.computer);
+			entry->SetValue(ibT("since"), row.acquiredAt);
 
 			// The tie to session_list: the two lists are read together when the question is
 			// "who is this, and are they still connected".
-			entry->SetValue(wxT("session"), row.sessionGuid);
+			entry->SetValue(ibT("session"), row.sessionGuid);
 
 			entries.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("held"), ibDataValue::Int((s64)entries.size()));
-		result.AddField(wxT("locks"), ibDataValue::Array(entries));
+		result.AddField(ibT("held"), ibDataValue::Int((std::int64_t)entries.size()));
+		result.AddField(ibT("locks"), ibDataValue::Array(entries));
 
 		if (entries.empty()) {
-			result.SetValue(wxT("note"), wanted.IsEmpty()
+			result.SetValue(ibT("note"), wanted.IsEmpty()
 				? ibMcpText("Nothing is locked.")
 				: ibMcpText("Nothing is locked on that object."));
 		}

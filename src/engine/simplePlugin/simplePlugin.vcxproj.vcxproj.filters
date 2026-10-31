@@ -6,4 +6,7 @@
   <ItemGroup>
     <ClInclude Include="simplePluginDLL.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="simplePlugin.rc" />
+  </ItemGroup>
 </Project>

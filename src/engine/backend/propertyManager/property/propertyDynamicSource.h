@@ -9,7 +9,7 @@ class ibQueryableSourceDescriptor;
 
 // ---------------------------------------------------------------------------
 // ibPropertyDynamicSource — the "Source" property of a dynamic list. The chosen
-// source queryable lives in the property's VARIANT (ibVariantDataDynamicSource),
+// source queryable lives in the property's VARIANT (ibVariantDynamicSource),
 // not on the dynamic list: the list is a pure facade (GetSourceQueryable -> GetQueryable()).
 // Modelled on ibPropertyType (data in a variant), but with no hard type check — the
 // variant just holds the queryable. The property serializes the source itself
@@ -19,40 +19,47 @@ class ibQueryableSourceDescriptor;
 class BACKEND_API ibPropertyDynamicSource : public ibProperty {
 public:
 
-	ibPropertyDynamicSource(ibPropertyCategory* cat, const wxString& name)
-		: ibProperty(cat, name, new ibVariantDataDynamicSource()) {}
-	ibPropertyDynamicSource(ibPropertyCategory* cat, const wxString& name, const wxString& label)
-		: ibProperty(cat, name, label, new ibVariantDataDynamicSource()) {}
-	ibPropertyDynamicSource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
-		: ibProperty(cat, name, label, helpString, new ibVariantDataDynamicSource()) {}
+	ibPropertyDynamicSource(ibPropertyCategory* cat, const ibString& name)
+		: ibProperty(cat, name, new ibVariantDynamicSource()) {}
+	ibPropertyDynamicSource(ibPropertyCategory* cat, const ibString& name, const ibString& label)
+		: ibProperty(cat, name, label, new ibVariantDynamicSource()) {}
+	ibPropertyDynamicSource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
+		: ibProperty(cat, name, label, helpString, new ibVariantDynamicSource()) {}
 
 	// The selected source queryable — data lives in the variant; the dynamic list reads it
 	// through here (facade). The setter stores it into the variant.
 	const ibBackendQueryable* GetQueryable() const {
-		return get_cell_variant<ibVariantDataDynamicSource>()->GetQueryable();
+		return get_cell_variant<ibVariantDynamicSource>()->GetQueryable();
 	}
 
 	// The source's DESCRIPTOR (holder) — parallel to GetQueryable(); the dynamic list reaches the
 	// command interface through it. Live-resolved by the variant, never cached.
 	const ibQueryableSourceDescriptor* GetDescriptor() const {
-		return get_cell_variant<ibVariantDataDynamicSource>()->GetDescriptor();
+		return get_cell_variant<ibVariantDynamicSource>()->GetDescriptor();
 	}
 	void SetQueryable(const ibBackendQueryable* queryable) {
-		m_propValue = new ibVariantDataDynamicSource(queryable, m_owner);   // owner → re-resolve through ITS config factory
+		m_propValue = new ibVariantDynamicSource(queryable, m_owner);   // owner → re-resolve through ITS config factory
 	}
 
 	// ⭐ THE SOURCE AS THE ID IT IS — see the variant. Reading and writing both go through this, so a
 	// source that cannot be resolved AT THIS MOMENT is still carried: the number is the source, and
 	// resolving it is a question asked later, by whoever needs the object.
+	//
+	// 🛑 …AND IT IS RESOLVED THROUGH THE OWNER'S CONFIGURATION, the way SetQueryable's is. The id
+	// used to go into the cell the property was created with — made before it had an owner, so with
+	// no configuration at all: after a reopen the number was there, the list's query was there, and
+	// the Source showed nothing, because the id was asked of the empty global factory (Max, 2026-10-13).
 	void SetTableId(const ibMetaID& tableId) {
-		get_cell_variant<ibVariantDataDynamicSource>()->SetTableId(tableId);
+		ibVariantDynamicSource* source = new ibVariantDynamicSource(nullptr, m_owner);
+		source->SetTableId(tableId);
+		m_propValue = source;
 	}
 	ibMetaID GetTableId() const {
-		return get_cell_variant<ibVariantDataDynamicSource>()->GetTableId();
+		return get_cell_variant<ibVariantDynamicSource>()->GetTableId();
 	}
 
 	// Choose the source by its registered identity — resolves the queryable into the variant.
-	void SetSource(const wxString& ns, const wxString& name);
+	void SetSource(const ibString& ns, const ibString& name);
 
 	// get property for grid — hand the owner to the frontend chooser slot.
 	// Runtime data exchange — the source's table id as the value.
@@ -71,6 +78,11 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
+	// …and the sources it may read, as the desktop's Source cell's drop-down offered them (ibPGDynamicSourceProperty):
+	// every source the owner's configuration registers, by its table id (what the property stores), named
+	// namespace.name. (Not GetValueList: the desktop's cell keeps its own list, by position, and its inspector would
+	// rebuild on every edit to match one by table id.)
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 };
 
 #endif // __PROPERTY_DYNAMIC_SOURCE_H__

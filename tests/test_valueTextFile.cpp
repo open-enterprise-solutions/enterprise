@@ -24,7 +24,7 @@
 namespace {
 
 struct TempFile {
-	wxString path = wxFileName::CreateTempFileName(wxT("oes"));
+	ibString path = wxFileName::CreateTempFileName(wxT("oes"));
 	~TempFile() { if (!path.empty()) wxRemoveFile(path); }
 
 	void Put(const std::string& bytes) const {
@@ -50,11 +50,11 @@ TEST(TextReader, AUtf8ByteOrderMarkIsNotText) {
 
 	ibValueTextReader reader;
 	reader.Open(f.path, ibTextEncoding_UTF8);
-	wxString line;
+	ibString line;
 	ASSERT_TRUE(reader.ReadLine(line));
-	EXPECT_EQ(line, wxString(wxT("code;name")));   // no mark in front, no CR behind
+	EXPECT_EQ(line, ibString(wxT("code;name")));   // no mark in front, no CR behind
 	ASSERT_TRUE(reader.ReadLine(line));
-	EXPECT_EQ(line, wxString(wxT("1;x")));
+	EXPECT_EQ(line, ibString(wxT("1;x")));
 	EXPECT_FALSE(reader.ReadLine(line)) << "a file that ends with a line break has no line after it";
 }
 
@@ -64,10 +64,10 @@ TEST(TextReader, AnEmptyLineDoesNotEndTheFile) {
 	f.Put("a\n\nb");
 	ibValueTextReader reader;
 	reader.Open(f.path);
-	wxString line;
-	ASSERT_TRUE(reader.ReadLine(line)); EXPECT_EQ(line, wxString(wxT("a")));
+	ibString line;
+	ASSERT_TRUE(reader.ReadLine(line)); EXPECT_EQ(line, ibString(wxT("a")));
 	ASSERT_TRUE(reader.ReadLine(line)); EXPECT_TRUE(line.empty());
-	ASSERT_TRUE(reader.ReadLine(line)); EXPECT_EQ(line, wxString(wxT("b")));
+	ASSERT_TRUE(reader.ReadLine(line)); EXPECT_EQ(line, ibString(wxT("b")));
 	EXPECT_FALSE(reader.ReadLine(line));
 }
 
@@ -105,8 +105,8 @@ TEST(TextReader, LineCountAndGetLineAreTheLinesReadLineHandsOver) {
 		reader.Open(f.path);
 		EXPECT_EQ(reader.LineCount(), lines) << "[" << bytes << "]";
 
-		std::vector<wxString> walked;
-		wxString line;
+		std::vector<ibString> walked;
+		ibString line;
 		while (reader.ReadLine(line))
 			walked.push_back(line);
 		ASSERT_EQ(walked.size(), lines) << "[" << bytes << "]";
@@ -126,11 +126,11 @@ TEST(TextReader, GetLineDoesNotMoveReadLine) {
 	f.Put("one\ntwo\nthree\n");
 	ibValueTextReader reader;
 	reader.Open(f.path);
-	wxString line;
-	ASSERT_TRUE(reader.ReadLine(line)); EXPECT_EQ(line, wxString(wxT("one")));
-	ASSERT_TRUE(reader.GetLine(3, line)); EXPECT_EQ(line, wxString(wxT("three")));
-	ASSERT_TRUE(reader.ReadLine(line)); EXPECT_EQ(line, wxString(wxT("two")));
-	EXPECT_EQ(reader.ReadRest(), wxString(wxT("three\n")));
+	ibString line;
+	ASSERT_TRUE(reader.ReadLine(line)); EXPECT_EQ(line, ibString(wxT("one")));
+	ASSERT_TRUE(reader.GetLine(3, line)); EXPECT_EQ(line, ibString(wxT("three")));
+	ASSERT_TRUE(reader.ReadLine(line)); EXPECT_EQ(line, ibString(wxT("two")));
+	EXPECT_EQ(reader.ReadRest(), ibString(wxT("three\n")));
 }
 
 // ...and the SCRIPT sees "no such line" as Undefined, the way it sees the end of the file: an empty string
@@ -165,7 +165,7 @@ TEST(TextReader, TheScriptAsksForALineByItsNumber) {
 
 TEST(TextReader, CountingWithNothingOpenIsRefused) {
 	ibValueTextReader reader;
-	wxString line;
+	ibString line;
 	EXPECT_THROW(reader.LineCount(), ibBackendException);
 	EXPECT_THROW(reader.GetLine(1, line), ibBackendException);
 }
@@ -179,7 +179,7 @@ TEST(TextReader, Utf16OfEitherEndIsToldByItsMark) {
 	for (const TempFile* file : { &little, &big }) {
 		ibValueTextReader reader;
 		reader.Open(file->path, ibTextEncoding_UTF16);
-		EXPECT_EQ(reader.ReadRest(), wxString::FromUTF8("\xD0\x9F\xD1\x80"));
+		EXPECT_EQ(reader.ReadRest(), ibString::FromUTF8("\xD0\x9F\xD1\x80"));
 	}
 }
 
@@ -204,7 +204,7 @@ TEST(TextReader, AMissingFileIsRefusedInWords) {
 
 TEST(TextReader, ReadingWithNothingOpenIsRefused) {
 	ibValueTextReader reader;
-	wxString line;
+	ibString line;
 	EXPECT_THROW(reader.ReadLine(line), ibBackendException);
 }
 
@@ -215,7 +215,7 @@ TEST(TextWriter, WhatIsOnDiskAfterAWrite) {
 	{
 		ibValueTextWriter writer;
 		writer.Open(f.path, ibTextEncoding_UTF8);
-		writer.Write(wxString::FromUTF8("\xD0\x9F;1\n"));
+		writer.Write(ibString::FromUTF8("\xD0\x9F;1\n"));
 		writer.Close();
 	}
 	EXPECT_EQ(f.Get(), std::string("\xD0\x9F;1\n"));
@@ -244,7 +244,7 @@ TEST(TextWriter, AnsiAndOemAreTheSystemsOwnPages) {
 			continue;   // a multi-byte page: a lone upper byte is half a character there
 
 		std::string bytes = "id;";
-		wxString text = wxT("id;");
+		ibString text = wxT("id;");
 		for (int b = 0xA1; b <= 0xAF; b++) {
 			const char one = static_cast<char>(b);
 			wchar_t wide = 0;
@@ -280,7 +280,7 @@ TEST(TextWriter, ACharacterThePageCannotSpellIsRefused) {
 	TempFile f;
 	ibValueTextWriter writer;
 	writer.Open(f.path, ibTextEncoding_OEM);
-	EXPECT_THROW(writer.Write(wxString::FromUTF8("\xE4\xB8\xAD")), ibBackendException);   // a CJK ideograph
+	EXPECT_THROW(writer.Write(ibString::FromUTF8("\xE4\xB8\xAD")), ibBackendException);   // a CJK ideograph
 }
 #endif
 

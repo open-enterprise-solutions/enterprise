@@ -6,6 +6,9 @@
 #include "frmclient/win/dlgs/settings/settingsStyle.h"          // art / grid styling, spelled once
 #include "frmclient/win/dlgs/callbackDropTarget.h"                  // the same-process drag: the source knows what moved
 #include "frmclient/win/dlgs/rowValueCell.h"                        // ibRowValueCellRenderer — the shared value cell
+#include "frmclient/win/dlgs/queryConstructor/queryConstructor.h"   // the Query tab's constructor button, its styling
+#include "frmclient/backend/query/queryConstructorModel.h"          // ibListSourceFields — the list's fields, asked of its tab
+#include "frmclient/backend/metaData.h"                            // …the tab its configuration handle carries
 #include <wx/stc/stc.h>                                            // the arbitrary query is shown in the styled editor
 
 #include "frmclient/backend/appData.h"                        // appData->DesignerMode() — the Query tab is a developer tool
@@ -47,7 +50,7 @@ public:
 	// The line a row is — see ibSettingsListedLines.
 	size_t LineAt(size_t row) const { return m_listed.At(row); }
 	unsigned int GetListedCount() const { return m_listed.Count(); }
-	virtual void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	virtual void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		ibGroupDescription* g = GetGroup();
 		if (g == nullptr) return;
 		// BOUNDS FIRST. The view paints rows it has, the list may already have fewer
@@ -62,7 +65,7 @@ public:
 			variant = ibValue::CreateEnumObject<ibValueEnumGroupKind>(
 				g->m_lines[at].m_kind).GetString();
 	}
-	virtual bool SetValueByRow(const wxVariant&, unsigned, unsigned) override { return false; }
+	virtual bool SetValueByRow(const ibVariant&, unsigned, unsigned) override { return false; }
 };
 
 // ===========================================================================
@@ -118,8 +121,10 @@ void ibListSettingsPanel::BuildPages()
 	//
 	// THE QUERY TAB IS A DEVELOPER TOOL — writing the source query is configuring the form, not
 	// using it; an end user opening "Filter" has no business being offered it.
-	if ((m_pages & Page_Query) != 0 && m_desc != nullptr && appData->DesignerMode())
-		notebook->AddPage(BuildQueryPage(notebook), _("Query"), true, ibSettingsTabArt(ibSettingsTab::Query));
+	if ((m_pages & Page_Query) != 0 && m_desc != nullptr && appData->DesignerMode()) {
+		if (wxWindow* const query = BuildQueryPage(notebook))
+			notebook->AddPage(query, _("Query"), true, ibSettingsTabArt(ibSettingsTab::Query));
+	}
 
 	// ⭐ THE TWO SHARED EDITORS. Built, not written: the composer's window builds the very same
 	// pair over its own buffer, which is the whole point of them living one level up.
@@ -194,7 +199,15 @@ void ibListSettingsPanel::BindFieldSource()
 
 	const ibMetaData* metaData = SourceMetaData();
 
-	// (A query describing its own fields is the configuration's to read — on the client the server describes them.)
+	// ⭐⭐ THE MAIN TABLE'S FIELDS, AND WHAT THE QUERY ADDS ON TOP — the desktop's answer, read where the configuration is:
+	// a list edited on a designer tab (a form attribute's) asks the tab (ibListSourceFields, Kind Source).
+	if (m_schema != nullptr && (m_schema->HasMainTable() || m_schema->HasQuery())
+		&& metaData != nullptr && metaData->GetTabId() != 0) {
+		m_fieldSource->SetPlainFields(ibListSourceFields(m_schema->m_mainTable, m_schema->m_query, metaData, &m_queryFault),
+			metaData);
+		return;
+	}
+
 
 	// ⭐ …AND WHERE THERE IS NO QUERY, THE FIELDS WERE DESCRIBED TO US. A value table or a tabular
 	// section has columns and no text; the caller states them as data and this window uses them
@@ -210,11 +223,63 @@ void ibListSettingsPanel::BindFieldSource()
 // The FIRST tab (dynamic-list only) — arbitrary-query source: an enable flag + the query text. When off, the list
 // takes its picked metaobject source; when on, this TEXT is the source (composer.FromText). Edits the list's OWN
 // UseCustomQuery / CustomQuery properties (serialised), NOT the settings buffer; applied to the list on OK.
-wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* WXUNUSED(parent))
+wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* parent)
 {
-	// THE DESIGNER'S TAB — the query a list reads, and its constructor. The client is never the designer (BuildPages asks
-	// appData->DesignerMode()), so it is never built here.
-	return nullptr;
+	wxPanel* page = new wxPanel(parent, wxID_ANY);
+	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+
+	// ⭐ NO "ARBITRARY QUERY" BOX. Having a query IS running one — the description says so by carrying
+	// text, and a checkbox beside it was a second spelling of the same fact. They disagreed: the box
+	// was set from `HasQuery()` while the editor was enabled unconditionally, so a source with no
+	// query opened with the box CLEAR and the text editable, and typing turned the list into a
+	// query-driven one without ever ticking anything (Max, 2026-08-24).
+	wxBoxSizer* header = new wxBoxSizer(wxHORIZONTAL);
+	header->Add(new wxStaticText(page, wxID_ANY, _("Query text - what this list reads")),
+		0, wxALIGN_CENTER_VERTICAL);
+	header->AddStretchSpacer();
+
+	// THE CONSTRUCTOR OPENS ON THIS VERY TEXT and writes back into it — as the composer's Query page has it. (On the
+	// client it is the ported window, whose catalogue and fields come from the server: queryConstructor.h.)
+	m_queryBuild = new wxButton(page, wxID_ANY, _("Query constructor"));
+	m_queryBuild->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+		if (m_queryText == nullptr)
+			return;
+		wxString text = m_queryText->GetText();
+		// A LIST FOLDS THROUGH ITS OWN SETTINGS — its arbitrary query carries no TOTALS.
+		if (!ibShowQueryConstructor(this, text, SourceMetaData(), /*readOnly*/false, ibQueryExclude_Totals))
+			return;
+		m_queryText->SetText(text);
+		ApplyQueryToList();   // a query built in the constructor changes the pickers the same way a typed one does
+	});
+	header->Add(m_queryBuild, 0, wxALIGN_CENTER_VERTICAL);
+	sizer->Add(header, 0, wxEXPAND | wxALL, FromDIP(6));
+
+	// THE SAME STYLED EDITOR as the query constructor's text pane: SQL lexer, the language's own
+	// keyword set, the engine's font and colours, line numbers. An arbitrary query is query text
+	// wherever it is shown, and showing it as grey characters HERE while it is highlighted THERE is
+	// the same language wearing two faces.
+	m_queryText = new wxStyledTextCtrl(page, wxID_ANY);
+	ibStyleQueryText(m_queryText);
+	sizer->Add(m_queryText, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(6));
+
+	// THE ENGINE'S OWN WORDS, under the text it is about. Shown only when there is something to say;
+	// there is no second, softer opinion here about what a valid query is.
+	m_queryError = new wxStaticText(page, wxID_ANY, wxEmptyString);
+	m_queryError->SetForegroundColour(*wxRED);
+	m_queryError->Hide();
+	sizer->Add(m_queryError, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(6));
+
+	// AND THE PICKERS FOLLOW THE TEXT. On leaving the editor the query is applied and every field
+	// tree in this dialog is rebuilt — so a field added to the query is there to filter, sort and
+	// group by without closing anything. Losing focus rather than every keystroke: a half-typed query
+	// does not resolve, and reporting that on every character would be noise.
+	m_queryText->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& event) {
+		event.Skip();
+		ApplyQueryToList();
+	});
+
+	page->SetSizer(sizer);
+	return page;
 }
 
 // WHICH FIELDS EXIST CAN CHANGE UNDER THE PANEL, and not only through its own Query tab: an
@@ -246,7 +311,7 @@ void ibListSettingsPanel::ApplyQueryToList()
 		if (m_queryText != nullptr)
 			m_desc->m_query = m_queryText->GetText();
 
-		// (What the text offers, and whether it compiles, is the engine's to say — the designer's tab, not built here.)
+		// What the text offers, and whether it compiles, the tab says — ReloadFields asks it (BindFieldSource).
 
 		ReloadFields();
 		ShowQueryFault();
@@ -317,7 +382,7 @@ wxWindow* ibListSettingsPanel::BuildGroupPage(wxWindow* parent)
 				// is not the other report).
 				ibValueCompositionField* field = nullptr;
 				const bool chosen = value.ConvertToValue(field) && field != nullptr;
-				g->m_lines[idx].m_path = chosen ? field->GetPath() : wxString();
+				g->m_lines[idx].m_path = chosen ? field->GetPath() : ibString();
 				if (m_groupModel != nullptr) m_groupModel->ResetFromList();
 			}),
 		eGroupField, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
@@ -697,7 +762,7 @@ bool ibDialogListSettings::ShowUserSettings(wxWindow* parent, const ibProtocolNo
 	ibSettingsDescription edited;
 	{
 		ibDataNode settings;
-		ibReadProtocolNode(request.FindChild(ibProtocolName::Settings), settings);
+		ibReadProtocolNode(request.FindChild(ibProtocol::ibRequest::ibListSettings::Settings), settings);
 		ibSettingsDescriptionMemory::ReadNode(settings, edited);
 	}
 
@@ -719,11 +784,11 @@ bool ibDialogListSettings::ShowUserSettings(wxWindow* parent, const ibProtocolNo
 	// (Max, 2026-08-24, screenshot). The panel prefers the query when there IS one.
 	// …as the server described them: its columns — name, how it reads, id, type, whether the options leave them — and
 	// which of their types are references, and to what (the [+] a field gets).
-	ibValueReferenceDataObject::ReadReferences(request.FindChild(ibProtocolName::References));
-	fields = ibReadSettingsFields(request.FindChild(ibProtocolName::Fields));
+	ibValueReferenceDataObject::ReadReferences(request.FindChild(ibProtocol::ibRequest::ibListSettings::References));
+	fields = ibReadSettingsFields(request.FindChild(ibProtocol::ibRequest::ibListSettings::Fields));
 
 	// A setting the server refused comes back with why — said before the window opens on it again.
-	const wxString error = request.GetString(ibProtocolName::Error);
+	const wxString error = request.GetString(ibProtocol::ibRequest::ibListSettings::Error);
 	if (!error.IsEmpty())
 		wxMessageBox(error, _("List settings"), wxOK | wxICON_WARNING, top);
 
@@ -735,6 +800,6 @@ bool ibDialogListSettings::ShowUserSettings(wxWindow* parent, const ibProtocolNo
 	// it refuses is asked again, with why.
 	ibDataNode settings;
 	ibSettingsDescriptionMemory::WriteNode(settings, edited);
-	ibWriteProtocolNode(settings, response.Child(ibProtocolName::Settings));
+	ibWriteProtocolNode(settings, response.Child(ibProtocol::ibRequest::ibListSettings::Settings));
 	return true;
 }

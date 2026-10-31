@@ -1,5 +1,6 @@
 #include "metaCommandObject.h"
 #include "metaCommandGroupObject.h"                 // ibValueMetaObjectCommandGroup — the declared groups Group offers
+#include "core/clsid.h"                             // IsReference — a command typed for an object (IsInterfaceRequired)
 
 #include "backend/metaData.h"                       // ibMetaData::GetAnyArrayObject
 #include "backend/session/session.h"                // ibSession::EditModuleManagerFor
@@ -11,13 +12,13 @@
 //*                            Command object                          *
 //***********************************************************************
 
-ibValueMetaObjectCommand::ibValueMetaObjectCommand(const wxString& name, const wxString& synonym, const wxString& comment)
+ibValueMetaObjectCommand::ibValueMetaObjectCommand(const ibString& name, const ibString& synonym, const ibString& comment)
 	: ibValueMetaObject(name, synonym, comment)
 {
 	// One handler shape for object and general commands (docs/private/command-arc.md §6):
 	//   Procedure CommandProcessing(CommandParameter, ExecuteParameters)
-	(*m_propertyCommandModule)->SetDefaultProcedure(wxT("CommandProcessing"), ibContentHelper::eProcedureHelper,
-		{ wxT("CommandParameter"), wxT("ExecuteParameters") });
+	(*m_propertyCommandModule)->SetDefaultProcedure(ibT("CommandProcessing"), ibContentHelper::eProcedureHelper,
+		{ ibT("CommandParameter"), ibT("ExecuteParameters") });
 }
 
 //***********************************************************************
@@ -170,7 +171,7 @@ const ibValueMetaObjectCommandGroup* ibValueMetaObjectCommand::GetCommandGroup()
 {
 	if (m_metaData == nullptr)
 		return nullptr;
-	const long key = m_propertyGroup->GetValue();
+	const long key = m_propertyGroup->GetValue().GetInteger();
 	// A platform group — the usual case — is answered without looking anything up.
 	for (const ibInterfaceCommandSection area : g_platformCommandGroups)
 		if (key == area)
@@ -182,11 +183,30 @@ const ibValueMetaObjectCommandGroup* ibValueMetaObjectCommand::GetCommandGroup()
 
 ibInterfaceCommandSection ibValueMetaObjectCommand::GetCommandSection() const
 {
-	const long key = m_propertyGroup->GetValue();
+	const long key = m_propertyGroup->GetValue().GetInteger();
 	for (const ibInterfaceCommandSection area : g_platformCommandGroups)
 		if (key == area)
 			return area;
 	return ibInterfaceCommandSection_Default;   // a declared group, or one that is gone — see the header
+}
+
+// ⭐ A COMMON COMMAND FILED UNDER A GROUP OF THE FORM COMMAND BAR IS REACHED FROM FORMS, not from a section: it
+// stands in that group's submenu on every form of the object its ParameterType names. Reported as "in no section"
+// it read as "nobody can open it" about a print command that was one click away (measured 2026-09-22, the first
+// common command filed under Print).
+//
+// ⚠ ONLY WHEN IT IS TYPED FOR SOMETHING. The forms it stands on are those of the objects its ParameterType names;
+// left with the default String it names none, stands on no form and in no section — and is exactly the command
+// the audits exist to report (the audit, 2026-09-22).
+bool ibValueMetaObjectCommonCommand::IsInterfaceRequired() const
+{
+	const ibValueMetaObjectCommandGroup* group = GetCommandGroup();
+	if (group == nullptr || group->GetCategory() != ibCommandGroupCategory_FormCommandBar)
+		return true;
+	for (const ibClassID& clsid : GetParameterType().GetClsidList())
+		if (::IsReference(clsid))   // the free clsid classifier — ibValue has a same-named member that hides it
+			return false;
+	return true;
 }
 
 // THE CHOICES OF «Group», in the order a section shows them: the platform's groups first, then the declared
@@ -203,7 +223,7 @@ bool ibValueMetaObjectCommand::FillGroupList(ibPropertyList* prop)
 			continue;
 		// The group's own picture when it has one — the one it will stand with; otherwise the kind's.
 		prop->AppendItem(group->GetName(), group->GetLabel(), group->GetMetaID(),
-			group->IsEmptyPicture() ? wxBitmap(group->GetIcon()) : group->GetPictureAsBitmap(), group);
+			group->IsEmptyPicture() ? ibPictureDescription(group->GetClassType()) : group->GetPictureDesc(), group);
 	}
 	return true;
 }
@@ -221,7 +241,7 @@ bool ibValueMetaObjectCommand::ReadData(const ibDataNode& node)
 	// A configuration written before command groups keeps the platform area under "InterfaceArea" — the same
 	// number Group holds for a platform group, so it is read into Group as it stands.
 	if (!m_propertyGroup->SetNodeValue(node.GetProperty(m_propertyGroup->GetName())))
-		m_propertyGroup->SetNodeValue(node.GetProperty(wxT("InterfaceArea")));
+		m_propertyGroup->SetNodeValue(node.GetProperty(ibT("InterfaceArea")));
 	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
 	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
 	m_propertyModifiesData->SetNodeValue(node.GetProperty(m_propertyModifiesData->GetName()));
@@ -285,7 +305,7 @@ bool ibValueCommandDataObject::RunHandler(ibValue& commandParameter, ibValue& ex
 {
 	// idiomatic fixed-N handler call (mirrors ExecAsProc(wxT("BeforeWrite"), cancel)):
 	// the variadic packs the two ibValue& into the ProcUnit's ibValue*[] form itself.
-	ExecAsProc(wxT("CommandProcessing"), commandParameter, executeParameters);
+	ExecAsProc(ibT("CommandProcessing"), commandParameter, executeParameters);
 	return true;
 }
 

@@ -3,15 +3,17 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "gridBox.h"
-#include "backend/picturePredefined.h"                   // the standard pictures for this control's two verbs
+#include "core/picturePredefined.h"                   // the standard pictures for this control's two verbs
 #include "backend/system/value/valueDataComposition.h"   // the composition the Generate verb runs
 #include "backend/spreadsheetModel.h"   // the model this control is moving onto
 #include "backend/settings/settingsComposer.h"            // ibSettingsCategory — which shelf a report's settings sit on
 #include "backend/backend_exception.h"                    // ibBackendInterruptException — a read stopped, not failed
 #include "backend/backend_mainFrame.h"                    // ibBackendDocFrame::ShowModalMessage — a refusal, said to the person
+#include "backend/backend_composition.h"                  // ibVariantCaption — what the picker shows of a variant
 #include "backend/session/session.h"                      // ibSession — whose queue a compose is delivered on
 #include "frmserver/visualView/choiceRequest.h"           // ibRequestMenu — a variant, picked from the popup menu
 #include "frmserver/win/dlgs/settings/savedSettings.h"    // ibDialogSavedSettings — the reader's shelf
+#include "frmserver/win/dlgs/settings/composer/composerSettings.h"   // ibDialogComposerSettings — the reader's settings window
 #include "frmserver/visualView/visualHost.h"              // ibFormVisualEditView — the host a delivered compose updates the box on
 #include "frmserver/docView/templates/docViewSpreadsheet.h"   // the document a delivered sheet goes into
 
@@ -33,13 +35,13 @@ void ibChooseVariant(ibDataComposer& composer)
 	std::vector<ibMenuItem> menu;
 	for (size_t i = 0; i < variants.size(); ++i) {
 		ibMenuItem item;
-		item.id = static_cast<s32>(i);
+		item.id = static_cast<std::int32_t>(i);
 		// WHAT THE PICKER SHOWS — the synonym in the configuration's language, else the name, else its place
 		// in the list: not a caption anybody wrote, but what an unnamed variant HAS, and a blank line in a menu
 		// cannot be clicked with any confidence.
-		item.caption = variants[i].GetPresentation();
+		item.caption = ibVariantCaption(variants[i]);
 		if (item.caption.IsEmpty())
-			item.caption = wxString::Format(_("Variant %u"), static_cast<unsigned>(i + 1));
+			item.caption = ibString::Format(_("Variant %u"), static_cast<unsigned>(i + 1));
 		// ⭐ AND THE ONE IN FORCE IS TICKED — by COMPARING the settings against what COMPOSES, because there is
 		// no stored "active variant" to read. Asked of the reader's section instead, nothing would be ticked
 		// until they had picked something, while variant zero plainly composes.
@@ -47,7 +49,7 @@ void ibChooseVariant(ibDataComposer& composer)
 		menu.push_back(item);
 	}
 
-	s32 chosen = 0;
+	std::int32_t chosen = 0;
 	if (!ibRequestMenu(menu, chosen))
 		return;   // closed without choosing — nothing changes
 
@@ -119,11 +121,15 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 		// person it reports to both belong to.
 		ibSession* const session = ibSession::Current();
 		model->SubmitFetchAsync([self, alive, keepModel, session]() {
-			wxString failure;
+			ibString failure;
 			bool cancelled = false;
+			ibSettingsDescription composedWith;
 			try {
 				// THE MODEL FILLS ITS OWN SHEET — this control asked for data, not for a document.
 				keepModel->Compose();
+				// …and the setting it filled it by, read after the run resolved its composition (the author's variants
+				// reach the composer there): what the sheet is outdated against (ComposeState).
+				composedWith = keepModel->GetModelComposer().GetCurrentSettingsDesc();
 			}
 			catch (const ibBackendInterruptException&) {
 				// ⭐ STOPPED, NOT FAILED — the form was closed, or Compose pressed again, while this run read.
@@ -136,7 +142,7 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 
 			// BACK ON THE SESSION'S OWN THREAD to deliver it — the box is the session's, and so is the
 			// person a refusal is said to.
-			std::function<void()> deliver = [self, alive, keepModel, failure, cancelled]() {
+			std::function<void()> deliver = [self, alive, keepModel, failure, cancelled, composedWith]() {
 				if (!*alive)
 					return;   // the form closed while the report was being built
 				self->m_composeRuns--;
@@ -162,6 +168,7 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 				// client is told: nobody asked for this frame, so nobody would see it until they asked for another.
 				self->m_gridDocument->SetSpreadsheetDocument(keepModel->GetSpreadsheetDocument());
 				++self->m_documentVersion;
+				self->m_composedSettings = composedWith;
 				if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
 					frame->RefreshFrame();
 			};
@@ -173,10 +180,10 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 						deliver();
 					}
 					catch (const std::exception& err) {
-						ibJournalWarning(wxT("gridbox"), wxT("a composed report was not delivered: %s"), wxString::FromUTF8(err.what()));
+						ibJournalWarning(ibT("gridbox"), ibT("a composed report was not delivered: %s"), ibString::FromUTF8(err.what()));
 					}
 					catch (...) {
-						ibJournalWarning(wxT("gridbox"), wxT("a composed report was not delivered"));
+						ibJournalWarning(ibT("gridbox"), ibT("a composed report was not delivered"));
 					}
 				});
 			else
@@ -188,12 +195,16 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 		// THE COMPOSER'S OWN SETTINGS, arranged by the person reading the report. The composer LIVES IN
 		// THE MODEL: when the model is one, it IS the settings — through the model's own pair, the road
 		// the list takes: a COPY of the setting in force is edited, and on acceptance it is set back on
-		// the model (SetUserSettingsDesc) and the report composed again. Nothing is kept on this side —
-		// the active setting lives in the model's composer, which the schema does not serialise; the
-		// author's default is untouched (Max, 2026-08-24).
+		// the model (SetUserSettingsDesc). Nothing is kept on this side — the active setting lives in the
+		// model's composer, which the schema does not serialise; the author's default is untouched
+		// (Max, 2026-08-24).
 		//
 		// The edit itself is an editor of its own, outside the runtime — a service of the protocol, as
 		// the person's own arrangement of a form is (ibValueForm::ChangeForm).
+		//
+		// ⭐ …AND THE SHEET ON SHOW STAYS THE ONE THAT WAS BUILT, as after a variant: a report is re-formed when the
+		// person says Compose, and until then the box says it is outdated (ComposeState) (Max, 2026-10-12).
+		ibDialogComposerSettings::ShowUserSettings(model);
 		break;
 	case ibSpreadsheetModelCommand_Variants:
 		// ⭐ THE SAME ACT AS ACCEPTING THE SETTINGS, said in one gesture: the variant's setting becomes
@@ -231,6 +242,14 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 		model->CallAsModelCommand(lNumAction, srcForm);
 		break;
 	}
+
+	// ⭐ …AND WHAT IT DID IS WHAT THE BOX SHOWS NOW — said once more, after the act. A command that asks the person on
+	// the way (the settings window, the variants' menu, the shelf) sent the box in the frame of its question, before
+	// the setting changed; the frame after it would not carry the box again, and its ComposeState would never say
+	// the sheet is outdated.
+	ibFormVisualDocument* const document = GetVisualDocument();
+	if (ibFormVisualEditView* const host = document != nullptr ? document->GetFirstView() : nullptr)
+		host->UpdateControl(this);
 }
 
 //**********************************************************************************

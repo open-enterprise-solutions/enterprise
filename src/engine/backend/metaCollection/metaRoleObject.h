@@ -4,7 +4,7 @@
 #include "metaModuleObject.h"   // ibPropertyInnerModule + ibValueMetaObjectManagerModule — the role's policy module
 #include "backend/propertyManager/property/propertyEnum.h"
 
-// The MODE itself lives in the role layer (`backend/roleHelper.h`, ibRoleCompositionMode) — it is
+// The MODE itself lives in the core (`core/roleCompositionMode.h`, ibRoleCompositionMode) — it is
 // read by the runtime role list and by the rights fold, both of which sit below the metadata. What
 // belongs here is only the metaobject's side of it: the enumeration value class (so the mode is a
 // script value and an inspector dropdown) and the property that stores it.
@@ -16,8 +16,8 @@ public:
 	ibValueEnumRoleCompositionMode() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibRoleCompositionMode_Union, wxT("Union"), _("Permitting"));
-		AddEnumeration(ibRoleCompositionMode_Intersection, wxT("Intersection"), _("Restricting"));
+		AddEnumeration(ibRoleCompositionMode_Union, ibT("Union"), _("Permitting"));
+		AddEnumeration(ibRoleCompositionMode_Intersection, ibT("Intersection"), _("Restricting"));
 	}
 };
 #pragma endregion
@@ -27,11 +27,11 @@ class BACKEND_API ibValueMetaObjectRole : public ibValueMetaObject {
 protected:
 public:
 
-	ibValueMetaObjectRole(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectRole(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	// The role's access-policy module — session-global (manager-module
 	// shaped). It is where the OnAccessRead / OnAccessWrite handlers live
@@ -71,15 +71,15 @@ private:
 	// itself, and auto-registers with the module manager on run.
 	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyRoleModule =
 		ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(
-			m_categoryContext, wxT("RoleModule"), _("Role module"),
+			m_categoryContext, ibT("RoleModule"), _("Role module"),
 			_("The role's row-level access policy: procedures OnAccessRead(Source, Operation, Allowed) and OnAccessWrite(Source, Operation, Allowed). Each folds a filter into Source (Where, Join or restrict) and sets Allowed = True; a handler that does not set it denies the operation. A role without a handler leaves the source alone."));
 
 	// Declared BEFORE the property that uses it — members are constructed in declaration order,
 	// whatever the initialiser list says (docs/portability.md §1.8).
-	ibPropertyCategory* m_categoryAccess = ibPropertyObject::CreatePropertyCategory(wxT("Access"), _("Access"));
+	ibPropertyCategory* m_categoryAccess = ibPropertyObject::CreatePropertyCategory(ibT("Access"), _("Access"));
 	ibPropertyEnum<ibValueEnumRoleCompositionMode>* m_propertyComposition =
 		ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRoleCompositionMode>>(
-			m_categoryAccess, wxT("Composition"), _("Composition"),
+			m_categoryAccess, ibT("CompositionMode"), _("Composition"),
 			_("How the role combines with the user's other roles. Permitting (the default): the role adds rights, one permitting role granting is enough. Restricting: the role grants nothing and subtracts - what it denies stays denied whatever the others grant (a data separator such as organisation or division). Verdict: (permitting OR ...) AND restricting AND ...; role order never matters."),
 			ibRoleCompositionMode_Union);
 };

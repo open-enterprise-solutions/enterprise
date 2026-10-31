@@ -4,8 +4,8 @@
 # Usage: package-macos.sh <build>/bin <out.dmg>
 #
 # The image holds ONE folder, `OES`, and a link to /Applications: the folder is dragged as a whole. The
-# applications do not carry their libraries inside the bundles — enterprise.app, designer.app and
-# launcher.app stand beside libbackend / libfrontend / the wxWidgets dylibs, codeRunner and appserver, and the
+# applications do not carry their libraries inside the bundles — enterprise-thin.app, designer-thin.app
+# and launcher.app stand beside libbackend / libfrmclient / the wxWidgets dylibs, codeRunner and appserver, and the
 # launcher finds the others as siblings — so the folder is what installs, not an .app alone.
 #
 # ⚠ THE LIBRARIES ARE FOUND BESIDE THE PROGRAM, NOT WHERE THEY WERE BUILT. Every dylib is named
@@ -35,6 +35,7 @@ rm -rf "$root"
 mkdir -p "$stage"
 cp -a "$release/." "$stage/"
 cp -a lang "$stage/lang"
+find "$stage/lang" \( -name '*.po' -o -name '*.pot' \) -delete   # the programs read the .mo only
 cp src/engine/backend/backend.conf "$stage/backend.conf"
 # The Firebird 5 kit the workflow laid out (fbkit/): the framework's Resources, as Firebird's own tree.
 cp -a fbkit "$stage/_fb"
@@ -86,8 +87,9 @@ for app in "$stage"/*.app; do
   codesign --force --deep --sign - "$app"
 done
 
-required=(enterprise.app enterprise-thin.app designer.app launcher.app codeRunner appserver
-          libcore.dylib libbackend.dylib libfrontend.dylib libprotocol.dylib libfrmclient.dylib libfrmserver.dylib libfileserver.dylib
+required=(enterprise-thin.app designer-thin.app launcher.app codeRunner appserver
+          appcluster appcluster-tray webserver web/www.wpk
+          libcore.dylib libbackend.dylib libprotocol.dylib libfrmclient.dylib libfrmserver.dylib libfileserver.dylib
           backend.conf help/en.hlk lang/ru/open_es.mo
           _fb/lib/libfbclient.dylib _fb/lib/libtommath.dylib _fb/plugins/libEngine13.dylib _fb/intl/libfbintl.dylib _fb/firebird.msg _fb/firebird.conf)
 for r in "${required[@]}"; do

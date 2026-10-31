@@ -39,42 +39,42 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // NodeId, `object` and `name` ARE names.
 const ibArg& ArgObject()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The catalog or chart's NodeId - metadata_tree and metadata_get give it."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgName()
 {
-	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("name"), ibArg::Kind::Text,
 		ibMcpText("The name code refers to it by. English, like every other name in a configuration."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgDescription()
 {
-	static const ibArg s_a(wxT("description"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("description"), ibArg::Kind::Text,
 		ibMcpText("What a person sees. May be in the configuration's own language."));
 	return s_a;
 }
 
 const ibArg& ArgCode()
 {
-	static const ibArg s_a(wxT("code"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("code"), ibArg::Kind::Text,
 		ibMcpText("The item's code, when the object has a code at all."));
 	return s_a;
 }
 
 const ibArg& ArgFolder()
 {
-	static const ibArg s_a(wxT("folder"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("folder"), ibArg::Kind::Flag,
 		ibMcpText("Declare it as a folder, so other predefined items can sit under it."));
 	return s_a;
 }
 
 const ibArg& ArgParent()
 {
-	static const ibArg s_a(wxT("parent"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("parent"), ibArg::Kind::Text,
 		ibMcpText("The predefined item already declared here to put this one under - a FOLDER where the object "
 		          "keeps folders and items apart, and any ITEM where it is a hierarchy of items (a chart of "
 		          "accounts: 631 and 632 under 63). The parent belongs to the DECLARATION, not to the data - "
@@ -84,7 +84,7 @@ const ibArg& ArgParent()
 
 const ibArg& ArgDelete()
 {
-	static const ibArg s_a(wxT("delete"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("delete"), ibArg::Kind::Flag,
 		ibMcpText("Remove the item of that name instead of adding one."));
 	return s_a;
 }
@@ -94,14 +94,14 @@ typedef ibPredefinedOwner::ibPredefinedValueObject     ibPredefinedItem;
 
 // The object named, and refused in words when it is one that cannot hold
 // predefined items at all - which is a different answer from holding none.
-ibPredefinedOwner* Owner(const ibDataNode& params, wxString& refusal)
+ibPredefinedOwner* Owner(const ibDataNode& params, ibString& refusal)
 {
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 		refusal = ibMcpText("No configuration is open.");
 		return nullptr;
 	}
 
-	const s32 id = (s32)ArgObject().Whole(params);
+	const std::int32_t id = (std::int32_t)ArgObject().Whole(params);
 	if (id <= 0) {
 		refusal = ibMcpText("Pass the object's NodeId - metadata_list gives it.");
 		return nullptr;
@@ -109,13 +109,13 @@ ibPredefinedOwner* Owner(const ibDataNode& params, wxString& refusal)
 
 	ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id);
 	if (object == nullptr) {
-		refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id);
+		refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id);
 		return nullptr;
 	}
 
 	ibPredefinedOwner* owner = dynamic_cast<ibPredefinedOwner*>(object);
 	if (owner == nullptr) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("'%s' cannot have predefined items - only a catalog, a chart of accounts or a "
 			  "chart of characteristic types can."), object->GetName());
 		return nullptr;
@@ -130,18 +130,18 @@ ibDataValue ItemEntry(const ibPredefinedItem* item)
 
 	// The NAME is what code writes; the description is what a person reads. Both,
 	// and named apart, for the same reason a query field keeps them apart.
-	node->SetValue(wxT("name"), item->GetPredefinedName());
+	node->SetValue(ibT("name"), item->GetPredefinedName());
 	if (!item->GetPredefinedCode().IsEmpty())
-		node->SetValue(wxT("code"), item->GetPredefinedCode());
+		node->SetValue(ibT("code"), item->GetPredefinedCode());
 	if (!item->GetPredefinedDescription().IsEmpty())
-		node->SetValue(wxT("description"), item->GetPredefinedDescription());
+		node->SetValue(ibT("description"), item->GetPredefinedDescription());
 
 	if (item->IsPredefinedFolder())
-		node->AddField(wxT("folder"), ibDataValue::Bool(true));
+		node->AddField(ibT("folder"), ibDataValue::Bool(true));
 
-	const wxString parent = item->GetPredefinedParentName();
+	const ibString parent = item->GetPredefinedParentName();
 	if (!parent.IsEmpty())
-		node->SetValue(wxT("parent"), parent);
+		node->SetValue(ibT("parent"), parent);
 
 	return ibDataValue::Child(node);
 }
@@ -155,15 +155,15 @@ ibDataValue ItemEntry(const ibPredefinedItem* item)
 class ibMcpToolPredefinedList : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("predefined_list"); }
+	ibString GetName() const override { return ibT("predefined_list"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("looking at the predefined items of '%s'"),
+		return ibString::Format(ibMcpText("looking at the predefined items of '%s'"),
 			ibMcpNameOf(params, ArgObject().Name()));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("The predefined items an object declares - the rows the configuration itself "
 			"requires to exist, each with the name code refers to it by. Ask before writing "
@@ -176,7 +176,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibPredefinedOwner* owner = Owner(params, refusal);
 		if (owner == nullptr)
@@ -188,11 +188,11 @@ public:
 				items.push_back(ItemEntry(item.get()));
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)items.size()));
-		result.AddField(wxT("items"), ibDataValue::Array(items));
+		result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)items.size()));
+		result.AddField(ibT("items"), ibDataValue::Array(items));
 
 		if (items.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("None declared. This object can have them - nothing has been added yet."));
 
 		return true;
@@ -207,18 +207,18 @@ MCP_TOOL_REGISTER(ibMcpToolPredefinedList);
 class ibMcpToolPredefinedAdd : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("predefined_add"); }
+	ibString GetName() const override { return ibT("predefined_add"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ArgDelete().Flag(params)
+		return ibString::Format(ArgDelete().Flag(params)
 				? ibMcpText("removing the predefined item '%s' from '%s'")
 				: ibMcpText("adding the predefined item '%s' to '%s'"),
 			ArgName().Text(params),
 			ibMcpNameOf(params, ArgObject().Name()));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Declare a predefined item on a catalog or a chart - exactly as adding one in "
 			"the designer would. The name is what code will refer to it by and must be unique "
@@ -232,13 +232,13 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibPredefinedOwner* owner = Owner(params, refusal);
 		if (owner == nullptr)
 			return false;
 
-		const wxString name = ArgName().Text(params);
+		const ibString name = ArgName().Text(params);
 		if (name.IsEmpty()) {
 			refusal = ibMcpText("A predefined item needs a name - that is what code will call it.");
 			return false;
@@ -248,15 +248,15 @@ public:
 
 			const auto existing = owner->FindPredefinedValue(name);
 			if (existing == nullptr) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("'%s' has no predefined item named '%s'."), owner->GetName(), name);
 				return false;
 			}
 
 			owner->DeletePredefinedValue(existing->GetPredefinedGuid());
 
-			result.AddField(wxT("deleted"), ibDataValue::Bool(true));
-			result.SetValue(wxT("name"), name);
+			result.AddField(ibT("deleted"), ibDataValue::Bool(true));
+			result.SetValue(ibT("name"), name);
 			return true;
 		}
 
@@ -264,18 +264,18 @@ public:
 		// would make the name code refers to them by ambiguous, and the ambiguity
 		// would only surface when the code ran.
 		if (owner->HasPredefinedValue(name)) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' already has a predefined item named '%s'."), owner->GetName(), name);
 			return false;
 		}
 
 		wxObjectDataPtr<ibPredefinedItem> parent;
-		const wxString parentName = ArgParent().Text(params);
+		const ibString parentName = ArgParent().Text(params);
 		if (!parentName.IsEmpty()) {
 
 			parent = owner->FindPredefinedValue(parentName);
 			if (parent == nullptr) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("There is no predefined item named '%s' to put this one under."), parentName);
 				return false;
 			}
@@ -292,13 +292,13 @@ public:
 			// owns that cell — so the tree came back empty on every apply and a trial balance in the
 			// hierarchy of `63` was impossible (Max, 2026-09-16, found by building exactly that).
 			if (owner->HasFolders() && !parent->IsPredefinedFolder()) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("'%s' is not a folder, so nothing can sit under it."), parentName);
 				return false;
 			}
 		}
 
-		const wxString description = ArgDescription().Text(params);
+		const ibString description = ArgDescription().Text(params);
 
 		owner->AppendPredefinedValue(name,
 			ArgCode().Text(params),
@@ -309,12 +309,12 @@ public:
 		// WHAT HAPPENED, in the caller's own words. Reporting the name back rather
 		// than a bare success means a caller never has to guess whether the item it
 		// meant to add is the item that now exists.
-		result.AddField(wxT("added"), ibDataValue::Bool(true));
-		result.SetValue(wxT("name"), name);
-		result.SetValue(wxT("object"), owner->GetName());
+		result.AddField(ibT("added"), ibDataValue::Bool(true));
+		result.SetValue(ibT("name"), name);
+		result.SetValue(ibT("object"), owner->GetName());
 
 		if (const auto added = owner->FindPredefinedValue(name))
-			result.AddField(wxT("item"), ItemEntry(added.get()));
+			result.AddField(ibT("item"), ItemEntry(added.get()));
 
 		return true;
 	}

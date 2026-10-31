@@ -3,7 +3,7 @@
 
 #include <wx/app.h>
 #include "launcher.h"
-#include "frontend/diagnostics/oesApp.h"
+#include "core/diagnostics/oesApp.h"
 
 class ibAppLauncher :
 	public ibWxApp {

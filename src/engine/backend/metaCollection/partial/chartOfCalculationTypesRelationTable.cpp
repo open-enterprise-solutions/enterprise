@@ -11,7 +11,7 @@
 // BOUND TO ITS PARENT FOR LIFE — the section states that about ITSELF, at construction. A chart of
 // calculation types always has its relations to author, so this is a fact about the class rather than
 // about anything the chart is configured with.
-ibValueMetaObjectCalculationTypeRelationTable::ibValueMetaObjectCalculationTypeRelationTable(const wxString& name, const wxString& synonym, const wxString& comment)
+ibValueMetaObjectCalculationTypeRelationTable::ibValueMetaObjectCalculationTypeRelationTable(const ibString& name, const ibString& synonym, const ibString& comment)
 	: ibValueMetaObjectTableDataRef()
 {
 	SetName(name);

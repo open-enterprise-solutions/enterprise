@@ -19,22 +19,23 @@ class ibValueEnumAccumulationRegisterType : public ibValueEnumeration<ibRegister
 	//ibValueEnumAccumulationRegisterType(ibRegisterType mode) : ibValueEnumeration(mode) {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibRegisterType::eBalances, wxT("Balances"), _("Balances"));
-		AddEnumeration(ibRegisterType::eTurnovers, wxT("Turnovers"), _("Turnovers"));
+		AddEnumeration(ibRegisterType::eBalances, ibT("Balances"), _("Balances"));
+		AddEnumeration(ibRegisterType::eTurnovers, ibT("Turnovers"), _("Turnovers"));
 	}
 };
 class ibValueEnumAccumulationRegisterRecordType : public ibValueEnumeration<ibRecordType> {
 	public:
+	// A new record is a receipt unless the code says otherwise (#411).
 	static ibValue CreateDefEnumValue() {
-		return ibValue::CreateEnumObject<ibValueEnumAccumulationRegisterRecordType>(ibRecordType::eExpense);
+		return ibValue::CreateEnumObject<ibValueEnumAccumulationRegisterRecordType>(ibRecordType::eReceipt);
 	}
 
 	ibValueEnumAccumulationRegisterRecordType() : ibValueEnumeration() {}
 	//ibValueEnumAccumulationRegisterRecordType(ibRecordType recordType) : ibValueEnumeration(recordType) {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(eExpense, wxT("Expense"), _("Expense"));
-		AddEnumeration(eReceipt, wxT("Receipt"), _("Receipt"));
+		AddEnumeration(eExpense, ibT("Expense"), _("Expense"));
+		AddEnumeration(eReceipt, ibT("Receipt"), _("Receipt"));
 	}
 };
 constexpr ibClassID g_enumRecordTypeCLSID = enum_to_clsid("EN_RETP");

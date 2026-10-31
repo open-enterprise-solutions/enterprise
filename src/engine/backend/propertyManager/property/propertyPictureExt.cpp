@@ -4,21 +4,26 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyExternalPicture::CreateVariantData(const ibExternalPictureDescription& id)
+ibVariant ibPropertyExternalPicture::CreateVariantData(const ibExternalPictureDescription& id)
 {
-	return new ibVariantDataExternalPicture(id);
+	return ibVariant(new ibVariantExternalPicture(id));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
-wxBitmap ibPropertyExternalPicture::GetValueAsBitmap() const
+ibPicture ibPropertyExternalPicture::GetValueAsPicture() const
 {
-	return get_cell_variant<ibVariantDataExternalPicture>()->GetPictureBitmap();
+	return get_cell_variant<ibVariantExternalPicture>()->GetPicture();
 }
 
-ibExternalPictureDescription& ibPropertyExternalPicture::GetValueAsPictureDesc() const
+const ibExternalPictureDescription& ibPropertyExternalPicture::GetValueAsPictureDesc() const
 {
-	return get_cell_variant<ibVariantDataExternalPicture>()->GetExternalPictureDesc();
+	return get_cell_variant<ibVariantExternalPicture>()->GetExternalPictureDesc();
+}
+
+ibGuid ibPropertyExternalPicture::GetValueAsVersion() const
+{
+	return get_cell_variant<ibVariantExternalPicture>()->GetPictureVersion();
 }
 
 void ibPropertyExternalPicture::SetValue(const ibExternalPictureDescription& val)
@@ -29,7 +34,7 @@ void ibPropertyExternalPicture::SetValue(const ibExternalPictureDescription& val
 ////////////////////////////////////////////////////////////////////////
 
 bool ibPropertyExternalPicture::IsEmptyProperty() const {
-	return get_cell_variant<ibVariantDataExternalPicture>()->IsEmptyPicture();
+	return get_cell_variant<ibVariantExternalPicture>()->IsEmptyPicture();
 }
 
 #include "backend/system/value/valuePicture.h"
@@ -49,7 +54,12 @@ bool ibPropertyExternalPicture::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyExternalPicture::ReadNodeValue(const ibDataValue& value)
 {
-	return ibExternalPictureDescriptionMemory::ReadNode(value, GetValueAsPictureDesc());
+	// Read whole, then set: the cell is a new value, with a version of its own — never written in place.
+	ibExternalPictureDescription read;
+	if (!ibExternalPictureDescriptionMemory::ReadNode(value, read))
+		return false;
+	SetValue(read);
+	return true;
 }
 
 bool ibPropertyExternalPicture::WriteNodeValue(ibDataValue& value) const

@@ -41,7 +41,7 @@
 
 #include "backend/backend.h"
 
-#include <wx/buffer.h>
+#include "core/memory/memoryBuffer.h"
 
 class BACKEND_API ibFirebirdBlobCompression {
 public:
@@ -70,12 +70,12 @@ public:
 	// the magic header. Compression is attempted only when the payload
 	// is large enough and zlib actually gains us anything; otherwise
 	// the body stays raw under the header.
-	static wxMemoryBuffer Wrap(const void* data, size_t size);
+	static ibMemoryBuffer Wrap(const void* data, size_t size);
 
 	// Unwrap a payload from read. Detects the magic header; on miss
 	// returns the input verbatim (legacy uncompressed payload from a
 	// pre-compression-feature write).
-	static wxMemoryBuffer Unwrap(const void* data, size_t size);
+	static ibMemoryBuffer Unwrap(const void* data, size_t size);
 
 	// True if the buffer starts with our magic. Cheap probe — read
 	// paths use this before paying the decompression cost.

@@ -12,6 +12,7 @@
 #include "reference/reference.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/system/systemManager.h"
+#include "backend/query/columnLayout.h"   // the date column the number's period is scanned inside
 
 
 //*********************************************************************************************
@@ -54,7 +55,7 @@ bool ibValueRecordDataObjectDocument::IsPosted() const
 const ibSourceExplorer* ibValueRecordDataObjectDocument::GetSourceExplorer() const
 {
 	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
-		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+		ibT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false, false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
@@ -140,18 +141,18 @@ void ibValueRecordDataObjectDocument::FillMethods(ibMemberTable& helper) const
 	// ⭐ THE SAME MOMENT THE REFERENCE VENDS. An object is asked when it is exactly as its reference
 	// is, and both answer with the pair already assembled -- one question, one answer, whichever
 	// hand it is asked from.
-	helper.AppendFunc(wxT("PointInTime"), wxT("PointInTime()"));
-	helper.AppendFunc(wxT("IsNew"), wxT("IsNew()"));
-	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
-	helper.AppendFunc(wxT("Fill"), 1, wxT("Fill(object : any)"));
-	helper.AppendFunc(wxT("Write"), 2, wxT("Write(writeMode : writeMode, postingMode : postingMode)"));
-	helper.AppendFunc(wxT("Delete"), wxT("Delete()"));
-	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
-	helper.AppendFunc(wxT("GetFormObject"), 2, wxT("GetFormObject(name : string, owner : any)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-	helper.AppendProc(wxT("Lock"),   wxT("Lock()"));
-	helper.AppendProc(wxT("Unlock"), wxT("Unlock()"));
+	helper.AppendFunc(ibT("PointInTime"), ibT("PointInTime()"));
+	helper.AppendFunc(ibT("IsNew"), ibT("IsNew()"));
+	helper.AppendFunc(ibT("Copy"), ibT("Copy()"));
+	helper.AppendFunc(ibT("Fill"), 1, ibT("Fill(object : any)"));
+	helper.AppendFunc(ibT("Write"), 2, ibT("Write(writeMode : writeMode, postingMode : postingMode)"));
+	helper.AppendFunc(ibT("Delete"), ibT("Delete()"));
+	helper.AppendFunc(ibT("Modified"), ibT("Modified()"));
+	helper.AppendFunc(ibT("GetFormObject"), 2, ibT("GetFormObject(name : string, owner : any)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
+	helper.AppendProc(ibT("Lock"),   ibT("Lock()"));
+	helper.AppendProc(ibT("Unlock"), ibT("Unlock()"));
 }
 
 bool ibValueRecordDataObjectDocument::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -181,10 +182,8 @@ bool ibValueRecordDataObjectDocument::GetPropVal(const long lPropNum, ibValue& p
 			m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
 			return true;
 		// Bound handle (RegisterRecords) — live bind value directly (Designer/runtime).
-		if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
-			pvarPropVal = bound;
+		if (GetBoundValue(GetPropName(lPropNum), pvarPropVal))
 			return true;
-		}
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
 		const long lPropData = m_members.GetPropData(lPropNum);
@@ -256,5 +255,40 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 	return ibRuntimeModuleDataObject::ExecAsFunc(
 		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
 	);
+}
+
+ibValueRecordDataObjectRef::ibNumberSeriesKey ibValueRecordDataObjectDocument::NumberSeriesKey() const
+{
+	ibNumberSeriesKey key;
+	const ibValueMetaObjectRecordDataRecorderRef* meta = GetMetaObject();
+	if (meta == nullptr)
+		return key;
+
+	const ibNumberPeriodicity period = meta->GetNumberPeriodicity();
+	if (period == ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical)
+		return key;
+
+	// The write dates the document before it asks for a number. An empty date has no period.
+	const ibValue date = GetValueByMetaID(*meta->GetDocumentDate());
+	if (date.GetType() != ibValueTypes::TYPE_DATE || date.GetDate().IsEmpty())
+		return key;
+	const ibDateTime when = date.GetDate();
+
+	key.m_interval = ibDocumentNumberInterval(period, when);
+
+	const ibTotalsPeriod unit = ibNumberPeriodicityUnit(period);
+	key.m_from = when.BeginOfPeriod(unit).GetValue();
+	key.m_to   = when.BeginOfNextPeriod(unit).GetValue();
+
+	const ibValueMetaObjectAttributePredefined* dateAttribute = meta->GetDocumentDate();
+	if (dateAttribute != nullptr && dateAttribute->GetQueryColumn() != nullptr) {
+		for (const ibColumnSlot& slot : DescribeColumnLayout(dateAttribute->GetQueryColumn())) {
+			if (slot.m_role == ibColumnRole::Date) {
+				key.m_dateField = slot.m_name;
+				break;
+			}
+		}
+	}
+	return key;
 }
 

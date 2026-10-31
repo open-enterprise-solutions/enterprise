@@ -62,7 +62,7 @@ class BACKEND_API ibSequenceQueryable : public ibRegisterDataQueryable {
 public:
 	explicit ibSequenceQueryable(const ibValueMetaObjectSequence* seq);
 
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;
 
 private:
@@ -79,11 +79,11 @@ class BACKEND_API ibSequenceBordersQueryable : public ibBackendQueryable {
 public:
 	explicit ibSequenceBordersQueryable(const ibValueMetaObjectSequence* seq) : m_seq(seq) {}
 
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;
-	virtual wxString GetQueryTableName() const override;
+	virtual ibString GetQueryTableName() const override;
 	virtual const ibUniqueKey& GetQueryTableGuid() const override;
-	virtual wxString GetQueryName() const override;
+	virtual ibString GetQueryName() const override;
 	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;
 	// ONE BORDER PER KEY — the dimensions are the whole key, and the moment is what the row says
@@ -97,8 +97,8 @@ private:
 class ibSequenceBordersSourceDescriptor : public ibQueryableSourceDescriptor {
 public:
 	explicit ibSequenceBordersSourceDescriptor(ibValueMetaObjectSequence* meta) : m_meta(meta), m_queryable(meta) {}
-	wxString GetNamespace() const override;
-	wxString GetName() const override;
+	ibString GetNamespace() const override;
+	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	const ibSequenceBordersQueryable* GetQueryable() const { return &m_queryable; }
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
@@ -127,9 +127,9 @@ public:
 	public:
 		explicit ibBackendColumnPointInTime(const ibValueMetaObjectSequence* seq) : m_seq(seq) {}
 
-		wxString GetName()         const override;
-		wxString GetSynonym()      const override;
-		wxString GetPhysicalName() const override;
+		ibString GetName()         const override;
+		ibString GetSynonym()      const override;
+		ibString GetPhysicalName() const override;
 		ibMetaID GetColumnId()     const override;
 		ibTypeDescription& GetTypeDesc() const override;
 		bool     IsAvailable()     const override;   // the PointInTime attribute's too — and so its sequence's
@@ -138,7 +138,7 @@ public:
 		std::vector<ibColumnSlot> DescribeLayout() const override;
 		Kind GetColumnKind() const override { return Kind::Synthetic; }
 
-		bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
+		bool ReadValue(const ibString& fieldName, const class ibMetaData* metaData,
 		               class ibValue& retValue, class ibQueryResult& result, bool createData = false) const override;
 		void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
 		               const class ibValue& value, int& position) const override;
@@ -157,7 +157,7 @@ private:
 
 	virtual ibFormTypeList GetFormType() const override {
 		ibFormTypeList formList;
-		formList.AppendItem(wxT("FormList"), _("Form list"), eFormList);
+		formList.AppendItem(ibT("FormList"), _("Form list"), eFormList);
 		return formList;
 	}
 
@@ -184,8 +184,8 @@ public:
 	}
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags) override;
@@ -230,8 +230,8 @@ public:
 	// ---- the borders, the second table --------------------------------------------------------------
 	// Its identity is held the way a derived table's is: a holder created with the sequence, saved with
 	// it and numbered with it, which is what gives the table a name and an id of its own.
-	wxString GetBordersTableName() const {
-		return wxString::Format(wxT("%s%i_%s"), GetClassName(), GetMetaID(), m_borders->GetName());
+	ibString GetBordersTableName() const {
+		return ibString::Format(ibT("%s%i_%s"), GetClassName(), GetMetaID(), m_borders->GetName());
 	}
 	const ibValueMetaObjectRegisterTotals* GetBordersObject() const { return m_borders; }
 	const ibSequenceBordersQueryable* GetBordersQueryable() const { return m_bordersSource.GetQueryable(); }
@@ -300,10 +300,10 @@ public:
 	const ibBackendColumnPointInTime* GetMomentColumn() const { return &m_momentColumn; }
 
 private:
-	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
 
 	ibPropertyBoolean* m_propertyAutomaticBorder = ibPropertyObject::CreateProperty<ibPropertyBoolean>(
-		m_categoryData, wxT("AutomaticBorder"), _("Automatic border"),
+		m_categoryData, ibT("AutomaticBorder"), _("Automatic border"),
 		_("The platform takes the border BACK by itself: a document at or before it - written again, posted again, "
 		  "unposted, deleted - sends the border to the registration before it, by the keys the document's own "
 		  "registrations name. Off: the configuration says when the sequence is broken, through SetBorder; the border "
@@ -311,19 +311,19 @@ private:
 		  "so a solution may want to decide that moment itself."), true);
 
 	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(
-		m_categoryContext, wxT("RecordSetModule"), _("Record set module"),
+		m_categoryContext, ibT("RecordSetModule"), _("Record set module"),
 		_("Code that runs with a set of registrations: its BeforeWrite and OnWrite handlers, and the procedures they "
 		  "call. It runs for every set written, whoever writes it - a document's posting or a script."));
 	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(
-		m_categoryContext, wxT("ManagerModule"), _("Manager module"),
+		m_categoryContext, ibT("ManagerModule"), _("Manager module"),
 		_("Code of the sequence as a whole rather than of one set: its exported procedures and functions are called on "
 		  "the manager, as Sequences.<Name>.<Function>() - beside GetBorder and SetBorder."));
 
 	ibPropertyContainer<>* m_propertyAttributePointInTime = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(
-		m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("PointInTime"), _("Point in time"),
+		m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(ibT("PointInTime"), _("Point in time"),
 			_("The registration's moment: the period it carries together with the document that registered it, so two "
 			  "registrations of one period are still ordered. Not stored - built from the two; a border is compared and "
-			  "sorted by it."), value_to_clsid(wxT("PointInTime"))));
+			  "sorted by it."), value_to_clsid(ibT("PointInTime"))));
 
 	ibBackendColumnPointInTime m_momentColumn{ this };
 
@@ -334,7 +334,7 @@ private:
 	ibMetaCommandDescriptor<ibSequenceQueryable, ibValueMetaObjectSequence> m_ownQueryable{ this };
 
 	ibValuePtr<ibValueMetaObjectRegisterTotals> m_borders{
-		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(wxT("Borders"), _("Borders")) };
+		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(ibT("Borders"), _("Borders")) };
 
 	ibSequenceBordersSourceDescriptor m_bordersSource{ this };
 };

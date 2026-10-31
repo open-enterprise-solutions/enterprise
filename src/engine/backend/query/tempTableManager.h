@@ -57,17 +57,17 @@ public:
 	// The temp table as a first-class DB source — From()/Join() it like any catalog (it inherits the
 	// ordinary DB provider, so it joins SERVER-SIDE). Stable for the manager's life.
 	const ibDbTempTableQueryable* Queryable() const { return m_queryable.get(); }
-	const wxString&               TableName() const { return m_tableName; }
+	const ibString&               TableName() const { return m_tableName; }
 
 private:
 	ibTempTableManager(ibConnectionScope scope, ibDatabaseConnectionHolder* holder,
-	                   ibTempTableDialect dialect, wxString tableName,
+	                   ibTempTableDialect dialect, ibString tableName,
 	                   std::unique_ptr<ibDbTempTableQueryable> queryable);
 
 	ibConnectionScope                        m_scope;       // pins the holder's connection (the temp table's lifetime anchor)
 	ibDatabaseConnectionHolder*              m_holder;      // for the DROP query (nests on the still-pinned scope in the dtor)
 	ibTempTableDialect                       m_dialect;     // L1 facts (copied) — drives the DROP
-	wxString                                 m_tableName;
+	ibString                                 m_tableName;
 	std::unique_ptr<ibDbTempTableQueryable>  m_queryable;
 };
 

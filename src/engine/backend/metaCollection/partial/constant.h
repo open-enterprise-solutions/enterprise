@@ -12,8 +12,8 @@ public:
 	ibValueMetaObjectConstant() : ibValueMetaObjectStoredValue() {}
 
 	//support icons
-	virtual wxIcon GetIcon() const override;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const override;
+	static ibPicture GetIconGroup();
 
 	// --- the type facade — it stayed HERE, which is what the user edits ------------------------
 	//
@@ -35,9 +35,9 @@ private:
 	// The VALUE properties — moved here from the attribute base the constant used to inherit. They
 	// are what the user edits, so they belong on the object the designer shows, and the inner column
 	// reads them back rather than holding a second copy.
-	ibPropertyCategory* m_categoryValue = ibPropertyObject::CreatePropertyCategory(wxT("Value"), _("Value"));
-	ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryValue, wxT("Type"), _("Type"), _("The type of the constant's value - a primitive (string, number, date, boolean) or a reference. The one stored value is kept in the system table of constants and converted to this type when read."), ibValueTypes::TYPE_STRING);
-	ibPropertyBoolean* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryValue, wxT("FillCheck"), _("Fill check"), _("Refuse to write an empty value: the constant's form shows the field as required, and a write leaving it empty fails with a message naming it."));
+	ibPropertyCategory* m_categoryValue = ibPropertyObject::CreatePropertyCategory(ibT("Value"), _("Value"));
+	ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryValue, ibT("Type"), _("Type"), _("The type of the constant's value - a primitive (string, number, date, boolean) or a reference. The one stored value is kept in the system table of constants and converted to this type when read."), ibValueTypes::TYPE_STRING);
+	ibPropertyBoolean* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryValue, ibT("FillCheck"), _("Fill check"), _("Refuse to write an empty value: the constant's form shows the field as required, and a write leaving it empty fails with a message naming it."));
 };
 
 #endif

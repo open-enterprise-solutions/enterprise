@@ -27,8 +27,8 @@ class ibValueMetaObjectStoredValue;
 class BACKEND_API ibConstantQueryable : public ibBackendQueryable {
 public:
 	explicit ibConstantQueryable(const ibValueMetaObjectStoredValue* meta) : m_meta(meta) {}
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // -> the constant's value column
-	virtual wxString GetQueryTableName() const override;
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;   // -> the constant's value column
+	virtual ibString GetQueryTableName() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta — the guid / metaID are read off it
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { RECORD_KEY } — the single-row UPSERT match
@@ -73,8 +73,8 @@ class BACKEND_API ibValueMetaObjectStoredValue :
 		// standing on rather than what you are reading off it. The table is the constant; the
 		// column is its value. (Physical storage is untouched — the field is still `fld<metaID>`,
 		// keyed on the constant's id, so nothing in the schema moves.)
-		static const wxChar* ValueColumnName() { return wxT("Value"); }
-		virtual wxString GetName() const { return ValueColumnName(); }
+		static const ibChar* ValueColumnName() { return ibT("Value"); }
+		virtual ibString GetName() const { return ValueColumnName(); }
 
 		// The SYNONYM has to be delegated explicitly, and the reason is a trap worth naming: the base
 		// derives it from GetName(), but ibValueMetaObject::GetName() is NOT virtual — only the query
@@ -88,13 +88,13 @@ class BACKEND_API ibValueMetaObjectStoredValue :
 		// (Delegated explicitly rather than left to the base: the base derives its synonym from
 		// GetName(), and ibValueMetaObject::GetName() is not virtual — only the query column's is —
 		// so the base would read its own empty name and the caption would vanish.)
-		virtual wxString GetSynonym() const override { return ValueColumnName(); }
+		virtual ibString GetSynonym() const override { return ValueColumnName(); }
 
 		// `fld<metaID>` — the SAME rule the attribute base applied when the constant itself was the
 		// column, keyed on the CONSTANT's id. This is the second half of "sys_const does not move":
 		// the id decides which column the differ matches, the name decides which field it renders.
-		virtual wxString GetPhysicalName() const override {
-			return m_owner != nullptr ? ibPhysicalFieldName(m_owner->GetMetaID()) : wxString();
+		virtual ibString GetPhysicalName() const override {
+			return m_owner != nullptr ? ibPhysicalFieldName(m_owner->GetMetaID()) : ibString();
 		}
 		virtual ibMetaID GetColumnId() const override { return m_owner != nullptr ? m_owner->GetMetaID() : 0; }
 		virtual ibTypeDescription& GetTypeDesc() const override { return m_owner->GetTypeDesc(); }
@@ -189,7 +189,7 @@ public:
 	// ibValueMetaObject::RefreshRegisteredTypeNames — the identity is the clsid and never moves.)
 
 	//get table name
-	static wxString GetPhysicalTableName() { return wxT("sys_const"); }
+	static ibString GetPhysicalTableName() { return ibT("sys_const"); }
 
 	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyModule->GetMetaObject(); }
@@ -253,7 +253,7 @@ protected:
 
 private:
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordModule"), _("Record module"), _("Code that runs when the constant's value is written: its BeforeWrite and OnWrite handlers, from the constant's form or from code (Constants.<Name>.Set)."));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, ibT("RecordModule"), _("Record module"), _("Code that runs when the constant's value is written: its BeforeWrite and OnWrite handlers, from the constant's form or from code (Constants.<Name>.Set)."));
 
 	// The one column of sys_const — a predefined child, created with the constant and reachable only
 	// through it. No metaID of its own (it reports the constant's), so nothing to serialize.
@@ -264,8 +264,8 @@ private:
 	ibMetaQueryDescriptor<ibConstantQueryable, ibValueMetaObjectStoredValue> m_queryable{ this };
 
 #pragma region role
-	ibRole* m_roleRead = ibValueMetaObject::CreateRole(wxT("Read"), _("Read"));
-	ibRole* m_roleWrite = ibValueMetaObject::CreateRole(wxT("Write"), _("Write"));
+	ibRole* m_roleRead = ibValueMetaObject::CreateRole(ibT("Read"), _("Read"));
+	ibRole* m_roleWrite = ibValueMetaObject::CreateRole(ibT("Write"), _("Write"));
 #pragma endregion
 
 	friend class ibValueRecordDataObjectConstant;
@@ -338,8 +338,8 @@ public:
 	virtual ibClassID GetSourceClassType() const final { return GetClassType(); };
 
 	//Get presentation
-	virtual wxString GetSourceCaption() const {
-		return GetMetaObject() ? stringUtils::GenerateSynonym(GetMetaObject()->GetClassName()) + wxT(": ") + GetMetaObject()->GetSynonym() : GetString().ToWxString();
+	virtual ibString GetSourceCaption() const {
+		return GetMetaObject() ? stringUtils::GenerateSynonym(GetMetaObject()->GetClassName()) + ibT(": ") + GetMetaObject()->GetSynonym() : GetString();
 	}
 
 	//support source data
@@ -391,7 +391,7 @@ public:
 
 	//Get ref class
 	virtual ibClassID GetClassType() const;
-	virtual wxString GetClassName() const;
+	virtual ibString GetClassName() const;
 	virtual ibString GetString() const;
 
 protected:

@@ -14,13 +14,13 @@ class ibBackendCoreException : public ibCoreException {
 public:
 
 	template <typename... Args>
-	static void Error(const wxString& format, Args... args) {
-		throw ibBackendCoreException(wxString::Format(format, args...));
+	static void Error(const ibString& format, Args... args) {
+		throw ibBackendCoreException(ibString::Format(format, args...));
 	}
 
 private:
 
-	explicit ibBackendCoreException(const wxString& description) : ibCoreException(description) {}
+	explicit ibBackendCoreException(const ibString& description) : ibCoreException(description) {}
 };
 
 #endif

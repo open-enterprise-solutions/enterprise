@@ -21,8 +21,8 @@ public:
 	ibValueMetaObjectAccountingKind() : ibValueMetaObjectAttribute(ibValueTypes::TYPE_BOOLEAN) {}
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//get data selector
 	virtual ibSelectorDataType GetFilterDataType() const;
@@ -38,8 +38,8 @@ class BACKEND_API ibValueMetaObjectAccountDimensionAccountingKind : public ibVal
 public:
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 };
 
 #endif // __ACCOUNTING_KIND_OBJECT_H__

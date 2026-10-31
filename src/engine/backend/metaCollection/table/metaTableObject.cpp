@@ -24,18 +24,18 @@ ibTabularSourceDescriptor::ibTabularSourceDescriptor(ibValueMetaObjectTableDataR
 {
 }
 
-wxString ibTabularSourceDescriptor::GetNamespace() const
+ibString ibTabularSourceDescriptor::GetNamespace() const
 {
 	// parent-qualified: the tabular section's namespace is its parent record/document's kind.
 	ibValueMetaObject* parent = m_meta->GetParent();
-	return parent != nullptr ? ibValue::GetNameObjectFromID(parent->GetClassType()) : wxString();
+	return parent != nullptr ? ibValue::GetNameObjectFromID(parent->GetClassType()) : ibString();
 }
 
-wxString ibTabularSourceDescriptor::GetName() const
+ibString ibTabularSourceDescriptor::GetName() const
 {
 	// "<Parent>.<Section>" — reached as the 3-segment source Document.Expense.Goods.
 	ibValueMetaObject* parent = m_meta->GetParent();
-	return parent != nullptr ? (parent->GetName() + wxT(".") + m_meta->GetName()) : m_meta->GetName();
+	return parent != nullptr ? (parent->GetName() + ibT(".") + m_meta->GetName()) : m_meta->GetName();
 }
 
 const ibBackendQueryable* ibTabularSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/)

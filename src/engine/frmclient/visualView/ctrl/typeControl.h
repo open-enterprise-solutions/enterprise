@@ -1,7 +1,7 @@
 #ifndef _ATTRIBUTE_CONTROL_H__
 #define _ATTRIBUTE_CONTROL_H__
 
-// THE VALUE CHOICE — the desktop's ibTypeControlFactory (frontend/visualView/ctrl/typeControl.h) as a value cell of the
+// THE VALUE CHOICE — the old desktop's ibTypeControlFactory as a value cell of the
 // client's settings windows asks it: settle the type a cell holds, and choose a value of it — a number on its calculator,
 // a date on its calendar. A value of a type of the server's (a reference, an enum member) is chosen on the server: the
 // next step of the protocol.

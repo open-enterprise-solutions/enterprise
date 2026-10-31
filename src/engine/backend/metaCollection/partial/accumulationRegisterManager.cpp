@@ -27,18 +27,18 @@ enum Func {
 
 void ibValueManagerDataObjectAccumulationRegister::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
-	helper.AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
-	helper.AppendFunc(wxT("Balance"), 2, wxT("Balance(period, filter...)"));
-	helper.AppendFunc(wxT("Turnovers"), 4, wxT("Turnovers(beginOfPeriod, endOfPeriod, filter, periodicity)"));
-	helper.AppendFunc(wxT("Select"), wxT("Select()"));
-	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
+	helper.AppendFunc(ibT("CreateRecordSet"), ibT("CreateRecordSet()"));
+	helper.AppendFunc(ibT("CreateRecordKey"), ibT("CreateRecordKey()"));
+	helper.AppendFunc(ibT("Balance"), 2, ibT("Balance(period, filter...)"));
+	helper.AppendFunc(ibT("Turnovers"), 4, ibT("Turnovers(beginOfPeriod, endOfPeriod, filter, periodicity)"));
+	helper.AppendFunc(ibT("Select"), ibT("Select()"));
+	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(string, owner, guid)"));
 	// NOTE: no GetRecordForm here — accumulation register has no record form
 	// (the enum Func and CallAsFunc switch don't handle it). An extra AppendFunc
 	// shifted every later method's index off its enum case (GetListForm/GetTemplate
 	// misrouted). Method index == AppendFunc order, so this list must mirror enum Func.
-	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(string)"));
+	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(string, owner, guid)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(string)"));
 }
 
 #include "selector/objectSelector.h"

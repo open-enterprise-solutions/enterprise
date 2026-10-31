@@ -7,11 +7,11 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/query/queryLexer.h"
+#include "core/query/queryLexer.h"
 
 namespace {
 
-std::vector<ibQueryToken> Lex(const wxString& text)
+std::vector<ibQueryToken> Lex(const ibString& text)
 {
 	ibQueryLexer lexer;
 	return lexer.Tokenize(text);
@@ -35,7 +35,7 @@ TEST(QueryL4Lexer, BasicSelect_KindsAndKeywords)
 	EXPECT_EQ(t[i].m_kind, ibQueryTokenKind::Ident);  EXPECT_EQ(t[i++].m_text, wxT("Products"));
 	EXPECT_TRUE(t[i++].IsKeyword(ibQueryKeyword::Where));
 	EXPECT_EQ(t[i++].m_kind, ibQueryTokenKind::Ident);  // Code
-	EXPECT_TRUE(t[i++].IsOp(wxT("=")));
+	EXPECT_TRUE(t[i++].IsOp(ibT("=")));
 	EXPECT_EQ(t[i].m_kind, ibQueryTokenKind::String); EXPECT_EQ(t[i++].m_literal.GetString(), wxT("A-01"));
 	EXPECT_TRUE(t.back().IsEnd());
 }
@@ -55,7 +55,7 @@ TEST(QueryL4Lexer, Parameter_AmpersandName)
 	ASSERT_GE(t.size(), 4u);
 	EXPECT_TRUE(t[0].IsKeyword(ibQueryKeyword::Where));
 	EXPECT_EQ(t[1].m_kind, ibQueryTokenKind::Ident);
-	EXPECT_TRUE(t[2].IsOp(wxT("=")));
+	EXPECT_TRUE(t[2].IsOp(ibT("=")));
 	EXPECT_EQ(t[3].m_kind, ibQueryTokenKind::Param);
 	EXPECT_EQ(t[3].m_text, wxT("Warehouse"));
 }
@@ -64,21 +64,21 @@ TEST(QueryL4Lexer, GluedMultiCharOperators)
 {
 	const auto t = Lex(wxT("a <= b >= c <> d != e < f"));
 	// idents at even positions, operators between
-	EXPECT_TRUE(t[1].IsOp(wxT("<=")));
-	EXPECT_TRUE(t[3].IsOp(wxT(">=")));
-	EXPECT_TRUE(t[5].IsOp(wxT("<>")));
-	EXPECT_TRUE(t[7].IsOp(wxT("<>")));   // != normalizes to <>
-	EXPECT_TRUE(t[9].IsOp(wxT("<")));
+	EXPECT_TRUE(t[1].IsOp(ibT("<=")));
+	EXPECT_TRUE(t[3].IsOp(ibT(">=")));
+	EXPECT_TRUE(t[5].IsOp(ibT("<>")));
+	EXPECT_TRUE(t[7].IsOp(ibT("<>")));   // != normalizes to <>
+	EXPECT_TRUE(t[9].IsOp(ibT("<")));
 }
 
 TEST(QueryL4Lexer, NumberAndStarLiterals)
 {
 	const auto t = Lex(wxT("SELECT * WHERE Qty > 100.5"));
 	EXPECT_TRUE(t[0].IsKeyword(ibQueryKeyword::Select));
-	EXPECT_TRUE(t[1].IsOp(wxT("*")));
+	EXPECT_TRUE(t[1].IsOp(ibT("*")));
 	EXPECT_TRUE(t[2].IsKeyword(ibQueryKeyword::Where));
 	EXPECT_EQ(t[3].m_kind, ibQueryTokenKind::Ident);
-	EXPECT_TRUE(t[4].IsOp(wxT(">")));
+	EXPECT_TRUE(t[4].IsOp(ibT(">")));
 	EXPECT_EQ(t[5].m_kind, ibQueryTokenKind::Number);
 }
 
@@ -86,11 +86,11 @@ TEST(QueryL4Lexer, ArithmeticOperatorsIncludingModulo)
 {
 	// + - * / % are all Op tokens (% must NOT fall through to Punct).
 	const auto t = Lex(wxT("a + b - c * d / e % f"));
-	EXPECT_TRUE(t[1].IsOp(wxT("+")));
-	EXPECT_TRUE(t[3].IsOp(wxT("-")));
-	EXPECT_TRUE(t[5].IsOp(wxT("*")));
-	EXPECT_TRUE(t[7].IsOp(wxT("/")));
-	EXPECT_TRUE(t[9].IsOp(wxT("%")));
+	EXPECT_TRUE(t[1].IsOp(ibT("+")));
+	EXPECT_TRUE(t[3].IsOp(ibT("-")));
+	EXPECT_TRUE(t[5].IsOp(ibT("*")));
+	EXPECT_TRUE(t[7].IsOp(ibT("/")));
+	EXPECT_TRUE(t[9].IsOp(ibT("%")));
 }
 
 TEST(QueryL4Lexer, UnionAndCaseKeywords)
@@ -167,8 +167,8 @@ TEST(QueryL4Lexer, DoubleDashIsNotAComment)
 	const auto t = Lex(wxT("SELECT a -- b"));
 	EXPECT_TRUE(t[0].IsKeyword(ibQueryKeyword::Select));
 	EXPECT_EQ(t[1].m_kind, ibQueryTokenKind::Ident);
-	EXPECT_TRUE(t[2].IsOp(wxT("-")));
-	EXPECT_TRUE(t[3].IsOp(wxT("-")));
+	EXPECT_TRUE(t[2].IsOp(ibT("-")));
+	EXPECT_TRUE(t[3].IsOp(ibT("-")));
 	EXPECT_EQ(t[4].m_kind, ibQueryTokenKind::Ident);
 }
 

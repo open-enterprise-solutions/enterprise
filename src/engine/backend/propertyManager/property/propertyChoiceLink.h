@@ -2,7 +2,7 @@
 #define __PROPERTY_CHOICE_LINK_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/choiceLinkDescription.h"
+#include "core/description/choiceLinkDescription.h"
 
 // Forward, not included: this header is pulled in by propertyManager.h, which the metadata headers
 // themselves include - asking for them back from here is the circle the property family is arranged to
@@ -26,7 +26,7 @@ class ibMetaData;
 // nobody can satisfy is not a safeguard. The one thing with nothing to give is an empty declaration
 // (ibChoiceLinkResolver::CanGovern).
 class BACKEND_API ibPropertyChoiceLink : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibChoiceTypeLinkDescription& linkDesc = ibChoiceTypeLinkDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibChoiceTypeLinkDescription& linkDesc = ibChoiceTypeLinkDescription());
 public:
 
 	ibChoiceTypeLinkDescription& GetValueAsLinkDesc() const;
@@ -35,7 +35,7 @@ public:
 	// The fields that may govern this one, as the drop-down offers them.
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
-	ibPropertyChoiceLink(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyChoiceLink(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
 	// NOTHING GOVERNS IT — the field opens the list its own type declares.
@@ -48,13 +48,18 @@ public:
 protected:
 
 	// The family rule — a value arrives in whichever wrapper the caller was handed. See propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 
 	// readable node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// …and what its window asks of the configuration, as the old desktop's link-by-type window did when it opened
+	// (now frmclient/win/dlgs/choiceLink): Targets — the reference types of the field (ibFieldReferenceTypes), each its Id,
+	// Title, Type (the class its reference is registered under) and Picture.
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 };
 
 // ⭐ WHAT IS SHOWN IN THE LIST — the table beside the link above, holding an
@@ -65,7 +70,7 @@ public:
 // ⭐ THE OWNER IS A ROW OF THIS TABLE (choiceLinkDescription.h): a catalog declaring `ListOwner` gets
 // one written for it, which is why there is no property for the owner anywhere.
 class BACKEND_API ibPropertyChoiceParameters : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibChoiceParametersDescription& paramsDesc = ibChoiceParametersDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibChoiceParametersDescription& paramsDesc = ibChoiceParametersDescription());
 public:
 
 	ibChoiceParametersDescription& GetValueAsParametersDesc() const;
@@ -80,7 +85,7 @@ public:
 	// so the list is not narrowed.
 	void GetSourceList(ibPropertyChoiceList& list) const;
 
-	ibPropertyChoiceParameters(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyChoiceParameters(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
 	// NO ROWS — the list shows everything the field's type holds.
@@ -92,13 +97,19 @@ public:
 
 protected:
 
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 
 	// readable node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// …and what its window asks of the configuration, as the old desktop's choice-parameters window did when it opened
+	// (now frmclient/win/dlgs/choiceParameters): Targets as the link's, each its children the fields a row may fill
+	// (GetParameterList); Sources — the fields beside it that may supply a value (GetSourceList), Title the holder they
+	// stand in, each its children (Id) the parameters it could fill, the likeliest first, and Default the obvious one.
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 };
 
 // ⭐⭐ THE REFERENCE TYPES OF A FIELD, NAMED — ONE ANSWER, TWO ASKERS. The link's editor asks it to

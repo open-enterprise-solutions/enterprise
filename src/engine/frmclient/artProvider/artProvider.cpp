@@ -1,6 +1,6 @@
 #include "artProvider.h"
 
-#include "frmclient/win/picture.h"   // ibProtocolImage — a PNG in base64, as the wire carries one
+#include "frmclient/backend/backend_picture.h"   // ibBackendPicture::GetImageFromBase64 — a master in the source
 
 // EVERY PICTURE HERE IS A PNG IN BASE64, one string each in private/picturePredefined.h: a master four times the
 // size of its drawing, scaled down here to the size asked. Its source is an SVG in tools/pictures/render.js, which
@@ -16,7 +16,7 @@
 // which would only be stretched in its turn.
 static wxBitmapBundle BundleOf(const wxString& png, const wxSize& size)
 {
-	const wxImage master = ibProtocolImage(png);
+	const wxImage master = ibBackendPicture::GetImageFromBase64(png);
 	if (!master.IsOk())
 		return wxBitmapBundle();
 

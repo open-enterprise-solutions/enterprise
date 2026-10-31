@@ -111,8 +111,8 @@ public:
 	virtual void FormIncrRef() = 0;
 	virtual void FormDecrRef() = 0;
 
-	virtual bool LoadForm(const wxMemoryBuffer& data) = 0;
-	virtual bool SaveForm(wxMemoryBuffer &data) const = 0;
+	virtual bool LoadForm(const ibMemoryBuffer& data) = 0;
+	virtual bool SaveForm(ibMemoryBuffer &data) const = 0;
 
 	///////////////////////////////////////////////////////////////////////////
 

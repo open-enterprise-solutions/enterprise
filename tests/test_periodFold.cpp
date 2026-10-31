@@ -33,18 +33,18 @@ ibDateTime Day(int y, int m, int d, int hh = 0, int mm = 0, int ss = 0)
         static_cast<unsigned>(hh), static_cast<unsigned>(mm), static_cast<unsigned>(ss));
 }
 
-wxString Ymd(const ibDateTime& d)
+ibString Ymd(const ibDateTime& d)
 {
     ibDateTimeParts p;
     d.ToParts(p);
-    return wxString::Format(wxT("%04d-%02u-%02u"), p.m_year, p.m_month, p.m_day);
+    return ibString::Format(wxT("%04d-%02u-%02u"), p.m_year, p.m_month, p.m_day);
 }
 
-wxString Hms(const ibDateTime& d)
+ibString Hms(const ibDateTime& d)
 {
     ibDateTimeParts p;
     d.ToParts(p);
-    return wxString::Format(wxT("%02u:%02u:%02u"), p.m_hour, p.m_minute, p.m_second);
+    return ibString::Format(wxT("%02u:%02u:%02u"), p.m_hour, p.m_minute, p.m_second);
 }
 
 } // namespace
@@ -136,7 +136,7 @@ ibQueryRamTable MakeTable()
     return t;
 }
 
-void AddRow(ibQueryRamTable& t, const wxString& wh, int month, double in, double out)
+void AddRow(ibQueryRamTable& t, const ibString& wh, int month, double in, double out)
 {
     const long r = t.AppendRow();
     t.SetCell(r, kWarehouse, ibValue(wh));
@@ -180,7 +180,7 @@ TEST(BalanceFold, SeedsFromTheOpeningBalance) {
     // It was a string folded from them with \x1f until 2026-08-15; the fold and
     // its callers now agree on values, so a seed cannot miss its key by spelling.
     ibBalanceOpening opening;
-    opening[{ ibValue(wxString(wxT("A"))) }][kTurn] = ibNumber(500.0);
+    opening[{ ibValue(ibString(wxT("A"))) }][kTurn] = ibNumber(500.0);
 
     FoldBalancesForward(t, { kWarehouse }, kPeriod, { OneSlot() }, opening);
 

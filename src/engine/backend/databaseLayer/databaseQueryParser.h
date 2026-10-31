@@ -1,17 +1,8 @@
 #ifndef _DATABASEQUERYPARSER_H_
 #define _DATABASEQUERYPARSER_H_
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
+#include "core/fstring.h"   // ibString, ibT
 
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-wxArrayString ParseQueries(const wxString& strQuery);
+std::vector<ibString> ParseQueries(const ibString& strQuery);
 
 #endif // _DATABASEQUERYPARSER_H_

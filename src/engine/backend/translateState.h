@@ -9,13 +9,13 @@
 #include <wx/string.h>
 
 struct ibTranslateState {
-	wxString m_languageCode;            // the script's override (SetLanguageCode); empty — none
-	wxString m_userLanguageCode;        // the user's, set at the login (SetUserInfo)
-	wxString m_defLanguageCode;         // the configuration's main language (SetUserLanguage, CompileRoot)
+	ibString m_languageCode;            // the script's override (SetLanguageCode); empty — none
+	ibString m_userLanguageCode;        // the user's, set at the login (SetUserInfo)
+	ibString m_defLanguageCode;         // the configuration's main language (SetUserLanguage, CompileRoot)
 
 	// THE ANSWER, kept ready — the hot path (ibBackendLocalization::GetUserLanguage) reads this one field: the
 	// override, else the user's, else the configuration's. Every writer above calls Resolve.
-	wxString m_resolvedLanguageCode;
+	ibString m_resolvedLanguageCode;
 
 	void Resolve() {
 		m_resolvedLanguageCode = !m_languageCode.IsEmpty() ? m_languageCode

@@ -16,8 +16,8 @@
 namespace {
 
 using ibArg = ibMcpTool::ibMcpArgument;
-const ibArg& ArgText() { static const ibArg a(wxT("text"), ibArg::Kind::Text, ibMcpText("The module text to compile."), true); return a; }
-const ibArg& ArgModule() { static const ibArg a(wxT("module"), ibArg::Kind::Text, ibMcpText("The name the messages are written against - pass the name of the module being edited so the report reads the way the designer's would. Optional.")); return a; }
+const ibArg& ArgText() { static const ibArg a(ibT("text"), ibArg::Kind::Text, ibMcpText("The module text to compile."), true); return a; }
+const ibArg& ArgModule() { static const ibArg a(ibT("module"), ibArg::Kind::Text, ibMcpText("The name the messages are written against - pass the name of the module being edited so the report reads the way the designer's would. Optional.")); return a; }
 
 ibDataValue DiagnosticsOf(const std::vector<ibDiagnostic>& diagnostics)
 {
@@ -29,16 +29,16 @@ ibDataValue DiagnosticsOf(const std::vector<ibDiagnostic>& diagnostics)
 
 		// THE FAILURE AS DATA — an address, not a sentence. The line and the
 		// module are what a caller navigates by; the message is what it reads.
-		entry->AddField(wxT("line"), ibDataValue::Int((s64)diagnostic.m_line));
-		entry->SetValue(wxT("module"), diagnostic.m_moduleName);
-		entry->SetValue(wxT("message"), diagnostic.m_message);
+		entry->AddField(ibT("line"), ibDataValue::Int((std::int64_t)diagnostic.m_line));
+		entry->SetValue(ibT("module"), diagnostic.m_moduleName);
+		entry->SetValue(ibT("message"), diagnostic.m_message);
 
 		if (!diagnostic.m_codeLine.IsEmpty())
-			entry->SetValue(wxT("codeLine"), diagnostic.m_codeLine);
+			entry->SetValue(ibT("codeLine"), diagnostic.m_codeLine);
 
 		// The engine's own code for this failure: a translated message changes,
 		// this does not.
-		entry->AddField(wxT("code"), ibDataValue::Int((s64)diagnostic.m_code));
+		entry->AddField(ibT("code"), ibDataValue::Int((std::int64_t)diagnostic.m_code));
 
 		list.push_back(ibDataValue::Child(entry));
 	}
@@ -54,14 +54,14 @@ ibDataValue DiagnosticsOf(const std::vector<ibDiagnostic>& diagnostics)
 class ibMcpToolScriptCheck : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("script_check"); }
+	ibString GetName() const override { return ibT("script_check"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("checking a piece of code");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Compile a module text and report what is wrong with it. The text is compiled and "
 			"thrown away: nothing is stored and no module is replaced. An empty diagnostics list "
@@ -81,15 +81,15 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const wxString text = ArgText().Text(params);
+		const ibString text = ArgText().Text(params);
 		if (text.IsEmpty()) {
 			refusal = ibMcpText("No text to check.");
 			return false;
 		}
 
-		const wxString module = ArgModule().Text(params);
+		const ibString module = ArgModule().Text(params);
 
 		// ⭐ THE OPEN CONFIGURATION IS THE CONTEXT, and it is handed over rather than reached for.
 		// Without it the compile has no parent and the platform's own globals do not resolve — a
@@ -97,7 +97,7 @@ public:
 		const ibMetaData* const context =
 			activeMetaData != nullptr && activeMetaData->IsConfigOpen() ? activeMetaData : nullptr;
 
-		const wxString named = module.IsEmpty() ? wxT("module") : module;
+		const ibString named = module.IsEmpty() ? ibString(ibT("module")) : module;
 		const std::vector<ibDiagnostic> diagnostics = ibCheckScript(text, named, context);
 
 		// ⭐⭐ THE VERDICT IS ABOUT THE TEXT THAT WAS SENT, and only compiling it with the
@@ -114,10 +114,10 @@ public:
 		for (const ibDiagnostic& one : diagnostics)
 			(one.m_moduleName.IsSameAs(named, /*caseSensitive=*/false) ? mine : elsewhere).push_back(one);
 
-		result.AddField(wxT("ok"), ibDataValue::Bool(mine.empty()));
-		result.AddField(wxT("diagnostics"), DiagnosticsOf(mine));
+		result.AddField(ibT("ok"), ibDataValue::Bool(mine.empty()));
+		result.AddField(ibT("diagnostics"), DiagnosticsOf(mine));
 		if (!elsewhere.empty())
-			result.AddField(wxT("inTheConfiguration"), DiagnosticsOf(elsewhere));
+			result.AddField(ibT("inTheConfiguration"), DiagnosticsOf(elsewhere));
 
 		// ⚠ SAID OUT LOUD, because it is what the answer is worth. With a configuration open the
 		// text is judged against its module manager — the globals, Manager, the metatype
@@ -127,9 +127,9 @@ public:
 		// 🛑 THIS FIELD READ `text-only` UNCONDITIONALLY and went on saying it after the check had
 		// stopped being text-only, which is a lie in the one field a caller reads to know how much
 		// to trust the verdict.
-		result.SetValue(wxT("scope"), wxString(context != nullptr
+		result.SetValue(ibT("scope"), ibString(context != nullptr
 			? ibMcpText("this configuration's context, but NO owning object - see ownNames if there are any")
-			: wxT("text-only")));
+			: ibString(ibT("text-only"))));
 
 		// ⭐⭐ AND AN UNRESOLVED NAME SAYS WHICH OF THE TWO IT IS. `Var is not found` is what this
 		// tool answers about a document's OWN attribute, because a bare text has no owner — and a
@@ -148,7 +148,7 @@ public:
 		}
 
 		if (unresolved) {
-			result.SetValue(wxT("ownNames"),
+			result.SetValue(ibT("ownNames"),
 				ibMcpText("At least one name did not resolve. If this text is an OBJECT MODULE, that is "
 				  "expected here and is not a fault in it: a document's or catalog's own attributes "
 				  "belong to the object, and this check compiles the text with no owner. Write it "
@@ -170,14 +170,14 @@ MCP_TOOL_REGISTER(ibMcpToolScriptCheck);
 class ibMcpToolScriptQuery : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("script_query"); }
+	ibString GetName() const override { return ibT("script_query"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("taking a query apart");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("TAKE A LINQ QUERY APART INSTEAD OF GUESSING AT IT. Compile a module text and answer "
 			"with the SHAPE of every `from ... select ...` in it - and of every `restrict ...` too, "
@@ -213,27 +213,27 @@ public:
 	//
 	// Not a keyword list bolted on: these are the words for the very things the tool answers about
 	// - a query, its clauses, the two forms it may be written in.
-	wxString GetSearchText() const override
+	ibString GetSearchText() const override
 	{
-		return wxT("linq query queries from where select join group orderby restrict "
+		return ibT("linq query queries from where select join group orderby restrict "
 			"clause clauses bindings take a query apart what the compiler understood "
 			"query tree parse stopped row level access");
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const wxString text = ArgText().Text(params);
+		const ibString text = ArgText().Text(params);
 		if (text.IsEmpty()) {
 			refusal = ibMcpText("No text to read.");
 			return false;
 		}
 
-		const wxString module = ArgModule().Text(params);
+		const ibString module = ArgModule().Text(params);
 		const ibMetaData* const context =
 			activeMetaData != nullptr && activeMetaData->IsConfigOpen() ? activeMetaData : nullptr;
 
 		const std::vector<ibQueryOutline> outlines =
-			ibOutlineScriptQueries(text, module.IsEmpty() ? wxT("module") : module, context);
+			ibOutlineScriptQueries(text, module.IsEmpty() ? ibString(ibT("module")) : module, context);
 
 		std::vector<ibDataValue> queries;
 		for (const ibQueryOutline& outline : outlines) {
@@ -243,64 +243,64 @@ public:
 			// WHICH OF THE TWO THINGS IT IS, said outright: a query, or a `restrict` that narrows
 			// one. A restriction carries no columns because it has no projection - reading that as
 			// "the compiler did not finish" would be wrong.
-			entry->SetValue(wxT("kind"), wxString(outline.m_isRestrict
-				? wxT("restrict") : wxT("query")));
+			entry->SetValue(ibT("kind"), ibString(outline.m_isRestrict
+				? ibT("restrict") : ibT("query")));
 
 			std::vector<ibDataValue> bindings;
 			for (const ibQueryOutlineBinding& binding : outline.m_bindings) {
 				std::shared_ptr<ibDataNode> one = std::make_shared<ibDataNode>();
-				one->SetValue(wxT("name"), binding.m_name);
-				one->SetValue(wxT("from"), binding.m_origin);
-				one->AddField(wxT("cell"), ibDataValue::Int((s64)binding.m_rowCell));
+				one->SetValue(ibT("name"), binding.m_name);
+				one->SetValue(ibT("from"), binding.m_origin);
+				one->AddField(ibT("cell"), ibDataValue::Int((std::int64_t)binding.m_rowCell));
 
 				// What this name OFFERS — the row's own fields, so a query can be written against
 				// what is really there. Absent rather than empty when the source did not resolve
 				// while designing: nothing listed is a different statement from "it has no fields".
 				if (!binding.m_offers.empty()) {
 					std::vector<ibDataValue> offers;
-					for (const wxString& field : binding.m_offers)
+					for (const ibString& field : binding.m_offers)
 						offers.push_back(ibDataValue::String(field));
-					one->AddField(wxT("offers"), ibDataValue::Array(offers));
+					one->AddField(ibT("offers"), ibDataValue::Array(offers));
 				}
 				bindings.push_back(ibDataValue::Child(one));
 			}
-			entry->AddField(wxT("binds"), ibDataValue::Array(bindings));
+			entry->AddField(ibT("binds"), ibDataValue::Array(bindings));
 
 			std::vector<ibDataValue> columns;
-			for (const wxString& column : outline.m_columns)
+			for (const ibString& column : outline.m_columns)
 				columns.push_back(ibDataValue::String(column));
-			entry->AddField(wxT("columns"), ibDataValue::Array(columns));
+			entry->AddField(ibT("columns"), ibDataValue::Array(columns));
 
-			entry->AddField(wxT("groups"), ibDataValue::Bool(outline.m_groups));
+			entry->AddField(ibT("groups"), ibDataValue::Bool(outline.m_groups));
 			if (!outline.m_groupInto.IsEmpty())
-				entry->SetValue(wxT("into"), outline.m_groupInto);
-			entry->AddField(wxT("orders"), ibDataValue::Bool(outline.m_orders));
+				entry->SetValue(ibT("into"), outline.m_groupInto);
+			entry->AddField(ibT("orders"), ibDataValue::Bool(outline.m_orders));
 			if (outline.m_orders) {
 				// One per key, in the order written - each key has its own way.
 				std::vector<ibDataValue> descending;
 				for (const bool down : outline.m_orderKeysDescending)
 					descending.push_back(ibDataValue::Bool(down));
-				entry->AddField(wxT("descending"), ibDataValue::Array(descending));
+				entry->AddField(ibT("descending"), ibDataValue::Array(descending));
 			}
 
 			// The query as it was written, and where it sits in the text — so a caller editing one
 			// replaces exactly what it read rather than looking for it again.
 			if (!outline.m_text.IsEmpty()) {
-				entry->SetValue(wxT("text"), outline.m_text);
-				entry->AddField(wxT("at"), ibDataValue::Int((s64)outline.m_textFrom));
-				entry->AddField(wxT("to"), ibDataValue::Int((s64)outline.m_textTo));
+				entry->SetValue(ibT("text"), outline.m_text);
+				entry->AddField(ibT("at"), ibDataValue::Int((std::int64_t)outline.m_textFrom));
+				entry->AddField(ibT("to"), ibDataValue::Int((std::int64_t)outline.m_textTo));
 			}
 
 			queries.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)queries.size()));
-		result.AddField(wxT("queries"), ibDataValue::Array(queries));
-		result.SetValue(wxT("scope"), wxString(context != nullptr
-			? ibMcpText("this configuration's context") : wxT("text-only")));
+		result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)queries.size()));
+		result.AddField(ibT("queries"), ibDataValue::Array(queries));
+		result.SetValue(ibT("scope"), ibString(context != nullptr
+			? ibMcpText("this configuration's context") : ibString(ibT("text-only"))));
 
 		if (queries.empty())
-			result.SetValue(wxT("note"), ibMcpText("No `from ...` query and no `restrict ...` in this "
+			result.SetValue(ibT("note"), ibMcpText("No `from ...` query and no `restrict ...` in this "
 				"text - a chain written with verbs (`arr.Where(...)`) is neither; it has no bindings "
 				"to name. `linq_methods` says how all three are written."));
 		return true;

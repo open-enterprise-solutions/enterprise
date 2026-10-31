@@ -4,7 +4,7 @@
 #include "backend/compiler/value.h"
 #include "backend/valueInfo.h"
 #include "backend/srcDataObject.h"   // ibSourceDataObject base — a reference IS a source object (vends its target's explorer)
-#include "backend/typeDescription.h"   // ibTypeDescription — CoerceHopType validates the pin against a field's CURRENT type filter
+#include "core/description/typeDescription.h"   // ibTypeDescription — CoerceHopType validates the pin against a field's CURRENT type filter
 
 //********************************************************************************************
 //*                                     Defines                                              *
@@ -82,7 +82,7 @@ public:
 	// branch via wxNewUniqueGuid — see ibValueRecordDataObjectRef.)
 
 	ibReference* GetReferenceData() const {
-		return m_reference_impl;
+		return m_reference_impl.get();
 	}
 
 	// IDENTITY = type + guid, and it is expressed by the COMPARISON, not by a rendered key.
@@ -159,7 +159,7 @@ public:
 	// different target type order-equal — and EVERY empty reference has an all-zero guid, so type is the ONLY
 	// thing telling an empty ref of type A from one of type B. Keeping LS==0 in lockstep with CompareValueEQ
 	// (type + guid) is what dedup / merge rely on. Out-of-line (reference.cpp): m_metaObject is incomplete here.
-	virtual int CompareValueLS(const ibValue& cParam) const override;
+	virtual int CompareValueLS(const ibVariant& cParam) const override;
 
 	// ⭐⭐ EQUALITY IS THE ORDER'S OWN ANSWER, not a second opinion about it. The invariant this class is
 	// written to — `LS == 0` exactly when two references are the same one — was being kept by THREE
@@ -169,7 +169,7 @@ public:
 	//
 	// 🛑 That drift is not hypothetical — it is exactly the shape that cost 2026-08-29: the order said
 	// "equal" where it meant "not comparable", and every hash container in the house believed it.
-	virtual bool CompareValueEQ(const ibValue& cParam) const override { return CompareValueLS(cParam) == 0; }
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override { return CompareValueLS(cParam) == 0; }
 
 	// Hashes by the GUID — the order's FIRST key, and the whole of identity for a
 	// reference that points at something. The type is deliberately left out: it
@@ -192,9 +192,9 @@ public:
 	}
 
 	//operator '!=' — the same one answer, negated. Never a third telling of it.
-	virtual bool CompareValueNE(const ibValue& cParam) const override { return CompareValueLS(cParam) != 0; }
+	virtual bool CompareValueNE(const ibVariant& cParam) const override { return CompareValueLS(cParam) != 0; }
 
-	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const;
+	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const;
 
 	//support source set/get data — ibValueDataObject value primitive (presentation + runtime read/copy)
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) override;
@@ -231,7 +231,7 @@ protected:
 
 public:
 	virtual ibClassID GetSourceClassType() const override { return GetClassType(); }
-	virtual wxString GetSourceCaption() const override { return GetString(); }
+	virtual ibString GetSourceCaption() const override { return GetString(); }
 	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
 	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
 	// Out-of-line (reference.cpp): the explorer build needs the COMPLETE metaobject types. Covariant
@@ -285,7 +285,7 @@ public:
 	virtual ibClassID GetClassType() const;
 
 	virtual ibString GetString() const;
-	virtual wxString GetClassName() const;
+	virtual ibString GetClassName() const;
 
 	// ⭐ THE VERB GOES TO THE GOVERNOR. Asked to narrow a value, a reference hands the question to the
 	// metaobject that governs it, together with itself as the element — see the definition. Nothing
@@ -305,7 +305,7 @@ protected:
 
 	const ibValueMetaObjectRecordDataRef* m_metaObject;
 	ibClassMetaclass m_metaclass = ibClassMetaclass_None;   // the family m_metaObject is of — asked of it once; GetClassType composes the id
-	ibReference* m_reference_impl;
+	std::unique_ptr<ibReference> m_reference_impl;
 
 	bool m_foundedRef;
 

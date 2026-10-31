@@ -88,6 +88,11 @@ public:
 		const wxAuiToolBarItemArray& items) wxOVERRIDE;
 
 	virtual void UpdateColoursFromSystem() wxOVERRIDE;
+
+private:
+
+	// The colour the toolbar is drawn FROM: its own when somebody set one, the control face otherwise.
+	wxColour BaseColour(const wxWindow* wnd) const;
 };
 
 #endif

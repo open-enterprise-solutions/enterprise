@@ -47,7 +47,7 @@ public:
 	ibQueryTempTableStore(const ibQueryTempTableStore&)            = delete;
 	ibQueryTempTableStore& operator=(const ibQueryTempTableStore&) = delete;
 
-	bool Has(const wxString& name) const;
+	bool Has(const ibString& name) const;
 
 	// Take a snapshot under `name`. The caller checks Has() first and reports the clash in its own
 	// words — a name declared twice is a mistake worth naming, because the second declaration would
@@ -62,13 +62,13 @@ public:
 	//
 	// `metaData` — the configuration the query ran on behalf of: the stored table answers it, so a reference
 	// in it can be followed to its catalog (a walk, «IN HIERARCHY»), as it can in the table it was read from.
-	void Put(const wxString& name, ibQueryRamTable&& rows,
-	         const std::vector<wxString>& indexedColumns = {}, const ibMetaData* metaData = nullptr);
+	void Put(const ibString& name, ibQueryRamTable&& rows,
+	         const std::vector<ibString>& indexedColumns = {}, const ibMetaData* metaData = nullptr);
 
 	// Release one table. False when the name is not there — the caller decides whether that is an
 	// error (in a package it is: a drop of something never made is a typo or a statement that
 	// did not run).
-	bool Drop(const wxString& name);
+	bool Drop(const ibString& name);
 
 	// Release everything. This is `TempTablesManager.Close()` — and the destructor's whole body,
 	// so forgetting to call it costs memory until the holder dies, never correctness.
@@ -79,10 +79,10 @@ public:
 	// The map an ibTempSourceScope is installed over. The scope holds a POINTER to it, so tables
 	// added while the scope is active are visible to the statements that follow — which IS the
 	// contract a package rests on.
-	const std::map<wxString, const ibBackendQueryable*>& Sources() const { return m_sources; }
+	const std::map<ibString, const ibBackendQueryable*>& Sources() const { return m_sources; }
 
 private:
-	std::map<wxString, const ibBackendQueryable*>          m_sources;   // by name (non-owning view)
+	std::map<ibString, const ibBackendQueryable*>          m_sources;   // by name (non-owning view)
 	std::vector<std::unique_ptr<ibBackendQueryable>>       m_owned;     // the tables themselves
 };
 

@@ -26,8 +26,8 @@
 class BACKEND_API ibSheetFormatNative : public ibSheetFormat {
 public:
 
-	virtual wxString GetName() const override;
-	virtual wxString GetExtension() const override;
+	virtual ibString GetName() const override;
+	virtual ibString GetExtension() const override;
 
 	virtual bool Read(wxInputStream& input, ibSpreadsheetDescription& sheet) const override;
 	virtual bool Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const override;

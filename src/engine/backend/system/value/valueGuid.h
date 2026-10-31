@@ -26,14 +26,19 @@ class BACKEND_API ibValueGuid : public ibValue {
 	}
 
 	//operator '=='
-	virtual bool CompareValueEQ(const ibValue &cParam) const {
+	virtual bool CompareValueEQ(const ibVariant &cParam) const {
 		return m_guid == ibGuid(cParam.GetString());
 	}
 
 	//operator '!='
-	virtual bool CompareValueNE(const ibValue &cParam) const {
+	virtual bool CompareValueNE(const ibVariant &cParam) const {
 		return m_guid != ibGuid(cParam.GetString());
 	}
+
+	// ⭐ A PACKED FORM — the guid (its 16 bytes), the nil guid's included; read back from its text too, where a text
+	// form carried it, and refused when that text is no guid.
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
 
 private:
 	ibGuid m_guid;

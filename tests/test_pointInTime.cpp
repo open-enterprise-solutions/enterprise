@@ -120,7 +120,7 @@ TEST(PointInTime, TakesADateAndOptionallyAReference) {
 
 // A moment with no date is not a moment — the constructor refuses rather than inventing one.
 TEST(PointInTime, RefusesWithoutADate) {
-	ibValue notADate(wxT("yesterday"));
+	ibValue notADate(ibT("yesterday"));
 	ibValue* one[] = { &notADate };
 
 	const MomentPtr built = MomentPtr(new ibValuePointInTime());

@@ -45,8 +45,8 @@ void ibValueMetaObjectCalculationRegister::ContributeTables(ibSchemaSnapshot& ou
 	{
 		const ibBackendQueryable* own = GetQueryable();
 		ibSchemaTable& t = out.Shared(own->GetQueryTableId(), own->GetQueryTableName());
-		ibDeclareLookupIndex(t, t.m_name + wxT("_DIX"), ibCalcLookupKey(this));
-		ibDeclareLookupIndex(t, t.m_name + wxT("_RIX"), { GetRegistrationPeriod()->GetQueryColumn() });
+		ibDeclareLookupIndex(t, t.m_name + ibT("_DIX"), ibCalcLookupKey(this));
+		ibDeclareLookupIndex(t, t.m_name + ibT("_RIX"), { GetRegistrationPeriod()->GetQueryColumn() });
 	}
 
 	// …AND THE RECALCULATION'S MARKS, where the register keeps them (IsUseRecalculation): the register's own columns
@@ -60,6 +60,6 @@ void ibValueMetaObjectCalculationRegister::ContributeTables(ibSchemaSnapshot& ou
 		ibSchemaTable& t = out.CreateSchemaTable(marks);
 		for (const ibBackendQueryColumn* column : marks->GetColumns())
 			t.Add(column);
-		ibDeclareLookupIndex(t, t.m_name + wxT("_LIX"), marks->GetPrimaryKeyColumns());
+		ibDeclareLookupIndex(t, t.m_name + ibT("_LIX"), marks->GetPrimaryKeyColumns());
 	}
 }

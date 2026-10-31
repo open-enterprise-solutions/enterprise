@@ -22,20 +22,20 @@
 #include "backend/mcp/mcpClipboard.h"   // the caller's own board — copy and paste share it
 
 #include "backend/backend_mainFrame.h"   // ibBackendDocFrame — the window a finished sheet is shown in
-#include "backend/backend_spreadsheet.h" // ibBackendSpreadsheetObject — a description IS a sheet
+#include "core/spreadsheet/spreadsheetObject.h" // ibSpreadsheetObject — a description IS a sheet
 #include "backend/session/session.h"     // ibSession::CurrentFrame — and whether there is one at all
 
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaSpreadsheetObject.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/sheetFormat/sheetFormat.h"   // a format registers itself and says what it reads
-#include "backend/spreadsheetDescription.h"
-#include "backend/typeconv.h"   // a colour from its name
+#include "core/description/spreadsheetDescription.h"
+#include "core/fileSystem.h"   // ibFileExists
 
 namespace {
 
 // The template a caller named, refused in words when it is something else.
-ibValueMetaObjectSpreadsheetBase* FindTemplate(const ibDataNode& params, wxString& refusal)
+ibValueMetaObjectSpreadsheetBase* FindTemplate(const ibDataNode& params, ibString& refusal)
 {
 	// The configuration check, the missing-argument refusal and the not-found refusal, in one
 	// call — see ibMcpObjectNamed for why they belong together.
@@ -46,7 +46,7 @@ ibValueMetaObjectSpreadsheetBase* FindTemplate(const ibDataNode& params, wxStrin
 	ibValueMetaObjectSpreadsheetBase* sheet =
 		dynamic_cast<ibValueMetaObjectSpreadsheetBase*>(object);
 	if (sheet == nullptr) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("'%s' is not a template. Create one with metadata_create kind=Template under an "
 			  "object, or kind=CommonTemplate under Common."), object->GetName());
 		return nullptr;
@@ -62,14 +62,14 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgId()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The template's NodeId."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgArea()
 {
-	static const ibArg s_a(wxT("area"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("area"), ibArg::Kind::Text,
 		ibMcpText("Only the cells inside this area. Omit for the whole sheet."));
 	return s_a;
 }
@@ -92,7 +92,7 @@ const ibArg& ArgArea()
 // no such thing. A shared argument may only say what is true of every tool that takes it.
 const ibArg& ArgRow()
 {
-	static const ibArg s_a(wxT("row"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("row"), ibArg::Kind::Whole,
 		ibMcpText("Row, 1-based - the number the editor shows in the margin.\n"
 			  "\xF0\x9F\x9B\x91 THE SCRIPT COUNTS FROM ZERO. `SpreadsheetDocument.Area(row, col)` - "
 			  "the way a MODULE reads a cell back - passes the number straight to the storage, "
@@ -105,7 +105,7 @@ const ibArg& ArgRow()
 
 const ibArg& ArgCol()
 {
-	static const ibArg s_a(wxT("col"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("col"), ibArg::Kind::Whole,
 		ibMcpText("Column, 1-based - the number the editor shows across the top.\n"
 			  "\xF0\x9F\x9B\x91 THE SCRIPT COUNTS FROM ZERO here too - see `row`. And a read past "
 			  "the last column does not refuse: it answers with the last one again, so a loop "
@@ -132,19 +132,19 @@ const ibArg& ArgCol()
 // ⭐ ONE TRANSLATION, AT THE BOUNDARY. Everything a caller sends comes through Line(); everything
 // answered goes back out through LineOut(). Not twelve subtractions at twelve call sites - the
 // thirteenth is what this defect is made of.
-s32 Line(const ibArg& argument, const ibDataNode& params)
+std::int32_t Line(const ibArg& argument, const ibDataNode& params)
 {
-	return (s32)argument.Whole(params) - 1;
+	return (std::int32_t)argument.Whole(params) - 1;
 }
 
-s64 LineOut(int stored)
+std::int64_t LineOut(int stored)
 {
-	return (s64)stored + 1;
+	return (std::int64_t)stored + 1;
 }
 
 const ibArg& ArgValue()
 {
-	static const ibArg s_a(wxT("value"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("value"), ibArg::Kind::Text,
 		ibMcpText("The text shown. For a caption this is all there is - and it is a LOCALISED string: "
 			  "it is translated when the sheet is put out, so it carries EVERY language the configuration "
 			  "declares, in one string (`en = 'Goods'; ru = 'Tovary'; uk = 'Tovary';`), exactly as a "
@@ -156,7 +156,7 @@ const ibArg& ArgValue()
 
 const ibArg& ArgParameter()
 {
-	static const ibArg s_a(wxT("parameter"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("parameter"), ibArg::Kind::Text,
 		ibMcpText("The name the module fills in, when the WHOLE cell is that value. A cell with one "
 			  "is a hole, not a caption - and it is stamped as a parameter cell, which is what "
 			  "makes the module's Parameters.Set reach it.\n"
@@ -188,7 +188,7 @@ const ibArg& ArgParameter()
 // it has nothing to do with what the cell SAYS.
 const ibArg& ArgDetails()
 {
-	static const ibArg s_a(wxT("details"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("details"), ibArg::Kind::Text,
 		ibMcpText("The DECIPHER parameter - what this cell drills down to when somebody clicks it in a "
 			  "printed report. Not what the cell shows: that is `parameter` or `value`."));
 	return s_a;
@@ -196,38 +196,38 @@ const ibArg& ArgDetails()
 
 const ibArg& ArgFill()
 {
-	static const ibArg s_a(wxT("fill"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("fill"), ibArg::Kind::Text,
 		ibMcpText("How the cell is filled: `text` is a caption as typed, `parameter` means the whole "
 			  "cell is one substituted value, `template` means the TEXT carries holes in square "
 			  "brackets - \"No. [Number] of [Date]\" - which the module fills by those names. "
 			  "Omitted, passing `parameter` makes a parameter cell and passing `value` makes a text "
 			  "one, which is right nearly always; name it when you want a template."),
-		/*required*/ false, { wxT("text"), wxT("parameter"), wxT("template") });
+		/*required*/ false, { ibT("text"), ibT("parameter"), ibT("template") });
 	return s_a;
 }
 
 // The fill type as the word the caller was given, so what is read back and what may be written are
 // the same three words rather than a number and a vocabulary.
-wxString FillWord(ibSpreadsheetFillType type)
+ibString FillWord(ibSpreadsheetFillType type)
 {
 	switch (type) {
-		case ibSpreadsheetFillType_StrParameter: return wxT("parameter");
-		case ibSpreadsheetFillType_StrTemplate:  return wxT("template");
+		case ibSpreadsheetFillType_StrParameter: return ibT("parameter");
+		case ibSpreadsheetFillType_StrTemplate:  return ibT("template");
 		default: break;
 	}
-	return wxT("text");
+	return ibT("text");
 }
 
 const ibArg& ArgAlign()
 {
-	static const ibArg s_a(wxT("align"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("align"), ibArg::Kind::Text,
 		ibMcpText("left, center or right."));
 	return s_a;
 }
 
 const ibArg& ArgUnderline()
 {
-	static const ibArg s_a(wxT("underline"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("underline"), ibArg::Kind::Flag,
 		ibMcpText("Rule a line under the cell - this is what a blank to be filled in by hand "
 			  "looks like, and what makes an empty printed form usable."));
 	return s_a;
@@ -235,7 +235,7 @@ const ibArg& ArgUnderline()
 
 const ibArg& ArgColSpan()
 {
-	static const ibArg s_a(wxT("colSpan"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("colSpan"), ibArg::Kind::Whole,
 		ibMcpText("How many columns the cell occupies - a heading spans the page. This MERGES: the "
 			  "cells it covers become part of this one."));
 	return s_a;
@@ -243,49 +243,49 @@ const ibArg& ArgColSpan()
 
 const ibArg& ArgRowSpan()
 {
-	static const ibArg s_a(wxT("rowSpan"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("rowSpan"), ibArg::Kind::Whole,
 		ibMcpText("How many rows it occupies - a tall cell for a hand-written block."));
 	return s_a;
 }
 
 const ibArg& ArgItalic()
 {
-	static const ibArg s_a(wxT("italic"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("italic"), ibArg::Kind::Flag,
 		ibMcpText("For the small explanations under a line."));
 	return s_a;
 }
 
 const ibArg& ArgBold()
 {
-	static const ibArg s_a(wxT("bold"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("bold"), ibArg::Kind::Flag,
 		ibMcpText("For a title or a total."));
 	return s_a;
 }
 
 const ibArg& ArgFontSize()
 {
-	static const ibArg s_a(wxT("fontSize"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("fontSize"), ibArg::Kind::Whole,
 		ibMcpText("Point size."));
 	return s_a;
 }
 
 const ibArg& ArgValign()
 {
-	static const ibArg s_a(wxT("valign"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("valign"), ibArg::Kind::Text,
 		ibMcpText("top, middle or bottom - which matters the moment a row is tall."));
 	return s_a;
 }
 
 const ibArg& ArgVertical()
 {
-	static const ibArg s_a(wxT("vertical"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("vertical"), ibArg::Kind::Flag,
 		ibMcpText("Turn the text on its side - a narrow column heading in a wide table."));
 	return s_a;
 }
 
 const ibArg& ArgBackground()
 {
-	static const ibArg s_a(wxT("background"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("background"), ibArg::Kind::Text,
 		ibMcpText("Fill colour, as a name or #rrggbb. Unset means unset, and the platform "
 			  "resolves it where there is a screen to ask."));
 	return s_a;
@@ -293,14 +293,14 @@ const ibArg& ArgBackground()
 
 const ibArg& ArgColour()
 {
-	static const ibArg s_a(wxT("colour"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("colour"), ibArg::Kind::Text,
 		ibMcpText("Text colour, same form."));
 	return s_a;
 }
 
 const ibArg& ArgBorder()
 {
-	static const ibArg s_a(wxT("border"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("border"), ibArg::Kind::Text,
 		ibMcpText("Rule lines on named sides: any of left, right, top, bottom, or `all`. "
 			  "`underline` is the common case of this and stays as its own argument."));
 	return s_a;
@@ -317,7 +317,7 @@ const ibArg& ArgBorder()
 // the heavy line is the COMMON case, not the exception, and the one this door could not draw.
 const ibArg& ArgBorderWidth()
 {
-	static const ibArg s_a(wxT("borderWidth"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("borderWidth"), ibArg::Kind::Whole,
 		ibMcpText("How heavy the rule is: 0 rubs it out, 1 is a hairline for the lines inside a "
 			  "table, 2 and 3 are the weights a printed form frames itself with. Default 1. "
 			  "Applies to the sides named by `border`."));
@@ -338,7 +338,7 @@ const ibArg& ArgBorderWidth()
 // normally filled in one go, so the verb takes a set and one is the degenerate case.
 const ibArg& ArgCells()
 {
-	static const ibArg s_a(wxT("cells"), ibArg::Kind::Many,
+	static const ibArg s_a(ibT("cells"), ibArg::Kind::Many,
 		ibMcpText("Several cells at once, instead of the single-cell arguments. Each entry is the "
 			  "same shape as one call - {row, col, value|parameter, fill, bold, border, ...} - and "
 			  "`id` is named once, on the outside. They are written in order and reported on "
@@ -350,7 +350,7 @@ const ibArg& ArgCells()
 
 const ibArg& ArgFit()
 {
-	static const ibArg s_a(wxT("fit"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("fit"), ibArg::Kind::Text,
 		ibMcpText("What long text does: wrap, overflow, clip, or ellipsis. On paper this decides "
 			  "whether a name runs into the next cell, is cut, or continues on a further line "
 			  "inside the same cell. `wrap` is what a column heading over a narrow money column "
@@ -362,14 +362,14 @@ const ibArg& ArgFit()
 
 const ibArg& ArgReadOnly()
 {
-	static const ibArg s_a(wxT("readOnly"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("readOnly"), ibArg::Kind::Flag,
 		ibMcpText("The cell cannot be typed into when the sheet is shown."));
 	return s_a;
 }
 
 const ibArg& ArgName()
 {
-	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("name"), ibArg::Kind::Text,
 		ibMcpText("What the module will call it."), /*required*/ true);
 	return s_a;
 }
@@ -384,7 +384,7 @@ const ibArg& ArgName()
 // its own words and with the shape it wanted - which is the only place that knows.
 const ibArg& ArgStart()
 {
-	static const ibArg s_a(wxT("start"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("start"), ibArg::Kind::Whole,
 		ibMcpText("First row, 1-based. Needed where a band is a RANGE - an area, a group - and not "
 			  "where one point addresses it."));
 	return s_a;
@@ -392,21 +392,21 @@ const ibArg& ArgStart()
 
 const ibArg& ArgEnd()
 {
-	static const ibArg s_a(wxT("end"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("end"), ibArg::Kind::Whole,
 		ibMcpText("Last row, inclusive. Needed alongside `start`."));
 	return s_a;
 }
 
 const ibArg& ArgFile()
 {
-	static const ibArg s_a(wxT("file"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("file"), ibArg::Kind::Text,
 		ibMcpText("Full path to the file. The format is decided by its extension."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgSize()
 {
-	static const ibArg s_a(wxT("size"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("size"), ibArg::Kind::Whole,
 		ibMcpText("The measurement. Omit or 0 puts the band back, leaving it none of its own: a row then "
 			"takes its AUTOMATIC height - the default, taller wherever its text needs it (a larger "
 			"font, several lines, a wrapped caption) - and a column the default width, a column "
@@ -417,23 +417,23 @@ const ibArg& ArgSize()
 
 const ibArg& ArgHide()
 {
-	static const ibArg s_a(wxT("hide"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("hide"), ibArg::Kind::Flag,
 		ibMcpText("Hide the band - a width of nothing, which is what hidden IS on a sheet."));
 	return s_a;
 }
 
 const ibArg& ArgWhat()
 {
-	static const ibArg s_a(wxT("what"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("what"), ibArg::Kind::Text,
 		ibMcpText("A page `break`, a `freeze` line that holds rows in place while the rest scrolls, "
 			  "or a `group` that can be collapsed."),
-			/*required*/ true, { wxT("break"), wxT("freeze"), wxT("group") });
+			/*required*/ true, { ibT("break"), ibT("freeze"), ibT("group") });
 	return s_a;
 }
 
 const ibArg& ArgColumns()
 {
-	static const ibArg s_a(wxT("columns"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("columns"), ibArg::Kind::Flag,
 		ibMcpText("Apply it to COLUMNS instead of rows. For a band: a vertical page break, a frozen "
 			  "left edge, a column group. For an AREA: a vertical block a module joins sideways, "
 			  "which is how one template serves a document with an article code and one without."));
@@ -442,7 +442,7 @@ const ibArg& ArgColumns()
 
 const ibArg& ArgAt()
 {
-	static const ibArg s_a(wxT("at"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("at"), ibArg::Kind::Whole,
 		ibMcpText("For a break: the row or column the page ends before. For a freeze: everything "
 			  "up to here stays put; 0 unfreezes.\n"
 			  "*** A break belongs ABOVE the sheet's last line. The last break in a sheet is where the "
@@ -453,14 +453,14 @@ const ibArg& ArgAt()
 
 const ibArg& ArgLevel()
 {
-	static const ibArg s_a(wxT("level"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("level"), ibArg::Kind::Whole,
 		ibMcpText("For a group: how deep it nests. Default 1."));
 	return s_a;
 }
 
 const ibArg& ArgCollapsed()
 {
-	static const ibArg s_a(wxT("collapsed"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("collapsed"), ibArg::Kind::Flag,
 		ibMcpText("For a group: start folded. This is a state of the DOCUMENT, so a long form can "
 			  "open readable."));
 	return s_a;
@@ -468,7 +468,7 @@ const ibArg& ArgCollapsed()
 
 const ibArg& ArgRemove()
 {
-	static const ibArg s_a(wxT("remove"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("remove"), ibArg::Kind::Flag,
 		ibMcpText("Take it off instead of putting it on. For a break, `at` says which one; for a "
 			  "freeze this is the same as at=0; for a group, `start` and `end` say which; for an "
 			  "AREA, the name does."));
@@ -477,42 +477,42 @@ const ibArg& ArgRemove()
 
 const ibArg& ArgTop()
 {
-	static const ibArg s_a(wxT("top"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("top"), ibArg::Kind::Whole,
 		ibMcpText("First row of the rectangle."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgLeft()
 {
-	static const ibArg s_a(wxT("left"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("left"), ibArg::Kind::Whole,
 		ibMcpText("First column."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgBottom()
 {
-	static const ibArg s_a(wxT("bottom"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("bottom"), ibArg::Kind::Whole,
 		ibMcpText("Last row, inclusive."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgRight()
 {
-	static const ibArg s_a(wxT("right"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("right"), ibArg::Kind::Whole,
 		ibMcpText("Last column, inclusive."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgSlot()
 {
-	static const ibArg s_a(wxT("slot"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("slot"), ibArg::Kind::Text,
 		ibMcpText("Which buffer to put it in. Omit for the usual one."));
 	return s_a;
 }
 
 const ibArg& ArgTimes()
 {
-	static const ibArg s_a(wxT("times"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("times"), ibArg::Kind::Whole,
 		ibMcpText("Lay it down more than once, each block below the last - so a band that repeats "
 			  "is one call. Default 1."));
 	return s_a;
@@ -526,14 +526,14 @@ const ibArg& ArgTimes()
 class ibMcpToolSheetGet : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("sheet_get"); }
+	ibString GetName() const override { return ibT("sheet_get"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("reading the template '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("reading the template '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("A template as it stands: its named AREAS - which is what a printing module "
 			"puts out - and every cell that has something in it, with the PARAMETER each "
@@ -548,7 +548,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
@@ -563,8 +563,8 @@ public:
 		// a form being laid out from paper needs to know whether it still fits on
 		// the page. Both are readings the sheet already keeps and nothing was
 		// handing over: the extent it occupies, and the page breaks that cut it.
-		result.AddField(wxT("rows"), ibDataValue::Int((s64)desc.GetNumberRows()));
-		result.AddField(wxT("cols"), ibDataValue::Int((s64)desc.GetNumberCols()));
+		result.AddField(ibT("rows"), ibDataValue::Int((std::int64_t)desc.GetNumberRows()));
+		result.AddField(ibT("cols"), ibDataValue::Int((std::int64_t)desc.GetNumberCols()));
 
 		// PAGES, counted the only way a sheet can count them: by the breaks it
 		// declares. A break says where the paper ends deliberately; without one
@@ -572,8 +572,8 @@ public:
 		// really ends is the printer's business.
 		const int rowBreaks = desc.GetBrakeNumberRows();
 		const int colBreaks = desc.GetBrakeNumberCols();
-		result.AddField(wxT("pagesDown"), ibDataValue::Int((s64)(rowBreaks + 1)));
-		result.AddField(wxT("pagesAcross"), ibDataValue::Int((s64)(colBreaks + 1)));
+		result.AddField(ibT("pagesDown"), ibDataValue::Int((std::int64_t)(rowBreaks + 1)));
+		result.AddField(ibT("pagesAcross"), ibDataValue::Int((std::int64_t)(colBreaks + 1)));
 
 		// ⭐ AND WHERE THEY ARE, not only how many. A count says a break exists and leaves the one
 		// question a caller actually has — which row, so it can be moved or taken off — answerable
@@ -581,29 +581,29 @@ public:
 		// be readable back, or the writer has no way to check itself.
 		if (rowBreaks > 0 || colBreaks > 0) {
 
-			ibDataNode& breaks = result.Child(wxT("breaks"));
+			ibDataNode& breaks = result.Child(ibT("breaks"));
 
 			std::vector<ibDataValue> down, across;
 			for (int idx = 0; idx < rowBreaks; ++idx)
-				down.push_back(ibDataValue::Int((s64)desc.GetRowBrakeByIdx(idx)));
+				down.push_back(ibDataValue::Int((std::int64_t)desc.GetRowBrakeByIdx(idx)));
 			for (int idx = 0; idx < colBreaks; ++idx)
-				across.push_back(ibDataValue::Int((s64)desc.GetColBrakeByIdx(idx)));
+				across.push_back(ibDataValue::Int((std::int64_t)desc.GetColBrakeByIdx(idx)));
 
-			breaks.AddField(wxT("rows"), ibDataValue::Array(down));
-			breaks.AddField(wxT("cols"), ibDataValue::Array(across));
+			breaks.AddField(ibT("rows"), ibDataValue::Array(down));
+			breaks.AddField(ibT("cols"), ibDataValue::Array(across));
 		}
 
 		if (desc.GetRowFreeze() > 0 || desc.GetColFreeze() > 0) {
-			ibDataNode& freeze = result.Child(wxT("freeze"));
-			freeze.AddField(wxT("rows"), ibDataValue::Int((s64)desc.GetRowFreeze()));
-			freeze.AddField(wxT("cols"), ibDataValue::Int((s64)desc.GetColFreeze()));
+			ibDataNode& freeze = result.Child(ibT("freeze"));
+			freeze.AddField(ibT("rows"), ibDataValue::Int((std::int64_t)desc.GetRowFreeze()));
+			freeze.AddField(ibT("cols"), ibDataValue::Int((std::int64_t)desc.GetColFreeze()));
 		}
 
 		// THE AREAS FIRST, because they are what a module names. A template with no
 		// area can be printed only whole, which is rarely what anybody wants.
 		std::vector<ibDataValue> areas;
 		int wantedStart = -1, wantedEnd = -1;
-		const wxString wanted = ArgArea().Text(params);
+		const ibString wanted = ArgArea().Text(params);
 
 		for (int idx = 0; idx < desc.GetAreaNumberRows(); ++idx) {
 
@@ -612,15 +612,15 @@ public:
 				continue;
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->SetValue(wxT("name"), area->m_label);
-			node->AddField(wxT("start"), ibDataValue::Int(LineOut(area->m_start)));
-			node->AddField(wxT("end"), ibDataValue::Int(LineOut(area->m_end)));
+			node->SetValue(ibT("name"), area->m_label);
+			node->AddField(ibT("start"), ibDataValue::Int(LineOut(area->m_start)));
+			node->AddField(ibT("end"), ibDataValue::Int(LineOut(area->m_end)));
 
 			// HOW TALL IT IS, since that is what decides how many of it fit. A
 			// module repeating a one-row band and a module repeating a five-row one
 			// have very different answers to "how many go on a page".
-			node->AddField(wxT("height"),
-				ibDataValue::Int((s64)(area->m_end - area->m_start + 1)));
+			node->AddField(ibT("height"),
+				ibDataValue::Int((std::int64_t)(area->m_end - area->m_start + 1)));
 
 			areas.push_back(ibDataValue::Child(node));
 
@@ -643,17 +643,17 @@ public:
 				continue;
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->SetValue(wxT("name"), area->m_label);
-			node->SetValue(wxT("band"), wxString(wxT("columns")));
-			node->AddField(wxT("start"), ibDataValue::Int(LineOut(area->m_start)));
-			node->AddField(wxT("end"), ibDataValue::Int(LineOut(area->m_end)));
-			node->AddField(wxT("width"),
-				ibDataValue::Int((s64)(area->m_end - area->m_start + 1)));
+			node->SetValue(ibT("name"), area->m_label);
+			node->SetValue(ibT("band"), ibString(ibT("columns")));
+			node->AddField(ibT("start"), ibDataValue::Int(LineOut(area->m_start)));
+			node->AddField(ibT("end"), ibDataValue::Int(LineOut(area->m_end)));
+			node->AddField(ibT("width"),
+				ibDataValue::Int((std::int64_t)(area->m_end - area->m_start + 1)));
 
 			areas.push_back(ibDataValue::Child(node));
 		}
 
-		result.AddField(wxT("areas"), ibDataValue::Array(areas));
+		result.AddField(ibT("areas"), ibDataValue::Array(areas));
 
 		// ⭐⭐ AND A SHEET WITH NO BANDS IS A SHEET NOBODY HAS CUT YET — said HERE, because this is
 		// the one call a caller makes before laying anything out, and the mistake it prevents is
@@ -668,7 +668,7 @@ public:
 		// for (measured on this server 2026-09-05: a print form laid out in twenty-five calls
 		// without one of these patterns being read).
 		if (areas.empty()) {
-			result.SetValue(wxT("nextStep"),
+			result.SetValue(ibT("nextStep"),
 				ibMcpText("This sheet has no AREAS, so a module can only print it whole - and areas are "
 				  "what a printed form is made of. Before laying cells out, read how a blank is taken "
 				  "apart: pattern_read 'form-to-areas' for the bands and the column blocks, "
@@ -691,30 +691,30 @@ public:
 		{
 			std::vector<ibDataValue> bands;
 
-			const auto band = [&bands](const wxChar* what, s64 at, int size) {
+			const auto band = [&bands](const ibChar* what, std::int64_t at, int size) {
 				std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-				node->SetValue(wxT("band"), wxString(what));
-				node->AddField(wxT("at"), ibDataValue::Int(at));
-				node->AddField(wxT("size"), ibDataValue::Int((s64)size));
+				node->SetValue(ibT("band"), ibString(what));
+				node->AddField(ibT("at"), ibDataValue::Int(at));
+				node->AddField(ibT("size"), ibDataValue::Int((std::int64_t)size));
 				if (size == 0)
-					node->AddField(wxT("hidden"), ibDataValue::Bool(true));
+					node->AddField(ibT("hidden"), ibDataValue::Bool(true));
 				bands.push_back(ibDataValue::Child(node));
 			};
 
 			for (int idx = 0; idx < desc.GetSizeNumberRows(); ++idx)
 				if (const ibSpreadsheetRowSizeDescription* r = desc.GetRowSizeByIdx((size_t)idx))
-					band(wxT("row"), LineOut((int)r->m_row), (int)r->m_height);
+					band(ibT("row"), LineOut((int)r->m_row), (int)r->m_height);
 
 			for (int idx = 0; idx < desc.GetSizeNumberCols(); ++idx)
 				if (const ibSpreadsheetColSizeDescription* c = desc.GetColSizeByIdx((size_t)idx))
-					band(wxT("column"), LineOut((int)c->m_col), (int)c->m_width);
+					band(ibT("column"), LineOut((int)c->m_col), (int)c->m_width);
 
 			if (!bands.empty())
-				result.AddField(wxT("sizes"), ibDataValue::Array(bands));
+				result.AddField(ibT("sizes"), ibDataValue::Array(bands));
 		}
 
 		if (!wanted.IsEmpty() && wantedStart < 0) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' has no area called '%s'."), sheet->GetName(), wanted);
 			return false;
 		}
@@ -755,18 +755,18 @@ public:
 			ibDataValue described;
 			if (!ibSpreadsheetCellDescriptionMemory::WriteNode(described, *cell)
 				|| described.Kind() != ibDataKind::Child) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("The cell at row %i, column %i could not describe itself."),
 					(int)LineOut(cell->m_row), (int)LineOut(cell->m_col));
 				return false;
 			}
 
-			std::shared_ptr<ibDataNode> node = described.AsChild();
+			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>(*described.AsChild());
 
 			// The ADDRESS is the container's to say — the cell knows what it holds, not where it
 			// sits, which is exactly the division WriteNode draws.
-			node->AddField(wxT("row"), ibDataValue::Int(LineOut(cell->m_row)));
-			node->AddField(wxT("col"), ibDataValue::Int(LineOut(cell->m_col)));
+			node->AddField(ibT("row"), ibDataValue::Int(LineOut(cell->m_row)));
+			node->AddField(ibT("col"), ibDataValue::Int(LineOut(cell->m_col)));
 
 			// ⭐ THE FILTER FOLLOWS THE REPORTER. A cell with nothing to say is one
 			// the node has nothing in beyond its address — so the test is asked of
@@ -783,10 +783,10 @@ public:
 			cells.push_back(ibDataValue::Child(node));
 		}
 
-		result.AddField(wxT("cells"), ibDataValue::Array(cells));
+		result.AddField(ibT("cells"), ibDataValue::Array(cells));
 
 		if (areas.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("No areas declared. A printing module names areas to put out, so a template "
 				  "without them can only be printed whole."));
 
@@ -802,14 +802,14 @@ MCP_TOOL_REGISTER(ibMcpToolSheetGet);
 class ibMcpToolSheetCell : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("sheet_cell"); }
+	ibString GetName() const override { return ibT("sheet_cell"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("writing a cell of the template '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("writing a cell of the template '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Put text or a PARAMETER into a cell of a template - or into a whole band of "
 			"them at once through `cells`, which is how a header row or a detail line is "
@@ -823,20 +823,20 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		// ⭐ THE SET FIRST, AND IT RUNS THE SINGLE-CELL BODY BELOW ONCE PER ENTRY. Written this way
 		// rather than as a second implementation: every rule about parameters, fill types, borders
 		// and spans stays in one place, so a cell written in a set is written by exactly the code
 		// that writes one on its own. The template is named once, on the outside, and carried in.
-		if (const ibDataValue* many = params.FindField(ArgCells().Name())) {
+		if (auto many = params.FindField(ArgCells().Name())) {
 
 			if (many->Kind() != ibDataKind::Array) {
 				refusal = ibMcpText("`cells` is a LIST of cells - [{row, col, value}, ...].");
 				return false;
 			}
 
-			const ibDataValue* named = params.FindField(ArgId().Name());
+			auto named = params.FindField(ArgId().Name());
 
 			std::vector<ibDataValue> written;
 			int at = 0;
@@ -845,8 +845,8 @@ public:
 
 				++at;
 
-				if (each.Kind() != ibDataKind::Child || each.AsChild() == nullptr) {
-					refusal = wxString::Format(
+				if (each.Kind() != ibDataKind::Child || !each.AsChild()) {
+					refusal = ibString::Format(
 						ibMcpText("Entry %i of `cells` is not a cell - each one is an object, "
 							  "{row, col, ...}."), at);
 					return false;
@@ -854,7 +854,7 @@ public:
 
 				ibDataNode one = *each.AsChild();
 
-				if (named != nullptr && one.FindField(ArgId().Name()) == nullptr)
+				if (named && !one.Has(ArgId().Name()))
 					one.AddField(ArgId().Name(), *named);
 
 				ibDataNode said;
@@ -863,7 +863,7 @@ public:
 					// transaction, so calling the set atomic would be the lie. The caller is told
 					// which entry stopped it and how many stand, which is what it needs to carry
 					// on from rather than start over.
-					refusal = wxString::Format(
+					refusal = ibString::Format(
 						ibMcpText("Cell %i of %u: %s. The %i before it are written."),
 						at, (unsigned)many->AsArray().size(), refusal, at - 1);
 					return false;
@@ -872,8 +872,8 @@ public:
 				written.push_back(ibDataValue::Child(std::make_shared<ibDataNode>(said)));
 			}
 
-			result.AddField(wxT("written"), ibDataValue::Int((s64)written.size()));
-			result.AddField(wxT("cells"), ibDataValue::Array(written));
+			result.AddField(ibT("written"), ibDataValue::Int((std::int64_t)written.size()));
+			result.AddField(ibT("cells"), ibDataValue::Array(written));
 			return true;
 		}
 
@@ -881,8 +881,8 @@ public:
 		if (sheet == nullptr)
 			return false;
 
-		const s32 row = Line(ArgRow(), params);
-		const s32 col = Line(ArgCol(), params);
+		const std::int32_t row = Line(ArgRow(), params);
+		const std::int32_t col = Line(ArgCol(), params);
 
 		if (row < 0 || col < 0) {
 			refusal = ibMcpText("A cell is addressed by row and column, both 1 or more - or a whole "
@@ -900,8 +900,8 @@ public:
 		// (A set of cells arrives through `cells` and comes back through here one entry at a time —
 		//  see the branch at the top of this method.)
 
-		const bool gaveValue     = params.FindField(ArgValue().Name())     != nullptr;
-		const bool gaveParameter = params.FindField(ArgParameter().Name()) != nullptr;
+		const bool gaveValue     = params.Has(ArgValue().Name());
+		const bool gaveParameter = params.Has(ArgParameter().Name());
 
 		// ⭐ A CELL'S TEXT IS A CAPTION, and it goes in every language the configuration declares — the
 		// rule every caption follows (ibMcpCaptionInEveryLanguage). A Russian word sent bare was stored
@@ -909,7 +909,7 @@ public:
 		// cell's text is a name the module fills in, not a caption, and is not asked.
 		if (gaveValue && !gaveParameter
 		    && !ibMcpCaptionInEveryLanguage(sheet->GetMetaData(), ArgValue().Text(params),
-		                                    wxString::Format(ibMcpText("The text of cell R%dC%d"), (int)row + 1, (int)col + 1),
+		                                    ibString::Format(ibMcpText("The text of cell R%dC%d"), (int)row + 1, (int)col + 1),
 		                                    refusal))
 			return false;
 
@@ -918,7 +918,7 @@ public:
 
 		// 🛑⭐⭐ A PARAMETER CELL CARRIES THE NAME AS ITS VALUE — AND THIS WROTE IT SOMEWHERE ELSE.
 		//
-		// ibBackendSpreadsheetObject::Put substitutes with
+		// ibSpreadsheetObject::Put substitutes with
 		//     cell->m_value = ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType)
 		// so for a Parameter cell the WHOLE TEXT is the name looked up, and for a Template cell the
 		// names are the `[...]` inside that text. The name has to be in m_value or there is nothing
@@ -940,18 +940,18 @@ public:
 			cell->SetValue(ArgParameter().Text(params));
 
 		// The decipher parameter, when one is asked for — the field SetParameter actually fills.
-		if (params.FindField(ArgDetails().Name()) != nullptr)
+		if (params.Has(ArgDetails().Name()))
 			cell->SetParameter(ArgDetails().Text(params));
 
 		// ⭐⭐ AND THE FILL TYPE WITH IT — see the note on ArgFill. Writing the parameter name
 		// without stamping the type left a cell that LOOKS like a hole to this tool and is a
 		// caption to everything that reads the sheet.
-		const wxString fill = ArgFill().Text(params);
+		const ibString fill = ArgFill().Text(params);
 
 		if (!fill.IsEmpty()) {
 			desc.SetCellFillType(row, col,
-				fill.IsSameAs(wxT("parameter"), false) ? ibSpreadsheetFillType_StrParameter
-				: fill.IsSameAs(wxT("template"), false) ? ibSpreadsheetFillType_StrTemplate
+				fill.IsSameAs(ibT("parameter"), false) ? ibSpreadsheetFillType_StrParameter
+				: fill.IsSameAs(ibT("template"), false) ? ibSpreadsheetFillType_StrTemplate
 				: ibSpreadsheetFillType_StrText);
 		}
 		// Not said, so it follows what arrived: a name to substitute is a parameter cell, a
@@ -962,7 +962,7 @@ public:
 		else if (gaveValue)
 			desc.SetCellFillType(row, col, ibSpreadsheetFillType_StrText);
 
-		const wxString align = ArgAlign().Text(params);
+		const ibString align = ArgAlign().Text(params);
 		if (!align.IsEmpty()) {
 
 			// ⚠ THE SHEET'S OWN ENUM, not the wx constant that looks like it.
@@ -972,9 +972,9 @@ public:
 			// text stayed left. Right-looking, silently wrong, and found only by
 			// looking at the screen.
 			int horizontal = ibAlignmentHorz_Left;
-			if (align.IsSameAs(wxT("center"), false))     horizontal = ibAlignmentHorz_Center;
-			else if (align.IsSameAs(wxT("right"), false)) horizontal = ibAlignmentHorz_Right;
-			else if (!align.IsSameAs(wxT("left"), false)) {
+			if (align.IsSameAs(ibT("center"), false))     horizontal = ibAlignmentHorz_Center;
+			else if (align.IsSameAs(ibT("right"), false)) horizontal = ibAlignmentHorz_Right;
+			else if (!align.IsSameAs(ibT("left"), false)) {
 				refusal = ibMcpText("Alignment is left, center or right.");
 				return false;
 			}
@@ -986,9 +986,9 @@ public:
 		// is what it is on paper — not a row of underscores, which would be text
 		// the module would have to print around.
 		if (ArgUnderline().Flag(params)) {
-			cell->m_borderAt[3].m_style = wxPENSTYLE_SOLID;
+			cell->m_borderAt[3].m_style = ibPenStyle_Solid;
 			cell->m_borderAt[3].m_width = 1;
-			cell->m_borderAt[3].m_colour = *wxBLACK;
+			cell->m_borderAt[3].m_colour = ibColour(0, 0, 0);
 		}
 
 		// ⚠ MERGING IS NOT SETTING A NUMBER. SetCellSize is the grid's own mechanism:
@@ -996,8 +996,8 @@ public:
 		// the offset back to its owner. Writing m_col_size straight left those
 		// cells believing they were their own — which draws right and behaves
 		// wrongly the moment anything walks the sheet.
-		const s32 colSpan = (s32)ArgColSpan().Whole(params);
-		const s32 rowSpan = (s32)ArgRowSpan().Whole(params);
+		const std::int32_t colSpan = (std::int32_t)ArgColSpan().Whole(params);
+		const std::int32_t rowSpan = (std::int32_t)ArgRowSpan().Whole(params);
 
 		if (colSpan > 1 || rowSpan > 1)
 			desc.SetCellSize(row, col, rowSpan > 1 ? rowSpan : 1, colSpan > 1 ? colSpan : 1);
@@ -1005,73 +1005,83 @@ public:
 		// THE FONT IS ONE OBJECT, so every question about it is answered on one
 		// copy and written back once — three separate reads would each start from
 		// the stored font and the last would win.
-		if (params.FindField(ArgItalic().Name()) != nullptr
-			|| params.FindField(ArgBold().Name()) != nullptr
-			|| params.FindField(ArgFontSize().Name()) != nullptr) {
+		if (params.Has(ArgItalic().Name())
+			|| params.Has(ArgBold().Name())
+			|| params.Has(ArgFontSize().Name())) {
 
 			// A cell that carries no font of its own is shown in the sheet's default
 			// one, so that is what "make it bold" starts from.
-			wxFont font = cell->m_font.IsOk() ? cell->m_font : ibDefaultSpreadsheetFont();
+			ibFont font = cell->m_font.IsOk() ? cell->m_font : ibDefaultSpreadsheetFont();
 
-			if (params.FindField(ArgItalic().Name()) != nullptr)
-				font.SetStyle(ArgItalic().Flag(params)
-					? wxFONTSTYLE_ITALIC : wxFONTSTYLE_NORMAL);
+			if (params.Has(ArgItalic().Name()))
+				font.m_style = ArgItalic().Flag(params)
+					? ibFONTSTYLE_ITALIC : ibFONTSTYLE_NORMAL;
 
-			if (params.FindField(ArgBold().Name()) != nullptr)
-				font.SetWeight(ArgBold().Flag(params)
-					? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
+			if (params.Has(ArgBold().Name()))
+				font.m_weight = ArgBold().Flag(params)
+					? ibFONTWEIGHT_BOLD : ibFONTWEIGHT_NORMAL;
 
-			const s32 points = (s32)ArgFontSize().Whole(params);
+			const std::int32_t points = (std::int32_t)ArgFontSize().Whole(params);
 			if (points > 0)
-				font.SetPointSize(points);
+				font.m_pointSize = points;
 
 			cell->m_font = font;
 		}
 
-		const wxString valign = ArgValign().Text(params);
+		const ibString valign = ArgValign().Text(params);
 		if (!valign.IsEmpty()) {
 
 			// The same rule as above: the sheet's own names, not the wx ones that
 			// resemble them.
-			if (valign.IsSameAs(wxT("top"), false))         cell->m_alignVert = ibAlignmentVert_Top;
-			else if (valign.IsSameAs(wxT("middle"), false)) cell->m_alignVert = ibAlignmentVert_Center;
-			else if (valign.IsSameAs(wxT("bottom"), false)) cell->m_alignVert = ibAlignmentVert_Bottom;
+			if (valign.IsSameAs(ibT("top"), false))         cell->m_alignVert = ibAlignmentVert_Top;
+			else if (valign.IsSameAs(ibT("middle"), false)) cell->m_alignVert = ibAlignmentVert_Center;
+			else if (valign.IsSameAs(ibT("bottom"), false)) cell->m_alignVert = ibAlignmentVert_Bottom;
 			else {
 				refusal = ibMcpText("Vertical alignment is top, middle or bottom.");
 				return false;
 			}
 		}
 
-		if (params.FindField(ArgVertical().Name()) != nullptr)
+		if (params.Has(ArgVertical().Name()))
 			cell->m_textOrient = ArgVertical().Flag(params)
 				? wxVERTICAL : wxHORIZONTAL;
 
 		// ⚠ AN UNSET COLOUR IS UNSET — the cell says so deliberately, and the
 		// getters resolve it where there IS a screen to ask. So a colour is only
 		// written when one was given, never defaulted here.
-		const wxString background = ArgBackground().Text(params);
-		if (!background.IsEmpty())
-			cell->m_backgroundColour = typeConv::StringToColour(background);
+		// A name, `#rrggbb` or `R,G,B` — what the arguments promise, read the way the report's
+		// conditional appearance reads a colour; anything else is refused, not painted black.
+		const auto colourOf = [&refusal](const ibString& word, ibColour& colour) {
+			if (!colour.FromString(word)) {
+				refusal = ibString::Format(ibMcpText("'%s' is not a colour - write it `R,G,B` (`255,235,156`), `#FFEB9C` or a name."), word);
+				return false;
+			}
+			return true;
+		};
 
-		const wxString colour = ArgColour().Text(params);
-		if (!colour.IsEmpty())
-			cell->m_textColour = typeConv::StringToColour(colour);
+		const ibString background = ArgBackground().Text(params);
+		if (!background.IsEmpty() && !colourOf(background, cell->m_backgroundColour))
+			return false;
 
-		const wxString border = ArgBorder().Text(params);
+		const ibString colour = ArgColour().Text(params);
+		if (!colour.IsEmpty() && !colourOf(colour, cell->m_textColour))
+			return false;
+
+		const ibString border = ArgBorder().Text(params);
 		if (!border.IsEmpty()) {
 
-			const bool all = border.IsSameAs(wxT("all"), false);
+			const bool all = border.IsSameAs(ibT("all"), false);
 			const bool sides[4] = {
-				all || border.Lower().Contains(wxT("left")),
-				all || border.Lower().Contains(wxT("right")),
-				all || border.Lower().Contains(wxT("top")),
-				all || border.Lower().Contains(wxT("bottom")),
+				all || border.Lower().Contains(ibT("left")),
+				all || border.Lower().Contains(ibT("right")),
+				all || border.Lower().Contains(ibT("top")),
+				all || border.Lower().Contains(ibT("bottom")),
 			};
 
 			// The weight, if one was named — see ArgBorderWidth for why the heavy line is the case
 			// this door could not draw. Zero rubs the rule out, which is how a form takes a line
 			// AWAY from one side of a framed block.
-			const int weight = params.FindField(ArgBorderWidth().Name()) != nullptr
+			const int weight = params.Has(ArgBorderWidth().Name())
 				? (int)ArgBorderWidth().Whole(params) : 1;
 
 			if (weight < 0) {
@@ -1082,26 +1092,26 @@ public:
 			for (int side = 0; side < 4; ++side) {
 				if (!sides[side])
 					continue;
-				cell->m_borderAt[side].m_style = weight > 0 ? wxPENSTYLE_SOLID : wxPENSTYLE_TRANSPARENT;
+				cell->m_borderAt[side].m_style = weight > 0 ? ibPenStyle_Solid : ibPenStyle_Transparent;
 				cell->m_borderAt[side].m_width = weight;
-				cell->m_borderAt[side].m_colour = *wxBLACK;
+				cell->m_borderAt[side].m_colour = ibColour(0, 0, 0);
 			}
 		}
 
-		const wxString fit = ArgFit().Text(params);
+		const ibString fit = ArgFit().Text(params);
 		if (!fit.IsEmpty()) {
 
 			// ⚠ AND HERE THE CELL'S NESTED ENUM IS THE RIGHT ONE — the sheet-level
 			// ibSpreadsheetFitMode numbers differently (Overflow = 4). Two enums
 			// that mean the same thing and count apart is exactly the trap the
 			// alignment fell into, so the class that OWNS the member decides.
-			if (fit.IsSameAs(wxT("overflow"), false))
+			if (fit.IsSameAs(ibT("overflow"), false))
 				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_Overflow;
-			else if (fit.IsSameAs(wxT("wrap"), false))
+			else if (fit.IsSameAs(ibT("wrap"), false))
 				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_Wrap;
-			else if (fit.IsSameAs(wxT("clip"), false))
+			else if (fit.IsSameAs(ibT("clip"), false))
 				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_Clip;
-			else if (fit.IsSameAs(wxT("ellipsis"), false))
+			else if (fit.IsSameAs(ibT("ellipsis"), false))
 				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_EllipsizeEnd;
 			else {
 				refusal = ibMcpText("Fit is wrap, overflow, clip or ellipsis.");
@@ -1109,33 +1119,33 @@ public:
 			}
 		}
 
-		if (params.FindField(ArgReadOnly().Name()) != nullptr)
+		if (params.Has(ArgReadOnly().Name()))
 			cell->m_isReadOnly = ArgReadOnly().Flag(params);
 
 		sheet->SetSpreadsheetDesc(desc);
 		activeMetaData->Modify(true);
 
-		result.AddField(wxT("row"), ibDataValue::Int(LineOut(row)));
-		result.AddField(wxT("col"), ibDataValue::Int(LineOut(col)));
+		result.AddField(ibT("row"), ibDataValue::Int(LineOut(row)));
+		result.AddField(ibT("col"), ibDataValue::Int(LineOut(col)));
 		// ⚠ THE TEXT IS ANSWERED UNDER THE NAME IT WAS SENT AS. A parameter cell holds the name in
 		// its value — that is what a parameter cell IS — so answering it as `value` would tell a
 		// caller that its `parameter` had not been taken. The fill type decides which word to use,
 		// which is the same fact deciding it in both directions.
-		const wxString said = cell->GetValue();
+		const ibString said = cell->GetValue();
 		if (!said.IsEmpty()) {
 			result.SetValue(desc.GetFillType(row, col) == ibSpreadsheetFillType_StrParameter
-				? wxT("parameter") : wxT("value"), said);
+				? ibT("parameter") : ibT("value"), said);
 		}
 
 		// And the decipher parameter, which is a different field and a different question.
 		if (!cell->GetParameter().IsEmpty())
-			result.SetValue(wxT("details"), cell->GetParameter());
+			result.SetValue(ibT("details"), cell->GetParameter());
 
 		// ⭐ AND WHAT IT NOW IS, because that is the half a caller could not see. A cell carrying a
 		// parameter name and a fill type of Text is the shape that prints an empty hole, and until
 		// this answered there was no way to tell one from a working cell without opening the
 		// designer and looking at the property panel.
-		result.SetValue(wxT("fill"), FillWord(desc.GetFillType(row, col)));
+		result.SetValue(ibT("fill"), FillWord(desc.GetFillType(row, col)));
 
 		// ⭐ AND THE PLACEMENT, for the same reason. `fit` could be written and never read, so a
 		// caller checking its own work saw a cell that agreed with everything it had asked for
@@ -1143,13 +1153,13 @@ public:
 		// only when it is not the default, so an ordinary cell's answer stays short.
 		switch (cell->m_fitMode) {
 		case ibSpreadsheetCellDescription::Mode_Wrap:
-			result.SetValue(wxT("fit"), wxString(wxT("wrap"))); break;
+			result.SetValue(ibT("fit"), ibString(ibT("wrap"))); break;
 		case ibSpreadsheetCellDescription::Mode_Clip:
-			result.SetValue(wxT("fit"), wxString(wxT("clip"))); break;
+			result.SetValue(ibT("fit"), ibString(ibT("clip"))); break;
 		case ibSpreadsheetCellDescription::Mode_EllipsizeStart:
 		case ibSpreadsheetCellDescription::Mode_EllipsizeMiddle:
 		case ibSpreadsheetCellDescription::Mode_EllipsizeEnd:
-			result.SetValue(wxT("fit"), wxString(wxT("ellipsis"))); break;
+			result.SetValue(ibT("fit"), ibString(ibT("ellipsis"))); break;
 		default:
 			break;
 		}
@@ -1166,15 +1176,15 @@ MCP_TOOL_REGISTER(ibMcpToolSheetCell);
 class ibMcpToolSheetArea : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("sheet_area"); }
+	ibString GetName() const override { return ibT("sheet_area"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("declaring the area '%s' in '%s'"),
+		return ibString::Format(ibMcpText("declaring the area '%s' in '%s'"),
 			ArgName().Text(params), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Name a band as an AREA - the unit a printing module puts out. A header, a "
 			"table row, a footer: the module names these, so a template without them can only "
@@ -1194,15 +1204,15 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
-		const wxString name = ArgName().Text(params);
-		const s32 start = Line(ArgStart(), params);
-		const s32 end = Line(ArgEnd(), params);
+		const ibString name = ArgName().Text(params);
+		const std::int32_t start = Line(ArgStart(), params);
+		const std::int32_t end = Line(ArgEnd(), params);
 
 		if (name.IsEmpty()) {
 			refusal = ibMcpText("An area needs a name - that is what the module puts out.");
@@ -1247,7 +1257,7 @@ public:
 		if (ArgRemove().Flag(params)) {
 
 			if (!exists) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("'%s' has no %s area called '%s' to remove."),
 					sheet->GetName(), columns ? ibMcpText("column") : ibMcpText("row"), name);
 				return false;
@@ -1259,9 +1269,9 @@ public:
 			sheet->SetSpreadsheetDesc(desc);
 			activeMetaData->Modify(true);
 
-			result.AddField(wxT("removed"), ibDataValue::Bool(true));
-			result.SetValue(wxT("name"), name);
-			result.SetValue(wxT("band"), wxString(columns ? wxT("columns") : wxT("rows")));
+			result.AddField(ibT("removed"), ibDataValue::Bool(true));
+			result.SetValue(ibT("name"), name);
+			result.SetValue(ibT("band"), ibString(columns ? ibT("columns") : ibT("rows")));
 			return true;
 		}
 
@@ -1280,11 +1290,11 @@ public:
 		sheet->SetSpreadsheetDesc(desc);
 		activeMetaData->Modify(true);
 
-		result.AddField(exists ? wxT("moved") : wxT("added"), ibDataValue::Bool(true));
-		result.SetValue(wxT("name"), name);
-		result.SetValue(wxT("band"), wxString(columns ? wxT("columns") : wxT("rows")));
-		result.AddField(wxT("start"), ibDataValue::Int(LineOut(start)));
-		result.AddField(wxT("end"), ibDataValue::Int(LineOut(end)));
+		result.AddField(exists ? ibT("moved") : ibT("added"), ibDataValue::Bool(true));
+		result.SetValue(ibT("name"), name);
+		result.SetValue(ibT("band"), ibString(columns ? ibT("columns") : ibT("rows")));
+		result.AddField(ibT("start"), ibDataValue::Int(LineOut(start)));
+		result.AddField(ibT("end"), ibDataValue::Int(LineOut(end)));
 		return true;
 	}
 };
@@ -1313,15 +1323,15 @@ MCP_TOOL_REGISTER(ibMcpToolSheetArea);
 class ibMcpToolSheetImport : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("sheet_import"); }
+	ibString GetName() const override { return ibT("sheet_import"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("importing a file into the template '%s'"),
+		return ibString::Format(ibMcpText("importing a file into the template '%s'"),
 			ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Read a spreadsheet or document file INTO a template - an existing invoice, "
 			"act or contract becomes the layout, and what changes in it becomes parameters "
@@ -1335,16 +1345,16 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
-		const wxString fileName = ArgFile().Text(params);
+		const ibString fileName = ArgFile().Text(params);
 
-		if (!wxFileExists(fileName)) {
-			refusal = wxString::Format(ibMcpText("There is no file at '%s'."), fileName);
+		if (!ibFileExists(fileName)) {
+			refusal = ibString::Format(ibMcpText("There is no file at '%s'."), fileName);
 			return false;
 		}
 
@@ -1352,22 +1362,22 @@ public:
 		if (format == nullptr || !format->CanRead()) {
 
 			// The list is the registry's, so it grows by itself.
-			wxString readable;
+			ibString readable;
 			for (const ibSheetFormat* known : ibSheetFormats()) {
 				if (known == nullptr || !known->CanRead())
 					continue;
-				readable << (readable.IsEmpty() ? wxT("") : wxT(", ")) << known->GetExtension();
+				readable << (readable.IsEmpty() ? ibT("") : ibT(", ")) << known->GetExtension();
 			}
 
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("Nothing here reads that kind of file. Readable: %s."),
-				readable.IsEmpty() ? wxT("none") : readable);
+				readable.IsEmpty() ? ibString(ibT("none")) : readable);
 			return false;
 		}
 
 		ibSpreadsheetDescription desc;
 		if (!format->ReadFile(fileName, desc)) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' could not read that file - it may be damaged, or written by something "
 				  "this format does not follow."), format->GetName());
 			return false;
@@ -1376,15 +1386,15 @@ public:
 		sheet->SetSpreadsheetDesc(desc);
 		activeMetaData->Modify(true);
 
-		result.AddField(wxT("imported"), ibDataValue::Bool(true));
-		result.SetValue(wxT("format"), format->GetName());
-		result.AddField(wxT("cells"), ibDataValue::Int((s64)desc.GetCellCount()));
-		result.AddField(wxT("areas"), ibDataValue::Int((s64)desc.GetAreaNumberRows()));
+		result.AddField(ibT("imported"), ibDataValue::Bool(true));
+		result.SetValue(ibT("format"), format->GetName());
+		result.AddField(ibT("cells"), ibDataValue::Int((std::int64_t)desc.GetCellCount()));
+		result.AddField(ibT("areas"), ibDataValue::Int((std::int64_t)desc.GetAreaNumberRows()));
 
 		// ⚠ WHAT CAME IN IS A PICTURE UNTIL IT IS CUT UP. A foreign file has no
 		// areas and no parameters — it is one flat sheet — so the next two steps
 		// are what turn it into a printed FORM rather than a copy of one.
-		result.SetValue(wxT("nextStep"),
+		result.SetValue(ibT("nextStep"),
 			ibMcpText("Read it with sheet_get, then declare the bands with sheet_area and turn the "
 			  "changing cells into parameters with sheet_cell."));
 
@@ -1416,14 +1426,14 @@ MCP_TOOL_REGISTER(ibMcpToolSheetImport);
 class ibMcpToolSheetSize : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("sheet_size"); }
+	ibString GetName() const override { return ibT("sheet_size"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("sizing a band of the template '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("sizing a band of the template '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Set the HEIGHT of a row or the WIDTH of a column, or hide one by giving it "
 			"nothing. A layout taken from paper is right in its content and wrong in its "
@@ -1436,7 +1446,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
@@ -1445,8 +1455,8 @@ public:
 		// ⚠ ASKED IN THE CALLER'S OWN NUMBERS FIRST, because here a zero means "not said" rather
 		// than a band: the choice between a row and a column is made on what ARRIVED, and only
 		// then is the one that was named translated into the sheet's own numbering.
-		const s32 rowSaid = (s32)ArgRow().Whole(params);
-		const s32 colSaid = (s32)ArgCol().Whole(params);
+		const std::int32_t rowSaid = (std::int32_t)ArgRow().Whole(params);
+		const std::int32_t colSaid = (std::int32_t)ArgCol().Whole(params);
 
 		// ONE BAND AT A TIME. Accepting both would leave a caller unsure which
 		// measurement the number was, and one of the two silently ignored.
@@ -1455,10 +1465,10 @@ public:
 			return false;
 		}
 
-		const s32 row = rowSaid - 1;
-		const s32 col = colSaid - 1;
+		const std::int32_t row = rowSaid - 1;
+		const std::int32_t col = colSaid - 1;
 
-		s32 size = (s32)ArgSize().Whole(params);
+		std::int32_t size = (std::int32_t)ArgSize().Whole(params);
 		if (ArgHide().Flag(params))
 			size = 1;   // the smallest a band can be and still be a band
 
@@ -1487,12 +1497,12 @@ public:
 		sheet->SetSpreadsheetDesc(desc);
 		activeMetaData->Modify(true);
 
-		result.SetValue(wxT("band"), wxString(rowSaid > 0 ? wxT("row") : wxT("column")));
-		result.AddField(wxT("at"), ibDataValue::Int((s64)(rowSaid > 0 ? rowSaid : colSaid)));
+		result.SetValue(ibT("band"), ibString(rowSaid > 0 ? ibT("row") : ibT("column")));
+		result.AddField(ibT("at"), ibDataValue::Int((std::int64_t)(rowSaid > 0 ? rowSaid : colSaid)));
 		if (putBack)
-			result.AddField(rowSaid > 0 ? wxT("automatic") : wxT("default"), ibDataValue::Bool(true));
+			result.AddField(rowSaid > 0 ? ibT("automatic") : ibT("default"), ibDataValue::Bool(true));
 		else
-			result.AddField(wxT("size"), ibDataValue::Int((s64)size));
+			result.AddField(ibT("size"), ibDataValue::Int((std::int64_t)size));
 		return true;
 	}
 };
@@ -1526,16 +1536,16 @@ MCP_TOOL_REGISTER(ibMcpToolSheetSize);
 class ibMcpToolSheetBand : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("sheet_band"); }
+	ibString GetName() const override { return ibT("sheet_band"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString what = ArgWhat().Text(params);
-		return wxString::Format(ibMcpText("setting %s in the template '%s'"),
+		const ibString what = ArgWhat().Text(params);
+		return ibString::Format(ibMcpText("setting %s in the template '%s'"),
 			what.IsEmpty() ? ibMcpText("a band") : what, ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("What a template says about whole rows or columns: a page BREAK (where the "
 			"paper ends, horizontally or vertically), a FREEZE (what stays put while the rest "
@@ -1558,21 +1568,21 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
-		const wxString what = ArgWhat().Text(params);
+		const ibString what = ArgWhat().Text(params);
 		const bool columns = ArgColumns().Flag(params);
 		const bool remove = ArgRemove().Flag(params);
 
 		ibSpreadsheetDescription desc = sheet->GetSpreadsheetDesc();
 
-		if (what.IsSameAs(wxT("break"), false)) {
+		if (what.IsSameAs(ibT("break"), false)) {
 
-			const s32 at = Line(ArgAt(), params);
+			const std::int32_t at = Line(ArgAt(), params);
 			if (at < 0) {
 				refusal = ibMcpText("A page break is placed at a row or column, 1 or more.");
 				return false;
@@ -1587,14 +1597,14 @@ public:
 			// the first one a caller asks for BECAME that end: it printed as nothing, and the verb read
 			// as broken (a blank whose table was to start a page of its own, 2026-09-22). The end is
 			// stamped at the sheet's last line first, so what is added after it is a break and is taken.
-			const s32 last = (columns ? desc.GetNumberCols() : desc.GetNumberRows()) - 1;
+			const std::int32_t last = (columns ? desc.GetNumberCols() : desc.GetNumberRows()) - 1;
 
 			if (remove) {
 				if (columns) desc.DeleteColBrake(at);
 				else         desc.DeleteRowBrake(at);
 			}
 			else if (at >= last) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("The sheet already ends at %s %d, so a break there is the end of it "
 						"rather than a page ending early. Place it above the last line that has "
 						"something in it."),
@@ -1606,11 +1616,11 @@ public:
 				else         { desc.SetRowBrake(last); desc.AddRowBrake(at); }
 			}
 
-			result.SetValue(wxT("what"), wxString(wxT("break")));
-			result.SetValue(wxT("did"), wxString(remove ? wxT("removed") : wxT("placed")));
-			result.AddField(wxT("at"), ibDataValue::Int(LineOut(at)));
+			result.SetValue(ibT("what"), ibString(ibT("break")));
+			result.SetValue(ibT("did"), ibString(remove ? ibT("removed") : ibT("placed")));
+			result.AddField(ibT("at"), ibDataValue::Int(LineOut(at)));
 		}
-		else if (what.IsSameAs(wxT("freeze"), false)) {
+		else if (what.IsSameAs(ibT("freeze"), false)) {
 
 			// 0 IS A LEGITIMATE ANSWER HERE and means "nothing is frozen" — which
 			// is why this one does not refuse it the way a break does. `remove` is
@@ -1621,7 +1631,7 @@ public:
 			// ⚠ AND IT IS A COUNT, NOT AN ADDRESS — "how many bands stay put", which is why it is
 			// NOT translated the way a break or a group is: freezing 2 rows freezes rows 1 and 2,
 			// and subtracting one here would freeze the wrong number of them.
-			const s32 at = remove ? 0 : (s32)ArgAt().Whole(params);
+			const std::int32_t at = remove ? 0 : (std::int32_t)ArgAt().Whole(params);
 			if (at < 0) {
 				refusal = ibMcpText("A freeze runs up to a row or column, or 0 for none.");
 				return false;
@@ -1630,13 +1640,13 @@ public:
 			if (columns) desc.SetColFreeze(at);
 			else         desc.SetRowFreeze(at);
 
-			result.SetValue(wxT("what"), wxString(wxT("freeze")));
-			result.AddField(wxT("at"), ibDataValue::Int((s64)at));
+			result.SetValue(ibT("what"), ibString(ibT("freeze")));
+			result.AddField(ibT("at"), ibDataValue::Int((std::int64_t)at));
 		}
-		else if (what.IsSameAs(wxT("group"), false)) {
+		else if (what.IsSameAs(ibT("group"), false)) {
 
-			const s32 start = Line(ArgStart(), params);
-			const s32 end = Line(ArgEnd(), params);
+			const std::int32_t start = Line(ArgStart(), params);
+			const std::int32_t end = Line(ArgEnd(), params);
 
 			// A GROUP THAT ENDS BEFORE IT BEGINS folds nothing while looking
 			// declared — the same mistake an area can make, refused the same way.
@@ -1645,7 +1655,7 @@ public:
 				return false;
 			}
 
-			s32 level = (s32)ArgLevel().Whole(params);
+			std::int32_t level = (std::int32_t)ArgLevel().Whole(params);
 			if (level <= 0)
 				level = 1;
 
@@ -1662,12 +1672,12 @@ public:
 				else         desc.AddRowGroup(start, end, level, collapsed);
 			}
 
-			result.SetValue(wxT("what"), wxString(wxT("group")));
-			result.SetValue(wxT("did"), wxString(remove ? wxT("removed") : wxT("placed")));
-			result.AddField(wxT("start"), ibDataValue::Int(LineOut(start)));
-			result.AddField(wxT("end"), ibDataValue::Int(LineOut(end)));
+			result.SetValue(ibT("what"), ibString(ibT("group")));
+			result.SetValue(ibT("did"), ibString(remove ? ibT("removed") : ibT("placed")));
+			result.AddField(ibT("start"), ibDataValue::Int(LineOut(start)));
+			result.AddField(ibT("end"), ibDataValue::Int(LineOut(end)));
 			if (!remove)
-				result.AddField(wxT("level"), ibDataValue::Int((s64)level));
+				result.AddField(ibT("level"), ibDataValue::Int((std::int64_t)level));
 		}
 		else {
 			// An unknown word must not fall through to a default: a misspelling
@@ -1679,7 +1689,7 @@ public:
 		sheet->SetSpreadsheetDesc(desc);
 		activeMetaData->Modify(true);
 
-		result.SetValue(wxT("band"), wxString(columns ? wxT("columns") : wxT("rows")));
+		result.SetValue(ibT("band"), ibString(columns ? ibT("columns") : ibT("rows")));
 		return true;
 	}
 };
@@ -1710,14 +1720,14 @@ MCP_TOOL_REGISTER(ibMcpToolSheetBand);
 class ibMcpToolSheetCopy : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("sheet_copy"); }
+	ibString GetName() const override { return ibT("sheet_copy"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("copying cells of the template '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("copying cells of the template '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Copy a rectangle of cells into the caller's own buffer, to be laid down "
 			"again elsewhere with sheet_paste. Everything a cell carries comes with it - the "
@@ -1731,16 +1741,16 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
-		const s32 top = Line(ArgTop(), params);
-		const s32 left = Line(ArgLeft(), params);
-		const s32 bottom = Line(ArgBottom(), params);
-		const s32 right = Line(ArgRight(), params);
+		const std::int32_t top = Line(ArgTop(), params);
+		const std::int32_t left = Line(ArgLeft(), params);
+		const std::int32_t bottom = Line(ArgBottom(), params);
+		const std::int32_t right = Line(ArgRight(), params);
 
 		// A RECTANGLE THAT ENDS BEFORE IT BEGINS copies nothing while looking
 		// asked-for — refused the same way an area and a group are.
@@ -1754,8 +1764,8 @@ public:
 
 		std::vector<ibDataValue> cells;
 
-		for (s32 row = top; row <= bottom; row++) {
-			for (s32 col = left; col <= right; col++) {
+		for (std::int32_t row = top; row <= bottom; row++) {
+			for (std::int32_t col = left; col <= right; col++) {
 
 				const ibSpreadsheetCellDescription* cell = desc.GetCell(row, col);
 
@@ -1769,38 +1779,38 @@ public:
 
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 
-				// ⚠ s32, NOT s64. SetValue dispatches through ibDataCodec<T> and
-				// only s32 has a specialization — an s64 fails to compile inside
+				// ⚠ std::int32_t, NOT std::int64_t. SetValue dispatches through ibDataCodec<T> and
+				// only std::int32_t has a specialization — an std::int64_t fails to compile inside
 				// dataBuilder.h, nowhere near the line that asked for it.
-				entry->SetValue(wxT("row"), (s32)(row - top));
-				entry->SetValue(wxT("col"), (s32)(col - left));
+				entry->SetValue(ibT("row"), (std::int32_t)(row - top));
+				entry->SetValue(ibT("col"), (std::int32_t)(col - left));
 
 				ibDataValue body;
 				if (!ibSpreadsheetCellDescriptionMemory::WriteNode(body, *cell))
 					continue;
 
-				entry->AddField(wxT("cell"), body);
+				entry->AddField(ibT("cell"), body);
 
 				cells.push_back(ibDataValue::Child(entry));
 			}
 		}
 
-		const wxString slotName = ArgSlot().Text(params);
+		const ibString slotName = ArgSlot().Text(params);
 
 		ibMcpClipboardSlot& slot = ibMcpClipboard(slotName);
 
 		slot.m_kind = ibMcpClipboardKind::Cells;
 		slot.m_name = sheet->GetName();
-		slot.m_what = wxString::Format(ibMcpText("%d x %d"), bottom - top + 1, right - left + 1);
+		slot.m_what = ibString::Format(ibMcpText("%d x %d"), bottom - top + 1, right - left + 1);
 
 		slot.m_payload = ibDataNode();
-		slot.m_payload.SetValue(wxT("rows"), (s32)(bottom - top + 1));
-		slot.m_payload.SetValue(wxT("cols"), (s32)(right - left + 1));
-		slot.m_payload.AddField(wxT("cells"), ibDataValue::Array(cells));
+		slot.m_payload.SetValue(ibT("rows"), (std::int32_t)(bottom - top + 1));
+		slot.m_payload.SetValue(ibT("cols"), (std::int32_t)(right - left + 1));
+		slot.m_payload.AddField(ibT("cells"), ibDataValue::Array(cells));
 
-		result.SetValue(wxT("slot"), slotName.IsEmpty() ? wxString(wxT("default")) : slotName);
-		result.SetValue(wxT("shape"), slot.m_what);
-		result.AddField(wxT("cells"), ibDataValue::Int((s64)cells.size()));
+		result.SetValue(ibT("slot"), slotName.IsEmpty() ? ibString(ibT("default")) : slotName);
+		result.SetValue(ibT("shape"), slot.m_what);
+		result.AddField(ibT("cells"), ibDataValue::Int((std::int64_t)cells.size()));
 
 		return true;
 	}
@@ -1811,14 +1821,14 @@ MCP_TOOL_REGISTER(ibMcpToolSheetCopy);
 class ibMcpToolSheetPaste : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("sheet_paste"); }
+	ibString GetName() const override { return ibT("sheet_paste"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("pasting cells into the template '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("pasting cells into the template '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Lay the copied rectangle of cells down again, its top-left corner at the "
 			"row and column given. Cells the copy did not include are left as they are.");
@@ -1830,21 +1840,21 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
-		const s32 row = Line(ArgRow(), params);
-		const s32 col = Line(ArgCol(), params);
+		const std::int32_t row = Line(ArgRow(), params);
+		const std::int32_t col = Line(ArgCol(), params);
 
 		if (row < 0 || col < 0) {
 			refusal = ibMcpText("Cells land at a row and column, both 1 or more.");
 			return false;
 		}
 
-		const wxString slotName = ArgSlot().Text(params);
+		const ibString slotName = ArgSlot().Text(params);
 
 		ibMcpClipboardSlot& slot = ibMcpClipboard(slotName);
 
@@ -1854,19 +1864,19 @@ public:
 		}
 
 		if (slot.m_kind != ibMcpClipboardKind::Cells) {
-			refusal = wxString::Format(ibMcpText("The buffer holds %s, not cells."),
+			refusal = ibString::Format(ibMcpText("The buffer holds %s, not cells."),
 				ibMcpClipboardKindName(slot.m_kind));
 			return false;
 		}
 
-		s32 times = (s32)ArgTimes().Whole(params);
+		std::int32_t times = (std::int32_t)ArgTimes().Whole(params);
 		if (times <= 0)
 			times = 1;
 
-		const s32 height = slot.m_payload.GetValue<s32>(wxT("rows"));
+		const std::int32_t height = slot.m_payload.GetValue<std::int32_t>(ibT("rows"));
 
-		const ibDataValue* cells = slot.m_payload.FindField(wxT("cells"));
-		if (cells == nullptr || cells->Kind() != ibDataKind::Array) {
+		auto cells = slot.m_payload.FindField(ibT("cells"));
+		if (!cells || cells->Kind() != ibDataKind::Array) {
 			refusal = ibMcpText("The buffer holds no cells.");
 			return false;
 		}
@@ -1875,24 +1885,24 @@ public:
 
 		int written = 0;
 
-		for (s32 pass = 0; pass < times; pass++) {
+		for (std::int32_t pass = 0; pass < times; pass++) {
 
-			const s32 offset = pass * height;
+			const std::int32_t offset = pass * height;
 
 			for (const ibDataValue& item : cells->AsArray()) {
 
 				if (item.Kind() != ibDataKind::Child)
 					continue;
 
-				const std::shared_ptr<ibDataNode>& entry = item.AsChild();
-				if (entry == nullptr)
+				const auto entry = item.AsChild();
+				if (!entry)
 					continue;
 
-				const s32 atRow = row + offset + entry->GetValue<s32>(wxT("row"));
-				const s32 atCol = col + entry->GetValue<s32>(wxT("col"));
+				const std::int32_t atRow = row + offset + entry->GetValue<std::int32_t>(ibT("row"));
+				const std::int32_t atCol = col + entry->GetValue<std::int32_t>(ibT("col"));
 
-				const ibDataValue* body = entry->FindField(wxT("cell"));
-				if (body == nullptr)
+				auto body = entry->FindField(ibT("cell"));
+				if (!body)
 					continue;
 
 				ibSpreadsheetCellDescription* target = desc.GetOrCreateCell(atRow, atCol);
@@ -1925,10 +1935,10 @@ public:
 		sheet->SetSpreadsheetDesc(desc);
 		activeMetaData->Modify(true);
 
-		result.SetValue(wxT("row"), row);
-		result.SetValue(wxT("col"), col);
-		result.AddField(wxT("cells"), ibDataValue::Int((s64)written));
-		result.AddField(wxT("times"), ibDataValue::Int((s64)times));
+		result.SetValue(ibT("row"), row);
+		result.SetValue(ibT("col"), col);
+		result.AddField(ibT("cells"), ibDataValue::Int((std::int64_t)written));
+		result.AddField(ibT("times"), ibDataValue::Int((std::int64_t)times));
 
 		return true;
 	}
@@ -1951,21 +1961,21 @@ MCP_TOOL_REGISTER(ibMcpToolSheetPaste);
 // pretending otherwise would be the same lie as a read that agrees with its own write.
 //
 // ⭐ AND IT IS ASSEMBLED FROM WHAT IS ALREADY THERE, not built: a template's description IS a
-// sheet (ibBackendSpreadsheetObject takes one whole), and a sheet already knows how to be shown —
+// sheet (ibSpreadsheetObject takes one whole), and a sheet already knows how to be shown —
 // ShowSpreadsheetDocument makes a document view over it, the same road `Show()` takes at runtime
 // and the list output takes from a form. Three lines of connecting, no new mechanism.
 class ibMcpToolSheetShow : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("sheet_show"); }
+	ibString GetName() const override { return ibT("sheet_show"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("opening the template '%s' for you to look at"),
+		return ibString::Format(ibMcpText("opening the template '%s' for you to look at"),
 			ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Open a template in a window, as a spreadsheet, so the PERSON at the designer can "
 			"look at it. Everything else here answers in text; this is the one question text "
@@ -1982,7 +1992,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
@@ -1998,22 +2008,22 @@ public:
 			return false;
 		}
 
-		wxObjectDataPtr<ibBackendSpreadsheetObject> shown(
-			new ibBackendSpreadsheetObject(sheet->GetSpreadsheetDesc()));
+		std::shared_ptr<ibSpreadsheetObject> shown(
+			std::make_shared<ibSpreadsheetObject>(sheet->GetSpreadsheetDesc()));
 
 		// ⚠ READ-ONLY, BECAUSE IT IS A COPY. Typing into it would change nothing and look as though
 		// it had - the window holds its own description, not the template's.
 		shown->EnableEditing(false);
 
-		const wxString title = wxString::Format(ibMcpText("Template: %s"), sheet->GetName());
+		const ibString title = ibString::Format(ibMcpText("Template: %s"), sheet->GetName());
 
 		if (!frame->ShowSpreadsheetDocument(title, shown)) {
 			refusal = ibMcpText("The window could not be opened.");
 			return false;
 		}
 
-		result.SetValue(wxT("shown"), title);
-		result.SetValue(wxT("note"),
+		result.SetValue(ibT("shown"), title);
+		result.SetValue(ibT("note"),
 			ibMcpText("It is open in front of the person at the designer. Say what you would like "
 			  "them to check - nothing about how it LOOKS comes back through here."));
 
@@ -2038,15 +2048,15 @@ MCP_TOOL_REGISTER(ibMcpToolSheetShow);
 class ibMcpToolSheetExport : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("sheet_export"); }
+	ibString GetName() const override { return ibT("sheet_export"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("writing the template '%s' out to a file"),
+		return ibString::Format(ibMcpText("writing the template '%s' out to a file"),
 			ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Write a template OUT to a spreadsheet file - the reverse of sheet_import. The "
 			"format is decided by the name's extension, exactly as it is on the way in.\n"
@@ -2061,13 +2071,13 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
-		const wxString fileName = ArgFile().Text(params);
+		const ibString fileName = ArgFile().Text(params);
 
 		if (fileName.IsEmpty()) {
 			refusal = ibMcpText("Say where to write it - the extension decides the format.");
@@ -2079,16 +2089,16 @@ public:
 		if (format == nullptr || !format->CanWrite()) {
 
 			// The list is the registry's, so it grows by itself — same as on the reading side.
-			wxString writable;
+			ibString writable;
 			for (const ibSheetFormat* known : ibSheetFormats()) {
 				if (known == nullptr || !known->CanWrite())
 					continue;
 				if (!writable.IsEmpty())
-					writable << wxT(", ");
+					writable << ibT(", ");
 				writable << known->GetExtension();
 			}
 
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("Nothing here writes '%s'. These can be written: %s."), fileName, writable);
 			return false;
 		}
@@ -2098,12 +2108,12 @@ public:
 		// difference between this file and one saved from an editor says the editor's road is
 		// where something is lost.
 		if (!format->WriteFile(fileName, sheet->GetSpreadsheetDesc())) {
-			refusal = wxString::Format(ibMcpText("'%s' could not be written."), fileName);
+			refusal = ibString::Format(ibMcpText("'%s' could not be written."), fileName);
 			return false;
 		}
 
-		result.SetValue(wxT("written"), fileName);
-		result.SetValue(wxT("format"), format->GetName());
+		result.SetValue(ibT("written"), fileName);
+		result.SetValue(ibT("format"), format->GetName());
 
 		return true;
 	}

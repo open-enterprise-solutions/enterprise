@@ -16,11 +16,11 @@ class FRMSERVER_API ibValueControl : public ibValueFrame {
 	* Support control name
 	*/
 
-	virtual bool GetControlNameAsString(wxString& result) const {
+	virtual bool GetControlNameAsString(ibString& result) const {
 		return m_propertyName->GetValueAsString(result);
 	}
 
-	virtual bool SetControlNameAsString(const wxString& result) const {
+	virtual bool SetControlNameAsString(const ibString& result) const {
 		m_propertyName->SetValue(result);
 		return true;
 	}
@@ -28,8 +28,8 @@ class FRMSERVER_API ibValueControl : public ibValueFrame {
 	/**
 	* Property events
 	*/
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 	/**
 	* Support form
@@ -99,12 +99,12 @@ protected:
 	//frame owner 
 	ibValueForm* m_formOwner;
 
-	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_category, wxT("Name"), _("Name"), _("Object name"), wxT(""));
+	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_category, ibT("Name"), _("Name"), _("Object name"), ibT(""));
 
 	// USER VISIBILITY — a group of its own: the functional options the element is available under. Empty =
 	// available whatever the options are.
-	ibPropertyCategory* m_categoryUserVisibility = ibPropertyObject::CreatePropertyCategory(wxT("UserVisibility"), _("User visibility"));
-	ibPropertyFunctionalOptions* m_propertyFunctionalOptions = ibPropertyObject::CreateProperty<ibPropertyFunctionalOptions>(m_categoryUserVisibility, wxT("FunctionalOptions"), _("Functional options"), _("The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."));
+	ibPropertyCategory* m_categoryUserVisibility = ibPropertyObject::CreatePropertyCategory(ibT("UserVisibility"), _("User visibility"));
+	ibPropertyFunctionalOptions* m_propertyFunctionalOptions = ibPropertyObject::CreateProperty<ibPropertyFunctionalOptions>(m_categoryUserVisibility, ibT("FunctionalOptions"), _("Functional options"), _("The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."));
 };
 
 #endif // !_BASE_H_

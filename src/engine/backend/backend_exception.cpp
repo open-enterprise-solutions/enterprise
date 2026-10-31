@@ -49,7 +49,7 @@ constexpr std::size_t kErrorChainMax = 64;
 bool s_errorsAlive = false;
 
 std::mutex s_errorMutex;
-std::unordered_map<std::thread::id, std::vector<wxString>> s_errorsByThread;
+std::unordered_map<std::thread::id, std::vector<ibString>> s_errorsByThread;
 
 struct ibErrorsLifetime {
 	ibErrorsLifetime() { s_errorsAlive = true; }
@@ -57,37 +57,37 @@ struct ibErrorsLifetime {
 } s_errorsLifetime;
 } // namespace
 
-void ibBackendException::PushLastError(const wxString& description)
+void ibBackendException::PushLastError(const ibString& description)
 {
 	if (description.IsEmpty() || !s_errorsAlive) return;
 
 	std::lock_guard<std::mutex> lock(s_errorMutex);
-	std::vector<wxString>& chain = s_errorsByThread[std::this_thread::get_id()];
+	std::vector<ibString>& chain = s_errorsByThread[std::this_thread::get_id()];
 	if (chain.size() >= kErrorChainMax)
 		chain.erase(chain.begin());
 	chain.push_back(description);
 }
 
-wxString ibBackendException::GetLastError()
+ibString ibBackendException::GetLastError()
 {
 	// Drain semantics preserved for legacy callers (mainApp's
 	// appDataCreate* failure path). Returns the most recent entry and
 	// clears the chain — same one-string surface as before.
-	if (!s_errorsAlive) return wxEmptyString;
+	if (!s_errorsAlive) return ibEmptyString;
 
 	std::lock_guard<std::mutex> lock(s_errorMutex);
 	auto found = s_errorsByThread.find(std::this_thread::get_id());
-	if (found == s_errorsByThread.end() || found->second.empty()) return wxEmptyString;
-	wxString last = found->second.back();
+	if (found == s_errorsByThread.end() || found->second.empty()) return ibEmptyString;
+	ibString last = found->second.back();
 	// Drop the whole entry, not just its contents: the map is then bounded by
 	// threads holding a PENDING error, not by every thread ever seen.
 	s_errorsByThread.erase(found);
 	return last;
 }
 
-std::vector<wxString> ibBackendException::DrainLastErrors()
+std::vector<ibString> ibBackendException::DrainLastErrors()
 {
-	std::vector<wxString> out;
+	std::vector<ibString> out;
 	if (!s_errorsAlive) return out;
 
 	std::lock_guard<std::mutex> lock(s_errorMutex);
@@ -99,19 +99,19 @@ std::vector<wxString> ibBackendException::DrainLastErrors()
 	return out;
 }
 
-std::vector<wxString> ibBackendException::PeekLastErrors()
+std::vector<ibString> ibBackendException::PeekLastErrors()
 {
 	if (!s_errorsAlive) return {};
 
 	std::lock_guard<std::mutex> lock(s_errorMutex);
 	auto found = s_errorsByThread.find(std::this_thread::get_id());
-	return found != s_errorsByThread.end() ? found->second : std::vector<wxString>();
+	return found != s_errorsByThread.end() ? found->second : std::vector<ibString>();
 }
 
 //////////////////////////////////////////////////////////////////////
 //					List of error messages							//
 //////////////////////////////////////////////////////////////////////
-static wxString gs_listErrorString[] =
+static ibString gs_listErrorString[] =
 {
 	_("Usage: %s <filename>"),
 	_("Error reading file %s"),
@@ -125,90 +125,90 @@ static wxString gs_listErrorString[] =
 	_("Constant number expected:\n%s"),
 	_("Constant string expected:\n%s"),
 	_("Constant date expected:\n%s"),
-	_("Duplicate identifier %s"),//ERROR_IDENTIFIER_DUPLICATE
+	_("Duplicate identifier %s"),//ibScriptError_IdentifierDuplicate
 	_("Label '%s' not defined"),
 	_("One of the keywords is expected!"),
 	_("Module code expected"),
-	_("Identifier expected"),//ERROR_IDENTIFIER_DEFINE
-	_("Region name expected"),//ERROR_IDENTIFIER_REGION
-	_("Keyword or identifier expected"),//ERROR_CODE
-	_("Symbol expected '%s'"),//ERROR_DELIMETER
-	_("Closing parenthesis or comma expected"),//ERROR_FUNC_DELIMETER
-	_("Function or procedure declaration keyword expected"),//ERROR_FUNC_DEFINE
-	_("Module cannot have a return statement"),//ERROR_RETURN
-	_("Expected constant"),//ERROR_CONST_DEFINE
-	_("An operator is expected to complete a procedure or function!"),//ERROR_ENDFUNC_DEFINE
-	_("Error writing file: %s"),//ERROR_FILE_WRITE
-	_("Error in expression:\n%s"),//ERROR_EXPRESSION
-	_("Keyword expected %s"),//ERROR_KEYWORD
-	_("Identifier '%s' not found"),//ERROR_IDENTIFIER_NOT_FOUND
-	_("Operator Break can be used only inside the cycle"),//ERROR_USE_BREAK
-	_("Operator Continue can be used only inside the cycle"),//ERROR_USE_CONTINUE
-	_("Operator Return cannot be used outside the procedure or function"),//ERROR_USE_RETURN
-	_("Expected program operators"),//ERROR_USE_BLOCK
-	_("Expected expression"),//ERROR_EXPRESSION_REQUIRE
-	_("Procedure or function not detected (%s)"),//ERROR_CALL_FUNCTION
-	_("Variable with the specified name is already defined (%s)"),//ERROR_DEF_VARIABLE
-	_("A procedure or function with the specified name is already defined (%s)"),//ERROR_DEF_FUNCTION
+	_("Identifier expected"),//ibScriptError_IdentifierDefine
+	_("Region name expected"),//ibScriptError_IdentifierRegion
+	_("Keyword or identifier expected"),//ibScriptError_Code
+	_("Symbol expected '%s'"),//ibScriptError_Delimiter
+	_("Closing parenthesis or comma expected"),//ibScriptError_FuncDelimiter
+	_("Function or procedure declaration keyword expected"),//ibScriptError_FuncDefine
+	_("Module cannot have a return statement"),//ibScriptError_Return
+	_("Expected constant"),//ibScriptError_ConstDefine
+	_("An operator is expected to complete a procedure or function!"),//ibScriptError_EndFuncDefine
+	_("Error writing file: %s"),//ibScriptError_FileWrite
+	_("Error in expression:\n%s"),//ibScriptError_Expression
+	_("Keyword expected %s"),//ibScriptError_Keyword
+	_("Identifier '%s' not found"),//ibScriptError_IdentifierNotFound
+	_("Operator Break can be used only inside the cycle"),//ibScriptError_UseBreak
+	_("Operator Continue can be used only inside the cycle"),//ibScriptError_UseContinue
+	_("Operator Return cannot be used outside the procedure or function"),//ibScriptError_UseReturn
+	_("Expected program operators"),//ibScriptError_UseBlock
+	_("Expected expression"),//ibScriptError_ExpressionRequire
+	_("Procedure or function not detected (%s)"),//ibScriptError_CallFunction
+	_("Variable with the specified name is already defined (%s)"),//ibScriptError_DefVariable
+	_("A procedure or function with the specified name is already defined (%s)"),//ibScriptError_DefFunction
 	// ⭐ NAME THE CALL. Both of these used to say only that a count was wrong, in a module with a
 	// hundred calls in it — and the runtime callsite was ALREADY handing over the function's name,
 	// which the message then threw away because it had nowhere to put it. An author reading "Too
 	// many parameters" has to find the call themselves; measured on a live session, the first guess
 	// was the wrong construct entirely (2026-09-02).
-	_("Too many parameters passed to '%s'"),//ERROR_MANY_PARAMS
-	_("Not enough parameters passed to '%s'"),//ERROR_FEW_PARAMS
-	_("Var is not found (%s)"),//ERROR_VAR_NOT_FOUND
-	_("Unexpected program code termination"),//ERROR_END_PROGRAM
-	_("This module may contain only definitions of procedures and functions"), //ERROR_ONLY_FUNCTION
-	_("Use procedure as function (%s)"), //ERROR_USE_PROCEDURE_AS_FUNCTION
-	_("Expected integer positive sign constant"),//ERROR_ARRAY_SIZE_CONST
-	_("Re-import the parent module"),//ERROR_DUBLICATE_IMPORT
-	_("Module not found"),//ERROR_MODULE_NOT_FOUND
-	_("The import statement must be at the beginning of the module"),//ERROR_USE_IMPORT
-	_("Final conditional compilation statement expected"),//ERROR_USE_ENDDEF
-	_("A pending region statement is expected"),//ERROR_USE_ENDREGION
+	_("Too many parameters passed to '%s'"),//ibScriptError_ManyParams
+	_("Not enough parameters passed to '%s'"),//ibScriptError_FewParams
+	_("Var is not found (%s)"),//ibScriptError_VarNotFound
+	_("Unexpected program code termination"),//ibScriptError_EndProgram
+	_("This module may contain only definitions of procedures and functions"), //ibScriptError_OnlyFunction
+	_("Use procedure as function (%s)"), //ibScriptError_UseProcedureAsFunction
+	_("Expected integer positive sign constant"),//ibScriptError_ArraySizeConst
+	_("Re-import the parent module"),//ibScriptError_DuplicateImport
+	_("Module not found"),//ibScriptError_ModuleNotFound
+	_("The import statement must be at the beginning of the module"),//ibScriptError_UseImport
+	_("Final conditional compilation statement expected"),//ibScriptError_UseEndDef
+	_("A pending region statement is expected"),//ibScriptError_UseEndRegion
 
-	_("Constructor not found (%s)"),//ERROR_CALL_CONSTRUCTOR
+	_("Constructor not found (%s)"),//ibScriptError_CallConstructor
 
-	_("'%s' is not a type a declaration can name - it takes a primitive (Number), a value class (Array) or a family of references (CatalogRef, AnyRef)"),//ERROR_TYPE_DEF
-	_("Bad variable type"),//ERROR_BAD_TYPE
-	_("Bad value type"),//ERROR_BAD_TYPE_EXPRESSION
-	_("Variable must be a numeric type"),//ERROR_NUMBER_TYPE
+	_("'%s' is not a type a declaration can name - it takes a primitive (Number), a value class (Array) or a family of references (CatalogRef, AnyRef)"),//ibScriptError_TypeDef
+	_("Bad variable type"),//ibScriptError_BadType
+	_("Bad value type"),//ibScriptError_BadTypeExpression
+	_("Variable must be a numeric type"),//ibScriptError_NumberType
 
-	_("Boolean value expected"),//ERROR_BAD_TYPE_EXPRESSION_B
-	_("Numeric value expected"),//ERROR_BAD_TYPE_EXPRESSION_N
-	_("String value expected"),//ERROR_BAD_TYPE_EXPRESSION_S
-	_("Date value expected"),//ERROR_BAD_TYPE_EXPRESSION_D
+	_("Boolean value expected"),//ibScriptError_BadTypeExpressionBoolean
+	_("Numeric value expected"),//ibScriptError_BadTypeExpressionNumber
+	_("String value expected"),//ibScriptError_BadTypeExpressionString
+	_("Date value expected"),//ibScriptError_BadTypeExpressionDate
 
-	_("Variable type does not support this operation"),//ERROR_TYPE_OPERATION
+	_("Variable type does not support this operation"),//ibScriptError_TypeOperation
 
 	// --- runtime (the interpreting loop) — lock-step with the enum ----------
-	_("Divide by zero"),//ERROR_DIVIDE_BY_ZERO
-	_("Cannot set array value '%s'"),//ERROR_ARRAY_SET
-	_("Cannot get array value '%s'"),//ERROR_ARRAY_GET
-	_("Object field not writable (%s)"),//ERROR_PROP_NOT_WRITABLE
-	_("Object field not readable (%s)"),//ERROR_PROP_NOT_READABLE
-	_("Object field is scope-local (%s)"),//ERROR_PROP_SCOPE_LOCAL
+	_("Divide by zero"),//ibScriptError_DivideByZero
+	_("Cannot set array value '%s'"),//ibScriptError_ArraySet
+	_("Cannot get array value '%s'"),//ibScriptError_ArrayGet
+	_("Object field not writable (%s)"),//ibScriptError_PropNotWritable
+	_("Object field not readable (%s)"),//ibScriptError_PropNotReadable
+	_("Object field is scope-local (%s)"),//ibScriptError_PropScopeLocal
 	// NAMING THE RECEIVER'S TYPE HERE WAS TRIED AND TAKEN BACK OUT. The type would be the
 	// interesting half, but the only honest way to ask for it is the value itself
 	// (GetClassName is virtual — a reference, a manager, a record each answer their own way),
 	// and a reference answers it by READING: ReadData walks reference fields and can recurse
 	// (see reference.cpp's cycle guard) or raise. A diagnostic that reads is a diagnostic
 	// that can fail while explaining a failure, so the receiver stays unnamed (Max, 2026-09-04).
-	_("No attribute or method found '%s' - a variable is not an aggregate object"),//ERROR_MEMBER_NOT_AGGREGATE
-	_("Aggregate object field not found '%s'"),//ERROR_MEMBER_NOT_FOUND
+	_("No attribute or method found '%s' - a variable is not an aggregate object"),//ibScriptError_MemberNotAggregate
+	_("Aggregate object field not found '%s'"),//ibScriptError_MemberNotFound
 	// STATES THE FACT, ADVISES NOTHING. It first read "call it directly, without the dot",
 	// which was written for `x.ValueIsFilled()` — and then it met a CORRECT call,
 	// `ValueIsFilled(Warehouse)`, that failed for a different reason, and told the person to
 	// remove a dot they had not written (Max, 2026-09-04). A diagnostic may say what it knows;
 	// it may not guess what was meant.
-	_("'%s' is a global function - it is not a member of this value"),//ERROR_MEMBER_IS_GLOBAL_FUNCTION
+	_("'%s' is a global function - it is not a member of this value"),//ibScriptError_MemberIsGlobalFunction
 
 	// --- compiler, appended after the runtime block — lock-step with the enum ----
 	// A GROUP WITHOUT A NAME IS THE ANSWER, and a clause written after it was met as "a ';' expected"
 	// on its first word - true, and no help: the author wrote a Select and was told about a semicolon.
 	_("Nothing can follow a group without a name: its answer is the groups themselves, each with Key and Values. "
-	  "To go on - Select, Where, OrderBy - name the group: '%s <name>'."),//ERROR_LINQ_AFTER_UNNAMED_GROUP
+	  "To go on - Select, Where, OrderBy - name the group: '%s <name>'."),//ibScriptError_LinqAfterUnnamedGroup
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -224,13 +224,13 @@ static wxString gs_listErrorString[] =
 // Error handling
 //////////////////////////////////////////////////////////////////////
 
-ibBackendException::ibBackendException(const wxString& strErrorDescription)
+ibBackendException::ibBackendException(const ibString& strErrorDescription)
 	: ibCoreException(strErrorDescription), m_errorHandled(false)
 {
 #ifdef DEBUG
 	// "thrown", said as such: a line per exception MADE — every level a cancel walks out of makes one — and
 	// not a line per thing a person was shown; read as the latter, it counted four messages that were one.
-	ibJournalInfo(wxT("exception"), wxT("thrown: %s"), strErrorDescription);
+	ibJournalInfo(ibT("exception"), ibT("thrown: %s"), strErrorDescription);
 #endif // !DEBUG
 
 	// EVERY refusal, in the same file as the ids and the SQL — the point of the trace is the ORDER of
@@ -254,15 +254,15 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 {
 	const bool isEvalMode = ibBackendException::IsEvalMode();
 
-	const wxString& strFileName = error.m_strFileName;
-	const wxString& strModuleName = error.m_strModuleName;
-	const wxString& strDocPath = error.m_strDocPath;
+	const ibString& strFileName = error.m_strFileName;
+	const ibString& strModuleName = error.m_strModuleName;
+	const ibString& strDocPath = error.m_strDocPath;
 
 	if (!err.m_errorHandled) {
 
 		if (activeMetaData != nullptr) {
 
-			wxString strModuleData;
+			ibString strModuleData;
 
 			if (!isEvalMode && strFileName.IsEmpty()) {
 				const ibGuid& guidDocPath = error.m_strDocPath;
@@ -297,7 +297,7 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 				}
 			}
 
-			const wxString strCodeError = isEvalMode ? wxString(wxEmptyString) :
+			const ibString strCodeError = isEvalMode ? ibString(ibEmptyString) :
 				ibBackendException::FindErrorCodeLine(strModuleData, error.m_numString);
 
 			ibBackendException::ProcessExceptionError(strFileName,
@@ -319,8 +319,8 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 			// the ones nobody asked about.
 			if (!isEvalMode) {
 				if (ibLogger* const logger = ibApplicationInstance::GetLogger())
-					logger->Error(wxT("script"), wxT("runtime.error"),
-						wxString::Format(wxT("%s (%s, line %d)"),
+					logger->Error(ibT("script"), ibT("runtime.error"),
+						ibString::Format(ibT("%s (%s, line %d)"),
 							err.GetErrorDescription(), strModuleName, (int)error.m_numLine + 1));
 			}
 		}
@@ -329,27 +329,32 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 			ibBackendException::ProcessExceptionError(strFileName,
 				strModuleName, strDocPath,
 				error.m_numString, error.m_numLine + 1,
-				wxEmptyString, wxNOT_FOUND, err.GetErrorDescription(),
+				ibEmptyString, wxNOT_FOUND, err.GetErrorDescription(),
 				ibDiagnosticKind::Runtime
 			);
 		}
 
+		err.m_errorModule  = strModuleName;
+		err.m_errorLine    = error.m_numLine + 1;   // 1-based, as the journal line above writes it
 		err.m_errorHandled = true;
 	}
 
-	// Rethrow the in-flight exception — ProcessError is always called from a
-	// catch block in procUnit, so `throw;` keeps the same object propagating
-	// (preserving m_errorHandled) without allocating a new copy.
-	throw;
+	// The caller rethrows, and it rethrows after its catch has returned.
+	// `throw;` here is a throw inside the handler. On MSVC that handler is
+	// a funclet above the frame, and each interpreter level that rethrows
+	// from there nests another one — the slack is gone after a few dozen,
+	// and the overflow then skips the frame guards. The same object is what
+	// has to travel, so m_errorHandled stays set; the caller holds it with
+	// std::current_exception() and rethrows that.
 }
 
-void ibBackendException::ProcessError(const wxString& strFileName,
-	const wxString& strModuleName, const wxString& strDocPath,
+void ibBackendException::ProcessError(const ibString& strFileName,
+	const ibString& strModuleName, const ibString& strDocPath,
 	const unsigned int currPos, const unsigned int currLine,
-	const wxString& strCodeError, const int codeError, const wxString& strErrorDesc)
+	const ibString& strCodeError, const int codeError, const ibString& strErrorDesc)
 {
 	//throw this exception
-	// COMPILE side: the only caller is ibCompileCode::DoSetError, i.e. the text
+	// COMPILE side: the only caller is ibCompileCode::DoRefuse, i.e. the text
 	// was refused before it ever ran.
 	//
 	// 🛑 THE ASSEMBLED MESSAGE IS DATA, AND IT WAS BEING PASSED AS A FORMAT. It embeds the offending
@@ -362,17 +367,17 @@ void ibBackendException::ProcessError(const wxString& strFileName,
 	// enough, and a configuration written in Russian or Ukrainian hits it the same way — which is how
 	// it was found: by bisecting a whole imported configuration down to one manager module that crashed the
 	// compiler at base open (2026-08-24).
-	ibBackendCoreException::Error(wxT("%s"),
+	ibBackendCoreException::Error(ibT("%s"),
 		ibBackendException::ProcessExceptionError(strFileName, strModuleName, strDocPath, currPos, currLine, strCodeError, codeError, strErrorDesc,
 			ibDiagnosticKind::Compile));
 }
 
 ////////////////////////////////////////////////////////////////////
 
-wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
-	const wxString& strModuleName, const wxString& strDocPath,
+ibString ibBackendException::ProcessExceptionError(const ibString& strFileName,
+	const ibString& strModuleName, const ibString& strDocPath,
 	const unsigned int currPos, const unsigned int currLine,
-	const wxString& strCodeError, const int codeError, const wxString& strErrorDesc,
+	const ibString& strCodeError, const int codeError, const ibString& strErrorDesc,
 	const ibDiagnosticKind kind)
 {
 	const bool isEvalMode = ibBackendException::IsEvalMode();
@@ -390,7 +395,7 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 	diagnostic.m_position = currPos;
 	diagnostic.m_code = codeError;
 	diagnostic.m_message = codeError > 0 ? ibBackendException::Format(codeError, strErrorDesc) : strErrorDesc;
-	diagnostic.m_codeLine = isEvalMode ? wxString(wxEmptyString) : strCodeError;
+	diagnostic.m_codeLine = isEvalMode ? ibString(ibEmptyString) : strCodeError;
 
 	// THE STACK IS COLLECTED WHETHER OR NOT ANYONE IS LOOKING. It used to be
 	// gathered inside the "is there a frame" branch, so a failure in a job, a
@@ -418,12 +423,12 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 
 	ibDiagnostics::Publish(diagnostic);
 
-	wxString strErrorMessage;
-	strErrorMessage += wxT("{") + strModuleName + wxT("(") + (isEvalMode ? wxString(wxT(" ")) : wxString::Format(wxT("%i"), currLine)) + wxT(")}: ");
-	strErrorMessage += diagnostic.m_message + wxT("\n");
+	ibString strErrorMessage;
+	strErrorMessage += ibT("{") + strModuleName + ibT("(") + (isEvalMode ? ibString(ibT(" ")) : ibString::Format(ibT("%i"), currLine)) + ibT(")}: ");
+	strErrorMessage += diagnostic.m_message + ibT("\n");
 	strErrorMessage += diagnostic.m_codeLine;
 
-	if (isEvalMode) strErrorMessage.Replace(wxT('\n'), wxT(' '));
+	if (isEvalMode) strErrorMessage.Replace(ibT("\n"), ibT(" "));
 
 	if (!isEvalMode) {
 
@@ -434,9 +439,9 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 
 		if (frame != nullptr) {
 			// The call-stack TEXT, rendered from the record above.
-			wxString strStackMessage;
+			ibString strStackMessage;
 			for (std::size_t i = 0; i < diagnostic.m_stack.size(); i++) {
-				strStackMessage += wxString::Format(wxT("\n%i: %s (#line %d)"),
+				strStackMessage += ibString::Format(ibT("\n%i: %s (#line %d)"),
 					static_cast<int>(i) + 1,
 					diagnostic.m_stack[i].m_module,
 					diagnostic.m_stack[i].m_line
@@ -451,7 +456,7 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 				strFileName,
 				strDocPath,
 				currLine,
-				strErrorMessage + (strStackMessage.IsEmpty() ? wxT("") : wxT("\n\nCall stack:") + strStackMessage)
+				strErrorMessage + (strStackMessage.IsEmpty() ? ibString() : ibT("\n\nCall stack:") + strStackMessage)
 			);
 
 			if (auto* sess = ibSession::Current())
@@ -466,7 +471,7 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 	PushLastError(strErrorMessage);
 
 #ifdef DEBUG
-	ibJournalInfo(wxT("exception"), wxT("reported: %s"), strErrorMessage);   // the formatted one, with its place
+	ibJournalInfo(ibT("exception"), ibT("reported: %s"), strErrorMessage);   // the formatted one, with its place
 #endif // !DEBUG
 
 	return strErrorMessage;
@@ -474,11 +479,20 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 
 ////////////////////////////////////////////////////////////////////
 
-const wxString& ibBackendException::GetErrorDesc(int codeError)
+ibString ibBackendException::Format(int codeError, const ibString& errorDesc)
 {
-	if (0 <= codeError && codeError < LastError)
+	const ibString& format = GetErrorDesc(codeError);
+	std::wstring spec;
+	if (ibFStringFormat::Prepare(ibGetTranslation(format), nullptr, 0, spec))
+		return Format(format);   // nowhere to put it
+	return Format(format, errorDesc);
+}
+
+const ibString& ibBackendException::GetErrorDesc(int codeError)
+{
+	if (0 <= codeError && codeError < ibScriptError_Count)
 		return gs_listErrorString[codeError];
-	return gs_listErrorString[ERROR_SYS1];
+	return gs_listErrorString[ibScriptError_Sys1];
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -515,42 +529,7 @@ bool ibBackendException::IsEvalComplete()
 
 ////////////////////////////////////////////////////////////////////
 
-#if !wxUSE_UTF8_LOCALE_ONLY
-wxString ibBackendException::DoFormatWchar(const wxChar* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	return FormatV(format, args);
-}
-#endif
-
-#if wxUSE_UNICODE_UTF8
-wxString ibBackendException::DoFormatUtf8(const wxChar* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	wxString strFormat;
-	strFormat.FormatV(format, args);
-	va_end(args);
-	return strFormat;
-}
-#endif
-
-wxString ibBackendException::FormatV(const wxString& format, va_list& list)
-{
-	wxString strErrorBuffer =
-		wxString::FormatV(wxGetTranslation(format), list);
-
-	va_end(list);
-
-	if (ibBackendException::IsEvalMode())
-		strErrorBuffer.Replace(wxT('\n'), wxT(' '));
-
-	stringUtils::TrimAll(strErrorBuffer);
-	return strErrorBuffer;
-}
-
-wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsigned int currPos)
+ibString ibBackendException::FindErrorCodeLine(const ibString& strBuffer, unsigned int currPos)
 {
 	const unsigned int sizeText = strBuffer.length();
 
@@ -566,7 +545,7 @@ wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsign
 	// crash MOVED rather than went away. A guard against absence has to be written at every place
 	// that consumes the absent thing, not only at the one that produced it.
 	if (sizeText == 0)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	unsigned int startPos = 0;
 	unsigned int endPos = sizeText;
@@ -575,7 +554,7 @@ wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsign
 	// editor hands over a buffer that can be '\r'-terminated — no match, so both
 	// bounds stayed at the extremes and the "line" became the whole file: the error
 	// for `Message("Hello world!");` came back carrying two more lines glued to it.
-	const auto IsEol = [](wxUniChar c) { return c == wxT('\n') || c == wxT('\r'); };
+	const auto IsEol = [](ibChar c) { return c == ibT('\n') || c == ibT('\r'); };
 
 	// THE MARKER STAYS WHERE THE CALLER PUT IT; only the SEARCH steps back.
 	//
@@ -620,12 +599,12 @@ wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsign
 	if (endPos   < currPos) endPos   = currPos;
 	if (endPos   > sizeText) endPos  = sizeText;
 
-	wxString strError = wxString::Format(wxT("%s <<?>> %s"),
+	ibString strError = ibString::Format(ibT("%s <<?>> %s"),
 		strBuffer.Mid(startPos, currPos - startPos),
 		strBuffer.Mid(currPos, endPos - currPos));
 
-	strError.Replace(wxT("\r"), wxEmptyString);
-	strError.Replace(wxT("\t"), wxT(" "));
+	strError.Replace(ibT("\r"), ibEmptyString);
+	strError.Replace(ibT("\t"), ibT(" "));
 
 	stringUtils::TrimAll(strError);
 
@@ -636,39 +615,17 @@ wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsign
 
 //service error handling procedures
 
-#if !wxUSE_UTF8_LOCALE_ONLY
-void ibBackendCoreException::DoErrorWchar(const wxChar* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-
-	const wxString& strErrorBuffer =
-		FormatV(format, args);
-
-	throw ibBackendCoreException(strErrorBuffer);
-}
-#endif
-
-#if wxUSE_UNICODE_UTF8
-void ibBackendCoreException::DoErrorUtf8(const wxChar* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	ErrorV(format, args);
-}
-#endif
-
 void ibBackendInterruptException::Error()
 {
 	throw ibBackendInterruptException();
 }
 
-void ibBackendAccessException::Error(const wxString& subject)
+void ibBackendAccessException::Error(const ibString& subject)
 {
 	throw ibBackendAccessException(subject);
 }
 
-void ibBackendFormException::Error(const wxString& subject)
+void ibBackendFormException::Error(const ibString& subject)
 {
 	// ⚠ THE CANONICAL SENTENCE STAYS. "Context functions are not available" is what this has said for
 	// years and what people recognise, and it was the wording of every frameless refusal in the tree
@@ -682,37 +639,37 @@ void ibBackendFormException::Error(const wxString& subject)
 	// others (Max, 2026-09-06: *"the canonical one is 'context functions are not available' - you
 	// just create a new kind so it is clear"*).
 	throw ibBackendFormException(subject.IsEmpty()
-		? _("Context functions are not available: this is a server, and a server has no forms.")
-		: wxString::Format(
+		? ibString(_("Context functions are not available: this is a server, and a server has no forms."))
+		: ibString::Format(
 			_("Context functions are not available: this is a server, and a server has no forms "
 			  "(asked for %s)."), subject));
 }
 
-void ibBackendLockException::VersionChangedThrow(const wxString& objectSynonym,
-                                                  const wxString& expected,
-                                                  const wxString& actual)
+void ibBackendLockException::VersionChangedThrow(const ibString& objectSynonym,
+                                                  const ibString& expected,
+                                                  const ibString& actual)
 {
-	const wxString msg = wxString::Format(
+	const ibString msg = ibString::Format(
 		_("%s: data was changed by another user. Please reload (expected version %s, found %s)."),
 		objectSynonym, expected, actual);
 	throw ibBackendLockException(Kind::VersionChanged, msg);
 }
 
-void ibBackendLockException::RowLockTimeoutThrow(const wxString& objectSynonym)
+void ibBackendLockException::RowLockTimeoutThrow(const ibString& objectSynonym)
 {
-	const wxString msg = wxString::Format(
+	const ibString msg = ibString::Format(
 		_("%s is currently being edited by another user. Please try again."),
 		objectSynonym);
 	throw ibBackendLockException(Kind::RowLockTimeout, msg);
 }
 
-void ibBackendLockException::LockConflictThrow(const wxString& objectName,
-                                                const wxString& blockingUser)
+void ibBackendLockException::LockConflictThrow(const ibString& objectName,
+                                                const ibString& blockingUser)
 {
-	const wxString msg = blockingUser.IsEmpty()
-		? wxString::Format(
+	const ibString msg = blockingUser.IsEmpty()
+		? ibString::Format(
 			_("%s is locked by another session."), objectName)
-		: wxString::Format(
+		: ibString::Format(
 			_("%s is locked by user %s."), objectName, blockingUser);
 	throw ibBackendLockException(Kind::LockConflict, msg, objectName, blockingUser);
 }

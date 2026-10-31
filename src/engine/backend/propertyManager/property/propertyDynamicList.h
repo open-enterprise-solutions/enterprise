@@ -2,7 +2,7 @@
 #define __PROPERTY_DYNAMIC_LIST_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/compositionDescription.h"   // what it stores — the SAME composer a report stores
+#include "core/description/compositionDescription.h"   // what it stores — the SAME composer a report stores
 
 // ---------------------------------------------------------------------------
 // ibPropertyDynamicList — backend half of the "dynamic list settings" designer
@@ -21,7 +21,7 @@
 class BACKEND_API ibPropertyDynamicList : public ibProperty {
 	// ONE maker with a default, the way ibPropertySpreadsheet has one over its description — a second
 	// overload for "no value yet" would be the empty description spelled twice.
-	static wxVariantData* CreateVariantData(ibPropertyObject* property,
+	static ibVariant CreateVariantData(ibPropertyObject* property,
 	                                        const ibCompositionDescription& val = ibCompositionDescription());
 public:
 
@@ -30,17 +30,17 @@ public:
 	// degenerately: a main table, a query and the same filter / sort / grouping. So the settings are
 	// no longer "persisted by the owner": they are this property's cell, read and written by the one
 	// pair that reads and writes a composition anywhere.
-	ibPropertyDynamicList(ibPropertyCategory* cat, const wxString& name)
+	ibPropertyDynamicList(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyDynamicList(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyDynamicList(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyDynamicList(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyDynamicList(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}

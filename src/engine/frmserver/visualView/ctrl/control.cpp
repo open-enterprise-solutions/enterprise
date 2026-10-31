@@ -93,7 +93,7 @@ void ibValueControl::AutoBindNewSource(ibTypeControlFactory* factory)
 	//
 	// Where a control declares nothing, the shared filter-kind -> clsid mapping stands
 	// (ibBackendTypeConfigFactory::GetDefaultTypeByFilter) — the SAME mapping
-	// ibVariantDataAttribute::DoSetDefaultMetaType uses, so a control's auto-attribute and a variant's
+	// ibVariantAttribute::DoSetDefaultMetaType uses, so a control's auto-attribute and a variant's
 	// default never diverge.
 	if (factory == nullptr || m_formOwner == nullptr || !IsUnbound())
 		return;

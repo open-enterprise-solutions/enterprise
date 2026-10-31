@@ -16,10 +16,10 @@
 #include "backend/backend_core.h"
 #include "backend/compiler/value.h"           // ibValue — the row a driver is handed
 #include "backend/query/queryLowering.h"      // ibQueryLowering::OutputColumn — the schema of an output
-#include "backend/compositionDescription.h"   // ibCompositionOutputKind — what an output IS
+#include "core/description/compositionDescription.h"   // ibCompositionOutputKind — what an output IS
 
-#include <wx/colour.h>   // ibCompositionAttr — what a cell is drawn with
-#include <wx/font.h>
+#include "core/graphics/colour.h"   // ibCompositionAttr — what a cell is drawn with, as data
+#include "core/graphics/font.h"
 #include <wx/string.h>
 #include <map>        // ibCompositionRowAttr — a kept row's, by column id
 #include <memory>     // ibCompositionAttr::m_format — one parsed Format, shared by every cell it is laid on
@@ -61,7 +61,8 @@ struct ibCompositionOutputInfo
 {
 	ibCompositionOutputKind                    m_kind = ibCompositionOutputKind::Grouping;
 	std::vector<ibQueryLowering::OutputColumn> m_schema;
-	wxString                                   m_name;   // what the output is called, when it is
+	ibString                                   m_name;   // what the output is called, when it is
+	const class ibMetaData*                    m_metaData = nullptr;   // the configuration its setting's values are read in
 	// …and HOW MANY OUTPUTS THE RUN DRAWS, this one among them. A caption tells one block from the others,
 	// and a run of one has nothing to tell apart (ibSpreadsheetComposeDriver::WriteOutputCaption).
 	size_t                                     m_outputCount = 1;
@@ -78,14 +79,14 @@ struct ibCompositionOutputInfo
 	// FIELD a column stands for (ibCompositionDescription::TitleForPath), and a resource reaches its
 	// field through the path it aggregates — `COUNT(Number)` is titled by `Number`, function and all
 	// qualification left out of it (Max, 2026-08-26).
-	std::vector<wxString>                      m_titles;
+	std::vector<ibString>                      m_titles;
 
 	// …AND IT IS ASKED, not indexed into — a schema and a list beside it can always disagree about
 	// length, and the answer where they do is the column's own name.
-	wxString TitleOf(size_t column) const {
+	ibString TitleOf(size_t column) const {
 		if (column < m_titles.size() && !m_titles[column].IsEmpty())
 			return m_titles[column];
-		return column < m_schema.size() ? m_schema[column].m_name : wxString();
+		return column < m_schema.size() ? m_schema[column].m_name : ibString();
 	}
 
 	// ⭐⭐ AND THE FIELD ITSELF — the path each column is a reading of, one entry per schema column.
@@ -100,11 +101,11 @@ struct ibCompositionOutputInfo
 	// Empty where a column stands for no field of the composition — a projected column, or one whose
 	// level a user's own grouping replaced. Empty means "cannot say", and a reader treats it as a
 	// cell with nothing to follow rather than guessing a path out of the name.
-	std::vector<wxString>                      m_paths;
+	std::vector<ibString>                      m_paths;
 
 	// …ASKED, like the title, and for the same reason.
-	wxString PathOf(size_t column) const {
-		return column < m_paths.size() ? m_paths[column] : wxString();
+	ibString PathOf(size_t column) const {
+		return column < m_paths.size() ? m_paths[column] : ibString();
 	}
 
 	// ⭐ AND HOW IT IS SHOWN — the appearance of the field the column reads (ibAppearanceDescription), one
@@ -194,53 +195,53 @@ struct ibCompositionOutputInfo
 struct ibCompositionFont {
 	int         m_pointSize = 0;                   // 0 = not said
 	int         m_weight = 0;                      // numeric, 700 = bold; 0 = not said
-	wxFontStyle m_style = wxFONTSTYLE_MAX;         // MAX = not said
-	wxString    m_face;                            // empty = not said
+	int         m_style = 0;                       // an ibFontStyle; 0 = not said
+	ibString    m_face;                            // empty = not said
 	bool        m_underlined = false;
 	bool        m_strikethrough = false;
 
 	// WHAT `font` SAYS beyond `ordinary` — made once, when a rule is made ready.
-	static ibCompositionFont Of(const wxFont& font, const wxFont& ordinary) {
+	static ibCompositionFont Of(const ibFont& font, const ibFont& ordinary) {
 		ibCompositionFont said;
 		if (!font.IsOk())
 			return said;
-		if (font.GetPointSize() != ordinary.GetPointSize())
-			said.m_pointSize = font.GetPointSize();
-		if (font.GetNumericWeight() != ordinary.GetNumericWeight())
-			said.m_weight = font.GetNumericWeight();
-		if (font.GetStyle() != ordinary.GetStyle())
-			said.m_style = font.GetStyle();
-		if (!font.GetFaceName().IsSameAs(ordinary.GetFaceName(), false))
-			said.m_face = font.GetFaceName();
-		said.m_underlined = font.GetUnderlined() && !ordinary.GetUnderlined();
-		said.m_strikethrough = font.GetStrikethrough() && !ordinary.GetStrikethrough();
+		if (static_cast<int>(font.m_pointSize) != static_cast<int>(ordinary.m_pointSize))
+			said.m_pointSize = static_cast<int>(font.m_pointSize);
+		if (font.m_weight != ordinary.m_weight)
+			said.m_weight = font.m_weight;
+		if (font.m_style != ordinary.m_style)
+			said.m_style = font.m_style;
+		if (!ibString(font.m_faceName).IsSameAs(ordinary.m_faceName, false))
+			said.m_face = font.m_faceName;
+		said.m_underlined = font.m_underlined && !ordinary.m_underlined;
+		said.m_strikethrough = font.m_strikethrough && !ordinary.m_strikethrough;
 		return said;
 	}
 
 	bool IsSaid() const {
-		return m_pointSize > 0 || m_weight > 0 || m_style != wxFONTSTYLE_MAX || !m_face.IsEmpty()
+		return m_pointSize > 0 || m_weight > 0 || m_style != 0 || !m_face.IsEmpty()
 			|| m_underlined || m_strikethrough;
 	}
 	// …read as the two flags a grid and a word have: bold (semibold and heavier), italic (or slanted).
-	bool IsBold() const { return m_weight >= wxFONTWEIGHT_SEMIBOLD; }
-	bool IsItalic() const { return m_style == wxFONTSTYLE_ITALIC || m_style == wxFONTSTYLE_SLANT; }
+	bool IsBold() const { return m_weight >= ibFONTWEIGHT_SEMIBOLD; }
+	bool IsItalic() const { return m_style == ibFONTSTYLE_ITALIC || m_style == ibFONTSTYLE_SLANT; }
 	// …each part another says replaces this one's, the rest stands — a bold rule and an italic one make bold italic.
 	void Say(const ibCompositionFont& other) {
 		if (other.m_pointSize > 0)                 m_pointSize = other.m_pointSize;
 		if (other.m_weight > 0)                    m_weight = other.m_weight;
-		if (other.m_style != wxFONTSTYLE_MAX)      m_style = other.m_style;
+		if (other.m_style != 0)                    m_style = other.m_style;
 		if (!other.m_face.IsEmpty())               m_face = other.m_face;
 		m_underlined = m_underlined || other.m_underlined;
 		m_strikethrough = m_strikethrough || other.m_strikethrough;
 	}
 	// THE CELL'S FONT with what is said laid on it.
-	wxFont Over(wxFont font) const {
-		if (m_pointSize > 0)                 font.SetPointSize(m_pointSize);
-		if (m_weight > 0)                    font.SetNumericWeight(m_weight);
-		if (m_style != wxFONTSTYLE_MAX)      font.SetStyle(m_style);
-		if (!m_face.IsEmpty())               font.SetFaceName(m_face);
-		if (m_underlined)                    font.SetUnderlined(true);
-		if (m_strikethrough)                 font.SetStrikethrough(true);
+	ibFont Over(ibFont font) const {
+		if (m_pointSize > 0)                 font.m_pointSize = m_pointSize;
+		if (m_weight > 0)                    font.m_weight = m_weight;
+		if (m_style != 0)                    font.m_style = static_cast<ibFontStyle>(m_style);
+		if (!m_face.IsEmpty())               font.m_faceName = m_face;
+		if (m_underlined)                    font.m_underlined = true;
+		if (m_strikethrough)                 font.m_strikethrough = true;
 		return font;
 	}
 };
@@ -252,11 +253,11 @@ struct ibCompositionFont {
 // border, an indent — and that is added HERE, where every driver reads it. Unset — not IsOk, wxALIGN_INVALID, no
 // text, no format — is the driver's own.
 struct BACKEND_API ibCompositionAttr {
-	wxColour m_backgroundColour;
-	wxColour m_textColour;
-	ibCompositionFont m_font;                           // said part by part, over the cell's own (Over)
+	ibColour m_backgroundColour;
+	ibColour m_textColour;
+	ibCompositionFont m_font;                          // said part by part, over the cell's own (Over)
 	int      m_horizontalAlignment = wxALIGN_INVALID;   // wxALIGN_LEFT / wxALIGN_CENTER_HORIZONTAL / wxALIGN_RIGHT
-	std::optional<wxString> m_text;                    // what the cell says in place of its value — an empty one too
+	std::optional<ibString> m_text;                    // what the cell says in place of its value — an empty one too
 	// …else the Format its value is written in, instead of its column's — parsed once, when the rule was made ready
 	// (ibCompositionRulesOf), and shared by every cell it is laid on; the text a driver writes with it anyway.
 	std::shared_ptr<const ibFormatString> m_format;
@@ -284,7 +285,7 @@ struct BACKEND_API ibCompositionAttr {
 
 	// …AND WHAT A CELL SAYS UNDER IT — its Text where one is in force, else `value` in its Format. False where neither
 	// is: the cell says its value as its own column writes it (the driver's own format).
-	bool TextOf(const ibValue& value, wxString& text) const;
+	bool TextOf(const ibValue& value, ibString& text) const;
 };
 
 // …AS A DRIVER KEEPS A ROW OF THEM — the row's own and each column's under the id the reader files the column's value

@@ -12,19 +12,26 @@
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectEnumeration::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 
+ibValueReferenceDataObject* ibValueManagerDataObjectEnumeration::EmptyRef() const
+{
+	return ibValueReferenceDataObject::Create(m_metaObject);
+}
+
 enum Func {
 	eGetForm,
 	eGetListForm,
 	eGetSelectForm,
 	eGetTemplate,
+	eEmptyRef
 };
 
 void ibValueManagerDataObjectEnumeration::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));
-	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(name : string, owner : any, id : guid)"));
-	helper.AppendFunc(wxT("GetSelectForm"), 3, wxT("GetSelectForm(name : string, owner : any, id : guid)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(ibT("GetSelectForm"), 3, ibT("GetSelectForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
+	helper.AppendFunc(ibT("EmptyRef"), ibT("EmptyRef()"));
 
 	//fill custom attributes
 	for (auto object : m_metaObject->GetEnumObjectArray()) {
@@ -86,6 +93,9 @@ bool ibValueManagerDataObjectEnumeration::CallAsFunc(const long lMethodNum, ibVa
 	}
 	case eGetTemplate:
 		pvarRetValue = m_metaObject->GetTemplate(paParams[0]->GetString());
+		return true;
+	case eEmptyRef:
+		pvarRetValue = EmptyRef();
 		return true;
 
 	}

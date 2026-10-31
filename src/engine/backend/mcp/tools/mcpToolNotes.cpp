@@ -35,7 +35,7 @@
 
 namespace {
 
-ibMetaData* OpenConfiguration(wxString& refusal)
+ibMetaData* OpenConfiguration(ibString& refusal)
 {
 	ibMetaData* metaData = activeMetaData;
 
@@ -75,20 +75,20 @@ struct ibNotedPlace {
 	size_t                   m_score;
 };
 
-void Score(ibValueMetaObject* object, const wxString& query, size_t& asked, size_t& best,
+void Score(ibValueMetaObject* object, const ibString& query, size_t& asked, size_t& best,
 	std::vector<ibNotedPlace>& into)
 {
 	if (object == nullptr || object->IsDeleted())
 		return;
 
-	const wxString help = object->GetHelpContent();
-	const wxString notes = object->GetNoteContent();
+	const ibString help = object->GetHelpContent();
+	const ibString notes = object->GetNoteContent();
 
 	// Only what carries a text: a bare name is what metadata_list answers, and every attribute called
 	// Stock would stand in front of the one report that says what stock is.
 	if (!help.IsEmpty() || !notes.IsEmpty()) {
-		const wxString haystack = object->GetName() + wxT("\n") + object->GetSynonym() + wxT("\n")
-			+ help + wxT("\n") + notes;
+		const ibString haystack = object->GetName() + ibT("\n") + object->GetSynonym() + ibT("\n")
+			+ help + ibT("\n") + notes;
 		const size_t score = ibMcpWordsFound(haystack, query, &asked);
 		if (score > 0) {
 			best = std::max(best, score);
@@ -106,7 +106,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgHelp()
 {
-	static const ibArg s_a(wxT("help"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("help"), ibArg::Kind::Flag,
 		ibMcpText("Include the user-facing help text as well as the notes. Off by default: the two "
 		  "are written for different readers, and mixing them is how one ends up in the "
 		  "other."));
@@ -115,7 +115,7 @@ const ibArg& ArgHelp()
 
 const ibArg& ArgId()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("One object's NodeId, and everything under it. Omit for the whole configuration - "
 			  "which is the usual way to ask."));
 	return s_a;
@@ -123,18 +123,18 @@ const ibArg& ArgId()
 
 const ibArg& ArgText()
 {
-	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("text"), ibArg::Kind::Text,
 		ibMcpText("The markdown. Empty clears what is there."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgTarget()
 {
-	static const ibArg s_a(wxT("target"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("target"), ibArg::Kind::Text,
 		ibMcpText("Which text: `notes` - why this exists, for whoever builds the configuration; or "
 			  "`help` - what this is and what to put in it, shown to the person USING the "
 			  "application when they press F1. Different readers, different words."),
-			/*required*/ true, { wxT("notes"), wxT("help") });
+			/*required*/ true, { ibT("notes"), ibT("help") });
 	return s_a;
 }
 
@@ -147,14 +147,14 @@ const ibArg& ArgTarget()
 class ibMcpToolNoteRead : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("note_read"); }
+	ibString GetName() const override { return ibT("note_read"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("reading what is known about this configuration");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Everything recorded ABOUT this configuration, in one answer: the markdown NOTES - "
 			"how each thing actually works inside, what was decided, what was tried and rejected - "
@@ -180,14 +180,14 @@ public:
 	//
 	// Ranked the corpus's way: everything that met every word if anything did, otherwise the best there was,
 	// marked "k of your n words".
-	void FindInside(const wxString& query, std::vector<ibDataValue>& places) const override
+	void FindInside(const ibString& query, std::vector<ibDataValue>& places) const override
 	{
 		if (query.IsEmpty())
 			return;
 
 		// Through the notes' one door to the configuration, as the notes' own commands go; with nothing open
 		// there is simply nothing of this configuration to offer, and the refusal is nobody's to hear.
-		wxString refusal;
+		ibString refusal;
 		ibMetaData* const metaData = OpenConfiguration(refusal);
 		if (metaData == nullptr)
 			return;
@@ -210,27 +210,27 @@ public:
 			ibMcpSayObject(place.m_object, *hit, /*withText*/ false);
 
 			if (partial)
-				hit->SetValue(wxT("matched"), wxString::Format(
+				hit->SetValue(ibT("matched"), ibString::Format(
 					ibMcpText("%i of your %i words"), (int)place.m_score, (int)asked));
 
 			// The line that met the words, and which text it stands in - the help first, because it is
 			// written in the words of the people who ask.
-			wxString line = ibMcpMatchingLine(place.m_object->GetHelpContent(), query);
-			wxString text = wxT("help");
+			ibString line = ibMcpMatchingLine(place.m_object->GetHelpContent(), query);
+			ibString text = ibT("help");
 			if (line.IsEmpty()) {
 				line = ibMcpMatchingLine(place.m_object->GetNoteContent(), query);
-				text = wxT("notes");
+				text = ibT("notes");
 			}
 			if (!line.IsEmpty()) {
-				hit->SetValue(wxT("text"), text);
-				hit->SetValue(wxT("line"), line);
+				hit->SetValue(ibT("text"), text);
+				hit->SetValue(ibT("line"), line);
 			}
 
 			places.push_back(ibDataValue::Child(hit));
 		}
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaData* metaData = OpenConfiguration(refusal);
 		if (metaData == nullptr)
@@ -238,11 +238,11 @@ public:
 
 		ibValueMetaObject* from = nullptr;
 
-		if (const ibDataValue* asked = params.FindField(ArgId().Name())) {
+		if (auto asked = params.FindField(ArgId().Name())) {
 			if (asked->Kind() == ibDataKind::Number) {
 				from = ibFindMetaObjectById(metaData, (ibMetaID)asked->AsInt());
 				if (from == nullptr) {
-					refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %s."),
+					refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
 						asked->AsNumber().ToString());
 					return false;
 				}
@@ -262,13 +262,13 @@ public:
 		std::vector<ibDataValue> entries;
 		Collect(from, /*wantNotes*/ true, wantHelp, entries);
 
-		result.AddField(wxT("recorded"), ibDataValue::Int((s64)entries.size()));
-		result.AddField(wxT("objects"), ibDataValue::Array(entries));
+		result.AddField(ibT("recorded"), ibDataValue::Int((std::int64_t)entries.size()));
+		result.AddField(ibT("objects"), ibDataValue::Array(entries));
 
 		// ⭐ SAID PLAINLY, because an empty list is also what a broken read looks like — and
 		// because "nothing is written down" is itself the most actionable answer this tool has.
 		if (entries.empty()) {
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("Nothing is recorded yet. note_write puts it there - and what is worth writing "
 				  "is the reasoning a later reader cannot recover from the objects themselves."));
 		}
@@ -286,14 +286,14 @@ MCP_TOOL_REGISTER(ibMcpToolNoteRead);
 class ibMcpToolNoteWrite : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("note_write"); }
+	ibString GetName() const override { return ibT("note_write"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("writing notes on '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("writing notes on '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Write one of the two texts an object carries, saying WHICH every time. `notes` "
 			"records what a later reader could not work out from the object itself - why it "
@@ -310,9 +310,9 @@ public:
 	// WHAT IS ABOUT TO BE WRITTEN, shown to the person it is being written about. Notes and help
 	// are prose meant to be read, so there is no reason to make them go and open a dialog to find
 	// out what an assistant put there in their name.
-	wxString GetDetail(const ibDataNode& params) const override
+	ibString GetDetail(const ibDataNode& params) const override
 	{
-		return ibMcpFencedExcerpt(ArgText().Text(params), wxT("markdown"));
+		return ibMcpFencedExcerpt(ArgText().Text(params), ibT("markdown"));
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -321,21 +321,21 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMetaData* metaData = OpenConfiguration(refusal);
 		if (metaData == nullptr)
 			return false;
 
-		const ibDataValue* asked = params.FindField(ArgId().Name());
-		if (asked == nullptr || asked->Kind() != ibDataKind::Number) {
+		auto asked = params.FindField(ArgId().Name());
+		if (!asked || asked->Kind() != ibDataKind::Number) {
 			refusal = ibMcpText("No id given.");
 			return false;
 		}
 
 		ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)asked->AsInt());
 		if (object == nullptr) {
-			refusal = wxString::Format(ibMcpText("Nothing in this configuration has id %s."),
+			refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
 				asked->AsNumber().ToString());
 			return false;
 		}
@@ -343,18 +343,18 @@ public:
 		// ⚠ THE KIND IS CHECKED. GetValue<wxString> answers empty for anything that is not a
 		// String, so an object sent here would CLEAR the notes and report success — the same trap
 		// that cost an evening on module_write.
-		const ibDataValue* incoming = params.FindField(ArgText().Name());
+		auto incoming = params.FindField(ArgText().Name());
 
-		if (incoming == nullptr || incoming->Kind() != ibDataKind::String) {
+		if (!incoming || incoming->Kind() != ibDataKind::String) {
 			refusal = ibMcpText("'text' must be a string. Nothing was written.");
 			return false;
 		}
 
-		const wxString text = incoming->AsString();
+		const ibString text = incoming->AsString();
 
-		const wxString target = ArgTarget().Text(params);
+		const ibString target = ArgTarget().Text(params);
 
-		if (!target.IsSameAs(wxT("notes"), false) && !target.IsSameAs(wxT("help"), false)) {
+		if (!target.IsSameAs(ibT("notes"), false) && !target.IsSameAs(ibT("help"), false)) {
 			refusal = ibMcpText("Say which text: 'notes' for the engineering intent, 'help' for what the "
 				"person using the application reads. Nothing was written.");
 			return false;
@@ -377,35 +377,35 @@ public:
 		// That is what makes the write the right place to ask: at the read there is nobody left who
 		// knows what was meant, while here the author is still holding it.
 		std::vector<ibDataValue> links;
-		std::set<wxLongLong_t> seen;
+		std::set<long long> seen;
 
 		if (ibMcpSayObjectLinks(text, metaData, links, seen) > 0) {
 
 			// Only the OFFENDING links are named. A note may carry a dozen good ones, and a
 			// refusal that lists them all makes the caller find the fault itself.
-			wxString says;
+			ibString says;
 			for (const ibDataValue& one : links) {
 
-				const std::shared_ptr<ibDataNode>& link = one.AsChild();
+				const auto link = one.AsChild();
 				if (!link)
 					continue;
 
-				const wxString label = link->GetValue<wxString>(wxT("label"));
+				const ibString label = link->GetValue<ibString>(ibT("label"));
 
 				// The id is stored as a number, so it is read as one — GetValue<wxString> on an
 				// Int answers empty, and the refusal would name every bad link as `oes:`.
-				const ibDataValue* number = link->FindField(wxT("id"));
-				const wxString said = wxString::Format(wxT("[%s](oes:%d)"), label,
-					(number != nullptr) ? (int)number->AsInt() : 0);
+				auto number = link->FindField(ibT("id"));
+				const ibString said = ibString::Format(ibT("[%s](oes:%d)"), label,
+					number ? (int)number->AsInt() : 0);
 
-				if (link->FindField(wxT("broken")) != nullptr) {
-					says << wxT("\n  ") << said
-						 << wxT(" - nothing in this configuration carries that id");
+				if (link->Has(ibT("broken"))) {
+					says << ibT("\n  ") << said
+						 << ibT(" - nothing in this configuration carries that id");
 				}
-				else if (link->FindField(wxT("agrees")) != nullptr) {
-					says << wxT("\n  ") << said << wxT(" - that id is ")
-						 << link->GetValue<wxString>(wxT("resolves")) << wxT(", a ")
-						 << link->GetValue<wxString>(wxT("kind"));
+				else if (link->Has(ibT("agrees"))) {
+					says << ibT("\n  ") << said << ibT(" - that id is ")
+						 << link->GetValue<ibString>(ibT("resolves")) << ibT(", a ")
+						 << link->GetValue<ibString>(ibT("kind"));
 				}
 			}
 
@@ -419,7 +419,7 @@ public:
 			return false;
 		}
 
-		const bool toHelp = target.IsSameAs(wxT("help"), false);
+		const bool toHelp = target.IsSameAs(ibT("help"), false);
 
 		if (toHelp)
 			object->SetHelpContent(text);
@@ -432,7 +432,7 @@ public:
 		// than a claim about it. "Written" is true of a write that stored nothing; only the
 		// object can say what it holds, and this is the one place that asks it.
 		ibMcpSayObject(object, result, /*withText*/ true);
-		result.SetValue(wxT("wrote"), wxString(toHelp ? wxT("help") : wxT("note")));
+		result.SetValue(ibT("wrote"), ibString(toHelp ? ibT("help") : ibT("note")));
 
 		return true;
 	}

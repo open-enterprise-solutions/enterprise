@@ -18,7 +18,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// grouped aggregation\nvar q = New Query(\n    \"SELECT Producer, SUM(Weight) AS TotalWeight \" +\n    \"FROM Catalog.Products GROUP BY Producer HAVING SUM(Weight) > 50\");\nvar sel = q.Execute().Select();\nwhile (sel.Next())\n    Message(sel.Producer + \" -> \" + sel.TotalWeight);",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "cls.Query",
     "cls.QueryResult",
@@ -46,7 +46,7 @@
    "parameters": "text — the query text (see \"Query language — overview\").",
    "return_descr": "Execute() returns a QueryResult.",
    "example": "// one parse — many executions\nvar q = New Query(\"SELECT * FROM Catalog.Products WHERE Price > &P\");\nq.SetParameter(\"P\", 100);\nvar expensive = q.Execute();\nq.SetParameter(\"P\", 10);\nvar most = q.Execute();",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "guide.query",
     "cls.QueryResult",
@@ -68,7 +68,7 @@
    "parameters": "",
    "return_descr": "Select() returns a QuerySelect; Unload() returns a Table.",
    "example": "var q = New Query(\"SELECT G.Description AS Name, G.Price AS Price FROM Catalog.Goods AS G\");\nvar t = q.Execute().Unload();\nMessage(String(t.Count()) + \" goods, \" + String(t.Total(\"Price\")) + \" in all\");",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "cls.Query",
     "cls.QuerySelect",
@@ -91,7 +91,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// recursive walk of the totals tree\nProcedure Walk(sel, indent) {\n    while (sel.Next()) {\n        Message(indent + sel.Warehouse + \" = \" + sel.Quantity);\n        if (sel.HasChildren())\n            Walk(sel.Select(), indent + \"  \");\n    }\n}",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "cls.QueryResult",
     "q.Totals"
@@ -112,7 +112,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.From",
     "q.GroupBy",
@@ -135,7 +135,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// balances as of a date, filtered outside\nSELECT Item, QuantityBalance\nFROM AccumulationRegister.Stock.Balance(&Period)\nWHERE QuantityBalance > 0",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.Join",
     "q.Select",
@@ -157,7 +157,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.From",
     "q.Where",
@@ -180,7 +180,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// IN with a subquery\nSELECT * FROM Document.Expense\nWHERE Partner IN (SELECT Ref FROM Catalog.Partners WHERE Region = &R)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.Params",
     "q.DotWalk",
@@ -202,7 +202,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.Select",
     "q.Totals",
@@ -224,7 +224,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.Select",
     "q.Union",
@@ -246,7 +246,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// the whole package, read by position\nvar q = New Query(\n    \"SELECT M.Goods AS Goods, SUM(M.Quantity) AS Qty INTO Folded \" +\n    \"FROM AccumulationRegister.Stock AS M GROUP BY M.Goods; \" +\n    \"SELECT f.Goods AS Goods, f.Qty AS Qty FROM Folded AS f\");\nvar results = q.ExecuteBatch();\nvar sel = results.Get(1).Select();          // [0] is the INTO statement's row count\nwhile (sel.Next())\n    Message(String(sel.Goods) + \" = \" + String(sel.Qty));",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.From",
     "q.GroupBy",
@@ -268,7 +268,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// walk: warehouse nodes -> item nodes (by hierarchy) -> rows\nvar sel = q.Execute().Select();\nwhile (sel.Next()) {\n    Message(\"Warehouse \" + sel.Warehouse + \": \" + sel.Quantity);\n    var byItem = sel.Select();\n    while (byItem.Next())\n        Message(\"  \" + byItem.Item + \": \" + byItem.Quantity);\n}",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "cls.QuerySelect",
     "q.GroupBy",
@@ -290,7 +290,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// the stock of each item at the start and the end of each month\nvar q = new Query(\"SELECT T.Item AS Item, T.Period AS Period, \"\n    + \"T.QuantityOpeningBalance AS Opening, T.QuantityClosingBalance AS Closing \"\n    + \"FROM AccumulationRegister.Stock.BalanceAndTurnovers(&B, &E, Day) AS T \"\n    + \"TOTALS SUM(Opening), SUM(Closing) BY Item, Period PERIODS(MONTH)\");\nq.SetParameter(\"B\", Date(2026, 1, 1));\nq.SetParameter(\"E\", Date(2026, 3, 31, 23, 59, 59));\nvar items = q.Execute().Select();\nwhile (items.Next()) {\n    var months = items.Select();\n    while (months.Next())\n        Message(items.Item + \" \" + months.Period + \": \" + months.Opening + \" -> \" + months.Closing);\n}",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.Totals",
     "q.Select"
@@ -311,7 +311,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.Select",
     "q.OrderBy"
@@ -332,7 +332,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "cls.Query",
     "q.Where",
@@ -355,7 +355,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// tag each union branch with a predefined catalog item\nSELECT Ref, value(Catalog.DocKinds.Incoming) AS Kind FROM Document.Receipt\nUNION ALL\nSELECT Ref, value(Catalog.DocKinds.Outgoing) AS Kind FROM Document.Expense",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.Params",
     "q.Where",
@@ -377,7 +377,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// a composite reference: the attribute exists on a few recorder types only\nSELECT Recorder.Partner AS Who, SUM(Quantity) AS Q\nFROM AccumulationRegister.Stock\nGROUP BY Recorder.Partner",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.Where",
     "q.Select",
@@ -399,7 +399,7 @@
    "parameters": "",
    "return_descr": "Number.",
    "example": "// how much left the warehouse per weekday\nSELECT WEEKDAY(M.Period) AS Weekday, SUM(M.Quantity) AS Qty\nFROM AccumulationRegister.Stock AS M\nGROUP BY WEEKDAY(M.Period)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.PeriodBounds",
     "q.DateAdd",
@@ -421,7 +421,7 @@
    "parameters": "",
    "return_descr": "Date.",
    "example": "// everything written this quarter\nSELECT Doc.Ref AS Doc\nFROM Document.Expense AS Doc\nWHERE Doc.Date BETWEEN BEGINOFPERIOD(&AsOf, Quarter) AND ENDOFPERIOD(&AsOf, Quarter)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.DateParts",
     "q.DateAdd",
@@ -443,7 +443,7 @@
    "parameters": "",
    "return_descr": "Date.",
    "example": "// invoices past their thirty days\nSELECT Doc.Ref AS Doc\nFROM Document.Expense AS Doc\nWHERE DATEADD(Doc.Date, Day, 30) < &Today",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.DateDiff",
     "q.PeriodBounds"
@@ -464,7 +464,7 @@
    "parameters": "",
    "return_descr": "Number — whole periods.",
    "example": "// how long each price held\nSELECT P.Period AS Since,\n\tDATEDIFF(P.Period, ISNULL(MIN(N.Period), &Till), Day) AS Days\nFROM InformationRegister.Prices AS P\n\tLEFT JOIN InformationRegister.Prices AS N\n\t\tON N.Item = P.Item AND N.Period > P.Period\nGROUP BY P.Item, P.Period",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.DateAdd",
     "q.DateParts"
@@ -485,7 +485,7 @@
    "parameters": "",
    "return_descr": "Date.",
    "example": "SELECT Doc.Ref AS Doc\nFROM Document.Expense AS Doc\nWHERE Doc.Date BETWEEN DATETIME(2026, 1, 1) AND DATETIME(2026, 3, 31, 23, 59, 59)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.PeriodBounds",
     "q.Params"
@@ -506,7 +506,7 @@
    "parameters": "",
    "return_descr": "String.",
    "example": "// how many items per code prefix\nSELECT SUBSTRING(G.Code, 1, 3) AS Prefix, COUNT(*) AS Items\nFROM Catalog.Goods AS G\nGROUP BY SUBSTRING(G.Code, 1, 3)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.Select"
    ],
@@ -526,7 +526,7 @@
    "parameters": "",
    "return_descr": "Boolean (a predicate).",
    "example": "// the number of the document behind each movement of one kind\nSELECT\n\tCAST(M.Recorder AS Document.Expense).Number AS ExpenseNo,\n\tM.Quantity AS Qty\nFROM AccumulationRegister.Stock AS M\nWHERE VALUETYPE(M.Recorder) = TYPE(Document.Expense)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Thin client, Server",
    "see_also": [
     "q.Value",
     "q.DotWalk"

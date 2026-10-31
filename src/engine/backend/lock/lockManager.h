@@ -13,7 +13,7 @@
 // LOCK) in record-locks Phase 5-7. sys_lock is exclusively for locks
 // that need to live longer than a transaction.
 //
-// Cluster-aware via the DB table — multiple wenterprise-server.exe
+// Cluster-aware via the DB table — multiple
 // processes on one .fdb see each other's sys_lock rows. Cleanup on
 // session end / zombie sweep handled by ibSessionRegistry (Phase B.2).
 //
@@ -37,12 +37,12 @@
 struct BACKEND_API ibLockSnapshotRow {
 	ibGuid       lockGuid;
 	ibGuid       sessionGuid;
-	wxString     namespaceName;
-	wxString     keyData;          // human-readable canonical key
+	ibString     namespaceName;
+	ibString     keyData;          // human-readable canonical key
 	ibLockMode   lockMode;
 	ibDateTime   acquiredAt;
-	wxString     userName;
-	wxString     computer;
+	ibString     userName;
+	ibString     computer;
 };
 
 class BACKEND_API ibLockManager {

@@ -41,20 +41,20 @@ enum Func {
 void ibValueManagerDataObjectJob::FillManagerMethods(ibMemberTable& helper) const
 {
 	// Order is load-bearing — CallAsFunc switches on the method index (eCreateElement = 0 …).
-	helper.AppendFunc(wxT("CreateElement"), wxT("CreateElement()"));
-	helper.AppendFunc(wxT("CreateGroup"), wxT("CreateGroup()"));
-	helper.AppendFunc(wxT("Select"), wxT("Select()"));
-	helper.AppendFunc(wxT("FindByCode"), 1, wxT("FindByCode(code : string)"));
-	helper.AppendFunc(wxT("FindByDescription"), 2, wxT("FindByDescription(descr : string, exact = true : boolean)"));
+	helper.AppendFunc(ibT("CreateElement"), ibT("CreateElement()"));
+	helper.AppendFunc(ibT("CreateGroup"), ibT("CreateGroup()"));
+	helper.AppendFunc(ibT("Select"), ibT("Select()"));
+	helper.AppendFunc(ibT("FindByCode"), 1, ibT("FindByCode(code : string)"));
+	helper.AppendFunc(ibT("FindByDescription"), 2, ibT("FindByDescription(descr : string, exact = true : boolean)"));
 	// RUN ONE ROW by reference, ignoring its schedule — the script-side twin of the list command,
 	// and the same single entry the tick uses. Without it a job could only be exercised by waiting
 	// out its interval, which makes "is the job wrong or is the manager wrong?" unanswerable.
-	helper.AppendFunc(wxT("Execute"), 1, wxT("Execute(job : reference)"));
-	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));
-	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(name : string, owner : any, id : guid)"));
-	helper.AppendFunc(wxT("GetSelectForm"), 3, wxT("GetSelectForm(name : string, owner : any, id : guid)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	helper.AppendFunc(wxT("EmptyRef"), wxT("EmptyRef()"));
+	helper.AppendFunc(ibT("Execute"), 1, ibT("Execute(job : reference)"));
+	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(ibT("GetSelectForm"), 3, ibT("GetSelectForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
+	helper.AppendFunc(ibT("EmptyRef"), ibT("EmptyRef()"));
 }
 
 bool ibValueManagerDataObjectJob::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)

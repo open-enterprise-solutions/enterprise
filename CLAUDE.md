@@ -6,26 +6,26 @@ This file gives an AI assistant (Claude Code or similar) the context needed to w
 
 ## What This Project Is
 
-**Open Enterprise Solutions (OES)** is a C++17 cross-platform low-code enterprise application platform. It lets developers define business applications through metadata (object types, forms, modules) and a built-in scripting language, without writing low-level code.
+**Open Enterprise Solutions (OES)** is a C++20 cross-platform low-code enterprise application platform. It lets developers define business applications through metadata (object types, forms, modules) and a built-in scripting language, without writing low-level code.
 
 **"Cross-platform" here is measured, not aspirational.** The platform core — metadata, the
 language and its compiler, the bytecode interpreter, the query engine, the database layer and the
 form layer — builds from one code base and runs an **identical suite** under three toolchains on
 two architectures: MSVC on Windows x64, GCC on Linux x64, and Apple Clang on macOS 14 **arm64**.
-Every application (`enterprise`, `designer`, `appserver`, `launcher`, `codeRunner`, `simplePlugin`)
+Every application (`enterprise-thin`, `designer-thin`, `appserver`, `launcher`, `codeRunner`, `simplePlugin`)
 links on every platform.
 
 The suite GROWS, so the number here is a reading and not a property: **919** on 2026-08-03 when
 the three jobs first agreed, **1166** on 2026-08-07 (1197 `TEST` cases live in `tests/`; CI's
-`ctest -E` holds back the two targets that need a display or a live PostgreSQL, and runs them in
-jobs of their own — the GUI suite is 38). Locally, with nothing excluded, `ctest` reports 1208.
+`ctest -E` holds back the target that needs a live PostgreSQL, and runs it in a job of its own).
+Locally, with nothing excluded, `ctest` reports 1208.
 Read the current figure off the last run rather than from here.
 
-Two boundaries, so the claim is not read wider than it is: the **web** targets
-(`wenterprise-server`, `wfrontend`) build under CMake only with `-DOES_BUILD_WEB=ON`, which CI does
-not set — so a break in the web keeps CI green; and of the five drivers, all compile everywhere but
-only **SQLite executes** in CI — Firebird and PostgreSQL load their clients at run time, which
-the runners do not have. Details and the day's findings: [docs/portability.md](docs/portability.md).
+One boundary, so the claim is not read wider than it is: of the five drivers, all compile everywhere and
+**SQLite executes** in every job — Firebird and PostgreSQL load their clients at run time, which the
+general runners do not have, so each executes in a job of its own: `tests-firebird` (the pinned
+Firebird 5 kit laid out as `_fb/`, the embedded engine) and `tests-postgres` (a live PostgreSQL 16).
+Details and the day's findings: [docs/portability.md](docs/portability.md).
 
 The runtime executes compiled bytecode, renders forms through wxWidgets, and stores all application data in a relational database (Firebird by default).
 
@@ -35,13 +35,13 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 
 | Area | Technology |
 |---|---|
-| Language | C++17 |
-| GUI | wxWidgets 3.3.2 (git submodule at `src/3rdparty/wxWidgets`) |
-| Build (Windows) | MSBuild — `enterprise.sln` (Visual Studio 2019/2022) |
+| Language | C++20 (no modules) |
+| GUI | wxWidgets 3.3.4 (git submodule at `src/3rdparty/wxWidgets`) |
+| Build (Windows) | MSBuild — `enterprise.sln` (Visual Studio 2022, toolset v143) |
 | Build (cross-platform) | CMake — `CMakeLists.txt` at repo root; macOS / Linux build supported, Windows uses MSBuild |
 | Primary database | Firebird (embedded) |
 | Other databases | PostgreSQL (production), ODBC (CMake `OES_USE_*` opt-in, and the base an MSSQL layer derives from); SQLite is always embedded but is for **tests and logging only, never production** |
-| License | PolyForm Noncommercial 1.0.0 — source-available, **not** open source (LICENSE.md). Noncommercial use and evaluation (a business trying it before deciding) are free; commercial use needs a license from the licensor, and that license covers the licensor's own builds only. Releases up to 2026-08-22 stay under the LGPL 2.1 they were published with. The wxWidgets-derived widget sources keep the wxWindows Library Licence — see NOTICE.md |
+| License | PolyForm Noncommercial 1.0.0 — source-available, **not** open source (LICENSE.md). Noncommercial use and evaluation (a business trying it before deciding) are free; commercial use needs a license from the licensor, and that license covers the licensor's own builds only. The wxWidgets-derived widget sources keep the wxWindows Library Licence — see NOTICE.md |
 
 ---
 
@@ -49,13 +49,14 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 
 ```
 enterprise/
-├── enterprise.sln           # MSBuild solution (17 C++ projects; folders: services / exec / plugins / 3rdparty)
+├── enterprise.sln           # MSBuild solution (18 C++ projects; folders: services / exec / plugins / 3rdparty)
 ├── Common.props             # Shared output paths and macros
 ├── ConfigurationDefs.props  # Per-configuration preprocessor defines
 ├── CLAUDE.md                # This file
 ├── docs/                     # PUBLIC documentation — start with README.md
 │   ├── README.md             # map of the public documents
 │   ├── development.md        # HOW WE WORK — pull requests, commits, code and design rules, tests
+│   ├── writing-code.md       # HOW WE WRITE CODE — names, classes, holders, refusals, the diff
 │   ├── ai-context.md         # READ FIRST if you are an AI generating metadata / scripts
 │   ├── ARCHITECTURE.md
 │   ├── BUILD.md
@@ -121,23 +122,23 @@ enterprise/
 │       ├── restructure-plan.md   # PLAN — grouping, declaration order, naming (nothing applied)
 │       └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/
-    ├── 3rdparty/wxWidgets/  # Submodule (wxWidgets 3.3.2)
+    ├── 3rdparty/wxWidgets/  # Submodule (wxWidgets 3.3.4)
     └── engine/
         ├── core/            # core.dll     — shared meanings under backend and frmclient: ids, ibString/ibNumber/
         │                    #   ibDateTime/ibGuid, fileSystem, serialize (dataBuilder, JSON), ibCoreException,
         │                    #   ibLocalization, build stamp; wx base only
         ├── backend/         # backend.dll  — engine, compiler, DB, metadata, debugger; links core
-        ├── frontend/        # frontend.dll (desktop UI) + wfrontend.dll (web) projects
         ├── protocol/        # protocol.dll — the client protocol: protocol.h (names/numbers, no deps) + the talking side
         ├── frmserver/       # frmserver.dll — server-side forms, the client host; includes protocol.h only
         ├── frmclient/       # frmclient.dll — the thin client's graphics library; links core and protocol
         ├── fileserver/      # fileserver.dll — a file base loaded into the thin client's process
         ├── enterprise-thin/ # enterprise-thin.exe (thin client)
-        ├── enterprise/      # enterprise.exe (thick client)
-        ├── wenterprise-server/ # web server (wes process)
-        ├── designer/        # designer.exe  (IDE)
+        ├── webserver/       # webserver.exe (the bases' transport for browsers: the site + the client protocol)
+        ├── designer-thin/   # designer-thin.exe (thin designer)
         ├── launcher/        # launcher.exe  (connection chooser)
         ├── appserver/       # appserver.exe (the application server)
+        ├── appcluster/      # appcluster.exe (servers per base, the port and routing, restarts; console or a service)
+        ├── appcluster-tray/ # appcluster-tray.exe (the cluster's tray: its servers, its verbs, starting it)
         ├── codeRunner/      # codeRunner.exe
         └── simplePlugin/    # simplePlugin.dll (example)
 ```
@@ -152,7 +153,7 @@ All database access goes through the abstract `ibDatabaseLayer` interface (`src/
 
 ### 2. ibValue Universal Type
 
-`ibValue` (`src/engine/backend/compiler/value.h`) is the single value type used for all script variables. The tag is the `ibValueTypes` enum (`core/types.h`, `: unsigned char`): primitives `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER`, `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`; references `TYPE_REFFER` (owned, ref-counted) / `TYPE_CONST_REFFER` (non-owned, read-only); object kinds `TYPE_VALUE`, `TYPE_ENUM`, `TYPE_OLE`, `TYPE_FUNCTION` (lambda), `TYPE_ITERATOR`. Arithmetic and comparison operations have type-dispatched variants (the `TYPE_DELTA*` opcode offset scheme in `codeDef.h`).
+`ibValue` (`src/engine/backend/compiler/value.h`) is the single value type used for all script variables. The tag is the `ibValueTypes` enum (`core/core.h`, `: unsigned char`): primitives `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER`, `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`; references `TYPE_REFFER` (owned, ref-counted) / `TYPE_CONST_REFFER` (non-owned, read-only); object kinds `TYPE_VALUE`, `TYPE_ENUM`, `TYPE_OLE`, `TYPE_FUNCTION` (lambda), `TYPE_ITERATOR`. Arithmetic and comparison operations have type-dispatched variants (the `TYPE_DELTA*` opcode offset scheme in `codeDef.h`).
 
 `ibValueMetaObject` extends `ibValue`, meaning metadata objects (Catalog definitions, Document definitions, etc.) can be stored in and returned from script variables.
 
@@ -179,9 +180,9 @@ The compiler is a single-pass recursive descent parser with a deferred-call-reso
 
 ### 4. Two-DLL Architecture
 
-`backend.dll` has zero UI code. `frontend.dll` owns all wxWidgets code. Communication is through abstract C++ interfaces exported by `backend.dll`. This allows the backend to run headless (daemon, codeRunner, service mode).
+`backend.dll` has zero UI code. The wxWidgets GUI is the clients': `frmclient.dll` under `enterprise-thin` and `designer-thin`, and `launcher` / `codeRunner` on wx directly. The forms are `frmserver.dll`'s, which reaches the engine through abstract C++ interfaces exported by `backend.dll` and a client through the protocol. This allows the backend to run headless (daemon, codeRunner, service mode).
 
-Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS`, wx base only): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibAnyValue` (the interface every value answers — the engine's and the client's `ibValue` derive from it, each storing its own way), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, binary + JSON providers), `ibCoreException`, `ibLocalization`, `diagnostics/` (the technology journal — one per process — and the crash guard), `ibProgramFolder` (`programFolder.h` — where `backend.conf`, `lang/`, `plugins/`, `_fb/` and the other programs are looked for: the executable's folder, or on macOS the one that holds the `.app`, never `Contents/MacOS`) and `ibDiagnosticFolder` (where the journal, the dumps and `oes-debug.log` go: the same folder, except `~/Library/Logs/OES` for a program running from a macOS bundle), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
+Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS` and the platform `__IBMSW__` / `__IBOSX__` / `__IBGTK__` in `coreApi.h`; its text is `ibString` throughout — UTF-16, `ibChar` = `char16_t` on every OS, `wc_str()` its one wide boundary — and of wx it keeps the base for `ibString`'s conversion, `_()`, `wxFileConfig`, zip and zlib): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibVariant` (`core/variant.h`, the one value type: a primitive or a counted reference, its lifecycle, serialization and compare, no base, no factory — the engine's `ibValue` adds the runtime and the factory, the thin client's a small factory; `ibVariantPtr<T>` in `core/variant_ptr.h`), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, the binary provider; `provider/` — JSON, XML, files), `json/` and `xml/` (the formats' text), `ibCoreException`, `ibLocalization`, `diagnostics/` (the technology journal — one per process — and the crash guard), `description/` (the schemas both sides share — source path, command path, calc schedule, choice link, home page; ids and nodes, never a value), `query/` (the query language's words: keywords, scalar calls, unfold, balance role), `graphics/` (`ibPicture`, `ibFont`, `ibColour`, `ibPoint`/`ibSize`/`ibRect` — data; the conversion to wx is each side's), `ibProgramFolder` (`fileSystem.h` — where `backend.conf`, `lang/`, `plugins/`, `_fb/` and the other programs are looked for: the executable's folder, or on macOS the one that holds the `.app`, never `Contents/MacOS`) and `ibDiagnosticFolder` (where the journal, the dumps and `oes-debug.log` go: the same folder, except `~/Library/Logs/OES` for a program running from a macOS bundle), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
 
 - Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin; fileserver = backend + frmserver inside the client process.
 - backend links core PUBLIC; every project that links `backend.lib` also links `core.lib`; protocol links core; frmclient links core + protocol. `protocol.h` itself stays dependency-free.
@@ -196,7 +197,7 @@ before that it did not, and every generic boundary (`catch (const std::exception
 let it fall through to `catch (...)`, where the message it carries was thrown away
 at the exact moment something decided to stop. `what()` returns the description as
 **UTF-8 bytes** held once in the exception; `GetErrorDescription()` returns the
-`wxString`. It has a virtual destructor so catching by the base class preserves the
+`ibString`. It has a virtual destructor so catching by the base class preserves the
 dynamic type for `dynamic_cast` and downstream re-catches.
 
 Since 2026-10-08 the base of every refusal is **`ibCoreException`** (`core/exception.h`,
@@ -253,9 +254,9 @@ CLSIDs appear in serialised configuration files and the DB; the kind-typing chan
 
 ```cpp
 // Global macro — std::shared_ptr<ibDatabaseLayer>
-db_query->RunQuery(wxT("INSERT INTO %s ..."), tableName);
+db_query->RunQuery(ibT("INSERT INTO %s ..."), tableName);
 
-ibPreparedStatement* stmt = db_query->PrepareStatement(wxT("SELECT * FROM %s WHERE id = ?"), table);
+ibPreparedStatement* stmt = db_query->PrepareStatement(ibT("SELECT * FROM %s WHERE id = ?"), table);
 stmt->SetParamInt(1, id);
 ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
 ```
@@ -282,7 +283,7 @@ A base's own service (the registry, the job manager, the MCP server) holds its b
 ibProcUnit unit;
 unit.Execute(byteCode);
 ibValue result;
-unit.CallAsFunc(wxT("FunctionName"), result, arg1, arg2);
+unit.CallAsFunc(ibT("FunctionName"), result, arg1, arg2);
 ```
 
 ### Creating a Form
@@ -362,20 +363,24 @@ also written into the technology journal with the accepted list beside it.
 ### Start a client on a folder base
 
 ```cmd
-bin\Win32\Debug\designer.exe   --file=F:\projects\oes-bin\examples\fb_test301
-bin\Win32\Debug\enterprise.exe --file=F:\projects\oes-bin\examples\fb_test301
+bin\Win32\Debug\designer-thin.exe   --file=F:\projects\oes-bin\examples\fb_test301
+bin\Win32\Debug\enterprise-thin.exe --file=F:\projects\oes-bin\examples\fb_test301
 ```
 
-`--file=` is the **folder**, not a `.fdb`. Started with no `--file` and no `--srv`, the designer asks
-for the folder with a picker. Server bases take `--srv` / `--db` / `--usr` / `--pwd` instead; the
-full list is `OnInitCmdLine` in each `mainApp.cpp` (`file`, `srv`, `dbport`, `db`, `user`,
+`--file=` is the **folder**, not a `.fdb`. Started with no `--file`, no `--srv` and no `--address`, the
+designer asks for the folder with a picker. Server bases take `--srv` / `--db` / `--usr` / `--pwd`
+instead, a base an application server serves `--address=oes://server[:port]/<base>`; the full list is
+`OnInitCmdLine` in each `mainApp.cpp` (`address`, `trusted`, `file`, `srv`, `dbport`, `db`, `user`,
 `password`, `ibuser`, `ibpwd`, `locale`).
 
 ### The MCP server — how an assistant reaches the platform
 
-**It lives INSIDE `designer.exe`.** Nothing answers until the designer is running with a
-configuration open — a refused connection means the process is not up, not that the feature is
-missing. It listens on `http://127.0.0.1:3737/` (default; the address, the port and the token are
+**It is the base's (`backend/mcp`, held by `ibApplicationInstance`), so it lives in the process that
+opens the base:** `designer-thin.exe` on a file base (fileserver opens the base in the designer's own
+process), `appserver.exe` for a base it serves when the base's settings switch it on (its port is
+`McpPort` in `server.conf`). Nothing answers until that process is running with a configuration
+open — a refused connection means the process is not up, not that the feature is missing. The
+designer's listens on `http://127.0.0.1:7374/` (default; the address, the port and the token are
 in the designer's own MCP settings, kept per user in the base). The token is minted once, on first
 enable, and never regenerated behind anyone's back.
 
@@ -385,7 +390,7 @@ window that would otherwise stay silent while their configuration is read and ch
 text says exactly this, so the rule teaches itself.
 
 Then the ones worth knowing before starting: `platform_state` (what is open, which dialect),
-`metadata_tree` (the map), `app_run` (start the application; **`restart: true`** after changing a
+`metadata_tree` (the map), `app_run` (start the application — `enterprise-thin` by default, or `webserver`; **`restart: true`** after changing a
 module — a running client keeps the bytecode it came up with), `debug_sandbox` (run statements
 inside a stopped runtime, always rolled back; answers with `microseconds`), and the two journals —
 `journal_read` for what the INSTALLATION did (logins, writes, postings: the accountant's record)
@@ -402,7 +407,7 @@ under the debugger as well as for the designer itself.
 | `master` | Release-tagged commits; stable |
 | `develop` | Active development; target branch for all PRs |
 
-All feature work happens on branches cut from `develop`. Pull requests target `develop`. Releases are merged from `develop` to `master` and tagged. How a pull request is taken, and the rules a change is reviewed against: [docs/development.md](docs/development.md).
+All feature work happens on branches cut from `develop`. Pull requests target `develop`. Releases are merged from `develop` to `master` and tagged. How a pull request is taken, and the rules a change is reviewed against: [docs/development.md](docs/development.md); how the code itself is written: [docs/writing-code.md](docs/writing-code.md).
 
 ---
 
@@ -411,7 +416,7 @@ All feature work happens on branches cut from `develop`. Pull requests target `d
 | Element | Convention | Example |
 |---|---|---|
 | Public classes (backend) | `ib` prefix | `ibDatabaseLayer`, `ibValueMetaObject` |
-| Public classes (frontend) | `ib` prefix | `ibValueForm`, `ibVisualHost` |
+| Public classes (frmserver / frmclient) | `ib` prefix | `ibValueForm`, `ibVisualHost` |
 | Member variables | `m_` prefix | `m_pByteCode`, `m_strName` |
 | Static members | `s_` prefix | `s_instance`, `s_listKeyWord` |
 | Compile-time constants | `g_` prefix | `g_metaCatalogCLSID` |
@@ -504,7 +509,7 @@ beside its forms and templates: what to read and how to fold it. The report name
 bound to that composer. Embedded and external reports both have them, being the same metaobject.
 See [docs/private/report-engine.md](docs/private/report-engine.md) §4f),
 `AccountDimensionKindsTable` (renamed from `SubcontoKindsTable` on 2026-08-12 —
-*subconto* was a calque; the concept is an **account dimension**, «аналитика», and its KIND is a
+*subconto* was a calque; the concept is an **account dimension**, and its KIND is a
 characteristic. The CLSID key `MD_SKTB` stayed, being an opaque body key rather than a name),
 `AccumulationRegisterTotals` (the totals table became a
 metaobject in its own right on 2026-07-29, rather than a bit on the register's id), and
@@ -523,18 +528,32 @@ that tree to bytes (and reads it back).
 
 - **Entry points:** `ibMetaDataConfigurationBase::LoadConfigFromFile(fileName)` /
   `SaveConfigToFile(fileName)` (`metadataConfiguration.h`).
-- **`ibBinaryProvider`** (`dataBuilder.{h,cpp}`) — the internal, owned binary
-  format. This is the round-trip path (Write + Read).
-- **`ibJsonProvider`** (`serialize/jsonProvider.{h,cpp}`) — JSON. `Write` emits JSON for
-  diff/inspection; `Read` is a full parser that reads MESSAGES, never a configuration: the
-  client protocol and MCP parse every JSON-RPC request through it (`rpc/rpcMessage.cpp`, before
-  any login), as does the thin client (`frmclient/backend/serialize/dataProtocol.cpp`), so it
-  refuses nesting past `ibJsonProvider::kMaxNesting` (256). The view is lossy by design (Fields +
-  Properties flatten into one key set, Date → ISO string, synthetic `TypeDesc`), so Write→Read is
-  not a round trip — use `ibBinaryProvider` for that.
+- **`ibBinaryProvider`** (`dataBuilder.{h,cpp}`) — the packet, OES-RPC 1.0: the node's own
+  bytes, the same in memory, in storage and on the client protocol's WebSocket (its layout in
+  `dataBuilder.h`'s header). This is the round-trip path (Write + Read).
+- **`ibJsonProvider`** (`serialize/provider/jsonProvider.{h,cpp}`) — JSON. `Write` emits JSON for
+  diff/inspection; `Read` is a full parser that reads MESSAGES, never a configuration: MCP and
+  the client protocol's HTTP `POST` parse every JSON-RPC request through it (`rpc/rpcMessage.cpp`,
+  before any login), as does the thin client (`frmclient/backend/serialize/dataProtocol.cpp`), so it
+  refuses nesting past `ibJsonProvider::kMaxNesting` (256). The view is lossy by design (Date → ISO
+  string, the type by name with a synthetic `TypeDesc`), so Write→Read is not a round trip — use
+  `ibBinaryProvider`, or `ibXmlProvider` for text.
   A type is named only by the injected `SetTypeResolver` (no built-in fallback — the
   engine's resolvers, e.g. `ibMetaTypeResolver`, name built-in types from the static
   registry); `SetTypeLookup` supplies the name→clsid inverse. Tests: `tests/test_jsonProvider.cpp`.
+- **`ibXmlProvider`** (`serialize/provider/xmlProvider.{h,cpp}`) — the node as XML, on the core's
+  own XML (`core/xml/xmlText.h`, expat). Unlike the JSON view it loses nothing: a field that is not
+  a string names its kind (`Kind="Number|Bool|Date|Binary|Empty|Array"`), a date keeps its
+  milliseconds, a string XML 1.0 cannot hold goes as base64 — Write→Read→Write gives the same text.
+  Refuses nesting past `ibXmlProvider::kMaxNesting` (256); types by the same `SetTypeResolver` /
+  `SetTypeLookup`. Tests: `tests/test_xmlProvider.cpp`.
+- **`ibFileProvider`** (`serialize/provider/fileProvider.{h,cpp}`) — a configuration as a directory
+  of files: `Catalog/Goods/node.json` (the node in `ibJsonProvider`'s form), module texts and
+  binaries beside it, from any depth of a value (`ObjectModule.Module.txt`). Laid out in memory (`files`, one field a file); `Publish` / `Collect`
+  touch the disk. Entry points: `SaveConfigToFiles` / `LoadConfigFromFiles` (a directory, or
+  the set of files), the Designer's *Configuration* menu, MCP `config_export_files` /
+  `config_import_files`. Records and user accounts are excluded.
+  See [configuration-files.md](docs/public/configuration-files.md). Tests: `tests/test_fileProvider.cpp`.
 - The old XML/JSON config layer is **gone**: `metadataConfigurationXML.cpp` /
   `metadataConfigurationJSON.cpp` and the `SaveConfigToXML` / `LoadConfigFromXML`
   / `SaveConfigToJSON` / `LoadConfigFromJSON` methods no longer exist.
@@ -564,7 +583,7 @@ See `docs/private/serialization-io.md` §4a.
 
 ## Compiler Quick Reference
 
-- **Opcodes:** defined in `src/engine/backend/compiler/codeDef.h` as `OPER_*` enumerators. Call-family: `OPER_CALL` (stack-frame named call), `OPER_CALL_CLOSURE` (named call with heap-promoted frame — callee has an inner lambda capturing locals), `OPER_CALL_METHOD` (per-class method dispatched by name string), `OPER_CALL_LINQ` (universal pipeline op dispatched by `ibLinqMethod` enum id, no string lookup), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). Lambda body fences `OPER_LFUNC` (the active materialiser) / `OPER_ENDLFUNC`. (`OPER_FUNC_PTR` is retired — `OPER_LFUNC` materialises the lambda value.) The ternary `?(cond, a, b)` has no opcode of its own: it compiles as If does (`OPER_IF`, the chosen branch writes the result, `OPER_GOTO` over the other), so only the chosen branch runs — a call or a raise in the other one does not happen. (`OPER_ITER`, which computed both, is gone — 2026-10-09.)
+- **Opcodes:** defined in `src/engine/core/compiler/codeDef.h` as `OPER_*` enumerators. Call-family: `OPER_CALL` (stack-frame named call), `OPER_CALL_CLOSURE` (named call with heap-promoted frame — callee has an inner lambda capturing locals), `OPER_CALL_METHOD` (per-class method dispatched by name string), `OPER_CALL_LINQ` (universal pipeline op dispatched by `ibLinqMethod` enum id, no string lookup), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). Lambda body fences `OPER_LFUNC` (the active materialiser) / `OPER_ENDLFUNC`. (`OPER_FUNC_PTR` is retired — `OPER_LFUNC` materialises the lambda value.) The ternary `?(cond, a, b)` has no opcode of its own: it compiles as If does (`OPER_IF`, the chosen branch writes the result, `OPER_GOTO` over the other), so only the chosen branch runs — a call or a raise in the other one does not happen. (`OPER_ITER`, which computed both, is gone — 2026-10-09.)
 - **Keywords:** 63, defined as `KEY_*` enumerators (`KEY_IF`=0 … `KEY_RESTRICT`) in the same file — includes access modifiers (`Public`/`Private`/`Protected`), the memoisation modifier (`Cached` — a SECOND axis that combines with an access one, legal on a Function only), preprocessor (`#Define`/`#Ifdef`/…), the LINQ block (`From`/`Where`/`Select`/`Join`/`Group`/…) and the access-policy filter (`Restrict`). The matching token strings are `s_listKeyWord[]` in `translateCode.cpp`, in lock-step index order with the enum.
 - **Built-in globals:** 94 functions + 6 procedures = 100 as of 2026-09-04, registered in `ibSystemManager` (`src/engine/backend/system/systemManager.cpp`); count drifts as features land — grep `AppendFunc\|AppendProc` for the live total
 - **Syntax modes:** VES (`If…Then…EndIf`, Visual-Basic-style, a legacy business-scripting dialect) and CES (`if (…) { … }`, C-flavoured); both compile to the same bytecode. Mode is process-global on `ibCompileCode::SetCodeStyle()` / `GetCodeStyle()`. **CES is the default** for new configurations (2026-05-10); existing serialised configs preserve their stored Syntax. Wire token in metadata enum still reads `vbs` for back-compat — user-visible label is `ves`.
@@ -588,14 +607,16 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
 ### Runtime infrastructure (landed)
 
 - **Worker pool** — `ibWorkerPool` (`src/engine/backend/session/workerPool.h`) + headless implementation (`workerPoolHeadless.{h,cpp}`). Each session has a queue + an atomic "leased" flag (`workerPoolHeadless.h`); sessionless callers fall back to a `thread_local ibProcUnitState ts_fallbackPUState` in `session.cpp` (`ibSession::GetPUState`).
-- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, config_md5)`**, where `config_md5` holds `ibByteCodeCache::CacheKey` — an MD5 of three things: `kAOTFormatVersion` (`compiler/byteCodeFormat.h`), `kEngineFingerprint` (a SHA-256 of every file under `backend/compiler/` and `backend/system/` — the compiler, the interpreter, the built-in registry — written at build time into a generated `engineFingerprintBuild.h` — by `compiler/engineFingerprint.cmake` under CMake, by the `EngineFingerprint` task of `backend.vcxproj` under MSBuild, one rule and one hash), and the configuration's own digest (`ibMetaData::GetConfigMD5()`). So a configuration save, a compiler change or a new built-in each make every older row unreachable, and `Invalidate()` is hygiene rather than correctness. The build stamp is no longer part of the key (2026-10-10): `core` is not rebuilt when the compiler changes, so a stale blob kept its key. Written by the RUNTIME lazily on first call to a descriptor; the Designer never writes it. See [docs/private/compiler-pipeline.md](docs/private/compiler-pipeline.md) §4a.
+- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, config_md5)`**, where `config_md5` holds `ibByteCodeCache::CacheKey` — an MD5 of three things: `kAOTFormatVersion` (`compiler/byteCodeFormat.h`), `kEngineFingerprint` (a SHA-256 of every file under `backend/compiler/`, `backend/system/` and `core/compiler/` — the compiler, the interpreter, the built-in registry, the translator — written at build time into a generated `engineFingerprintBuild.h` — by `compiler/engineFingerprint.cmake` under CMake, by the `EngineFingerprint` task of `backend.vcxproj` under MSBuild, one rule and one hash), and the configuration's own digest (`ibMetaData::GetConfigMD5()`). So a configuration save, a compiler change or a new built-in each make every older row unreachable, and `Invalidate()` is hygiene rather than correctness. The build stamp is no longer part of the key (2026-10-10): `core` is not rebuilt when the compiler changes, so a stale blob kept its key. Written by the RUNTIME lazily on first call to a descriptor; the Designer never writes it. See [docs/private/compiler-pipeline.md](docs/private/compiler-pipeline.md) §4a.
 - **Per-session runtime image** — each `ibSession` owns `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>` (built in `CreateRoot`; `GetManagerModule()`) and `m_lambdaRuntime : std::unique_ptr<ibProcUnit>` (wired to `m_root`'s procUnit on first `GetLambdaRuntime()`). Designer / codeRunner edit-time managers come from `GetEditModuleManager(metaData)` / `EditModuleManagerFor(metaData)`, kept separate from the per-session runtime root.
 
 ---
 
 ## What Not To Do
 
-- Do not add `#include` for wxWidgets headers in `backend.dll` source files — the backend must remain GUI-free
+- Do not add `#include` for wxWidgets GUI headers in `core.dll` / `protocol.dll` / `backend.dll` / `frmserver.dll`
+  source files — they are compiled with `wxUSE_GUI=0` and link wx base only; a picture, a colour, a font there is the
+  core's data (`core/graphics`)
 - Do not give `core.dll` anything beyond wx base: no wx core/GUI, no base, no script, no metadata — it sits under frmclient as well as backend
 - **Do not raise a MODAL from the engine.** `backend.dll` has no modal boxes of its own (verified
   2026-09-02; the last two were leftovers from when the designer and the engine were one binary —
@@ -607,11 +628,15 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
   queues), and where a caller can act on the reason, hand it back — `bool Verb(…, wxString* refusal)`.
   The only modals left in the backend are `Alert` / `Question`, which exist because a SCRIPT asked
   for one.
-- Do not use raw `RunQueryWithResults(wxT("...%s..."), userInput)` for user-supplied values — use `ibPreparedStatement`
+- Do not use raw `RunQueryWithResults(ibT("...%s..."), userInput)` for user-supplied values — use `ibPreparedStatement`
 - Do not commit changes to `enterprise.sln` project GUIDs or global section entries unless you are adding/removing a project
 - Do not define `NDEBUG` in Debug configurations
 - **Do not add an AI agent as a git co-author.** No `Co-Authored-By:` trailer for Claude / Cursor / Codex / Copilot / etc., and no “Generated with …” footer in commit messages or pull-request bodies. The human who asked for the change is the only author — [docs/development.md](docs/development.md) §1; `.github/lint.sh` refuses it.
 - Do not catch `const ibBackendException*` and swallow it silently
+- **Do not teach the schema differ a metadata case.** `DiffSnapshots`, `DiffColumnInto` and
+  `NeedsRegeneration` compare two DECLARED snapshots and know nothing about metadata. When an apply
+  goes wrong, fix the declaration (`DescribeTable`), not the differ — the banner in
+  `backend/query/schemaSnapshot.h` says why and how to tell.
 - **Do not wave off a slow Debug build with "Release will be fast".** Speed is accepted in the DEBUG
   build (Max, 2026-09-12: *"if debug works at a normal level, release will work fine — the debug
   build is the most serious examiner"*). What a checked build (MSVC, `_ITERATOR_DEBUG_LEVEL=2`) makes
@@ -624,6 +649,17 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
 
 ---
 
+## Token Economy
+
+Every tool call is a round trip that re-reads the whole context, so cost = turns × context size.
+
+- **One turn, many calls.** Independent edits, reads and checks go out together in one response, not one per turn.
+- **Read pieces, not files.** `Grep` for the place first, then `Read` with `offset`/`limit`; a build goes to a log and only the filtered errors come back.
+- **Wide searches go to an `Explore` agent** — it reads in its own context and returns the conclusion.
+- **One arc, one session.** After an arc is pushed and its lessons are in memory, start fresh (`/clear`).
+
+---
+
 ## AI Agents
 
 Specialized agents for OES development tasks. Defined in `~/.claude/agents/oes-*.md`.
@@ -632,13 +668,13 @@ Specialized agents for OES development tasks. Defined in `~/.claude/agents/oes-*
 Checks code for vulnerabilities: SQL injection (string concatenation in queries instead of `ibPreparedStatement`), buffer overflows (strcpy/sprintf), hardcoded credentials, unsafe file access, memory leaks (missing RAII). Flags MD5 password hashing as critical.
 
 ### Code Reviewer (`oes-code-reviewer`)
-Reviews code against C++17 standards and OES architecture rules: RAII, const-correctness, explicit constructors, cross-platform compatibility (MSVC/Clang/GCC), naming conventions (`ib` prefix, `m_` members), no GUI headers in backend.
+Reviews code against C++20 standards and OES architecture rules: RAII, const-correctness, explicit constructors, cross-platform compatibility (MSVC/Clang/GCC), naming conventions (`ib` prefix, `m_` members), no GUI headers in backend.
 
 ### Test Writer (`oes-test-writer`)
 Generates Google Test tests. Naming: `TEST(ClassName, Method_Condition_Expected)`. Uses MockDatabaseLayer for unit tests, real SQLite for integration tests. Handles throw-by-value / catch-by-const-ref exceptions (see decision #5).
 
 ### CMake Writer (`oes-cmake-writer`)
-Generates and fixes CMakeLists.txt. Target-based approach, C++17, compatible with MSVC 2019+/Clang/GCC 9+. Handles wxWidgets submodule, optional DB drivers (OES_USE_FIREBIRD, etc.).
+Generates and fixes CMakeLists.txt. Target-based approach, C++20, compatible with MSVC 2022/Clang/GCC 11+. Handles wxWidgets submodule, optional DB drivers (OES_USE_FIREBIRD, etc.).
 
 ### System Architect (`oes-system-architect`)
 Evaluates architecture, identifies coupling issues, circular dependencies, two-DLL separation violations. Proposes incremental refactoring plans.
@@ -656,4 +692,4 @@ Schema design, query optimization, cross-DB compatibility (Firebird/PostgreSQL, 
 CI/CD, cross-platform builds (MSBuild + CMake), release management. PRs → develop, releases → master with tag.
 
 ### Code Refactorer (`oes-code-refactorer`)
-Fixes MSVC-specific code for Clang/GCC, breaks circular includes, modernizes to C++17 where appropriate. One refactoring per PR.
+Fixes MSVC-specific code for Clang/GCC, breaks circular includes, modernizes to C++20 where appropriate. One refactoring per PR.

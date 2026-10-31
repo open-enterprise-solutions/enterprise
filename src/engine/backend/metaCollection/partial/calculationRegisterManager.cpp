@@ -28,15 +28,15 @@ enum {
 
 void ibValueManagerDataObjectCalculationRegister::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
-	helper.AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
+	helper.AppendFunc(ibT("CreateRecordSet"), ibT("CreateRecordSet()"));
+	helper.AppendFunc(ibT("CreateRecordKey"), ibT("CreateRecordKey()"));
 	// TWO ARGUMENTS, because there are two forms: Get(filter) and Get(period, filter).
-	helper.AppendFunc(wxT("Get"), 2, wxT("Get(Period, Filter...)"));
-	helper.AppendFunc(wxT("GetBase"), 4, wxT("GetBase(Filter, Resources, Dimensions, Sections)"));
-	helper.AppendFunc(wxT("Select"), wxT("Select()"));
-	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
-	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(string)"));
+	helper.AppendFunc(ibT("Get"), 2, ibT("Get(Period, Filter...)"));
+	helper.AppendFunc(ibT("GetBase"), 4, ibT("GetBase(Filter, Resources, Dimensions, Sections)"));
+	helper.AppendFunc(ibT("Select"), ibT("Select()"));
+	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(string, owner, guid)"));
+	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(string, owner, guid)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(string)"));
 }
 
 #include "selector/objectSelector.h"

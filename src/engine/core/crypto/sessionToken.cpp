@@ -1,0 +1,128 @@
+#include "sessionToken.h"
+
+#include <cstdint>
+#include <cstring>
+
+#include <mbedtls/ctr_drbg.h>
+#include <mbedtls/entropy.h>
+
+// constant_time.h does not open extern "C" itself. The symbol is C.
+extern "C" {
+#include <mbedtls/constant_time.h>
+}
+
+#include "sha256.hpp"
+
+namespace ibSessionToken {
+
+std::vector<unsigned char> Generate()
+{
+	std::vector<unsigned char> out(kBytes);
+
+	mbedtls_entropy_context  entropy;
+	mbedtls_ctr_drbg_context drbg;
+	mbedtls_entropy_init(&entropy);
+	mbedtls_ctr_drbg_init(&drbg);
+
+	// Its own personalization — not the field cipher's, so the two draws are not one stream.
+	static const unsigned char personal[] = "oes.sessionToken";
+	int rc = mbedtls_ctr_drbg_seed(&drbg, mbedtls_entropy_func, &entropy, personal, sizeof(personal) - 1);
+	if (rc == 0)
+		rc = mbedtls_ctr_drbg_random(&drbg, out.data(), out.size());
+
+	mbedtls_ctr_drbg_free(&drbg);
+	mbedtls_entropy_free(&entropy);
+
+	if (rc != 0)
+		out.clear();
+	return out;
+}
+
+ibString Hex(const unsigned char* bytes, std::size_t length)
+{
+	static const char kDigits[] = "0123456789abcdef";
+	if (bytes == nullptr)
+		return ibString();
+	ibString hex;
+	hex.reserve(length * 2);
+	for (std::size_t i = 0; i < length; ++i) {
+		hex += ibChar(kDigits[bytes[i] >> 4]);
+		hex += ibChar(kDigits[bytes[i] & 0x0F]);
+	}
+	return hex;
+}
+
+bool Hash(const unsigned char* bytes, std::size_t length, unsigned char out[kDigest])
+{
+	if (bytes == nullptr || out == nullptr)
+		return false;
+	ibSHA256::Hash(bytes, length, out);
+	return true;
+}
+
+ibString HashHex(const unsigned char* bytes, std::size_t length)
+{
+	unsigned char digest[kDigest];
+	if (!Hash(bytes, length, digest))
+		return ibString();
+	return Hex(digest, kDigest);
+}
+
+bool ParseHex(const ibString& hex, unsigned char out[kBytes])
+{
+	if (out == nullptr || hex.length() != kBytes * 2)
+		return false;
+	auto nibble = [](ibChar c) -> int {
+		if (c >= ibT('0') && c <= ibT('9'))
+			return c - ibT('0');
+		if (c >= ibT('a') && c <= ibT('f'))
+			return c - ibT('a') + 10;
+		if (c >= ibT('A') && c <= ibT('F'))
+			return c - ibT('A') + 10;
+		return -1;
+	};
+	for (std::size_t i = 0; i < kBytes; ++i) {
+		const int hi = nibble(hex[i * 2]);
+		const int lo = nibble(hex[i * 2 + 1]);
+		if (hi < 0 || lo < 0)
+			return false;
+		out[i] = static_cast<unsigned char>((hi << 4) | lo);
+	}
+	return true;
+}
+
+ibString WithRoute(const ibString& hex, unsigned route)
+{
+	if (route == 0)
+		return hex;
+	return hex + ibString::Format(ibT(".%u"), route);
+}
+
+void SplitRoute(const ibString& token, ibString& hex, unsigned& route)
+{
+	route = 0;
+	const int dot = token.Find(ibT('.'), true);
+	unsigned long number = 0;
+	if (dot == wxNOT_FOUND || !token.Mid(dot + 1).ToULong(&number) || number == 0 || number > 0xFFFF) {
+		hex = token;
+		return;
+	}
+	hex = token.Left(dot);
+	route = static_cast<unsigned>(number);
+}
+
+bool DigestEqual(const unsigned char* left, const unsigned char* right)
+{
+	if (left == nullptr || right == nullptr)
+		return false;
+	return mbedtls_ct_memcmp(left, right, kDigest) == 0;
+}
+
+bool TextEqual(const std::string& presented, const std::string& expected)
+{
+	if (expected.empty() || presented.size() != expected.size())
+		return false;
+	return mbedtls_ct_memcmp(presented.data(), expected.data(), expected.size()) == 0;
+}
+
+} // namespace ibSessionToken

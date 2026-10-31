@@ -1,0 +1,8 @@
+// appcluster.exe - its version (core/version.rc2).
+
+#include <windows.h>
+
+#define OES_FILE_DESCRIPTION "OES application cluster"
+#define OES_FILE_NAME        "appcluster.exe"
+#define OES_FILE_TYPE        VFT_APP
+#include "../core/version.rc2"

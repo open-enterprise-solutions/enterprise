@@ -1,0 +1,104 @@
+# The browser client
+
+**What.** The client a browser runs: the page the [web server](../ARCHITECTURE.md#the-web-server-webserverexe-srcenginewebserver)
+serves at `/<publication>/`, talking to the base through the [client protocol](client-protocol.md) over the socket
+beside it, `/<publication>/client`. Like [the thin client](thin-client.md), it runs nothing of the configuration.
+
+**Why.** A person with a browser alone — another machine, a phone — works in the same base with the same forms. The
+thin client is its reference: what the thin client does with a frame, the page does the same.
+
+**No build.** The browser loads the modules as they are: no Node, no package manager, no bundler — one toolchain less
+to keep beside the platform's own. Types are JSDoc, checked by the editor (`jsconfig.json`, `checkJs`). What the page
+is built on lies in `vendor/<library>/<version>/` with its licence, MIT only: Web Awesome (the standard controls),
+Tabulator (the grid). The controls are plain custom elements, `<oes-…>`; no framework keeps a second copy of the
+server's tree.
+
+**Where.** `src/engine/webserver/www/`. The web server serves it from `Root` (a folder: edit and reload), a release
+from its pack `web/www.wpk`.
+
+## Parts
+
+| Folder | Holds |
+|---|---|
+| `src/protocol/` | the socket (OES-RPC packets — `packet.js` reads and writes them — deflated answers), the session — login, one call at a time, the frame and its patches, coming back after a drop — and the pictures |
+| `src/window/` | the window: login, the section panel, the tabs, the messages, the questions, All functions |
+| `src/controls/` | a form's controls, one file each, each its own element; the sizers; the label column |
+| `src/tablebox/` | the table: the grid fed with the server's pages |
+| `src/gridbox/` | the spreadsheet, drawn as a table |
+| `styles/` | the palette, the splash, the window, the form — and the form folded for a narrow screen |
+| `tests/web/` (the repository's) | the page's tests: its own modules in a real browser, the server a fake in the page. Python and Playwright, no Node; `python -m unittest discover -s tests/web` |
+
+## Who does what
+
+The form lives on the server. The page draws the frame's tree, applies its patches and sends what the person did; the
+caret, the typed echo, the scroll, the keys and the measuring of the label column are the browser's. A control updated
+by a patch is updated in place, so the focus and the caret stay where they were.
+
+## What it guarantees
+
+- **The start.** The thin client's splash is on the screen before the big stylesheets have come, the arrows and the stage
+  of the start under it. A login asked takes its place; then it is up again until the first window has its rows.
+- **A form comes whole.** A form just opened is drawn out of sight, the one on show staying up until it has its rows and
+  the components it is drawn with have come and drawn themselves, for a second at most; then it replaces the other in one
+  frame, and its tab comes in that frame too. The first window has as long as its rows take, the splash being up. A tab
+  gone back to comes at once. What did not change is not drawn again.
+- **The start page is a container of forms.** Its columns stand side by side and the cells of each one under the other, in
+  the shares the configuration gives, with a sash between them to drag. Each cell is a strip with its title over a form
+  that works as a tab's does and goes back to the server by its own `Key`; a form that would not open is said in its cell.
+- **As dense as a desktop form on a mouse**, the root's 13 px; a finger keeps 16 px and targets of 44 px.
+- **The thin client's rules.** The login first goes in with no name — a base with no users lets it in. A refused call
+  is said in a box with the server's words; a session that ended closes the window. A dropped socket is opened again and
+  the session taken back with `login {Token}` while the server keeps it; the call the drop left unanswered is sent again
+  under its own id.
+- **A dialog moves by its title**, as a window on a desktop, and stays inside the window.
+- **A question is never left standing.** The server's code waits where it asked; a question the page does not draw is
+  answered as cancelled, and the person is told so.
+- **A choice form opens as a tab**, as any form. Asked from a modal dialog — a report's settings — it opens over that
+  dialog: the dialog blocks the form, so a tab beneath it could not be seen.
+- **A form's command bar stays on top**; the controls under it fill the tab while they fit, what grows sharing what is
+  left, and scroll under the bar when they do not — the thin client's layout. A table or a sheet takes the height the
+  form gives it and scrolls its rows inside itself; columns that do not fit scroll sideways, and fold into their row only
+  in a narrow window. A cell's text and a header's caption that do not fit lose their middle, the first letters and the
+  last staying. A command bar keeps one line; what does not fit is under its ».
+- **A sheet's cells are taken as in a spreadsheet program**: a click, a drag, Shift and Ctrl with a click, the arrows,
+  Ctrl+A. Ctrl+C copies them as cells — a figure as a number — and the figures taken are summed in the sheet's corner:
+  average, count, sum. A row folded away is neither summed nor copied.
+- **The table** keeps its place: a list read again is read around its top visible row, paged both ways, a stale page
+  dropped. A cell keeps the server's text; its editor is a field's (`controls/textEditor.js`), with the column's buttons
+  (… ▷ ×).
+- **A table shows its rows three ways**, the person's to switch: every row flat (List); one level, a folder activated
+  entered and the folders it stands in frozen over its rows, one of them activated gone back out of (Hierarchy); or the
+  hierarchy in place, a folder opened by its expander and read whole (Tree). Read again, a tree keeps its folders open.
+- **The cursor stands on a row or on a cell**, as the table's selection mode says: a cell is marked, its row tinted. The
+  keys are the thin client's: the arrows, Page Up and Down, Home and End among the rows held, Tab along the columns, F2 and
+  Space edit, Enter activates, and in a tree the arrows sideways and + - * open and close a folder. A second click on the
+  cursor's cell opens its editor. A column that takes no typing still opens, for its buttons.
+- **The first column's cell is the row's too**, in every view: the step in, the place of the expander, the row's picture,
+  then the value. A row with a group's caption is that caption, across the whole line. A table has its footer and its
+  column groups: side by side under a title, one under the other, in one cell; its header and footer take the lines it
+  says. A column is dragged by its header where the columns are a plain row.
+- **A table holds a window of rows, not the list** — the thin client's: a page is as many rows as the window shows,
+  read when fewer than five are left past its edge, and the side left behind is let go, so a list scrolled to its end
+  holds about two windows. Its scrollbar says only whether there are rows before and after (at the top, in the middle,
+  at the bottom); the thumb let go at the very top reads the list from its first row.
+- **A narrow screen** (under 40 rem): the sizers fold into a column, fields take the full width, touch targets are
+  44 px and more, nothing is reached by hover alone, a table scrolls sideways inside itself — never the page.
+- **A number's … opens a calculator, a date's a calendar**, dropped under the field, as the thin client's: the
+  calculator counts in exact decimals (0.1 + 0.2 is 0.3), keys typed work as keys pressed.
+- **Printing prints the active tab's content**, without the window around it; a sheet a script prints is drawn for the
+  printer alone. A sheet's frozen rows repeat on every page; a row's print break ends its page.
+- **Busy and offline are shown**: a call unanswered for 800 ms shows a spinner, a dropped connection a strip.
+- **Escape closes what stands on top**, one thing a press: a cell's editor, a menu, a dialog, then the active tab. The tab
+  is closed as its × closes it: the text typed is sent first, and the server asks about what is left to save.
+
+## Where it stops
+
+- The questions drawn are the message box, the choice, the view mode, the menu, the calculator and the calendar, the
+  error and the print; the others are answered as cancelled.
+- A tree's rows opened stay held: only its top level is paged, and a folder is read whole.
+- A column under a group is not dragged.
+- A printed sheet is answered as printed: the browser does not say whether its print dialog was cancelled.
+- A number goes back from the calculator exact to 15 digits.
+- No files: nothing is uploaded or saved from the page.
+- A view that is no form — a text, a spreadsheet opened from a file — is not drawn.
+- The page's own captions are English; the server's texts come translated.

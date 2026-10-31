@@ -1,6 +1,8 @@
 #include "firebirdInterface.h"
 #include "firebirdBootstrap.h"
 
+#include "core/fileSystem.h"   // ibFileExists
+
 bool ibInterfaceFirebird::Init()
 {
 	// Locate _fb/ subfolder next to the executable + set DLL search
@@ -11,29 +13,29 @@ bool ibInterfaceFirebird::Init()
 	ibFirebirdBootstrap::Init();
 
 	bool bLoaded = false;
-#ifndef __WXMSW__
+#ifndef __IBMSW__
 	// ⭐ THE FIREBIRD BESIDE THE PROGRAM, BY ITS FULL PATH. Windows reaches _fb/ through SetDllDirectory; a
 	// POSIX loader has no such door and looks a bare name up in the system alone, so the kit a package
 	// carries (_fb/lib, laid out as Firebird's own tree: lib/, plugins/, intl/) was never loaded. The kit's
 	// libraries find each other from there — `$ORIGIN/../lib` on Linux, `@rpath/lib/…` through the program's
 	// rpath on macOS — and the engine reads plugins/, intl/ and firebird.msg through FIREBIRD, which the
 	// bootstrap has just pointed at the same folder. No kit beside the program: the system's, as before.
-	const wxString& fbDir = ibFirebirdBootstrap::GetFbRuntimeDir();
+	const ibString& fbDir = ibFirebirdBootstrap::GetFbRuntimeDir();
 	if (!fbDir.IsEmpty()) {
-#if defined(__WXOSX__) || defined(__APPLE__)
-		const wxString kitClient = fbDir + wxT("/lib/libfbclient.dylib");
+#if defined(__IBOSX__) || defined(__APPLE__)
+		const ibString kitClient = fbDir + ibT("/lib/libfbclient.dylib");
 #else
-		const wxString kitClient = fbDir + wxT("/lib/libfbclient.so.2");
+		const ibString kitClient = fbDir + ibT("/lib/libfbclient.so.2");
 #endif
-		if (wxFileExists(kitClient))
+		if (ibFileExists(kitClient))
 			bLoaded = m_FirebirdDLL.Load(kitClient);
 	}
 #endif
 	if (!bLoaded)
-		bLoaded = m_FirebirdDLL.Load(wxDynamicLibrary::CanonicalizeName(wxT("fbclient")));
-#if defined(__WXOSX__) || defined(__APPLE__)
+		bLoaded = m_FirebirdDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("fbclient")));
+#if defined(__IBOSX__) || defined(__APPLE__)
 	if (!bLoaded) {
-		bLoaded = m_FirebirdDLL.Load(wxT("/Library/Frameworks/Firebird.framework/Versions/A/Libraries/libfbclient.dylib"));
+		bLoaded = m_FirebirdDLL.Load(ibT("/Library/Frameworks/Firebird.framework/Versions/A/Libraries/libfbclient.dylib"));
 	}
 #endif
 	if (!bLoaded)
@@ -41,7 +43,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	wxString symbol = wxT("fb_interpret");
+	ibString symbol = ibT("fb_interpret");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pFbInterpret = (fb_interpretType)m_FirebirdDLL.GetSymbol(symbol);
@@ -51,7 +53,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_expand_dpb");
+	symbol = ibT("isc_expand_dpb");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscExpandDpb = (isc_expand_dpbType)m_FirebirdDLL.GetSymbol(symbol);
@@ -61,7 +63,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_modify_dpb");
+	symbol = ibT("isc_modify_dpb");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscModifyDpb = (isc_modify_dpbType)m_FirebirdDLL.GetSymbol(symbol);
@@ -71,7 +73,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_create_database");
+	symbol = ibT("isc_create_database");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscCreateDatabase = (isc_create_databaseType)m_FirebirdDLL.GetSymbol(symbol);
@@ -81,7 +83,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_attach_database");
+	symbol = ibT("isc_attach_database");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscAttachDatabase = (isc_attach_databaseType)m_FirebirdDLL.GetSymbol(symbol);
@@ -91,7 +93,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_detach_database");
+	symbol = ibT("isc_detach_database");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDetachDatabase = (isc_detach_databaseType)m_FirebirdDLL.GetSymbol(symbol);
@@ -101,7 +103,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_start_transaction");
+	symbol = ibT("isc_start_transaction");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscStartTransaction = (isc_start_transactionType)m_FirebirdDLL.GetSymbol(symbol);
@@ -111,7 +113,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_commit_transaction");
+	symbol = ibT("isc_commit_transaction");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscCommitTransaction = (isc_commit_transactionType)m_FirebirdDLL.GetSymbol(symbol);
@@ -121,7 +123,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_rollback_transaction");
+	symbol = ibT("isc_rollback_transaction");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscRollbackTransaction = (isc_rollback_transactionType)m_FirebirdDLL.GetSymbol(symbol);
@@ -131,7 +133,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_dsql_execute_immediate");
+	symbol = ibT("isc_dsql_execute_immediate");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDsqlExecuteImmediate = (isc_dsql_execute_immediateType)m_FirebirdDLL.GetSymbol(symbol);
@@ -141,7 +143,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_dsql_allocate_statement");
+	symbol = ibT("isc_dsql_allocate_statement");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDsqlAllocateStatement = (isc_dsql_allocate_statementType)m_FirebirdDLL.GetSymbol(symbol);
@@ -151,7 +153,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_dsql_prepare");
+	symbol = ibT("isc_dsql_prepare");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDsqlPrepare = (isc_dsql_prepareType)m_FirebirdDLL.GetSymbol(symbol);
@@ -161,7 +163,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_dsql_describe");
+	symbol = ibT("isc_dsql_describe");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDsqlDescribe = (isc_dsql_describeType)m_FirebirdDLL.GetSymbol(symbol);
@@ -171,7 +173,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_sql_interprete");
+	symbol = ibT("isc_sql_interprete");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscSqlInterprete = (isc_sql_interpreteType)m_FirebirdDLL.GetSymbol(symbol);
@@ -181,7 +183,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_sqlcode");
+	symbol = ibT("isc_sqlcode");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscSqlcode = (isc_sqlcodeType)m_FirebirdDLL.GetSymbol(symbol);
@@ -191,7 +193,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_encode_timestamp");
+	symbol = ibT("isc_encode_timestamp");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscEncodeTimestamp = (isc_encode_timestampType)m_FirebirdDLL.GetSymbol(symbol);
@@ -201,7 +203,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_create_blob2");
+	symbol = ibT("isc_create_blob2");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscCreateBlob2 = (isc_create_blob2Type)m_FirebirdDLL.GetSymbol(symbol);
@@ -211,7 +213,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_open_blob2");
+	symbol = ibT("isc_open_blob2");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscOpenBlob2 = (isc_open_blob2Type)m_FirebirdDLL.GetSymbol(symbol);
@@ -221,7 +223,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_put_segment");
+	symbol = ibT("isc_put_segment");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscPutSegment = (isc_put_segmentType)m_FirebirdDLL.GetSymbol(symbol);
@@ -231,7 +233,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_close_blob");
+	symbol = ibT("isc_close_blob");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscCloseBlob = (isc_close_blobType)m_FirebirdDLL.GetSymbol(symbol);
@@ -241,7 +243,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_commit_retaining");
+	symbol = ibT("isc_commit_retaining");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscCommitRetaining = (isc_commit_retainingType)m_FirebirdDLL.GetSymbol(symbol);
@@ -251,7 +253,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_dsql_free_statement");
+	symbol = ibT("isc_dsql_free_statement");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDsqlFreeStatement = (isc_dsql_free_statementType)m_FirebirdDLL.GetSymbol(symbol);
@@ -261,7 +263,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_dsql_describe_bind");
+	symbol = ibT("isc_dsql_describe_bind");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDsqlDescribeBind = (isc_dsql_describe_bindType)m_FirebirdDLL.GetSymbol(symbol);
@@ -271,7 +273,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_dsql_execute");
+	symbol = ibT("isc_dsql_execute");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDsqlExecute = (isc_dsql_executeType)m_FirebirdDLL.GetSymbol(symbol);
@@ -281,7 +283,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_dsql_sql_info");
+	symbol = ibT("isc_dsql_sql_info");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDsqlSqlInfo = (isc_dsql_sql_infoType)m_FirebirdDLL.GetSymbol(symbol);
@@ -291,7 +293,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_vax_integer");
+	symbol = ibT("isc_vax_integer");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscVaxInteger = (isc_vax_integerType)m_FirebirdDLL.GetSymbol(symbol);
@@ -301,7 +303,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_dsql_execute2");
+	symbol = ibT("isc_dsql_execute2");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDsqlExecute2 = (isc_dsql_execute2Type)m_FirebirdDLL.GetSymbol(symbol);
@@ -311,7 +313,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_dsql_fetch");
+	symbol = ibT("isc_dsql_fetch");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDsqlFetch = (isc_dsql_fetchType)m_FirebirdDLL.GetSymbol(symbol);
@@ -321,7 +323,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_decode_timestamp");
+	symbol = ibT("isc_decode_timestamp");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDecodeTimestamp = (isc_decode_timestampType)m_FirebirdDLL.GetSymbol(symbol);
@@ -331,7 +333,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_decode_sql_date");
+	symbol = ibT("isc_decode_sql_date");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDecodeSqlDate = (isc_decode_sql_dateType)m_FirebirdDLL.GetSymbol(symbol);
@@ -341,7 +343,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_decode_sql_time");
+	symbol = ibT("isc_decode_sql_time");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscDecodeSqlTime = (isc_decode_sql_timeType)m_FirebirdDLL.GetSymbol(symbol);
@@ -351,7 +353,7 @@ bool ibInterfaceFirebird::Init()
 		return false;
 	}
 
-	symbol = wxT("isc_get_segment");
+	symbol = ibT("isc_get_segment");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 	{
 		m_pIscGetSegment = (isc_get_segmentType)m_FirebirdDLL.GetSymbol(symbol);
@@ -367,23 +369,23 @@ bool ibInterfaceFirebird::Init()
 	// Every FB client from 2.5 onwards exports these, so the null
 	// path is effectively unreachable in practice — guard exists
 	// for defensive layering.
-	symbol = wxT("isc_service_attach");
+	symbol = ibT("isc_service_attach");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 		m_pIscServiceAttach = (isc_service_attachType)m_FirebirdDLL.GetSymbol(symbol);
 
-	symbol = wxT("isc_service_detach");
+	symbol = ibT("isc_service_detach");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 		m_pIscServiceDetach = (isc_service_detachType)m_FirebirdDLL.GetSymbol(symbol);
 
-	symbol = wxT("isc_service_start");
+	symbol = ibT("isc_service_start");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 		m_pIscServiceStart = (isc_service_startType)m_FirebirdDLL.GetSymbol(symbol);
 
-	symbol = wxT("isc_service_query");
+	symbol = ibT("isc_service_query");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 		m_pIscServiceQuery = (isc_service_queryType)m_FirebirdDLL.GetSymbol(symbol);
 
-	symbol = wxT("fb_cancel_operation");
+	symbol = ibT("fb_cancel_operation");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 		m_pFbCancelOperation = (fb_cancel_operationType)m_FirebirdDLL.GetSymbol(symbol);
 

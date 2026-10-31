@@ -48,10 +48,10 @@
 
 namespace {
 
-wxString EnvOr(const char* name, const wxString& fallback)
+ibString EnvOr(const char* name, const ibString& fallback)
 {
 	const char* value = std::getenv(name);
-	return (value != nullptr && *value != '\0') ? wxString::FromUTF8(value) : fallback;
+	return (value != nullptr && *value != '\0') ? ibString::FromUTF8(value) : fallback;
 }
 
 bool HaveServer()
@@ -197,7 +197,7 @@ TEST_F(PostgresDialect, BlobBytesAreReturnedIntact)
 	ASSERT_TRUE(static_cast<bool>(rs));
 	ASSERT_TRUE(rs->Next());
 
-	wxMemoryBuffer readBack;
+	ibMemoryBuffer readBack;
 	rs->GetResultBlob(1, readBack);
 	ASSERT_EQ(sizeof(payload), readBack.GetDataLen());
 	EXPECT_EQ(0, memcmp(payload, readBack.GetData(), sizeof(payload)));
@@ -259,7 +259,7 @@ TEST_F(PostgresDialect, NoWaitDoesNotWaitForAHeldRow)
 	opts.noWait = true;
 	waiter->BeginTransaction(opts);
 
-	wxString state;
+	ibString state;
 	const auto started = std::chrono::steady_clock::now();
 	try {
 		ibResultSetGuard blocked(waiter,
@@ -268,9 +268,9 @@ TEST_F(PostgresDialect, NoWaitDoesNotWaitForAHeldRow)
 			state = wxT("acquired");
 	}
 	catch (const ibDatabaseLayerException& err) {
-		// The driver does not stash SQLSTATE on this path, so the refusal is
-		// recognised by the server's own words: a lock timeout, not a cancel.
-		state = err.GetErrorDescription();
+		// lock_not_available. The statement path records the SQLSTATE, so the
+		// refusal is not guessed from the server's message.
+		state = err.GetSqlState();
 	}
 	catch (const ibBackendInterruptException&) {
 		state = wxT("57014");
@@ -286,7 +286,7 @@ TEST_F(PostgresDialect, NoWaitDoesNotWaitForAHeldRow)
 	holder->Close();
 	s_db->RunQuery(wxT("DROP TABLE IF EXISTS oes_dialect_nowait"));
 
-	EXPECT_NE(state.Lower().Find(wxT("lock")), wxNOT_FOUND)
+	EXPECT_EQ(wxT("55P03"), state)
 		<< "a noWait transaction must be refused for the lock, not cancelled: " << state.utf8_str();
 	EXPECT_LT(waited, 1000) << "waited " << waited << " ms";
 }

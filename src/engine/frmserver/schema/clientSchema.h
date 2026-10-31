@@ -15,10 +15,10 @@
 
 #include <wx/string.h>
 
-#include "core/fileSystem/types.h"   // s32
+#include <cstdint>   // std::int32_t
 
 #include "frmserver/frmserver.h"
-#include "protocol/protocol.h"   // ibProtocolSchema, ibProtocolRefusal
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibKind, ibProtocol::ibRefusal
 
 class ibDataNode;
 class ibSession;
@@ -34,11 +34,12 @@ public:
 	// does: a client asks for a schema by its number, past any menu that would have hidden it. The menu asks the
 	// same question (ibClientFrame), so it offers what the schema would let through. A schema without a right of
 	// its own is everybody's.
-	virtual bool AccessRight(const ibSession& WXUNUSED(session)) const { return true; }
+	virtual bool AccessRight(const ibSession& /*session*/) const { return true; }
 
 	// What the schema shows, into `result` — of the client's session, handed in: the configuration it works in, the
-	// base it works in. Asked on that session: what a schema lists may depend on the person's rights.
-	virtual void Build(const ibSession& session, ibDataNode& result) const = 0;
+	// base it works in — and of what its arguments name (the predefined items of that object), as Command takes them.
+	// Asked on that session: what a schema lists may depend on the person's rights.
+	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const = 0;
 
 	// WHAT A PERSON DID IN IT — one of the schema's own commands (a number of its own on the wire), with its
 	// arguments: the dialog's own handler on the desktop (a double click in All functions opens the item). Asked on
@@ -46,8 +47,16 @@ public:
 	// the WORK that does it, which the client's work then runs: what it opens the frame shows, and what it asks the
 	// person waits for the response. Empty with a refusal — why, and its text: the schema takes no such command, or
 	// not with these arguments — a schema acts only on what it offered; nothing is done then.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
-		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const;
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const;
+
+protected:
+
+	// WHAT WENT WRONG, in the base's own words — the chain the desktop's ShowBackendErrorChain (designer/mainFrame) put
+	// under its heading: `detail` (an exception's own text, an engine's refusal) and what the base pushed on the way, each
+	// once, a repeat counted, the first twenty shown. Drained whatever it says — the chain is the thread's, and must not
+	// leak into the next asking.
+	static ibString BackendErrorChain(const ibString& detail = ibEmptyString);
 };
 
 #endif

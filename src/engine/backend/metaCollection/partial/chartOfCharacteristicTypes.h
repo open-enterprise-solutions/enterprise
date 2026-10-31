@@ -30,11 +30,11 @@ private:
 
 	virtual ibFormTypeList GetFormType() const override {
 		ibFormTypeList formList;
-		formList.AppendItem(wxT("FormObject"), _("Form object"), eFormObject);
-		formList.AppendItem(wxT("FormFolder"), _("Form group"), eFormFolder);
-		formList.AppendItem(wxT("FormList"), _("Form list"), eFormList);
-		formList.AppendItem(wxT("FormSelect"), _("Form select"), eFormSelect);
-		formList.AppendItem(wxT("FormGroupSelect"), _("Form group select"), eFormFolderSelect);
+		formList.AppendItem(ibT("FormObject"), _("Form object"), eFormObject);
+		formList.AppendItem(ibT("FormFolder"), _("Form group"), eFormFolder);
+		formList.AppendItem(ibT("FormList"), _("Form list"), eFormList);
+		formList.AppendItem(ibT("FormSelect"), _("Form select"), eFormSelect);
+		formList.AppendItem(ibT("FormGroupSelect"), _("Form group select"), eFormFolderSelect);
 		return formList;
 	}
 
@@ -65,8 +65,8 @@ public:
 	virtual ~ibValueMetaObjectChartOfCharacteristicTypes();
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -115,8 +115,8 @@ public:
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 protected:
 
@@ -168,7 +168,7 @@ private:
 		for (auto object : GetFormArrayObject()) {
 			if (!object->IsAllowed()) continue;
 			if (eFormObject == object->GetTypeForm()) {
-				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetIcon(), object);
+				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetClassType(), object);
 			}
 		}
 		return true;
@@ -178,7 +178,7 @@ private:
 		for (auto object : GetFormArrayObject()) {
 			if (!object->IsAllowed()) continue;
 			if (eFormFolder == object->GetTypeForm()) {
-				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetIcon(), object);
+				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetClassType(), object);
 			}
 		}
 		return true;
@@ -188,7 +188,7 @@ private:
 		for (auto object : GetFormArrayObject()) {
 			if (!object->IsAllowed()) continue;
 			if (eFormList == object->GetTypeForm()) {
-				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetIcon(), object);
+				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetClassType(), object);
 			}
 		}
 		return true;
@@ -198,7 +198,7 @@ private:
 		for (auto object : GetFormArrayObject()) {
 			if (!object->IsAllowed()) continue;
 			if (eFormSelect == object->GetTypeForm()) {
-				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetIcon(), object);
+				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetClassType(), object);
 			}
 		}
 		return true;
@@ -208,25 +208,25 @@ private:
 		for (auto object : GetFormArrayObject()) {
 			if (!object->IsAllowed()) continue;
 			if (eFormFolderSelect == object->GetTypeForm()) {
-				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetIcon(), object);
+				prop->AppendItem(object->GetName(), object->GetMetaID(), object->GetClassType(), object);
 			}
 		}
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"), _("Code of one characteristic type: its write handlers (BeforeWrite, OnWrite, SetNewCode...) and the procedures they call."));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the chart as a whole rather than of one item: its exported procedures and functions are called on the manager, as ChartsOfCharacteristicTypes.<Name>.<Function>()."));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, ibT("ObjectModule"), _("Object module"), _("Code of one characteristic type: its write handlers (BeforeWrite, OnWrite, SetNewCode...) and the procedures they call."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, ibT("ManagerModule"), _("Manager module"), _("Code of the chart as a whole rather than of one item: its exported procedures and functions are called on the manager, as ChartsOfCharacteristicTypes.<Name>.<Function>()."));
 
-	ibPropertyCategory* m_categoryType = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertyType* m_propertyTypesOfCharacteristics = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryType, wxT("TypesOfCharacteristics"), _("Types of Characteristics"), _("Every type a characteristic of this chart may ever hold - the contour. Each item narrows it with its own Type; a field typed by a characteristic (an account dimension, an extra attribute) takes values of the item's type."), ibValueTypes::TYPE_STRING);
+	ibPropertyCategory* m_categoryType = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
+	ibPropertyType* m_propertyTypesOfCharacteristics = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryType, ibT("TypesOfCharacteristics"), _("Types of Characteristics"), _("Every type a characteristic of this chart may ever hold - the contour. Each item narrows it with its own Type; a field typed by a characteristic (an account dimension, an extra attribute) takes values of the item's type."), ibValueTypes::TYPE_STRING);
 
-	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
+	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(ibT("PresetValues"), _("Preset values"));
 
-	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), _("The form a characteristic type opens with. Empty: the form is generated from its attributes."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormObject);
-	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolder"), _("Default Folder Form"), _("The form a folder of characteristic types opens with. Empty: a generated form."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormFolder);
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the chart's list opens with. Empty: the list form is generated."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormList);
-	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), _("The form used to choose a characteristic type for a field of this type. Empty: the list form opens in choice mode."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormSelect);
-	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), _("The form used to choose a folder - for an item's Parent. Empty: the list form opens showing folders only."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormFolderSelect);
+	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormObject"), _("Default Object Form"), _("The form a characteristic type opens with. Empty: the form is generated from its attributes."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormObject);
+	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormFolder"), _("Default Folder Form"), _("The form a folder of characteristic types opens with. Empty: a generated form."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormFolder);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormList"), _("Default List Form"), _("The form the chart's list opens with. Empty: the list form is generated."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormList);
+	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormSelect"), _("Default Select Form"), _("The form used to choose a characteristic type for a field of this type. Empty: the list form opens in choice mode."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormSelect);
+	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, ibT("DefaultFormFolderSelect"), _("Default Folder Select Form"), _("The form used to choose a folder - for an item's Parent. Empty: the list form opens showing folders only."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormFolderSelect);
 
 	//default array
 	// THE CHARACTERISTIC'S OWN TYPE — a filter over what this chart declares, held as a type
@@ -234,7 +234,7 @@ private:
 	// and empty is an ERROR rather than "everything the contour allows". Without that, a
 	// characteristic with no type would let a value of any kind into a slot the kind was supposed
 	// to narrow — which is the whole purpose of this second tier.
-	ibPropertyContainer<>* m_propertyAttributeType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Type"), _("Type"), _("The type of this characteristic's values - chosen from the chart's Types of characteristics. A field typed by this characteristic holds values of this type only. Required."), g_valueTypeDescriptionCLSID, /*fillCheck*/ true, ibValue(), ibItemMode::ibItemMode_Item));
+	ibPropertyContainer<>* m_propertyAttributeType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(ibT("Type"), _("Type"), _("The type of this characteristic's values - chosen from the chart's Types of characteristics. A field typed by this characteristic holds values of this type only. Required."), g_valueTypeDescriptionCLSID, /*fillCheck*/ true, ibValue(), ibItemMode::ibItemMode_Item));
 
 	friend class ibValueRecordDataObjectChartOfCharacteristicTypes;
 	friend class ibMetaData;

@@ -19,8 +19,8 @@ class ibMetaQueryDescriptor : public ibQueryableSourceDescriptor
 public:
 	explicit ibMetaQueryDescriptor(TMeta* meta) : m_meta(meta), m_queryable(meta) {}
 
-	wxString GetNamespace() const override { return ibValue::GetNameObjectFromID(m_meta->GetClassType()); }
-	wxString GetName() const override { return m_meta->GetName(); }
+	ibString GetNamespace() const override { return ibValue::GetNameObjectFromID(m_meta->GetClassType()); }
+	ibString GetName() const override { return m_meta->GetName(); }
 	const ibBackendQueryable* CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/) override { return &m_queryable; }
 
 	// The contained queryable — the metaobject's GetQueryable() forwards here (stable for the object's life).

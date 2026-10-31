@@ -1,24 +1,10 @@
 #ifndef __DATABASE_LAYER_H__
 #define __DATABASE_LAYER_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/hashset.h>
-#include <wx/arrstr.h>
-#include <wx/variant.h>
-
 #include <atomic>
 #include <map>
 #include <memory>
+#include <unordered_set>
 #include <vector>
 
 #include "databaseLayerDef.h"
@@ -155,7 +141,7 @@ struct ibDialectDictionary
 	// declared beside the index a list reads by, and this is the word that makes one there
 	// (`CREATE DESCENDING INDEX`). EMPTY (default) = the engine walks an ascending index both ways
 	// (PostgreSQL, SQLite, MySQL, MSSQL) — the twin would only cost every write, so it is not made.
-	wxString m_descendingIndexWord;
+	ibString m_descendingIndexWord;
 
 	// ⭐⭐ HOW MANY FIELDS AN INDEX MAY COVER. 0 (the default) = no limit worth declaring.
 	//
@@ -195,15 +181,15 @@ struct ibDialectDictionary
 	// Physical row identifier, used to drop duplicate-key rows (keep one) BEFORE a UNIQUE index is created
 	// over existing data: FB "RDB$DB_KEY", SQLite "rowid", PG "ctid". EMPTY (default) => no dedup, so the
 	// UNIQUE create fails loudly on duplicates. Used by ibSchemaBuilder::Execute.
-	wxString m_rowIdColumn;
+	ibString m_rowIdColumn;
 
 	// UPSERT (INSERT-or-update by PK) as a TEMPLATE the renderer fills. Placeholders:
 	//   {table} {columns} {values} {keys} {update}
 	// {update} = the conflict-update body: m_upsertUpdateItem per non-key column,
 	// comma-joined. Firebird's MATCHING needs no update body (empty item). Default =
 	// PG / SQLite ON CONFLICT.
-	wxString m_upsertTemplate   = wxT("INSERT INTO {table} ({columns}) VALUES ({values}) ON CONFLICT ({keys}) DO UPDATE SET {update}");
-	wxString m_upsertUpdateItem = wxT("{col} = excluded.{col}");
+	ibString m_upsertTemplate   = ibT("INSERT INTO {table} ({columns}) VALUES ({values}) ON CONFLICT ({keys}) DO UPDATE SET {update}");
+	ibString m_upsertUpdateItem = ibT("{col} = excluded.{col}");
 
 	// RETURNING — a write that hands back column values from the rows it just wrote, so
 	// "modify, then read what it became" is ONE statement instead of two. That matters
@@ -214,12 +200,12 @@ struct ibDialectDictionary
 	// EMPTY (default — ODBC) = the driver has no such form. The renderer THROWS
 	// UnsupportedNode rather than emulate it, because the emulation (write, then SELECT)
 	// silently drops exactly the atomicity the caller asked for.
-	wxString m_returningClause;
+	ibString m_returningClause;
 
 	// Identifier quoting — <open><name><close>. Default = NONE (bare identifiers, and
 	// avoids Firebird turning quoted names case-sensitive). Opt-in: set to "\"" (ANSI).
-	wxString m_identQuoteOpen;
-	wxString m_identQuoteClose;
+	ibString m_identQuoteOpen;
+	ibString m_identQuoteClose;
 
 	// The longest name a RELATION ALIAS may have (0 = no limit). A longer one is rendered as its head plus a
 	// hash of the whole name, the same at its definition and at every reference (ibQueryRenderer::AliasIdent).
@@ -242,17 +228,17 @@ struct ibDialectDictionary
 	// so whoever writes the name and whoever reads it back compute the same spelling, and two names that share
 	// the head still differ. The relation alias (ibQueryRenderer::AliasIdent) and the result label
 	// (ibSqlAliasOf) are both spelled through it. 0 = no limit.
-	static wxString BoundedName(const wxString& name, size_t limit)
+	static ibString BoundedName(const ibString& name, size_t limit)
 	{
 		static const size_t kHashChars = 8;
 		if (limit <= kHashChars + 1 || name.length() <= limit)
 			return name;
 		unsigned long hash = 2166136261UL;   // FNV-1a, 32-bit
-		for (const wxUniChar ch : name) {
-			hash ^= static_cast<unsigned long>(ch.GetValue());
+		for (const ibChar ch : name) {
+			hash ^= static_cast<unsigned long>(ch);
 			hash = (hash * 16777619UL) & 0xFFFFFFFFUL;
 		}
-		return name.Left(limit - kHashChars - 1) + wxString::Format(wxT("_%08lx"), hash);
+		return name.Left(limit - kHashChars - 1) + ibString::Format(ibT("_%08lx"), hash);
 	}
 
 	ibSqlFeatures m_features;
@@ -260,18 +246,18 @@ struct ibDialectDictionary
 	// --- type map (DDL): canonical column type -> dialect SQL type --------
 	// Parameterised types are printf patterns the renderer fills. BLOB vs BYTEA,
 	// DATE vs TIMESTAMP, boolean-as-SMALLINT live here.
-	wxString m_typeBoolean       = wxT("BOOLEAN");
-	wxString m_typeInteger       = wxT("INTEGER");
-	wxString m_typeBigInt        = wxT("BIGINT");        // 64-bit integer (reference _RTRef = clsid)
-	wxString m_typeDate          = wxT("TIMESTAMP");     // DateTime fraction (date + time)
-	wxString m_typeDateOnly      = wxT("DATE");          // Date fraction (no time)
-	wxString m_typeTime          = wxT("TIME");          // Time fraction (no date)
-	wxString m_typeBlob          = wxT("BLOB");
-	wxString m_typeGuid          = wxT("VARCHAR(36)");   // VARCHAR (not CHAR): carries vary_length, so a guid reads back exact — no charset-padded CHAR tail (PG overrides to native UUID)
-	wxString m_typeStringPattern = wxT("VARCHAR(%d)");   // variable-length string
-	wxString m_typeCharPattern   = wxT("CHAR(%d)");      // fixed-length string
-	wxString m_typeBinaryPattern = wxT("BINARY(%d)");    // fixed-length bytes (reference _RRRef = pure guid); indexable for = joins
-	wxString m_typeNumberPattern = wxT("DECIMAL(%d,%d)");
+	ibString m_typeBoolean       = ibT("BOOLEAN");
+	ibString m_typeInteger       = ibT("INTEGER");
+	ibString m_typeBigInt        = ibT("BIGINT");        // 64-bit integer (reference _RTRef = clsid)
+	ibString m_typeDate          = ibT("TIMESTAMP");     // DateTime fraction (date + time)
+	ibString m_typeDateOnly      = ibT("DATE");          // Date fraction (no time)
+	ibString m_typeTime          = ibT("TIME");          // Time fraction (no date)
+	ibString m_typeBlob          = ibT("BLOB");
+	ibString m_typeGuid          = ibT("VARCHAR(36)");   // VARCHAR (not CHAR): carries vary_length, so a guid reads back exact — no charset-padded CHAR tail (PG overrides to native UUID)
+	ibString m_typeStringPattern = ibT("VARCHAR(%d)");   // variable-length string
+	ibString m_typeCharPattern   = ibT("CHAR(%d)");      // fixed-length string
+	ibString m_typeBinaryPattern = ibT("BINARY(%d)");    // fixed-length bytes (reference _RRRef = pure guid); indexable for = joins
+	ibString m_typeNumberPattern = ibT("DECIMAL(%d,%d)");
 
 	// DDL/DML transaction barrier. Some engines cannot safely populate a table
 	// (prepared INSERT/UPDATE with bind) in the SAME transaction that created or
@@ -287,7 +273,7 @@ struct ibDialectDictionary
 	// ALTER COLUMN (type change) as a TEMPLATE — {table} {column} {type}. Default =
 	// PG / Firebird "ALTER COLUMN c TYPE t"; SQLite leaves
 	// it EMPTY (no in-place type change) so the renderer THROWS rather than emulate.
-	wxString m_alterColumnTemplate = wxT("ALTER TABLE {table} ALTER COLUMN {column} TYPE {type}");
+	ibString m_alterColumnTemplate = ibT("ALTER TABLE {table} ALTER COLUMN {column} TYPE {type}");
 
 	// Multi-clause ALTER TABLE: "ALTER TABLE t ADD c1, ADD c2, DROP COLUMN c3" in one statement.
 	// FB / PG accept it; SQLite does NOT (one ADD/DROP per ALTER), so the structure builder
@@ -297,33 +283,33 @@ struct ibDialectDictionary
 	// Column-drop spelling. Default = ANSI "DROP COLUMN c" (PG / SQLite 3.35+).
 	// Firebird rejects the COLUMN keyword — it takes plain "ALTER TABLE t DROP c". Used by
 	// DropColumn and the multi-clause ALTER fold.
-	wxString m_dropColumnClause = wxT("DROP COLUMN ");
+	ibString m_dropColumnClause = ibT("DROP COLUMN ");
 
 	// ANALYZE spelling — the renderer emits `<prefix> <table>` for an ibDdlKind::Analyze. Refreshes
 	// the optimiser's statistics so it plans against real cardinality (after a temp materialise / bulk
 	// load / restructure). PG / SQLite: "ANALYZE"; Firebird: EMPTY (no portable
 	// ANALYZE — it tunes per-index stats differently), which renders empty → Execute no-ops.
-	wxString m_analyzePrefix;   // empty = the driver has no ANALYZE statement
+	ibString m_analyzePrefix;   // empty = the driver has no ANALYZE statement
 
 	// Row-lock clause APPENDED to a top-level SELECT for a pessimistic read-for-update (the
 	// register set lock). Default = PG " FOR UPDATE"; Firebird overrides to " WITH
 	// LOCK"; SQLite leaves it EMPTY (it locks the whole DB per transaction — the open TX IS
 	// the lock, there is no row-level FOR UPDATE). Rendered after ORDER BY / LIMIT.
 	// (docs/private/record-locks.md)
-	wxString m_rowLockSuffix = wxT(" FOR UPDATE");
+	ibString m_rowLockSuffix = ibT(" FOR UPDATE");
 
 	// Appended AFTER m_rowLockSuffix when the IR asks for a non-blocking acquire (ibQueryIR::
 	// m_lockNoWait). Default = PG " NOWAIT" (=> " FOR UPDATE NOWAIT"). Firebird leaves it
 	// EMPTY — it has no FOR UPDATE NOWAIT; a non-blocking acquire is expressed by the transaction's
 	// own lock-timeout (ibTxOptions::noWait -> isc_tpb_nowait). SQLite empty (whole-DB lock).
 	// (docs/private/record-locks.md — unifies the old ibDatabaseLayer::NoWaitClause virtual onto the dictionary.)
-	wxString m_rowLockNoWaitSuffix = wxT(" NOWAIT");
+	ibString m_rowLockNoWaitSuffix = ibT(" NOWAIT");
 
 	// GROUP BY ROLLUP spelling (used only when m_features.m_rollup): the keys render between
 	// prefix and suffix. Standard (PG / FB): "GROUP BY ROLLUP(<keys>)". MSSQL: prefix empty,
 	// suffix " WITH ROLLUP" -> "GROUP BY <keys> WITH ROLLUP". (docs/private/query-language-arc.md §22.1b)
-	wxString m_rollupPrefix = wxT("ROLLUP(");
-	wxString m_rollupSuffix = wxT(")");
+	ibString m_rollupPrefix = ibT("ROLLUP(");
+	ibString m_rollupSuffix = ibT(")");
 
 	// GROUP BY <position> — may a grouping key be named by its place in the SELECT list? A key that
 	// BINDS A VALUE (a CASE comparing a column with a parameter) cannot be written out twice: the engine
@@ -336,7 +322,7 @@ struct ibDialectDictionary
 	// A source-less SELECT (SELECT <consts> with no FROM — the derived one-row VALUES relation the
 	// write-time WITH CHECK builds). Most engines allow a bare FROM-less SELECT (empty here); Firebird
 	// requires a one-row dummy table -> "RDB$DATABASE". Set per driver; empty = emit no FROM at all.
-	wxString m_selectFromDual = wxEmptyString;
+	ibString m_selectFromDual = ibEmptyString;
 
 	// HOW A PLACEHOLDER STATES ITS TYPE inside the UNION-ALL spelling of a batched INSERT.
 	// Placeholders: {value} — the rendered value (a bind marker); {table} / {column} — where it is
@@ -357,7 +343,7 @@ struct ibDialectDictionary
 	// It casts to TYPE OF COLUMN rather than to a type word so the ENGINE looks the type up in its
 	// own catalogue. The alternative — the renderer deciding what a column holds — would be a second
 	// authority on the schema sitting next to the one that created it, free to disagree with it.
-	wxString m_batchInsertCast = wxEmptyString;
+	ibString m_batchInsertCast = ibEmptyString;
 
 	// Period truncation: unit -> a SQL expression template with ONE placeholder, {expr}. This is
 	// what the L2-1 renderer spells an ibQueryExprKind::PeriodTrunc node through, so ANY query can
@@ -368,7 +354,7 @@ struct ibDialectDictionary
 	//
 	// One definition per engine, shared by every consumer: the totals trigger keys rows with it and
 	// the read view projects columns with it, so a stored key and a read column CANNOT drift apart.
-	std::map<ibTotalsPeriod, wxString> m_periodTrunc;
+	std::map<ibTotalsPeriod, ibString> m_periodTrunc;
 
 	// ⭐ THE REST OF THE CALENDAR, ON THE SAME TERMS. Each map is unit -> a SQL template with named
 	// placeholders, so the IR keeps saying WHAT and the dictionary keeps saying HOW. A unit missing
@@ -383,15 +369,15 @@ struct ibDialectDictionary
 	// They are four maps rather than one keyed by (operation, unit) because they are asked
 	// separately and a missing entry has to be reportable as "this engine cannot END a quarter"
 	// rather than as a lookup miss in a table nobody can see the shape of.
-	std::map<ibTotalsPeriod, wxString> m_periodEnd;
-	std::map<ibTotalsPeriod, wxString> m_dateAdd;
-	std::map<ibTotalsPeriod, wxString> m_dateDiff;
-	std::map<ibDatePart,     wxString> m_datePart;
+	std::map<ibTotalsPeriod, ibString> m_periodEnd;
+	std::map<ibTotalsPeriod, ibString> m_dateAdd;
+	std::map<ibTotalsPeriod, ibString> m_dateDiff;
+	std::map<ibDatePart,     ibString> m_datePart;
 
 	// SUBSTRING(<string>, <from>, <length>) — one template, {expr} / {from} / {len}. Not a map: the
 	// call has no unit to vary by, and the engines differ only in the word (SUBSTRING … FROM … FOR …
 	// against SUBSTR(…)). Empty = this engine is not asked to do it.
-	wxString m_substring;
+	ibString m_substring;
 
 	// --- behaviour slots (the small tail data cannot express) -------------
 	// Reserved for emulation rewrites (FULL OUTER -> LEFT UNION RIGHT, window ->
@@ -427,14 +413,14 @@ struct ibTempTableDialect
 	Strategy m_strategy = Strategy::AdHocCreate;
 
 	// CREATE prefix (ad-hoc) — the manager appends " <name> (<cols>)" + m_onCommitClause.
-	wxString m_createPrefix   = wxT("CREATE TEMPORARY TABLE");
+	ibString m_createPrefix   = ibT("CREATE TEMPORARY TABLE");
 	// Clause appended after the column list: PG " ON COMMIT DROP"; FB GTT " ON COMMIT DELETE ROWS";
 	// SQLite empty (connection-scoped, auto-dropped on disconnect).
-	wxString m_onCommitClause;
+	ibString m_onCommitClause;
 	// Does the temp table drop itself at session / commit end? false => the manager emits DROP.
 	bool     m_autoDrops      = true;
 	// DROP statement prefix (used only when !m_autoDrops) — the manager appends the name.
-	wxString m_dropPrefix     = wxT("DROP TABLE");
+	ibString m_dropPrefix     = ibT("DROP TABLE");
 	// (ANALYZE is NOT here — it is a general L2-1 statement, ibDdlKind::Analyze, rendered from the
 	//  main ibDialectDictionary::m_analyzePrefix, so any caller can refresh stats, not just temp.)
 };
@@ -503,8 +489,8 @@ struct ibMaterializationDialect
 	// PerRow: the inserted / deleted ROW ("NEW" / "OLD").
 	// SetBased: the inserted / deleted TABLE ("inserted" / "deleted") — same slots, and
 	// that reuse is the point: the generator names a side, the dialect says how.
-	wxString m_newRowAlias = wxT("NEW");
-	wxString m_oldRowAlias = wxT("OLD");
+	ibString m_newRowAlias = ibT("NEW");
+	ibString m_oldRowAlias = ibT("OLD");
 
 	// --- the trigger shell ----------------------------------------------------
 	// Placeholders: {name} {table} {timing} {body}. The generator supplies {body} already
@@ -516,34 +502,34 @@ struct ibMaterializationDialect
 	// trigger, several deltas, all inside the one transaction that wrote the movement — so
 	// the multi-table case keeps the same atomicity guarantee as the single-table one, and
 	// needs no coordination anywhere above.
-	wxString m_triggerShellTemplate =
-		wxT("CREATE TRIGGER {name} {timing} ON {table} FOR EACH ROW BEGIN {body} END");
+	ibString m_triggerShellTemplate =
+		ibT("CREATE TRIGGER {name} {timing} ON {table} FOR EACH ROW BEGIN {body} END");
 
 	// Separator the generator joins those statements with. A trailing separator after the
 	// last statement is required by the PSQL / plpgsql / SQLite trigger bodies, so this is
 	// a terminator rather than a true separator — the generator appends it after each.
-	wxString m_bodyStatementTerminator = wxT("; ");
+	ibString m_bodyStatementTerminator = ibT("; ");
 
 	// PostgreSQL cannot inline a trigger body — it needs a FUNCTION the trigger then calls.
 	// When non-empty the generator emits THIS FIRST ({name} gets an "fn_" flavour, {body} the
 	// same rendered body) and the shell above only references it. EMPTY (FB / SQLite)
 	// = the body inlines, one statement instead of two.
-	wxString m_functionShellTemplate;
+	ibString m_functionShellTemplate;
 
 	// Timing clauses substituted into {timing}, one per movement event.
-	wxString m_timingInsert = wxT("AFTER INSERT");
-	wxString m_timingUpdate = wxT("AFTER UPDATE");
-	wxString m_timingDelete = wxT("AFTER DELETE");
+	ibString m_timingInsert = ibT("AFTER INSERT");
+	ibString m_timingUpdate = ibT("AFTER UPDATE");
+	ibString m_timingDelete = ibT("AFTER DELETE");
 
 	// DROP spelling — {name} {table}. PG drops by name alone; SQLite / FB likewise,
 	// but MSSQL disagrees about the schema qualifier, so it stays a template.
-	wxString m_dropTriggerTemplate = wxT("DROP TRIGGER {name}");
+	ibString m_dropTriggerTemplate = ibT("DROP TRIGGER {name}");
 
 	// Drops the separate function object, for the engines that have one — {name}. EMPTY where
 	// the body inlines (FB / SQLite), because there is nothing to drop. Without this
 	// a dropped table would leave its trigger function orphaned in the schema: harmless, but
 	// it accumulates across every restructure and nothing else would ever collect it.
-	wxString m_dropFunctionTemplate;
+	ibString m_dropFunctionTemplate;
 
 	// --- "does this object exist?" — the probes that make a DROP safe ---------
 	// A SELECT returning at least one row when the named object exists; {name} is substituted.
@@ -563,8 +549,8 @@ struct ibMaterializationDialect
 	// The probe belongs to the dialect because the catalogue it reads is engine-specific
 	// (RDB$RELATIONS / pg_class / sqlite_master), which is exactly the kind of fact a dictionary
 	// exists to hold.
-	wxString m_viewExistsQuery;
-	wxString m_triggerExistsQuery;
+	ibString m_viewExistsQuery;
+	ibString m_triggerExistsQuery;
 
 	// --- the delta upsert (the whole point of the dictionary) -----------------
 	// "add this delta into the totals row for this key, creating the row if absent".
@@ -600,15 +586,15 @@ struct ibMaterializationDialect
 	// would be a procedural IF — which breaks the SQLite floor and splits the family in two.
 	// INSERT..SELECT..WHERE expresses the same thing declaratively on all four engines. An
 	// unconditional delta (an accumulation register) renders {where} empty and pays nothing.
-	wxString m_deltaUpsertTemplate =
-		wxT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
+	ibString m_deltaUpsertTemplate =
+		ibT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
 
 	// One accumulate item, comma-joined into {update}. Placeholders: {target} {source} {col}.
 	// ⭐⭐ NULL-SAFE ON THE TARGET. A figure column added to a totals table that already had rows is NULL in
 	// every one of them, and `NULL + x` is NULL: the movement's figure vanished into the row it was added
 	// to (measured 2026-09-17 — a quantity added to the ledger read 0 where 140 had been posted). The
 	// incoming value is made safe where it is rendered (RenderDelta), the stored one here.
-	wxString m_deltaUpdateItem   = wxT("{col} = COALESCE({target}.{col}, 0) + {source}.{col}");
+	ibString m_deltaUpdateItem   = ibT("{col} = COALESCE({target}.{col}, 0) + {source}.{col}");
 	// One key-equality item, AND-joined into {keyMatch}. Same placeholders.
 	// ⭐⭐ NULL-SAFE, AND THE INDEX IS WHY. A key column may legitimately be empty — a register
 	// dimension nobody filled in stores NULL in all three of its physical fields — and plain `=`
@@ -621,20 +607,20 @@ struct ibMaterializationDialect
 	// — seen live 2026-08-31 on a movement whose Characteristic was left empty. Two notions of
 	// equality over one key: the index's and the ON clause's. The statement is written from the same
 	// key list the index is built from, so the COMPARISON has to come from there too.
-	wxString m_deltaKeyMatchItem = wxT("{target}.{col} IS NOT DISTINCT FROM {source}.{col}");
+	ibString m_deltaKeyMatchItem = ibT("{target}.{col} IS NOT DISTINCT FROM {source}.{col}");
 
 	// How the two sides are named inside the items above. PG / SQLite: the target is the
 	// table itself and the incoming row is "excluded". Firebird's MERGE binds both to
 	// explicit aliases. One slot, two spellings.
-	wxString m_deltaTargetAlias = wxT("{table}");
-	wxString m_deltaSourceAlias = wxT("excluded");
+	ibString m_deltaTargetAlias = ibT("{table}");
+	ibString m_deltaSourceAlias = ibT("excluded");
 
 	// Renders the incoming row as a one-row relation for MERGE USING — {selectItems} is
 	// "<value> AS <col>" per column, comma-joined. Empty (PG / SQLite) = the form
 	// takes VALUES directly and needs no relation. Firebird additionally needs a FROM, and
 	// takes it from ibDialectDictionary::m_selectFromDual (RDB$DATABASE) — the fact already
 	// lives there, so it is not restated here.
-	wxString m_deltaSourceTemplate;
+	ibString m_deltaSourceTemplate;
 
 	// (Period truncation is NOT here — it moved to ibDialectDictionary::m_periodTrunc, where the
 	//  L2-1 renderer can reach it. A trigger keys its rows through the same map the view projects
@@ -665,11 +651,11 @@ struct ibMaterializationDialect
 	// joined at all, and a bare CAST of a binary reference key or an unbounded string is either a
 	// character-set error or a silent truncation. A hashed part is fixed-width, ASCII, and cannot
 	// truncate.
-	wxString m_keyHashItem;
+	ibString m_keyHashItem;
 	// How the parts are joined. Firebird / PG / SQLite concatenate with ||; a dialect with	// CONCAT() instead joins on a comma and wraps the list in its digest template.
-	wxString m_keyHashJoin = wxT(" || '.' || ");
+	ibString m_keyHashJoin = ibT(" || '.' || ");
 	// {expr} — the joined parts, digested into what the column stores.
-	wxString m_keyHashDigest;
+	ibString m_keyHashDigest;
 
 	// --- a byte string written INTO trigger and view text ----------------------
 	// A trigger body binds no parameters, so a binary value it compares with is spelled as a literal: a
@@ -677,13 +663,13 @@ struct ibMaterializationDialect
 	// standard binary string (Firebird, SQLite, MySQL); PostgreSQL's bytea is written differently. What asks
 	// for it: an EMPTY REFERENCE differs from a filled one only in its id field (zero bytes), so "the row
 	// names an account" is that field compared with the zero id.
-	wxString m_binaryLiteralTemplate = wxT("X'{hex}'");
+	ibString m_binaryLiteralTemplate = ibT("X'{hex}'");
 
 	// --- the totals table itself ----------------------------------------------
 	// Appended after the CREATE TABLE column list — PostgreSQL " WITH (fillfactor = 80)",
 	// which keeps the hot totals UPDATE on the same page (HOT update, no index write) and is
 	// worth a multiple on write throughput. Empty elsewhere.
-	wxString m_totalsTableSuffix;
+	ibString m_totalsTableSuffix;
 
 	// --- split totals (write-contention relief) --------------------------------
 	// An expression yielding an id unique to the CURRENT connection / transaction. It is the
@@ -697,24 +683,24 @@ struct ibMaterializationDialect
 	// EMPTY = this engine cannot split totals. SQLite is the honest empty: a single-writer
 	// embedded engine has no write contention to relieve, so the feature is meaningless
 	// rather than missing. A register asking for shards on such an engine gets one shard.
-	wxString m_connectionIdExpr;
+	ibString m_connectionIdExpr;
 
 	// Folds the connection id into a shard number — {conn} and {n}. Default is the infix
 	// remainder every engine but Firebird takes; Firebird has no '%' operator and spells it
 	// MOD(a, b). A one-token difference, but it is exactly the kind that would otherwise
 	// become an `if (driver)` in the renderer.
-	wxString m_shardExprTemplate = wxT("({conn} % {n})");
+	ibString m_shardExprTemplate = ibT("({conn} % {n})");
 
 	// --- the read views -------------------------------------------------------
 	// {name} {body}. The view is the register's public read API; the totals table under it is
 	// an implementation detail, which is what lets the strategy change later without touching
 	// a single caller above L3.
-	wxString m_createViewTemplate = wxT("CREATE VIEW {name} AS {body}");
-	wxString m_dropViewTemplate   = wxT("DROP VIEW {name}");
+	ibString m_createViewTemplate = ibT("CREATE VIEW {name} AS {body}");
+	ibString m_dropViewTemplate   = ibT("DROP VIEW {name}");
 };
 
-WX_DECLARE_HASH_SET(ibDatabaseResultSet*, wxPointerHash, wxPointerEqual, DatabaseResultSetHashSet);
-WX_DECLARE_HASH_SET(ibPreparedStatement*, wxPointerHash, wxPointerEqual, DatabaseStatementHashSet);
+typedef std::unordered_set<ibDatabaseResultSet*> DatabaseResultSetHashSet;
+typedef std::unordered_set<ibPreparedStatement*> DatabaseStatementHashSet;
 
 class ibDatabaseConnectionHolder;
 class ibConnectionPool;
@@ -761,7 +747,7 @@ public:
 	virtual ~ibDatabaseLayer();
 
 	// Open database
-	virtual bool Open(const wxString& strDatabase) = 0;
+	virtual bool Open(const ibString& strDatabase) = 0;
 
 	/// close database  
 	virtual bool Close() = 0;
@@ -892,32 +878,38 @@ public:
 	//   * a period-truncation expression is `strftime('%Y-%m-%d', …)` — a '%' that printf would
 	//     eat before the server ever saw it.
 	// Anything whose text is already final belongs here, not there.
-	int RunStatement(const wxString& sql) { return DoRunQuery(sql, /*bParseQueries*/ false); }
+	int RunStatement(const ibString& sql) { return DoRunQuery(sql, /*bParseQueries*/ false); }
 
-	// Define formatted run query
+	// Define formatted run query — the text is `format` with `args` put in, as ibString::Format puts them
 
 	/// Run an insert, update, or delete query on the database
-	WX_DEFINE_VARARG_FUNC(int, RunQuery, 1, (const wxFormatString&),
-		DoRunQueryWchar, DoRunQueryUtf8);
+	template <class... Args>
+	int RunQuery(const ibString& format, const Args&... args) {
+		return DoRunQuery(ibString::Format(format, args...), true);
+	}
 
 	///  Run a select query on the database
-	WX_DEFINE_VARARG_FUNC(ibDatabaseResultSet*, RunQueryWithResults, 1, (const wxFormatString&),
-		DoRunQueryWithResultsWchar, DoRunQueryWithResultsUtf8);
+	template <class... Args>
+	ibDatabaseResultSet* RunQueryWithResults(const ibString& format, const Args&... args) {
+		return DoRunQueryWithResults(ibString::Format(format, args...));
+	}
 
 	/// ibPreparedStatement support
-	WX_DEFINE_VARARG_FUNC(ibPreparedStatement*, PrepareStatement, 1, (const wxFormatString&),
-		DoPrepareStatementWchar, DoPrepareStatementUtf8);
+	template <class... Args>
+	ibPreparedStatement* PrepareStatement(const ibString& format, const Args&... args) {
+		return DoPrepareStatement(ibString::Format(format, args...));
+	}
 
 	// function names more consistent with JDBC and wxSQLite3
 	// these just provide wrappers for existing functions
 
 	/// See RunQuery
-	WX_DEFINE_VARARG_FUNC(int, ExecuteUpdate, 1, (const wxFormatString&),
-		DoRunQueryWchar, DoRunQueryUtf8);
+	template <class... Args>
+	int ExecuteUpdate(const ibString& format, const Args&... args) { return RunQuery(format, args...); }
 
 	/// See RunQueryWithResults
-	WX_DEFINE_VARARG_FUNC(ibDatabaseResultSet*, ExecuteQuery, 1, (const wxFormatString&),
-		DoRunQueryWithResultsWchar, DoRunQueryWithResultsUtf8);
+	template <class... Args>
+	ibDatabaseResultSet* ExecuteQuery(const ibString& format, const Args&... args) { return RunQueryWithResults(format, args...); }
 
 	/// Close a result set returned by the database or a prepared statement previously
 	virtual bool CloseResultSet(ibDatabaseResultSet*& pResultSet);
@@ -929,19 +921,19 @@ public:
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	/// Check for the existence of a table by name
-	virtual bool TableExists(const wxString& table) = 0;
+	virtual bool TableExists(const ibString& table) = 0;
 
 	/// Check for the existence of a view by name
-	virtual bool ViewExists(const wxString& view) = 0;
+	virtual bool ViewExists(const ibString& view) = 0;
 	
 	/// Retrieve all table names
-	virtual wxArrayString GetTables() = 0;
+	virtual std::vector<ibString> GetTables() = 0;
 	
 	/// Retrieve all view names
-	virtual wxArrayString GetViews() = 0;
+	virtual std::vector<ibString> GetViews() = 0;
 
 	/// Retrieve all column names for a table
-	virtual wxArrayString GetColumns(const wxString& table) = 0;
+	virtual std::vector<ibString> GetColumns(const ibString& table) = 0;
 
 	// Database single result retrieval API contributed by Guru Kathiresan
 	/// With the GetSingleResultX API, two additional exception types are thrown:
@@ -951,65 +943,7 @@ public:
 	/// Retrieve a single integer value from a query
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
 	///  is thrown unless bRequireUniqueResult is false
-	virtual int GetSingleResultInt(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual int GetSingleResultInt(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single string value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual ibString GetSingleResultString(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual ibString GetSingleResultString(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single long value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual long GetSingleResultLong(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual long GetSingleResultLong(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single bool value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual bool GetSingleResultBool(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual bool GetSingleResultBool(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single date/time value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual ibDateTime GetSingleResultDate(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual ibDateTime GetSingleResultDate(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single Blob value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual void* GetSingleResultBlob(const wxString& strSQL, int nField, wxMemoryBuffer& buffer, bool bRequireUniqueResult = true);
-	virtual void* GetSingleResultBlob(const wxString& strSQL, const wxString& strField, wxMemoryBuffer& buffer, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single double value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual double GetSingleResultDouble(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual double GetSingleResultDouble(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single number value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual ibNumber GetSingleResultNumber(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual ibNumber GetSingleResultNumber(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve all the values of one field in a result set
-	virtual wxArrayInt GetResultsArrayInt(const wxString& strSQL, int nField);
-	virtual wxArrayInt GetResultsArrayInt(const wxString& strSQL, const wxString& Field);
-
-	virtual wxArrayString GetResultsArrayString(const wxString& strSQL, int nField);
-	virtual wxArrayString GetResultsArrayString(const wxString& strSQL, const wxString& Field);
-
-	virtual wxArrayLong GetResultsArrayLong(const wxString& strSQL, int nField);
-	virtual wxArrayLong GetResultsArrayLong(const wxString& strSQL, const wxString& Field);
-
-#if wxCHECK_VERSION(2, 7, 0)
-	virtual wxArrayDouble GetResultsArrayDouble(const wxString& strSQL, int nField);
-	virtual wxArrayDouble GetResultsArrayDouble(const wxString& strSQL, const wxString& Field);
-#endif
+	virtual int GetSingleResultInt(const ibString& strSQL, int nField, bool bRequireUniqueResult = true);
 
 	virtual int GetDatabaseLayerType() const = 0;
 
@@ -1102,15 +1036,15 @@ protected:
 	// query database
 
 	/// Run an insert, update, or delete query on the database
-	virtual int DoRunQuery(const wxString& strQuery, bool bParseQueries) = 0;
+	virtual int DoRunQuery(const ibString& strQuery, bool bParseQueries) = 0;
 
 	/// Run a select query on the database
-	virtual ibDatabaseResultSet* DoRunQueryWithResults(const wxString& strQuery) = 0;
+	virtual ibDatabaseResultSet* DoRunQueryWithResults(const ibString& strQuery) = 0;
 
 	// prepared statement support
 
 	/// Prepare a SQL statement which can be reused with different parameters
-	virtual ibPreparedStatement* DoPrepareStatement(const wxString& strQuery) = 0;
+	virtual ibPreparedStatement* DoPrepareStatement(const ibString& strQuery) = 0;
 
 	// Driver-specific transaction operations. Called by the non-virtual
 	// wrappers above only at depth transitions (0→1 for DoBegin, 1→0
@@ -1199,38 +1133,9 @@ protected:
 
 private:
 
-	int GetSingleResultInt(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	ibString GetSingleResultString(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	long GetSingleResultLong(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	bool GetSingleResultBool(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	ibDateTime GetSingleResultDate(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	void* GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, wxMemoryBuffer& buffer, bool bRequireUniqueResult = true);
-	double GetSingleResultDouble(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	ibNumber GetSingleResultNumber(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	wxArrayInt GetResultsArrayInt(const wxString& strSQL, const wxVariant* field);
-	wxArrayString GetResultsArrayString(const wxString& strSQL, const wxVariant* field);
-	wxArrayLong GetResultsArrayLong(const wxString& strSQL, const wxVariant* field);
-
-#if wxCHECK_VERSION(2, 7, 0)
-	wxArrayDouble GetResultsArrayDouble(const wxString& strSQL, const wxVariant* field);
-#endif
-
 	DatabaseResultSetHashSet m_ResultSets;
 	DatabaseStatementHashSet m_Statements;
-
-#if !wxUSE_UTF8_LOCALE_ONLY
-	int DoRunQueryWchar(const wxChar* format, ...);
-	ibDatabaseResultSet* DoRunQueryWithResultsWchar(const wxChar* format, ...);
-	ibPreparedStatement* DoPrepareStatementWchar(const wxChar* format, ...);
-#endif
-#if wxUSE_UNICODE_UTF8
-	int DoRunQueryUtf8(const wxChar* format, ...);
-	ibDatabaseResultSet* DoRunQueryWithResultsUtf8(const wxChar* format, ...);
-	ibPreparedStatement* DoPrepareStatementUtf8(const wxChar* format, ...);
-#endif
 };
-
-#include <memory>
 
 // RAII guard for an ibDatabaseResultSet* obtained from ibDatabaseLayer::RunQueryWithResults
 // or ibPreparedStatement::RunQueryWithResults. Calls rs->Close() and db->CloseResultSet(rs)

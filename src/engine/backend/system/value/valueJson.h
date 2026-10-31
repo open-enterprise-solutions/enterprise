@@ -113,7 +113,7 @@ private:
 // A number token as the parser hands it over -> the number, or why not. Apart from the reader so that what it
 // does to the token can be asked directly (the locale's decimal point, above all: a suite cannot count on a
 // comma locale being installed where it runs).
-BACKEND_API bool ibJsonNumberFromToken(const std::string& token, ibNumber& number, wxString& refusal);
+BACKEND_API bool ibJsonNumberFromToken(const std::string& token, ibNumber& number, ibString& refusal);
 
 // ⭐ …AND WRITTEN. The writer keeps the document well-formed by itself: a value inside an object needs its name
 // first, an end closes what was opened, a document holds one value, and Close() refuses a text with anything
@@ -160,7 +160,7 @@ public:
 	void WriteEndArray();
 	void WritePropertyName(const ibString& name);
 	void WriteValue(const ibValue& value);
-	wxString Close();                          // the text; raises while anything is still open
+	ibString Close();                          // the text; raises while anything is still open
 
 private:
 	struct ibFrame {
@@ -175,7 +175,7 @@ private:
 	void WriteAny(const ibValue& value, int depth);
 
 	std::vector<ibFrame> m_open;
-	wxString             m_text;
+	ibString             m_text;
 	ibJsonFormatting     m_formatting = ibJsonFormatting_Compact;
 	bool                 m_rootWritten = false;
 };

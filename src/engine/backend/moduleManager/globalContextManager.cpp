@@ -34,17 +34,17 @@ class ibValueGlobalContextStructureManager : public ibValueStructure {
 		}
 	}
 
-	virtual wxString GetClassName() const {
+	virtual ibString GetClassName() const {
 		ibCtorAbstractType* so = m_metaData->GetAvailableCtor(m_clsid);
 		if (so != nullptr)
-			return so->GetClassName() + wxT("Manager");
+			return so->GetClassName() + ibT("Manager");
 		return ibValueStructure::GetClassName();
 	}
 
 	virtual ibString GetString() const {
 		ibCtorAbstractType* so = m_metaData->GetAvailableCtor(m_clsid);
 		if (so != nullptr)
-			return so->GetClassName() + wxT("Manager");
+			return so->GetClassName() + ibT("Manager");
 		return ibValueStructure::GetString();
 	}
 
@@ -77,18 +77,18 @@ public:
 		: ibValueStructure(true)   // read-only: the forks are the platform's, not a caller's map
 	{
 		ibValuePtr<ibValuePredefinedJobs> predefined(new ibValuePredefinedJobs(metaData));
-		ibValueStructure::Insert(wxT("Predefined"), predefined);
+		ibValueStructure::Insert(ibT("Predefined"), predefined);
 
 		// The parameterized fork is the SAME parameterised manager every other metatype gets —
 		// handed this metatype's clsid. Nothing about jobs is special on this side, and that is
 		// the point: a job's rows select exactly like a catalog's.
 		ibValuePtr<ibValueGlobalContextStructureManager> parameterized(
 			new ibValueGlobalContextStructureManager(g_metaParameterizedJobCLSID, metaData));
-		ibValueStructure::Insert(wxT("Parameterized"), parameterized);
+		ibValueStructure::Insert(ibT("Parameterized"), parameterized);
 	}
 
-	virtual wxString GetClassName() const { return wxT("ScheduledJobsManager"); }
-	virtual ibString GetString() const { return wxT("ScheduledJobsManager"); }
+	virtual ibString GetClassName() const { return ibT("ScheduledJobsManager"); }
+	virtual ibString GetString() const { return ibT("ScheduledJobsManager"); }
 };
 
 enum
@@ -116,32 +116,32 @@ enum
 
 void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(wxT("Constants"));
-	helper.AppendProp(wxT("Catalogs"));
-	helper.AppendProp(wxT("Documents"));
-	helper.AppendProp(wxT("Enumerations"));
-	helper.AppendProp(wxT("DataProcessors"));
-	helper.AppendProp(wxT("ExternalDataProcessors"));
-	helper.AppendProp(wxT("Reports"));
-	helper.AppendProp(wxT("ExternalReports"));
-	helper.AppendProp(wxT("InformationRegisters"));
-	helper.AppendProp(wxT("AccumulationRegisters"));
-	helper.AppendProp(wxT("ChartsOfCharacteristicTypes"));
-	helper.AppendProp(wxT("ChartsOfAccounts"));
-	helper.AppendProp(wxT("AccountingRegisters"));
-	helper.AppendProp(wxT("ChartsOfCalculationTypes"));
-	helper.AppendProp(wxT("CalculationRegisters"));
+	helper.AppendProp(ibT("Constants"));
+	helper.AppendProp(ibT("Catalogs"));
+	helper.AppendProp(ibT("Documents"));
+	helper.AppendProp(ibT("Enumerations"));
+	helper.AppendProp(ibT("DataProcessors"));
+	helper.AppendProp(ibT("ExternalDataProcessors"));
+	helper.AppendProp(ibT("Reports"));
+	helper.AppendProp(ibT("ExternalReports"));
+	helper.AppendProp(ibT("InformationRegisters"));
+	helper.AppendProp(ibT("AccumulationRegisters"));
+	helper.AppendProp(ibT("ChartsOfCharacteristicTypes"));
+	helper.AppendProp(ibT("ChartsOfAccounts"));
+	helper.AppendProp(ibT("AccountingRegisters"));
+	helper.AppendProp(ibT("ChartsOfCalculationTypes"));
+	helper.AppendProp(ibT("CalculationRegisters"));
 	// Where a border is read and said — `Sequences.<Name>.GetBorder(…)` / `SetBorder(…)`.
-	helper.AppendProp(wxT("Sequences"));
+	helper.AppendProp(ibT("Sequences"));
 	// ONE entry point for scheduled work, two forks inside it — Predefined and Parameterized. See
 	// ibValueScheduledJobsManager above for why both live behind one name.
-	helper.AppendProp(wxT("ScheduledJobs"));
+	helper.AppendProp(ibT("ScheduledJobs"));
 	// The configuration's own declared parameters of this session. Read anywhere,
 	// written only by the session module (metaSessionParameterObject.h).
-	helper.AppendProp(wxT("SessionParameters"));
+	helper.AppendProp(ibT("SessionParameters"));
 	// Whether a part of the configuration is used in this base — `FunctionalOptions.<Name>.Get()`. Each
 	// option IS a constant, so the manager a name yields is the constant's own (metaFunctionalOptionObject.h).
-	helper.AppendProp(wxT("FunctionalOptions"));
+	helper.AppendProp(ibT("FunctionalOptions"));
 }
 
 #include "backend/metaCollection/metaSessionParameterObject.h"   // the metatype AND the value it yields

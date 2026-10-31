@@ -2,17 +2,14 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode — readable Bool node value
 
 
-//base property for "bool"
-bool ibPropertyBoolean::SetDataValue(const ibValue& varPropVal)
+bool ibPropertyBoolean::GetValueAsBoolean() const
 {
-	SetValue(varPropVal.GetBoolean());
-	return true;
+	return GetNodeValue().AsBool();
 }
 
-bool ibPropertyBoolean::GetDataValue(ibValue& pvarPropVal) const
+void ibPropertyBoolean::SetValue(const bool boolean)
 {
-	pvarPropVal = ibPropertyBoolean::GetValueAsBoolean();
-	return true;
+	ibPropertySerializable::ReadNodeValue(ibDataValue::Bool(boolean));
 }
 
 bool ibPropertyBoolean::ReadNodeValue(const ibDataValue& value)
@@ -33,14 +30,14 @@ bool ibPropertyBoolean::ReadNodeValue(const ibDataValue& value)
 	// path existed; the exception jumped over it (found 2026-09-01, sweeping every tool).
 	if (value.Kind() == ibDataKind::String) {
 
-		const wxString word = value.AsString();
+		const ibString word = value.AsString();
 
-		if (word.IsSameAs(wxT("true"), false) || word.IsSameAs(wxT("1"))) {
+		if (word.IsSameAs(ibT("true"), false) || word.IsSameAs(ibT("1"))) {
 			ibPropertyBoolean::SetValue(true);
 			return true;
 		}
 
-		if (word.IsSameAs(wxT("false"), false) || word.IsSameAs(wxT("0"))) {
+		if (word.IsSameAs(ibT("false"), false) || word.IsSameAs(ibT("0"))) {
 			ibPropertyBoolean::SetValue(false);
 			return true;
 		}
@@ -52,11 +49,5 @@ bool ibPropertyBoolean::ReadNodeValue(const ibDataValue& value)
 		return false;
 
 	ibPropertyBoolean::SetValue(value.AsBool());
-	return true;
-}
-
-bool ibPropertyBoolean::WriteNodeValue(ibDataValue& value) const
-{
-	value = ibDataValue::Bool(ibPropertyBoolean::GetValueAsBoolean());
 	return true;
 }

@@ -16,7 +16,7 @@ void ibValueSpreadsheetDetails::LinkTo(const ibValue& parent)
 	m_parents.push_back(parent);
 }
 
-const ibValue& ibValueSpreadsheetDetails::Unwrap(const ibValue& value)
+const ibVariant& ibValueSpreadsheetDetails::Unwrap(const ibVariant& value)
 {
 	const ibValueSpreadsheetDetails* details = From(value);
 	return details != nullptr ? details->m_value : value;
@@ -83,9 +83,9 @@ void ibValueSpreadsheetDetails_BindNames(ibValue::ibMemberTable& helper, const i
 	// ⚠ THREE NAMES, AND NO MORE. What a script can usefully ask of a details parameter is which
 	// field it stands for, what kind of field that is, and what value it holds; the LINKS are walked
 	// by the detail itself, in C++, and publishing them would be a second surface to keep true.
-	helper.AppendProp(wxT("Field"));
-	helper.AppendProp(wxT("Kind"));
-	helper.AppendProp(wxT("Value"));
+	helper.AppendProp(ibT("Field"));
+	helper.AppendProp(ibT("Kind"));
+	helper.AppendProp(ibT("Value"));
 }
 
 bool ibValueSpreadsheetDetails::GetPropVal(const long lPropNum, ibValue& pvarPropVal)

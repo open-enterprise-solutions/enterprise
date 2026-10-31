@@ -1,13 +1,12 @@
 #include "resultSetMetaData.h"
 
-
-int ibResultSetMetaData::FindColumnByName(const wxString &colName)
+int ibResultSetMetaData::FindColumnByName(const ibString &colName)
 {
 	for (int i = 1; i <= GetColumnCount(); i++)
 	{
-		if (stringUtils::CompareString(colName, GetColumnName(i)))
+		if (stringUtils::IsSameAs(colName, GetColumnName(i)))
 			return i;
 	}
 
-	return wxNOT_FOUND;
+	return -1;
 }

@@ -33,25 +33,28 @@ public:
 	virtual bool IsDesignerHost() const { return false; }
 	// The title bar — the form's caption, as the host shows it: the client's view, as its document's title; the
 	// designer's editor, on the card it draws.
-	virtual void SetCaption(const wxString& strCaption) = 0;
-	// ⭐ A PICTURE AS THE FRAME NAMES IT — by its id, the client given the picture itself once (ibClientFrame::SendPicture),
-	// against the configuration of the form held. Empty: no picture, or no client to draw for.
-	virtual wxString SendPicture(const struct ibPictureDescription& picture) = 0;
+	virtual void SetCaption(const ibString& strCaption) = 0;
 
 	void CreateVisualHost();
 	bool UpdateVisualHost(class ibDataNode& frame);
 	void ClearVisualHost();
 
-	void CreateControl(class ibValueFrame* control);
+	void CreateControl(class ibValueFrame* control, bool firstCreated = false);
 	void UpdateControl(class ibValueFrame* control);
 	void RemoveControl(class ibValueFrame* control);
 	void SelectControl(class ibValueFrame* control);
 
-private:
+protected:
 
-	void GenerateControl(class ibValueFrame* control);
-	bool RefreshControl(class ibValueFrame* control, class ibDataNode& node);
+	// A control's life as a host takes it — the designer's editor writes a new one's node with them (WriteClasses).
+	void GenerateControl(class ibValueFrame* control, bool firstCreated = false);
+	void RefreshControl(class ibValueFrame* control, class ibDataNode& node);
+	// …and drawn again over the node it was drawn as: its own part read anew, each in it drawn there copied as it was,
+	// one not there (added since) read whole.
+	void RefreshControl(class ibValueFrame* control, class ibDataNode& node, const class ibDataNode& drawn);
 	void ClearControl(class ibValueFrame* control);
+
+private:
 
 	// ⭐ THE FRAME AS DRAWN LAST, AND THE CONTROLS UPDATED SINCE — gathered as they change, never worked out by
 	// comparing: the next frame draws those anew and keeps the rest as drawn.
@@ -96,10 +99,7 @@ public:
 	// THE DOCUMENT'S TITLE FROM THE FORM'S CAPTION, the desktop host's own (ibVisualHostClient::SetCaption): a
 	// caption the form has is the title; without one, what its source object says of itself (a new object's form
 	// included), else the form's synonym. What a person reads the document as — its tab, a question about it.
-	virtual void SetCaption(const wxString& strCaption) override;
-
-	// The client this view's tab is drawn for sends it (ibClientFrame::SendPicture).
-	virtual wxString SendPicture(const ibPictureDescription& picture) override;
+	virtual void SetCaption(const ibString& strCaption) override;
 
 	// THE SAME DOC/VIEW, A FACADE OVER THE FORM'S ACTIVE CONTROL (ibValueForm::GetActiveControl): when it holds
 	// a view of its own (ibValueFrame::GetControlView — the grid box, the text box), activating the form
@@ -135,7 +135,7 @@ public:
 
 	virtual bool IsVisualDemonstrationDoc() const { return false; }
 
-	virtual bool OnCreate(const wxString& WXUNUSED(path), long flags) override;
+	virtual bool OnCreate(const ibString& /*path*/, long flags) override;
 	virtual bool OnCloseDocument() override;
 
 	virtual bool IsCloseOnOwnerClose() const override;

@@ -21,29 +21,29 @@ namespace {
 // reason Firebird can put {table} before {timing} without the renderer knowing.
 // ---------------------------------------------------------------------------
 
-wxString Fill(wxString tpl, const wxString& key, const wxString& value)
+ibString Fill(ibString tpl, const ibString& key, const ibString& value)
 {
-	tpl.Replace(wxT("{") + key + wxT("}"), value);
+	tpl.Replace(ibT("{") + key + ibT("}"), value);
 	return tpl;
 }
 
 // Every `{binary:<hex>}` in a guard, spelled as the engine writes a byte string (m_binaryLiteralTemplate).
-wxString FillBinaryLiterals(wxString text, const ibMaterializationDialect& mat)
+ibString FillBinaryLiterals(ibString text, const ibMaterializationDialect& mat)
 {
-	static const wxString open = wxT("{binary:");
-	for (size_t at = text.find(open); at != wxString::npos; at = text.find(open)) {
-		const size_t close = text.find(wxT('}'), at);
-		if (close == wxString::npos)
+	static const ibString open = ibT("{binary:");
+	for (size_t at = text.find(open); at != ibString::npos; at = text.find(open)) {
+		const size_t close = text.find(ibT('}'), at);
+		if (close == ibString::npos)
 			break;
-		const wxString hex = text.Mid(at + open.length(), close - at - open.length());
-		text = text.Left(at) + Fill(mat.m_binaryLiteralTemplate, wxT("hex"), hex) + text.Mid(close + 1);
+		const ibString hex = text.Mid(at + open.length(), close - at - open.length());
+		text = text.Left(at) + Fill(mat.m_binaryLiteralTemplate, ibT("hex"), hex) + text.Mid(close + 1);
 	}
 	return text;
 }
 
-wxString Join(const std::vector<wxString>& items, const wxString& sep)
+ibString Join(const std::vector<ibString>& items, const ibString& sep)
 {
-	wxString out;
+	ibString out;
 	for (size_t i = 0; i < items.size(); i++) {
 		if (i != 0) out += sep;
 		out += items[i];
@@ -53,21 +53,21 @@ wxString Join(const std::vector<wxString>& items, const wxString& sep)
 
 // The suffix a period PROJECTION column carries. Fixed spellings: they become column names on a
 // view that scripts and reports address by name, so they are API.
-const wxChar* UnitSuffix(ibTotalsPeriod unit)
+const ibChar* UnitSuffix(ibTotalsPeriod unit)
 {
 	switch (unit) {
-		case ibTotalsPeriod::Second:   return wxT("Second");
-		case ibTotalsPeriod::Minute:   return wxT("Minute");
-		case ibTotalsPeriod::Hour:     return wxT("Hour");
-		case ibTotalsPeriod::Day:      return wxT("Day");
-		case ibTotalsPeriod::Week:     return wxT("Week");
-		case ibTotalsPeriod::TenDays:  return wxT("TenDays");
-		case ibTotalsPeriod::Month:    return wxT("Month");
-		case ibTotalsPeriod::Quarter:  return wxT("Quarter");
-		case ibTotalsPeriod::HalfYear: return wxT("HalfYear");
-		case ibTotalsPeriod::Year:     return wxT("Year");
+		case ibTotalsPeriod::Second:   return ibT("Second");
+		case ibTotalsPeriod::Minute:   return ibT("Minute");
+		case ibTotalsPeriod::Hour:     return ibT("Hour");
+		case ibTotalsPeriod::Day:      return ibT("Day");
+		case ibTotalsPeriod::Week:     return ibT("Week");
+		case ibTotalsPeriod::TenDays:  return ibT("TenDays");
+		case ibTotalsPeriod::Month:    return ibT("Month");
+		case ibTotalsPeriod::Quarter:  return ibT("Quarter");
+		case ibTotalsPeriod::HalfYear: return ibT("HalfYear");
+		case ibTotalsPeriod::Year:     return ibT("Year");
 	}
-	return wxT("");
+	return ibT("");
 }
 
 // Every unit in COARSENING order — the enum's own contract, restated once so the projection walk
@@ -87,14 +87,14 @@ const ibTotalsPeriod g_units[] = {
 // Throws when the engine has no form for the unit: falling back to a neighbouring unit, or
 // leaving the value untruncated, yields a wrong grouping key that still runs, still commits, and
 // reconciles to nothing months later.
-wxString Truncate(const ibDialectDictionary& dialect, ibTotalsPeriod unit, const wxString& expr)
+ibString Truncate(const ibDialectDictionary& dialect, ibTotalsPeriod unit, const ibString& expr)
 {
 	const auto it = dialect.m_periodTrunc.find(unit);
 	if (it == dialect.m_periodTrunc.end()) {
 		ibBackendCoreException::Error(_("The database engine cannot truncate a period to '%s'"), UnitSuffix(unit));
-		return wxEmptyString;   // not reached — Error throws
+		return ibEmptyString;   // not reached — Error throws
 	}
-	return Fill(it->second, wxT("expr"), expr);
+	return Fill(it->second, ibT("expr"), expr);
 }
 
 // ⭐⭐ WHAT IDENTIFIES A DERIVED ROW — the column and the value it is filled from, as ONE list.
@@ -106,27 +106,27 @@ wxString Truncate(const ibDialectDictionary& dialect, ibTotalsPeriod unit, const
 //
 // They walk one function because the digest below is an identity only while both walk the same parts
 // in the same order. Two copies of this list would compile, run, and hash the same row two ways.
-std::vector<std::pair<wxString, wxString>> KeyColumnValues(const ibMaterializeSpec& spec,
+std::vector<std::pair<ibString, ibString>> KeyColumnValues(const ibMaterializeSpec& spec,
                                                            const ibMaterializationDialect& mat,
                                                            const ibDialectDictionary& dialect,
-                                                           const wxString& rowAlias,
+                                                           const ibString& rowAlias,
                                                            unsigned int shards)
 {
 	const bool overRow = !rowAlias.IsEmpty();
-	std::vector<std::pair<wxString, wxString>> out;
+	std::vector<std::pair<ibString, ibString>> out;
 
 	if (!spec.m_periodColumn.IsEmpty()) {
 		out.push_back({ spec.m_periodColumn, overRow
-			? Truncate(dialect, spec.m_periodUnit, Fill(spec.m_periodSourceExpr, wxT("row"), rowAlias))
+			? Truncate(dialect, spec.m_periodUnit, Fill(spec.m_periodSourceExpr, ibT("row"), rowAlias))
 			: spec.m_periodColumn });
 	}
-	for (const wxString& k : spec.m_keyColumns)
-		out.push_back({ k, overRow ? (rowAlias + wxT(".") + k) : k });
+	for (const ibString& k : spec.m_keyColumns)
+		out.push_back({ k, overRow ? (rowAlias + ibT(".") + k) : k });
 
 	if (shards > 1) {
-		wxString shardExpr = Fill(mat.m_shardExprTemplate, wxT("conn"), mat.m_connectionIdExpr);
-		shardExpr = Fill(shardExpr, wxT("n"), wxString::Format(wxT("%u"), shards));
-		out.push_back({ ShardColumnName(), overRow ? shardExpr : wxString(ShardColumnName()) });
+		ibString shardExpr = Fill(mat.m_shardExprTemplate, ibT("conn"), mat.m_connectionIdExpr);
+		shardExpr = Fill(shardExpr, ibT("n"), ibString::Format(ibT("%u"), shards));
+		out.push_back({ ShardColumnName(), overRow ? shardExpr : ibString(ShardColumnName()) });
 	}
 	return out;
 }
@@ -135,16 +135,16 @@ std::vector<std::pair<wxString, wxString>> KeyColumnValues(const ibMaterializeSp
 // (ibKeyNeedsHash). Each part is hashed BEFORE the parts are joined: a key field may be a binary
 // reference key or an unbounded string, and casting either into text to join it is a character-set
 // error or a silent truncation, while a hashed part is fixed-width ASCII whatever it holds.
-wxString RenderKeyHash(const ibMaterializeSpec& spec, const ibMaterializationDialect& mat,
-                       const ibDialectDictionary& dialect, const wxString& rowAlias, unsigned int shards)
+ibString RenderKeyHash(const ibMaterializeSpec& spec, const ibMaterializationDialect& mat,
+                       const ibDialectDictionary& dialect, const ibString& rowAlias, unsigned int shards)
 {
 	if (spec.m_keyHashColumn.IsEmpty() || mat.m_keyHashDigest.IsEmpty())
-		return wxEmptyString;
+		return ibEmptyString;
 
-	std::vector<wxString> parts;
+	std::vector<ibString> parts;
 	for (const auto& keyColumn : KeyColumnValues(spec, mat, dialect, rowAlias, shards))
-		parts.push_back(Fill(mat.m_keyHashItem, wxT("value"), keyColumn.second));
-	return Fill(mat.m_keyHashDigest, wxT("expr"), Join(parts, mat.m_keyHashJoin));
+		parts.push_back(Fill(mat.m_keyHashItem, ibT("value"), keyColumn.second));
+	return Fill(mat.m_keyHashDigest, ibT("expr"), Join(parts, mat.m_keyHashJoin));
 }
 
 // ---------------------------------------------------------------------------
@@ -156,16 +156,16 @@ wxString RenderKeyHash(const ibMaterializeSpec& spec, const ibMaterializationDia
 // rides in the VALUE, never in the operator — so no engine needs a second template and a delete
 // cannot accidentally be emitted as a replace.
 // ---------------------------------------------------------------------------
-wxString RenderDelta(const ibMaterializeSpec& spec,
+ibString RenderDelta(const ibMaterializeSpec& spec,
                      const ibMaterializationDialect& mat,
                      const ibDialectDictionary& dialect,
-                     const wxString& rowAlias,
+                     const ibString& rowAlias,
                      bool negate,
                      unsigned int shards)
 {
-	auto overRow = [&](wxString e) { return Fill(std::move(e), wxT("row"), rowAlias); };
+	auto overRow = [&](ibString e) { return Fill(std::move(e), ibT("row"), rowAlias); };
 
-	std::vector<wxString> columns, values, keyNames, keyMatch, update, selectItems;
+	std::vector<ibString> columns, values, keyNames, keyMatch, update, selectItems;
 
 	// --- key columns ---
 	for (const auto& keyColumn : KeyColumnValues(spec, mat, dialect, rowAlias, shards)) {
@@ -182,74 +182,74 @@ wxString RenderDelta(const ibMaterializeSpec& spec,
 	// (exact), and the digest only carries the UNIQUE index. It is also absent from {update} — a
 	// matched row keeps the key it was inserted with, so its digest is already right, and re-deriving
 	// one on every movement would be work with no answer to give.
-	const wxString keyHashValue = RenderKeyHash(spec, mat, dialect, rowAlias, shards);
+	const ibString keyHashValue = RenderKeyHash(spec, mat, dialect, rowAlias, shards);
 	if (!keyHashValue.IsEmpty()) {
 		columns.push_back(spec.m_keyHashColumn);
 		values.push_back(keyHashValue);
 	}
 
 	// --- accumulating columns ---
-	const wxString target = Fill(mat.m_deltaTargetAlias, wxT("table"), spec.m_table);
-	const wxString source = mat.m_deltaSourceAlias;
+	const ibString target = Fill(mat.m_deltaTargetAlias, ibT("table"), spec.m_table);
+	const ibString source = mat.m_deltaSourceAlias;
 
 	for (const ibMaterializeDelta& d : spec.m_deltas) {
 		// NULL-SAFE ON THE SOURCE: a movement written before its figure existed holds NULL there, and a NULL
 		// delta inserted as a new row's figure makes that row absorb every later addition (m_deltaUpdateItem).
-		wxString value = wxT("COALESCE(") + overRow(d.m_valueExpr) + wxT(", 0)");
+		ibString value = ibT("COALESCE(") + overRow(d.m_valueExpr) + ibT(", 0)");
 		if (negate)
-			value = wxT("-(") + value + wxT(")");
+			value = ibT("-(") + value + ibT(")");
 		columns.push_back(d.m_column);
 		values.push_back(value);
 
-		wxString item = Fill(mat.m_deltaUpdateItem, wxT("col"), d.m_column);
-		item = Fill(item, wxT("target"), target);
-		item = Fill(item, wxT("source"), source);
+		ibString item = Fill(mat.m_deltaUpdateItem, ibT("col"), d.m_column);
+		item = Fill(item, ibT("target"), target);
+		item = Fill(item, ibT("source"), source);
 		update.push_back(item);
 	}
 
-	for (const wxString& k : keyNames) {
-		wxString item = Fill(mat.m_deltaKeyMatchItem, wxT("col"), k);
-		item = Fill(item, wxT("target"), target);
-		item = Fill(item, wxT("source"), source);
+	for (const ibString& k : keyNames) {
+		ibString item = Fill(mat.m_deltaKeyMatchItem, ibT("col"), k);
+		item = Fill(item, ibT("target"), target);
+		item = Fill(item, ibT("source"), source);
 		keyMatch.push_back(item);
 	}
 
 	for (size_t i = 0; i < columns.size(); i++)
-		selectItems.push_back(values[i] + wxT(" AS ") + columns[i]);
+		selectItems.push_back(values[i] + ibT(" AS ") + columns[i]);
 
 	// A guarded delta is a SELECT with a WHERE, and a source-less SELECT cannot carry one on every
 	// engine — hence the dummy relation, whose spelling already lives in the query dictionary
 	// (RDB$DATABASE / DUAL) and is therefore not restated in the materialization one.
-	const wxString guard = FillBinaryLiterals(overRow(spec.m_guard), mat);
-	wxString from, where;
+	const ibString guard = FillBinaryLiterals(overRow(spec.m_guard), mat);
+	ibString from, where;
 	if (!dialect.m_selectFromDual.IsEmpty())
-		from = wxT(" FROM ") + dialect.m_selectFromDual;
+		from = ibT(" FROM ") + dialect.m_selectFromDual;
 	if (!guard.IsEmpty())
-		where = wxT(" WHERE ") + guard;
+		where = ibT(" WHERE ") + guard;
 
-	wxString sourceRel;
+	ibString sourceRel;
 	if (!mat.m_deltaSourceTemplate.IsEmpty()) {
-		sourceRel = Fill(mat.m_deltaSourceTemplate, wxT("selectItems"), Join(selectItems, wxT(", ")));
-		sourceRel = Fill(sourceRel, wxT("from"),  from);
-		sourceRel = Fill(sourceRel, wxT("where"), where);
+		sourceRel = Fill(mat.m_deltaSourceTemplate, ibT("selectItems"), Join(selectItems, ibT(", ")));
+		sourceRel = Fill(sourceRel, ibT("from"),  from);
+		sourceRel = Fill(sourceRel, ibT("where"), where);
 	}
 
-	wxString sql = mat.m_deltaUpsertTemplate;
-	sql = Fill(sql, wxT("table"),     spec.m_table);
-	sql = Fill(sql, wxT("columns"),   Join(columns, wxT(", ")));
-	sql = Fill(sql, wxT("values"),    Join(values, wxT(", ")));
+	ibString sql = mat.m_deltaUpsertTemplate;
+	sql = Fill(sql, ibT("table"),     spec.m_table);
+	sql = Fill(sql, ibT("columns"),   Join(columns, ibT(", ")));
+	sql = Fill(sql, ibT("values"),    Join(values, ibT(", ")));
 	// {keys} is the CONFLICT TARGET, and a conflict target has to name an existing unique index. Where
 	// the key's uniqueness moved into the digest column, that is the index there is — so the engines
 	// that spell ON CONFLICT (<columns>) name it, and the ones that match by their own ON clause
 	// (Firebird's MERGE) never look at this placeholder at all.
-	sql = Fill(sql, wxT("keys"),      keyHashValue.IsEmpty() ? Join(keyNames, wxT(", ")) : spec.m_keyHashColumn);
-	sql = Fill(sql, wxT("update"),    Join(update, wxT(", ")));
-	sql = Fill(sql, wxT("keyMatch"),  Join(keyMatch, wxT(" AND ")));
-	sql = Fill(sql, wxT("sourceRel"), sourceRel);
-	sql = Fill(sql, wxT("target"),    target);
-	sql = Fill(sql, wxT("source"),    source);
-	sql = Fill(sql, wxT("from"),      from);
-	sql = Fill(sql, wxT("where"),     where);
+	sql = Fill(sql, ibT("keys"),      keyHashValue.IsEmpty() ? Join(keyNames, ibT(", ")) : spec.m_keyHashColumn);
+	sql = Fill(sql, ibT("update"),    Join(update, ibT(", ")));
+	sql = Fill(sql, ibT("keyMatch"),  Join(keyMatch, ibT(" AND ")));
+	sql = Fill(sql, ibT("sourceRel"), sourceRel);
+	sql = Fill(sql, ibT("target"),    target);
+	sql = Fill(sql, ibT("source"),    source);
+	sql = Fill(sql, ibT("from"),      from);
+	sql = Fill(sql, ibT("where"),     where);
 	return sql;
 }
 
@@ -259,28 +259,28 @@ wxString RenderDelta(const ibMaterializeSpec& spec,
 // and all of them land inside the one transaction that wrote the movement.
 void RenderTrigger(ibMaterializeSql& out,
                    const ibMaterializationDialect& mat,
-                   const wxString& name,
-                   const wxString& sourceTable,
-                   const wxString& timing,
-                   const std::vector<wxString>& statements)
+                   const ibString& name,
+                   const ibString& sourceTable,
+                   const ibString& timing,
+                   const std::vector<ibString>& statements)
 {
-	wxString body;
-	for (const wxString& s : statements)
+	ibString body;
+	for (const ibString& s : statements)
 		body += s + mat.m_bodyStatementTerminator;
 
-	wxString functionName;
+	ibString functionName;
 	if (!mat.m_functionShellTemplate.IsEmpty()) {
-		functionName = wxT("fn_") + name;
-		wxString fn = Fill(mat.m_functionShellTemplate, wxT("name"), functionName);
-		fn = Fill(fn, wxT("body"), body);
+		functionName = ibT("fn_") + name;
+		ibString fn = Fill(mat.m_functionShellTemplate, ibT("name"), functionName);
+		fn = Fill(fn, ibT("body"), body);
 		out.AddCreate(fn);
 	}
 
-	wxString sql = Fill(mat.m_triggerShellTemplate, wxT("name"), name);
-	sql = Fill(sql, wxT("table"),    sourceTable);
-	sql = Fill(sql, wxT("timing"),   timing);
-	sql = Fill(sql, wxT("body"),     body);
-	sql = Fill(sql, wxT("function"), functionName);
+	ibString sql = Fill(mat.m_triggerShellTemplate, ibT("name"), name);
+	sql = Fill(sql, ibT("table"),    sourceTable);
+	sql = Fill(sql, ibT("timing"),   timing);
+	sql = Fill(sql, ibT("body"),     body);
+	sql = Fill(sql, ibT("function"), functionName);
 	out.AddCreate(sql);
 }
 
@@ -298,9 +298,9 @@ void RenderTrigger(ibMaterializeSql& out,
 // read of a split table is a SUM over its shards — and that is the only place the split is visible.
 // Above the view nothing can tell a split table from a plain one, which is what makes the split a
 // storage decision rather than a schema one.
-wxString Fold(const wxString& column, bool collapsing)
+ibString Fold(const ibString& column, bool collapsing)
 {
-	return collapsing ? (wxT("SUM(") + column + wxT(")")) : column;
+	return collapsing ? (ibT("SUM(") + column + ibT(")")) : column;
 }
 
 // The period column plus every COARSER unit as its own projection, so one query can group by month
@@ -308,8 +308,8 @@ wxString Fold(const wxString& column, bool collapsing)
 // information does not exist, and a column silently repeating the month under the name "day" would
 // be worse than its absence.
 void AppendPeriodColumns(const ibMaterializeSpec& spec, const ibDialectDictionary& dialect,
-                         std::vector<wxString>& select, std::vector<wxString>& groupBy,
-                         const wxString& periodExpr = wxEmptyString)
+                         std::vector<ibString>& select, std::vector<ibString>& groupBy,
+                         const ibString& periodExpr = ibEmptyString)
 {
 	if (spec.m_periodColumn.IsEmpty())
 		return;
@@ -318,15 +318,15 @@ void AppendPeriodColumns(const ibMaterializeSpec& spec, const ibDialectDictionar
 	// carries the raw instant. Everything else -- the projections, their names, the grouping -- is
 	// the same sentence over whichever expression that is, which is why the arm passes it in rather
 	// than each arm growing its own copy of this walk.
-	const wxString base = periodExpr.IsEmpty() ? spec.m_periodColumn : periodExpr;
+	const ibString base = periodExpr.IsEmpty() ? spec.m_periodColumn : periodExpr;
 
-	select.push_back(base + (periodExpr.IsEmpty() ? wxString() : (wxT(" AS ") + spec.m_periodColumn)));
+	select.push_back(base + (periodExpr.IsEmpty() ? ibString() : (ibT(" AS ") + spec.m_periodColumn)));
 	groupBy.push_back(base);
 	for (const ibTotalsPeriod unit : g_units) {
 		if (unit <= spec.m_periodUnit)
 			continue;
-		const wxString expr = Truncate(dialect, unit, base);
-		select.push_back(expr + wxT(" AS ") + spec.m_periodColumn + wxT("_") + UnitSuffix(unit));
+		const ibString expr = Truncate(dialect, unit, base);
+		select.push_back(expr + ibT(" AS ") + spec.m_periodColumn + ibT("_") + UnitSuffix(unit));
 		groupBy.push_back(expr);
 	}
 }
@@ -341,47 +341,47 @@ void AppendPeriodColumns(const ibMaterializeSpec& spec, const ibDialectDictionar
 // The period is the RAW instant rather than a truncation: that is the whole reason this arm exists.
 // The stored arm answers down to the grain; below it, only a movement knows when it happened.
 // ---------------------------------------------------------------------------
-wxString RenderMovementArm(const ibMaterializeSpec& spec,
+ibString RenderMovementArm(const ibMaterializeSpec& spec,
                            const ibMaterializeView& view,
                            const ibMaterializationDialect& mat,
                            const ibDialectDictionary& dialect)
 {
-	auto overRow = [&](wxString e) { return Fill(std::move(e), wxT("row"), spec.m_source); };
+	auto overRow = [&](ibString e) { return Fill(std::move(e), ibT("row"), spec.m_source); };
 
 	// What a movement contributes to a stored column -- looked up, never re-derived. A column with
 	// no delta contributes nothing, which is the honest answer for a scaffold column.
-	auto contribution = [&](const wxString& column) -> wxString {
+	auto contribution = [&](const ibString& column) -> ibString {
 		for (const ibMaterializeDelta& d : spec.m_deltas)
 			if (d.m_column == column)
-				return wxT("(") + overRow(d.m_valueExpr) + wxT(")");
-		return wxT("0");
+				return ibT("(") + overRow(d.m_valueExpr) + ibT(")");
+		return ibT("0");
 	};
 
-	std::vector<wxString> select, unusedGroupBy;
+	std::vector<ibString> select, unusedGroupBy;
 	if (view.m_withPeriod)
 		AppendPeriodColumns(spec, dialect, select, unusedGroupBy, overRow(spec.m_periodSourceExpr));
-	for (const wxString& k : spec.m_keyColumns)
-		select.push_back(spec.m_source + wxT(".") + k);
+	for (const ibString& k : spec.m_keyColumns)
+		select.push_back(spec.m_source + ibT(".") + k);
 
 	for (const ibMaterializeViewColumn& c : view.m_columns) {
-		const wxString a = contribution(c.m_columnA);
-		const wxString b = c.m_columnB.IsEmpty() ? wxString() : contribution(c.m_columnB);
-		const wxString diff = b.IsEmpty() ? a : (wxT("(") + a + wxT(" - ") + b + wxT(")"));
+		const ibString a = contribution(c.m_columnA);
+		const ibString b = c.m_columnB.IsEmpty() ? ibString() : contribution(c.m_columnB);
+		const ibString diff = b.IsEmpty() ? a : (ibT("(") + a + ibT(" - ") + b + ibT(")"));
 
 		// ⚠ A RUNNING FORM HAS NO MEANING ON THIS ARM. A running sum is defined over the ordered
 		// stored rows; a movement is one row of the tail. A view that needs both is two views.
-		select.push_back(diff + wxT(" AS ") + c.m_alias);
+		select.push_back(diff + ibT(" AS ") + c.m_alias);
 	}
 
 	for (const auto& c : view.m_movementColumns)
-		select.push_back(spec.m_source + wxT(".") + c.first);
+		select.push_back(spec.m_source + ibT(".") + c.first);
 
 	// The SAME guard the trigger accumulates under. The stored arm holds only what was in force
 	// (the trigger saw to that); the movement arm has to apply the condition itself, or the tail
 	// would add rows the totals below it deliberately never counted.
-	wxString body = wxT("SELECT ") + Join(select, wxT(", ")) + wxT(" FROM ") + spec.m_source;
+	ibString body = ibT("SELECT ") + Join(select, ibT(", ")) + ibT(" FROM ") + spec.m_source;
 	if (!spec.m_guard.IsEmpty())
-		body += wxT(" WHERE ") + FillBinaryLiterals(overRow(spec.m_guard), mat);
+		body += ibT(" WHERE ") + FillBinaryLiterals(overRow(spec.m_guard), mat);
 
 	return body;
 }
@@ -395,7 +395,7 @@ wxString RenderMovementArm(const ibMaterializeSpec& spec,
 // this file gaining a line. That independence is the requirement: level 2 must not know which
 // tables exist above it.
 // ---------------------------------------------------------------------------
-wxString RenderView(const ibMaterializeSpec& spec,
+ibString RenderView(const ibMaterializeSpec& spec,
                     const ibMaterializeView& view,
                     const ibMaterializationDialect& mat,
                     const ibDialectDictionary& dialect,
@@ -408,10 +408,10 @@ wxString RenderView(const ibMaterializeSpec& spec,
 	// Miss this and a balance view reports whatever single period the engine happened to return.
 	const bool collapses = (shards > 1) || !view.m_withPeriod;
 
-	std::vector<wxString> select, groupBy;
+	std::vector<ibString> select, groupBy;
 	if (view.m_withPeriod)
 		AppendPeriodColumns(spec, dialect, select, groupBy);
-	for (const wxString& k : spec.m_keyColumns) { select.push_back(k); groupBy.push_back(k); }
+	for (const ibString& k : spec.m_keyColumns) { select.push_back(k); groupBy.push_back(k); }
 
 	// The window every running form is evaluated over: partition by the key, ordered by the period.
 	// The DATABASE walks the periods — the alternative is carrying every row out to a client and
@@ -433,34 +433,34 @@ wxString RenderView(const ibMaterializeSpec& spec,
 		if (c.m_agg == ibMaterializeAgg::RunningSum || c.m_agg == ibMaterializeAgg::RunningSumExcludingCurrent)
 			hasRunningForm = true;
 
-	const std::vector<wxString> windowOrder = spec.m_periodColumn.IsEmpty()
-		? std::vector<wxString>()
-		: std::vector<wxString>{ spec.m_periodColumn };
-	const wxString over = hasRunningForm
+	const std::vector<ibString> windowOrder = spec.m_periodColumn.IsEmpty()
+		? std::vector<ibString>()
+		: std::vector<ibString>{ spec.m_periodColumn };
+	const ibString over = hasRunningForm
 		? ibRenderOverClause(dialect, spec.m_keyColumns, windowOrder, ibQueryFrame::RangeThroughPeers)
-		: wxString();
+		: ibString();
 
-	wxString nonZero;
+	ibString nonZero;
 	for (const ibMaterializeViewColumn& c : view.m_columns) {
-		const wxString a = Fold(c.m_columnA, collapses);
-		const wxString b = c.m_columnB.IsEmpty() ? wxString() : Fold(c.m_columnB, collapses);
-		const wxString diff = b.IsEmpty() ? a : (wxT("(") + a + wxT(" - ") + b + wxT(")"));
+		const ibString a = Fold(c.m_columnA, collapses);
+		const ibString b = c.m_columnB.IsEmpty() ? ibString() : Fold(c.m_columnB, collapses);
+		const ibString diff = b.IsEmpty() ? a : (ibT("(") + a + ibT(" - ") + b + ibT(")"));
 
-		wxString expr;
+		ibString expr;
 		switch (c.m_agg) {
 			case ibMaterializeAgg::Value:      expr = a;    break;
 			case ibMaterializeAgg::Difference: expr = diff; break;
 			case ibMaterializeAgg::RunningSum:
-				expr = wxT("SUM(") + diff + wxT(")") + over;
+				expr = ibT("SUM(") + diff + ibT(")") + over;
 				break;
 			case ibMaterializeAgg::RunningSumExcludingCurrent:
 				// The running sum through this row, minus this row's own contribution. One window
 				// instead of two, and no self-join: the value entering a period is what left the
 				// previous one, by construction.
-				expr = wxT("(SUM(") + diff + wxT(")") + over + wxT(" - ") + diff + wxT(")");
+				expr = ibT("(SUM(") + diff + ibT(")") + over + ibT(" - ") + diff + ibT(")");
 				break;
 		}
-		select.push_back(expr + wxT(" AS ") + c.m_alias);
+		select.push_back(expr + ibT(" AS ") + c.m_alias);
 
 		if (view.m_dropZeroRows) {
 			// Survives if ANY column is non-zero — an item with quantity 0 but amount 5 still
@@ -468,8 +468,8 @@ wxString RenderView(const ibMaterializeSpec& spec,
 			// touched instead of what is actually there. Windowed forms are excluded because a
 			// window cannot appear in HAVING.
 			if (c.m_agg == ibMaterializeAgg::Value || c.m_agg == ibMaterializeAgg::Difference) {
-				const wxString nz = expr + wxT(" <> 0");
-				nonZero = nonZero.IsEmpty() ? nz : (nonZero + wxT(" OR ") + nz);
+				const ibString nz = expr + ibT(" <> 0");
+				nonZero = nonZero.IsEmpty() ? nz : (nonZero + ibT(" OR ") + nz);
 			}
 		}
 	}
@@ -479,23 +479,23 @@ wxString RenderView(const ibMaterializeSpec& spec,
 	// with, and Firebird answers "expression evaluation not supported" when it compiles the view,
 	// which it does at COMMIT rather than at CREATE (see m_movementColumns).
 	for (const auto& c : view.m_movementColumns)
-		select.push_back(wxT("CAST(NULL AS ") + ibMapColumnType(dialect, c.second) + wxT(") AS ") + c.first);
+		select.push_back(ibT("CAST(NULL AS ") + ibMapColumnType(dialect, c.second) + ibT(") AS ") + c.first);
 
 	// GROUP BY only when something actually merges (see `collapses` above). An unsplit,
 	// period-carrying view already holds one row per key, and grouping it would buy nothing while
 	// costing the engine a sort or a hash on every single read.
-	wxString body = wxT("SELECT ") + Join(select, wxT(", ")) + wxT(" FROM ") + spec.m_table;
+	ibString body = ibT("SELECT ") + Join(select, ibT(", ")) + ibT(" FROM ") + spec.m_table;
 	if (collapses && !groupBy.empty())
-		body += wxT(" GROUP BY ") + Join(groupBy, wxT(", "));
+		body += ibT(" GROUP BY ") + Join(groupBy, ibT(", "));
 	if (collapses && !nonZero.IsEmpty())
-		body += wxT(" HAVING ") + nonZero;
+		body += ibT(" HAVING ") + nonZero;
 	else if (!nonZero.IsEmpty())
-		body += wxT(" WHERE ") + nonZero;   // nothing was grouped, so the same test belongs in WHERE
+		body += ibT(" WHERE ") + nonZero;   // nothing was grouped, so the same test belongs in WHERE
 
 	if (view.m_withMovements)
-		body += wxT(" UNION ALL ") + RenderMovementArm(spec, view, mat, dialect);
+		body += ibT(" UNION ALL ") + RenderMovementArm(spec, view, mat, dialect);
 
-	return Fill(Fill(mat.m_createViewTemplate, wxT("name"), view.m_name), wxT("body"), body);
+	return Fill(Fill(mat.m_createViewTemplate, ibT("name"), view.m_name), ibT("body"), body);
 }
 
 // Every object the bundle for this spec owns, as DROP statements.
@@ -508,21 +508,21 @@ void RenderDrops(ibMaterializeSql& out, const ibMaterializeSpec& spec, const ibM
 {
 	for (const ibMaterializeView& v : spec.m_views)
 		if (!v.m_name.IsEmpty())
-			out.AddDrop(Fill(mat.m_dropViewTemplate, wxT("name"), v.m_name),
-			            Fill(mat.m_viewExistsQuery, wxT("name"), v.m_name));
+			out.AddDrop(Fill(mat.m_dropViewTemplate, ibT("name"), v.m_name),
+			            Fill(mat.m_viewExistsQuery, ibT("name"), v.m_name));
 
-	for (const wxString& n : { spec.m_table + wxT("_AI"), spec.m_table + wxT("_AU"), spec.m_table + wxT("_AD") }) {
-		out.AddDrop(Fill(Fill(mat.m_dropTriggerTemplate, wxT("name"), n), wxT("table"), spec.m_source),
-		            Fill(mat.m_triggerExistsQuery, wxT("name"), n));
+	for (const ibString& n : { spec.m_table + ibT("_AI"), spec.m_table + ibT("_AU"), spec.m_table + ibT("_AD") }) {
+		out.AddDrop(Fill(Fill(mat.m_dropTriggerTemplate, ibT("name"), n), ibT("table"), spec.m_source),
+		            Fill(mat.m_triggerExistsQuery, ibT("name"), n));
 		if (!mat.m_dropFunctionTemplate.IsEmpty())
-			out.AddDrop(Fill(mat.m_dropFunctionTemplate, wxT("name"), wxT("fn_") + n));
+			out.AddDrop(Fill(mat.m_dropFunctionTemplate, ibT("name"), ibT("fn_") + n));
 	}
 }
 
 } // namespace
 
-const wxChar* ShardColumnName()   { return wxT("shard_"); }
-const wxChar* KeyHashColumnName() { return wxT("keyhash_"); }
+const ibChar* ShardColumnName()   { return ibT("shard_"); }
+const ibChar* KeyHashColumnName() { return ibT("keyhash_"); }
 
 unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn)
 {
@@ -569,7 +569,7 @@ bool ibFillKeyHashes(ibDatabaseLayer& conn, const ibMaterializeSpec& spec,
 	if (mat == nullptr || spec.m_table.IsEmpty() || spec.m_keyHashColumn.IsEmpty())
 		return true;   // nothing carries an identity here — not a failure
 
-	const wxString digest = RenderKeyHash(spec, *mat, conn.GetDialect(), wxEmptyString,
+	const ibString digest = RenderKeyHash(spec, *mat, conn.GetDialect(), ibEmptyString,
 	                                      EffectiveShardCount(spec, mat));
 	if (digest.IsEmpty())
 		return true;
@@ -590,9 +590,9 @@ bool ibFillKeyHashes(ibDatabaseLayer& conn, const ibMaterializeSpec& spec,
 	// driver except through here is held by the type, and a bypass costs nothing until the day
 	// something else copies it.
 	ibMaterializeSql fill;
-	fill.AddCreate(wxT("UPDATE ") + spec.m_table + wxT(" SET ") + spec.m_keyHashColumn +
-	               wxT(" = ") + digest +
-	               wxT(" WHERE ") + spec.m_keyHashColumn + wxT(" IS NULL"));
+	fill.AddCreate(ibT("UPDATE ") + spec.m_table + ibT(" SET ") + spec.m_keyHashColumn +
+	               ibT(" = ") + digest +
+	               ibT(" WHERE ") + spec.m_keyHashColumn + ibT(" IS NULL"));
 	return fill.Apply(conn);
 }
 
@@ -633,14 +633,14 @@ ibMaterializeSql RenderMaterialization(const ibMaterializeSpec& spec,
 
 	const unsigned int shards = EffectiveShardCount(spec, mat);
 
-	const wxString nameAI = spec.m_table + wxT("_AI");
-	const wxString nameAU = spec.m_table + wxT("_AU");
-	const wxString nameAD = spec.m_table + wxT("_AD");
+	const ibString nameAI = spec.m_table + ibT("_AI");
+	const ibString nameAU = spec.m_table + ibT("_AU");
+	const ibString nameAD = spec.m_table + ibT("_AD");
 
 	// --- CREATE. The three events differ ONLY in which row the delta reads and which sign it
 	// carries, which is why one declaration covers all of them.
-	const wxString plusNew  = RenderDelta(spec, *mat, dialect, mat->m_newRowAlias, false, shards);
-	const wxString minusOld = RenderDelta(spec, *mat, dialect, mat->m_oldRowAlias, true,  shards);
+	const ibString plusNew  = RenderDelta(spec, *mat, dialect, mat->m_newRowAlias, false, shards);
+	const ibString minusOld = RenderDelta(spec, *mat, dialect, mat->m_oldRowAlias, true,  shards);
 
 	RenderTrigger(out, *mat, nameAI, spec.m_source, mat->m_timingInsert, { plusNew });
 	RenderTrigger(out, *mat, nameAU, spec.m_source, mat->m_timingUpdate, { minusOld, plusNew });
@@ -666,13 +666,14 @@ ibMaterializeSql RenderMaterialization(const ibMaterializeSpec& spec,
 // ============================================================================
 
 static ibQueryExprPtr BoundedByMoment(const ibQueryExprPtr& period, const ibValue& at,
-                                      const std::vector<std::pair<wxString, ibQueryExprPtr>>& tail,
+                                      const std::vector<std::pair<ibString, ibQueryExprPtr>>& tail,
                                       bool atMost, bool excluding);
 
 namespace {
 
 // The predicate a conditional column is summed under. Unbounded sides simply drop out — an absent
-// interval start makes "before the start" empty, which is the honest reading of "no start given".
+// interval start makes "before the start" empty, which is the honest reading of "no start given";
+// the caller says that empty as a zero, since no condition here would mean every row.
 //
 // ⭐ A BOUNDARY IS A MOMENT, AND HERE TOO. The arm cut below compares a boundary as an instant AND the
 // document at it; this sorts a row BEFORE or INSIDE the interval, and when the movements carry the rows
@@ -718,7 +719,7 @@ ibQueryExprPtr WhenPredicate(const ibMaterializeReadSpec& spec, ibMaterializeWhe
 // engine takes it, and it is the SAME order the boundary value compares by — one order, so a
 // balance computed on the server and one computed in memory cannot disagree about which of two
 // documents at the same instant came first.
-static ibQueryExprPtr TupleCompare(const std::vector<std::pair<wxString, ibQueryExprPtr>>& tail,
+static ibQueryExprPtr TupleCompare(const std::vector<std::pair<ibString, ibQueryExprPtr>>& tail,
                                    size_t i, bool atMost, bool excluding = false)
 {
 	const ibQueryExprPtr col = tail[i].second ? ibCol(tail[i].first) : nullptr;
@@ -741,7 +742,7 @@ static ibQueryExprPtr TupleCompare(const std::vector<std::pair<wxString, ibQuery
 // "at this instant, no later than this document" -- the period compared first, the tuple only when
 // the instants are equal. That is the whole of what a moment adds to a date.
 static ibQueryExprPtr BoundedByMoment(const ibQueryExprPtr& period, const ibValue& at,
-                                      const std::vector<std::pair<wxString, ibQueryExprPtr>>& tail,
+                                      const std::vector<std::pair<ibString, ibQueryExprPtr>>& tail,
                                       bool atMost, bool excluding)
 {
 	// EXCLUDING moves the operator, not the value. Nudging the instant by a second instead would be
@@ -785,7 +786,7 @@ ibQueryRelPtr RenderStoredRows(const ibMaterializeSpec& spec, const ibMaterializ
 	std::vector<ibQueryProjItem> proj;
 	if (view.m_withPeriod && !spec.m_periodColumn.IsEmpty())
 		proj.push_back(ibQueryProjItem{ ibCol(spec.m_periodColumn), spec.m_periodColumn });   // as stored: no coarser unit
-	for (const wxString& k : spec.m_keyColumns)
+	for (const ibString& k : spec.m_keyColumns)
 		proj.push_back(ibQueryProjItem{ ibCol(k), k });
 
 	for (const ibMaterializeViewColumn& c : view.m_columns) {
@@ -817,13 +818,13 @@ ibQueryRelPtr RenderMovementRows(const ibMaterializeSpec& spec, const ibMaterial
 			return nullptr;
 		proj.push_back(ibQueryProjItem{ spec.m_periodSourceIR, spec.m_periodColumn });   // the instant, untruncated
 	}
-	for (const wxString& k : spec.m_keyColumns)
+	for (const ibString& k : spec.m_keyColumns)
 		proj.push_back(ibQueryProjItem{ ibCol(spec.m_source, k), k });
 
 	// What a movement contributes to a stored column — looked up, never re-derived, exactly as the view's
 	// movement arm looks it up. A column with no delta contributes nothing.
 	bool unreadable = false;
-	const auto contribution = [&](const wxString& column) -> ibQueryExprPtr {
+	const auto contribution = [&](const ibString& column) -> ibQueryExprPtr {
 		for (const ibMaterializeDelta& d : spec.m_deltas)
 			if (d.m_column == column) {
 				if (!d.m_valueIR)
@@ -854,14 +855,14 @@ ibQueryRelPtr RenderMovementRows(const ibMaterializeSpec& spec, const ibMaterial
 	return q.Build().m_root;
 }
 
-ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wxString& alias)
+ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ibString& alias)
 {
 	const ibQueryExprPtr zero = ibConst(ibValue(0.0));
 
 	std::vector<ibQueryProjItem> proj;
 	std::vector<ibQueryExprPtr>  keys;
-	for (const wxString& k : spec.m_keyColumns) {
-		proj.push_back(ibQueryProjItem{ ibCol(k), wxString() });
+	for (const ibString& k : spec.m_keyColumns) {
+		proj.push_back(ibQueryProjItem{ ibCol(k), ibString() });
 		keys.push_back(ibCol(k));
 	}
 
@@ -906,7 +907,13 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 		// Conditioning turns "sum this column" into "sum it only for the rows that count" — which
 		// is how one pass yields an opening balance, an interval turnover and a closing balance
 		// side by side instead of three scans or a full outer join.
-		if (ibQueryExprPtr when = WhenPredicate(spec, c.m_when))
+		// …and "before an absent start" is no row at all. WhenPredicate answers an unbounded side with no
+		// condition, which for this one column would sum the whole history into the opening balance - the
+		// balance as it stands today, shown as what the interval began with (2026-10-28, a report by
+		// recorder with no period given).
+		if (c.m_when == ibMaterializeWhen::BeforeFrom && spec.m_from.GetType() != TYPE_DATE)
+			value = zero;
+		else if (ibQueryExprPtr when = WhenPredicate(spec, c.m_when))
 			value = ibCase({ { when, value } }, zero);
 
 		if (runningForm && periodised) {
@@ -916,8 +923,8 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 			// Two levels of fold, and both are honest SQL: the inner SUM is this period's own
 			// movement, the outer one accumulates those period sums along the order. RANGE, so
 			// nothing depends on the order rows arrive in within a period.
-			const ibQueryExprPtr periodSum = ibCast(ibFunc(wxT("SUM"), { value }), ibTypeNumber(18, 6));
-			const ibQueryExprPtr running = ibWindowed(ibFunc(wxT("SUM"), { periodSum }),
+			const ibQueryExprPtr periodSum = ibCast(ibFunc(ibT("SUM"), { value }), ibTypeNumber(18, 6));
+			const ibQueryExprPtr running = ibWindowed(ibFunc(ibT("SUM"), { periodSum }),
 				ibQueryWindow{ keys, { ibQuerySortKey{ grain, ibQuerySortDir::Asc } },
 				               ibQueryFrame::RangeThroughPeers });
 
@@ -939,7 +946,7 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 		else if (c.m_aggregate) {
 			// Pin the width: a bare SUM narrows to (9,0)/(10,0) on Firebird and silently
 			// truncates the fraction.
-			value = ibCast(ibFunc(wxT("SUM"), { value }), ibTypeNumber(18, 6));
+			value = ibCast(ibFunc(ibT("SUM"), { value }), ibTypeNumber(18, 6));
 			anyAggregate = true;
 			if (spec.m_dropZeroRows) {
 				ibQueryExprPtr nz = ibBinOp(ibQueryBinOp::Ne, value, zero);
@@ -957,10 +964,10 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 	// The period column rides through unaggregated reads: the caller groups or reports by it. A
 	// periodised read already projects it as the grain, above.
 	if (!anyAggregate && !periodised && !spec.m_periodColumn.IsEmpty())
-		proj.insert(proj.begin(), ibQueryProjItem{ ibCol(spec.m_periodColumn), wxString() });
+		proj.insert(proj.begin(), ibQueryProjItem{ ibCol(spec.m_periodColumn), ibString() });
 
 	// The rows as they stand when the reading was handed them (m_storedRows), the named surface otherwise.
-	const wxString rows = spec.m_rowsAlias.IsEmpty() ? alias + wxT("_rows") : spec.m_rowsAlias;
+	const ibString rows = spec.m_rowsAlias.IsEmpty() ? alias + ibT("_rows") : spec.m_rowsAlias;
 
 	ibDatabaseQueryBuilder q;
 	if (spec.m_storedRows)
@@ -1082,12 +1089,12 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 				ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 					_("A reading inside the stored grain was handed the stored rows without the movements to complete them"));
 			if (spec.m_movedRows) {
-				std::vector<wxString> carried;
-				const auto carry = [&carried](const wxString& name) {
+				std::vector<ibString> carried;
+				const auto carry = [&carried](const ibString& name) {
 					if (!name.IsEmpty() && std::find(carried.begin(), carried.end(), name) == carried.end())
 						carried.push_back(name);
 				};
-				for (const wxString& k : spec.m_keyColumns) carry(k);
+				for (const ibString& k : spec.m_keyColumns) carry(k);
 				carry(spec.m_periodColumn);
 				carry(spec.m_markColumn);
 				for (const auto& b : spec.m_boundaryHead) carry(b.first);
@@ -1105,8 +1112,8 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 				// against it — a walk through a reference finds its outer row under that name in either.
 				const auto half = [&](const ibQueryExprPtr& cut, const ibQueryRelPtr& relation) {
 					std::vector<ibQueryProjItem> columns;
-					for (const wxString& name : carried)
-						columns.push_back(ibQueryProjItem{ ibCol(name), wxString() });
+					for (const ibString& name : carried)
+						columns.push_back(ibQueryProjItem{ ibCol(name), ibString() });
 					ibDatabaseQueryBuilder arm;
 					arm.From(ibSubquery(relation, rows)).Project(columns);
 					arm.Where(cut);
@@ -1123,7 +1130,7 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 					stored = ibBinOp(ibQueryBinOp::And, stored, ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_from)));
 				filtersRideInside = true;
 				q.From(ibSubquery(ibUnionAll(half(stored, spec.m_storedRows),
-					half(moved, spec.m_movedRows)), alias + wxT("_cut")));
+					half(moved, spec.m_movedRows)), alias + ibT("_cut")));
 			}
 		}
 	}
@@ -1154,7 +1161,7 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 	// makes the first period's opening balance correct: it is the closing balance of a period the
 	// answer never shows.
 	ibDatabaseQueryBuilder outer;
-	outer.From(ibSubquery(q.Build().m_root, alias + wxT("_acc")));
+	outer.From(ibSubquery(q.Build().m_root, alias + ibT("_acc")));
 
 	if (spec.m_fromGrain.GetType() == TYPE_DATE)
 		outer.Where(ibBinOp(ibQueryBinOp::Ge, ibCol(spec.m_periodColumn), ibConst(spec.m_fromGrain)));
@@ -1166,7 +1173,7 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 
 // Does the object a guarded drop targets actually exist? A read, never DDL — so it cannot fail the
 // way a speculative DROP does, and the transaction stays intact whatever the answer.
-static bool ExistsByProbe(ibDatabaseLayer& conn, const wxString& probe)
+static bool ExistsByProbe(ibDatabaseLayer& conn, const ibString& probe)
 {
 	// "NOT THERE" AND "COULD NOT ASK" ARE OPPOSITE ANSWERS, and this used to return both as `false`.
 	// The probe reads a system table, so it does not fail on an absent object — it returns no rows.
@@ -1179,7 +1186,7 @@ static bool ExistsByProbe(ibDatabaseLayer& conn, const wxString& probe)
 	// stops the restructuring where the fault is instead of letting it walk on half-applied.
 	ibDatabaseResultSet* rs = nullptr;
 	try {
-		rs = conn.RunQueryWithResults(wxT("%s"), probe);   // a statement is data, not a format (ibRunRendered)
+		rs = conn.RunQueryWithResults(ibT("%s"), probe);   // a statement is data, not a format (ibRunRendered)
 	}
 	catch (const ibCoreException&) {
 		conn.ResetErrorCodes();
@@ -1261,7 +1268,7 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 		}
 		catch (const ibCoreException& err) {
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
-			                               wxString::Format(wxT("%s\n\nstatement:\n%s"),
+			                               ibString::Format(ibT("%s\n\nstatement:\n%s"),
 			                                                err.GetErrorDescription(), s.m_sql));
 		}
 	}

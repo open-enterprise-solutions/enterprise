@@ -15,13 +15,13 @@
 //*                          Scheduled job object                       *
 //***********************************************************************
 
-ibValueMetaObjectScheduledJob::ibValueMetaObjectScheduledJob(const wxString& name, const wxString& synonym, const wxString& comment)
+ibValueMetaObjectScheduledJob::ibValueMetaObjectScheduledJob(const ibString& name, const ibString& synonym, const ibString& comment)
 	: ibValueMetaObject(name, synonym, comment)
 {
 	// One handler shape, shared with the parameterized kind — which passes the job's own reference
 	// as the single argument. Keeping the NAME identical is what lets the two kinds be described,
 	// documented and debugged as one thing.
-	(*m_propertyJobModule)->SetDefaultProcedure(wxT("JobProcessing"), ibContentHelper::eProcedureHelper);
+	(*m_propertyJobModule)->SetDefaultProcedure(ibT("JobProcessing"), ibContentHelper::eProcedureHelper);
 }
 
 //***********************************************************************
@@ -70,7 +70,7 @@ bool RunScheduledJobBody(ibSession* session, const ibValueMetaObjectScheduledJob
 	// Throwing is allowed and expected to travel: the worker's promise captures it, the manager
 	// logs it and the run is journalled as failed. Swallowing it here would make a broken job look
 	// like a job that did nothing.
-	unit->ExecAsProc(wxT("JobProcessing"));
+	unit->ExecAsProc(ibT("JobProcessing"));
 	return false;
 }
 
@@ -132,7 +132,7 @@ bool ibValueMetaObjectScheduledJob::RegisterJob()
 	if (!manager->Register(std::move(desc))) {
 		// Register logs the reason itself. A job that could not be declared must not stop a
 		// configuration from opening — the failure belongs in the log, not in the user's face.
-		ibJournalInfo(wxT("metadata.job"),wxT("scheduled job '%s' was not registered"), GetJobName());
+		ibJournalInfo(ibT("metadata.job"),ibT("scheduled job '%s' was not registered"), GetJobName());
 		return true;
 	}
 

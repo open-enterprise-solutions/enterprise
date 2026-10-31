@@ -66,13 +66,13 @@ class ibBackendQueryable;
 inline void ibBindLinqMethods(ibValue::ibMemberTable& helper, const ibValue*)
 {
 	for (const ibValue::ibLinqMethodInfo& info : ibValue::GetLinqMethodTable())
-		helper.AppendFunc(wxString(info.name), wxString(info.helper));
+		helper.AppendFunc(ibString(info.name), ibString(info.helper));
 }
 
 class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMethods>
 {
 	const ibBackendQueryable* m_queryable = nullptr;
-	wxString                  m_sourceName;          // "Catalogs.Goods" — watch / diagnostics
+	ibString                  m_sourceName;          // "Catalogs.Goods" — watch / diagnostics
 	ibDataQueryBuilder        m_builder;             // accumulated door verbs (From set at vend)
 	long                      m_take = 0;            // Take(n) — page limit at execute (0 = all)
 	// Select(x => x.Field) — a single-column SCALAR projection: the read yields THIS column's
@@ -80,8 +80,8 @@ class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMeth
 	// A plain column reads by pointer (m_projectCol); a DOT-WALK leaf (x => x.Ref.Field) is
 	// projected onto the builder as SelectPath(...) AS m_projectAlias and read back by that name.
 	const ibBackendQueryColumn* m_projectCol = nullptr;
-	wxString                    m_projectAlias;
-	std::vector<wxString>     m_ops;                 // folded-op labels — the watch string only
+	ibString                    m_projectAlias;
+	std::vector<ibString>     m_ops;                 // folded-op labels — the watch string only
 	// Owned wrapper for a NON-metaobject source (Data.From over a value table) —
 	// shared across chain links (every link reads the same materialised relation).
 	std::shared_ptr<const ibBackendQueryable> m_ownedSource;
@@ -103,7 +103,7 @@ class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMeth
 	// said by the caller because only the caller knows; it is REPORTED here, once, because that is
 	// the one place every fallback passes through.
 	void MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibValue** args, long n,
-		const wxChar* why);
+		const ibChar* why);
 
 	// L4-2 JOIN push-down: when the inner argument is ALSO a queryable and the two key
 	// selectors each lower to one column, build the JOIN on the L3 door and run the
@@ -121,12 +121,12 @@ class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMeth
 
 public:
 	ibValueQueryable() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
-	ibValueQueryable(const ibBackendQueryable* queryable, const wxString& sourceName);
+	ibValueQueryable(const ibBackendQueryable* queryable, const ibString& sourceName);
 	// Data.From — an OWNED in-memory source (the wrapper dies with the last chain link).
-	ibValueQueryable(std::shared_ptr<const ibBackendQueryable> owned, const wxString& sourceName);
+	ibValueQueryable(std::shared_ptr<const ibBackendQueryable> owned, const ibString& sourceName);
 
 	const ibBackendQueryable* GetQueryable()  const { return m_queryable; }
-	const wxString&           GetSourceName() const { return m_sourceName; }
+	const ibString&           GetSourceName() const { return m_sourceName; }
 
 	// RLS semi-join — the inner's ACCUMULATED WHERE (its own .Where() folds, incl. dot-walk + captured
 	// runtime Params). Lets `restrict s in Source join a in Data.Registers.X.Where(…) on …` render as a
@@ -191,11 +191,11 @@ public:
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
 
 	// Identity — two Queryables over the same source compare equal.
-	virtual bool CompareValueEQ(const ibValue& cParam) const override {
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override {
 		const ibValueQueryable* other = dynamic_cast<ibValueQueryable*>(cParam.GetRef());
 		return other != nullptr && other->m_queryable == m_queryable;
 	}
-	virtual bool CompareValueNE(const ibValue& cParam) const override {
+	virtual bool CompareValueNE(const ibVariant& cParam) const override {
 		return !CompareValueEQ(cParam);
 	}
 };
@@ -213,11 +213,11 @@ class BACKEND_API ibValueQueryDecorator : public ibValue
 {
 	ibDataQueryBuilder*       m_target = nullptr;   // the query being decorated — Join/Where fold IN HERE
 	const ibBackendQueryable* m_source = nullptr;   // the table being decorated (the .From leaf)
-	wxString                  m_sourceName;
+	ibString                  m_sourceName;
 
 public:
 	ibValueQueryDecorator() : ibValue(ibValueTypes::TYPE_VALUE) {}
-	ibValueQueryDecorator(ibDataQueryBuilder* target, const ibBackendQueryable* source, const wxString& sourceName);
+	ibValueQueryDecorator(ibDataQueryBuilder* target, const ibBackendQueryable* source, const ibString& sourceName);
 
 	virtual bool     IsEmpty()   const override { return m_source == nullptr; }
 	virtual ibString GetString() const override;
@@ -228,8 +228,8 @@ public:
 
 	// Type branch in a handler: `Source = "Document.Receipt"` compares the decorated source to its
 	// canonical full-name STRING ("<ClassName>.<Name>"), so a module can shape per source.
-	virtual bool CompareValueEQ(const ibValue& cParam) const override;
-	virtual bool CompareValueNE(const ibValue& cParam) const override { return !CompareValueEQ(cParam); }
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override;
+	virtual bool CompareValueNE(const ibVariant& cParam) const override { return !CompareValueEQ(cParam); }
 };
 
 #endif

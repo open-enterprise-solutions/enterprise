@@ -2,7 +2,7 @@
 #define __COMPOSITION_HELPER_H__
 
 #include "backend_core.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 #include <set>
 
@@ -35,7 +35,7 @@ public:
 		DoSetComposition(id, set);
 	}
 
-	bool IsInComposition(const ibMetaID& id) const { return m_compositions.find(id) != m_compositions.end(); }
+	bool IsInComposition(const ibMetaID& id) const { return m_compositions.contains(id); }
 
 	const std::set<ibMetaID>& GetCompositions() const { return m_compositions; }
 

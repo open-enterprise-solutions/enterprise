@@ -41,7 +41,7 @@ public:
 	// The line a row is — see ibSettingsListedLines.
 	size_t LineAt(size_t row) const { return m_listed.At(row); }
 	unsigned int GetListedCount() const { return m_listed.Count(); }
-	virtual void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	virtual void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		ibSortDescription* o = GetSortDesc();
 		if (o == nullptr) return;
 		// BOUNDS FIRST. The view paints rows it has, the list may already have fewer (a Reset lands
@@ -61,9 +61,9 @@ public:
 	// ⛔ NOTHING WRITES THROUGH THIS MODEL. Both columns are drawn by ibRowValueCellRenderer, whose
 	// GetValueFromEditorCtrl returns false unconditionally — the cell hands its result to the
 	// renderer's own setter, never to the model. The body that stood here decoded a direction out of
-	// a wxVariant and could not be reached; the grouping model next door (listSettings.cpp) already
+	// a ibVariant and could not be reached; the grouping model next door (listSettings.cpp) already
 	// says the same thing the honest way.
-	virtual bool SetValueByRow(const wxVariant&, unsigned, unsigned) override { return false; }
+	virtual bool SetValueByRow(const ibVariant&, unsigned, unsigned) override { return false; }
 };
 
 // ===========================================================================
@@ -120,7 +120,7 @@ ibSortEditor::ibSortEditor(wxWindow* parent, ibSortDescription* sort, ibSettings
 				// "did it convert" made the clear button do nothing at all.
 				ibValueCompositionField* field = nullptr;
 				const bool chosen = value.ConvertToValue(field) && field != nullptr;
-				o->m_lines[idx].m_path = chosen ? field->GetPath() : wxString();
+				o->m_lines[idx].m_path = chosen ? field->GetPath() : ibString();
 				if (m_model != nullptr) m_model->ResetFromList();
 			}),
 		eOrderField, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));

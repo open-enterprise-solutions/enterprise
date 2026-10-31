@@ -235,6 +235,12 @@ public:
 	// empty pad between the first and last period the data holds; they never FILTER.
 	static void              PadPeriodLevels(ibSelectorTree& tree, const std::vector<ibTotalLevel>& levels,
 	                                         const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates);
+	// ⭐ …AND THE FIGURES MADE OF FIGURES — `SUM(Accrued) - SUM(Deducted) AS ToPay` (ibDerivedAggregate), worked out
+	// at every node from the figures already folded there, and published under their names. Called where every
+	// road's tree comes out (ibSelector::Build), so a DBMS's tree and ours get them the same way.
+	static void              ApplyDerivedAggregates(ibSelectorTree& tree,
+	                                                const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+	                                                const std::vector<ibDerivedAggregate>& derived);
 	// Join two materialised tables on (onLeft <onOp> onRight), emitting outCols (each tagged by side in
 	// fromLeft). onOp == Eq is the hash-join fast path; any other op is a nested-loop theta join. The RAM
 	// JOIN core, pure (no DB) — unit-testable.

@@ -4,8 +4,7 @@
 
 #include "translateConstructor.h"
 
-#include "frmclient/backend/metaData.h"
-#include "frmclient/backend/metaCollection/metaLanguageObject.h"
+#include "frmclient/backend/userInfo.h"   // ibUserInfo::ListLanguages — the configuration's languages, the server's
 #include "core/stringUtils.h"
 
 #include <wx/button.h>
@@ -16,7 +15,7 @@
 // all there is.
 static wxString LanguageLabel(const wxString& code, const wxString& name)
 {
-	if (name.IsEmpty() || stringUtils::CompareString(name, code))
+	if (name.IsEmpty() || stringUtils::IsSameAs(name, code))
 		return code;
 	return wxString::Format(wxT("%s (%s)"), name, code);
 }
@@ -26,23 +25,18 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 	: wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_original(text)
 {
-	// The configuration's languages, in its own order. A language of an extension is its owner's.
+	// The configuration's languages, in its own order — the server's (an extension's are its owner's).
 	std::vector<std::pair<wxString, wxString>> languages;   // code, what a person calls it
-	if (metaData != nullptr) {
-		ibMetaData* ownerRaw = nullptr;
-		metaData->GetOwner(ownerRaw);
-		const ibMetaData* owner = ownerRaw != nullptr ? ownerRaw : metaData;
-		for (const auto language : owner->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID))
-			languages.emplace_back(language->GetLangCode(), language->GetSynonym());
-	}
-	// No configuration behind the text (a code runner's editor): the language in force is the one box
-	// every text has.
+	for (const ibUserInfo::LanguageBrief& language : ibUserInfo::ListLanguages(metaData))
+		languages.emplace_back(language.m_strLanguageCode, language.m_strLanguageTitle);
+	const bool hasConfiguration = !languages.empty();
+	// No configuration behind the text: the language in force is the one box every text has.
 	if (languages.empty())
 		languages.emplace_back(ibBackendLocalization::GetUserLanguage(), wxString());
 
 	const auto isLanguage = [&languages](const wxString& code) {
 		for (const auto& language : languages)
-			if (stringUtils::CompareString(language.first, code))
+			if (stringUtils::IsSameAs(language.first, code))
 				return true;
 		return false;
 	};
@@ -98,7 +92,7 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 		if (isLanguage(entry.m_code))
 			continue;
 		if (other == nullptr) {
-			top->Add(new wxStaticText(this, wxID_ANY, metaData != nullptr
+			top->Add(new wxStaticText(this, wxID_ANY, hasConfiguration
 					? _("Also in this text, for codes this configuration has no language for. They are kept:")
 					: _("Also in this text:")),
 				wxSizerFlags().Border(wxLEFT | wxRIGHT, gap * 2));
@@ -128,7 +122,7 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 			if (box.second->IsEmpty()) { focus = box.second; break; }
 		}
 		for (const auto& box : m_boxes) {
-			if (focus == nullptr && stringUtils::CompareString(box.first, ibBackendLocalization::GetUserLanguage()))
+			if (focus == nullptr && stringUtils::IsSameAs(box.first, ibBackendLocalization::GetUserLanguage()))
 				focus = box.second;
 		}
 		if (focus == nullptr && !m_boxes.empty())

@@ -9,7 +9,7 @@
 //* DOES when its properties are edited is one aspect and lives in one file.                    *
 //*********************************************************************************************
 
-void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	// ⭐⭐ THE CHILD CALLS THIS ITSELF NOW — nothing is pushed down to it from here (Max, 2026-08-24).
 	// A property belongs to the object that created it, that object reacts to its own change, and
@@ -41,7 +41,7 @@ bool ibFormAttributeValue::ibFormAttribute::FillFillCheck(ibPropertyList* prop)
 	// THE KINDS THEMSELVES, not the numbers they happen to have — the list is a VIEW of the
 	// enumeration, so adding a third answer is one enumerator and one line here rather than a hunt
 	// for every place a literal 1 stood for "show an error".
-	prop->AppendItem(_("Don't check"), ibFormAttributeFillCheck_DontCheck, wxBitmap());
-	prop->AppendItem(_("Show error"),  ibFormAttributeFillCheck_ShowError, wxBitmap());
+	prop->AppendItem(_("Don't check"), ibFormAttributeFillCheck_DontCheck, ibPictureDescription());
+	prop->AppendItem(_("Show error"),  ibFormAttributeFillCheck_ShowError, ibPictureDescription());
 	return true;
 }
