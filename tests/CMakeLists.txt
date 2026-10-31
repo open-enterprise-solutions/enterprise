@@ -39,6 +39,7 @@ add_executable(oes_tests
     test_dictionary.cpp
     test_driverDates.cpp
     test_formatString.cpp
+    test_tstr.cpp
     test_blockSyntaxLINQ.cpp
     test_scriptFoldCode.cpp
     test_byteCodeAOT.cpp

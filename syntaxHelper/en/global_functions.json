@@ -547,7 +547,7 @@
       "signature": "Tstr(text : string, langCode : string)",
       "description": "Picks ONE language out of a text that carries several. The text itself holds every translation — that is the every-language form a synonym and a template cell use — and this reads one of them out. Use it wherever a module BUILDS a string a person will read: a message, a sheet title, a caption assembled at run time. Those are the strings a template's own language code does not reach, so they are the ones that quietly stay monolingual.",
       "syntax_block": "Tstr(text : string, langCode : string)",
-      "parameters": "text — the source, carrying every language: \"en = 'Total'; ru = 'Itogo'; uk = 'Razom';\". langCode — which one to read out ('en', 'ru', 'uk'); platform_state lists the languages this configuration declares.",
+      "parameters": "text — the source, carrying every language: \"en = 'Total'; ru = 'Itogo'; uk = 'Razom';\". langCode — which one to read out ('en', 'ru', 'uk'); platform_state lists the languages this configuration declares. Omitted or empty, it is the user's language, the one every caption on the screen is read in.",
       "return_descr": "String — the named language's text; the source unchanged when it carries no languages at all, so a plain string passes through rather than vanishing.",
       "example": "Message(Tstr(\"en = 'Total'; ru = 'Itogo'; uk = 'Razom';\", \"uk\"));",
       "availability": "Thin client, Server",
