@@ -15,7 +15,7 @@ public:
 public:
 
 	ibCompileModule(const ibValueMetaObjectModuleBase* moduleObject, bool onlyFunction = false);
-	virtual ~ibCompileModule() {}
+	virtual ~ibCompileModule();
 
 	// Parent compile-module — orchestration storage for the compile
 	// cascade (global module recurse, designer recompile, re-set

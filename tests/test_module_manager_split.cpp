@@ -95,3 +95,71 @@ TEST(ModuleManagerSeam, NonDesignerKindIgnoresCachePath) {
     ibSession svc(wxT("seam-service"), ibSessionKind::Service);
     EXPECT_EQ(svc.GetEditModuleManager(nullptr), nullptr);
 }
+
+// ---------------------------------------------------------------------------
+// External object ↔ its manager: ownership is in the types (PR 589). The
+// manager owns the compile module and the proc unit; the object only borrows
+// them, and the manager knows the object only weakly. Whichever goes first,
+// the other reads empty — nothing is freed twice, nothing points at freed memory.
+// ---------------------------------------------------------------------------
+
+namespace {
+    // Opens the protected answers the external objects give GetCompileModule() / GetProcUnit() with.
+    class ibExternalOwnerProbe : public ibExternalOwnerHelper {
+    public:
+        ibExternalOwnerProbe() : ibExternalOwnerHelper(nullptr) {}
+        using ibExternalOwnerHelper::GetBorrowedCompileModule;
+        using ibExternalOwnerHelper::GetBorrowedProcUnit;
+    };
+}
+
+TEST(ibExternalOwnerHelper, BorrowRuntime_LenderLetsGo_BorrowReadsEmpty) {
+    ibExternalOwnerProbe object;
+    std::shared_ptr<ibProcUnit> procUnit = std::make_shared<ibProcUnit>();
+    object.BorrowRuntime(nullptr, procUnit);
+    EXPECT_EQ(object.GetBorrowedProcUnit(), procUnit);
+    EXPECT_EQ(procUnit.use_count(), 1);   // a borrow keeps nothing alive
+
+    procUnit.reset();                     // the manager's DestroyMainModule / its death
+    EXPECT_EQ(object.GetBorrowedProcUnit(), nullptr);
+    EXPECT_EQ(object.GetBorrowedCompileModule(), nullptr);
+}
+
+TEST(ibExternalOwnerHelper, GetWeakObject_ObjectGoesFirst_ManagerReadsEmpty) {
+    // The road of the webserver SIGSEGV: the object dies while the container, and the manager in it, stay.
+    std::weak_ptr<ibValueRecordDataObjectExt> managerSide;
+    {
+        ibExternalOwnerProbe object;
+        managerSide = object.GetWeakObject();
+        EXPECT_FALSE(managerSide.expired());
+    }
+    EXPECT_TRUE(managerSide.expired());
+}
+
+TEST(ibByteCode, Unregister_SameIdCompiledAgain_KeepsTheLaterOne) {
+    // Every descriptor compiling one module stamps its guid: a module dying drops only its own slot.
+    const ibGuid id = ibGuid::newGuid();
+    ibByteCode first, second;
+    first.m_id = id;
+    second.m_id = id;
+    ibByteCode::Register(&first);
+    ibByteCode::Register(&second);
+
+    ibByteCode::Unregister(&first);
+    EXPECT_EQ(ibByteCode::Find(id), &second);
+
+    ibByteCode::Unregister(&second);
+    EXPECT_EQ(ibByteCode::Find(id), nullptr);
+}
+
+TEST(ibByteCode, Unregister_IdClearedByReset_FoundByPointer) {
+    // A module Reset() before it died has no id left to be found by.
+    const ibGuid id = ibGuid::newGuid();
+    ibByteCode bc;
+    bc.m_id = id;
+    ibByteCode::Register(&bc);
+    bc.Reset();
+
+    ibByteCode::Unregister(&bc);
+    EXPECT_EQ(ibByteCode::Find(id), nullptr);
+}
