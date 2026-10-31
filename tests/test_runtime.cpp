@@ -3382,6 +3382,40 @@ TEST_F(BuiltInRuntime, AVariadicBuiltInAcceptsEveryCount) {
 // the file instead.
 // ===========================================================================
 
+// Issue #203, as it was reported: the numbers 1, 2 and 3 in a column added without a type, unloaded
+// into an array, totalled 1 and averaged 1/3. Two changes answer it together: a column with no type
+// keeps the number that was written, and Sum adds every element. This pins the script, end to end.
+TEST(RuntimeTest, AColumnUnloadedIntoAnArraySumsAndAveragesItsNumbers) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var n public; var total public; var mean public; var projected public;\n")
+		wxT("var t; t = New Table;\n")
+		wxT("t.Columns.AddColumn(\"A\");\n")
+		wxT("var r; r = t.Add(); r.A = 1;\n")
+		wxT("r = t.Add(); r.A = 2;\n")
+		wxT("r = t.Add(); r.A = 3;\n")
+		wxT("var col; col = t.UnloadColumn(\"A\");\n")
+		wxT("n = col.Count();\n")
+		wxT("total = col.Sum();\n")
+		wxT("mean = col.Average();\n")
+		wxT("projected = col.Sum(Function(x) Return x EndFunction);\n")));
+
+	ibProcUnit pu;
+	ibString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("n"), v));
+	EXPECT_EQ(3, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("total"), v));
+	EXPECT_EQ(ibValueTypes::TYPE_NUMBER, v.GetType());
+	EXPECT_EQ(6, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("mean"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("projected"), v));
+	EXPECT_EQ(6, v.GetInteger());
+}
+
 TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc,
