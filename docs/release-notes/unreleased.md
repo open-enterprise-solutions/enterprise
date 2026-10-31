@@ -25,8 +25,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   writer could not write is raised at `Close`.
 - **`XMLString(value)` and `XMLValue(xml)`: a value as XML and back.** The value is packed the way
   `JSONString` packs it, but the XML keeps each field's kind, so a date or a number comes back
-  exactly, as the type the text names. A reference inside a structure or an array does not come
-  back yet. `Guid` and `BinaryData` now pack themselves too; a Guid takes its 16 bytes and is
+  exactly, as the type the text names. The type is said once, by XML Schema's `xsi:type`, and a
+  number, a string, a boolean or a date is the element's text; a date outside the years 1 to 9999 is
+  refused. A reference inside a structure or an array does not come back yet. `Guid` and `BinaryData` now pack themselves too; a Guid takes its 16 bytes and is
   written as its text.
 - **`Format` spells a date out and pads a number.** A date pattern takes `d`/`dd`, `ddd`/`dddd`
   (the weekday), `M`/`MM`, `MMM`/`MMMM` (the month's name, after a day in the genitive in ru and

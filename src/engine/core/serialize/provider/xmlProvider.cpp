@@ -129,8 +129,6 @@ bool IsSchemaDateTime(const ibString& text)
 	return true;
 }
 
-// A date as XML Schema writes one: `T` between the day and the time, the milliseconds when there are any. The empty
-// date is the first day of the calendar, which is what it is.
 // A date's parts, for a text that is read back: four digits of a year, so the years 1 to 9999 and no others.
 ibDateTimeParts PartsOfDate(const ibDateTime& date)
 {
@@ -141,6 +139,8 @@ ibDateTimeParts PartsOfDate(const ibDateTime& date)
 	return p;
 }
 
+// A date as XML Schema writes one: `T` between the day and the time, the milliseconds when there are any. The empty
+// date is the first day of the calendar, which is what it is.
 ibString SchemaDateOf(const ibDateTime& date)
 {
 	const ibDateTimeParts p = PartsOfDate(date);

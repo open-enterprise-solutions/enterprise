@@ -31,7 +31,7 @@
 //	own type is not said again where it is the value's (an element of a list); where it is none (the root a value is
 //	packed into) the node says so with an empty `Type=""`.
 //
-//	  <Node xmlns:xs="…/XMLSchema" xmlns:xsi="…/XMLSchema-instance" xsi:type="Array">   declared on the outermost
+//	  <Node Type="" xmlns:xs="…/XMLSchema" xmlns:xsi="…/XMLSchema-instance" xsi:type="Array">   declared on the outermost
 //	    <Field Name="n" Kind="Number">3</Field>
 //	    <Children>
 //	      <Node xsi:type="xs:decimal">5</Node>                 xs:string, xs:boolean, xs:dateTime (`T`, the
