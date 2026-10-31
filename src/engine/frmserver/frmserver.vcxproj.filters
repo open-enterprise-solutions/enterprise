@@ -19,6 +19,12 @@
     <Filter Include="mcp\tools">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="mcp\tools\designer">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4040}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mcp\tools\runtime">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4041}</UniqueIdentifier>
+    </Filter>
     <Filter Include="metaTree">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4012}</UniqueIdentifier>
     </Filter>
@@ -145,8 +151,8 @@
     <ClCompile Include="docView\templates\designer\docViewSpreadsheetEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewAssistant.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\docViewAssistant.cpp">
+      <Filter>docView\templates</Filter>
     </ClCompile>
     <ClCompile Include="docView\templates\designer\docViewCommonAttributeEdit.cpp">
       <Filter>docView\templates\designer</Filter>
@@ -178,11 +184,131 @@
     <ClCompile Include="docView\templates\docViewText.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\mcpToolForms.cpp">
+    <ClCompile Include="mcp\mcpClipboard.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpDebugBridge.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpServer.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpTool.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolChat.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\mcpToolProtocol.cpp">
+    <ClCompile Include="mcp\tools\mcpToolEnvelope.cpp">
       <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolFormat.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolHelp.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolLanguage.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolMetadata.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolPatterns.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolPlatform.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolProtocol.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolQuery.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolValue.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolApp.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolBind.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolClipboard.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolComplete.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolComposition.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolDatabase.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolDebug.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolForms.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolFunctionalOption.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolJournal.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolLocks.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolMetadataWrite.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolModule.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolNotes.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolPicture.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolPredefined.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolReport.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolRoles.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolRunCode.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolSchema.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolScreen.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolScript.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolSection.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolSession.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolSheet.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\runtime\mcpToolCompose.cpp">
+      <Filter>mcp\tools\runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\runtime\mcpToolWindow.cpp">
+      <Filter>mcp\tools\runtime</Filter>
     </ClCompile>
     <ClCompile Include="metaTree\treeConfiguration.cpp">
       <Filter>metaTree</Filter>
@@ -208,11 +334,11 @@
     <ClCompile Include="schema\languages.cpp">
       <Filter>schema</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\mcpServer.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\assistantAccess.cpp">
+      <Filter>schema</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\assistant.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\assistant.cpp">
+      <Filter>schema</Filter>
     </ClCompile>
     <ClCompile Include="schema\designer\metaData.cpp">
       <Filter>schema\designer</Filter>
@@ -565,6 +691,9 @@
     <ClInclude Include="client\clientHost.h">
       <Filter>client</Filter>
     </ClInclude>
+    <ClInclude Include="client\clientHostCtorToken.h">
+      <Filter>client</Filter>
+    </ClInclude>
     <ClInclude Include="client\clientInstance.h">
       <Filter>client</Filter>
     </ClInclude>
@@ -622,8 +751,8 @@
     <ClInclude Include="docView\templates\designer\docViewSpreadsheetEdit.h">
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewAssistant.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\docViewAssistant.h">
+      <Filter>docView\templates</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\designer\docViewCommonAttributeEdit.h">
       <Filter>docView\templates\designer</Filter>
@@ -655,6 +784,21 @@
     <ClInclude Include="docView\templates\docViewText.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
+    <ClInclude Include="mcp\mcpClipboard.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpDebugBridge.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpServer.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpTool.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\tools\mcpToolMetadata.h">
+      <Filter>mcp\tools</Filter>
+    </ClInclude>
     <ClInclude Include="metaTree\treeConfiguration.h">
       <Filter>metaTree</Filter>
     </ClInclude>
@@ -679,11 +823,11 @@
     <ClInclude Include="schema\languages.h">
       <Filter>schema</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\mcpServer.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\assistantAccess.h">
+      <Filter>schema</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\assistant.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\assistant.h">
+      <Filter>schema</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\metaData.h">
       <Filter>schema\designer</Filter>

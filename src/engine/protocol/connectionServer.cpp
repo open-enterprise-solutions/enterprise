@@ -222,6 +222,12 @@ bool ibProtocolConnectionServer::Reconnect(ibString& error)
 	return Open(address, trusted, error);
 }
 
+bool ibProtocolConnectionServer::IsOpen() const
+{
+	std::lock_guard<std::mutex> lock(m_mutex);
+	return m_socketClient && !m_closed;
+}
+
 std::unique_ptr<ibProtocolConnection> ibProtocolConnectionServer::OpenChannel(ibString& error)
 {
 	if (m_address.IsEmpty()) {

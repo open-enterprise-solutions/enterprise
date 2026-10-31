@@ -1,0 +1,27 @@
+#ifndef __SCHEMA_ASSISTANT_H__
+#define __SCHEMA_ASSISTANT_H__
+
+// THE ASSISTANT WINDOW — the person's, in the designer's Administration and the application's Assistant menu (as their
+// roles say), as the server holds it: a tab its command opens (ibAssistantTranscriptDocument), the exchange drawn by the
+// tab's own view.
+
+#include "frmserver/schema/clientSchema.h"
+
+class FRMSERVER_API ibSchemaAssistant : public ibClientSchema {
+public:
+
+	// ⭐ THE WINDOW IS ONLY A WINDOW ONTO A RUNNING SERVER — the base's assistant access listening, what the desktop's
+	// menu item stood on (OnUpdateMcpAssistant). With nothing listening what a person typed would sit in a queue no
+	// client can collect.
+	virtual bool AccessRight(const ibSession& session) const override;
+
+	// Nothing — the window is a tab, opened by Open.
+	virtual void Build(const ibSession& /*session*/, const ibDataNode& /*args*/,
+		ibDataNode& /*result*/) const override {}
+
+	// Open — the window's tab; ONE window, and the command means "show me it": an open one is raised.
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const override;
+};
+
+#endif

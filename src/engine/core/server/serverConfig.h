@@ -26,8 +26,6 @@
 //   Id=…                      written at the first start — the folder keeps it, not the name
 //   Processes=1               how many servers the cluster runs for the base, side by side: a client goes to the one
 //                             its session lives in (ibSessionToken::WithRoute), a new one to the least busy
-//   McpPort=7600              the base's assistant access (MCP), when its settings switch it on: written at the
-//                             first start — the first of ibPort::BaseAssistant no other base has
 //   IbUser=Admin              the base's user the server logs in as
 //   IbPassword=               empty, or enc:… — sealed by `appserver --set-password=trade/IbPassword`
 //
@@ -62,7 +60,6 @@ struct ibConfiguredInstance {
 	ibString       m_password;        // as stored: empty or sealed
 	ibString       m_ibUser;          // the base's user the server logs in as
 	ibString       m_ibPassword;      // as stored: empty or sealed
-	ibString       m_mcpPort;         // its assistant access's port, as written
 	unsigned       m_processes = 1;   // its servers side by side — at least one
 };
 
@@ -90,10 +87,6 @@ public:
 	// A base seen for the first time is assigned its Id, written back into the config — its folder is named by
 	// it, so renaming the group does not lose the folder — and every base learns its folder.
 	void AssignIds(std::vector<ibConfiguredInstance>& instances) const;
-
-	// …and its assistant access's port, the first of ibPort::BaseAssistant no other base has, written back too: two
-	// bases of one cluster never meet on one port. A port written by hand is kept as written.
-	void AssignMcpPorts(std::vector<ibConfiguredInstance>& instances) const;
 
 	// WHERE THE CLIENTS REACH THIS SERVER — the keys above the first base's group (a group IS a base). The host is
 	// this machine's own when none is written: a person has to mean it to widen that, and to name a certificate for it.

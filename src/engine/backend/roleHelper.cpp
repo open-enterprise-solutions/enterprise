@@ -1,5 +1,7 @@
 #include "roleHelper.h"
 
+#include "backend/session/session.h"   // whether this session has a user at all
+
 #define roleBlock 0x200000
 
 ////////////////////////////////////////////////////////////////////////
@@ -29,6 +31,12 @@ bool ibAccessObject::AccessRight(const ibRole* role, const ibRoleUserInfo& roleI
 {
 	if (role == nullptr || !DoAccessRight(role))
 		return false;
+
+	// A BASE WITH NO USERS IS OPEN ACCESS (ibApplicationInstance::AuthenticateUser): a session in it has nobody to keep
+	// out, so a right closed by default is open there too. A session in a base with users always has its user.
+	const ibSession* const session = ibSession::Current();
+	if (!roleInfo.IsSetRole() && session != nullptr && !session->GetUserInfo().IsOk())
+		return true;
 
 	// UNSET is not the same as DENIED, and the answer for it is not hard-wired here: every right
 	// DECLARES its own default where it is created (CreateRole(name, label, defValue) — allowed

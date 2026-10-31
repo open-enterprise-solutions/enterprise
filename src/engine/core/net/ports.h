@@ -19,14 +19,13 @@ namespace ibPort {
 	// THE COORDINATOR'S — the application cluster's, kept in server.conf (Port): every client comes in by it, the tray
 	// too, and the cluster hands each client to the server of its base inside.
 	inline constexpr ibPortRange Clients       { 7373, 1 };
-	// The designer's assistant access (MCP).
-	inline constexpr ibPortRange Assistant     { 7374, 1 };
+	// The assistant access (MCP) — on the person's own machine: their client listens, the designer on the first, the
+	// application on the last, unless they set another.
+	inline constexpr ibPortRange Assistant     { 7374, 2 };
 
 	// THE SERVERS' — the cluster's, one process a base (appserver --worker), on this machine alone: each the first free
 	// one, said to the cluster as it starts serving.
 	inline constexpr ibPortRange Workers       { 7500, 100 };
-	// …and the assistant access of their bases: one each, kept in server.conf (McpPort).
-	inline constexpr ibPortRange BaseAssistant { 7600, 100 };
 
 	// THE DEBUGGER'S — every process that can be debugged (a client, a server's base, the web) listens on the first
 	// free one; the designer looks in all of them.

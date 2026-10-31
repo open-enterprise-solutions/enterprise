@@ -34,7 +34,8 @@ namespace ibProtocol {
 	//   6  …and the designer's debugger rides the protocol (ibDebug): a second connection of the same client, bound to it by
 	//      the key the first asks for, carries the debugger's commands, answered at once, and the server's `debug`
 	//      notifications — a stop, the stack, the locals — sent as they happen, not as a frame.
-	inline constexpr int Version = 6;
+	//   7  …and the assistant's MCP rides it the same way (ibMcp): a connection of its own, bound by a key of its own.
+	inline constexpr int Version = 7;
 
 	// WHAT A CLIENT ASKS THE SERVER. On the wire a method is a name, as JSON-RPC has it; in code it is a type: the server
 	// reads the name once (MethodFromName) and nothing past it compares strings. A name is never changed; a new method
@@ -61,6 +62,7 @@ namespace ibProtocol {
 		Presentation,   // ibPresentation
 		Picture,        // ibPicture
 		Debug,          // ibDebug — answered at once, never the frame
+		Mcp,            // ibMcp — never the frame
 	};
 
 	// The name a method goes by on the wire.
@@ -86,6 +88,7 @@ namespace ibProtocol {
 		case ibMethod::Presentation: return "presentation";
 		case ibMethod::Picture:      return "picture";
 		case ibMethod::Debug:        return "debug";
+		case ibMethod::Mcp:          return "mcp";
 		}
 		return "";
 	}
@@ -93,7 +96,7 @@ namespace ibProtocol {
 	// …and the method a name means; Unknown for a name the protocol does not have.
 	inline ibMethod MethodFromName(const char* name)
 	{
-		for (int method = static_cast<int>(ibMethod::Login); method <= static_cast<int>(ibMethod::Debug); ++method) {
+		for (int method = static_cast<int>(ibMethod::Login); method <= static_cast<int>(ibMethod::Mcp); ++method) {
 			if (std::strcmp(name, MethodName(static_cast<ibMethod>(method))) == 0)
 				return static_cast<ibMethod>(method);
 		}
@@ -139,6 +142,8 @@ namespace ibProtocol {
 		inline constexpr const char* Changed = "changed";
 		// …and the debugger's news, to the client's debug connection (params: Client, Event and its fields — ibDebug).
 		inline constexpr const char* Debug   = "debug";
+		// …and what the assistant's server says unasked, to the client's MCP connection (params: Client, Message — ibMcp).
+		inline constexpr const char* Mcp     = "mcp";
 
 	}
 
@@ -221,7 +226,6 @@ namespace ibProtocol {
 		// after a removal, a form editor's own), each as schema Properties writes them — the client shows them without
 		// reading them.
 		inline constexpr const char* Properties = "Properties";
-		inline constexpr const char* Endpoint   = "Endpoint";   // the designer's assistant access: where it listens
 		inline constexpr const char* Language   = "Language";
 		inline constexpr const char* Tab        = "Tab";        // activate, close: the tab's id
 		inline constexpr const char* Command    = "Command";    // command: ibCommand
@@ -444,6 +448,30 @@ namespace ibProtocol {
 			Locals       = 8,    // Rows {Name, Value, Type, Attributes}
 			Variable     = 9,    // {Item, Asker}, Rows {Item, Name, Value, Type, Attributes}
 			Expanded     = 10,   // the same
+		};
+
+	}
+
+	// THE ASSISTANT'S MCP (protocol 7) — protocol inside the protocol: the client's end only carries it, and what a message
+	// means is the server's (frmserver/mcp). On a connection of its own, so a tool working does not hold the window up, and
+	// bound as the debugger's is: mcp {Command: Channel} on the client's connection → Channel, a key; mcp {Command: Listen,
+	// Channel} on a second connection of the same client binds that one — from then on mcp {Command: Message} is answered
+	// on it and it is sent what the server says unasked, `mcp {Client, Message}`. Refused NoRight to a person whose roles
+	// do not give the assistant (ibSchema::ibMcpServer). The client's session answers: their rights, their configuration.
+	namespace ibMcp {
+
+		inline constexpr const char* Command         = "Command";
+		inline constexpr const char* Channel         = "Channel";          // Channel's answer, Listen's key
+		inline constexpr const char* Message         = "Message";          // the JSON text, as MCP wrote it; empty - the headers alone asked of
+		inline constexpr const char* ProtocolVersion = "ProtocolVersion";  // a Message's: the HTTP header it came with, MCP-Protocol-Version
+		inline constexpr const char* Method          = "Method";           // …Mcp-Method
+		inline constexpr const char* Name            = "Name";             // …Mcp-Name
+		inline constexpr const char* Status          = "Status";           // a Message's answer: the HTTP status to carry it with
+
+		enum class ibCommand : int {
+			Channel = 1,    // → Channel
+			Listen  = 2,    // {Channel}
+			Message = 3,    // {Message, ProtocolVersion, Method, Name} → {Message, Status}
 		};
 
 	}
@@ -996,17 +1024,11 @@ namespace ibProtocol {
 
 		}
 
-		// The designer's assistant access, the person's: Enabled, Address, Port, Token — where it listens, whether it does,
-		// and what a person hands their tool; Running, Endpoint, Allowed. Commands Start {Enabled, Address, Port, Token} —
-		// started on those, Stop, Save {…} — kept as the person's.
+		// The assistant access, the person's: Enabled, Address, Port, Token — where their client listens (it does the
+		// listening: ibMcp), whether it does, and what a person hands their tool. Command Save {…} — kept as the person's;
+		// a token not made yet is made here. A person's roles not giving the assistant — no such schema (AccessRight).
 		namespace ibMcpServer {
 
-			inline constexpr const char* Enabled  = "Enabled";
-			inline constexpr const char* Address  = "Address";
-			inline constexpr const char* Port     = "Port";
-			inline constexpr const char* Token    = "Token";
-			inline constexpr const char* Running  = "Running";
-			inline constexpr const char* Endpoint = "Endpoint";   // empty while it is not running
 			inline constexpr const char* Allowed  = "Allowed";
 
 		}

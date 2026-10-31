@@ -33,7 +33,7 @@ that knows its class. Rules: writing-code.md §7.
 **Entrance.** A way in for a different caller: the designer's mouse, a thin client, a browser, an
 assistant over MCP. Every entrance reaches the same session, the same rights and the same doors. A new
 entrance is not a new door.
-*Holds at* `backend/mcp/mcpTool.h`: a tool calls the same door the button calls. Rules: writing-code.md
+*Holds at* `frmserver/mcp/mcpTool.h`: a tool calls the same door the button calls. Rules: writing-code.md
 §11.
 
 **Seam.** The line between two layers, and the one thing allowed across it. Narrow on purpose: the layer

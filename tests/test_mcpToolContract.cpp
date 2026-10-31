@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Description : the MCP tool CONTRACT — what every tool owes its caller,
-//	              asked of every tool that is registered (backend/mcp/).
+//	              asked of every tool that is registered (frmserver/mcp/).
 //
 //	              ⭐ THE POINT IS THAT THESE TESTS DO NOT NAME ANY TOOL. They walk
 //	              ibMcpTools() and hold each one to the same rules, so a tool
@@ -31,8 +31,8 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/mcp/mcpTool.h"
-#include "backend/mcp/mcpClipboard.h"
+#include "frmserver/mcp/mcpTool.h"
+#include "frmserver/mcp/mcpClipboard.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/appData.h"
 #include "backend/compiler/compileCode.h"
@@ -300,14 +300,13 @@ TEST(McpToolContract, EveryTool_DescribesItselfForTheCaller)
 // C4566 on each). The Linux build sends them intact, so no test that runs the tools can see it - only
 // the SOURCE can. The rule was two comments long (mcpTool.h, mcpServer.cpp); this is where it is kept.
 //
-// Read from the sources of every layer that has tools, not only the backend this binary links: the form
-// verbs and the message verbs are sent down the same wire.
+// Read from the sources of the layer that has the tools.
 TEST(McpToolContract, EveryTextSentDownTheWire_IsAscii)
 {
 	const ibString engine = EngineSourceDir();
 	size_t scanned = 0;
 
-	for (const ibString& layer : { ibString(wxT("backend")), ibString(wxT("frontend")), ibString(wxT("designer")) }) {
+	for (const ibString& layer : { ibString(wxT("frmserver")) }) {
 		wxFileName dir(engine, wxEmptyString);
 		dir.AppendDir(layer);
 		dir.AppendDir(wxT("mcp"));
@@ -560,6 +559,20 @@ TEST(McpToolContract, EveryNameSaidInADescription_IsANameThatExists)
 				<< "', which is neither a tool nor one of its own arguments";
 		}
 	}
+}
+
+// Who may be offered a tool: what changes the configuration is the designer's alone, what reads data needs the roles to
+// give that too, and what shows the schema is anybody's the assistant is given to.
+TEST(McpToolContract, ToolMode_IsWhatItWasRegisteredAs)
+{
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("metadata_create"))), ibMcpToolMode::Designer);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("client_call"))), ibMcpToolMode::Designer);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("compose_run"))), ibMcpToolMode::Data);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("value_pack"))), ibMcpToolMode::Data);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("value_unpack"))), ibMcpToolMode::Data);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("compose_settings"))), ibMcpToolMode::Common);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("metadata_get"))), ibMcpToolMode::Common);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("syntax_search"))), ibMcpToolMode::Common);
 }
 
 TEST(McpToolContract, EveryTool_SaysWhatItIsDoingInAPersonsWords)

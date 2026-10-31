@@ -1,10 +1,10 @@
 #ifndef __DEBUGGING_H__
 #define __DEBUGGING_H__
 
-// DEBUGGING IN THE CURRENT SESSION — the check box of the enterprise's Options (enterprise/win/dlg/enterpriseOption), as
-// the server holds it: whether the process listens for the designer, and whether the person may switch it — the
-// dialog's SetValue and Enable — and the switch itself, as the box's handler started and shut the debug server. The
-// runtime's own: it is the runtime that is debugged.
+// DEBUGGING IN THE CURRENT SESSION — the check box of the application's Options (ibPanelDebugSettings), as the server
+// holds it: whether the process listens for the designer, and whether the person may switch it — the box's value and
+// whether it is enabled — and the switch itself, as the box's handler starts and shuts the debug server. The runtime's
+// own: it is the runtime that is debugged. The Options item of the application's menu asks this schema.
 
 #include "frmserver/schema/clientSchema.h"
 

@@ -4,7 +4,7 @@
 #include "commonObject.h"
 #include "backend/metaCollection/metaComposerObject.h"   // the report's own composers
 
-class ibValueMetaObjectReport : public ibValueMetaObjectRecordDataExt {
+class BACKEND_API ibValueMetaObjectReport : public ibValueMetaObjectRecordDataExt {
 	public:
 
 	// Its own menu ids — see the twin in dataProcessor.h.

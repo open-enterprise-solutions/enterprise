@@ -1733,11 +1733,11 @@ msgstr "Сервер уже запущен"
 msgid ""
 "Assistant access is switched off.\n"
 "\n"
-"Turn it on in Tools > Options > Assistant access."
+"Turn it on in the assistant access settings."
 msgstr ""
 "Доступ для ассистента выключен.\n"
 "\n"
-"Включите его в Сервис > Параметры > Доступ для ассистента."
+"Включите его в настройках доступа для ассистента."
 
 #: src/engine/backend/mcp/mcpServer.cpp:925
 msgid "The address or the port is not set"
@@ -1748,17 +1748,17 @@ msgid "There is no session to work in"
 msgstr "Нет сеанса для работы"
 
 #: src/engine/backend/mcp/mcpServer.cpp:1026
-msgid "Assistant access has been switched off. Nothing is listening, so nothing written here will be collected until it is switched on again in Tools > Options > Assistant access."
-msgstr "Доступ для ассистента выключен. Никто не слушает, поэтому ничего из написанного здесь не будет получено, пока доступ снова не включат в Сервис > Параметры > Доступ для ассистента."
+msgid "Assistant access has been switched off. Nothing is listening, so nothing written here will be collected until it is switched on again."
+msgstr "Доступ для ассистента выключен. Никто не слушает, поэтому ничего из написанного здесь не будет получено, пока доступ снова не включат."
 
 #: src/engine/backend/mcp/mcpServer.cpp:1210
-msgid "Assistant access is not running. Start it in Tools > Options > Assistant access."
-msgstr "Доступ для ассистента не запущен. Запустите его в Сервис > Параметры > Доступ для ассистента."
+msgid "Assistant access is not running. Start it in the assistant access settings."
+msgstr "Доступ для ассистента не запущен. Запустите его в настройках доступа для ассистента."
 
 #: src/engine/backend/mcp/mcpServer.cpp:1214
 #, c-format
-msgid "Assistant access is running at %s (build %u)."
-msgstr "Доступ для ассистента работает на %s (сборка %u)."
+msgid "Assistant access is running (build %u)."
+msgstr "Доступ для ассистента запущен (сборка %u)."
 
 #: src/engine/backend/mcp/mcpServer.cpp:1221
 #, c-format
@@ -8961,11 +8961,11 @@ msgstr "Описание:"
 msgid "Assistant access (MCP)"
 msgstr "Доступ ассистента (MCP)"
 
-msgid "Let an assistant reach this designer"
-msgstr "Разрешить ассистенту подключаться к этому конфигуратору"
+msgid "Let an assistant reach this session"
+msgstr "Разрешить ассистенту подключаться к этому сеансу"
 
-msgid "A connected assistant can read the configuration, check syntax and add objects - as you, with your rights. It runs only while your session is open."
-msgstr "Подключённый ассистент может читать конфигурацию, проверять синтаксис и добавлять объекты - от вашего имени и с вашими правами. Работает, только пока открыт ваш сеанс."
+msgid "A connected assistant works as you, with your rights: it can do here what your roles allow you. It runs only while your session is open."
+msgstr "Подключённый ассистент работает от вашего имени и с вашими правами: здесь ему доступно то, что разрешают ваши роли. Работает, только пока открыт ваш сеанс."
 
 msgid "Address:"
 msgstr "Адрес:"
@@ -8980,8 +8980,8 @@ msgstr "Запустить сейчас"
 msgid "Give this to your assistant"
 msgstr "Передайте это ассистенту"
 
-msgid "Any assistant that speaks MCP can connect, from this machine or another on the network. Put this into its server configuration - it is the standard form and needs nothing else:"
-msgstr "Подключиться может любой ассистент, поддерживающий MCP, - с этого компьютера или с другого в сети. Добавьте это в его конфигурацию серверов - это стандартный формат, больше ничего не нужно:"
+msgid "Any assistant that speaks MCP can connect from this machine. Put this into its server configuration - it is the standard form and needs nothing else:"
+msgstr "С этого компьютера может подключиться любой ассистент, поддерживающий MCP. Добавьте это в его конфигурацию серверов - это стандартный формат, больше ничего не нужно:"
 
 msgid "Copy the configuration"
 msgstr "Скопировать конфигурацию"
@@ -9008,8 +9008,8 @@ msgstr "Остановить сейчас"
 msgid "Running at %s"
 msgstr "Работает по адресу %s"
 
-msgid "Not running. It starts by itself next time you open the designer."
-msgstr "Не запущен. Запустится сам при следующем открытии конфигуратора."
+msgid "Not running. It starts by itself next time you log in."
+msgstr "Не запущен. Запустится сам при следующем входе."
 
 msgid "Not running, and switched off above - it will not start by itself."
 msgstr "Не запущен и выключен выше - сам он не запустится."
@@ -12746,8 +12746,11 @@ msgstr "Доступ для ассистента не запустился: %s"
 msgid ""
 "Assistant access did not start: %s.\n"
 "\n"
-"If another designer is open, it holds the port - only one can. Close it, or give this one a port of its own in Tools > Options > Assistant access."
-msgstr "Доступ для ассистента не запустился: %s.\n\nЕсли открыт другой конфигуратор, порт занят им - он может быть только у одного. Закройте его или назначьте этому свой порт в Сервис > Параметры > Доступ для ассистента."
+"If another window is open, it holds the port - only one can. Close it, or give this one a port of its own in the assistant access settings."
+msgstr ""
+"Доступ для ассистента не запустился: %s.\n"
+"\n"
+"Если открыто другое окно, порт занят им - он может быть только у одного. Закройте его или назначьте этому свой порт в настройках доступа для ассистента."
 
 #: src/engine/backend/mcp/tools/mcpToolSession.cpp:114
 #, c-format
@@ -13591,3 +13594,11 @@ msgstr "Значение типа '%s' не является '%s'"
 #, c-format
 msgid "Too many failed logins: try again in %d s."
 msgstr "Слишком много неудачных входов: повторите через %d с."
+
+#: src/engine/backend/metaCollection/metaObjectMetadata.h:214
+msgid "Data assistant"
+msgstr "Ассистент с доступом к данным"
+
+#: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
+msgid "Debugging"
+msgstr "Отладка"

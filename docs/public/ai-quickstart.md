@@ -17,14 +17,16 @@ by running it - instead of guessing.
 2. Start `launcher`, press **Add**, choose **File (local database)**, pick an empty folder, save.
    Open it with **Designer**.
 3. In the designer: **Tools → Options… → Assistant access (MCP)**. Tick *Let an assistant reach this
-   designer* and press **Start now**.
+   session* and press **Start now**.
 4. Under *Give this to your assistant*: **Copy the configuration** for any MCP client, or **Copy the
    command** for Claude Code - one line, `claude mcp add --transport http oes <address> --header
    "Authorization: Bearer <key>"`.
 
 The key is made once and kept, so a connected assistant stays connected. Whoever holds it can do in
 this designer what you can.
-The server listens on `127.0.0.1:7374` (a base on an application cluster: on its own port, `server.conf`'s `McpPort`); set another address to reach it from another machine - then `backend.conf` must name a certificate ([listeners.md](listeners.md)), or the server refuses to listen in the clear off this machine.
+The port opens on your own machine, `127.0.0.1:7374`, whatever server the base is on: the client carries it there. It does not listen off this machine.
+
+In the application the same access is in **Tools → Options… → Assistant access** and its window at the bottom of **Administration**, for a person whose role has the *Assistant* right, and for everyone in a base with no users. It shows the configuration and no record of it; the *Data assistant* right adds what works with the data under that person's roles: running a report, opening a list or a document in their window, adding or correcting a value.
 
 ## The first request
 

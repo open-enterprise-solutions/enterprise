@@ -18,7 +18,7 @@ namespace {
 // events (Messages, Clear, Exit, Properties — DrawFrame's `events`) and the method's own result beside it.
 bool IsFrameWord(const ibString& name)
 {
-	return name == ibProtocol::ibFrame::Title || name == ibProtocol::ibFrame::Status || name == ibProtocol::ibFrame::Endpoint
+	return name == ibProtocol::ibFrame::Title || name == ibProtocol::ibFrame::Status
 		|| name == ibProtocol::ibFrame::Language || name == ibProtocol::ibFrame::ActiveTab
 		|| name == ibProtocol::ibFrame::Schemas || name == ibProtocol::ibFrame::Templates || name == ibProtocol::ibFrame::Menu
 		|| name == ibProtocol::ibFrame::MetaData || name == ibProtocol::ibFrame::View || name == ibProtocol::ibFrame::Tabs
@@ -275,37 +275,86 @@ void ibCommunicator::Listen(std::function<void()> changed)
 bool ibCommunicator::ListenDebug(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal,
 	ibString& error)
 {
-	refusal = ibProtocol::ibRefusal::None;
-	error.clear();
-	if (!told) {
-		std::lock_guard<std::mutex> lock(m_debugMutex);
-		if (m_debugConnection)
-			m_debugConnection->Listen(nullptr);
-		m_debugConnection.reset();
-		return true;
-	}
-	if (m_protocol < 6) {
+	if (told && m_protocol < 6) {
 		refusal = ibProtocol::ibRefusal::NotFound;
 		error = ibT("the server speaks no protocol with the debugger in it");
 		return false;
 	}
+	return ListenChannel(m_debug, ibProtocol::ibMethod::Debug, ibProtocol::ibRpc::Debug, std::move(told), refusal, error);
+}
 
-	// The second connection, and the key that binds it — asked on this one, outside the debugger's lock (the order the
-	// two locks are taken in is this one's first).
-	std::unique_ptr<ibProtocolConnection> channel = m_connection ? m_connection->OpenChannel(error) : nullptr;
-	if (!channel) {
+bool ibCommunicator::Debug(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
+	ibString& error)
+{
+	std::lock_guard<std::mutex> lock(m_debug.mutex);
+	return ChannelCallLocked(m_debug, ibProtocol::ibMethod::Debug, params, result, refusal, error);
+}
+
+bool ibCommunicator::ListenMcp(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal,
+	ibString& error)
+{
+	if (told && m_protocol < 7) {
+		refusal = ibProtocol::ibRefusal::NotFound;
+		error = ibT("the server speaks no protocol with the assistant in it");
+		return false;
+	}
+	return ListenChannel(m_mcp, ibProtocol::ibMethod::Mcp, ibProtocol::ibRpc::Mcp, std::move(told), refusal, error);
+}
+
+bool ibCommunicator::Mcp(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
+	ibString& error)
+{
+	std::function<void(const ibProtocolNode& news)> reopen;
+	{
+		std::lock_guard<std::mutex> lock(m_mcp.mutex);
+		if (m_mcp.told && (!m_mcp.connection || !m_mcp.connection->IsOpen()))
+			reopen = m_mcp.told;
+	}
+	// Outside the channel's lock: the key is asked on the client's own connection. Two calls here at once open two, and
+	// the later one stays — the server drops the first as any other connection gone.
+	if (reopen && !ListenMcp(std::move(reopen), refusal, error))
+		return false;
+
+	std::lock_guard<std::mutex> lock(m_mcp.mutex);
+	return ChannelCallLocked(m_mcp, ibProtocol::ibMethod::Mcp, params, result, refusal, error);
+}
+
+bool ibCommunicator::ListenChannel(Channel& channel, ibProtocol::ibMethod method, const char* notification,
+	std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal, ibString& error)
+{
+	refusal = ibProtocol::ibRefusal::None;
+	error.clear();
+	if (!told) {
+		std::lock_guard<std::mutex> lock(channel.mutex);
+		if (channel.connection)
+			channel.connection->Listen(nullptr);
+		channel.connection.reset();
+		channel.told = nullptr;
+		return true;
+	}
+
+	// The second connection, and the key that binds it — asked on this one, outside the channel's lock (the order the
+	// two locks are taken in is this one's first). Every channel's Command and Channel are the debugger's words.
+	// Under m_mutex: a channel opened again meets the window's call bringing this connection back (Reconnect).
+	std::unique_ptr<ibProtocolConnection> opened;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (m_connection)
+			opened = m_connection->OpenChannel(error);
+	}
+	if (!opened) {
 		refusal = ibProtocol::ibRefusal::Failed;
 		return false;
 	}
 	ibProtocolNode params, key;
 	params.SetValue(ibProtocol::ibDebug::Command, static_cast<int>(ibProtocol::ibDebug::ibCommand::Channel));
-	if (!Call(ibProtocol::ibMethod::Debug, params, key, refusal, error))
+	if (!Call(method, params, key, refusal, error))
 		return false;
 
 	// Told before it is bound, so news the moment it is bound is not lost — of this client only.
 	const ibString client = GetClient();
-	channel->Listen([client, told = std::move(told)](const ibProtocolNode& said) {
-		if (said.GetString(ibProtocol::ibRpc::Method) != ibProtocol::ibRpc::Debug)
+	opened->Listen([client, notification, told](const ibProtocolNode& said) {
+		if (said.GetString(ibProtocol::ibRpc::Method) != notification)
 			return;
 		const ibProtocolNode news = said.FindChild(ibProtocol::ibRpc::Params);
 		if (news.GetString(ibProtocol::ibLogin::Client) != client)
@@ -313,50 +362,44 @@ bool ibCommunicator::ListenDebug(std::function<void(const ibProtocolNode& news)>
 		told(news);
 	});
 
-	std::lock_guard<std::mutex> lock(m_debugMutex);
-	if (m_debugConnection)
-		m_debugConnection->Listen(nullptr);
-	m_debugConnection = std::move(channel);
-	m_debugClient = client;
+	std::lock_guard<std::mutex> lock(channel.mutex);
+	if (channel.connection)
+		channel.connection->Listen(nullptr);
+	channel.connection = std::move(opened);
+	channel.client = client;
+	channel.told = std::move(told);
 
 	ibProtocolNode listen, bound;
 	listen.SetValue(ibProtocol::ibDebug::Command, static_cast<int>(ibProtocol::ibDebug::ibCommand::Listen))
 		.SetValue(ibProtocol::ibDebug::Channel, key.GetString(ibProtocol::ibDebug::Channel));
-	if (DebugLocked(listen, bound, refusal, error))
+	if (ChannelCallLocked(channel, method, listen, bound, refusal, error))
 		return true;
-	m_debugConnection->Listen(nullptr);
-	m_debugConnection.reset();
+	channel.connection->Listen(nullptr);
+	channel.connection.reset();
 	return false;
 }
 
-bool ibCommunicator::Debug(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
-	ibString& error)
-{
-	std::lock_guard<std::mutex> lock(m_debugMutex);
-	return DebugLocked(params, result, refusal, error);
-}
-
-bool ibCommunicator::DebugLocked(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
-	ibString& error)
+bool ibCommunicator::ChannelCallLocked(Channel& channel, ibProtocol::ibMethod method, const ibProtocolNode& params,
+	ibProtocolNode& result, ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	refusal = ibProtocol::ibRefusal::None;
 	error.clear();
 	result = ibProtocolNode();
-	if (!m_debugConnection) {
+	if (!channel.connection) {
 		refusal = ibProtocol::ibRefusal::NoSession;
-		error = ibT("no debugger is listening");
+		error = ibT("nothing is listening on that connection");
 		return false;
 	}
 
 	// The client named, as every call names it; nothing held goes with it, and no frame is asked for.
-	const long long id = ++m_debugLastId;
-	ibProtocolNode request = Request(id, ibProtocol::ibMethod::Debug, params);
-	request.Child(ibProtocol::ibRpc::Params).SetValue(ibProtocol::ibLogin::Client, m_debugClient);
+	const long long id = ++channel.lastId;
+	ibProtocolNode request = Request(id, method, params);
+	request.Child(ibProtocol::ibRpc::Params).SetValue(ibProtocol::ibLogin::Client, channel.client);
 
 	ibMemoryBuffer sent;
 	request.Write(sent);
 	ibProtocolNode answer;
-	if (!m_debugConnection->Exchange(sent, answer, refusal, error))
+	if (!channel.connection->Exchange(sent, answer, refusal, error))
 		return false;
 	return ReadAnswer(answer, id, result, refusal, error);
 }
@@ -444,7 +487,8 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 	// row the cursor stands on. Taken once: a call that does not get through loses it with the session it was of. A
 	// client going says nothing more of where it was, and the debugger's call is no work of the client's (the server
 	// would drop it). Each held event's bytes go in at the list's end as they are (Hold made them its own).
-	if (!beforeLogin && method != ibProtocol::ibMethod::Logout && method != ibProtocol::ibMethod::Debug) {
+	if (!beforeLogin && method != ibProtocol::ibMethod::Logout && method != ibProtocol::ibMethod::Debug
+		&& method != ibProtocol::ibMethod::Mcp) {
 		std::vector<ibProtocolNode> pending;
 		{
 			std::lock_guard<std::mutex> lock(m_pendingMutex);
@@ -578,13 +622,14 @@ void ibCommunicator::Take(const ibProtocolNode& answer)
 
 void ibCommunicator::Forget()
 {
-	// The debugger's connection goes with the client it was bound for.
-	{
-		std::lock_guard<std::mutex> lock(m_debugMutex);
-		if (m_debugConnection)
-			m_debugConnection->Listen(nullptr);
-		m_debugConnection.reset();
-		m_debugClient.clear();
+	// The debugger's connection and the assistant's go with the client they were bound for.
+	for (Channel* const channel : { &m_debug, &m_mcp }) {
+		std::lock_guard<std::mutex> lock(channel->mutex);
+		if (channel->connection)
+			channel->connection->Listen(nullptr);
+		channel->connection.reset();
+		channel->client.clear();
+		channel->told = nullptr;
 	}
 	m_client.clear();
 	m_token.clear();

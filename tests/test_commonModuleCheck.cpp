@@ -16,7 +16,7 @@
 #include "backend/compiler/compileCode.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/mcp/mcpTool.h"
+#include "frmserver/mcp/mcpTool.h"
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"

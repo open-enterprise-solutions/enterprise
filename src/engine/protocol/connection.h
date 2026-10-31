@@ -31,6 +31,8 @@ public:
 	// Open this connection again after it has closed. False when there is nowhere to return to — a file base has
 	// no socket. The default is false, so a connection that cannot return does not pretend to.
 	virtual bool Reconnect(ibString& error) { (void)error; return false; }
+	// Whether a request can still go. True by default: a connection with no socket has nothing to lose.
+	virtual bool IsOpen() const { return true; }
 
 	// A SECOND CONNECTION TO THE SAME PLACE (protocol 6) — the debugger's, so what it carries is not queued behind this
 	// one's calls: the same server's address, the same file base. Null, with why in `error`, when there is none — the

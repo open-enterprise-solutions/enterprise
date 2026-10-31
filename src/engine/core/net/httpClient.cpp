@@ -574,6 +574,8 @@ public:
 							}
 							if (!self->m_done)
 								return;
+							std::error_code ignored;
+							self->m_connecting->set_option(asio::ip::tcp::no_delay(true), ignored);
 							if (self->m_tls)
 								self->m_stream = std::make_unique<ibTlsStream>(std::move(*self->m_connecting), self->m_tls, host);
 							else

@@ -10,6 +10,7 @@
 #include <wx/propdlg.h>
 
 #include "frmclient/frmclient.h"
+#include "protocol/protocolNode.h"
 
 class ibPanelKeyBinder;
 class ibPanelFontColorSettings;
@@ -25,7 +26,11 @@ public:
 	ibPanelKeyBinder* GetKeyBinderPanel() const { return m_keyBinderPanel; }
 	ibPanelEditorSettings* GetEditorSettingsPanel() const { return m_editorSettingsPanel; }
 	ibPanelFontColorSettings* GetFontColorSettingsPanel() const { return m_fontColorSettingsPanel; }
-	ibPanelMcpSettings* GetMcpSettingsPanel() const { return m_mcpSettingsPanel; }
+
+	// The pages not everyone has, added before ShowModal: the assistant's for whom the roles give it, the debugging one
+	// in the application.
+	ibPanelMcpSettings* AddMcpSettingsPanel();
+	void AddDebugSettingsPanel(const ibProtocolNode& shown);
 
 private:
 

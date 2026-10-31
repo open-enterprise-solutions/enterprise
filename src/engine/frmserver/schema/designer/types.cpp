@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "backend/mcp/mcpTool.h"
+#include "frmserver/mcp/mcpTool.h"
 #include "core/serialize/dataBuilder.h"
 
 void ibSchemaTypes::Build(const ibSession& /*session*/, const ibDataNode& args, ibDataNode& result) const

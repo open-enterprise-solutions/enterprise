@@ -85,6 +85,9 @@
     <ClCompile Include="docView\tabDocument.cpp">
       <Filter>docView</Filter>
     </ClCompile>
+    <ClCompile Include="docView\docViewAssistant.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
     <ClCompile Include="docView\print\printPreview.cpp">
       <Filter>docView\print</Filter>
     </ClCompile>
@@ -131,6 +134,9 @@
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\settings\mcpsettingspanel.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\debugsettingspanel.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\settings\settingsdialog.cpp">
@@ -203,9 +209,6 @@
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\authorization.cpp">
-      <Filter>win\dlgs</Filter>
-    </ClCompile>
-    <ClCompile Include="win\dlgs\enterpriseOption.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\errorDialog.cpp">
@@ -494,6 +497,9 @@
     <ClInclude Include="docView\tabDocument.h">
       <Filter>docView</Filter>
     </ClInclude>
+    <ClInclude Include="docView\docViewAssistant.h">
+      <Filter>docView</Filter>
+    </ClInclude>
     <ClInclude Include="docView\print\printPreview.h">
       <Filter>docView\print</Filter>
     </ClInclude>
@@ -578,6 +584,9 @@
     <ClInclude Include="mainFrame\settings\mcpsettingspanel.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
+    <ClInclude Include="mainFrame\settings\debugsettingspanel.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
     <ClInclude Include="mainFrame\settings\settingsdialog.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
@@ -612,9 +621,6 @@
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\authorization.h">
-      <Filter>win\dlgs</Filter>
-    </ClInclude>
-    <ClInclude Include="win\dlgs\enterpriseOption.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\errorDialog.h">

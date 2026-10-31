@@ -1,0 +1,68 @@
+#include "assistant.h"
+
+#include "frmserver/client/clientHost.h"
+#include "frmserver/mcp/mcpServer.h"
+#include "backend/session/session.h"
+#include "core/picturePredefined.h"   // the assistant's own icon, from the picture registry
+
+#include "frmserver/docView/docManager.h"
+#include "frmserver/docView/templates/docViewAssistant.h"
+
+namespace {
+
+// The base's assistant access — its owner's, asked instead of "the current one".
+ibMcpServer* ServerOf(const ibSession& session)
+{
+	return ibClientHost::GetMcpServer(&session);
+}
+
+}
+
+bool ibSchemaAssistant::AccessRight(const ibSession& session) const
+{
+	const ibMcpServer* const server = ServerOf(session);
+	return server != nullptr && server->IsRunning();
+}
+
+std::function<void()> ibSchemaAssistant::Command(const ibSession& session, std::int32_t command,
+	const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, ibString& error) const
+{
+	if (static_cast<ibProtocol::ibSchema::ibCommand>(command) != ibProtocol::ibSchema::ibCommand::Open) {
+		refusal = ibProtocol::ibRefusal::NotFound;
+		error = ibString::Format(ibT("the assistant window has no command %d"), command);
+		return nullptr;
+	}
+
+	ibMcpServer* const server = ServerOf(session);
+	if (server == nullptr || !server->IsRunning()) {
+		refusal = ibProtocol::ibRefusal::NotNow;
+		error = ibT("the base's assistant access is not running");
+		return nullptr;
+	}
+
+	return [server]() {
+		ibDocManager* const documentManager = ibDocManager::GetDocumentManager();
+		if (documentManager == nullptr)
+			return;
+
+		// ⭐ ONE ASSISTANT WINDOW — there is one server and one conversation, so a second tab would show the same
+		// exchange in two places. The document brings ITSELF forward (the desktop's OnMcpAssistant).
+		for (ibDocument* open : documentManager->GetDocumentsVector()) {
+			if (ibAssistantTranscriptDocument* already = wxDynamicCast(open, ibAssistantTranscriptDocument)) {
+				already->Activate();
+				return;
+			}
+		}
+
+		ibAssistantTranscriptDocument* doc = documentManager->CreateDocument<ibAssistantTranscriptDocument>(server);
+		if (doc == nullptr)
+			return;
+
+		doc->SetTitle(_("Assistant"));
+		doc->SetIcon(ibPictureDescription(g_picAssistantCLSID));
+		documentManager->AddDocument(doc);
+
+		if (!doc->OnCreate(ibEmptyString, 0))
+			doc->DeleteAllViews();
+	};
+}

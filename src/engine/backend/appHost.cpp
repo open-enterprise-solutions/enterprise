@@ -404,12 +404,8 @@ void ibApplicationHost::ReadBackendConf()
 	// The certificate the listeners speak TLS over, named relative to this file's folder (core/server/listener.h).
 	m_configTls = ibTlsFiles::FromConf(fc, wxFileName(strConfigFile).GetPath());
 
-	// (THE MCP SERVER'S SETTINGS ARE NOT HERE. They belong to a PERSON in a
-	//  BASE — the server is started from an authenticated designer session and
-	//  has nothing to say before one exists — so they live in sys_settings with
-	//  every other saved setting, under their own category. See
-	//  ibMcpServer::LoadSettings. A copy in this file would be a second road,
-	//  and the two would disagree the first time somebody edited the page.)
+	// (THE ASSISTANT ACCESS'S SETTINGS ARE NOT HERE: the port is on the person's own machine, and so
+	//  are they. See ibMcpServer::GetSettings in frmclient/backend/mcp/mcpServer.h.)
 }
 
 void ibApplicationHost::SetMemoryLimit(std::size_t megabytes)

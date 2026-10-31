@@ -163,7 +163,6 @@ bool ibFrontendMainFrameDesigner::Debug(const ibProtocolNode& params, ibProtocol
 #include "designer-thin/docManager/templates/docViewFunctionalOption.h"
 #include "designer-thin/docManager/templates/docViewRole.h"
 #include "designer-thin/docManager/templates/docViewComposer.h"
-#include "designer-thin/docManager/templates/docViewAssistant.h"
 
 ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId)
 {
@@ -187,8 +186,6 @@ ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocol::ibView::i
 		return new ibRoleEditDocument(tabId);
 	if (kind == ibProtocol::ibView::ibKind::Composer)
 		return new ibComposerEditDocument(tabId);
-	if (kind == ibProtocol::ibView::ibKind::Assistant)
-		return new ibAssistantDocument(tabId);
 	return ibFrontendMainFrame::CreateDocument(kind, tabId);
 }
 
@@ -223,9 +220,6 @@ bool ibFrontendMainFrameDesigner::Show(bool show)
 		// asked for it.
 		if (m_debugClient == nullptr)
 			m_debugClient.reset(new ibDebuggerClient);
-
-		// The assistant comes up with the designer where the desktop's window started it — on the server, as the
-		// designer's session starts (ibClientFrameDesigner::CreateStartupPage); its refusal comes in the messages.
 	}
 
 	return ret;

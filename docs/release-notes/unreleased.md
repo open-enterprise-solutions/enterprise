@@ -16,6 +16,29 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   still show the text. A configuration, a form or a message written by this build is not read by an
   earlier one (`the packet is OES-RPC version 2, this end reads 1`): update the thin clients with
   the server. A base written before is read as it is.
+- **The assistant access (MCP) listens on the person's own machine, and each person has their own.**
+  Their client opens the port and carries the messages to the base; the server opens none, and
+  `McpPort` in `server.conf` is no longer read. Point an assistant that used it at the client's port.
+  The settings moved from the base to that machine, one set for the designer on port 7374 and one
+  for the application on 7375. Saved ones are not carried over: turn it on again and hand the new key
+  to the assistant.
+- **The application has the assistant too, as a role says.** Two new rights: *Assistant* gives the
+  menu and the schema alone, no record of it; *Data assistant* adds what works with the data, such as
+  running a report, with what that person may see and change. Both are off until a role gives them, except
+  in a base with no users, which is open access. In the designer neither is asked.
+- **The application has the designer's Options.** **Tools → Options…** holds the keys, the editor, the
+  fonts and the assistant access, plus a *Debugging* page. Each mode keeps its options apart, so the
+  application starts with its own defaults. The assistant's window is at the bottom of **Administration**.
+- **An assistant in the application can work in your window.** It can open a report it wrote, as an
+  external report in a tab; open a list or a document and put the cursor on a row; add or correct a
+  value. All of it under your roles, with the *Data assistant* right. What it writes is really
+  written. Nothing is added to the configuration.
+- **`Execute` and `Evaluate` now do what they say.** They ran as a watch, so what their code wrote was
+  silently not written; code that failed said nothing from `Execute` and came back from `Evaluate` as
+  the string `<error: …>`. They write now, and a failure raises an error. A module that relied on any
+  of this should be checked.
+- **An assistant's connection comes back by itself.** After a dropped connection its next call opens a
+  new one. The call that was under way is not repeated, and the assistant is told to check its result.
 
 ## Script language
 

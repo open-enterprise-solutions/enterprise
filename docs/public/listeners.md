@@ -75,9 +75,8 @@ as written; taken by another process, it is refused, never moved off.
 | Port | Whose | Kept in |
 |---|---|---|
 | 7373 | the cluster: every client, and its tray | `server.conf` `Port` |
-| 7374 | the designer's assistant access (MCP) | the designer's settings |
+| 7374, 7375 | the assistant access (MCP), on the person's own machine: their client listens, the designer on the first, the application on the second | their settings on that machine, one set for each |
 | 7500-7599 | the cluster's servers, as many a base as its `Processes`, on `127.0.0.1`: the first free one | - |
-| 7600-7699 | the assistant access of a base, one each, held by its first server | `server.conf` `McpPort` |
 | 7700-7709 | the debugger: the first free one, the designer looks in all | - |
 | 8080 / 443 | the web server: HTTP / HTTPS, when `web.conf` names a certificate | `web.conf` `HttpPort`, `HttpsPort` |
 

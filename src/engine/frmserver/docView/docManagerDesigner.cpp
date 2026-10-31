@@ -1,10 +1,8 @@
 #include "docManagerDesigner.h"
 
-#include "frmserver/schema/designer/assistant.h"
 #include "frmserver/schema/designer/configCompare.h"
 #include "frmserver/schema/designer/database.h"
 #include "frmserver/schema/designer/debugger.h"
-#include "frmserver/schema/designer/mcpServer.h"
 #include "frmserver/schema/designer/metaData.h"
 #include "frmserver/schema/designer/homePage.h"
 #include "frmserver/schema/designer/objectText.h"
@@ -28,11 +26,7 @@
 #include "frmserver/docView/templates/designer/docViewComposerEdit.h"
 #include "frmserver/docView/templates/designer/docViewSpreadsheetEdit.h"
 
-//tools
-#include "frmserver/docView/templates/designer/docViewAssistant.h"
-
 #include "core/fileKind.h"   // extensions live in one table, not at each call site
-#include "core/picturePredefined.h"   // the assistant's picture — its tool template's key
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDocManagerDesigner, ibDocManager);
 
@@ -64,14 +58,6 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	// …and a report's composer — the composition panel over its description, as the desktop's designer opened it.
 	AddDocTemplate(g_metaComposerCLSID, CLASSINFO(ibComposerCompositionDocument), CLASSINFO(ibComposerCompositionView));
 
-	// The assistant window — no metaobject, the registration journal's shape: an invisible template reached through
-	// CreateDocument<ibAssistantTranscriptDocument>() from its schema's Open.
-	AddDocTemplate(g_picAssistantCLSID,
-		_("Assistant"), ibEmptyString, ibEmptyString,
-		_("Assistant Doc"), _("Assistant View"),
-		CLASSINFO(ibAssistantTranscriptDocument), CLASSINFO(ibAssistantTranscriptView),
-		ibTEMPLATE_INVISIBLE);
-
 	// The configuration tree — its doors; the rows are the frame's (ibClientFrameDesigner).
 	RegisterSchema(ibProtocol::ibSchema::ibKind::MetaData, std::make_unique<ibSchemaMetaData>());
 	// …and its predefined values editor — what an object declares, and its edits.
@@ -88,10 +74,6 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	RegisterSchema(ibProtocol::ibSchema::ibKind::UserList, std::make_unique<ibSchemaUserList>());
 	// …and Restore, Dump and Clear database — the base as a whole.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Database, std::make_unique<ibSchemaDatabase>());
-	// The designer's options — the person's assistant access (its MCP page).
-	RegisterSchema(ibProtocol::ibSchema::ibKind::McpServer, std::make_unique<ibSchemaMcpServer>());
-	// …and the window onto it — Administration → Assistant window.
-	RegisterSchema(ibProtocol::ibSchema::ibKind::Assistant, std::make_unique<ibSchemaAssistant>());
 	RegisterSchema(ibProtocol::ibSchema::ibKind::ConfigCompare, std::make_unique<ibSchemaConfigCompare>());
 	// The syntax helper's names that have no article.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Types, std::make_unique<ibSchemaTypes>());

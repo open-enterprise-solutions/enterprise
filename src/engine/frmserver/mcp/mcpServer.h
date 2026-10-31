@@ -1,0 +1,362 @@
+﻿#ifndef _IB_MCP_SERVER_H_
+#define _IB_MCP_SERVER_H_
+
+////////////////////////////////////////////////////////////////////////////
+//	Description : ibMcpServer — the platform answering a machine caller
+////////////////////////////////////////////////////////////////////////////
+//
+// WHAT IT IS. One person's: one per client of a base (ibClientHost::GetMcpServer),
+// so several assistants work side by side and each holds its own conversation. It is
+// IN THE ENGINE deliberately — not a plugin, not a mode of one binary — so every host of
+// a base can offer it, and a plugin stays what the boundary was built to be: a showcase,
+// not the mechanism.
+//
+// WHAT IT SERVES. Whatever registered itself (mcpTool.h). The server holds no
+// list of verbs: the compiler's check, the metadata doors, and later the syntax
+// helper, the debugger, the query constructor, the composer and the FORM (that
+// one registered by the front, which is where controls live) each arrive by
+// registering. Adding one edits nothing here.
+//
+// IN WHOSE NAME. The client's session — a person logged in, the platform let them
+// in — bound around each message. So every door it calls answers exactly as it would
+// for that person: same rights, same roles, same configuration. There is no second
+// permission model to keep in step, which is the whole reason the session is the
+// unit rather than a token of our own invention.
+//
+// THE TRANSPORT IS THE CLIENT'S. An HTTP port on its own machine (frmclient/backend/
+// mcp/mcpServer.h), carried here over a connection of the client's own (ibProtocol::
+// ibMcp): this knows the protocol and the tools, that knows neither.
+//
+////////////////////////////////////////////////////////////////////////////
+
+#include "frmserver/frmserver.h"
+#include "frmserver/client/clientHostCtorToken.h"
+
+#include <atomic>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <set>
+#include <vector>
+
+#include <wx/string.h>
+
+#include "core/fstring.h"           // ibString — a call's text and its answer, as the transport holds them
+
+class ibSession;
+
+// WATCHING THE CONVERSATION. The designer shows a window with the exchange in
+// it — what was asked, what the platform answered — so a person can see what is
+// being done in their name rather than infer it from the tree changing under
+// them. Publishing is best-effort and cheap when nobody listens, like the
+// diagnostics bus it is modelled on.
+//
+// ⭐ IT PUSHES DATA, NOT A PICTURE. The three strings are what happened; how it
+// LOOKS is the front's business — a list, a document, a rendered page — which is
+// the same division ibPropertyObjectNotifier keeps ("the object says what
+// changed; the front owns the widget"). A server that answered in HTML would put
+// presentation in the core and make the window unreplaceable. The same push also
+// feeds a log and a test, which a rendered page could not.
+class ibMcpNotifier {
+public:
+	virtual ~ibMcpNotifier() = default;
+
+	// Called on the SERVER'S thread, once per exchange. Keep it short: the
+	// answer is not sent until this returns. A front-end notifier should post to
+	// its own queue rather than touch a widget here.
+	virtual void OnMcpExchange(const ibString& method,
+		const ibString& request, const ibString& answer) = 0;
+};
+
+class FRMSERVER_API ibMcpServer {
+public:
+
+	ibMcpServer(const ibMcpServer&) = delete;
+	ibMcpServer& operator=(const ibMcpServer&) = delete;
+
+	// Construction restricted to ibClientHost (clientHostCtorToken.h).
+	//
+	// ⚠ BOTH OUT OF LINE, and the constructor is not an oversight: the bridge
+	// below is an incomplete type here (it is declared in the .cpp), and an
+	// INLINE constructor needs the member's destructor too — for unwinding if it
+	// throws. Defined inline, this is `can't delete an incomplete type` at every
+	// call site that builds one.
+	// The token names the base this server belongs to; `session` is the person's — everything is done in
+	// its name, and it outlives the server (the host stops the server before the session goes).
+	ibMcpServer(ib::ClientHostCtorToken owner, ibSession* session);
+	~ibMcpServer();
+
+	// --- the transport ----------------------------------------------------
+	// ⭐ ONE MESSAGE IN, ITS ANSWER OUT, as the transport heard it: the JSON and the headers MCP mirrors it
+	// into — and `status`, the HTTP status to carry the answer with, the protocol's verdict. The transport
+	// knows none of what they mean. An empty message asks the headers alone.
+	ibString Call(const ibString& message, const ibString& protocolVersion, const ibString& method,
+		const ibString& name, std::int32_t& status);
+
+	// A TRANSPORT CAME: `told` is how what is said unasked reaches it, called on whichever thread says it,
+	// and sent in the order said. Empty — it went, and nothing listens.
+	void Listen(std::function<void(const ibString& message)> told);
+	// Nothing listens and nothing is watched: the client is going.
+	void Stop();
+
+	bool IsRunning() const { return m_running.load(); }
+
+	// --- the debugger -----------------------------------------------------
+	// The bridge a designer's assistant listens to it by (mcpDebugBridge.h). Set by the bridge: the debug client
+	// owns it and may end it first. Null — there is none.
+	class ibMcpDebugBridge* GetDebugBridge() const { return m_debugBridge.load(); }
+	void                    SetDebugBridge(class ibMcpDebugBridge* bridge) { m_debugBridge.store(bridge); }
+
+	// --- asking the client's model ----------------------------------------
+	//
+	// THE PLATFORM HAS NO MODEL, AND SHOULD NOT. Model access belongs to
+	// whoever connected: MCP's `sampling/createMessage` is the server asking the
+	// CLIENT to run a completion and hand back the text. So no key is stored
+	// here, no outbound TLS is needed, and the answer comes from the same
+	// assistant that is already working on this configuration rather than from a
+	// second one configured elsewhere.
+	//
+	// True only when a client is connected AND declared the sampling capability
+	// in its handshake — which is what makes the Send button mean something
+	// instead of being enabled and hopeful.
+	bool CanAskModel() const;
+
+	// Queues one question. Answers false with a reason when there is nobody to
+	// ask. The REPLY DOES NOT COME BACK HERE: it arrives from the client later
+	// and is published to the notifiers like any other exchange, so a window
+	// that already shows the conversation shows this too, and the caller does
+	// not sit waiting on a socket.
+	bool AskModel(const ibString& question, ibString& refusal);
+
+	// --- the conversation itself ------------------------------------------
+	//
+	// A PERSON'S MESSAGE HAS TO WAIT SOMEWHERE. The platform cannot call a model
+	// (no outbound TLS, no key, and neither belongs here); the assistant that
+	// CAN is the one already connected. So the window drops what was typed into
+	// this queue and whoever is connected picks it up with a tool and answers
+	// with another — the conversation happens inside the configuration, and
+	// model access stays where it already lives.
+	//
+	// ⚠ This is the SHORT road, and it is honest about being one: the client has
+	// to come and look. The long road is MCP sampling, where the server asks the
+	// client without being asked — same window, same notifiers, different
+	// plumbing underneath.
+	void Say(const ibString& text);      // from the window, to whoever is listening
+	std::vector<ibString> TakeSaid();    // from the client: everything not taken yet
+
+	// ⭐⭐ WHAT HAPPENED, AS AGAINST WHAT WAS ASKED — and they are kept apart because they oblige
+	// differently (Max, 2026-09-01: *"it is information you can read, but it does not order you to
+	// do it"*).
+	//
+	// A person's message is an ASK: taken once, answered once. A note is CONTEXT: the person
+	// created a catalog, the configuration was saved, the database was applied. Both are useful to
+	// an assistant and only the first is a request — put them in one list and every observation
+	// starts reading like an instruction, which is how an assistant ends up answering a person who
+	// said nothing.
+	//
+	// ⚠ AND IT NEVER REACHES THE WINDOW. The person DID the thing; telling them they did it fills
+	// their own pane with their own actions.
+	void Note(const ibString& text);
+	std::vector<ibString> TakeNoted();
+
+	// ⭐ HAS ANYBODY PICKED IT UP — asked WITHOUT taking, which TakeSaid cannot do. The window
+	// needs it to tell two silences apart: a message nobody has collected means nothing is
+	// listening, and one that was collected means an answer is being worked on. Both look like
+	// waiting; only the first is a problem, and calling it "processing" would be a lie.
+	size_t PendingCount() const;
+	void Reply(const ibString& text);    // from the client, into the window
+
+	// ⭐ WHO SAID IT, KEPT WITH WHAT WAS SAID. The queue above answers "what is new"; this answers
+	// "what was the conversation", and they are different questions that were being served by one
+	// destructive vector — so closing the window lost the exchange, and a client reconnecting had
+	// no idea what had been discussed.
+	struct Turn {
+		bool     fromPerson;   // the window, as opposed to the assistant
+		ibString text;
+	};
+
+	// ⭐ WHAT THE WINDOW SAYS BEFORE ANYONE HAS SAID ANYTHING. An empty pane tells a person
+	// nothing — not whether this is working, not what it is, not what to do next — and "nothing
+	// has happened yet" and "this is broken" look identical when both are blank.
+	//
+	// One text, two moments: published when a transport comes (so a window already open sees it appear) and
+	// shown when a WINDOW opens onto a server already running (so somebody who opens the tab an
+	// hour later is not the only one who missed it). Written once here because two greetings would
+	// drift into disagreeing about the same server.
+	//
+	// ⚠ NOT by Stop(). At the point Stop announces itself the server is still running, so this
+	// would say so — the one moment the text would be exactly wrong. Stopping has words of its
+	// own, and that is the reason, not an oversight.
+	ibString Greeting() const;
+
+	// Everything said this session, oldest first. The window fills itself from it when it opens;
+	// an assistant reads it to learn the context it is joining.
+	//
+	// ⚠ THIS SESSION ONLY. It lives with the server and goes when the process does — persisting a
+	// conversation is a separate decision with a place to store it, and pretending otherwise here
+	// would be the worse kind of half-answer.
+	std::vector<Turn> GetConversation() const;
+
+	// --- watching ---------------------------------------------------------
+	// The pair every notifier in this tree is added and removed by. Removal is
+	// by pointer identity and must happen before the notifier is destroyed.
+	void AddNotifier(ibMcpNotifier* notifier);
+	void RemoveNotifier(ibMcpNotifier* notifier);
+
+private:
+
+	// WHAT THE HTTP HEADERS SAID, for the parts of the message the transport mirrors
+	// into them. From revision 2025-06-18 a client states the protocol version in a
+	// header; from 2026-07-28 it also mirrors the method and the tool name, and the
+	// server MUST refuse a request whose header and body disagree — because a
+	// load balancer routes on the one and the server executes on the other.
+	//
+	// Carried in a struct of its own rather than by handing Answer an
+	// ibHttpRequest: the JSON-RPC layer has never known what HTTP is, and the
+	// three strings it now needs are not a reason to teach it.
+	struct ibMcpWireHeaders {
+		ibString m_protocolVersion;   // MCP-Protocol-Version, empty when absent
+		ibString m_method;            // Mcp-Method
+		ibString m_name;              // Mcp-Name (tools/call, resources/read, prompts/get)
+	};
+
+	// ANSWER ONE MESSAGE. Parses the envelope, finds the tool, calls it, writes
+	// the answer.
+	//
+	// `headers` is what the transport saw.
+	//
+	// `outErrorCode` receives the JSON-RPC error code when the answer is a refusal, 0
+	// otherwise. The transport needs it because the modern revision expects certain
+	// refusals to carry an HTTP status of their own — but WHICH status is the
+	// transport's business, so this hands over the protocol's own verdict rather than
+	// an HTTP number. It also spares the caller from reading its own output back:
+	// searching the emitted JSON for `"code":-32020` is a guess about the writer's
+	// spacing, and it was wrong the first time it was tried.
+	ibString Answer(const ibString& request, const ibMcpWireHeaders& headers, int* outErrorCode);
+
+	// What is said unasked, to the transport: dropped when none listens.
+	void Tell(const ibString& message);
+
+	void Publish(const ibString& method, const ibString& request, const ibString& answer);
+
+	// ⭐⭐ RUN A TOOL WHERE A MOUSE CLICK RUNS — through the session's worker pool, which on a
+	// desktop host is the wx main thread. The thread a message came on may not touch a widget or the tree, and
+	// what that cost was not a refusal but the process: see the note on the definition.
+	//
+	// ⭐⭐ AND THERE ARE THREE OUTCOMES, NOT TWO. `outPending` is set when the wait expired with the
+	// call still QUEUED — it did not fail, and it did not finish; it will run. That is not a
+	// refusal, and answering one is what cost three unnamed common modules: the assistant read
+	// `isError`, believed the work had not happened, called again, and the first call then landed
+	// too (2026-08-31). A false refusal is worse than a slow answer because it makes a caller ACT.
+	//
+	// The reason it needs its own channel is the same one that keeps recurring here: a bool cannot
+	// carry a third state, and the text that explains it is read by a person while the caller is a
+	// machine, for which false is false.
+	bool RunTool(const class ibMcpTool* tool, const class ibDataNode& arguments,
+		class ibDataNode& payload, ibString& refusal, bool* outPending = nullptr);
+
+	// The configuration its session works in — what every answer here is about. Null while it is stopped.
+	class ibMetaDataConfigurationBase* GetMetaData() const;
+
+	// Puts the bridge on the open configuration's list, moving it when that configuration is not
+	// the one it is already watching. Called from the one place every tool call passes through —
+	// a configuration can be opened, closed and reopened while the server runs.
+	void WatchMetadata();
+
+	// How the transport is told (Listen). Under the lock: what two threads say reaches it in the order said.
+	std::function<void(const ibString& message)> m_told;
+	std::mutex                   m_toldMutex;
+
+	// ⭐⭐ THE ASSISTANT'S OWN SUBSCRIPTION TO THE METADATA — the twin of ibMcpDebugBridge, and the
+	// same idea: it watches ALONGSIDE the designer's navigator instead of asking the navigator
+	// anything, so a person building a configuration by hand and an assistant watching it see the
+	// same events at the same moment.
+	//
+	// What it does with them is forward them, one line each, down the road a chat message already
+	// travels (Max, 2026-09-01: *"you can just forward them to yourself — for you it is a log"*).
+	//
+	// ⚠ THE CLASS ITSELF LIVES IN THE .cpp and is unnameable from outside, exactly as the tree's
+	// notifier does. Nothing hands one in, nothing holds one but this.
+	std::unique_ptr<class ibMcpMetaBridge> m_metaBridge;
+
+	std::atomic<class ibMcpDebugBridge*> m_debugBridge{ nullptr };
+
+	std::atomic<bool>            m_running{ false };
+
+	// WHAT THE CLIENT SAID IT CAN DO, taken from its handshake. Asked before
+	// every outgoing request, because a client that cannot sample must be told
+	// so by a disabled button rather than by silence after a press.
+	std::atomic<bool>            m_clientCanSample{ false };
+
+	// The id of the next request WE send. Server-initiated ids live in their own
+	// numbering — a client's id 1 and ours are different conversations, and
+	// mixing them is how an answer gets matched to the wrong question.
+	std::atomic<long>            m_outgoingId{ 1 };
+
+	// The session everything is done in the name of. Not owned: it outlives the
+	// server by construction (the server is stopped when the session closes).
+	ibSession* const             m_session;
+
+	// The base this server belongs to — its owner, asked instead of "the current one".
+	ibApplicationInstance* const     m_applicationInstance;
+
+	// ⚠ ADDED AND REMOVED ON ONE THREAD, CALLED ON ANOTHER — a window's (the thin designer's: whichever thread serves
+	// its client) against the server's and Say's. Held for the whole of Publish, so once RemoveNotifier returns no call
+	// to that notifier is in flight and it may go.
+	std::vector<ibMcpNotifier*>  m_notifiers;
+	std::mutex                   m_notifiersMutex;
+
+	// WHAT WAS TYPED AND NOT YET COLLECTED. Written on the UI thread (the Send
+	// button), drained on the server's (a tool call), so it is guarded — the one
+	// place in this class where two threads meet over a container.
+	// HOW MUCH THE CLIENT ASKED FOR, as a rank rather than a word — set by `logging/setLevel`,
+	// read on the thread that writes the stream. Starts at 0 (debug), which is everything: a
+	// client that never sets it gets the notifications, which is what the whole stream is for.
+	std::atomic<int>             m_logLevel{ 0 };
+
+	// HAS ANYBODY EVER FINISHED A HANDSHAKE. Not the same as "running": a server can listen all
+	// day with nobody there, and a person waiting for an answer cannot tell those apart from the
+	// window. Set once at `initialize` and never cleared — HTTP has no hang-up to observe, so
+	// claiming somebody left would be a guess, while "somebody did connect" stays true.
+	bool                         m_greeted = false;
+
+	// HAS THE ASSISTANT SPOKEN TO THE PERSON YET — a different fact from m_greeted, which only
+	// records that somebody connected. Until this is true every answer carries the reminder to
+	// introduce itself, because the orientation that asks for it is handed over once and a
+	// long-running client no longer has it in view.
+	bool                         m_introduced = false;
+
+	// ⭐⭐ WHAT HAS ALREADY BEEN POINTED AT, so a reminder is said ONCE and then never again.
+	//
+	// The corpus knows how a template is cut into bands, how a form is laid out, how a register is
+	// shaped — and a caller has to KNOW IT IS THERE to ask. The greeting has exactly this problem
+	// and exactly this cure (m_introduced): say it at a moment the reader can act on it, and stop
+	// the moment it is honoured.
+	//
+	// Keyed by tool FAMILY (`sheet`, `form`, `metadata`), because that is the grain a body of
+	// craft is written at: a hint per call would be sixty of them during one layout, which is a
+	// nag, and a nag is read past. Reading the corpus marks its families too, so a caller who went
+	// there first is never told to.
+	std::set<ibString>           m_hinted;
+
+	// ⭐ AND THE ONE FACT THAT CHANGES HOW EVERY VISIBLE STRING IS WRITTEN, said once. A
+	// configuration with two declared languages needs every synonym, caption and heading in BOTH —
+	// and a caller writing one of them cannot see that from the call it is making. The platform
+	// knows; the caller does not; so the platform says it.
+	bool                         m_saidLanguages = false;
+
+	mutable std::mutex           m_saidMutex;
+
+	// NOT YET COLLECTED — drained by TakeSaid, so each message is answered once.
+	std::vector<ibString>        m_said;
+
+	// …AND WHAT WAS MERELY OBSERVED, drained by TakeNoted. Same mutex, separate list: see Note().
+	std::vector<ibString>        m_noted;
+
+	// WHAT WAS SAID, kept. Guarded by the same mutex: the two are written in one breath and a
+	// second lock would only be a second thing to forget.
+	std::vector<Turn>            m_conversation;
+};
+
+#endif // _IB_MCP_SERVER_H_

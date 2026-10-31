@@ -2,14 +2,12 @@
 
 #include "backend/appData.h"
 #include "backend/debugger/debugClient.h"
-#include "backend/mcp/mcpServer.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
 
 #include "core/picturePredefined.h"   // the assistant's item's picture
 
 #include "frmserver/docView/docManagerDesigner.h"
-#include "frmserver/schema/designer/mcpServer.h"   // SwitchableServer — the assistant the person may switch here
 
 #include "clientDebugger.h"
 
@@ -40,19 +38,6 @@ bool ibClientFrameDesigner::AllowRun()
 	if (metaData == nullptr || !metaData->AccessRight_Administration())
 		return false;
 	return m_metaTree.Load(std::static_pointer_cast<ibMetaDataConfigurationBase>(metaData->shared_from_this()));
-}
-
-void ibClientFrameDesigner::CreateStartupPage()
-{
-	// Nothing starts that the settings did not ask for, nor one running already: Start refuses a switched-off access on
-	// its own, and that refusal is not worth saying at every start.
-	ibMcpServer* const server = ibSchemaMcpServer::SwitchableServer(*GetSession());
-	if (server == nullptr || !server->GetSettings().m_enabled || server->IsRunning())
-		return;
-
-	ibString refusal;
-	if (!server->Start(GetSession(), refusal) && !refusal.IsEmpty())
-		Message(refusal, ibStatusMessage::ibStatusMessage_Warning);
 }
 
 void ibClientFrameDesigner::OnDraw(ibDataNode& state)

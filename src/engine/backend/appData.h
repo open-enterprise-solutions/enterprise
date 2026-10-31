@@ -553,13 +553,6 @@ private:
 	// runs first, so no worker is left holding a session being dropped.
 	std::unique_ptr<class ibJobManager> m_jobManager;
 
-	// The MCP server — the platform answering a machine caller. Declared next to
-	// the job manager and for the same reason: it holds a listening thread that
-	// works IN THE NAME OF a session, so it must be gone while the registry that
-	// owns sessions is still up. Its Stop() joins the thread, so nothing is left
-	// mid-exchange against a configuration being torn down.
-	std::unique_ptr<class ibMcpServer> m_mcpServer;
-
 	// Saved settings (sys_settings). No external deps on teardown — every call
 	// opens its own builder — so its position among the others is free; it stands
 	// here because it is read at the same moments jobs are: while a base is open.
@@ -650,14 +643,6 @@ public:
 	static class ibJobManager* GetJobManager() { return GetJobManager(Get()); }
 	static class ibJobManager* GetJobManager(const ibApplicationInstance* applicationInstance) {
 		return applicationInstance != nullptr ? applicationInstance->m_jobManager.get() : nullptr;
-	}
-
-	// The MCP server. Same nullptr-before-and-after contract as the accessors
-	// above; it exists from startup but LISTENS only once somebody starts it in
-	// the name of a session. See backend/mcp/mcpServer.h.
-	static class ibMcpServer* GetMcpServer() { return GetMcpServer(Get()); }
-	static class ibMcpServer* GetMcpServer(const ibApplicationInstance* applicationInstance) {
-		return applicationInstance != nullptr ? applicationInstance->m_mcpServer.get() : nullptr;
 	}
 
 	// Saved settings — the two doors a caller wants are Save / Restore on the

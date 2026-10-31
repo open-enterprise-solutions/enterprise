@@ -16,8 +16,11 @@
 #include "frmserver/docView/templates/docViewHomePage.h"
 
 // …and the shared schemas.
+#include "frmserver/docView/templates/docViewAssistant.h"
 #include "frmserver/schema/about.h"
 #include "frmserver/schema/activeUser.h"
+#include "frmserver/schema/assistant.h"
+#include "frmserver/schema/assistantAccess.h"
 #include "frmserver/schema/auditLog.h"
 #include "frmserver/schema/languages.h"
 
@@ -309,6 +312,17 @@ ibDocManager::ibDocManager(long /*flags*/, bool initialize)
 		CLASSINFO(ibHomePageDocument), CLASSINFO(ibHomePageView),
 		ibTEMPLATE_INVISIBLE);
 
+	// The assistant window — no metaobject, the registration journal's shape: an invisible template its schema's Open makes.
+	AddDocTemplate(g_picAssistantCLSID,
+		_("Assistant"), ibEmptyString, ibEmptyString,
+		_("Assistant Doc"), _("Assistant View"),
+		CLASSINFO(ibAssistantTranscriptDocument), CLASSINFO(ibAssistantTranscriptView),
+		ibTEMPLATE_INVISIBLE);
+
+	// The person's assistant access — both applications': in the application as their roles say (AccessRight).
+	RegisterSchema(ibProtocol::ibSchema::ibKind::McpServer, std::make_unique<ibSchemaMcpServer>());
+	// …and the window onto it.
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Assistant, std::make_unique<ibSchemaAssistant>());
 	// Active users — the sessions and the locks; the designer's dialog and the runtime's showed the same tables.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::ActiveUser, std::make_unique<ibSchemaActiveUser>());
 	// The registration journal — a tab its command opens; both applications' Administration had it.

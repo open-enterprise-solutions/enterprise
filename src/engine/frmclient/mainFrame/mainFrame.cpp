@@ -21,10 +21,18 @@
 #include "output/outputWindow.h"
 #include "objinspect/objinspect.h"
 #include "settings/settingsxml.h"
+#include "settings/settingsdialog.h"
+#include "settings/keybinderpanel.h"
+#include "settings/fontcolorsettingspanel.h"
+#include "settings/editorsettingspanel.h"
+#include "settings/mcpsettingspanel.h"
 
 
 #include "core/exception.h"   // ibCoreException — the engine's exception a fetch was refused with
+#include "frmclient/backend/appData.h"
+#include "frmclient/backend/mcp/mcpServer.h"   // the assistant's port, up and down with the window
 #include "frmclient/docView/docManager.h"
+#include "frmclient/docView/docViewAssistant.h"   // the assistant's tab — a view the server holds
 #include "frmclient/docView/templates/docViewFile.h"
 #include "frmclient/docView/templates/docViewAuditLog.h"   // the journal's tab — a view of its own (the tab's Kind)
 #include "frmclient/docView/templates/docViewHomePage.h"   // the start page's tab — its forms, laid out
@@ -34,7 +42,6 @@
 #include "frmclient/win/dlgs/about.h"
 #include "frmclient/win/dlgs/activeUser.h"
 #include "frmclient/win/dlgs/authorization.h"
-#include "frmclient/win/dlgs/enterpriseOption.h"
 #include "frmclient/win/dlgs/errorDialog.h"
 #include "frmclient/win/dlgs/formEditor.h"
 #include "frmclient/win/dlgs/generation.h"
@@ -85,8 +92,18 @@ void RemoveWindowMenuOf(wxMenuBar* bar, wxMenu* windowMenu)
 	}
 }
 
-// The person's options file, beside the desktop designer's options.xml: the thin client's commands go by other ids.
+// The person's options files, beside the desktop designer's options.xml: the thin client's commands go by other ids.
+// One for each mode: a font or a key set in the application does not move the designer's.
 constexpr const wxChar* kOptionsFile = wxT("options-thin.xml");
+constexpr const wxChar* kApplicationOptionsFile = wxT("options-thin-application.xml");
+
+wxFileName GetOptionsFile(ibProtocol::ibLogin::ibMode mode)
+{
+	wxFileName fileName(wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache),
+		mode == ibProtocol::ibLogin::ibMode::Designer ? kOptionsFile : kApplicationOptionsFile);
+	fileName.AppendDir(wxT("OES"));
+	return fileName;
+}
 
 // A file goes up in parts of at most this — what the server keeps one part as (ibTempStorage::kPartSize).
 constexpr std::size_t kUploadPartSize = 1024 * 1024;
@@ -591,13 +608,10 @@ void ibFrontendMainFrame::LoadOptions()
 	// Disable logging since it's ok if the options file is not there.
 	wxLogNull logNo;
 
-	// The person's directory, where the desktop designer keeps its options.xml — the thin client's file beside it. The
-	// thin designer writes it (SaveOptions).
-	wxFileName fileName(wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache), kOptionsFile);
-	fileName.AppendDir(wxT("OES"));
-
+	// The person's directory, where the desktop designer keeps its options.xml — this mode's file beside it, written by
+	// SaveOptions.
 	wxXmlDocument document;
-	if (!document.Load(fileName.GetFullPath()) || document.GetRoot()->GetName() != wxT("options"))
+	if (!document.Load(GetOptionsFile(m_mode).GetFullPath()) || document.GetRoot()->GetName() != wxT("options"))
 		return;
 
 	for (wxXmlNode* node = document.GetRoot()->GetChildren(); node != nullptr; node = node->GetNext()) {
@@ -625,8 +639,7 @@ void ibFrontendMainFrame::SaveOptions()
 	root->AddChild(m_keyBinder.Save(wxT("shortcuts")));
 
 	// Make sure the directory exists.
-	wxFileName fileName(wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache), kOptionsFile);
-	fileName.AppendDir(wxT("OES"));
+	const wxFileName fileName = GetOptionsFile(m_mode);
 	fileName.Mkdir(wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
 	document.Save(fileName.GetFullPath());
 
@@ -802,6 +815,14 @@ bool ibFrontendMainFrame::Show(bool show)
 	// The window's own parts, once the start has run and nothing of it is pending.
 	CreateStartupPage();
 
+	// THE ASSISTANT'S PORT, when the person's settings ask for it. Nothing starts that the settings did not ask for, and a
+	// person whose roles do not give it is refused the schema: GetMcpServer answers none.
+	if (ibMcpServer* const assistant = ibApplicationInstance::GetMcpServer(); assistant != nullptr && assistant->GetSettings().m_enabled) {
+		ibString assistantRefusal;
+		if (!assistant->Start(assistantRefusal) && !assistantRefusal.IsEmpty())
+			wxLogWarning(wxT("%s"), wxString(assistantRefusal));
+	}
+
 	if (!wxAuiMDIParentFrame::Show(true))
 		return false;
 	SetFocus();
@@ -821,6 +842,8 @@ bool ibFrontendMainFrame::Destroy()
 {
 	// The client goes with the window: its session is torn down by the server, with whatever it still had open.
 	m_closingWindow = true;
+	// The assistant's port goes first: it carries over the connection the logout closes.
+	ibApplicationInstance::StopMcpServer();
 	m_communicator->Logout();
 
 	// …and the tabs' documents here with it: the frame has no tab any more, so none of them asks the server
@@ -851,6 +874,18 @@ bool ibFrontendMainFrame::Call(ibProtocol::ibMethod method, const ibProtocolNode
 
 	CallSettled();
 	return called;
+}
+
+bool ibFrontendMainFrame::ListenMcp(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal,
+	ibString& error)
+{
+	return m_communicator->ListenMcp(std::move(told), refusal, error);
+}
+
+bool ibFrontendMainFrame::Mcp(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
+	ibString& error)
+{
+	return m_communicator->Mcp(params, result, refusal, error);
 }
 
 bool ibFrontendMainFrame::Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer,
@@ -933,10 +968,59 @@ void ibFrontendMainFrame::ShowSchema(ibProtocol::ibSchema::ibKind schema, const 
 		ibDialogAbout dialog(this, shown);
 		dialog.ShowModal();
 	}
-	else if (schema == ibProtocol::ibSchema::ibKind::Debugging) {
-		ibDialogEnterpriseOption dialog(this, shown);
-		dialog.ShowModal();
+	else if (schema == ibProtocol::ibSchema::ibKind::Debugging || schema == ibProtocol::ibSchema::ibKind::McpServer) {
+		ShowOptions(schema, shown);
 	}
+}
+
+void ibFrontendMainFrame::ShowOptions(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown)
+{
+	// The pages edit copies; the frame takes them back only on OK.
+	ibDialogSettings dialog(this);
+	dialog.GetKeyBinderPanel()->SetSettings(m_keyBinder);
+	dialog.GetFontColorSettingsPanel()->SetSettings(m_fontColorSettings);
+	dialog.GetEditorSettingsPanel()->SetSettings(m_editorSettings);
+
+	// ASSISTANT ACCESS, for whom it is given: the designer's item is its schema, shown already; the application's item is
+	// Debugging, so it is asked there. Its settings lie on this machine.
+	ibMcpServer* const mcpServer = schema == ibProtocol::ibSchema::ibKind::McpServer
+		? ibApplicationInstance::GetMcpServer(shown) : ibApplicationInstance::GetMcpServer();
+	ibPanelMcpSettings* const mcpSettings = mcpServer != nullptr ? dialog.AddMcpSettingsPanel() : nullptr;
+	if (mcpServer != nullptr) {
+		mcpSettings->SetSettings(mcpServer->GetSettings());
+		mcpSettings->SetEndpoint(mcpServer->GetEndpoint());
+	}
+
+	if (schema == ibProtocol::ibSchema::ibKind::Debugging)
+		dialog.AddDebugSettingsPanel(shown);
+
+	if (dialog.ShowModal() == wxID_OK)
+	{
+		if (mcpServer != nullptr) {
+			// A running port is NOT moved by this: it keeps the address it took
+			// until somebody stops and starts it, which is the only way a page can
+			// say one thing while a client talks to another and be caught at it.
+			mcpServer->SaveSettings(mcpSettings->GetSettings());
+		}
+
+		m_keyBinder = dialog.GetKeyBinderPanel()->GetSettings();
+		m_keyBinder.UpdateWindow(this);
+#if wxUSE_MENUBAR
+		m_keyBinder.UpdateMenuBar(GetMenuBar());
+#endif
+
+		m_fontColorSettings = dialog.GetFontColorSettingsPanel()->GetSettings();
+		m_editorSettings = dialog.GetEditorSettingsPanel()->GetSettings();
+
+		// …and in force at once, as the desktop's UpdateEditorOptions put them: every document's views told (a module's
+		// sets its editor anew, a form's its Module page), and the output window.
+		for (ibFrontendDocument* const doc : m_docManager->GetDocumentsVector())
+			doc->UpdateAllViews();
+		if (m_outputWindow != nullptr)
+			m_outputWindow->SetFontColorSettings(m_fontColorSettings);
+	}
+
+	SaveOptions();
 }
 
 bool ibFrontendMainFrame::AllowClose()
@@ -981,14 +1065,6 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	}
 	if (GetStatusBar() != nullptr && (whole || patch.Has(ibProtocol::ibFrame::Status)))
 		SetStatusText(frame.GetString(ibProtocol::ibFrame::Status));
-	// …and beside it the assistant's lamp. The endpoint, not just the word: when an assistant cannot connect, the first
-	// question is always which address and port it should have used, and the answer is then already on screen. Empty
-	// when it is off — its absence says the same thing.
-	if (GetStatusBar() != nullptr && (whole || patch.Has(ibProtocol::ibFrame::Endpoint))) {
-		const wxString endpoint = frame.GetString(ibProtocol::ibFrame::Endpoint);
-		SetStatusText(endpoint.IsEmpty() ? wxString() : wxString::Format(wxT("Assistant  %s"), endpoint),
-			ibDocBottomStatusBar::FieldAssistant);
-	}
 
 	if (whole || patch.Has(ibProtocol::ibFrame::Menu))
 		DrawMenu(frame.FindChild(ibProtocol::ibFrame::Menu));
@@ -1155,6 +1231,8 @@ ibTabDocument* ibFrontendMainFrame::CreateDocument(ibProtocol::ibView::ibKind ki
 		return new ibAuditLogDocument(tabId);
 	if (kind == ibProtocol::ibView::ibKind::HomePage)
 		return new ibHomePageDocument(tabId);
+	if (kind == ibProtocol::ibView::ibKind::Assistant)
+		return new ibAssistantDocument(tabId);
 	return new ibFormVisualDocument(tabId);
 }
 

@@ -2,6 +2,7 @@
 #define __PROTOCOL_COMMUNICATOR_H__
 
 #include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -63,6 +64,15 @@ public:
 	// is bound, or refused.
 	bool Debug(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal, ibString& error);
 
+	// ⭐ THE ASSISTANT'S MCP, ON A CONNECTION OF ITS OWN (protocol 7) — the same road: opened and bound by the key mcp
+	// {Channel} asks for; `told` is handed the params of each `mcp` notification of this client. False with why — a server
+	// below 7, a person whose roles do not give the assistant. Empty `told` — that connection closed.
+	bool ListenMcp(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal, ibString& error);
+	// mcp {Command, …} on that connection, beside this one's calls, never with a frame — a tool working holds only this.
+	// That connection gone is opened again first. A call it took with it is NOT sent again, as it may have been carried
+	// out: false, and the next call finds the connection open.
+	bool Mcp(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal, ibString& error);
+
 	bool            IsLoggedIn() const { return !m_client.IsEmpty(); }
 	const ibString& GetClient() const { return m_client; }
 	int             GetProtocol() const { return m_protocol; }
@@ -83,8 +93,21 @@ private:
 	void Take(const ibProtocolNode& answer);
 	// The client is gone (logged out, or its session is): nothing of it is kept.
 	void Forget();
-	// debug {…} on the debugger's connection, under m_debugMutex.
-	bool DebugLocked(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal, ibString& error);
+	// A CONNECTION OF ITS OWN (protocol 6) — the client it is bound for, its calls' ids, and who is told what comes on it.
+	// A lock of its own: what goes on it does not wait for this connection's call. Taken after m_mutex, never before it.
+	struct Channel {
+		std::mutex                                      mutex;
+		ibString                                        client;
+		long long                                       lastId = 0;
+		std::function<void(const ibProtocolNode& news)> told;
+		std::unique_ptr<ibProtocolConnection>           connection;
+	};
+	// Opened and bound by the key `method` asks for; each `notification` of this client told. Empty `told` — closed.
+	bool ListenChannel(Channel& channel, ibProtocol::ibMethod method, const char* notification,
+		std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal, ibString& error);
+	// `method` {…} on that connection, under its lock.
+	bool ChannelCallLocked(Channel& channel, ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& result,
+		ibProtocol::ibRefusal& refusal, ibString& error);
 
 	std::unique_ptr<ibProtocolConnection> m_connection;
 	std::mutex                            m_mutex;
@@ -109,13 +132,10 @@ private:
 	std::mutex                  m_pendingMutex;
 	std::vector<ibProtocolNode> m_pending;
 
-	// (protocol 6) THE DEBUGGER'S CONNECTION (ListenDebug), the client it is bound for, and its calls' ids — a lock of
-	// their own: a step does not wait for this connection's call. Taken after m_mutex, never before it. Last: it goes
-	// before the connection it was opened beside.
-	std::mutex                            m_debugMutex;
-	ibString                              m_debugClient;
-	long long                             m_debugLastId = 0;
-	std::unique_ptr<ibProtocolConnection> m_debugConnection;
+	// (protocol 6, 7) THE DEBUGGER'S CONNECTION (ListenDebug) AND THE ASSISTANT'S (ListenMcp). Last: they go before the
+	// connection they were opened beside.
+	Channel m_debug;
+	Channel m_mcp;
 };
 
 #endif

@@ -3110,8 +3110,9 @@ bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunConte
 	// of expressions re-read at every step, where compiling once is the whole point. Keeping sandbox
 	// bytecode bought nothing and cost a wrong answer: the key is case-folded, so a second sandbox
 	// differing only in case silently re-ran the FIRST one's bytecode, down to the member spelling
-	// its error message quoted. It runs, and it is gone with runEvaluate at the end of this call.
-	const bool reusable = evalMode != eval_sandbox;
+	// its error message quoted. It runs, and it is gone with runEvaluate at the end of this call. So is
+	// code run as ordinary work (the language's Evaluate and Execute), for the same reason.
+	const bool reusable = evalMode != eval_sandbox && evalMode != eval_none;
 
 	auto iterator = reusable
 		? std::find_if(pRunContext->m_listEval.begin(), pRunContext->m_listEval.end(),
@@ -3135,8 +3136,10 @@ bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunConte
 				// reason into pvarRetValue when it can; if it's still empty
 				// (compile aborted without producing a value), fill in a
 				// generic note so the watch row isn't blank.
-				if (pvarRetValue.GetType() == ibValueTypes::TYPE_EMPTY)
-					reportFailure(_("compile failed"));
+				if (pvarRetValue.GetType() == ibValueTypes::TYPE_EMPTY) {
+					const ibString said = ibBackendException::GetLastError();
+					reportFailure(said.IsEmpty() ? ibString(_("compile failed")) : said);
+				}
 				return false;
 			}
 

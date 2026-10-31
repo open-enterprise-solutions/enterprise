@@ -212,9 +212,6 @@
     <ClCompile Include="docManager\templates\docViewFormEditor.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
-    <ClCompile Include="docManager\templates\docViewAssistant.cpp">
-      <Filter>docManager\templates</Filter>
-    </ClCompile>
     <ClCompile Include="docManager\templates\docViewCommonAttribute.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
@@ -366,9 +363,6 @@
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewFormEditor.h">
-      <Filter>docManager\templates</Filter>
-    </ClInclude>
-    <ClInclude Include="docManager\templates\docViewAssistant.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewCommonAttribute.h">

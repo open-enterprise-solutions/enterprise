@@ -1,0 +1,243 @@
+﻿////////////////////////////////////////////////////////////////////////////
+//	Description : starting the application — the launch button, as a verb
+////////////////////////////////////////////////////////////////////////////
+//
+// A file of its own because it is a subject of its own. It sat among the SESSION verbs, which
+// answer about people already logged in — a neighbour by accident of when it was written, not by
+// what it is about. Starting a process and listing who is in one are different questions.
+//
+//
+// ⭐ THE LAST STEP OF THE LOOP. Everything else here builds a configuration and
+// reads what came of it; this is what makes it RUN, so "update the database and
+// start debugging" becomes one sequence instead of a sentence handed to a
+// person to carry out.
+//
+// It is the same door the designer's Debug menu takes —
+// ibApplicationInstance::RunApplication — which is why the connection flags, the
+// manifest handshake for the web server and the debug port offset all come for
+// free. What the MENU does around that door is ask questions: it saves a
+// modified configuration first, and it refuses to start a second debug session.
+// Those become a refusal and an argument here, because a tool has nobody to ask.
+//
+// ⚠ IT DOES NOT SAVE FOR YOU. The menu offers; this refuses. A launch that
+// silently applied pending changes to the database would be the one action in
+// this whole surface capable of altering a live base as a SIDE EFFECT of
+// something that reads as "start the app" — database_diff says what is pending
+// and config_apply is the verb that writes it.
+//
+
+#include "frmserver/mcp/mcpTool.h"
+
+#include "backend/appData.h"
+#include "backend/debugger/debugClient.h"     // one debug session at a time — the menu's own guard
+#include "backend/metadataConfiguration.h"    // …and the configuration must already be in the base
+#include "core/startProcess.h"                // ibStopProcess — the process asked to close, before it is made to
+
+#include <wx/process.h>                       // wxProcess::Exists — has the previous run actually gone
+#include <chrono>
+#include <thread>                             // the wait while it goes
+
+namespace {
+
+using ibArg = ibMcpTool::ibMcpArgument;
+
+const ibArg& ArgDebug()
+{
+	static const ibArg s_a(ibT("debug"), ibArg::Kind::Flag,
+		ibMcpText("Start it with the debugger attached, so breakpoints set through debug_breakpoint "
+		  "are honoured. Default true - the reason a tool starts an application is usually "
+		  "to watch it."));
+	return s_a;
+}
+
+const ibArg& ArgApplication()
+{
+	static const ibArg s_a(ibT("application"), ibArg::Kind::Text,
+		ibMcpText("Which one. Default is the thin client."),
+			/*required*/ false, { ibT("enterprise-thin"), ibT("webserver") });
+	return s_a;
+}
+
+// ⭐⭐ THE VERB THE LOOP WAS MISSING, AND IT IS NOT A NEW MECHANISM. Ending a run has been possible
+// all along — `debug_attach {host, port, stop: true}` — but a caller who has just rewritten a module
+// is not asking to end anything: they are asking for the NEW code to run, and the ending is a step
+// on the way. Measured 2026-09-04: the refusal below named the state and not the door, so a whole
+// session's worth of restarts went out to the operating system, and twice the answer that came back
+// was produced by the PREVIOUS version of the module — a running application holds the bytecode it
+// started with.
+const ibArg& ArgRestart()
+{
+	static const ibArg s_a(ibT("restart"), ibArg::Kind::Flag,
+		ibMcpText("End the run that is already going, then start a fresh one. This is what to pass "
+		  "after changing a module: a running application keeps the bytecode it started with, so "
+		  "the change is invisible until it comes up again. A run started from here WITHOUT the "
+		  "debugger is ended too - it has no debug connection, but this designer knows its process."));
+	return s_a;
+}
+
+// The last run STARTED FROM HERE is remembered in mcpTool.cpp (ibMcpStartedApplication) — so a
+// restart can wait for the process to actually go before starting its replacement (two of them on one
+// file base is a lock fight, and the loser is silent), and so every tool whose wait expires can ask
+// whether the application is still there. Zero when this designer has started nothing, which is
+// honest: a run somebody else started is one this cannot watch, and the wait falls back to a fixed one.
+
+} // namespace
+
+//---------------------------------------------------------------------------
+// app_run
+//---------------------------------------------------------------------------
+class ibMcpToolAppRun : public ibMcpTool {
+public:
+
+	ibString GetName() const override { return ibT("app_run"); }
+
+	ibString GetActivity(const ibDataNode& params) const override
+	{
+		const ibString what = ArgApplication().Text(params);
+		return ibString::Format(ibMcpText("starting %s"), what.IsEmpty() ? ibMcpText("the application") : what);
+	}
+
+	ibString GetDescription() const override
+	{
+		return ibMcpText("Start the application on this base - the thin client or the web server, with or "
+			"without the debugger attached. The same launch the designer's Debug menu "
+			"performs, so connection flags and the debug port are handled; the web server answers its "
+			"page's address in `page` - no browser is opened. Refuses when the "
+			"configuration has edits the base does not hold - a module written a moment ago as much as "
+			"a change of structure: config_apply them first, because a launch must never write to a base "
+			"as a side effect (database_diff lists only the structure).\n\n"
+			"After changing a module: config_apply, then restart: true - a running application keeps the "
+			"bytecode it came up with, so the new code is invisible until it is started again.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgApplication(), ArgDebug(), ArgRestart() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
+	{
+		if (appData == nullptr) {
+			refusal = ibMcpText("The application is not up.");
+			return false;
+		}
+
+		// Any of the argument's words — one it does not take was refused before Call (ibMcpArgument's list).
+		ibString application = ArgApplication().Text(params);
+		if (application.IsEmpty())
+			application = ibT("enterprise-thin");
+
+		// DEFAULTS TO TRUE, and asked of the field rather than of the value: `debug: false` has
+		// to be distinguishable from "not said", or the default silently wins over an explicit no.
+		bool withDebug = true;
+		if (params.Has(ArgDebug().Name()))
+			withDebug = ArgDebug().Flag(params);
+
+		const bool restart = ArgRestart().Flag(params);
+		const long lastStarted = ibMcpStartedApplication();   // see the note above the namespace's end
+
+		// ⚠ THE CONFIGURATION MUST ALREADY BE IN THE BASE. The application reads the database's
+		// copy, so launching with unapplied changes runs the OLD configuration while the caller
+		// believes it is testing the new one — a failure that looks like a bug in the code just
+		// written.
+		// ⭐ ASKED OF THE BASE, with nothing to recognise first. IsConfigSave is virtual on
+		// ibMetaDataConfigurationBase and the active metadata is a configuration by definition, so
+		// the cast to the storage class was a conversion to reach a question already in hand.
+		//
+		// 🛑 AND AN EDIT NOT YET SAVED IS ONE TOO. IsConfigSave compares what was SAVED with the base, so a
+		// module written a moment ago (module_write marks the configuration modified and saves nothing)
+		// passed, and the restarted application ran the old text with nothing said (measured 2026-09-11).
+		// The designer's own Debug menu asks the same question of IsModified before it launches.
+		//
+		// ⚠ ASKED BEFORE ANYTHING IS ENDED: a refusal that arrives after `restart` has closed the running
+		// application has cost the caller that application for nothing.
+		if (activeMetaData->IsModified() || !activeMetaData->IsConfigSave()) {
+			refusal = ibMcpText("The configuration has edits the base does not hold yet, so the application would "
+				"run the old text - a module written a moment ago as much as a change of structure. "
+				"config_apply puts them in the base (a module's text needs no exclusive mode; database_diff "
+				"lists only the structure, so it shows nothing for code), then app_run again.");
+			return false;
+		}
+
+		// ONE DEBUGGER AT A TIME — the same guard the menu keeps. A second debug launch attaches
+		// nothing and leaves the caller waiting at a breakpoint that will never be hit.
+		bool ended = false;
+		if (debugClient != nullptr && debugClient->HasConnections()) {
+
+			if (!restart && withDebug) {
+				// ⭐ A REFUSAL THAT NAMES THE DOOR. "Let it finish" is advice a tool cannot act on,
+				// and it is not even what the caller wants — they want the new code running.
+				refusal = ibMcpText("A debug session is already running. Pass restart: true to end it "
+					"and come up again with the current configuration - that is what to do after "
+					"changing a module, because a running application keeps the bytecode it "
+					"started with. (debug_sessions reports the address, and debug_attach with "
+					"stop: true ends one without starting anything.)");
+				return false;
+			}
+
+			if (restart) {
+				// ⭐ THE PLATFORM'S OWN ENDING, asked of every connection rather than of a chosen
+				// one — the debugger's Stop: DetachConnection is a no-op on a connection that is not
+				// attached, so the filtering that would otherwise be written here is already inside it.
+				debugClient->Stop(/*kill=*/true);
+
+				ended = true;
+
+				if (lastStarted == 0)
+					std::this_thread::sleep_for(std::chrono::milliseconds(1000));   // started by somebody else - there is no pid to watch
+			}
+		}
+		// ⚠ …AND THE PROCESS IS ASKED AS WELL, whatever the debugger was told: a run started without it has no
+		// connection to end (`restart` then started a SECOND application beside the first, 2026-09-10), and one with
+		// it may not have heard or may not go (`endedPrevious` was answered with the old web server alive, and the next
+		// run's commands went to both, 2026-10-30). A run THIS designer started has its pid, so it is asked to close,
+		// and then made to.
+		//
+		// ⚠ AND WAIT FOR IT TO ACTUALLY GO. It unwinds, closes its session and lets go of the base; starting the
+		// replacement before that is two processes on one file base — Firebird gives the second one a lock error
+		// that reads like a corrupt installation.
+		if (restart && lastStarted != 0 && wxProcess::Exists((int)lastStarted)) {
+			ibStopProcess(lastStarted);
+			for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
+			if (wxProcess::Exists((int)lastStarted))
+				wxProcess::Kill((int)lastStarted, wxSIGKILL, wxKILL_CHILDREN);
+			for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
+			ended = true;
+		}
+
+		const ibString useWeb = application.Lower();
+		const bool manifest = useWeb.IsSameAs(ibT("webserver"));
+
+		ibString page;
+		const long pid = appData->RunApplication(useWeb, withDebug, manifest, &page);
+
+		if (pid == 0) {
+			refusal = ibString::Format(ibMcpText("%s could not be started."), application);
+			return false;
+		}
+
+		ibMcpRememberStartedApplication(pid);
+
+		result.SetValue(ibT("started"), application);
+		result.AddField(ibT("pid"), ibDataValue::Int((std::int64_t)pid));
+		result.AddField(ibT("debug"), ibDataValue::Bool(withDebug));
+		if (!page.IsEmpty())
+			result.SetValue(ibT("page"), page);   // the web server's page, to open in a browser
+
+		if (ended)
+			result.AddField(ibT("endedPrevious"), ibDataValue::Bool(true));
+
+		if (withDebug) {
+			result.SetValue(ibT("note"),
+				ibMcpText("The debugger attaches as the application comes up; debug_state says when it "
+				  "has stopped somewhere."));
+		}
+
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppRun);

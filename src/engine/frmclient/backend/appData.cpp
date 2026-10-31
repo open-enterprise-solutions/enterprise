@@ -103,8 +103,8 @@ ibMcpServer s_mcpServer;
 
 ibMcpServer* ibApplicationInstance::GetMcpServer()
 {
-	// The schema says whether the person may switch it here (Allowed): not on the application server, nor where the
-	// mode has no such schema (the runtime) — refused, and said to nobody. Allowed already — what was received stands.
+	// The schema says whether the person may have it (Allowed): in the application their roles say — refused, and said
+	// to nobody. Allowed already — what was received stands.
 	if (!s_mcpServer.IsAllowed())
 		s_mcpServer.Receive();
 	return s_mcpServer.IsAllowed() ? &s_mcpServer : nullptr;
@@ -114,4 +114,9 @@ ibMcpServer* ibApplicationInstance::GetMcpServer(const ibProtocolNode& shown)
 {
 	s_mcpServer.Receive(shown);
 	return s_mcpServer.IsAllowed() ? &s_mcpServer : nullptr;
+}
+
+void ibApplicationInstance::StopMcpServer()
+{
+	s_mcpServer.Stop();
 }

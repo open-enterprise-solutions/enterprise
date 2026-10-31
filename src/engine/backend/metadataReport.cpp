@@ -5,6 +5,7 @@
 
 #include "metadataReport.h"
 #include "backend/appData.h"
+#include "backend/metaCollection/metaComposerObject.h"     // the composer ibOpenReportOver declares
 
 ibMetaDataReport::ibMetaDataReport() : ibMetaData(),
 m_ownerMeta(nullptr),
@@ -538,4 +539,58 @@ bool ibMetaDataReport::DeleteCommonTree(const ibClassID& clsid)
 	// Deleted-node purge (runs during save/apply to drop IsDeleted nodes from
 	// tree + DB) is owned by the node (ibValueMetaObject::DeleteSubtree).
 	return m_commonObject->DeleteSubtree();
+}
+
+// ⭐⭐ DETAIL IS A NEW REPORT OVER THE SAME SCHEMA — not this report re-drawn.
+//
+// A form cannot be copied (Max, 2026-08-26), and it does not need to be: what a reader is asking is
+// "show me this figure broken down another way", and that is a COMPOSITION, not a window. So the
+// schema is copied into a FRESH external report living in memory, and that report opens its own form
+// — which it generates from its composer, so nothing has to be drawn. A report an assistant builds for a
+// person is the same thing with the schema written by it.
+//
+// ⭐ THE WHOLE CYCLE ALREADY EXISTS. `ibMetaDataReport`'s constructor builds the root, registers it
+// and stands up the module manager — "so a freshly created (not-from-file) report already has it".
+// Opening from a file is the same path with `LoadCommonTree` in the middle; here the middle is a
+// composer carrying a copy of the schema.
+bool ibOpenReportOver(const ibCompositionDescription& desc, const ibString& name, const ibString& synonym)
+{
+	// A report in memory, held from birth: the ctor has already made its root and its module manager.
+	const std::shared_ptr<ibMetaDataReport> detailMeta = ibMetaData::MakeShared<ibMetaDataReport>();
+	ibValueMetaObject* root = detailMeta->GetCommonMetaObject();
+	if (root == nullptr)
+		return false;
+
+	if (!name.IsEmpty())
+		root->SetName(name);
+	if (!synonym.IsEmpty())
+		root->SetSynonym(synonym);
+
+	// …AND THE COMPOSER IT DECLARES. A report's main node IS its default composer, which is what puts
+	// a gridbox on the generated form without anybody drawing one.
+	ibValueMetaObjectComposer* composer =
+		root->CreateMetaObjectAndSetParent<ibValueMetaObjectComposer>();
+	if (composer == nullptr)
+		return false;
+
+	// REGISTERED LIKE ANY OTHER METAOBJECT — an external report's tree is registered as it is built
+	// (Max: "as an external report it still has to be registered"), and a node that skipped it has no
+	// ctor behind its class.
+	composer->OnCreateMetaObject(detailMeta.get(), newObjectFlag);
+	composer->OnLoadMetaObject(detailMeta.get());
+	composer->SetCompositionDesc(desc);
+
+	if (!detailMeta->RunDatabase())
+		return false;
+
+	// …and the object holds the container from its run on (the module manager RunDatabase builds hands it over), so
+	// this reference may go: the form's life is what keeps the report alive.
+	if (ibValueModuleRuntimeManagerExternalReport* manager = detailMeta->GetManagerModule()) {
+		if (ibValueRecordDataObjectReport* object =
+				dynamic_cast<ibValueRecordDataObjectReport*>(manager->GetObjectValue())) {
+			object->ShowFormValue();
+			return true;
+		}
+	}
+	return false;
 }

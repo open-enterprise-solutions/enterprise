@@ -1567,7 +1567,8 @@ bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPro
 				ApplyCurrentLine(tableReturnLine);
 			}
 			else {
-				ApplyCurrentLine(nullptr);
+				// …or what stands for a row: a list's reference, a value of its rows. None of them: no row.
+				ApplyCurrentLine(m_tableModel != nullptr ? ResolveLineByValue(m_tableModel, varPropVal) : nullptr);
 			}
 		}
 	}

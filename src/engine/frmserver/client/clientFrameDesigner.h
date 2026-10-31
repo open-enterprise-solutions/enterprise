@@ -18,11 +18,6 @@ public:
 	// The right to edit the configuration — its administration right, asked of the person who logged in; let in, the
 	// tree is loaded with it, as the desktop's AllowRun loaded its navigator.
 	virtual bool AllowRun() override;
-	// ⭐ THE ASSISTANT COMES UP WITH THE DESIGNER, when its settings switch it on — the desktop's main window started it
-	// as it showed (ibFrontendMainFrameDesigner::Show); here, as the designer's session starts, so the client asks
-	// nothing for it (five exchanges at every start, 2026-10-15). A refusal is not fatal and not silent — the port may
-	// be another designer's: said in the messages, and the designer carries on.
-	virtual void CreateStartupPage() override;
 
 	// The configuration tree, as the frame's MetaData.
 	virtual void OnDraw(ibDataNode& state) override;

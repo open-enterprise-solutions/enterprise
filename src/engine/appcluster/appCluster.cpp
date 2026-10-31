@@ -147,11 +147,10 @@ bool ibAppCluster::OnInit()
 	if (!m_config->LoadKey(error))
 		return Refuse(error);
 
-	// The Ids written before a server reads them: each base's folder is named by its Id. And each base's assistant port,
-	// here, once: the servers start side by side and only read.
+	// The Ids written before a server reads them: each base's folder is named by its Id. Here, once: the servers start
+	// side by side and only read.
 	std::vector<ibConfiguredInstance> instances = m_config->ReadInstances();
 	m_config->AssignIds(instances);
-	m_config->AssignMcpPorts(instances);
 	if (instances.empty())
 		return Refuse(ibString::Format(ibT("the config %s names no base"), m_config->GetConfPath()));
 

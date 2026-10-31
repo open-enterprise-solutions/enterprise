@@ -1,3 +1,6 @@
+#ifndef __META_DATA_REPORT_H__
+#define __META_DATA_REPORT_H__
+
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/partial/dataReport.h"
 #include "backend/moduleManager/moduleManagerExt.h"
@@ -106,3 +109,10 @@ private:
 	// open flag now lives in ibMetaData's open-image (IsConfigOpen / SetConfigOpened)
 	ibVersionID m_version;
 };
+
+// A SCHEMA OPENED AS A REPORT: a fresh external report in memory holding a copy of it, and the form it generates — a
+// cell's detail (ibValueGridBox), and what an assistant builds for a person (report_show). `name`, `synonym`: what its
+// window says; empty, a fresh report answers with the default name. False: it did not open.
+BACKEND_API bool ibOpenReportOver(const struct ibCompositionDescription& desc, const ibString& name, const ibString& synonym);
+
+#endif

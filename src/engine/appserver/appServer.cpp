@@ -15,7 +15,6 @@
 #include "backend/appHost.h"
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
-#include "backend/mcp/mcpServer.h"
 #include "backend/session/session.h"
 
 #include "core/diagnostics/crashGuard.h"   // the stop, one fact: who asks, the serving loop that reads it
@@ -199,32 +198,8 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 		return false;
 	}
 
-	// THE BASE'S CLIENTS — the protocol served for it (frmserver), and the base's MCP when its settings switch it
-	// on: an assistant reaches the clients through it (client_call), as a client. Whether it is on, and its key, are
-	// the base's settings; its port is the config's (McpPort) — the bases of one cluster never meet on one, and of a
-	// base's servers the first one holds it.
+	// THE BASE'S CLIENTS — the protocol served for it (frmserver), each person's assistant among it.
 	m_clientHosts[instance.m_name] = std::make_unique<ibClientHost>(applicationInstance, m_route);
-	if (m_route > 1) {
-		ibAppServerSay(ibJournalMark::Info, ibT("base '%s': its MCP is the first server's, not this one's (route %u)"),
-			instance.m_name, m_route);
-	}
-	else if (ibMcpServer* const mcp = ibApplicationInstance::GetMcpServer(applicationInstance)) {
-		ibString refusal;
-		mcp->LoadSettings(session.Get());
-		unsigned long port = 0;
-		if (instance.m_mcpPort.ToULong(&port) && port != 0 && port <= 65535) {
-			ibMcpSettings settings = mcp->GetSettings();
-			settings.m_port = static_cast<unsigned short>(port);
-			mcp->Configure(settings);
-		}
-		else {
-			refusal = ibString::Format(ibT("McpPort=%s in %s is not a port"), instance.m_mcpPort, m_config.GetConfPath());
-		}
-		if (refusal.IsEmpty() && mcp->Start(session.Get(), refusal))
-			ibAppServerSay(ibJournalMark::Info, ibT("base '%s': MCP at %s"), instance.m_name, mcp->GetEndpoint());
-		else
-			ibAppServerSay(ibJournalMark::Info, ibT("base '%s': no MCP - %s"), instance.m_name, refusal);
-	}
 
 	m_sessions.push_back(std::move(session));
 	ibAppServerSay(ibJournalMark::Info, ibT("base '%s' is served: %s"), instance.m_name,
@@ -234,15 +209,10 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 
 void ibAppServer::Stop()
 {
-	// The port first — no client comes in any more, and those connected are let go; then the clients, each
-	// base's while the base is still open: every client's session is torn down on its own worker. Then each
-	// base's MCP, which reaches them.
+	// The port first — no client comes in any more, and those connected are let go; then each base's host: its clients,
+	// while the base is still open: every client's session is torn down on its own worker.
 	m_clientListener.Stop();
 	m_clientHosts.clear();
-	for (const ibSessionHolder& session : m_sessions) {
-		if (ibMcpServer* const mcp = ibApplicationInstance::GetMcpServer(session->GetApplicationInstance()))
-			mcp->Stop();
-	}
 
 	while (!m_sessions.empty()) {
 		ibSessionHolder session = std::move(m_sessions.back());

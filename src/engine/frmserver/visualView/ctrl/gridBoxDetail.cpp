@@ -1,8 +1,7 @@
 #include "gridBox.h"
 #include "backend/system/value/valueDataComposition.h"    // the schema a detail copies
 #include "backend/system/value/valueSpreadsheetDetails.h"  // …and what the clicked cell was composed from
-#include "backend/metadataReport.h"                        // the in-memory external report
-#include "backend/metaCollection/metaComposerObject.h"     // …and the composer metaobject it declares
+#include "backend/metadataReport.h"                        // the in-memory external report a detail opens
 #include "backend/metaCollection/genericData.h"            // ibValueMetaObjectGenericData — the report a detail is named after
 #include "frmserver/visualView/ctrl/form.h"                 // ibValueForm::GetMetaObject — …reached through the grid's form
 #include "backend/backend_localization.h"                  // a title read in the reader's language
@@ -202,59 +201,6 @@ std::vector<ibOutputDescription> ibStructureByField(const ibString& path)
 	return std::vector<ibOutputDescription>(1, output);
 }
 
-// ⭐⭐ DETAIL IS A NEW REPORT OVER THE SAME SCHEMA — not this report re-drawn.
-//
-// A form cannot be copied (Max, 2026-08-26), and it does not need to be: what a reader is asking is
-// "show me this figure broken down another way", and that is a COMPOSITION, not a window. So the
-// schema is copied into a FRESH external report living in memory, and that report opens its own form
-// — which it generates from its composer, so nothing has to be drawn.
-//
-// ⭐ THE WHOLE CYCLE ALREADY EXISTS. `ibMetaDataReport`'s constructor builds the root, registers it
-// and stands up the module manager — "so a freshly created (not-from-file) report already has it".
-// Opening from a file is the same path with `LoadCommonTree` in the middle; here the middle is a
-// composer carrying a copy of the schema.
-// `source` — the report the cell was composed in; the detail is named after it.
-void ibOpenReportOver(const ibCompositionDescription& desc, const ibValueMetaObject* source)
-{
-	// A report in memory, held from birth: the ctor has already made its root and its module manager.
-	const std::shared_ptr<ibMetaDataReport> detailMeta = ibMetaData::MakeShared<ibMetaDataReport>();
-	ibValueMetaObject* root = detailMeta->GetCommonMetaObject();
-	if (root == nullptr)
-		return;
-
-	// ⭐ …AND NAMED AFTER THE REPORT IT DETAILS. A detail is that report's figure broken down, so its window says
-	// whose it is (Max, 2026-09-30); a fresh report answers with the default name, "External report1".
-	if (source != nullptr) {
-		root->SetName(source->GetName());
-		root->SetSynonym(source->GetSynonym());
-	}
-
-	// …AND THE COMPOSER IT DECLARES. A report's main node IS its default composer, which is what puts
-	// a gridbox on the generated form without anybody drawing one.
-	ibValueMetaObjectComposer* composer =
-		root->CreateMetaObjectAndSetParent<ibValueMetaObjectComposer>();
-	if (composer == nullptr)
-		return;
-
-	// REGISTERED LIKE ANY OTHER METAOBJECT — an external report's tree is registered as it is built
-	// (Max: "as an external report it still has to be registered"), and a node that skipped it has no
-	// ctor behind its class.
-	composer->OnCreateMetaObject(detailMeta.get(), newObjectFlag);
-	composer->OnLoadMetaObject(detailMeta.get());
-	composer->SetCompositionDesc(desc);
-
-	if (!detailMeta->RunDatabase())
-		return;
-
-	// …and the object holds the container from its run on (the module manager RunDatabase builds hands it over), so
-	// this reference may go: the form's life is what keeps the report alive.
-	if (ibValueModuleRuntimeManagerExternalReport* manager = detailMeta->GetManagerModule()) {
-		if (ibValueRecordDataObjectReport* object =
-				dynamic_cast<ibValueRecordDataObjectReport*>(manager->GetObjectValue()))
-			object->ShowFormValue();
-	}
-}
-
 }   // namespace
 
 // ⭐⭐ WHICH FIELDS THIS CELL CAN BE BROKEN DOWN BY — the second question a click asks, and the one
@@ -351,7 +297,10 @@ void ibValueGridBox::ShowCellDetail(int row, int col, const ibString& byPath)
 		detailDesc.GetCompositionSettingsDesc() = narrowed;
 	}
 
-	// …over the report this grid stands in — the form's own object (ibValueForm::GetMetaObject).
+	// …over the report this grid stands in — the form's own object (ibValueForm::GetMetaObject). ⭐ NAMED AFTER IT: a detail
+	// is that report's figure broken down, so its window says whose it is (Max, 2026-09-30).
 	const ibValueForm* form = GetOwnerForm();
-	ibOpenReportOver(detailDesc, form != nullptr ? form->GetMetaObject() : nullptr);
+	const ibValueMetaObject* const source = form != nullptr ? form->GetMetaObject() : nullptr;
+	ibOpenReportOver(detailDesc, source != nullptr ? source->GetName() : ibString(),
+		source != nullptr ? source->GetSynonym() : ibString());
 }

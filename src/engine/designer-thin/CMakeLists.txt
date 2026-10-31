@@ -30,7 +30,6 @@ set(DESIGNER_THIN_SOURCES
     docManager/templates/docViewDataReportFile.cpp
     docManager/templates/docViewModuleEditor.cpp
     docManager/templates/docViewFormEditor.cpp
-    docManager/templates/docViewAssistant.cpp
     docManager/templates/docViewCommonAttribute.cpp
     docManager/templates/docViewFunctionalOption.cpp
     docManager/templates/docViewComposer.cpp

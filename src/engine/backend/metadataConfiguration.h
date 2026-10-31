@@ -45,6 +45,8 @@ public:
 	virtual bool AccessRight_ActiveUsers() const { return true; }
 	virtual bool AccessRight_ExclusiveMode() const { return true; }
 	virtual bool AccessRight_ModeAllFunction() const { return true; }
+	virtual bool AccessRight_Assistant() const { return true; }
+	virtual bool AccessRight_DataAssistant() const { return true; }
 #pragma endregion
 
 protected:
@@ -210,6 +212,8 @@ public:
 	virtual bool AccessRight_ActiveUsers() const { return m_commonObject->AccessRight_ActiveUsers(); }
 	virtual bool AccessRight_ExclusiveMode() const { return m_commonObject->AccessRight_ExclusiveMode(); }
 	virtual bool AccessRight_ModeAllFunction() const { return m_commonObject->AccessRight_ModeAllFunction(); }
+	virtual bool AccessRight_Assistant() const { return m_commonObject->AccessRight_Assistant(); }
+	virtual bool AccessRight_DataAssistant() const { return m_commonObject->AccessRight_DataAssistant(); }
 #pragma endregion
 
 	// Public ctor — `ibMetaDataConfigurationFile` is NOT the appData-

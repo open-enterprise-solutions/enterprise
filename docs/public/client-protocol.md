@@ -56,6 +56,7 @@ browser's `DecompressionStream("deflate-raw")`); a packet begins `OES1`, a defla
 | `presentation` | `Client`, `Value`, `Format` | `Text` — the value as a person reads it, formatted by the server (`Format`: the codes `Format()` takes) |
 | `picture` | `Client`, `Pictures` — the ids: an engine picture's number, a configuration picture's `<guid>#<version>` (read by the guid) | `Pictures` — each `Id`, `Picture` (the PNG, a `Binary`; empty when there is none of that id) |
 | `debug` | `Client`, `Command` and its fields (protocol 6) | at once, never the frame — [The debugger](#the-debugger) |
+| `mcp` | `Client`, `Command` and its fields (protocol 7) | never the frame — [The assistant](#the-assistant) |
 
 `login`'s `Read` saves the start's own reads: the designer names the debugger's store (`Schema` 15), which was a
 call of its own at every start. A schema the server does not know, the person has no right to, or that could not be
@@ -306,7 +307,7 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 | 4 About | both | `Build`, `Picture`, `Database`, `Application`, `User`, `Locale`, `Plugins` (`Name`, `Version`) | — | — |
 | 5 Registration journal | both | nothing | 1 Open — opens its tab (`Kind` 4) | active users |
 | 6 Debugging | the runtime | `Debugging` — the session's process listens for the designer; `Allowed` — it may be switched now (not on an application server, not while a start waits for the designer) | 2 Start, 3 Stop | — |
-| 7 Assistant access | the designer | the person's MCP server: `Enabled`, `Address`, `Port`, `Token`, `Running`, `Endpoint`, `Allowed` | 2 Start `{Enabled, Address, Port, Token}`, 3 Stop, 4 Save `{…}` | — |
+| 7 Assistant access | both, in the application as the roles say | `Allowed`; the settings lie on the person's machine | — | — |
 | 8 Users | the designer | `Users` (`Guid`, `Name`, `FullName`), and what a record is chosen from: `Roles` (`Guid`, `Name`, `Title`, `Mode`), `Languages` (`Guid`, `Title`, `Code`, and `Default` on the configuration's own language); with `Args {Guid}` — that one's `User` (`Guid`, `Name`, `FullName`, `Password` — whether one is stored, `Language`, `Roles`) | 4 Save `{Guid, Name, FullName, Language, Roles[, Password]}` — the password hashed by the server, absent: kept; 8 Remove `{Guid}` | data administration |
 | 18 ConfigCompare | the designer | with `Args {Mode, File, File2}` (`Mode` 1 the configuration and a file, 2 and the base's, 3 two files): `Records` — the walk of the two; a side that cannot be read is refused | 13 Merge `{Mode, File, File2, Pull, Ops}` — Add/Delete/Replace; what was applied and what was not, said to the person by the server | administration |
 | 19 Types | the designer | the language's types, for the syntax helper: with `Args {Query}` — `Types` (`Name`), whose names match; with `Args {Name}` — what that one offers: `Methods` (`Name`, `Signature`) and `Properties` (`Name`), or `Note`, why it cannot be asked | — | — |
@@ -422,6 +423,23 @@ From then on that connection takes the commands, each answered at once and never
 | 14 Add expression, 15 Expand expression | `Expression`, `Item`, `Asker` | — news 9, 10 |
 | 16 Remove expression | `Item` | — |
 | 17 Stack | `Level` | — the locals of that call, news 8 |
+
+## The assistant
+
+From protocol 7 MCP rides the protocol: the client opens a port on its own machine and carries what it hears to the
+server, which answers in the client's session, with that person's rights. It goes on a connection of its own, bound as
+the debugger's is, so a tool working does not hold the window up and each person's assistant works beside the others:
+
+1. `mcp {Client, Command: 1}` on the client's connection → `Channel`, a key for one use.
+2. A second connection to the same place: `mcp {Client, Command: 2, Channel}` on it binds it.
+3. `mcp {Client, Command: 3, Message, ProtocolVersion, Method, Name}` on it → `Message`, `Status`: the MCP JSON as it
+   is, the HTTP headers MCP mirrors it into, and the status to carry the answer with. An empty `Message` asks the
+   headers alone.
+
+What the server says unasked comes as `mcp {Client, Message}`. Its closing ends nothing: nothing listens any more, and
+the client opens another before its next message, by a new key. A message it took with it is not sent again: it may
+have been carried out. A person whose roles do not give the assistant is refused 403. Tools they are not given are not
+listed and not found.
 
 | Event | Fields |
 |---|---|

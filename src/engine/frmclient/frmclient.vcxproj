@@ -153,6 +153,7 @@
     <ClCompile Include="docView\docView.cpp" />
     <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\tabDocument.cpp" />
+    <ClCompile Include="docView\docViewAssistant.cpp" />
     <ClCompile Include="docView\print\printPreview.cpp" />
     <ClCompile Include="docView\templates\docViewText.cpp" />
     <ClCompile Include="docView\templates\docViewFile.cpp" />
@@ -169,6 +170,7 @@
     <ClCompile Include="mainFrame\settings\fontcolorsettingspanel.cpp" />
     <ClCompile Include="mainFrame\settings\keybinderpanel.cpp" />
     <ClCompile Include="mainFrame\settings\mcpsettingspanel.cpp" />
+    <ClCompile Include="mainFrame\settings\debugsettingspanel.cpp" />
     <ClCompile Include="mainFrame\settings\settingsdialog.cpp" />
     <ClCompile Include="mainFrame\settings\showhelpevent.cpp" />
     <ClCompile Include="backend\appData.cpp" />
@@ -193,7 +195,6 @@
     <ClCompile Include="win\dlgs\userItem.cpp" />
     <ClCompile Include="win\dlgs\userList.cpp" />
     <ClCompile Include="win\dlgs\authorization.cpp" />
-    <ClCompile Include="win\dlgs\enterpriseOption.cpp" />
     <ClCompile Include="win\dlgs\errorDialog.cpp" />
     <ClCompile Include="win\dlgs\formEditor.cpp" />
     <ClCompile Include="win\dlgs\formSelector\formSelector.cpp" />
@@ -459,6 +460,7 @@
     <ClInclude Include="docView\docView.h" />
     <ClInclude Include="docView\docManager.h" />
     <ClInclude Include="docView\tabDocument.h" />
+    <ClInclude Include="docView\docViewAssistant.h" />
     <ClInclude Include="docView\print\printPreview.h" />
     <ClInclude Include="docView\templates\docViewText.h" />
     <ClInclude Include="docView\templates\docViewFile.h" />
@@ -487,6 +489,7 @@
     <ClInclude Include="mainFrame\settings\fontcolorsettingspanel.h" />
     <ClInclude Include="mainFrame\settings\keybinderpanel.h" />
     <ClInclude Include="mainFrame\settings\mcpsettingspanel.h" />
+    <ClInclude Include="mainFrame\settings\debugsettingspanel.h" />
     <ClInclude Include="mainFrame\settings\settingsdialog.h" />
     <ClInclude Include="mainFrame\settings\showhelpevent.h" />
     <ClInclude Include="mainFrame\settings\settingsxml.h" />
@@ -499,7 +502,6 @@
     <ClInclude Include="win\dlgs\userItem.h" />
     <ClInclude Include="win\dlgs\userList.h" />
     <ClInclude Include="win\dlgs\authorization.h" />
-    <ClInclude Include="win\dlgs\enterpriseOption.h" />
     <ClInclude Include="win\dlgs\errorDialog.h" />
     <ClInclude Include="win\dlgs\formEditor.h" />
     <ClInclude Include="win\dlgs\formSelector\formSelector.h" />

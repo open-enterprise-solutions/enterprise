@@ -315,7 +315,6 @@
     <ClInclude Include="localization.h" />
     <ClInclude Include="localization\dictionary.h" />
     <ClInclude Include="logger\loggerQuery.h" />
-    <ClInclude Include="mcp\mcpSettings.h" />
     <ClInclude Include="memory\lz\lzhuf.h" />
     <ClInclude Include="memory\compression.h" />
     <ClInclude Include="memory\memoryBuffer.h" />

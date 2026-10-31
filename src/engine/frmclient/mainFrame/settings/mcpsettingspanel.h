@@ -3,12 +3,11 @@
 
 /////////////////////////////////////////////////////////////////////////////
 // The MCP page of the settings dialog — where a person says whether their own
-// assistant may reach this designer, and where.
+// assistant may reach this session, and where.
 //
-// THE SETTINGS ARE THEIRS, not the installation's: they are saved per user, so
-// two developers on one machine run two servers on two ports. This panel only
-// edits the value; who saves it and when is the dialog's caller (the designer),
-// and where it is kept is the server's (sys_settings, category Mcp).
+// THE SETTINGS ARE THEIRS, on their own machine, and the designer's apart from the
+// application's. This panel only edits the value; who saves it and when is the
+// dialog's caller, and where it is kept is the transport's (ibMcpServer::SaveSettings).
 //
 // The endpoint field is READ-ONLY on purpose. It is not a setting — it is what
 // the platform HANDS OUT: the address a person pastes into their tool's own

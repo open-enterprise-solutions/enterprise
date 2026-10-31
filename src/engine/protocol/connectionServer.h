@@ -45,6 +45,7 @@ public:
 		ibProtocol::ibRefusal& refusal, ibString& error) override;
 	// The same address, opened again. False when Open has never succeeded.
 	virtual bool Reconnect(ibString& error) override;
+	virtual bool IsOpen() const override;
 	// …and a second socket to it, the debugger's (protocol 6).
 	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(ibString& error) override;
 	// What the server says unasked — on the thread that reads the socket.
@@ -68,7 +69,7 @@ private:
 
 	// What the socket hands over, under m_mutex: its opening, the answer to the request waiting, its going and why,
 	// whoever listens.
-	std::mutex                                 m_mutex;
+	mutable std::mutex                         m_mutex;
 	std::condition_variable                    m_answered;
 	std::optional<ibProtocolNode>              m_answer;
 	bool                                       m_opened = false;

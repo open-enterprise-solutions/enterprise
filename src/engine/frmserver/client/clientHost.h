@@ -38,6 +38,8 @@
 class ibApplicationInstance;
 class ibClientInstance;
 class ibClientFrame;
+class ibMcpServer;
+class ibSession;
 struct ibRpcRequest;
 
 class FRMSERVER_API ibClientHost {
@@ -88,11 +90,26 @@ public:
 	// …and THE CLIENT'S DEBUGGER SAID SOMETHING (protocol 6) — a stop, the stack, a value asked for: sent as it is, `debug
 	// {Client, Event, …}`, to the connection its debugger listens on (ibProtocol::ibDebug). None listening — not told.
 	void NotifyDebug(const ibClientInstance* instance, const ibDataNode& event);
+	// …and THE CLIENT'S ASSISTANT SERVER SAID SOMETHING UNASKED (protocol 7): sent as it is, `mcp {Client, Message}`, to the
+	// connection its transport listens on (ibProtocol::ibMcp). None listening — not told.
+	void NotifyMcp(const ibClientInstance* instance, const ibString& message);
 
 	// The host serving this base — what a door outside the library (an MCP tool) reaches the clients by.
 	static ibClientHost* Find(const ibApplicationInstance* applicationInstance);
+	// THE PERSON'S MCP SERVER — one per client, so what an assistant holds (the settings, the conversation, what it was told)
+	// is that person's and several work side by side; made when first asked for, and it goes before the client does. None —
+	// the session is no client's of this process.
+	static ibMcpServer* GetMcpServer(const ibSession* session);
 
 private:
+
+	// A SECOND CONNECTION OF A CLIENT'S (protocol 6) — the key drawn for it: its SHA-256 until Listen takes it, under m_mutex
+	// with hasKey; then the connection. Atomic: a call reads it without m_mutex.
+	struct Channel {
+		bool                     hasKey = false;
+		unsigned char            digest[32] = {};
+		std::atomic<const void*> connection{ nullptr };
+	};
 
 	struct Client {
 		std::shared_ptr<ibClientInstance> instance;
@@ -136,12 +153,13 @@ private:
 		// SHA-256 of the bearer token. The token itself is not kept. Under m_mutex, with hasToken.
 		bool                              hasToken = false;
 		unsigned char                     tokenDigest[32] = {};
-		// THE DEBUGGER'S CONNECTION (protocol 6) — a second one of this client's, bound by the key Channel drew: its SHA-256
-		// until Listen takes it, under m_mutex with hasChannelKey; then the connection — what `debug` news goes to, and
-		// what may ask the debugger beside the login one. Atomic: a call reads it without m_mutex.
-		bool                              hasChannelKey = false;
-		unsigned char                     channelDigest[32] = {};
-		std::atomic<const void*>          debugConnection{ nullptr };
+		// THE DEBUGGER'S CONNECTION (protocol 6) — what `debug` news goes to, and what may ask the debugger beside the login one.
+		Channel                           debugChannel;
+		// THE ASSISTANT'S (protocol 7) — what `mcp` news goes to and its messages come by, and the person's server they are
+		// answered by: made under mcpMutex when first asked for (GetMcpServer).
+		Channel                           mcpChannel;
+		std::mutex                        mcpMutex;
+		std::unique_ptr<ibMcpServer>      mcpServer;
 		// Armed when a thin client's connection has dropped: the moment the session ends if nobody returns.
 		// 0 — a connection is attached, or this client never had one (an HTTP call, `connectionless`). Stored before
 		// `connection` is cleared, so a call never observes a null connection together with a zero deadline.
@@ -165,6 +183,20 @@ private:
 	// connection here, the rest are its frame's debugger's (ibClientDebugger::Command).
 	bool                    Debug(Client& client, const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
 		ibString& error, const void* connection);
+	// mcp {Command} — the person's assistant server (ibProtocol::ibMcp): Channel and Listen bind its connection here, a
+	// Message is its server's, in the client's session.
+	bool                    Mcp(Client& client, const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
+		ibString& error, const void* connection);
+	// A channel's key drawn for who holds the client, onto `result`, and the key presented on the connection it binds.
+	bool                    DrawChannelKey(Channel& channel, ibDataNode& result, ibProtocol::ibRefusal& refusal, ibString& error);
+	bool                    BindChannel(Channel& channel, const ibString& given, const void* connection,
+		ibProtocol::ibRefusal& refusal, ibString& error);
+	// The client's assistant server, made when first asked for. …and stopped: a client's server goes before its session does.
+	ibMcpServer*            GetMcpServer(Client& client);
+	static void             StopMcpServer(Client& client);
+	// News to a client's second connection — the id and the notifier taken under the lock, sent outside it.
+	void                    NotifyChannel(const ibClientInstance* instance, Channel Client::* channel, const char* method,
+		const ibDataNode& params);
 
 	// The work on the client's session worker, waited for until it settles; then the frame drawn into `result` —
 	// numbered, and the patch from the frame of number `since` when that is the last one the client was answered.
@@ -180,7 +212,7 @@ private:
 	ibApplicationInstance* m_applicationInstance;
 	unsigned               m_route;
 
-	mutable std::mutex                             m_mutex;
+	mutable std::mutex                            m_mutex;
 	std::map<ibString, std::shared_ptr<Client>>    m_clients;
 	// How each connection is told something (SetNotifier), under m_mutex.
 	std::map<const void*, std::function<void(const ibMemoryBuffer& packet)>> m_notifiers;

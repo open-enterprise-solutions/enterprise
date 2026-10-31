@@ -32,6 +32,8 @@ public:
 	bool AccessRight_ActiveUsers(const ibRoleUserInfo& roleInfo = ibRoleUserInfo()) const { return AccessRight(m_roleActiveUsers, roleInfo.IsSetRole() ? roleInfo : GetUserRoleInfo()); }
 	bool AccessRight_ExclusiveMode(const ibRoleUserInfo& roleInfo = ibRoleUserInfo()) const { return AccessRight(m_roleExclusiveMode, roleInfo.IsSetRole() ? roleInfo : GetUserRoleInfo()); }
 	bool AccessRight_ModeAllFunction(const ibRoleUserInfo& roleInfo = ibRoleUserInfo()) const { return AccessRight(m_roleModeAllFunction, roleInfo.IsSetRole() ? roleInfo : GetUserRoleInfo()); }
+	bool AccessRight_Assistant(const ibRoleUserInfo& roleInfo = ibRoleUserInfo()) const { return AccessRight(m_roleAssistant, roleInfo.IsSetRole() ? roleInfo : GetUserRoleInfo()); }
+	bool AccessRight_DataAssistant(const ibRoleUserInfo& roleInfo = ibRoleUserInfo()) const { return AccessRight(m_roleDataAssistant, roleInfo.IsSetRole() ? roleInfo : GetUserRoleInfo()); }
 #pragma endregion
 
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
@@ -208,6 +210,8 @@ private:
 	ibRole* m_roleActiveUsers = ibValueMetaObject::CreateRole(ibT("ActiveUsers"), _("Active users"));
 	ibRole* m_roleExclusiveMode = ibValueMetaObject::CreateRole(ibT("ExclusiveMode"), _("Exclusive mode"));
 	ibRole* m_roleModeAllFunction = ibValueMetaObject::CreateRole(ibT("ModeAllFunctions"), _("Mode \"All functions\""));
+	ibRole* m_roleAssistant = ibValueMetaObject::CreateRole(ibT("Assistant"), _("Assistant"), false);
+	ibRole* m_roleDataAssistant = ibValueMetaObject::CreateRole(ibT("DataAssistant"), _("Data assistant"), false);
 #pragma endregion
 };
 

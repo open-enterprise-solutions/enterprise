@@ -2,6 +2,7 @@
 #define _FRMCLIENT_MAIN_FRAME_H__
 
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -127,6 +128,10 @@ public:
 	// the control that fixes it). A session gone closes the client all the same.
 	bool Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer,
 		ibProtocol::ibRefusal& refusal, ibString& error);
+	// …and the assistant's own connection, the window's doors to it (ibCommunicator::ListenMcp, Mcp): called on the
+	// transport's threads too, and never draws the frame.
+	bool ListenMcp(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal, ibString& error);
+	bool Mcp(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal, ibString& error);
 	// A call nobody waits on — what the person did in a view, a tab chosen or closed: made after the event that
 	// raised it, in the order posted, and never inside another call — but inside a question a call is asking, as the
 	// desktop's modal loop runs the events of the windows over it (a choice form a window opened, CreateChildFrame):
@@ -252,6 +257,9 @@ protected:
 	// THE PERSON'S OPTIONS WRITTEN BACK — the designer's Options: the font and colours, how editors edit, the keys as
 	// they stand, into the file LoadOptions reads; and kept as read, so a menu built again keeps the keys.
 	void SaveOptions();
+	// Tools → Options, the one dialog of both modes: the schema its item asked (the designer's McpServer, the
+	// application's Debugging) says which pages it holds besides the common ones.
+	void ShowOptions(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown);
 
 	class ibFrameManager : public wxAuiManager {
 	public:

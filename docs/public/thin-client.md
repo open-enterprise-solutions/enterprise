@@ -64,9 +64,9 @@ types.
 
 ## The person's options
 
-Read once, at the start, from `options-thin.xml` in the person's directory (`%LOCALAPPDATA%\OES` on Windows) — beside
-the desktop designer's `options.xml`, not in it: a key is kept by the command's id, and the thin client's are other
-numbers. The keys of a menu are built each time the menu is: every command's default — the window's own File and
+Read once, at the start, from the person's directory (`%LOCALAPPDATA%\OES` on Windows), each mode from its own file:
+the designer from `options-thin.xml`, the application from `options-thin-application.xml`. Both lie beside the desktop
+designer's `options.xml`, not in it: a key is kept by the command's id, and the thin client's are other numbers. The keys of a menu are built each time the menu is: every command's default — the window's own File and
 Edit, the server's for its commands — and then the person's over them. A server command's id is its number in the
 protocol, so a key kept for it holds from one run to the next. The thin client only reads the file; the thin designer
 will write it.

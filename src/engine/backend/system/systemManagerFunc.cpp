@@ -832,19 +832,26 @@ ibValue ibValueSystemFunction::XMLValue(const ibString& text)
 
 ibValue ibValueSystemFunction::Evaluate(const ibString& strExpression)
 {
-	auto* puState = ibSession::GetPUState();
 	ibValue retValue;
-	ibProcUnit::Evaluate(strExpression, puState ? puState->GetCurrentRunContext() : nullptr, retValue, false);
+	if (strExpression.IsEmpty())
+		return retValue;
+
+	// In the kind of run that asked: ordinary work writes, a watch stays a watch. A failure is an error, not a value.
+	if (!ibProcUnit::Evaluate(strExpression, nullptr, retValue, false, ibBackendException::IsEvalMode()))
+		ibBackendException::Error(ibT("%s"), retValue.GetString());
 	return retValue;
 }
 
 void ibValueSystemFunction::Execute(const ibString& strExpression)
 {
-	if (ibBackendException::IsEvalMode())
+	if (ibBackendException::IsEvalMode() || strExpression.IsEmpty())
 		return;
-	auto* puState = ibSession::GetPUState();
+
+	// ⭐ ORDINARY WORK, NOT A WATCH: left to Evaluate's default the scope was a watch's, where a write answers false and
+	// changes nothing. A failure is an error.
 	ibValue retValue;
-	ibProcUnit::Evaluate(strExpression, puState ? puState->GetCurrentRunContext() : nullptr, retValue, true);
+	if (!ibProcUnit::Evaluate(strExpression, nullptr, retValue, true, eval_none))
+		ibBackendException::Error(ibT("%s"), retValue.GetString());
 }
 
 #include "core/formatString.h"

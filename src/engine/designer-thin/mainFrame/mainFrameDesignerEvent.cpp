@@ -446,14 +446,6 @@ void ibFrontendMainFrameDesigner::OnUpdateDebugCommand(wxUpdateUIEvent& event)
 //*                                    Tool                                      *
 //********************************************************************************
 
-#include "frmclient/backend/mcp/mcpServer.h"
-#include "frmclient/mainFrame/settings/settingsdialog.h"
-#include "frmclient/mainFrame/settings/keybinderpanel.h"
-#include "frmclient/mainFrame/settings/fontcolorsettingspanel.h"
-#include "frmclient/mainFrame/settings/editorsettingspanel.h"
-#include "frmclient/mainFrame/settings/mcpsettingspanel.h"
-#include "frmclient/mainFrame/output/outputWindow.h"
-
 #include "frmclient/win/dlgs/userList.h"
 
 void ibFrontendMainFrameDesigner::ShowSchema(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown)
@@ -473,61 +465,7 @@ void ibFrontendMainFrameDesigner::ShowSchema(ibProtocol::ibSchema::ibKind schema
 		return;
 	}
 
-	// Tools → Options — the server's menu item (its McpServer schema); the dialog the desktop's OnToolsSettings
-	// (designer/mainFrame/mainFrameDesignerEvent.cpp) as it is, its assistant access asked of the schema again.
-	if (schema != ibProtocol::ibSchema::ibKind::McpServer) {
-		ibFrontendMainFrame::ShowSchema(schema, shown);
-		return;
-	}
-
-	// The pages edit copies; the frame takes them back only on OK.
-	ibDialogSettings dialog(this);
-	dialog.GetKeyBinderPanel()->SetSettings(m_keyBinder);
-	dialog.GetFontColorSettingsPanel()->SetSettings(m_fontColorSettings);
-	dialog.GetEditorSettingsPanel()->SetSettings(m_editorSettings);
-
-	// ASSISTANT ACCESS. Unlike the pages above, this one is not the frame's own
-	// state kept in an options file — it belongs to the PERSON in this base, so
-	// it is read from and written back to the server that owns it.
-	// The menu item's answer is this schema's (McpServer): Allowed, the settings, Running, the Endpoint — the page reads
-	// them from it, and asks the server nothing more to open.
-	ibPanelMcpSettings* mcpSettings = dialog.GetMcpSettingsPanel();
-	ibMcpServer* mcpServer = ibApplicationInstance::GetMcpServer(shown);
-	if (mcpServer != nullptr) {
-		mcpSettings->SetSettings(mcpServer->GetSettings());
-		mcpSettings->SetEndpoint(mcpServer->GetEndpoint());
-	}
-
-	if (dialog.ShowModal() == wxID_OK)
-	{
-		if (mcpServer != nullptr) {
-			// Configure first, save second, both from the one value the page
-			// holds — so what is written down and what is in force cannot differ.
-			// A running server is NOT moved by this: it keeps the address it took
-			// until somebody stops and starts it, which is the only way a page can
-			// say one thing while a client talks to another and be caught at it.
-			mcpServer->Configure(mcpSettings->GetSettings());
-			mcpServer->SaveSettings(ibSession::Current());
-		}
-
-		m_keyBinder = dialog.GetKeyBinderPanel()->GetSettings();
-		m_keyBinder.UpdateWindow(this);
-#if wxUSE_MENUBAR
-		m_keyBinder.UpdateMenuBar(GetMenuBar());
-#endif
-
-		m_fontColorSettings = dialog.GetFontColorSettingsPanel()->GetSettings();
-		m_editorSettings = dialog.GetEditorSettingsPanel()->GetSettings();
-
-		// …and in force at once, as the desktop's UpdateEditorOptions put them: every document's views told (a module's
-		// sets its editor anew, a form's its Module page), and the output window.
-		for (ibFrontendDocument* const doc : m_docManager->GetDocumentsVector())
-			doc->UpdateAllViews();
-		if (m_outputWindow != nullptr)
-			m_outputWindow->SetFontColorSettings(m_fontColorSettings);
-	}
-
-	SaveOptions();
+	ibFrontendMainFrame::ShowSchema(schema, shown);
 }
 
 #include "frmclient/win/dlgs/connectionDB.h"

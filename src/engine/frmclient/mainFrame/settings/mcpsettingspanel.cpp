@@ -20,14 +20,14 @@ ibPanelMcpSettings::ibPanelMcpSettings(wxWindow* parent, int id, wxPoint pos, wx
 		new wxStaticBox(this, -1, _("Assistant access (MCP)")), wxVERTICAL);
 
 	m_enabled = new wxCheckBox(this, ID_McpEnabled,
-		_("Let an assistant reach this designer"), wxDefaultPosition, wxDefaultSize, 0);
+		_("Let an assistant reach this session"), wxDefaultPosition, wxDefaultSize, 0);
 	box->Add(m_enabled, 0, wxALL, 5);
 
 	// SAID PLAINLY, because a person deciding this is deciding how much to hand
 	// over — and the honest answer is "everything you can do here".
 	wxStaticText* what = new wxStaticText(this, wxID_ANY,
-		_("A connected assistant can read the configuration, check syntax and add objects - "
-		  "as you, with your rights. It runs only while your session is open."),
+		_("A connected assistant works as you, with your rights: it can do here what your roles "
+		  "allow you. It runs only while your session is open."),
 		wxDefaultPosition, wxDefaultSize, 0);
 	what->Wrap(FromDIP(420));
 	box->Add(what, 0, wxALL, 5);
@@ -72,13 +72,12 @@ ibPanelMcpSettings::ibPanelMcpSettings(wxWindow* parent, int id, wxPoint pos, wx
 	//
 	// So the page tells them WHAT TO INSTALL and hands them the exact line, in that order.
 	// ⭐ THE UNIVERSAL FORM FIRST, AND NAMED AS SUCH. This server speaks plain MCP over HTTP and is
-	// tied to no vendor - any client, on any machine, connects the same way. The convenience
+	// tied to no vendor - any client on this machine connects the same way. The convenience
 	// command below is one PRODUCT's spelling of it, and leading with that would quietly tell
 	// somebody using a different assistant that they were in the wrong place.
 	wxStaticText* howTo = new wxStaticText(this, wxID_ANY,
-		_("Any assistant that speaks MCP can connect, from this machine or another on the "
-		  "network. Put this into its server configuration - it is the standard form and needs "
-		  "nothing else:"));
+		_("Any assistant that speaks MCP can connect from this machine. Put this into its server "
+		  "configuration - it is the standard form and needs nothing else:"));
 	howTo->Wrap(FromDIP(420));
 	handout->Add(howTo, 0, wxALL, 5);
 
@@ -227,7 +226,6 @@ void ibPanelMcpSettings::OnCopyBlock(wxCommandEvent& WXUNUSED(event))
 //---------------------------------------------------------------------------
 
 #include "frmclient/backend/appData.h"
-#include "frmclient/backend/session/session.h"
 
 void ibPanelMcpSettings::OnRun(wxCommandEvent& WXUNUSED(event))
 {
@@ -245,15 +243,14 @@ void ibPanelMcpSettings::OnRun(wxCommandEvent& WXUNUSED(event))
 	// changed the port and pressed Start means the new port; starting on the old one and showing
 	// the new one in the field above is the page lying about itself.
 	//
-	// Safe here BY CONSTRUCTION: Configure refuses to move a RUNNING server, and this branch only
-	// runs when it is stopped.
-	server->Configure(m_settings);
+	// Safe here BY CONSTRUCTION: a running port is not moved, and this branch only runs when it is stopped.
+	server->SaveSettings(m_settings);
 
 	// IN THE NAME OF THIS SESSION. Everything the assistant then does, it does as the person who
-	// pressed this - same rights, same configuration - and it stops when they close the designer.
+	// pressed this - same rights, same configuration - and it stops when their session ends.
 	ibString refusal;
 
-	if (!server->Start(ibSession::Current(), refusal)) {
+	if (!server->Start(refusal)) {
 		// ⚠ ON THE PAGE, NOT IN A BOX. The refusal names the reason - switched off, port taken -
 		// and a box would have to be dismissed before the setting it talks about could be
 		// changed. Here it stays next to the control that fixes it.
@@ -263,11 +260,6 @@ void ibPanelMcpSettings::OnRun(wxCommandEvent& WXUNUSED(event))
 		Layout();
 		return;
 	}
-
-	// ⭐ AND THE PAGE CATCHES UP WITH THE SERVER. Start may have minted a token; reading the
-	// settings back is what puts the real one into the command below, instead of the copy this
-	// page was handed when it opened.
-	m_settings = server->GetSettings();
 
 	SetEndpoint(server->GetEndpoint());
 	RefreshRunState();
@@ -288,7 +280,7 @@ void ibPanelMcpSettings::RefreshRunState()
 		m_stateLabel->SetLabel(running
 			? ibString::Format(_("Running at %s"), m_endpoint)
 			: (m_settings.m_enabled
-				? _("Not running. It starts by itself next time you open the designer.")
+				? _("Not running. It starts by itself next time you log in.")
 				: _("Not running, and switched off above - it will not start by itself.")));
 
 	Layout();

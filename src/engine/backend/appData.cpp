@@ -27,7 +27,6 @@
 #include "backend/logger/loggerSweep.h"
 #include "backend/lock/lockManager.h"
 #include "backend/job/jobManager.h"           // ibJobManager (owned via GetJobManager)
-#include "backend/mcp/mcpServer.h"            // ibMcpServer (owned via GetMcpServer)
 #include "backend/job/platformJobs.h"         // the engine's own jobs, declared when a database opens
 #include "backend/settings/settingsStorage.h" // ibSettingsStorage (owned via GetSettingsStorage)
 #include "backend/temp/tempStorage.h"         // ibTempStorage (owned via GetTempStorage)
@@ -331,7 +330,6 @@ ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode 
 	m_queryableFactory(std::unique_ptr<ibQueryableFactory>(new ibQueryableFactory(ib::AppDataCtorToken{ this }))),
 	m_sessionRegistry(std::unique_ptr<ibSessionRegistry>(new ibSessionRegistry(ib::AppDataCtorToken{ this }))),
 	m_jobManager(std::unique_ptr<ibJobManager>(new ibJobManager(ib::AppDataCtorToken{ this }))),
-	m_mcpServer(std::unique_ptr<ibMcpServer>(new ibMcpServer(ib::AppDataCtorToken{ this }))),
 	m_settingsStorage(std::unique_ptr<ibSettingsStorage>(new ibSettingsStorage(ib::AppDataCtorToken{ this }))),
 	m_tempStorage(std::unique_ptr<ibTempStorage>(new ibTempStorage(ib::AppDataCtorToken{ this })))
 {
@@ -462,12 +460,6 @@ void ibApplicationInstance::WireSessionEvents()
 			// this IS the window's session, the answer the old "hand back the lone map entry" gave.
 			registry->SetFallback(s);
 		}
-		// A PERSON'S OWN MCP SERVER, read the moment they are let in — the
-		// settings are keyed by user, so opening the designer is when "whose
-		// server is this" gets its answer. Nothing saved yet is a cold start,
-		// not a failure: the defaults stand, and the defaults are off.
-		if (ownSession && m_mcpServer) m_mcpServer->LoadSettings(s);
-
 		if (s->GetMetaData() != nullptr) {
 			// Root mm is allocated by ibSession::EnsureRoot (called by the registry before this listener) for
 			// runtime sessions; the Designer has no root mm (it uses the lightweight designer manager in the
@@ -556,11 +548,6 @@ void ibApplicationInstance::Close()
 	//    and this order is what keeps its replacement honest.
 	if (m_jobManager) m_jobManager->Stop();
 
-	// Same reasoning one line up: the listener works in the name of a session and
-	// touches metadata on every exchange, so it is joined BEFORE anything it can
-	// reach starts going away.
-	if (m_mcpServer) m_mcpServer->Stop();
-
 	// 1. Stop the registry — submits Remove@Urgent for every session
 	//    still in m_own, drains the queue, joins the worker. sys_session
 	//    DELETEs + OnDisconnect listeners fire before pool dies. Right after
@@ -600,12 +587,11 @@ void ibApplicationInstance::Close()
 	if (m_connectionPool) m_connectionPool->Shutdown();
 
 	// 4. The rest of the fields, in reverse declaration order: m_tempStorage → m_settingsStorage →
-	//    m_mcpServer → m_jobManager → m_sessionRegistry → m_logger → m_queryableFactory → m_lockManager →
+	//    m_jobManager → m_sessionRegistry → m_logger → m_queryableFactory → m_lockManager →
 	//    m_connectionPool (m_activeMetaData, declared last, went first). (The job manager's own dtor calls
 	//    Stop() again; it is idempotent, so the explicit step above only fixes the ORDER.)
 	release(m_tempStorage);
 	release(m_settingsStorage);
-	release(m_mcpServer);
 	release(m_jobManager);
 	release(m_sessionRegistry);
 	release(m_logger);

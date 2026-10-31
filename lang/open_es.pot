@@ -1705,7 +1705,7 @@ msgstr ""
 msgid ""
 "Assistant access is switched off.\n"
 "\n"
-"Turn it on in Tools > Options > Assistant access."
+"Turn it on in the assistant access settings."
 msgstr ""
 
 #: src/engine/backend/mcp/mcpServer.cpp:925
@@ -1717,16 +1717,16 @@ msgid "There is no session to work in"
 msgstr ""
 
 #: src/engine/backend/mcp/mcpServer.cpp:1026
-msgid "Assistant access has been switched off. Nothing is listening, so nothing written here will be collected until it is switched on again in Tools > Options > Assistant access."
+msgid "Assistant access has been switched off. Nothing is listening, so nothing written here will be collected until it is switched on again."
 msgstr ""
 
 #: src/engine/backend/mcp/mcpServer.cpp:1210
-msgid "Assistant access is not running. Start it in Tools > Options > Assistant access."
+msgid "Assistant access is not running. Start it in the assistant access settings."
 msgstr ""
 
 #: src/engine/backend/mcp/mcpServer.cpp:1214
 #, c-format
-msgid "Assistant access is running at %s (build %u)."
+msgid "Assistant access is running (build %u)."
 msgstr ""
 
 #: src/engine/backend/mcp/mcpServer.cpp:1221
@@ -8754,10 +8754,10 @@ msgstr ""
 msgid "Assistant access (MCP)"
 msgstr ""
 
-msgid "Let an assistant reach this designer"
+msgid "Let an assistant reach this session"
 msgstr ""
 
-msgid "A connected assistant can read the configuration, check syntax and add objects - as you, with your rights. It runs only while your session is open."
+msgid "A connected assistant works as you, with your rights: it can do here what your roles allow you. It runs only while your session is open."
 msgstr ""
 
 msgid "Address:"
@@ -8773,7 +8773,7 @@ msgstr ""
 msgid "Give this to your assistant"
 msgstr ""
 
-msgid "Any assistant that speaks MCP can connect, from this machine or another on the network. Put this into its server configuration - it is the standard form and needs nothing else:"
+msgid "Any assistant that speaks MCP can connect from this machine. Put this into its server configuration - it is the standard form and needs nothing else:"
 msgstr ""
 
 msgid "Copy the configuration"
@@ -8801,7 +8801,7 @@ msgstr ""
 msgid "Running at %s"
 msgstr ""
 
-msgid "Not running. It starts by itself next time you open the designer."
+msgid "Not running. It starts by itself next time you log in."
 msgstr ""
 
 msgid "Not running, and switched off above - it will not start by itself."
@@ -12133,7 +12133,7 @@ msgstr ""
 msgid ""
 "Assistant access did not start: %s.\n"
 "\n"
-"If another designer is open, it holds the port - only one can. Close it, or give this one a port of its own in Tools > Options > Assistant access."
+"If another window is open, it holds the port - only one can. Close it, or give this one a port of its own in the assistant access settings."
 msgstr ""
 
 #: src/engine/backend/mcp/tools/mcpToolSession.cpp:114
@@ -13255,4 +13255,12 @@ msgstr ""
 #: src/engine/backend/session/sessionRegistry.cpp
 #, c-format
 msgid "Too many failed logins: try again in %d s."
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaObjectMetadata.h:214
+msgid "Data assistant"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
+msgid "Debugging"
 msgstr ""

@@ -62,6 +62,8 @@ public:
 	static class ibMcpServer* GetMcpServer();
 	// …as its schema's answer already at hand shows it (a menu item's) — received from it, not asked again.
 	static class ibMcpServer* GetMcpServer(const class ibProtocolNode& shown);
+	// …and its port closed, the window going. Nothing is asked of the server for it.
+	static void StopMcpServer();
 };
 
 inline ibApplicationData s_appData;
