@@ -23,7 +23,7 @@
 class ibValueMetaObjectAccountDimensionKindsTable : public ibValueMetaObjectTableDataRef {
 	public:
 
-	ibValueMetaObjectAccountDimensionKindsTable(const wxString& name, const wxString& synonym, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectAccountDimensionKindsTable(const ibString& name, const ibString& synonym, const ibString& comment = ibEmptyString);
 	ibValueMetaObjectAccountDimensionKindsTable();
 	virtual ~ibValueMetaObjectAccountDimensionKindsTable();
 
@@ -70,7 +70,7 @@ protected:
 
 private:
 
-	ibPropertyCategory* m_categoryAccountDimension = ibPropertyObject::CreatePropertyCategory(wxT("AccountDimension"), _("Account dimension"));
+	ibPropertyCategory* m_categoryAccountDimension = ibPropertyObject::CreatePropertyCategory(ibT("AccountDimension"), _("Account dimension"));
 
 	// Predefined columns
 	// FILL-CHECKED: a line of this table IS a kind. A row with an empty kind carries a flag about
@@ -82,10 +82,10 @@ private:
 	// the row's own position — two answers to one question, and the stored one is the one that can
 	// disagree. Removed 2026-08-16; nothing had ever read it.
 	ibPropertyContainer<>* m_propertyAccountDimensionKind = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccountDimension,
-		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("AccountDimensionKind"), _("Account dimension kind"), _("The analytics kind this slot of the account is kept by - an item of the bound chart of characteristic types; its type is what the posting's dimension may hold. Required."), /*fillCheck*/ true, ibItemMode::ibItemMode_Item));
+		ibValueMetaObjectCompositeData::CreateEmptyType(ibT("AccountDimensionKind"), _("Account dimension kind"), _("The analytics kind this slot of the account is kept by - an item of the bound chart of characteristic types; its type is what the posting's dimension may hold. Required."), /*fillCheck*/ true, ibItemMode::ibItemMode_Item));
 
 	ibPropertyContainer<>* m_propertySummaryOnly = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccountDimension,
-		ibValueMetaObjectCompositeData::CreateBoolean(wxT("SummaryOnly"), _("Summary only"), _("Turnovers only: postings carry this dimension and turnovers are read by it, but balances are not broken down by it - the balance of the account is folded over this slot."), ibItemMode::ibItemMode_Item));
+		ibValueMetaObjectCompositeData::CreateBoolean(ibT("SummaryOnly"), _("Summary only"), _("Turnovers only: postings carry this dimension and turnovers are read by it, but balances are not broken down by it - the balance of the account is folded over this slot."), ibItemMode::ibItemMode_Item));
 };
 
 #endif

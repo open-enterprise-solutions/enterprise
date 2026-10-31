@@ -8,7 +8,8 @@
 #include "frmclient/backend/system/value/valueColour.h"            // a colour parameter, kept as a value
 #include "frmclient/backend/system/value/valueFont.h"              // …and a font
 #include "frmclient/backend/system/value/valueSpreadsheet.h"       // …and an alignment, the sheet's own enumeration
-#include "frmclient/backend/spreadsheetDescription.h"              // ibDefaultSpreadsheetFont() — the font a font is chosen from
+#include "core/description/spreadsheetDescription.h"              // ibDefaultSpreadsheetFont() — the font a font is chosen from
+#include "frmclient/win/typeconv.h"                               // WxColourToColour — a row's grey is the model view's data
 
 #include <wx/choicdlg.h>   // wxGetSingleChoiceIndex — an alignment is one of three words
 #include <wx/colordlg.h>   // wxColourDialog — a colour is chosen in the system's window
@@ -21,12 +22,11 @@ namespace {
 
 // THE TEXT A PARAMETER KEEPS, ticked or not — what its value cell edits. (Never a reference: an appearance
 // reads back without a configuration — see ibAppearanceValueDescription.)
-wxString KeptText(const ibAppearanceDescription& appearance, ibAppearanceParameter parameter)
+ibString KeptText(const ibAppearanceDescription& appearance, ibAppearanceParameter parameter)
 {
 	const ibAppearanceValueDescription* value = appearance.Find(parameter);
-	// ⚠ BOTH ARMS wxString: an ibString beside a wxString is ambiguous on GCC and clang — each converts to the
-	// other — and MSVC's silence about it cost the Linux and macOS builds of fd601790d their frontend.
-	return value != nullptr ? ibStoredValue(value->m_value, nullptr).GetString().ToWxString() : wxString();
+	// ⚠ BOTH ARMS ibString: an ibString beside a wxString is ambiguous — each converts to the other.
+	return value != nullptr ? ibStoredValue(value->m_value, nullptr).GetString() : ibString();
 }
 
 bool IsTicked(const ibAppearanceDescription& appearance, ibAppearanceParameter parameter)
@@ -37,9 +37,9 @@ bool IsTicked(const ibAppearanceDescription& appearance, ibAppearanceParameter p
 
 // A PARAMETER'S TEXT, written anew — ticked when there is something to apply, the way a value put beside a
 // setting switches it on; emptied, the parameter is forgotten (the door's own rule, Say).
-void SayText(ibAppearanceDescription& appearance, ibAppearanceParameter parameter, const wxString& raw)
+void SayText(ibAppearanceDescription& appearance, ibAppearanceParameter parameter, const ibString& raw)
 {
-	appearance.Say(parameter, !raw.IsEmpty(), raw.IsEmpty() ? ibValue() : ibValue(raw));
+	appearance.Say(parameter, !raw.IsEmpty(), raw.IsEmpty() ? ibDataNode() : ibStoreValue(ibValue(raw)));
 }
 
 // WHICH PARAMETERS ARE WRITTEN AS TEXT — typed into the cell, in every language. The others are a colour, a font
@@ -62,7 +62,7 @@ public:
 	static bool IsRow(unsigned row) { return row < ibAppearanceParameters().size(); }
 	static ibAppearanceParameter ParameterAt(unsigned row) { return ibAppearanceParameters()[row]; }
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		if (!IsRow(row))
 			return;
 		const ibAppearanceParameter parameter = ParameterAt(row);
@@ -75,18 +75,18 @@ public:
 			variant = ibTranslateString(KeptText(*m_appearance, parameter)).GetString();
 	}
 
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override {
 		if (!IsRow(row) || m_readOnly)
 			return false;
 		const ibAppearanceParameter parameter = ParameterAt(row);
-		const wxString kept = KeptText(*m_appearance, parameter);
+		const ibString kept = KeptText(*m_appearance, parameter);
 		if (col == kColUse) {
-			if (variant.GetBool() == IsTicked(*m_appearance, parameter))
+			if (variant.GetBoolean() == IsTicked(*m_appearance, parameter))
 				return false;
 			// THE TICK KEEPS THE VALUE AS IT IS — a colour stays a colour; only the word "in force" changes.
 			const ibAppearanceValueDescription* said = m_appearance->Find(parameter);
-			m_appearance->Say(parameter, variant.GetBool(),
-				said != nullptr ? ibStoredValue(said->m_value, nullptr) : ibValue());
+			m_appearance->Say(parameter, variant.GetBoolean(),
+				said != nullptr ? said->m_value : ibDataNode());
 			return true;
 		}
 		if (col != kColValue)
@@ -99,7 +99,7 @@ public:
 		if (!IsTyped(parameter)) {
 			if (!text.IsEmpty() || kept.IsEmpty())
 				return false;
-			m_appearance->Say(parameter, false, ibValue());
+			m_appearance->Say(parameter, false, ibDataNode());
 			return true;
 		}
 
@@ -119,7 +119,7 @@ public:
 	// AN UNTICKED VALUE READS GREY — kept, not applied.
 	bool GetAttrByRow(unsigned row, unsigned col, ibDataViewItemAttr& attr) const override {
 		if (col == kColValue && IsRow(row) && !IsTicked(*m_appearance, ParameterAt(row))) {
-			attr.SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+			attr.SetColour(typeConv::WxColourToColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT)));
 			return true;
 		}
 		return false;
@@ -235,7 +235,7 @@ private:
 		// is read as what it changes of that one (ibCompositionFont::Of), so ticking italic says italic and nothing more.
 		case ibAppearanceParameter::Font: {
 			wxFontData data;
-			data.SetInitialFont(ibDefaultSpreadsheetFont());
+			data.SetInitialFont(typeConv::FontToWxFont(ibDefaultSpreadsheetFont()));
 			if (const ibAppearanceValueDescription* said = m_edited.Find(parameter)) {
 				ibValue kept = ibStoredValue(said->m_value, nullptr);
 				ibValueFont* font = nullptr;
@@ -269,7 +269,7 @@ private:
 
 	// A VALUE CHOSEN IN ITS WINDOW — said ticked, and shown as its own text.
 	bool Choose(ibAppearanceParameter parameter, const ibValue& value, wxString& text) {
-		m_edited.Say(parameter, true, value);
+		m_edited.Say(parameter, true, ibStoreValue(value));
 		text = KeptText(m_edited, parameter);
 		m_view->Refresh();
 		return true;

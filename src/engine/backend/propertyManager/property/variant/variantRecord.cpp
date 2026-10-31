@@ -1,10 +1,10 @@
 #include "variantRecord.h"
 
-wxString ibVariantDataRecord::MakeString() const
+ibString ibVariantRecord::GetString() const
 {
 	const ibMetaData* metaData = m_ownerProperty->GetMetaData();
-	if (metaData == nullptr) return wxEmptyString;
-	wxString strDescr;
+	if (metaData == nullptr) return ibEmptyString;
+	ibString strDescr;
 	for (unsigned int idx = 0; idx < m_metaDesc.GetTypeCount(); idx++) {
 		const ibValueMetaObject* record = metaData->FindAnyObjectByFilter(m_metaDesc.GetByIdx(idx));
 		if (record == nullptr || !record->IsAllowed())
@@ -13,7 +13,7 @@ wxString ibVariantDataRecord::MakeString() const
 			strDescr = record->GetName();
 		}
 		else {
-			strDescr = strDescr + wxT(", ") + record->GetName();
+			strDescr = strDescr + ibT(", ") + record->GetName();
 		}
 	}
 	return strDescr;
@@ -23,7 +23,7 @@ wxString ibVariantDataRecord::MakeString() const
 
 #include "backend/system/value/valueArray.h"
 
-ibValue ibVariantDataRecord::GetDataValue() const
+ibValue ibVariantRecord::GetDataValue() const
 {
 	ibValueArray* valueArr = new ibValueArray();
 	const ibMetaData* metaData = m_ownerProperty->GetMetaData();

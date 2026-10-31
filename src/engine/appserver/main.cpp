@@ -1,12 +1,10 @@
-// appserver — the application server: the process that serves the bases of its server folder without a window
-// (backend/server/serverConfig.h — the folder; appServer.h — the serving; docs/private/multi-base-process.md § 5). It was
-// called `daemon` until 2026-10-01. Started by hand it narrates in its console — the technological journal
-// mirrored onto standard error — and stays until Ctrl+C; later it becomes a service and the journal stays.
+// appserver — the application server: the process that serves one base of its server folder for the application
+// cluster, without a window (core/server/serverConfig.h — the folder; appServer.h — the serving; appcluster — who
+// starts it, --worker=<base>). It was called `daemon` until 2026-10-01. It narrates in its console — the technological
+// journal mirrored onto standard error. By hand it only seals a password into the config (--set-password).
 
 #include <wx/app.h>
 #include <wx/cmdline.h>
-#include <wx/filename.h>
-#include "core/programFolder.h"
 
 #ifdef __WXMSW__
 #include <windows.h>
@@ -20,12 +18,15 @@
 #include <string>
 
 #include "appServer.h"
-#include "frontend/diagnostics/oesConsole.h"
+#include "core/diagnostics/oesConsole.h"
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_OPTION, "d",  "dir",          "Server folder: server.conf, server.key and a folder per base (default: server beside the executable)", wxCMD_LINE_VAL_STRING, 0 },
-	{ wxCMD_LINE_OPTION, "lc", "locale",       "UI locale",               wxCMD_LINE_VAL_STRING, 0 },
+	{ wxCMD_LINE_OPTION, "lc", "locale",       "The platform's locale for a base that names none (default: backend.conf's Locale, else English)", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_OPTION, "sp", "set-password", "Seal a password into the config: <base>/Password or <base>/IbPassword, typed at the keyboard", wxCMD_LINE_VAL_STRING, 0 },
+	{ wxCMD_LINE_OPTION, "w",  "worker",       "Serve one base for the cluster that started this server (appcluster): its port said on standard output, stopped by 'stop' on standard input or by its closing", wxCMD_LINE_VAL_STRING, 0 },
+	{ wxCMD_LINE_OPTION, "r",  "route",        "Which of the base's servers this one is (server.conf's Processes, from 1): its sessions' tokens end in it, and the cluster carries their clients back to it", wxCMD_LINE_VAL_NUMBER, 0 },
+	{ wxCMD_LINE_SWITCH, "a",  "again",        "Started again after a fall (by the cluster): the first error takes no dump - the first start took one", wxCMD_LINE_VAL_NONE, 0 },
 	{ wxCMD_LINE_SWITCH, "h",  "help",         "Show this help message.", wxCMD_LINE_VAL_NONE,   wxCMD_LINE_OPTION_HELP },
 	{ wxCMD_LINE_NONE,   nullptr, nullptr,     nullptr,                   wxCMD_LINE_VAL_NONE,   0 }
 };
@@ -36,20 +37,11 @@ IB_LEAK_TRACKER_ARM();
 
 namespace {
 
-// Where a server started without --dir keeps its bases — `server` in the program folder.
-// Inside a bundle that is beside the .app, not in Contents/MacOS/.
-wxString DefaultServerDir()
-{
-	wxFileName fn = wxFileName::DirName(ibProgramFolder());
-	fn.AppendDir(wxT("server"));
-	return fn.GetPath();
-}
-
 // Typed at the keyboard, not echoed. A console reads it in UTF-16, so a password in any alphabet arrives
 // whole; anything else (a pipe) is read as a line of UTF-8.
-wxString ReadHidden()
+ibString ReadHidden()
 {
-	wxString line;
+	ibString line;
 #ifdef __WXMSW__
 	HANDLE in = ::GetStdHandle(STD_INPUT_HANDLE);
 	DWORD mode = 0;
@@ -58,13 +50,13 @@ wxString ReadHidden()
 		wchar_t buffer[512];
 		DWORD read = 0;
 		if (::ReadConsoleW(in, buffer, 511, &read, nullptr))
-			line = wxString(buffer, read);
+			line = ibString(buffer, read);
 		::SetConsoleMode(in, mode);
 	}
 	else {
 		std::string raw;
 		std::getline(std::cin, raw);
-		line = wxString::FromUTF8(raw);
+		line = ibString::FromUTF8(raw);
 	}
 #else
 	termios old{};
@@ -78,39 +70,38 @@ wxString ReadHidden()
 	std::getline(std::cin, raw);
 	if (tty)
 		::tcsetattr(STDIN_FILENO, TCSANOW, &old);
-	line = wxString::FromUTF8(raw);
+	line = ibString::FromUTF8(raw);
 #endif
 	std::fputs("\n", stderr);
-	line.Replace(wxT("\r"), wxEmptyString);
-	line.Replace(wxT("\n"), wxEmptyString);
+	line.Replace(ibT("\r"), ibEmptyString);
+	line.Replace(ibT("\n"), ibEmptyString);
 	return line;
 }
 
 // `appserver --set-password=<base>/<Password|IbPassword>` — the secret typed at the keyboard, sealed into the
 // config: it travels neither on a command line nor through a file.
-int SetPassword(ibServerConfig& config, const wxString& target)
+int SetPassword(ibServerConfig& config, const ibString& target)
 {
-	const wxString base = target.BeforeLast(wxT('/'));
-	const wxString name = target.AfterLast(wxT('/'));
-	if (base.IsEmpty() || (name != wxT("Password") && name != wxT("IbPassword"))) {
-		ibAppServerSay(ibJournalMark::Error, wxT("--set-password wants <base>/Password or <base>/IbPassword, not '%s'"),
+	const ibString base = target.BeforeLast(ibT('/'));
+	const ibString name = target.AfterLast(ibT('/'));
+	if (base.IsEmpty() || (name != ibT("Password") && name != ibT("IbPassword"))) {
+		ibAppServerSay(ibJournalMark::Error, ibT("--set-password wants <base>/Password or <base>/IbPassword, not '%s'"),
 			target);
 		return 1;
 	}
 
-	wxString error;
+	ibString error;
 	if (!config.LoadKey(error)) {
-		ibAppServerSay(ibJournalMark::Error, wxT("%s"), error);
+		ibAppServerSay(ibJournalMark::Error, ibT("%s"), error);
 		return 1;
 	}
 
-	std::fprintf(stderr, "%s for %s: ", static_cast<const char*>(name.utf8_str()),
-		static_cast<const char*>(base.utf8_str()));
+	std::fprintf(stderr, "%s for %s: ", name.utf8_str().c_str(), base.utf8_str().c_str());
 	if (!config.SealSecret(base, name, ReadHidden(), error)) {
-		ibAppServerSay(ibJournalMark::Error, wxT("%s"), error);
+		ibAppServerSay(ibJournalMark::Error, ibT("%s"), error);
 		return 1;
 	}
-	ibAppServerSay(ibJournalMark::Info, wxT("%s/%s sealed into %s"), base, name, config.GetConfPath());
+	ibAppServerSay(ibJournalMark::Info, ibT("%s/%s sealed into %s"), base, name, config.GetConfPath());
 	return 0;
 }
 
@@ -120,9 +111,9 @@ int main(int argc, char** argv)
 {
 	wxApp::CheckBuildOptions(WX_BUILD_OPTIONS_SIGNATURE, "appserver");
 
-	// wxInitializer + wxSocketBase::Initialize + ibCrashGuard::Install, in one line. Headless: no wxApp, faults
+	// wxInitializer + ibCrashGuard::Install, in one line. Headless: no wxApp, faults
 	// from worker / debug-listener threads write minidumps instead of a silent abort.
-	ibOesConsoleBoot boot(wxT("appserver"), argc, argv);
+	ibOesConsoleBoot boot(ibT("appserver"), argc, argv);
 	if (!boot.IsOk()) {
 		std::fprintf(stderr, "Failed to initialize the wxWidgets library, aborting.");
 		return -1;
@@ -135,10 +126,17 @@ int main(int argc, char** argv)
 	wxCmdLineParser parser(s_cmdLineDesc, argc, argv);
 	if (parser.Parse() != 0)
 		return 1;
+	if (parser.Found(wxT("again")))
+		ibTechJournal::SkipErrorDump();
 
-	wxString folder = DefaultServerDir(), locale = wxT("en"), sealTarget;
+	// The locale left out is the platform's own: a base's, then backend.conf's Locale, then English (InitLocale).
+	// wxCmdLineParser's own: it writes what it found into wx strings.
+	wxString folder = ibServerConfig::DefaultFolder(), locale, sealTarget, workerBase;
 	parser.Found(wxT("dir"), &folder);
 	parser.Found(wxT("locale"), &locale);
+	parser.Found(wxT("worker"), &workerBase);
+	long route = 0;
+	parser.Found(wxT("route"), &route);
 	ibServerConfig config(folder);
 
 	if (parser.Found(wxT("set-password"), &sealTarget))
@@ -148,5 +146,5 @@ int main(int argc, char** argv)
 	::DisableProcessWindowsGhosting();
 #endif
 
-	return ibAppServer(config, locale).Run();
+	return ibAppServer(config, locale, workerBase, route > 0 ? static_cast<unsigned>(route) : 0).Run();
 }

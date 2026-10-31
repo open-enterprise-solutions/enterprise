@@ -3,14 +3,14 @@
 
 #include "frmserver/visualView/ctrl/control.h"
 #include "frmserver/docView/docView.h"   // ibDocument / ibMetaDocument — the doc-parent a form opens under
-#include "backend/sourceDescription.h"   // ibSourceDescription — the binding-path wrapper (Get/SetValueByAttributePath)
+#include "core/description/sourceDescription.h"   // ibSourceDescription — the binding-path wrapper (Get/SetValueByAttributePath)
 #include "backend/backend_command.h"   // ibBackendCommandSender — the form IS-A command-hop source (entry gate)
 
 #include <chrono>   // an attached procedure's interval and due time
 #include <memory>   // std::unique_ptr — owns the form's attribute/value registry entries
 
 #define defaultFormId 1
-#define thisForm wxT("ThisForm")
+#define thisForm ibT("ThisForm")
 
 //********************************************************************************************
 //*                                     Defines                                              *
@@ -66,8 +66,8 @@ public:
 
 public:
 
-	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
-	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
+	void SetCaption(const ibString& caption) { return m_propertyTitle->SetValue(caption); }
+	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
 	// Soft-lock state. m_lockBadgeHolder holds the blocking user's name
 	// when TryAcquireFormLock conflicted on open; empty means the form
@@ -83,19 +83,19 @@ public:
 	// lock state alongside data state; explicit callers (focus / poll
 	// timer) may invoke directly too. Safe no-op when not in soft-
 	// lock state.
-	void SetLockBadge(const wxString& holderName) { m_lockBadgeHolder = holderName; }
-	const wxString& GetLockBadgeHolder() const { return m_lockBadgeHolder; }
+	void SetLockBadge(const ibString& holderName) { m_lockBadgeHolder = holderName; }
+	const ibString& GetLockBadgeHolder() const { return m_lockBadgeHolder; }
 	void RefreshLockBadge();
 
-	wxColour GetForegroundColour() const { return m_propertyFG->GetValueAsColour(); }
-	wxColour GetBackgroundColour() const { return m_propertyBG->GetValueAsColour(); }
+	ibColour GetForegroundColour() const { return m_propertyFG->GetValueAsColour(); }
+	ibColour GetBackgroundColour() const { return m_propertyBG->GetValueAsColour(); }
 
 	bool IsFormEnabled() const { return m_propertyEnabled->GetValueAsBoolean(); }
 
 	wxOrientation GetOrient() const { return m_propertyOrient->GetValueAsEnum(); }
 
 	ibValueFrame* NewObject(const ibClassID& clsid, ibValueFrame* parentControl = nullptr, const ibValue& generateId = true);
-	ibValueFrame* NewObject(const wxString& classControl, ibValueFrame* controlParent, const ibValue& generateId = true) {
+	ibValueFrame* NewObject(const ibString& classControl, ibValueFrame* controlParent, const ibValue& generateId = true) {
 		const ibClassID& clsid = ibValue::GetIDObjectFromString(classControl);
 		if (clsid > 0) {
 			return NewObject(
@@ -114,7 +114,7 @@ public:
 	}
 
 	template <typename retType>
-	inline retType* NewObject(const wxString& className, ibValueFrame* parentControl = nullptr, const ibValue& generateId = true) {
+	inline retType* NewObject(const ibString& className, ibValueFrame* parentControl = nullptr, const ibValue& generateId = true) {
 		return dynamic_cast<retType*>(
 			NewObject(className, parentControl, generateId));
 	}
@@ -130,7 +130,7 @@ public:
 	* Fabrica de objetos.
 	* A partir del nombre de la clase se crea una nueva instancia de un objeto.
 	*/
-	ibValueFrame* CreateObject(const wxString& className, ibValueFrame* parentControl = nullptr);
+	ibValueFrame* CreateObject(const ibString& className, ibValueFrame* parentControl = nullptr);
 
 public:
 
@@ -173,6 +173,7 @@ public:
 
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
+	virtual bool GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const override;
 
 	//****************************************************************************
 	//*                              Support form context                        *
@@ -216,15 +217,15 @@ public:
 	// Registry CRUD — every accessor hands out the ENTRY (ibFormAttributeValue): the
 	// entity carrying the attribute (its hidden private description) AND its value. Never
 	// a raw attribute. An attribute is NEVER empty: name + Type + value.
-	ibFormAttributeValue* AddAttribute(const wxString& name, const ibClassID& type, const ibValue& value);
+	ibFormAttributeValue* AddAttribute(const ibString& name, const ibClassID& type, const ibValue& value);
 	// The MAIN entry (the source object lands here) — guards that no other main exists.
-	ibFormAttributeValue* AddMainAttribute(const wxString& name, const ibClassID& type, ibSourceDataObject* value);
+	ibFormAttributeValue* AddMainAttribute(const ibString& name, const ibClassID& type, ibSourceDataObject* value);
 
 	// Provision a fresh attribute — name = `name` made UNIQUE among the form's attributes, typed from
 	// `typeDesc` (the control's default type, already produced by the source-type generator) — and return
 	// its id. The auto-source the source controls' creation helper (ibValueControl::AutoBindNewSource)
 	// binds to. wxNOT_FOUND on failure.
-	ibMetaID AddAutoAttribute(const wxString& name, const ibTypeDescription& typeDesc);
+	ibMetaID AddAutoAttribute(const ibString& name, const ibTypeDescription& typeDesc);
 
 	// Command-friendly split of AddAttribute (lets the visual-editor undo stack co-own the exact
 	// entry across undo/redo — the holder is a ref-counted runtime value, held by ibValuePtr like a
@@ -233,11 +234,11 @@ public:
 	//            its own description;
 	//   ATTACH — the form co-owns the holder and module-wires it;
 	//   DETACH — the form drops its ref (undo), unbinding it first; the caller keeps it alive.
-	ibValuePtr<ibFormAttributeValue> MakeAttribute(const wxString& name, const ibClassID& type = 0, const ibValue& value = ibValue());
+	ibValuePtr<ibFormAttributeValue> MakeAttribute(const ibString& name, const ibClassID& type = 0, const ibValue& value = ibValue());
 	ibFormAttributeValue* AttachAttribute(ibValuePtr<ibFormAttributeValue> holder);
 	ibValuePtr<ibFormAttributeValue> DetachAttribute(ibFormAttributeValue* entry);
 
-	ibFormAttributeValue* GetAttribute(const wxString& name) const;
+	ibFormAttributeValue* GetAttribute(const ibString& name) const;
 	ibFormAttributeValue* GetAttribute(unsigned int idx) const;
 	// Path-head resolve: a binding stores the attribute's id at path[0].
 	ibFormAttributeValue* FindAttributeById(const ibMetaID& id) const;
@@ -246,7 +247,7 @@ public:
 	// Make entry the SOLE main attribute (sets its flag, clears it on all others).
 	void SetMainAttribute(ibFormAttributeValue* entry);
 
-	void DeleteAttribute(const wxString& name);
+	void DeleteAttribute(const ibString& name);
 	void DeleteAttribute(unsigned int idx);
 	// Bind `entry` into the form module: its value cell as a LOCAL named <attrName>, and —
 	// when it is the MAIN — the exported DataSource too. Self-managed by the attribute's
@@ -258,11 +259,11 @@ public:
 	void DropAttributeBinds(ibFormAttributeValue* entry);
 
 	// Name uniqueness among the form's attributes (optionally ignoring one entry — for rename).
-	bool IsAttributeNameUnique(const wxString& name, const ibFormAttributeValue* except = nullptr) const;
+	bool IsAttributeNameUnique(const ibString& name, const ibFormAttributeValue* except = nullptr) const;
 	// `base` made unique by appending a counter when it collides.
-	wxString MakeUniqueAttributeName(const wxString& base = wxT("Attribute")) const;
+	ibString MakeUniqueAttributeName(const ibString& base = ibT("Attribute")) const;
 	// Rename `entry` to `newName`, re-binding its module variable. False if empty / not unique.
-	bool RenameAttribute(ibFormAttributeValue* entry, const wxString& newName);
+	bool RenameAttribute(ibFormAttributeValue* entry, const ibString& newName);
 	// Paste a clipboard-deserialized attribute node as a fresh NON-main entry (unique name + id,
 	// wired into the module). Returns the new entry, or nullptr on failure.
 	ibFormAttributeValue* PasteAttribute(const ibDataNode& node);
@@ -271,9 +272,9 @@ public:
 	// (Name/Caption/Action/Picture) the inspector edits, held by ibValuePtr, serialized WITH the form data. A
 	// projection binds to a form command by its ID (a normal 1-hop command path, rename-stable) and runs its Action
 	// (a form-runtime procedure) live; nothing to do with metaobjects.
-	ibFormCommandValue* AddFormCommand(const wxString& name, const wxString& procedure = wxEmptyString);
+	ibFormCommandValue* AddFormCommand(const ibString& name, const ibString& procedure = ibEmptyString);
 	const std::vector<ibValuePtr<ibFormCommandValue>>& GetFormCommands() const { return m_formCommands; }
-	ibFormCommandValue* GetFormCommand(const wxString& name) const;
+	ibFormCommandValue* GetFormCommand(const ibString& name) const;
 	ibFormCommandValue* FindFormCommandById(const ibMetaID& id) const;
 
 	// ibBackendCommandSender — the form is the command SOURCE / entry hop: resolve an id to a command-capable
@@ -282,10 +283,10 @@ public:
 	// ResolveCommandPath on the form; each further hop self-describes, exactly as a source path does.
 	virtual bool GetCommandByHop(const ibCommandHop& hop, ibValue& out) override;
 
-	void DeleteFormCommand(const wxString& name);
-	bool RenameFormCommand(ibFormCommandValue* entry, const wxString& newName);
-	wxString MakeUniqueFormCommandName(const wxString& base = wxT("Command")) const;
-	bool IsFormCommandNameUnique(const wxString& name, const ibFormCommandValue* except = nullptr) const;
+	void DeleteFormCommand(const ibString& name);
+	bool RenameFormCommand(ibFormCommandValue* entry, const ibString& newName);
+	ibString MakeUniqueFormCommandName(const ibString& base = ibT("Command")) const;
+	bool IsFormCommandNameUnique(const ibString& name, const ibFormCommandValue* except = nullptr) const;
 	ibMetaID NextFormCommandId() const;
 	ibFormCommandValue* PasteFormCommand(const ibDataNode& node);
 	bool ReadFormCommands(const ibDataNode& node);
@@ -326,7 +327,7 @@ public:
 	const ibValueMetaObjectGenericData* GetMetaObject() const;
 
 	// get control caption
-	virtual wxString GetControlTitle() const;
+	virtual ibString GetControlTitle() const;
 
 	ibValue GetCreatedValue() const { return m_createdValue; }
 
@@ -424,7 +425,7 @@ public:
 
 public:
 
-	ibValueFrame* CreateControl(const wxString& classControl, ibValueFrame* control = nullptr);
+	ibValueFrame* CreateControl(const ibString& classControl, ibValueFrame* control = nullptr);
 	void RemoveControl(ibValueFrame* control);
 
 	// All controls owned by this form, derived by walking the control hierarchy
@@ -435,8 +436,8 @@ public:
 
 public:
 
-	virtual bool LoadForm(const wxMemoryBuffer& data);
-	virtual bool SaveForm(wxMemoryBuffer &data) const;
+	virtual bool LoadForm(const ibMemoryBuffer& data);
+	virtual bool SaveForm(ibMemoryBuffer &data) const;
 
 	//notify
 	virtual void NotifyCreate(const ibValue& vCreated);
@@ -480,8 +481,8 @@ public:
 	virtual bool IsCloseOnOwnerClose() const { return m_closeOnOwnerClose; }
 
 	//timers
-	void AttachIdleHandler(const wxString& procedureName, int interval, bool single);
-	void DetachIdleHandler(const wxString& procedureName);
+	void AttachIdleHandler(const ibString& procedureName, int interval, bool single);
+	void DetachIdleHandler(const ibString& procedureName);
 
 	// THE ATTACHED PROCEDURES THAT ARE DUE, run now — on the form's session, which is where it is called (the
 	// client's tick hands it to the session: ibClient). A once-only handler goes after its run.
@@ -500,7 +501,7 @@ public:
 	// the client was drawn from, so a client cannot do what it was not offered. Focus is the form's own: the
 	// control becomes the active one (the row a command acts on is the active table's). Every other event is
 	// the control's (ibValueFrame::OnClientEvent).
-	bool DispatchEvent(const ibFormID& controlId, ibProtocolEvent event, const ibDataNode& args);
+	bool DispatchEvent(const ibFormID& controlId, ibProtocol::ibEvent::ibKind event, const ibDataNode& args);
 
 	//actionData
 	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
@@ -519,8 +520,8 @@ public:
 	bool ShowForm(ibDocument* docParent, bool createContext = true);
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -589,25 +590,25 @@ private:
 		bool                                  single;
 		std::chrono::steady_clock::time_point due;
 	};
-	std::map<wxString, ibIdleHandler> m_idleHandlerArray;
+	std::map<ibString, ibIdleHandler> m_idleHandlerArray;
 
 	ibValuePtr<ibValueFormCollectionControl> m_formCollectionControl;
 
-	ibPropertyCategory* m_categoryFrame = ibPropertyObject::CreatePropertyCategory(wxT("Frame"), _("Frame"));
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryFrame, wxT("Title"), _("Title"),
+	ibPropertyCategory* m_categoryFrame = ibPropertyObject::CreatePropertyCategory(ibT("Frame"), _("Frame"));
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryFrame, ibT("Title"), _("Title"),
 		_("The form window's title. Empty: the synonym of the object the form shows (or of the form itself) is used. Can be written per language and changed from code while the form is open."),
-		wxT(""));
-	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, wxT("ForegroundColour"), _("Foreground"), _("The form's text colour, inherited by controls that have no colour of their own. Default: the system colour."), wxDefaultStypeFGColour);
-	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, wxT("BackgroundColour"), _("Background"), _("The form's background colour. Default: the system colour, which follows the user's theme."), wxDefaultStypeBGColour);
-	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryFrame, wxT("Enabled"), _("Enabled"), _("Whether the user can interact with the form. Off: every control on it is greyed out and takes no input - a view-only form."), true);
-	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(wxT("Sizer"), _("Sizer"));
-	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"),
+		ibT(""));
+	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, ibT("ForegroundColour"), _("Foreground"), _("The form's text colour, inherited by controls that have no colour of their own. Default: the system colour."), ibDefaultStyleFGColour);
+	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, ibT("BackgroundColour"), _("Background"), _("The form's background colour. Default: the system colour, which follows the user's theme."), ibDefaultStyleBGColour);
+	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryFrame, ibT("Enabled"), _("Enabled"), _("Whether the user can interact with the form. Off: every control on it is greyed out and takes no input - a view-only form."), true);
+	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(ibT("Sizer"), _("Sizer"));
+	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),
 		_("How the form lays out its top-level controls: vertically (the default, one under another) or horizontally (side by side). Groups inside the form have their own orientation."),
 		wxVERTICAL);
 
 	// Soft-lock badge - user name of the session that holds the lock.
 	// Empty when the form is editable; set on form-open conflict.
-	wxString m_lockBadgeHolder;
+	ibString m_lockBadgeHolder;
 
 	friend class ibValueControl;
 	friend class ibValueFormCollectionControl;

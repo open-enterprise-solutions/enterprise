@@ -2,15 +2,15 @@
 
 #include "backend/metaData.h"
 
-wxString ibVariantDataCalcSchedule::MakeString() const
+ibString ibVariantCalcSchedule::GetString() const
 {
 	if (!m_scheduleDesc.IsOk() || m_ownerProperty == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	const ibMetaData* metaData = m_ownerProperty->GetMetaData();
 	if (metaData == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	const ibValueMetaObject* schedule = metaData->FindAnyObjectByFilter(m_scheduleDesc.GetRegister());
-	return schedule != nullptr ? schedule->GetName() : wxString();
+	return schedule != nullptr ? schedule->GetName() : ibString();
 }

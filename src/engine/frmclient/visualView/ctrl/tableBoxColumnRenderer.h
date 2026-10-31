@@ -10,20 +10,11 @@
 
 class ibValueModelTableBoxColumn;
 
-// THE VALUE A CELL HOLDS — the engine's ibVariantDataValue (backend/tabularModel.h): for the reader that shows it.
-class ibVariantDataValue :
-	public wxVariantData {
-public:
-	virtual const ibValue& GetValue() const = 0;
-protected:
-	ibVariantDataValue() : wxVariantData() {}
-};
-
 // ----------------------------------------------------------------------------
 // ibDataViewValueRenderer
 // ----------------------------------------------------------------------------
 
-// THE DESKTOP'S VALUE CELL (frontend/visualView/ctrl/tableBoxColumnRenderer.h) as the client's settings windows draw
+// THE VALUE CELL as the client's settings windows draw
 // theirs: a value's text, a flag as a tick, edited through the text editor. The desktop's also served a table's column,
 // asking it for its format and its editor's buttons and refreshing its form; a settings window hands it no column (the
 // client's table draws its own cells, tableBox.cpp), so what was asked of the column is not here.
@@ -51,8 +42,6 @@ public:
 		: ibDataViewCustomRenderer(wxT("string"), wxDATAVIEW_CELL_EDITABLE, wxALIGN_LEFT)
 	{
 	}
-
-	virtual bool IsCompatibleVariantType(const wxString& variantType) const { return true; }
 
 	virtual bool Render(wxRect rect, wxDC* dc, int state) override
 	{
@@ -87,7 +76,7 @@ public:
 	virtual wxSize GetSize() const override {
 		if (m_valueFlag.has_value())
 			return wxRendererNative::Get().GetCheckMarkSize(GetView());
-		if (!m_valueVariant.IsNull()) {
+		if (m_value.GetType() != ibValueTypes::TYPE_EMPTY) {
 			return GetTextExtent(m_valueText);
 		}
 		else {
@@ -96,41 +85,28 @@ public:
 		}
 	}
 
-	virtual bool SetValue(const wxVariant& value) override {
+	virtual bool SetValue(const ibVariant& value) override {
 
-		m_valueVariant = value;
+		m_value = value;
 		m_valueText.clear();
 		m_valueFlag.reset();
 
-		if (value.IsNull()) {
+		if (value.GetType() == ibValueTypes::TYPE_EMPTY) {
 			SetAlignment(wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
 			return true;
 		}
 
-		// A CELL'S OWN VALUE or a text — the desktop's: a number to the right, a flag as a tick, the rest as it reads.
-		const ibValue* cell = GetCellValue(value);
-		if (cell == nullptr) {
-			SetAlignment(wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
-			m_valueText = value.MakeString();
-			return true;
-		}
-
-		SetAlignment((cell->GetType() == ibValueTypes::TYPE_NUMBER ? wxALIGN_RIGHT : wxALIGN_LEFT) | wxALIGN_CENTRE_VERTICAL);
-		m_valueText = cell->GetString();
-		if (cell->GetType() == ibValueTypes::TYPE_BOOLEAN)
-			m_valueFlag = cell->GetBoolean();
+		// THE CELL'S OWN VALUE — the desktop's: a number to the right, a flag as a tick, the rest as it reads.
+		SetAlignment((value.GetType() == ibValueTypes::TYPE_NUMBER ? wxALIGN_RIGHT : wxALIGN_LEFT) | wxALIGN_CENTRE_VERTICAL);
+		m_valueText = value.GetString();
+		if (value.GetType() == ibValueTypes::TYPE_BOOLEAN)
+			m_valueFlag = value.GetBoolean();
 		return true;
 	}
 
-	virtual bool GetValue(wxVariant& WXUNUSED(value)) const override
+	virtual bool GetValue(ibVariant& WXUNUSED(value)) const override
 	{
 		return true;
-	}
-
-	static const ibValue* GetCellValue(const wxVariant& value) {
-		if (value.GetType() != wxT("value"))
-			return nullptr;
-		return &static_cast<const ibVariantDataValue*>(value.GetData())->GetValue();
 	}
 
 #if wxUSE_ACCESSIBILITY
@@ -143,12 +119,12 @@ public:
 
 	virtual wxWindow* CreateEditorCtrl(wxWindow* parent,
 		wxRect labelRect,
-		const wxVariant& value) override;
-	virtual bool GetValueFromEditorCtrl(wxWindow* ctrl, wxVariant& value) override;
+		const ibVariant& value) override;
+	virtual bool GetValueFromEditorCtrl(wxWindow* ctrl, ibVariant& value) override;
 
 private:
 
-	wxVariant m_valueVariant;
+	ibVariant   m_value;
 	wxString  m_valueText;
 	std::optional<bool> m_valueFlag;
 };

@@ -7386,7 +7386,7 @@ void ibGrid::DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGr
 			ibGridCellCoords cell(row + cell_rows, col + cell_cols);
 			const wxLongLong_t key = keyOf(cell);
 
-			if (exposed.count(key) == 0 && queued.insert(key).second)
+			if (!exposed.contains(key) && queued.insert(key).second)
 				redrawCells.Add(cell);
 
 			// don't bother drawing this cell

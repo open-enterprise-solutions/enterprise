@@ -15,7 +15,7 @@
 
 #include "valueArray.h"
 #include "backend/compiler/value.h"
-#include "backend/job/jobSchedule.h"
+#include "core/job/jobSchedule.h"
 
 class ibMetaData;
 
@@ -180,7 +180,7 @@ class BACKEND_API ibValuePredefinedJobs : public ibValueArray {
 		// Keyed by the metaobject's GUID, never by its name: the guid is the identity that
 		// survives a rename, an unload / reload and a copy onto another base, while a row keyed by
 		// the old name is an orphan that still says "switched off" while the job runs.
-		ibValueJobRow(const ibGuid& jobKey, const wxString& jobName);
+		ibValueJobRow(const ibGuid& jobKey, const ibString& jobName);
 		virtual ~ibValueJobRow() {}
 
 		bool ReadSettings();
@@ -196,11 +196,11 @@ class BACKEND_API ibValuePredefinedJobs : public ibValueArray {
 	private:
 
 		ibGuid                   m_jobKey;    // the metaobject GUID — the row is this job, whatever it is called
-		wxString                 m_jobName;   // the display name
+		ibString                 m_jobName;   // the display name
 		bool                     m_active = true;
 		ibJobScheduleDescription m_schedule;
 		ibDateTime               m_lastRun;
-		wxString                 m_computer;
+		ibString                 m_computer;
 	};
 
 	ibValuePredefinedJobs() : ibValueArray() {}
@@ -209,7 +209,7 @@ class BACKEND_API ibValuePredefinedJobs : public ibValueArray {
 	// in the caller, so "what counts as a predefined job" is answered once.
 	explicit ibValuePredefinedJobs(ibMetaData* metaData);
 
-	virtual wxString GetClassName() const { return wxT("PredefinedJobs"); }
+	virtual ibString GetClassName() const { return ibT("PredefinedJobs"); }
 
 	// Its own id — the array it derives from answers with the array's.
 	virtual ibClassID GetClassType() const override { return g_valuePredefinedJobsCLSID; }

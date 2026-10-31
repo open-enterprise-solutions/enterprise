@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 #include "core/fnumber.h"
+#include "core/fstring.h"   // ibString — what FromString reads
 
 #include <climits>
 #include <sstream>
@@ -39,7 +40,7 @@ TEST(NumberLayout, ZeroBitsAreZero) {
 // ===========================================================================
 
 TEST(NumberShared, WriteToACopyLeavesTheOriginal) {
-    const ibNumber original(wxString(wxT("765.3456754567765443343")));   // 22 digits → heap
+    const ibNumber original(ibString(wxT("765.3456754567765443343")));   // 22 digits → heap
     ibNumber copy(original);
     copy += ibNumber(1);
     EXPECT_EQ(original.ToString(), wxT("765.3456754567765443343"));
@@ -52,7 +53,7 @@ TEST(NumberShared, WriteToACopyLeavesTheOriginal) {
 }
 
 TEST(NumberShared, ItselfOnBothSides) {
-    ibNumber n(wxString(wxT("765.3456754567765443343")));
+    ibNumber n(ibString(wxT("765.3456754567765443343")));
     n = n;
     n += n;
     EXPECT_EQ(n.ToString(), wxT("1530.6913509135530886686"));
@@ -125,44 +126,44 @@ TEST(NumberParser, EmptyStringFails) {
 
 TEST(NumberParser, MinusOnlyFails) {
     ibNumber n;
-    EXPECT_FALSE(n.FromString(wxString(wxT("-"))));
+    EXPECT_FALSE(n.FromString(ibString(wxT("-"))));
 }
 
 TEST(NumberParser, DotOnlyFails) {
     ibNumber n;
-    EXPECT_FALSE(n.FromString(wxString(wxT("."))));
+    EXPECT_FALSE(n.FromString(ibString(wxT("."))));
 }
 
 TEST(NumberParser, GarbageFails) {
     ibNumber n;
-    EXPECT_FALSE(n.FromString(wxString(wxT("abc"))));
+    EXPECT_FALSE(n.FromString(ibString(wxT("abc"))));
 }
 
 TEST(NumberParser, PlusPrefixOk) {
     ibNumber n;
-    EXPECT_TRUE(n.FromString(wxString(wxT("+5"))));
+    EXPECT_TRUE(n.FromString(ibString(wxT("+5"))));
     EXPECT_EQ(n, ibNumber(5));
 }
 
 TEST(NumberParser, WhitespaceTolerated) {
     ibNumber n;
-    EXPECT_TRUE(n.FromString(wxString(wxT("  42 "))));
+    EXPECT_TRUE(n.FromString(ibString(wxT("  42 "))));
     EXPECT_EQ(n, ibNumber(42));
 }
 
 TEST(NumberParser, ScientificPositive) {
-    ibNumber a(wxString(wxT("1.5e2")));
+    ibNumber a(ibString(wxT("1.5e2")));
     EXPECT_EQ(a, ibNumber(150));
 }
 
 TEST(NumberParser, ScientificNegativeExp) {
-    ibNumber b(wxString(wxT("1.5e-2")));
-    EXPECT_EQ(b, ibNumber(wxString(wxT("0.015"))));
+    ibNumber b(ibString(wxT("1.5e-2")));
+    EXPECT_EQ(b, ibNumber(ibString(wxT("0.015"))));
 }
 
 TEST(NumberParser, GarbageTailStopsAtDigits) {
     ibNumber n;
-    EXPECT_TRUE(n.FromString(wxString(wxT("12x"))));
+    EXPECT_TRUE(n.FromString(ibString(wxT("12x"))));
     EXPECT_EQ(n, ibNumber(12));
 }
 
@@ -175,27 +176,27 @@ TEST(NumberToString, Zero) {
 }
 
 TEST(NumberToString, SmallFraction) {
-    EXPECT_EQ(ibNumber(wxString(wxT("0.01"))).ToString(), wxT("0.01"));
+    EXPECT_EQ(ibNumber(ibString(wxT("0.01"))).ToString(), wxT("0.01"));
 }
 
 TEST(NumberToString, NegativeFraction) {
-    EXPECT_EQ(ibNumber(wxString(wxT("-0.0001"))).ToString(), wxT("-0.0001"));
+    EXPECT_EQ(ibNumber(ibString(wxT("-0.0001"))).ToString(), wxT("-0.0001"));
 }
 
 TEST(NumberToString, TenToEighteen) {
-    ibNumber n(wxString(wxT("1000000000000000000")));
+    ibNumber n(ibString(wxT("1000000000000000000")));
     EXPECT_EQ(n.ToString(), wxT("1000000000000000000"));
 }
 
 TEST(NumberToString, HeapTier22Digits) {
-    const wxString s = wxT("765.3456754567765443343");
+    const ibString s = wxT("765.3456754567765443343");
     ibNumber n(s);
     EXPECT_TRUE(n.IsHeap());
     EXPECT_EQ(n.ToString(), s);
 }
 
 TEST(NumberToString, TwoHundredDigitsRoundTrip) {
-    wxString s; s.reserve(202);
+    ibString s; s.reserve(202);
     for (int i = 0; i < 100; ++i) s += wxChar(wxT('1') + (i % 9));
     s += wxT('.');
     for (int i = 0; i < 100; ++i) s += wxChar(wxT('0') + ((i + 3) % 10));
@@ -205,13 +206,13 @@ TEST(NumberToString, TwoHundredDigitsRoundTrip) {
 }
 
 TEST(NumberToString, NegZeroCanonical) {
-    ibNumber n(wxString(wxT("-0")));
+    ibNumber n(ibString(wxT("-0")));
     EXPECT_EQ(n.ToString(), wxT("0"));
     EXPECT_FALSE(n.IsSign());
 }
 
 TEST(NumberToString, LeadingZerosDropped) {
-    ibNumber n(wxString(wxT("00123")));
+    ibNumber n(ibString(wxT("00123")));
     EXPECT_EQ(n.ToString(), wxT("123"));
 }
 
@@ -220,9 +221,9 @@ TEST(NumberToString, LeadingZerosDropped) {
 // ===========================================================================
 
 TEST(NumberArith, ExactDecimalAdd) {
-    ibNumber a(wxString(wxT("0.1")));
-    ibNumber b(wxString(wxT("0.2")));
-    EXPECT_EQ(a + b, ibNumber(wxString(wxT("0.3"))));
+    ibNumber a(ibString(wxT("0.1")));
+    ibNumber b(ibString(wxT("0.2")));
+    EXPECT_EQ(a + b, ibNumber(ibString(wxT("0.3"))));
 }
 
 TEST(NumberArith, ZeroAdd) {
@@ -240,23 +241,23 @@ TEST(NumberArith, MulSignRules) {
 
 TEST(NumberArith, CarryAcrossLimb) {
     // 2^32-1 + 1 = 2^32 — exercises carry from limb 0 into limb 1
-    ibNumber a(wxString(wxT("4294967295")));
-    EXPECT_EQ(a + ibNumber(1), ibNumber(wxString(wxT("4294967296"))));
+    ibNumber a(ibString(wxT("4294967295")));
+    EXPECT_EQ(a + ibNumber(1), ibNumber(ibString(wxT("4294967296"))));
 }
 
 TEST(NumberArith, MultiLimbAdd) {
     // 2^64 + 2^64 = 2 * 2^64 — multi-limb carry
-    ibNumber a(wxString(wxT("18446744073709551616")));
-    EXPECT_EQ(a + a, ibNumber(wxString(wxT("36893488147419103232"))));
+    ibNumber a(ibString(wxT("18446744073709551616")));
+    EXPECT_EQ(a + a, ibNumber(ibString(wxT("36893488147419103232"))));
 }
 
 TEST(NumberArith, BigSelfSubIsZero) {
-    ibNumber a(wxString(wxT("123456789012345")));
+    ibNumber a(ibString(wxT("123456789012345")));
     EXPECT_TRUE((a - a).IsZero());
 }
 
 TEST(NumberArith, ExactProduct) {
-    EXPECT_EQ(ibNumber(wxString(wxT("12.5"))) * ibNumber(8), ibNumber(100));
+    EXPECT_EQ(ibNumber(ibString(wxT("12.5"))) * ibNumber(8), ibNumber(100));
 }
 
 TEST(NumberArith, OneThirdHasManyDigits) {
@@ -271,44 +272,44 @@ TEST(NumberArith, OneThirdHasManyDigits) {
 TEST(NumberDivision, IntegerOperandsGetTheFixedRoom) {
     // 0 fractional digits in -> exactly kDivExtraDigits out.
     const ibNumber c = ibNumber(1) / ibNumber(3);
-    const wxString text = c.ToString();
+    const ibString text = c.ToString();
     ASSERT_TRUE(text.StartsWith(wxT("0.")));
     EXPECT_EQ(text.length() - 2, static_cast<size_t>(ibNumber::kDivExtraDigits));
 }
 
 TEST(NumberDivision, RoomIsAddedToTheDividendsOwnLength) {
     // A dividend carrying 4 fractional digits keeps them and gains the room on top.
-    const ibNumber c = ibNumber(wxString(wxT("0.1234"))) / ibNumber(3);
-    const wxString text = c.ToString();
+    const ibNumber c = ibNumber(ibString(wxT("0.1234"))) / ibNumber(3);
+    const ibString text = c.ToString();
     ASSERT_TRUE(text.StartsWith(wxT("0.")));
     EXPECT_EQ(text.length() - 2, static_cast<size_t>(4 + ibNumber::kDivExtraDigits));
 }
 
 TEST(NumberDivision, LastDigitIsRoundedNotTruncated) {
     // 2/3 = 0.666…67, never 0.666…66 — truncation biases every proportion downwards.
-    const wxString text = (ibNumber(2) / ibNumber(3)).ToString();
+    const ibString text = (ibNumber(2) / ibNumber(3)).ToString();
     EXPECT_TRUE(text.EndsWith(wxT("7")));
 }
 
 TEST(NumberDivision, ExactQuotientKeepsNoTrailingZeros) {
     // 1/8 is 0.125 — not 0.125 followed by however many zeros the rule asked for. The next division
     // measures ITS room from this length, so the zeros would compound.
-    EXPECT_EQ((ibNumber(1) / ibNumber(8)).ToString(), wxString(wxT("0.125")));
+    EXPECT_EQ((ibNumber(1) / ibNumber(8)).ToString(), ibString(wxT("0.125")));
 }
 
 TEST(NumberDivision, EqualOperandsWrittenDifferentlyDivideEqually) {
     // 0.10 and 0.1000000 are one number in two spellings: measured on the written form they would
     // produce quotients of different length, which are then not equal to each other.
-    const ibNumber a = ibNumber(wxString(wxT("0.10")))      / ibNumber(3);
-    const ibNumber b = ibNumber(wxString(wxT("0.1000000"))) / ibNumber(3);
+    const ibNumber a = ibNumber(ibString(wxT("0.10")))      / ibNumber(3);
+    const ibNumber b = ibNumber(ibString(wxT("0.1000000"))) / ibNumber(3);
     EXPECT_EQ(a, b);
     EXPECT_EQ(a.ToString(), b.ToString());
 }
 
 TEST(NumberDivision, DivisorLengthDoesNotChangeTheQuotientsLength) {
     // The room is the DIVIDEND's, so a long divisor must not shorten (or lengthen) the answer.
-    const wxString viaShort = (ibNumber(1) / ibNumber(wxString(wxT("3")))).ToString();
-    const wxString viaLong  = (ibNumber(1) / ibNumber(wxString(wxT("3.0000000000")))).ToString();
+    const ibString viaShort = (ibNumber(1) / ibNumber(ibString(wxT("3")))).ToString();
+    const ibString viaLong  = (ibNumber(1) / ibNumber(ibString(wxT("3.0000000000")))).ToString();
     EXPECT_EQ(viaShort.length(), viaLong.length());
 }
 
@@ -318,9 +319,9 @@ TEST(NumberDivision, ChainStopsAtTheCeiling) {
     ibNumber v(1);
     for (int i = 0; i < 40; ++i)
         v = v / ibNumber(3);
-    const wxString text = v.ToString();
+    const ibString text = v.ToString();
     const size_t point = text.Find(wxT('.'));
-    ASSERT_NE(point, wxString::npos);
+    ASSERT_NE(point, ibString::npos);
     EXPECT_LE(text.length() - point - 1, static_cast<size_t>(ibNumber::kMaxDivFracDigits));
 }
 
@@ -336,10 +337,10 @@ TEST(NumberDivision, TheImmediateRoadAnswersAsTheGeneralOne) {
         { wxT("5000"), wxT("3") },             { wxT("0.000001"), wxT("7") },     { wxT("99.99"), wxT("33.33") },
         { wxT("-70368744177663"), wxT("-0.0000007") },                            { wxT("1"), wxT("0.0000000001234") },
     };
-    const wxString zeros = wxT("000000000000000000000000");   // 24: the mantissa leaves the immediate tier
+    const ibString zeros = wxT("000000000000000000000000");   // 24: the mantissa leaves the immediate tier
     for (const auto& c : cases) {
-        const wxString written(c[0]);
-        const ibNumber a(written), b{ wxString(c[1]) };
+        const ibString written(c[0]);
+        const ibNumber a(written), b{ ibString(c[1]) };
         const ibNumber aOnTheHeap(written.Contains(wxT(".")) ? written + zeros : written + wxT(".") + zeros);
         ASSERT_EQ(a, aOnTheHeap);
         const ibNumber viaStack = a / b;
@@ -359,10 +360,10 @@ TEST(NumberDivision, AQuotientLimbGuessedOneTooLargeIsCorrected) {
     // 2^96 / (2^64 + 1): the quotient limb estimated from the top two limbs is one too large, and the
     // long division has to add the divisor back — its rare branch, found by running the division
     // against the base-2 one it replaced.
-    const ibNumber a(wxString(wxT("79228162514264337593543950336")));
-    const ibNumber b(wxString(wxT("18446744073709551617")));
-    EXPECT_EQ(a % b, ibNumber(wxString(wxT("18446744069414584321"))));
-    EXPECT_EQ((a / b).Trunc(), ibNumber(wxString(wxT("4294967295"))));
+    const ibNumber a(ibString(wxT("79228162514264337593543950336")));
+    const ibNumber b(ibString(wxT("18446744073709551617")));
+    EXPECT_EQ(a % b, ibNumber(ibString(wxT("18446744069414584321"))));
+    EXPECT_EQ((a / b).Trunc(), ibNumber(ibString(wxT("4294967295"))));
     EXPECT_EQ((a / b).Trunc() * b + (a % b), a);
 }
 
@@ -394,26 +395,26 @@ TEST(NumberArith, PostIncrement) {
 
 TEST(NumberCompare, SmallVsBigPositive) {
     ibNumber tiny(5);
-    ibNumber bigPos(wxString(wxT("123456789012345678901234567890")));
+    ibNumber bigPos(ibString(wxT("123456789012345678901234567890")));
     EXPECT_LT(tiny, bigPos);
     EXPECT_GT(bigPos, tiny);
 }
 
 TEST(NumberCompare, BigNegativeOrdering) {
     ibNumber tiny(5);
-    ibNumber bigPos(wxString(wxT("123456789012345678901234567890")));
-    ibNumber bigNeg(wxString(wxT("-123456789012345678901234567890")));
+    ibNumber bigPos(ibString(wxT("123456789012345678901234567890")));
+    ibNumber bigNeg(ibString(wxT("-123456789012345678901234567890")));
     EXPECT_LT(bigNeg, tiny);
     EXPECT_LT(bigNeg, bigPos);
     EXPECT_EQ(-bigPos, bigNeg);
 }
 
 TEST(NumberCompare, ExpNormalize) {
-    EXPECT_EQ(ibNumber(1), ibNumber(wxString(wxT("1.0"))));
+    EXPECT_EQ(ibNumber(1), ibNumber(ibString(wxT("1.0"))));
 }
 
 TEST(NumberCompare, ZeroEqualsNegZero) {
-    EXPECT_EQ(ibNumber(0), ibNumber(wxString(wxT("-0"))));
+    EXPECT_EQ(ibNumber(0), ibNumber(ibString(wxT("-0"))));
 }
 
 // ===========================================================================
@@ -421,30 +422,30 @@ TEST(NumberCompare, ZeroEqualsNegZero) {
 // ===========================================================================
 
 TEST(NumberRound, HalfAwayFromZero) {
-    EXPECT_EQ(ibNumber(wxString(wxT("1.5"))).Round(),  ibNumber(2));
-    EXPECT_EQ(ibNumber(wxString(wxT("2.5"))).Round(),  ibNumber(3));
-    EXPECT_EQ(ibNumber(wxString(wxT("-1.5"))).Round(), ibNumber(-2));
+    EXPECT_EQ(ibNumber(ibString(wxT("1.5"))).Round(),  ibNumber(2));
+    EXPECT_EQ(ibNumber(ibString(wxT("2.5"))).Round(),  ibNumber(3));
+    EXPECT_EQ(ibNumber(ibString(wxT("-1.5"))).Round(), ibNumber(-2));
 }
 
 TEST(NumberRound, BelowHalf) {
-    EXPECT_TRUE(ibNumber(wxString(wxT("0.4"))).Round().IsZero());
+    EXPECT_TRUE(ibNumber(ibString(wxT("0.4"))).Round().IsZero());
 }
 
 TEST(NumberRound, AboveHalf) {
-    EXPECT_EQ(ibNumber(wxString(wxT("0.6"))).Round(), ibNumber(1));
+    EXPECT_EQ(ibNumber(ibString(wxT("0.6"))).Round(), ibNumber(1));
 }
 
 TEST(NumberRound, RoundToNDigits) {
-    EXPECT_EQ(ibNumber(wxString(wxT("1.234"))).Round(2),
-              ibNumber(wxString(wxT("1.23"))));
-    EXPECT_EQ(ibNumber(wxString(wxT("1.235"))).Round(2),
-              ibNumber(wxString(wxT("1.24"))));
+    EXPECT_EQ(ibNumber(ibString(wxT("1.234"))).Round(2),
+              ibNumber(ibString(wxT("1.23"))));
+    EXPECT_EQ(ibNumber(ibString(wxT("1.235"))).Round(2),
+              ibNumber(ibString(wxT("1.24"))));
 }
 
 TEST(NumberRound, Trunc) {
-    EXPECT_EQ(ibNumber(wxString(wxT("1.99"))).Trunc(),  ibNumber(1));
-    EXPECT_EQ(ibNumber(wxString(wxT("-1.99"))).Trunc(), ibNumber(-1));
-    EXPECT_TRUE(ibNumber(wxString(wxT("0.5"))).Trunc().IsZero());
+    EXPECT_EQ(ibNumber(ibString(wxT("1.99"))).Trunc(),  ibNumber(1));
+    EXPECT_EQ(ibNumber(ibString(wxT("-1.99"))).Trunc(), ibNumber(-1));
+    EXPECT_TRUE(ibNumber(ibString(wxT("0.5"))).Trunc().IsZero());
 }
 
 // ===========================================================================
@@ -454,7 +455,7 @@ TEST(NumberRound, Trunc) {
 TEST(NumberConv, ToInt) {
     EXPECT_EQ(ibNumber(456).ToInt(),  456);
     EXPECT_EQ(ibNumber(-456).ToInt(), -456);
-    EXPECT_EQ(ibNumber(wxString(wxT("1.99"))).ToInt(), 1); // truncated
+    EXPECT_EQ(ibNumber(ibString(wxT("1.99"))).ToInt(), 1); // truncated
     EXPECT_EQ(ibNumber(static_cast<int64_t>(INT64_MAX)).ToInt(), INT_MAX);
 }
 
@@ -468,17 +469,17 @@ TEST(NumberConv, ToInt64Out) {
     EXPECT_EQ(ibNumber(static_cast<int64_t>(INT64_MAX)).ToInt(out), 0);
     EXPECT_EQ(out, INT64_MAX);
 
-    EXPECT_NE(ibNumber(wxString(wxT("99999999999999999999"))).ToInt(out), 0);
+    EXPECT_NE(ibNumber(ibString(wxT("99999999999999999999"))).ToInt(out), 0);
 }
 
 TEST(NumberConv, ToDouble) {
-    double d = ibNumber(wxString(wxT("3.14"))).ToDouble();
+    double d = ibNumber(ibString(wxT("3.14"))).ToDouble();
     EXPECT_GT(d, 3.139);
     EXPECT_LT(d, 3.141);
 }
 
 TEST(NumberConv, ToFloat) {
-    EXPECT_EQ(ibNumber(wxString(wxT("2.5"))).ToFloat(), 2.5f);
+    EXPECT_EQ(ibNumber(ibString(wxT("2.5"))).ToFloat(), 2.5f);
 }
 
 // ===========================================================================
@@ -496,12 +497,12 @@ TEST(NumberMath, PowZero) {
 }
 
 TEST(NumberMath, PowNegativeExponent) {
-    EXPECT_EQ(ibNumber(4).Pow(-2), ibNumber(wxString(wxT("0.0625"))));
+    EXPECT_EQ(ibNumber(4).Pow(-2), ibNumber(ibString(wxT("0.0625"))));
 }
 
 TEST(NumberMath, SqrtApproxFour) {
     ibNumber s = ibNumber(16).Sqrt();
-    EXPECT_LT((s - ibNumber(4)).Abs(), ibNumber(wxString(wxT("0.01"))));
+    EXPECT_LT((s - ibNumber(4)).Abs(), ibNumber(ibString(wxT("0.01"))));
 }
 
 // --- High-precision transcendentals -----------------------------------------
@@ -512,13 +513,13 @@ TEST(NumberMath, SqrtApproxFour) {
 
 TEST(NumberMath, SqrtTwoBeyondDouble) {
     ibNumber s = ibNumber(2).Sqrt();
-    ibNumber known(wxString(wxT("1.4142135623730950488")));   // 19 digits after the point
-    EXPECT_LT((s - known).Abs(), ibNumber(wxString(wxT("1e-18"))));
+    ibNumber known(ibString(wxT("1.4142135623730950488")));   // 19 digits after the point
+    EXPECT_LT((s - known).Abs(), ibNumber(ibString(wxT("1e-18"))));
 }
 
 TEST(NumberMath, SqrtSquaredRecoversInput) {
     ibNumber s = ibNumber(2).Sqrt();
-    EXPECT_LT((s * s - ibNumber(2)).Abs(), ibNumber(wxString(wxT("1e-26"))));
+    EXPECT_LT((s * s - ibNumber(2)).Abs(), ibNumber(ibString(wxT("1e-26"))));
 }
 
 TEST(NumberMath, SqrtPerfectSquareExact) {
@@ -528,8 +529,8 @@ TEST(NumberMath, SqrtPerfectSquareExact) {
 
 TEST(NumberMath, ExpOneIsEBeyondDouble) {
     ibNumber e = ibNumber(1).Exp();
-    ibNumber known(wxString(wxT("2.7182818284590452353")));   // e, 19 digits after the point
-    EXPECT_LT((e - known).Abs(), ibNumber(wxString(wxT("1e-18"))));
+    ibNumber known(ibString(wxT("2.7182818284590452353")));   // e, 19 digits after the point
+    EXPECT_LT((e - known).Abs(), ibNumber(ibString(wxT("1e-18"))));
 }
 
 TEST(NumberMath, ExpZeroIsOne) {
@@ -538,8 +539,8 @@ TEST(NumberMath, ExpZeroIsOne) {
 
 TEST(NumberMath, LnTwoBeyondDouble) {
     ibNumber l = ibNumber(2).Ln();
-    ibNumber known(wxString(wxT("0.6931471805599453094")));   // ln 2, 19 digits after the point
-    EXPECT_LT((l - known).Abs(), ibNumber(wxString(wxT("1e-18"))));
+    ibNumber known(ibString(wxT("0.6931471805599453094")));   // ln 2, 19 digits after the point
+    EXPECT_LT((l - known).Abs(), ibNumber(ibString(wxT("1e-18"))));
 }
 
 TEST(NumberMath, LnOneIsZero) {
@@ -552,28 +553,28 @@ TEST(NumberMath, LnNonPositiveGuarded) {
 }
 
 TEST(NumberMath, ExpLnRoundTrip) {           // ln(exp(x)) == x
-    ibNumber x(wxString(wxT("12.345")));
-    EXPECT_LT((x.Exp().Ln() - x).Abs(), ibNumber(wxString(wxT("1e-22"))));
+    ibNumber x(ibString(wxT("12.345")));
+    EXPECT_LT((x.Exp().Ln() - x).Abs(), ibNumber(ibString(wxT("1e-22"))));
 }
 
 TEST(NumberMath, LnExpRoundTrip) {           // exp(ln(x)) == x
-    ibNumber x(wxString(wxT("3.5")));
-    EXPECT_LT((x.Ln().Exp() - x).Abs(), ibNumber(wxString(wxT("1e-22"))));
+    ibNumber x(ibString(wxT("3.5")));
+    EXPECT_LT((x.Ln().Exp() - x).Abs(), ibNumber(ibString(wxT("1e-22"))));
 }
 
 TEST(NumberMath, Log10OfThousandIsThree) {
     EXPECT_LT((ibNumber(1000).Log(ibNumber(10)) - ibNumber(3)).Abs(),
-              ibNumber(wxString(wxT("1e-22"))));
+              ibNumber(ibString(wxT("1e-22"))));
 }
 
 TEST(NumberMath, PowHalfEqualsSqrt) {        // 2^0.5 == sqrt(2)
-    ibNumber p = ibNumber(2).Pow(ibNumber(wxString(wxT("0.5"))));
-    EXPECT_LT((p - ibNumber(2).Sqrt()).Abs(), ibNumber(wxString(wxT("1e-22"))));
+    ibNumber p = ibNumber(2).Pow(ibNumber(ibString(wxT("0.5"))));
+    EXPECT_LT((p - ibNumber(2).Sqrt()).Abs(), ibNumber(ibString(wxT("1e-22"))));
 }
 
 TEST(NumberMath, AbsAndSign) {
-    EXPECT_EQ(ibNumber(wxString(wxT("-7.5"))).Abs(),
-              ibNumber(wxString(wxT("7.5"))));
+    EXPECT_EQ(ibNumber(ibString(wxT("-7.5"))).Abs(),
+              ibNumber(ibString(wxT("7.5"))));
 
     ibNumber b(3);
     b.ChangeSign();
@@ -591,29 +592,29 @@ TEST(NumberMath, AbsAndSign) {
 TEST(NumberBuffer, ZeroEncodesEmpty) {
     // Zero is encoded as an EMPTY buffer (compact zero-encoding, fnumber.cpp
     // GetBuffer) — no 9-byte header; SetBuffer recovers zero from len == 0.
-    wxMemoryBuffer blob = ibNumber().GetBuffer();
+    ibMemoryBuffer blob = ibNumber().GetBuffer();
     EXPECT_EQ(blob.GetDataLen(), 0u);
 }
 
 TEST(NumberBuffer, RoundTripZero) {
-    wxMemoryBuffer blob = ibNumber().GetBuffer();
+    ibMemoryBuffer blob = ibNumber().GetBuffer();
     ibNumber b(7);
     EXPECT_TRUE(b.SetBuffer(blob));
     EXPECT_TRUE(b.IsZero());
 }
 
 TEST(NumberBuffer, RoundTripFractional) {
-    ibNumber a(wxString(wxT("-7654321.0987654321")));
-    wxMemoryBuffer blob = a.GetBuffer();
+    ibNumber a(ibString(wxT("-7654321.0987654321")));
+    ibMemoryBuffer blob = a.GetBuffer();
     ibNumber b;
     EXPECT_TRUE(b.SetBuffer(blob));
     EXPECT_EQ(b, a);
 }
 
 TEST(NumberBuffer, RoundTripFiftyDigits) {
-    const wxString s = wxT("12345678901234567890123456789012345678901234567890");
+    const ibString s = wxT("12345678901234567890123456789012345678901234567890");
     ibNumber a(s);
-    wxMemoryBuffer blob = a.GetBuffer();
+    ibMemoryBuffer blob = a.GetBuffer();
     ibNumber b;
     b.SetBuffer(blob);
     EXPECT_EQ(b, a);
@@ -629,7 +630,7 @@ TEST(NumberBuffer, NullPointerRejected) {
 }
 
 TEST(NumberBuffer, OutParamReuseOverwrites) {
-    wxMemoryBuffer mb;
+    ibMemoryBuffer mb;
     ibNumber(42).GetBuffer(mb);
     const size_t firstLen = mb.GetDataLen();
 
@@ -646,9 +647,9 @@ TEST(NumberBuffer, OutParamReuseOverwrites) {
 // ===========================================================================
 
 namespace {
-    wxString Hex16(const uint8_t buf[16]) {
-        wxString s;
-        for (int i = 15; i >= 0; --i) s += wxString::Format(wxT("%02X"), buf[i]);
+    ibString Hex16(const uint8_t buf[16]) {
+        ibString s;
+        for (int i = 15; i >= 0; --i) s += ibString::Format(wxT("%02X"), buf[i]);
         return s;
     }
 }
@@ -671,7 +672,7 @@ TEST(Number128, MinusOneAllFFBytes) {
 }
 
 TEST(Number128, ThirtyDigitPositiveRoundTrip) {
-    ibNumber a(wxString(wxT("123456789012345678901234567890")));
+    ibNumber a(ibString(wxT("123456789012345678901234567890")));
     uint8_t buf[16];
     a.To128Bytes(buf);
     ibNumber b;
@@ -680,7 +681,7 @@ TEST(Number128, ThirtyDigitPositiveRoundTrip) {
 }
 
 TEST(Number128, ThirtyDigitNegativeRoundTrip) {
-    ibNumber a(wxString(wxT("-123456789012345678901234567890")));
+    ibNumber a(ibString(wxT("-123456789012345678901234567890")));
     uint8_t buf[16];
     a.To128Bytes(buf);
     ibNumber b;
@@ -694,7 +695,7 @@ TEST(Number128, ThirtyDigitNegativeRoundTrip) {
 
 TEST(NumberStream, OstreamFraction) {
     std::stringstream ss;
-    ss << ibNumber(wxString(wxT("3.14")));
+    ss << ibNumber(ibString(wxT("3.14")));
     EXPECT_EQ(ss.str(), "3.14");
 }
 
@@ -707,13 +708,13 @@ TEST(NumberStream, OstreamNegativeInt) {
 // -------------------------------------------------------------------- Format
 
 TEST(NumberFormat, DefaultsMatchBareToString) {
-    ibNumber n(wxString(wxT("12345.678")));
+    ibNumber n(ibString(wxT("12345.678")));
     ibNumber::Format fmt;
     EXPECT_EQ(n.ToString(fmt), n.ToString());
 }
 
 TEST(NumberFormat, FracDigitsRounds) {
-    ibNumber n(wxString(wxT("1.23456")));
+    ibNumber n(ibString(wxT("1.23456")));
     ibNumber::Format fmt; fmt.fracDigits = 2;
     EXPECT_EQ(n.ToString(fmt), wxT("1.23"));
 }
@@ -722,33 +723,33 @@ TEST(NumberFormat, FracDigitsRounds) {
 // up - `Format(1250.5, "NFD=2")` is the help's own example and printed 1250.5.
 TEST(NumberFormat, FracDigitsPadsToAFixedWidth) {
     ibNumber::Format fmt; fmt.fracDigits = 2;
-    EXPECT_EQ(ibNumber(wxString(wxT("1250.5"))).ToString(fmt), wxT("1250.50"));
+    EXPECT_EQ(ibNumber(ibString(wxT("1250.5"))).ToString(fmt), wxT("1250.50"));
     EXPECT_EQ(ibNumber(5).ToString(fmt), wxT("5.00"));
     EXPECT_EQ(ibNumber().ToString(fmt), wxT("0.00"));
-    EXPECT_EQ(ibNumber(wxString(wxT("-0.5"))).ToString(fmt), wxT("-0.50"));
+    EXPECT_EQ(ibNumber(ibString(wxT("-0.5"))).ToString(fmt), wxT("-0.50"));
 }
 
 TEST(NumberFormat, FracDigitsZeroDropsThePoint) {
     ibNumber::Format fmt; fmt.fracDigits = 0;
-    EXPECT_EQ(ibNumber(wxString(wxT("1250.5"))).ToString(fmt), wxT("1251"));
+    EXPECT_EQ(ibNumber(ibString(wxT("1250.5"))).ToString(fmt), wxT("1251"));
 }
 
 // The immediate tier is laid out on the stack (fnumber.cpp) and must round exactly as Round(n) does:
 // half away from zero, a carry that grows the integer part, no sign on a figure that rounded to zero.
 TEST(NumberFormat, TheImmediateTierRoundsLikeRound) {
     ibNumber::Format fmt; fmt.fracDigits = 2;
-    EXPECT_EQ(ibNumber(wxString(wxT("9.995"))).ToString(fmt), wxT("10.00"));
-    EXPECT_EQ(ibNumber(wxString(wxT("-9.995"))).ToString(fmt), wxT("-10.00"));
-    EXPECT_EQ(ibNumber(wxString(wxT("0.005"))).ToString(fmt), wxT("0.01"));
-    EXPECT_EQ(ibNumber(wxString(wxT("-0.004"))).ToString(fmt), wxT("0.00"));
+    EXPECT_EQ(ibNumber(ibString(wxT("9.995"))).ToString(fmt), wxT("10.00"));
+    EXPECT_EQ(ibNumber(ibString(wxT("-9.995"))).ToString(fmt), wxT("-10.00"));
+    EXPECT_EQ(ibNumber(ibString(wxT("0.005"))).ToString(fmt), wxT("0.01"));
+    EXPECT_EQ(ibNumber(ibString(wxT("-0.004"))).ToString(fmt), wxT("0.00"));
 }
 
 // The out-argument form writes the same text into the string it is handed, whatever that held before —
 // the form a column of a report reuses row after row.
 TEST(NumberFormat, TheOutArgumentWritesTheSameText) {
     ibNumber::Format fmt; fmt.fracDigits = 2; fmt.groupSep = wxT(' '); fmt.groupSize = 3;
-    wxString out(wxT("something longer that was there before"));
-    ibNumber(wxString(wxT("1234567.891"))).ToString(fmt, out);
+    ibString out(wxT("something longer that was there before"));
+    ibNumber(ibString(wxT("1234567.891"))).ToString(fmt, out);
     EXPECT_EQ(out, wxT("1 234 567.89"));
     ibNumber(5).ToString(fmt, out);
     EXPECT_EQ(out, wxT("5.00"));
@@ -756,7 +757,7 @@ TEST(NumberFormat, TheOutArgumentWritesTheSameText) {
 
 TEST(NumberFormat, FracDigitsWithGroups) {
     ibNumber::Format fmt; fmt.fracDigits = 2; fmt.groupSep = wxT(' '); fmt.groupSize = 3;
-    EXPECT_EQ(ibNumber(wxString(wxT("1234567.5"))).ToString(fmt), wxT("1 234 567.50"));
+    EXPECT_EQ(ibNumber(ibString(wxT("1234567.5"))).ToString(fmt), wxT("1 234 567.50"));
 }
 
 TEST(NumberFormat, GroupSepThousands) {
@@ -807,13 +808,13 @@ TEST(NumberFormat, PadNegativeSignOutside) {
 TEST(NumberFormat, PadHeapTierBigCounter) {
     // bigger than int64 — printf-route would have overflowed; ibNumber path
     // stays exact.
-    ibNumber n(wxString(wxT("99999999999999999999")));   // 20 digits
+    ibNumber n(ibString(wxT("99999999999999999999")));   // 20 digits
     ibNumber::Format fmt; fmt.minIntDigits = 24;
     EXPECT_EQ(n.ToString(fmt), wxT("000099999999999999999999"));
 }
 
 TEST(NumberFormat, PadCombinedWithFracDigits) {
-    ibNumber n(wxString(wxT("3.14159")));
+    ibNumber n(ibString(wxT("3.14159")));
     ibNumber::Format fmt; fmt.minIntDigits = 4; fmt.fracDigits = 2;
     EXPECT_EQ(n.ToString(fmt), wxT("0003.14"));
 }

@@ -14,21 +14,21 @@
 
 // A cell names itself on the wire as Fetch wrote it — from 1; the sheet, and the handler, count from 0. A
 // click that names no cell is no click.
-bool ibValueGridBox::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibValueGridBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	switch (event) {
-	case ibProtocolEvent::Cell: {
-		const int row = args.GetValue<s32>(wxT("Row")) - 1, col = args.GetValue<s32>(wxT("Col")) - 1;
+	case ibProtocol::ibEvent::ibKind::Cell: {
+		const int row = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Row) - 1, col = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Col) - 1;
 		if (row >= 0 && col >= 0)
 			OnCellLeftClick(row, col);
 		return true;
 	}
-	case ibProtocolEvent::Change: {
+	case ibProtocol::ibEvent::ibKind::Change: {
 		// THE SHEET AS THE PERSON LEFT IT — edited on the client and handed over whole (Change {Sheet}): the sheet on
 		// show from then on, which is the model's own. Its version stays: the client holds that sheet already.
 		ibSpreadsheetDescription sheet;
 		if (!m_gridDocument->GetSpreadsheet().IsEditable()
-			|| !ibSpreadsheetDescriptionMemory::ReadNode(args.GetProperty(wxT("Sheet")), sheet))
+			|| !ibSpreadsheetDescriptionMemory::ReadNode(args.GetProperty(ibProtocol::ibForm::ibSpreadsheet::Sheet), sheet))
 			return false;
 		m_gridDocument->SetSpreadsheetDesc(std::move(sheet));
 		return true;
@@ -70,11 +70,11 @@ void ibValueGridBox::OnCellLeftClick(int row, int col)
 	// nothing a reader can follow — a caption, a blank — and a menu over it would be commands that
 	// do nothing. The click then means nothing. Asked of the sheet ON SHOW: the cell clicked is one
 	// the person was shown.
-	const wxObjectDataPtr<ibBackendSpreadsheetObject> document = m_gridDocument->GetSpreadsheetDocument();
+	const std::shared_ptr<ibSpreadsheetObject> document = m_gridDocument->GetSpreadsheetDocument();
 	if (!document)
 		return;
 
-	wxString detailsParameter;
+	ibString detailsParameter;
 	document->GetCellDetailsParameter(row, col, detailsParameter);
 	if (detailsParameter.IsEmpty())
 		return;
@@ -83,7 +83,7 @@ void ibValueGridBox::OnCellLeftClick(int row, int col)
 	// and nothing to re-compose, so the entry would be a command that cannot mean anything.
 	const bool composed = ResolveComposition() != nullptr;
 
-	enum : s32 { idOpenValue = 1, idShowDetail, idDetailByFirst };
+	enum : std::int32_t { idOpenValue = 1, idShowDetail, idDetailByFirst };
 	std::vector<ibMenuItem> menu;
 	menu.push_back(ibMenuItem{ idOpenValue, _("Open value") });
 	ibMenuItem detail{ idShowDetail, _("Detail...") };
@@ -91,13 +91,13 @@ void ibValueGridBox::OnCellLeftClick(int row, int col)
 	menu.push_back(detail);
 	// …and one entry per field this cell can be broken down by — the submenu answers for itself,
 	// including whether there is anything to offer (gridBoxDetail.cpp).
-	const std::vector<wxString> byPath = AppendDetailByMenu(menu, idDetailByFirst, row, col);
+	const std::vector<ibString> byPath = AppendDetailByMenu(menu, idDetailByFirst, row, col);
 
-	s32 chosen = 0;
+	std::int32_t chosen = 0;
 	if (!ibRequestMenu(menu, chosen))
 		return;   // closed without choosing — the click meant nothing after all
 
-	if (chosen >= idDetailByFirst && chosen - idDetailByFirst < static_cast<s32>(byPath.size())) {
+	if (chosen >= idDetailByFirst && chosen - idDetailByFirst < static_cast<std::int32_t>(byPath.size())) {
 		ShowCellDetail(row, col, byPath[static_cast<size_t>(chosen - idDetailByFirst)]);
 		return;
 	}
@@ -107,9 +107,11 @@ void ibValueGridBox::OnCellLeftClick(int row, int col)
 	// and that value is shown. The document used to have a verb for this, which was the same two
 	// lines with a door in front of them — and the door belonged to the value, not to the sheet.
 	case idOpenValue: {
-		ibValue bound;
-		if (document->GetParameter(detailsParameter, bound))
+		ibVariant held;
+		if (document->GetParameter(detailsParameter, held)) {
+			ibValue bound = ibValue(held);
 			bound.ShowValue();
+		}
 		break;
 	}
 	case idShowDetail:

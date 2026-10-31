@@ -16,7 +16,7 @@
 
 #include <chrono>
 
-ibLogger::ibLogger(const wxString& dir,
+ibLogger::ibLogger(const ibString& dir,
                    std::size_t maxQueue,
                    std::size_t maxBatch,
                    int         maxWaitMs)
@@ -83,18 +83,18 @@ void ibLogger::SweepLoop()
     }
 }
 
-wxLongLong_t ibLogger::NowMillis()
+long long ibLogger::NowMillis()
 {
     return wxDateTime::UNow().GetValue().GetValue();
 }
 
-wxString ibLogger::HostName()
+ibString ibLogger::HostName()
 {
     // NB: do not name the static `s_host` — winsock's <windows.h> chain
     // defines a macro `s_host` that expands to `S_un.S_un_b.s_b2`, which
     // makes any local with that name unparseable. Hit on first compile,
     // bug class is the same as wxWidgets' WX_NO_WIN_LEAN_AND_MEAN trap.
-    static const wxString s_hostName = wxGetHostName();
+    static const ibString s_hostName = wxGetHostName();
     return s_hostName;
 }
 
@@ -113,52 +113,52 @@ void ibLogger::FlushBlocking()
     // right before ~ibLogger, so we don't bother restarting.
 }
 
-void ibLogger::Audit(const wxString& source,
-                     const wxString& event_type,
-                     const wxString& message)
+void ibLogger::Audit(const ibString& source,
+                     const ibString& event_type,
+                     const ibString& message)
 {
     Emit(ibLogLevel::Audit, source, event_type, message, nullptr);
 }
 
-void ibLogger::Audit(const wxString& source,
-                     const wxString& event_type,
-                     const wxString& message,
+void ibLogger::Audit(const ibString& source,
+                     const ibString& event_type,
+                     const ibString& message,
                      const ibValue&  details)
 {
     Emit(ibLogLevel::Audit, source, event_type, message, &details);
 }
 
-void ibLogger::Audit(const wxString& source,
-                     const wxString& event_type,
-                     const wxString& message,
-                     const wxString& refGuid,
+void ibLogger::Audit(const ibString& source,
+                     const ibString& event_type,
+                     const ibString& message,
+                     const ibString& refGuid,
                      int             refMetaId)
 {
     Emit(ibLogLevel::Audit, source, event_type, message,
          /*details=*/nullptr, &refGuid, refMetaId);
 }
 
-void ibLogger::Info(const wxString& source, const wxString& event_type, const wxString& message)
+void ibLogger::Info(const ibString& source, const ibString& event_type, const ibString& message)
 {
     Emit(ibLogLevel::Info, source, event_type, message, nullptr);
 }
 
-void ibLogger::Warn(const wxString& source, const wxString& event_type, const wxString& message)
+void ibLogger::Warn(const ibString& source, const ibString& event_type, const ibString& message)
 {
     Emit(ibLogLevel::Warn, source, event_type, message, nullptr);
 }
 
-void ibLogger::Error(const wxString& source, const wxString& event_type, const wxString& message)
+void ibLogger::Error(const ibString& source, const ibString& event_type, const ibString& message)
 {
     Emit(ibLogLevel::Error, source, event_type, message, nullptr);
 }
 
 void ibLogger::Emit(ibLogLevel level,
-                    const wxString& source,
-                    const wxString& event_type,
-                    const wxString& message,
+                    const ibString& source,
+                    const ibString& event_type,
+                    const ibString& message,
                     const ibValue*  details,
-                    const wxString* refGuid,
+                    const ibString* refGuid,
                     int             refMetaId)
 {
     if (!m_queue) return;

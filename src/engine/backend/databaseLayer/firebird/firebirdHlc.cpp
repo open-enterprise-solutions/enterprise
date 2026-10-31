@@ -1,7 +1,7 @@
 #include "firebirdHlc.h"
 #include "firebirdCommon.h"
 
-#include <wx/datetime.h>
+#include "core/fdatetime.h"   // ibDateTime — the timestamp a reading is shown with
 
 namespace {
 
@@ -110,19 +110,17 @@ uint8_t ibHlcClock::ExtractNodeId(uint64_t hlc) {
 	return static_cast<uint8_t>(hlc & kNodeIdMask);
 }
 
-wxString ibHlcClock::Format(uint64_t hlc) {
+ibString ibHlcClock::Format(uint64_t hlc) {
 	const uint64_t ms = ExtractMillis(hlc);
 	const uint16_t c  = ExtractCounter(hlc);
 	const uint8_t  n  = ExtractNodeId(hlc);
 
-	// FromUNIX in wx returns a UTC wxDateTime directly, no manual
-	// .ToUTC() pass needed. Sub-second precision is appended as a
-	// literal — wxDateTime's own millisecond field isn't shown by
-	// the `%H:%M:%S` format spec.
-	const wxDateTime dt = wxDateTime((time_t)(ms / 1000)).ToUTC();
-	return wxString::Format(
-		wxT("%s.%03lluZ#%u/%u"),
-		dt.Format(wxT("%Y-%m-%dT%H:%M:%S")),
+	// The UTC parts of the instant, counted from the epoch — no zone and no clock on the way. The
+	// milliseconds are appended as a literal: `%H:%M:%S` does not show them.
+	const ibDateTime dt = ibDateTime(1970, 1, 1).AddMilliseconds(static_cast<long long>(ms / 1000 * 1000));
+	return ibString::Format(
+		ibT("%s.%03lluZ#%u/%u"),
+		dt.Format(ibT("%Y-%m-%dT%H:%M:%S")),
 		(unsigned long long)(ms % 1000),
 		(unsigned)c,
 		(unsigned)n);

@@ -9,7 +9,7 @@
 #include "backend/lock/lockHandle.h"    // ibLockHandle (m_formLockHandle)
 #include "backend/lock/lockTypes.h"     // ibLockMode (TryAcquireFormLock)
 #include "backend/compiler/value.h"     // ibValue (inline GetValueByPath default-constructs one)
-#include "backend/sourceDescription.h"  // ibSourceHop — a binding path is {id, expected type} per hop
+#include "core/description/sourceDescription.h"  // ibSourceHop — a binding path is {id, expected type} per hop
 
 #include "backend/metaCollection/genericData.h"   // ibValueMetaObjectGenericData COMPLETE -> the covariant GetSourceMetaObject() -> GenericData* compiles (no casts). genericData.h fwd-declares ibSourceDataObject, so no cycle.
 
@@ -45,10 +45,10 @@ public:
 	private:
 
 		struct ibSourceInfo {
-			wxString          m_srcName;
-			wxString          m_srcSynonym;
+			ibString          m_srcName;
+			ibString          m_srcSynonym;
 			// THE GROUP THIS COLUMN BELONGS WITH, by name — see GetSourceGroup.
-			wxString          m_srcGroup;
+			ibString          m_srcGroup;
 			ibMetaID          m_mid = wxNOT_FOUND;
 			ibTypeDescription m_typeDesc;        // what the field IS — the declaration, shown as it was written
 			ibTypeDescription m_typeValueDesc;   // what a VALUE here may be — the declaration expanded (see below)
@@ -62,7 +62,7 @@ public:
 		ibSourceExplorer() {}
 
 		// The one value ctor — every node is built from plain values + flags, no metaobject.
-		ibSourceExplorer(const wxString& name, const wxString& synonym, const ibMetaID& id,
+		ibSourceExplorer(const ibString& name, const ibString& synonym, const ibMetaID& id,
 			const ibTypeDescription& typeDesc, bool tableSection = false, bool select = true,
 			bool enabled = true, bool visible = true)
 			: ibSourceExplorer(name, synonym, id, typeDesc, typeDesc, tableSection, select, enabled, visible) {
@@ -71,7 +71,7 @@ public:
 		// The same node, told BOTH answers: what the field IS and what a value here may BE. They differ
 		// for a declaration that stands for another type — a characteristic names its chart, and the
 		// chart's own references are what a branch walks into and what storage lays out.
-		ibSourceExplorer(const wxString& name, const wxString& synonym, const ibMetaID& id,
+		ibSourceExplorer(const ibString& name, const ibString& synonym, const ibMetaID& id,
 			const ibTypeDescription& typeDesc, const ibTypeDescription& typeValueDesc,
 			bool tableSection = false, bool select = true, bool enabled = true, bool visible = true) {
 			m_sourceInfo.m_srcName = name;
@@ -84,12 +84,12 @@ public:
 		}
 
 		// Queryable-style node: the name doubles as the synonym.
-		ibSourceExplorer(const wxString& name, const ibMetaID& id, const ibTypeDescription& typeDesc)
+		ibSourceExplorer(const ibString& name, const ibMetaID& id, const ibTypeDescription& typeDesc)
 			: ibSourceExplorer(name, name, id, typeDesc) {
 		}
 
-		wxString GetSourceName()    const { return m_sourceInfo.m_srcName; }
-		wxString GetSourceSynonym() const { return m_sourceInfo.m_srcSynonym; }
+		ibString GetSourceName()    const { return m_sourceInfo.m_srcName; }
+		ibString GetSourceSynonym() const { return m_sourceInfo.m_srcSynonym; }
 
 		// ⭐ COLUMNS THAT BELONG TOGETHER SAY THE SAME NAME HERE, and a form builder reads
 		// that as "put these in one group, titled this". Empty — the ordinary case — means
@@ -100,8 +100,8 @@ public:
 		// thing. How that is shown (a stack, a merged cell, a title) is the form''s to
 		// decide — an account register only knows that its four Dr dimensions are the Dr
 		// dimensions, and twelve of them side by side is what makes a journal unreadable.
-		wxString GetSourceGroup()   const { return m_sourceInfo.m_srcGroup; }
-		void SetSourceGroup(const wxString& group) { m_sourceInfo.m_srcGroup = group; }
+		ibString GetSourceGroup()   const { return m_sourceInfo.m_srcGroup; }
+		void SetSourceGroup(const ibString& group) { m_sourceInfo.m_srcGroup = group; }
 		ibMetaID GetSourceId()      const { return m_sourceInfo.m_mid; }
 		const ibTypeDescription& GetTypeDesc() const { return m_sourceInfo.m_typeDesc; }   // node's Type (structure-hop reads the reference target)	
 		
@@ -119,8 +119,8 @@ public:
 		// THE NODE'S PICTURE, asked of the column it was built from — so a dimension and a resource
 		// are drawn apart without the drawer knowing either word. Null when the node stands behind
 		// no column (a plain-value node); the reader then draws its own default.
-		wxIcon GetSourceIcon() const {
-			return m_sourceInfo.m_col != nullptr ? m_sourceInfo.m_col->GetColumnIcon() : wxNullIcon;
+		ibPictureDescription GetSourcePicture() const {
+			return m_sourceInfo.m_col != nullptr ? m_sourceInfo.m_col->GetColumnPicture() : ibPictureDescription();
 		}
 
 
@@ -145,7 +145,7 @@ public:
 		// the metadata judgement lives on the column, not here.
 		// `group` names the group these columns belong with (see GetSourceGroup); empty = on its own.
 		void AppendColumn(const ibBackendQueryColumn* col, bool enabled = true, bool visible = true,
-			const wxString& group = wxEmptyString) {
+			const ibString& group = ibEmptyString) {
 			if (col == nullptr || !col->IsAllowed()) return;
 			// BOTH ANSWERS AT ONCE: the DECLARATION (a characteristic must say it is one — inspector,
 			// generated column, type picker) and what a value here may BE (the chart's references —
@@ -158,9 +158,8 @@ public:
 		}
 
 		// Append a COLUMN by plain values (a queryable column with no descriptor object).
-		void AppendColumn(const wxString& name, const ibMetaID& id, const ibTypeDescription& typeDesc) {
-			m_arraySource.emplace_back(ibSourceExplorer{ name, id, typeDesc });
-			m_arraySource.back().m_sourceInfo.m_owner = m_sourceInfo.m_owner;
+		void AppendColumn(const ibString& name, const ibMetaID& id, const ibTypeDescription& typeDesc) {
+			m_arraySource.emplace_back(ibSourceExplorer{ name, id, typeDesc }).m_sourceInfo.m_owner = m_sourceInfo.m_owner;
 		}
 
 		// Append a COLUMN from an ABSTRACT source-column descriptor + its id. Unlike the ibBackendQueryColumn
@@ -189,10 +188,10 @@ public:
 		// is a cast at a call site against a class of defect that costs a day, and the cast makes the
 		// parameter read as what it is.
 		void AppendColumn(const ibBackendSourceColumn* col, bool enabled, bool visible = true,
-			const wxString& group = wxEmptyString) = delete;
+			const ibString& group = ibEmptyString) = delete;
 
 		void AppendColumn(const ibBackendSourceColumn* col, const ibMetaID& id, bool enabled = true, bool visible = true,
-			const wxString& group = wxEmptyString) {
+			const ibString& group = ibEmptyString) {
 			if (col == nullptr || !col->IsAllowed()) return;
 			m_arraySource.emplace_back(ibSourceExplorer{ col->GetName(), col->GetSynonym(), id,
 				col->GetTypeDesc(), col->GetTypeValueDesc(), /*tableSection*/false, /*select*/true, enabled, visible });
@@ -203,11 +202,11 @@ public:
 
 		// Append a TABLE-SECTION node (tableSection = true). Returns a reference so the caller adds the
 		// section's own columns to it via AppendColumn (the form builder reads them as a sub-tablebox).
-		ibSourceExplorer& AppendTable(const wxString& name, const wxString& synonym, const ibMetaID& id,
+		ibSourceExplorer& AppendTable(const ibString& name, const ibString& synonym, const ibMetaID& id,
 			const ibTypeDescription& typeDesc) {
-			m_arraySource.emplace_back(ibSourceExplorer{ name, synonym, id, typeDesc, /*tableSection*/true });
-			m_arraySource.back().m_sourceInfo.m_owner = m_sourceInfo.m_owner;
-			return m_arraySource.back();
+			ibSourceExplorer& table = m_arraySource.emplace_back(ibSourceExplorer{ name, synonym, id, typeDesc, /*tableSection*/true });
+			table.m_sourceInfo.m_owner = m_sourceInfo.m_owner;
+			return table;
 		}
 
 		// By POINTER — no copy of the node + its child vector (the no-allocation discipline). An out-of-
@@ -233,7 +232,7 @@ public:
 		// call sites wrote this loop by hand and only two of them agreed on the case rule: the third
 		// compared exactly, so a filter written `Supplier.region` against a field named `Region` silently
 		// stopped filtering instead of matching. One rule, in one place.
-		const ibSourceExplorer* FindByName(const wxString& name) const {
+		const ibSourceExplorer* FindByName(const ibString& name) const {
 			for (size_t i = 0; i < m_arraySource.size(); ++i)
 				if (m_arraySource[i].GetSourceName().IsSameAs(name, false)) return &m_arraySource[i];
 			return nullptr;
@@ -252,7 +251,7 @@ public:
 		// Reset to a fresh ROOT with this info for an in-place rebuild — drops children (KEEPS capacity) and
 		// KEEPS the owner (bound at construction). A subclass calls this at the top of GetSourceExplorer,
 		// Appends its columns into *this, then returns *this (now a const& to the owner-bound member).
-		ibSourceExplorer& Reset(const wxString& name, const wxString& synonym, const ibMetaID& id,
+		ibSourceExplorer& Reset(const ibString& name, const ibString& synonym, const ibMetaID& id,
 			const ibTypeDescription& typeDesc, bool tableSection = false, bool select = true) {
 			ibSourceDataObject* owner = m_sourceInfo.m_owner;
 			m_arraySource.clear();
@@ -270,7 +269,7 @@ public:
 		// ⭐ …AT THE VERSION OF THE METADATA IT DESCRIBES (ibMetaData::GetFactoryCountChanges) — what a source the
 		// metadata describes resets with. Built at that version already: nothing is reset, false — read it as it is.
 		// Built at another: reset, true — fill it.
-		bool Reset(unsigned int sourceVersion, const wxString& name, const wxString& synonym, const ibMetaID& id,
+		bool Reset(unsigned int sourceVersion, const ibString& name, const ibString& synonym, const ibMetaID& id,
 			const ibTypeDescription& typeDesc, bool tableSection = false, bool select = true) {
 			if (m_sourceVersion == sourceVersion)
 				return false;
@@ -428,7 +427,7 @@ public:
 	// cannot carry. `outAvailable` (optional) — every hop may be shown (functional options): a reference the
 	// options take away takes the field behind it too, so the leaf alone does not answer.
 	bool WalkColumns(const std::vector<ibSourceHop>& path, size_t from, const ibBackendSourceColumn*& leaf,
-		wxString* outText = nullptr, bool* outLeafIsTable = nullptr, bool* outContainerIsTable = nullptr,
+		ibString* outText = nullptr, bool* outLeafIsTable = nullptr, bool* outContainerIsTable = nullptr,
 		bool* outAvailable = nullptr) const;
 
 protected:

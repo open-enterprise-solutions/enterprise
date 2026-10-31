@@ -84,7 +84,7 @@ const ibMaterializationDialect& DialectWithoutHash()
 }
 
 // (period, wh, owner) -> (in, out)
-using Totals = std::map<wxString, std::pair<double, double>>;
+using Totals = std::map<ibString, std::pair<double, double>>;
 
 struct KeyHashFix : ::testing::Test
 {
@@ -130,14 +130,14 @@ struct KeyHashFix : ::testing::Test
 	// entry is a printf-style vararg — passing it directly makes the CRT read `%Y` as a specifier and
 	// assert. The neighbouring parity test carries the same note; it is the sort of trap that is
 	// invisible until a query happens to contain a percent sign.
-	Totals Read(const wxString& sql)
+	Totals Read(const ibString& sql)
 	{
 		Totals out;
 		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), sql);
 		if (rs == nullptr)
 			return out;
 		while (rs->Next()) {
-			const wxString key = rs->GetResultString(1) + wxT("|") + rs->GetResultString(2) + wxT("|") + rs->GetResultString(3);
+			const ibString key = rs->GetResultString(1) + wxT("|") + rs->GetResultString(2) + wxT("|") + rs->GetResultString(3);
 			out[key] = { rs->GetResultDouble(4), rs->GetResultDouble(5) };
 		}
 		db.CloseResultSet(rs);   // the LAYER owns the result set; closing it on the object alone leaves its registry dangling
@@ -161,7 +161,7 @@ struct KeyHashFix : ::testing::Test
 		                " WHERE qty_in <> 0 OR qty_out <> 0"));
 	}
 
-	long RowCount(const wxString& table)
+	long RowCount(const ibString& table)
 	{
 		long n = -1;
 		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), wxT("SELECT COUNT(*) FROM ") + table);
@@ -172,9 +172,9 @@ struct KeyHashFix : ::testing::Test
 		return n;
 	}
 
-	wxString OneString(const wxString& sql)
+	ibString OneString(const ibString& sql)
 	{
-		wxString value;
+		ibString value;
 		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), sql);
 		if (rs != nullptr) {
 			if (rs->Next()) value = rs->GetResultString(1);
@@ -255,7 +255,7 @@ TEST(KeyHashRender, DigestIsInserted_AndIsNotWhatTheDeltaMatchesOn)
 	const ibMaterializeSql sql = RenderMaterialization(
 		MakeSpec(/*withKeyHash*/ true), &mat, ibDatabaseLayerSQLite::Dialect());
 
-	const wxString text = sql.CreateText();
+	const ibString text = sql.CreateText();
 	ASSERT_FALSE(text.IsEmpty());
 
 	// The column is written…
@@ -267,12 +267,12 @@ TEST(KeyHashRender, DigestIsInserted_AndIsNotWhatTheDeltaMatchesOn)
 	// SQLite's upsert names its conflict target by COLUMN LIST, and the only unique
 	// index there is over the digest — so that is what it must name. Naming the key
 	// columns would be an ON CONFLICT with no index behind it.
-	EXPECT_TRUE(text.Contains(wxT("ON CONFLICT (") + wxString(KeyHashColumnName()) + wxT(")")))
+	EXPECT_TRUE(text.Contains(wxT("ON CONFLICT (") + ibString(KeyHashColumnName()) + wxT(")")))
 		<< "an ON CONFLICT engine conflicts on the index that exists";
 
 	// And the accumulate never touches it: a matched row keeps the key it was
 	// inserted with, so its digest is already right.
-	EXPECT_FALSE(text.Contains(wxString(KeyHashColumnName()) + wxT(" = ")))
+	EXPECT_FALSE(text.Contains(ibString(KeyHashColumnName()) + wxT(" = ")))
 		<< "the digest is insert-only — nothing updates it";
 }
 
@@ -282,7 +282,7 @@ TEST(KeyHashRender, WithoutTheColumn_NothingChanges)
 	const ibMaterializeSql sql = RenderMaterialization(
 		MakeSpec(/*withKeyHash*/ false), &mat, ibDatabaseLayerSQLite::Dialect());
 
-	const wxString text = sql.CreateText();
+	const ibString text = sql.CreateText();
 	ASSERT_FALSE(text.IsEmpty());
 	EXPECT_FALSE(text.Contains(KeyHashColumnName()));
 	EXPECT_TRUE(text.Contains(wxT("ON CONFLICT (period_, wh, owner_)")))
@@ -398,7 +398,7 @@ TEST_F(KeyHashFix, FillingTwiceChangesNothing)
 	if (!ready) GTEST_SKIP();
 
 	Move(1, wxT("2026-03-04 10:00:00"), wxT("W1"), wxT("O1"), 10.0, 0);
-	const wxString before = OneString(wxT("SELECT keyhash_ FROM Reg9_T"));
+	const ibString before = OneString(wxT("SELECT keyhash_ FROM Reg9_T"));
 	ASSERT_FALSE(before.IsEmpty());
 
 	ASSERT_TRUE(ibFillKeyHashes(db, MakeSpec(/*withKeyHash*/ true), &mat));

@@ -31,7 +31,7 @@ ibValue ibValueSessionParameter::GetValue(bool getThis) const
 	return m_metaObject->AdjustValue(session->GetSessionParameter(m_metaObject->GetName()));
 }
 
-void ibValueSessionParameter::SetValue(const ibValue& value)
+void ibValueSessionParameter::SetValue(const ibVariant& value)
 {
 	if (!m_metaObject)
 		return;
@@ -46,7 +46,7 @@ void ibValueSessionParameter::SetValue(const ibValue& value)
 	// here, because the declaration already carries them.
 	//
 	// The session refuses the write outside its own module, by raising.
-	session->SetSessionParameter(m_metaObject->GetName(), m_metaObject->AdjustValue(value));
+	session->SetSessionParameter(m_metaObject->GetName(), m_metaObject->AdjustValue(ibValue(value)));
 }
 
 //***********************************************************************
@@ -94,10 +94,13 @@ bool ibValueSessionParameters::GetPropVal(const long lPropNum, ibValue& pvarProp
 	if (parameter == nullptr)
 		return false;
 
-	// THE UNIT, not a loose value. It carries its declaration, so whoever holds it
-	// can still be told what type it is — and it reads as its value, so a comparison
-	// against a field compares what is in it.
-	pvarPropVal = new ibValueSessionParameter(parameter);
+	// THE STORED VALUE, not the holder. The holder is how the session is read, and
+	// it adjusts to the declared type; what a script holds is that result. A holder
+	// has no fields of the reference it points at, TypeOf names the holder, and '='
+	// compares two holders, so CurrentUser.Employee, an empty-reference comparison
+	// and a value put into an array all see the wrong object.
+	ibValueSessionParameter unit(parameter);
+	pvarPropVal = unit.GetValue();
 	return true;
 }
 

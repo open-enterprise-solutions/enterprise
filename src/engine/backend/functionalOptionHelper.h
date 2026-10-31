@@ -2,7 +2,7 @@
 #define __FUNCTIONAL_OPTION_HELPER_H__
 
 #include "backend_core.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 #include <set>
 
@@ -31,7 +31,7 @@ public:
 		DoSetFunctionalOption(id, set);
 	}
 
-	bool IsInFunctionalOption(const ibMetaID& id) const { return m_functionalOptions.find(id) != m_functionalOptions.end(); }
+	bool IsInFunctionalOption(const ibMetaID& id) const { return m_functionalOptions.contains(id); }
 
 	const std::set<ibMetaID>& GetFunctionalOptions() const { return m_functionalOptions; }
 

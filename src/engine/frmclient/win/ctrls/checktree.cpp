@@ -1,6 +1,6 @@
 #include "checktree.h"
 
-#include "frmclient/win/picture.h"   // ibProtocolPicture — a PNG in base64, as a bitmap
+#include "frmclient/backend/backend_picture.h"   // ibBackendPicture::GetImageFromBase64 — a master in the source
 
 // The box in each state: normal, under the mouse, pressed (the left button down), disabled. A PNG master each,
 // drawn from its SVG by tools/pictures/render.js, scaled down here.
@@ -146,12 +146,9 @@ void ibCheckTree::Init()
 	// A state picture — a PNG in base64, at 16 × 16 (ibBackendPicture::GetIconFromBase64 on the desktop).
 	const auto icon = [](const wxString& png) {
 		wxIcon result;
-		wxBitmap picture = ibProtocolPicture(png);
-		if (picture.IsOk()) {
-			if (picture.GetSize() != wxSize(16, 16))
-				picture = wxBitmap(picture.ConvertToImage().Rescale(16, 16, wxIMAGE_QUALITY_HIGH));
-			result.CopyFromBitmap(picture);
-		}
+		const wxImage picture = ibBackendPicture::GetImageFromBase64(png, wxSize(16, 16));
+		if (picture.IsOk())
+			result.CopyFromBitmap(wxBitmap(picture));
 		return result;
 	};
 
@@ -196,16 +193,7 @@ void ibCheckTree::Init()
 
 void ibCheckTree::SetItemTextColour(const wxTreeItemId& item, const wxColour& col)
 {
-	std::map<wxTreeItemId, wxColor>::iterator it = m_colors.find(item);
-
-	if (it == m_colors.end())
-	{
-		m_colors.insert(std::pair<wxTreeItemId, wxColor>(item, col));
-	}
-	else
-	{
-		m_colors[item] = col;
-	}
+	m_colors.insert_or_assign(item, col);
 
 	wxTreeCtrl::SetItemTextColour(item, col);
 }

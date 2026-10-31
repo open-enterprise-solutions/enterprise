@@ -24,13 +24,13 @@ const ibTypeDescription kNoType;
 
 class PolicyTestCol : public ibBackendQueryColumn {
 public:
-	PolicyTestCol(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	PolicyTestCol(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
@@ -39,7 +39,7 @@ class PolicyTestQueryable : public ibBackendQueryable {
 public:
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 
-	wxString GetQueryTableName() const override { return wxT("T"); }
+	ibString GetQueryTableName() const override { return wxT("T"); }
 	ibMetaID GetQueryTableId()   const override { return 1; }
 	const ibUniqueKey& GetQueryTableGuid() const override {
 		static const ibUniqueKey key = [] { ibGuidImpl impl{}; impl.m_data1 = 1; return ibGuid(impl); }();
@@ -47,7 +47,7 @@ public:
 	}
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}

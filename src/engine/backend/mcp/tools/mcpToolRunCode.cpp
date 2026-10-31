@@ -119,7 +119,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // next month; it is now a decision about the configuration instead of a toll on trying anything.
 const ibArg& ArgText()
 {
-	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("text"), ibArg::Kind::Text,
 		ibMcpText("The code to run - whole statements, in the configuration's own dialect "
 			  "(platform_state says which). It is CHECKED HERE before anything is sent, so a "
 			  "mistake in it comes back as a refusal with line numbers and never reaches the base "
@@ -141,7 +141,7 @@ const ibArg& ArgText()
 
 const ibArg& ArgSaid()
 {
-	static const ibArg s_a(wxT("said"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("said"), ibArg::Kind::Text,
 		ibMcpText("One line saying what this run is doing, for the ACTIVITY LINE the person sees in "
 			  "Active Users - 'loading January opening balances', 'making 200 test documents'. "
 			  "Ad-hoc code has no name of its own, so without this they are shown a run with "
@@ -151,7 +151,7 @@ const ibArg& ArgSaid()
 
 const ibArg& ArgCommit()
 {
-	static const ibArg s_a(wxT("commit"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("commit"), ibArg::Kind::Flag,
 		ibMcpText("FALSE (the default) runs the code for real and then UNDOES it - the base is unchanged "
 			  "and what comes back is what actually happened. TRUE keeps it, and NOTHING can undo that. "
 			  "Run false first whenever a file is being interpreted; skip it when the data is invented "
@@ -169,7 +169,7 @@ const ibArg& ArgCommit()
 // assistant's own account of it, before the rows move.
 const ibArg& ArgUnderstood()
 {
-	static const ibArg s_a(wxT("understood"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("understood"), ibArg::Kind::Text,
 		ibMcpText("REQUIRED to commit. Say - to yourself, in your own words - that you know this run "
 			  "changes data and that nothing undoes it.\n"
 			  "\n"
@@ -187,7 +187,7 @@ const ibArg& ArgUnderstood()
 
 const ibArg& ArgSession()
 {
-	static const ibArg s_a(wxT("session"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("session"), ibArg::Kind::Text,
 		ibMcpText("The run to ask about, by the `session` code_run gave back - which is the run's own "
 			  "row in Active Users and the id every one of its journal lines carries. So the same "
 			  "string reaches it three ways: here, journal_read {session} for what it is doing, and "
@@ -209,7 +209,7 @@ const ibArg& ArgSession()
 
 // The bridge, or a refusal that says which of the two things is missing — there is no debugger in
 // this process at all, or nothing is attached to one.
-ibMcpDebugBridge* JobBridge(wxString& refusal)
+ibMcpDebugBridge* JobBridge(ibString& refusal)
 {
 	if (debugClient == nullptr) {
 		refusal = ibMcpText("This process has no debugger client, so there is no application to run "
@@ -255,15 +255,15 @@ ibMcpDebugBridge* JobBridge(wxString& refusal)
 // worker). So the check is handed to the session's worker — the main loop on the desktop — and waited for;
 // the wait for the APPLICATION that follows stays on this thread, where it has to. Its state is shared, not
 // borrowed from this frame: a check the main thread reaches after we stopped waiting writes into its own.
-bool CheckCode(const wxString& text, wxString& refusal)
+bool CheckCode(const ibString& text, ibString& refusal)
 {
 	struct ibCheckCall {
-		wxString                  m_text;
+		ibString                  m_text;
 		std::vector<ibDiagnostic> m_found;
 	};
 	auto call = std::make_shared<ibCheckCall>();
 	call->m_text = text;
-	const auto check = [call]() { call->m_found = ibCheckScript(call->m_text, wxT("JobCode"), activeMetaData); };
+	const auto check = [call]() { call->m_found = ibCheckScript(call->m_text, ibT("JobCode"), activeMetaData); };
 
 	ibSession* const session = ibSession::Current();
 	ibWorkerPool* const pool = session != nullptr ? session->GetWorkerPool() : nullptr;
@@ -285,10 +285,10 @@ bool CheckCode(const wxString& text, wxString& refusal)
 	if (found.empty())
 		return true;
 
-	wxString said;
+	ibString said;
 	for (const ibDiagnostic& one : found)
-		said += wxString::Format(wxT("\n  line %d: %s"), (int)one.m_line, one.m_message);
-	refusal = wxString::Format(
+		said += ibString::Format(ibT("\n  line %d: %s"), (int)one.m_line, one.m_message);
+	refusal = ibString::Format(
 		ibMcpText("That code did not compile, so NOTHING was sent - no application was asked to do "
 			  "anything and nothing was written:%s"),
 		said);
@@ -304,40 +304,40 @@ void DescribeRun(const ibJobRunByteCodeState& state, ibDataNode& into)
 	// anybody a message — it is tied to no one's session — so the journal, read by this id, is where
 	// a run says what it is doing.
 	if (!state.m_session.IsEmpty())
-		into.SetValue(wxT("session"), state.m_session);
-	into.SetValue(wxT("complete"), state.m_complete);
+		into.SetValue(ibT("session"), state.m_session);
+	into.SetValue(ibT("complete"), state.m_complete);
 	// ⭐ THE SAME LINE THE PERSON READS. A run says where it has got to in ONE place - its activity,
 	// which is also written to sys_session.currentActivity and shows in Active Users. So what comes
 	// back here and what is on their screen are the same sentence, and neither can drift from the
 	// other. (There is no separate progress: a second way to say the same thing would be a second
 	// road obliged to agree with the first.)
 	if (!state.m_activity.IsEmpty())
-		into.SetValue(wxT("activity"), state.m_activity);
+		into.SetValue(ibT("activity"), state.m_activity);
 	if (!state.m_error.IsEmpty())
-		into.SetValue(wxT("error"), state.m_error);
+		into.SetValue(ibT("error"), state.m_error);
 	else if (state.m_complete && !state.m_result.IsEmpty())
-		into.SetValue(wxT("result"), state.m_result);
+		into.SetValue(ibT("result"), state.m_result);
 
 	// ⭐ WHAT THE CODE SAID — its `Message` lines, the last of them, in the shape debug_state gives an
 	// application's: what a person running it in a window would have read.
 	std::vector<ibDataValue> said;
 	for (const ibJobRunByteCodeState::ibLine& line : state.m_output) {
 		std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-		node->SetValue(wxT("text"), line.m_text);
-		node->SetValue(wxT("level"), wxString(
-			  line.m_status == ibStatusMessage_Error   ? wxT("error")
-			: line.m_status == ibStatusMessage_Warning ? wxT("warning")
-			                                           : wxT("info")));
+		node->SetValue(ibT("text"), line.m_text);
+		node->SetValue(ibT("level"), ibString(
+			  line.m_status == ibStatusMessage_Error   ? ibT("error")
+			: line.m_status == ibStatusMessage_Warning ? ibT("warning")
+			                                           : ibT("info")));
 		said.push_back(ibDataValue::Child(node));
 	}
 	if (!said.empty())
-		into.AddField(wxT("output"), ibDataValue::Array(said));
+		into.AddField(ibT("output"), ibDataValue::Array(said));
 }
 
 // ⚠ THREE OUTCOMES, AND A BOOL CANNOT CARRY THEM. `sent` false means no answer came back before the
 // deadline - nothing is known, and the run may well be running. `m_accepted` false means the
 // application considered the request and REFUSED it, and said why. Only the third is an answer.
-bool Answered(bool sent, const ibJobRunByteCodeState& state, wxString& refusal)
+bool Answered(bool sent, const ibJobRunByteCodeState& state, ibString& refusal)
 {
 	if (!sent) {
 		refusal = ibMcpNoAnswer(ibMcpText("The application did not answer in time. That is not the same "
@@ -360,7 +360,7 @@ bool Answered(bool sent, const ibJobRunByteCodeState& state, wxString& refusal)
 class ibMcpToolRunCode : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("code_run"); }
+	ibString GetName() const override { return ibT("code_run"); }
 
 	// 🛑 NOT ON THE MAIN THREAD — see ibMcpTool::NeedsMainThread. All three of these ask the
 	// application and WAIT, and the answer comes back through the session's worker, which on the
@@ -371,26 +371,26 @@ public:
 	// their base, not what tool is running — it is the sentence they need in order to stop it if it
 	// was not what they meant. So it prefers the caller's own one-line account over any wording this
 	// file could invent: `said` names the actual job, where a generic "running code" names none.
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		wxString said = ArgSaid().Text(params);
+		ibString said = ArgSaid().Text(params);
 		if (said.IsEmpty())
 			said = ArgUnderstood().Text(params);
 
 		if (!ArgCommit().Flag(params))
 			return said.IsEmpty()
 				? ibMcpText("running code as a trial - everything written will be undone")
-				: wxString::Format(
+				: ibString::Format(
 					ibMcpText("running code as a trial (everything written will be undone): %s"),
 					said);
 		// Their base, their sentence to read: what the assistant SAYS it is about to do, in the
 		// assistant's own words, while there is still time to stop it.
 		return said.IsEmpty()
 			? ibMcpText("RUNNING CODE - writing to the base for real")
-			: wxString::Format(ibMcpText("RUNNING CODE, writing for real: %s"), said);
+			: ibString::Format(ibMcpText("RUNNING CODE, writing for real: %s"), said);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("RUN ARBITRARY CODE against a live base - the verb for every job that has to "
 			"TOUCH DATA rather than describe it. It is one tool because they are one act:\n"
@@ -511,14 +511,14 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const wxString text   = ArgText().Text(params);
+		const ibString text   = ArgText().Text(params);
 		const bool     commit = ArgCommit().Flag(params);
 
 		// ⚠ Strip, not Trim — wxString::Trim MUTATES and so is non-const; this text is not ours to
 		// edit and the neighbouring `understood` check only gets away with it on a temporary.
-		if (text.Strip(wxString::both).IsEmpty()) {
+		if (text.Strip(ibString::both).IsEmpty()) {
 			refusal = ibMcpText("Nothing to run - `text` is the code itself.");
 			return false;
 		}
@@ -573,7 +573,7 @@ public:
 		if (commit) {
 			const ibMcpDebugBridge::Stop stop = bridge->GetStop();
 			if (stop.m_stopped) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("The application is stopped at a breakpoint (%s). A run started now goes "
 						  "through the debugger's sandbox, which rolls everything back - it would come back "
 						  "complete and keep nothing. Let the application go first: debug_run with action "
@@ -604,9 +604,9 @@ public:
 			return false;
 
 		DescribeRun(state, result);
-		result.SetValue(wxT("committing"), commit);
+		result.SetValue(ibT("committing"), commit);
 		if (!commit)
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("A trial: everything this writes will be undone. What comes back is what really "
 					  "happened - read it before running the same thing with commit."));
 
@@ -635,17 +635,12 @@ public:
 		// a second number for a fact already on the wire, and one that could not speak for a run
 		// somebody else had started (Max, 2026-09-07: *"the running application is there in the
 		// debugger"*).
-		wxString running;
+		ibString running;
 		if (debugClient != nullptr) {
-			for (const auto* connection : debugClient->GetListConnection()) {
-				if (connection == nullptr)
-					continue;
-				const wxString digest = connection->GetConfigMD5();
-				if (!digest.IsEmpty()) {
-					running = digest;
-					break;
-				}
-			}
+			debugClient->ForEachConnection([&running](const auto& connection) {
+				if (running.IsEmpty())
+					running = connection.GetConfigMD5();
+			});
 		}
 
 		// ⭐⭐ THE SAME PAIR THE DESIGNER'S OWN CAPTION PAINTS, and asked the same way round — so the
@@ -671,7 +666,7 @@ public:
 		// together are the ordinary state of an afternoon's work, not an exotic one — and a reader
 		// told only the first would apply their edits and expect to be level, being wrong by however
 		// much the base was behind to begin with.
-		wxString what;
+		ibString what;
 
 		if (edited)
 			what = ibMcpText("it has been edited in this process and nowhere else");
@@ -689,7 +684,7 @@ public:
 			// ⭐ AND THE DOOR IS CHOSEN BY WHAT IS TRUE, not by which clause was written first. A
 			// restart alone is enough only when the base already holds everything; anything pending
 			// has to be published before a restart can pick it up.
-			result.SetValue(wxT("configuration"), wxString::Format(
+			result.SetValue(ibT("configuration"), ibString::Format(
 				ibMcpText("THE RUN IS NOT WORKING FROM WHAT IS OPEN HERE: %s. An application works "
 				  "from what the DATABASE holds and keeps what it read at startup - modules, and "
 				  "which registers a document posts to. %s"),
@@ -712,17 +707,17 @@ MCP_TOOL_REGISTER(ibMcpToolRunCode);
 class ibMcpToolRunCodeStatus : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("code_status"); }
+	ibString GetName() const override { return ibT("code_status"); }
 
 	// 🛑 It waits on the wire like the one above — same reason, same answer.
 	bool NeedsMainThread() const override { return false; }
 
-	wxString GetActivity(const ibDataNode& /*params*/) const override
+	ibString GetActivity(const ibDataNode& /*params*/) const override
 	{
 		return ibMcpText("checking a code run");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("How a run is getting on: `activity` - where it says it has got to - "
 			"plus whether it has finished and what it answered or failed with, and `output` - what its "
@@ -741,7 +736,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMcpDebugBridge* const bridge = JobBridge(refusal);
 		if (bridge == nullptr)
@@ -768,17 +763,17 @@ MCP_TOOL_REGISTER(ibMcpToolRunCodeStatus);
 class ibMcpToolRunCodeCancel : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("code_cancel"); }
+	ibString GetName() const override { return ibT("code_cancel"); }
 
 	// 🛑 It waits on the wire like the two above — same reason, same answer.
 	bool NeedsMainThread() const override { return false; }
 
-	wxString GetActivity(const ibDataNode& /*params*/) const override
+	ibString GetActivity(const ibDataNode& /*params*/) const override
 	{
 		return ibMcpText("stopping a code run");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Stop a background run - one code_run started. COOPERATIVE: the flag is raised and the code unwinds at its "
 			"next loop boundary, so code that does not loop cannot be stopped at all - which is why "
@@ -797,7 +792,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMcpDebugBridge* const bridge = JobBridge(refusal);
 		if (bridge == nullptr)
@@ -812,7 +807,7 @@ public:
 		// still going and reports the state either way, so "it had already finished" comes back as a
 		// finished run rather than as a refusal — which is what the caller needs to know, and it is
 		// not a mistake to have asked.
-		result.SetValue(wxT("note"), state.m_complete
+		result.SetValue(ibT("note"), state.m_complete
 			? ibMcpText("It had already finished - nothing to stop. What it ended with is here.")
 			: ibMcpText("Asked it to stop; it unwinds at the next loop boundary. Anything already "
 				    "committed stays."));

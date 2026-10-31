@@ -29,7 +29,7 @@
 
 #include "backend/mcp/mcpTool.h"
 
-#include "backend/compositionDescription.h"
+#include "core/description/compositionDescription.h"
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
 
@@ -41,7 +41,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 
 const ibArg& ArgId()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The FORM's NodeId - metadata_tree and metadata_list give it. A report's own schema "
 			  "needs none of this: report_get answers it directly."), /*required*/ true);
 	return s_a;
@@ -49,7 +49,7 @@ const ibArg& ArgId()
 
 const ibArg& ArgPath()
 {
-	static const ibArg s_a(wxT("path"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("path"), ibArg::Kind::Text,
 		ibMcpText("WHICH schema, as schema_read gave its `path` back - the indices of the children to "
 			  "descend, slash-separated. A form with one list has one; a form with two has two, and "
 			  "the path is the only thing that tells them apart."), /*required*/ true);
@@ -58,12 +58,12 @@ const ibArg& ArgPath()
 
 const ibArg& ArgSchema()
 {
-	static const ibArg s_a(wxT("schema"), ibArg::Kind::Node,
+	static const ibArg s_a(ibT("schema"), ibArg::Kind::Node,
 		ibMcpText("The composition to put there, in the shape schema_read and report_get answer with. "
 			  "It REPLACES what is at `path` - this is not a merge, and anything the old one had and "
 			  "the new one does not is gone. The example is an empty one, written by the same reader "
 			  "that will take yours."),
-		/*required*/ true, std::vector<wxString>(),
+		/*required*/ true, std::vector<ibString>(),
 		[](ibDataValue& shape) {
 			return ibCompositionDescriptionMemory::WriteNode(shape, ibCompositionDescription());
 		});
@@ -84,58 +84,58 @@ bool HoldsComposition(const ibDataNode& node)
 
 // The tree, walked once. `path` is where we are; a hit does not stop the descent, because a
 // composition can sit inside something that holds another.
-void FindSchemas(const ibDataNode& node, const wxString& path, std::vector<ibDataValue>& found)
+void FindSchemas(const ibDataNode& node, const ibString& path, std::vector<ibDataValue>& found)
 {
 	if (!path.IsEmpty() && HoldsComposition(node)) {
 		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-		entry->SetValue(wxT("path"), path);
+		entry->SetValue(ibT("path"), path);
 
 		// WHAT IT IS, in the tree's own words when it has any — a reader deciding which of two
 		// schemas to take needs something beside an index.
-		const wxString kind = ibCompositionNodeName(node.GetClsid());
+		const ibString kind = ibCompositionNodeName(node.GetClsid());
 		if (!kind.IsEmpty())
-			entry->SetValue(wxT("nodeType"), kind);
+			entry->SetValue(ibT("nodeType"), kind);
 
 		std::shared_ptr<ibDataNode> schema = std::make_shared<ibDataNode>(node);
-		entry->AddField(wxT("schema"), ibDataValue::Child(schema));
+		entry->AddField(ibT("schema"), ibDataValue::Child(schema));
 
 		found.push_back(ibDataValue::Child(entry));
 	}
 
 	for (size_t i = 0; i < node.Children().size(); ++i) {
-		const wxString step = path.IsEmpty()
-			? wxString::Format(wxT("%d"), (int)i)
-			: path + wxT("/") + wxString::Format(wxT("%d"), (int)i);
+		const ibString step = path.IsEmpty()
+			? ibString::Format(ibT("%d"), (int)i)
+			: path + ibT("/") + ibString::Format(ibT("%d"), (int)i);
 		FindSchemas(node.Children()[i], step, found);
 	}
 }
 
 // Descend to what `path` names, or null. Written for BOTH directions — a path that reads has to be a
 // path that writes, or the pair is two addressing schemes wearing one name.
-ibDataNode* NodeAt(ibDataNode& root, const wxString& path, wxString& refusal)
+ibDataNode* NodeAt(ibDataNode& root, const ibString& path, ibString& refusal)
 {
 	ibDataNode* at = &root;
-	wxString    rest = path;
+	ibString    rest = path;
 
 	while (!rest.IsEmpty()) {
-		wxString step = rest.BeforeFirst('/');
+		ibString step = rest.BeforeFirst('/');
 		rest = rest.AfterFirst('/');
 
 		long index = -1;
 		if (!step.ToLong(&index) || index < 0) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' is not a path - it is the child indices to descend, like `3/1/0`, as "
 					  "schema_read gives them."), path);
 			return nullptr;
 		}
 		if ((size_t)index >= at->Children().size()) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("There is nothing at '%s' in this form: step %d has %d child(ren). The form "
 					  "has been edited since schema_read answered - read it again."),
 				path, (int)index, (int)at->Children().size());
 			return nullptr;
 		}
-		at = &at->Children()[(size_t)index];
+		at = &at->Handle(at->Children()[(size_t)index]);
 	}
 
 	return at;
@@ -144,7 +144,7 @@ ibDataNode* NodeAt(ibDataNode& root, const wxString& path, wxString& refusal)
 // The form's control tree, as a node. A form's blob ALREADY IS the binary-provider node format, so
 // this is one round trip and no window is involved.
 std::shared_ptr<ibDataNode> FormTree(const ibDataNode& params, ibValueMetaObjectFormBase*& form,
-	wxString& refusal)
+	ibString& refusal)
 {
 	form = nullptr;
 
@@ -154,7 +154,7 @@ std::shared_ptr<ibDataNode> FormTree(const ibDataNode& params, ibValueMetaObject
 
 	form = object->ConvertToType<ibValueMetaObjectFormBase>();
 	if (form == nullptr) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("'%s' is not a form. A report's schema is report_get; this is for the schemas "
 				  "that live on forms, which is where a dynamic list keeps its one."),
 			object->GetName());
@@ -163,13 +163,13 @@ std::shared_ptr<ibDataNode> FormTree(const ibDataNode& params, ibValueMetaObject
 
 	const ibDataValue tree = ibValueMetaObjectFormBase::FormBlobToNode(form->GetFormData());
 	if (tree.Kind() != ibDataKind::Child || !tree.AsChild()) {
-		refusal = wxString::Format(
+		refusal = ibString::Format(
 			ibMcpText("'%s' has no form data to read - nothing has been laid out on it yet."),
 			object->GetName());
 		return nullptr;
 	}
 
-	return tree.AsChild();
+	return std::make_shared<ibDataNode>(*tree.AsChild());
 }
 
 //---------------------------------------------------------------------------
@@ -178,14 +178,14 @@ std::shared_ptr<ibDataNode> FormTree(const ibDataNode& params, ibValueMetaObject
 class ibMcpToolSchemaRead : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("schema_read"); }
+	ibString GetName() const override { return ibT("schema_read"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("reading the schemas on '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("reading the schemas on '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("EVERY COMPOSITION ON A FORM, with the address of each. A report declares its "
 			"schema in metadata and report_get answers it; a DYNAMIC LIST keeps one on a form, "
@@ -206,7 +206,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectFormBase* form = nullptr;
 		const std::shared_ptr<ibDataNode> tree = FormTree(params, form, refusal);
@@ -214,13 +214,13 @@ public:
 			return false;
 
 		std::vector<ibDataValue> found;
-		FindSchemas(*tree, wxEmptyString, found);
-		result.AddField(wxT("schemas"), ibDataValue::Array(found));
+		FindSchemas(*tree, ibEmptyString, found);
+		result.AddField(ibT("schemas"), ibDataValue::Array(found));
 
 		// ⚠ NONE IS AN ANSWER, not an empty result to puzzle over: this form has no dynamic list on
 		// it, which is a fact about the form rather than a failure to look.
 		if (found.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("No composition on this form - nothing here reads by a schema. A form shows a "
 					  "list only if one was put on it."));
 		return true;
@@ -235,14 +235,14 @@ MCP_TOOL_REGISTER(ibMcpToolSchemaRead);
 class ibMcpToolSchemaWrite : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("schema_write"); }
+	ibString GetName() const override { return ibT("schema_write"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("changing a list's schema on '%s'"), ibMcpNameOf(params));
+		return ibString::Format(ibMcpText("changing a list's schema on '%s'"), ibMcpNameOf(params));
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("PUT A COMPOSITION BACK onto a form, at the `path` schema_read gave. That is the "
 			"other half of reaching a list's schema: read it, work on it - report_* verbs shape a "
@@ -262,10 +262,10 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const ibDataNode* given = params.FindChild(ArgSchema().Name());
-		if (given == nullptr) {
+		auto given = params.FindChild(ArgSchema().Name());
+		if (!given) {
 			refusal = ibMcpText("No `schema` came with the call, so there is nothing to put there.");
 			return false;
 		}
@@ -274,7 +274,7 @@ public:
 		// stored perfectly happily and fail later, in a form somebody opens, with no trace of where
 		// it came from.
 		ibCompositionDescription check;
-		if (!ibCompositionDescriptionMemory::ReadNode(*given, check, activeMetaData)) {
+		if (!ibCompositionDescriptionMemory::ReadNode(*given, check)) {
 			refusal = ibMcpText("`schema` could not be read as a composition, so it was not written. "
 				"schema_read and report_get both answer with the shape one has.");
 			return false;
@@ -290,7 +290,7 @@ public:
 			return false;
 
 		if (!HoldsComposition(*at)) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("Nothing at '%s' is a composition, so writing one there would put a schema "
 					  "where nothing reads it. schema_read lists the paths that are."),
 				ArgPath().Text(params));
@@ -308,8 +308,8 @@ public:
 
 		form->SetFormData(ibValueMetaObjectFormBase::FormNodeToBlob(ibDataValue::Child(tree)));
 
-		result.SetValue(wxT("written"), true);
-		result.SetValue(wxT("note"),
+		result.SetValue(ibT("written"), true);
+		result.SetValue(ibT("note"),
 			ibMcpText("Written into the form and NOT saved - config_check says what is now pending, "
 				  "config_save applies it. compose_run with the schema you wrote says what it "
 				  "answers before you commit to it."));

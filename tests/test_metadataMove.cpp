@@ -54,7 +54,7 @@ struct SectionsFix {
 		A = Make(wxT("A")); B = Make(wxT("B")); C = Make(wxT("C")); D = Make(wxT("D"));
 	}
 
-	ibValueMetaObject* Make(const wxString& name, ibValueMetaObject* parent = nullptr) {
+	ibValueMetaObject* Make(const ibString& name, ibValueMetaObject* parent = nullptr) {
 		ibValueMetaObject* section = cfg.CreateMetaObject(g_metaSectionCLSID, parent != nullptr ? parent : root, /*runObject*/ false);
 		if (section != nullptr)
 			cfg.RenameMetaObject(section, name);
@@ -62,8 +62,8 @@ struct SectionsFix {
 	}
 
 	// The names of the sections directly under `parent`, in the order the tree holds them.
-	static std::vector<wxString> Order(ibValueMetaObject* parent) {
-		std::vector<wxString> names;
+	static std::vector<ibString> Order(ibValueMetaObject* parent) {
+		std::vector<ibString> names;
 		for (unsigned int idx = 0; idx < parent->GetChildCount(); ++idx) {
 			ibValueMetaObject* child = parent->GetChild(idx);
 			if (child->GetClassType() == g_metaSectionCLSID)
@@ -79,8 +79,8 @@ bool PutAt(ibValueMetaObject* object, ibValueMetaObject* other) {
 	return parent->ChangeChildPosition(object, parent->GetChildPosition(other));
 }
 
-std::vector<wxString> Names(std::initializer_list<const wxChar*> list) {
-	std::vector<wxString> names;
+std::vector<ibString> Names(std::initializer_list<const wxChar*> list) {
+	std::vector<ibString> names;
 	for (const wxChar* n : list) names.push_back(n);
 	return names;
 }

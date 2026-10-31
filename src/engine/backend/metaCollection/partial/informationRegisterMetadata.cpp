@@ -15,17 +15,17 @@ ibValueMetaObjectInformationRegister::ibValueMetaObjectInformationRegister() : i
 m_metaRecordManager(new ibValueMetaObjectRecordManager())
 {
 	//set default proc
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel"), ibT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnWrite"), ibContentHelper::eProcedureHelper, { ibT("Cancel"), ibT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("BeforeDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(ibT("OnDelete"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
 
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("Form"), ibT("Cancel") });
 }
 
 ibValueMetaObjectInformationRegister::~ibValueMetaObjectInformationRegister()
 {
-	wxDELETE(m_metaRecordManager);
+	delete m_metaRecordManager;
 }
 
 ibTotalsPeriod ibValueMetaObjectInformationRegister::GetPeriodicityUnit() const
@@ -91,8 +91,8 @@ bool ibValueMetaObjectInformationRegister::WriteData(ibDataNode& node) const
 
 bool ibValueMetaObjectInformationRegister::ReadData(const ibDataNode& node)
 {
-	m_propertyDefFormRecord->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormRecord->GetName())));
-	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormRecord->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormRecord->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormList->GetName())));
 
 	m_propertyWriteMode->SetNodeValue(node.GetProperty(m_propertyWriteMode->GetName()));
 	m_propertyPeriodicity->SetNodeValue(node.GetProperty(m_propertyPeriodicity->GetName()));

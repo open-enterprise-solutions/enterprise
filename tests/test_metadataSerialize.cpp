@@ -36,7 +36,7 @@
 
 namespace {
 
-bool BuffersEqual(const wxMemoryBuffer& a, const wxMemoryBuffer& b) {
+bool BuffersEqual(const ibMemoryBuffer& a, const ibMemoryBuffer& b) {
 	if (a.GetDataLen() != b.GetDataLen())
 		return false;
 	if (a.GetDataLen() == 0)
@@ -47,11 +47,11 @@ bool BuffersEqual(const wxMemoryBuffer& a, const wxMemoryBuffer& b) {
 // Save -> load (into a fresh holder) -> save again; true iff the two blobs are
 // byte-identical (the serialization fixed-point property).
 ::testing::AssertionResult RoundTripsByteEqual(ibMetaDataConfigurationFile& cfg) {
-	wxMemoryBuffer b1;
+	ibMemoryBuffer b1;
 	if (!cfg.SaveConfigToBuffer(b1))            return ::testing::AssertionFailure() << "first save failed";
 	ibMetaDataConfigurationFile cfg2;
 	if (!cfg2.LoadConfigFromBuffer(b1))         return ::testing::AssertionFailure() << "load failed";
-	wxMemoryBuffer b2;
+	ibMemoryBuffer b2;
 	if (!cfg2.SaveConfigToBuffer(b2))           return ::testing::AssertionFailure() << "re-save failed";
 	if (b1.GetDataLen() != b2.GetDataLen())     return ::testing::AssertionFailure() << "length drift";
 	if (!BuffersEqual(b1, b2))                  return ::testing::AssertionFailure() << "byte drift";
@@ -67,14 +67,14 @@ bool BuffersEqual(const wxMemoryBuffer& a, const wxMemoryBuffer& b) {
 TEST(MetadataSerialize, DefaultConfig_RoundTrip_BytesEqual) {
 	ibMetaDataConfigurationFile cfg1;
 
-	wxMemoryBuffer buf1;
+	ibMemoryBuffer buf1;
 	ASSERT_TRUE(cfg1.SaveConfigToBuffer(buf1));
 	ASSERT_GT(buf1.GetDataLen(), 0u) << "save produced an empty blob";
 
 	ibMetaDataConfigurationFile cfg2;
 	ASSERT_TRUE(cfg2.LoadConfigFromBuffer(buf1));
 
-	wxMemoryBuffer buf2;
+	ibMemoryBuffer buf2;
 	ASSERT_TRUE(cfg2.SaveConfigToBuffer(buf2));
 
 	ASSERT_EQ(buf1.GetDataLen(), buf2.GetDataLen())
@@ -109,17 +109,17 @@ TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
 		ASSERT_NE(root, nullptr) << "fresh config has no root for " << c.clsid;
 
 		ibValueMetaObject* obj = cfg1.CreateMetaObject(
-			metadata_to_clsid(wxString::FromAscii(c.clsid)), root, /*runObject*/ false);
+			metadata_to_clsid(ibString::FromUTF8(c.clsid)), root, /*runObject*/ false);
 		ASSERT_NE(obj, nullptr) << "CreateMetaObject failed for " << c.clsid;
-		cfg1.RenameMetaObject(obj, wxString(c.name));
+		cfg1.RenameMetaObject(obj, ibString(c.name));
 
-		wxMemoryBuffer buf1;
+		ibMemoryBuffer buf1;
 		ASSERT_TRUE(cfg1.SaveConfigToBuffer(buf1)) << "save failed for " << c.clsid;
 
 		ibMetaDataConfigurationFile cfg2;
 		ASSERT_TRUE(cfg2.LoadConfigFromBuffer(buf1)) << "load failed for " << c.clsid;
 
-		wxMemoryBuffer buf2;
+		ibMemoryBuffer buf2;
 		ASSERT_TRUE(cfg2.SaveConfigToBuffer(buf2)) << "re-save failed for " << c.clsid;
 
 		ASSERT_EQ(buf1.GetDataLen(), buf2.GetDataLen()) << "length drift for " << c.clsid;
@@ -145,13 +145,13 @@ TEST(MetadataSerialize, CatalogWithAttribute_RoundTrip_BytesEqual) {
 	ASSERT_NE(attr, nullptr) << "CreateMetaObject(MD_ATTR) under a catalog returned null";
 	cfg1.RenameMetaObject(attr, wxT("Price"));
 
-	wxMemoryBuffer buf1;
+	ibMemoryBuffer buf1;
 	ASSERT_TRUE(cfg1.SaveConfigToBuffer(buf1));
 
 	ibMetaDataConfigurationFile cfg2;
 	ASSERT_TRUE(cfg2.LoadConfigFromBuffer(buf1));
 
-	wxMemoryBuffer buf2;
+	ibMemoryBuffer buf2;
 	ASSERT_TRUE(cfg2.SaveConfigToBuffer(buf2));
 
 	ASSERT_EQ(buf1.GetDataLen(), buf2.GetDataLen())
@@ -202,17 +202,17 @@ TEST(MetadataSerialize, MultipleSiblingObjects_RoundTrip_BytesEqual) {
 // load that consumes more/less than save wrote and only diverges on re-entry).
 TEST(MetadataSerialize, DefaultConfig_RoundTrip_Idempotent) {
 	ibMetaDataConfigurationFile cfg1;
-	wxMemoryBuffer buf1;
+	ibMemoryBuffer buf1;
 	ASSERT_TRUE(cfg1.SaveConfigToBuffer(buf1));
 
 	ibMetaDataConfigurationFile cfg2;
 	ASSERT_TRUE(cfg2.LoadConfigFromBuffer(buf1));
-	wxMemoryBuffer buf2;
+	ibMemoryBuffer buf2;
 	ASSERT_TRUE(cfg2.SaveConfigToBuffer(buf2));
 
 	ibMetaDataConfigurationFile cfg3;
 	ASSERT_TRUE(cfg3.LoadConfigFromBuffer(buf2));
-	wxMemoryBuffer buf3;
+	ibMemoryBuffer buf3;
 	ASSERT_TRUE(cfg3.SaveConfigToBuffer(buf3));
 
 	EXPECT_TRUE(BuffersEqual(buf2, buf3))
@@ -224,16 +224,16 @@ TEST(MetadataSerialize, DefaultConfig_RoundTrip_Idempotent) {
 // the same SaveConfigToBuffer/LoadConfigFromBuffer seam with no extra framing.
 TEST(MetadataSerialize, DefaultConfig_FileRoundTrip_MatchesBuffer) {
 	ibMetaDataConfigurationFile cfg1;
-	wxMemoryBuffer bufMem;
+	ibMemoryBuffer bufMem;
 	ASSERT_TRUE(cfg1.SaveConfigToBuffer(bufMem));
 
-	const wxString path = wxFileName::CreateTempFileName(wxT("oes_meta_rt_"));
+	const ibString path = wxFileName::CreateTempFileName(wxT("oes_meta_rt_"));
 	ASSERT_FALSE(path.IsEmpty());
 	ASSERT_TRUE(cfg1.SaveConfigToFile(path));
 
 	ibMetaDataConfigurationFile cfg2;
 	ASSERT_TRUE(cfg2.LoadConfigFromFile(path));
-	wxMemoryBuffer bufFromFile;
+	ibMemoryBuffer bufFromFile;
 	ASSERT_TRUE(cfg2.SaveConfigToBuffer(bufFromFile));
 
 	wxRemoveFile(path);

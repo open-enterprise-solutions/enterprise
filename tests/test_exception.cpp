@@ -47,7 +47,7 @@ TEST(BackendException, WhatCarriesTheDescription) {
 		FAIL() << "Error() must throw";
 	}
 	catch (const ibBackendException& err) {
-		const wxString description = err.GetErrorDescription();
+		const ibString description = err.GetErrorDescription();
 		EXPECT_TRUE(description.Contains(wxT("ConstantObject.Rate")));
 
 		// The same sentence, through the standard door. This is what a generic
@@ -59,14 +59,14 @@ TEST(BackendException, WhatCarriesTheDescription) {
 // --- caught as std::exception: the case that used to be a black hole ----------
 TEST(BackendException, IsCaughtByAGenericHandler) {
 	bool caughtAsStd = false;
-	wxString whatText;
+	ibString whatText;
 
 	try {
 		ibBackendCoreException::Error(wxT("registry thread failed"));
 	}
 	catch (const std::exception& e) {          // no knowledge of the project's types
 		caughtAsStd = true;
-		whatText = wxString::FromUTF8(e.what());
+		whatText = ibString::FromUTF8(e.what());
 	}
 	catch (...) {
 		FAIL() << "fell through to catch(...) — the description would be unreachable";
@@ -123,7 +123,7 @@ TEST(BackendException, DerivedHandlerWinsOverTheStandardBase) {
 // `throw;` propagates the in-flight exception, which is how ProcessError avoids
 // formatting one failure twice (m_errorHandled rides along).
 TEST(BackendException, BareRethrowPreservesTheDescription) {
-	wxString seen;
+	ibString seen;
 	try {
 		try {
 			ibBackendCoreException::Error(wxT("inner failure"));

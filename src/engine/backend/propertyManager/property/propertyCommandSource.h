@@ -2,7 +2,7 @@
 #define __PROPERTY_COMMAND_SOURCE_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/commandDescription.h"
+#include "core/description/commandDescription.h"
 
 // The button's COMMAND-source property — the command-door twin of ibPropertySource. It holds an
 // ibCommandDescription (a command-hop path: own object / main attribute / table / general) and, like the
@@ -11,23 +11,23 @@
 class BACKEND_API ibPropertyCommandSource : public ibProperty {
 	// The owning property object (a button / a bar item) becomes the variant's factory — cast to ibBackendCommandReceiver,
 	// its WalkCommand validates the binding. Mirrors ibPropertySource::CreateVariantData taking the property.
-	static wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const wxString& display = wxEmptyString);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const ibString& display = ibEmptyString);
 public:
 
 #pragma region _value_
 	// The binding address — the command-hop path stored in the variant (fed to the button, serialised here).
 	ibCommandDescription& GetValueAsCommandDesc() const;
 	// The binding rendered as its NAME — the same string the inspector cell shows ("<not selected>" if unbound).
-	wxString GetValueAsString() const;
+	ibString GetValueAsString() const;
 
-	void SetValue(const ibCommandDescription& desc, const wxString& display = wxEmptyString);
+	void SetValue(const ibCommandDescription& desc, const ibString& display = ibEmptyString);
 #pragma endregion
 
-	ibPropertyCommandSource(ibPropertyCategory* cat, const wxString& name)
+	ibPropertyCommandSource(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), ibCommandDescription())) {}
-	ibPropertyCommandSource(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyCommandSource(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), ibCommandDescription())) {}
-	ibPropertyCommandSource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyCommandSource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject(), ibCommandDescription())) {}
 
 	virtual bool IsEmptyProperty() const;
@@ -39,6 +39,10 @@ public:
 	// Load & save — the DUMB command-hop path (ibCommandDescriptionMemory, symmetric to the source path).
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// …and the commands of the owner's form it may name, as the desktop's picker gathered them over the owner's command
+	// door (advpropCommandSource.cpp): CommandTree, the form editor's (ibBackendCommandReceiver::WriteCommandTree).
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 };
 
 #endif // !__PROPERTY_COMMAND_SOURCE_H__

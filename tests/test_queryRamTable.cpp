@@ -22,13 +22,13 @@ ibQueryRamTable Table(std::initializer_list<ibMetaID> ids)
 {
     ibQueryRamTable t;
     for (const ibMetaID id : ids)
-        t.AddColumn(id, wxString::Format(wxT("c%d"), static_cast<int>(id)), ibTypeDescription());
+        t.AddColumn(id, ibString::Format(wxT("c%d"), static_cast<int>(id)), ibTypeDescription());
     return t;
 }
 
-void Put(ibQueryRamTable& t, long row, ibMetaID id, const wxString& text) { t.SetCell(row, id, ibValue(text)); }
+void Put(ibQueryRamTable& t, long row, ibMetaID id, const ibString& text) { t.SetCell(row, id, ibValue(text)); }
 
-wxString Text(const ibQueryRamTable& t, long row, ibMetaID id) { return t.GetCell(row, id).GetString(); }
+ibString Text(const ibQueryRamTable& t, long row, ibMetaID id) { return t.GetCell(row, id).GetString(); }
 
 } // namespace
 
@@ -103,7 +103,7 @@ TEST(RamTableRows, HandedOnAfterWhatIsThere) {
 // Rows reordered where they stand: row i becomes what was row order[i], and only the first `keep` stay.
 TEST(RamTableRows, ReorderFollowsThePermutationAndKeepsTheHead) {
     ibQueryRamTable t = Table({ kA });
-    for (const wxString& s : { wxString(wxT("r0")), wxString(wxT("r1")), wxString(wxT("r2")), wxString(wxT("r3")) })
+    for (const ibString& s : { ibString(wxT("r0")), ibString(wxT("r1")), ibString(wxT("r2")), ibString(wxT("r3")) })
         Put(t, t.AppendRow(), kA, s);
 
     t.ReorderRows({ 2, 0, 3, 1 }, 3);

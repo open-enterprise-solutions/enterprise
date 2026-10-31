@@ -24,7 +24,7 @@ void ibValueTextCtrl::OnPropertyRefresh()
 	HideProperty(m_propertyChoiceForm, !hasChoice);
 }
 
-bool ibValueTextCtrl::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueTextCtrl::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	//if (m_propertySource == property && !ibValueTextCtrl::LoadFromVariant(newValue))
 	//	return true;

@@ -84,21 +84,21 @@ const ibMetaData* ibFormVisualDocument::GetMetaData() const
 	return m_valueForm != nullptr ? m_valueForm->GetMetaData() : nullptr;
 }
 
-bool ibFormVisualDocument::OnCreate(const wxString& path, long flags)
+bool ibFormVisualDocument::OnCreate(const ibString& path, long flags)
 {
 	const ibSourceDataObject* sourceObject = m_valueForm->GetSourceObject();
 
 	if (sourceObject != nullptr && !IsVisualDemonstrationDoc()) {
 		const ibValueMetaObjectGenericData* genericObject = sourceObject->GetSourceMetaObject();
 		if (genericObject != nullptr) {
-			ibFormVisualDocument::SetIcon(ibBackendPicture::GetServerPicture(genericObject->GetClassType()));
+			ibFormVisualDocument::SetIcon(ibPictureDescription(genericObject->GetClassType()));
 			ibFormVisualDocument::SetFilename(genericObject->GetFileName());
 		}
 	}
 	else {
 		const ibValueMetaObjectFormBase* creator = m_valueForm->GetFormMetaObject();
 		if (creator != nullptr) {
-			ibFormVisualDocument::SetIcon(ibBackendPicture::GetServerPicture(creator->GetClassType()));
+			ibFormVisualDocument::SetIcon(ibPictureDescription(creator->GetClassType()));
 			ibFormVisualDocument::SetFilename(creator->GetFileName());
 		}
 	}
@@ -288,7 +288,7 @@ ibValueForm* ibFormVisualEditView::GetValueForm() const
 	return m_document->GetValueForm();
 }
 
-bool ibFormVisualEditView::OnCreate(ibDocument* WXUNUSED(doc), long WXUNUSED(flags))
+bool ibFormVisualEditView::OnCreate(ibDocument* /*doc*/, long /*flags*/)
 {
 	// The form has opened — its beforeOpen / onOpen ran before its document was made (ibValueForm::CreateDocForm):
 	// its controls are created. Nothing is drawn: the frame is written when a client asks for it (OnDraw).
@@ -299,11 +299,11 @@ bool ibFormVisualEditView::OnCreate(ibDocument* WXUNUSED(doc), long WXUNUSED(fla
 void ibFormVisualEditView::OnDraw(ibDataNode& frame)
 {
 	// The key a client names this form by when it is not its tab's own — a cell of the start page.
-	frame.SetValue(wxT("Key"), GetValueForm()->GetFormKey().GetGuid().str());
+	frame.SetValue(ibProtocol::ibForm::Key, GetValueForm()->GetFormKey().GetGuid().str());
 	UpdateVisualHost(frame);
 }
 
-void ibFormVisualEditView::SetCaption(const wxString& strCaption)
+void ibFormVisualEditView::SetCaption(const ibString& strCaption)
 {
 	const ibValueForm* handler = m_document->GetValueForm();
 
@@ -314,7 +314,7 @@ void ibFormVisualEditView::SetCaption(const wxString& strCaption)
 				const ibValueMetaObjectFormBase* creator = handler->GetFormMetaObject();
 				const ibValueMetaObjectGenericData* genericObject = srcObject->GetSourceMetaObject();
 				if (genericObject != nullptr) {
-					m_document->SetTitle(genericObject->GetSynonym() + wxT(": ") + creator->GetSynonym());
+					m_document->SetTitle(genericObject->GetSynonym() + ibT(": ") + creator->GetSynonym());
 					m_document->SetFilename(genericObject->GetFileName(), true);
 				}
 				else if (creator != nullptr) {
@@ -332,7 +332,7 @@ void ibFormVisualEditView::SetCaption(const wxString& strCaption)
 		}
 		else {
 			m_document->SetTitle(strCaption);
-			m_document->SetFilename(wxEmptyString, true);
+			m_document->SetFilename(ibEmptyString, true);
 		}
 	}
 	else if (strCaption.IsEmpty()) {
@@ -357,23 +357,11 @@ void ibFormVisualEditView::SetCaption(const wxString& strCaption)
 	}
 	else if (m_document != nullptr && !m_document->IsVisualDemonstrationDoc()) {
 		m_document->SetTitle(strCaption);
-		m_document->SetFilename(wxEmptyString, true);
+		m_document->SetFilename(ibEmptyString, true);
 	}
 }
 
-#include "frmserver/client/clientChildFrame.h"   // ibClientChildFrame — the tab, and the client it is drawn for
-#include "frmserver/client/clientFrame.h"        // ibClientFrame::SendPicture
-
-wxString ibFormVisualEditView::SendPicture(const ibPictureDescription& picture)
-{
-	// The tab this view is drawn in — its own, or the start page's for a form composed into it.
-	const ibClientChildFrame* const tab = dynamic_cast<const ibClientChildFrame*>(GetDocChildFrame());
-	ibClientFrame* const frame = tab != nullptr ? tab->GetFrame() : nullptr;
-	const ibValueForm* const form = GetValueForm();
-	return frame != nullptr ? frame->SendPicture(picture, form != nullptr ? form->GetMetaData() : nullptr) : wxString();
-}
-
-void ibFormVisualEditView::OnUpdate(ibView* WXUNUSED(sender), wxObject* WXUNUSED(hint))
+void ibFormVisualEditView::OnUpdate(ibView* /*sender*/, wxObject* /*hint*/)
 {
 	// The next frame drawn reads the form as it is; there is nothing kept to refresh.
 }
@@ -385,7 +373,7 @@ ibView* ibFormVisualEditView::GetActiveControlView() const
 	return control != nullptr ? control->GetControlView() : nullptr;
 }
 
-void ibFormVisualEditView::OnActivateView(bool activate, ibView* WXUNUSED(activeView), ibView* deactiveView)
+void ibFormVisualEditView::OnActivateView(bool activate, ibView* /*activeView*/, ibView* deactiveView)
 {
 	if (ibView* view = GetActiveControlView())
 		view->OnActivateView(activate, view, deactiveView);

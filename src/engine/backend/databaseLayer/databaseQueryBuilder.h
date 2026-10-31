@@ -98,8 +98,10 @@ enum class ibQueryExprKind
 
 enum class ibQueryBinOp
 {
-	// arithmetic
-	Add, Sub, Mul, Div, Mod,
+	// arithmetic. Concat is string addition: Firebird dialect 3 refuses '+' on VARCHAR,
+	// and PostgreSQL and SQLite spell that operation '||'. The lowering picks it when an
+	// operand is a string.
+	Add, Concat, Sub, Mul, Div, Mod,
 	// comparison
 	Eq, Ne, Lt, Le, Gt, Ge,
 	// pattern match (FindByCode / FindByDescription)
@@ -113,11 +115,11 @@ struct ibQueryExpr
 	ibQueryExprKind m_kind;
 
 	// Column / Func: identifier name (column name, or function name).
-	wxString m_name;
+	ibString m_name;
 
 	// Column: optional table / alias qualifier — "<qualifier>.<name>". Empty =
 	// unqualified. Needed once joins make a bare column ambiguous.
-	wxString m_qualifier;
+	ibString m_qualifier;
 
 	// Const: the literal value (bound as a parameter at execute time).
 	ibValue m_const;
@@ -125,7 +127,7 @@ struct ibQueryExpr
 	// Const (blob form): raw bytes bound via SetParamBlob — OPAQUE to L2-1. The
 	// metadata layer encodes a reference (ibReference) / binary key here; L2-1
 	// never interprets it, so it stays metadata-blind. Empty = not a blob.
-	wxMemoryBuffer m_blob;
+	ibMemoryBuffer m_blob;
 
 	// Param: index into the externally-supplied bind values (>= 0).
 	int m_paramIndex = -1;
@@ -194,7 +196,7 @@ using ibQueryExprPtr = std::shared_ptr<ibQueryExpr>;
 
 // --- expression factories (readable IR construction) ----------------------
 
-inline ibQueryExprPtr ibCol(const wxString& name)
+inline ibQueryExprPtr ibCol(const ibString& name)
 {
 	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::Column);
 	e->m_name = name;
@@ -202,7 +204,7 @@ inline ibQueryExprPtr ibCol(const wxString& name)
 }
 
 // Qualified column: "<table>.<column>" — for joins (disambiguates).
-inline ibQueryExprPtr ibCol(const wxString& qualifier, const wxString& name)
+inline ibQueryExprPtr ibCol(const ibString& qualifier, const ibString& name)
 {
 	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::Column);
 	e->m_qualifier = qualifier;
@@ -243,7 +245,7 @@ inline ibQueryExprPtr ibBinOp(ibQueryBinOp op, ibQueryExprPtr lhs, ibQueryExprPt
 	return e;
 }
 
-inline ibQueryExprPtr ibFunc(const wxString& name, std::vector<ibQueryExprPtr> args = {},
+inline ibQueryExprPtr ibFunc(const ibString& name, std::vector<ibQueryExprPtr> args = {},
 	bool distinct = false)
 {
 	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::Func);
@@ -456,7 +458,7 @@ inline ibQueryExprPtr ibWindowed(ibQueryExprPtr func, ibQueryWindow window)
 struct ibQueryProjItem
 {
 	ibQueryExprPtr m_expr;
-	wxString       m_alias;   // optional output alias; empty = derive
+	ibString       m_alias;   // optional output alias; empty = derive
 };
 
 struct ibQueryRel
@@ -467,11 +469,11 @@ struct ibQueryRel
 	std::shared_ptr<ibQueryRel> m_input;
 
 	// Scan
-	wxString m_table;
+	ibString m_table;
 
 	// Subquery: the alias the derived table is exposed under (FROM (...) AS m_alias).
 	// The inner relation is m_input.
-	wxString m_alias;
+	ibString m_alias;
 
 	// Filter
 	ibQueryExprPtr m_predicate;
@@ -518,7 +520,7 @@ using ibQueryRelPtr = std::shared_ptr<ibQueryRel>;
 // lets the same table be joined more than once in one query (a dot-walk that reaches
 // two different reference columns pointing at the same catalog) and disambiguates
 // shared column names — qualify the aliased side's columns with ibCol(alias, name).
-inline ibQueryRelPtr ibScan(const wxString& table, const wxString& alias = wxEmptyString)
+inline ibQueryRelPtr ibScan(const ibString& table, const ibString& alias = ibEmptyString)
 {
 	auto r = std::make_shared<ibQueryRel>(ibQueryRelKind::Scan);
 	r->m_table = table;
@@ -543,7 +545,7 @@ inline ibQueryRelPtr ibJoin(ibQueryRelPtr left, ibQueryRelPtr right,
 // what lets a nested aggregate / filtered subquery be a join input — e.g. the register
 // slice's "MAX(period) GROUP BY dims" inner select joined back to the table:
 //   ibJoin(ibSubquery(aggInner, "T1"), ibScan("Reg"), onPredicate)
-inline ibQueryRelPtr ibSubquery(ibQueryRelPtr inner, const wxString& alias)
+inline ibQueryRelPtr ibSubquery(ibQueryRelPtr inner, const ibString& alias)
 {
 	auto r = std::make_shared<ibQueryRel>(ibQueryRelKind::Subquery);
 	r->m_input = std::move(inner);
@@ -661,7 +663,7 @@ inline ibQueryExprPtr ibInQuery(ibQueryExprPtr lhs, ibQueryRelPtr subquery, bool
 // a query changes; only where it is written.
 struct ibQueryCte
 {
-	wxString      m_name;
+	ibString      m_name;
 	ibQueryRelPtr m_query;
 	// RECURSIVE: the query reads its own name — a UNION whose second member joins back to it, the way a
 	// parent chain is walked down. Said with `WITH RECURSIVE`, which only a dialect that walks trees has
@@ -703,11 +705,11 @@ struct ibQueryIR
 
 struct ibDdlColumn
 {
-	wxString     m_name;
+	ibString     m_name;
 	ibColumnType m_type;
 	bool         m_notNull    = false;
 	bool         m_primaryKey = false;   // PRIMARY KEY implies NOT NULL
-	wxString     m_default;              // DEFAULT clause value (literal SQL), empty = none
+	ibString     m_default;              // DEFAULT clause value (literal SQL), empty = none
 };
 
 // A single clause inside a batched ALTER TABLE. The structure builder coalesces consecutive
@@ -728,7 +730,7 @@ struct ibDdlStatement
 {
 	ibDdlKind m_kind;
 
-	wxString m_table;
+	ibString m_table;
 
 	// CreateTable: all columns. AddColumn / DropColumn: one column (m_columns[0];
 	// DropColumn uses only its m_name).
@@ -738,8 +740,8 @@ struct ibDdlStatement
 	std::vector<ibAlterClause> m_alterClauses;
 
 	// CreateIndex / DropIndex.
-	wxString              m_indexName;
-	std::vector<wxString> m_indexColumns;   // CreateIndex: the indexed columns
+	ibString              m_indexName;
+	std::vector<ibString> m_indexColumns;   // CreateIndex: the indexed columns
 	bool                  m_unique = false; // CreateIndex: UNIQUE
 	bool                  m_descending = false; // CreateIndex / DropIndex: the twin a backward read walks
 	                                            // (ibDialectDictionary::m_descendingIndexWord)
@@ -751,13 +753,13 @@ struct ibDdlStatement
 	// renderer stays a pure function of DDL + main dialect; the caller, the temp-table manager,
 	// supplies these from the driver's temp facts, so there is NO per-driver fork in the renderer).
 	bool     m_temporary    = false;   // emit m_createPrefix instead of "CREATE TABLE" + append m_createSuffix
-	wxString m_createPrefix;           // e.g. "CREATE TEMPORARY TABLE"
-	wxString m_createSuffix;           // appended after the column list, e.g. " ON COMMIT DROP" (empty = none)
+	ibString m_createPrefix;           // e.g. "CREATE TEMPORARY TABLE"
+	ibString m_createSuffix;           // appended after the column list, e.g. " ON COMMIT DROP" (empty = none)
 
 	explicit ibDdlStatement(ibDdlKind kind) : m_kind(kind) {}
 };
 
-inline ibDdlStatement ibCreateTable(const wxString& table, std::vector<ibDdlColumn> columns, bool ifNotExists = false)
+inline ibDdlStatement ibCreateTable(const ibString& table, std::vector<ibDdlColumn> columns, bool ifNotExists = false)
 {
 	ibDdlStatement s(ibDdlKind::CreateTable);
 	s.m_table        = table;
@@ -766,7 +768,7 @@ inline ibDdlStatement ibCreateTable(const wxString& table, std::vector<ibDdlColu
 	return s;
 }
 
-inline ibDdlStatement ibDropTable(const wxString& table, bool ifExists = false)
+inline ibDdlStatement ibDropTable(const ibString& table, bool ifExists = false)
 {
 	ibDdlStatement s(ibDdlKind::DropTable);
 	s.m_table     = table;
@@ -777,7 +779,7 @@ inline ibDdlStatement ibDropTable(const wxString& table, bool ifExists = false)
 // The same DROP TABLE carrying the table's COLUMNS. The renderer still spells only the name; the
 // shape is for the barrier's compensation ledger, which re-creates the table (EMPTY — its rows died
 // with the first commit) if the second phase fails, so the schema matches the baseline again.
-inline ibDdlStatement ibDropTable(const wxString& table, std::vector<ibDdlColumn> columns)
+inline ibDdlStatement ibDropTable(const ibString& table, std::vector<ibDdlColumn> columns)
 {
 	ibDdlStatement s(ibDdlKind::DropTable);
 	s.m_table   = table;
@@ -789,7 +791,7 @@ inline ibDdlStatement ibDropTable(const wxString& table, std::vector<ibDdlColumn
 // (after a temp materialise, a bulk load, or a restructure). The per-driver form lives in the
 // dialect (m_analyzePrefix: PG/SQLite "ANALYZE", FB empty); a driver with
 // no ANALYZE renders to empty and Execute no-ops. (docs/private/temp-db.md)
-inline ibDdlStatement ibAnalyzeTable(const wxString& table)
+inline ibDdlStatement ibAnalyzeTable(const ibString& table)
 {
 	ibDdlStatement s(ibDdlKind::Analyze);
 	s.m_table = table;
@@ -799,8 +801,8 @@ inline ibDdlStatement ibAnalyzeTable(const wxString& table)
 // CREATE a TEMPORARY table. The temp lexical bits (createPrefix / createSuffix) come from the L1
 // ibTempTableDialect, so this stays driver-agnostic — the temp-table manager fills them from the
 // connected driver's facts. (docs/private/temp-db.md)
-inline ibDdlStatement ibCreateTempTable(const wxString& table, std::vector<ibDdlColumn> columns,
-                                        const wxString& createPrefix, const wxString& createSuffix = wxEmptyString)
+inline ibDdlStatement ibCreateTempTable(const ibString& table, std::vector<ibDdlColumn> columns,
+                                        const ibString& createPrefix, const ibString& createSuffix = ibEmptyString)
 {
 	ibDdlStatement s(ibDdlKind::CreateTable);
 	s.m_table        = table;
@@ -811,7 +813,7 @@ inline ibDdlStatement ibCreateTempTable(const wxString& table, std::vector<ibDdl
 	return s;
 }
 
-inline ibDdlStatement ibAddColumn(const wxString& table, ibDdlColumn column)
+inline ibDdlStatement ibAddColumn(const ibString& table, ibDdlColumn column)
 {
 	ibDdlStatement s(ibDdlKind::AddColumn);
 	s.m_table = table;
@@ -821,7 +823,7 @@ inline ibDdlStatement ibAddColumn(const wxString& table, ibDdlColumn column)
 
 // ALTER TABLE <table> DROP COLUMN <column>. (AlterColumn / type change is NOT here —
 // SQLite cannot alter a column's type, it needs a table rebuild; a separate concern.)
-inline ibDdlStatement ibDropColumn(const wxString& table, const wxString& column)
+inline ibDdlStatement ibDropColumn(const ibString& table, const ibString& column)
 {
 	ibDdlStatement s(ibDdlKind::DropColumn);
 	s.m_table = table;
@@ -833,7 +835,7 @@ inline ibDdlStatement ibDropColumn(const wxString& table, const wxString& column
 // The same DROP COLUMN carrying the FULL column description, not just its name. The renderer
 // still spells only the name; the extra shape is for the barrier's compensation ledger, which
 // re-adds the column (EMPTY — the data died with the first commit) if the second phase fails.
-inline ibDdlStatement ibDropColumn(const wxString& table, ibDdlColumn column)
+inline ibDdlStatement ibDropColumn(const ibString& table, ibDdlColumn column)
 {
 	ibDdlStatement s(ibDdlKind::DropColumn);
 	s.m_table = table;
@@ -844,7 +846,7 @@ inline ibDdlStatement ibDropColumn(const wxString& table, ibDdlColumn column)
 // ALTER TABLE <table> ALTER/MODIFY COLUMN <column> <new-type> — change a column's
 // type. The per-DBMS spelling is the dialect's m_alterColumnTemplate; SQLite cannot do
 // it in place and its (empty) template makes the renderer throw.
-inline ibDdlStatement ibAlterColumn(const wxString& table, ibDdlColumn column)
+inline ibDdlStatement ibAlterColumn(const ibString& table, ibDdlColumn column)
 {
 	ibDdlStatement s(ibDdlKind::AlterColumn);
 	s.m_table = table;
@@ -855,7 +857,7 @@ inline ibDdlStatement ibAlterColumn(const wxString& table, ibDdlColumn column)
 // The same ALTER with the PREVIOUS shape riding second (m_columns[1]). Renderers read only the
 // front; the barrier's compensation ledger reads the tail to restore the column's old type when
 // the second phase fails. Without it the alter is irreversible and the compensation says so.
-inline ibDdlStatement ibAlterColumn(const wxString& table, ibDdlColumn column, ibDdlColumn prev)
+inline ibDdlStatement ibAlterColumn(const ibString& table, ibDdlColumn column, ibDdlColumn prev)
 {
 	ibDdlStatement s(ibDdlKind::AlterColumn);
 	s.m_table = table;
@@ -867,7 +869,7 @@ inline ibDdlStatement ibAlterColumn(const wxString& table, ibDdlColumn column, i
 // ALTER TABLE <table> <clause>, <clause>, … — a batched column delta (ADD / DROP COLUMN folded into
 // one statement). The structure builder coalesces consecutive same-op clauses of one table into this;
 // dialects without multi-clause ALTER (SQLite) get one statement per clause from the builder instead.
-inline ibDdlStatement ibAlterTable(const wxString& table, std::vector<ibAlterClause> clauses)
+inline ibDdlStatement ibAlterTable(const ibString& table, std::vector<ibAlterClause> clauses)
 {
 	ibDdlStatement s(ibDdlKind::AlterTable);
 	s.m_table        = table;
@@ -876,8 +878,8 @@ inline ibDdlStatement ibAlterTable(const wxString& table, std::vector<ibAlterCla
 }
 
 // CREATE [UNIQUE] [DESCENDING] INDEX <name> ON <table> (<columns>).
-inline ibDdlStatement ibCreateIndex(const wxString& table, const wxString& indexName,
-                                    std::vector<wxString> columns, bool unique = false, bool descending = false)
+inline ibDdlStatement ibCreateIndex(const ibString& table, const ibString& indexName,
+                                    std::vector<ibString> columns, bool unique = false, bool descending = false)
 {
 	ibDdlStatement s(ibDdlKind::CreateIndex);
 	s.m_table        = table;
@@ -890,7 +892,7 @@ inline ibDdlStatement ibCreateIndex(const wxString& table, const wxString& index
 
 // DROP INDEX <name> [ON <table>]. The table is needed only by dialects that require it
 // (MSSQL — see ibDialectDictionary::m_dropIndexNeedsTable); pass it for portability.
-inline ibDdlStatement ibDropIndex(const wxString& indexName, const wxString& table = wxEmptyString)
+inline ibDdlStatement ibDropIndex(const ibString& indexName, const ibString& table = ibEmptyString)
 {
 	ibDdlStatement s(ibDdlKind::DropIndex);
 	s.m_indexName = indexName;
@@ -900,8 +902,8 @@ inline ibDdlStatement ibDropIndex(const wxString& indexName, const wxString& tab
 
 // The same DROP INDEX carrying the index's COLUMNS and uniqueness — for the compensation ledger,
 // which re-creates it if the second phase fails. The renderer spells only the name.
-inline ibDdlStatement ibDropIndex(const wxString& indexName, const wxString& table,
-                                  std::vector<wxString> columns, bool unique, bool descending = false)
+inline ibDdlStatement ibDropIndex(const ibString& indexName, const ibString& table,
+                                  std::vector<ibString> columns, bool unique, bool descending = false)
 {
 	ibDdlStatement s(ibDdlKind::DropIndex);
 	s.m_indexName    = indexName;
@@ -921,7 +923,7 @@ inline ibDdlStatement ibDropIndex(const wxString& indexName, const wxString& tab
 // A column assignment: <column> = <value-expr>.
 struct ibDmlAssign
 {
-	wxString       m_column;
+	ibString       m_column;
 	ibQueryExprPtr m_value;
 };
 
@@ -931,7 +933,7 @@ struct ibDmlStatement
 {
 	ibDmlKind m_kind;
 
-	wxString m_table;
+	ibString m_table;
 
 	// Insert + Update + Upsert.
 	std::vector<ibDmlAssign> m_assignments;
@@ -946,24 +948,24 @@ struct ibDmlStatement
 
 	// Upsert: the conflict / match columns (the PK, e.g. "uuid"). The dialect
 	// renders them as FB MATCHING(...) / PG-SQLite ON CONFLICT(...); they are	// excluded from the UPDATE SET (the PK never changes).
-	std::vector<wxString> m_matchKeys;
+	std::vector<ibString> m_matchKeys;
 
 	// Insert ONLY — INSERT … SELECT. When set, the row source is this relation tree instead of a
 	// VALUES list (m_assignments is then ignored). m_insertColumns is the optional target column list
 	// (empty => `INSERT INTO t SELECT …`). Standard SQL on every driver — no dialect fork.
 	ibQueryRelPtr         m_selectSource;
-	std::vector<wxString> m_insertColumns;
+	std::vector<ibString> m_insertColumns;
 
 	// RETURNING — columns the statement hands back from the rows it wrote. Empty (default) =
 	// a plain write with no cursor. Set it through ibReturning() and run the statement with
 	// ibDatabaseQueryBuilder::ExecuteReturning, which is the overload that yields a cursor.
 	// The spelling lives in the dialect (m_returningClause); a driver without one throws.
-	std::vector<wxString> m_returning;
+	std::vector<ibString> m_returning;
 
 	explicit ibDmlStatement(ibDmlKind kind) : m_kind(kind) {}
 };
 
-inline ibDmlStatement ibInsert(const wxString& table, std::vector<ibDmlAssign> assignments)
+inline ibDmlStatement ibInsert(const ibString& table, std::vector<ibDmlAssign> assignments)
 {
 	ibDmlStatement s(ibDmlKind::Insert);
 	s.m_table       = table;
@@ -974,7 +976,7 @@ inline ibDmlStatement ibInsert(const wxString& table, std::vector<ibDmlAssign> a
 // INSERT INTO <table> [(columns)] <SELECT …>. The source is any relation tree (ibScan / ibProject /
 // ibFilter / Join). Empty `columns` emits `INSERT INTO t SELECT …` (column-position match, same
 // contract as raw SQL). Standard SQL — rendered identically on all drivers.
-inline ibDmlStatement ibInsertSelect(const wxString& table, std::vector<wxString> columns, ibQueryRelPtr source)
+inline ibDmlStatement ibInsertSelect(const ibString& table, std::vector<ibString> columns, ibQueryRelPtr source)
 {
 	ibDmlStatement s(ibDmlKind::Insert);
 	s.m_table         = table;
@@ -983,7 +985,7 @@ inline ibDmlStatement ibInsertSelect(const wxString& table, std::vector<wxString
 	return s;
 }
 
-inline ibDmlStatement ibUpdate(const wxString& table, std::vector<ibDmlAssign> assignments, ibQueryExprPtr where = nullptr)
+inline ibDmlStatement ibUpdate(const ibString& table, std::vector<ibDmlAssign> assignments, ibQueryExprPtr where = nullptr)
 {
 	ibDmlStatement s(ibDmlKind::Update);
 	s.m_table       = table;
@@ -992,7 +994,7 @@ inline ibDmlStatement ibUpdate(const wxString& table, std::vector<ibDmlAssign> a
 	return s;
 }
 
-inline ibDmlStatement ibDelete(const wxString& table, ibQueryExprPtr where = nullptr)
+inline ibDmlStatement ibDelete(const ibString& table, ibQueryExprPtr where = nullptr)
 {
 	ibDmlStatement s(ibDmlKind::Delete);
 	s.m_table = table;
@@ -1002,12 +1004,12 @@ inline ibDmlStatement ibDelete(const wxString& table, ibQueryExprPtr where = nul
 
 // Ask a write to hand back columns from the rows it wrote:
 //
-//     ibReturning(ibUpdate(table, { { wxT("number"), … } }, where), { wxT("number") })
+//     ibReturning(ibUpdate(table, { { ibT("number"), … } }, where), { ibT("number") })
 //
 // A modifier rather than a parameter on every factory: RETURNING is orthogonal to WHICH
 // write it is, and threading it through ibInsert / ibUpdate / ibDelete / ibUpsert would
 // have put an empty vector in every existing call site. Run it with ExecuteReturning.
-inline ibDmlStatement ibReturning(ibDmlStatement dml, std::vector<wxString> columns)
+inline ibDmlStatement ibReturning(ibDmlStatement dml, std::vector<ibString> columns)
 {
 	dml.m_returning = std::move(columns);
 	return dml;
@@ -1016,8 +1018,8 @@ inline ibDmlStatement ibReturning(ibDmlStatement dml, std::vector<wxString> colu
 // UPSERT: INSERT the row, or UPDATE it in place when a row with the same
 // matchKeys (PK) already exists. The per-DBMS spelling is closed by the
 // dialect's UPSERT template; matchKeys are excluded from the UPDATE half.
-inline ibDmlStatement ibUpsert(const wxString& table, std::vector<ibDmlAssign> assignments,
-                               std::vector<wxString> matchKeys)
+inline ibDmlStatement ibUpsert(const ibString& table, std::vector<ibDmlAssign> assignments,
+                               std::vector<ibString> matchKeys)
 {
 	ibDmlStatement s(ibDmlKind::Upsert);
 	s.m_table       = table;
@@ -1039,19 +1041,19 @@ struct ibQueryParam
 	ibValue m_value;                  // valid when !m_external && !m_isBlob (Const literal)
 
 	bool           m_isBlob = false;  // true = bind m_blob via SetParamBlob (opaque bytes)
-	wxMemoryBuffer m_blob;            // valid when m_isBlob
+	ibMemoryBuffer m_blob;            // valid when m_isBlob
 };
 
 struct ibRenderedQuery
 {
-	wxString                  m_sql;
+	ibString                  m_sql;
 	std::vector<ibQueryParam> m_params;  // in placeholder order — bind 1:1, left to right
 };
 
 // Canonical column type -> this dialect's SQL type name. THE map, used by the DDL renderer below
 // and by the view renderer at L2-2 (databaseMaterializeBuilder), which holds a dictionary rather
 // than a builder and would otherwise need a copy of the same switch.
-BACKEND_API wxString ibMapColumnType(const ibDialectDictionary& dialect, const ibColumnType& type);
+BACKEND_API ibString ibMapColumnType(const ibDialectDictionary& dialect, const ibColumnType& type);
 
 // THE spelling of an OVER (…) clause — one place, two doors, for the same reason ibMapColumnType is
 // one place: the IR renderer below reaches it with rendered expressions, and L2-2's view generator
@@ -1062,9 +1064,9 @@ BACKEND_API wxString ibMapColumnType(const ibDialectDictionary& dialect, const i
 // with UnsupportedNode — the same answer RETURNING gives — because every emulation of a running
 // total (a self-join per row, a correlated subquery) silently changes the cost of a report from
 // linear to quadratic, and a query that merely got slower is not a failure anyone reports.
-BACKEND_API wxString ibRenderOverClause(const ibDialectDictionary& dialect,
-                                        const std::vector<wxString>& partitionBy,
-                                        const std::vector<wxString>& orderBy,
+BACKEND_API ibString ibRenderOverClause(const ibDialectDictionary& dialect,
+                                        const std::vector<ibString>& partitionBy,
+                                        const std::vector<ibString>& orderBy,
                                         ibQueryFrame frame);
 
 class BACKEND_API ibQueryRenderer
@@ -1075,7 +1077,7 @@ public:
 	ibRenderedQuery Render(const ibQueryIR& ir);
 
 	// DDL has no result set and no bind params (MVP) — returns SQL text only.
-	wxString RenderDDL(const ibDdlStatement& ddl);
+	ibString RenderDDL(const ibDdlStatement& ddl);
 
 	// DML (Insert/Update/Delete/Upsert) — SQL + bind plan, like Render().
 	ibRenderedQuery RenderDML(const ibDmlStatement& dml);
@@ -1089,22 +1091,23 @@ public:
 
 private:
 
-	wxString RenderSelect(const ibQueryRel* root);  // flatten a relation chain into one SELECT (appends binds)
-	wxString RenderExpr(const ibQueryExprPtr& expr);
+	ibString RenderSelect(const ibQueryRel* root);  // flatten a relation chain into one SELECT (appends binds)
+	ibString RenderExpr(const ibQueryExprPtr& expr);
 	// Fill EVERY occurrence of a template placeholder, rendering the operand once PER occurrence — a
 	// dialect template may name its operand several times, and a bound operand has to bind as often
 	// as it is spelled. See the body for what a single render cost.
-	wxString FillRepeated(const wxString& tpl, const wxString& key, const ibQueryExprPtr& operand);
-	wxString RenderOver(const ibQueryWindow& window);  // renders the operands, spells the clause via ibRenderOverClause
-	wxString RenderSource(const ibQueryRel* rel);   // FROM source: Scan / Join-tree / Subquery (recursive)
-	wxString RenderPlaceholder();              // spells the next placeholder, bumps the counter
-	wxString QuoteIdent(const wxString& name) const;
-	wxString AliasIdent(const wxString& alias) const;   // a relation alias, within the dialect's m_maxAliasLength
-	static wxString BinOpText(ibQueryBinOp op);
-	static wxString JoinTypeText(ibQueryJoinType type);
+	ibString FillRepeated(const ibString& tpl, const ibString& key, const ibQueryExprPtr& operand);
+	ibString RenderOver(const ibQueryWindow& window);  // renders the operands, spells the clause via ibRenderOverClause
+	ibString RenderSource(const ibQueryRel* rel);   // FROM source: Scan / Join-tree / Subquery (recursive)
+	ibString RenderPlaceholder();              // spells the next placeholder, bumps the counter
+	ibString QuoteIdent(const ibString& name) const;
+	ibString AliasIdent(const ibString& alias) const;   // a relation alias, within the dialect's m_maxAliasLength
+	static ibString BinOpText(ibQueryBinOp op);
+	static ibString JoinTypeText(ibQueryJoinType type);
 
-	wxString RenderColumn(const ibDdlColumn& col);      // "<name> <sqltype> [PRIMARY KEY|NOT NULL]"
-	wxString MapType(const ibColumnType& type) const;   // canonical type -> dialect SQL type (thin wrapper over ibMapColumnType)
+	// inlinePrimaryKey false: a composite key is a table constraint, so the column is only NOT NULL.
+	ibString RenderColumn(const ibDdlColumn& col, bool inlinePrimaryKey = true);
+	ibString MapType(const ibColumnType& type) const;   // canonical type -> dialect SQL type (thin wrapper over ibMapColumnType)
 
 	ibDialectDictionary m_dialect;             // BY VALUE — a renderer built from a dialect TEMPORARY
 	                                           // (`ibQueryRenderer r(FbDialect()); … r.RenderDDL()`) outlives it;
@@ -1230,23 +1233,23 @@ public:
 	// Read the current row's column as a normalized ibValue (1-based index, or
 	// by name). A NULL column yields a TYPE_NULL value.
 	ibValue GetValue(int column);
-	ibValue GetValue(const wxString& name);
+	ibValue GetValue(const ibString& name);
 	// The index GetValue(name) reads — the first column of that name, without case — or -1. For a reader
 	// that asks for the same column on every row and would rather find it once.
-	int     ColumnIndex(const wxString& name);
+	int     ColumnIndex(const ibString& name);
 
 	// Typed field reads by name — the dialect-NORMALISED form of the row's physical fields
 	// (the "same shape as L1, minus the dialect"). The provider's value-assembly reads the
 	// physical _N/_S/_RRRef columns through THESE, so it never touches the raw L1 result set — which
 	// is no longer reachable at all (see below). Delegate to the borrowed driver cursor.
-	ibString    GetResultString(const wxString& name);   // the engine's own text (fstring.h); NULL is empty
-	int         GetResultInt(const wxString& name);
-	long long   GetResultLong(const wxString& name);
-	bool        GetResultBool(const wxString& name);
-	ibDateTime  GetResultDate(const wxString& name);   // the reading (fdatetime.h); NULL is the empty date
-	double      GetResultDouble(const wxString& name);
-	ibNumber    GetResultNumber(const wxString& name);
-	void*       GetResultBlob(const wxString& name, wxMemoryBuffer& buffer);
+	ibString    GetResultString(const ibString& name);   // the engine's own text (fstring.h); NULL is empty
+	int         GetResultInt(const ibString& name);
+	long long   GetResultLong(const ibString& name);
+	bool        GetResultBool(const ibString& name);
+	ibDateTime  GetResultDate(const ibString& name);   // the reading (fdatetime.h); NULL is the empty date
+	double      GetResultDouble(const ibString& name);
+	ibNumber    GetResultNumber(const ibString& name);
+	void*       GetResultBlob(const ibString& name, ibMemoryBuffer& buffer);
 
 	// ⭐⭐ IS THIS FIELD NULL — the one question the typed reads above cannot answer.
 	//
@@ -1262,12 +1265,12 @@ public:
 	// back as a debug alert instead of a blank cell (2026-09-06).
 	// The RAM fold answers the same case with a real NULL (ibAggAcc::Result); this is what lets the
 	// server road say it too, instead of guessing from a value that has no way to be absent.
-	bool        IsResultNull(const wxString& name);
+	bool        IsResultNull(const ibString& name);
 
 	// A cell's fields found once per result (FieldSlots above): the slots of a base, one lookup per cell
 	// whatever it reads, and a field's index the first time a slot is asked for.
-	FieldSlots& FieldsOf(const wxString& base);
-	int         FieldIndex(FieldSlots& slots, const wxString& base, unsigned slot, const wxString& suffix);
+	FieldSlots& FieldsOf(const ibString& base);
+	int         FieldIndex(FieldSlots& slots, const ibString& base, unsigned slot, const ibString& suffix);
 
 	// …and the typed reads of a field found that way, answering exactly what the named reads answer.
 	ibString    GetResultString(int field);
@@ -1276,11 +1279,11 @@ public:
 	bool        GetResultBool(int field);
 	ibDateTime  GetResultDate(int field);
 	ibNumber    GetResultNumber(int field);
-	void*       GetResultBlob(int field, wxMemoryBuffer& buffer);
+	void*       GetResultBlob(int field, ibMemoryBuffer& buffer);
 	bool        IsResultNull(int field);
 
 	int      ColumnCount();
-	wxString ColumnName(int column);
+	ibString ColumnName(int column);
 
 	// (RawResultSet REMOVED 2026-08-13 — the Phase-1 bridge that handed out the borrowed driver
 	//  cursor for callers still materialising rows by hand. It had ONE left, the bytecode cache
@@ -1302,7 +1305,7 @@ private:
 	// row after row, so the one after the last is almost always the next — one comparison — where a hash
 	// map hashed the name and, in a checked build, locked for every iterator it made (2026-09-12). A
 	// deque keeps a FieldSlots where it is while the next base is added (ibCellFields holds one).
-	std::deque<std::pair<wxString, FieldSlots>> m_fields;
+	std::deque<std::pair<ibString, FieldSlots>> m_fields;
 	size_t         m_lastFields = 0;
 	StringToIntMap m_columnsByName;
 	bool           m_columnsByNameBuilt = false;
@@ -1343,7 +1346,7 @@ public:
 
 	// --- fluent DQL construction (chainable, returns *this) ---------------
 	// Physical names only — the metadata->physical mapping is a Level 3 job.
-	ibDatabaseQueryBuilder& From(const wxString& table);
+	ibDatabaseQueryBuilder& From(const ibString& table);
 	// FROM a pre-built source tree (Scan / Join / Subquery) — the flexible form that
 	// lets the metadata layer hand down an arbitrary join/derived-table source. Wins
 	// over From(table) when both are set.
@@ -1352,13 +1355,13 @@ public:
 	// or a prior Join) becomes the LEFT; `table` / `right` is the RIGHT; `on` the ON
 	// predicate (qualify its columns with ibCol(table, name) to disambiguate). Several
 	// Join() nest left-deep. The ibQueryRelPtr overload joins a subquery / slice source.
-	ibDatabaseQueryBuilder& Join(const wxString& table, ibQueryExprPtr on,
+	ibDatabaseQueryBuilder& Join(const ibString& table, ibQueryExprPtr on,
 	                             ibQueryJoinType type = ibQueryJoinType::Inner);
 	ibDatabaseQueryBuilder& Join(ibQueryRelPtr right, ibQueryExprPtr on,
 	                             ibQueryJoinType type = ibQueryJoinType::Inner);
-	ibDatabaseQueryBuilder& Select(std::vector<wxString> columns);   // empty / unset = SELECT *
+	ibDatabaseQueryBuilder& Select(std::vector<ibString> columns);   // empty / unset = SELECT *
 	ibDatabaseQueryBuilder& Where(ibQueryExprPtr predicate);         // AND-folded with prior Where()
-	ibDatabaseQueryBuilder& OrderBy(const wxString& column, ibQuerySortDir dir = ibQuerySortDir::Asc);
+	ibDatabaseQueryBuilder& OrderBy(const ibString& column, ibQuerySortDir dir = ibQuerySortDir::Asc);
 	ibDatabaseQueryBuilder& AddSortKey(ibQuerySortKey key);   // prebuilt key (composite / metadata-derived)
 	ibDatabaseQueryBuilder& Limit(long count, long offset = 0);
 
@@ -1415,16 +1418,16 @@ public:
 	// for its whole job — gate a CREATE on TableExists, read a live column set, check open /
 	// in-transaction state — without reaching for the raw ibDatabaseLayer. A scope that holds no
 	// connection reports false / empty (these never throw — they are pre-flight checks).
-	bool          TableExists(const wxString& table);
-	wxArrayString GetColumns(const wxString& table);
+	bool          TableExists(const ibString& table);
+	std::vector<ibString> GetColumns(const ibString& table);
 	bool          IsOpen();
 	bool          IsActiveTransaction();
 
 private:
 	// fluent state — assembled into an ibQueryIR by Build()
-	wxString                    m_table;
+	ibString                    m_table;
 	ibQueryRelPtr               m_source;       // pre-built FROM tree (Join/Subquery); null = ibScan(m_table)
-	std::vector<wxString>       m_select;
+	std::vector<ibString>       m_select;
 	std::vector<ibQueryExprPtr> m_predicates;   // AND-folded
 	std::vector<ibQuerySortKey> m_sortKeys;
 	bool                        m_hasLimit   = false;
@@ -1460,8 +1463,8 @@ public:
 	// they are the assignment columns; for Delete they are the WHERE-equality
 	// columns (DELETE ... WHERE col0 = ? AND col1 = ? ...). `matchKeys` are the
 	// PK columns for Upsert (ignored otherwise). `holder` null = session default.
-	ibQueryStatement(Kind kind, const wxString& table, std::vector<wxString> columns,
-	                 std::vector<wxString> matchKeys = {},
+	ibQueryStatement(Kind kind, const ibString& table, std::vector<ibString> columns,
+	                 std::vector<ibString> matchKeys = {},
 	                 ibDatabaseConnectionHolder* holder = nullptr);
 	~ibQueryStatement() override = default;
 
@@ -1515,9 +1518,9 @@ protected:   // ibBatchInsert is one — its table, its columns and the values i
 	ibDmlStatement BuildDml() const;
 
 	Kind                        m_kind;
-	wxString                    m_table;
-	std::vector<wxString>       m_columns;
-	std::vector<wxString>       m_matchKeys;
+	ibString                    m_table;
+	std::vector<ibString>       m_columns;
+	std::vector<ibString>       m_matchKeys;
 	std::vector<ibQueryExprPtr> m_values;     // one expr per column, in column order
 	ibDatabaseConnectionHolder* m_holder;
 	ibQueryExprPtr              m_wherePredicate;   // Update only: extra WHERE (RLS), AND-folded with the key match
@@ -1547,7 +1550,7 @@ class BACKEND_API ibBatchInsert : public ibQueryStatement
 {
 public:
 	// `columns` are the physical column names in bind order. `holder` null = session default.
-	ibBatchInsert(const wxString& table, std::vector<wxString> columns, ibDatabaseConnectionHolder* holder = nullptr);
+	ibBatchInsert(const ibString& table, std::vector<ibString> columns, ibDatabaseConnectionHolder* holder = nullptr);
 	~ibBatchInsert() override;
 
 	// Keep the base's non-pure overload visible alongside our overrides.

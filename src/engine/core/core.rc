@@ -1,0 +1,8 @@
+// core.dll - its version (version.rc2).
+
+#include <windows.h>
+
+#define OES_FILE_DESCRIPTION "OES core library"
+#define OES_FILE_NAME        "core.dll"
+#define OES_FILE_TYPE        VFT_DLL
+#include "version.rc2"

@@ -3,7 +3,7 @@
 #include <wx/imaglist.h>
 #include <wx/sizer.h>
 
-#include "protocol/protocol.h"   // ibProtocolName
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibAllFunctions
 
 #include "frmclient/win/picture.h"
 
@@ -54,14 +54,18 @@ void ibDialogFunctionAll::BuildTree(const ibProtocolNode& shown)
 		return picture.IsOk() ? imageList->Add(picture) : -1;
 	};
 
+	// Every picture the tree names asked for at once — not a call per item drawn.
+	const std::vector<ibProtocolNode> groups = shown.FindChild(ibProtocol::ibSchema::ibAllFunctions::Groups).Children();
+	ibProtocolPictureReceive(shown);
+
 	wxTreeItemId root = m_treeCtrlElements->AddRoot(wxEmptyString);
-	for (const ibProtocolNode& group : shown.FindChild(ibProtocolName::Groups).Children()) {
-		const int groupImage = imageOf(group.GetString(ibProtocolName::Icon));
-		wxTreeItemId groupItem = m_treeCtrlElements->AppendItem(root, group.GetString(ibProtocolName::Title), groupImage, groupImage);
+	for (const ibProtocolNode& group : groups) {
+		const int groupImage = imageOf(group.GetString(ibProtocol::ibSchema::ibAllFunctions::Icon));
+		wxTreeItemId groupItem = m_treeCtrlElements->AppendItem(root, group.GetString(ibProtocol::ibSchema::ibAllFunctions::Title), groupImage, groupImage);
 		for (const ibProtocolNode& item : group.Children()) {
-			const int itemImage = imageOf(item.GetString(ibProtocolName::Icon));
-			m_treeCtrlElements->AppendItem(groupItem, item.GetString(ibProtocolName::Title), itemImage, itemImage,
-				new ibFunctionItem(item.GetInt(ibProtocolName::Item)));
+			const int itemImage = imageOf(item.GetString(ibProtocol::ibSchema::ibAllFunctions::Icon));
+			m_treeCtrlElements->AppendItem(groupItem, item.GetString(ibProtocol::ibSchema::ibAllFunctions::Title), itemImage, itemImage,
+				new ibFunctionItem(item.GetInt(ibProtocol::ibSchema::ibAllFunctions::Item)));
 		}
 	}
 

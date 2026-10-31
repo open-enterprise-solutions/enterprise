@@ -8,7 +8,10 @@
 #include <wx/itemattr.h>   // wxItemAttr — the header's look
 #include <wx/renderer.h>   // wxRendererNative::DrawCheckMark — a boolean cell
 
+#include "core/serialize/dataBuilder.h"              // ibDataValue — a column's width, as its property takes it
+#include "frmclient/backend/appData.h"               // DesignerMode — no table's rows are read there
 #include "frmclient/visualView/commandBar.h"
+#include "frmclient/visualView/visualHostClient.h"   // a designer's host selects and moves by it
 #include "frmclient/win/picture.h"
 #include "frmclient/win/ctrls/controlTextEditor.h"
 #include "frmclient/win/ctrls/dataview/dataview.h"
@@ -26,20 +29,18 @@ public:
 	explicit ibViewCellRenderer(const ibValueModelTableBoxColumn& column)
 		: ibDataViewCustomRenderer(GetDefaultType(), wxDATAVIEW_CELL_EDITABLE), m_column(column) {}
 
-	virtual bool IsCompatibleVariantType(const wxString& /*variantType*/) const override { return true; }
-
-	virtual bool SetValue(const wxVariant& value) override
+	virtual bool SetValue(const ibVariant& value) override
 	{
 		m_flag.reset();
 		m_text.clear();
-		if (value.GetType() == wxT("bool"))
-			m_flag = value.GetBool();
-		else if (!value.IsNull())
+		if (value.GetType() == ibValueTypes::TYPE_BOOLEAN)
+			m_flag = value.GetBoolean();
+		else if (value.GetType() != ibValueTypes::TYPE_EMPTY)
 			m_text = value.GetString();
 		return true;
 	}
 
-	virtual bool GetValue(wxVariant& /*value*/) const override { return true; }
+	virtual bool GetValue(ibVariant& /*value*/) const override { return true; }
 
 	virtual bool Render(wxRect rect, wxDC* dc, int state) override
 	{
@@ -66,12 +67,12 @@ public:
 	virtual bool HasEditorCtrl() const override { return true; }
 
 	// The desktop's CreateEditorCtrl: the field's editor in the cell, as its column says, the table's look on it.
-	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value) override
+	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) override
 	{
 		ibControlTextEditor* const textEditor = new ibControlTextEditor;
 		textEditor->SetDVCMode(true);
 		textEditor->Show(false);   // hidden while it is made: no flicker
-		if (!textEditor->Create(parent, wxID_ANY, value.IsNull() ? wxString() : value.GetString(),
+		if (!textEditor->Create(parent, wxID_ANY, value.GetType() == ibValueTypes::TYPE_EMPTY ? wxString() : value.GetString().ToWxString(),
 			labelRect.GetPosition(), labelRect.GetSize()))
 			return nullptr;
 
@@ -96,7 +97,7 @@ public:
 	}
 
 	// The text in the editor it made.
-	virtual bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) override
+	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) override
 	{
 		if (editor == nullptr || editor != m_textEditor)
 			return false;
@@ -117,13 +118,13 @@ private:
 // its window takes (UpdateWindow): what laying on again would only lay out and repaint.
 ibProtocolNode PropertiesOf(const ibProtocolNode& node)
 {
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 	ibProtocolNode properties = node.Clone();
-	properties.Remove(ibProtocolName::NodeChildren);
-	properties.Remove(ibProtocolName::State);
-	properties.SetValue(ibProtocolName::Enabled, state.GetBool(ibProtocolName::Enabled, true))
-		.SetValue(ibProtocolName::Visible, state.GetBool(ibProtocolName::Visible, true))
-		.SetValue(ibProtocolName::Tooltip, state.GetString(ibProtocolName::Tooltip));
+	properties.Remove(ibProtocol::ibNode::Children);
+	properties.Remove(ibProtocol::ibForm::ibState::State);
+	properties.SetValue(ibProtocol::ibForm::ibProperty::Enabled, state.GetBool(ibProtocol::ibForm::ibState::Enabled, true))
+		.SetValue(ibProtocol::ibForm::ibProperty::Visible, state.GetBool(ibProtocol::ibForm::ibState::Visible, true))
+		.SetValue(ibProtocol::ibForm::ibProperty::Tooltip, state.GetString(ibProtocol::ibForm::ibState::Tooltip));
 	return properties;
 }
 
@@ -180,14 +181,14 @@ ibValueModelTableBox::ibValueModelTableBox(ibVisualHostClient& host, long long c
 
 ibValueModelTableBox::~ibValueModelTableBox() = default;
 
-void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
+void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 {
 	m_panel = new wxPanel(parent, wxID_ANY);
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
 
 	// The chrome: its command bar above it.
-	m_commandBar = std::make_unique<ibViewCommandBar>(m_panel, [this](const ibProtocolNode& args) {
-		CallAsAction(ibProtocolEvent::Command, args);
+	m_commandBar = std::make_unique<ibViewCommandBar>(m_panel, GetVisualHost(), [this](const ibProtocolNode& args) {
+		CallAsAction(ibProtocol::ibEvent::ibKind::Command, args);
 	});
 	sizer->Add(m_commandBar->GetWindow(), 0, wxEXPAND);
 
@@ -199,14 +200,90 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 	m_panel->SetMinSize(m_panel->FromDIP(wxSize(150, 75)));
 
 	// The rows — read once the table has its size and its columns (the data view's bootstrap, on the next idle), on
-	// its thread; what an answer leaves to the UI comes back here, if this is still here.
+	// its thread; what an answer leaves to the UI comes back here, if this is still here. State's Rows (the first page)
+	// is served here once when the reset asks from the top — no wire call.
 	std::weak_ptr<bool> alive = m_alive;
-	ibViewTableModel* const model = new ibViewTableModel(MakeFetcher(), [this, alive](const ibViewTableModel::ibAnswer& answer) {
+	ibViewFetcher wire = MakeFetcher();
+	// …none in the designer: its tables have no rows to show, the server reads none there (ibValueModelTableBox::Fetch) —
+	// a form tried out in it was refused (404), each of its tables (2026-10-15).
+	const bool designer = appData->DesignerMode();
+	ibViewFetcher fetcher = [this, wire, designer](const ibProtocolNode& request, ibProtocolNode& answer) -> bool {
+		// The page State's Rows was read as: from the top, or around the row the server stands on — Anchor, when this side
+		// had been given it — with its Count and as many rows ahead (Before), the top saying so (Begin). Taken for a read it
+		// holds all of: that Anchor, no larger a Count, no more rows ahead than it has — or the top reached.
+		const long long held = m_firstDraw.GetInt(ibProtocol::ibForm::ibTable::Count);
+		const long long ahead = m_firstDraw.GetInt(ibProtocol::ibForm::ibTable::Before);
+		const long long wanted = request.GetInt(ibProtocol::ibForm::ibTable::Before);
+		const bool reset = m_hasFirstDraw
+			&& request.GetInt(ibProtocol::ibForm::ibTable::Direction) == static_cast<int>(ibProtocol::ibForm::ibTable::ibDirection::Reset)
+			&& request.GetInt(ibProtocol::ibForm::ibTable::Parent) == 0;
+		if (reset
+			&& request.GetInt(ibProtocol::ibForm::ibTable::Anchor) == m_firstDraw.GetInt(ibProtocol::ibForm::ibTable::Anchor)
+			&& (held == 0 || request.GetInt(ibProtocol::ibForm::ibTable::Count) <= held)
+			&& (wanted == 0 || m_firstDraw.GetBool(ibProtocol::ibForm::ibTable::Begin)
+				|| (m_firstDraw.Has(ibProtocol::ibForm::ibTable::Before) && ahead >= wanted))) {
+			answer = std::move(m_firstDraw);
+			m_hasFirstDraw = false;
+			m_firstDraw = ibProtocolNode();
+			return true;
+		}
+		// …AND ONE THAT IS THE WHOLE LEVEL — Begin and End — answers a read anew around any row of it: the read after a
+		// cell's Change names the client's own cursor (its top row), not the row the server stands on. The page is cut out
+		// of it as the server would have read it.
+		const long long anchor = request.GetInt(ibProtocol::ibForm::ibTable::Anchor);
+		if (reset && anchor != 0 && held > 0 && m_firstDraw.GetBool(ibProtocol::ibForm::ibTable::End)
+			&& m_firstDraw.GetBool(ibProtocol::ibForm::ibTable::Begin)) {
+			const std::vector<ibProtocolNode> rows = m_firstDraw.Children();
+			std::size_t at = 0;
+			while (at < rows.size() && rows[at].GetId() != anchor)
+				++at;
+			if (at < rows.size()) {
+				const long long count = request.GetInt(ibProtocol::ibForm::ibTable::Count);
+				const std::size_t from = at - std::min<std::size_t>(at, static_cast<std::size_t>(std::max(0LL, wanted)));
+				const std::size_t to = count > 0 ? std::min(rows.size(), at + static_cast<std::size_t>(count)) : rows.size();
+				ibProtocolNode page;
+				for (const auto& entry : m_firstDraw.Entries()) {
+					if (entry.first != ibProtocol::ibNode::Children && entry.first != ibProtocol::ibForm::ibTable::Before
+						&& entry.first != ibProtocol::ibForm::ibTable::Begin && entry.first != ibProtocol::ibForm::ibTable::End
+						&& entry.first != ibProtocol::ibForm::ibTable::Anchor && entry.first != ibProtocol::ibForm::ibTable::Count)
+						page.SetValue(entry.first, entry.second);
+				}
+				for (std::size_t idx = from; idx < to; ++idx) {
+					ibProtocolNode row = page.AddChild();
+					for (const auto& entry : rows[idx].Entries())
+						row.SetValue(entry.first, entry.second);
+				}
+				if (request.Has(ibProtocol::ibForm::ibTable::Before))
+					page.SetValue(ibProtocol::ibForm::ibTable::Before, static_cast<long long>(at - from));
+				if (from == 0)
+					page.SetValue(ibProtocol::ibForm::ibTable::Begin, true);
+				if (to == rows.size())
+					page.SetValue(ibProtocol::ibForm::ibTable::End, true);
+				answer = std::move(page);
+				m_hasFirstDraw = false;
+				m_firstDraw = ibProtocolNode();
+				return true;
+			}
+		}
+		return !designer && wire(request, answer);
+	};
+	ibViewTableModel* const model = new ibViewTableModel(std::move(fetcher), [this, alive](const ibViewTableModel::ibAnswer& answer) {
 		wxTheApp->CallAfter([this, alive, answer]() {
 			if (alive.lock())
 				OnAnswered(answer);
 		});
 	});
+	// The table takes the focus as its form opens — the desktop's, as its model is attached — but only where it can be
+	// seen: on a notebook page that is not selected (a hidden ancestor) focusing it makes the notebook switch to that page,
+	// and the form opens on the table's page instead of its first. What it stands in is drawn already, before what is in
+	// it; its own Visible is the State's, which Update lays on.
+	if (!designer) {
+		bool visible = node.FindChild(ibProtocol::ibForm::ibState::State).GetBool(ibProtocol::ibForm::ibState::Visible, true);
+		for (wxWindow* w = parent; visible && w != nullptr && !w->IsTopLevel(); w = w->GetParent())
+			visible = w->IsShown();
+		if (visible)
+			m_dataView->SetFocus();
+	}
 	m_dataView->AssociateModel(model);
 	model->DecRef();   // the data view holds it
 
@@ -214,6 +291,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 	m_dataView->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, &ibValueModelTableBox::OnSelectionChanged, this);
 	m_dataView->GetMainWindow()->Bind(wxEVT_LEFT_UP, &ibValueModelTableBox::OnCellCursor, this);
 	m_dataView->GetMainWindow()->Bind(wxEVT_KEY_UP, &ibValueModelTableBox::OnCellCursor, this);
+	m_dataView->GetMainWindow()->Bind(wxEVT_LEFT_DOWN, &ibValueModelTableBox::OnMainWindowClick, this);
 	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &ibValueModelTableBox::OnItemActivated, this);
 	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_START_EDITING, &ibValueModelTableBox::OnItemStartEditing, this);
 	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_EDITING_STARTED, &ibValueModelTableBox::OnItemEditingStarted, this);
@@ -222,7 +300,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 	m_dataView->Bind(wxEVT_CONTROL_BUTTON_SELECT, &ibValueModelTableBox::OnEditorButton, this);
 	m_dataView->Bind(wxEVT_CONTROL_BUTTON_OPEN, &ibValueModelTableBox::OnEditorButton, this);
 	m_dataView->Bind(wxEVT_CONTROL_BUTTON_CLEAR, &ibValueModelTableBox::OnEditorButton, this);
-	m_dataView->Bind(wxEVT_DATAVIEW_COLUMN_HEADER_CLICK, &ibValueModelTableBox::OnColumnHeaderClick, this);
+	m_dataView->Bind(wxEVT_DATAVIEW_COLUMN_HEADER_CLICK, &ibValueModelTableBox::OnColumnClick, this);
 	m_dataView->Bind(wxEVT_DATAVIEW_COLUMN_REORDERED, &ibValueModelTableBox::OnColumnReordered, this);
 	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibValueModelTableBox::OnContextMenu, this);
 	m_dataView->GenericGetHeader()->Bind(wxEVT_HEADER_END_RESIZE, &ibValueModelTableBox::OnHeaderEndResize, this);
@@ -240,13 +318,13 @@ void ibValueModelTableBox::Update(const ibProtocolNode& node)
 
 		// The desktop's OnUpdated: the header and the footer, their heights in lines, the rows and columns frozen, how
 		// the cursor stands.
-		m_dataView->ShowHeaderWindow(node.GetBool(ibProtocolName::Header, true));
-		m_dataView->SetHeaderHeight(static_cast<int>(node.GetInt(ibProtocolName::HeaderHeight, 1)));
-		m_dataView->ShowFooterWindow(node.GetBool(ibProtocolName::Footer, false));
-		m_dataView->SetFooterHeight(static_cast<int>(node.GetInt(ibProtocolName::FooterHeight, 1)));
-		m_dataView->FreezeTo(static_cast<int>(node.GetInt(ibProtocolName::FreezeRow)),
-			static_cast<int>(node.GetInt(ibProtocolName::FreezeCol)));
-		m_dataView->SetSelectionMode(node.GetInt(ibProtocolName::RowSelectionMode, ibDataViewSelectRow) == ibDataViewSelectCell
+		m_dataView->ShowHeaderWindow(node.GetBool(ibProtocol::ibForm::ibTable::Header, true));
+		m_dataView->SetHeaderHeight(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibTable::HeaderHeight, 1)));
+		m_dataView->ShowFooterWindow(node.GetBool(ibProtocol::ibForm::ibTable::Footer, false));
+		m_dataView->SetFooterHeight(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibTable::FooterHeight, 1)));
+		m_dataView->FreezeTo(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibTable::FreezeRow)),
+			static_cast<int>(node.GetInt(ibProtocol::ibForm::ibTable::FreezeCol)));
+		m_dataView->SetSelectionMode(node.GetInt(ibProtocol::ibForm::ibTable::RowSelectionMode, ibDataViewSelectRow) == ibDataViewSelectCell
 			? ibDataViewSelectCell : ibDataViewSelectRow);
 
 		UpdateWindow(m_panel, node);
@@ -260,19 +338,19 @@ void ibValueModelTableBox::Update(const ibProtocolNode& node)
 		ApplyLook(m_commandBar->GetWindow(), node);
 	}
 
-	UpdateState(node.FindChild(ibProtocolName::State), nullptr);
+	UpdateState(node.FindChild(ibProtocol::ibForm::ibState::State), nullptr);
 }
 
 void ibValueModelTableBox::Update(const ibProtocolNode& node, const ibProtocolNode& patch)
 {
 	// Its properties among what changed — laid on as a whole (Update); its State alone — only what of it changed: an
 	// answer that moved the cursor neither builds the command bar again nor repaints it.
-	if (patch.GetChangeCount() > (patch.Has(ibProtocolName::State) ? 1u : 0u)) {
+	if (patch.GetChangeCount() > (patch.Has(ibProtocol::ibForm::ibState::State) ? 1u : 0u)) {
 		Update(node);
 		return;
 	}
-	const ibProtocolNode changed = patch.FindChild(ibProtocolName::State);
-	UpdateState(node.FindChild(ibProtocolName::State), &changed);
+	const ibProtocolNode changed = patch.FindChild(ibProtocol::ibForm::ibState::State);
+	UpdateState(node.FindChild(ibProtocol::ibForm::ibState::State), &changed);
 }
 
 void ibValueModelTableBox::UpdateState(const ibProtocolNode& state, const ibProtocolNode* changed)
@@ -281,37 +359,45 @@ void ibValueModelTableBox::UpdateState(const ibProtocolNode& state, const ibProt
 	// table built anew had no command bar, no context menu, no current row.
 	const bool whole = changed == nullptr;
 
-	if (whole || changed->Has(ibProtocolName::CommandBar))
-		m_commandBar->Update(state.FindChild(ibProtocolName::CommandBar));
-	if (whole || changed->Has(ibProtocolName::ContextMenu)) {
+	if (whole || changed->Has(ibProtocol::ibForm::ibCommandBar::CommandBar))
+		m_commandBar->Update(state.FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar));
+	if (whole || changed->Has(ibProtocol::ibForm::ibTable::ContextMenu)) {
 		// A copy — the frame changes under a handle into it with the next answer.
-		const ibProtocolNode contextMenu = state.FindChild(ibProtocolName::ContextMenu);
+		const ibProtocolNode contextMenu = state.FindChild(ibProtocol::ibForm::ibTable::ContextMenu);
 		m_contextMenu = contextMenu.IsNode() ? contextMenu.Clone() : ibProtocolNode();
 	}
 
 	// How the rows are shown — the State's: the person switches it.
-	if (whole || changed->Has(ibProtocolName::ViewMode))
-		m_dataView->SetViewMode(static_cast<ibDataViewViewMode>(state.GetInt(ibProtocolName::ViewMode,
-			static_cast<int>(ibProtocolViewMode::Hierarchical))));
+	if (whole || changed->Has(ibProtocol::ibForm::ibTable::ViewMode))
+		m_dataView->SetViewMode(static_cast<ibDataViewViewMode>(state.GetInt(ibProtocol::ibForm::ibTable::ViewMode,
+			static_cast<int>(ibProtocol::ibForm::ibTable::ibViewMode::Hierarchical))));
 
-	// The rows read anew when the server has — the first time, the data view reads them by itself.
-	if (whole || changed->Has(ibProtocolName::Version)) {
-		const long long version = state.GetInt(ibProtocolName::Version);
+	// The first page may already ride in this State's frame (Rows). Else the data view fetches, as before.
+	if (whole || changed->Has(ibProtocol::ibForm::ibTable::Rows)) {
+		if (state.Has(ibProtocol::ibForm::ibTable::Rows)) {
+			m_firstDraw = state.FindChild(ibProtocol::ibForm::ibTable::Rows).Clone();
+			m_hasFirstDraw = true;
+		}
+	}
+
+	// The rows read anew when the server has — the first time, the data view reads them by itself (or from Rows above).
+	if (whole || changed->Has(ibProtocol::ibForm::ibTable::Version)) {
+		const long long version = state.GetInt(ibProtocol::ibForm::ibTable::Version);
 		if (m_version != -1 && version != m_version)
 			m_dataView->SchedulePagedRefresh();
 		m_version = version;
 	}
 
 	// The row the server moved the cursor to — it says none back that the client told it.
-	if (whole || changed->Has(ibProtocolName::CurrentRow)) {
-		const long long currentRow = state.GetInt(ibProtocolName::CurrentRow);
+	if (whole || changed->Has(ibProtocol::ibForm::ibTable::CurrentRow)) {
+		const long long currentRow = state.GetInt(ibProtocol::ibForm::ibTable::CurrentRow);
 		if (currentRow != 0)
 			SelectRow(currentRow);
 	}
 
 	// A row activated: the server opens a cell's editor (an editable row) — the answer that says so opens it here.
-	if (whole || changed->Has(ibProtocolName::Edit)) {
-		const ibProtocolNode edit = state.FindChild(ibProtocolName::Edit);
+	if (whole || changed->Has(ibProtocol::ibForm::ibTable::Edit)) {
+		const ibProtocolNode edit = state.FindChild(ibProtocol::ibForm::ibTable::Edit);
 		if (m_awaitEdit && edit.IsNode()) {
 			m_awaitEdit = false;
 			OpenEditor(edit);
@@ -364,10 +450,10 @@ void ibValueModelTableBox::OpenEditor(const ibProtocolNode& edit)
 	if (m_editRow != 0)
 		return;   // a cell is being edited already
 
-	const ibDataViewItem row = m_dataView->FindRow(edit.GetInt(ibProtocolName::Row));
+	const ibDataViewItem row = m_dataView->FindRow(edit.GetInt(ibProtocol::ibForm::ibTable::Row));
 	if (!row.IsOk())
 		return;
-	const long long columnId = edit.GetInt(ibProtocolName::Column);
+	const long long columnId = edit.GetInt(ibProtocol::ibForm::ibTable::Column);
 	for (unsigned int idx = 0; idx < m_dataView->GetColumnCount(); ++idx) {
 		const ibDataViewColumn* const column = m_dataView->GetColumn(idx);
 		if (static_cast<long long>(column->GetModelColumn()) == columnId) {
@@ -400,31 +486,25 @@ bool ibValueModelTableBox::EditCurrentRow(const ibDataViewItem& item)
 	return true;
 }
 
-void ibValueModelTableBox::CallAsAction(ibProtocolEvent event, const ibProtocolNode& args)
+void ibValueModelTableBox::CallAsAction(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args)
 {
 	// As the row's activation (OnItemActivated): the editor opens here when the row has a cell that may be edited — its
 	// Input tells the server the cell; otherwise the server decides — a list's row opens its object's form, and an
 	// editor it opens comes in the answer (State's Edit), awaited from before the command goes.
-	if ((args.GetInt(ibProtocolName::Id) & eStartEditingFlag) != 0 && !EditCurrentRow(m_dataView->GetSelection()))
+	if ((args.GetInt(ibProtocol::ibEvent::Id) & eStartEditingFlag) != 0 && !EditCurrentRow(m_dataView->GetSelection()))
 		m_awaitEdit = true;
 	Send(event, args);
 }
 
-void ibValueModelTableBox::SendCell(ibProtocolEvent event, const ibProtocolNode& args)
+void ibValueModelTableBox::SendCell(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args)
 {
 	ibProtocolNode cell = args.IsNode() ? args.Clone() : ibProtocolNode();
-	cell.SetValue(ibProtocolName::Row, m_editRow).SetValue(ibProtocolName::Column, m_editColumn);
+	cell.SetValue(ibProtocol::ibForm::ibTable::Row, m_editRow).SetValue(ibProtocol::ibForm::ibTable::Column, m_editColumn);
 	Send(event, cell);
 }
 
 void ibValueModelTableBox::OnAnswered(const ibViewTableModel::ibAnswer& answer)
 {
-	// The pictures first — the rows they are of are drawn next.
-	for (const auto& [id, picture] : answer.pictures)
-		ibProtocolPictureKeep(id, ibProtocolPicture(picture));
-	if (!answer.pictures.empty())
-		m_dataView->Refresh();
-
 	if (answer.currentRow != 0)
 		SelectRow(answer.currentRow);
 }
@@ -487,10 +567,10 @@ void ibValueModelTableBox::SendCursor()
 
 	// The column too, where the cursor stands on a cell — a column's model column is its id.
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Row, handle);
+	args.SetValue(ibProtocol::ibEvent::Row, handle);
 	if (columnId != 0)
-		args.SetValue(ibProtocolName::Column, columnId);
-	Send(ibProtocolEvent::Row, args);
+		args.SetValue(ibProtocol::ibEvent::Column, columnId);
+	Send(ibProtocol::ibEvent::ibKind::Row, args);
 }
 
 void ibValueModelTableBox::OnItemActivated(ibDataViewEvent& event)
@@ -515,8 +595,8 @@ void ibValueModelTableBox::OnItemActivated(ibDataViewEvent& event)
 	if (!EditCurrentRow(event.GetItem())) {
 		if (column != nullptr) {
 			ibProtocolNode cell;
-			cell.SetValue(ibProtocolName::Row, handle).SetValue(ibProtocolName::Column, m_currentColumn);
-			Send(ibProtocolEvent::Row, cell);
+			cell.SetValue(ibProtocol::ibForm::ibTable::Row, handle).SetValue(ibProtocol::ibForm::ibTable::Column, m_currentColumn);
+			Send(ibProtocol::ibEvent::ibKind::Row, cell);
 		}
 		m_awaitEdit = true;
 	}
@@ -524,8 +604,8 @@ void ibValueModelTableBox::OnItemActivated(ibDataViewEvent& event)
 	// What else activating it is the server decides — the row's object opened, a choice made — and it raises the row's
 	// activation for the form.
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Row, handle);
-	Send(ibProtocolEvent::Open, args);
+	args.SetValue(ibProtocol::ibEvent::Row, handle);
+	Send(ibProtocol::ibEvent::ibKind::Open, args);
 }
 
 void ibValueModelTableBox::OnItemStartEditing(ibDataViewEvent& event)
@@ -544,7 +624,7 @@ void ibValueModelTableBox::OnItemEditingStarted(ibDataViewEvent& event)
 	m_awaitEdit = false;
 
 	// The typing started: the server takes the cell (its Edit) — the object is modified, nothing is committed.
-	SendCell(ibProtocolEvent::Input, ibProtocolNode());
+	SendCell(ibProtocol::ibEvent::ibKind::Input, ibProtocolNode());
 }
 
 void ibValueModelTableBox::OnItemEditingDone(ibDataViewEvent& event)
@@ -552,8 +632,8 @@ void ibValueModelTableBox::OnItemEditingDone(ibDataViewEvent& event)
 	// What was typed, committed — or nothing, the edit cancelled.
 	if (m_editRow != 0 && !event.IsEditCancelled()) {
 		ibProtocolNode args;
-		args.SetValue(ibProtocolName::Text, event.GetValue().GetString());
-		SendCell(ibProtocolEvent::Change, args);
+		args.SetValue(ibProtocol::ibEvent::Text, event.GetValue().GetString());
+		SendCell(ibProtocol::ibEvent::ibKind::Change, args);
 	}
 	m_editRow = 0;
 	m_editColumn = 0;
@@ -574,16 +654,24 @@ void ibValueModelTableBox::OnEditorButton(wxCommandEvent& event)
 			text->SetValue(wxEmptyString);
 	}
 
-	SendCell(type == wxEVT_CONTROL_BUTTON_SELECT ? ibProtocolEvent::Select
-		: type == wxEVT_CONTROL_BUTTON_OPEN ? ibProtocolEvent::Open : ibProtocolEvent::Clear, ibProtocolNode());
+	SendCell(type == wxEVT_CONTROL_BUTTON_SELECT ? ibProtocol::ibEvent::ibKind::Select
+		: type == wxEVT_CONTROL_BUTTON_OPEN ? ibProtocol::ibEvent::ibKind::Open : ibProtocol::ibEvent::ibKind::Clear, ibProtocolNode());
 }
 
-void ibValueModelTableBox::OnColumnHeaderClick(ibDataViewEvent& event)
+void ibValueModelTableBox::OnColumnClick(ibDataViewEvent& event)
 {
 	// The sort is the server's: asked of it, the arrow and the rows come back with its answer. Not passed on — the
 	// data view would turn its arrow by itself.
 	const ibDataViewColumn* const column = event.GetDataViewColumn();
-	if (column == nullptr || !column->IsSortable())
+	if (column == nullptr)
+		return;
+
+	// The designer's: the column selected in its editor (the desktop's) — there are no rows to sort.
+	if (GetVisualHost().IsDesignerHost()) {
+		GetVisualHost().SelectControl(GetVisualHost().GetValueForm()->FindControlByID(column->GetModelColumn()));
+		return;
+	}
+	if (!column->IsSortable())
 		return;
 
 	// The rows come back in another order: the read after it starts at the top, not at the row that was the top
@@ -591,8 +679,8 @@ void ibValueModelTableBox::OnColumnHeaderClick(ibDataViewEvent& event)
 	m_dataView->SetPagedSkipRestoreCapture();
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Column, static_cast<long long>(column->GetModelColumn()));
-	Send(ibProtocolEvent::Sort, args);
+	args.SetValue(ibProtocol::ibEvent::Column, static_cast<long long>(column->GetModelColumn()));
+	Send(ibProtocol::ibEvent::ibKind::Sort, args);
 }
 
 void ibValueModelTableBox::OnColumnReordered(ibDataViewEvent& event)
@@ -631,17 +719,21 @@ void ibValueModelTableBox::OnColumnReordered(ibDataViewEvent& event)
 	if (ibValueFrame* oldHolder = columnObject->GetParent())
 		oldHolder->RemoveChild(columnObject);
 
+	const unsigned int pos = at != wxNOT_FOUND ? wxMin((unsigned int)at, holder->GetChildCount()) : holder->GetChildCount();
 	columnObject->SetParent(holder);
-	holder->AddChild(at != wxNOT_FOUND
-		? wxMin((unsigned int)at, holder->GetChildCount()) : holder->GetChildCount(),
-		columnObject);
+	holder->AddChild(pos, columnObject);
 
-	// …and in the server's, which is the form: the same move there (OnColumnMoved).
+	// …and in the form: the designer's, its editor's command (the desktop's RefreshEditor over its tree so moved); the
+	// runtime's is the server's — the same move there (OnColumnMoved).
+	if (GetVisualHost().IsDesignerHost()) {
+		GetVisualHost().MovePosition(columnObject, holder, pos);
+		return;
+	}
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Column, columnObject->GetControlID())
-		.SetValue(ibProtocolName::Holder, holder != this ? holder->GetControlID() : 0)
-		.SetValue(ibProtocolName::Position, static_cast<long long>(at));
-	Send(ibProtocolEvent::Move, args);
+	args.SetValue(ibProtocol::ibEvent::Column, columnObject->GetControlID())
+		.SetValue(ibProtocol::ibEvent::Holder, holder != this ? holder->GetControlID() : 0)
+		.SetValue(ibProtocol::ibEvent::Position, static_cast<long long>(at));
+	Send(ibProtocol::ibEvent::ibKind::Move, args);
 }
 
 void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
@@ -655,11 +747,11 @@ void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 	constexpr int kFirstEntryId = wxID_HIGHEST + 1;
 	wxMenu menu;
 	for (std::size_t idx = 0; idx < entries.size(); ++idx) {
-		wxMenuItem* const item = menu.Append(kFirstEntryId + static_cast<int>(idx), entries[idx].GetString(ibProtocolName::Caption));
-		const wxBitmap picture = ibProtocolPicture(entries[idx].GetString(ibProtocolName::Picture));
+		wxMenuItem* const item = menu.Append(kFirstEntryId + static_cast<int>(idx), entries[idx].GetString(ibProtocol::ibForm::ibCommandBar::Caption));
+		const wxBitmap picture = ibProtocolPicture(entries[idx], ibProtocol::ibForm::ibCommandBar::Picture);
 		if (picture.IsOk())
 			item->SetBitmap(picture);
-		item->Enable(entries[idx].GetBool(ibProtocolName::Enabled, true));
+		item->Enable(entries[idx].GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));
 	}
 
 	const int chosen = m_dataView->GetPopupMenuSelectionFromUser(menu, event.GetPosition());
@@ -670,8 +762,8 @@ void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 		return;
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Id, entries[idx].GetInt(ibProtocolName::Id));
-	CallAsAction(ibProtocolEvent::Action, args);
+	args.SetValue(ibProtocol::ibEvent::Id, entries[idx].GetInt(ibProtocol::ibForm::ibCommandBar::Id));
+	CallAsAction(ibProtocol::ibEvent::ibKind::Action, args);
 }
 
 void ibValueModelTableBox::OnHeaderEndResize(ibHeaderGenericCtrlEvent& event)
@@ -684,45 +776,31 @@ void ibValueModelTableBox::OnHeaderEndResize(ibHeaderGenericCtrlEvent& event)
 	if (column == nullptr)
 		return;
 	m_dataView->CallAfter([this, column]() {
+		// The designer's: the width the column's property in the form, and the column selected (the desktop's
+		// SetWidthColumn and SelectControl).
+		if (GetVisualHost().IsDesignerHost()) {
+			ibValueFrame* const control = GetVisualHost().GetValueForm()->FindControlByID(column->GetModelColumn());
+			if (control == nullptr)
+				return;
+			ibPropertyGate::SetValue(control, control->GetProperty(ibProtocol::ibForm::ibTable::Width),
+				ibDataValue::UInt(static_cast<std::uint64_t>(column->WXGetSpecifiedWidth())));
+			GetVisualHost().SelectControl(control);
+			return;
+		}
 		ibProtocolNode args;
-		args.SetValue(ibProtocolName::Column, static_cast<long long>(column->GetModelColumn()))
-			.SetValue(ibProtocolName::Width, column->WXGetSpecifiedWidth());
-		Send(ibProtocolEvent::Resize, args);
+		args.SetValue(ibProtocol::ibEvent::Column, static_cast<long long>(column->GetModelColumn()))
+			.SetValue(ibProtocol::ibEvent::Width, column->WXGetSpecifiedWidth());
+		Send(ibProtocol::ibEvent::ibKind::Resize, args);
 	});
 }
 
-bool ibValueModelTableBox::ReadData(const ibDataNode& node)
+void ibValueModelTableBox::OnMainWindowClick(wxMouseEvent& event)
 {
-	m_propertyHeader->SetNodeValue(node.GetProperty(m_propertyHeader->GetName()));
-	m_propertyHeaderHeight->SetNodeValue(node.GetProperty(m_propertyHeaderHeight->GetName()));
-	m_propertyFooter->SetNodeValue(node.GetProperty(m_propertyFooter->GetName()));
-	m_propertyFooterHeight->SetNodeValue(node.GetProperty(m_propertyFooterHeight->GetName()));
-
-	m_propertyFreezeRow->SetNodeValue(node.GetProperty(m_propertyFreezeRow->GetName()));
-	m_propertyFreezeCol->SetNodeValue(node.GetProperty(m_propertyFreezeCol->GetName()));
-
-	m_propertyRowSelectionMode->SetNodeValue(node.GetProperty(m_propertyRowSelectionMode->GetName()));
-	m_propertyChoiceMode->SetNodeValue(node.GetProperty(m_propertyChoiceMode->GetName()));
-	m_propertyViewMode->SetNodeValue(node.GetProperty(m_propertyViewMode->GetName()));
-
-	return ibValueWindow::ReadData(node);
-}
-
-bool ibValueModelTableBox::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyHeader->GetName(), m_propertyHeader->GetNodeValue());
-	node.SetProperty(m_propertyHeaderHeight->GetName(), m_propertyHeaderHeight->GetNodeValue());
-	node.SetProperty(m_propertyFooter->GetName(), m_propertyFooter->GetNodeValue());
-	node.SetProperty(m_propertyFooterHeight->GetName(), m_propertyFooterHeight->GetNodeValue());
-
-	node.SetProperty(m_propertyFreezeRow->GetName(), m_propertyFreezeRow->GetNodeValue());
-	node.SetProperty(m_propertyFreezeCol->GetName(), m_propertyFreezeCol->GetNodeValue());
-
-	node.SetProperty(m_propertyRowSelectionMode->GetName(), m_propertyRowSelectionMode->GetNodeValue());
-	node.SetProperty(m_propertyChoiceMode->GetName(), m_propertyChoiceMode->GetNodeValue());
-	node.SetProperty(m_propertyViewMode->GetName(), m_propertyViewMode->GetNodeValue());
-
-	return ibValueWindow::WriteData(node);
+	// The designer's: a click on the rows selects the table, its column selected or not (the desktop's) — the
+	// application's click leaves the selection on a column, a table's part.
+	if (GetVisualHost().IsDesignerHost())
+		GetVisualHost().SelectControl(this);
+	event.Skip();
 }
 
 //***********************************************************************************
@@ -732,85 +810,47 @@ bool ibValueModelTableBox::WriteData(ibDataNode& node) const
 void ibValueModelTableBoxColumn::Create(wxWindow* /*parent*/, const ibProtocolNode& node)
 {
 	// Built bare, as on the desktop, and hung on the group it is in; what it shows is its State's (Update).
-	m_column = new ibViewTableColumnObject(*this, static_cast<unsigned int>(node.GetInt(ibProtocolName::ControlId)));
+	m_column = new ibViewTableColumnObject(*this, static_cast<unsigned int>(node.GetInt(ibProtocol::ibForm::ControlId)));
 	if (ibDataViewColumnGroup* const holder = GetParent() != nullptr ? GetParent()->GetColumnHolder() : nullptr)
 		holder->AppendColumn(m_column);
 }
 
 void ibValueModelTableBoxColumn::Update(const ibProtocolNode& node)
 {
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 
 	// The desktop's column OnUpdated. The header and the footer — the captions, the pictures, or both, as its
 	// representation says (the server resolves Auto, and sends no picture for a text one).
-	const bool picture = state.GetInt(ibProtocolName::Representation) == static_cast<int>(ibProtocolRepresentation::Picture);
-	m_column->SetTitle(picture ? wxString() : state.GetString(ibProtocolName::Caption));
-	m_column->SetBitmap(ibProtocolPicture(state.GetString(ibProtocolName::HeaderPicture)));
-	m_column->SetFooterTitle(picture ? wxString() : state.GetString(ibProtocolName::FooterText));
-	m_column->SetFooterBitmap(ibProtocolPicture(state.GetString(ibProtocolName::FooterPicture)));
+	const bool picture = state.GetInt(ibProtocol::ibForm::ibState::Representation) == static_cast<int>(ibProtocol::ibForm::ibState::ibRepresentation::Picture);
+	m_column->SetTitle(picture ? ibString() : state.GetString(ibProtocol::ibForm::ibState::Caption));
+	m_column->SetBitmap(ibProtocolPicture(state, ibProtocol::ibForm::ibTable::HeaderPicture));
+	m_column->SetFooterTitle(picture ? ibString() : state.GetString(ibProtocol::ibForm::ibTable::FooterText));
+	m_column->SetFooterBitmap(ibProtocolPicture(state, ibProtocol::ibForm::ibTable::FooterPicture));
 
-	m_column->SetWidth(static_cast<int>(node.GetInt(ibProtocolName::Width, 80)));
-	m_column->SetAlignment(static_cast<wxAlignment>(node.GetInt(ibProtocolName::HeaderAlign, wxALIGN_LEFT)));
-	m_column->SetFooterAlignment(static_cast<wxAlignment>(node.GetInt(ibProtocolName::FooterAlign, wxALIGN_LEFT)));
+	m_column->SetWidth(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibTable::Width, 80)));
+	m_column->SetAlignment(static_cast<wxAlignment>(node.GetInt(ibProtocol::ibForm::ibTable::HeaderAlign, wxALIGN_LEFT)));
+	m_column->SetFooterAlignment(static_cast<wxAlignment>(node.GetInt(ibProtocol::ibForm::ibTable::FooterAlign, wxALIGN_LEFT)));
 
-	m_column->SetHidden(!state.GetBool(ibProtocolName::Visible, true));
-	m_column->SetSortable(state.GetBool(ibProtocolName::Sortable));
-	m_column->SetResizeable(node.GetBool(ibProtocolName::Resizable, true));
-	m_column->SetReorderable(node.GetBool(ibProtocolName::Reorderable, true));
+	m_column->SetHidden(!state.GetBool(ibProtocol::ibForm::ibState::Visible, true));
+	m_column->SetSortable(state.GetBool(ibProtocol::ibForm::ibTable::Sortable));
+	m_column->SetResizeable(node.GetBool(ibProtocol::ibForm::ibTable::Resizable, true));
+	m_column->SetReorderable(node.GetBool(ibProtocol::ibForm::ibTable::Reorderable, true));
 
-	// How its cells are typed into is its properties' (ReadData); the server says whether the column may be written.
-	m_readOnly = state.GetBool(ibProtocolName::ReadOnly);
+	// How its cells are typed into is its node's; the server says whether the column may be written.
+	m_passwordMode = node.GetBool(ibProtocol::ibForm::ibProperty::PasswordMode);
+	m_multilineMode = node.GetBool(ibProtocol::ibForm::ibProperty::MultilineMode);
+	m_textEditMode = node.GetBool(ibProtocol::ibForm::ibTable::TexteditMode, true);
+	m_selectButton = node.GetBool(ibProtocol::ibForm::ibProperty::ButtonSelect, true);
+	m_openButton = node.GetBool(ibProtocol::ibForm::ibProperty::ButtonOpen);
+	m_clearButton = node.GetBool(ibProtocol::ibForm::ibProperty::ButtonClear, true);
+	m_readOnly = state.GetBool(ibProtocol::ibForm::ibTable::ReadOnly);
 
 	// The sort the server keeps, shown by the arrow; a click asks it for another.
-	m_sort = state.GetInt(ibProtocolName::Sort);
+	m_sort = state.GetInt(ibProtocol::ibForm::ibTable::Sort);
 	if (m_sort != 0)
 		m_column->SetSortOrder(m_sort > 0);
 	else if (m_column->IsSortKey())
 		m_column->UnsetAsSortKey();
-}
-
-bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
-{
-	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
-	m_propertyFooterText->SetNodeValue(node.GetProperty(m_propertyFooterText->GetName()));
-	m_propertyPasswordMode->SetNodeValue(node.GetProperty(m_propertyPasswordMode->GetName()));
-	m_propertyMultilineMode->SetNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
-	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
-	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
-	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
-	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
-	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
-	m_propertyHeaderAlign->SetNodeValue(node.GetProperty(m_propertyHeaderAlign->GetName()));
-	m_propertyFooterAlign->SetNodeValue(node.GetProperty(m_propertyFooterAlign->GetName()));
-	m_propertyWidth->SetNodeValue(node.GetProperty(m_propertyWidth->GetName()));
-	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
-	m_propertyResizable->SetNodeValue(node.GetProperty(m_propertyResizable->GetName()));
-	m_propertyReorderable->SetNodeValue(node.GetProperty(m_propertyReorderable->GetName()));
-
-	return ibValueControl::ReadData(node);
-}
-
-bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
-	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
-	node.SetProperty(m_propertyFooterText->GetName(), m_propertyFooterText->GetNodeValue());
-	node.SetProperty(m_propertyPasswordMode->GetName(), m_propertyPasswordMode->GetNodeValue());
-	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
-	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
-	node.SetProperty(m_propertyFormat->GetName(), m_propertyFormat->GetNodeValue());
-	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
-	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
-	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());
-	node.SetProperty(m_propertyHeaderAlign->GetName(), m_propertyHeaderAlign->GetNodeValue());
-	node.SetProperty(m_propertyFooterAlign->GetName(), m_propertyFooterAlign->GetNodeValue());
-	node.SetProperty(m_propertyWidth->GetName(), m_propertyWidth->GetNodeValue());
-	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
-	node.SetProperty(m_propertyResizable->GetName(), m_propertyResizable->GetNodeValue());
-	node.SetProperty(m_propertyReorderable->GetName(), m_propertyReorderable->GetNodeValue());
-
-	return ibValueControl::WriteData(node);
 }
 
 //***********************************************************************************
@@ -829,36 +869,14 @@ void ibValueModelTableBoxColumnGroup::Update(const ibProtocolNode& node)
 	if (m_group == nullptr)
 		return;
 
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
-	m_group->SetTitle(state.GetString(ibProtocolName::Caption));
-	m_group->SetKind(static_cast<ibColumnGroupKind>(node.GetInt(ibProtocolName::Grouping, ibColumnGroupVertical)));
-	m_group->SetTitleShown(node.GetBool(ibProtocolName::ShowTitle));
-	m_group->SetAlignment(static_cast<wxAlignment>(node.GetInt(ibProtocolName::HeaderAlign, wxALIGN_CENTER)));
-	m_group->SetHidden(!state.GetBool(ibProtocolName::Visible, true));
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
+	m_group->SetTitle(state.GetString(ibProtocol::ibForm::ibState::Caption));
+	m_group->SetKind(static_cast<ibColumnGroupKind>(node.GetInt(ibProtocol::ibForm::ibTable::Grouping, ibColumnGroupVertical)));
+	m_group->SetTitleShown(node.GetBool(ibProtocol::ibForm::ibTable::ShowTitle));
+	m_group->SetAlignment(static_cast<wxAlignment>(node.GetInt(ibProtocol::ibForm::ibTable::HeaderAlign, wxALIGN_CENTER)));
+	m_group->SetHidden(!state.GetBool(ibProtocol::ibForm::ibState::Visible, true));
 
 	// The geometry the group decides is the data view's to work out again — asked of the group.
 	if (ibDataViewCtrl* const dataView = m_group->GetOwner())
 		dataView->InvalidateColumnLayout();
-}
-
-bool ibValueModelTableBoxColumnGroup::ReadData(const ibDataNode& node)
-{
-	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyGrouping->SetNodeValue(node.GetProperty(m_propertyGrouping->GetName()));
-	m_propertyShowTitle->SetNodeValue(node.GetProperty(m_propertyShowTitle->GetName()));
-	m_propertyHeaderAlign->SetNodeValue(node.GetProperty(m_propertyHeaderAlign->GetName()));
-	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
-
-	return ibValueControl::ReadData(node);
-}
-
-bool ibValueModelTableBoxColumnGroup::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
-	node.SetProperty(m_propertyGrouping->GetName(), m_propertyGrouping->GetNodeValue());
-	node.SetProperty(m_propertyShowTitle->GetName(), m_propertyShowTitle->GetNodeValue());
-	node.SetProperty(m_propertyHeaderAlign->GetName(), m_propertyHeaderAlign->GetNodeValue());
-	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
-
-	return ibValueControl::WriteData(node);
 }

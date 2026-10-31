@@ -9,7 +9,7 @@ ibDesignerExclusivePolicy::ibDesignerExclusivePolicy(ibSessionRegistry* registry
 {
 }
 
-bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, wxString& reason)
+bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, ibString& reason)
 {
 	// Only designer Adds are subject to the exclusion; everyone else
 	// passes unconditionally.
@@ -35,7 +35,7 @@ bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, wxString& reaso
 	// succeeds and policy treats every live designer as a zombie.
 	//
 	// Rule: any other designer row visible in the snapshot vetoes the new designer.
-	const wxString& ownId = session.GetId();
+	const ibString& ownId = session.GetId();
 	const auto peerDesigners = [&ownId](const ibSessionSnapshot& snap) {
 		std::vector<unsigned int> rows;
 		for (unsigned int i = 0; i < snap.GetSessionCount(); ++i) {
@@ -66,7 +66,7 @@ bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, wxString& reaso
 	// (SettleSilentPeers): a row that moved is a designer at work and still vetoes; one that did not is
 	// removed, and the start goes on.
 	if (!peers.empty()) {
-		std::vector<wxString> guids;
+		std::vector<ibString> guids;
 		for (const unsigned int i : peers)
 			guids.push_back(snap.GetSession(i));
 		if (m_registry->SettleSilentPeers(guids) > 0) {
@@ -77,7 +77,7 @@ bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, wxString& reaso
 
 	for (const unsigned int i : peers) {
 		// Another designer row visible, and alive — veto.
-		reason = wxString::Format(
+		reason = ibString::Format(
 			_("Another designer process is already running:\n%s, %s, %s"),
 			snap.GetStartedDate(i),
 			snap.GetComputerName(i),
@@ -91,8 +91,8 @@ bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, wxString& reaso
 		// stays for the person; the line is for whoever reads afterwards, and it names WHICH peer.
 		// ⚠ AT INFO, because a line for the file is what Info is (journal.h): a Warning echoes as a
 		// dialog of its own, and it stood beside the box as a SECOND window for the same refusal (2026-09-11).
-		ibJournalInfo(wxT("session"), wxT("designer refused to start - another designer is ")
-			wxT("running: started %s, computer %s, user %s"),
+		ibJournalInfo(ibT("session"), ibT("designer refused to start - another designer is ")
+			ibT("running: started %s, computer %s, user %s"),
 			snap.GetStartedDate(i), snap.GetComputerName(i), snap.GetUserName(i));
 
 		return false;

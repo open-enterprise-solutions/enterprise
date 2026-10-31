@@ -18,14 +18,14 @@
 
 namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
-const ibArg& ArgMethod() { static const ibArg a(wxT("method"), ibArg::Kind::Text, ibMcpText("The protocol's method: login, logout, frame, schema, execute, event, respond, fetch, activate, close, upload, download, open, command."), true); return a; }
-const ibArg& ArgParams() { static const ibArg a(wxT("params"), ibArg::Kind::Node, ibMcpText("Its parameters, as the method takes them: {\"User\":\"...\",\"Password\":\"...\"} for login, {\"Client\":\"...\"} for frame, ..."), false); return a; }
+const ibArg& ArgMethod() { static const ibArg a(ibT("method"), ibArg::Kind::Text, ibMcpText("The protocol's method: login, logout, frame, schema, execute, event, respond, fetch, activate, close, upload, download, open, command."), true); return a; }
+const ibArg& ArgParams() { static const ibArg a(ibT("params"), ibArg::Kind::Node, ibMcpText("Its parameters, as the method takes them: {\"User\":\"...\",\"Password\":\"...\"} for login, {\"Client\":\"...\"} for frame, ..."), false); return a; }
 } // namespace
 
 class ibMcpToolClientCall : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("client_call"); }
+	ibString GetName() const override { return ibT("client_call"); }
 
 	// It waits for a client's session — on that session's worker, never on this process's main thread.
 	bool NeedsMainThread() const override { return false; }
@@ -34,12 +34,12 @@ public:
 	// client may do while it is asked something is the protocol's own rule (only respond).
 	bool RunsWhileBusy() const override { return true; }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("working as a client of the base");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Work with the base AS A CLIENT does - the protocol a browser or the desktop renderer speaks, "
 			"one call at a time: method and params; the answer is the method's result, a refusal is an error. "
@@ -56,9 +56,9 @@ public:
 			"is in, when it is a start page's cell}; respond {Client, Id: the pending "
 			"Request's id, Response}; fetch {Client, Control, Request, Form} - a table's rows {Direction 0/1/-1, Anchor, "
 			"Count, Parent} or a spreadsheet's cells {Top, Left, Bottom, Right}; activate / close {Client, Tab}; "
-			"upload {Client, Name, Data: base64, at most 1 MB} -> File (the id of a new temporary file of the client), "
-			"then upload {Client, File, Data} for each next part; download {Client, File, Part} -> Name, Part, Parts, "
-			"Data; open {Client, File} -> the frame, the file opened as a document of the template its name matches "
+			"upload {Client, Name, Data: the part's bytes written \"base64:<...>\", at most 1 MB} -> File (the id of a "
+			"new temporary file of the client), then upload {Client, File, Data} for each next part; download {Client, "
+			"File, Part} -> Name, Part, Parts, Data (\"base64:<...>\"); open {Client, File} -> the frame, the file opened as a document of the template its name matches "
 			"(the frame's Templates: Title, Mask). A client's files go when its session does. command {Client, Command} "
 			"-> the frame: a command of the frame's Menu (1 Undo, 2 Redo, 3 Save, 4 Close) done on the active tab's "
 			"document; one not Enabled is refused. The Menu is a tree of items: Separator; Command with Title, "
@@ -85,7 +85,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibClientHost* const host = appData != nullptr ? ibClientHost::Find(appData) : nullptr;
 		if (host == nullptr) {
@@ -94,13 +94,13 @@ public:
 		}
 		// A client in this same process: the call goes to the host as it is, no envelope, and its answer is the result.
 		// A refusal says why by its number, as the wire does in the error's code.
-		const ibDataNode* const given = params.FindChild(ArgParams().Name());
-		ibProtocolRefusal why = ibProtocolRefusal::None;
-		wxString error;
-		if (host->Call(ibProtocolMethodFromName(ArgMethod().Text(params).utf8_str()), given != nullptr ? *given : ibDataNode(),
+		const auto given = params.FindChild(ArgParams().Name());
+		ibProtocol::ibRefusal why = ibProtocol::ibRefusal::None;
+		ibString error;
+		if (host->Call(ibProtocol::MethodFromName(ArgMethod().Text(params).ToUtf8().c_str()), given ? *given : ibDataNode(),
 				result, why, error))
 			return true;
-		refusal = wxString::Format(wxT("refused %d: %s"), static_cast<s32>(why), error);
+		refusal = ibString::Format(ibT("refused %d: %s"), static_cast<std::int32_t>(why), error);
 		return false;
 	}
 };

@@ -182,10 +182,10 @@ enum class ibPriority : int {
 // ------------------------------------------------------------------
 struct BACKEND_API ibSessionIdentity {
 	ibGuid       m_guid;              // PK in sys_session.session
-	wxString     m_userName;          // empty = anonymous phase / technical
-	wxString     m_userGuid;           // sys_user row, empty before Attach
-	wxString     m_computer;          // hostname
-	wxString     m_address;            // "host:port" for web; "" for desktop
+	ibString     m_userName;          // empty = anonymous phase / technical
+	ibString     m_userGuid;           // sys_user row, empty before Attach
+	ibString     m_computer;          // hostname
+	ibString     m_address;            // "host:port" for web; "" for desktop
 	ibRunMode    m_appMode;            // how its process holds the base: a file base, a server, …
 	ibDateTime   m_started;
 	int          m_pid = 0;            // OS pid — for kick / attach debugger
@@ -216,7 +216,7 @@ public:
 	// kind = what this session does in the running process. The process-
 	// level run mode (how the exe was launched) lives on appData and is
 	// the same for every session inside a process — not duplicated here.
-	ibSession(wxString id, ibSessionKind kind);
+	ibSession(ibString id, ibSessionKind kind);
 
 	// Virtual — ibGUISession (desktop) and ibWebClientSession (per web
 	// tab) hang off this. The holder is the only strong reference (the
@@ -255,19 +255,20 @@ public:
 		Authenticated,   // creds accepted (silent or via dialog)
 		Failed,          // creds rejected — show "Authentication failed"
 		Cancelled,       // user cancelled the interactive dialog — silent exit
+		Timeout,         // the registry did not answer in time — a busy server, not the creds (ibConnectResult::Timeout)
 	};
-	OpenResult Open(const wxString& user, const wxString& password);
+	OpenResult Open(const ibString& user, const ibString& password);
 
 	// Interactive prompt event — fires only when silent Attach fails.
 	// Overridden by ibGUISession (shared for designer + enterprise; shows
 	// the wx login dialog) and future ibWebClientSession (HTTP login
 	// form). Base no-op returns false so non-GUI sessions fail hard on
 	// wrong creds without hanging on a non-existent prompt.
-	virtual bool OnShowAuthenticate(const wxString& /*user*/, const wxString& /*password*/) { return false; }
+	virtual bool OnShowAuthenticate(const ibString& /*user*/, const ibString& /*password*/) { return false; }
 
 	// Legacy id (string representation of m_guid or external cookie).
 	// New code should prefer m_identity.m_guid directly.
-	const wxString&    GetId()   const { return m_id; }
+	const ibString&    GetId()   const { return m_id; }
 	ibSessionKind      GetKind() const { return m_kind; }
 
 	// Session-wide lambda executor — pure accessor; the runtime itself
@@ -295,7 +296,7 @@ public:
 	// False means it could NOT be evaluated, with the reason in `produced` — a caller must refuse
 	// rather than carry on: an expression that failed and one that legitimately came out empty are
 	// the same emptiness afterwards.
-	bool EvaluateInRoot(const wxString& expression, class ibValue& produced);
+	bool EvaluateInRoot(const ibString& expression, class ibValue& produced);
 
 	// ⭐⭐ STATE THAT LIVES ONCE PER SESSION — ASKED FOR BY ITS TYPE.
 	//
@@ -334,8 +335,20 @@ public:
 	// pulls it opaquely in its ctor and applies it to every read/write. Null on
 	// Designer / technical sessions (no enforcement). Created at authentication
 	// (EnsureRoot) for runtime sessions; the concrete impl lives in session.cpp.
-	// Returns null inside an ibAccessTrustScope (a role module runs privileged).
+	// Returns null inside an ibAccessTrustScope (a role module, a privileged module
+	// runs privileged). Await pauses that window, so a task it runs while a question
+	// is open does not see the bypass.
 	const ibAccessPolicy* GetAccessPolicy() const;
+
+	// The trusted window (no RLS, no rights on objects) and the session-parameter
+	// write window. Await clears both for the tasks it runs and puts them back after.
+	bool AccessTrusted() const { return m_accessTrusted; }
+	bool SessionParametersOpen() const { return m_sessionParametersOpen; }
+
+	// A role handler (OnAccessRead / OnAccessWrite) may not ask the user. The frame's two
+	// doors call this (ShowModalMessage, Request). SetSessionParameters is not a role handler
+	// and may ask.
+	void RefuseQuestionFromRoleHandler() const;
 
 	// The module manager whose context (Manager / Catalogs / Documents / globals)
 	// an object/record/module compiled against `metaData` should parent to. One
@@ -381,7 +394,11 @@ public:
 	// Fire-and-forget activity label update — submits SetActivity@Low so
 	// it never preempts real Add / Remove work. Registry handler UPDATEs
 	// `sys_session.currentActivity`; admin UI sees it on the next snapshot.
-	void SetActivity(const wxString& activity);
+	void SetActivity(const ibString& activity);
+
+	// A thin client's resume token, its digest, into `sys_session.tokenHash` — written by the registry, the row's one
+	// writer (ProcessSetTokenHash). Waits for its verdict: false — refused, or not answered in time.
+	bool SetTokenHash(const ibString& tokenHash);
 
 	// Server session — back-link from a server-spawned client to the
 	// session that hosts it. Set by the holder right after the client is
@@ -447,12 +464,10 @@ public:
 	void ClearRoot();
 
 	// Idempotent CreateRoot over the configuration this session acquired.
-	// Called by ibSessionRegistry::NotifyAuthenticated between the
-	// OnFirstConnect phase (which may run metadataCreate, populating
-	// the base's active one) and the OnAuthenticated phase (whose listeners —
-	// e.g. RunDatabase → OnBeforeRunMetaObject — need session->mm to
-	// already exist). No-op when m_root already set or the session
-	// holds no configuration.
+	// Called by ibSessionRegistry::NotifyAuthenticated right after
+	// AcquireMetaData, before the OnAuthenticated phase (whose listeners —
+	// CompileRoot — need session->mm to already exist). No-op when m_root
+	// already set or the session holds no configuration.
 	void EnsureRoot();
 
 	// Read access — single overload, const only. The non-const reference
@@ -479,7 +494,15 @@ public:
 	// because the writer (SetSessionRawPassword in registry-driven
 	// InstallUser) is single-threaded; readers observe Auth() ==
 	// Authenticated before relying on the value.
-	const wxString& GetSessionRawPassword() const { return m_sessionRawPassword; }
+	const ibString& GetSessionRawPassword() const { return m_sessionRawPassword; }
+
+	// The child has the password in its ticket. Drop the copy this session
+	// was keeping for the next Designer launch, overwriting it first.
+	void ClearSessionRawPassword() {
+		for (size_t i = 0; i < m_sessionRawPassword.length(); ++i)
+			m_sessionRawPassword[i] = ibT('x');
+		m_sessionRawPassword.clear();
+	}
 
 	// ⭐⭐ THE ONE COMMAND TO STOP: "finish your current operation" — from any thread, from anyone (a closed
 	// window, Ctrl+Break, an administrator's kick, a debugger's Pause, a cancelled job, shutdown). The session
@@ -566,8 +589,8 @@ public:
 	// of times during a single form open. m_resolvedLanguageCode is the
 	// pre-computed answer — refreshed only when one of the three changes.
 	// Inline + by-const-ref keeps the read at one field load with no logic.
-	const wxString& GetLanguageCode() const { return m_translateState.m_resolvedLanguageCode; }
-	void            SetLanguageCode(const wxString& code) {
+	const ibString& GetLanguageCode() const { return m_translateState.m_resolvedLanguageCode; }
+	void            SetLanguageCode(const ibString& code) {
 		m_translateState.m_languageCode = code;
 		m_translateState.Resolve();
 	}
@@ -713,14 +736,14 @@ public:
 	// Diagnostic string set by the registry thread on Rejected / AuthFailed
 	// transitions. Read after State() / Auth() changes to report the
 	// reason to producers. Returned by value to avoid exposing the mutex.
-	wxString Reason() const;
+	ibString Reason() const;
 
 	// Same string, set WITHOUT a state change — for a close that owes the
 	// user an explanation. An admin kick writes it here before Close(true);
 	// the frontend's force-exit listener shows it and stays silent when it
 	// is empty (an ordinary process shutdown force-closes too, and that one
 	// explains itself by the user having asked for it).
-	void SetReason(const wxString& reason);
+	void SetReason(const ibString& reason);
 
 	// Canonical "session this code is currently working on": the calling
 	// thread's own binding, else its base's fallback — the process's own
@@ -839,8 +862,11 @@ private:
 	// convention, and why nothing else needs to report a close.
 	void Teardown();
 	friend class ibAccessTrustScope;   // toggles m_accessTrusted (RLS privileged window)
+	friend class ibRoleHandlerScope;   // names the OnAccess* handler that is on the stack
+	friend class ibSessionParameterWriteWindow; // toggles m_sessionParametersOpen
+	friend class ibSessionTrustPause;  // Await clears both for the tasks it runs
 
-	wxString       m_id;
+	ibString       m_id;
 	ibSessionKind  m_kind;
 
 	// Registry-only API. Takes m_mtx, mutates the state machine, and
@@ -848,8 +874,8 @@ private:
 	// Call sites outside ibSessionRegistry's single-consumer thread are
 	// bugs by construction — that's why the friend declaration above is
 	// the only access path.
-	void Transition(ibSessionState next, const wxString& reason = wxEmptyString);
-	void TransitionAuth(ibAuthState   next, const wxString& reason = wxEmptyString);
+	void Transition(ibSessionState next, const ibString& reason = ibEmptyString);
+	void TransitionAuth(ibAuthState   next, const ibString& reason = ibEmptyString);
 
 	// Block the calling thread until the lifecycle state changes away
 	// from `from` (or timeout). Returns the new state on success, `from`
@@ -858,9 +884,11 @@ private:
 	ibSessionState WaitForState(ibSessionState from, std::chrono::milliseconds timeout);
 	ibAuthState    WaitForAuth (ibAuthState    from, std::chrono::milliseconds timeout);
 
-	// Its +1 — the base's active configuration as it stands when the session is let in (GetMetaData). Acquired
-	// once, by the registry (NotifyAuthenticated), before the root is built over it; a rented read takes its
-	// parent's instead (ibJobManager).
+	// Its +1 — the base's active configuration as it stands when the session is let in (GetMetaData); a designer's
+	// session makes one of its own instead, the configuration it edits (ibMetaDataConfigurationStorage), held by it
+	// alone.
+	// Acquired once, by the registry (NotifyAuthenticated), before the root is built over it; a rented read takes
+	// its parent's instead (ibJobManager).
 	void AcquireMetaData();
 	// …and its −1, when it leaves (NotifyDisconnect): the root built over it first, then the reference. The last
 	// session working in a configuration the base has replaced closes it here, on the thread that takes it down.
@@ -875,7 +903,7 @@ private:
 	void SetInserted(bool v)   { m_inserted = v; }
 
 	// Auth-flow mutators. Driven only through ibSessionRegistry façades
-	// (InstallUser, EnableDebugForSession) — registry is the single
+	// (InstallUser) — registry is the single
 	// mutator of session state, callers from appData / login dialogs
 	// route through it. SetSessionRawPassword writes the plain-text
 	// cache used by the Designer "Start debugging" child spawn; the
@@ -890,19 +918,16 @@ private:
 		m_translateState.m_userLanguageCode = info.m_strLanguageCode;
 		m_translateState.Resolve();
 	}
-	void SetSessionRawPassword(const wxString& pwd) { m_sessionRawPassword = pwd; }
-	void ClearSessionRawPassword() { m_sessionRawPassword.clear(); }
-	void EnableDebug()  { if (!m_debug) m_debug = std::make_unique<ibDebugSession>(); }
-	void DisableDebug() { m_debug.reset(); }
+	void SetSessionRawPassword(const ibString& pwd) { m_sessionRawPassword = pwd; }
 
 public:
-	// Per-session debug state. nullptr -> session is not being debugged
-	// (ibProcUnit::Execute skips breakpoint checks fast). Allocated by
-	// EnableDebug() when --debug starts the session or designer attaches;
-	// destroyed in DisableDebug() / ~ibSession. Migrated here from
-	// process-level ibDebuggerServer fields so concurrent web sessions
-	// in wenterprise-server can each enter their own debug loop without
-	// blocking the others.
+	// Per-session debug state — where a stop of this session parks. MADE WITH THE SESSION: a designer
+	// attaches at any moment, and a stop must find it then. It was made only for a session that logged in
+	// under --debug, so attaching to a running application took the breakpoints and the Pause and every
+	// stop was dropped in DoDebugLoop without a word (Max, 2026-10-21, desktop and thin alike). Whether
+	// anything stops is the debug server's (m_bUseDebug, the breakpoints). Here and not on ibDebuggerServer
+	// so concurrent sessions of one server each enter their own debug loop without blocking
+	// the others.
 	struct ibDebugSession {
 		// True while ibProcUnit::Execute is parked in DoDebugLoop's CV
 		// wait. Designer's Continue/Step/Detach commands clear this and
@@ -923,40 +948,20 @@ public:
 		// Per-session watch expressions (id -> source). Breakpoints
 		// stay process-level on ibDebuggerServer because module bytecode
 		// is shared across sessions.
-		std::map<unsigned long long, wxString> m_expressions;
+		std::map<unsigned long long, ibString> m_expressions;
 	};
 
-	// Thread safety for the four accessors below.
-	//
-	// EnableDebug runs exactly once per session, on the registry thread,
-	// inside the OnAuthenticated listener BEFORE TransitionAuth flips
-	// m_auth to Authenticated. IsDebug / Debug are read by debug-server
-	// connection threads, web HTTP handlers, and ibProcUnit on script
-	// threads — all of which only run after the session reaches
-	// Authenticated. Happens-before via the auth state machine
-	// (release-store on m_auth followed by acquire-load) makes the
-	// non-atomic m_debug write visible to readers; no explicit mutex.
-	//
-	// DisableDebug is currently unused — the unique_ptr is released by
-	// ~ibSession. Kept on the API for future "detach debugger mid-
-	// session" scenarios; if it gains a real caller, the timing
-	// argument above no longer holds and m_debug needs atomic
-	// shared_ptr or a mutex.
-	// Public reads — used by debug-server worker threads and HTTP handlers
-	// to discover whether a session is attached for debugging and to
-	// access its watch list / debug-loop CV. Mutators (EnableDebug /
-	// DisableDebug) are restricted to the auth flow — see private block
-	// further down with friend ibApplicationInstance.
-	bool IsDebug() const     { return m_debug != nullptr; }
-	ibDebugSession* Debug()  { return m_debug.get(); }
+	// Read by debug-server connection threads, web HTTP handlers and ibProcUnit on script threads: it is
+	// made with the session and never replaced, so there is no write to race; what changes inside it is
+	// guarded by its own mutex and flag.
+	ibDebugSession& Debug() { return m_debug; }
 
 	// Drop the debug-park flag and notify the per-session CV so any
 	// script worker stopped at a breakpoint inside DoDebugLoop wakes
 	// up immediately and unwinds. Used by session-destroy paths (web
 	// F5 → ibWebSession::OnExit → worker join) so the parked thread
 	// doesn't hold the worker indefinitely while the destroy waits to
-	// release the registry slot. No-op if the session isn't being
-	// debugged.
+	// release the registry slot.
 	void WakeDebugLoop();
 
 	// --- Database connection façade ----------------------------------
@@ -1011,8 +1016,7 @@ private:
 	// m_parent chain. See project_runtime_facade_plan.md.
 	ibValuePtr<ibValueModuleManagerRuntimeConfiguration> m_root;
 	
-	// nullptr unless the session was created with debug attached.
-	std::unique_ptr<ibDebugSession> m_debug;
+	ibDebugSession m_debug;   // made with the session — see Debug()
 
 	// RLS — the concrete session-side policy (created at auth)
 	std::unique_ptr<ibAccessPolicy> m_accessPolicy;
@@ -1025,6 +1029,10 @@ private:
 	// window on one web session must not lift enforcement on another.
 	bool m_accessTrusted = false;
 
+	// Set only by ibRoleHandlerScope, and only around OnAccessRead / OnAccessWrite.
+	// Null the rest of the time, including inside SetSessionParameters, which may ask.
+	const ibString* m_roleHandler = nullptr;
+
 	// SESSION PARAMETERS — declared in metadata, filled once by the session module,
 	// read everywhere. Keyed by the parameter's NAME, which is what a script writes.
 	//
@@ -1032,7 +1040,7 @@ private:
 	// moment work under different organisations, and a process-wide store would let
 	// one of them answer for the other. Isolation here is structural, not a rule
 	// anybody has to keep.
-	std::map<wxString, ibValue> m_sessionParameters;
+	std::map<ibString, ibValue> m_sessionParameters;
 
 	// WRITABLE ONLY WHILE THE SESSION MODULE RUNS. Not "frozen afterwards" — closed
 	// by default, opened for the length of that one call and closed again:
@@ -1057,10 +1065,10 @@ public:
 	// Read one, by the name a script used. Answers an empty value for a name that
 	// was never declared — the caller sees Undefined, which is what an unset
 	// parameter is.
-	ibValue GetSessionParameter(const wxString& name) const;
+	ibValue GetSessionParameter(const ibString& name) const;
 	// Write one. Refused (raises) once the session module has returned — see the
 	// freeze note above.
-	void SetSessionParameter(const wxString& name, const ibValue& value);
+	void SetSessionParameter(const ibString& name, const ibValue& value);
 
 private:
 
@@ -1097,8 +1105,8 @@ private:
 	mutable std::mutex              m_mtx;
 	mutable std::condition_variable m_cv;
 
-	wxString m_activity;   // guarded by m_mtx; last-reported activity string
-	wxString m_reason;     // guarded by m_mtx; reject / auth-fail diagnostic
+	ibString m_activity;   // guarded by m_mtx; last-reported activity string
+	ibString m_reason;     // guarded by m_mtx; reject / auth-fail diagnostic
 
 	// Authoritative user identity for this session. Populated by InstallUser
 	// (registry's ProcessAttach for headless paths, the GUI login dialog
@@ -1108,7 +1116,7 @@ private:
 	// checks. m_sessionRawPassword caches the plain-text for Designer
 	// "Start debugging" — handed to spawned child processes so they can
 	// re-authenticate without prompting.
-	wxString                  m_sessionRawPassword;
+	ibString                  m_sessionRawPassword;
 	ibUserInfo 				  m_userInfo;
 
 	// Script-visible "working date" — see GetWorkDate/SetWorkDate.
@@ -1209,9 +1217,12 @@ private:
 };
 
 // RAII: mark the session's access context TRUSTED for the scope's lifetime, so
-// a role module runs PRIVILEGED — every query its body builds sees GetAccessPolicy()
-// return null and therefore bypasses RLS, dissolving re-entrancy (the module may
-// read the very source it restricts). Saves and restores the PRIOR value, so nested
+// the code it runs is PRIVILEGED — every query its body builds sees GetAccessPolicy()
+// return null and therefore bypasses RLS, and every right on an object is granted
+// (ibValueMetaObject::IsFullAccess). Opened by a role module — which dissolves
+// re-entrancy, the module may read the very source it restricts — by the session
+// parameters' handler, and by every call into a privileged common module
+// (ibRuntimeModuleDataObject::ExecAsProc). Saves and restores the PRIOR value, so nested
 // trusted scopes compose; the dtor runs on every exit INCLUDING a handler throw, so
 // enforcement is always restored. The bypass is CONSTRUCTIVE (only this scope sets
 // the flag) — never a failure default, so a genuinely absent policy stays fail-closed.
@@ -1230,6 +1241,93 @@ public:
 private:
 	ibSession* m_session;
 	bool       m_prev;
+};
+
+// Names the role handler on the stack. Question and every modal refuse while it is open.
+// Not every trusted window is a role handler: SetSessionParameters uses the trust scope
+// and may still ask. The name is copied so a temporary at the call survives the scope.
+class BACKEND_API ibRoleHandlerScope {
+public:
+	ibRoleHandlerScope(ibSession* session, const ibString& handler)
+		: m_session(session)
+		, m_name(handler)
+		, m_prev(session != nullptr ? session->m_roleHandler : nullptr)
+	{
+		if (m_session != nullptr)
+			m_session->m_roleHandler = &m_name;
+	}
+	~ibRoleHandlerScope()
+	{
+		if (m_session != nullptr)
+			m_session->m_roleHandler = m_prev;
+	}
+
+	ibRoleHandlerScope(const ibRoleHandlerScope&)            = delete;
+	ibRoleHandlerScope& operator=(const ibRoleHandlerScope&) = delete;
+
+private:
+	ibSession*       m_session;
+	ibString         m_name;
+	const ibString*  m_prev;
+};
+
+// The write window SetSessionParameters opens around the one call that may
+// write. Saves the prior flag, so a nested window composes, and closes on
+// every exit including a throw.
+class BACKEND_API ibSessionParameterWriteWindow {
+public:
+	explicit ibSessionParameterWriteWindow(ibSession* s)
+		: m_session(s), m_prev(s != nullptr && s->m_sessionParametersOpen)
+	{
+		if (m_session != nullptr) m_session->m_sessionParametersOpen = true;
+	}
+	~ibSessionParameterWriteWindow()
+	{
+		if (m_session != nullptr) m_session->m_sessionParametersOpen = m_prev;
+	}
+
+	ibSessionParameterWriteWindow(const ibSessionParameterWriteWindow&)            = delete;
+	ibSessionParameterWriteWindow& operator=(const ibSessionParameterWriteWindow&) = delete;
+
+private:
+	ibSession* m_session;
+	bool       m_prev;
+};
+
+// Await holds this for the whole wait. SetSessionParameters may ask, and its
+// trust and write window live on the session. The tasks Await runs are that
+// session's, so they would run privileged — RLS off, parameters writable —
+// for as long as the question is open. Clearing the flags here is what keeps
+// that work from inheriting the bypass; the destructor puts them back,
+// including when the wait is cancelled. A role handler never reaches this:
+// it is refused at the question, before it can park.
+class BACKEND_API ibSessionTrustPause {
+public:
+	explicit ibSessionTrustPause(ibSession* s)
+		: m_session(s)
+		, m_trusted(s != nullptr && s->m_accessTrusted)
+		, m_parametersOpen(s != nullptr && s->m_sessionParametersOpen)
+	{
+		if (m_session == nullptr)
+			return;
+		m_session->m_accessTrusted = false;
+		m_session->m_sessionParametersOpen = false;
+	}
+	~ibSessionTrustPause()
+	{
+		if (m_session == nullptr)
+			return;
+		m_session->m_accessTrusted = m_trusted;
+		m_session->m_sessionParametersOpen = m_parametersOpen;
+	}
+
+	ibSessionTrustPause(const ibSessionTrustPause&)            = delete;
+	ibSessionTrustPause& operator=(const ibSessionTrustPause&) = delete;
+
+private:
+	ibSession* m_session;
+	bool       m_trusted;
+	bool       m_parametersOpen;
 };
 
 // ibApplicationInstance::CreateSession<SessionT> template bodies live in

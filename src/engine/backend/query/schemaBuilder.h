@@ -53,14 +53,14 @@ public:
 	// (not yet durable for a same-TX write), DEFER `work` to run after the DDL commit and return true
 	// (the real result surfaces in Flush). Otherwise run `work` now and return its result. The
 	// write site stays agnostic: it hands a self-contained "do the write, return success" closure.
-	bool RunOrDefer(const wxString& table, std::function<bool()> work);
+	bool RunOrDefer(const ibString& table, std::function<bool()> work);
 
 	// ⭐ TWO TABLES, ONE PIECE OF WORK. A totals rebuild READS the movements and WRITES the totals, so
 	// either of them being new in this transaction is enough to make it wait — and keying on one of
 	// the two is a coin toss that loses half the time. It lost on the ordinary case: a register whose
 	// movements already existed and whose totals table had just been re-created ran the rebuild
 	// immediately and met "Table unknown …_DEBITTOTALS".
-	bool RunOrDefer(const wxString& tableA, const wxString& tableB, std::function<bool()> work);
+	bool RunOrDefer(const ibString& tableA, const ibString& tableB, std::function<bool()> work);
 
 	// Run every deferred write in the CURRENT transaction — call this in the data/seed phase AFTER the
 	// orchestrator has committed the DDL and opened a fresh TX (so the just-created tables are durable).
@@ -72,7 +72,7 @@ public:
 	// to compensate: if the phase AFTER the DDL commit fails, these tables are durable while the
 	// baseline still says they do not exist, and dropping them is what keeps the two in step
 	// (ibStructureBuilder::UndoAppliedDdl). Empty off a barrier dialect.
-	std::set<wxString> CreatedTables() const;
+	std::set<ibString> CreatedTables() const;
 
 	// THE COMPENSATION LEDGER — one inverse action per DDL the first commit ran on a pre-existing
 	// object, in execution order (the caller replays it in REVERSE). Built by Execute from the

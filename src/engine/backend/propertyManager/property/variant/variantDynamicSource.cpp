@@ -6,8 +6,8 @@
 #include "backend/query/queryable.h"              // GetQueryTableId / GetQueryName
 #include "backend/propertyManager/propertyObject.h"   // ibPropertyObject::GetMetaData
 
-ibVariantDataDynamicSource::ibVariantDataDynamicSource(const ibBackendQueryable* queryable, const ibPropertyObject* owner)
-	: wxVariantData(), m_tableId(queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : wxNOT_FOUND),
+ibVariantDynamicSource::ibVariantDynamicSource(const ibBackendQueryable* queryable, const ibPropertyObject* owner)
+	: ibVariant(ibValueTypes::TYPE_VALUE), m_tableId(queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : wxNOT_FOUND),
 	// Resolve the owner's SPECIFIC config ONCE, here, and keep the metadata — NOT the owner pointer (which, for a
 	// form-attribute's transient dynamic list, dangles once the list is re-materialised). (CONST owner: the non-const
 	// GetMetaData wxFAILs.)
@@ -24,7 +24,7 @@ static ibQueryableFactory* ibVariantSourceFactory(const ibMetaData* md)
 	return factory != nullptr ? factory : ibApplicationInstance::GetQueryableFactory();
 }
 
-const ibBackendQueryable* ibVariantDataDynamicSource::GetQueryable() const
+const ibBackendQueryable* ibVariantDynamicSource::GetQueryable() const
 {
 	// Re-resolve LIVE every time — never a cached pointer. Goes THROUGH the owner's metadata factory (per-config →
 	// global), which hands back the descriptor's own `&m_queryable`, or null if the source was deleted.
@@ -34,7 +34,7 @@ const ibBackendQueryable* ibVariantDataDynamicSource::GetQueryable() const
 	return factory != nullptr ? factory->ResolveById(m_tableId) : nullptr;
 }
 
-const ibQueryableSourceDescriptor* ibVariantDataDynamicSource::GetDescriptor() const
+const ibQueryableSourceDescriptor* ibVariantDynamicSource::GetDescriptor() const
 {
 	// Re-resolve LIVE, same id as GetQueryable, THROUGH the owner's metadata factory — the descriptor (its command +
 	// column surface, FillSourceExplorer) is the copy's OWN, so the columns are the copy's. Null when deleted.
@@ -44,13 +44,13 @@ const ibQueryableSourceDescriptor* ibVariantDataDynamicSource::GetDescriptor() c
 	return factory != nullptr ? factory->ResolveDescriptorById(m_tableId) : nullptr;
 }
 
-void ibVariantDataDynamicSource::SetQueryable(const ibBackendQueryable* queryable)
+void ibVariantDynamicSource::SetQueryable(const ibBackendQueryable* queryable)
 {
 	m_tableId = queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : wxNOT_FOUND;
 }
 
-wxString ibVariantDataDynamicSource::MakeString() const
+ibString ibVariantDynamicSource::GetString() const
 {
 	const ibBackendQueryable* q = GetQueryable();
-	return q != nullptr ? q->GetQueryName() : wxString();
+	return q != nullptr ? q->GetQueryName() : ibString();
 }

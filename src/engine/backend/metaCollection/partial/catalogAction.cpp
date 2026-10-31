@@ -17,12 +17,12 @@ enum
 ibValueRecordDataObjectCatalog::ibStandardCommandSet ibValueRecordDataObjectCatalog::GetStandardCommands(const ibFormID &formType)
 {
 	ibStandardCommandSet catalogActions(this);
-	catalogActions.AddAction(wxT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
-	catalogActions.AddAction(wxT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
+	catalogActions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
+	catalogActions.AddAction(ibT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	catalogActions.AddSeparator();
-	catalogActions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);   // creates a NEW object — doesn't modify THIS one
+	catalogActions.AddAction(ibT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);   // creates a NEW object — doesn't modify THIS one
 	catalogActions.AddSeparator();
-	catalogActions.AddAction(wxT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
+	catalogActions.AddAction(ibT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
 	return catalogActions;
 }
 

@@ -54,20 +54,20 @@ public:
 		}
 
 		//Is global module?
-		wxString GetModuleFullName() const {
-			return m_moduleObject ? m_moduleObject->GetFullName() : wxString(wxEmptyString);
+		ibString GetModuleFullName() const {
+			return m_moduleObject ? m_moduleObject->GetFullName() : ibString(ibEmptyString);
 		}
 
-		wxString GetModuleDocPath() const {
-			return m_moduleObject ? m_moduleObject->GetDocPath() : wxString(wxEmptyString);
+		ibString GetModuleDocPath() const {
+			return m_moduleObject ? m_moduleObject->GetDocPath() : ibString(ibEmptyString);
 		}
 
-		wxString GetModuleName() const {
-			return m_moduleObject ? m_moduleObject->GetName() : wxString(wxEmptyString);
+		ibString GetModuleName() const {
+			return m_moduleObject ? m_moduleObject->GetName() : ibString(ibEmptyString);
 		}
 
-		wxString GetModuleText() const {
-			return m_moduleObject ? m_moduleObject->GetModuleText() : wxString(wxEmptyString);
+		ibString GetModuleText() const {
+			return m_moduleObject ? m_moduleObject->GetModuleText() : ibString(ibEmptyString);
 		}
 
 		bool IsGlobalModule() const {
@@ -88,6 +88,7 @@ public:
 		//method call
 		virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
+		virtual bool GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const override;
 
 		virtual ibString GetString() const override {
 			return m_moduleObject->GetName();
@@ -99,7 +100,7 @@ public:
 		}
 
 		//operator '=='
-		virtual bool CompareValueEQ(const ibValue& cParam) const override
+		virtual bool CompareValueEQ(const ibVariant& cParam) const override
 		{
 			ibValueModuleUnit* compareModule = dynamic_cast<ibValueModuleUnit*>(cParam.GetRef());
 			if (compareModule) {
@@ -110,7 +111,7 @@ public:
 		}
 
 		//operator '!='
-		virtual bool CompareValueNE(const ibValue& cParam) const override
+		virtual bool CompareValueNE(const ibVariant& cParam) const override
 		{
 			ibValueModuleUnit* compareModule = dynamic_cast<ibValueModuleUnit*>(cParam.GetRef());
 			if (compareModule) {
@@ -140,7 +141,7 @@ public:
 		virtual bool IsEmpty() const override { return false; }
 
 		//operator '=='
-		virtual bool CompareValueEQ(const ibValue& cParam) const override
+		virtual bool CompareValueEQ(const ibVariant& cParam) const override
 		{
 			ibValueMetadataUnit* compareMetadata = dynamic_cast<ibValueMetadataUnit*>(cParam.GetRef());
 			if (compareMetadata) {
@@ -151,7 +152,7 @@ public:
 		}
 
 		//operator '!='
-		virtual bool CompareValueNE(const ibValue& cParam) const override {
+		virtual bool CompareValueNE(const ibVariant& cParam) const override {
 			ibValueMetadataUnit* compareMetadata = dynamic_cast<ibValueMetadataUnit*>(cParam.GetRef());
 			if (compareMetadata) {
 				return m_metaData != compareMetadata->GetMetaData();
@@ -196,7 +197,7 @@ public:
 		virtual bool IsEmpty() const override { return false; }
 
 		//operator '=='
-		virtual bool CompareValueEQ(const ibValue& cParam) const override
+		virtual bool CompareValueEQ(const ibVariant& cParam) const override
 		{
 			ibValueDataUnit* compareData = dynamic_cast<ibValueDataUnit*>(cParam.GetRef());
 			if (compareData) {
@@ -206,7 +207,7 @@ public:
 		}
 
 		//operator '!='
-		virtual bool CompareValueNE(const ibValue& cParam) const override {
+		virtual bool CompareValueNE(const ibVariant& cParam) const override {
 			ibValueDataUnit* compareData = dynamic_cast<ibValueDataUnit*>(cParam.GetRef());
 			if (compareData) {
 				return m_metaData != compareData->GetMetaData();
@@ -244,6 +245,7 @@ public:
 	//method call
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
+	virtual bool GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const override;
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
@@ -267,8 +269,8 @@ public:
 	//associated map — globals are the compile module's extern variables (single
 	// source; m_listGlConstValue registry removed). Values are owned by
 	// m_metaManager / m_listCommonModuleManager, the map only references them.
-	virtual std::map<wxString, ibValue*>& GetGlobalVariables() { return m_compileModule->m_listExternValue; }
-	virtual std::map<wxString, ibContextVar>& GetContextVariables() { return m_compileModule->m_listContextValue; }
+	virtual std::map<ibString, ibValue*>& GetGlobalVariables() { return m_compileModule->m_listExternValue; }
+	virtual std::map<ibString, ibContextVar>& GetContextVariables() { return m_compileModule->m_listContextValue; }
 
 	//return external module
 	virtual ibValue* GetObjectValue() const { return nullptr; }
@@ -291,6 +293,10 @@ protected:
 
 	// global data manager — the "Data" queryable-source root (L4-2)
 	ibValuePtr<ibValueDataUnit> m_dataManager;
+
+	// the context types' objects (EnumManager / SystemManager) — made for this manager as its main module comes up,
+	// held while it is up: the compile module's context binds only reference them
+	std::vector<ibValue> m_listContextManager;
 
 	friend class ibMetaDataConfiguration;
 	friend class ibMetaDataDataProcessor;
@@ -354,7 +360,7 @@ public:
 	// init-modules list. Not for direct caller use outside metadata
 	// or CreateMainModule.
 	bool RuntimeRegisterCommonModule(ibValueMetaObjectCommonModule* commonModule, bool compileNow = false);
-	bool RuntimeRenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName);
+	bool RuntimeRenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName);
 	bool RuntimeUnregisterCommonModule(ibValueMetaObjectCommonModule* commonModule);
 
 	ibValueModuleUnit* FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const override;
@@ -468,7 +474,7 @@ class BACKEND_API ibValueModuleManagerDesigner : public ibValueModuleManager {
 	// designer); false defers compilation to CreateMainModule (bulk load path).
 	bool AddCommonModule(ibValueMetaObjectCommonModule* commonModule, bool managerModule = false, bool runModule = false);
 	bool RemoveCommonModule(ibValueMetaObjectCommonModule* commonModule);
-	bool RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName);
+	bool RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName);
 	ibValueModuleUnit* FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const override;
 
 	std::vector<ibValuePtr<ibValueModuleUnit>>& GetCommonModules() { return m_listCommonModule; }
@@ -478,7 +484,7 @@ class BACKEND_API ibValueModuleManagerDesigner : public ibValueModuleManager {
 	// modules surfaced as names), which never enter this holder's own map. The
 	// config-root holder (m_external == false) returns its own map. Mirrors the
 	// Ext runtime managers' GetContextVariables/GetGlobalVariables delegation.
-	std::map<wxString, ibValue*>& GetGlobalVariables() override;
+	std::map<ibString, ibValue*>& GetGlobalVariables() override;
 
 private:
 	bool m_populated = false;

@@ -106,7 +106,7 @@ bool ibValueMetaObjectParameterizedJob::RunHandler(const ibGuid& objGuid) const
 	// A throw travels: the worker's promise captures it, the manager journals the run as failed.
 	// Swallowing it here would make a broken job look like one that did nothing.
 	ibValue* params[] = { &jobReference };
-	if (!ibRuntimeModuleDataObject::ExecAsManagerEvent(this, wxT("JobProcessing"), params, 1))
+	if (!ibRuntimeModuleDataObject::ExecAsManagerEvent(this, ibT("JobProcessing"), params, 1))
 		ibBackendCoreException::Error(_("the job module is not registered in this session"));
 	return true;
 }
@@ -151,16 +151,16 @@ bool ibValueMetaObjectParameterizedJob::RunJobByReference(const ibGuid& objGuid)
 	return true;
 }
 
-wxString ibValueMetaObjectParameterizedJob::GetRowJobName(const ibGuid& objGuid) const
+ibString ibValueMetaObjectParameterizedJob::GetRowJobName(const ibGuid& objGuid) const
 {
 	// Name reads for a person, guid keeps it unique. Both, because this string is what the journal
 	// line and the Active Users row show: "Exchange" alone would not say WHICH exchange, and a bare
 	// guid would not say what it is.
-	return GetJobName() + wxT(".") + objGuid.str();
+	return GetJobName() + ibT(".") + objGuid.str();
 }
 
 bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool active,
-	const ibJobScheduleDescription& schedule, const wxString& presentation) const
+	const ibJobScheduleDescription& schedule, const ibString& presentation) const
 {
 	// The Designer never runs a configuration's jobs. It edits them.
 	if (appData == nullptr || appData->DesignerMode())
@@ -188,7 +188,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool 
 		// NoBase is not that failure and is not reported: this runs at bring-up, where a row
 		// declared before the connection is up has been asked nothing. Logging it would train
 		// whoever reads the log to ignore the line that matters.
-		ibJournalInfo(wxT("job.register"),wxT("job row '%s': the register refused the settings write"), presentation);
+		ibJournalInfo(ibT("job.register"),ibT("job row '%s': the register refused the settings write"), presentation);
 	}
 
 	// … and the row is declared ALIVE whatever its switch says, so the orphan sweep at start-up
@@ -260,7 +260,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool 
 	if (!manager->Register(std::move(desc))) {
 		// Register logs the reason itself. A row that could not be declared must not stop a
 		// configuration from opening — the failure belongs in the log, not in the user's face.
-		ibJournalInfo(wxT("job.register"),wxT("job row '%s' was not registered"), presentation);
+		ibJournalInfo(ibT("job.register"),ibT("job row '%s' was not registered"), presentation);
 		return true;
 	}
 
@@ -351,7 +351,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 	catch (const ibCoreException& err) {
 		// A table that cannot be read at start-up must not stop the configuration from opening —
 		// the rows are still there and re-register themselves as they are written.
-		ibJournalInfo(wxT("job.register"),wxT("scheduled job '%s': rows were not registered: %s"),
+		ibJournalInfo(ibT("job.register"),ibT("scheduled job '%s': rows were not registered: %s"),
 			GetJobName(), err.GetErrorDescription());
 	}
 
@@ -370,7 +370,7 @@ bool ibValueMetaObjectParameterizedJob::UnregisterJobs()
 	// Withdraw by PREFIX — the rows were registered as "<JobName>.<rowGuid>", and by the time a
 	// configuration closes the table may no longer be readable. Asking the manager what it holds
 	// is both cheaper and safe.
-	manager->UnregisterByPrefix(GetJobName() + wxT("."));
+	manager->UnregisterByPrefix(GetJobName() + ibT("."));
 	return true;
 }
 

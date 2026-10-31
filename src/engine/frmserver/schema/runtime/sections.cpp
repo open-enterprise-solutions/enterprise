@@ -1,6 +1,5 @@
 #include "sections.h"
 
-#include "backend/backend_picture.h"                          // the pictures, as they travel
 #include "backend/interfaceHelper.h"                          // ibInterfaceCommandSection, ibInterfaceCommandType
 #include "backend/metaCollection/metaCommandGroupObject.h"    // the platform's groups + the declared ones, in order
 #include "backend/metaCollection/metaFormObject.h"            // ibBackendCommandItem — what a link executes
@@ -8,6 +7,7 @@
 #include "backend/metadataConfiguration.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"                          // the configuration the session works in
+#include "backend/backend_picture.h"                          // ibBackendPicture::SendPicture — the pictures, by their ids
 
 #include <vector>
 
@@ -15,8 +15,9 @@ namespace {
 
 // One block of a section's page — a heading (or none) and the items under it, in one of the panel's two columns.
 struct ibSectionBlock {
-	s32                                 column = 1;   // 1 — the navigation's, on the left; 2 — the actions', on the right
-	wxString                            title;        // none — the section's own items at the top
+	ibProtocol::ibSchema::ibSections::ibColumn column = ibProtocol::ibSchema::ibSections::ibColumn::Left;   // the navigation's;
+	                                                                                                       // the actions' — Right
+	ibString                            title;        // none — the section's own items at the top
 	const ibValueMetaObjectCommandGroup* group = nullptr;   // a declared group's: its picture and tooltip
 	ibInterfaceCommandSection           area = ibInterfaceCommandSection_Default;   // what its items open as
 	std::vector<ibValueMetaObject*>     items;
@@ -93,7 +94,7 @@ std::vector<ibSectionBlock> PageOf(const ibValueMetaObjectSection* section)
 		ibSectionBlock block;
 		if (!section->GetInterfaceItemArrayObject(area, block.items))
 			continue;
-		block.column = 2;
+		block.column = ibProtocol::ibSchema::ibSections::ibColumn::Right;
 		block.title = ibCommandGroupCaption(area);
 		block.area = area;
 		page.push_back(block);
@@ -104,7 +105,7 @@ std::vector<ibSectionBlock> PageOf(const ibValueMetaObjectSection* section)
 		ibSectionBlock block;
 		if (!section->GetInterfaceItemArrayObject(group, block.items))
 			continue;
-		block.column = 2;
+		block.column = ibProtocol::ibSchema::ibSections::ibColumn::Right;
 		block.title = group->GetSynonym();
 		block.group = group;
 		page.push_back(block);
@@ -124,77 +125,70 @@ std::vector<const ibValueMetaObjectSection*> UsedSections(const ibMetaDataConfig
 	return used;
 }
 
-void SetPicture(ibDataNode& node, const wxString& name, const ibServerPicture& picture)
-{
-	if (picture.IsOk())
-		node.SetValue(name, wxString(picture.GetData()));
-}
-
 } // namespace
 
-void ibSchemaSections::Build(const ibSession& session, ibDataNode& result) const
+void ibSchemaSections::Build(const ibSession& session, const ibDataNode& /*args*/, ibDataNode& result) const
 {
 	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr)
 		return;
 
-	ibDataNode& sections = result.Child(wxT("Sections"));
+	ibDataNode& sections = result.Child(ibProtocol::ibSchema::ibSections::Sections);
 	for (const ibValueMetaObjectSection* section : UsedSections(metaData)) {
 		ibDataNode& node = sections.AddChild(0, section->GetMetaID());
-		node.SetValue(wxT("Title"), section->GetSynonym());
+		node.SetValue(ibProtocol::ibSchema::ibSections::Title, section->GetSynonym());
 		// Its own picture, or the configuration's — as its button drew it.
-		SetPicture(node, wxT("Picture"), section->IsEmptyPicture()
-			? ibBackendPicture::GetServerPicture(g_metaCommonMetadataCLSID)
-			: ibBackendPicture::GetServerPicture(section->GetPictureDesc(), metaData));
+		node.SetValue(ibProtocol::ibSchema::ibSections::Picture, ibBackendPicture::SendPicture(section->IsEmptyPicture()
+			? ibPictureDescription(g_metaCommonMetadataCLSID) : section->GetPictureDesc(), metaData));
 
-		ibDataNode& blocks = node.Child(wxT("Blocks"));
+		ibDataNode& blocks = node.Child(ibProtocol::ibSchema::ibSections::Blocks);
 		for (const ibSectionBlock& block : PageOf(section)) {
 			ibDataNode& blockNode = blocks.AddChild(0, 0);
-			blockNode.SetValue(wxT("Column"), block.column);
+			blockNode.SetValue(ibProtocol::ibSchema::ibSections::Column, static_cast<std::int32_t>(block.column));
 			if (!block.title.IsEmpty())
-				blockNode.SetValue(wxT("Title"), block.title);
+				blockNode.SetValue(ibProtocol::ibSchema::ibSections::Title, block.title);
 			if (block.group != nullptr) {
 				if (!block.group->IsEmptyPicture())
-					SetPicture(blockNode, wxT("Picture"), ibBackendPicture::GetServerPicture(block.group->GetPictureDesc(), metaData));
-				const wxString tooltip = block.group->GetToolTip();
+					blockNode.SetValue(ibProtocol::ibSchema::ibSections::Picture, ibBackendPicture::SendPicture(block.group->GetPictureDesc(), metaData));
+				const ibString tooltip = block.group->GetToolTip();
 				if (!tooltip.IsEmpty())
-					blockNode.SetValue(wxT("Tooltip"), tooltip);
+					blockNode.SetValue(ibProtocol::ibSchema::ibSections::Tooltip, tooltip);
 			}
 			for (const ibValueMetaObject* object : block.items) {
 				ibDataNode& item = blockNode.AddChild(0, 0);
-				item.SetValue(wxT("Item"), static_cast<s32>(object->GetMetaID()));
-				item.SetValue(wxT("Title"), object->GetSynonym());
-				item.SetValue(wxT("Type"), static_cast<s32>(TypeOf(block.area)));
-				SetPicture(item, wxT("Icon"), ibBackendPicture::GetServerPicture(object->GetClassType()));
+				item.SetValue(ibProtocol::ibSchema::ibSections::Item, static_cast<std::int32_t>(object->GetMetaID()));
+				item.SetValue(ibProtocol::ibSchema::ibSections::Title, object->GetSynonym());
+				item.SetValue(ibProtocol::ibSchema::ibSections::Type, static_cast<std::int32_t>(TypeOf(block.area)));
+				item.SetValue(ibProtocol::ibSchema::ibSections::Icon, ibBackendPicture::SendPicture(object->GetClassType()));
 			}
 		}
 	}
 }
 
-std::function<void()> ibSchemaSections::Command(const ibSession& session, s32 command,
-	const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const
+std::function<void()> ibSchemaSections::Command(const ibSession& session, std::int32_t command,
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
 	if (static_cast<ibSchemaSectionsCommand>(command) != ibSchemaSectionsCommand::Open) {
-		refusal = ibProtocolRefusal::NotFound;
-		error = wxString::Format(wxT("Sections has no command %d"), command);
+		refusal = ibProtocol::ibRefusal::NotFound;
+		error = ibString::Format(ibT("Sections has no command %d"), command);
 		return nullptr;
 	}
 
 	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr) {
-		refusal = ibProtocolRefusal::Failed;
-		error = wxT("the session has no configuration");
+		refusal = ibProtocol::ibRefusal::Failed;
+		error = ibT("the session has no configuration");
 		return nullptr;
 	}
 
-	const ibMetaID itemId = args.GetValue<s32>(wxT("Item"));
-	s32 type = ibInterfaceCommandType_Default;
-	args.GetValue(wxT("Type"), type);
+	const ibMetaID itemId = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibSections::Item);
+	std::int32_t type = ibInterfaceCommandType_Default;
+	args.GetValue(ibProtocol::ibSchema::ibSections::Type, type);
 
 	// Only what a page offers this person, as that page offers it: the same sections, the same right, the same blocks.
 	for (const ibValueMetaObjectSection* section : UsedSections(metaData)) {
 		for (const ibSectionBlock& block : PageOf(section)) {
-			if (static_cast<s32>(TypeOf(block.area)) != type)
+			if (static_cast<std::int32_t>(TypeOf(block.area)) != type)
 				continue;
 			for (const ibValueMetaObject* object : block.items) {
 				if (object->GetMetaID() != itemId)
@@ -209,7 +203,7 @@ std::function<void()> ibSchemaSections::Command(const ibSession& session, s32 co
 		}
 	}
 
-	refusal = ibProtocolRefusal::NotFound;
-	error = wxString::Format(wxT("Sections offer no item %d"), itemId);
+	refusal = ibProtocol::ibRefusal::NotFound;
+	error = ibString::Format(ibT("Sections offer no item %d"), itemId);
 	return nullptr;
 }

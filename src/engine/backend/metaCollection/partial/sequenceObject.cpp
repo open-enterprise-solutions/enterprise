@@ -28,16 +28,16 @@ enum func
 // of them for this kind of row.
 void ibValueRecordSetObjectSequence::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Add"), wxT("Add()"));
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
-	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
-	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	helper.AppendFunc(wxT("Load"), 1, wxT("Load(value : any table)"));
-	helper.AppendFunc(wxT("Unload"), wxT("Unload()"));
-	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
-	helper.AppendFunc(wxT("Read"), wxT("Read()"));
-	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendFunc(ibT("Add"), ibT("Add()"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
+	helper.AppendFunc(ibT("Write"), 1, ibT("Write(replace : boolean)"));
+	helper.AppendFunc(ibT("Load"), 1, ibT("Load(value : any table)"));
+	helper.AppendFunc(ibT("Unload"), ibT("Unload()"));
+	helper.AppendFunc(ibT("Modified"), ibT("Modified()"));
+	helper.AppendFunc(ibT("Read"), ibT("Read()"));
+	helper.AppendFunc(ibT("Selected"), ibT("Selected()"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 }
 
 // 🛑 …AND DECLARING THEM IS HALF THE WORK. The member table says a set HAS `Add`; this says what

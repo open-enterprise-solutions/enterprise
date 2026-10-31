@@ -9,7 +9,7 @@
 #include "backend/system/value/valueQuery.h"
 
 namespace {
-bool HasMethod(const ibValue& v, const wxString& name)
+bool HasMethod(const ibValue& v, const ibString& name)
 {
 	for (long i = 0; i < v.GetNMethods(); ++i)
 		if (v.GetMethodName(i) == name) return true;

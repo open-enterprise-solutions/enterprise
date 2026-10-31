@@ -150,7 +150,7 @@ ibQueryIR KeysetCursorIR()
 			ibBinOp(ibQueryBinOp::And,
 				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("Code_S")), ibParam(1)),
 				ibBinOp(ibQueryBinOp::Gt, ibCol(wxT("Ref")),
-				        ibConst(ibValue(wxString(wxT("APPLE-LAST")))))));
+				        ibConst(ibValue(ibString(wxT("APPLE-LAST")))))));
 
 	return ibDatabaseQueryBuilder()
 		.From(wxT("Reference17"))

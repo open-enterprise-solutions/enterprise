@@ -1,0 +1,1943 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.XMLReader",
+      "name_local": "XMLReader",
+      "name_en": "XMLReader",
+      "kind": "collection",
+      "class_id": 215563432532262761,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "New XMLReader()",
+      "description": "XML read by a script NODE BY NODE - a tax return, a bank statement, a supplier's price list. Each `Read()` moves to the next node, and the properties describe the node it stands on.\n\nTHE SOURCE is a file (`OpenFile`) or a string (`SetString`). Nothing is parsed until the first `Read()`, and a file is read a chunk at a time - a document of any size is walked without being held whole. What waits to be read is bounded too: a few hundred bytes of nested entities that expand into a million elements are handed over as they are read, not built in memory first.\n\nWHAT A NODE IS: `<a/>` is a PAIR - `StartElement` and then `EndElement` - and so is `<a></a>` (`IsEmptyElement` tells them apart). A comment and a processing instruction are nodes. A CDATA section is a node of its OWN, never merged into the text beside it. The XML declaration is NOT a node: `XMLVersion`, `XMLEncoding` and `Standalone` read it. Text between elements that is only whitespace is dropped while `IgnoreWhitespace` is True, the default.\n\nTHE ATTRIBUTES are the current element's - by number (from 0), by name, or with a cursor (`ReadAttribute`) that stands on them one at a time. The `xmlns` declarations are attributes too, and come FIRST. An attribute that is not there is `Undefined` - not an empty string, which `a=\"\"` would be.\n\nA DOCUMENT MAY NOT REACH OUTSIDE ITSELF: an external entity (`<!ENTITY e SYSTEM \"file:///...\">`) or an external DTD is REFUSED - not read, and not quietly left out either. Entities declared inside the document are read as ever.\n\nA text that is not well-formed is refused WHERE IT BROKE, with the line and the column - after the nodes before the fault have been handed over, so a walk stops at the same place however the file was cut into chunks.",
+      "syntax_block": "var Reader = New XMLReader();\nReader.OpenFile(Path);\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        Message(Reader.Name);\n    }\n}\nReader.Close();",
+      "syntax_block_ves": "Reader = New XMLReader();\nReader.OpenFile(Path);\nWhile Reader.Read() Do\n    If Reader.NodeType = XMLNodeType.StartElement Then\n        Message(Reader.Name);\n    Endif;\nEndDo;\nReader.Close();",
+      "parameters": "None - a reader is made empty, and is given its source by `OpenFile` or `SetString`.",
+      "return_descr": "XMLReader - with nothing open.",
+      "example": "var Reader = New XMLReader();\nReader.OpenFile(\"C:\\in\\J0100117.xml\");\nvar Tin = \"\";\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        if (Reader.Name = \"TIN\") {\n            Reader.Read();                 // the text inside <TIN>\n            Tin = Reader.Value;\n        }\n    }\n}\nReader.Close();\nMessage(Tin);",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.Read",
+        "cls.XMLReader.NodeType",
+        "cls.XMLReader.GetAttribute",
+        "cls.XMLWriter",
+        "enum.XMLNodeType",
+        "cls.XMLNamespaceContext"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.NodeType",
+      "name_local": "NodeType",
+      "name_en": "NodeType",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.NodeType",
+      "description": "WHAT THE READER STANDS ON, as an `XMLNodeType` member - read-only. A walk is steered by it: `Read()` to step, `NodeType` to ask what the step landed on.\n\nBefore the first `Read()`, once `Read()` has answered False, and after `Close()`, it is `XMLNodeType.None`. While the attribute cursor stands on an attribute it is `XMLNodeType.Attribute`, until `MoveToElement` or the next `Read()`.\n\nThe nodes a walk actually meets: `StartElement`, `EndElement`, `Text`, `Whitespace` (only with `IgnoreWhitespace = False`), `CDATASection`, `Comment`, `ProcessingInstruction` - and `Attribute` through the cursor. The XML declaration and the document type are not nodes here, and no entity or notation is ever reported.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.StartElement) {\n    // ...\n}",
+      "parameters": "",
+      "return_descr": "XMLNodeType.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>t<!--c--></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Comment) {\n        Message(\"a comment: \" + Reader.Value);   // c\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.Read",
+        "cls.XMLReader.MoveToContent"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Name",
+      "name_local": "Name",
+      "name_en": "Name",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Name",
+      "description": "THE NAME AS IT IS WRITTEN, prefix included (`xsi:type`) - read-only. An element's on its `StartElement` and on its `EndElement`; an attribute's while the cursor stands on it; a processing instruction's target.\n\nText, CDATA, a comment and whitespace have no name: there it is \"\". `HasName` says whether a node has one.\n\nXML names are case-sensitive: `Name = \"TIN\"` does not match `<tin>`.",
+      "syntax_block": "Name = Reader.Name;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<p:a xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nMessage(Reader.Name);                      // p:a\nMessage(Reader.LocalName);                 // a",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.LocalName",
+        "cls.XMLReader.Prefix",
+        "cls.XMLReader.NamespaceURI",
+        "cls.XMLReader.HasName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.LocalName",
+      "name_local": "LocalName",
+      "name_en": "LocalName",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.LocalName",
+      "description": "THE NAME WITHOUT ITS PREFIX - `type` of `xsi:type` - read-only; for a name without a prefix, the name itself. Together with `NamespaceURI` it is what a name MEANS, whatever prefix a particular document happened to choose.\n\nFor the default-namespace declaration `xmlns=\"...\"`, read as an attribute, the local name is `xmlns` itself.",
+      "syntax_block": "Local = Reader.LocalName;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<d:Item xmlns:d=\"\"urn:d\"\"/>\");\nReader.Read();\nif (Reader.LocalName = \"Item\" And Reader.NamespaceURI = \"urn:d\") {\n    Message(\"an item, whatever its prefix\");\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.Name",
+        "cls.XMLReader.NamespaceURI",
+        "cls.XMLReader.Prefix"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Prefix",
+      "name_local": "Prefix",
+      "name_en": "Prefix",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Prefix",
+      "description": "THE PREFIX OF THE NAME - `xsi` of `xsi:type` - read-only; \"\" for a name without one. The prefix is the document's choice and may differ from one sender to the next; compare `NamespaceURI` when it is the namespace that matters.\n\nA namespace declaration `xmlns:d=\"...\"`, read as an attribute, has the prefix `xmlns`.",
+      "syntax_block": "Prefix = Reader.Prefix;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<p:a xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nMessage(Reader.Prefix);                    // p",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.Name",
+        "cls.XMLReader.LocalName",
+        "cls.XMLReader.NamespaceURI"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.NamespaceURI",
+      "name_local": "NamespaceURI",
+      "name_en": "NamespaceURI",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.NamespaceURI",
+      "description": "THE NAMESPACE THE NAME IS IN - read-only; \"\" when it is in none. An element without a prefix is in the default namespace in scope; an attribute without a prefix is in NO namespace, a default one notwithstanding, as the Namespaces recommendation has it.\n\nThe `xmlns` declarations, read as attributes, are in `http://www.w3.org/2000/xmlns/`.",
+      "syntax_block": "Uri = Reader.NamespaceURI;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:x\"\" a=\"\"1\"\"/>\");\nReader.Read();\nMessage(Reader.NamespaceURI);              // urn:x\nReader.ReadAttribute();                    // xmlns\nReader.ReadAttribute();                    // a\nMessage(Reader.NamespaceURI = \"\");        // True: no namespace",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.LocalName",
+        "cls.XMLReader.NamespaceContext",
+        "cls.XMLNamespaceContext"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Value",
+      "name_local": "Value",
+      "name_en": "Value",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Value",
+      "description": "WHAT THE NODE HOLDS - read-only: the text of a `Text`, `Whitespace` or `CDATASection` node, the text of a comment, the data of a processing instruction, and an attribute's value while the cursor stands on it.\n\nAn element has NO value: its text is the `Text` node that follows its `StartElement`, so the idiom is `Read()` onto the start, `Read()` once more, then `Value`. On an element it is \"\".\n\nEntities are already replaced: `&amp;` arrives as `&`, `&#1028;` as the character. A text is ONE node however it was cut - by the chunks a file is read in, or by an entity in its middle.",
+      "syntax_block": "Text = Reader.Value;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<HNAME>A &amp; B</HNAME>\");\nReader.Read();                             // <HNAME>\nReader.Read();                             // the text\nMessage(Reader.Value);                      // A & B",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.HasValue",
+        "cls.XMLReader.Read",
+        "cls.XMLReader.IgnoreWhitespace"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.HasValue",
+      "name_local": "HasValue",
+      "name_en": "HasValue",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.HasValue",
+      "description": "Whether the node CAN hold a value - read-only. True on `Attribute`, `Text`, `Whitespace`, `CDATASection`, `Comment` and `ProcessingInstruction`; False on an element's start or end and on `None`.\n\nIt speaks of the KIND of node, not of the text: an empty attribute `a=\"\"` has a value, and it is \"\".",
+      "syntax_block": "if (Reader.HasValue) {\n    Message(Reader.Value);\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>t</a>\");\nReader.Read();\nMessage(Reader.HasValue);                   // False: an element\nReader.Read();\nMessage(Reader.HasValue);                   // True: the text",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.Value",
+        "cls.XMLReader.HasName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.HasName",
+      "name_local": "HasName",
+      "name_en": "HasName",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.HasName",
+      "description": "Whether the node HAS a name - read-only. True on `StartElement`, `EndElement`, `ProcessingInstruction` and `Attribute`; False on text, CDATA, whitespace, a comment and `None`.",
+      "syntax_block": "if (Reader.HasName) {\n    Message(Reader.Name);\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a><!--c--></a>\");\nwhile (Reader.Read()) {\n    Message(Reader.HasName);               // True, False, True\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.Name",
+        "cls.XMLReader.HasValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IsWhitespace",
+      "name_local": "IsWhitespace",
+      "name_en": "IsWhitespace",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IsWhitespace",
+      "description": "Whether the reader stands on a `Whitespace` node - read-only.\n\nText that is NOTHING BUT whitespace - spaces, tabs, line breaks, `&#32;` included - is always made a `Whitespace` node when it is read, never a `Text` one; so here this is the same question as `NodeType = XMLNodeType.Whitespace`. Such nodes are only met with `IgnoreWhitespace = False`.",
+      "syntax_block": "if (Reader.IsWhitespace) {\n    // the line breaks and indents between elements\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b/></a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.IsWhitespace);               // True",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.IgnoreWhitespace",
+        "cls.XMLReader.IsCharacters"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IsCharacters",
+      "name_local": "IsCharacters",
+      "name_en": "IsCharacters",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IsCharacters",
+      "description": "Whether the reader stands on character data - read-only: True on `Text`, `CDATASection` and `Whitespace`, False on everything else (a comment's text included).\n\nIt is the question to ask when a value may come either as text or wrapped in CDATA: both are characters.",
+      "syntax_block": "if (Reader.IsCharacters) {\n    Text = Text + Reader.Value;\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>x<![CDATA[<y>]]></a>\");\nvar Text = \"\";\nwhile (Reader.Read()) {\n    if (Reader.IsCharacters) {\n        Text = Text + Reader.Value;\n    }\n}\nMessage(Text);                              // x<y>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.IsWhitespace",
+        "cls.XMLReader.Value"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.XMLVersion",
+      "name_local": "XMLVersion",
+      "name_en": "XMLVersion",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.XMLVersion",
+      "description": "THE VERSION THE XML DECLARATION NAMES - `1.0` of `<?xml version=\"1.0\"?>` - read-only. The declaration is not a node: it is read with the start of the document, so this is known from the first `Read()` on; before it, and for a document without a declaration, it is \"\".",
+      "syntax_block": "Version = Reader.XMLVersion;",
+      "parameters": "",
+      "return_descr": "String - \"\" when the document has no declaration.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\" encoding=\"\"UTF-8\"\"?><a/>\");\nReader.Read();\nMessage(Reader.XMLVersion);                // 1.0",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.XMLEncoding",
+        "cls.XMLReader.Standalone"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.XMLEncoding",
+      "name_local": "XMLEncoding",
+      "name_en": "XMLEncoding",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.XMLEncoding",
+      "description": "THE ENCODING THE XML DECLARATION NAMES - read-only, known from the first `Read()` on; \"\" without a declaration or without an `encoding=` in it.\n\nIt is the declaration's WORD, read as written. For a file it is also what the bytes were decoded with (unless a byte-order mark said otherwise). For a text given with `SetString` it is only a word: the text is characters already, and the encoding it names is what the text once WAS - it is not applied again.",
+      "syntax_block": "Encoding = Reader.XMLEncoding;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.OpenFile(\"C:\\in\\J0100117.xml\");\nReader.Read();\nMessage(Reader.XMLEncoding);               // windows-1251",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.InputEncoding",
+        "cls.XMLReader.OpenFile",
+        "cls.XMLReader.SetString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.InputEncoding",
+      "name_local": "InputEncoding",
+      "name_en": "InputEncoding",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.InputEncoding",
+      "description": "The same as `XMLEncoding` - read-only: the encoding the declaration names, \"\" without one. It says nothing `XMLEncoding` does not.\n\nIt is NOT a detection: a UTF-8 file with no declaration answers \"\" here too.",
+      "syntax_block": "Encoding = Reader.InputEncoding;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\" encoding=\"\"UTF-8\"\"?><a/>\");\nReader.Read();\nMessage(Reader.InputEncoding);             // UTF-8",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.XMLEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Standalone",
+      "name_local": "Standalone",
+      "name_en": "Standalone",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Standalone",
+      "description": "Whether the XML declaration says `standalone=\"yes\"` - read-only, known from the first `Read()` on. False for `\"no\"`, for a declaration without the word, and for a document without a declaration.\n\nIt only reports what the document says.",
+      "syntax_block": "if (Reader.Standalone) {\n    // ...\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\" standalone=\"\"yes\"\"?><a/>\");\nReader.Read();\nMessage(Reader.Standalone);                // True",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.XMLVersion",
+        "cls.XMLReader.XMLEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IgnoreWhitespace",
+      "name_local": "IgnoreWhitespace",
+      "name_en": "IgnoreWhitespace",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IgnoreWhitespace",
+      "description": "Whether text that is nothing but whitespace is DROPPED - read and write, True by default.\n\nTrue: the line breaks and indents between elements of a document laid out for a person are never seen, and a walk goes from element to element. False: they are handed over as `Whitespace` nodes - what a copy that must keep the layout, or a value made of spaces, needs.\n\nOnly WHOLLY-whitespace text is concerned: `<b>x y</b>` keeps its space either way, and so does the whitespace inside a text that holds anything else. A CDATA section is never whitespace. The setting can be changed at any time and applies from the next `Read()` on.",
+      "syntax_block": "Reader.IgnoreWhitespace = False;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a>\" + Chars.LF + \"  <b/>\" + Chars.LF + \"</a>\");\nvar Count = 0;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Whitespace) {\n        Count = Count + 1;\n    }\n}\nMessage(Count);                             // 2: the line break before <b/>, and the one after it",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.IsWhitespace",
+        "enum.XMLNodeType.Whitespace"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.IsEmptyElement",
+      "name_local": "IsEmptyElement",
+      "name_en": "IsEmptyElement",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.IsEmptyElement",
+      "description": "Whether the element was written `<a/>` rather than `<a></a>` - read-only.\n\nBoth forms are the same PAIR of nodes, `StartElement` then `EndElement`; this is the one thing that tells them apart. It says so on BOTH nodes of the pair, and on an attribute of such an element too. False on every other node.\n\n⚠ Inside an entity's replacement text the two forms cannot be told apart, and an empty element there is not marked.",
+      "syntax_block": "if (Reader.IsEmptyElement) {\n    // <a/>: the next node is its EndElement\n}",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r><a/><b></b></r>\");\nReader.Read();                             // r\nReader.Read();                             // a\nMessage(Reader.IsEmptyElement);             // True\nReader.Read();                             // </a> - the same tag\nMessage(Reader.IsEmptyElement);             // True\nReader.Read();                             // b\nMessage(Reader.IsEmptyElement);             // False",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.Read",
+        "enum.XMLNodeType.StartElement",
+        "enum.XMLNodeType.EndElement"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Depth",
+      "name_local": "Depth",
+      "name_en": "Depth",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.Depth",
+      "description": "How deep the node stands - read-only. The root element is at 0, what is directly inside it at 1, and an element's `EndElement` is at the depth of its `StartElement`, so the two nodes of one element always agree. On an attribute it is its element's depth.\n\n⚠ NOT the `Depth` of `NamespaceContext`: that one counts one more than this on a start or a text, the same on an end. Compare the reader's own `Depth` with the reader's own.",
+      "syntax_block": "Level = Reader.Depth;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r><a>t</a></r>\");\nwhile (Reader.Read()) {\n    Message(Reader.Depth);                 // 0, 1, 2, 1, 0\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.NamespaceContext",
+        "cls.XMLNamespaceContext.Depth",
+        "cls.XMLReader.Skip"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.LineNumber",
+      "name_local": "LineNumber",
+      "name_en": "LineNumber",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.LineNumber",
+      "description": "The line the node BEGINS on, counted from 1 - read-only. Both nodes of `<a/>` stand where the one tag does; on an attribute it is its element's line. A node that came out of an entity's replacement text says where the entity REFERENCE is.\n\n0 before the first `Read()` and at the end. A refusal of a text that is not well-formed names its own line and column in its sentence.",
+      "syntax_block": "Line = Reader.LineNumber;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>\" + Chars.LF + \"<b/></a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.LineNumber);                // 2\nMessage(Reader.LinePosition);              // 1",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.LinePosition"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.LinePosition",
+      "name_local": "LinePosition",
+      "name_en": "LinePosition",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.LinePosition",
+      "description": "The column the node begins at on its line, counted from 1 - read-only. An element's is the column of its `<`; both nodes of `<a/>` have the one tag's. On an attribute it is its element's.\n\n0 before the first `Read()` and at the end.",
+      "syntax_block": "Column = Reader.LinePosition;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a><c></c></a>\");\nReader.Read();\nReader.Read();                             // <c>\nMessage(Reader.LinePosition);              // 4\nReader.Read();                             // </c>\nMessage(Reader.LinePosition);              // 7",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.LineNumber"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.NamespaceContext",
+      "name_local": "NamespaceContext",
+      "name_en": "NamespaceContext",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLReader.NamespaceContext",
+      "description": "THE NAMESPACES IN SCOPE AT THE NODE, as an `XMLNamespaceContext` - read-only. It is a SNAPSHOT: taken on a node, it answers for that node however far the reader has gone since, `Close()` included.\n\nOn an element's `EndElement` the scope is still the element's; on an attribute it is its element's; a text keeps the scope it began in. Before the first `Read()` only `xml` is bound. With nothing open - before `OpenFile` or `SetString`, and after `Close()` - it is `Undefined`.\n\n⚠ Its `Depth` is NOT the reader's `Depth`: on the root's start it is 1, on a text inside the root 2, on the root's end 0; on an attribute, one more than on its element's start.",
+      "syntax_block": "Context = Reader.NamespaceContext;",
+      "parameters": "",
+      "return_descr": "XMLNamespaceContext - or Undefined when nothing is open.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:p=\"\"urn:p\"\"><p:x/></r>\");\nReader.Read();\nReader.Read();                             // p:x\nvar Context = Reader.NamespaceContext;\nMessage(Context.LookupNamespaceURI(\"p\"));  // urn:p",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLNamespaceContext",
+        "cls.XMLReader.NamespaceURI",
+        "cls.XMLReader.Depth"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.OpenFile",
+      "name_local": "OpenFile",
+      "name_en": "OpenFile",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "OpenFile(path : string)",
+      "description": "Opens the FILE to read - closing first whatever the reader held. The file is read a chunk at a time as the walk goes, never loaded whole.\n\nTHE ENCODING is the file's own: its byte-order mark, or else its XML declaration - UTF-8 when it has neither. UTF-8, UTF-16, ISO-8859-1 and US-ASCII are read, and so are windows-1251 and cp866 (also spelled `cp1251` and `IBM866`), through the engine's own tables - the same characters on every machine, whatever its system code page. There is no encoding argument: a file says what it is.\n\nA file that cannot be opened is refused HERE: `XMLReader: cannot open the file '...' for reading`. Everything about its CONTENTS - an encoding not supported, XML that is not well-formed - is said by the `Read()` that reaches it: `XMLReader: the encoding 'koi8-u' is not supported; supported: UTF-8, UTF-16, windows-1251, cp866, ISO-8859-1, US-ASCII at line 1, column ... of '...'`. A known encoding spelled another way in a declaration is refused with the name to write: `the encoding 'utf8' is read under its own name only - write it 'UTF-8'`.",
+      "syntax_block": "Reader.OpenFile(Path);",
+      "parameters": "path - the file to read.",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.OpenFile(\"C:\\in\\statement.xml\");\nwhile (Reader.Read()) {\n    // ...\n}\nReader.Close();",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader",
+        "cls.XMLReader.SetString",
+        "cls.XMLReader.Close",
+        "cls.XMLReader.XMLEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.SetString",
+      "name_local": "SetString",
+      "name_en": "SetString",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "SetString(text : string)",
+      "description": "Gives the reader a TEXT to read - closing first whatever it held. Like `OpenFile`, nothing is parsed yet: the first `Read()` begins, and a text that is not well-formed is refused by the `Read()` that reaches the fault.\n\nA STRING IS CHARACTERS ALREADY. An `encoding=\"windows-1251\"` in its declaration names what the text once WAS - as bytes in a file - and is not applied a second time, which would turn every Cyrillic letter into two. `XMLEncoding` still reports the word.\n\nA text holding what is not a character (a lone surrogate) is refused by the `Read()` that reaches it, like any malformed text: `XMLReader: not well-formed (invalid token) at line 1, column 5`.",
+      "syntax_block": "Reader.SetString(Text);",
+      "parameters": "text - the XML document, whole.",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(Response.GetBodyAsString());\nwhile (Reader.Read()) {\n    // ...\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader",
+        "cls.XMLReader.OpenFile",
+        "cls.XMLReader.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Close()",
+      "description": "Lets go of the file or the text, of the parser, and of every node waiting to be read; the reader then stands on `None` with nothing open. `Read()` then raises `XMLReader: no text or file is open` until `OpenFile` or `SetString` gives it a source again.\n\nA reader need not be closed to be reused - `OpenFile` and `SetString` close first - but a file stays open until the reader closes it or reads it to its end.\n\nUnlike `XMLWriter.Close()`, which can hand over the written text, this one answers with NOTHING.",
+      "syntax_block": "Reader.Close();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.OpenFile(Path);\nwhile (Reader.Read()) {\n    // ...\n}\nReader.Close();      // the file is let go of here",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.OpenFile",
+        "cls.XMLReader.SetString",
+        "cls.XMLWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Read",
+      "name_local": "Read",
+      "name_en": "Read",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Read()",
+      "description": "Steps to the NEXT NODE and answers whether there is one. The first call stands on the first node of the document; when nothing is left it answers False, and the reader then stands on `None`. It also leaves the attribute cursor: after `Read()` the reader stands on a node, never on an attribute.\n\nWhitespace-only text is passed over while `IgnoreWhitespace` is True.\n\nIT REFUSES: `XMLReader: no text or file is open` with no source; and a document that is not well-formed - `XMLReader: mismatched tag at line 2, column 6` for a string, with `of '<file>'` added for a file. The nodes BEFORE the fault are handed over first, so the refusal comes exactly where the document broke; asked again, `Read()` refuses again rather than walking on past the fault.\n\nAlso refused here: an external entity (`XMLReader: the external entity 'file:///...' is not read - a document may not reach outside itself at line ..., column ...`), a document that depends on an external DTD or a parameter entity (`... the document depends on declarations outside itself (an external DTD or a parameter entity), which are not read ...`), and an encoding that is not supported.",
+      "syntax_block": "while (Reader.Read()) {\n    // Reader.NodeType, Reader.Name, Reader.Value\n}",
+      "parameters": "None.",
+      "return_descr": "Boolean - False when nothing is left.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>\" + Chars.LF + \"<b></a>\");\ntry {\n    while (Reader.Read()) {\n        Message(Reader.Name);              // a, b\n    }\n} except {\n    Message(ErrorDescription());           // ... at line 2, column 6\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.NodeType",
+        "cls.XMLReader.Skip",
+        "cls.XMLReader.MoveToContent",
+        "cls.XMLReader.IgnoreWhitespace"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.Skip",
+      "name_local": "Skip",
+      "name_en": "Skip",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Skip()",
+      "description": "Steps over the ELEMENT the reader stands on, whole: on a `StartElement` it reads through everything inside and stops ON that element's own `EndElement` - found by depth, not by name, so a nested element of the same name does not stop it. The next `Read()` then goes on after the element. For `<a/>` that end is the very next node.\n\nOn an attribute it skips the attribute's ELEMENT, the same way. On any other node - text, a comment, an end - it is simply `Read()`.\n\nNothing is gathered while skipping: an element of any size is passed over a node at a time.",
+      "syntax_block": "Reader.Skip();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r><meta><x/><y/></meta><TIN>1</TIN></r>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        if (Reader.Name = \"meta\") {\n            Reader.Skip();                 // stands on </meta>\n        } else {\n            Message(Reader.Name);          // r, TIN\n        }\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.Read",
+        "cls.XMLReader.Depth",
+        "cls.XMLReader.MoveToContent"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.MoveToContent",
+      "name_local": "MoveToContent",
+      "name_en": "MoveToContent",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "MoveToContent()",
+      "description": "Moves to the next node that is CONTENT and answers its type. It passes over whitespace, comments and processing instructions - and over the time before the first `Read()`, so on a fresh reader it reads to the root element. On content (an element's start or end, text, CDATA) it does not move. On an attribute it goes back to the attribute's element.\n\nAt the end of the document it answers `XMLNodeType.None`.",
+      "syntax_block": "Type = Reader.MoveToContent();",
+      "parameters": "None.",
+      "return_descr": "XMLNodeType - the type of the node it stopped on.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!--generated--><DECLAR/>\");\nif (Reader.MoveToContent() = XMLNodeType.StartElement) {\n    Message(Reader.Name);                  // DECLAR\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.Read",
+        "cls.XMLReader.Skip",
+        "enum.XMLNodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributeCount",
+      "name_local": "AttributeCount",
+      "name_en": "AttributeCount",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributeCount()",
+      "description": "How many attributes the current element has - the `xmlns` declarations among them.\n\nAn element's `StartElement` has its attributes, and so has the `EndElement` of `<a x=\"1\"/>`, being the same tag; the end of `<b z=\"3\"></b>` is a tag of its own and has none. On text, a comment, or before the first `Read()`, it is 0. While the cursor stands on an attribute it is still the element's count.",
+      "syntax_block": "Count = Reader.AttributeCount();",
+      "parameters": "None.",
+      "return_descr": "Number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\" b=\"\"2\"\"/>\");\nReader.Read();\nfor (i = 0 To Reader.AttributeCount() - 1) {\n    Message(Reader.AttributeName(i) + \" = \" + Reader.AttributeValue(i));\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.AttributeName",
+        "cls.XMLReader.AttributeValue",
+        "cls.XMLReader.ReadAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributeName",
+      "name_local": "AttributeName",
+      "name_en": "AttributeName",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributeName(index : number)",
+      "description": "The NAME of the attribute at this number, counted from 0, as written - prefix included (`xsi:type`).\n\nThe `xmlns` declarations are attributes too and come FIRST, whatever their place in the tag: `xmlns` for the default namespace, `xmlns:p` for a prefix.\n\nIT REFUSES what is not a number: `XMLReader: an attribute is asked for by its number - a value of the type 'String' is not a number`. A number that names no attribute - negative, fractional, past the last - answers \"\"; a script compares with \"\".",
+      "syntax_block": "Name = Reader.AttributeName(0);",
+      "parameters": "index - the attribute's number, from 0.",
+      "return_descr": "String - \"\" when there is no attribute at that number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" a=\"\"1\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeName(0));          // xmlns:d\nMessage(Reader.AttributeName(2));          // d:b\nMessage(Reader.AttributeName(9) = \"\");     // True",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.AttributeLocalName",
+        "cls.XMLReader.AttributeCount",
+        "cls.XMLReader.AttributeValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributeLocalName",
+      "name_local": "AttributeLocalName",
+      "name_en": "AttributeLocalName",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributeLocalName(index : number)",
+      "description": "The LOCAL NAME of the attribute at this number, counted from 0 - the name without its prefix: `b` of `d:b`, `d` of `xmlns:d`, and `xmlns` itself for the default-namespace declaration.\n\nIT REFUSES what is not a number: `XMLReader: an attribute is asked for by its number - a value of the type 'String' is not a number`. A number that names no attribute - negative, fractional, past the last - answers \"\"; a script compares with \"\".",
+      "syntax_block": "Local = Reader.AttributeLocalName(i);",
+      "parameters": "index - the attribute's number, from 0.",
+      "return_descr": "String - \"\" when there is no attribute at that number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeLocalName(1));     // b",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.AttributeName",
+        "cls.XMLReader.AttributeNamespaceURI"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributeNamespaceURI",
+      "name_local": "AttributeNamespaceURI",
+      "name_en": "AttributeNamespaceURI",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributeNamespaceURI(index : number)",
+      "description": "The NAMESPACE of the attribute at this number, counted from 0. An attribute WITHOUT a prefix is in no namespace - \"\" - whatever default namespace is in scope. The `xmlns` declarations are in `http://www.w3.org/2000/xmlns/`.\n\nIT REFUSES what is not a number: `XMLReader: an attribute is asked for by its number - a value of the type 'String' is not a number`. A number that names no attribute - negative, fractional, past the last - answers \"\"; a script compares with \"\".",
+      "syntax_block": "Uri = Reader.AttributeNamespaceURI(i);",
+      "parameters": "index - the attribute's number, from 0.",
+      "return_descr": "String - \"\" when there is no attribute at that number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" a=\"\"1\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeNamespaceURI(1) = \"\"); // True: a has no prefix\nMessage(Reader.AttributeNamespaceURI(2));  // urn:d",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.AttributeName",
+        "cls.XMLReader.AttributeValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributePrefix",
+      "name_local": "AttributePrefix",
+      "name_en": "AttributePrefix",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributePrefix(index : number)",
+      "description": "The PREFIX of the attribute at this number, counted from 0: `d` of `d:b`, `xmlns` of `xmlns:d`, and \"\" for an attribute without one - the default-namespace declaration `xmlns` among them.\n\nIT REFUSES what is not a number: `XMLReader: an attribute is asked for by its number - a value of the type 'String' is not a number`. A number that names no attribute - negative, fractional, past the last - answers \"\"; a script compares with \"\".",
+      "syntax_block": "Prefix = Reader.AttributePrefix(i);",
+      "parameters": "index - the attribute's number, from 0.",
+      "return_descr": "String - \"\" when there is no attribute at that number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributePrefix(0));        // xmlns\nMessage(Reader.AttributePrefix(1));        // d",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.AttributeName",
+        "cls.XMLReader.AttributeLocalName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.AttributeValue",
+      "name_local": "AttributeValue",
+      "name_en": "AttributeValue",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "AttributeValue(indexOrName : number | string [, namespaceURI : string])",
+      "description": "The VALUE of an attribute of the current element, found by NUMBER (from 0) or by NAME.\n\nBY NAME without a namespace, the name is the one written in the tag, prefix included - `GetAttribute(\"xsi:type\")`. WITH a namespace URI, it is the LOCAL name in that namespace - `GetAttribute(\"type\", \"http://www.w3.org/2001/XMLSchema-instance\")` - which finds the attribute whatever prefix the document chose for it. An empty URI is the same as none. Names are case-sensitive.\n\nAN ATTRIBUTE THAT IS NOT THERE IS `Undefined` - not an empty string, which an attribute written `a=\"\"` is - and so is a number that names none (negative, fractional, past the last). Compare with `Undefined` to ask whether it is there.\n\nIT REFUSES anything but a number or a string: `XMLReader: an attribute is found by its number or its name, not by a value of the type 'Boolean'`.\n\nEntities in the value are already replaced, and so are the line breaks and tabs a writer had to escape.\n\n`AttributeValue` and `GetAttribute` are the same verb under two names.",
+      "syntax_block": "Value = Reader.AttributeValue(\"name\");\nValue = Reader.AttributeValue(\"localName\", NamespaceURI);\nValue = Reader.AttributeValue(0);",
+      "parameters": "indexOrName - the attribute's number from 0, or its name.\nnamespaceURI - optional: with it, the name is a local name in this namespace.",
+      "return_descr": "String - or Undefined when there is no such attribute.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\" e=\"\"\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeValue(\"a\"));                 // 1\nMessage(Reader.AttributeValue(\"e\") = \"\");          // True: there, and empty\nMessage(Reader.AttributeValue(\"missing\") = Undefined); // True: not there",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.GetAttribute",
+        "cls.XMLReader.AttributeName",
+        "cls.XMLReader.AttributeCount"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.GetAttribute",
+      "name_local": "GetAttribute",
+      "name_en": "GetAttribute",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "GetAttribute(indexOrName : number | string [, namespaceURI : string])",
+      "description": "The VALUE of an attribute of the current element, found by NUMBER (from 0) or by NAME.\n\nBY NAME without a namespace, the name is the one written in the tag, prefix included - `GetAttribute(\"xsi:type\")`. WITH a namespace URI, it is the LOCAL name in that namespace - `GetAttribute(\"type\", \"http://www.w3.org/2001/XMLSchema-instance\")` - which finds the attribute whatever prefix the document chose for it. An empty URI is the same as none. Names are case-sensitive.\n\nAN ATTRIBUTE THAT IS NOT THERE IS `Undefined` - not an empty string, which an attribute written `a=\"\"` is - and so is a number that names none (negative, fractional, past the last). Compare with `Undefined` to ask whether it is there.\n\nIT REFUSES anything but a number or a string: `XMLReader: an attribute is found by its number or its name, not by a value of the type 'Boolean'`.\n\nEntities in the value are already replaced, and so are the line breaks and tabs a writer had to escape.\n\n`GetAttribute` and `AttributeValue` are the same verb under two names.",
+      "syntax_block": "Value = Reader.GetAttribute(\"name\");\nValue = Reader.GetAttribute(\"localName\", NamespaceURI);",
+      "parameters": "indexOrName - the attribute's number from 0, or its name.\nnamespaceURI - optional: with it, the name is a local name in this namespace.",
+      "return_descr": "String - or Undefined when there is no such attribute.",
+      "example": "var Xsi = \"http://www.w3.org/2001/XMLSchema-instance\";\nvar Reader = New XMLReader();\nReader.SetString(\"<DECLAR xmlns:xsi=\"\"\" + Xsi + \"\"\" xsi:noNamespaceSchemaLocation=\"\"J0100117.xsd\"\"/>\");\nReader.Read();\nMessage(Reader.GetAttribute(\"xsi:noNamespaceSchemaLocation\"));   // J0100117.xsd\nMessage(Reader.GetAttribute(\"noNamespaceSchemaLocation\", Xsi));  // J0100117.xsd\nif (Reader.GetAttribute(\"version\") = Undefined) {\n    Message(\"no version given\");\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.AttributeValue",
+        "cls.XMLReader.ReadAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.FirstAttribute",
+      "name_local": "FirstAttribute",
+      "name_en": "FirstAttribute",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "FirstAttribute()",
+      "description": "Puts the attribute cursor on the FIRST attribute of the current element and answers True - or answers False, and does not move, when the element has none (or the reader does not stand on an element). From an attribute it starts over.\n\nON AN ATTRIBUTE, the reader answers for it: `NodeType` is `XMLNodeType.Attribute`, and `Name`, `LocalName`, `Prefix`, `NamespaceURI` and `Value` are the attribute's. `AttributeCount`, `Depth`, `LineNumber` and `IsEmptyElement` stay the element's. `MoveToElement` or the next `Read()` leave the attribute.",
+      "syntax_block": "if (Reader.FirstAttribute()) {\n    // Reader.Name, Reader.Value - the first attribute\n}",
+      "parameters": "None.",
+      "return_descr": "Boolean - False when there is no attribute.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<b x=\"\"1\"\" y=\"\"2\"\"/>\");\nReader.Read();\nif (Reader.FirstAttribute()) {\n    Message(Reader.Name + \" = \" + Reader.Value);   // x = 1\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.NextAttribute",
+        "cls.XMLReader.ReadAttribute",
+        "cls.XMLReader.MoveToElement"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.NextAttribute",
+      "name_local": "NextAttribute",
+      "name_en": "NextAttribute",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "NextAttribute()",
+      "description": "Moves the attribute cursor to the NEXT attribute and answers True. From the element itself it goes to the FIRST attribute, so `while (Reader.NextAttribute())` walks them all. Past the last it answers False and STAYS on the last one.\n\nON AN ATTRIBUTE, the reader answers for it: `NodeType` is `XMLNodeType.Attribute`, and `Name`, `LocalName`, `Prefix`, `NamespaceURI` and `Value` are the attribute's. `AttributeCount`, `Depth`, `LineNumber` and `IsEmptyElement` stay the element's. `MoveToElement` or the next `Read()` leave the attribute.\n\nThe same as `ReadAttribute`.",
+      "syntax_block": "while (Reader.NextAttribute()) {\n    // Reader.Name, Reader.Value\n}",
+      "parameters": "None.",
+      "return_descr": "Boolean - False when there is no next attribute.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<b x=\"\"1\"\" y=\"\"2\"\"/>\");\nReader.Read();\nwhile (Reader.NextAttribute()) {\n    Message(Reader.Name + \" = \" + Reader.Value);   // x = 1, y = 2\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.ReadAttribute",
+        "cls.XMLReader.FirstAttribute",
+        "cls.XMLReader.MoveToElement"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.ReadAttribute",
+      "name_local": "ReadAttribute",
+      "name_en": "ReadAttribute",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "ReadAttribute()",
+      "description": "Walks the attributes of the current element: the first call stands on the FIRST attribute, each next call on the next, and past the last it answers False and stays where it was. So `while (Reader.ReadAttribute())` visits every attribute, the `xmlns` declarations first.\n\nON AN ATTRIBUTE, the reader answers for it: `NodeType` is `XMLNodeType.Attribute`, and `Name`, `LocalName`, `Prefix`, `NamespaceURI` and `Value` are the attribute's. `AttributeCount`, `Depth`, `LineNumber` and `IsEmptyElement` stay the element's. `MoveToElement` or the next `Read()` leave the attribute.\n\nThe next `Read()` goes on AFTER the element - into its content - not to anything near the attribute.\n\nThe same as `NextAttribute`.",
+      "syntax_block": "while (Reader.ReadAttribute()) {\n    // Reader.Name, Reader.Value\n}",
+      "parameters": "None.",
+      "return_descr": "Boolean - False when there is no next attribute.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\" p:b=\"\"2\"\" xmlns:p=\"\"urn:p\"\"><c/></r>\");\nReader.Read();\nwhile (Reader.ReadAttribute()) {\n    Message(Reader.Name + \" = \" + Reader.Value);   // xmlns:p = urn:p, a = 1, p:b = 2\n}\nReader.Read();\nMessage(Reader.Name);                                // c",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.NextAttribute",
+        "cls.XMLReader.FirstAttribute",
+        "cls.XMLReader.MoveToElement",
+        "cls.XMLReader.GetAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLReader.MoveToElement",
+      "name_local": "MoveToElement",
+      "name_en": "MoveToElement",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "MoveToElement()",
+      "description": "Takes the attribute cursor back to the ELEMENT the attribute belongs to, and answers True; answers False when the reader stood on no attribute and so did not move.\n\nAfter it `NodeType`, `Name` and `Value` are the element's again, and `NextAttribute` starts from the first attribute.",
+      "syntax_block": "Reader.MoveToElement();",
+      "parameters": "None.",
+      "return_descr": "Boolean - True when it stood on an attribute.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<b x=\"\"1\"\"/>\");\nReader.Read();\nReader.ReadAttribute();\nMessage(Reader.NodeType = XMLNodeType.Attribute);   // True\nReader.MoveToElement();\nMessage(Reader.Name);                      // b",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.ReadAttribute",
+        "cls.XMLReader.FirstAttribute",
+        "cls.XMLReader.NextAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter",
+      "name_local": "XMLWriter",
+      "name_en": "XMLWriter",
+      "kind": "collection",
+      "class_id": 210769561834208926,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "New XMLWriter()",
+      "description": "XML written by a script - a tax return, an exchange file, the body of a request. The writer keeps EVERY ELEMENT WELL-FORMED BY ITSELF: a name that is a name, an attribute only right after its element's start and only once, an end only for an element that was started, the declaration only first, and `Close()` refused while an element or an attribute is still open. It does NOT insist on ONE ROOT: several elements at the top, or text there, are not refused - a FRAGMENT is written as readily as a document, and keeping to one root is the script's part.\n\nA WRITE IT REFUSES CHANGES NOTHING: no half tag, no half attribute value, no element begun is left behind - the script can catch the refusal and write on, from where it stood before the call.\n\nTHE TARGET is a file - `OpenFile(path, encoding, writeBOM)`, written a piece at a time - or a string: `SetString(encoding)`, and then `Close()` hands the text over.\n\nWHAT IS GIVEN IS ESCAPED where it must be: `&`, `<`, `>` in text; also `\"`, a tab and the line breaks in an attribute's value, which a reader would otherwise turn into spaces. A character the file's encoding has no byte for is written as a `&#N;` reference in text and in an attribute - legal XML, read back as the character; in a name, a comment, an instruction or a CDATA section there is no such thing, and it is REFUSED. A character XML does not allow at all (most controls below a space) is refused everywhere.\n\nNAMESPACES are declared where they are first needed: an element or an attribute written with a URI that is not bound in scope gets its declaration on that very tag. `xmlns` and `xmlns:p` written with `WriteAttribute` are declarations too, and the writer knows them as such.\n\nLAYOUT: `Indent`, True by default, puts every element on a line of its own, a tab a level - but never inside an element that holds text, where the line would become part of the text.",
+      "syntax_block": "var Writer = New XMLWriter();\nWriter.OpenFile(Path, \"windows-1251\");\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"DECLAR\");\nWriter.WriteStartElement(\"TIN\");\nWriter.WriteText(Tin);\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nWriter.Close();",
+      "syntax_block_ves": "Writer = New XMLWriter();\nWriter.OpenFile(Path, \"windows-1251\");\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"DECLAR\");\nWriter.WriteStartElement(\"TIN\");\nWriter.WriteText(Tin);\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nWriter.Close();",
+      "parameters": "None - a writer is made with nothing open, and is given its target by `OpenFile` or `SetString`.",
+      "return_descr": "XMLWriter - with nothing open.",
+      "example": "var Xsi = \"http://www.w3.org/2001/XMLSchema-instance\";\nvar Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"DECLAR\");\nWriter.WriteNamespaceMapping(\"xsi\", Xsi);\nWriter.WriteAttribute(\"xsi:noNamespaceSchemaLocation\", \"J0100117.xsd\");\nWriter.WriteStartElement(\"HNAME\");\nWriter.WriteText(\"Paper & Co\");\nWriter.WriteEndElement();\nWriter.WriteStartElement(\"EMPTY\");\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <?xml version=\"1.0\" encoding=\"UTF-8\"?><DECLAR xmlns:xsi=\"...\" xsi:noNamespaceSchemaLocation=\"J0100117.xsd\"><HNAME>Paper &amp; Co</HNAME><EMPTY/></DECLAR>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.OpenFile",
+        "cls.XMLWriter.SetString",
+        "cls.XMLWriter.WriteStartElement",
+        "cls.XMLWriter.Close",
+        "cls.XMLReader"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.Indent",
+      "name_local": "Indent",
+      "name_en": "Indent",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLWriter.Indent",
+      "description": "Whether the text is LAID OUT for a person - read and write, True by default.\n\nTrue: a line break before every element, comment, instruction and CDATA section, and one tab per open level; the end of an element that holds elements stands on a line of its own. NOT inside an element that holds text - `<b>t</b>`, `<m>x<i/>y</m>` stay on one line - because there the line and the tabs would become part of the text. Nothing is put before the very first thing written.\n\nFalse: everything on one line, with no whitespace that was not written.\n\nIt can be changed at any time and applies to what is written from then on.",
+      "syntax_block": "Writer.Indent = False;",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteStartElement(\"b\");\nWriter.WriteText(\"t\");\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <a>\n// \t<b>t</b>\n// </a>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter",
+        "cls.XMLWriter.WriteText"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.NamespaceContext",
+      "name_local": "NamespaceContext",
+      "name_en": "NamespaceContext",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLWriter.NamespaceContext",
+      "description": "THE NAMESPACES IN SCOPE WHERE THE WRITER STANDS, as an `XMLNamespaceContext` - read-only: every declaration on the elements still open, the ones the writer made by itself included, and `xml`. Its `Depth` is the number of elements open.\n\nA SNAPSHOT: it answers for the moment it was taken, whatever is written after. With nothing open it is `Undefined`.",
+      "syntax_block": "Context = Writer.NamespaceContext;",
+      "parameters": "",
+      "return_descr": "XMLNamespaceContext - or Undefined when nothing is open.",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\", \"urn:x\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nvar Context = Writer.NamespaceContext;\nMessage(Context.DefaultNamespace);          // urn:x\nMessage(Context.LookupNamespaceURI(\"p\"));  // urn:p",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLNamespaceContext",
+        "cls.XMLWriter.LookupPrefix",
+        "cls.XMLWriter.WriteNamespaceMapping"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.OpenFile",
+      "name_local": "OpenFile",
+      "name_en": "OpenFile",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "OpenFile(path : string [, encoding : string = \"UTF-8\" [, writeBOM : boolean = True]])",
+      "description": "Makes the FILE to write into - created, or emptied if it is there. What is written passes to the file a piece at a time; it is complete on disk when `Close()` answers.\n\nTHE ENCODING: `UTF-8` (the default), `UTF-16`, `windows-1251` or `cp866` - case does not matter, and `utf8`, `utf16`, `cp1251` and `IBM866` are taken too. windows-1251 and cp866 are the engine's own tables: the same bytes on every machine, whatever its system code page. `WriteXMLDeclaration` then names the encoding by its usual name (`cp1251` is declared `windows-1251`). Anything else is refused: `XMLWriter: the encoding 'koi8-u' is not supported; supported: UTF-8, UTF-16, windows-1251, cp866`.\n\nTHE BYTE-ORDER MARK: UTF-8 gets one unless `writeBOM` is False; UTF-16 (little-endian) ALWAYS has one, since it cannot be read without it; windows-1251 and cp866 never have one, whatever `writeBOM` says.\n\nA file that cannot be made is refused: `XMLWriter: cannot open the file '...' for writing`; a full disk is said by `Close()`: `XMLWriter: writing to the file '...' failed`.\n\n⚠ A new `OpenFile` or `SetString` on a writer still open - and a writer let go of without `Close()` - does not cut its file short: what was written so far reaches the file, unfinished as it is, and the file is closed. (A path that cannot be opened leaves the open writer as it was.) The SAME path as the file the writer has open starts that file over: the old document is let go of first, and the file is then written anew. Only `Close()` says that the file could not be written in full, and only `Close()` refuses an unfinished document - `Close()` first.",
+      "syntax_block": "Writer.OpenFile(Path);\nWriter.OpenFile(Path, \"windows-1251\");\nWriter.OpenFile(Path, \"UTF-8\", False);",
+      "parameters": "path - the file to write.\nencoding - optional: UTF-8 (the default), UTF-16, windows-1251, cp866.\nwriteBOM - optional, True by default: whether a UTF-8 file begins with its byte-order mark.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.OpenFile(\"C:\\out\\J0100117.xml\", \"windows-1251\");\nWriter.WriteXMLDeclaration();   // encoding=\"windows-1251\"\nWriter.WriteStartElement(\"DECLAR\");\nWriter.WriteEndElement();\nWriter.Close();",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.SetString",
+        "cls.XMLWriter.Close",
+        "cls.XMLWriter.WriteXMLDeclaration"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.SetString",
+      "name_local": "SetString",
+      "name_en": "SetString",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "SetString([encoding : string = \"UTF-8\"])",
+      "description": "Makes the writer write into a STRING; `Close()` then hands the text over.\n\nA string holds every character, so nothing is ever turned into a `&#N;` reference here, and the ENCODING is only the WORD `WriteXMLDeclaration` writes into the declaration - for a text that will become bytes later, in a file or a request body, in that encoding. It is written by its usual name, as `OpenFile` writes it: `cp1251` is declared `windows-1251`, `utf8` `UTF-8`. A word that names no encoding the engine knows is refused here as well: `XMLWriter: the encoding '...' is not supported; supported: UTF-8, UTF-16, windows-1251, cp866`.\n\n⚠ A new `SetString` or `OpenFile` on a writer still open lets go of the document being written, unfinished: one written into a file reaches its file and the file is closed; one written into a string is dropped. `Close()` first.",
+      "syntax_block": "Writer.SetString();\nWriter.SetString(\"windows-1251\");",
+      "parameters": "encoding - optional, UTF-8 by default: the word the declaration will name.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString(\"windows-1251\");\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"a\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <?xml version=\"1.0\" encoding=\"windows-1251\"?>\n// <a/>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.OpenFile",
+        "cls.XMLWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Close()",
+      "description": "Finishes the document. For a STRING it answers with the TEXT; for a FILE it writes what is left, closes the file and answers \"\" - the document is on disk when it returns. With nothing open it answers \"\".\n\nIT REFUSES an UNFINISHED document: `XMLWriter: the element 'a' is still open - WriteEndElement for every WriteStartElement`, and `XMLWriter: an attribute is still open`; refused, the writer stays open, and the script can end what is open and close again. Several elements at the top, or text there, are not refused: a fragment is handed over as it was written. A file that could not be written in full says so here: `XMLWriter: writing to the file '...' failed`.\n\nClosed, the writer has nothing open: the next document begins with `OpenFile` or `SetString`, and a write before that is refused - `XMLWriter: no file or string is open - OpenFile or SetString first`.",
+      "syntax_block": "Text = Writer.Close();",
+      "parameters": "None.",
+      "return_descr": "String - the text for a string; \"\" for a file.",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\ntry {\n    Writer.Close();\n} except {\n    Message(ErrorDescription());           // ... the element 'a' is still open ...\n}\nWriter.WriteEndElement();\nMessage(Writer.Close());                   // <a/>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.OpenFile",
+        "cls.XMLWriter.SetString",
+        "cls.XMLReader.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteXMLDeclaration",
+      "name_local": "WriteXMLDeclaration",
+      "name_en": "WriteXMLDeclaration",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteXMLDeclaration()",
+      "description": "Writes the XML declaration: `<?xml version=\"1.0\" encoding=\"...\"?>`, the encoding being the file's (by its usual name) or, for a string, the one `SetString` named - UTF-8 when none was.\n\nIt must be the FIRST thing in the document, or it is refused: `XMLWriter: the XML declaration is the first thing in a document`. A document may go without one; a UTF-8 file is read as UTF-8 without it.",
+      "syntax_block": "Writer.WriteXMLDeclaration();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"a\");\nWriter.WriteEndElement();\nMessage(Writer.Close());                   // <?xml version=\"1.0\" encoding=\"UTF-8\"?><a/>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.OpenFile",
+        "cls.XMLWriter.SetString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteStartElement",
+      "name_local": "WriteStartElement",
+      "name_en": "WriteStartElement",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteStartElement(name : string [, namespaceURI : string])",
+      "description": "Starts an ELEMENT. Its start tag stays open for attributes and namespace declarations until something is written inside it; `WriteEndElement` ends it - as `<a/>` when nothing was written inside.\n\nTHE NAME may be `prefix:local`. WITH A NAMESPACE URI: a URI not bound in scope is declared on this element - under the name's prefix, or as the default namespace for a name without one; a name without a prefix whose URI is already bound to a prefix TAKES that prefix. WITHOUT a URI, a prefixed name needs its prefix bound already (`XMLWriter: the prefix 'p' is not bound to a namespace`), and an unprefixed name stays in the DEFAULT NAMESPACE IN SCOPE - nothing is written to undo it.\n\nA NAME IS CHECKED: of ASCII, only letters, digits and `_`, `-`, `.`, `:` are allowed; it does not begin with a digit, `-`, `.` or `:`, and it holds ONE colon at most, not at its end; the local part after the colon does not begin with a digit, `-` or `.` either. Anything else is refused: `XMLWriter: 'a b' is not a name for an element`, `XMLWriter: 'a:b:c' is not a name for an element`, `XMLWriter: 'p:1x' is not a name for an element`. The prefix `xmlns` is refused too: `XMLWriter: the prefix 'xmlns' is reserved`. A character past ASCII is let through where XML allows it - but not one the file's encoding cannot hold: `XMLWriter: the character U+0100 in an element has no byte in windows-1251`. The name must be a string: `XMLWriter: the name is a string, not a value of the type 'Number'`.",
+      "syntax_block": "Writer.WriteStartElement(\"Name\");\nWriter.WriteStartElement(\"Name\", NamespaceURI);",
+      "parameters": "name - the element's name, `local` or `prefix:local`.\nnamespaceURI - optional: the namespace it is in.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteStartElement(\"a\", \"urn:d\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nWriter.WriteStartElement(\"b\", \"urn:p\");     // the URI is p's\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a xmlns=\"urn:d\" xmlns:p=\"urn:p\"><p:b/></a>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteEndElement",
+        "cls.XMLWriter.WriteAttribute",
+        "cls.XMLWriter.WriteNamespaceMapping"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteEndElement",
+      "name_local": "WriteEndElement",
+      "name_en": "WriteEndElement",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteEndElement()",
+      "description": "Ends the element started last. When nothing was written inside it the element closes as `<a/>`; otherwise its end tag is written - on a line of its own when it holds elements and `Indent` is on.\n\nIT REFUSES `XMLWriter: no element is open to end`, and `XMLWriter: an attribute is open - WriteEndAttribute comes first`.",
+      "syntax_block": "Writer.WriteEndElement();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"EMPTY\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <EMPTY/>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteStartElement",
+        "cls.XMLWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteAttribute",
+      "name_local": "WriteAttribute",
+      "name_en": "WriteAttribute",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteAttribute(name : string, value : string) | WriteAttribute(name : string, namespaceURI : string, value : string)",
+      "description": "Writes an ATTRIBUTE of the element whose start tag is still open. TWO FORMS: `(name, value)`, and `(name, namespaceURI, value)` - three arguments mean the second is the namespace.\n\n⚠ A third argument that is `Undefined` counts as no third argument: the SECOND is then the value.\n\nTHE VALUE is escaped - `&`, `<`, `>`, `\"`, the tab and the line breaks - and reads back exactly as it was given. A character the file's encoding cannot hold is written as `&#N;`.\n\nWITH A NAMESPACE URI: a prefixed name whose prefix does not mean that URI in scope gets the declaration on the tag, under its prefix. An unprefixed name takes a named prefix bound to the URI in scope; when there is none, the writer makes one up (`d1p1`, `d2p1`, ...) and declares it on the tag - also when the URI is the DEFAULT namespace's, since an attribute is never in the default namespace. A prefixed name without a URI needs its prefix bound already.\n\nNAMESPACE DECLARATIONS: `WriteAttribute(\"xmlns:p\", uri)` and `WriteAttribute(\"xmlns\", uri)` DECLARE the namespace, as `WriteNamespaceMapping` does, and the writer knows them: a name under `p` written afterwards is bound, `LookupPrefix` finds `p`, and the same declaration is not written twice. In the three-argument form the URI of such a declaration can only be the xmlns namespace's: `XMLWriter: a namespace declaration is in the namespace 'http://www.w3.org/2000/xmlns/', not in 'urn:x'`. `xmlns:` with nothing after the colon is not a name: `XMLWriter: 'xmlns:' is not a name for an attribute`.\n\nA DECLARATION THAT WOULD MOVE A NAME already on the tag - the element's own or an attribute written - into another namespace is refused: `XMLWriter: the prefix 'p' already stands for 'urn:x' on this element`; for the default namespace the sentence names `xmlns`. So is an attribute whose URI would declare the element's prefix again for another namespace.\n\nTHE SAME ATTRIBUTE TWICE on one element is refused - by the same name, or by two prefixes of one namespace: `XMLWriter: the attribute 'a' is written on this element already`.\n\nIT REFUSES an attribute anywhere but right after its element's start - `XMLWriter: an attribute is written right after its element's start, before anything inside it` - and a value that is not a string: `XMLWriter: the value is a string, not a value of the type 'Number'`. Convert a number or a date to the text the format wants first. A refused attribute leaves nothing of itself on the tag.",
+      "syntax_block": "Writer.WriteAttribute(\"name\", Value);\nWriter.WriteAttribute(\"name\", NamespaceURI, Value);",
+      "parameters": "name - the attribute's name.\nnamespaceURI - in the three-argument form: the namespace it is in.\nvalue - the value, a string.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"r\");\nWriter.WriteAttribute(\"a\", \"1 < 2\");\nWriter.WriteAttribute(\"q\", \"urn:q\", \"x\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <r a=\"1 &lt; 2\" xmlns:d1p1=\"urn:q\" d1p1:q=\"x\"/>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteStartAttribute",
+        "cls.XMLWriter.WriteStartElement",
+        "cls.XMLWriter.WriteNamespaceMapping"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteStartAttribute",
+      "name_local": "WriteStartAttribute",
+      "name_en": "WriteStartAttribute",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteStartAttribute(name : string [, namespaceURI : string])",
+      "description": "Starts an ATTRIBUTE whose value is written in PIECES: `WriteText` (escaped) and `WriteRaw` (as it is) then go into the value, until `WriteEndAttribute` closes it. Name and namespace work as in `WriteAttribute`.\n\nRefused anywhere but right after an element's start, and while another attribute is open: `XMLWriter: an attribute is written right after its element's start, before anything inside it`. An attribute left open is refused by the next element, the end of an element, and `Close()`.\n\nA namespace declaration is not written in pieces: an `xmlns` or `xmlns:p` name is refused - `XMLWriter: a namespace is declared with WriteNamespaceMapping or WriteAttribute, not as an open attribute`. The same attribute twice on one element is refused as in `WriteAttribute`.",
+      "syntax_block": "Writer.WriteStartAttribute(\"name\");\nWriter.WriteText(Part);\nWriter.WriteEndAttribute();",
+      "parameters": "name - the attribute's name.\nnamespaceURI - optional: the namespace it is in.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"r\");\nWriter.WriteStartAttribute(\"period\");\nWriter.WriteText(\"2026\");\nWriter.WriteText(\"-10\");\nWriter.WriteEndAttribute();\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <r period=\"2026-10\"/>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteEndAttribute",
+        "cls.XMLWriter.WriteAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteEndAttribute",
+      "name_local": "WriteEndAttribute",
+      "name_en": "WriteEndAttribute",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteEndAttribute()",
+      "description": "Closes the attribute `WriteStartAttribute` opened. Refused when none is open: `XMLWriter: no attribute is open to end`.",
+      "syntax_block": "Writer.WriteEndAttribute();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "Writer.WriteStartAttribute(\"code\");\nWriter.WriteText(Code);\nWriter.WriteEndAttribute();",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteStartAttribute"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteText",
+      "name_local": "WriteText",
+      "name_en": "WriteText",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteText(text : string)",
+      "description": "Writes TEXT - escaped: `&`, `<` and `>` become `&amp;`, `&lt;`, `&gt;`, and a carriage return `&#13;` (a reader would make a bare one a line feed). It reads back exactly as it was given. Inside an open `WriteStartAttribute` it goes into the attribute's value instead.\n\nA character the file's encoding has no byte for is written as a `&#N;` reference. A character XML does not allow at all is refused: `XMLWriter: the character U+0001 is not allowed in XML` - and a refused text writes nothing of itself, not even the part before that character.\n\nText marks its element as one that holds text: `Indent` puts no line breaks inside it from then on.\n\nThe text must be a string - `XMLWriter: the text is a string, not a value of the type 'Number'`: a number, a date or a Boolean is converted to the text the format wants by the script, not guessed at by the writer.",
+      "syntax_block": "Writer.WriteText(Text);",
+      "parameters": "text - the text, a string.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"c\");\nWriter.WriteText(\"1 < 2 & 3\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <c>1 &lt; 2 &amp; 3</c>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteCDATASection",
+        "cls.XMLWriter.WriteRaw",
+        "cls.XMLWriter.Indent"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteCDATASection",
+      "name_local": "WriteCDATASection",
+      "name_en": "WriteCDATASection",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteCDATASection(text : string)",
+      "description": "Writes a CDATA SECTION - `<![CDATA[...]]>` - in which the text stands UNESCAPED. A text holding `]]>`, which would end the section early, is split across two sections, and reads back whole as two `CDATASection` nodes.\n\nNo reference exists inside CDATA, so a character the file's encoding cannot hold is REFUSED here: `XMLWriter: the character U+0100 in a CDATA section has no byte in windows-1251`.\n\nLike text, a section marks its element as one that holds text: `Indent` puts no line breaks after it inside that element.",
+      "syntax_block": "Writer.WriteCDATASection(Text);",
+      "parameters": "text - the text, a string.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteStartElement(\"a\");\nWriter.WriteCDATASection(\"<b>bold</b>\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a><![CDATA[<b>bold</b>]]></a>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteText",
+        "enum.XMLNodeType.CDATASection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteComment",
+      "name_local": "WriteComment",
+      "name_en": "WriteComment",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteComment(text : string)",
+      "description": "Writes a COMMENT - `<!--text-->`, the text as it is (put spaces around it yourself if they are wanted).\n\nRefused: a text holding `--` or ending with `-` - `XMLWriter: a comment cannot hold '--' or end with '-'` - and a character the file's encoding cannot hold, since a comment has no references: `XMLWriter: the character U+0100 in a comment has no byte in windows-1251`.",
+      "syntax_block": "Writer.WriteComment(Text);",
+      "parameters": "text - the comment's text.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteStartElement(\"a\");\nWriter.WriteComment(\" generated \");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a><!-- generated --></a>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteProcessingInstruction",
+        "enum.XMLNodeType.Comment"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteProcessingInstruction",
+      "name_local": "WriteProcessingInstruction",
+      "name_en": "WriteProcessingInstruction",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteProcessingInstruction(name : string [, text : string])",
+      "description": "Writes a PROCESSING INSTRUCTION - `<?name text?>`; without a text, `<?name?>`.\n\nRefused: the name `xml` in any case - `XMLWriter: 'xml' is the declaration's, not an instruction's name - WriteXMLDeclaration writes it`; a name with a colon or one that is not a name - `XMLWriter: 'a b' is not a name for a processing instruction`; a text holding `?>` - `XMLWriter: a processing instruction cannot hold '?>'`; and a character the file's encoding cannot hold.",
+      "syntax_block": "Writer.WriteProcessingInstruction(\"xml-stylesheet\", \"type=\"\"text/xsl\"\" href=\"\"form.xsl\"\"\");",
+      "parameters": "name - the instruction's target.\ntext - optional: what follows it.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteProcessingInstruction(\"xml-stylesheet\", \"href=\"\"form.xsl\"\"\");\nWriter.WriteStartElement(\"a\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <?xml-stylesheet href=\"form.xsl\"?><a/>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteComment",
+        "enum.XMLNodeType.ProcessingInstruction"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteNamespaceMapping",
+      "name_local": "WriteNamespaceMapping",
+      "name_en": "WriteNamespaceMapping",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteNamespaceMapping(prefix : string, namespaceURI : string)",
+      "description": "DECLARES a namespace on the element whose start tag is still open: `xmlns:prefix=\"uri\"`, or `xmlns=\"uri\"` - the default namespace - for an empty prefix (\"\" or `Undefined`). Declared once on the root, a namespace serves the whole document, and the writer then uses its prefix by itself for every name in that URI.\n\nThe same declaration twice on one element is written once. Refused: a declaration anywhere but on an open start tag - `XMLWriter: a namespace is declared on an element's start, before anything inside it`; the prefix `xml` or `xmlns` - `XMLWriter: the prefix 'xml' is reserved`; a prefix with no namespace - `XMLWriter: the prefix 'p' cannot be bound to no namespace`; a prefix that is not a name, or holds a colon - `XMLWriter: 'p:q' is not a name for a prefix`; a prefix bound to the XML or the xmlns namespace - `XMLWriter: the namespace 'http://www.w3.org/2000/xmlns/' is reserved`; one prefix for two URIs on the same element - `XMLWriter: the prefix 'p' is declared on this element already`; and a declaration that would move a name already on the tag - the element's own or an attribute written - into another namespace: `XMLWriter: the prefix 'p' already stands for 'urn:x' on this element` (for the default namespace the sentence names `xmlns`).\n\n`WriteAttribute(\"xmlns:p\", uri)` declares the same way.",
+      "syntax_block": "Writer.WriteNamespaceMapping(\"xsi\", \"http://www.w3.org/2001/XMLSchema-instance\");",
+      "parameters": "prefix - the prefix; \"\" for the default namespace.\nnamespaceURI - the namespace.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\", \"urn:x\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a xmlns=\"urn:x\" xmlns:p=\"urn:p\"/>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteStartElement",
+        "cls.XMLWriter.LookupPrefix",
+        "cls.XMLWriter.NamespaceContext"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteRaw",
+      "name_local": "WriteRaw",
+      "name_en": "WriteRaw",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteRaw(text : string)",
+      "description": "Writes the text AS IT IS - NOT escaped and not checked for markup: a fragment of XML that was made elsewhere. Inside an open `WriteStartAttribute` it goes into the attribute's value, unescaped too.\n\n⚠ The writer cannot vouch for what it did not write: raw text that is not XML makes a document that does not parse, and nothing says so until someone reads it. What IS checked is every character, BEFORE anything of the text is written: it must be one XML allows - a lone surrogate or a control is refused, `XMLWriter: the character U+D800 is not allowed in XML` - and it must have a byte in the target's encoding, since no reference is made for it: `XMLWriter: the character U+0100 has no byte in windows-1251`. A string holds every character XML allows.\n\nRaw text marks its element as one that holds text - `Indent` puts no line breaks inside it.",
+      "syntax_block": "Writer.WriteRaw(Fragment);",
+      "parameters": "text - the text, written as it is.",
+      "return_descr": "",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteRaw(\"<b>made elsewhere</b>\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a><b>made elsewhere</b></a>",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteText",
+        "cls.XMLWriter.WriteCDATASection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.WriteCurrent",
+      "name_local": "WriteCurrent",
+      "name_en": "WriteCurrent",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "WriteCurrent(reader : XMLReader)",
+      "description": "Writes the node an `XMLReader` STANDS ON - that node only, not what is inside it: an element's start with its attributes (its namespace declarations among them), an end, a text, a CDATA section, a comment, an instruction; on the attribute cursor, that attribute - an `xmlns` or `xmlns:p` one written as the declaration it is. An element's start is ONE write, with all its attributes: an attribute refused, the element is not begun either. So a loop over a reader COPIES a document, and a loop that skips a node, or writes something else in its place, transforms it on the way.\n\n`<a/>` stays `<a/>`: the start is written closed, and its end, read next, writes nothing. Before the first `Read()` and at the end there is nothing to write. Keep the whitespace with `IgnoreWhitespace = False` and `Indent = False` for a copy that is the same text.\n\nAnything but a reader is refused: `XMLWriter: WriteCurrent writes what an XMLReader stands on - not a value of the type 'String'`.",
+      "syntax_block": "Writer.WriteCurrent(Reader);",
+      "parameters": "reader - the XMLReader whose current node is written.",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(Source);\nvar Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType <> XMLNodeType.Comment) {\n        Writer.WriteCurrent(Reader);       // the document, without its comments\n    }\n}\nMessage(Writer.Close());",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader",
+        "cls.XMLReader.Read",
+        "cls.XMLWriter.Indent"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLWriter.LookupPrefix",
+      "name_local": "LookupPrefix",
+      "name_en": "LookupPrefix",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "LookupPrefix(namespaceURI : string)",
+      "description": "The PREFIX the namespace is bound to WHERE THE WRITER STANDS - the innermost declaration that still means this URI, the writer's own made-up ones (`d1p1`) included; \"\" when it is the default namespace; `xml` for the XML namespace.\n\n`Undefined` when nothing binds it, for an empty URI, and when the writer has nothing open. Declarations written with `WriteAttribute(\"xmlns:p\", ...)` count as those of `WriteNamespaceMapping` do.\n\nIt answers for an ELEMENT's name. An attribute never takes the default namespace's \"\": an attribute written in the default namespace's URI gets a made-up prefix (`d1p1`), unless a named prefix for that URI is in scope.",
+      "syntax_block": "Prefix = Writer.LookupPrefix(NamespaceURI);",
+      "parameters": "namespaceURI - the namespace.",
+      "return_descr": "String - or Undefined when no prefix is bound to it.",
+      "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nMessage(Writer.LookupPrefix(\"urn:p\"));                // p\nMessage(Writer.LookupPrefix(\"urn:none\") = Undefined); // True",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLWriter.WriteNamespaceMapping",
+        "cls.XMLWriter.NamespaceContext",
+        "cls.XMLNamespaceContext.LookupPrefix"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext",
+      "name_local": "XMLNamespaceContext",
+      "name_en": "XMLNamespaceContext",
+      "kind": "collection",
+      "class_id": 334649882924145898,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Reader.NamespaceContext : XMLNamespaceContext",
+      "description": "THE NAMESPACES IN SCOPE AT ONE PLACE OF A DOCUMENT - which prefix stands for which URI there, and what the default namespace is. A SCRIPT NEVER MAKES ONE - `New XMLNamespaceContext()` does not compile, there being nothing for it to be the context OF: an `XMLReader` hands one out for the node it stands on, an `XMLWriter` for where it is writing, both through their `NamespaceContext` property.\n\nIT IS A SNAPSHOT: taken on a node, it answers for that node however far the reader has gone since, `Close()` included.\n\nWhat it holds: every declaration in scope, one URI per prefix - a prefix declared again further in stands for the new URI inside, and for the old one again once that element is over; `xmlns=\"\"` takes the default namespace back. And `xml`, bound in every document, declared or not.\n\nIts use: a value such as `xsi:type=\"d:Item\"` carries a PREFIX in its text, and only the context of the node says which namespace that prefix means there.",
+      "syntax_block": "Context = Reader.NamespaceContext;\nContext.LookupNamespaceURI(\"p\")   Context.LookupPrefix(Uri)   Context.DefaultNamespace",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\" xmlns:p=\"\"urn:p\"\"><p:x/></r>\");\nReader.Read();\nReader.Read();                             // p:x\nvar Context = Reader.NamespaceContext;\nMessage(Context.DefaultNamespace);          // urn:a\nMessage(Context.LookupNamespaceURI(\"p\"));  // urn:p\nMessage(Context.LookupPrefix(\"urn:p\"));     // p",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.NamespaceContext",
+        "cls.XMLWriter.NamespaceContext",
+        "cls.XMLNamespaceContext.LookupNamespaceURI"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.DefaultNamespace",
+      "name_local": "DefaultNamespace",
+      "name_en": "DefaultNamespace",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNamespaceContext.DefaultNamespace",
+      "description": "The DEFAULT NAMESPACE in scope - the one an element without a prefix is in - read-only; \"\" when there is none, including where `xmlns=\"\"` took it back.",
+      "syntax_block": "Uri = Context.DefaultNamespace;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\"><c xmlns=\"\"\"\"/></r>\");\nReader.Read();\nMessage(Reader.NamespaceContext.DefaultNamespace);          // urn:a\nReader.Read();\nMessage(Reader.NamespaceContext.DefaultNamespace = \"\");     // True: taken back",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLNamespaceContext",
+        "cls.XMLNamespaceContext.LookupNamespaceURI"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.Depth",
+      "name_local": "Depth",
+      "name_en": "Depth",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNamespaceContext.Depth",
+      "description": "How deep the place the context was taken stands - read-only.\n\nFROM A READER it is NOT the reader's own `Depth`: one more than the reader's on an element's start and on text (the root's start 1, a text inside the root 2), the same as the reader's on an element's end (the root's end 0, an empty element's end included), and on an attribute one more than on its element's start. Before the first `Read()` it is 1.\n\nFROM A WRITER it is the number of elements open.",
+      "syntax_block": "Level = Context.Depth;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r>t</r>\");\nwhile (Reader.Read()) {\n    Message(\"\" + Reader.Depth + \" / \" + Reader.NamespaceContext.Depth);   // 0 / 1, 1 / 2, 0 / 0\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLNamespaceContext",
+        "cls.XMLReader.Depth",
+        "cls.XMLReader.NamespaceContext"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.LookupNamespaceURI",
+      "name_local": "LookupNamespaceURI",
+      "name_en": "LookupNamespaceURI",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "LookupNamespaceURI(prefix : string)",
+      "description": "The NAMESPACE the prefix stands for here; with \"\", the default namespace. `xml` always answers `http://www.w3.org/XML/1998/namespace`. A prefix that is not bound here - and \"\" where there is no default namespace - answers `Undefined`.\n\nThe prefix must be a string - `XMLNamespaceContext: a prefix is a string, not a value of the type 'Number'` - since `Undefined` read as \"\" would quietly ask about the default namespace.",
+      "syntax_block": "Uri = Context.LookupNamespaceURI(\"p\");",
+      "parameters": "prefix - the prefix; \"\" for the default namespace.",
+      "return_descr": "String - or Undefined when the prefix is not bound.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" xmlns:xsi=\"\"http://www.w3.org/2001/XMLSchema-instance\"\"><i xsi:type=\"\"d:Item\"\"/></r>\");\nReader.Read();\nReader.Read();\nvar Type = Reader.GetAttribute(\"xsi:type\");                     // d:Item - a prefix in a value\nvar Uri = Reader.NamespaceContext.LookupNamespaceURI(Left(Type, Find(Type, \":\") - 1));\nMessage(Uri);                                                    // urn:d",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLNamespaceContext.LookupPrefix",
+        "cls.XMLNamespaceContext.DefaultNamespace"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.LookupPrefix",
+      "name_local": "LookupPrefix",
+      "name_en": "LookupPrefix",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "LookupPrefix(namespaceURI : string)",
+      "description": "A PREFIX bound to the namespace here: \"\" when it is the default namespace, `xml` for the XML namespace, and `Undefined` when nothing binds it. A prefix declared again further in for another URI no longer counts.\n\nWith SEVERAL prefixes on one URI it is the OUTERMOST that is answered; `Prefixes` gives them all.\n\nThe URI must be a string: `XMLNamespaceContext: a namespace URI is a string, not a value of the type 'Number'`.",
+      "syntax_block": "Prefix = Context.LookupPrefix(Uri);",
+      "parameters": "namespaceURI - the namespace.",
+      "return_descr": "String - or Undefined when no prefix is bound to it.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nvar Context = Reader.NamespaceContext;\nMessage(Context.LookupPrefix(\"urn:p\"));                // p\nMessage(Context.LookupPrefix(\"urn:none\") = Undefined); // True",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLNamespaceContext.LookupNamespaceURI",
+        "cls.XMLNamespaceContext.Prefixes",
+        "cls.XMLWriter.LookupPrefix"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.NamespaceURIs",
+      "name_local": "NamespaceURIs",
+      "name_en": "NamespaceURIs",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "NamespaceURIs()",
+      "description": "Every NAMESPACE bound here, each once even when several prefixes stand for it - the default namespace's among them, and the XML namespace, which is bound everywhere.",
+      "syntax_block": "Uris = Context.NamespaceURIs();",
+      "parameters": "None.",
+      "return_descr": "Array of String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\" xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nforeach (Uri In Reader.NamespaceContext.NamespaceURIs()) {\n    Message(Uri);          // urn:a, urn:p and the XML namespace\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLNamespaceContext.Prefixes",
+        "cls.XMLNamespaceContext.NamespaceMappings"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.Prefixes",
+      "name_local": "Prefixes",
+      "name_en": "Prefixes",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "Prefixes(namespaceURI : string)",
+      "description": "Every PREFIX bound to the namespace here - \"\" among them when it is also the default namespace. An empty array when nothing binds it.\n\nThe URI must be a string: `XMLNamespaceContext: a namespace URI is a string, not a value of the type 'Number'`.",
+      "syntax_block": "List = Context.Prefixes(Uri);",
+      "parameters": "namespaceURI - the namespace.",
+      "return_descr": "Array of String.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:p=\"\"urn:p\"\" xmlns:q=\"\"urn:p\"\"/>\");\nReader.Read();\nMessage(Reader.NamespaceContext.Prefixes(\"urn:p\").Count());   // 2",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLNamespaceContext.LookupPrefix",
+        "cls.XMLNamespaceContext.NamespaceURIs"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.XMLNamespaceContext.NamespaceMappings",
+      "name_local": "NamespaceMappings",
+      "name_en": "NamespaceMappings",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "NamespaceMappings()",
+      "description": "Everything in scope at once: a `Container` from PREFIX to NAMESPACE - the default namespace under the key \"\", and `xml` always among the keys.",
+      "syntax_block": "Mappings = Context.NamespaceMappings();",
+      "parameters": "None.",
+      "return_descr": "Container - prefix to namespace URI.",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\" xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nforeach (Pair In Reader.NamespaceContext.NamespaceMappings()) {\n    Message(\"'\" + Pair.Key + \"' = \" + Pair.Value);   // '' = urn:a, 'p' = urn:p, 'xml' = ...\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLNamespaceContext.NamespaceURIs",
+        "cls.XMLNamespaceContext.LookupNamespaceURI"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType",
+      "name_local": "XMLNodeType",
+      "name_en": "XMLNodeType",
+      "kind": "enum_type",
+      "class_id": 389858258248631250,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.<Member>",
+      "description": "WHAT AN XMLReader STANDS ON - `NodeType` answers with one of these, and `MoveToContent` too. The list has all fifteen kinds, in a fixed order, so that code written against the whole list compiles: `None, StartElement, EndElement, Text, Whitespace, CDATASection, Comment, ProcessingInstruction, XMLDeclaration, DocumentTypeDefinition, Attribute, EntityReference, Entity, EndEntity, Notation`.\n\nWHAT A WALK ACTUALLY MEETS is fewer: `StartElement`, `EndElement`, `Text`, `CDATASection`, `Comment`, `ProcessingInstruction`, `Whitespace` with `IgnoreWhitespace = False`, `Attribute` on the attribute cursor, and `None` where the reader stands on nothing. The XML declaration and the document type are not nodes here, and no entity or notation is ever reported - entities arrive already replaced.\n\nA member is written `XMLNodeType.<Name>` and compared with `=` and `<>`.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.StartElement) {\n    // ...\n}",
+      "syntax_block_ves": "If Reader.NodeType = XMLNodeType.StartElement Then\n    // ...\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>t</a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Text) {\n        Message(Reader.Value);             // t\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "cls.XMLReader.NodeType",
+        "cls.XMLReader.MoveToContent",
+        "cls.XMLReader.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.None",
+      "name_local": "None",
+      "name_en": "None",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.None",
+      "description": "WHERE THE READER STANDS ON NOTHING - not a node of the document. `NodeType` is `None` before the first `Read()`, once `Read()` has answered False, and after `Close()`; `MoveToContent` answers it at the end of the document.",
+      "syntax_block": "if (Reader.MoveToContent() = XMLNodeType.None) {\n    // the document is over\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<a/>\");\nMessage(Reader.NodeType = XMLNodeType.None);   // True: nothing read yet\nwhile (Reader.Read()) {\n}\nMessage(Reader.NodeType = XMLNodeType.None);   // True: past the end",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.StartElement",
+      "name_local": "StartElement",
+      "name_en": "StartElement",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.StartElement",
+      "description": "THE START OF AN ELEMENT - `<a>`, and the first of the two nodes of `<a/>`. Its `Name`, `LocalName`, `Prefix` and `NamespaceURI` are the element's, and its attributes are read on it. `IsEmptyElement` says whether it was written `<a/>`; `Skip()` on it passes over the whole element.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.StartElement And Reader.Name = \"TIN\") {\n    Reader.Read();\n    Tin = Reader.Value;\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        Message(\"StartElement: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.EndElement",
+      "name_local": "EndElement",
+      "name_en": "EndElement",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.EndElement",
+      "description": "THE END OF AN ELEMENT - `</a>`, and the second node of `<a/>`, which is the same tag: there it says `IsEmptyElement` too and still has the attributes. It stands at the depth of its own `StartElement`, so the two are matched by `Depth`.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.EndElement And Reader.Name = \"ROW\") {\n    // one row is complete\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.EndElement) {\n        Message(\"EndElement: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Text",
+      "name_local": "Text",
+      "name_en": "Text",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Text",
+      "description": "TEXT INSIDE AN ELEMENT, its entities already replaced - `Value` holds it. One node however it was cut: by the chunks a file is read in, by an entity in its middle. Text that is nothing but whitespace is a `Whitespace` node instead, never this one; CDATA is a node of its own.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.Text) {\n    Message(Reader.Value);\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Text) {\n        Message(\"Text: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Whitespace",
+      "name_local": "Whitespace",
+      "name_en": "Whitespace",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Whitespace",
+      "description": "TEXT THAT IS NOTHING BUT WHITESPACE - the line breaks and indents between elements. Met only with `IgnoreWhitespace = False`; by default such text is dropped and this member never appears.",
+      "syntax_block": "Reader.IgnoreWhitespace = False;\n// ... Reader.NodeType = XMLNodeType.Whitespace",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Whitespace) {\n        Message(\"Whitespace: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.CDATASection",
+      "name_local": "CDATASection",
+      "name_en": "CDATASection",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.CDATASection",
+      "description": "A CDATA SECTION - `<![CDATA[...]]>` - its text in `Value`, unescaped. A node of its OWN: never merged into the text before or after it, and never a `Whitespace` node. `IsCharacters` is True on it as on text.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.CDATASection) {\n    Html = Reader.Value;\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.CDATASection) {\n        Message(\"CDATASection: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Comment",
+      "name_local": "Comment",
+      "name_en": "Comment",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Comment",
+      "description": "A COMMENT - `<!--...-->` - its text in `Value`. Comments inside the document type are not handed over. `MoveToContent` passes over them.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.Comment) {\n    // skipped\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Comment) {\n        Message(\"Comment: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.ProcessingInstruction",
+      "name_local": "ProcessingInstruction",
+      "name_en": "ProcessingInstruction",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.ProcessingInstruction",
+      "description": "A PROCESSING INSTRUCTION - `<?target data?>`: `Name` is the target, `Value` the data. The XML declaration `<?xml ...?>` looks like one but is not: it is not a node at all.",
+      "syntax_block": "if (Reader.NodeType = XMLNodeType.ProcessingInstruction) {\n    Message(Reader.Name + \": \" + Reader.Value);\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.ProcessingInstruction) {\n        Message(\"ProcessingInstruction: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.XMLDeclaration",
+      "name_local": "XMLDeclaration",
+      "name_en": "XMLDeclaration",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.XMLDeclaration",
+      "description": "THE XML DECLARATION - which is NOT a node here: `<?xml version=\"1.0\" encoding=\"...\"?>` is read with the start of the document, and `XMLVersion`, `XMLEncoding` and `Standalone` report it. THE READER NEVER PRODUCES IT: the member is in the list so that code written against the whole list compiles; a comparison with it is simply never true here.",
+      "syntax_block": "Encoding = Reader.XMLEncoding;   // not a node",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.XMLDeclaration) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - never met here",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.DocumentTypeDefinition",
+      "name_local": "DocumentTypeDefinition",
+      "name_en": "DocumentTypeDefinition",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.DocumentTypeDefinition",
+      "description": "THE DOCUMENT TYPE - `<!DOCTYPE ...>`, which is not handed over as a node: its internal entities are applied, an external one is refused. THE READER NEVER PRODUCES IT: the member is in the list so that code written against the whole list compiles; a comparison with it is simply never true here.",
+      "syntax_block": "// <!DOCTYPE ...> is not a node here",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.DocumentTypeDefinition) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - never met here",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Attribute",
+      "name_local": "Attribute",
+      "name_en": "Attribute",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Attribute",
+      "description": "AN ATTRIBUTE, met only through the attribute cursor - after `ReadAttribute`, `NextAttribute` or `FirstAttribute` - never by `Read()`. `Name` and `Value` are then the attribute's, until `MoveToElement` or the next `Read()`.",
+      "syntax_block": "while (Reader.ReadAttribute()) {\n    // Reader.NodeType = XMLNodeType.Attribute\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\"/>\");\nReader.Read();\nReader.ReadAttribute();\nMessage(Reader.NodeType = XMLNodeType.Attribute);   // True\nMessage(Reader.Name + \" = \" + Reader.Value);       // a = 1",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.EntityReference",
+      "name_local": "EntityReference",
+      "name_en": "EntityReference",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.EntityReference",
+      "description": "A REFERENCE TO AN ENTITY - which never arrives as a node: entities are replaced while the text is read, `&amp;` arriving as `&` inside the text it stands in. THE READER NEVER PRODUCES IT: the member is in the list so that code written against the whole list compiles; a comparison with it is simply never true here.",
+      "syntax_block": "// &e; arrives as its replacement text",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.EntityReference) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - never met here",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Entity",
+      "name_local": "Entity",
+      "name_en": "Entity",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Entity",
+      "description": "AN ENTITY DECLARATION. THE READER NEVER PRODUCES IT: the member is in the list so that code written against the whole list compiles; a comparison with it is simply never true here.",
+      "syntax_block": "// not produced",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Entity) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - never met here",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.EndEntity",
+      "name_local": "EndEntity",
+      "name_en": "EndEntity",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.EndEntity",
+      "description": "THE END OF AN ENTITY'S REPLACEMENT TEXT. THE READER NEVER PRODUCES IT: the member is in the list so that code written against the whole list compiles; a comparison with it is simply never true here.",
+      "syntax_block": "// not produced",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.EndEntity) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - never met here",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.XMLNodeType.Notation",
+      "name_local": "Notation",
+      "name_en": "Notation",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "xml"
+      ],
+      "signature": "XMLNodeType.Notation",
+      "description": "A NOTATION DECLARATION. THE READER NEVER PRODUCES IT: the member is in the list so that code written against the whole list compiles; a comparison with it is simply never true here.",
+      "syntax_block": "// not produced",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Notation) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - never met here",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.XMLNodeType",
+        "cls.XMLReader.NodeType"
+      ],
+      "reviewed": false
+    }
+  ]
+}

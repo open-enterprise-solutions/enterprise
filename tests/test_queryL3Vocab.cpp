@@ -15,13 +15,13 @@ namespace {
 // Minimal column — only identity is needed (the factories store the pointer; they call no methods).
 class TestCol : public ibBackendQueryColumn {
 public:
-	TestCol(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	TestCol(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()      const override { return m_id; }
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
@@ -34,7 +34,7 @@ TEST(QueryL3Vocab, PredicateTree_Factories)
 
 	ibQueryCondition c;
 	c.m_col   = &code;
-	c.m_value = ibValue(wxT("A-01"));
+	c.m_value = ibValue(ibT("A-01"));
 	const ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(c);
 	ASSERT_EQ(leaf->m_kind, ibQueryPredicateKind::Leaf);
 	EXPECT_EQ(leaf->m_leaf.m_col, &code);

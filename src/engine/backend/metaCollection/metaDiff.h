@@ -96,9 +96,9 @@ struct BACKEND_API ibMetaDiffRecord {
 	// are null, m_groupClsid is 0, m_status is Same / Changed by
 	// string equality of the two values. The model renders the name
 	// in kColName and the stringified values in kColLeft / kColRight.
-	wxString m_propertyName;
-	wxString m_leftValue;
-	wxString m_rightValue;
+	ibString m_propertyName;
+	ibString m_leftValue;
+	ibString m_rightValue;
 
 	bool IsGroup() const { return m_groupClsid != 0; }
 	bool IsProperty() const { return !m_propertyName.IsEmpty(); }
@@ -152,7 +152,7 @@ public:
 	// Attributes, ...). Mirrors the constants in
 	// treeConfiguration_impl.cpp. Returns a hex-formatted fallback for
 	// unknown CLSIDs so the UI never shows an empty string.
-	static wxString GroupLabelFor(ibClassID clsid);
+	static ibString GroupLabelFor(ibClassID clsid);
 
 	// Canonical sort rank for a group CLSID. Lower rank = appears first
 	// in the standard metadata tree (see treeConfiguration_impl.cpp).

@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 #include "backend/compiler/value.h"
+#include "frmclient/win/dateconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "backend/compiler/procUnitLambda.h"   // CopyValue — the LET road a script's `r = …` takes
 #include "backend/system/value/valueArray.h"   // ValueHashContract — composite keys
 #include "backend/system/systemManager.h"      // ibValueSystemFunction::Date — the script's door to a date
@@ -26,10 +27,10 @@
 TEST(ValueTest, SizeofReport) {
     RecordProperty("sizeof_ibValue", (int)sizeof(ibValue));
     RecordProperty("sizeof_ibNumber", (int)sizeof(ibNumber));
-    RecordProperty("sizeof_wxString", (int)sizeof(wxString));
+    RecordProperty("sizeof_wxString", (int)sizeof(ibString));
     std::cout << "[ footprint ] sizeof(ibValue)="  << sizeof(ibValue)
               << "  sizeof(ibNumber)=" << sizeof(ibNumber)
-              << "  sizeof(wxString)=" << sizeof(wxString) << std::endl;
+              << "  sizeof(wxString)=" << sizeof(ibString) << std::endl;
     SUCCEED();
 }
 
@@ -47,7 +48,7 @@ TEST(ValueTest, TheCountSitsInThePaddingBeforeTheUnion) {
 // ===========================================================================
 
 TEST(ValueUnion, ACopyOfAStringSharesItsText) {
-    const ibValue original(wxT("a text longer than the short-string buffer"));
+    const ibValue original(ibT("a text longer than the short-string buffer"));
     const ibValue copy(original);
     EXPECT_EQ(original.GetString().wc_str(), copy.GetString().wc_str());   // the same characters
 }
@@ -56,17 +57,17 @@ TEST(ValueUnion, EveryKindStartsFromAnEmptyWord) {
     ibValue v(true);
     v.SetType(ibValueTypes::TYPE_NUMBER);       // a boolean's byte is not read as a number
     EXPECT_TRUE(v.GetNumber().IsZero());
-    v = wxT("text");
+    v = ibT("text");
     v.SetType(ibValueTypes::TYPE_NUMBER);       // nor a string's text
     EXPECT_TRUE(v.GetNumber().IsZero());
-    v = ibNumber(wxString(wxT("765.3456754567765443343")));
+    v = ibNumber(ibString(wxT("765.3456754567765443343")));
     v.SetType(ibValueTypes::TYPE_STRING);       // nor a heap-tier number
     EXPECT_TRUE(v.GetString().IsEmpty());
 }
 
 TEST(ValueUnion, KindChangesOnTheLetRoad) {
-    const ibValue number(ibNumber(wxString(wxT("765.3456754567765443343"))));
-    const ibValue text(wxT("text"));
+    const ibValue number(ibNumber(ibString(wxT("765.3456754567765443343"))));
+    const ibValue text(ibT("text"));
     const ibValue flag(true);
     ibValue slot;
     for (const ibValue* source : { &number, &text, &flag, &number, &flag, &text }) {
@@ -131,7 +132,7 @@ TEST(ValueTest, NumberGetBoolean) {
 
 TEST(ValueTest, NumberToString) {
     ibValue v(123);
-    wxString s = v.GetString();
+    ibString s = v.GetString();
     EXPECT_FALSE(s.IsEmpty());
 }
 
@@ -140,13 +141,13 @@ TEST(ValueTest, NumberToString) {
 // ===========================================================================
 
 TEST(ValueTest, StringConstruction) {
-    ibValue v(wxString(wxT("hello")));
+    ibValue v(ibString(wxT("hello")));
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
     EXPECT_EQ(v.GetString(), wxT("hello"));
 }
 
 TEST(ValueTest, EmptyString) {
-    ibValue v(wxString(wxT("")));
+    ibValue v(ibString(wxT("")));
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
     EXPECT_TRUE(v.GetString().IsEmpty());
 }
@@ -157,7 +158,7 @@ TEST(ValueTest, EmptyString) {
 // Every test above hands ibValue a wxString, which is exactly why none of them
 // caught this: a raw `const char*` / `const wchar_t*` has a STANDARD conversion
 // to bool, which outranks the user-defined one to wxString. With the string
-// ctors declared `char*` (non-const), `ibValue v = wxEmptyString` — and
+// ctors declared `char*` (non-const), `ibValue v = ibEmptyString` — and
 // wxEmptyString IS a `const wxChar*` — silently produced Boolean TRUE, and
 // GetString() then answered "True" instead of "". That reached a user as a
 // document numbered "True0000001" (2026-08-03).
@@ -167,17 +168,24 @@ TEST(ValueTest, EmptyString) {
 // ---------------------------------------------------------------------------
 
 TEST(ValueTest, EmptyStringPointerIsStringNotBoolean) {
-    ibValue v = wxEmptyString;
+    ibValue v = ibT("");
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
     EXPECT_TRUE(v.GetString().IsEmpty());
-    EXPECT_NE(v.GetString(), wxT("True"));
+    EXPECT_NE(v.GetString(), ibT("True"));
 }
 
-TEST(ValueTest, WideLiteralIsStringNotBoolean) {
-    ibValue v = wxT("text");
+TEST(ValueTest, LiteralIsStringNotBoolean) {
+    ibValue v = ibT("text");
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
-    EXPECT_EQ(v.GetString(), wxT("text"));
+    EXPECT_EQ(v.GetString(), ibT("text"));
 }
+
+// A WIDE literal is no longer a string to a value at all - since the text is char16_t, `wchar_t*` is just
+// another pointer, and the deleted constructor refuses it at compile time rather than letting it turn TRUE.
+static_assert(!std::is_constructible<ibValue, const wchar_t*>::value,
+    "a wide literal must not become a value - write it as ibT(\"...\")");
+static_assert(!std::is_assignable<ibValue&, const wchar_t*>::value,
+    "a wide literal must not be assigned to a value - write it as ibT(\"...\")");
 
 TEST(ValueTest, NarrowLiteralIsStringNotBoolean) {
     ibValue v = "narrow";
@@ -187,16 +195,16 @@ TEST(ValueTest, NarrowLiteralIsStringNotBoolean) {
 
 TEST(ValueTest, AssignEmptyStringPointerIsStringNotBoolean) {
     ibValue v(ibNumber(1));
-    v = wxEmptyString;
+    v = ibEmptyString;
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
     EXPECT_TRUE(v.GetString().IsEmpty());
 }
 
-TEST(ValueTest, AssignWideLiteralIsStringNotBoolean) {
+TEST(ValueTest, AssignLiteralIsStringNotBoolean) {
     ibValue v(ibNumber(1));
-    v = wxT("assigned");
+    v = ibT("assigned");
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
-    EXPECT_EQ(v.GetString(), wxT("assigned"));
+    EXPECT_EQ(v.GetString(), ibT("assigned"));
 }
 
 // ===========================================================================
@@ -214,9 +222,9 @@ TEST(ValueTest, DateFromComponents) {
 
 TEST(ValueTest, DateFromDateTime) {
     wxDateTime dt(15, wxDateTime::Jan, 2025, 10, 30, 0);
-    ibValue v(ibDateTime::OfWxDateTime(dt));
+    ibValue v(typeConv::WxDateTimeToDateTime(dt));
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_DATE);
-    wxDateTime recovered = v.GetDate().ToWxDateTime();
+    wxDateTime recovered = typeConv::DateTimeToWxDateTime(v.GetDate());
     EXPECT_EQ(recovered.GetYear(), 2025);
     EXPECT_EQ(recovered.GetMonth(), wxDateTime::Jan);
     EXPECT_EQ(recovered.GetDay(), 15);
@@ -249,8 +257,8 @@ TEST(ValueTest, TheEmptyDateIsOneValueOnEveryClock) {
     EXPECT_TRUE(text.IsEmpty());
     EXPECT_TRUE(text.SetDate(wxT("00010101000001")));
     EXPECT_FALSE(text.IsEmpty());
-    EXPECT_TRUE(ibValue(ibDateTime::OfWxDateTime(wxDateTime())).IsEmpty());   // an invalid wxDateTime crosses as the empty date
-    EXPECT_FALSE(ibValue(ibValueTypes::TYPE_DATE).GetDate().ToWxDateTime().IsValid());   // ...and back
+    EXPECT_TRUE(ibValue(typeConv::WxDateTimeToDateTime(wxDateTime())).IsEmpty());   // an invalid wxDateTime crosses as the empty date
+    EXPECT_FALSE(typeConv::DateTimeToWxDateTime(ibValue(ibValueTypes::TYPE_DATE).GetDate()).IsValid());   // ...and back
     EXPECT_EQ(wxT("01.01.0001 00:00:00"), ibValue(ibValueTypes::TYPE_DATE).GetString());
 }
 
@@ -276,7 +284,7 @@ TEST(ValueTest, ADateHoldsItsPartsWhateverTheMachineClockDoes) {
     ibValue read;
     EXPECT_TRUE(read.SetDate(gap.GetString()));
     EXPECT_EQ(gap.GetDate(), read.GetDate());
-    EXPECT_EQ(gap.GetDate(), ibValue(wxT("29.03.2026 02:30:00")).GetDate());   // the string branch of GetDate
+    EXPECT_EQ(gap.GetDate(), ibValue(ibT("29.03.2026 02:30:00")).GetDate());   // the string branch of GetDate
 
     // Two readings compare by the calendar, and a date hashes as its reading.
     EXPECT_TRUE(ibValue(2026, 3, 29, 2, 30, 0).CompareValueLS(ibValue(2026, 3, 29, 3, 30, 0)) < 0);
@@ -301,8 +309,8 @@ TEST(ValueTest, ATextBecomesADateByItsDigits) {
     EXPECT_FALSE(v.SetDate(wxT("20260231")));
     EXPECT_FALSE(v.SetDate(wxT("not a date at all")));
     // The same text through the string branch of GetDate - one reading, not two.
-    EXPECT_EQ(ibDateTime(2026, 3, 15), ibValue(wxT("20260315")).GetDate());
-    EXPECT_TRUE(ibValue(wxT("31.04.2026")).GetDate().IsEmpty());
+    EXPECT_EQ(ibDateTime(2026, 3, 15), ibValue(ibT("20260315")).GetDate());
+    EXPECT_TRUE(ibValue(ibT("31.04.2026")).GetDate().IsEmpty());
     // Parts that are no date are the empty date, not a rolled-over one.
     EXPECT_TRUE(ibValue(2026, 2, 30).IsEmpty());
     EXPECT_TRUE(ibValue(2026, 13, 1).IsEmpty());
@@ -355,8 +363,8 @@ TEST(ValueTest, ADatePackedIntoANodeComesBackAsTheSameReading) {
     ASSERT_TRUE(read.Deserialize(node));
     EXPECT_EQ(ibValueTypes::TYPE_DATE, read.GetType());
     EXPECT_EQ(written.GetDate(), read.GetDate());
-    const ibDataValue* stored = node.FindField(kValueFieldData);
-    ASSERT_TRUE(stored != nullptr && stored->Kind() == ibDataKind::Date);
+    auto stored = node.FindField(kValueFieldData);
+    ASSERT_TRUE(stored && stored->Kind() == ibDataKind::Date);
     EXPECT_EQ(ibDateTime(2026, 3, 29, 2, 30), stored->AsDate());
 
     const ibValue none(ibValueTypes::TYPE_DATE);
@@ -397,7 +405,7 @@ TEST(ValueTest, AssignmentOperator) {
 
 TEST(ValueTest, AssignString) {
     ibValue v;
-    v = wxString(wxT("test"));
+    v = ibString(wxT("test"));
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
     EXPECT_EQ(v.GetString(), wxT("test"));
 }
@@ -431,9 +439,9 @@ TEST(ValueTest, NumberOrdering) {
 }
 
 TEST(ValueTest, StringEquality) {
-    ibValue a(wxString(wxT("abc")));
-    ibValue b(wxString(wxT("abc")));
-    ibValue c(wxString(wxT("xyz")));
+    ibValue a(ibString(wxT("abc")));
+    ibValue b(ibString(wxT("abc")));
+    ibValue c(ibString(wxT("xyz")));
     EXPECT_TRUE(a == b);
     EXPECT_TRUE(a != c);
 }
@@ -637,7 +645,7 @@ TEST(ValueAccess, BooleanReadsBack) {
 }
 
 TEST(ValueAccess, StringReadsBack) {
-    EXPECT_EQ(ibValue(wxString(wxT("hi"))).GetString(), wxT("hi"));
+    EXPECT_EQ(ibValue(ibString(wxT("hi"))).GetString(), wxT("hi"));
 }
 
 // ===========================================================================
@@ -652,8 +660,8 @@ TEST(ValueAccess, StringReadsBack) {
 
 TEST(ValueHash, DeterministicForSameValue) {
     EXPECT_EQ(ibValue(ibNumber(7)).GetValueHash(), ibValue(ibNumber(7)).GetValueHash());
-    EXPECT_EQ(ibValue(wxString(wxT("k"))).GetValueHash(),
-              ibValue(wxString(wxT("k"))).GetValueHash());
+    EXPECT_EQ(ibValue(ibString(wxT("k"))).GetValueHash(),
+              ibValue(ibString(wxT("k"))).GetValueHash());
 }
 
 TEST(ValueHash, DiffersForDifferentNumbers) {
@@ -674,21 +682,21 @@ TEST(ValueHash, DiffersForDifferentNumbers) {
 // ===========================================================================
 
 TEST(ValueOrderAcrossKinds, NumberOrdersBeforeString) {
-    EXPECT_TRUE (ibValue(1) < ibValue(wxString(wxT("abc"))));
-    EXPECT_FALSE(ibValue(wxString(wxT("abc"))) < ibValue(1));
+    EXPECT_TRUE (ibValue(1) < ibValue(ibString(wxT("abc"))));
+    EXPECT_FALSE(ibValue(ibString(wxT("abc"))) < ibValue(1));
 }
 
 // The case that pins the rule down: with coercion, "0" would become 0 and this
 // would read false. The kinds are apart, so the digits in the string are not
 // consulted at all.
 TEST(ValueOrderAcrossKinds, NumberOrdersBeforeStringThatLooksSmaller) {
-    EXPECT_TRUE (ibValue(1) < ibValue(wxString(wxT("0"))));
-    EXPECT_FALSE(ibValue(wxString(wxT("0"))) < ibValue(1));
+    EXPECT_TRUE (ibValue(1) < ibValue(ibString(wxT("0"))));
+    EXPECT_FALSE(ibValue(ibString(wxT("0"))) < ibValue(1));
 }
 
 TEST(ValueOrderAcrossKinds, BooleanOrdersBeforeString) {
-    EXPECT_TRUE (ibValue(true) < ibValue(wxString(wxT("True"))));
-    EXPECT_FALSE(ibValue(wxString(wxT("True"))) < ibValue(true));
+    EXPECT_TRUE (ibValue(true) < ibValue(ibString(wxT("True"))));
+    EXPECT_FALSE(ibValue(ibString(wxT("True"))) < ibValue(true));
 }
 
 // A BOOLEAN AND A NUMBER NO LONGER MEET ON VALUE, and that is a fix rather than
@@ -713,7 +721,7 @@ TEST(ValueOrderAcrossKinds, BooleanAndNumberAreSeparatedNotCoerced) {
 TEST(ValueOrderAcrossKinds, EqualityUnderOrderIsTransitive) {
     const ibValue samples[] = {
         ibValue(), ibValue(true), ibValue(false), ibValue(0), ibValue(1), ibValue(2),
-        ibValue(ibNumber(1.0)), ibValue(wxString(wxT("1"))), ibValue(wxString(wxT("abc"))),
+        ibValue(ibNumber(1.0)), ibValue(ibString(wxT("1"))), ibValue(ibString(wxT("abc"))),
     };
     for (const ibValue& a : samples)
         for (const ibValue& b : samples)
@@ -728,21 +736,21 @@ TEST(ValueOrderAcrossKinds, EqualityUnderOrderIsTransitive) {
 
 TEST(ValueOrderAcrossKinds, EmptySortsBelowEverything) {
     EXPECT_TRUE(ibValue() < ibValue(1));
-    EXPECT_TRUE(ibValue() < ibValue(wxString(wxT("a"))));
+    EXPECT_TRUE(ibValue() < ibValue(ibString(wxT("a"))));
 }
 
 // Equality is type-strict and stays so: it never had the coercion the order is
 // giving up here, and `1` was never equal to "1".
 TEST(ValueOrderAcrossKinds, EqualityRemainsTypeStrict) {
-    EXPECT_FALSE(ibValue(1) == ibValue(wxString(wxT("1"))));
-    EXPECT_TRUE (ibValue(1) != ibValue(wxString(wxT("1"))));
+    EXPECT_FALSE(ibValue(1) == ibValue(ibString(wxT("1"))));
+    EXPECT_TRUE (ibValue(1) != ibValue(ibString(wxT("1"))));
 }
 
 // '<>' is '=' negated now, so the two can no longer answer differently about
 // one pair — which is what they could do while each carried its own switch.
 TEST(ValueOrderAcrossKinds, NotEqualIsExactlyTheNegationOfEqual) {
     const ibValue samples[] = {
-        ibValue(), ibValue(1), ibValue(true), ibValue(wxString(wxT("1"))), ibValue(wxString(wxT("x"))),
+        ibValue(), ibValue(1), ibValue(true), ibValue(ibString(wxT("1"))), ibValue(ibString(wxT("x"))),
     };
     for (const ibValue& a : samples)
         for (const ibValue& b : samples)
@@ -775,8 +783,8 @@ TEST(ValueThroughReference, NumberEqualsAReferenceToTheSameNumber) {
 }
 
 TEST(ValueThroughReference, StringEqualsAReferenceToTheSameString) {
-    const ibValue direct(wxString(wxT("abc")));
-    const ibValue viaRef(new ibValue(wxString(wxT("abc"))));
+    const ibValue direct(ibString(wxT("abc")));
+    const ibValue viaRef(new ibValue(ibString(wxT("abc"))));
     EXPECT_TRUE(direct.CompareValueEQ(viaRef));
     EXPECT_TRUE(viaRef.CompareValueEQ(direct));
 }
@@ -792,14 +800,14 @@ TEST(ValueThroughReference, OrderingIsTheSameThroughAReference) {
 // before a bare string and against a referenced one by a different rule.
 TEST(ValueThroughReference, RankRuleReadsThroughAReference) {
     const ibValue number(1);
-    const ibValue textViaRef(new ibValue(wxString(wxT("0"))));
+    const ibValue textViaRef(new ibValue(ibString(wxT("0"))));
     EXPECT_EQ(number.CompareValueLS(textViaRef), -1);
     EXPECT_EQ(textViaRef.CompareValueLS(number),  1);
 }
 
 TEST(ValueThroughReference, ReferenceToNumberIsNotEqualToItsSpelling) {
     const ibValue numberViaRef(new ibValue(1));
-    EXPECT_FALSE(numberViaRef.CompareValueEQ(ibValue(wxString(wxT("1")))));
+    EXPECT_FALSE(numberViaRef.CompareValueEQ(ibValue(ibString(wxT("1")))));
 }
 
 // ===========================================================================
@@ -832,10 +840,10 @@ TEST(ValueHashContract, OrderEqualImpliesHashEqual) {
         ibValue(ibNumber(1.0)),                      // the same number as 1
         ibValue(ibNumber(1.5)),                      // shares 1's bucket, differs in order
         ibValue(true), ibValue(false),               // True coerces to 1
-        ibValue(wxString(wxT("1"))),                 // NOT the number 1
-        ibValue(wxString(wxT("abc"))),
+        ibValue(ibString(wxT("1"))),                 // NOT the number 1
+        ibValue(ibString(wxT("abc"))),
         ibValue(new ibValue(1)),                     // a reference to 1
-        ibValue(new ibValue(wxString(wxT("abc")))),  // a reference to "abc"
+        ibValue(new ibValue(ibString(wxT("abc")))),  // a reference to "abc"
         ibValue(static_cast<ibValue*>(arrayA)),
         ibValue(static_cast<ibValue*>(arrayB)),      // equal contents, separate object
     };
@@ -859,8 +867,8 @@ TEST(ValueHashContract, TrailingZeroHashesWithTheInteger) {
 
 TEST(ValueHashContract, ReferenceHashesAsItsTarget) {
     EXPECT_EQ(ibValue(7).GetValueHash(), ibValue(new ibValue(7)).GetValueHash());
-    EXPECT_EQ(ibValue(wxString(wxT("k"))).GetValueHash(),
-              ibValue(new ibValue(wxString(wxT("k")))).GetValueHash());
+    EXPECT_EQ(ibValue(ibString(wxT("k"))).GetValueHash(),
+              ibValue(new ibValue(ibString(wxT("k")))).GetValueHash());
 }
 
 TEST(ValueHashContract, ArraysWithEqualContentsHashAlike) {

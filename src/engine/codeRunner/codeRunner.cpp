@@ -1,9 +1,10 @@
 #include "codeRunner.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
-#include "frontend/artProvider/artProvider.h"
-#include "frontend/mainFrame/settings/editorsettings.h"
-#include "frontend/mainFrame/settings/fontcolorsettings.h"
+#include "core/exception.h"   // ibCoreException — what a refused compile or run throws
+#include "codeRunner/artProvider/artProvider.h"
+#include "codeRunner/mainFrame/settings/editorsettings.h"
+#include "codeRunner/mainFrame/settings/fontcolorsettings.h"
 
 #include <wx/filedlg.h>
 #include <wx/aboutdlg.h>
@@ -260,11 +261,10 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 
 	wxBoxSizer* bSizerMain = new wxBoxSizer(wxVERTICAL);
 
-	// Frontend's full code editor — sessionless / document-less for the
-	// codeRunner host. Highlighter / fold / auto-indent / format & indent
-	// commands all live in ibCodeEditor; only debugger integration is
-	// gated off (designer's ibCodeEditorDesigner subclass wires that).
-	m_codeEditor = new ibCodeEditor(/*document=*/nullptr, this, wxID_ANY,
+	// The code editor, the old desktop front's copied whole (win/editor/codeEditor), with no
+	// document behind it: highlighter / fold / auto-indent / format & indent commands all live in
+	// ibCodeEditor; the debugger's hooks stay the no-ops they are for a host without one.
+	m_codeEditor = new ibCodeEditor(this, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
 	// Apply default editor + font/color settings — codeRunner has no
@@ -336,8 +336,10 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	// Documents, EnumManager, …) so script can reference them. They
 	// flow through CreateBinder into the runtime binder at Execute time.
 	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
-		// A context ctor answers with the object it holds for the whole run, never an empty one.
-		m_compileCode->AddContextVariable(ctor->GetClassName(), ctor->CreateObject());
+		// A context ctor makes the object for whoever asks; this runner holds it for the whole run.
+		const ibValue created = ctor->CreateObject();
+		m_compileCode->AddContextVariable(ctor->GetClassName(), created);
+		m_listContextManager.emplace_back(created);
 	}
 
 	// Connect button events.

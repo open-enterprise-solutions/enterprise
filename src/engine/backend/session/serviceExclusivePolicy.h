@@ -30,14 +30,14 @@ class BACKEND_API ibServiceExclusivePolicy : public ibSessionPolicy {
 public:
 	explicit ibServiceExclusivePolicy(ibSessionRegistry* registry);
 
-	bool CanAdd(const ibSession& session, wxString& reason) override;
+	bool CanAdd(const ibSession& session, ibString& reason) override;
 
 	// ⭐ ASKED AT OPEN — before the opening process writes anything into the base: its tables, its jobs, its
 	// sweep of sys_session. The same rule CanAdd applies to a session, over the rows alive now (their beat
 	// within the registry's silence); this process has none in a base it is only opening. False, with the
 	// refusal, when the base is held. A base whose sessions cannot be read is not proven held — the
 	// session-time check still stands behind this one.
-	static bool CanOpen(ibRunMode runMode, wxString& reason);
+	static bool CanOpen(ibRunMode runMode, ibString& reason);
 
 private:
 	// THE RULE, once: a row of another process is in the way when exactly one of the two is a Service session —

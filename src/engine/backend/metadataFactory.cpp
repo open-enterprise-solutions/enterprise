@@ -97,8 +97,8 @@ void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)
 		if (ibMetaData::IsRegisterCtor(typeCtor->GetClassType())) {
 			// The register*() macros hand us a raw `new`; the raise leaves nobody to free it.
 			// (ibValue's path is covered by value_register's catch — the metadata macros have none.)
-			const wxString className = typeCtor->GetClassName();
-			wxDELETE(typeCtor);
+			const ibString className = typeCtor->GetClassName();
+			delete typeCtor;
 			ibBackendCoreException::Error(_("Object '%s' is exist"), className);
 			return;
 		}
@@ -107,7 +107,7 @@ void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)
 		// registered class is a hundred lines of "as expected" before anything interesting happens.
 		static const bool s_traceTypes = ibDebugTraceEnabled("OES_TRACE_TYPES");
 		if (s_traceTypes)
-			ibJournalInfo(wxT("metadata"), wxT("register %s -> %s"),
+			ibJournalInfo(ibT("metadata"), ibT("register %s -> %s"),
 				typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()));
 
 		wxASSERT(m_image);                 // registration happens only while open (image live)
@@ -125,7 +125,7 @@ void ibMetaData::UnRegisterCtor(ibCtorMetaValueType*& typeCtor)
 		// expected" at every shutdown while the REGISTER side of the same pair stayed quiet.
 		static const bool s_traceTypes = ibDebugTraceEnabled("OES_TRACE_TYPES");
 		if (s_traceTypes)
-			ibJournalInfo(wxT("metadata"), wxT("unregister %s -> %s"),
+			ibJournalInfo(ibT("metadata"), ibT("unregister %s -> %s"),
 				typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()));
 
 		// Facade: CallEvent(UnRegister) + unregister. The registry owns the ctor via
@@ -139,11 +139,11 @@ void ibMetaData::UnRegisterCtor(ibCtorMetaValueType*& typeCtor)
 	else {
 		// typeCtor may BE the null here — say so instead of dereferencing it to build the message.
 		ibBackendCoreException::Error(_("Object '%s' is not exist"),
-			typeCtor != nullptr ? typeCtor->GetClassName() : wxString(wxT("<null>")));
+			typeCtor != nullptr ? typeCtor->GetClassName() : ibString(ibT("<null>")));
 	}
 }
 
-void ibMetaData::UnRegisterCtor(const wxString& className)
+void ibMetaData::UnRegisterCtor(const ibString& className)
 {
 	ibCtorMetaValueType* typeCtor = GetTypeCtor(className);
 	if (typeCtor == nullptr) {
@@ -173,7 +173,7 @@ void ibMetaData::InvalidateCtorNames() const
 		m_image->InvalidateCtorNames();
 }
 
-bool ibMetaData::IsRegisterCtor(const wxString& className) const
+bool ibMetaData::IsRegisterCtor(const ibString& className) const
 {
 	if (className.IsEmpty())
 		return false;
@@ -182,7 +182,7 @@ bool ibMetaData::IsRegisterCtor(const wxString& className) const
 	return ibValue::IsRegisterCtor(className);
 }
 
-bool ibMetaData::IsRegisterCtor(const wxString& className, ibCtorObjectType objectType) const
+bool ibMetaData::IsRegisterCtor(const ibString& className, ibCtorObjectType objectType) const
 {
 	if (className.IsEmpty())
 		return false;
@@ -193,7 +193,7 @@ bool ibMetaData::IsRegisterCtor(const wxString& className, ibCtorObjectType obje
 	return ibValue::IsRegisterCtor(className, objectType);
 }
 
-bool ibMetaData::IsRegisterCtor(const wxString& className, ibCtorObjectType objectType, ibCtorObjectMetaType refType) const
+bool ibMetaData::IsRegisterCtor(const ibString& className, ibCtorObjectType objectType, ibCtorObjectMetaType refType) const
 {
 	if (className.IsEmpty())
 		return false;
@@ -212,7 +212,7 @@ bool ibMetaData::IsRegisterCtor(const ibClassID& clsid) const
 	return ibValue::IsRegisterCtor(clsid);
 }
 
-ibClassID ibMetaData::GetIDObjectFromString(const wxString& className) const
+ibClassID ibMetaData::GetIDObjectFromString(const ibString& className) const
 {
 	const ibCtorMetaValueType* typeCtor = GetTypeCtor(className);
 	if (typeCtor != nullptr)
@@ -220,7 +220,7 @@ ibClassID ibMetaData::GetIDObjectFromString(const wxString& className) const
 	return ibValue::GetIDObjectFromString(className);
 }
 
-wxString ibMetaData::GetNameObjectFromID(const ibClassID& clsid, bool upper) const
+ibString ibMetaData::GetNameObjectFromID(const ibClassID& clsid, bool upper) const
 {
 	const ibCtorMetaValueType* typeCtor = GetTypeCtor(clsid);
 	if (typeCtor != nullptr)
@@ -244,7 +244,7 @@ ibClassID ibMetaData::GetIDObjectFromMetaID(const ibMetaID& metaID, ibCtorObject
 	return result;
 }
 
-ibCtorMetaValueType* ibMetaData::GetTypeCtor(const wxString& className) const
+ibCtorMetaValueType* ibMetaData::GetTypeCtor(const ibString& className) const
 {
 	return m_image ? m_image->FindCtor(className) : nullptr;   // linear by name (see ctorRegistry.h)
 }
@@ -259,7 +259,7 @@ ibCtorMetaValueType* ibMetaData::GetTypeCtor(const ibValueMetaObject* metaValue,
 	return m_image ? m_image->FindCtor(metaValue, refType) : nullptr;   // the id (metaValue, refType) spells — O(1)
 }
 
-ibCtorAbstractType* ibMetaData::GetAvailableCtor(const wxString& className) const
+ibCtorAbstractType* ibMetaData::GetAvailableCtor(const ibString& className) const
 {
 	if (m_image)
 		if (ibCtorMetaValueType* typeCtor = m_image->FindCtor(className))

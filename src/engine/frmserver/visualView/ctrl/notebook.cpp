@@ -1,6 +1,7 @@
 #include "notebook.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
+#include "frmserver/visualView/visualHost.h"   // IsDesignerHost, CreateControl — the designer's new notebook gets its first page
 
 //***********************************************************************************
 //*                                 Value Notebook                                  *
@@ -11,6 +12,28 @@ ibValueNotebook::ibValueNotebook() : ibValueWindow(), m_activePage(nullptr)
 	m_members.Bind(this, &ibValueNotebook::FillControlMembers);
 	//set default params
 	//m_minimum_size = wxSize(300, 100);
+}
+
+//***********************************************************************************
+//*                                 Special Notebook func                           *
+//***********************************************************************************
+
+void ibValueNotebook::AddNotebookPage(ibVisualHost* host)
+{
+	wxASSERT(m_formOwner);
+
+	// Named, numbered and put on the notebook by the form (NewObject), then built as the designer's add builds one.
+	ibValueFrame* newNotebookPage = m_formOwner->NewObject(g_controlNotebookPageCLSID, this);
+	if (newNotebookPage != nullptr)
+		host->CreateControl(newNotebookPage, true);
+}
+
+void ibValueNotebook::OnCreated(ibVisualHost* host, bool firstCreated)
+{
+	if (host->IsDesignerHost() && GetChildCount() == 0
+		&& firstCreated) {
+		ibValueNotebook::AddNotebookPage(host);
+	}
 }
 
 //***********************************************************************************
@@ -36,7 +59,7 @@ void ibValueNotebook::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	ibValueWindow::OnUpdate(state, host);
 
 	ibValueNotebookPage* selectedPage = GetActivePage();
-	state.SetValue(wxT("ActivePage"), selectedPage != nullptr ? selectedPage->GetControlID() : 0);
+	state.SetValue(ibProtocol::ibForm::ibNotebook::ActivePage, selectedPage != nullptr ? selectedPage->GetControlID() : 0);
 }
 
 //**********************************************************************************
@@ -70,8 +93,8 @@ enum Func {
 
 void ibValueNotebook::FillControlMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Pages"), wxT("Pages()"));
-	helper.AppendFunc(wxT("ActivePage"), wxT("ActivePage()"));
+	helper.AppendFunc(ibT("Pages"), ibT("Pages()"));
+	helper.AppendFunc(ibT("ActivePage"), ibT("ActivePage()"));
 }
 
 #include "backend/system/value/valueMap.h"

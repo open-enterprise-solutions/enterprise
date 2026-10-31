@@ -1,22 +1,8 @@
 #ifndef __DATABASE_RESULT_SET_H__
 #define __DATABASE_RESULT_SET_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/hashmap.h>
-#include <wx/hashset.h>
-#include <wx/datetime.h>
-
 #include <unordered_map>   // StringToIntMap — the field-name index
+#include <unordered_set>   // MetaDataHashSet
 
 #include "databaseLayerDef.h"
 #include "databaseErrorReporter.h"
@@ -31,33 +17,31 @@
 // name's own characters where they lie (no copy, no library call per character), so a name is looked up
 // exactly as it was written. A field name is an identifier: folding the ASCII letters is the whole of
 // the case it has.
-inline wchar_t ibFieldNameFold(wchar_t c) { return (c >= L'a' && c <= L'z') ? static_cast<wchar_t>(c - (L'a' - L'A')) : c; }
+inline ibChar ibFieldNameFold(ibChar c) { return (c >= ibT('a') && c <= ibT('z')) ? static_cast<ibChar>(c - (ibT('a') - ibT('A'))) : c; }
 struct ibFieldNameHash {
-	size_t operator()(const wxString& name) const {
-		// `auto`: a pointer into the string where wxString holds wide characters, a buffer that must
-		// outlive the loop where it holds UTF-8 — held either way, read the same way.
-		const auto chars = name.wc_str();
+	size_t operator()(const ibString& name) const {
+		const ibChar* const chars = name.c_str();
 		size_t h = static_cast<size_t>(2166136261u);   // FNV-1a over the folded characters
-		for (const wchar_t* p = chars; *p != 0; ++p)
+		for (const ibChar* p = chars; *p != 0; ++p)
 			h = (h ^ static_cast<size_t>(ibFieldNameFold(*p))) * static_cast<size_t>(16777619u);
 		return h;
 	}
 };
 struct ibFieldNameEqual {
-	bool operator()(const wxString& a, const wxString& b) const {
+	bool operator()(const ibString& a, const ibString& b) const {
 		if (a.length() != b.length())
 			return false;
-		const auto ac = a.wc_str();
-		const auto bc = b.wc_str();
+		const ibChar* const ac = a.c_str();
+		const ibChar* const bc = b.c_str();
 		// The characters as they are first; the case is looked at only where they differ.
-		for (const wchar_t *p = ac, *q = bc; *p != 0; ++p, ++q)
+		for (const ibChar *p = ac, *q = bc; *p != 0; ++p, ++q)
 			if (*p != *q && ibFieldNameFold(*p) != ibFieldNameFold(*q))
 				return false;
 		return true;
 	}
 };
-typedef std::unordered_map<wxString, int, ibFieldNameHash, ibFieldNameEqual> StringToIntMap;
-WX_DECLARE_HASH_SET(ibResultSetMetaData*, wxPointerHash, wxPointerEqual, MetaDataHashSet);
+typedef std::unordered_map<ibString, int, ibFieldNameHash, ibFieldNameEqual> StringToIntMap;
+typedef std::unordered_set<ibResultSetMetaData*> MetaDataHashSet;
 
 // ⭐⭐ WHOEVER KEEPS BOOKS ON A RESULT SET. There are two of them — the layer for a result it produced
 // itself, and the prepared statement for one its own cursor vends — and a result set has to be able to
@@ -99,7 +83,7 @@ public:
 	/// Close the result set (call ibDatabaseLayer::CloseResultSet() instead on the result set)
 	virtual void Close() = 0;
 
-	virtual int LookupField(const wxString& strField) = 0;
+	virtual int LookupField(const ibString& strField) = 0;
 
 	// get field
 	/// Retrieve an integer from the result set by the 1-based field index
@@ -116,7 +100,7 @@ public:
 	/// the empty date; IsFieldNull says which of the two it was.
 	virtual ibDateTime GetResultDate(int nField) = 0;
 	/// Retrieve a BLOB from the result set by the 1-based field index
-	virtual void* GetResultBlob(int nField, wxMemoryBuffer& buffer) = 0;
+	virtual void* GetResultBlob(int nField, ibMemoryBuffer& buffer) = 0;
 	/// Retrieve a double from the result set by the 1-based field index
 	virtual double GetResultDouble(int nField) = 0;
 	/// Retrieve a number from the result set by the 1-based field index
@@ -125,23 +109,23 @@ public:
 	virtual bool IsFieldNull(int nField) = 0;
 
 	/// Retrieve an integer from the result set by the result set column name
-	virtual int GetResultInt(const wxString& strField);
+	virtual int GetResultInt(const ibString& strField);
 	/// Retrieve a string from the result set by the result set column name (see the index form)
-	virtual ibString GetResultString(const wxString& strField);
+	virtual ibString GetResultString(const ibString& strField);
 	/// Retrieve a long from the result set by the result set column name
-	virtual long long GetResultLong(const wxString& strField);
+	virtual long long GetResultLong(const ibString& strField);
 	/// Retrieve a boolean from the result set by the result set column name
-	virtual bool GetResultBool(const wxString& strField);
+	virtual bool GetResultBool(const ibString& strField);
 	/// Retrieve a date from the result set by the result set column name (see the index form)
-	virtual ibDateTime GetResultDate(const wxString& strField);
+	virtual ibDateTime GetResultDate(const ibString& strField);
 	/// Retrieve a BLOB from the result set by the result set column name
-	virtual void* GetResultBlob(const wxString& strField, wxMemoryBuffer& buffer);
+	virtual void* GetResultBlob(const ibString& strField, ibMemoryBuffer& buffer);
 	/// Retrieve a double from the result set by the result set column name
-	virtual double GetResultDouble(const wxString& strField);
+	virtual double GetResultDouble(const ibString& strField);
 	/// Retrieve a number from the result set by the result set column name
-	virtual ibNumber GetResultNumber(const wxString& strField);
+	virtual ibNumber GetResultNumber(const ibString& strField);
 	/// Check if a field in the current result set record is nullptr
-	virtual bool IsFieldNull(const wxString& strField);
+	virtual bool IsFieldNull(const ibString& strField);
 
 	// get MetaData
 	/// Retrieve the MetaData associated with this result set

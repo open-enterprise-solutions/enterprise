@@ -26,14 +26,14 @@ enum {
 
 void ibValueManagerDataObjectSequence::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
-	helper.AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
-	helper.AppendFunc(wxT("Select"), wxT("Select()"));
+	helper.AppendFunc(ibT("CreateRecordSet"), ibT("CreateRecordSet()"));
+	helper.AppendFunc(ibT("CreateRecordKey"), ibT("CreateRecordKey()"));
+	helper.AppendFunc(ibT("Select"), ibT("Select()"));
 	// The key is a STRUCTURE, name to value — `GetBorder(New Structure("Organisation", org))`. Left
 	// out, a sequence that keeps no dimensions has its one border.
-	helper.AppendFunc(wxT("GetBorder"), 1, wxT("GetBorder(Key : structure)"));
-	helper.AppendFunc(wxT("SetBorder"), 2, wxT("SetBorder(Border, Key : structure)"));
-	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
+	helper.AppendFunc(ibT("GetBorder"), 1, ibT("GetBorder(Key : structure)"));
+	helper.AppendFunc(ibT("SetBorder"), 2, ibT("SetBorder(Border, Key : structure)"));
+	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(string, owner, guid)"));
 }
 
 // ⭐ WHICH BORDER — SAID BY A STRUCTURE, name to value, the way every register reading takes its
@@ -51,10 +51,10 @@ static std::vector<ibValue> KeyFromStructure(const ibValueMetaObjectSequence* se
 	const bool given = filter.ConvertToValue(structure) && structure != nullptr;
 
 	for (long at = 0; given && at < structure->GetNProps(); ++at) {
-		const wxString name = structure->GetPropName(at);
+		const ibString name = structure->GetPropName(at);
 		bool named = false;
 		for (const ibValueMetaObjectDimension* dimension : seq->GetDimensionArrayObject())
-			if (dimension != nullptr && stringUtils::CompareString(name, dimension->GetName())) {
+			if (dimension != nullptr && stringUtils::IsSameAs(name, dimension->GetName())) {
 				named = true;
 				break;
 			}

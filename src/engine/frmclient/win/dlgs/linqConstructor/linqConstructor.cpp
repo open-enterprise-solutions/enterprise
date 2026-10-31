@@ -1,0 +1,1450 @@
+////////////////////////////////////////////////////////////////////////////
+//	Description : The LINQ constructor (linqConstructor.h)
+////////////////////////////////////////////////////////////////////////////
+
+#include "linqConstructor.h"
+
+#include "core/compiler/translateCode.h"     // GetKeyWord - the words are the lexer's
+#include "core/compiler/codeDef.h"           // KEY_FROM ... KEY_RESTRICT
+#include "core/stringUtils.h"
+#include "frmclient/backend/compiler/value.h"   // ibValue::GetIconGroup - a field's picture
+#include "frmclient/artProvider/artProvider.h"   // wxART_FRONTEND and the product's own pictures
+#include "frmclient/mainFrame/mainFrame.h"       // the editor settings the block is coloured with
+#include "frmclient/win/ctrls/dataview/dataview.h"   // ibDataViewListCtrl - the platform's list, edited in place
+#include "frmclient/win/ctrls/dataview/dataviewEditOnActivate.h"   // …opened by a double-click
+#include "frmclient/win/dlgs/callbackDropTarget.h"   // a drop is the arrow's verb, reached by the mouse
+#include "frmclient/win/editor/codeEditor/codeEditor.h"   // the block, coloured as the module is
+#include "frmclient/docView/tabDocument.h"               // the module's tab — what the compiler is asked through
+#include "frmclient/win/picture.h"                       // ibProtocolPicture — a kind's picture, by its id
+#include "protocol/protocol.h"                           // ibProtocol::ibView::ibModule::ibLinq
+#include "protocol/protocolNode.h"
+
+#include <wx/artprov.h>
+#include <wx/button.h>
+#include <wx/imaglist.h>
+#include <wx/msgdlg.h>
+#include <wx/notebook.h>
+#include <wx/panel.h>
+#include <wx/settings.h>
+#include <wx/sizer.h>
+#include <wx/spinctrl.h>
+#include <wx/statbox.h>
+#include <wx/textdlg.h>
+#include <wx/toolbar.h>
+#include <wx/utils.h>
+
+#include <algorithm>
+
+namespace {
+
+// What a node of a source tree stands for.
+enum class ibNodeKind {
+	Group,       // "Visible here" - only a heading
+	Container,   // an expression whose members are more places to go (`Data`, `Data.Catalogs`)
+	Variable,    // a name visible where the window opened, that can be opened
+	Value,       // a plain value visible there - a number, a date, a flag: for a condition, not a table
+	Source,      // an expression whose ROWS are read - a table, a query's result
+	Field,       // a field of a source's row
+	Hint,        // a line that says something - under a source of unknown columns, a door to write one
+};
+
+class ibLinqNode : public wxTreeItemData {
+public:
+	ibLinqNode(ibNodeKind kind, const wxString& expression, const wxString& field = wxString())
+		: m_kind(kind), m_expression(expression), m_field(field) {
+		// Nothing to ask for: born loaded, so opening it never clears it.
+		m_loaded = (kind == ibNodeKind::Group || kind == ibNodeKind::Field || kind == ibNodeKind::Hint
+			|| kind == ibNodeKind::Value);
+	}
+
+	ibNodeKind m_kind;
+	wxString   m_expression;   // for a field, the expression of its source
+	wxString   m_field;
+	bool       m_loaded;
+};
+
+ibLinqNode* NodeOf(const wxTreeCtrl* tree, const wxTreeItemId& item)
+{
+	return tree != nullptr && item.IsOk() ? static_cast<ibLinqNode*>(tree->GetItemData(item)) : nullptr;
+}
+
+wxString Word(int key)
+{
+	return ibTranslateCode::GetKeyWord(key);
+}
+
+// The alias a probe query binds. A name nobody writes: the probe is thrown away with its compile.
+const wxChar* const kProbeRow = wxT("linqRow");
+
+// The two arrows between panes - drawn by code point, since a source literal carries ASCII only.
+const wxString kArrowIn  = wxString(wxUniChar(0x203A));
+const wxString kArrowOut = wxString(wxUniChar(0x2039));
+
+} // namespace
+
+namespace linq = ibProtocol::ibView::ibModule::ibLinq;
+
+ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxString& text, unsigned int caret,
+	ibTabDocument* module, short codeStyle, bool readOnly)
+	: wxDialog(parent, wxID_ANY, _("LINQ query constructor"), wxDefaultPosition, wxDefaultSize,
+		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+	m_text(text), m_caret(std::min<unsigned int>(caret, (unsigned int)text.length())), m_module(module),
+	m_codeStyle(codeStyle)
+{
+	m_anchor = m_caret;
+
+	// ⭐ A QUERY THE CARET STANDS IN IS OPENED, NOT WRITTEN ANEW. Where it is and where it ends is the
+	// compiler's to say - it bracketed the text while reading it; the parts are read back out of that
+	// text by the block's own reader, and OK replaces that stretch.
+	//
+	// The compiler's outline is the server's (the desktop's ibOutlineScriptQueries): the module's tab answers where
+	// the query at the caret starts, and ibLinqBlock::Parse reads it from there as the desktop does. The same answer
+	// says what is visible there and what each of those and `Data` hold (Open) — the window's opening is one question.
+	ibLinqBlock opened(m_codeStyle);
+	ibString openRefusal;
+	ibProtocolNode opening;
+	{
+		wxBusyCursor busy;
+		ibProtocolNode request;
+		request.SetValue(linq::Open, true);
+		if (!AskModule(request, m_text, m_caret, opening))
+			openRefusal = _("The module's tab was not asked: the tables and the names visible at the caret are not "
+				"listed, and a query the caret stands in is not opened.");
+		else   // where the block will stand: the query's first word, or the caret
+			m_anchor = static_cast<unsigned int>(opening.GetInt(linq::Anchor, m_caret));
+	}
+	const ibProtocolNode query = opening.FindChild(linq::Query);
+	if (query.IsNode()) {
+		// ⭐ WHERE THE QUERY ENDS IS THE LEXER'S TO SAY, not the compiler's bracket: the bracket ends
+		// where the compiler STOPPED, and in a query left half-written - `On g. Equals c.` - that is
+		// mid-way, so OK replaced the first half and left the rest standing after the new block. The
+		// reader is handed the module from the query's start and says how much of it the query is.
+		const unsigned int from = static_cast<unsigned int>(query.GetInt(linq::From));
+		const wxString rest = m_text.Mid(from);
+		size_t consumed = 0;
+		if (ibLinqBlock::Parse(rest, opened, openRefusal, &consumed)) {
+			// The stretch itself, without the whitespace around it: it starts where the tab said the block stands.
+			const wxString read = rest.Left(consumed);
+			m_replacing = true;
+			m_replaceFrom = m_anchor;
+			m_replaceTo = from + (unsigned int)wxString(read).Trim(true).length();
+		}
+	}
+
+	// WHAT IS VISIBLE WHERE THE BLOCK STANDS - the dropdown's own list, the values in it: the module's
+	// variables, the procedure's locals and parameters, the object's own attributes and tabular sections.
+	//
+	// The names are the compiler's (the desktop's ibNamesAtCaret — what is not callable, declared or a member), the
+	// tab's answer to the opening, asked where the block stands.
+	for (const ibProtocolNode& name : opening.FindChild(linq::Names).Children())
+		m_variables.push_back(name.GetString(linq::Name));
+	for (const ibProtocolNode& kind : opening.FindChild(linq::Kinds).Children())
+		m_kindPictures[kind.GetString(linq::Name)] = kind.GetString(linq::Picture);
+
+	// ASKED ONCE, for every tree: which visible names are places to open and which are plain values
+	// (a leaf with no arrow, for a condition), and what `Data` holds - its sections head every tree,
+	// the way the metadata kinds head the query constructor's. (The opening answered them: nothing is asked here.)
+	{
+		wxBusyCursor busy;
+		for (const wxString& name : m_variables)
+			m_variableOpens.push_back(!IsPlainValue(MembersOf(name)));
+		m_sections = MembersOf(wxT("Data")).m_names;
+	}
+
+	const int gap = FromDIP(6);
+	wxBoxSizer* top = new wxBoxSizer(wxVERTICAL);
+	m_notebook = new wxNotebook(this, wxID_ANY);
+	// A TAB WEARS ITS PICTURE — the query constructor's for the same tab; Other is its Advanced. In the
+	// order the pages are added below, which is also each page's picture index.
+	{
+		wxWithImages::Images pictures;
+		for (const wxString id : { wxART_TABLE, wxART_FILTER, wxART_GROUPING, wxART_SORT, wxART_ADVANCED })
+			pictures.push_back(wxArtProvider::GetBitmapBundle(id, wxART_FRONTEND, wxSize(16, 16)));   // normal DPI, no FromDIP
+		m_notebook->SetImages(pictures);
+	}
+
+	const auto makeList = [&](wxWindow* page) {
+		ibDataViewListCtrl* list = new ibDataViewListCtrl(page, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+			wxDV_ROW_LINES | wxDV_SINGLE);
+		list->Bind(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, [this](ibDataViewEvent&) { ShowResult(); });
+		ibDataViewEditOnActivate(list);   // a double-click opens the cell - the constructors' one way
+		return list;
+	};
+	const auto removeSelected = [this](ibDataViewListCtrl* list) {
+		const int row = list->GetSelectedRow();
+		if (row == wxNOT_FOUND)
+			return;
+		list->DeleteItem(row);
+		ShowResult();
+	};
+	const auto moveSelected = [this](ibDataViewListCtrl* list, int delta) {
+		const int row = list->GetSelectedRow();
+		const int target = row + delta;
+		if (row == wxNOT_FOUND || target < 0 || target >= list->GetItemCount())
+			return;
+		for (unsigned int col = 0; col < (unsigned int)list->GetStore()->m_cols.size(); ++col) {
+			ibVariant here, there;
+			list->GetValue(here, row, col);
+			list->GetValue(there, target, col);
+			list->SetValue(there, row, col);
+			list->SetValue(here, target, col);
+		}
+		list->SelectRow(target);
+		ShowResult();
+	};
+	// THE ARROWS BETWEEN PANES, as the query constructor has them: in, and back out.
+	const auto arrows = [&](wxWindow* page, std::function<void()> in, std::function<void()> out) {
+		wxBoxSizer* column = new wxBoxSizer(wxVERTICAL);
+		column->AddStretchSpacer();
+		wxButton* forward = new wxButton(page, wxID_ANY, kArrowIn, wxDefaultPosition, FromDIP(wxSize(28, 24)), wxBU_EXACTFIT);
+		forward->Bind(wxEVT_BUTTON, [in](wxCommandEvent&) { in(); });
+		column->Add(forward, wxSizerFlags().Border(wxBOTTOM, gap));
+		if (out) {
+			wxButton* back = new wxButton(page, wxID_ANY, kArrowOut, wxDefaultPosition, FromDIP(wxSize(28, 24)), wxBU_EXACTFIT);
+			back->Bind(wxEVT_BUTTON, [out](wxCommandEvent&) { out(); });
+			column->Add(back);
+		}
+		column->AddStretchSpacer();
+		return column;
+	};
+	const auto pane = [&](wxWindow* page, const wxString& title, wxToolBar* bar, wxWindow* body) {
+		wxBoxSizer* column = new wxBoxSizer(wxVERTICAL);
+		column->Add(new wxStaticText(page, wxID_ANY, title), wxSizerFlags().Border(wxBOTTOM, gap / 2));
+		if (bar != nullptr) {
+			bar->Realize();
+			column->Add(bar, wxSizerFlags().Expand());
+		}
+		column->Add(body, wxSizerFlags(1).Expand());
+		return column;
+	};
+
+	// ---- Tables and fields: what can be read | the tables read | the columns of the answer ----
+	{
+		wxPanel* page = new wxPanel(m_notebook);
+		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+
+		wxTreeCtrl* tree = MakeSourceTree(page);
+		row->Add(pane(page, _("Available tables"), nullptr, tree), wxSizerFlags(3).Expand().Border(wxALL, gap));
+		row->Add(arrows(page, [this] { AddSelectedAsSource(false); }, [this, removeSelected] { removeSelected(m_sources); }),
+			wxSizerFlags().Expand());
+
+		m_sources = makeList(page);
+		m_sources->AppendTextColumn(_("Name in the query"), wxDATAVIEW_CELL_EDITABLE, FromDIP(90));
+		m_sources->AppendTextColumn(_("Reads"), wxDATAVIEW_CELL_EDITABLE, FromDIP(170));
+		m_sources->AppendToggleColumn(Word(KEY_JOIN), wxDATAVIEW_CELL_ACTIVATABLE, FromDIP(40));
+		m_sources->AppendTextColumn(Word(KEY_ON), wxDATAVIEW_CELL_EDITABLE, FromDIP(100));
+		m_sources->AppendTextColumn(Word(KEY_EQUALS), wxDATAVIEW_CELL_EDITABLE, FromDIP(100));
+		wxToolBar* sourceBar = MakeBar(page);
+		AddTool(sourceBar, _("Add as join"), wxART_ADD_JOIN, [this] { AddSelectedAsSource(true); });
+		AddTool(sourceBar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_sources); });
+		row->Add(pane(page, _("Tables"), sourceBar, m_sources), wxSizerFlags(4).Expand().Border(wxALL, gap));
+
+		row->Add(arrows(page, [this] { AddSelectedAsField(); }, [this, removeSelected] { removeSelected(m_fields); }),
+			wxSizerFlags().Expand());
+
+		m_fields = makeList(page);
+		m_fields->AppendTextColumn(_("Column"), wxDATAVIEW_CELL_EDITABLE, FromDIP(110));
+		m_fields->AppendTextColumn(_("Expression"), wxDATAVIEW_CELL_EDITABLE, FromDIP(190));
+		wxToolBar* fieldBar = MakeBar(page);
+		AddTool(fieldBar, _("Add an expression"), wxART_ADD_EXPRESSION, [this] {
+			wxVector<ibVariant> values;
+			values.push_back(ibVariant(wxString::Format(wxT("Column%d"), m_fields->GetItemCount() + 1)));
+			values.push_back(ibVariant(wxString()));
+			m_fields->AppendItem(values);
+			m_fields->SelectRow(m_fields->GetItemCount() - 1);
+		});
+		AddTool(fieldBar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_fields); });
+		AddTool(fieldBar, _("Move up"), wxART_UP, [this, moveSelected] { moveSelected(m_fields, -1); });
+		AddTool(fieldBar, _("Move down"), wxART_DOWN, [this, moveSelected] { moveSelected(m_fields, +1); });
+		wxBoxSizer* fieldPane = pane(page, _("Fields"), fieldBar, m_fields);
+		// Said only while the query groups: then these are not the answer's only columns, and not rows.
+		m_fieldsNote = new wxStaticText(page, wxID_ANY, wxEmptyString);
+		m_fieldsNote->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+		m_fieldsNote->Hide();
+		fieldPane->Add(m_fieldsNote, wxSizerFlags().Expand().Border(wxTOP, gap / 2));
+		row->Add(fieldPane, wxSizerFlags(4).Expand().Border(wxALL, gap));
+
+		m_sources->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedAsSource(m_sources->GetItemCount() > 0); }));
+		m_fields->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedAsField(); }));
+
+		page->SetSizer(row);
+		m_notebook->AddPage(page, _("Tables and fields"), false, 0);
+		m_pageTrees.push_back(tree);
+	}
+
+	// ---- Conditions: what can be read | the conditions, a `Where` each ----
+	{
+		wxPanel* page = new wxPanel(m_notebook);
+		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+
+		wxTreeCtrl* tree = MakeSourceTree(page);
+		row->Add(pane(page, _("Available tables"), nullptr, tree), wxSizerFlags(3).Expand().Border(wxALL, gap));
+		row->Add(arrows(page, [this] { AddSelectedToCondition(); }, [this, removeSelected] { removeSelected(m_conditions); }),
+			wxSizerFlags().Expand());
+
+		m_conditions = makeList(page);
+		m_conditions->AppendTextColumn(_("Condition"), wxDATAVIEW_CELL_EDITABLE, FromDIP(420));
+		// A condition on the rows is read before grouping; one on the GROUPS after it, over the group's
+		// name - `grp.Values.Count() > 1`.
+		m_conditions->AppendToggleColumn(_("On groups"), wxDATAVIEW_CELL_ACTIVATABLE, FromDIP(80));
+		wxToolBar* bar = MakeBar(page);
+		AddTool(bar, _("Add a condition"), wxART_ADD_CONDITION, [this] {
+			wxVector<ibVariant> values;
+			values.push_back(ibVariant(wxString()));
+			values.push_back(ibVariant(false));
+			m_conditions->AppendItem(values);
+			m_conditions->SelectRow(m_conditions->GetItemCount() - 1);
+		});
+		AddTool(bar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_conditions); });
+		row->Add(pane(page, ibString::Format(_("Each line is a '%s'. A variable visible here is written by its name - it is the parameter."),
+			Word(KEY_WHERE)), bar, m_conditions), wxSizerFlags(5).Expand().Border(wxALL, gap));
+		m_conditions->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedToCondition(); }));
+
+		page->SetSizer(row);
+		m_notebook->AddPage(page, _("Conditions"), false, 1);
+		m_pageTrees.push_back(tree);
+	}
+
+	// ---- Grouping: what can be read | the keys | the totals - the query constructor's own page ----
+	{
+		wxPanel* page = new wxPanel(m_notebook);
+		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+
+		wxTreeCtrl* tree = MakeSourceTree(page);
+		row->Add(pane(page, _("Available tables"), nullptr, tree), wxSizerFlags(3).Expand().Border(wxALL, gap));
+
+		wxBoxSizer* lists = new wxBoxSizer(wxVERTICAL);
+
+		// THE KEYS: rows with the same keys become one row of the answer, and every key is its column.
+		wxBoxSizer* keyRow = new wxBoxSizer(wxHORIZONTAL);
+		keyRow->Add(arrows(page, [this] { AddSelectedAsGroupKey(); }, [this, removeSelected] { removeSelected(m_groupKeys); }),
+			wxSizerFlags().Expand());
+		m_groupKeys = makeList(page);
+		m_groupKeys->AppendTextColumn(_("Column"), wxDATAVIEW_CELL_EDITABLE, FromDIP(110));
+		m_groupKeys->AppendTextColumn(_("Grouped by"), wxDATAVIEW_CELL_EDITABLE, FromDIP(220));
+		wxToolBar* keyBar = MakeBar(page);
+		AddTool(keyBar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_groupKeys); });
+		AddTool(keyBar, _("Move up"), wxART_UP, [this, moveSelected] { moveSelected(m_groupKeys, -1); });
+		AddTool(keyBar, _("Move down"), wxART_DOWN, [this, moveSelected] { moveSelected(m_groupKeys, +1); });
+		keyRow->Add(pane(page, ibString::Format(_("Group by (%s ... %s)"), Word(KEY_GROUP), Word(KEY_BY)), keyBar, m_groupKeys),
+			wxSizerFlags(1).Expand().Border(wxALL, gap));
+		lists->Add(keyRow, wxSizerFlags(1).Expand());
+
+		// THE TOTALS: what each group makes of its rows - a sum, a count, the smallest, the largest, the mean.
+		wxBoxSizer* totalRow = new wxBoxSizer(wxHORIZONTAL);
+		totalRow->Add(arrows(page, [this] { AddSelectedAsTotal(); }, [this, removeSelected] { removeSelected(m_totals); }),
+			wxSizerFlags().Expand());
+		m_totals = makeList(page);
+		m_totals->AppendTextColumn(_("Column"), wxDATAVIEW_CELL_EDITABLE, FromDIP(110));
+		wxArrayString functions;
+		for (const ibLinqTotal total : { ibLinqTotal::Sum, ibLinqTotal::Count, ibLinqTotal::Min, ibLinqTotal::Max, ibLinqTotal::Average })
+			functions.Add(ibLinqTotalName(total));
+		m_totals->AppendColumn(new ibDataViewColumn(_("Total"),
+			new ibDataViewChoiceRenderer(functions, wxDATAVIEW_CELL_EDITABLE), 1, FromDIP(80), wxALIGN_LEFT), wxT("string"));
+		m_totals->AppendTextColumn(_("Of the field"), wxDATAVIEW_CELL_EDITABLE, FromDIP(170));
+		wxToolBar* totalBar = MakeBar(page);
+		AddTool(totalBar, _("Count the rows"), wxART_COUNT_ROWS, [this] {
+			wxString name = wxT("Count");
+			const auto taken = [this](const wxString& candidate) {
+				for (int at = 0; at < m_totals->GetItemCount(); ++at)
+					if (stringUtils::IsSameAs(m_totals->GetTextValue(at, 0), candidate))
+						return true;
+				return false;
+			};
+			for (int n = 1; taken(name); ++n)
+				name = wxString::Format(wxT("Count%d"), n);
+			wxVector<ibVariant> values;
+			values.push_back(ibVariant(name));
+			values.push_back(ibVariant(ibLinqTotalName(ibLinqTotal::Count).ToWxString()));
+			values.push_back(ibVariant(wxString()));
+			m_totals->AppendItem(values);
+			ShowResult();
+		});
+		AddTool(totalBar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_totals); });
+		totalRow->Add(pane(page, _("Totals over each group's rows"), totalBar, m_totals),
+			wxSizerFlags(1).Expand().Border(wxALL, gap));
+		lists->Add(totalRow, wxSizerFlags(1).Expand());
+
+		// THE GROUP'S NAME, and what it means, said where it is set.
+		wxBoxSizer* intoRow = new wxBoxSizer(wxHORIZONTAL);
+		intoRow->Add(new wxStaticText(page, wxID_ANY, ibString::Format(_("The group's name (%s)"), Word(KEY_INTO))),
+			wxSizerFlags().CenterVertical().Border(wxRIGHT, gap));
+		m_groupInto = new wxTextCtrl(page, wxID_ANY);
+		intoRow->Add(m_groupInto, wxSizerFlags(1));
+		lists->Add(intoRow, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT, gap * 2));
+		wxStaticText* meaning = new wxStaticText(page, wxID_ANY,
+			_("Rows with the same keys become one row of the answer: its columns are the keys and the totals. "
+			  "The order then sorts the groups - by a key, or by a total's column name. Past the name, a condition "
+			  "marked 'On groups' or a field reads the group: <name>.Key, <name>.Values. "
+			  "Without a name the answer is the groups themselves, and no column can be chosen."));
+		meaning->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+		meaning->Wrap(FromDIP(560));
+		lists->Add(meaning, wxSizerFlags().Expand().Border(wxALL, gap * 2));
+
+		row->Add(lists, wxSizerFlags(5).Expand());
+
+		m_groupKeys->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedAsGroupKey(); }));
+		m_totals->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedAsTotal(); }));
+
+		page->SetSizer(row);
+		m_notebook->AddPage(page, _("Grouping"), false, 2);
+		m_pageTrees.push_back(tree);
+	}
+
+	// ---- Order: what can be read | the keys, in order ----
+	{
+		wxPanel* page = new wxPanel(m_notebook);
+		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+
+		wxTreeCtrl* tree = MakeSourceTree(page);
+		row->Add(pane(page, _("Available tables"), nullptr, tree), wxSizerFlags(3).Expand().Border(wxALL, gap));
+		row->Add(arrows(page, [this] { AddSelectedToOrder(); }, [this, removeSelected] { removeSelected(m_order); }),
+			wxSizerFlags().Expand());
+
+		m_order = makeList(page);
+		m_order->AppendTextColumn(_("Expression"), wxDATAVIEW_CELL_EDITABLE, FromDIP(320));
+		m_order->AppendToggleColumn(Word(KEY_DESCENDING), wxDATAVIEW_CELL_ACTIVATABLE, FromDIP(90));
+		wxToolBar* bar = MakeBar(page);
+		// An order written by hand - a total's column name, when the query groups.
+		AddTool(bar, _("Add an expression"), wxART_ADD_EXPRESSION, [this] {
+			wxVector<ibVariant> values;
+			values.push_back(ibVariant(wxString()));
+			values.push_back(ibVariant(false));
+			m_order->AppendItem(values);
+			m_order->SelectRow(m_order->GetItemCount() - 1);
+		});
+		AddTool(bar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_order); });
+		AddTool(bar, _("Move up"), wxART_UP, [this, moveSelected] { moveSelected(m_order, -1); });
+		AddTool(bar, _("Move down"), wxART_DOWN, [this, moveSelected] { moveSelected(m_order, +1); });
+		row->Add(pane(page, _("Order"), bar, m_order), wxSizerFlags(5).Expand().Border(wxALL, gap));
+		m_order->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedToOrder(); }));
+
+		page->SetSizer(row);
+		m_notebook->AddPage(page, _("Order"), false, 3);
+		m_pageTrees.push_back(tree);
+	}
+
+	// ---- Other: the query constructor's "Record selection" - a switch and a number of rows ----
+	{
+		wxPanel* page = new wxPanel(m_notebook);
+		wxStaticBoxSizer* selection = new wxStaticBoxSizer(wxVERTICAL, page, _("Record selection"));
+		wxWindow* box = selection->GetStaticBox();
+
+		// ⭐ A NUMBER OF ROWS IS A NUMBER, so it is a counter with arrows, switched on by its word - as the
+		// query constructor's `First`. A variable read out of a block opened (`Take pageSize`) is kept,
+		// and said beside the counter, until the counter is touched.
+		const auto countRow = [&](ibRowCount& count, int key, const wxString& meaning) {
+			wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+			count.m_use = new wxCheckBox(box, wxID_ANY, Word(key));
+			row->Add(count.m_use, wxSizerFlags().CenterVertical().Border(wxRIGHT, gap));
+			count.m_count = new wxSpinCtrl(box, wxID_ANY, wxEmptyString, wxDefaultPosition, FromDIP(wxSize(90, -1)),
+				wxSP_ARROW_KEYS, 1, 1000000, 10);
+			count.m_count->Disable();
+			row->Add(count.m_count, wxSizerFlags().CenterVertical().Border(wxRIGHT, gap));
+			wxStaticText* said = new wxStaticText(box, wxID_ANY, meaning);
+			said->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+			row->Add(said, wxSizerFlags().CenterVertical().Border(wxRIGHT, gap));
+			count.m_kept = new wxStaticText(box, wxID_ANY, wxEmptyString);
+			count.m_kept->Hide();
+			row->Add(count.m_kept, wxSizerFlags().CenterVertical());
+			selection->Add(row, wxSizerFlags().Border(wxALL, gap / 2));
+
+			ibRowCount* const held = &count;
+			count.m_use->Bind(wxEVT_CHECKBOX, [this, held](wxCommandEvent&) {
+				held->m_count->Enable(held->m_use->IsChecked());
+				ShowResult();
+			});
+			count.m_count->Bind(wxEVT_SPINCTRL, [this, held](wxSpinEvent&) {
+				KeepCount(*held, wxString());   // touched: the number is what it says now
+				ShowResult();
+			});
+		};
+		countRow(m_skipCount, KEY_SKIP, _("rows to pass over"));
+		countRow(m_takeCount, KEY_TAKE, _("rows at most"));
+
+		m_distinct = new wxCheckBox(box, wxID_ANY, ibString::Format(_("%s - no repeated rows"), Word(KEY_DISTINCT)));
+		selection->Add(m_distinct, wxSizerFlags().Border(wxALL, gap / 2));
+
+		wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+		sizer->Add(selection, wxSizerFlags().Border(wxALL, gap * 2));
+		page->SetSizer(sizer);
+		m_notebook->AddPage(page, _("Other"), false, 4);
+		m_pageTrees.push_back(nullptr);
+	}
+
+	top->Add(m_notebook, wxSizerFlags(1).Expand().Border(wxALL, gap));
+
+	// HOW IT IS USED, said once: the tree on the left is what can be read, and everything moves out of it
+	// the same three ways.
+	wxStaticText* howTo = new wxStaticText(this, wxID_ANY,
+		_("Drag a table or a field from the tree on the left into a list, double-click it, or press the arrow. "
+		  "A table whose columns are not known opens to a line that lets you write a field by hand."));
+	howTo->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+	top->Add(howTo, wxSizerFlags().Border(wxLEFT | wxRIGHT | wxBOTTOM, gap * 2));
+
+	// ---- the block, coloured as the module colours it, and what the compiler made of it ----
+	m_block = new ibCodeEditor(nullptr, this, wxID_ANY);
+	m_block->SetMinSize(FromDIP(wxSize(-1, 110)));
+	if (mainFrame != nullptr)
+		m_block->RefreshEditor();
+	m_block->SetCodeStyle(m_codeStyle);   // the module's syntax: the desktop's editor read it of the process
+	for (int margin = 0; margin < 5; ++margin)
+		m_block->SetMarginWidth(margin, 0);   // no line numbers, breakpoints or folds for a preview
+	m_block->SetReadOnly(true);
+	top->Add(m_block, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT, gap));
+
+	m_verdict = new wxStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxST_NO_AUTORESIZE);
+	top->Add(m_verdict, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT | wxTOP, gap * 2));
+	top->Add(CreateStdDialogButtonSizer(readOnly ? wxCANCEL : (wxOK | wxCANCEL)),
+		wxSizerFlags().Right().Border(wxALL, gap * 2));
+
+	// The group's name: the block follows each letter, the compiler is asked when the field is left — a letter is not an
+	// act of the person's, and each would be a question to the server.
+	m_groupInto->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { ShowBlock(); });
+	m_groupInto->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& event) { ShowResult(); event.Skip(); });
+	m_distinct->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { ShowResult(); });
+	Bind(wxEVT_BUTTON, &ibDialogLinqConstructor::OnOk, this, wxID_OK);
+
+	SetSizerAndFit(top);
+	SetSize(FromDIP(wxSize(1060, 700)));
+	CentreOnParent();
+
+	if (m_replacing)
+		Open(opened);
+	else if (!openRefusal.IsEmpty())
+		wxMessageBox(openRefusal + wxT("\n\n")
+			+ _("The window opens empty, and OK writes a new block at the caret."), GetTitle(), wxOK | wxICON_INFORMATION, parent);
+
+	ShowResult();
+}
+
+// ---------------------------------------------------------------------------
+//  IntelliSense, asked
+// ---------------------------------------------------------------------------
+
+ibDialogLinqConstructor::ibProbe ibDialogLinqConstructor::Ask(const wxString& probe) const
+{
+	// ⭐ AS A COMPLETION, like the dropdown: answering compiles the text and walks it, values are made
+	// on the way, and a name not written yet is ordinary here rather than an error.
+	//
+	// The walk is the server's (the desktop's ibValueAtCaret at the probe's end): the module's tab answers whether the
+	// probe resolved, the class it resolved to, the names after the dot that are not scoped to a frame. A probe the
+	// window asked before — or that a question for a whole place answered on the way — asks nothing.
+	auto known = m_asked.find(probe);
+	if (known == m_asked.end()) {
+		AskAll({ probe }, {});
+		known = m_asked.find(probe);
+	}
+	return known != m_asked.end() ? known->second : ibProbe();
+}
+
+ibDialogLinqConstructor::ibProbe ibDialogLinqConstructor::MembersOf(const wxString& expression) const
+{
+	return Ask(MembersProbe(expression));
+}
+
+ibDialogLinqConstructor::ibProbe ibDialogLinqConstructor::RowOf(const wxString& expression) const
+{
+	return Ask(RowProbe(expression));
+}
+
+// A probe is asked where the block stands: the tab appends it to the text up to the START of the anchor's line (the
+// statements above are finished, the one the block stands in may not be — `q = |`), so it crosses the wire as the
+// statement alone.
+wxString ibDialogLinqConstructor::MembersProbe(const wxString& expression) const
+{
+	return wxT("linqProbe = ") + expression + wxT(".");
+}
+
+wxString ibDialogLinqConstructor::RowProbe(const wxString& expression) const
+{
+	// A ROW is what the source yields, and it is asked where a row is: inside a query over it, after
+	// the dot of its alias - exactly where a person writing the query by hand stands.
+	return wxT("linqProbe = ") + Word(KEY_FROM) + wxT(" ") + kProbeRow + wxT(" ")
+		+ Word(KEY_IN) + wxT(" ") + expression + wxT(" ") + Word(KEY_WHERE) + wxT(" ") + kProbeRow + wxT(".");
+}
+
+bool ibDialogLinqConstructor::AskModule(ibProtocolNode& request, const wxString& text, unsigned int position,
+	ibProtocolNode& answer) const
+{
+	if (m_module == nullptr)
+		return false;
+	request.SetValue(ibProtocol::ibView::ibModule::Kind, static_cast<int>(ibProtocol::ibView::ibModule::ibRequest::Linq))
+		.SetValue(ibProtocol::ibView::ibModule::Text, text)
+		.SetValue(ibProtocol::ibView::ibModule::Position, static_cast<int>(position));
+	if (!m_module->Fetch(request, answer))
+		return false;
+	KeepValues(answer);
+	return true;
+}
+
+void ibDialogLinqConstructor::KeepValues(const ibProtocolNode& answer) const
+{
+	for (const ibProtocolNode& value : answer.FindChild(linq::Values).Children()) {
+		ibProbe probe;
+		probe.m_resolved = value.GetBool(linq::Resolved);
+		probe.m_type = value.GetString(linq::Type);
+		for (const ibProtocolNode& name : value.FindChild(linq::Names).Children())
+			probe.m_names.push_back(name.GetString(linq::Name));
+		m_asked[value.GetString(linq::Text)] = probe;
+	}
+}
+
+void ibDialogLinqConstructor::AskAll(const std::vector<wxString>& probes, const std::vector<wxString>& deep) const
+{
+	ibProtocolNode request;
+	bool asking = false;
+	for (const wxString& probe : probes) {
+		const bool isDeep = std::find(deep.begin(), deep.end(), probe) != deep.end();
+		const auto known = m_asked.find(probe);
+		if (known != m_asked.end()) {
+			// A place answered before (the opening's Visible here) is asked again only when it is asked deep and its
+			// members are not known yet: AddPlace asks each member next, and one question answers them all.
+			if (!isDeep)
+				continue;
+			const std::vector<wxString>& names = known->second.m_names;
+			if (std::all_of(names.begin(), names.end(),
+				[this, &probe](const wxString& name) { return m_asked.find(probe + name + wxT(".")) != m_asked.end(); }))
+				continue;
+		}
+		request.AddItem(linq::Probes, probe);
+		if (isDeep)
+			request.AddItem(linq::Deep, probe);
+		asking = true;
+	}
+	if (!asking)
+		return;
+	ibProtocolNode answer;
+	if (!AskModule(request, m_text, m_anchor, answer)) {
+		// Not answered: each is known as resolving to nothing, so it is not asked again — and the person is told why
+		// the place lists nothing, once for each question the tab left unanswered.
+		for (const wxString& probe : probes)
+			m_asked.emplace(probe, ibProbe());
+		wxMessageBox(_("The module's tab did not answer: what this place holds is not listed."),
+			_("LINQ query constructor"), wxOK | wxICON_WARNING);
+	}
+}
+
+// ---------------------------------------------------------------------------
+//  The trees
+// ---------------------------------------------------------------------------
+
+int ibDialogLinqConstructor::IconIndex(wxTreeCtrl* tree, const wxString& key, const std::function<wxIcon()>& make)
+{
+	std::map<wxString, int>& known = m_treeIcons[tree];
+	const auto found = known.find(key);
+	if (found != known.end())
+		return found->second;
+
+	int index = -1;
+	const wxIcon icon = make();
+	if (icon.IsOk() && tree->GetImageList() != nullptr)
+		index = tree->GetImageList()->Add(icon);
+	known[key] = index;
+	return index;
+}
+
+// A METATYPE'S OWN PICTURE, taken from its registration - `Data.Catalogs` holds catalogs, and a catalog
+// is what the type registry calls "Catalog". One rule turns the section's name into the kind's
+// (`ChartsOf...` into `ChartOf...`, a plural into its singular), so a metatype added tomorrow is dressed
+// the day it registers.
+int ibDialogLinqConstructor::KindIcon(wxTreeCtrl* tree, const wxString& section)
+{
+	// The kind's registration is the server's (the desktop's GetAvailableCtor(kind)->GetClassIcon): the opening
+	// answered each section's picture; one with none wears the folder the desktop fell back to.
+	return IconIndex(tree, wxT("kind:") + section, [this, &section]() -> wxIcon {
+		const auto picture = m_kindPictures.find(section);
+		if (picture != m_kindPictures.end() && !picture->second.IsEmpty()) {
+			const wxBitmap bitmap = ibProtocolPicture(picture->second);
+			if (bitmap.IsOk()) {
+				wxIcon icon;
+				icon.CopyFromBitmap(bitmap);
+				if (icon.IsOk())
+					return icon;
+			}
+		}
+		return wxArtProvider::GetIcon(wxART_COMMON_FOLDER, wxART_METATREE, wxSize(16, 16));
+	});
+}
+
+bool ibDialogLinqConstructor::IsPlainValue(const ibProbe& members)
+{
+	if (!members.m_resolved || !members.m_names.empty())
+		return false;
+	for (const wxChar* plain : { wxT("Number"), wxT("String"), wxT("Date"), wxT("Boolean") })
+		if (members.m_type == plain)
+			return true;
+	return false;
+}
+
+// One place under `parent`. Asked (`probe`) whether it is only a plain value, which then stays a leaf;
+// a place under a section of `Data` is a table and is not asked.
+void ibDialogLinqConstructor::AddPlace(wxTreeCtrl* tree, const wxTreeItemId& parent, const wxString& name,
+	const wxString& expression, int icon, bool probe)
+{
+	const bool plain = probe && IsPlainValue(MembersOf(expression));
+	const wxTreeItemId item = tree->AppendItem(parent, name, icon, -1,
+		new ibLinqNode(plain ? ibNodeKind::Value : ibNodeKind::Container, expression));
+	tree->SetItemHasChildren(item, !plain);
+}
+
+wxTreeCtrl* ibDialogLinqConstructor::MakeSourceTree(wxWindow* parent)
+{
+	// The modern arrow and no lines - the same as every tree of the query constructor.
+	wxTreeCtrl* tree = new wxTreeCtrl(parent, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(250, 300)),
+		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
+	tree->AssignImageList(new wxImageList(16, 16));
+
+	const wxTreeItemId root = tree->AddRoot(wxEmptyString);
+
+	// ⭐ THE CONFIGURATION'S TABLES FIRST, the way the query constructor opens on its kinds: `Data`'s
+	// sections at the top, each in its kind's picture, their tables inside. The expression each stands
+	// for is the one LINQ reads by - `Data.Catalogs.Goods`.
+	for (const wxString& section : m_sections) {
+		const wxTreeItemId item = tree->AppendItem(root, section, KindIcon(tree, section), -1,
+			new ibLinqNode(ibNodeKind::Container, wxT("Data.") + section));
+		tree->SetItemHasChildren(item, true);
+	}
+
+	// …AND WHAT THIS PLACE IN THE MODULE CAN SEE: a table filled above, another query's answer, the
+	// object's own tabular section - opened like the rest. A plain value is a leaf, for a condition.
+	const wxTreeItemId visible = tree->AppendItem(root, _("Visible here"),
+		IconIndex(tree, wxT("visible"), [] { return wxArtProvider::GetIcon(wxART_LOCAL_VARIABLE, wxART_SERVICE, wxSize(16, 16)); }),
+		-1, new ibLinqNode(ibNodeKind::Group, wxString()));
+	const int variableIcon = IconIndex(tree, wxT("variable"),
+		[] { return wxArtProvider::GetIcon(wxART_VARIABLE, wxART_AUTOCOMPLETE, wxSize(16, 16)); });
+	for (size_t i = 0; i < m_variables.size(); ++i) {
+		const bool opens = i < m_variableOpens.size() && m_variableOpens[i];
+		const wxTreeItemId item = tree->AppendItem(visible, m_variables[i], variableIcon, -1,
+			new ibLinqNode(opens ? ibNodeKind::Variable : ibNodeKind::Value, m_variables[i]));
+		tree->SetItemHasChildren(item, opens);
+	}
+	if (m_variables.empty())
+		tree->AppendItem(visible, _("(no variables above this place)"), -1, -1, new ibLinqNode(ibNodeKind::Hint, wxString()));
+
+	tree->Bind(wxEVT_TREE_ITEM_EXPANDING, &ibDialogLinqConstructor::OnExpanding, this);
+	tree->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibDialogLinqConstructor::OnActivated, this);
+	tree->Bind(wxEVT_TREE_BEGIN_DRAG, &ibDialogLinqConstructor::OnBeginDrag, this);
+	tree->Expand(visible);
+	return tree;
+}
+
+// ⭐ A DRAG IS THE ARROW, REACHED BY THE MOUSE: the dragged node is selected, and the list it is dropped
+// on runs its own verb on the selection (ibCallbackDropTarget). NOT `Allow()`ed - that would start the
+// tree's own native drag beside this one, which MSW refuses (see queryConstructorEdit.cpp).
+void ibDialogLinqConstructor::OnBeginDrag(wxTreeEvent& event)
+{
+	wxTreeCtrl* tree = wxDynamicCast(event.GetEventObject(), wxTreeCtrl);
+	if (tree == nullptr || NodeOf(tree, event.GetItem()) == nullptr)
+		return;
+	tree->SelectItem(event.GetItem());
+	wxTextDataObject payload(wxT("linq"));
+	wxDropSource drag(payload, tree);
+	drag.DoDragDrop(wxDrag_CopyOnly);
+}
+
+void ibDialogLinqConstructor::FillFields(wxTreeCtrl* tree, const wxTreeItemId& item, const wxString& expression, const ibProbe& row)
+{
+	const int fieldIcon = IconIndex(tree, wxT("field"), [] { return ibValue::GetIconGroup(); });
+	for (const wxString& field : row.m_names)
+		tree->AppendItem(item, field, fieldIcon, -1, new ibLinqNode(ibNodeKind::Field, expression, field));
+
+	if (!row.m_names.empty())
+		return;
+
+	// A SOURCE WHOSE ROWS THE WALK CANNOT DESCRIBE is still a source: its fields are written in by
+	// hand, on the author's responsibility - a double click on this line asks for one.
+	tree->AppendItem(item, row.m_resolved
+		? ibString::Format(_("%s - its columns are not known before it runs: double-click to write one"), row.m_type)
+		: _("not read as a table here - double-click to write a field by hand"),
+		-1, -1, new ibLinqNode(ibNodeKind::Hint, expression));
+}
+
+void ibDialogLinqConstructor::OnExpanding(wxTreeEvent& event)
+{
+	wxTreeCtrl* tree = wxDynamicCast(event.GetEventObject(), wxTreeCtrl);
+	const wxTreeItemId item = event.GetItem();
+	ibLinqNode* node = NodeOf(tree, item);
+	if (node == nullptr || node->m_loaded)
+		return;
+	node->m_loaded = true;
+
+	wxBusyCursor busy;
+	tree->DeleteChildren(item);
+
+	// ⭐ ONE RULE FOR EVERY PLACE, read off what IntelliSense answers about it:
+	//   * a STRUCTURE (`Data`, `Data.Catalogs`) is a place with places in it - asked for its rows it would
+	//     answer key-value pairs, which is true and useless;
+	//   * something whose ROWS have fields is a table - its children are the fields;
+	//   * something with MEMBERS and no rows (`RegisterRecords`, a reference) is a place: a record set, a
+	//     tabular section waits inside it;
+	//   * something iterated whose rows name nothing (a table filled at run time), or that did not resolve
+	//     at all (an argument of no known type), is a table whose fields are written by hand.
+	const bool underData = node->m_expression.StartsWith(wxT("Data."));
+	// …ASKED AS ONE QUESTION: the place, its rows, and — off `Data` — what each member is (AddPlace's probes).
+	{
+		const wxString membersProbe = MembersProbe(node->m_expression);
+		AskAll({ membersProbe, RowProbe(node->m_expression) },
+			underData ? std::vector<wxString>() : std::vector<wxString>{ membersProbe });
+	}
+	const ibProbe members = MembersOf(node->m_expression);
+	const bool structure = members.m_type == wxT("Structure");
+	const ibProbe rows = structure ? ibProbe() : RowOf(node->m_expression);
+
+	if (!structure && !rows.m_names.empty()) {
+		node->m_kind = ibNodeKind::Source;
+		FillFields(tree, item, node->m_expression, rows);
+	}
+	else if (!members.m_names.empty()) {
+		node->m_kind = ibNodeKind::Container;   // a variable that turned out to be a place, not a table
+		// A section's members are tables of its kind; anything else's are asked what they are.
+		const wxString section = node->m_expression.AfterFirst(wxT('.')).BeforeFirst(wxT('.'));
+		const int icon = underData ? KindIcon(tree, section)
+			: IconIndex(tree, wxT("variable"), [] { return wxArtProvider::GetIcon(wxART_VARIABLE, wxART_AUTOCOMPLETE, wxSize(16, 16)); });
+		for (const wxString& member : members.m_names)
+			AddPlace(tree, item, member, node->m_expression + wxT(".") + member, icon, /*probe*/ !underData);
+	}
+	else if (structure) {
+		// A section with nothing in it - a configuration with no constants - is empty, not a table.
+		tree->AppendItem(item, _("(nothing here)"), -1, -1, new ibLinqNode(ibNodeKind::Hint, wxString()));
+	}
+	else {
+		node->m_kind = ibNodeKind::Source;
+		FillFields(tree, item, node->m_expression, rows);
+	}
+
+	if (!tree->ItemHasChildren(item))
+		tree->SetItemHasChildren(item, false);
+}
+
+wxTreeCtrl* ibDialogLinqConstructor::CurrentTree() const
+{
+	const int page = m_notebook != nullptr ? m_notebook->GetSelection() : wxNOT_FOUND;
+	return page >= 0 && (size_t)page < m_pageTrees.size() ? m_pageTrees[page] : nullptr;
+}
+
+void ibDialogLinqConstructor::OnActivated(wxTreeEvent& event)
+{
+	wxTreeCtrl* tree = wxDynamicCast(event.GetEventObject(), wxTreeCtrl);
+	ibLinqNode* node = NodeOf(tree, event.GetItem());
+	if (node == nullptr) {
+		event.Skip();
+		return;
+	}
+
+	// A double click does what the arrow of its tab does.
+	const int page = m_notebook->GetSelection();
+	switch (node->m_kind) {
+	case ibNodeKind::Field:
+		if (page == 0) AddSelectedAsField();
+		else if (page == 1) AddSelectedToCondition();
+		else if (page == 2) AddSelectedAsGroupKey();   // a key, as the query constructor's first list
+		else if (page == 3) AddSelectedToOrder();
+		break;
+	case ibNodeKind::Source:
+		if (page == 0) AddSelectedAsSource(m_sources->GetItemCount() > 0);
+		else event.Skip();
+		break;
+	case ibNodeKind::Value:
+		if (page == 1) AddSelectedToCondition();
+		break;
+	case ibNodeKind::Hint:
+		if (!node->m_expression.IsEmpty())
+			WriteFieldByHand(tree, event.GetItem());
+		break;
+	default:
+		event.Skip();   // a place to go into, not a thing to pick
+		break;
+	}
+}
+
+// ⭐ ON THE AUTHOR'S RESPONSIBILITY: a field of a source whose rows the walk cannot describe is written
+// in by name. It lands in the tree like any other field and is used the same way; nothing here can
+// check it, and the compiler's verdict under the block is what does.
+void ibDialogLinqConstructor::WriteFieldByHand(wxTreeCtrl* tree, const wxTreeItemId& hint)
+{
+	const wxTreeItemId source = tree->GetItemParent(hint);
+	ibLinqNode* node = NodeOf(tree, hint);
+	if (!source.IsOk() || node == nullptr)
+		return;
+
+	const wxString name = wxString(wxGetTextFromUser(
+		_("The field's name, as it is written after a dot. The constructor cannot check it - the compiler's verdict under the block will."),
+		GetTitle(), wxEmptyString, this)).Trim(true).Trim(false);
+	if (name.IsEmpty())
+		return;
+
+	const wxTreeItemId field = tree->InsertItem(source, tree->GetPrevSibling(hint), name,
+		IconIndex(tree, wxT("field"), [] { return ibValue::GetIconGroup(); }), -1,
+		new ibLinqNode(ibNodeKind::Field, node->m_expression, name));
+	tree->SelectItem(field);
+}
+
+// ---------------------------------------------------------------------------
+//  The verbs
+// ---------------------------------------------------------------------------
+
+void ibDialogLinqConstructor::AddSelectedAsSource(bool join)
+{
+	wxTreeCtrl* tree = CurrentTree();
+	const wxTreeItemId item = tree != nullptr ? tree->GetSelection() : wxTreeItemId();
+	ibLinqNode* node = NodeOf(tree, item);
+	if (node == nullptr)
+		return;
+	// A place not opened yet does not know whether it is a table: opening it decides.
+	if ((node->m_kind == ibNodeKind::Container || node->m_kind == ibNodeKind::Variable) && !node->m_loaded)
+		tree->Expand(item);
+	if (node->m_kind == ibNodeKind::Variable || node->m_kind == ibNodeKind::Source || node->m_kind == ibNodeKind::Field)
+		AddSource(node->m_expression, join);
+	else
+		wxBell();
+}
+
+wxString ibDialogLinqConstructor::QualifiedField(const wxString& sourceExpression, const wxString& field)
+{
+	wxString alias = AliasOf(sourceExpression);
+	if (alias.IsEmpty()) {
+		AddSource(sourceExpression, m_sources->GetItemCount() > 0);
+		alias = AliasOf(sourceExpression);
+	}
+	return alias + wxT(".") + field;
+}
+
+void ibDialogLinqConstructor::AddSelectedAsField()
+{
+	wxTreeCtrl* tree = CurrentTree();
+	const wxTreeItemId item = tree != nullptr ? tree->GetSelection() : wxTreeItemId();
+	ibLinqNode* node = NodeOf(tree, item);
+	if (node == nullptr) {
+		wxBell();
+		return;
+	}
+
+	const auto addOne = [this](const wxString& sourceExpression, const wxString& field) {
+		const wxString expression = QualifiedField(sourceExpression, field);
+		wxString name = field;
+		const auto taken = [&](const wxString& candidate) {
+			for (int row = 0; row < m_fields->GetItemCount(); ++row)
+				if (stringUtils::IsSameAs(m_fields->GetTextValue(row, 0), candidate))
+					return true;
+			return false;
+		};
+		for (int n = 1; taken(name); ++n)
+			name = field + wxString::Format(wxT("%d"), n);
+
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(name));
+		values.push_back(ibVariant(expression));
+		m_fields->AppendItem(values);
+	};
+
+	if (node->m_kind == ibNodeKind::Field) {
+		addOne(node->m_expression, node->m_field);
+	}
+	else {
+		// A TABLE brought to the fields brings all of its own - opened first when it is not yet.
+		if ((node->m_kind == ibNodeKind::Container || node->m_kind == ibNodeKind::Variable) && !node->m_loaded)
+			tree->Expand(item);
+		if (node->m_kind != ibNodeKind::Source) {
+			wxBell();
+			return;
+		}
+		wxTreeItemIdValue cookie;
+		for (wxTreeItemId child = tree->GetFirstChild(item, cookie); child.IsOk(); child = tree->GetNextChild(item, cookie)) {
+			const ibLinqNode* field = NodeOf(tree, child);
+			if (field != nullptr && field->m_kind == ibNodeKind::Field)
+				addOne(field->m_expression, field->m_field);
+		}
+	}
+	ShowResult();
+}
+
+void ibDialogLinqConstructor::AddSelectedToCondition()
+{
+	wxTreeCtrl* tree = CurrentTree();
+	ibLinqNode* node = NodeOf(tree, tree != nullptr ? tree->GetSelection() : wxTreeItemId());
+	if (node == nullptr)
+		return;
+
+	wxString piece;
+	if (node->m_kind == ibNodeKind::Field)
+		piece = QualifiedField(node->m_expression, node->m_field) + wxT(" = ");
+	else if (node->m_kind == ibNodeKind::Variable || node->m_kind == ibNodeKind::Value)
+		piece = node->m_expression;   // THE PARAMETER IS THE VARIABLE - written by its name
+	else {
+		wxBell();
+		return;
+	}
+
+	// Onto the selected condition when there is one - `g.Price > ` waiting for its right-hand side is
+	// exactly where a variable goes - otherwise a condition of its own.
+	const int row = m_conditions->GetSelectedRow();
+	if (row != wxNOT_FOUND && node->m_kind != ibNodeKind::Field) {
+		const wxString was = m_conditions->GetTextValue(row, 0);
+		m_conditions->SetTextValue(was + (was.IsEmpty() || was.EndsWith(wxT(" ")) ? wxString() : wxString(wxT(" "))) + piece, row, 0);
+	}
+	else {
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(piece));
+		values.push_back(ibVariant(false));
+		m_conditions->AppendItem(values);
+		m_conditions->SelectRow(m_conditions->GetItemCount() - 1);
+	}
+	ShowResult();
+}
+
+bool ibDialogLinqConstructor::SelectedField(wxString& expression, wxString& name)
+{
+	wxTreeCtrl* tree = CurrentTree();
+	ibLinqNode* node = NodeOf(tree, tree != nullptr ? tree->GetSelection() : wxTreeItemId());
+	if (node == nullptr || node->m_kind != ibNodeKind::Field) {
+		wxBell();
+		return false;
+	}
+	expression = QualifiedField(node->m_expression, node->m_field);
+
+	// The field's own name, numbered when a column of the answer already has it.
+	const auto taken = [this](const wxString& candidate) {
+		for (const ibDataViewListCtrl* columns : { m_groupKeys, m_totals, m_fields })
+			for (int at = 0; at < columns->GetItemCount(); ++at)
+				if (stringUtils::IsSameAs(columns->GetTextValue(at, 0), candidate))
+					return true;
+		return false;
+	};
+	name = node->m_field;
+	for (int n = 1; taken(name); ++n)
+		name = node->m_field + wxString::Format(wxT("%d"), n);
+	return true;
+}
+
+void ibDialogLinqConstructor::NameTheGroup()
+{
+	if (!wxString(m_groupInto->GetValue()).Trim(true).Trim(false).IsEmpty())
+		return;
+	// `grp`, numbered when a variable visible here or a source already has the name.
+	const auto taken = [this](const wxString& candidate) {
+		for (const wxString& variable : m_variables)
+			if (stringUtils::IsSameAs(variable, candidate))
+				return true;
+		for (int at = 0; at < m_sources->GetItemCount(); ++at)
+			if (stringUtils::IsSameAs(m_sources->GetTextValue(at, 0), candidate))
+				return true;
+		return false;
+	};
+	wxString name = wxT("grp");
+	for (int n = 1; taken(name); ++n)
+		name = wxString::Format(wxT("grp%d"), n);
+	m_groupInto->ChangeValue(name);
+}
+
+void ibDialogLinqConstructor::AddSelectedAsGroupKey()
+{
+	wxString expression, name;
+	if (!SelectedField(expression, name))
+		return;
+
+	// ⭐ A KEY IS A COLUMN OF THE ANSWER. The same field already among the fields - picked there before the
+	// query grouped - would be written a second time, reading a row the answer no longer has: it moves.
+	for (int at = m_fields->GetItemCount() - 1; at >= 0; --at)
+		if (stringUtils::IsSameAs(wxString(m_fields->GetTextValue(at, 1)).Trim(true).Trim(false), expression)) {
+			name = m_fields->GetTextValue(at, 0);
+			m_fields->DeleteItem(at);
+		}
+
+	wxVector<ibVariant> values;
+	values.push_back(ibVariant(name));
+	values.push_back(ibVariant(expression));
+	m_groupKeys->AppendItem(values);
+	m_groupKeys->SelectRow(m_groupKeys->GetItemCount() - 1);
+	NameTheGroup();
+	ShowResult();
+}
+
+void ibDialogLinqConstructor::AddSelectedAsTotal()
+{
+	wxString expression, name;
+	if (!SelectedField(expression, name))
+		return;
+
+	// A total of a field that was among the fields replaces it there, as a key does.
+	for (int at = m_fields->GetItemCount() - 1; at >= 0; --at)
+		if (stringUtils::IsSameAs(wxString(m_fields->GetTextValue(at, 1)).Trim(true).Trim(false), expression)) {
+			name = m_fields->GetTextValue(at, 0);
+			m_fields->DeleteItem(at);
+		}
+
+	wxVector<ibVariant> values;
+	values.push_back(ibVariant(name));
+	values.push_back(ibVariant(ibLinqTotalName(ibLinqTotal::Sum).ToWxString()));
+	values.push_back(ibVariant(expression));
+	m_totals->AppendItem(values);
+	m_totals->SelectRow(m_totals->GetItemCount() - 1);
+	ShowResult();
+}
+
+void ibDialogLinqConstructor::AddSelectedToOrder()
+{
+	wxTreeCtrl* tree = CurrentTree();
+	ibLinqNode* node = NodeOf(tree, tree != nullptr ? tree->GetSelection() : wxTreeItemId());
+	if (node == nullptr || node->m_kind != ibNodeKind::Field) {
+		wxBell();
+		return;
+	}
+	wxVector<ibVariant> values;
+	values.push_back(ibVariant(QualifiedField(node->m_expression, node->m_field)));
+	values.push_back(ibVariant(false));
+	m_order->AppendItem(values);
+	ShowResult();
+}
+
+wxString ibDialogLinqConstructor::AliasOf(const wxString& sourceExpression) const
+{
+	for (int row = 0; row < m_sources->GetItemCount(); ++row) {
+		if (m_sources->GetTextValue(row, 1) == sourceExpression)
+			return m_sources->GetTextValue(row, 0);
+	}
+	return wxString();
+}
+
+wxString ibDialogLinqConstructor::NewAlias(const wxString& expression) const
+{
+	// The first letter of what is read, lower case - `g` for Goods - numbered when it is taken, by
+	// another source or by a name visible here (an alias shadowing a variable would change what the
+	// block reads).
+	wxString base = expression.AfterLast(wxT('.')).Left(1).Lower();
+	if (base.IsEmpty())
+		base = wxT("r");
+	const auto taken = [&](const wxString& candidate) {
+		for (int row = 0; row < m_sources->GetItemCount(); ++row)
+			if (stringUtils::IsSameAs(m_sources->GetTextValue(row, 0), candidate))
+				return true;
+		for (const wxString& name : m_variables)
+			if (stringUtils::IsSameAs(name, candidate))
+				return true;
+		return false;
+	};
+	wxString alias = base;
+	for (int n = 1; taken(alias); ++n)
+		alias = base + wxString::Format(wxT("%d"), n);
+	return alias;
+}
+
+void ibDialogLinqConstructor::AddSource(const wxString& expression, bool join)
+{
+	if (m_sources->GetItemCount() == 0)
+		join = false;   // a join needs something to join to
+
+	const wxString alias = NewAlias(expression);
+	const wxString first = m_sources->GetItemCount() > 0 ? m_sources->GetTextValue(0, 0) : wxString();
+
+	wxVector<ibVariant> values;
+	values.push_back(ibVariant(alias));
+	values.push_back(ibVariant(expression));
+	values.push_back(ibVariant(join));
+	// The keys start as the two aliases and a dot - the place to write them, not a guess at them.
+	values.push_back(ibVariant(join ? first + wxT(".") : wxString()));
+	values.push_back(ibVariant(join ? alias + wxT(".") : wxString()));
+	m_sources->AppendItem(values);
+	ShowResult();
+}
+
+void ibDialogLinqConstructor::Open(const ibLinqBlock& block)
+{
+	for (const ibLinqBlockSource& source : block.m_sources) {
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(source.m_alias.ToWxString()));
+		values.push_back(ibVariant(source.m_expression.ToWxString()));
+		values.push_back(ibVariant(source.m_join));
+		values.push_back(ibVariant(source.m_leftKey.ToWxString()));
+		values.push_back(ibVariant(source.m_rightKey.ToWxString()));
+		m_sources->AppendItem(values);
+	}
+	for (const ibLinqBlockField& field : block.m_fields) {
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(field.m_name.ToWxString()));
+		values.push_back(ibVariant(field.m_expression.ToWxString()));
+		m_fields->AppendItem(values);
+	}
+	for (const bool onGroups : { false, true })
+		for (const wxString& condition : onGroups ? block.m_groupConditions : block.m_conditions) {
+			wxVector<ibVariant> values;
+			values.push_back(ibVariant(condition));
+			values.push_back(ibVariant(onGroups));
+			m_conditions->AppendItem(values);
+		}
+	for (const ibLinqBlockOrder& order : block.m_order) {
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(order.m_expression.ToWxString()));
+		values.push_back(ibVariant(order.m_descending));
+		m_order->AppendItem(values);
+	}
+	for (const ibLinqBlockField& key : block.m_groupKeys) {
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(key.m_name.ToWxString()));
+		values.push_back(ibVariant(key.m_expression.ToWxString()));
+		m_groupKeys->AppendItem(values);
+	}
+	for (const ibLinqBlockTotal& total : block.m_totals) {
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(total.m_name.ToWxString()));
+		values.push_back(ibVariant(ibLinqTotalName(total.m_function).ToWxString()));
+		values.push_back(ibVariant(total.m_expression.ToWxString()));
+		m_totals->AppendItem(values);
+	}
+	m_groupInto->ChangeValue(block.m_groupInto);
+	OpenCount(m_skipCount, block.m_skip);
+	OpenCount(m_takeCount, block.m_take);
+	m_distinct->SetValue(block.m_distinct);
+}
+
+ibLinqBlock ibDialogLinqConstructor::Collect() const
+{
+	ibLinqBlock block(m_codeStyle);
+	const auto text = [](const ibDataViewListCtrl* list, int row, unsigned int col) {
+		return wxString(list->GetTextValue(row, col)).Trim(true).Trim(false);
+	};
+
+	for (int row = 0; row < m_sources->GetItemCount(); ++row) {
+		ibLinqBlockSource source;
+		source.m_alias      = text(m_sources, row, 0);
+		source.m_expression = text(m_sources, row, 1);
+		source.m_join       = m_sources->GetToggleValue(row, 2);
+		source.m_leftKey    = text(m_sources, row, 3);
+		source.m_rightKey   = text(m_sources, row, 4);
+		block.m_sources.push_back(source);
+	}
+	for (int row = 0; row < m_fields->GetItemCount(); ++row) {
+		ibLinqBlockField field;
+		field.m_name       = text(m_fields, row, 0);
+		field.m_expression = text(m_fields, row, 1);
+		block.m_fields.push_back(field);
+	}
+	for (int row = 0; row < m_conditions->GetItemCount(); ++row)
+		(m_conditions->GetToggleValue(row, 1) ? block.m_groupConditions : block.m_conditions).push_back(text(m_conditions, row, 0));
+	for (int row = 0; row < m_order->GetItemCount(); ++row) {
+		ibLinqBlockOrder order;
+		order.m_expression = text(m_order, row, 0);
+		order.m_descending = m_order->GetToggleValue(row, 1);
+		block.m_order.push_back(order);
+	}
+	for (int row = 0; row < m_groupKeys->GetItemCount(); ++row) {
+		ibLinqBlockField key;
+		key.m_name       = text(m_groupKeys, row, 0);
+		key.m_expression = text(m_groupKeys, row, 1);
+		block.m_groupKeys.push_back(key);
+	}
+	for (int row = 0; row < m_totals->GetItemCount(); ++row) {
+		ibLinqBlockTotal total;
+		total.m_name = text(m_totals, row, 0);
+		const wxString function = text(m_totals, row, 1);
+		for (const ibLinqTotal candidate : { ibLinqTotal::Sum, ibLinqTotal::Count, ibLinqTotal::Min, ibLinqTotal::Max, ibLinqTotal::Average })
+			if (stringUtils::IsSameAs(ibLinqTotalName(candidate), function))
+				total.m_function = candidate;
+		total.m_expression = text(m_totals, row, 2);
+		block.m_totals.push_back(total);
+	}
+	block.m_groupInto = wxString(m_groupInto->GetValue()).Trim(true).Trim(false);
+	block.m_skip      = CountText(m_skipCount);
+	block.m_take      = CountText(m_takeCount);
+	block.m_distinct  = m_distinct->IsChecked();
+	return block;
+}
+
+void ibDialogLinqConstructor::KeepCount(ibRowCount& count, const wxString& variable)
+{
+	count.m_variable = variable;
+	count.m_kept->SetLabelText(variable.IsEmpty() ? ibString() : ibString::Format(_("now: %s"), variable));
+	if (count.m_kept->IsShown() != !variable.IsEmpty()) {
+		count.m_kept->Show(!variable.IsEmpty());
+		count.m_kept->GetParent()->Layout();
+	}
+}
+
+void ibDialogLinqConstructor::OpenCount(ibRowCount& count, const wxString& text)
+{
+	const wxString written = wxString(text).Trim(true).Trim(false);
+	long number = 0;
+	const bool isNumber = !written.IsEmpty() && written.ToLong(&number) && number > 0;
+	count.m_use->SetValue(!written.IsEmpty());
+	count.m_count->Enable(!written.IsEmpty());
+	if (isNumber)
+		count.m_count->SetValue((int)std::min<long>(number, count.m_count->GetMax()));
+	KeepCount(count, isNumber || written.IsEmpty() ? wxString() : written);
+}
+
+wxString ibDialogLinqConstructor::CountText(const ibRowCount& count)
+{
+	if (count.m_use == nullptr || !count.m_use->IsChecked())
+		return wxString();
+	if (!count.m_variable.IsEmpty())
+		return count.m_variable;
+	return wxString::Format(wxT("%d"), count.m_count->GetValue());
+}
+
+wxString ibDialogLinqConstructor::IndentAt(unsigned int position) const
+{
+	// The text in front of `position` on its line, a tab kept a tab and anything else a space.
+	const int lineStart = m_text.Left(position).Find(wxT('\n'), /*fromEnd*/ true) + 1;
+	wxString indent;
+	for (unsigned int i = (unsigned int)lineStart; i < position && i < m_text.length(); ++i)
+		indent += m_text[i] == wxT('\t') ? wxT('\t') : wxT(' ');
+	return indent;
+}
+
+ibString ibDialogLinqConstructor::GetBlock(ibString& refusal) const
+{
+	return Collect().Render(IndentAt(m_anchor), refusal);
+}
+
+bool ibDialogLinqConstructor::GetReplacedSpan(unsigned int& from, unsigned int& to) const
+{
+	from = m_replaceFrom;
+	to = m_replaceTo;
+	return m_replacing;
+}
+
+wxToolBar* ibDialogLinqConstructor::MakeBar(wxWindow* parent)
+{
+	wxToolBar* bar = new wxToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxTB_FLAT | wxTB_HORIZONTAL | wxTB_NODIVIDER);
+	// 16x16 - a toolbar above a list must not be the loudest thing on the page.
+	bar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
+	return bar;
+}
+
+void ibDialogLinqConstructor::AddTool(wxToolBar* bar, const wxString& label, const wxString& artId, std::function<void()> action)
+{
+	// THE PRODUCT'S OWN PICTURES first (wxART_FRONTEND serves ADD / EDIT / DELETE / UP / DOWN), the
+	// stock ones after, and the word when there is no picture at all - never an empty square.
+	const wxSize size(16, 16);   // a bundle's size is at normal DPI — the bar and the display scale it
+	wxBitmapBundle bitmap = wxArtProvider::GetBitmapBundle(artId, wxART_FRONTEND, size);
+	if (!bitmap.IsOk())
+		bitmap = wxArtProvider::GetBitmapBundle(artId, wxASCII_STR(wxART_MENU), size);
+
+	const int id = wxWindow::NewControlId();
+	if (bitmap.IsOk())
+		bar->AddTool(id, label, bitmap, label);
+	else {
+		bar->SetWindowStyle(bar->GetWindowStyle() | wxTB_TEXT);
+		bar->AddTool(id, label, wxBitmapBundle(), label);
+	}
+	bar->Bind(wxEVT_TOOL, [action](wxCommandEvent&) { action(); }, id);
+}
+
+// ---------------------------------------------------------------------------
+//  The block, and the compiler's reading of it
+// ---------------------------------------------------------------------------
+
+void ibDialogLinqConstructor::ShowResult()
+{
+	const wxString text = ShowBlock();
+	if (!text.IsEmpty())
+		AskVerdict(text);
+}
+
+wxString ibDialogLinqConstructor::ShowBlock()
+{
+	if (m_block == nullptr || m_verdict == nullptr)
+		return wxString();
+
+	// While the query groups, the fields tab says what its list has become.
+	if (m_fieldsNote != nullptr && m_groupKeys != nullptr) {
+		const bool grouped = m_groupKeys->GetItemCount() > 0;
+		if (grouped) {
+			const wxString group = wxString(m_groupInto->GetValue()).Trim(true).Trim(false);
+			m_fieldsNote->SetLabelText(ibString::Format(
+				_("The query groups its rows. The answer's columns are the keys and the totals of the Grouping tab, "
+				  "then these - written over the group: %s.Key, %s.Values."),
+				group.IsEmpty() ? wxString(wxT("grp")) : group, group.IsEmpty() ? wxString(wxT("grp")) : group));
+			// Wrapped to the list it stands under - a fixed width ran past a narrow pane and was cut off.
+			const int width = m_fields->GetClientSize().x;
+			m_fieldsNote->Wrap(width > FromDIP(80) ? width : FromDIP(300));
+		}
+		m_fieldsNote->Show(grouped);
+		m_fieldsNote->GetParent()->Layout();
+	}
+
+	// ⭐ THE PREVIEW SHOWS THE BLOCK AS IT STANDS, a wrong part included, and the refusal under it says what
+	// is wrong: blank at the first wrong cell, it showed nothing of the rest. OK still writes only a block
+	// with nothing refused (OnOk asks GetBlock).
+	ibString refusal;
+	const wxString block = Collect().RenderDraft(IndentAt(m_anchor), refusal);
+	m_block->SetReadOnly(false);
+	m_block->SetText(block);
+	m_block->SetReadOnly(true);
+
+	if (!refusal.IsEmpty() || block.IsEmpty()) {
+		m_verdict->SetForegroundColour(wxColour(0xC0, 0x30, 0x30));
+		m_verdict->SetLabelText(refusal);
+		return wxString();
+	}
+
+	// ⭐ THE COMPILER READS IT WHERE IT WILL STAND - the module with the block written in, over the
+	// query it replaces or at the caret - and says what it understood: which names the query binds,
+	// where each came from, which columns the answer has. The window keeps no opinion of its own.
+	//
+	// That reading is the server's (the desktop's ibOutlineScriptQueries over the module with the block in it — the
+	// bindings, their origins and fields, the answer's columns): the module's tab answers it, and a block already read
+	// is not asked again.
+	const wxString text = m_text.Left(m_anchor) + block + m_text.Mid(m_replacing ? m_replaceTo : m_anchor);
+	if (m_module == nullptr) {
+		m_verdict->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+		m_verdict->SetLabelText(_("The compiler's reading of the block is not asked here - check the module after OK."));
+		return wxString();
+	}
+	if (text == m_verdictText) {
+		m_verdict->SetForegroundColour(m_verdictRead ? wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)
+			: wxColour(0xC0, 0x30, 0x30));
+		m_verdict->SetLabelText(m_verdictLabel);
+		return wxString();
+	}
+	m_verdict->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+	m_verdict->SetLabelText(_("The compiler reads the block when the group's name is written."));
+	return text;
+}
+
+void ibDialogLinqConstructor::AskVerdict(const wxString& text)
+{
+	wxBusyCursor busy;
+	ibProtocolNode request;
+	request.SetValue(linq::Verdict, true);
+	ibProtocolNode answer;
+	const bool asked = AskModule(request, text, m_anchor, answer);
+	const ibProtocolNode read = answer.FindChild(linq::Read);
+
+	m_verdictText = text;
+	m_verdictRead = asked && read.IsNode();
+	if (!m_verdictRead) {
+		m_verdictLabel = asked ? wxString(_("The compiler did not read a query at this place - look at the block."))
+			: wxString(_("The compiler's reading of the block was not answered - check the module after OK."));
+	}
+	else {
+		wxString names;
+		for (const ibProtocolNode& binding : read.FindChild(linq::Bindings).Children()) {
+			names += (names.IsEmpty() ? wxString() : wxString(wxT(", "))) + binding.GetString(linq::Name) + wxT(" (")
+				+ binding.GetString(linq::Origin);
+			const long long offers = binding.GetInt(linq::Offers);
+			if (offers > 0)
+				names += ibString::Format(_(", %u fields"), (unsigned)offers);
+			names += wxT(")");
+		}
+		wxString columns;
+		for (const ibProtocolNode& column : read.FindChild(linq::Columns).Children())
+			columns += (columns.IsEmpty() ? wxString() : wxString(wxT(", "))) + column.GetString(linq::Name);
+		m_verdictLabel = ibString::Format(_("The compiler reads it: %s. Columns of the answer: %s."),
+			names, columns.IsEmpty() ? wxString(_("the row itself")) : columns);
+	}
+	m_verdict->SetForegroundColour(m_verdictRead ? wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)
+		: wxColour(0xC0, 0x30, 0x30));
+	m_verdict->SetLabelText(m_verdictLabel);
+}
+
+void ibDialogLinqConstructor::OnOk(wxCommandEvent& event)
+{
+	ibString refusal;
+	if (GetBlock(refusal).IsEmpty()) {
+		wxMessageBox(refusal, GetTitle(), wxOK | wxICON_WARNING, this);
+		return;
+	}
+	event.Skip();   // the dialog's own OK: EndModal(wxID_OK)
+}

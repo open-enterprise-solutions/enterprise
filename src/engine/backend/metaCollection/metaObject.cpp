@@ -8,15 +8,16 @@
 #include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase::GetRestructureInfo (the static ledger accessor)
 
 #include "backend/metaData.h"
+#include "backend/session/session.h"       // AccessTrusted — the trusted window lets every right through
 #include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — per-object id tracing is opt-in
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 #include <wx/log.h>
 
 // Restructure-ledger facade — one call onto the active config's ledger (the static accessor).
-void ibValueMetaObject::RestructureInfo   (const wxString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendInfo(message);    }
-void ibValueMetaObject::RestructureWarning(const wxString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendWarning(message); }
-void ibValueMetaObject::RestructureError  (const wxString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendError(message);   }
+void ibValueMetaObject::RestructureInfo   (const ibString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendInfo(message);    }
+void ibValueMetaObject::RestructureWarning(const ibString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendWarning(message); }
+void ibValueMetaObject::RestructureError  (const ibString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendError(message);   }
 
 //*****************************************************************************************
 //*                                  MetaObject                                           *
@@ -40,7 +41,12 @@ bool ibValueMetaObject::BuildNewName()
 {
 	// Both halves are the metadata's: GetNewName hands the name back while nobody else carries it (the
 	// bare name is its first candidate) and the next free one otherwise; RenameMetaObject takes it.
-	const wxString newName = m_metaData->GetNewName(GetClassType(), GetParent(), GetName(), /*forConstructor*/ true);
+	ibNameRequest request;
+	request.m_clsid = GetClassType();
+	request.m_prefix = GetName();
+	request.m_forConstructor = true;
+	request.m_metaId = GetMetaID();   // already under GetParent() by now, and its own entry is no collision
+	const ibString newName = m_metaData->GetNewName(GetParent(), request);
 	if (newName == GetName())
 		return true;
 	m_metaData->RenameMetaObject(this, newName);
@@ -49,7 +55,7 @@ bool ibValueMetaObject::BuildNewName()
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-ibValueMetaObject::ibValueMetaObject(const wxString& strName, const wxString& synonym, const wxString& comment) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+ibValueMetaObject::ibValueMetaObject(const ibString& strName, const ibString& synonym, const ibString& comment) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
 m_metaFlags(metaDefaultFlag), m_metaId(0), m_metaData(nullptr)
 {
 	m_members.Bind(this, &ibValueMetaObject::FillMembers);
@@ -85,7 +91,7 @@ bool ibValueMetaObject::OnCreateMetaObject(ibMetaData* metaData, int flags)
 	// reaches. The counter it exists for is still one variable away when it is needed.
 	static const bool s_traceIds = ibDebugTraceEnabled("OES_TRACE_METAIDS");
 	if (s_traceIds)
-		ibJournalInfo(wxT("metadata"), wxT("id %i -> %s"), GetMetaID(), GetClassName());
+		ibJournalInfo(ibT("metadata"), ibT("id %i -> %s"), GetMetaID(), GetClassName());
 	return true;
 }
 
@@ -134,6 +140,13 @@ bool ibValueMetaObject::IsFullAccess() const
 {
 	if (appData->DesignerMode())
 		return true;
+
+	// The trusted window — a privileged module's call, a role handler, the session parameters' handler —
+	// checks no right, as it applies no RLS (ibAccessTrustScope). The script's AccessRight and IsInRole do
+	// not ask here, so inside the window they still answer what the user may.
+	if (const ibSession* const session = ibSession::Current())
+		if (session->AccessTrusted())
+			return true;
 
 	return m_metaData->IsFullAccess();
 }
@@ -231,7 +244,7 @@ bool ibValueMetaObject::CompareObject(const ibValueMetaObject* compareObject) co
 	return ibControlComparator::CompareObject(this, compareObject);
 }
 
-void ibValueMetaObject::SetName(const wxString& strName)
+void ibValueMetaObject::SetName(const ibString& strName)
 {
 	m_propertyName->SetValue(strName);
 
@@ -271,19 +284,19 @@ bool ibValueMetaObject::ChangeChildPosition(ibValueMetaObject* object, unsigned 
 	return true;
 }
 
-wxString ibValueMetaObject::GetModuleName() const
+ibString ibValueMetaObject::GetModuleName() const
 {
 	ibValueMetaObject* parent = GetParent();
 	//wxASSERT(parent);
 	if (parent != nullptr) {
-		return parent->GetName() + wxT(": ") + GetName();
+		return parent->GetName() + ibT(": ") + GetName();
 	}
 	return GetName();
 }
 
-wxString ibValueMetaObject::GetFullName() const
+ibString ibValueMetaObject::GetFullName() const
 {
-	wxString strFullName;
+	ibString strFullName;
 
 	ibValueMetaObject* parent = GetParent();
 
@@ -304,7 +317,7 @@ wxString ibValueMetaObject::GetFullName() const
 	return strFullName;
 }
 
-wxString ibValueMetaObject::GetFileName() const
+ibString ibValueMetaObject::GetFileName() const
 {
 	return m_metaData->GetFileName();
 }
@@ -337,22 +350,23 @@ bool ibValueMetaObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 }
 
 #include "backend/backend_exception.h"
-#include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 
 namespace {
-	// True if the most recent RequireExclusiveForDDL on this thread
-	// auto-acquired exclusive mode. ReleaseAutoExclusive uses it to know
+	// True while the exclusive mode held on this thread was taken by
+	// RequireExclusiveForDDL. ReleaseAutoExclusive uses it to know
 	// whether to drop the flag (don't drop if the caller had it before).
 	thread_local bool ts_acquiredByGate = false;
 }
 
 void ibRestructureInfo::RequireExclusiveForDDL()
 {
-	ts_acquiredByGate = false;
-
-	// Already exclusive? Caller (or previous gate) holds it. Don't touch.
+	// Already exclusive? Caller (or previous gate) holds it. Don't touch — the flag included. Every batch of an
+	// apply asks (ibStructureBatch::Flush), and the second asking used to clear what the first had set, so the
+	// apply's end released nothing: the base stayed exclusive until the designer closed, and every later login
+	// parked behind it (2026-10-30, "registry did not answer to Add").
 	if (appData->ExclusiveMode()) return;
+	ts_acquiredByGate = false;
 
 	// Bootstrap path — no current session / no registry yet (e.g. first-open
 	// auto-save triggered by m_configNew during LoadDatabase before the
@@ -373,11 +387,11 @@ void ibRestructureInfo::RequireExclusiveForDDL()
 
 	// Each verdict says what it is: "not answered" read as "others connected" sent the person looking for
 	// a session that did not exist (2026-09-15).
-	const wxString why =
+	const ibString why =
 		verdict == ibSession::ibExclusiveResult::HeldByOther ? _("Another session holds exclusive mode.")
 		: verdict == ibSession::ibExclusiveResult::Pending   ? _("The session registry did not answer in time.")
 		:                                                      _("Other sessions are connected - disconnect them and try again.");
-	ibBackendCoreException::Error(wxString::Format(
+	ibBackendCoreException::Error(ibString::Format(
 		_("Structure (DDL) changes require exclusive mode. %s "
 		  "Code-only changes (modules, forms) can be saved without it."), why));
 }

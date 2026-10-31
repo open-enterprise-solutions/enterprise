@@ -1,6 +1,6 @@
 # Pack a CMake Release tree for Windows x64 into the nightly zip.
 #
-# What goes in: everything the build put beside the executables (the programs, backend / frontend, the
+# What goes in: everything the build put beside the executables (the programs, backend / frmclient, the
 # wxWidgets DLLs, help/, plugins/, and the database clients the backend's post-build step copies: _fb/ and
 # libpq with OpenSSL), plus what no build step places — the interface translations (lang/) and the MSVC
 # runtime, which Common.props copies for a Visual Studio Release build and nothing does for CMake. The
@@ -23,8 +23,9 @@ New-Item -ItemType Directory $stage | Out-Null
 Copy-Item -Recurse -Path (Join-Path $release '*') -Destination $stage
 Get-ChildItem -Recurse -File $stage -Include *.pdb, *.ilk, *.exp, *.lib | Remove-Item -Force
 
-# The translations — read from <exeDir>/lang/<code>/open_es.mo.
+# The translations — read from <exeDir>/lang/<code>/open_es.mo; the .po and the template beside them stay in the repository.
 Copy-Item -Recurse -Path 'lang' -Destination (Join-Path $stage 'lang')
+Get-ChildItem -Recurse -File (Join-Path $stage 'lang') -Include *.po, *.pot | Remove-Item -Force
 
 # The MSVC runtime, from the toolset that built it (vcvars sets VCToolsRedistDir).
 $crt = Get-ChildItem -Directory (Join-Path $env:VCToolsRedistDir 'x64') -Filter 'Microsoft.VC*.CRT' | Select-Object -First 1
@@ -34,8 +35,9 @@ foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
 }
 
 $required = @(
-    'enterprise.exe', 'enterprise-thin.exe', 'designer.exe', 'launcher.exe', 'codeRunner.exe', 'appserver.exe',
-    'core.dll', 'backend.dll', 'frontend.dll', 'protocol.dll', 'frmclient.dll', 'frmserver.dll', 'fileserver.dll',
+    'enterprise-thin.exe', 'designer-thin.exe', 'launcher.exe', 'codeRunner.exe', 'appserver.exe',
+    'appcluster.exe', 'appcluster-tray.exe', 'webserver.exe', 'web\www.wpk',
+    'core.dll', 'backend.dll', 'protocol.dll', 'frmclient.dll', 'frmserver.dll', 'fileserver.dll',
     'backend.conf',
     '_fb\fbclient.dll', '_fb\firebird.msg', '_fb\firebird.conf', '_fb\plugins\engine13.dll', '_fb\intl\fbintl.dll',
     'libpq.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll',

@@ -47,22 +47,22 @@ const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
 
 		m_ownerRef.reset(new ibBackendColumnRawDB(ibBackendColumnRawDB::Reference(ibOwnerRefField(),
 			owner != nullptr ? reference_to_clsid(owner->GetMetaID(), clsid_metaclass(owner->GetClassType())) : 0,
-			ownerReference != nullptr ? ownerReference->GetName() : wxString(), identity)));
+			ownerReference != nullptr ? ownerReference->GetName() : ibString(), identity)));
 	});
 	return m_ownerRef.get();
 }
 
-const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const wxString& name) const
+const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const ibString& name) const
 {
 	const ibBackendQueryColumn* const ownerRef = OwnerRefColumn();
-	if (ownerRef != nullptr && !ownerRef->GetName().IsEmpty() && stringUtils::CompareString(name, ownerRef->GetName()))
+	if (ownerRef != nullptr && !ownerRef->GetName().IsEmpty() && stringUtils::IsSameAs(name, ownerRef->GetName()))
 		return ownerRef;
 	// The attribute's QUERY FACE — it holds one rather than being one (docs/private/ownership-authority.md) — found in the
 	// SAME list GetColumns vends. The table's children alone missed what its owner carries into it: the account's
 	// kinds table shows a tick-box per breakdown accounting kind of its chart, and `K.Quantitative` was refused as
 	// an unknown attribute while `SELECT *` returned it (2026-09-17).
 	for (const auto attribute : m_meta->GetGenericAttributeArrayObject())
-		if (attribute != nullptr && stringUtils::CompareString(name, attribute->GetName()))
+		if (attribute != nullptr && stringUtils::IsSameAs(name, attribute->GetName()))
 			return attribute->GetQueryColumn();
 	return nullptr;
 }
@@ -81,8 +81,8 @@ std::vector<const ibBackendQueryColumn*> ibTabularQueryable::GetColumns() const
 // typed on. It has an identity and no way to publish the thing carrying it, so it states it directly.
 const ibUniqueKey& ibTabularQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
 ibMetaID ibTabularQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
-wxString ibTabularQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
-wxString ibTabularQueryable::GetQueryName()      const { return m_meta->GetName(); }
+ibString ibTabularQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+ibString ibTabularQueryable::GetQueryName()      const { return m_meta->GetName(); }
 const ibMetaData* ibTabularQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
 // No key of its own: a line is identified by its OWNER plus its number, and the owner arrives as a
 // plain query filter (Where on the raw "uuid" column at read/delete time) - so the tabular section
@@ -111,7 +111,7 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 		// 🛑 THE ORDER WAS SAID HERE AND NOT WRITTEN. Unordered, the lines come back in whatever order the
 		// engine reads them in, and the save numbers them anew in that order — nothing but the storage kept a
 		// document's lines where they were.
-		q.From(m_metaTable->GetQueryable()).Where(ibOwnerRefColumn(), ibValue(wxString(srcGuid)))
+		q.From(m_metaTable->GetQueryable()).Where(ibOwnerRefColumn(), ibValue(ibString(srcGuid)))
 			.OrderBy(m_metaTable->GetNumberLine()->GetQueryColumn(), /*ascending*/ true);
 		ibReadPageRequest page;
 		page.m_count = 0;   // all lines
@@ -163,8 +163,8 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 		for (const auto object : attributes) {
 			if (object->FillCheck()) {
 				if (node->IsEmptyValue(object->GetMetaID())) {
-					wxString fillError =
-						wxString::Format(_("The %s is required on line %i of the %s list"), object->GetSynonym(), currLine, m_metaTable->GetSynonym());
+					ibString fillError =
+						ibString::Format(_("The %s is required on line %ld of the %s list"), object->GetSynonym(), currLine, m_metaTable->GetSynonym());
 					ibValueSystemFunction::Message(fillError, ibStatusMessage::ibStatusMessage_Information);
 					fillCheck = false;
 				}

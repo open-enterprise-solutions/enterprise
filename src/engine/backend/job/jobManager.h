@@ -43,7 +43,7 @@
 #include "backend/appDataCtorToken.h"
 #include "backend/session/sessionHolder.h"
 #include "backend/compiler/value.h"        // ibValue — the argument-array gate
-#include "backend/job/jobSchedule.h"       // ibJobScheduleDescription — when a job is due
+#include "core/job/jobSchedule.h"          // ibJobScheduleDescription — when a job is due
 #include "backend/lock/lockHandle.h"       // ibLockHandle held per running job
 #include "backend/lock/lockHolder.h"       // ibLockHolder — base for the job's claim identity
 #include "backend/system/systemEnum.h"     // ibStatusMessage — the level of what a run's code said
@@ -123,7 +123,7 @@ struct BACKEND_API ibJobDescription {
 	// Identity. Unique within the manager; Register rejects a duplicate rather than
 	// replacing, so a double bootstrap is a visible error instead of a silent
 	// second copy of a job that must not run twice.
-	wxString   m_name;
+	ibString   m_name;
 
 	// THE STABLE KEY — what the base stores its settings and its shared clock under, and what the
 	// cross-process claim names.
@@ -239,7 +239,7 @@ enum class ibJobOutcome {
 
 // A job's observable state — what an administration list would show.
 struct BACKEND_API ibJobState {
-	wxString     m_name;
+	ibString     m_name;
 	// The KEY this job answers to — the metaobject's guid for a predefined job, the row's for a
 	// parameterized one, a fixed literal for each of the engine's own. It is what sys_job, the
 	// cross-process claim and every "run this one" are keyed on; the name is the caption.
@@ -258,11 +258,11 @@ struct BACKEND_API ibJobState {
 	// (due on the next tick). A stored "next run" would be one more thing that can
 	// disagree with reality after a restart.
 	ibDateTime   m_nextRunAt;
-	wxString     m_error;   // set when m_outcome == Failed
+	ibString     m_error;   // set when m_outcome == Failed
 	// The schedule as a sentence — "Every 10 minutes, 10:00-15:00, Tue". Built
 	// from the same fields an editor shows, so a settings list and this list say
 	// the same thing without either restating the rules.
-	wxString     m_schedule;
+	ibString     m_schedule;
 };
 
 // ONE background run, shared between the worker executing it and whoever is
@@ -283,14 +283,14 @@ public:
 	// The value the procedure returned. Empty until the run completes, and empty
 	// afterwards if it threw — check Error() to tell those apart.
 	ibValue  Result() const;
-	wxString Error()  const;
+	ibString Error()  const;
 	// Cooperative: raises the session's cancel flag; the interpreter unwinds at
 	// its next loop boundary. A run blocked in a socket read will not notice.
 	void     Cancel();
 
 	// Set by the worker as the run proceeds; also written to
 	// sys_session.currentActivity, so the same text shows in Active Users.
-	wxString Activity() const;
+	ibString Activity() const;
 
 	// ⭐⭐ WHICH SESSION IS DOING IT — sys_session.session, the row a person sees in Active Users.
 	// A background run has a session of its own, so it already HAS an identity in the platform's
@@ -301,7 +301,7 @@ public:
 	// you have access to Active Users and you can check there"*).
 	//
 	// Empty for a run whose session has already been let go.
-	wxString SessionGuid() const;
+	ibString SessionGuid() const;
 
 	// ⭐ WHAT ITS CODE SAID. `Message` in a session with no window reached nothing at all — a background
 	// session is tied to nobody — so the run it is doing keeps the lines itself, the last kKeptLines of them,
@@ -309,11 +309,11 @@ public:
 	// what an application printed. Current() is the run THIS THREAD is doing, set for as long as its body
 	// runs — how `Message` finds it, the same way ibSession::Current() finds the session.
 	struct ibSaid {
-		wxString        m_text;
+		ibString        m_text;
 		ibStatusMessage m_status = ibStatusMessage_Information;
 	};
 	static ibBackgroundRun* Current();
-	void                Say(const wxString& text, ibStatusMessage status);
+	void                Say(const ibString& text, ibStatusMessage status);
 	std::vector<ibSaid> Said() const;
 
 private:
@@ -323,8 +323,8 @@ private:
 	ibSessionHolder    m_holder;
 	std::future<void>  m_future;
 	ibValue            m_result;
-	wxString           m_error;
-	wxString           m_activity;
+	ibString           m_error;
+	ibString           m_activity;
 	std::deque<ibSaid> m_said;
 	std::atomic<bool>  m_done { false };
 };
@@ -357,13 +357,13 @@ public:
 	// Drop a job and release its session. Returns false when the name is unknown.
 	// A run already in flight is NOT cancelled — the entry waits for it, so the
 	// session stays alive exactly as long as the work using it.
-	bool Unregister(const wxString& name);
+	bool Unregister(const ibString& name);
 
 	// Drop every job whose name starts with `prefix`; returns how many went. The parameterized
 	// scheduled job registers one entry PER ROW under "<JobName>.<rowGuid>", and when its
 	// configuration closes it has to withdraw all of them without re-reading a table it may no
 	// longer be able to read. Same waiting rule as Unregister: a run in flight is not cancelled.
-	std::size_t UnregisterByPrefix(const wxString& prefix);
+	std::size_t UnregisterByPrefix(const ibString& prefix);
 
 	// Start the manager's OWN tick thread. Idempotent.
 	//
@@ -417,7 +417,7 @@ public:
 	//
 	// The returned handle may be dropped: the run finishes regardless and tears its
 	// session down when it does.
-	std::shared_ptr<ibBackgroundRun> StartBackground(const wxString& procedureName,
+	std::shared_ptr<ibBackgroundRun> StartBackground(const ibString& procedureName,
 	                                                 const std::vector<ibValue>& args = {});
 
 	// THE SAME RUN, described in C++ instead of by name.
@@ -449,7 +449,7 @@ public:
 	// discovered by nobody on a worker.
 	using ibBackgroundBody = std::function<ibValue(ibSession* session)>;
 	std::shared_ptr<ibBackgroundRun> StartBackground(ibBackgroundBody body,
-	                                                 const wxString& activity,
+	                                                 const ibString& activity,
 	                                                 ibJobTenancy tenancy = ibJobTenancy::Standalone);
 
 	// The rented runs still reading for `landlord` — the sessions whose host it is. Asked by ibSession::Cancel,
@@ -464,7 +464,7 @@ public:
 	// Not a debugging convenience — without it a job can only be exercised by
 	// waiting out its schedule, which makes "is the job wrong or is the manager
 	// wrong?" unanswerable when a fresh tenant misbehaves.
-	bool Execute(const wxString& name);
+	bool Execute(const ibString& name);
 
 	// Cap on jobs registered at once. Each holds a session, and a session holds a
 	// connection out of ibConnectionPool — whose Checkout BLOCKS once maxSize is
@@ -551,7 +551,7 @@ private:
 			// not ours this time.
 			std::atomic<bool> m_skipped { false };
 			std::mutex        m_mtx;                 // guards m_error only
-			wxString          m_error;
+			ibString          m_error;
 		};
 		std::shared_ptr<ibRunResult>          m_result;
 		// The session this run is on. Kept here rather than only inside the task so
@@ -567,7 +567,7 @@ private:
 		// back around.
 		ibJobOutcome                          m_outcome = ibJobOutcome::Never;
 		ibDateTime                            m_lastRunAt;
-		wxString                              m_error;
+		ibString                              m_error;
 	};
 
 	// Is a previous run still going? A default-constructed future is "never ran".
@@ -601,11 +601,11 @@ public:
 	// declared them.
 	struct ibJobSettings {
 		ibGuid                   m_key;         // identity — the metaobject's guid, or a row's own
-		wxString                 m_name;        // display name, so the table reads for a person
+		ibString                 m_name;        // display name, so the table reads for a person
 		bool                     m_active = true;
 		ibJobScheduleDescription m_schedule;
 		ibDateTime               m_lastRun;      // read-only for a caller — the shared clock
-		wxString                 m_computer;     // who ran it last, for diagnostics
+		ibString                 m_computer;     // who ran it last, for diagnostics
 		bool                     m_found = false;   // was there a row at all? (seed-on-first-sight)
 
 		bool IsOk() const { return m_key.isValid(); }
@@ -672,7 +672,7 @@ public:
 	// applicationInstance — whose clock: the tick names its own base; a run leaves it out and reads through its
 	// session (the calling thread's db_query channel).
 	static ibDateTime ReadSharedLastRun(const ibGuid& key, const ibApplicationInstance* applicationInstance = nullptr);
-	static void       WriteSharedLastRun(const ibGuid& key, const wxString& name, const ibDateTime& when);
+	static void       WriteSharedLastRun(const ibGuid& key, const ibString& name, const ibDateTime& when);
 
 	// Apply settings to a REGISTERED job, at once — no re-registration, because the entry holds a
 	// session and dropping it would end a run in flight. Returns false when the key is unknown.
@@ -680,7 +680,7 @@ public:
 
 	// The job registered under this key, by NAME — what a settings value needs to run one by hand
 	// (Execute is keyed by name, because that is the manager's own identity for an entry).
-	wxString FindNameByKey(const ibGuid& key) const;
+	ibString FindNameByKey(const ibGuid& key) const;
 
 private:
 
@@ -694,7 +694,7 @@ private:
 	// Submit the body. Caller holds m_mtx; the submit itself does not block.
 	bool Launch(ibJobEntry& e);
 
-	ibJobEntry* Find(const wxString& name);
+	ibJobEntry* Find(const ibString& name);
 
 	mutable std::mutex                        m_mtx;
 	std::vector<std::unique_ptr<ibJobEntry>>  m_entries;

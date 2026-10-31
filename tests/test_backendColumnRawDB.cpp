@@ -21,7 +21,7 @@ TEST(BackendColumnRawDB, FactoryCarriesFieldName) {
 
 TEST(BackendColumnRawDB, RawLowersToOneFieldNamedAfterItself) {
     const ibBackendColumnRawDB col = ibBackendColumnRawDB::String(wxT("name"));
-    const std::vector<wxString> fields = ColumnFieldNames(&col);
+    const std::vector<ibString> fields = ColumnFieldNames(&col);
     ASSERT_EQ(fields.size(), 1u);
     EXPECT_EQ(fields[0], wxT("name"));
 }

@@ -5,12 +5,14 @@
 
 #include "backend/backend_mainFrame.h"
 #include "backend/appData.h"
+#include "backend/session/session.h"   // IsDesignerSessionKind — whom a configuration was made for
 #include "backend/job/jobManager.h"   // the job records are swept once the surviving jobs are known
 
 // ms_instance / Get / Initialize / Destroy retired — ownership moved
 // to ibApplicationInstance::m_activeMetaData, shared with every session let
 // in while it was active (ibSession::GetMetaData). The fabric
-// lives on ibApplicationInstance::CreateActiveMetaData, its tear-down in the base's Close;
+// lives on ibApplicationInstance::CreateActiveMetaData (a designer's session's own: ibSession::AcquireMetaData),
+// its tear-down in the base's Close;
 // callers reach the active metadata through `appEnv::ActiveMetaData()`
 // (which the legacy `activeMetaData` macro now redirects to).
 //
@@ -22,13 +24,82 @@
 #include <fstream>
 #include <filesystem>
 
+#include "core/fileSystem.h"             // ibPathOf
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
 #include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot / ibSchemaTable — ContributeTables drives data dump
 #include "backend/query/dataMover.h"         // ibDataMover::Dump / Restore (L3-3 row mover)
+#include "core/serialize/provider/fileProvider.h"
 #include "core/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/objCtor.h"                       // ibCtorMetaValueType::GetClassName — clsid -> type name
 
-bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName)
+namespace {
+
+// ⭐ THE TYPES A DIRECTORY NAMES ARE THE REGISTRY'S — Catalog, Attribute, Form: the same in every configuration, so an
+// export reads into any one. A configuration's own (CatalogRef.Goods) would read back into that one alone.
+ibFileProvider ConfigurationFiles()
+{
+	ibFileProvider provider;
+	provider.SetTypeResolver([](ibClassID clsid) {
+		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(clsid);
+		return ctor != nullptr ? ctor->GetClassName() : ibString();
+	});
+	provider.SetTypeLookup([](const ibString& name) {
+		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(name);
+		return ctor != nullptr ? ctor->GetClassType() : ibClassID(0);
+	});
+	return provider;
+}
+
+} // namespace
+
+bool ibMetaDataConfigurationBase::SaveConfigToFiles(const ibString& directory)
+{
+	ibDataNode files;
+	return SaveConfigToFiles(files) && ibFileProvider::Publish(files, directory);
+}
+
+bool ibMetaDataConfigurationBase::SaveConfigToFiles(ibDataNode& files)
+{
+	ibDataNode root;
+	if (!GetCommonMetaObject()->BuildDataNode(root, saveToFileFlag))
+		return false;
+	return ConfigurationFiles().Write(root, files);
+}
+
+bool ibMetaDataConfigurationBase::LoadConfigFromFiles(const ibString& directory)
+{
+	ibDataNode files;
+	return ibFileProvider::Collect(directory, files) && LoadConfigFromFiles(files);
+}
+
+bool ibMetaDataConfigurationBase::LoadConfigFromFiles(const ibDataNode& files)
+{
+	if (!IsEditable())
+		ibBackendCoreException::Error(_("This configuration is open for reading only."));
+	ibDataNode root;
+	if (!ConfigurationFiles().Read(files, root))
+		return false;
+	if (root.GetClsid() != g_metaCommonMetadataCLSID)
+		ibBackendCoreException::Error(_("The directory does not contain a configuration."));
+
+	// Enter through the same detached-root load as a configuration file. Parsing all
+	// files finishes before that door closes editors or replaces any live metadata.
+	ibWriterMemory inner;
+	ibBinaryProvider provider;
+	if (!provider.Write(root, inner))
+		return false;
+	ibWriterMemory header;
+	header.w_u64(sign_metadata);
+	header.w_stringZ(root.GetValue<ibString>(ibT("Guid")));
+	ibWriterMemory metadata;
+	metadata.w_chunk(static_cast<std::uint64_t>(root.GetMetaId()), inner.buffer());
+	ibWriterMemory configuration;
+	configuration.w_chunk(eHeaderBlock, header.buffer());
+	configuration.w_chunk(root.GetClsid(), metadata.buffer());
+	return LoadConfigFromBuffer(configuration.buffer());
+}
+
+bool ibMetaDataConfigurationBase::LoadConfigFromFile(const ibString& strFileName)
 {
 	std::ifstream in(strFileName.ToStdString(), std::ios::in | std::ios::binary);
 
@@ -44,7 +115,7 @@ bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName
 	//go to beginning
 	in.seekg(0, in.beg);
 
-	wxMemoryBuffer buffer(fsize);
+	ibMemoryBuffer buffer(fsize);
 
 	in.read((char*)buffer.GetWriteBuf(fsize), fsize);
 	buffer.UngetWriteBuf(fsize);
@@ -53,10 +124,10 @@ bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName
 	return LoadConfigFromBuffer(buffer);
 }
 
-bool ibMetaDataConfigurationBase::SaveConfigToFile(const wxString& strFileName)
+bool ibMetaDataConfigurationBase::SaveConfigToFile(const ibString& strFileName)
 {
 	//common data
-	wxMemoryBuffer buffer;
+	ibMemoryBuffer buffer;
 
 	if (!SaveConfigToBuffer(buffer))
 		return false;
@@ -65,9 +136,9 @@ bool ibMetaDataConfigurationBase::SaveConfigToFile(const wxString& strFileName)
 	// buffer, write it to a sibling temp file, then rename over the target. The
 	// rename is the one commit point — a failed or partial write never replaces
 	// a good existing config file. Temp sits next to the target so the rename
-	// stays on one filesystem (atomic). std::filesystem (C++17), no wx.
+	// stays on one filesystem (atomic). std::filesystem, no wx.
 	namespace fs = std::filesystem;
-	const fs::path dstPath(strFileName.ToStdWstring());
+	const fs::path dstPath = ibPathOf(strFileName);
 	fs::path tmpPath = dstPath;
 	tmpPath += L".tmp";
 
@@ -76,7 +147,7 @@ bool ibMetaDataConfigurationBase::SaveConfigToFile(const wxString& strFileName)
 		if (!datafile.is_open())
 			return false;
 
-		datafile.write(reinterpret_cast<char*>(buffer.GetData()), buffer.GetBufSize());
+		datafile.write(reinterpret_cast<char*>(buffer.GetData()), buffer.GetDataLen());
 		datafile.flush();
 
 		const bool ok = datafile.good();
@@ -133,7 +204,7 @@ m_commonObject(nullptr)
 				wxASSERT_MSG(false, "commonLanguage->OnLoadMetaObject() == false");
 			}
 
-			commonLanguage->SetName(wxT("English"));
+			commonLanguage->SetName(ibT("English"));
 		}
 
 		commonLanguage->InvalidateNames();
@@ -167,12 +238,12 @@ ibValueMetaObjectConfiguration* ibMetaDataConfigurationFile::GetCommonMetaObject
 	return m_commonObject;
 }
 
-wxString ibMetaDataConfigurationFile::GetLangCode() const
+ibString ibMetaDataConfigurationFile::GetLangCode() const
 {
 	if (m_commonObject != nullptr)
 		return m_commonObject->GetLangCode();
 
-	return wxT("");
+	return ibT("");
 }
 
 bool ibMetaDataConfigurationFile::IsFullAccess() const
@@ -235,7 +306,7 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 			return false;
 	}
 	catch (const ibCoreException& err) {
-		ibJournalError(wxT("metadata.config"),err.GetErrorDescription());
+		ibJournalError(ibT("metadata.config"),err.GetErrorDescription());
 		return false;
 	}
 
@@ -315,7 +386,7 @@ bool ibMetaDataConfigurationFile::ClearDatabase()
 	return true;
 }
 
-bool ibMetaDataConfigurationFile::LoadConfigFromBuffer(const wxMemoryBuffer& buffer)
+bool ibMetaDataConfigurationFile::LoadConfigFromBuffer(const ibMemoryBuffer& buffer)
 {
 	// Close the old tree's run-state first (unregisters its ctors). For the
 	// storage subclass this is virtual and also closes the saved baseline, which
@@ -330,7 +401,7 @@ bool ibMetaDataConfigurationFile::LoadConfigFromBuffer(const wxMemoryBuffer& buf
 		}
 	}
 
-	ibReaderMemory readerData(buffer.GetData(), buffer.GetBufSize());
+	ibReaderMemory readerData(buffer);
 
 	if (readerData.eof())
 		return false;
@@ -375,9 +446,9 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	};
 	{
 		std::shared_ptr<ibReaderMemory> headerReader(readerData.open_chunk(eHeaderBlock));
-		if (!headerReader || headerReader->elapsed() < (int)sizeof(u64) || headerReader->r_u64() != sign_metadata)
+		if (!headerReader || headerReader->elapsed() < (int)sizeof(std::uint64_t) || headerReader->r_u64() != sign_metadata)
 			unreadable();
-		wxString metaGuid;
+		ibString metaGuid;
 		headerReader->r_stringZ(metaGuid);
 	}
 
@@ -388,7 +459,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	if (!readerMemory)
 		unreadable();
 
-	u64 meta_id = 0;
+	std::uint64_t meta_id = 0;
 	std::shared_ptr <ibReaderMemory> readerMetaMemory(readerMemory->open_chunk_iterator(meta_id));
 
 	if (!readerMetaMemory)
@@ -416,7 +487,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	catch (const ibCoreException& err) {
 		// ⭐ THE ENGINE'S WORDS REACH THE USER — the twin of the report / data-processor catches.
 		// A configuration that refuses to load is the costliest of the three to face in silence.
-		ibJournalError(wxT("metadata.config"),wxT("%s"), err.GetErrorDescription());
+		ibJournalError(ibT("metadata.config"),ibT("%s"), err.GetErrorDescription());
 		return false; // fresh (ibValuePtr) discards the root automatically
 	}
 
@@ -460,9 +531,9 @@ bool ibMetaDataConfiguration::OnInitialize(const int flags)
 
 	// Localization: pin the configuration's main language code (metadata
 	// short-code form ru/en/uk) into the translate state of whoever loads
-	// it — the designer's session, a base's first session. Every other
-	// session takes its base's in CompileRoot; the user's preferred
-	// language is assigned by SetUserInfo on authentication and wins.
+	// it — the base's opening. Every session takes its base's in CompileRoot;
+	// the user's preferred language is assigned by SetUserInfo on
+	// authentication and wins.
 	ibBackendLocalization::SetUserLanguage(GetLangCode());
 
 	if ((flags & _app_start_create_debug_server_flag) != 0) {
@@ -473,7 +544,7 @@ bool ibMetaDataConfiguration::OnInitialize(const int flags)
 		// per-process search. Per-tab WebClient sessions stop at their
 		// own OnStart only after the listener exists.
 		const bool waitForClient = !appData->WebEnterpriseMode();
-		debugServer->CreateServer(defaultHost, defaultDebuggerPort, waitForClient);
+		debugServer->CreateServer(defaultHost, ibPort::Debugger.m_first, waitForClient);
 	}
 
 	return true;
@@ -497,7 +568,7 @@ ibMetaDataConfiguration::~ibMetaDataConfiguration() = default;
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ibMetaDataConfiguration::ibMetaDataConfiguration(ib::AppDataCtorToken owner) :
-	ibMetaDataConfigurationFile(), m_configNew(true)
+	ibMetaDataConfigurationFile(), m_owner(owner), m_configNew(true)
 {
 	m_applicationInstance = owner.GetApplicationInstance();
 }
@@ -510,11 +581,7 @@ bool ibMetaDataConfigurationStorage::OnInitialize(const int flags)
 {
 	m_metaGuid = ibGuid::newGuid();
 
-	if (!ibMetaDataConfigurationStorage::TableAlreadyCreated()) {
-		ibMetaDataConfigurationStorage::CreateConfigTable();
-		ibMetaDataConfigurationStorage::CreateConfigSaveTable();
-		ibMetaDataConfigurationStorage::CreateConfigSequence();
-	}
+	// (Its tables are the base's, made as it opens — ibApplicationInstance::Open.)
 
 	// Designer-side debugger client. Same 1:1-with-metadata footing as
 	// m_debugServer above — promoted to ibApplicationInstance if multi-metadata
@@ -556,8 +623,7 @@ bool ibMetaDataConfigurationStorage::OnDestroy()
 
 ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorToken owner) :
 	ibMetaDataConfiguration(owner),
-	m_configMetadata(MakeShared<ibMetaDataConfiguration>(owner)),
-	m_owner(owner) {
+	m_configMetadata(MakeShared<ibMetaDataConfiguration>(owner)) {
 	// Designer-edit configuration carries a compile-value cache + its module-manager —
 	// built with the runtime image (CreateDesignerCache below); callsites gate on
 	// `if (auto* cc = metaData->GetCompileCache())` rather than appData->DesignerMode().
@@ -566,15 +632,9 @@ ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorTo
 // Designer-edit config: compile cache + its module-manager (bound to the common
 // metaobject, rebuilt fresh with the image each run). Built by the image ctor; dropping
 // the image releases the manager (RAII → DestroyMainModule).
-// Designer mode only (Enterprise runtime never opens the metadata tree — only objects execute). A config ALWAYS
-// carries the cache in the designer: the active edit config AND one browsed read-only from the DB (this inner
-// baseline, reached via activeMetaData->GetConfiguration()). A metaobject's form is built THROUGH the cache (its
-// owner + the seated source object come from it), so without it an object form opens sourceless and crashes.
-// Storage inherits this (its own identical override is gone). Regression from the per-config image (ibMetaImage):
-// the cache had narrowed to Storage only. Mode-gated inside, by analogy with the external report / data processor.
 std::unique_ptr<ibCompileValueCache> ibMetaDataConfiguration::CreateDesignerCache()
 {
-	if (!appData->DesignerMode())
+	if (!IsDesignerSessionKind(m_owner.GetSessionKind()))
 		return nullptr;
 	auto cache = std::make_unique<ibCompileValueCache>();
 	cache->SetModuleManager(new ibValueModuleManagerDesigner(this, GetCommonMetaObject()));
@@ -609,7 +669,7 @@ bool ibMetaDataConfigurationStorage::LoadDatabase(int flags)
 	return false;
 }
 
-bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer& buffer)
+bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const ibMemoryBuffer& buffer)
 {
 	ibReaderMemory reader(buffer);
 
@@ -617,17 +677,17 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 	// no such chunk and carried instants of the dumping machine's clock; the mover reads each form
 	// as the date it is (ibDataMover::DateOfWire). A form this build does not know is a newer one.
 	ibDataMover::DateForm dates = ibDataMover::DateForm::Instant;
-	wxMemoryBuffer bufferForm;
+	ibMemoryBuffer bufferForm;
 	if (reader.r_chunk(3, bufferForm)) {
 		ibReaderMemory readerForm(bufferForm);
-		const u32 form = readerForm.r_u32();
-		if (form > static_cast<u32>(ibDataMover::DateForm::DateTime))
+		const std::uint32_t form = readerForm.r_u32();
+		if (form > static_cast<std::uint32_t>(ibDataMover::DateForm::DateTime))
 			ibBackendCoreException::Error(_("The data was saved by a newer build (date form %u) that this build cannot read. Nothing was loaded."), form);
 		dates = static_cast<ibDataMover::DateForm>(form);
 	}
 
 	//common data
-	wxMemoryBuffer bufferData;
+	ibMemoryBuffer bufferData;
 
 	if (reader.r_chunk(1, bufferData)) {
 
@@ -639,7 +699,7 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 		for (const ibSchemaTable& table : snapshot.Tables()) {
 			if (table.m_columns.empty())   // a pure scaffold / seed table (an enum) — no data to move
 				continue;
-			wxMemoryBuffer tableBuffer;
+			ibMemoryBuffer tableBuffer;
 			if (readerData.r_chunk(table.m_id, tableBuffer)) {
 				ibReaderMemory rows(tableBuffer);
 				if (!ibDataMover::Restore(table, rows, dates))
@@ -649,7 +709,7 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 	}
 
 	//sequence
-	wxMemoryBuffer bufferSequence;
+	ibMemoryBuffer bufferSequence;
 
 	if (reader.r_chunk(2, bufferSequence)) {
 		ibReaderMemory readerSequence(bufferSequence);
@@ -659,7 +719,7 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 	return true;
 }
 
-bool ibMetaDataConfigurationFile::SaveConfigToBuffer(wxMemoryBuffer& buffer)
+bool ibMetaDataConfigurationFile::SaveConfigToBuffer(ibMemoryBuffer& buffer)
 {
 	//common data
 	ibWriterMemory writer;
@@ -672,7 +732,7 @@ bool ibMetaDataConfigurationFile::SaveConfigToBuffer(wxMemoryBuffer& buffer)
 	return true;
 }
 
-bool ibMetaDataConfigurationStorage::DumpDataToBuffer(wxMemoryBuffer& buffer)
+bool ibMetaDataConfigurationStorage::DumpDataToBuffer(ibMemoryBuffer& buffer)
 {
 	ibWriterMemory writer;
 
@@ -702,7 +762,7 @@ bool ibMetaDataConfigurationStorage::DumpDataToBuffer(wxMemoryBuffer& buffer)
 	// The form of the dates in chunk 1 (ibDataMover::DateForm): an ibDateTime's count. A dump without
 	// this chunk carried instants, and RestoreDataFromBuffer reads it as one.
 	ibWriterMemory writerForm;
-	writerForm.w_u32(static_cast<u32>(ibDataMover::DateForm::DateTime));
+	writerForm.w_u32(static_cast<std::uint32_t>(ibDataMover::DateForm::DateTime));
 	writer.w_chunk(3, writerForm.buffer());
 
 	buffer = writer.buffer();
@@ -737,8 +797,8 @@ bool ibMetaDataConfigurationFile::SaveCommonTree(const ibClassID& clsid, ibWrite
 		return false;
 
 	ibWriterMemory metaWriter;
-	metaWriter.w_chunk((u64)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
-	writerData.w_chunk((u64)builder.Root().GetClsid(), metaWriter.pointer(), metaWriter.size());
+	metaWriter.w_chunk((std::uint64_t)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
+	writerData.w_chunk((std::uint64_t)builder.Root().GetClsid(), metaWriter.pointer(), metaWriter.size());
 
 	// ⭐ …and that it has been written out. A watcher shows this as "no longer modified"; nothing
 	// in the tree changed, which is why this is a stage of its own and not MetaDataChanged.
@@ -758,7 +818,7 @@ bool ibMetaDataConfigurationStorage::DeleteCommonTree(const ibClassID& clsid)
 //*      the three configuration verbs — see the note in metadataConfiguration.h                   *
 //**************************************************************************************************
 
-bool ibMetaDataConfigurationBase::SaveConfiguration(wxString& refusal)
+bool ibMetaDataConfigurationBase::SaveConfiguration(ibString& refusal)
 {
 	if (!IsEditable()) {
 		refusal = _("This configuration is open for reading only.");
@@ -795,12 +855,20 @@ bool ibMetaDataConfigurationBase::SaveConfiguration(wxString& refusal)
 	return true;
 }
 
-bool ibMetaDataConfigurationBase::ApplyConfiguration(wxString& refusal,
+bool ibMetaDataConfigurationBase::ApplyConfiguration(ibString& refusal,
 	const std::function<bool(const ibRestructureInfo&)>& decide)
 {
 	if (!IsEditable()) {
 		refusal = _("This configuration is open for reading only.");
 		return false;
+	}
+
+	// ⭐ THE BASE HOLDS THIS CONFIGURATION ALREADY — the question app_run asks before it launches. Nothing to apply is
+	// nothing to do: it took the base exclusively, rewrote the whole configuration and restructured nothing, about eight
+	// seconds each, and the file grew by what it rewrote (measured 2026-10-30: 35.1 to 41.5 MB over three applies).
+	if (!IsModified() && IsConfigSave()) {
+		GetRestructureInfo().Clear();
+		return true;
 	}
 
 	try {
@@ -886,14 +954,14 @@ bool ibMetaDataConfigurationBase::ApplyConfiguration(wxString& refusal,
 		return false;
 	}
 	catch (const std::exception& e) {
-		refusal = wxString::FromUTF8(e.what());
+		refusal = ibString::FromUTF8(e.what());
 		return false;
 	}
 
 	return true;
 }
 
-bool ibMetaDataConfigurationBase::RollbackConfiguration(wxString& refusal)
+bool ibMetaDataConfigurationBase::RollbackConfiguration(ibString& refusal)
 {
 	if (!IsEditable()) {
 		refusal = _("This configuration is open for reading only.");

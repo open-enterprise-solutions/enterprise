@@ -36,7 +36,7 @@
 class ibValueMetaObjectCalculationTypeRelationTable : public ibValueMetaObjectTableDataRef {
 public:
 
-	ibValueMetaObjectCalculationTypeRelationTable(const wxString& name, const wxString& synonym, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectCalculationTypeRelationTable(const ibString& name, const ibString& synonym, const ibString& comment = ibEmptyString);
 	ibValueMetaObjectCalculationTypeRelationTable();
 	virtual ~ibValueMetaObjectCalculationTypeRelationTable();
 
@@ -94,7 +94,7 @@ protected:
 
 private:
 
-	ibPropertyCategory* m_categoryRelation = ibPropertyObject::CreatePropertyCategory(wxT("Relation"), _("Relation"));
+	ibPropertyCategory* m_categoryRelation = ibPropertyObject::CreatePropertyCategory(ibT("Relation"), _("Relation"));
 
 	// FILL-CHECKED: a row of this table IS an edge. A row with no type named carries an edge to
 	// nothing — for the displacement relation it would be a displacer that does not exist, which is
@@ -114,7 +114,7 @@ private:
 	// performed it; an untyped column then stored a type tag and no reference, and the relation read
 	// back empty.)
 	ibPropertyContainer<>* m_propertyCalculationType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryRelation,
-		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("CalculationType"), _("Calculation type"), _("The type this row names - the one that displaces, feeds the base of, or leads the type owning the row, depending on the section. A type of this chart or of one of its base charts. Required."), /*fillCheck*/ true, ibItemMode::ibItemMode_Item));
+		ibValueMetaObjectCompositeData::CreateEmptyType(ibT("CalculationType"), _("Calculation type"), _("The type this row names - the one that displaces, feeds the base of, or leads the type owning the row, depending on the section. A type of this chart or of one of its base charts. Required."), /*fillCheck*/ true, ibItemMode::ibItemMode_Item));
 };
 
 #endif

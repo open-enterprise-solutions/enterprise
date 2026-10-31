@@ -23,16 +23,10 @@
 // See docs/private/ownership-authority.md. Nothing on THIS side changed — every tier below the L3 door
 // still meets a plain ibBackendQueryColumn and knows nothing about where it came from.
 
-#include "backend/typeDescription.h"    // ibTypeDescription (the column's L3 type)
+#include "core/description/typeDescription.h"    // ibTypeDescription (the column's L3 type)
 #include "backend/databaseLayer/columnType.h"   // ibColumnType — the canonical type a column's field declares
-
-// ⚠ NOT <wx/icon.h> — FORWARD-DECLARED. backend.dll is GUI-free (CLAUDE.md), and this header is
-// included by every attribute metaobject, so one GUI include here reaches ~25 direct includers and
-// everything behind them. A virtual returning wxIcon compiles against an incomplete type; only the
-// two files that DEFINE such a body need the real header, and they already include it.
-class wxIcon;
-
-#include "backend/query/queryBalanceRole.h"   // ibBalanceRole — what a column is in a balance (GetBalanceRole)
+#include "core/description/pictureDescription.h"   // ibPictureDescription — the column's picture, by its number (GetColumnPicture)
+#include "core/query/queryBalanceRole.h"      // ibBalanceRole — what a column is in a balance (GetBalanceRole)
 
 #include <limits>   // numeric_limits — the ceiling a composed id may not pass (CanComposeSyntheticId)
 #include <memory>   // enable_shared_from_this — a column carries its own control block (see below)
@@ -61,10 +55,10 @@ enum class ibColumnRole : uint8_t {
 
 // One physical field of a logical column (the layout decomposition unit).
 struct ibColumnSlot {
-	wxString     m_name;                       // physical column name (base + suffix)
+	ibString     m_name;                       // physical column name (base + suffix)
 	ibColumnRole m_role    = ibColumnRole::Raw;
 	ibColumnType m_type;                       // canonical type for DDL (MapType -> dialect SQL)
-	wxString     m_default;                    // DEFAULT clause (e.g. "0"), empty = none
+	ibString     m_default;                    // DEFAULT clause (e.g. "0"), empty = none
 	bool         m_notNull = false;
 };
 
@@ -116,14 +110,14 @@ public:
 	virtual ~ibBackendAbstractColumn() = default;
 
 	// Logical identifier — what a script / the L4 parser refers to.
-	virtual wxString GetName() const = 0;
+	virtual ibString GetName() const = 0;
 
 	// Display caption. Defaults to the logical name; a metaobject column / a form attribute override
 	// it with their synonym.
-	virtual wxString GetSynonym() const { return GetName(); }
+	virtual ibString GetSynonym() const { return GetName(); }
 
 	// Tooltip / comment. Empty by default; a metaobject column / a form attribute override it.
-	virtual wxString GetComment() const { return wxEmptyString; }
+	virtual ibString GetComment() const { return ibEmptyString; }
 };
 
 class BACKEND_API ibBackendSourceColumn : public ibBackendAbstractColumn
@@ -156,15 +150,19 @@ public:
 	virtual bool IsAvailable() const { return true; }
 
 	// THE COLUMN'S OWN PICTURE — asked of the column, never deduced by the reader. The default is
-	// the plain ATTRIBUTE picture from the icon library, so every column is dressed even when it
-	// stands behind no metaobject (a view's column, a temp table's); a column that IS a metaobject
-	// answers with whatever picture its own metatype registered. That is what keeps a dimension
-	// from looking like a resource without anybody, anywhere, keeping a list of kinds and a switch
-	// over it — a metatype added tomorrow is dressed the day it registers an icon.
+	// the plain ATTRIBUTE picture, so every column is dressed even when it stands behind no
+	// metaobject (a view's column, a temp table's); a column that IS a metaobject answers with its
+	// metatype's. That is what keeps a dimension from looking like a resource without anybody,
+	// anywhere, keeping a list of kinds and a switch over it — a metatype added tomorrow is dressed
+	// the day it registers.
 	//
-	// Body in metaAttributeObject_res.cpp, next to the icon it returns: this header must not pull
-	// the metadata tree in (the attribute metaobject includes THIS file).
-	virtual wxIcon GetColumnIcon() const;
+	// ⭐ A NUMBER, NOT AN IMAGE: the class whose picture it is, as a tree row names one to the client
+	// (ibBackendPicture::SendPicture). Whoever draws it makes its own image from it — the desktop beside
+	// the server, the client from the server's answer.
+	//
+	// Body in metaAttributeObject_res.cpp, next to the attribute class it names: this header must not
+	// pull the metadata tree in (the attribute metaobject includes THIS file).
+	virtual ibPictureDescription GetColumnPicture() const;
 
 	// …AND WHAT IT IS IN A BALANCE (ibBalanceRole) — a fact about the column a person is shown, like its
 	// picture, so it is asked here, where the field lists see a column. Answered by the view that published
@@ -203,7 +201,7 @@ public:
 
 	// Base physical column (db field name). The lowering derives the actual
 	// per-type physical columns from this plus the type description.
-	virtual wxString GetPhysicalName() const = 0;
+	virtual ibString GetPhysicalName() const = 0;
 
 	// The column's id WITHIN its source/model — the key its source reads a value by.
 	// For a DB / attribute column this IS the metaID; for a computed / temp column it
@@ -388,7 +386,7 @@ public:
 	// column that is not stored the ordinary way overrides this and reads itself — a synthetic column
 	// has no tag of its own and assembles its value from the columns it is made of. The default stays
 	// the default, so nothing that reads a stored column pays for the possibility.
-	virtual bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
+	virtual bool ReadValue(const ibString& fieldName, const class ibMetaData* metaData,
 	                       class ibValue& retValue, class ibQueryResult& result, bool createData = false) const;
 
 	// …AND THE WRITE, THE SAME WAY. The pair belongs together: a value bound by the default lands in
@@ -441,7 +439,7 @@ public:
 	// a column the schema differ can track, so it can be ADDED to or DROPPED from an existing
 	// table. A derived table's accumulating columns need that: they appear and disappear as the
 	// metaobject gains and loses resources, and without an identity the differ cannot see either.
-	ibBackendColumnRawDB(const wxString& field, RawType type, ibMetaID modelId = 0)
+	ibBackendColumnRawDB(const ibString& field, RawType type, ibMetaID modelId = 0)
 		: m_field(field), m_type(type), m_modelId(modelId) {}
 
 	// ⭐ TWO NAMES WHERE THEY DIFFER, one where they do not. A scaffold column is its own field and
@@ -449,8 +447,8 @@ public:
 	// author writes, `uuid` is what the table keeps, and handing the storage spelling out as the
 	// name puts the physical schema into the field tree — the exact mistake the register's view
 	// columns were fixed for.
-	wxString              GetName()         const override { return m_name.IsEmpty() ? m_field : m_name; }
-	wxString              GetPhysicalName() const override { return m_field; }
+	ibString              GetName()         const override { return m_name.IsEmpty() ? m_field : m_name; }
+	ibString              GetPhysicalName() const override { return m_field; }
 	ibTypeDescription&    GetTypeDesc()     const override { return m_typeDesc; }   // interface returns a non-const ref
 	ibMetaID              GetColumnId()      const override { return m_modelId; }   // 0 = scaffold, never diffed
 	Kind                  GetColumnKind()   const override { return Kind::Raw; }
@@ -470,14 +468,14 @@ public:
 	// sizes an index key from the DECLARED length times the charset's bytes-per-character, so a
 	// VARCHAR(255) in UTF8 is 1020 bytes and passes the key-size ceiling (≈ page_size / 4) on its own —
 	// "key size exceeds implementation restriction", with nothing wrong but the declaration.
-	static ibBackendColumnRawDB String   (const wxString& field, ibMetaID id = 0, unsigned int length = 0) {
+	static ibBackendColumnRawDB String   (const ibString& field, ibMetaID id = 0, unsigned int length = 0) {
 		ibBackendColumnRawDB col(field, RawType::String, id);
 		col.m_length = length;
 		return col;
 	}
 	// The same for a number: a totals column has to carry the RESOURCE's own precision and scale, or a
 	// figure with kopecks is stored in a column that has none and the fraction is lost on the way in.
-	static ibBackendColumnRawDB Number   (const wxString& field, ibMetaID id = 0,
+	static ibBackendColumnRawDB Number   (const ibString& field, ibMetaID id = 0,
 	                               unsigned int precision = 0, unsigned int scale = 0) {
 		ibBackendColumnRawDB col(field, RawType::Number, id);
 		col.m_length = precision;
@@ -491,8 +489,8 @@ public:
 	// exactly one owner, so the type is known from the metadata and storing it per row would be a
 	// column repeating one constant a million times. The target rides on the column instead, and the
 	// codec reads a real reference out of the sixteen bytes it finds.
-	static ibBackendColumnRawDB Reference(const wxString& field, const ibClassID& target = 0,
-	                               const wxString& name = wxEmptyString, ibMetaID modelId = 0)
+	static ibBackendColumnRawDB Reference(const ibString& field, const ibClassID& target = 0,
+	                               const ibString& name = ibEmptyString, ibMetaID modelId = 0)
 	{
 		ibBackendColumnRawDB col(field, RawType::Reference, modelId);
 		col.m_name = name;
@@ -512,18 +510,18 @@ public:
 	// a raw guid is sixteen bytes and not thirty-six characters. Now the column answers, and a caller
 	// asks nobody what kind of column it holds. (Bodies in dbTableProvider.cpp, beside the reference
 	// assembly a single-target raw reference needs.)
-	bool ReadValue(const wxString& fieldName, const class ibMetaData* metaData,
+	bool ReadValue(const ibString& fieldName, const class ibMetaData* metaData,
 	               class ibValue& retValue, class ibQueryResult& result, bool createData = false) const override;
 	void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
 	               const class ibValue& value, int& position) const override;
-	static ibBackendColumnRawDB Date     (const wxString& field, ibMetaID id = 0) { return ibBackendColumnRawDB(field, RawType::Date, id);      }
-	static ibBackendColumnRawDB Boolean  (const wxString& field) { return ibBackendColumnRawDB(field, RawType::Boolean);   }
-	static ibBackendColumnRawDB Guid     (const wxString& field) { return ibBackendColumnRawDB(field, RawType::Guid);      }
-	static ibBackendColumnRawDB Blob     (const wxString& field) { return ibBackendColumnRawDB(field, RawType::Blob);      }
+	static ibBackendColumnRawDB Date     (const ibString& field, ibMetaID id = 0) { return ibBackendColumnRawDB(field, RawType::Date, id);      }
+	static ibBackendColumnRawDB Boolean  (const ibString& field) { return ibBackendColumnRawDB(field, RawType::Boolean);   }
+	static ibBackendColumnRawDB Guid     (const ibString& field) { return ibBackendColumnRawDB(field, RawType::Guid);      }
+	static ibBackendColumnRawDB Blob     (const ibString& field) { return ibBackendColumnRawDB(field, RawType::Blob);      }
 
 private:
-	wxString                  m_field;
-	wxString                  m_name;    // what a QUERY writes; empty = the field is its own name
+	ibString                  m_field;
+	ibString                  m_name;    // what a QUERY writes; empty = the field is its own name
 	RawType                   m_type;
 	unsigned int              m_length = 0;   // string length / number precision; 0 = the tier's default
 	unsigned int              m_scale  = 0;   // number scale — the fraction a figure is stored with

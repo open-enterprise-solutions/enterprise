@@ -18,22 +18,22 @@ ibSelectorDataType ibValueMetaObjectAccountingKind::GetFilterDataType() const
 // than a stand-in, and the engine's common set has no tick-box of its own to borrow instead. Art of
 // their own is worth having (a tick-box, and a tick-box over a breakdown) and is a picture to be drawn,
 // not a mechanism to be built: dropping two base64 PNGs in here is the whole of it.
-wxIcon ibValueMetaObjectAccountingKind::GetIcon() const
+ibPicture ibValueMetaObjectAccountingKind::GetIcon() const
 {
 	return GetIconGroup();
 }
 
-wxIcon ibValueMetaObjectAccountingKind::GetIconGroup()
+ibPicture ibValueMetaObjectAccountingKind::GetIconGroup()
 {
 	return ibValueMetaObjectAttribute::GetIconGroup();
 }
 
-wxIcon ibValueMetaObjectAccountDimensionAccountingKind::GetIcon() const
+ibPicture ibValueMetaObjectAccountDimensionAccountingKind::GetIcon() const
 {
 	return GetIconGroup();
 }
 
-wxIcon ibValueMetaObjectAccountDimensionAccountingKind::GetIconGroup()
+ibPicture ibValueMetaObjectAccountDimensionAccountingKind::GetIconGroup()
 {
 	return ibValueMetaObjectAttribute::GetIconGroup();
 }

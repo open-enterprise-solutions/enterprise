@@ -1,6 +1,7 @@
 #include "procContext.h"
 #include "procUnit.h"
 #include "procUnitState.h"   // ibRunStack — the slots a per-call frame reserves on
+#include "backend/backend_exception.h"
 #include "session/session.h" // ibSession::GetPUState — whose stack that is
 
 //*************************************************************************************************
@@ -143,6 +144,24 @@ void ibRunContextSmall::DestroyLocals()
 ibRunContext::~ibRunContext()
 {
 	DestroyLocals();
+}
+
+void ibRunContext::Enter(const ibByteCode::ibByteFunction* function, const ibByteCode* bytecode)
+{
+	m_currentFunction = function;
+	if (function == nullptr || m_pRefLocVars == nullptr)
+		return;
+
+	const long declared = static_cast<long>(function->m_listParam.size());
+	const long slots = GetLocalCount();
+	for (long i = 0; i < declared && i < slots; ++i) {
+		if (m_pRefLocVars[i] != nullptr)
+			continue;
+		m_pRefLocVars[i] = &m_pLocVars[i];
+		if (bytecode == nullptr || !bytecode->GetParamDefValue((long)*function, i, m_pLocVars[i]))
+			ibBackendCoreException::Error(_("Missing required argument '%s'"),
+				function->m_listParam[static_cast<size_t>(i)].m_strName);
+	}
 }
 
 //*************************************************************************************************

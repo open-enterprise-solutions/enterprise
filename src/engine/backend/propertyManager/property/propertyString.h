@@ -7,32 +7,33 @@
 class BACKEND_API ibPropertyStringBase : public ibProperty {
 public:
 
-	wxString GetValueAsString() const {
-		static thread_local wxString result;
+	ibString GetValueAsString() const {
+		static thread_local ibString result;
 		GetValueAsString(result);
 		return std::move(result);
 	}
 
-	bool GetValueAsString(wxString& result) const {
-		if (!m_propValue.IsNull())
-			return m_propValue.GetData()->Write(result);
-		return false;
+	bool GetValueAsString(ibString& result) const {
+		if (m_propValue.GetType() == ibValueTypes::TYPE_EMPTY)
+			return false;
+		result = m_propValue.GetString();
+		return true;
 	}
 
-	void SetValue(const wxString& strValue) { m_propValue = strValue; }
+	void SetValue(const ibString& strValue) { m_propValue = ibVariant(strValue); }
 
-	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibProperty(cat, name, value)
+	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name,
+		const ibString& value) : ibProperty(cat, name, ibVariant(value))
 	{
 	}
 
-	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibProperty(cat, name, label, value)
+	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name, const ibString& label,
+		const ibString& value) : ibProperty(cat, name, label, ibVariant(value))
 	{
 	}
 
-	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibProperty(cat, name, label, helpString, value)
+	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
+		const ibString& value) : ibProperty(cat, name, label, helpString, ibVariant(value))
 	{
 	}
 
@@ -56,18 +57,18 @@ public:
 class BACKEND_API ibPropertyString : public ibPropertyStringBase {
 public:
 
-	ibPropertyString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyStringBase(cat, name, value)
+	ibPropertyString(ibPropertyCategory* cat, const ibString& name,
+		const ibString& value) : ibPropertyStringBase(cat, name, value)
 	{
 	}
 
-	ibPropertyString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, value)
+	ibPropertyString(ibPropertyCategory* cat, const ibString& name, const ibString& label,
+		const ibString& value) : ibPropertyStringBase(cat, name, label, value)
 	{
 	}
 
-	ibPropertyString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString, value)
+	ibPropertyString(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
+		const ibString& value) : ibPropertyStringBase(cat, name, label, helpString, value)
 	{
 	}
 
@@ -77,18 +78,18 @@ public:
 class BACKEND_API ibPropertyUString : public ibPropertyStringBase {
 public:
 
-	ibPropertyUString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyStringBase(cat, name, value)
+	ibPropertyUString(ibPropertyCategory* cat, const ibString& name,
+		const ibString& value) : ibPropertyStringBase(cat, name, value)
 	{
 	}
 
-	ibPropertyUString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, value)
+	ibPropertyUString(ibPropertyCategory* cat, const ibString& name, const ibString& label,
+		const ibString& value) : ibPropertyStringBase(cat, name, label, value)
 	{
 	}
 
-	ibPropertyUString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString, value)
+	ibPropertyUString(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
+		const ibString& value) : ibPropertyStringBase(cat, name, label, helpString, value)
 	{
 	}
 
@@ -98,18 +99,18 @@ public:
 class BACKEND_API ibPropertyUEString : public ibPropertyUString {
 public:
 
-	ibPropertyUEString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyUString(cat, name, value)
+	ibPropertyUEString(ibPropertyCategory* cat, const ibString& name,
+		const ibString& value) : ibPropertyUString(cat, name, value)
 	{
 	}
 
-	ibPropertyUEString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyUString(cat, name, label, value)
+	ibPropertyUEString(ibPropertyCategory* cat, const ibString& name, const ibString& label,
+		const ibString& value) : ibPropertyUString(cat, name, label, value)
 	{
 	}
 
-	ibPropertyUEString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyUString(cat, name, label, helpString, value)
+	ibPropertyUEString(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
+		const ibString& value) : ibPropertyUString(cat, name, label, helpString, value)
 	{
 	}
 
@@ -127,7 +128,7 @@ class BACKEND_API ibPropertyTString : public ibProperty {
 	// in one run (2026-09-22). It never needed `this`: it builds a variant out of its argument.
 	// ⚠ The same shape lives in the other property headers of this family - they are not converted
 	// here, because only the one the tests exercise has been measured.
-	static wxVariantData* CreateVariantData(const ibTranslateString& translate);
+	static ibVariant CreateVariantData(const ibTranslateString& translate);
 public:
 
 	ibTranslateString& GetValueAsTranslate() const;
@@ -135,31 +136,31 @@ public:
 
 	// THE ACTIVE SYNONYM — the text, in the language in force. It is the translation converting
 	// itself, and it is the one question a label, a tooltip or a page header ever asks.
-	wxString GetValueAsTranslateString() const { return GetValueAsTranslate().GetString(); }
+	ibString GetValueAsTranslateString() const { return GetValueAsTranslate().GetString(); }
 
-	// …AND THE RAW TEMPLATE — `en = 'Goods'; ru = 'Товары';`, every language at once, as it is
+	// …AND THE RAW TEMPLATE — `en = 'Goods'; de = 'Waren';`, every language at once, as it is
 	// written down. What a template cell keeps, and what a file is written with.
 	//
 	// ⚠ NAMED "RAW", not "String". Called GetValueAsString it is indistinguishable from the reader
 	// every other string property has, and two callers asked for it while meaning the text — so a
 	// person was shown `en = 'Title';` in a notebook page header, and the rename gate compared a
 	// synonym against a template.
-	wxString GetValueAsRawString() const { return GetValueAsTranslate().GetRawText(); }
+	ibString GetValueAsRawString() const { return GetValueAsTranslate().GetRawText(); }
 
 	// ⚠ NO DEFAULT FOR THE VALUE. The three differ only by how many STRINGS precede it, so a default
 	// makes `(cat, name, text)` fit the second one as well — `C2668: ambiguous call` at every
 	// declaration (measured on the first build). The number property can afford one; this cannot.
-	ibPropertyTString(ibPropertyCategory* cat, const wxString& name,
+	ibPropertyTString(ibPropertyCategory* cat, const ibString& name,
 		const ibTranslateString& value) : ibProperty(cat, name, CreateVariantData(value))
 	{
 	}
 
-	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
+	ibPropertyTString(ibPropertyCategory* cat, const ibString& name, const ibString& label,
 		const ibTranslateString& value) : ibProperty(cat, name, label, CreateVariantData(value))
 	{
 	}
 
-	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
+	ibPropertyTString(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
 		const ibTranslateString& value) : ibProperty(cat, name, label, helpString, CreateVariantData(value))
 	{
 	}
@@ -182,18 +183,18 @@ public:
 class BACKEND_API ibPropertyMString : public ibPropertyStringBase {
 public:
 
-	ibPropertyMString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyStringBase(cat, name, value)
+	ibPropertyMString(ibPropertyCategory* cat, const ibString& name,
+		const ibString& value) : ibPropertyStringBase(cat, name, value)
 	{
 	}
 
-	ibPropertyMString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, value)
+	ibPropertyMString(ibPropertyCategory* cat, const ibString& name, const ibString& label,
+		const ibString& value) : ibPropertyStringBase(cat, name, label, value)
 	{
 	}
 
-	ibPropertyMString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString, value)
+	ibPropertyMString(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
+		const ibString& value) : ibPropertyStringBase(cat, name, label, helpString, value)
 	{
 	}
 

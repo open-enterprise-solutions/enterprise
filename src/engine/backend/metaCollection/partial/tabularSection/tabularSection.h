@@ -1,7 +1,7 @@
 #ifndef _VALUETABLEPART_H__
 
 #include "backend/tabularModel.h"
-#include "backend/picturePredefined.h"                 // g_pic*CLSID — this model emits its own standard command icons
+#include "core/picturePredefined.h"                 // g_pic*CLSID — this model emits its own standard command icons
 #include "backend/valueInfo.h"
 
 #include "backend/metaCollection/table/metaTableObject.h"
@@ -19,20 +19,15 @@ protected:
 		enLoad,
 		enUnload,
 		enGetMetadata,
+		// The position of a row (0-based); -1 for a row of another section.
+		enIndex,
+		enTotal,
 	};
 
 	enum {
 		eTabularSection,
 	};
 
-	class ibVariantDataValueNumberLine :
-		public ibVariantDataValueImpl<ibValue> {
-	public:
-		ibVariantDataValueNumberLine(const long& cValue)
-			: ibVariantDataValueImpl(static_cast<signed int>(cValue))
-		{
-		}
-	};
 
 public:
 
@@ -70,7 +65,7 @@ public:
 		return f;
 	}
 
-	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const;
+	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const ibString& colName = ibEmptyString) const;
 
 	//set meta/get meta
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal);
@@ -89,8 +84,8 @@ public:
 	public:
 
 			virtual unsigned int GetColumnID() const { return m_metaAttribute->GetMetaID(); }
-			virtual wxString GetColumnName() const { return m_metaAttribute->GetName(); }
-			virtual wxString GetColumnCaption() const { return m_metaAttribute->GetSynonym(); }
+			virtual ibString GetColumnName() const { return m_metaAttribute->GetName(); }
+			virtual ibString GetColumnCaption() const { return m_metaAttribute->GetSynonym(); }
 			virtual const ibTypeDescription GetColumnType() const { return m_metaAttribute->GetTypeDesc(); }
 			virtual const ibFormatString& GetColumnFormat() const {
 				return ibBackendTypeConfigFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
@@ -148,7 +143,7 @@ public:
 		//Get ref class
 		virtual ibClassID GetClassType() const;
 
-		virtual wxString GetClassName() const;
+		virtual ibString GetClassName() const;
 		virtual ibString GetString() const;
 
 		friend class ibValueTabularSectionDataObjectBase;
@@ -201,9 +196,9 @@ public:
 
 	virtual ~ibValueTabularSectionDataObjectBase() {}
 
-	virtual void GetValueByRow(wxVariant& variant,
+	virtual void GetValueByRow(ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) const override;
-	virtual bool SetValueByRow(const wxVariant& variant,
+	virtual bool SetValueByRow(const ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) override;
 
 	// ⭐⭐ THE NUMBER A PERSON READS — the row's place in WHAT IS SHOWN, 1-based; 0 when the row is not shown
@@ -242,19 +237,19 @@ public:
 	enum { eAddValue = 1, eCopyValue, eEditValue = 3 | eStartEditingFlag, eDeleteValue = 4,
 		eMoveUpValue = 5, eMoveDownValue, eSortAscValue, eSortDescValue };   // Edit's id carries the front-edit flag
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override {
-		commands.emplace_back(eAddValue,    wxT("Add"),    _("Add"),    g_picAddCLSID,    true);
-		commands.emplace_back(eCopyValue,    wxT("Copy"),   _("Copy"),   g_picCopyCLSID);
-		commands.emplace_back(eEditValue,    wxT("Edit"),   _("Edit"),   g_picEditCLSID);
-		commands.emplace_back(eDeleteValue,  wxT("Delete"), _("Delete"), g_picDeleteCLSID);
+		commands.emplace_back(eAddValue,    ibT("Add"),    _("Add"),    g_picAddCLSID,    true);
+		commands.emplace_back(eCopyValue,    ibT("Copy"),   _("Copy"),   g_picCopyCLSID);
+		commands.emplace_back(eEditValue,    ibT("Edit"),   _("Edit"),   g_picEditCLSID);
+		commands.emplace_back(eDeleteValue,  ibT("Delete"), _("Delete"), g_picDeleteCLSID);
 		commands.emplace_back();   // separator — what follows is about the ORDER, not about the rows
-		commands.emplace_back(eMoveUpValue,   wxT("MoveUp"),   _("Move up"),   g_picMoveUpCLSID);
-		commands.emplace_back(eMoveDownValue, wxT("MoveDown"), _("Move down"), g_picMoveDownCLSID);
+		commands.emplace_back(eMoveUpValue,   ibT("MoveUp"),   _("Move up"),   g_picMoveUpCLSID);
+		commands.emplace_back(eMoveDownValue, ibT("MoveDown"), _("Move down"), g_picMoveDownCLSID);
 		// …and a separator BETWEEN THE TWO PAIRS: moving is done BY HAND to one row, ordering is done BY
 		// A COLUMN to all of them — two questions, two groups.
 		commands.emplace_back();
 		// All four keep the DEFAULT modify flag (Max, 2026-08-29): in a view-only form they show and grey out.
-		commands.emplace_back(eSortAscValue,  wxT("SortAsc"),  _("Sort ascending"),  g_picSortAscCLSID);
-		commands.emplace_back(eSortDescValue, wxT("SortDesc"), _("Sort descending"), g_picSortDescCLSID);
+		commands.emplace_back(eSortAscValue,  ibT("SortAsc"),  _("Sort ascending"),  g_picSortAscCLSID);
+		commands.emplace_back(eSortDescValue, ibT("SortDesc"), _("Sort descending"), g_picSortDescCLSID);
 	}
 	// Flat tabular section: no hierarchy, so only the SELECTED row matters — m_anchor is ignored.
 	virtual void CallAsCommand(const ibActionID& lNumAction, const ibDataViewCommandContext& ctx, ibBackendValueForm* srcForm) override {
@@ -295,7 +290,7 @@ public:
 	//Get ref class 
 	virtual ibClassID GetClassType() const;
 
-	virtual wxString GetClassName() const;
+	virtual ibString GetClassName() const;
 	virtual ibString GetString() const;
 
 	// Iterator runtime path lives on ibValueModel (cursor over Get*Fetch

@@ -18,12 +18,12 @@ class ibClientFrame;
 class FRMSERVER_API ibClientChildFrame : public ibDocChildFrameAnyBase {
 public:
 
-	ibClientChildFrame(ibClientFrame* frame, s32 id, ibDocument* doc, ibView* view, const wxString& title);
+	ibClientChildFrame(ibClientFrame* frame, std::int32_t id, ibDocument* doc, ibView* view, const ibString& title);
 	virtual ~ibClientChildFrame() override;
 
 	// Its id in the frame — what a client names it by (the wire's NodeId of the tab): given when it opens, never
 	// another tab's, so a tab closing shifts no other.
-	s32 GetId() const { return m_id; }
+	std::int32_t GetId() const { return m_id; }
 
 	// Shown = the client's ACTIVE tab: the frame switches to it. A tab is never hidden on its own — it is
 	// closed instead — so `false` changes nothing.
@@ -33,17 +33,17 @@ public:
 	// when nothing on the stack is inside them any more — then the tab.
 	virtual bool Close() override;
 
-	ibClientFrame* GetFrame() const { return m_frame; }
+	virtual ibClientFrame* GetFrame() const override { return m_frame; }
 
 	// Its title — its document's once the document has one (a form's host sets it from the form's caption,
 	// ibFormVisualEditView::SetCaption, as the desktop's tab followed its document), the one it opened with before.
-	void     SetTitle(const wxString& title) { m_title = title; }
-	wxString GetTitle() const;
+	void     SetTitle(const ibString& title) { m_title = title; }
+	ibString GetTitle() const;
 
 	// The tab's icon — the document's own when it has one (a catalog's form shows the catalog's), the
 	// form's otherwise. An empty icon tells the client to show the title alone.
-	void                   SetIcon(const ibServerPicture& icon) { m_icon = icon; }
-	const ibServerPicture& GetIcon() const { return m_icon; }
+	void                        SetIcon(const ibPictureDescription& icon) { m_icon = icon; }
+	const ibPictureDescription& GetIcon() const { return m_icon; }
 
 	// Locked — the frame keeps it ahead of the normal tabs and lets no close reach it (ibClientFrame::LockTab).
 	void Lock() { m_locked = true; }
@@ -51,11 +51,11 @@ public:
 
 private:
 
-	ibClientFrame*  m_frame;
-	s32             m_id;
-	wxString        m_title;
-	ibServerPicture m_icon;
-	bool            m_locked = false;
+	ibClientFrame*        m_frame;
+	std::int32_t                   m_id;
+	ibString              m_title;
+	ibPictureDescription  m_icon;
+	bool                  m_locked = false;
 };
 
 #endif

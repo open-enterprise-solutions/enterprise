@@ -1,9 +1,7 @@
 #include "firebirdMaintenance.h"
 #include "firebirdInterface.h"
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
-
-#include <wx/filename.h>
-#include <wx/log.h>
+#include "core/fileSystem.h"            // ibFileExists, ibRemoveFile, ibRenameFile
 
 #include <chrono>
 #include <string>
@@ -19,19 +17,19 @@ namespace {
 // firebird.exe accepts external connections. Caller should set
 // real creds in production.
 void ResolveCredentials(const ibFirebirdMaintenance::ServiceConnection& conn,
-                        wxString& user, wxString& pwd) {
+                        ibString& user, ibString& pwd) {
 	if (conn.username.IsEmpty() || conn.password.IsEmpty()) {
-		ibJournalWarning(wxT("db.firebird"),wxT("ibFirebirdMaintenance: empty credentials, falling ")
-		             wxT("back to SYSDBA/masterkey - set real creds for ")
-		             wxT("production deploys"));
+		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdMaintenance: empty credentials, falling ")
+		             ibT("back to SYSDBA/masterkey - set real creds for ")
+		             ibT("production deploys"));
 	}
-	user = conn.username.IsEmpty() ? wxT("SYSDBA")    : conn.username;
-	pwd  = conn.password.IsEmpty() ? wxT("masterkey") : conn.password;
+	user = conn.username.IsEmpty() ? ibString(ibT("SYSDBA"))    : conn.username;
+	pwd  = conn.password.IsEmpty() ? ibString(ibT("masterkey")) : conn.password;
 }
 
 // Build the SPB (Service Parameter Block) for service_mgr attach.
 // Format: version + isc_spb_user_name(N + bytes) + isc_spb_password(N + bytes).
-std::string BuildAttachSpb(const wxString& user, const wxString& password) {
+std::string BuildAttachSpb(const ibString& user, const ibString& password) {
 	std::string spb;
 	spb.push_back(isc_spb_version);
 	spb.push_back(isc_spb_current_version);
@@ -55,7 +53,7 @@ std::string BuildAttachSpb(const wxString& user, const wxString& password) {
 //
 // Wire format for service-action string params (sweep / backup /
 // restore): one tag byte + 2-byte little-endian length + bytes.
-void AppendSpbString(std::string& spb, char tag, const wxString& value) {
+void AppendSpbString(std::string& spb, char tag, const ibString& value) {
 	const auto bytes = value.utf8_str();
 	const size_t n = std::min<size_t>(strlen(bytes.data()), 65535);
 	spb.push_back(tag);
@@ -205,16 +203,12 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 // isc_service_detach the embedded Firebird engine can still hold the backup file for a moment — it
 // closes its OS handle asynchronously — so an immediate delete races and fails with a sharing
 // violation (Win32 error 32). That is harmless: a leftover temp is reclaimed by the next cycle's
-// pre-clean. Retry a few times, then give up SILENTLY — wxLogNull suppresses wxRemoveFile's
-// wxLogSysError so a benign shutdown race never pops a modal "couldn't be removed" dialog.
-void TryRemoveTempFile(const wxString& path) {
-	if (!wxFileExists(path)) return;
-	// ⚠ NOT a logging call, and so NOT migrated to the journal: wxLogNull is a SUPPRESSION scope for
-	// wx's own internals — wxRemoveFile raises wxLogSysError from inside, and this is the only way to
-	// stop it. The one-file rule is about who WRITES log lines; silencing someone else's stays here.
-	wxLogNull noLog;
+// pre-clean. Retry a few times, then give up SILENTLY — ibRemoveFile writes nothing into the log, so a
+// benign shutdown race never pops a modal "couldn't be removed" dialog.
+void TryRemoveTempFile(const ibString& path) {
+	if (!ibFileExists(path)) return;
 	for (int attempt = 0; attempt < 5; ++attempt) {
-		if (wxRemoveFile(path) || !wxFileExists(path))
+		if (ibRemoveFile(path) || !ibFileExists(path))
 			return;
 		std::this_thread::sleep_for(std::chrono::milliseconds(40));
 	}
@@ -225,7 +219,7 @@ void TryRemoveTempFile(const wxString& path) {
 
 ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunSweep(
 	ibInterfaceFirebird* iface,
-	const wxString& databasePath,
+	const ibString& databasePath,
 	const ServiceConnection& conn,
 	const std::function<bool()>& cancelled)
 {
@@ -236,15 +230,15 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunSweep(
 	 || iface->GetIscServiceDetach() == nullptr)
 		return Status::ServicesApiUnavailable;
 
-	wxString user, pwd;
+	ibString user, pwd;
 	ResolveCredentials(conn, user, pwd);
 
 	// Service manager attach target: `service_mgr` for local,
 	// `host:service_mgr` for remote. Embedded path uses the bare
 	// form.
-	wxString svcTarget = wxT("service_mgr");
+	ibString svcTarget = ibT("service_mgr");
 	if (!conn.server.IsEmpty())
-		svcTarget = conn.server + wxT(":service_mgr");
+		svcTarget = conn.server + ibT(":service_mgr");
 
 	const auto svcUtf8 = svcTarget.utf8_str();
 	const size_t svcLen = strlen(svcUtf8.data());
@@ -288,7 +282,7 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunSweep(
 
 ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 	ibInterfaceFirebird* iface,
-	const wxString& databasePath,
+	const ibString& databasePath,
 	const ServiceConnection& conn,
 	const std::function<bool()>& cancelled)
 {
@@ -299,16 +293,15 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 	 || iface->GetIscServiceDetach() == nullptr)
 		return Status::ServicesApiUnavailable;
 
-	wxString user, pwd;
+	ibString user, pwd;
 	ResolveCredentials(conn, user, pwd);
-	wxString svcTarget = wxT("service_mgr");
+	ibString svcTarget = ibT("service_mgr");
 	if (!conn.server.IsEmpty())
-		svcTarget = conn.server + wxT(":service_mgr");
+		svcTarget = conn.server + ibT(":service_mgr");
 
-	wxFileName dbFn(databasePath);
-	const wxString backupPath  = dbFn.GetFullPath() + wxT(".tmp.fbk");
-	const wxString restorePath = dbFn.GetFullPath() + wxT(".tmp.new.fdb");
-	const wxString rollbackPath = dbFn.GetFullPath() + wxT(".bak");
+	const ibString backupPath  = databasePath + ibT(".tmp.fbk");
+	const ibString restorePath = databasePath + ibT(".tmp.new.fdb");
+	const ibString rollbackPath = databasePath + ibT(".bak");
 
 	// Clean up any leftovers from a prior aborted cycle.
 	TryRemoveTempFile(backupPath);
@@ -406,14 +399,14 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 	// which is not crash-safe — caller responsibility to keep the
 	// .fdb on a local disk for this operation.
 	TryRemoveTempFile(rollbackPath);
-	if (!wxRenameFile(databasePath, rollbackPath)) {
+	if (!ibRenameFile(databasePath, rollbackPath)) {
 		TryRemoveTempFile(backupPath);
 		TryRemoveTempFile(restorePath);
 		return Status::IOError;
 	}
-	if (!wxRenameFile(restorePath, databasePath)) {
+	if (!ibRenameFile(restorePath, databasePath)) {
 		// Rollback: original is still under .bak. Restore it.
-		wxRenameFile(rollbackPath, databasePath);
+		ibRenameFile(rollbackPath, databasePath);
 		TryRemoveTempFile(backupPath);
 		TryRemoveTempFile(restorePath);
 		return Status::IOError;
@@ -425,16 +418,16 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 	return Status::Ok;
 }
 
-wxString ibFirebirdMaintenance::StatusToString(Status s) {
+ibString ibFirebirdMaintenance::StatusToString(Status s) {
 	switch (s) {
-		case Status::Ok:                     return wxT("Ok");
-		case Status::ServicesApiUnavailable: return wxT("Services API unavailable in fbclient");
-		case Status::AttachFailed:           return wxT("service_mgr attach failed (auth?)");
-		case Status::StartFailed:            return wxT("service_start failed (bad SPB?)");
-		case Status::QueryFailed:            return wxT("service_query mid-operation failed");
-		case Status::Timeout:                return wxT("operation didn't complete in time budget");
-		case Status::RestoreFailed:          return wxT("restore step failed - original file kept under .bak");
-		case Status::IOError:                return wxT("local file rename/delete failed");
+		case Status::Ok:                     return ibT("Ok");
+		case Status::ServicesApiUnavailable: return ibT("Services API unavailable in fbclient");
+		case Status::AttachFailed:           return ibT("service_mgr attach failed (auth?)");
+		case Status::StartFailed:            return ibT("service_start failed (bad SPB?)");
+		case Status::QueryFailed:            return ibT("service_query mid-operation failed");
+		case Status::Timeout:                return ibT("operation didn't complete in time budget");
+		case Status::RestoreFailed:          return ibT("restore step failed - original file kept under .bak");
+		case Status::IOError:                return ibT("local file rename/delete failed");
 	}
-	return wxT("(unknown)");
+	return ibT("(unknown)");
 }

@@ -11,7 +11,8 @@
 //
 // How it works:
 //   - The token's constructor is private.
-//   - Only `ibApplicationInstance` and `ibApplicationHost` are friends, so only they can mint a token.
+//   - Only `ibApplicationInstance`, `ibApplicationHost` and `ibSession` are friends, so only they can mint a
+//     token (a designer's session makes the configuration it edits — ibSession::AcquireMetaData).
 //   - Subsystem ctors take an `ibAppDataCtorToken` argument.
 //
 // Net effect: subsystems can declare their ctors public (no friend
@@ -38,6 +39,10 @@
 // it (`GetApplicationInstance()`) — one argument for one fact, "made by this base"
 // (docs/private/multi-base-process.md § 3). Null when the host mints it for the process's share (the
 // plugins, the syntax-helper corpus) or a test mints it with no base.
+//
+// ⭐ …AND FOR WHOM, WHEN A SESSION MINTS IT — its kind: what is made for a designer's session is built as the
+// designer's (a configuration's compile cache), whatever thread builds it. Minted by the base, it is for no session
+// (Unknown): the base's own, the one the rest work in (Max, 2026-10-28).
 
 // Forward declaration is REQUIRED. `friend class ::ibApplicationInstance;`
 // uses a *qualified* name; per [class.friend], qualified friend names
@@ -49,6 +54,8 @@
 // path that surfaced the bug.
 class ibApplicationInstance;
 class ibApplicationHost;
+class ibSession;
+enum class ibSessionKind : int;   // defined in backend/session/session.h
 
 namespace ib {
 
@@ -62,20 +69,27 @@ class AppDataCtorToken {
 public:
 #else
 	// Mintable only from inside ibApplicationInstance's TU — and the host's, which owns the process's share:
-	// the plugins and the syntax-helper corpus (appHost.h).
+	// the plugins and the syntax-helper corpus (appHost.h); and a designer's session's, for the configuration
+	// it edits, made for it and held by it alone (ibSession::AcquireMetaData).
 	friend class ::ibApplicationInstance;
 	friend class ::ibApplicationHost;
+	friend class ::ibSession;
 #endif
 	explicit AppDataCtorToken(ibApplicationInstance* applicationInstance = nullptr) : m_applicationInstance(applicationInstance) {}
+	AppDataCtorToken(ibApplicationInstance* applicationInstance, ibSessionKind sessionKind) :
+		m_applicationInstance(applicationInstance), m_sessionKind(sessionKind) {}
 public:
 	AppDataCtorToken(const AppDataCtorToken&) = default;
 	AppDataCtorToken& operator=(const AppDataCtorToken&) = default;
 
 	// The base that minted it — the owner of what it builds.
 	ibApplicationInstance* GetApplicationInstance() const { return m_applicationInstance; }
+	// The kind of the session that minted it — Unknown when the base or the host did.
+	ibSessionKind GetSessionKind() const { return m_sessionKind; }
 
 private:
 	ibApplicationInstance* m_applicationInstance;
+	ibSessionKind m_sessionKind{};   // Unknown (0)
 };
 
 } // namespace ib

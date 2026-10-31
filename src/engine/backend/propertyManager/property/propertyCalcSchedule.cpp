@@ -3,14 +3,14 @@
 #include "backend/metaData.h"
 #include "backend/metaCollection/partial/commonObject.h"   // the registers: their resources, dimensions and attributes
 
-wxVariantData* ibPropertyCalcSchedule::CreateVariantData(ibPropertyObject* property, const ibCalcScheduleDescription& scheduleDesc)
+ibVariant ibPropertyCalcSchedule::CreateVariantData(ibPropertyObject* property, const ibCalcScheduleDescription& scheduleDesc)
 {
-	return new ibVariantDataCalcSchedule(property, scheduleDesc);
+	return ibVariant(new ibVariantCalcSchedule(property, scheduleDesc));
 }
 
 ibCalcScheduleDescription& ibPropertyCalcSchedule::GetValueAsScheduleDesc() const
 {
-	return get_cell_variant<ibVariantDataCalcSchedule>()->GetScheduleDesc();
+	return get_cell_variant<ibVariantCalcSchedule>()->GetScheduleDesc();
 }
 
 void ibPropertyCalcSchedule::SetValue(const ibCalcScheduleDescription& val)
@@ -19,9 +19,9 @@ void ibPropertyCalcSchedule::SetValue(const ibCalcScheduleDescription& val)
 }
 
 // The family rule — see propertyRecord.cpp.
-void ibPropertyCalcSchedule::DoSetValue(const wxVariant& val)
+void ibPropertyCalcSchedule::DoSetValue(const ibVariant& val)
 {
-	if (const ibVariantDataCalcSchedule* carried = find_cell_variant<ibVariantDataCalcSchedule>(val)) {
+	if (const ibVariantCalcSchedule* carried = find_cell_variant<ibVariantCalcSchedule>(val)) {
 		SetValue(carried->GetScheduleDesc());
 		return;
 	}
@@ -44,8 +44,8 @@ ibPropertyChoiceMode ibPropertyCalcSchedule::GetValueList(ibPropertyChoiceList& 
 		ibCalcScheduleDescription scheduleDesc;
 		scheduleDesc.SetSchedule(schedule->GetMetaID(), 0, 0);
 		list.Add(schedule->GetMetaID(), schedule->GetName(), schedule->GetSynonym(),
-			wxVariant(new ibVariantDataCalcSchedule(owner, scheduleDesc)),
-			schedule->GetIcon());
+			ibVariant(new ibVariantCalcSchedule(owner, scheduleDesc)),
+			schedule->GetClassType());
 	}
 
 	return ibPropertyChoiceMode::Single;
@@ -66,7 +66,7 @@ void ibPropertyCalcSchedule::GetScheduleValueList(const ibCalcScheduleDescriptio
 	if (const ibValueMetaObjectRegisterData* schedule = GetScheduleRegister(scheduleDesc)) {
 		for (const ibValueMetaObjectResource* resource : schedule->GetResourceArrayObject()) {
 			if (!resource->IsDeleted() && resource->GetTypeDesc().ContainType(g_valueNumberCLSID))
-				list.Add(resource->GetMetaID(), resource->GetName(), resource->GetSynonym(), wxVariant(resource->GetMetaID()), resource->GetIcon());
+				list.Add(resource->GetMetaID(), resource->GetName(), resource->GetSynonym(), ibVariant(resource->GetMetaID()), resource->GetClassType());
 		}
 	}
 }
@@ -76,7 +76,7 @@ void ibPropertyCalcSchedule::GetScheduleDateList(const ibCalcScheduleDescription
 	if (const ibValueMetaObjectRegisterData* schedule = GetScheduleRegister(scheduleDesc)) {
 		for (const ibValueMetaObjectDimension* dimension : schedule->GetDimensionArrayObject()) {
 			if (!dimension->IsDeleted() && dimension->GetTypeDesc().ContainType(g_valueDateCLSID))
-				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), wxVariant(dimension->GetMetaID()), dimension->GetIcon());
+				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), ibVariant(dimension->GetMetaID()), dimension->GetClassType());
 		}
 	}
 }
@@ -86,7 +86,7 @@ void ibPropertyCalcSchedule::GetScheduleLinkList(const ibCalcScheduleDescription
 	if (const ibValueMetaObjectRegisterData* schedule = GetScheduleRegister(scheduleDesc)) {
 		for (const ibValueMetaObjectDimension* dimension : schedule->GetDimensionArrayObject()) {
 			if (!dimension->IsDeleted() && dimension->GetMetaID() != scheduleDesc.GetDate())
-				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), wxVariant(dimension->GetMetaID()), dimension->GetIcon());
+				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), ibVariant(dimension->GetMetaID()), dimension->GetClassType());
 		}
 	}
 }
@@ -107,7 +107,7 @@ void ibPropertyCalcSchedule::GetScheduleFieldList(ibMetaID dimension, ibProperty
 			return;
 		for (const ibClassID& clsid : field->GetTypeDesc().GetClsidList()) {
 			if (wanted.ContainType(clsid)) {
-				list.Add(field->GetMetaID(), field->GetName(), field->GetSynonym(), wxVariant(field->GetMetaID()), field->GetIcon());
+				list.Add(field->GetMetaID(), field->GetName(), field->GetSynonym(), ibVariant(field->GetMetaID()), field->GetClassType());
 				return;
 			}
 		}
@@ -122,8 +122,7 @@ bool ibPropertyCalcSchedule::SetDataValue(const ibValue& varPropVal) { return fa
 
 bool ibPropertyCalcSchedule::GetDataValue(ibValue& pvarPropVal) const
 {
-	wxString name;
-	get_cell_variant<ibVariantDataCalcSchedule>()->Write(name);
+	const ibString name = m_propValue.GetString();
 	pvarPropVal = ibValue(name);
 	return true;
 }
@@ -136,4 +135,43 @@ bool ibPropertyCalcSchedule::ReadNodeValue(const ibDataValue& value)
 bool ibPropertyCalcSchedule::WriteNodeValue(ibDataValue& value) const
 {
 	return ibCalcScheduleDescriptionMemory::WriteNode(value, GetValueAsScheduleDesc());
+}
+
+#include "protocol/protocol.h"            // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "core/serialize/dataBuilder.h"
+
+bool ibPropertyCalcSchedule::GetProtocolValue(ibDataNode& row, ibReader reader)
+{
+	if (!ibProperty::GetProtocolValue(row, reader))
+		return false;
+
+	const ibCalcScheduleDescription& desc = GetValueAsScheduleDesc();
+	auto lists = std::make_shared<ibDataNode>();
+	const auto append = [](ibDataNode& parent, std::int32_t kind, const ibPropertyChoiceList& list) {
+		for (unsigned int index = 0; index < list.GetCount(); ++index) {
+			ibDataNode& item = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
+			if (kind != 0)
+				item.SetValue(ibProtocol::ibSchema::ibProperties::Kind, kind);
+			item.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(list.GetId(index)));
+			item.SetValue(ibProtocol::ibSchema::ibProperties::Title, list.GetName(index));   // names, as the desktop's cell named them
+		}
+	};
+
+	ibPropertyChoiceList values, dates, links;
+	GetScheduleValueList(desc, values);
+	append(*lists, 1, values);
+	GetScheduleDateList(desc, dates);
+	append(*lists, 2, dates);
+	GetScheduleLinkList(desc, links);
+	for (unsigned int index = 0; index < links.GetCount(); ++index) {
+		ibDataNode& link = lists->AddChild(0, static_cast<ibMetaID>(lists->Children().size() + 1));
+		link.SetValue(ibProtocol::ibSchema::ibProperties::Kind, static_cast<std::int32_t>(3));
+		link.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(links.GetId(index)));
+		link.SetValue(ibProtocol::ibSchema::ibProperties::Title, links.GetName(index));
+		ibPropertyChoiceList fields;
+		GetScheduleFieldList(links.GetId(index), fields);
+		append(link, 0, fields);
+	}
+	row.SetProperty(ibProtocol::ibSchema::ibProperties::Schedule, ibDataValue::Child(lists));
+	return true;
 }

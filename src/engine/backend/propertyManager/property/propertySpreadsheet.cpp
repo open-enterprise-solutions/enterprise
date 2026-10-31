@@ -5,16 +5,16 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertySpreadsheet::CreateVariantData(const ibSpreadsheetDescription& val)
+ibVariant ibPropertySpreadsheet::CreateVariantData(const ibSpreadsheetDescription& val)
 {
-	return new ibVariantDataSpreadsheet(val);
+	return ibVariant(new ibVariantSpreadsheet(val));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibSpreadsheetDescription& ibPropertySpreadsheet::GetValueAsSpreadsheetDesc() const
 {
-	return get_cell_variant<ibVariantDataSpreadsheet>()->GetSpreadsheetDesc();
+	return get_cell_variant<ibVariantSpreadsheet>()->GetSpreadsheetDesc();
 }
 
 void ibPropertySpreadsheet::SetValue(const ibSpreadsheetDescription& val)
@@ -26,7 +26,7 @@ void ibPropertySpreadsheet::SetValue(const ibSpreadsheetDescription& val)
 
 bool ibPropertySpreadsheet::IsEmptyProperty() const
 {
-	return get_cell_variant<ibVariantDataSpreadsheet>()->IsEmptySpreadsheet();
+	return get_cell_variant<ibVariantSpreadsheet>()->IsEmptySpreadsheet();
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -58,4 +58,15 @@ bool ibPropertySpreadsheet::ReadNodeValue(const ibDataValue& value)
 bool ibPropertySpreadsheet::WriteNodeValue(ibDataValue& value) const
 {
 	return ibSpreadsheetDescriptionMemory::WriteNode(value, GetValueAsSpreadsheetDesc());
+}
+
+#include "backend/metaCollection/metaObject.h"   // ibValueMetaObject — the owner, the link's object
+#include "protocol/protocol.h"                   // ibProtocol::ibSchema::ibProperties::Object
+
+bool ibPropertySpreadsheet::GetProtocolValue(ibDataNode& row, ibReader reader)
+{
+	if (!ibProperty::GetProtocolValue(row, reader))
+		return false;
+	row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<std::int32_t>(static_cast<const ibValueMetaObject*>(m_owner)->GetMetaID()));
+	return true;
 }

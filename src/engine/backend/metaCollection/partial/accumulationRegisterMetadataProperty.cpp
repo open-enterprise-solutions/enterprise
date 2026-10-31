@@ -1,6 +1,6 @@
 #include "accumulationRegister.h"
 
-void ibValueMetaObjectAccumulationRegister::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObjectAccumulationRegister::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	if (GetRegisterType() == ibRegisterType::eBalances) {
 		(*m_propertyAttributeRecordType)->ClearFlag(metaDisableFlag);

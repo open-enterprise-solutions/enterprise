@@ -2,9 +2,9 @@
 #include "backend/metaData.h"
 #include "backend/objCtor.h"   // ibCtorMetaValueType — the configuration's references a barrier stands for
 
-wxString ibVariantDataAttribute::MakeString() const
+ibString ibVariantAttribute::GetString() const
 {
-	wxString strDescr;
+	ibString strDescr;
 	if (m_ownerProperty != nullptr) {
 		// The same owner as DoRefreshTypeDesc, and the same answer when it has no configuration: the value
 		// registry names what it holds itself.
@@ -14,18 +14,18 @@ wxString ibVariantDataAttribute::MakeString() const
 			const ibCtorAbstractType* typeCtor = metaData != nullptr ? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
 			if (typeCtor == nullptr)
 				continue;
-			strDescr = strDescr.IsEmpty() ? typeCtor->GetClassName() : strDescr + wxT(", ") + typeCtor->GetClassName();
+			strDescr = strDescr.IsEmpty() ? typeCtor->GetClassName() : strDescr + ibT(", ") + typeCtor->GetClassName();
 		}
 	}
 	return strDescr;
 }
 
-void ibVariantDataAttribute::DoSetDefaultMetaType() {
+void ibVariantAttribute::DoSetDefaultMetaType() {
 	if (m_ownerProperty != nullptr)
 		m_typeDesc.SetDefaultMetaType(ibBackendTypeConfigFactory::GetDefaultTypeByFilter(m_ownerProperty->GetFilterDataType()));
 }
 
-void ibVariantDataAttribute::DoSetFromMetaId(const ibMetaID& id)
+void ibVariantAttribute::DoSetFromMetaId(const ibMetaID& id)
 {
 	if (m_ownerProperty != nullptr && id != wxNOT_FOUND) {
 
@@ -52,14 +52,14 @@ void ibVariantDataAttribute::DoSetFromMetaId(const ibMetaID& id)
 	}
 }
 
-void ibVariantDataAttribute::DoSetFromTypeId(const ibTypeDescription& td)
+void ibVariantAttribute::DoSetFromTypeId(const ibTypeDescription& td)
 {
 	m_typeDesc = td;
 	m_object_version = 0;   // a new declaration is refreshed as a new value is — its barriers derived again
 	RefreshTypeDesc();
 }
 
-void ibVariantDataAttribute::DoRefreshTypeDesc()
+void ibVariantAttribute::DoRefreshTypeDesc()
 {
 	if (m_ownerProperty != nullptr) {
 
@@ -100,7 +100,7 @@ void ibVariantDataAttribute::DoRefreshTypeDesc()
 				}
 
 				std::vector<ibClassID> members;
-				if (IsReference(clsid) && clsid_is_any(clsid))
+				if (::IsReference(clsid) && clsid_is_any(clsid))   // the kind byte — a variant has an IsReference() of its own
 					for (const ibCtorMetaValueType* reference : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
 						if (clsid_admits(clsid, reference->GetClassType()))
 							members.push_back(reference->GetClassType());

@@ -88,10 +88,10 @@
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>false</ConformanceMode>
+      <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
@@ -99,7 +99,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;ws2_32.lib;crypt32.lib;mbedtls.lib;bcrypt.lib;backend.lib;core.lib;frmserver.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxbase33ud.lib;backend.lib;core.lib;frmserver.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -108,16 +108,16 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>false</ConformanceMode>
+      <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;ws2_32.lib;crypt32.lib;mbedtls.lib;bcrypt.lib;backend.lib;core.lib;frmserver.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxbase33ud.lib;backend.lib;core.lib;frmserver.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -128,10 +128,10 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>false</ConformanceMode>
+      <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
@@ -143,7 +143,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;ws2_32.lib;crypt32.lib;mbedtls.lib;bcrypt.lib;backend.lib;core.lib;frmserver.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxbase33u.lib;backend.lib;core.lib;frmserver.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -154,10 +154,10 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>false</ConformanceMode>
+      <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
@@ -169,7 +169,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;ws2_32.lib;crypt32.lib;mbedtls.lib;bcrypt.lib;backend.lib;core.lib;frmserver.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxbase33u.lib;backend.lib;core.lib;frmserver.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -180,6 +180,12 @@
   <ItemGroup>
     <ClInclude Include="appServer.h" />
     <ClInclude Include="clientListener.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="appserver.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

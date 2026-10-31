@@ -4,7 +4,7 @@
 #include "frmclient/win/typeconv.h"   // ColourToString / StringToColour — the engine's text of a colour
 
 namespace {
-const wxString kColourText = wxT("v");
+const ibString kColourText = ibT("v");
 }
 
 ibString ibValueColour::GetString() const
@@ -14,12 +14,12 @@ ibString ibValueColour::GetString() const
 
 bool ibValueColour::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(kColourText, typeConv::ColourToString(m_colour));
+	node.SetValue(kColourText, ibString(typeConv::ColourToString(m_colour)));
 	return true;
 }
 
 bool ibValueColour::DoDeserialize(const ibDataNode& node)
 {
-	m_colour = typeConv::StringToColour(node.GetValue<wxString>(kColourText));
+	m_colour = typeConv::StringToColour(node.GetValue<ibString>(kColourText));
 	return true;
 }

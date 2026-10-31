@@ -7,21 +7,21 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyModule::CreateVariantData()
+ibVariant ibPropertyModule::CreateVariantData()
 {
-	return new ibVariantDataModule();
+	return ibVariant(new ibVariantModule());
 }
 
 ////////////////////////////////////////////////////////////////////////
 
-wxString ibPropertyModule::GetValueAsString() const
+ibString ibPropertyModule::GetValueAsString() const
 {
-	return get_cell_variant<ibVariantDataModule>()->GetModuleText();
+	return get_cell_variant<ibVariantModule>()->GetModuleText();
 }
 
-void ibPropertyModule::SetValue(const wxString& val)
+void ibPropertyModule::SetValue(const ibString& val)
 {
-	get_cell_variant<ibVariantDataModule>()->SetModuleText(val);
+	get_cell_variant<ibVariantModule>()->SetModuleText(val);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -47,5 +47,16 @@ bool ibPropertyModule::ReadNodeValue(const ibDataValue& value)
 bool ibPropertyModule::WriteNodeValue(ibDataValue& value) const
 {
 	value = ibDataValue::String(ibPropertyModule::GetValueAsString());
+	return true;
+}
+
+#include "backend/metaCollection/metaObject.h"   // ibValueMetaObject — the owner, the link's object
+#include "protocol/protocol.h"                   // ibProtocol::ibSchema::ibProperties::Object
+
+bool ibPropertyModule::GetProtocolValue(ibDataNode& row, ibReader reader)
+{
+	if (!ibProperty::GetProtocolValue(row, reader))
+		return false;
+	row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<std::int32_t>(static_cast<const ibValueMetaObject*>(m_owner)->GetMetaID()));
 	return true;
 }

@@ -1,6 +1,15 @@
 #ifndef _CORE_BUILD_H__
 #define _CORE_BUILD_H__
 
+// THE PLATFORM'S VERSION — the last of the list below, said once: the code reads it as version_oes_last, and every
+// program's and library's version resource as these three (core/version.rc2 — the resource compiler reads this file
+// up to RC_INVOKED).
+#define OES_VERSION_MAJOR   2
+#define OES_VERSION_MINOR   0
+#define OES_VERSION_RELEASE 0
+
+#ifndef RC_INVOKED
+
 #include "core/core.h"
 
 //*******************************************************************************************
@@ -10,10 +19,10 @@
 #define version_generate(major, minor, release) \
 		( (major * 1000) + (minor * 100) + release )
 
+// The compatibility ladder (compatibility-version.md): a rung per behaviour a configuration may still ask for. The
+// alpha's rungs, 1.0.0 and 1.0.1, went with 2.0.0 (2026-10-28) — a configuration of the alpha is not carried over.
 enum ibProgramVersion {
-	version_oes_1_0_0 = version_generate(1, 0, 0),
-	version_oes_1_0_1 = version_generate(1, 0, 1),
-	version_oes_last  = version_oes_1_0_1
+	version_oes_last  = version_generate(OES_VERSION_MAJOR, OES_VERSION_MINOR, OES_VERSION_RELEASE)
 };
 
 // THE BUILD — its number: the days from 2018-01-01 to the day it was compiled, the VERSION, stable across a day of
@@ -26,5 +35,7 @@ CORE_API unsigned int GetBuildId();
 // for the second question (a banner that has to be exact). The bytecode cache does not use it:
 // its engine half is the format version, which moves when the bytecode does.
 CORE_API const char* GetBuildStamp();
+
+#endif // RC_INVOKED
 
 #endif

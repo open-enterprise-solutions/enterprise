@@ -3,10 +3,6 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 #include <atomic>   // the statement-name counter
-#include <wx/tokenzr.h>
-#include <wx/arrimpl.cpp>
-
-WX_DEFINE_OBJARRAY(ArrayOfPostgresPreparedStatementWrappers);
 
 ibPreparedStatementPostgres::ibPreparedStatementPostgres(ibInterfacePostgres* pInterface)
 	: ibPreparedStatement()
@@ -14,7 +10,7 @@ ibPreparedStatementPostgres::ibPreparedStatementPostgres(ibInterfacePostgres* pI
 	m_pInterface = pInterface;
 }
 
-ibPreparedStatementPostgres::ibPreparedStatementPostgres(ibInterfacePostgres* pInterface, PGconn* pDatabase, const wxString& strSQL, const wxString& strStatementName)
+ibPreparedStatementPostgres::ibPreparedStatementPostgres(ibInterfacePostgres* pInterface, PGconn* pDatabase, const ibString& strSQL, const ibString& strStatementName)
 	: ibPreparedStatement()
 {
 	m_pInterface = pInterface;
@@ -37,30 +33,30 @@ void ibPreparedStatementPostgres::Close()
 	// the connection is still there to ask.
 	for (size_t i = 0; i < m_Statements.size(); i++)
 		m_Statements[i].Deallocate();
-	m_Statements.Clear();
+	m_Statements.clear();
 }
 
-void ibPreparedStatementPostgres::AddStatement(PGconn* pDatabase, const wxString& strSQL, const wxString& strStatementName)
+void ibPreparedStatementPostgres::AddStatement(PGconn* pDatabase, const ibString& strSQL, const ibString& strStatementName)
 {
 	ibPreparedStatementPostgresWrapper Statement(m_pInterface, pDatabase, strSQL, strStatementName);
 	m_Statements.push_back(Statement);
 }
 
-ibPreparedStatementPostgres* ibPreparedStatementPostgres::CreateStatement(ibInterfacePostgres* pInterface, PGconn* pDatabase, const wxString& strSQL)
+ibPreparedStatementPostgres* ibPreparedStatementPostgres::CreateStatement(ibInterfacePostgres* pInterface, PGconn* pDatabase, const ibString& strSQL)
 {
-	wxArrayString Queries = ParseQueries(strSQL);
+	std::vector<ibString> Queries = ParseQueries(strSQL);
 
-	wxArrayString::iterator start = Queries.begin();
-	wxArrayString::iterator stop = Queries.end();
+	std::vector<ibString>::iterator start = Queries.begin();
+	std::vector<ibString>::iterator stop = Queries.end();
 
 	ibPreparedStatementPostgres* pStatement = new ibPreparedStatementPostgres(pInterface);
 	while (start != stop)
 	{
-		wxString strName = ibPreparedStatementPostgres::GenerateStatementName();
+		ibString strName = ibPreparedStatementPostgres::GenerateStatementName();
 		pStatement->AddStatement(pDatabase, (*start), strName);
-		wxCharBuffer nameBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(strName);
-		wxCharBuffer sqlBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(TranslateSQL((*start)));
-		PGresult* pResult = pInterface->GetPQprepare()(pDatabase, nameBuffer, sqlBuffer, 0, nullptr);
+		std::string nameBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(strName);
+		std::string sqlBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(TranslateSQL((*start)));
+		PGresult* pResult = pInterface->GetPQprepare()(pDatabase, nameBuffer.c_str(), sqlBuffer.c_str(), 0, nullptr);
 		if (pResult == nullptr)
 		{
 			delete pStatement;
@@ -69,8 +65,9 @@ ibPreparedStatementPostgres* ibPreparedStatementPostgres::CreateStatement(ibInte
 
 		if (pInterface->GetPQresultStatus()(pResult) != PGRES_COMMAND_OK)
 		{
-			pStatement->SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(pInterface->GetPQresultStatus()(pResult),
-				pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)));
+			const char* state = pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE);
+			pStatement->SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(pInterface->GetPQresultStatus()(pResult), state),
+				ibDatabaseLayerPostgres::ClassifySqlState(state != nullptr ? ibString::FromUTF8(state) : ibString()));
 			pStatement->SetErrorMessage(ibDatabaseStringConverter::ConvertFromUnicodeStream(
 				pInterface->GetPQresultErrorMessage()(pResult)));
 			pInterface->GetPQclear()(pResult);
@@ -180,7 +177,7 @@ int ibPreparedStatementPostgres::RunQuery()
 	for (unsigned int i = 0; i < (m_Statements.size()); i++) {
 		rows = m_Statements[i].DoRunQuery();
 		if (m_Statements[i].GetErrorCode() != DATABASE_LAYER_OK) {
-			SetErrorCode(m_Statements[i].GetErrorCode());
+			SetErrorCode(m_Statements[i].GetErrorCode(), m_Statements[i].GetErrorKind());
 			SetErrorMessage(m_Statements[i].GetErrorMessage());
 			ThrowDatabaseException();
 			return DATABASE_LAYER_QUERY_RESULT_ERROR;
@@ -194,7 +191,7 @@ ibDatabaseResultSet* ibPreparedStatementPostgres::RunQueryWithResults()
 	for (unsigned int i = 0; i < (m_Statements.size() - 1); i++) {
 		m_Statements[i].DoRunQuery();
 		if (m_Statements[i].GetErrorCode() != DATABASE_LAYER_OK) {
-			SetErrorCode(m_Statements[i].GetErrorCode());
+			SetErrorCode(m_Statements[i].GetErrorCode(), m_Statements[i].GetErrorKind());
 			SetErrorMessage(m_Statements[i].GetErrorMessage());
 			ThrowDatabaseException();
 			return nullptr;
@@ -203,7 +200,7 @@ ibDatabaseResultSet* ibPreparedStatementPostgres::RunQueryWithResults()
 	ibPreparedStatementPostgresWrapper* pLastStatement = &(m_Statements[m_Statements.size() - 1]);
 	ibDatabaseResultSet* pResultSet = pLastStatement->DoRunQueryWithResults();
 	if (pLastStatement->GetErrorCode() != DATABASE_LAYER_OK) {
-		SetErrorCode(pLastStatement->GetErrorCode());
+		SetErrorCode(pLastStatement->GetErrorCode(), pLastStatement->GetErrorKind());
 		SetErrorMessage(pLastStatement->GetErrorMessage());
 		ThrowDatabaseException();
 	}
@@ -218,10 +215,10 @@ ibDatabaseResultSet* ibPreparedStatementPostgres::RunQueryWithResults()
 // the same seed: a registry thread drew exactly the names the main thread had already prepared on the same
 // connection ("prepared statement … already exists", 2026-10-01, the first application-server run on
 // PostgreSQL). A counter cannot repeat.
-wxString ibPreparedStatementPostgres::GenerateStatementName()
+ibString ibPreparedStatementPostgres::GenerateStatementName()
 {
 	static std::atomic<unsigned long long> s_counter{ 0 };
-	return wxString::Format(wxT("databaselayer_%llu"), ++s_counter);
+	return ibString::Format(ibT("databaselayer_%llu"), ++s_counter);
 }
 
 int ibPreparedStatementPostgres::FindStatementAndAdjustPositionIndex(int* pPosition)
@@ -249,24 +246,24 @@ int ibPreparedStatementPostgres::FindStatementAndAdjustPositionIndex(int* pPosit
 	return -1;
 }
 
-wxString ibPreparedStatementPostgres::TranslateSQL(const wxString& strOriginalSQL)
+ibString ibPreparedStatementPostgres::TranslateSQL(const ibString& strOriginalSQL)
 {
 	int nParameterIndex = 1;
-	wxString strReturn = wxEmptyString;//strOriginalSQL;
+	ibString strReturn = ibEmptyString;//strOriginalSQL;
 	/*
-	int nFound = strReturn.Replace(_("?"), wxString::Format(_("$%d"), nParameterIndex), false);
+	int nFound = strReturn.Replace(_("?"), ibString::Format(_("$%d"), nParameterIndex), false);
 	while (nFound != 0)
 	{
 	  nParameterIndex++;
-	  nFound = strReturn.Replace(_("?"), wxString::Format(_("$%d"), nParameterIndex), false);
+	  nFound = strReturn.Replace(_("?"), ibString::Format(_("$%d"), nParameterIndex), false);
 	}
 	*/
 	bool bInStringLiteral = false;
 	unsigned int len = strOriginalSQL.length();
 	for (unsigned int i = 0; i < len; i++)
 	{
-		wxChar character = strOriginalSQL[i];
-		if (wxT('\'') == character)
+		ibChar character = strOriginalSQL[i];
+		if (ibT('\'') == character)
 		{
 			// Signify that we are inside a string literal inside the SQL
 			bInStringLiteral = !bInStringLiteral;
@@ -285,7 +282,7 @@ wxString ibPreparedStatementPostgres::TranslateSQL(const wxString& strOriginalSQ
 				else
 				{
 					// Replace the question mark with a prepared statement placeholder
-					strReturn += wxString::Format(wxT("$%d"), nParameterIndex);
+					strReturn += ibString::Format(ibT("$%d"), nParameterIndex);
 					nParameterIndex++;
 				}
 			}

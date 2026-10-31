@@ -1,87 +1,54 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, wxFormBuilder
+//	Author		: Maxim Kornienko
 //	Description : the view of a tab
 ////////////////////////////////////////////////////////////////////////////
 
 #include "visualHostClient.h"
 #include "ctrl/frame.h"
 #include "commandBar.h"
-#include "ctrl/widgets.h"   // ibViewPlaceholder — in the place of a control not drawn yet
+#include "ctrl/sizer.h"     // ibValueSizerItem — how a sizer item lays its child out
 
+#include <algorithm>         // std::find — who stays (UpdateChildren)
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
 
-#include "frmclient/backend/serialize/dataProtocol.h"   // a control's node read as the engine reads its JSON
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/typeconv.h"
 #include "frmclient/win/ctrls/dynamicBorder.h"
 
 namespace {
 
-// How a sizer item lays its child out — the desktop's ibValueSizerItem: the borders it has, and how it stretches.
-int FlagOf(const ibProtocolNode& item)
-{
-	int flag = static_cast<int>(item.GetInt(ibProtocolName::Stretch));
-	if (item.GetBool(ibProtocolName::BorderLeft))
-		flag |= wxLEFT;
-	if (item.GetBool(ibProtocolName::BorderRight))
-		flag |= wxRIGHT;
-	if (item.GetBool(ibProtocolName::BorderTop))
-		flag |= wxUP;
-	if (item.GetBool(ibProtocolName::BorderBottom))
-		flag |= wxDOWN;
-	return flag;
-}
-
 // THE VIEW A CALL IS OF — a form by its key; a view that is no form (no key), by the tab it is drawn in.
 void SetViewOf(ibProtocolNode& params, const wxString& formKey, long long tabId)
 {
 	if (formKey.IsEmpty())
-		params.SetValue(ibProtocolName::Tab, tabId);
+		params.SetValue(ibProtocol::ibFetch::Tab, tabId);
 	else
-		params.SetValue(ibProtocolName::Form, formKey);
+		params.SetValue(ibProtocol::ibFetch::Form, formKey);
 }
 
-// A node less what is in it — what its control draws; the walk goes on to its children.
+// A node less what is in it — what its control draws; the walk goes on to its children. Its bytes as they lie, its
+// children's cut off: its entries set one by one, a handle made for each, were a quarter of the view's draw at every
+// control dropped (a Debug profile, 2026-10-26).
 ibProtocolNode WithoutChildren(const ibProtocolNode& node)
 {
-	ibProtocolNode bare = node.Clone();
-	bare.Remove(ibProtocolName::NodeChildren);
-	return bare;
+	const ibDataNode* const read = node.GetBody();
+	if (read == nullptr)
+		return ibProtocolNode();
+	ibDataNode bare = *read;
+	bare.RemoveChildren();
+	return ibProtocolNode(bare);
 }
 
-// THE NODE A CONTROL'S ReadData READS — the desktop's form node of it: its entries as the server's WriteData wrote them,
-// less what is in it (controls of their own) and its State (the runtime's, beside its properties).
-ibDataNode DataOf(const ibProtocolNode& node)
+// A control whose orientation is a style it is created with — a line, a slider, a gauge: a new Orient builds it anew
+// (ShapeOf keeps it in the shape for the same reason).
+bool IsOrientCreated(const wxString& type)
 {
-	// Read as the engine reads its JSON — and then all of it as properties: the server wrote them as its control's
-	// properties (WriteData), and the wire keeps fields and properties in one set.
-	ibDataNode read;
-	ibReadProtocolNode(node, read);
-
-	ibDataNode data;
-	for (const auto& [name, value] : read.Fields())
-		data.SetProperty(name, value);
-	for (const auto& [name, value] : read.Properties()) {
-		if (name != ibProtocolName::State)
-			data.SetProperty(name, value);
-	}
-	return data;
-}
-
-// …read by the control: its name, then its properties — the desktop's LoadNode, as a control is built or patched — and
-// what the server says it is called (a form's, a page's — its Title).
-void ReadControl(ibValueFrame* control, const ibProtocolNode& node)
-{
-	control->SetControlName(node.GetString(ibProtocolName::Name));
-	control->ReadData(DataOf(node));
-
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
-	control->SetControlTitle(state.Has(ibProtocolName::Caption) ? state.GetString(ibProtocolName::Caption)
-		: state.GetString(ibProtocolName::Title));
+	return type == ibProtocol::ibForm::ibType::Staticline || type == ibProtocol::ibForm::ibType::Slider
+		|| type == ibProtocol::ibForm::ibType::Gauge;
 }
 
 // A view as a list of what it is made of: each node's type and id, in order, nested as they are — and what a control
-// is BUILT with rather than set afterwards: how a sizer item lays its child out, which way a line runs.
+// is BUILT with rather than set afterwards: how a sizer item lays its child out, which way a line, a slider, a gauge runs.
 void ShapeOf(const ibProtocolNode& node, std::string& shape)
 {
 	const wxString type = node.GetType();
@@ -89,12 +56,12 @@ void ShapeOf(const ibProtocolNode& node, std::string& shape)
 	shape += '#';
 	shape += std::to_string(node.GetId());
 
-	if (type == ibProtocolType::SizerItem) {
-		shape += '(' + std::to_string(node.GetInt(ibProtocolName::Proportion)) + '|' + std::to_string(FlagOf(node))
-			+ '|' + std::to_string(node.GetInt(ibProtocolName::BorderSize)) + ')';
+	if (type == ibProtocol::ibForm::ibType::SizerItem) {
+		shape += '(' + std::to_string(node.GetInt(ibProtocol::ibForm::ibProperty::Proportion)) + '|' + std::to_string(ibValueSizerItem::GetFlag(node))
+			+ '|' + std::to_string(node.GetInt(ibProtocol::ibForm::ibProperty::BorderSize)) + ')';
 	}
-	else if (type == ibProtocolType::Staticline) {
-		shape += '(' + std::to_string(node.GetInt(ibProtocolName::Orient)) + ')';
+	else if (IsOrientCreated(type)) {
+		shape += '(' + std::to_string(node.GetInt(ibProtocol::ibForm::ibProperty::Orient)) + ')';
 	}
 
 	shape += '[';
@@ -104,16 +71,24 @@ void ShapeOf(const ibProtocolNode& node, std::string& shape)
 }
 
 // A patch that changes the view's shape — a control added, taken away or moved: said by the entries that order and
-// remove the children with ids, at any control of it (framePatch.cpp). What changes inside a control's own entries — its
-// State's lists — is no part of the shape.
-bool IsShapeChanged(const ibProtocolNode& patch)
+// remove the children with ids, at any control of it (framePatch.cpp); and a new Orient of a control created with it,
+// read from the view's node of the same id. What changes inside a control's own entries — its State's lists — is no
+// part of the shape.
+bool IsShapeChanged(const ibProtocolNode& view, const ibProtocolNode& patch)
 {
-	if (patch.Has(ibProtocolName::NodeOrder) || patch.Has(ibProtocolName::NodeRemovedIds)
-		|| patch.Has(ibProtocolName::NodeChildrenWhole))
+	if (patch.Has(ibProtocol::ibNode::Order) || patch.Has(ibProtocol::ibNode::RemovedIds)
+		|| patch.Has(ibProtocol::ibNode::ChildrenWhole))
 		return true;
-	for (const ibProtocolNode& child : patch.Children()) {
-		if (IsShapeChanged(child))
-			return true;
+	if (patch.Has(ibProtocol::ibForm::ibProperty::Orient) && IsOrientCreated(view.GetType()))
+		return true;
+	for (const ibProtocolNode& changed : patch.Children()) {
+		for (const ibProtocolNode& child : view.Children()) {
+			if (child.GetId() == changed.GetId()) {
+				if (IsShapeChanged(child, changed))
+					return true;
+				break;
+			}
+		}
 	}
 	return false;
 }
@@ -123,13 +98,13 @@ bool IsShapeChanged(const ibProtocolNode& patch)
 // be pressed — is drawn where it stands.
 bool IsLayoutChanged(const ibProtocolNode& patch)
 {
-	if (patch.GetChangeCount() > (patch.Has(ibProtocolName::State) ? 1u : 0u))
+	if (patch.GetChangeCount() > (patch.Has(ibProtocol::ibForm::ibState::State) ? 1u : 0u))
 		return true;
 
-	static const char* const kLayoutState[] = { ibProtocolName::Visible, ibProtocolName::Caption, ibProtocolName::Title,
-		ibProtocolName::Representation };
-	const ibProtocolNode state = patch.FindChild(ibProtocolName::State);
-	const std::vector<ibProtocolNode> removed = state.GetList(ibProtocolName::NodeRemoved);
+	static const char* const kLayoutState[] = { ibProtocol::ibForm::ibState::Visible, ibProtocol::ibForm::ibState::Caption, ibProtocol::ibForm::ibState::Title,
+		ibProtocol::ibForm::ibState::Representation };
+	const ibProtocolNode state = patch.FindChild(ibProtocol::ibForm::ibState::State);
+	const std::vector<ibProtocolNode> removed = state.GetList(ibProtocol::ibNode::Removed);
 	for (const char* const name : kLayoutState) {
 		if (state.Has(name))
 			return true;
@@ -161,6 +136,12 @@ void CalculateLabels(const ibValueFrame* control, wxBoxSizer* parentSizer, int& 
 	if (parentSizer->GetOrientation() == wxHORIZONTAL)
 		return;
 
+	// A PAGE stops it too — a window that lays out what is in it with a sizer of its own (a notebook's page, the one
+	// control that is both): its labels are a column of their own, which ApplyLabels measures when it reaches the page.
+	// Walked on, every page of a notebook was one column with the form, and the widest caption anywhere set every label.
+	if (control->GetWindow() != nullptr && control->GetSizer() != nullptr)
+		return;
+
 	wxBoxSizer* const childSizer = dynamic_cast<wxBoxSizer*>(control->GetSizer());
 	wxBoxSizer* const nextParent = childSizer != nullptr ? childSizer : parentSizer;
 	for (unsigned int idx = 0; idx < control->GetChildCount(); idx++)
@@ -171,6 +152,18 @@ void ApplyLabels(const ibValueFrame* control, wxBoxSizer* parentSizer, int& maxL
 {
 	wxBoxSizer* const childSizer = dynamic_cast<wxBoxSizer*>(control->GetSizer());
 	ibControlDynamicBorder* const label = dynamic_cast<ibControlDynamicBorder*>(control->GetWindow());
+
+	// A page starts a column of its own (see CalculateLabels): measured in its sizer, from nothing.
+	if (control->GetWindow() != nullptr && childSizer != nullptr) {
+		int pageMax = 0;
+		if (childSizer->GetOrientation() == wxVERTICAL) {
+			for (unsigned int idx = 0; idx < control->GetChildCount(); idx++)
+				CalculateLabels(control->GetChild(idx), childSizer, pageMax);
+		}
+		for (unsigned int idx = 0; idx < control->GetChildCount(); idx++)
+			ApplyLabels(control->GetChild(idx), childSizer, pageMax);
+		return;
+	}
 
 	// What is in it sees a copy of the width: what it changes stays with it.
 	int subtreeMax = maxLabelWidth;
@@ -194,14 +187,21 @@ void ApplyLabels(const ibValueFrame* control, wxBoxSizer* parentSizer, int& maxL
 //***********************************************************************************
 
 ibVisualHostClient::ibVisualHostClient(ibFrontendMainFrame& frame, wxWindow* parent, long long tabId)
-	: wxScrolledCanvas(parent, wxID_ANY), m_mainFrame(frame), m_tabId(tabId), m_valueForm(std::make_unique<ibValueForm>(*this))
+	: wxPanel(parent, wxID_ANY), m_mainFrame(frame), m_tabId(tabId), m_valueForm(std::make_unique<ibValueForm>(*this))
 {
-	SetDoubleBuffered(true);
-	SetScrollRate(5, 5);
+	// ⭐ A FRAME AROUND THE WINDOW THE CONTROLS SCROLL IN, that one filling it — the desktop's facade (ibVisualHost): the
+	// command bar stands above it (Build) and stays where it is while the controls scroll; it scrolled away with them when
+	// this one was the scrolling window (2026-10-22).
+	m_contentWindow = new wxScrolledCanvas(this, wxID_ANY);
+	m_contentWindow->SetDoubleBuffered(true);
+	m_contentWindow->SetScrollRate(5, 5);
 #ifdef __WXOSX__
-	SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
-	SetBackgroundStyle(wxBG_STYLE_SYSTEM);
+	m_contentWindow->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
+	m_contentWindow->SetBackgroundStyle(wxBG_STYLE_SYSTEM);
 #endif
+	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
+	sizer->Add(m_contentWindow, 1, wxEXPAND);
+	SetSizer(sizer);
 }
 
 ibVisualHostClient::~ibVisualHostClient()
@@ -213,12 +213,13 @@ ibVisualHostClient::~ibVisualHostClient()
 void ibVisualHostClient::Draw(const ibProtocolNode& view, const ibProtocolNode& patch)
 {
 	// A view of no type — a text's — is not one drawn here.
-	const bool isForm = view.GetType() == ibProtocolType::ClientForm;
+	const bool isForm = view.GetType() == ibProtocol::ibForm::ibType::ClientForm;
 	if (!isForm && view.GetType().IsEmpty())
 		return;
 
-	m_formKey = view.GetString(ibProtocolName::Key);
-	m_valueForm->SetControlID(view.GetInt(ibProtocolName::ControlId));
+	const bool sameForm = !m_shape.empty() && m_formKey == view.GetString(ibProtocol::ibForm::Key);
+	m_formKey = view.GetString(ibProtocol::ibForm::Key);
+	m_valueForm->SetControlID(view.GetInt(ibProtocol::ibForm::ControlId));
 
 	// Held still while it is laid out again — and repainted whole when let go; so only when it is laid out again.
 	wxWindowUpdateLocker freeze;
@@ -226,7 +227,7 @@ void ibVisualHostClient::Draw(const ibProtocolNode& view, const ibProtocolNode& 
 	// ⭐ WHAT THE PATCH CHANGED IS DRAWN, NOTHING ELSE — a control whose node in it has entries of its own; the rest is
 	// not looked at, nor compared, and laid out again only when what changed takes room. The view is built anew when the
 	// patch changes its shape, when it was not built yet, and when there is no patch: a frame sent whole.
-	if (patch.IsNode() && !m_shape.empty() && !IsShapeChanged(patch)) {
+	if (patch.IsNode() && !m_shape.empty() && !IsShapeChanged(view, patch)) {
 		const bool layoutChanged = IsLayoutChanged(patch);
 		if (layoutChanged)
 			freeze.Lock(this);
@@ -241,63 +242,98 @@ void ibVisualHostClient::Draw(const ibProtocolNode& view, const ibProtocolNode& 
 	}
 
 	freeze.Lock(this);
-	std::string shape;
-	ShapeOf(view, shape);
-	if (shape != m_shape) {
-		// What the person is typing goes into the control built anew for the same node — none: the field is gone.
-		long long editing = 0;
-		ibViewEdit edit;
-		for (const auto& [id, control] : m_controls) {
-			if (control->SaveEdit(edit)) {
-				editing = id;
-				break;
-			}
+	// What the person is typing goes into the control made anew for the same node, wherever it is made anew — none: the
+	// field is gone. The one typed into is held till then: one made anew is never taken for it.
+	long long editing = 0;
+	ibValuePtr<ibValueFrame> edited;
+	ibViewEdit edit;
+	for (const auto& [id, control] : m_controls) {
+		if (control->SaveEdit(edit)) {
+			editing = id;
+			edited = control;
+			break;
 		}
+	}
 
+	// ⭐ THE SAME FORM IS DRAWN IN ONE WALK — what is in each control laid in where it changed, each node drawn where it
+	// changed (UpdateChildren); its shape is not written out to be compared, nor the form walked again to draw it (ShapeOf
+	// and a second walk were half of the host's draw, 2026-10-22). The form's look first, as Build gives it: what is laid
+	// in takes it on. Built anew when none is, another form is drawn, or what is in it cannot be laid in; a view that is no
+	// form, when its shape changed.
+	bool drawnAgain = false;
+	if (sameForm && isForm) {
+		UpdateForm(view);
+		drawnAgain = UpdateChildren(view, patch, m_valueForm.get(), GetBackgroundWindow(), m_content);
+	}
+	std::string shape;
+	if (!drawnAgain)
+		ShapeOf(view, shape);
+	if (drawnAgain) {
+		ibJournalInfo(wxT("view"), wxT("form %s drawn again: %u controls"), m_formKey,
+			static_cast<unsigned>(m_controls.size()));
+	}
+	else if (!isForm && shape == m_shape) {
+		UpdateNode(view);
+		const auto found = m_controls.find(view.GetId());
+		if (found != m_controls.end() && !found->second->IsPlaceholder()) {
+			wxWindow* const childParent = found->second->GetChildParent();
+			UpdateChildren(view, ibProtocolNode(), found->second, childParent != nullptr ? childParent : GetBackgroundWindow(),
+				found->second->GetSizer());
+		}
+	}
+	else {
 		Clear();
 		Build(view);
 		m_shape = shape;
-
-		const auto found = m_controls.find(editing);
-		if (found != m_controls.end())
-			found->second->RestoreEdit(edit);
 		ibJournalInfo(wxT("view"), wxT("form %s built anew: %u controls"), m_formKey,
 			static_cast<unsigned>(m_controls.size()));
 	}
-	else if (isForm) {
-		UpdateForm(view);
-		for (const ibProtocolNode& child : view.Children())
-			UpdateNode(child);
-		ibJournalInfo(wxT("view"), wxT("form %s drawn again"), m_formKey);
-	}
-	else {
-		UpdateNode(view);
-	}
+
+	const auto found = m_controls.find(editing);
+	if (found != m_controls.end() && found->second != edited)
+		found->second->RestoreEdit(edit);
 
 	AlignLabels();
 	UpdateVirtualSize();
 }
 
-void ibVisualHostClient::Send(long long controlId, ibProtocolEvent event, const ibProtocolNode& args)
+void ibVisualHostClient::Send(long long controlId, ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args)
 {
-	// Raised while the view is torn down — a focus going with a closing tab — it is no one's.
-	if (IsBeingDeleted())
+	// Raised while the view is torn down — a focus going with a closing tab — it is no one's; in a designer's — the
+	// editor's.
+	if (IsBeingDeleted() || IsDesignerHost())
 		return;
-
-	// The form named by its key, not taken for the active tab's: a field left for another tab commits after the tab
-	// has changed.
-	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Control, controlId)
-		.SetValue(ibProtocolName::Event, static_cast<int>(event))
-		.SetValue(ibProtocolName::Args, args);
-	SetViewOf(params, m_formKey, m_tabId);
 
 	// What it says, as it says it — a sheet handed over whole by its size: written out, it was the sheet again in the
 	// journal at every edit.
-	const std::string said = args.IsNode() ? args.Write() : std::string("{}");
+	const ibString said = args.IsNode() ? args.Write() : ibString(wxT("{}"));
 	ibJournalInfo(wxT("event"), wxT("%d on %lld: %s"), static_cast<int>(event), controlId,
-		said.size() <= 1024 ? wxString::FromUTF8(said) : wxString::Format(wxT("%zu bytes"), said.size()));
-	m_mainFrame.Post(ibProtocolMethod::Event, params);
+		said.length() <= 1024 ? said : ibString::Format(wxT("%zu characters"), said.length()));
+	m_mainFrame.Post(ibProtocol::ibMethod::Event, EventOf(controlId, event, args));
+}
+
+bool ibVisualHostClient::Hold(long long controlId, ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args)
+{
+	// Raised while the view is torn down — no one's, as for Send; the editor's in a designer's.
+	if (IsBeingDeleted() || IsDesignerHost())
+		return true;
+	if (!m_mainFrame.Hold(EventOf(controlId, event, args)))
+		return false;
+	// Counted as it is said: a walk through a list is the journal's own measure of what the wire was spared.
+	ibJournalInfo(wxT("event"), wxT("%d on %lld held"), static_cast<int>(event), controlId);
+	return true;
+}
+
+ibProtocolNode ibVisualHostClient::EventOf(long long controlId, ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const
+{
+	// The form named by its key, not taken for the active tab's: a field left for another tab commits after the tab
+	// has changed — and a held event is carried after it.
+	ibProtocolNode params;
+	params.SetValue(ibProtocol::ibEvent::Control, controlId)
+		.SetValue(ibProtocol::ibEvent::Event, static_cast<int>(event))
+		.SetValue(ibProtocol::ibEvent::Args, args);
+	SetViewOf(params, m_formKey, m_tabId);
+	return params;
 }
 
 ibViewFetcher ibVisualHostClient::MakeFetcher(long long controlId) const
@@ -306,13 +342,31 @@ ibViewFetcher ibVisualHostClient::MakeFetcher(long long controlId) const
 	ibFrontendMainFrame* const frame = &m_mainFrame;
 	const wxString form = m_formKey;
 	const long long tab = m_tabId;
-	return [frame, controlId, form, tab](const ibProtocolNode& request, ibProtocolNode& answer) {
+	// …none in a designer's: the editor's tab answers the ask as its own, with the whole form and its classes — some 280 KB,
+	// a second on every drawing of a form with a table (2026-10-15). A document's tab in the designer is asked: its sheet
+	// comes by Fetch alone (2026-10-20: the designer's whole process refused it, a sheet opened there came empty).
+	const bool designer = IsDesignerHost();
+	return [frame, controlId, form, tab, designer](const ibProtocolNode& request, ibProtocolNode& answer) {
+		if (designer)
+			return false;
 		ibProtocolNode params;
-		params.SetValue(ibProtocolName::Control, controlId)
-			.SetValue(ibProtocolName::Request, request);
+		params.SetValue(ibProtocol::ibFetch::Control, controlId)
+			.SetValue(ibProtocol::ibFetch::Request, request);
 		SetViewOf(params, form, tab);
-		return frame->Fetch(params, answer);
+		return frame->Fetch(ibProtocol::ibMethod::Fetch, params, answer);
 	};
+}
+
+// A NODE READ BY ITS CONTROL — its name, and what the server says it is called (a form's, a page's — its Title); its
+// properties are the server's (ibValueFrame).
+void ibVisualHostClient::ReadControl(ibValueFrame* control, const ibProtocolNode& node)
+{
+	control->SetControlName(node.GetString(ibProtocol::ibForm::Name));
+
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
+	control->SetControlTitle(state.Has(ibProtocol::ibForm::ibState::Caption) ? state.GetString(ibProtocol::ibForm::ibState::Caption)
+		: state.GetString(ibProtocol::ibForm::ibState::Title));
+	control->SetSubscribedEvents(state.GetList(ibProtocol::ibForm::ibState::Subscribed));
 }
 
 void ibVisualHostClient::UpdateForm(const ibProtocolNode& form)
@@ -320,40 +374,51 @@ void ibVisualHostClient::UpdateForm(const ibProtocolNode& form)
 	// The form reads what it holds, as its controls do — its editor shows it.
 	ReadControl(m_valueForm.get(), form);
 
-	m_content->SetOrientation(static_cast<int>(form.GetInt(ibProtocolName::Orient, wxVERTICAL)));
-	m_commandBar->Update(form.FindChild(ibProtocolName::State).FindChild(ibProtocolName::CommandBar));
+	m_content->SetOrientation(static_cast<int>(form.GetInt(ibProtocol::ibForm::ibProperty::Orient, wxVERTICAL)));
+	m_commandBar->Update(form.FindChild(ibProtocol::ibForm::ibState::State).FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar));
 
 	// The form's colours — onto its command bar as well (the desktop's UpdateFormLayers).
-	const wxString foreground = form.GetString(ibProtocolName::ForegroundColour);
+	wxWindow* const window = GetBackgroundWindow();
+	const wxString foreground = form.GetString(ibProtocol::ibForm::ibProperty::ForegroundColour);
 	if (!foreground.IsEmpty()) {
-		SetForegroundColour(typeConv::StringToColour(foreground));
-		m_commandBar->GetWindow()->SetForegroundColour(GetForegroundColour());
+		window->SetForegroundColour(typeConv::StringToColour(foreground));
+		m_commandBar->GetWindow()->SetForegroundColour(window->GetForegroundColour());
 	}
-	const wxString background = form.GetString(ibProtocolName::BackgroundColour);
+	const wxString background = form.GetString(ibProtocol::ibForm::ibProperty::BackgroundColour);
 	if (!background.IsEmpty()) {
-		SetBackgroundColour(typeConv::StringToColour(background));
-		m_commandBar->GetWindow()->SetBackgroundColour(GetBackgroundColour());
+		window->SetBackgroundColour(typeConv::StringToColour(background));
+		m_commandBar->GetWindow()->SetBackgroundColour(window->GetBackgroundColour());
 	}
 }
 
 void ibVisualHostClient::Build(const ibProtocolNode& form)
 {
-	// The desktop's chrome: the command bar at the top, above the controls (CreateFormLayers).
-	m_sizer = new wxBoxSizer(wxVERTICAL);
-	m_commandBar = std::make_unique<ibViewCommandBar>(this, [this](const ibProtocolNode& args) {
-		Send(m_valueForm->GetControlID(), ibProtocolEvent::Command, args);
+	// The desktop's chrome: the command bar at the top, above the controls (CreateFormLayers) — on this window, above the
+	// one they scroll in, so it stays where it is (InitMainSizer); a host that builds them deeper (the designer's card)
+	// has it there with them, the whole card scrolling.
+	wxWindow* const window = GetBackgroundWindow();
+	wxWindow* const barParent = window == m_contentWindow ? this : window;
+	m_commandBar = std::make_unique<ibViewCommandBar>(barParent, *this, [this](const ibProtocolNode& args) {
+		Send(m_valueForm->GetControlID(), ibProtocol::ibEvent::ibKind::Command, args);
 	});
-	m_sizer->Add(m_commandBar->GetWindow(), 0, wxEXPAND);
 	m_content = new wxBoxSizer(wxVERTICAL);
-	m_sizer->Add(m_content, 1, wxEXPAND);
-	SetSizer(m_sizer);
+	if (barParent == this) {
+		GetSizer()->Insert(0, m_commandBar->GetWindow(), 0, wxEXPAND);
+		window->SetSizer(m_content);
+	}
+	else {
+		wxBoxSizer* const column = new wxBoxSizer(wxVERTICAL);
+		column->Add(m_commandBar->GetWindow(), 0, wxEXPAND);
+		column->Add(m_content, 1, wxEXPAND);
+		window->SetSizer(column);
+	}
 
 	// A VIEW THAT IS NO FORM IS ONE CONTROL, filling the tab — with no commands of a form's.
-	if (form.GetType() != ibProtocolType::ClientForm) {
+	if (form.GetType() != ibProtocol::ibForm::ibType::ClientForm) {
 		m_commandBar->Update(ibProtocolNode());
 		ibProtocolNode item;
-		item.SetValue(ibProtocolName::Proportion, 1).SetValue(ibProtocolName::Stretch, static_cast<long long>(wxEXPAND));
-		Generate(form, this, m_content, item, nullptr);
+		item.SetValue(ibProtocol::ibForm::ibProperty::Proportion, 1).SetValue(ibProtocol::ibForm::ibProperty::Stretch, static_cast<long long>(wxEXPAND));
+		Generate(form, window, m_content, item, nullptr);
 		return;
 	}
 
@@ -361,36 +426,30 @@ void ibVisualHostClient::Build(const ibProtocolNode& form)
 	UpdateForm(form);
 
 	for (const ibProtocolNode& child : form.Children())
-		Generate(child, this, m_content, ibProtocolNode(), nullptr);
+		Generate(child, window, m_content, ibProtocolNode(), nullptr);
 }
 
 void ibVisualHostClient::Generate(const ibProtocolNode& node, wxWindow* parent, wxSizer* sizer, const ibProtocolNode& item,
 	ibValueFrame* parentControl)
 {
 	const wxString type = node.GetType();
+	const long long controlId = node.GetInt(ibProtocol::ibForm::ControlId);
 
 	// A SIZER ITEM — the desktop's ibValueSizerItem: an object of the form's tree, which draws nothing; it says how its
 	// child sits in the sizer, and its child hangs on it, as the server's does.
 	ibValueFrame* const parentFrame = parentControl != nullptr ? parentControl : m_valueForm.get();
-	if (type == ibProtocolType::SizerItem) {
-		ibValueFrame* const holder = ibValueFrame::Make(type, *this, node.GetInt(ibProtocolName::ControlId));
-		if (holder != nullptr) {
-			ReadControl(holder, node);
-			m_controls[node.GetId()] = holder;
-			parentFrame->AddChild(holder);
-			holder->SetParent(parentFrame);
-		}
+	if (type == ibProtocol::ibForm::ibType::SizerItem) {
+		ibValueFrame* const holder = ibValueFrame::Make(type, *this, controlId);
+		ReadControl(holder, node);
+		m_controls[node.GetId()] = holder;
+		parentFrame->AddChild(holder);
+		holder->SetParent(parentFrame);
 		for (const ibProtocolNode& child : node.Children())
-			Generate(child, parent, sizer, node, holder != nullptr ? holder : parentControl);
+			Generate(child, parent, sizer, node, holder);
 		return;
 	}
 
-	// A control this client does not draw yet — a placeholder in its place says so; what is in it is not drawn.
-	const long long controlId = node.GetInt(ibProtocolName::ControlId);
-	ibValueFrame* const made = ibValueFrame::Make(type, *this, controlId);
-	const bool drawn = made != nullptr;
-	ibValueFrame* const control = drawn ? made : new ibViewPlaceholder(*this, controlId, type);
-
+	ibValueFrame* const control = ibValueFrame::Make(type, *this, controlId);
 	m_controls[node.GetId()] = control;
 	parentFrame->AddChild(control);
 	control->SetParent(parentFrame);
@@ -399,9 +458,9 @@ void ibVisualHostClient::Generate(const ibProtocolNode& node, wxWindow* parent, 
 	ReadControl(control, node);
 	control->Create(parent, node);
 
-	const int proportion = static_cast<int>(item.GetInt(ibProtocolName::Proportion));
-	const int flag = FlagOf(item);
-	const int border = static_cast<int>(item.GetInt(ibProtocolName::BorderSize));
+	const int proportion = static_cast<int>(item.GetInt(ibProtocol::ibForm::ibProperty::Proportion));
+	const int flag = ibValueSizerItem::GetFlag(item);
+	const int border = static_cast<int>(item.GetInt(ibProtocol::ibForm::ibProperty::BorderSize));
 	if (wxWindow* const window = control->GetWindow()) {
 		if (sizer != nullptr)
 			sizer->Add(window, proportion, flag, border);
@@ -416,7 +475,8 @@ void ibVisualHostClient::Generate(const ibProtocolNode& node, wxWindow* parent, 
 	// Drawn before what is in it, as on the desktop.
 	control->Update(node);
 	m_drawn[node.GetId()] = WithoutChildren(node);
-	if (!drawn)
+	// A control this client does not draw yet — a placeholder in its place says so; what is in it is not drawn.
+	if (control->IsPlaceholder())
 		return;
 
 	wxWindow* const childParent = control->GetChildParent();
@@ -427,12 +487,13 @@ void ibVisualHostClient::Generate(const ibProtocolNode& node, wxWindow* parent, 
 void ibVisualHostClient::UpdateNode(const ibProtocolNode& node)
 {
 	const auto found = m_controls.find(node.GetId());
-	// Not drawn — nor what is in it.
+	// Not drawn.
 	if (found == m_controls.end())
 		return;
 
 	// A node the frame left as it was is not read nor drawn again: each setter of a table's column repaints its header,
-	// and a frame drawing every column anew for one changed field flickered. A sizer item draws nothing — it is read.
+	// and a frame drawing every column anew for one changed field flickered. A sizer item draws nothing — it is read,
+	// and sets its child's place in the sizer.
 	ibProtocolNode bare = WithoutChildren(node);
 	ibProtocolNode& drawn = m_drawn[node.GetId()];
 	if (drawn != bare) {
@@ -440,15 +501,12 @@ void ibVisualHostClient::UpdateNode(const ibProtocolNode& node)
 		found->second->Update(node);
 		drawn = std::move(bare);
 	}
-
-	for (const ibProtocolNode& child : node.Children())
-		UpdateNode(child);
 }
 
 void ibVisualHostClient::UpdateNode(const ibProtocolNode& node, const ibProtocolNode& patch)
 {
 	if (patch.GetChangeCount() != 0) {
-		if (node.GetType() == ibProtocolType::ClientForm) {
+		if (node.GetType() == ibProtocol::ibForm::ibType::ClientForm) {
 			UpdateForm(node);   // the form's own — its look and its command bar
 		}
 		else {
@@ -474,12 +532,161 @@ void ibVisualHostClient::UpdateNode(const ibProtocolNode& node, const ibProtocol
 	}
 }
 
+// ⭐ WHAT IS IN A CONTROL IS LAID IN WHERE IT CHANGED — the rest keep their windows. A form built anew for each control
+// added made every window again, and destroyed every one, half of the form editor's draw (2026-10-22). A control added,
+// gone, moved among the others or made otherwise is laid in here; one moved here from another control is made anew here,
+// and goes from there as that one is walked. Each that stayed is drawn in the same walk (UpdateNode), and gone into in
+// turn; one whose children cannot be laid in is made anew in its place. False — none of it can be: a sizer item's child
+// sits in the sizer of what holds the item, a notebook puts its pages on itself; made anew a level up, the form built anew.
+bool ibVisualHostClient::UpdateChildren(const ibProtocolNode& node, const ibProtocolNode& patch, ibValueFrame* control,
+	wxWindow* parent, wxSizer* sizer)
+{
+	const std::vector<ibProtocolNode> children = node.Children();
+	const std::vector<ibProtocolNode> changes = patch.IsNode() ? patch.Children() : std::vector<ibProtocolNode>();
+	// One place in the sizer for each control in it, in its order.
+	const bool placed = sizer != nullptr && control->GetClassName() != ibProtocol::ibForm::ibType::SizerItem
+		&& sizer->GetItemCount() == control->GetChildCount();
+
+	// A CHILD GONE — its windows destroyed while its control is still there to handle them, its place in the sizer with
+	// them, then the control (the ids drawn under it with it).
+	const auto remove = [this, control, sizer](unsigned int idx) {
+		ibValueFrame* const gone = control->GetChild(idx);
+		const ibValuePtr<ibValueFrame> keep(gone);   // while the ids under it are let go of
+		sizer->GetItem(idx)->DeleteWindows();
+		sizer->Remove(static_cast<int>(idx));
+		for (auto it = m_controls.begin(); it != m_controls.end();) {
+			const ibValueFrame* in = it->second;
+			while (in != nullptr && in != gone)
+				in = in->GetParent();
+			if (in != nullptr) {
+				m_drawn.erase(it->first);
+				it = m_controls.erase(it);
+			}
+			else {
+				++it;
+			}
+		}
+		control->RemoveChild(gone);
+		gone->SetParent(nullptr);
+	};
+	// A CHILD PUT IN ITS NODE'S PLACE — its place in the sizer and among the control's children moved there, and in the
+	// tab order before the next window beside it.
+	const auto place = [control, sizer](ibValueFrame* child, unsigned int idx) {
+		const unsigned int position = control->GetChildPosition(child);
+		if (position == idx)
+			return;
+		wxSizerItemList& items = sizer->GetChildren();
+		const wxSizerItemList::compatibility_iterator at = items.Item(position);
+		wxSizerItem* const item = at->GetData();
+		items.DeleteNode(at);   // the list's node only — the item is the sizer's
+		items.Insert(idx, item);
+		control->ChangeChildPosition(child, idx);
+
+		wxWindow* const window = item->GetWindow();
+		for (size_t next = idx + 1; window != nullptr && next < sizer->GetItemCount(); next++) {
+			wxWindow* const before = sizer->GetItem(next)->GetWindow();
+			if (before != nullptr && before->GetParent() == window->GetParent()) {
+				window->MoveBeforeInTabOrder(before);
+				break;
+			}
+		}
+	};
+	// A CHILD MADE — generated at the end of the sizer and of the control, put in its place. One that takes no place in
+	// the sizer (none to show it) would leave the order to guess: not this.
+	const auto make = [this, &children, control, parent, sizer, &place](unsigned int idx) {
+		const size_t count = sizer->GetItemCount();
+		Generate(children[idx], parent, sizer, ibProtocolNode(), control);
+		if (sizer->GetItemCount() != count + 1)
+			return false;
+		place(control->GetChild(control->GetChildCount() - 1), idx);
+		return true;
+	};
+
+	// WHO STAYS — drawn in this control, of its node's class, a line's way as it was made (made with its window); in any
+	// order. One drawn in another control, of another class, or turned, is made anew.
+	std::vector<ibValueFrame*> stays(children.size(), nullptr);
+	bool same = children.size() == control->GetChildCount();
+	for (unsigned int idx = 0; idx < children.size(); idx++) {
+		const ibProtocolNode& child = children[idx];
+		const long long id = child.GetId();
+		const auto found = m_controls.find(id);
+		if (found != m_controls.end() && found->second->GetParent() == control) {
+			const wxString type = child.GetType();
+			if (found->second->GetClassName() == type && !(IsOrientCreated(type)
+				&& m_drawn[id].GetInt(ibProtocol::ibForm::ibProperty::Orient) != child.GetInt(ibProtocol::ibForm::ibProperty::Orient)))
+				stays[idx] = found->second;
+		}
+		if (stays[idx] == nullptr || !same || control->GetChild(idx) != stays[idx])
+			same = false;
+	}
+
+	if (!same) {
+		if (!placed)
+			return false;
+		// THE GONE first — each drawn here that does not stay; then each in its node's place, the new made.
+		for (unsigned int idx = control->GetChildCount(); idx-- > 0;) {
+			if (std::find(stays.begin(), stays.end(), control->GetChild(idx)) == stays.end())
+				remove(idx);
+		}
+		for (unsigned int idx = 0; idx < children.size(); idx++) {
+			if (stays[idx] != nullptr)
+				place(stays[idx], idx);
+			else if (!make(idx))
+				return false;
+		}
+		// A page's sizer is not laid out with the form's.
+		if (wxWindow* const window = sizer->GetContainingWindow())
+			window->Layout();
+	}
+
+	// EACH THAT STAYED — its node drawn where it changed (a sizer item's place with it), then what is in it, where Generate
+	// made it: a sizer item's child in the window and the sizer the item is in, a control's in those the control gives.
+	// ⭐ BY THE PATCH, when there is one: one it does not name is as it was, and what is in it too — not copied nor compared;
+	// one whose shape it keeps is drawn down it (UpdateNode). Only those on the way to a control added, gone or moved are
+	// compared with what was drawn — each control was, at every control dropped on a form (a Debug profile, 2026-10-26).
+	for (unsigned int idx = 0; idx < children.size(); idx++) {
+		ibValueFrame* const drawn = stays[idx];
+		if (drawn == nullptr)
+			continue;
+		const ibProtocolNode& child = children[idx];
+		ibProtocolNode changed;
+		if (patch.IsNode()) {
+			const auto named = std::find_if(changes.begin(), changes.end(),
+				[&child](const ibProtocolNode& change) { return change.GetId() == child.GetId(); });
+			if (named == changes.end())
+				continue;
+			if (!IsShapeChanged(child, *named)) {
+				UpdateNode(child, *named);
+				continue;
+			}
+			changed = *named;
+		}
+		UpdateNode(child);
+		if (drawn->IsPlaceholder())
+			continue;
+		const bool sizerItem = drawn->GetClassName() == ibProtocol::ibForm::ibType::SizerItem;
+		wxWindow* const childParent = sizerItem ? nullptr : drawn->GetChildParent();
+		if (UpdateChildren(child, changed, drawn, childParent != nullptr ? childParent : parent, sizerItem ? sizer : drawn->GetSizer()))
+			continue;
+		// …made anew in its place, what is in it with it.
+		if (!placed)
+			return false;
+		remove(idx);
+		if (!make(idx))
+			return false;
+	}
+	return true;
+}
+
 void ibVisualHostClient::Clear()
 {
 	// The windows first, while the controls that handle their events are still there; the sizers with them.
-	DestroyChildren();
-	SetSizer(nullptr);
-	m_sizer = nullptr;
+	wxWindow* const window = GetBackgroundWindow();
+	window->DestroyChildren();
+	window->SetSizer(nullptr);
+	// …and the command bar where it stands on this one, above them (Build).
+	if (m_commandBar != nullptr && window == m_contentWindow)
+		m_commandBar->GetWindow()->Destroy();
 	m_content = nullptr;
 	m_commandBar.reset();
 
@@ -517,8 +724,10 @@ void ibVisualHostClient::AlignLabels()
 
 void ibVisualHostClient::UpdateVirtualSize()
 {
-	// The scrolling is what the controls need: the scrollbars show only when the form does not fit.
+	// The scrolling is what the controls need: the scrollbars show only when the form does not fit — the command bar
+	// above, laid out with the window they scroll in.
 	Layout();
-	FitInside();
-	Refresh();
+	m_contentWindow->Layout();
+	m_contentWindow->FitInside();
+	m_contentWindow->Refresh();
 }

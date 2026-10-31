@@ -21,9 +21,9 @@ public:
 	bool AccessRight_Use() const { return IsFullAccess() || AccessRight(m_roleUse); }
 #pragma endregion
 
-	wxBitmap GetPictureAsBitmap() const {
+	ibPicture GetPicture() const {
 		if (!m_propertyPicture->IsEmptyProperty())
-			return m_propertyPicture->GetValueAsBitmap();
+			return m_propertyPicture->GetValueAsPicture();
 		return ibBackendPicture::CreatePicture(g_metaCommonMetadataCLSID);
 	}
 	// …and what the picture IS — what a server sends it by (ibBackendPicture::GetServerPicture), as a command's; none —
@@ -38,11 +38,11 @@ public:
 		return 0;
 	}
 
-	ibValueMetaObjectSection(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
+	ibValueMetaObjectSection(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//prepare menu for item
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
@@ -107,10 +107,10 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
-	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryContext, wxT("Picture"), _("Picture"),
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryContext, ibT("Picture"), _("Picture"),
 		_("The section's icon in the navigation panel. Empty: the configuration's own icon is shown."));
 #pragma region role
-	ibRole* m_roleUse = ibValueMetaObject::CreateRole(wxT("Use"), wxGETTEXT_IN_CONTEXT("access right", "Use"));
+	ibRole* m_roleUse = ibValueMetaObject::CreateRole(ibT("Use"), ibGETTEXT_IN_CONTEXT("access right", "Use"));
 #pragma endregion
 };
 

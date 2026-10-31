@@ -5,16 +5,16 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyNumber::CreateVariantData(const ibNumber& val)
+ibVariant ibPropertyNumber::CreateVariantData(const ibNumber& val)
 {
-	return new ibVariantDataNumber(val);
+	return ibVariant(new ibVariantNumber(val));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibNumber& ibPropertyNumber::GetValueAsNumber() const
 {
-	return get_cell_variant<ibVariantDataNumber>()->GetNumber();
+	return get_cell_variant<ibVariantNumber>()->GetNumber();
 }
 
 void ibPropertyNumber::SetValue(const ibNumber& val)

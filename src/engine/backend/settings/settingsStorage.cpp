@@ -32,15 +32,15 @@ ibSettingsStorage::~ibSettingsStorage() = default;
 // would take the CREATE. sys_lock met this first and answered it the same way:
 // a deterministic hash for the lookup, the readable parts beside it for a person
 // reading the table and for "everything this user saved" queries.
-wxString ibSettingsStorage::HashKey(const ibSettingsKey& key)
+ibString ibSettingsStorage::HashKey(const ibSettingsKey& key)
 {
 	return ibLockKey::Hash({
-		{ wxT("category"),   ibValue(static_cast<signed int>(key.m_category)) },
+		{ ibT("category"),   ibValue(static_cast<signed int>(key.m_category)) },
 		// The guids as TEXT for hashing — a guid renders one way and only one way, so the hash of an
 		// address is the same on every driver, every platform and every process.
-		{ wxT("objectKey"),  Text(key.m_objectKey)  },
-		{ wxT("settingKey"), Text(key.m_settingKey) },
-		{ wxT("userKey"),    Text(key.m_userKey)    },
+		{ ibT("objectKey"),  Text(key.m_objectKey)  },
+		{ ibT("settingKey"), Text(key.m_settingKey) },
+		{ ibT("userKey"),    Text(key.m_userKey)    },
 	});
 }
 
@@ -62,17 +62,17 @@ bool ibSettingsStorage::Save(const ibSettingsKey& key, const ibDataNode& node)
 		// (ON CONFLICT / UPDATE OR INSERT … MATCHING) is closed by the door.
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibUpsert(settings_table, {
-			{ wxT("entryKey"),   ibConst(ibValue(HashKey(key))) },
-			{ wxT("category"),   ibConst(ibValue(static_cast<signed int>(key.m_category))) },
-			{ wxT("objectKey"),  ibConst(Text(key.m_objectKey))  },
-			{ wxT("settingKey"), ibConst(Text(key.m_settingKey)) },
-			{ wxT("userKey"),    ibConst(Text(key.m_userKey))    },
-			{ wxT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
-			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
+			{ ibT("entryKey"),   ibConst(ibValue(HashKey(key))) },
+			{ ibT("category"),   ibConst(ibValue(static_cast<signed int>(key.m_category))) },
+			{ ibT("objectKey"),  ibConst(Text(key.m_objectKey))  },
+			{ ibT("settingKey"), ibConst(Text(key.m_settingKey)) },
+			{ ibT("userKey"),    ibConst(Text(key.m_userKey))    },
+			{ ibT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
+			{ ibT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
 			// Opaque bytes bound as a blob constant — L2 never interprets them,
 			// which is right for a payload whose format belongs to the value.
-			{ wxT("binaryData"), ibConstBlob(writer.pointer(), writer.size()) },
-		}, { wxT("entryKey") }));
+			{ ibT("binaryData"), ibConstBlob(writer.pointer(), writer.size()) },
+		}, { ibT("entryKey") }));
 		return true;   // a real failure THROWS; the affected-row count is not an error
 	}
 	catch (...) {
@@ -80,7 +80,7 @@ bool ibSettingsStorage::Save(const ibSettingsKey& key, const ibDataNode& node)
 		// it is not silence either: the caller is told false, and the journal keeps
 		// what happened, because a settings write failing quietly is exactly the
 		// bug people report as "it forgets what I set".
-		ibJournalWarning(wxT("settings"), wxT("save failed: category %d, object %s, setting %s"),
+		ibJournalWarning(ibT("settings"), ibT("save failed: category %d, object %s, setting %s"),
 			static_cast<int>(key.m_category), key.m_objectKey.str(), key.m_settingKey.str());
 		return false;
 	}
@@ -91,18 +91,18 @@ bool ibSettingsStorage::Restore(const ibSettingsKey& key, ibDataNode& node) cons
 	if (!key.IsOk())
 		return false;
 
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	try {
 		ibDatabaseQueryBuilder q;
 		ibQueryResult rs = q.From(settings_table)
-			.Select({ wxT("binaryData") })
-			.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("entryKey")), ibParam(0)))
+			.Select({ ibT("binaryData") })
+			.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("entryKey")), ibParam(0)))
 			.Execute({ ibValue(HashKey(key)) });
 
 		if (!rs.Next())
 			return false;   // nobody saved anything here — the caller keeps what it had
 
-		rs.GetResultBlob(wxT("binaryData"), blob);
+		rs.GetResultBlob(ibT("binaryData"), blob);
 	}
 	catch (...) {
 		// No table, no base, a passive scope: NO OPINION, the same answer as an
@@ -132,12 +132,12 @@ std::vector<ibSettingsEntry> ibSettingsStorage::List(ibSettingsCategory category
 		// answers "this one setting", this answers "everything about this object".
 		ibDatabaseQueryBuilder q;
 		ibQueryResult rs = q.From(settings_table)
-			.Select({ wxT("settingKey"), wxT("changed") })
+			.Select({ ibT("settingKey"), ibT("changed") })
 			.Where(ibBinOp(ibQueryBinOp::And,
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("category")),  ibParam(0)),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("category")),  ibParam(0)),
 				ibBinOp(ibQueryBinOp::And,
-					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("objectKey")), ibParam(1)),
-					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("userKey")),   ibParam(2)))))
+					ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("objectKey")), ibParam(1)),
+					ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("userKey")),   ibParam(2)))))
 			.Execute({
 				ibValue(static_cast<signed int>(category)),
 				Text(objectKey),
@@ -184,7 +184,7 @@ bool ibSettingsStorage::Remove(const ibSettingsKey& key)
 	try {
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibDelete(settings_table,
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("entryKey")), ibConst(ibValue(HashKey(key))))));
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("entryKey")), ibConst(ibValue(HashKey(key))))));
 		return true;   // removing an absent setting (0 rows) is success; a real failure THROWS
 	}
 	catch (...) {

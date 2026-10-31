@@ -21,7 +21,7 @@
 
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"   // CODE_VES / CODE_CES
-#include "backend/compiler/codeDef.h"
+#include "core/compiler/codeDef.h"
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 
@@ -49,8 +49,8 @@ const ::testing::Environment* const g_vesCodeStyleEnv =
 // out its timeout, and the report says "timed out" rather than "assertion in
 // this function". One such assert cost a two-minute wait and told us nothing.
 //
-// The GUI suite has had this since it was written (tests/frontendFix.h); the
-// backend suite never did, because until something asserted nobody noticed.
+// The old desktop's GUI suite had this since it was written; the backend
+// suite never did, because until something asserted nobody noticed.
 // Same treatment, one place, applied whatever --gtest_filter selects.
 class HeadlessAssertEnvironment : public ::testing::Environment {
 public:
@@ -98,14 +98,12 @@ public:
 		// THE THIRD DOOR, and the one that actually hung the runner. A wx
 		// WARNING is not an assert: with no log target set, wx installs one
 		// that BUFFERS and flushes into a modal box when the target goes away.
-		// The GUI fixture handles its own case (tests/frontendFix.h, after
-		// wxEntryStart, because a wxApp installs wxLogGui of its own), but a
-		// backend test that makes wx warn had nothing at all. stderr has no
+		// A backend test that makes wx warn had nothing at all. stderr has no
 		// OK button.
 		delete wxLog::SetActiveTarget(new wxLogStderr());
 
 		// Image handlers are NOT registered here. backend.dll already does it from
-		// a static ctor at DLL load (picturePredefined.cpp), and the initializer
+		// a static ctor at DLL load (backend_picture.cpp), and the initializer
 		// above is what makes that hold — with wx up for the whole run, nothing
 		// calls wxEntryCleanup mid-suite to wipe them. Registering again only
 		// prints a screenful of "Adding duplicate image handler".
@@ -117,7 +115,7 @@ const ::testing::Environment* const g_headlessAssertEnv =
 
 namespace {
 
-bool TryCompile(ibCompileCode& cc, const wxString& src) {
+bool TryCompile(ibCompileCode& cc, const ibString& src) {
 	try {
 		return cc.Compile(src);
 	} catch (...) {
@@ -153,31 +151,31 @@ size_t CountOpcodeAnyType(const ibByteCode& bc, short baseOper) {
 } // namespace
 
 // ===========================================================================
-// Lexer (ibTranslateCode::PrepareLexem)
+// Lexer (ibTranslateCode::Translate)
 // ===========================================================================
 
 TEST(LexerTest, EmptySourceProducesEndProgramOnly) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT(""));
-	ASSERT_TRUE(cc.PrepareLexem());
+	ASSERT_TRUE(cc.Translate());
 	// At least the ENDPROGRAM sentinel — exact number depends on lexer
 	// implementation, but it must be non-empty.
-	EXPECT_GE(cc.GetLexemCount(), 1u);
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 1u);
 }
 
 TEST(LexerTest, SimpleAssignmentTokenizes) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT("a = 1;"));
-	ASSERT_TRUE(cc.PrepareLexem());
+	ASSERT_TRUE(cc.Translate());
 	// Identifier 'a', '=', number '1', ';', ENDPROGRAM — at least 5.
-	EXPECT_GE(cc.GetLexemCount(), 4u);
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
 TEST(LexerTest, StringLiteralLexes) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT("s = \"hello\";"));
-	ASSERT_TRUE(cc.PrepareLexem());
-	EXPECT_GE(cc.GetLexemCount(), 4u);
+	ASSERT_TRUE(cc.Translate());
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
 // ===========================================================================
@@ -233,7 +231,7 @@ TEST(CompilerTest, ExportVariableMarkedAsExport) {
 
 TEST(CompilerTest, FunctionDeclarationRegistersInListFunc) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Function Add(x, y)\n")
 		wxT("  Return x + y;\n")
 		wxT("EndFunction\n");
@@ -255,7 +253,7 @@ TEST(CompilerTest, FunctionDeclarationRegistersInListFunc) {
 
 TEST(CompilerTest, ExportFunctionFlagged) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Function PublicFn() Public\n")
 		wxT("  Return 1;\n")
 		wxT("EndFunction\n");
@@ -274,7 +272,7 @@ TEST(CompilerTest, ExportFunctionFlagged) {
 
 TEST(CompilerTest, ProcedureRecognized) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Procedure DoIt()\n")
 		wxT("  a = 1;\n")
 		wxT("EndProcedure\n");
@@ -293,7 +291,7 @@ TEST(CompilerTest, ProcedureRecognized) {
 
 TEST(CompilerTest, IfStatementEmitsBranch) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("a = 0;\n")
 		wxT("If a > 0 Then\n")
 		wxT("  a = 1;\n")
@@ -306,7 +304,7 @@ TEST(CompilerTest, IfStatementEmitsBranch) {
 
 TEST(CompilerTest, WhileLoopEmitsGoto) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("a = 0;\n")
 		wxT("While a < 10 Do\n")
 		wxT("  a = a + 1;\n")
@@ -327,14 +325,14 @@ TEST(CompilerTest, SyntaxErrorReturnsFalse) {
 // Compile + AOT round-trip — checks the AOT layer with real compiler output
 // ===========================================================================
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	// Var declaration + function declaration. NB: the parameter is named
 	// `delta`, not `by` — `By` is a reserved LINQ keyword (group/order ... by),
 	// so using it as an identifier fails to lex ("Identifier expected").
-	const wxString src =
+	const ibString src =
 		wxT("var counter public;\n")
 		wxT("Function Increment(delta)\n")
 		wxT("  counter = counter + delta;\n")
@@ -346,7 +344,7 @@ TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 
 	ibWriterMemory w;
 	ASSERT_TRUE(src_bc.SerializeAOT(w));
-	wxMemoryBuffer blob = w.buffer();
+	ibMemoryBuffer blob = w.buffer();
 	EXPECT_GT(blob.GetDataLen(), 0u);
 
 	ibReaderMemory r(blob);
@@ -381,7 +379,7 @@ TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 //
 // Verifies:
 //   * Lambda body references outer-fn local — compile succeeds (was
-//     ERROR_VAR_NOT_FOUND pre-Phase-A).
+//     ibScriptError_VarNotFound pre-Phase-A).
 //   * Outer fn's ibByteFunction.m_needsHeapFrame = true after lambda
 //     captures one of its locals.
 //   * Bytecode dump shows OPER_GET inside lambda body reading at
@@ -391,7 +389,7 @@ TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 namespace {
 
 // Find an ibByteFunction by real name (case-insensitive).
-const ibByteCode::ibByteFunction* FindFnByName(const ibByteCode& bc, const wxString& name) {
+const ibByteCode::ibByteFunction* FindFnByName(const ibByteCode& bc, const ibString& name) {
 	for (const auto& fn : bc.m_listFunc)
 		if (fn.m_strRealName.IsSameAs(name, false))
 			return &fn;
@@ -410,7 +408,7 @@ const ibByteCode::ibByteFunction* FindFirstLambda(const ibByteCode& bc) {
 
 TEST(ClosureCapture, LambdaReferencingOuterLocalCompiles) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Function makeAdder(n)\n")
 		wxT("  Return Function(x)\n")
 		wxT("           Return x + n;\n")
@@ -421,7 +419,7 @@ TEST(ClosureCapture, LambdaReferencingOuterLocalCompiles) {
 
 TEST(ClosureCapture, OuterFnMarkedNeedsHeapFrameAfterCapture) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Function makeAdder(n)\n")
 		wxT("  Return Function(x)\n")
 		wxT("           Return x + n;\n")
@@ -438,7 +436,7 @@ TEST(ClosureCapture, OuterFnMarkedNeedsHeapFrameAfterCapture) {
 TEST(ClosureCapture, NoCaptureLeavesNeedsHeapFrameFalse) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	// No inner lambda → no capture → no heap-frame requirement.
-	const wxString src =
+	const ibString src =
 		wxT("Function plainAdd(a, b)\n")
 		wxT("  Return a + b;\n")
 		wxT("EndFunction\n");
@@ -452,7 +450,7 @@ TEST(ClosureCapture, NoCaptureLeavesNeedsHeapFrameFalse) {
 
 TEST(ClosureCapture, LambdaBodyEmitsDepthGreaterOrEqualOneForCapturedVar) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	const wxString src =
+	const ibString src =
 		wxT("Function makeAdder(n)\n")
 		wxT("  Return Function(x)\n")
 		wxT("           Return x + n;\n")
@@ -597,9 +595,9 @@ TEST(PluginHost, HandsOutTheCapabilitiesItAdvertises) {
 	EXPECT_EQ(IB_PLUGIN_ABI_VERSION, host->abi_version);
 	ASSERT_NE(nullptr, host->query);
 
-	EXPECT_NE(nullptr, host->query(host, ibCapabilityDiagnostics, 1));
-	EXPECT_NE(nullptr, host->query(host, ibCapabilityScript, 1));
-	EXPECT_NE(nullptr, host->query(host, ibCapabilityMetadata, 1));
+	EXPECT_NE(nullptr, host->query(host, ibCapabilityDiagnostics, 2));
+	EXPECT_NE(nullptr, host->query(host, ibCapabilityScript, 2));
+	EXPECT_NE(nullptr, host->query(host, ibCapabilityMetadata, 2));
 }
 
 TEST(PluginHost, RefusesUnknownNamesAndWrongVersions) {
@@ -610,14 +608,15 @@ TEST(PluginHost, RefusesUnknownNamesAndWrongVersions) {
 	EXPECT_EQ(nullptr, host->query(host, nullptr, 1));
 	// A version the host does not implement must answer NULL rather than hand
 	// back a layout the caller was not built against — that is the whole reason
-	// capabilities are versioned one by one.
-	EXPECT_EQ(nullptr, host->query(host, ibCapabilityScript, 2));
+	// capabilities are versioned one by one. v1 is the wxString one, retired on 2026-10-27.
+	EXPECT_EQ(nullptr, host->query(host, ibCapabilityScript, 1));
+	EXPECT_EQ(nullptr, host->query(host, ibCapabilityScript, 3));
 	EXPECT_EQ(nullptr, host->query(host, ibCapabilityScript, 0));
 }
 
 TEST(PluginHost, ScriptCheckReportsWhereTheCodeIsWrong) {
 	const ibPluginHost* host = ibPluginHostInstance();
-	const auto* script = static_cast<const ibPluginScript*>(host->query(host, ibCapabilityScript, 1));
+	const auto* script = static_cast<const ibPluginScript*>(host->query(host, ibCapabilityScript, 2));
 	ASSERT_NE(nullptr, script);
 
 	const std::vector<ibDiagnostic> found = script->Check(wxT("a = "), wxT("draft"));
@@ -631,7 +630,7 @@ TEST(PluginHost, ScriptCheckReportsWhereTheCodeIsWrong) {
 
 TEST(PluginHost, ScriptCheckPassesValidCode) {
 	const ibPluginHost* host = ibPluginHostInstance();
-	const auto* script = static_cast<const ibPluginScript*>(host->query(host, ibCapabilityScript, 1));
+	const auto* script = static_cast<const ibPluginScript*>(host->query(host, ibCapabilityScript, 2));
 	ASSERT_NE(nullptr, script);
 
 	// VES dialect — the suite's global environment sets CODE_VES.
@@ -640,7 +639,7 @@ TEST(PluginHost, ScriptCheckPassesValidCode) {
 
 	EXPECT_TRUE(found.empty()) << "valid code reported "
 		<< found.size() << " diagnostic(s); first: "
-		<< (found.empty() ? wxString() : found.front().m_message).ToStdString();
+		<< (found.empty() ? ibString() : found.front().m_message).ToStdString();
 }
 
 TEST(PluginHost, MetadataAnswersEmptyWithNoConfiguration) {
@@ -648,7 +647,7 @@ TEST(PluginHost, MetadataAnswersEmptyWithNoConfiguration) {
 	// configuration. Answering empty is the contract; crashing or asserting
 	// would make every headless host a special case.
 	const ibPluginHost* host = ibPluginHostInstance();
-	const auto* metadata = static_cast<const ibPluginMetadata*>(host->query(host, ibCapabilityMetadata, 1));
+	const auto* metadata = static_cast<const ibPluginMetadata*>(host->query(host, ibCapabilityMetadata, 2));
 	ASSERT_NE(nullptr, metadata);
 
 	if (metadata->IsConfigurationOpen())
@@ -753,9 +752,9 @@ TEST(BarrierTypes, AreRegisteredLikeAnyOtherType) {
 	// The point of making them types: every declaration site resolves them
 	// through the ordinary registry, with no special case anywhere.
 	for (const wchar_t* name : { L"Any", L"AnyRef", L"AnyControl", L"AnyValue" }) {
-		EXPECT_TRUE(ibValue::IsRegisterCtor(wxString(name)))
-			<< "barrier type not registered: " << wxString(name).ToStdString();
-		EXPECT_NE(nullptr, ibValue::GetAvailableCtor(wxString(name)));
+		EXPECT_TRUE(ibValue::IsRegisterCtor(ibString(name)))
+			<< "barrier type not registered: " << ibString(name).ToStdString();
+		EXPECT_NE(nullptr, ibValue::GetAvailableCtor(ibString(name)));
 	}
 }
 
@@ -845,10 +844,10 @@ TEST(BarrierTypes, AKindBarrierAdmitsEveryMemberOfItsKind) {
 	ASSERT_NE(nullptr, anyValue);
 
 	for (const wchar_t* name : { L"Array", L"Structure", L"Container" }) {
-		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(wxString(name));
+		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(ibString(name));
 		if (ctor == nullptr) continue;
 		EXPECT_TRUE(anyValue->AllowValue(ctor->GetClassType()))
-			<< wxString(name).ToStdString() << " should be an AnyValue";
+			<< ibString(name).ToStdString() << " should be an AnyValue";
 	}
 }
 TEST(AnyKinds, DeclarationCompiles) {
@@ -899,7 +898,7 @@ TEST(ValueSerialize, PrimitivesRoundTrip) {
 	const std::vector<ibValue> samples = {
 		ibValue(true),
 		ibValue(false),
-		ibValue(wxT("text with ;;; separators and |pipes|")),
+		ibValue(ibT("text with ;;; separators and |pipes|")),
 		ibValue(42),
 	};
 
@@ -918,7 +917,7 @@ TEST(ValueSerialize, SeparatorsInsideAStringDoNotBreakTheParse) {
 	// THE BUG THE LENGTH FIELD EXISTS TO PREVENT. The envelope declares L:<n>
 	// and the reader now honours it; splitting on ";;;" instead cut this value
 	// in half and called the remainder garbage.
-	const ibValue original(wxT("a;;;b;;;c"));
+	const ibValue original(ibT("a;;;b;;;c"));
 	const ibValue restored = RoundTrip(original);
 	EXPECT_EQ(wxT("a;;;b;;;c"), restored.GetString());
 }
@@ -932,7 +931,7 @@ TEST(ValueSerialize, ExactNumbersSurvive) {
 TEST(ValueSerialize, ArraysNestAndSurvive) {
 	ibValuePtr<ibValueArray> inner(new ibValueArray());
 	inner->Add(ibValue(1));
-	inner->Add(ibValue(wxT("two")));
+	inner->Add(ibValue(ibT("two")));
 
 	ibValuePtr<ibValueArray> outer(new ibValueArray());
 	outer->Add(ibValue(true));
@@ -955,8 +954,8 @@ TEST(ValueSerialize, ArraysNestAndSurvive) {
 
 TEST(ValueSerialize, StructuresComeBackAsStructures) {
 	ibValuePtr<ibValueStructure> structure(new ibValueStructure());
-	structure->Insert(ibValue(wxT("Name")), ibValue(wxT("Widget")));
-	structure->Insert(ibValue(wxT("Count")), ibValue(7));
+	structure->Insert(ibValue(ibT("Name")), ibValue(ibT("Widget")));
+	structure->Insert(ibValue(ibT("Count")), ibValue(7));
 
 	const ibValue original(structure);
 	const ibValue restored = RoundTrip(original);
@@ -1004,7 +1003,7 @@ TEST(ValueSerialize, NodePathIsTheMechanism) {
 	// provider. Pinning the node path directly means a change of text format
 	// cannot quietly break what it is a rendering of.
 	ibDataNode node(g_valueStringCLSID, 0);
-	const ibValue original(wxT("through the node"));
+	const ibValue original(ibT("through the node"));
 
 	ASSERT_TRUE(original.Serialize(node));
 
@@ -1020,8 +1019,8 @@ TEST(ValueSerialize, NodeCarriesTheTypeFirst) {
 	ibDataNode node(g_valueNumberCLSID, 0);
 	ASSERT_TRUE(ibValue(7).Serialize(node));
 
-	EXPECT_EQ(wxString::Format(wxT("%llu"), (unsigned long long)g_valueNumberCLSID),
-		node.GetValue<wxString>(wxT("t")));
+	EXPECT_EQ(ibString::Format(wxT("%llu"), (unsigned long long)g_valueNumberCLSID),
+		node.GetValue<ibString>(ibT("t")));
 }
 
 TEST(ValueSerialize, UnknownTypeInANodeIsRefused) {
@@ -1030,7 +1029,7 @@ TEST(ValueSerialize, UnknownTypeInANodeIsRefused) {
 	// empty would be indistinguishable from a value that legitimately IS empty,
 	// and would surface far away as a blank field nobody can explain.
 	ibDataNode node(0, 0);
-	node.SetValue(wxT("t"), wxString(wxT("8613303245920547140")));   // no such registered type
+	node.SetValue(wxT("t"), ibString(wxT("8613303245920547140")));   // no such registered type
 
 	EXPECT_THROW(ibValue::FromNode(node), ibBackendException);
 }
@@ -1059,7 +1058,7 @@ public:
 	// pretending to be one.
 	void SetVersion(const ibVersionID& version) override { m_version = version; }
 	ibVersionID GetVersion() const override { return m_version; }
-	wxString GetLangCode() const override { return wxT("en"); }
+	ibString GetLangCode() const override { return wxT("en"); }
 	bool RunDatabase(int flags = defaultFlag) override { return true; }
 	bool CloseDatabase(int flags = defaultFlag) override { return true; }
 
@@ -1088,7 +1087,7 @@ TEST(MetaDataSerialize, RoundTripsThroughTheDoor) {
 
 	const std::vector<ibValue> samples = {
 		ibValue(true),
-		ibValue(wxT("there and back")),
+		ibValue(ibT("there and back")),
 		ibValue(42),
 	};
 
@@ -1108,7 +1107,7 @@ TEST(MetaDataSerialize, ACompositeSurvivesTheTree) {
 	StandInMetaData metaData;
 
 	ibValuePtr<ibValueArray> source(new ibValueArray());
-	source->Add(ibValue(wxT("first")));
+	source->Add(ibValue(ibT("first")));
 	source->Add(ibValue(2));
 
 	ibDataNode node(source->GetClassType(), 0);
@@ -1133,7 +1132,7 @@ TEST(MetaDataSerialize, TheTreeIS_WhatTravels) {
 	// reading it back lands on the same value. A second pair of methods taking a
 	// buffer would be this choice made twice.
 	StandInMetaData metaData;
-	const ibValue original(wxT("out through a provider"));
+	const ibValue original(ibT("out through a provider"));
 
 	ibDataNode written(original.GetClassType(), 0);
 	metaData.Serialize(original, written);
@@ -1141,10 +1140,7 @@ TEST(MetaDataSerialize, TheTreeIS_WhatTravels) {
 	ibWriterMemory writer;
 	ASSERT_TRUE(ibBinaryProvider().Write(written, writer));
 
-	// HELD, NOT BORROWED FROM A TEMPORARY. buffer() hands back a copy by value and
-	// the reader keeps only its pointer, so passing the call directly would leave
-	// the reader on freed bytes (fs.h deletes that overload for this reason).
-	const wxMemoryBuffer blob = writer.buffer();
+	const ibMemoryBuffer blob = writer.buffer();
 	ASSERT_GT(blob.GetDataLen(), 0u);
 
 	ibDataNode read;
@@ -1159,7 +1155,7 @@ TEST(MetaDataSerialize, WhatItDoesNotKnowGoesToTheValueFactory) {
 	// nothing, so every type on the way through is the factory's answer —
 	// reached inside IsRegisterCtor / CreateObject, not around them.
 	StandInMetaData metaData;
-	const ibValue original(wxT("through the factory"));
+	const ibValue original(ibT("through the factory"));
 
 	ibDataNode node(original.GetClassType(), 0);
 	metaData.Serialize(original, node);
@@ -1174,7 +1170,7 @@ TEST(MetaDataSerialize, ItsOwnRegistryIsAskedFirst) {
 	StandInMetaData metaData;
 	metaData.Claim(g_valueStringCLSID);
 
-	const ibValue original(wxT("through the configuration"));
+	const ibValue original(ibT("through the configuration"));
 	ibDataNode node(original.GetClassType(), 0);
 	metaData.Serialize(original, node);
 
@@ -1188,7 +1184,7 @@ TEST(MetaDataSerialize, ATypeNOBODYHasIsRefused) {
 	StandInMetaData metaData;
 
 	ibDataNode node(0, 0);
-	node.SetValue(wxT("t"), wxString(wxT("8613303245920547140")));
+	node.SetValue(wxT("t"), ibString(wxT("8613303245920547140")));
 
 	EXPECT_THROW(metaData.Deserialize(node), ibBackendException);
 }
@@ -1236,7 +1232,7 @@ public:
 	}
 	ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const override {
 		if (clsid == m_own)
-			return ibValue(wxT("the catalog's empty reference"));
+			return ibValue(ibT("the catalog's empty reference"));
 		return StandInMetaData::CreateObject(clsid, paParams, lSizeArray);
 	}
 
@@ -1253,7 +1249,7 @@ TEST(TypedEmpty, AReferenceOfTheConfigurationIsMadeByTheConfiguration) {
 	MakingStandIn metaData(catalogRef);
 	const ibValue empty = ibValueTypeDescription::AdjustValue(ibTypeDescription(catalogRef), &metaData);
 
-	EXPECT_EQ(empty.GetString(), wxString(wxT("the catalog's empty reference")));
+	EXPECT_EQ(empty.GetString(), ibString(wxT("the catalog's empty reference")));
 }
 
 TEST(TypedEmpty, ATypeNobodyHasIsTheEmptyValueNotARefusal) {
@@ -1276,9 +1272,9 @@ TEST(TypedEmpty, ATypeNobodyHasIsTheEmptyValueNotARefusal) {
 // ===========================================================================
 
 #include "backend/system/value/composition/valueComposerField.h"
-#include "backend/compositionDescription.h"
+#include "backend/backend_composition.h"
 #include "backend/composition/dataComposer.h"
-#include "backend/query/queryRender.h"   // ibRenderQueryExpr — the text IS the expression rendered
+#include "core/query/queryRender.h"   // ibRenderQueryExpr — the text IS the expression rendered
 
 TEST(CompositionField, IsARegisteredType) {
 	EXPECT_TRUE(ibValue::IsRegisterCtor(wxT("CompositionField")));
@@ -1326,7 +1322,7 @@ TEST(CompositionField, IsNotAStringThatSpellsThePath) {
 	// A filter holding text where a field belongs is a different (and wrong)
 	// thing; saying so is what makes that visible instead of almost-working.
 	ibValuePtr<ibValueCompositionField> field(new ibValueCompositionField(wxT("Amount")));
-	EXPECT_FALSE(ibValue(field) == ibValue(wxT("Amount")));
+	EXPECT_FALSE(ibValue(field) == ibValue(ibT("Amount")));
 }
 
 TEST(CompositionField, SettingThePathDropsTheBinding) {
@@ -1337,7 +1333,7 @@ TEST(CompositionField, SettingThePathDropsTheBinding) {
 	field->SetTypeInfo(42, ibTypeDescription(g_valueNumberCLSID));
 	ASSERT_EQ(42, field->GetLeafId());
 
-	field->SetPropVal(ibValueCompositionField::enPath, ibValue(wxT("Supplier")));
+	field->SetPropVal(ibValueCompositionField::enPath, ibValue(ibT("Supplier")));
 	EXPECT_EQ(wxNOT_FOUND, field->GetLeafId());
 	EXPECT_EQ(0u, field->GetTypeDescription().GetClsidCount());
 }
@@ -1372,7 +1368,7 @@ TEST(FilterTree, GroupsAreTheOnlyNodes) {
 	// Conditions are leaves. Only a group can hold children — which is what
 	// makes the shape a tree rather than a list of lists.
 	ibFilterDescription filter;
-	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 	ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
 
 	ASSERT_EQ(2u, filter.m_nodes.size());
@@ -1386,10 +1382,10 @@ TEST(FilterTree, AGroupOwnsItsChildren) {
 	// parent and the two can never disagree. Copying the filter deep-copies the whole tree, which is
 	// what every window relies on — edit a copy, put it back on OK.
 	ibFilterDescription filter;
-	filter.Append(wxT("A"), ibComparisonKind_Equal, ibValue(1));
+	filter.Append(wxT("A"), ibComparisonKind_Equal, ibStoreValue(ibValue(1)));
 	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
-	ibFilterDescription::Append(either.m_children, wxT("B"), ibComparisonKind_Equal, ibValue(2));
-	ibFilterDescription::Append(either.m_children, wxT("C"), ibComparisonKind_Equal, ibValue(3));
+	ibFilterDescription::Append(either.m_children, wxT("B"), ibComparisonKind_Equal, ibStoreValue(ibValue(2)));
+	ibFilterDescription::Append(either.m_children, wxT("C"), ibComparisonKind_Equal, ibStoreValue(ibValue(3)));
 
 	ASSERT_EQ(2u, filter.m_nodes.size()) << "the children landed beside the group instead of inside it";
 	ASSERT_EQ(2u, filter.m_nodes[1].m_children.size());
@@ -1404,14 +1400,14 @@ TEST(FilterTree, ASideIsAFieldOrAValue) {
 	// `Price > Cost` — both sides are the same shape, which is what lets a condition compare two
 	// fields and not only a field with a literal.
 	ibFilterDescription filter;
-	ibFilterNodeDescription& node = filter.Append(wxT("Price"), ibComparisonKind_Greater, ibValue());
+	ibFilterNodeDescription& node = filter.Append(wxT("Price"), ibComparisonKind_Greater, ibDataNode());
 	node.m_right.m_path = wxT("Cost");
 
 	EXPECT_TRUE(node.m_left.IsField());
 	EXPECT_TRUE(node.m_right.IsField());
 
 	ibFilterDescription other;
-	ibFilterNodeDescription& literal = other.Append(wxT("Price"), ibComparisonKind_Greater, ibValue(100));
+	ibFilterNodeDescription& literal = other.Append(wxT("Price"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 	EXPECT_TRUE(literal.m_left.IsField());
 	EXPECT_FALSE(literal.m_right.IsField()) << "a literal side must not read as a path";
 }
@@ -1420,7 +1416,7 @@ TEST(FilterTree, ALineHoldsWhatThePickerResolved) {
 	// What the picker resolved must survive being put into a condition: the leaf id and the type are
 	// what make the OTHER side editable, and the presentation is what a person reads.
 	ibFilterDescription filter;
-	ibFilterNodeDescription& node = filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	ibFilterNodeDescription& node = filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 	node.m_left.m_leafId       = 7;
 	node.m_left.m_type         = ibTypeDescription(g_valueNumberCLSID);
 	node.m_left.m_presentation = wxT("Sum");
@@ -1437,13 +1433,13 @@ TEST(FilterTree, ALineHoldsWhatThePickerResolved) {
 
 TEST(FilterTreePersist, ANestedTreeSurvivesTheRoundTrip) {
 	ibFilterDescription filter;
-	ibFilterNodeDescription& first = filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	ibFilterNodeDescription& first = filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 	first.m_left.m_presentation = wxT("Sum");
 
 	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
-	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibValue(wxT("north")));
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("north"))));
 	ibFilterNodeDescription& pair =
-		ibFilterDescription::Append(either.m_children, wxT("Price"), ibComparisonKind_Greater, ibValue());
+		ibFilterDescription::Append(either.m_children, wxT("Price"), ibComparisonKind_Greater, ibDataNode());
 	pair.m_right.m_path = wxT("Cost");
 
 	ibDataNode node(make_clsid("CompositionFilter", ibClassKind_None), 0);
@@ -1488,7 +1484,7 @@ TEST(FilterTreePersist, ARecordWithoutATreeReadsAsAnEmptyFilter) {
 TEST(FilterAst, AConditionBecomesACompareNode) {
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1511,7 +1507,7 @@ TEST(FilterAst, AConditionBecomesACompareNode) {
 TEST(FilterAst, ADottedPathTravelsAsSegments) {
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Supplier.Region.Country"), ibComparisonKind_Equal, ibValue(wxT("PL")));
+	filter.Append(wxT("Supplier.Region.Country"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("PL"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr && ast->m_lhs != nullptr);
@@ -1524,11 +1520,11 @@ TEST(FilterAst, GroupsBecomeLogicalNodes) {
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
 	filter.m_rootKind = ibFilterGroupKind_And;
-	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 
 	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
-	ibFilterDescription::Append(either.m_children, wxT("A"), ibComparisonKind_Equal, ibValue(1));
-	ibFilterDescription::Append(either.m_children, wxT("B"), ibComparisonKind_Equal, ibValue(2));
+	ibFilterDescription::Append(either.m_children, wxT("A"), ibComparisonKind_Equal, ibStoreValue(ibValue(1)));
+	ibFilterDescription::Append(either.m_children, wxT("B"), ibComparisonKind_Equal, ibStoreValue(ibValue(2)));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1547,7 +1543,7 @@ TEST(FilterAst, NotWrapsTheWholeGroup) {
 	ibFilterDescription filter;
 	ibFilterNodeDescription& negated =
 		ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Not);
-	ibFilterDescription::Append(negated.m_children, wxT("Deleted"), ibComparisonKind_Equal, ibValue(true));
+	ibFilterDescription::Append(negated.m_children, wxT("Deleted"), ibComparisonKind_Equal, ibStoreValue(ibValue(true)));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1561,7 +1557,7 @@ TEST(FilterAst, ContainsIsALikeNotAComparison) {
 	// has no meaning for would push the problem one layer down.
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Name"), ibComparisonKind_Contains, ibValue(wxT("ab")));
+	filter.Append(wxT("Name"), ibComparisonKind_Contains, ibStoreValue(ibValue(ibT("ab"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1575,14 +1571,14 @@ TEST(FilterAst, InAndInHierarchyAreOneNodeAndAWord) {
 	ibDataDBComposer composer;
 
 	ibFilterDescription plain;
-	plain.Append(wxT("Item"), ibComparisonKind_In, ibValue(wxT("x")));
+	plain.Append(wxT("Item"), ibComparisonKind_In, ibStoreValue(ibValue(ibT("x"))));
 	const ibQueryAstExprPtr flat = composer.BuildFilterAst(plain);
 	ASSERT_TRUE(flat != nullptr);
 	EXPECT_EQ(ibQueryAstExprKind::In, flat->m_kind);
 	EXPECT_EQ(ibQueryDimUnfold::Elements, flat->m_unfold);
 
 	ibFilterDescription deep;
-	deep.Append(wxT("Item"), ibComparisonKind_InHierarchy, ibValue(wxT("x")));
+	deep.Append(wxT("Item"), ibComparisonKind_InHierarchy, ibStoreValue(ibValue(ibT("x"))));
 	const ibQueryAstExprPtr tree = composer.BuildFilterAst(deep);
 	ASSERT_TRUE(tree != nullptr);
 	EXPECT_EQ(ibQueryAstExprKind::In, tree->m_kind) << "a second node kind for one question";
@@ -1593,7 +1589,7 @@ TEST(FilterAst, ASwitchedOffLineSaysNothing) {
 	// Not written, rather than written and then ignored: a condition switched off narrows nothing.
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100), /*use*/ false);
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)), /*use*/ false);
 
 	EXPECT_TRUE(composer.BuildFilterAst(filter) == nullptr);
 }
@@ -1606,15 +1602,15 @@ TEST(FilterAst, NestedGroupsRenderWithParentheses) {
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
 	filter.m_rootKind = ibFilterGroupKind_And;
-	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 
 	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
-	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibValue(wxT("north")));
-	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibValue(wxT("south")));
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("north"))));
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("south"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
-	const wxString expr = ibRenderQueryExpr(*ast);
+	const ibString expr = ibRenderQueryExpr(*ast);
 
 	EXPECT_TRUE(expr.Contains(wxT("Amount >")));
 	EXPECT_TRUE(expr.Contains(wxT(" AND ")));
@@ -1627,12 +1623,12 @@ TEST(FilterAst, AFieldOnBothSidesRendersAsTwoPaths) {
 	// `Price > Cost` — no parameter at all, because neither side is a value.
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	ibFilterNodeDescription& node = filter.Append(wxT("Price"), ibComparisonKind_Greater, ibValue());
+	ibFilterNodeDescription& node = filter.Append(wxT("Price"), ibComparisonKind_Greater, ibDataNode());
 	node.m_right.m_path = wxT("Cost");
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
-	const wxString expr = ibRenderQueryExpr(*ast);
+	const ibString expr = ibRenderQueryExpr(*ast);
 	EXPECT_TRUE(expr.Contains(wxT("Price > Cost"))) << expr.ToStdString();
 	EXPECT_FALSE(expr.Contains(wxT("&"))) << "a field must render as a path, not a parameter";
 }
@@ -1643,11 +1639,11 @@ TEST(FilterAst, AValueRendersAsAParameter) {
 	// in somebody's locale.
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Name"), ibComparisonKind_Equal, ibValue(wxT("O'Brien")));
+	filter.Append(wxT("Name"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("O'Brien"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
-	const wxString expr = ibRenderQueryExpr(*ast);
+	const ibString expr = ibRenderQueryExpr(*ast);
 	EXPECT_TRUE(expr.Contains(wxT("&"))) << expr.ToStdString();
 	EXPECT_FALSE(expr.Contains(wxT("O'Brien"))) << "the value was inlined into the text";
 }
@@ -1693,7 +1689,7 @@ TEST(ListSettingsLines, AGroupingLineCarriesItsUnfoldKind) {
 
 TEST(ListSettingsLines, SettingsCarryAllThreeParts) {
 	ibSettingsDescription settings;
-	settings.m_filter.Append(wxT("Number"), ibComparisonKind_Equal, ibValue(wxT("00001")));
+	settings.m_filter.Append(wxT("Number"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("00001"))));
 	settings.m_sort.Append(wxT("Date"), false);
 	settings.m_group.Append(wxT("Warehouse"), ibQueryDimUnfold::Hierarchy);
 
@@ -1825,7 +1821,7 @@ TEST(CompilerTest, CachedParsesInTheBraceDialectToo) {
 // variable, after the name). A leading modifier is not a dialect variant, it is
 // a syntax error, and the helper's examples were unrunnable.
 TEST(CompilerTest, AccessModifiersAreTrailingForEveryOneOfThem) {
-	for (const wxString& access : { wxString(wxT("Public")), wxString(wxT("Private")), wxString(wxT("Protected")) }) {
+	for (const ibString& access : { ibString(wxT("Public")), ibString(wxT("Private")), ibString(wxT("Protected")) }) {
 		{	// trailing — the form the grammar has
 			ibCompileCode cc(wxT("test"), wxT("memory"), false);
 			EXPECT_TRUE(TryCompile(cc,
@@ -1850,7 +1846,7 @@ TEST(CompilerTest, AccessModifiersAreTrailingForEveryOneOfThem) {
 // three modifiers (compileCode.cpp, the Var declaration loop), and it reads
 // them after the NAME.
 TEST(CompilerTest, AVariableTakesItsModifierAfterTheNameToo) {
-	for (const wxString& access : { wxString(wxT("Public")), wxString(wxT("Private")), wxString(wxT("Protected")) }) {
+	for (const ibString& access : { ibString(wxT("Public")), ibString(wxT("Private")), ibString(wxT("Protected")) }) {
 		{	// trailing — the form the grammar has
 			ibCompileCode cc(wxT("test"), wxT("memory"), false);
 			EXPECT_TRUE(TryCompile(cc, wxT("Var total ") + access + wxT(";\n")))
@@ -1887,9 +1883,9 @@ TEST(CompilerTest, ADateLiteralBeforeAKeywordIsTwoLexems) {
 // native stack. Two thousand of them overflowed it and the process went down with no diagnostic;
 // past the ceiling (400) the expression is refused as a compile error. The point of the first test
 // is that the assertion is REACHED at all.
-static wxString NestedInParentheses(int depth)
+static ibString NestedInParentheses(int depth)
 {
-	wxString src = wxT("Var a public; a = ");
+	ibString src = wxT("Var a public; a = ");
 	for (int i = 0; i < depth; ++i) src += wxT('(');
 	src += wxT('1');
 	for (int i = 0; i < depth; ++i) src += wxT(')');

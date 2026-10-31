@@ -30,9 +30,9 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/query/queryAST.h"
-#include "backend/query/queryParser.h"
-#include "backend/query/queryRender.h"
+#include "core/query/queryAST.h"
+#include "core/query/queryParser.h"
+#include "core/query/queryRender.h"
 #include "backend/backend_exception.h"
 
 namespace {
@@ -83,7 +83,7 @@ public:
 	//     told apart from every clause that starts with a keyword, and the qualified form
 	//     (`Products.Order`) already works — which is what the constructor writes, always. Recorded
 	//     as a known limit rather than smuggled in under a generator run.
-	wxString SafeName()
+	ibString SafeName()
 	{
 		static const wxChar* s_names[] = {
 			wxT("Code"), wxT("Description"), wxT("Parent"), wxT("Owner"), wxT("Qty"), wxT("Price"),
@@ -92,7 +92,7 @@ public:
 		return s_names[Below(static_cast<unsigned int>(std::size(s_names)))];
 	}
 
-	wxString AnyName()
+	ibString AnyName()
 	{
 		static const wxChar* s_reserved[] = {
 			wxT("Order"), wxT("Group"), wxT("Value"), wxT("Count"), wxT("Index"), wxT("Update"),
@@ -101,13 +101,13 @@ public:
 		// ⚠ BOTH BRANCHES ARE wxString. A ternary mixing `wxString` with a `const wxChar*` compiles
 		// on MSVC and is AMBIGUOUS to Clang and ill-typed to GCC — each can convert either way.
 		return Chance(2) ? SafeName()
-		                 : wxString(s_reserved[Below(static_cast<unsigned int>(std::size(s_reserved)))]);
+		                 : ibString(s_reserved[Below(static_cast<unsigned int>(std::size(s_reserved)))]);
 	}
 
-	wxString SourceName()
+	ibString SourceName()
 	{
 		static const wxChar* s_kinds[] = { wxT("Catalog"), wxT("Document"), wxT("InformationRegister") };
-		return wxString(s_kinds[Below(3)]) + wxT(".") + AnyName();   // the metaobject may be `Document.Order`
+		return ibString(s_kinds[Below(3)]) + wxT(".") + AnyName();   // the metaobject may be `Document.Order`
 	}
 
 	// A dotted column path: one to three segments. The FIRST is safe (see the two pools above); the
@@ -132,9 +132,9 @@ public:
 	{
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
 		switch (Below(3)) {
-		case 0:  e->m_literal = ibValue(ibNumber(static_cast<long>(Below(1000)))); break;
-		case 1:  e->m_literal = ibValue(SafeName()); break;
-		default: e->m_literal = ibValue(Below(2) != 0u); break;
+		case 0:  e->m_literal = ibVariant(ibNumber(static_cast<long>(Below(1000)))); break;
+		case 1:  e->m_literal = ibVariant(SafeName()); break;
+		default: e->m_literal = ibVariant(Below(2) != 0u); break;
 		}
 		return e;
 	}
@@ -286,7 +286,7 @@ public:
 			s.m_alias = SafeName();  // a nested source without a name is legal but pointless here
 			return s;
 		}
-		const wxString dotted = SourceName();
+		const ibString dotted = SourceName();
 		s.m_name.push_back(dotted.BeforeFirst(wxT('.')));
 		s.m_name.push_back(dotted.AfterFirst(wxT('.')));
 		if (Chance(2))
@@ -310,7 +310,7 @@ public:
 			// An alias is written on purpose about half the time — a name the reader must give back
 			// unchanged, including when it collides with the natural one.
 			if (Chance(2))
-				p.m_alias = SafeName() + wxString::Format(wxT("%u"), i);
+				p.m_alias = SafeName() + ibString::Format(wxT("%u"), i);
 			s->m_projections.push_back(p);
 		}
 
@@ -369,7 +369,7 @@ public:
 				// …AND SOMETIMES A NAME. `TOTALS SUM(x) AS Qty` is exactly the kind of word a round
 				// trip drops: the figure still comes back, under a name nobody asked for.
 				if (Chance(3))
-					resource.m_alias = wxString::Format(wxT("Res%u"), i);
+					resource.m_alias = ibString::Format(wxT("Res%u"), i);
 				s->m_totalsAggregates.push_back(std::move(resource));
 			}
 			const unsigned int dims = s->m_totalsOverall ? Below(3) : 1 + Below(2);
@@ -395,7 +395,7 @@ public:
 					dim.m_fields.push_back(std::move(field));
 				}
 				if (Chance(3))
-					dim.m_alias = SafeName() + wxString::Format(wxT("L%u"), d);
+					dim.m_alias = SafeName() + ibString::Format(wxT("L%u"), d);
 				s->m_totalsBy.push_back(dim);
 			}
 		}
@@ -432,9 +432,9 @@ private:
 
 // render → parse → render, and the two texts must agree. Returns the failure story, empty on
 // success, so the caller can name the seed AND show the query.
-wxString RoundTripFailure(const ibQuerySelect& ast)
+ibString RoundTripFailure(const ibQuerySelect& ast)
 {
-	wxString written;
+	ibString written;
 	try {
 		written = ibRenderQuery(ast);
 	}
@@ -453,7 +453,7 @@ wxString RoundTripFailure(const ibQuerySelect& ast)
 	if (!read)
 		return wxT("PARSE RETURNED NOTHING FOR:\n") + written;
 
-	wxString again;
+	ibString again;
 	try {
 		again = ibRenderQuery(*read);
 	}
@@ -481,7 +481,7 @@ TEST(QueryRoundTripProperty, GeneratedQueriesSurviveTheTrip)
 		const ibQuerySelectPtr ast = gen.Select(0, /*allowTail*/true);
 		ASSERT_NE(nullptr, ast);
 
-		const wxString failure = RoundTripFailure(*ast);
+		const ibString failure = RoundTripFailure(*ast);
 		EXPECT_TRUE(failure.IsEmpty()) << "seed " << seed << "\n" << failure.ToStdString();
 		++checked;
 	}
@@ -498,7 +498,7 @@ TEST(QueryRoundTripProperty, TheGeneratorReallyProducesTheAwkwardShapes)
 	for (unsigned int seed = 1; seed <= 400; ++seed) {
 		ibAstGen gen(seed * 2654435761u);
 		const ibQuerySelectPtr ast = gen.Select(0, true);
-		const wxString text = ibRenderQuery(*ast);
+		const ibString text = ibRenderQuery(*ast);
 
 		for (const ibQueryTotalDim& dim : ast->m_totalsBy)
 			if (dim.m_fields.size() > 1)
@@ -543,7 +543,7 @@ TEST(QueryRoundTripProperty, WindowsSurviveTheTrip)
 		ASSERT_NO_THROW(ast = parser.Parse(text)) << text;
 		ASSERT_NE(nullptr, ast) << text;
 
-		const wxString failure = RoundTripFailure(*ast);
+		const ibString failure = RoundTripFailure(*ast);
 		EXPECT_TRUE(failure.IsEmpty()) << text << "\n" << failure.ToStdString();
 	}
 }

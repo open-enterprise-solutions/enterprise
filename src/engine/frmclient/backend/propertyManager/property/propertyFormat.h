@@ -16,19 +16,19 @@ public:
 
 	// THE FORMAT STRINGS, one per language, as stored. Which language is read is the reader's question
 	// (ibTranslateString::GetString — the language in force).
-	const ibTranslateString& GetValueAsFormatString() const { return GetValueAsTranslate(); }
+	ibTranslateString GetValueAsFormatString() const { return GetValueAsTranslate(); }
 
-	ibPropertyFormat(ibPropertyCategory* cat, const wxString& name,
+	ibPropertyFormat(ibPropertyCategory* cat, const ibString& name,
 		const ibTranslateString& value) : ibPropertyTString(cat, name, value)
 	{
 	}
 
-	ibPropertyFormat(ibPropertyCategory* cat, const wxString& name, const wxString& label,
+	ibPropertyFormat(ibPropertyCategory* cat, const ibString& name, const ibString& label,
 		const ibTranslateString& value) : ibPropertyTString(cat, name, label, value)
 	{
 	}
 
-	ibPropertyFormat(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
+	ibPropertyFormat(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
 		const ibTranslateString& value) : ibPropertyTString(cat, name, label, helpString, value)
 	{
 	}

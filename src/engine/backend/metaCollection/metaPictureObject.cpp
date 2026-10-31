@@ -10,7 +10,7 @@
 //*                           Metamodule                                *
 //***********************************************************************
 
-ibValueMetaObjectPicture::ibValueMetaObjectPicture(const wxString& name, const wxString& synonym, const wxString& comment) :
+ibValueMetaObjectPicture::ibValueMetaObjectPicture(const ibString& name, const ibString& synonym, const ibString& comment) :
 	ibValueMetaObject(name, synonym, comment)
 {
 }

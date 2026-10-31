@@ -117,7 +117,7 @@ void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
 
 #ifdef DEBUG
 		if (TraceTypes() && wxTheApp != NULL)
-			ibJournalInfo(wxT("compiler"),wxT("* Register class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
+			ibJournalInfo(ibT("compiler"),ibT("* Register class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
 		s_factoryCtorCountChanges++;
@@ -139,7 +139,7 @@ void ibValue::UnRegisterCtor(ibCtorAbstractType*& typeCtor)
 		// call would ask wx to build a log target nobody can then delete (see OnExit's
 		// wxLog::DontCreateOnDemand note).
 		if (TraceTypes() && wxTheApp != NULL)
-			ibJournalInfo(wxT("compiler"),wxT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
+			ibJournalInfo(ibT("compiler"),ibT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 		// Registry owns the ctor via shared_ptr — Unregister FREES it; null the caller's
 		// (by-ref) pointer so the now-dangling ctor is never dereferenced (replaces the
@@ -155,7 +155,7 @@ void ibValue::UnRegisterCtor(ibCtorAbstractType*& typeCtor)
 	// registry's own destructor already covers the finished case.
 }
 
-void ibValue::UnRegisterCtor(const wxString& className)
+void ibValue::UnRegisterCtor(const ibString& className)
 {
 	ibCtorAbstractType* typeCtor = GetAvailableCtor(className);
 
@@ -172,14 +172,14 @@ void ibValue::UnRegisterCtor(const wxString& className)
 	UnRegisterCtor(typeCtor);
 }
 
-bool ibValue::IsRegisterCtor(const wxString& className)
+bool ibValue::IsRegisterCtor(const ibString& className)
 {
 	if (CtorRegistry() == nullptr || className.IsEmpty())
 		return false;
 	return CtorRegistry()->Find(className) != nullptr;
 }
 
-bool ibValue::IsRegisterCtor(const wxString& className, ibCtorObjectType objectType)
+bool ibValue::IsRegisterCtor(const ibString& className, ibCtorObjectType objectType)
 {
 	if (CtorRegistry() == nullptr)
 		return false;
@@ -223,14 +223,14 @@ ibClassID ibValue::GetTypeIDByRef(const ibValue* objectRef)
 	case ibValueTypes::TYPE_ITERATOR:
 		return GetTypeIDByRef(typeid(*objectRef));
 	default:
-		wxFAIL_MSG(wxString::Format(
+		wxFAIL_MSG(ibString::Format(
 			wxT("GetTypeIDByRef: unhandled object tag %d - add it to the typeid switch"),
 			static_cast<int>(objectRef->m_typeClass)));
 		return 0;
 	}
 }
 
-ibClassID ibValue::GetIDObjectFromString(const wxString& className)
+ibClassID ibValue::GetIDObjectFromString(const ibString& className)
 {
 	const ibCtorAbstractType* typeCtor = GetAvailableCtor(className);
 	if (typeCtor != nullptr)
@@ -239,7 +239,7 @@ ibClassID ibValue::GetIDObjectFromString(const wxString& className)
 	return 0;
 }
 
-wxString ibValue::GetNameObjectFromID(const ibClassID& clsid, bool upper)
+ibString ibValue::GetNameObjectFromID(const ibClassID& clsid, bool upper)
 {
 	const ibCtorAbstractType* typeCtor = GetAvailableCtor(clsid);
 	if (typeCtor != nullptr) {
@@ -248,23 +248,17 @@ wxString ibValue::GetNameObjectFromID(const ibClassID& clsid, bool upper)
 	}
 
 	ibBackendCoreException::Error(_("Object with id '%llu' is not exist"), clsid);
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
-wxString ibValue::GetNameObjectFromVT(ibValueTypes valueType, bool upper)
+ibString ibValue::GetNameObjectFromVT(ibValueTypes valueType, bool upper)
 {
-	if (valueType > ibValueTypes::TYPE_REFFER || CtorRegistry() == nullptr)
-		return wxEmptyString;
-	wxString result;
-	CtorRegistry()->ForEach([&](ibCtorAbstractType* typeCtor) {
-		if (!result.IsEmpty())
-			return;
-		const ibCtorSingleType* simpleSingleObject = dynamic_cast<ibCtorSingleType*>(typeCtor);
-		if (simpleSingleObject != nullptr &&
-			valueType == simpleSingleObject->GetValueType())
-			result = upper ? typeCtor->GetClassName().Upper() : typeCtor->GetClassName();
-	});
-	return result;
+	// THE CORE'S TABLE — the one the primitives are registered by (value.cpp) and the query's parser reads.
+	const char* const name = ::GetNameObjectFromVT(valueType);
+	if (name == nullptr)
+		return ibEmptyString;
+	const ibString result(name);
+	return upper ? result.Upper() : result;
 }
 
 ibValueTypes ibValue::GetVTByID(const ibClassID& clsid)
@@ -292,25 +286,7 @@ ibValueTypes ibValue::GetVTByID(const ibClassID& clsid)
 	return ibValueTypes::TYPE_EMPTY;
 }
 
-ibClassID ibValue::GetIDByVT(const ibValueTypes& valueType)
-{
-	if (valueType == ibValueTypes::TYPE_EMPTY)
-		return g_valueUndefinedCLSID;
-	else if (valueType == ibValueTypes::TYPE_BOOLEAN)
-		return g_valueBooleanCLSID;
-	else if (valueType == ibValueTypes::TYPE_NUMBER)
-		return g_valueNumberCLSID;
-	else if (valueType == ibValueTypes::TYPE_DATE)
-		return g_valueDateCLSID;
-	else if (valueType == ibValueTypes::TYPE_STRING)
-		return g_valueStringCLSID;
-	else if (valueType == ibValueTypes::TYPE_NULL)
-		return g_valueNullCLSID;
-
-	return 0;
-}
-
-ibCtorAbstractType* ibValue::GetAvailableCtor(const wxString& className)
+ibCtorAbstractType* ibValue::GetAvailableCtor(const ibString& className)
 {
 	// ⭐ AN EMPTY NAME IS NOT A LOOKUP. Nothing is registered under one, so asking is meaningless —
 	// and the answer to a meaningless question is the same null a missing name gets, decided HERE

@@ -1,16 +1,18 @@
 #ifndef _MAIN_ENTERPRISE_APP_H__
 #define _MAIN_ENTERPRISE_APP_H__
 
-#include <wx/app.h>
+#include "core/diagnostics/oesApp.h"   // ibWxApp — the journal and the dumps, the light appearance, the refusals said
 
-// THE THIN RUNTIME — the desktop's enterprise.exe (enterprise/mainApp) as a thin client: it opens a connection — to an
+// THE THIN RUNTIME — the runtime as a thin client: it opens a connection — to an
 // application server by its address, or to a file base it opens in its own process (fileserver, loaded for it) — and
 // puts up the runtime's main window around it, which logs in and draws what it is answered. It holds no base of its
 // own and runs no code: that is the server's, wherever it runs.
-class ibAppEnterprise : public wxApp {
+class ibAppEnterprise : public ibWxApp {
 
-	// APPLICATION SERVER ENTRY — oes://server[:port]/<base>
+	// APPLICATION SERVER ENTRY — oes://server[:port]/<base>, or oess:// over TLS; the authorities it trusts, a PEM file
+	// (empty — the platform's store)
 	wxString m_strAddress;
+	wxString m_strTrusted;
 
 	// FILE ENTRY
 	wxString m_strFile;
@@ -34,10 +36,11 @@ class ibAppEnterprise : public wxApp {
 
 public:
 
-	virtual bool OnInit() override;
+	virtual wxString GetExeName() const override { return wxT("enterprise-thin"); }
+	virtual bool DoOnInit() override;
 
 #if wxUSE_CMDLINE_PARSER
-	// this one is called from OnInit() to add all supported options
+	// this one is called from wxApp::OnInit() to add all supported options
 	// to the given parser
 	virtual void OnInitCmdLine(wxCmdLineParser& parser) override;
 	virtual bool OnCmdLineParsed(wxCmdLineParser& parser) override;
@@ -49,6 +52,7 @@ protected:
 
 	//global process events:
 	void OnKeyEvent(wxKeyEvent& event);
+	void OnSetFocus(wxFocusEvent& event);
 };
 
 wxDECLARE_APP(ibAppEnterprise);

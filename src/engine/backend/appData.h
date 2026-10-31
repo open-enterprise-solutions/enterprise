@@ -40,7 +40,7 @@ enum ibRunMode {
 	eUNKNOWN_MODE  = 0,   // nobody said — the default; a base is not opened with it (ibApplicationHost::Ensure throws)
 	eLAUNCHER_MODE = 1,   // the launcher: holds no base — makes and lists them
 	eSERVER_MODE   = 4,   // a server: holds bases for other people's clients, as its settings say (the application server)
-	eFILE_MODE     = 6,   // a file base: holds its base itself, in its own process (designer.exe, enterprise.exe, wes, a thin client)
+	eFILE_MODE     = 6,   // a file base: holds its base itself, in its own process (fileserver, in a thin client or the web server)
 	eSANDBOX_MODE  = 7,   // a sandbox: opens a base, runs, closes (codeRunner)
 };
 
@@ -51,7 +51,7 @@ enum ibRunMode {
 
 class BACKEND_API ibDatabaseLayer;
 class BACKEND_API ibSession;
-class BACKEND_API ibHelpService;  // defined in backend/help/helpService.h
+class ibHelpService;  // defined in core/syntaxHelper/helpService.h
 
 enum class ibSessionKind : int;   // defined in backend/session/session.h
 
@@ -73,25 +73,28 @@ enum class ibSessionKind : int;   // defined in backend/session/session.h
 // own settings are not here: they live in its folder, in infobase.conf (the connections to its DBMS), and the
 // process's in backend.conf.
 // THE TYPE SAYS HOW THE PROCESS HOLDS THE BASE — a file base (ibFileInstanceRequest) or a server
-// (ibServerInstanceRequest). What a session works in is said when it is created (CreateSession), not here.
+// (ibServerInstanceRequest). What each session works in is said when it is created (CreateSession).
 struct BACKEND_API ibInstanceRequest {
 	// The base's name in the journal; empty — its folder's (Firebird), its database's (PostgreSQL). A server's:
 	// the base's group in server.conf.
-	wxString  m_name;
-	wxString  m_locale;      // empty — the process's
+	ibString  m_name;
+	ibString  m_locale;      // empty — the process's
+
+	// _app_start_* — read as the base's configuration is made, at its opening (the debug server comes up with it).
+	int       m_loadMetadataFlags = _app_start_default_flag;
 };
 
 // WHERE A BASE LIVES — a Firebird base in its folder, or a PostgreSQL one on the server named.
 struct BACKEND_API ibInstanceStorage {
 	// The base's folder — its journal and its infobase.conf, and a Firebird base's sys.fdb. A PostgreSQL base's may
 	// be left empty — the user's local data, as before.
-	wxString  m_directory;
+	ibString  m_directory;
 	// A PostgreSQL base — on the server named; no server — the base is the folder's sys.fdb (Firebird).
-	wxString  m_server;
-	wxString  m_port;
-	wxString  m_user;        // the DBMS's
-	wxString  m_password;
-	wxString  m_database;
+	ibString  m_server;
+	ibString  m_port;
+	ibString  m_user;        // the DBMS's
+	ibString  m_password;
+	ibString  m_database;
 };
 
 // A FILE BASE — the process holds it itself, and its opener says where it lives.
@@ -104,7 +107,7 @@ struct BACKEND_API ibFileInstanceRequest : ibInstanceRequest, ibInstanceStorage 
 // A SERVER — started from its settings: it reads where the base lives itself, from the base's group (m_name) in
 // server.conf of its folder. Nobody hands it a DBMS.
 struct BACKEND_API ibServerInstanceRequest : ibInstanceRequest {
-	wxString  m_folder;      // the server folder — server.conf and server.key in it
+	ibString  m_folder;      // the server folder — server.conf and server.key in it
 };
 
 // ONE BASE. A process holds one (every host of today) or several (the application server); the set and what belongs
@@ -123,7 +126,7 @@ class BACKEND_API ibApplicationInstance {
 	// pool, the tables, the locale, the journal, the jobs): the base it now is, or null — refused or thrown, it
 	// is closed again. `folder` keeps its infobase.conf; `request` says the locale.
 	static ibApplicationInstance* Open(std::unique_ptr<ibApplicationInstance> opening,
-		std::shared_ptr<class ibDatabaseLayer> db, const wxString& folder, const ibInstanceRequest& request, bool create);
+		std::shared_ptr<class ibDatabaseLayer> db, const ibString& folder, const ibInstanceRequest& request, bool create);
 
 	// Its teardown, in order — run by its owner while it is still listed (ibApplicationHost::Close), before it
 	// is freed. Idempotent: the destructor runs it again over the empty shell.
@@ -153,7 +156,7 @@ public:
 	static ibApplicationInstance* CreateAppDataEnv(const ibFileInstanceRequest& request);
 	static ibApplicationInstance* CreateAppDataEnv(const ibServerInstanceRequest& request);
 
-	static bool SetLocaleAppDataEnv(const wxString& strLocale = wxT(""));
+	static bool SetLocaleAppDataEnv(const ibString& strLocale = ibT(""));
 
 	// Every base this process holds, newest first, and the process with them.
 	static bool DestroyAppDataEnv();
@@ -212,8 +215,8 @@ public:
 	// WebServer session so their Server() stays null.
 	template<class SessionT>
 	ibSessionHolder CreateSession(ibSessionKind kind,
-	                              const wxString& presetGuid,
-	                              const wxString& address);
+	                              const ibString& presetGuid,
+	                              const ibString& address);
 
 private:
 	// Register the session-lifecycle event listeners that drive
@@ -261,27 +264,23 @@ public:
 
 #pragma region execute
 	// RunApplication overloads spawn any OES bin (enterprise / designer /
-	// appserver / codeRunner / wenterprise-server). Connection flags are
+	// appserver / codeRunner / webserver). Connection flags are
 	// emitted in unified `--flag=value` form which every bin's parser
 	// accepts.
-	// useManifest=true switches to wenterprise-server's bind-handshake
-	// protocol: --port=0 --manifest=<tempfile>, poll manifest for the
-	// real URL and open the default browser. Returns pid.
-	long RunApplication(const wxString& strAppName,
+	// useManifest=true starts the web server (ibStartWebServer): it
+	// publishes this file base, and `page` is given its address - the caller
+	// opens it, a browser being a window's (the engine opens none).
+	// Returns pid.
+	long RunApplication(const ibString& strAppName,
 		bool searchDebug = true,
-		bool useManifest = false) const;
-	long RunApplication(const wxString& strAppName,
-		const wxString& strUserName,
-		const wxString& strUserPassword,
+		bool useManifest = false,
+		ibString* page = nullptr) const;
+	long RunApplication(const ibString& strAppName,
+		const ibString& strUserName,
+		const ibString& strUserPassword,
 		bool searchDebug = true,
-		bool useManifest = false) const;
-
-	// Append `--port=0 --manifest=<tempfile>` to cmd, spawn detached,
-	// poll the manifest for up to 5s and open the default browser at the
-	// reported URL. Returns pid on spawn-ok, 0 on failure. Exposed for
-	// callers that build the cmd from external connection data (e.g.
-	// launcher picks from a saved IB list, not the appData singleton).
-	static long SpawnWebServerWithManifest(wxString cmd, bool searchDebug = false);
+		bool useManifest = false,
+		ibString* page = nullptr) const;
 #pragma endregion
 
 	ibRunMode GetAppMode() const { return m_runMode; }
@@ -296,12 +295,12 @@ public:
 	bool WebEnterpriseMode() const;
 	bool ServiceMode() const;
 
-	inline wxString GetRunModeDescr(const ibRunMode& mode) const {
+	inline ibString GetRunModeDescr(const ibRunMode& mode) const {
 		switch (mode)
 		{
 		case eUNKNOWN_MODE:
 		case eLAUNCHER_MODE:
-			return wxEmptyString;
+			return ibEmptyString;
 		case eSERVER_MODE:
 			return _("Application server");
 		case eFILE_MODE:
@@ -309,10 +308,10 @@ public:
 		case eSANDBOX_MODE:
 			return _("Sandbox");
 		}
-		return wxEmptyString;
+		return ibEmptyString;
 	}
 
-	inline wxString GetRunModeDescr() const { return GetRunModeDescr(m_runMode); }
+	inline ibString GetRunModeDescr() const { return GetRunModeDescr(m_runMode); }
 
 	// Verify credentials and install the resolved user onto the current
 	// ibSessionScope's ibSession. Single entry point used by both the GUI
@@ -322,20 +321,21 @@ public:
 	// filled in that case; the install side runs only when outInfo.IsOk()
 	// (open-access mode passes verification with empty info — no install).
 	// Returns false on bad creds; outInfo is left untouched.
-	bool Login(const wxString& strUserName,
-	           const wxString& strUserPassword,
+	bool Login(const ibString& strUserName,
+	           const ibString& strUserPassword,
 	           ibUserInfo& outInfo);
 
 	// Pure credential check used by Login above. Looks up the user, verifies
 	// the password (PBKDF2 with silent MD5→PBKDF2 upgrade via NeedsRehash),
 	// fills `outInfo` on success, and does NOT mutate any session state.
-	// Returns true for open-access mode too (empty sys_user populating +
-	// any creds → pass with outInfo.IsOk()==false). Safe to call from the
-	// registry thread without a ibSessionScope. Exposed as a building block
+	// An empty name is open access only when the user list was read and is
+	// empty, on every host (outInfo stays empty). A list that could not be
+	// read returns false.
+	// Safe to call from the registry thread without a ibSessionScope. Exposed as a building block
 	// so registry's ProcessAttach can short-circuit on bad creds before
 	// pinning a session scope.
-	bool AuthenticateUser(const wxString& strUserName,
-	                      const wxString& strUserPassword,
+	bool AuthenticateUser(const ibString& strUserName,
+	                      const ibString& strUserPassword,
 	                      ibUserInfo& outInfo);
 
 	// Commit side of Login. Writes the resolved user onto the current
@@ -346,7 +346,7 @@ public:
 	// that has no business installing a user. Most callers should go
 	// through Login above instead of invoking this directly.
 	void InstallUser(const ibUserInfo& info,
-	                 const wxString& rawPassword);
+	                 const ibString& rawPassword);
 
 	// Process-wide exclusive (monopoly) mode — true when any session
 	// currently holds it. Facade over ibSessionRegistry; out-of-line so
@@ -357,19 +357,21 @@ public:
 	// (per-cookie on web, main user session on desktop). Without an active
 	// ibSessionScope the readers see an empty/unauthenticated state — used
 	// only by pre-auth bootstrap and standalone tools (codeRunner).
-	const wxString& GetUserName()     const;
-	const wxString& GetUserPassword() const;
+	const ibString& GetUserName()     const;
+	const ibString& GetUserPassword() const;
 	const ibUserInfo& GetUserInfo() const;
 
-	wxString GetComputerName() const { return m_strComputer; }
+	const ibString& GetComputerName() const { return m_strComputer; }
 
 	// The base's name, as its opening request gave it (ibInstanceRequest::m_name) — else the directory of a
 	// file base or the name of a server one. Read by the journal.
-	wxString GetInstanceName() const { return m_strInstance; }
-	const wxString& GetFile() const { return m_strFile; } // a Firebird base's folder (VCS working copy root)
+	const ibString& GetInstanceName() const { return m_strInstance; }
+	const ibString& GetFile() const { return m_strFile; } // a Firebird base's folder (VCS working copy root)
 
-	// The platform locale — the PROCESS's (ibApplicationHost), asked here so its readers need not know that.
-	wxString GetLocale() const;
+	// The base's locale where it names one, else the PROCESS's (ibApplicationHost).
+	ibString GetLocale() const;
+	// The words its threads speak (core/localization/dictionary.h): null — the process's.
+	const ibDictionary* GetDictionary() const { return m_dictionary; }
 
 #pragma region session
 
@@ -391,7 +393,7 @@ public:
 
 #pragma region language
 
-	wxString GetUserLanguageCode() const;
+	ibString GetUserLanguageCode() const;
 
 #pragma endregion
 
@@ -413,31 +415,39 @@ public:
 
 #pragma region database
 
-	bool LoadDatabase(const wxString& strFullPath);
-	bool SaveDatabase(const wxString& strFullPath);
+	bool LoadDatabase(const ibString& strFullPath);
+	bool SaveDatabase(const ibString& strFullPath);
+
+	// The same, over a stream — a file of the session's temporary storage, which a client uploaded or takes down
+	// (ibTempFileInputStream / ibTempFileOutputStream). The stream is the caller's to close.
+	bool LoadDatabase(class wxInputStream& stream);
+	bool SaveDatabase(class wxOutputStream& stream);
 
 	bool ClearDatabase();
 
 #pragma endregion 
 
-	wxString GetDatabaseDescription() const;
+	ibString GetDatabaseDescription() const;
 
 private:
 
 	// Buffer-level user-table export / import. Per-record serialization
 	// lives on ibUserInfo (Serialize / Deserialize); these methods just
 	// drive the iteration over the sys_user table.
-	bool LoadUserInfoFromBuffer(wxMemoryBuffer& buffer);
-	bool SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const;
+	bool LoadUserInfoFromBuffer(ibMemoryBuffer& buffer);
+	bool SaveUserInfoToBuffer(ibMemoryBuffer& buffer) const;
 
-	wxString ComputeMd5() const;
-	wxString ComputeMd5(const wxString& userPassword) const;
+	ibString ComputeMd5() const;
+	ibString ComputeMd5(const ibString& userPassword) const;
 
 	static bool TableAlreadyCreated();
 	static void CreateTableUser();
 	static void CreateTableSession();
 	static void CreateTableEvent();
 	static void CreateTableLock();
+#ifdef OES_TESTING
+	friend struct LockSchemaAccess;   // the race test opens a base that already has sys_lock
+#endif
 	// Additive — creates sys_job if missing. The shared last-run clock for
 	// scheduled jobs; independent table, not part of TableAlreadyCreated()'s
 	// init contract, so existing databases pick it up on next open.
@@ -467,12 +477,17 @@ private:
 	class ibApplicationHost* const m_host;
 
 	ibRunMode m_runMode;
-	wxString m_strComputer;
+	ibString m_strComputer;
 
 	// The name a person calls this base by — written before every journal line about it. Declared before the
 	// subsystems below so it dies after them: they still write lines while they are destroyed, and those lines
 	// ask for it.
-	wxString m_strInstance;
+	ibString m_strInstance;
+
+	// The words of the locale the base names (sys_settings, Regional — no user), read once as it opens; null —
+	// it names none, and its threads speak the process's language. The set is the process's (ibDictionary
+	// keeps one per language), so nothing here dies with the base.
+	const ibDictionary* m_dictionary = nullptr;
 
 	// Subsystem ownership — order below is THE teardown contract.
 	// C++ destroys members in reverse declaration order, so the last
@@ -559,12 +574,10 @@ private:
 	// works in that one for its whole life, so an update that puts another one here leaves every working session
 	// in the configuration it came in with; the old one goes with the last of them. A shared_ptr, swapped under the
 	// process's lock (ReplaceActiveMetaData).
-	// Polymorphic — concrete subclass (`ibMetaDataConfiguration` for the application,
-	// `ibMetaDataConfigurationStorage` for a designer's process) chosen by the
-	// fabric `CreateActiveMetaData` by the process's own session. nullptr in
-	// launcher / codeRunner (no DB-backed metadata). Declared last so
-	// reverse-order destruction lets it go first — OnDestroy ran already
-	// in the dtor above.
+	// The application's — `ibMetaDataConfiguration`, loaded and run as the base opens (CreateActiveMetaData),
+	// before anybody comes in. A designer's session works in a configuration of its own, held by it alone
+	// (ibSession::AcquireMetaData). nullptr in launcher / codeRunner (no DB-backed metadata). Declared last so
+	// reverse-order destruction lets it go first — OnDestroy ran already in the dtor above.
 	std::shared_ptr<class ibMetaDataConfigurationBase> m_activeMetaData;
 
 public:
@@ -598,23 +611,21 @@ public:
 
 	// Active configuration metadata accessor — the configuration this thread works in: its session's own, else the
 	// one its scope holds, else the base's active one (held for the sessions to come). nullptr in launcher /
-	// codeRunner; nullptr before CreateActiveMetaData fires for the first time. The legacy `activeMetaData` macro
+	// codeRunner; nullptr while the base is still opening. The legacy `activeMetaData` macro
 	// redirects to `appEnv::ActiveMetaData()` which calls this. Whoever works in it holds `shared_from_this()`.
 	static class ibMetaDataConfigurationBase* GetActiveMetaData() { return GetActiveMetaData(Get()); }
 	static class ibMetaDataConfigurationBase* GetActiveMetaData(const ibApplicationInstance* applicationInstance);
 
-	// The active configuration replaced — by the one handed in: the designer's apply hands in what the database now
-	// publishes. The sessions working in the old one keep it; it goes with the last of them.
-	void ReplaceActiveMetaData(std::shared_ptr<class ibMetaDataConfigurationBase> metaData);
+	// The active configuration replaced — the base reads what the database now publishes, as its own (the designer's
+	// apply asks it to; the designer's copy is the designer's). The sessions working in the old one keep it; it goes
+	// with the last of them. False when the database's copy could not be read: the old one stays.
+	bool ReplaceActiveMetaData();
 
-	// Fabric — pick subclass by the kind of the base's first session (a designer's: the
-	// configuration to edit; anyone else's: the one the application runs) and
-	// stash it in m_activeMetaData. Returns false if construction or
-	// OnInitialize failed; the launcher returns true with no-op so callers can
-	// branch uniformly.
+	// Fabric — the configuration the application runs, put in m_activeMetaData, loaded and run: the base's opening
+	// makes it, before any session is let in. Returns false if OnInitialize or the run failed.
 	// Replaces the historical `ibMetaDataConfigurationBase::Initialize` static.
-	static bool CreateActiveMetaData(ibApplicationInstance* applicationInstance, ibSessionKind kind, int flags);
-	// (Its tear-down is the base's own Close: OnDestroy, then the field released.)
+	static bool CreateActiveMetaData(ibApplicationInstance* applicationInstance, int flags);
+	// (Its tear-down is the base's own Close: OnDestroy, then the base's reference let go — the last holder closes it.)
 
 	// Audit + trace logger. Created during CreateFile/Server AppDataEnv
 	// once the DB is open + the connection pool is initialised; destroyed
@@ -664,12 +675,19 @@ public:
 
 private:
 
+	// …the replacement itself — the one handed in put in m_activeMetaData, the one before let go; the public
+	// ReplaceActiveMetaData() hands in what it read from the database, a test — a configuration made in memory.
+	void ReplaceActiveMetaData(std::shared_ptr<class ibMetaDataConfigurationBase> metaData);
+#ifdef OES_TESTING
+	friend struct ActiveMetaDataAccess;
+#endif
+
 	// Build the absolute path for the .olg directory:
 	//   - a Firebird base   → <m_strFile>/oeslog
 	//   - a PostgreSQL base → <m_strDirLocal>/oeslog when the opener named the base's folder,
 	//                         else <wxStandardPaths::GetUserLocalDataDir>/OES/<server>_<db>/logs
 	// Called from the opening once the base's fields are set.
-	wxString ResolveLogDir() const;
+	ibString ResolveLogDir() const;
 
 	// Stand up m_logger using ResolveLogDir(). No-op for LAUNCHER mode
 	// (no session / no audit surface). Failures are swallowed — the
@@ -677,51 +695,49 @@ private:
 	void CreateLogger();
 
 	bool m_connected_to_db = false;
-	bool m_created_metadata = false;
-	bool m_run_metadata = false;
 
-public:
-	// Flags stashed before Authenticate fires the OnFirstConnect
-	// listener — listener can't take a flags argument (callback shape is
-	// fixed) so the flags ride here instead. Apps that need non-default
-	// flags (Enterprise's debug-server flag) write directly before
-	// CreateSession + Authenticate.
+	// The flags the base was opened with (ibInstanceRequest) — its configuration was made by them, and with the
+	// debug server up every session let in is debuggable.
 	int  m_loadMetadataFlags = _app_start_default_flag;
-private:
 
 	// A FIREBIRD BASE — its folder
-	wxString m_strFile;
+	ibString m_strFile;
 
 	// A POSTGRESQL BASE — the server named; none — the base is Firebird (ibInstanceStorage says the same)
-	wxString m_strServer;
-	wxString m_strPort;
-	wxString m_strDatabase;
+	ibString m_strServer;
+	ibString m_strPort;
+	ibString m_strDatabase;
 
-	wxString m_strUser;
-	wxString m_strPassword;
+	ibString m_strUser;
+	ibString m_strPassword;
 
 	// A PostgreSQL base's own folder on this machine, when its opener keeps one (ibInstanceRequest::m_directory).
-	wxString m_strDirLocal;
+	ibString m_strDirLocal;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-#define user_table				wxT("sys_user")
-#define session_table			wxT("sys_session")
-#define sequence_table			wxT("sys_sequence")
-#define event_table				wxT("sys_event")
-#define bytecode_cache_table	wxT("sys_bytecode_cache")
-#define lock_table				wxT("sys_lock")
+#define user_table				ibT("sys_user")
+#define session_table			ibT("sys_session")
+#define sequence_table			ibT("sys_sequence")
+#define event_table				ibT("sys_event")
+#define bytecode_cache_table	ibT("sys_bytecode_cache")
+#define lock_table				ibT("sys_lock")
+// One row per key, primary key (namespace, keyHash). Acquire locks this row for the
+// transaction, then reads and writes sys_lock. Release does not delete it. The
+// sweep does, once nobody holds the key. An old binary on the same base still
+// acquires without this row, so the race stays open until every process is upgraded.
+#define lock_key_table			ibT("sys_lock_key")
 // sys_job — one row per scheduled job, holding the LAST RUN as every process on
 // this base sees it. Without it each process keeps its own clock and a job runs
 // once per process per interval instead of once per interval.
-#define job_table				wxT("sys_job")
+#define job_table				ibT("sys_job")
 // sys_settings — one row per saved setting: a packed runtime value under an
 // address of category + object + name + user. What a person arranged survives
 // the form that arranged it. See backend/settings/settingsStorage.h.
-#define settings_table			wxT("sys_settings")
+#define settings_table			ibT("sys_settings")
 // sys_file — the sessions' temporary files: one row per PART of a file (its header first), owned by a
 // session and gone with it. See backend/temp/tempStorage.h.
-#define file_table				wxT("sys_file")
+#define file_table				ibT("sys_file")
 ///////////////////////////////////////////////////////////////////////////////
 
 #endif

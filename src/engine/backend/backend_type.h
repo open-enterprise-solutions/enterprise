@@ -3,9 +3,25 @@
 
 #include <vector>
 
-#include "backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 #include "backend/query/queryColumn.h"     // ibBackendAbstractColumn (name/synonym/comment) + ibBackendSourceColumn
-#include "backend/sourceDescription.h"     // ibSourceDescription — control's bound source path (GetSourceDesc / SetDefaultSourceType)
+#include "core/description/sourceDescription.h"     // ibSourceDescription — control's bound source path (GetSourceDesc / SetDefaultSourceType)
+#include "core/selectorDataType.h"                  // ibSelectorDataType — the shape a type is picked in (GetFilterDataType)
+
+//////////////////////////////////////////////////////////////
+
+// ⭐ A BINDING'S DOOR ON THIS SIDE — the core one writes every id as it is held; this one writes against the
+// configuration the binding belongs to, and asks it which ids still name an object.
+class BACKEND_API ibBackendMetaDescriptionMemory : public ibMetaDescriptionMemory {
+public:
+	static bool WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc, const class ibMetaData* metaData = nullptr);
+};
+
+// …and a type's — written against the configuration it belongs to, the classes it no longer knows dropped.
+class BACKEND_API ibBackendTypeDescriptionMemory : public ibTypeDescriptionMemory {
+public:
+	static bool WriteNode(ibDataValue& value, const ibTypeDescription& typeDesc, const class ibMetaData* metaData = nullptr);
+};
 
 //////////////////////////////////////////////////////////////
 
@@ -85,19 +101,6 @@ public:
 
 //////////////////////////////////////////////////////////////
 
-enum ibSelectorDataType {
-	ibSelectorDataType_any,
-	ibSelectorDataType_boolean,
-	ibSelectorDataType_reference,
-	ibSelectorDataType_table,
-	ibSelectorDataType_resource,
-	// WHAT RAISES AN EVENT — an object, a manager, a record set, of one metaobject or of every one of a
-	// metatype: what an event handler names as its source.
-	ibSelectorDataType_eventSource,
-};
-
-//////////////////////////////////////////////////////////////
-
 class BACKEND_API ibBackendTypeConfigFactory :
 	public ibBackendTypeFactory {
 public:
@@ -108,7 +111,7 @@ public:
 
 	// The default value type (clsid) for a filter kind: _boolean -> Boolean, _resource -> Number,
 	// _table -> value-table, _reference / else -> String. Static, keyed on the kind — the ONE mapping both
-	// ibVariantDataAttribute::DoSetDefaultMetaType and ibValueControl::AutoBindNewSource use, so they cannot drift.
+	// ibVariantAttribute::DoSetDefaultMetaType and ibValueControl::AutoBindNewSource use, so they cannot drift.
 	static ibClassID GetDefaultTypeByFilter(ibSelectorDataType filterDataType);
 
 	// ⭐⭐ AND EVERY TYPE THAT KIND MAY TAKE — the same question as the default above, asked in full.
@@ -189,7 +192,7 @@ public:
 	// column, so ONE resolver returns either. The class IS an attribute, so the accessors carry no
 	// "Attribute" noise: GetName / GetId / IsMain. GetName IS the attribute's name (the abstract
 	// column's); GetSynonym / GetComment are overridden by the concrete holder from its properties.
-	virtual wxString GetName() const override = 0;
+	virtual ibString GetName() const override = 0;
 	virtual ibMetaID GetId() const = 0;
 
 	virtual bool IsMain() const = 0;
@@ -236,7 +239,7 @@ public:
 	// path (a hop no longer resolves). `valid`/`outText` (optional) report resolvability and the dotted
 	// display "Attr.Field.Sub". Takes the wrapper (not a bare vector) — resolution is source-explorer-driven.
 	const ibBackendSourceColumn* WalkSource(const ibSourceDescription& desc,
-		bool* valid = nullptr, wxString* outText = nullptr) const;
+		bool* valid = nullptr, ibString* outText = nullptr) const;
 
 	// The source HOLDER whose attribute id matches — the ONE lookup shared by the dot-walk and the
 	// path / type resolvers (instead of re-scanning GetSourceList at every site). Null = no such

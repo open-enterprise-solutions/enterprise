@@ -1,19 +1,6 @@
 #ifndef __ODBC_DATABASE_LAYER_H__ibDatabaseLayerODBC
 #define __ODBC_DATABASE_LAYER_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/arrstr.h>
-
 #include "backend/databaseLayer/databaseLayerDef.h"
 #include "backend/databaseLayer/databaseLayer.h"
 
@@ -34,11 +21,8 @@ public:
 
 	// open database
 	virtual bool Open();
-	virtual bool Open(const wxString& strConnection);
-	virtual bool Open(const wxString& strDSN, const wxString& strUser, const wxString& strPassword);
-#if wxUSE_GUI
-	virtual bool Open(const wxString& strConnection, bool bPromptForInfo, wxWindow* parent = nullptr);
-#endif
+	virtual bool Open(const ibString& strConnection);
+	virtual bool Open(const ibString& strDSN, const ibString& strUser, const ibString& strPassword);
 
 	// close database  
 	virtual bool Close();
@@ -64,11 +48,11 @@ public:
 	// SET LOCK_TIMEOUT 0 (ibTxOptions::noWait). See docs/private/record-locks.md.
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
-	virtual bool TableExists(const wxString& table);
-	virtual bool ViewExists(const wxString& view);
-	virtual wxArrayString GetTables();
-	virtual wxArrayString GetViews();
-	virtual wxArrayString GetColumns(const wxString& table);
+	virtual bool TableExists(const ibString& table);
+	virtual bool ViewExists(const ibString& view);
+	virtual std::vector<ibString> GetTables();
+	virtual std::vector<ibString> GetViews();
+	virtual std::vector<ibString> GetColumns(const ibString& table);
 
 	virtual int GetDatabaseLayerType() const {
 		return DATABASELAYER_ODBC;
@@ -93,28 +77,29 @@ public:
 	static bool IsAvailable();
 
 	// The native error as the code — or the cancel, when the SQLSTATE says it was the statement cancelled (HY008).
-	static int TranslateErrorCode(int nNativeCode, const wxString& strSqlState);
+	static int TranslateErrorCode(int nNativeCode, const ibString& strSqlState);
 
 	// SQLSTATE-based classification — ODBC's standard error identifier
 	// is the same 5-char SQLSTATE as SQL standard / PostgreSQL. Backends
 	// reachable through ODBC (MSSQL, Oracle, DB2, etc.) all funnel their
 	// errors through this format, so the class-digit dispatch is the
-	// portable choice.
-	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
-	wxString GetSqlState() const override { return m_lastSqlState; }
+	// portable choice. Every reporter of the driver — the layer, the
+	// statement, the result set — records this Kind with the code.
+	static ibBackendDatabaseException::Kind ClassifySqlState(const ibString& sqlState, int nativeCode);
+	ibString GetSqlState() const override { return m_lastSqlState; }
 
 	// Stash the most recent SQLSTATE pulled from SQLGetDiagRec so the
 	// next ThrowDatabaseException carries it.
-	void SetLastSqlState(const wxString& s) { m_lastSqlState = s; }
+	void SetLastSqlState(const ibString& s) { m_lastSqlState = s; }
 
 protected:
 
 	// query database
-	virtual int DoRunQuery(const wxString& strQuery, bool bParseQuery);
-	virtual ibDatabaseResultSet* DoRunQueryWithResults(const wxString& strQuery);
+	virtual int DoRunQuery(const ibString& strQuery, bool bParseQuery);
+	virtual ibDatabaseResultSet* DoRunQueryWithResults(const ibString& strQuery);
 
 	// ibPreparedStatement support
-	virtual ibPreparedStatement* DoPrepareStatement(const wxString& strQuery);
+	virtual ibPreparedStatement* DoPrepareStatement(const ibString& strQuery);
 
 	// transaction support — driver-level operations; the nesting
 	// counter lives on ibDatabaseLayer, see databaseLayer.h.
@@ -124,23 +109,19 @@ protected:
 
 private:
 
-	virtual ibPreparedStatement* DoPrepareStatement(const wxString& strQuery, bool bParseQuery);
+	virtual ibPreparedStatement* DoPrepareStatement(const ibString& strQuery, bool bParseQuery);
 
 	//SQLHENV m_sqlEnvHandle;
 	void* m_sqlEnvHandle;
 	//SQLHDBC m_sqlHDBC;
 	void* m_sqlHDBC;
 
-	wxString m_strDSN;
-	wxString m_strUser;
-	wxString m_strPassword;
+	ibString m_strDSN;
+	ibString m_strUser;
+	ibString m_strPassword;
 
-	wxString m_strConnection;
+	ibString m_strConnection;
 
-#if wxUSE_GUI
-	bool m_bPrompt;
-	wxWindow* m_parentContext;
-#endif
 
 	bool m_bIsConnected;
 	ibInterfaceODBC* m_pInterface;
@@ -152,7 +133,7 @@ private:
 	// Stashed by SetLastSqlState() — most recent SQLSTATE pulled from
 	// SQLGetDiagRec. Travels with the next ThrowDatabaseException so
 	// admin logs see what the driver actually reported.
-	wxString m_lastSqlState;
+	ibString m_lastSqlState;
 
 public:
 

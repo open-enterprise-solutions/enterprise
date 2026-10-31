@@ -49,8 +49,11 @@ void ibValueSelectorRecordDataObject::Reset()
 	// Designer mode never iterates (Next() returns false); GetPropVal reads these
 	// designer values directly, so populate them up front.
 	if (appData->DesignerMode()) {
-		for (const auto object : m_metaObject->GetAttributeArrayObject())
+		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
+			if (m_metaObject->IsDataReference(object->GetMetaID()))
+				continue;
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), object->CreateValue());
+		}
 		for (const auto object : m_metaObject->GetTableArrayObject())
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
 	}
@@ -93,8 +96,8 @@ void ibValueSelectorRecordDataObject::MaterialiseRow(const ibDataQueryResult& se
 	m_listObjectValue.clear();
 	m_listObjectValue.insert_or_assign(m_metaObject->GetMetaID(),
 		selection.GetValue(m_metaObject->GetDataReference()->GetQueryColumn()));
-	for (const auto object : m_metaObject->GetAttributeArrayObject())
-		if (!m_metaObject->IsDataReference(object->GetMetaID()))
+	for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
+		if (!m_metaObject->IsDataReference(object->GetMetaID()) && object->GetQueryColumn() != nullptr)
 			m_listObjectValue[object->GetMetaID()] = selection.GetValue(object->GetQueryColumn());
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
 		ibValueTabularSectionDataObjectRef* tabularSection = new ibValueTabularSectionDataObjectRef(this, object);

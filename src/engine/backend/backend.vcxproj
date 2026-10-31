@@ -23,16 +23,8 @@
     <ClInclude Include="appData.h" />
     <ClInclude Include="appDataCtorToken.h" />
     <ClInclude Include="appHost.h" />
-    <ClInclude Include="cipher\fieldCipher.h" />
     <ClInclude Include="appEnv.h" />
     <ClInclude Include="backend.h" />
-    <ClInclude Include="syntaxHelper\helpCategory.h" />
-    <ClInclude Include="syntaxHelper\helpCorpus.h" />
-    <ClInclude Include="syntaxHelper\helpEntry.h" />
-    <ClInclude Include="syntaxHelper\helpLoader.h" />
-    <ClInclude Include="syntaxHelper\helpLoadError.h" />
-    <ClInclude Include="syntaxHelper\helpResolver.h" />
-    <ClInclude Include="syntaxHelper\helpService.h" />
     <ClInclude Include="logger\logger.h" />
     <ClInclude Include="logger\loggerEntry.h" />
     <ClInclude Include="logger\loggerQueue.h" />
@@ -42,12 +34,11 @@
     <ClInclude Include="logger\loggerSinkSqlite.h" />
     <ClInclude Include="logger\loggerSweep.h" />
     <ClInclude Include="logger\loggerWriter.h" />
-    <ClInclude Include="backend_spreadsheet.h" />
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="backend_diagnostic.h" />
-    <ClInclude Include="fileKind.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
     <ClInclude Include="session\serviceExclusivePolicy.h" />
+    <ClInclude Include="session\sessionThrottle.h" />
     <ClInclude Include="session\sessionException.h" />
     <ClInclude Include="session\session.h" />
     <ClInclude Include="session\sessionHolder.h" />
@@ -69,11 +60,9 @@
     <ClInclude Include="mcp\mcpDebugBridge.h" />
     <ClInclude Include="mcp\mcpTool.h" />
     <ClInclude Include="job\platformJobs.h" />
-    <ClInclude Include="job\jobSchedule.h" />
     <ClInclude Include="settings\settingsStorage.h" />
     <ClInclude Include="settings\settingsComposer.h" />
     <ClInclude Include="temp\tempStorage.h" />
-    <ClInclude Include="server\serverConfig.h" />
     <ClInclude Include="sheetFormat\sheetFormat.h" />
     <ClInclude Include="sheetFormat\sheetFormatXlsx.h" />
     <ClInclude Include="sheetFormat\sheetFormatNative.h" />
@@ -83,31 +72,27 @@
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_picture.h" />
     <ClInclude Include="backend_type.h" />
+    <ClInclude Include="backend_composition.h" />
     <ClInclude Include="characteristicCtor.h" />
     <ClInclude Include="constantCtor.h" />
     <ClInclude Include="moduleManager\globalContextManager.h" />
     <ClInclude Include="restructureInfo.h" />
-    <ClInclude Include="spreadsheetDescription.h" />
     <ClInclude Include="spreadsheetModel.h" />
     <ClInclude Include="compiler\cache\byteCodeCache.h" />
     <ClInclude Include="compiler\byteCode.h" />
     <ClInclude Include="compiler\byteCodeFormat.h" />
-    <ClInclude Include="compiler\codeDef.h" />
     <ClInclude Include="compiler\compileCode.h" />
     <ClInclude Include="compiler\compileState.h" />
     <ClInclude Include="compiler\compileContext.h" />
     <ClInclude Include="compiler\byteCodeLINQ.h" />
     <ClInclude Include="compiler\compileModule.h" />
     <ClInclude Include="compiler\scriptComplete.h" />
-    <ClInclude Include="compiler\blockSyntaxLINQ.h" />
-    <ClInclude Include="compiler\scriptParseCode.h" />
     <ClInclude Include="compiler\scriptCheck.h" />
     <ClInclude Include="compiler\enumFactory.h" />
     <ClInclude Include="compiler\enumUnit.h" />
     <ClInclude Include="compiler\procContext.h" />
     <ClInclude Include="compiler\procUnit.h" />
     <ClInclude Include="compiler\procUnitLambda.h" />
-    <ClInclude Include="compiler\translateCode.h" />
     <ClInclude Include="compiler\typeCtor.h" />
     <ClInclude Include="compiler\value.h" />
     <ClInclude Include="compiler\valueSerialization.h" />
@@ -189,8 +174,6 @@
     <ClInclude Include="translateState.h" />
     <ClInclude Include="metaCollection\metaLanguageObject.h" />
     <ClInclude Include="metaCollection\metaPictureObject.h" />
-    <ClInclude Include="homePageDescription.h" />
-    <ClInclude Include="pictureDescription.h" />
     <ClInclude Include="metaCollection\attribute\metaAttributeObject.h" />
     <ClInclude Include="metaCollection\attribute\metaAttributeObjectEnum.h" />
     <ClInclude Include="metaCollection\accountingKind\metaAccountingKindObject.h" />
@@ -278,19 +261,11 @@
     <ClInclude Include="query\tempTableManager.h" />
     <ClInclude Include="query\queryRamTable.h" />
     <ClInclude Include="query\queryRowCursor.h" />
-    <ClInclude Include="query\queryKeywords.h" />
-    <ClInclude Include="query\queryLexer.h" />
-    <ClInclude Include="query\queryAST.h" />
-    <ClInclude Include="query\queryRender.h" />
     <ClInclude Include="query\queryConstructorModel.h" />
     <ClInclude Include="query\queryTempStore.h" />
-    <ClInclude Include="query\queryParser.h" />
     <ClInclude Include="query\queryLowering.h" />
     <ClInclude Include="query\queryException.h" />
     <ClInclude Include="query\queryHierarchy.h" />
-    <ClInclude Include="query\queryUnfold.h" />
-    <ClInclude Include="query\queryBalanceRole.h" />
-    <ClInclude Include="query\queryRewrite.h" />
     <ClInclude Include="compiler\lambdaQueryAST.h" />
     <ClInclude Include="query\queryableFactory.h" />
     <ClInclude Include="composition\dataComposer.h" />
@@ -302,8 +277,6 @@
     <ClInclude Include="composition\composeEvaluate.h" />
     <ClInclude Include="composition\composeRunSchema.h" />
     <ClInclude Include="composition\compositionCondition.h" />
-    <ClInclude Include="composition\compositionTheme.h" />
-    <ClInclude Include="compositionDescription.h" />
     <ClInclude Include="system\value\composition\valueComposerField.h" />
     <ClInclude Include="system\value\composition\valueComposerSettings.h" />
     <ClInclude Include="system\value\valueComposer.h" />
@@ -321,13 +294,13 @@
     <ClInclude Include="metaCtor.h" />
     <ClInclude Include="metaData.h" />
     <ClInclude Include="metadataConfiguration.h" />
+    <ClInclude Include="metadataSerialization.h" />
     <ClInclude Include="metadataDataProcessor.h" />
     <ClInclude Include="metadataReport.h" />
     <ClInclude Include="moduleInfo.h" />
     <ClInclude Include="moduleManager\moduleManager.h" />
     <ClInclude Include="moduleManager\moduleManagerExt.h" />
     <ClInclude Include="objCtor.h" />
-    <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="propertyManager\propertyManager.h" />
     <ClInclude Include="propertyManager\propertyObject.h" />
     <ClInclude Include="propertyManager\property\eventControl.h" />
@@ -385,7 +358,6 @@
     <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h" />
     <ClInclude Include="propertyManager\property\variant\variantTranslate.h" />
     <ClInclude Include="propertyManager\property\variant\variantType.h" />
-    <ClInclude Include="res\resource.h" />
     <ClInclude Include="roleHelper.h" />
     <ClInclude Include="srcObject.h" />
     <ClInclude Include="srcDataObject.h" />
@@ -400,6 +372,7 @@
     <ClInclude Include="system\value\valueColour.h" />
     <ClInclude Include="system\value\valueEvent.h" />
     <ClInclude Include="system\value\valueBinaryData.h" />
+    <ClInclude Include="system\value\valueDataHashing.h" />
     <ClInclude Include="system\value\valueTextFile.h" />
     <ClInclude Include="system\value\valueHttp.h" />
     <ClInclude Include="system\value\valueSecureConnection.h" />
@@ -407,6 +380,7 @@
     <ClInclude Include="system\value\valueFont.h" />
     <ClInclude Include="system\value\valueGuid.h" />
     <ClInclude Include="system\value\valueJson.h" />
+    <ClInclude Include="system\value\valueXml.h" />
     <ClInclude Include="system\value\valueJob.h" />
     <ClInclude Include="system\value\valueMap.h" />
     <ClInclude Include="system\value\valueOLE.h" />
@@ -421,21 +395,12 @@
     <ClInclude Include="system\value\valueTable.h" />
     <ClInclude Include="system\value\valueType.h" />
     <ClInclude Include="tabularModel.h" />
-    <ClInclude Include="tabularModelView.h" />
-    <ClInclude Include="commandDescription.h" />
-    <ClInclude Include="sourceDescription.h" />
-    <ClInclude Include="calcScheduleDescription.h" />
-    <ClInclude Include="choiceLinkDescription.h" />
     <ClInclude Include="choiceLinkResolver.h" />
-    <ClInclude Include="typeconv.h" />
-    <ClInclude Include="typeDescription.h" />
     <ClInclude Include="uniqueKey.h" />
     <ClInclude Include="vcs\gitService.h" />
     <ClInclude Include="plugin\pluginApi.h" />
     <ClInclude Include="plugin\pluginHost.h" />
     <ClInclude Include="plugin\pluginManager.h" />
-    <ClInclude Include="utils\md5.hpp" />
-    <ClInclude Include="utils\sha256.hpp" />
     <ClInclude Include="utils\passwordHash.hpp" />
     <ClInclude Include="utils\dataVersion.hpp" />
     <ClInclude Include="valueInfo.h" />
@@ -445,13 +410,8 @@
   <ItemGroup>
     <ClCompile Include="appData.cpp" />
     <ClCompile Include="appHost.cpp" />
-    <ClCompile Include="cipher\fieldCipher.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
     <ClCompile Include="appEnv.cpp" />
-    <ClCompile Include="syntaxHelper\helpCorpus.cpp" />
-    <ClCompile Include="syntaxHelper\helpLoader.cpp" />
-    <ClCompile Include="syntaxHelper\helpResolver.cpp" />
-    <ClCompile Include="syntaxHelper\helpService.cpp" />
     <ClCompile Include="logger\logger.cpp" />
     <ClCompile Include="logger\loggerDiagnosticSink.cpp" />
     <ClCompile Include="logger\loggerQueue.cpp" />
@@ -461,13 +421,12 @@
     <ClCompile Include="logger\loggerWriter.cpp" />
     <ClCompile Include="userInfo.cpp" />
     <ClCompile Include="backend.cpp" />
-    <ClCompile Include="backend_spreadsheet.cpp" />
     <ClCompile Include="backend_exception.cpp" />
     <ClCompile Include="backend_diagnostic.cpp" />
-    <ClCompile Include="fileKind.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
     <ClCompile Include="session\serviceExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
+    <ClCompile Include="session\sessionThrottle.cpp" />
     <ClCompile Include="session\sessionException.cpp" />
     <ClCompile Include="session\sessionParameters.cpp" />
     <ClCompile Include="session\sessionHolder.cpp" />
@@ -522,13 +481,10 @@
     <ClCompile Include="job\jobRunByteCode.cpp" />
     <ClCompile Include="job\jobRegister.cpp" />
     <ClCompile Include="job\platformJobs.cpp" />
-    <ClCompile Include="job\jobSchedule.cpp" />
-    <ClCompile Include="job\jobScheduleRules.cpp" />
     <ClCompile Include="query\queryable.cpp" />
     <ClCompile Include="settings\settingsStorage.cpp" />
     <ClCompile Include="settings\settingsComposer.cpp" />
     <ClCompile Include="temp\tempStorage.cpp" />
-    <ClCompile Include="server\serverConfig.cpp" />
     <ClCompile Include="sheetFormat\sheetFormat.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatNative.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatDocx.cpp" />
@@ -545,31 +501,26 @@
     <ClCompile Include="constantCtor.cpp" />
     <ClCompile Include="metadataSerialization.cpp" />
     <ClCompile Include="moduleManager\globalContextManager.cpp" />
-    <ClCompile Include="spreadsheetDescription.cpp" />
     <ClCompile Include="metaCollection\metaLanguageObjectProperty.cpp" />
     <ClCompile Include="metaCollection\metaLanguageObject_res.cpp" />
     <ClCompile Include="metaCollection\metaLanguageObject.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\metaPictureObject.cpp" />
     <ClCompile Include="metaCollection\metaPictureObject_res.cpp" />
-    <ClCompile Include="homePageDescription.cpp" />
-    <ClCompile Include="pictureDescription.cpp" />
     <ClCompile Include="backend_type.cpp" />
+    <ClCompile Include="backend_composition.cpp" />
     <ClCompile Include="compiler\byteCode.cpp" />
     <ClCompile Include="compiler\compileCode.cpp" />
     <ClCompile Include="compiler\compileCodeLINQ.cpp" />
     <ClCompile Include="compiler\compileContext.cpp" />
     <ClCompile Include="compiler\compileModule.cpp" />
     <ClCompile Include="compiler\scriptComplete.cpp" />
-    <ClCompile Include="compiler\blockSyntaxLINQ.cpp" />
-    <ClCompile Include="compiler\scriptParseCode.cpp" />
     <ClCompile Include="compiler\scriptCheck.cpp" />
     <ClCompile Include="compiler\enumUnit.cpp" />
     <ClCompile Include="compiler\enumFactory.cpp" />
     <ClCompile Include="compiler\procContext.cpp" />
     <ClCompile Include="compiler\procUnit.cpp" />
     <ClCompile Include="compiler\procUnitLINQ.cpp" />
-    <ClCompile Include="compiler\translateCode.cpp" />
     <ClCompile Include="compiler\value.cpp" />
     <ClCompile Include="compiler\valueFactory.cpp" />
     <ClCompile Include="compiler\value_res.cpp" />
@@ -815,15 +766,11 @@
     <ClCompile Include="metaCollection\partial\informationRegisterObject.cpp" />
     <ClCompile Include="query\queryColumn.cpp" />
     <ClCompile Include="query\dataQueryBuilder.cpp" />
-    <ClCompile Include="query\queryLexer.cpp" />
-    <ClCompile Include="query\queryRender.cpp" />
     <ClCompile Include="query\queryConstructorModel.cpp" />
     <ClCompile Include="query\queryTempStore.cpp" />
-    <ClCompile Include="query\queryParser.cpp" />
     <ClCompile Include="query\queryLowering.cpp" />
     <ClCompile Include="query\queryException.cpp" />
     <ClCompile Include="query\queryHierarchy.cpp" />
-    <ClCompile Include="query\queryRewrite.cpp" />
     <ClCompile Include="compiler\lambdaQueryAST.cpp" />
     <ClCompile Include="query\queryableFactory.cpp" />
     <ClCompile Include="composition\dataComposer.cpp" />
@@ -833,8 +780,6 @@
     <ClCompile Include="composition\composeEvaluate.cpp" />
     <ClCompile Include="composition\composeRunSchema.cpp" />
     <ClCompile Include="composition\compositionCondition.cpp" />
-    <ClCompile Include="composition\compositionTheme.cpp" />
-    <ClCompile Include="compositionDescription.cpp" />
     <ClCompile Include="system\value\composition\valueComposerField.cpp" />
     <ClCompile Include="system\value\composition\valueComposerSettings.cpp" />
     <ClCompile Include="system\value\valueComposer.cpp" />
@@ -896,7 +841,6 @@
     <ClCompile Include="objCtor.cpp" />
     <ClCompile Include="srcDataObject.cpp" />
     <ClCompile Include="tabularDataObject.cpp" />
-    <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="propertyManager\propertyObject.cpp" />
     <ClCompile Include="propertyManager\property\eventControl.cpp" />
     <ClCompile Include="propertyManager\property\eventAction.cpp" />
@@ -964,6 +908,7 @@
     <ClCompile Include="system\value\valueDatabaseResultSet.cpp" />
     <ClCompile Include="system\value\valueEvent.cpp" />
     <ClCompile Include="system\value\valueBinaryData.cpp" />
+    <ClCompile Include="system\value\valueDataHashing.cpp" />
     <ClCompile Include="system\value\valueTextFile.cpp" />
     <ClCompile Include="system\value\valueHttp.cpp" />
     <ClCompile Include="system\value\valueSecureConnection.cpp" />
@@ -971,6 +916,7 @@
     <ClCompile Include="system\value\valueFont.cpp" />
     <ClCompile Include="system\value\valueGuid.cpp" />
     <ClCompile Include="system\value\valueJson.cpp" />
+    <ClCompile Include="system\value\valueXml.cpp" />
     <ClCompile Include="system\value\valueJob.cpp" />
     <ClCompile Include="system\value\valueMap.cpp" />
     <ClCompile Include="system\value\valueOLE.cpp" />
@@ -990,20 +936,12 @@
     <ClCompile Include="tabularModel.cpp" />
     <ClCompile Include="tabularModelDb.cpp" />
     <ClCompile Include="tabularModelRam.cpp" />
-    <ClCompile Include="commandDescription.cpp" />
-    <ClCompile Include="sourceDescription.cpp" />
-    <ClCompile Include="calcScheduleDescription.cpp" />
-    <ClCompile Include="choiceLinkDescription.cpp" />
     <ClCompile Include="choiceLinkResolver.cpp" />
-    <ClCompile Include="tabularModelView.cpp" />
-    <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="uniqueKey.cpp" />
     <ClCompile Include="compiler\typeAny.cpp" />
     <ClCompile Include="vcs\gitService.cpp" />
     <ClCompile Include="plugin\pluginManager.cpp" />
     <ClCompile Include="plugin\pluginHost.cpp" />
-    <ClCompile Include="utils\md5.cpp" />
-    <ClCompile Include="utils\sha256.cpp" />
     <ClCompile Include="utils\passwordHash.cpp" />
     <ClCompile Include="utils\dataVersion.cpp" />
     <ClCompile Include="value_cast.cpp" />
@@ -1075,6 +1013,45 @@
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
+    </CopyFileToFolders>
+    <!-- The zone rules ICU counts a region's time by (tzdata/ beside the engine, as the Linux kit lays
+         them out), and ids.dat, the list of zone names the engine reads from the same folder. Without
+         the rules the ICU built into the kit knows 2018's: a zone named since then - Europe/Kyiv - is
+         accepted by the engine and counted as UTC, silently. -->
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\tzdata\metaZones.res">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\tzdata\timezoneTypes.res">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\tzdata\windowsZones.res">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\tzdata\zoneinfo64.res">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\tzdata\ids.dat">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
     </CopyFileToFolders>
     <!-- Phase 6 — security5.fdb is FB's user-credentials store. The spawned
          firebird.exe authenticates incoming TCP connects against it; without
@@ -1404,7 +1381,7 @@
     </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="res\backend.rc" />
+    <ResourceCompile Include="backend.rc" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
@@ -1478,11 +1455,11 @@
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
-      <ConformanceMode>false</ConformanceMode>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);$(oesSrcDir)include;.;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);$(oesSrcDir)include;.;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/Gw /bigobj %(AdditionalOptions)</AdditionalOptions>
@@ -1491,7 +1468,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;bcrypt.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -1499,11 +1476,11 @@
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
-      <ConformanceMode>false</ConformanceMode>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/Gw /bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -1511,7 +1488,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;bcrypt.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
@@ -1522,11 +1499,11 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
-      <ConformanceMode>false</ConformanceMode>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
@@ -1539,7 +1516,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;bcrypt.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -1549,11 +1526,11 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
-      <ConformanceMode>false</ConformanceMode>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
@@ -1567,7 +1544,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;bcrypt.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -1608,8 +1585,8 @@
   <!--
     The bytecode cache key's engine hash, computed by MSBuild itself: no cmake is needed to build on
     Windows. The rule is compiler/engineFingerprint.cmake's, byte for byte, so a CMake build and an
-    MSBuild build of one tree write one hash: every file under compiler\ and system\ by its path
-    relative to backend\ (forward slashes, ordinal order, CMakeFiles skipped), each as
+    MSBuild build of one tree write one hash: every file under compiler\, system\ and ..\core\compiler\
+    (the translator) by its path relative to backend\ (forward slashes, ordinal order, CMakeFiles skipped), each as
     "<path>\n<lowercase hex of its bytes>\n", SHA-256 over all of it. Written to
     $(IntDir)engineFingerprintBuild.h only when the hash moved. Change one, change the other.
   -->
@@ -1623,14 +1600,14 @@
       <Code Type="Fragment" Language="cs"><![CDATA[
         string backend = Path.GetFullPath(BackendDir).TrimEnd('\\', '/');
         var rels = new List<string>();
-        foreach (string part in new[] { "compiler", "system" }) {
-          string root = Path.Combine(backend, part);
+        foreach (string part in new[] { "compiler", "system", "../core/compiler" }) {
+          string root = Path.GetFullPath(Path.Combine(backend, part)).TrimEnd('\\', '/');
           if (!Directory.Exists(root)) {
             Log.LogError("EngineFingerprint: {0} does not exist", root);
             return false;
           }
           foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)) {
-            string rel = Path.GetFullPath(file).Substring(backend.Length + 1).Replace('\\', '/');
+            string rel = part + "/" + Path.GetFullPath(file).Substring(root.Length + 1).Replace('\\', '/');
             if (rel.StartsWith("CMakeFiles/") || rel.Contains("/CMakeFiles/"))
               continue;
             rels.Add(rel);
@@ -1665,8 +1642,8 @@
         string body = "#ifndef __ENGINE_FINGERPRINT_BUILD_H__\n"
           + "#define __ENGINE_FINGERPRINT_BUILD_H__\n\n"
           + "// Generated by backend.vcxproj (EngineFingerprint), the rule of compiler/engineFingerprint.cmake. Do not edit.\n"
-          + "// The hash is every file under compiler/ and system/. The bytecode cache key\n"
-          + "// carries it, so a compiler change or a new built-in misses the old rows.\n\n"
+          + "// The hash is every file under compiler/, system/ and ../core/compiler/. The bytecode\n"
+          + "// cache key carries it, so a compiler change or a new built-in misses the old rows.\n\n"
           + "inline constexpr char kEngineFingerprint[] = \"" + hash + "\";\n\n"
           + "#endif\n";
         string output = Path.GetFullPath(OutputFile);

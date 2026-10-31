@@ -31,7 +31,7 @@ class BACKEND_API ibValueSelectorDataObject : public ibValueDynamicMembers {
 	virtual ibClassID GetClassType() const;
 
 	//types
-	virtual wxString GetClassName() const;
+	virtual ibString GetClassName() const;
 	virtual ibString GetString() const;
 
 protected:

@@ -23,7 +23,7 @@ ibValueResultSet::~ibValueResultSet()
 
 void ibValueResultSet::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Next"), wxT("Next()"));
+	helper.AppendFunc(ibT("Next"), ibT("Next()"));
 
 	if (m_resultSet != nullptr) {
 		ibResultSetMetaData* resultSetMetaData = m_resultSet->GetMetaData();

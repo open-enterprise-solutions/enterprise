@@ -47,7 +47,7 @@ public:
 	//
 	// Empty by default: a row whose columns have no published names has nothing to answer, and that
 	// is a complete answer rather than a gap.
-	virtual ibValue Get(const wxString& /*name*/) const { return ibValue(); }
+	virtual ibValue Get(const ibString& /*name*/) const { return ibValue(); }
 };
 
 // A forward cursor over rows. The cursor IS the current row — one object, one position, no
@@ -69,7 +69,7 @@ public:
 	ibRamTableRow(const ibQueryRamTable& table, long row) : m_table(table), m_row(row) {}
 	ibValue Get(ibMetaID id) const override { return m_table.GetCell(m_row, id); }
 	// …and by name: the table already carries one per column (an aggregate's alias among them).
-	ibValue Get(const wxString& name) const override {
+	ibValue Get(const ibString& name) const override {
 		for (const ibQueryRamColumn& c : m_table.Columns())
 			if (c.m_name.IsSameAs(name, false)) return m_table.GetCell(m_row, c.m_id);
 		return ibValue();

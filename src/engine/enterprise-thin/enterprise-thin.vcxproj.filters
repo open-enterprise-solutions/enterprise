@@ -29,7 +29,6 @@
     <ClInclude Include="mainFrame\mainFrameEnterprise.h">
       <Filter>mainFrame</Filter>
     </ClInclude>
-    <ClInclude Include="resource.h" />
     <ClInclude Include="win\dlg\functionAll.h">
       <Filter>win\dlg</Filter>
     </ClInclude>
@@ -39,5 +38,8 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="enterprise-thin.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
 </Project>

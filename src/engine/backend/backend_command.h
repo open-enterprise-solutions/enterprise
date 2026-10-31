@@ -2,7 +2,7 @@
 #define __BACKEND_COMMAND_H__
 
 #include "backend/backend_core.h"          // BACKEND_API
-#include "backend/commandDescription.h"    // ibCommandHop / ibCommandDescription — a command-hop path
+#include "core/description/commandDescription.h"    //ibCommandHop / ibCommandDescription — a command-hop path
 #include "backend/compiler/value.h"        // ibValue (+ ConvertToValue — a value self-describes as command-capable)
 #include <wx/string.h>
 #include <vector>
@@ -58,7 +58,7 @@ public:
 // ---------------------------------------------------------------------------------------------------
 //  RECEIVER — everything that RECEIVES a command: a button, a toolbar / command bar (and its items).
 //  The command-side twin of ibBackendTypeSourceFactory. This is the BACKEND slice, declared here so the
-//  variant (ibVariantDataCommandSource, backend) can CAST its owner to it and validate the binding in
+//  variant (ibVariantCommandSource, backend) can CAST its owner to it and validate the binding in
 //  MakeString — which runs at RUNTIME too, not only in the designer cell: a bound command that was
 //  deleted must read "<not found>" everywhere, so the check cannot live in a frontend-only adapter.
 //
@@ -78,7 +78,11 @@ public:
 
 	// Validate the binding by WALKING its hops. Gateway bool: false = a hop no longer resolves (the command is gone,
 	// "<not found>"). `outText` (optional) receives the resolved leaf's name when the whole path is valid.
-	virtual bool WalkCommand(const ibCommandDescription& desc, wxString* outText = nullptr) const = 0;
+	virtual bool WalkCommand(const ibCommandDescription& desc, ibString* outText = nullptr) const = 0;
+
+	// The commands a binding may name, as rows — the form editor's command tree (the frontend's WriteCommandTree over
+	// this receiver's form), which the command-source row carries for its picker.
+	virtual void WriteCommandTree(class ibDataNode& node) const = 0;
 };
 
 #endif // !__BACKEND_COMMAND_H__

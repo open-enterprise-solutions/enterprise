@@ -50,7 +50,7 @@ struct RegisterSurfaceFix {
 				totals = &t;
 	}
 
-	const ibMaterializeView* View(const wxString& name) const {
+	const ibMaterializeView* View(const ibString& name) const {
 		if (totals == nullptr) return nullptr;
 		for (const ibMaterializeView& v : totals->m_materialize.m_views)
 			if (v.m_name == name) return &v;
@@ -168,7 +168,7 @@ TEST(AccumulationRegisterSurface, OnlyTheDressedViewsAreDeclared) {
 
 namespace {
 
-wxString SqlOf(const ibQueryRelPtr& rel)
+ibString SqlOf(const ibQueryRelPtr& rel)
 {
 	return ibQueryRenderer(ibDatabaseLayerSQLite::Dialect()).Render(ibQueryIR(ibProject(rel))).m_sql;
 }
@@ -176,7 +176,7 @@ wxString SqlOf(const ibQueryRelPtr& rel)
 // 🛑 WHETHER THE SQL NAMES A RELATION IS ASKED OF THE WHOLE IDENTIFIER. A balance register's totals table is
 // `<register>_BalanceTotals`, so a plain Contains took it for the balance view `<register>_Balance`: the stored
 // rows read exactly the table they should, and the test called that the view (CI, 2026-09-21).
-bool NamesRelation(const wxString& sql, const wxString& name)
+bool NamesRelation(const ibString& sql, const ibString& name)
 {
 	return std::regex_search(sql.ToStdString(), std::regex("\\b" + name.ToStdString() + "\\b"));
 }
@@ -196,13 +196,13 @@ TEST(AccumulationRegisterSurface, TheRowsAsTheyStandReadTheTwoTables) {
 	ASSERT_TRUE(stored);
 	ASSERT_TRUE(moved) << "a register with a recorder has a movement arm";
 
-	const wxString storedSql = SqlOf(stored);
-	const wxString movedSql  = SqlOf(moved);
+	const ibString storedSql = SqlOf(stored);
+	const ibString movedSql  = SqlOf(moved);
 	EXPECT_TRUE(NamesRelation(storedSql, f.totals->m_name)) << storedSql;
 	EXPECT_FALSE(storedSql.Contains(wxT("GROUP BY"))) << storedSql;
 	EXPECT_TRUE(NamesRelation(movedSql, f.totals->m_materialize.SourceTable())) << movedSql;
 	EXPECT_FALSE(NamesRelation(movedSql, f.totals->m_name)) << movedSql;
-	for (const wxString& sql : { storedSql, movedSql }) {
+	for (const ibString& sql : { storedSql, movedSql }) {
 		EXPECT_FALSE(NamesRelation(sql, f.reg->GetTurnoverViewName())) << sql;
 		EXPECT_FALSE(NamesRelation(sql, f.reg->GetBalanceViewName())) << sql;
 	}
@@ -236,7 +236,7 @@ TEST(AccumulationRegisterSurface, TheMovementRowsCarryTheReadForms) {
 	EXPECT_FALSE(render.m_guardIR);
 	EXPECT_FALSE(render.m_periodIsDateIR);
 
-	wxString tagField;
+	ibString tagField;
 	for (const ibColumnSlot& slot : DescribeColumnLayout(f.reg->GetRegisterPeriod()->GetQueryColumn()))
 		if (slot.m_role == ibColumnRole::Discriminator)
 			tagField = slot.m_name;
@@ -244,6 +244,6 @@ TEST(AccumulationRegisterSurface, TheMovementRowsCarryTheReadForms) {
 
 	ibQueryRelPtr stored, moved;
 	ASSERT_TRUE(f.reg->GetTotalsRows(stored, moved));
-	const wxString movedSql = SqlOf(moved);
+	const ibString movedSql = SqlOf(moved);
 	EXPECT_TRUE(movedSql.Contains(tagField)) << movedSql;
 }

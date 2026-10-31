@@ -36,16 +36,16 @@ enum recordSet
 
 void ibValueRecordSetObjectCalculationRegister::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Add"), wxT("Add()"));
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
-	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
-	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	helper.AppendFunc(wxT("Load"), 1, wxT("Load(value : any table)"));
-	helper.AppendFunc(wxT("Unload"), wxT("Unload()"));
-	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
-	helper.AppendFunc(wxT("Read"), wxT("Read()"));
-	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendFunc(ibT("Add"), ibT("Add()"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
+	helper.AppendFunc(ibT("Write"), 1, ibT("Write(replace : boolean)"));
+	helper.AppendFunc(ibT("Load"), 1, ibT("Load(value : any table)"));
+	helper.AppendFunc(ibT("Unload"), ibT("Unload()"));
+	helper.AppendFunc(ibT("Modified"), ibT("Modified()"));
+	helper.AppendFunc(ibT("Read"), ibT("Read()"));
+	helper.AppendFunc(ibT("Selected"), ibT("Selected()"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 
 	// `Filter` is NOT declared here — see informationRegisterObject.cpp: it is an export variable of
 	// the set, bound in InitializeObject, and that reaches this table on its own.
@@ -58,7 +58,7 @@ void ibValueRecordSetObjectCalculationRegister::FillMembers(ibMemberTable& helpe
 void ibValueRecordSetObjectCalculationRegister::DescribeReturnLine(ibMemberTable& helper) const
 {
 	ibValueRecordSetObject::DescribeReturnLine(helper);
-	helper.AppendFunc(wxT("GetBase"), 3, wxT("GetBase(Resources, Dimensions, Sections)"),
+	helper.AppendFunc(ibT("GetBase"), 3, ibT("GetBase(Resources, Dimensions, Sections)"),
 		ibValueCalculationLine::eMethodGetBase, wxNOT_FOUND);
 }
 
@@ -74,21 +74,11 @@ bool ibValueRecordSetObjectCalculationRegister::ibValueCalculationLine::CallAsFu
 	const ibCalcBaseAsked asked = ibCalcBaseAskedOf(reg, lSizeArray > 0 ? *paParams[0] : ibValue(),
 		lSizeArray > 1 ? *paParams[1] : ibValue(), lSizeArray > 2 ? *paParams[2] : ibValue());
 
-	ibCalcBaseRecord record;
-	ibValue from, to, registered;
-	GetValueByMetaID(reg->GetRegisterLineNumber()->GetMetaID(), record.m_line);
-	GetValueByMetaID(reg->GetCalculationType()->GetMetaID(), record.m_type);
-	GetValueByMetaID(reg->GetBasePeriodStart()->GetMetaID(), from);
-	GetValueByMetaID(reg->GetBasePeriodEnd()->GetMetaID(), to);
-	GetValueByMetaID(reg->GetRegistrationPeriod()->GetMetaID(), registered);
-	record.m_from = from.GetDate();
-	record.m_to = to.GetDate();
-	record.m_registration = registered.GetDate();
-	for (const ibCalcBaseAsked::ibPairing& pairing : asked.m_dimensions) {
+	const ibCalcBaseRecord record = ibCalcBaseRecordOf(reg, asked, [this](const ibValueMetaObjectAttributeBase* field) {
 		ibValue value;
-		GetValueByMetaID(pairing.m_own->GetMetaID(), value);
-		record.m_dimensions.push_back(value);
-	}
+		GetValueByMetaID(field->GetMetaID(), value);
+		return value;
+	});
 	pvarRetValue = ibCalcReadBase(reg, asked, { record });
 	return true;
 }

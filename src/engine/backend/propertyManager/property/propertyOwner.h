@@ -6,7 +6,7 @@
 
 //base property for "generation"
 class BACKEND_API ibPropertyOwner : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 	ibMetaDescription& GetValueAsMetaDesc() const;
 	void SetValue(const ibMetaDescription& val);
@@ -15,9 +15,9 @@ public:
 	// the property editor's constructor, which is why nothing headless could answer the question.
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
-	ibPropertyOwner(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyOwner(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyOwner(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyOwner(ibPropertyCategory* cat, const ibString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyOwner(ibPropertyCategory* cat, const ibString& name, const ibString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyOwner(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
@@ -27,9 +27,9 @@ public:
 protected:
 
 	// The family rule, kept here too: a relationship arrives in whichever wrapper the caller was
-	// handed - CreateValueList builds every candidate as ibVariantDataOwner - and a property that
+	// handed - CreateValueList builds every candidate as ibVariantOwner - and a property that
 	// stores a neighbour's wrapper raises on every later read. See propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 

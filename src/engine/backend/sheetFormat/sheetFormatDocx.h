@@ -26,8 +26,8 @@
 class BACKEND_API ibSheetFormatDocx : public ibSheetFormat {
 public:
 
-	virtual wxString GetName() const override { return _("Word document"); }
-	virtual wxString GetExtension() const override { return wxT("docx"); }
+	virtual ibString GetName() const override { return _("Word document"); }
+	virtual ibString GetExtension() const override { return ibT("docx"); }
 
 	// See above — this one only goes out.
 	virtual bool CanRead() const override { return false; }

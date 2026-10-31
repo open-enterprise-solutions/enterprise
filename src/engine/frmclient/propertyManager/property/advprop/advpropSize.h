@@ -8,20 +8,19 @@
 // ibPGSizeProperty
 // -----------------------------------------------------------------------
 
+// The wxPropertyGrid sample's wxSizeProperty, as the old desktop's.
 class ibPGSizeProperty : public wxPGProperty {
 public:
 	
 	ibPGSizeProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const wxSize& value = wxSize());
+		const wxVariant& value = wxNullVariant);
 
 	virtual wxVariant ChildChanged(wxVariant& thisValue, int childIndex,
 		wxVariant& childValue) const override;
 
 	virtual void RefreshChildren() override;
 
-protected:
-	void DoSetValue(const wxSize& value) { m_value = WXVARIANT(value); }
 private:
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGSizeProperty);
 };

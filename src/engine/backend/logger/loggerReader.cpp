@@ -4,19 +4,18 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseResultSet.h"
+#include "core/fileSystem.h"
 
-#include <wx/dir.h>
-#include <wx/filename.h>
 #include <wx/datetime.h>
 
 #include <algorithm>
 
 namespace {
 
-bool ParseLogFileName(const wxString& name, int& year, int& month)
+bool ParseLogFileName(const ibString& name, int& year, int& month)
 {
     // Expected: oes_YYYY_MM.olg
-    if (!name.StartsWith(wxT("oes_"))) return false;
+    if (!name.StartsWith(ibT("oes_"))) return false;
     long y = 0, m = 0;
     if (!name.Mid(4, 4).ToLong(&y)) return false;
     if (!name.Mid(9, 2).ToLong(&m)) return false;
@@ -28,7 +27,7 @@ bool ParseLogFileName(const wxString& name, int& year, int& month)
 // Returns true when the year-month bucket intersects the filter's
 // date range. Bounded by 0 → "no constraint".
 bool MonthInRange(int year, int month,
-                  wxLongLong_t from_ms, wxLongLong_t to_ms)
+                  long long from_ms, long long to_ms)
 {
     if (from_ms == 0 && to_ms == 0) return true;
 
@@ -37,8 +36,8 @@ bool MonthInRange(int year, int month,
     wxDateTime nextMonth = start;
     nextMonth.Add(wxDateSpan::Month());
 
-    const wxLongLong_t bucketStart = start.GetValue().GetValue();
-    const wxLongLong_t bucketEnd   = nextMonth.GetValue().GetValue();
+    const long long bucketStart = start.GetValue().GetValue();
+    const long long bucketEnd   = nextMonth.GetValue().GetValue();
 
     if (from_ms != 0 && bucketEnd   <= from_ms) return false;
     if (to_ms   != 0 && bucketStart >= to_ms)   return false;
@@ -55,9 +54,9 @@ bool MonthInRange(int year, int month,
 // list to dodge wxVariant churn — bind sites are statically typed via
 // SetParamString / SetParamInt at the call site below.
 struct BoundFilter {
-    wxString               where;       // "" or "ts_ms >= ? AND ..."
-    std::vector<wxString>  strs;
-    std::vector<wxLongLong_t> nums;     // mixed int / longlong storage
+    ibString               where;       // "" or "ts_ms >= ? AND ..."
+    std::vector<ibString>  strs;
+    std::vector<long long> nums;     // mixed int / longlong storage
     // Order in which params are bound 1..N:
     //   p[i].first  == 'S' → strs[stringIdx++]
     //   p[i].first  == 'L' → nums[longIdx++] as double
@@ -68,14 +67,14 @@ struct BoundFilter {
 BoundFilter BuildWhere(const ibLogFilter& f)
 {
     BoundFilter b;
-    wxString w;
-    auto andAdd = [&](const wxString& clause) {
-        if (!w.IsEmpty()) w += wxT(" AND ");
+    ibString w;
+    auto andAdd = [&](const ibString& clause) {
+        if (!w.IsEmpty()) w += ibT(" AND ");
         w += clause;
     };
 
-    if (f.from_ms != 0)        { andAdd(wxT("ts_ms >= ?")); b.nums.push_back(f.from_ms); b.kinds.push_back('L'); }
-    if (f.to_ms   != 0)        { andAdd(wxT("ts_ms <  ?")); b.nums.push_back(f.to_ms);   b.kinds.push_back('L'); }
+    if (f.from_ms != 0)        { andAdd(ibT("ts_ms >= ?")); b.nums.push_back(f.from_ms); b.kinds.push_back('L'); }
+    if (f.to_ms   != 0)        { andAdd(ibT("ts_ms <  ?")); b.nums.push_back(f.to_ms);   b.kinds.push_back('L'); }
     // 🛑⭐⭐ AUDIT IS A KIND, NOT A SEVERITY, and it sits at 3 — above Error(2) — on a scale this
     // query reads as a THRESHOLD. So a plain `level >= ?` answered "show me the errors" with every
     // login, every document write and every assistant call in the base, and the actual failures were
@@ -87,24 +86,24 @@ BoundFilter BuildWhere(const ibLogFilter& f)
     // meanings had been folded into one number; this separates them at the only place that reads it.
     if (f.min_level >= 0) {
         if (f.min_level == static_cast<int>(ibLogLevel::Audit)) {
-            andAdd(wxT("level = ?"));
+            andAdd(ibT("level = ?"));
             b.nums.push_back(f.min_level);
             b.kinds.push_back('I');
         }
         else {
-            andAdd(wxT("level >= ? AND level <> ?"));
+            andAdd(ibT("level >= ? AND level <> ?"));
             b.nums.push_back(f.min_level);
             b.kinds.push_back('I');
             b.nums.push_back(static_cast<int>(ibLogLevel::Audit));
             b.kinds.push_back('I');
         }
     }
-    if (!f.user_name.IsEmpty()){ andAdd(wxT("user_name = ?")); b.strs.push_back(f.user_name); b.kinds.push_back('S'); }
-    if (!f.session_id.IsEmpty()){ andAdd(wxT("session_id = ?")); b.strs.push_back(f.session_id); b.kinds.push_back('S'); }
-    if (!f.source.IsEmpty())   { andAdd(wxT("source = ?"));    b.strs.push_back(f.source);    b.kinds.push_back('S'); }
-    if (!f.event_type.IsEmpty()){andAdd(wxT("event_type = ?"));b.strs.push_back(f.event_type);b.kinds.push_back('S'); }
-    if (!f.ref_guid.IsEmpty()) { andAdd(wxT("ref_guid = ?"));  b.strs.push_back(f.ref_guid);  b.kinds.push_back('S'); }
-    if (!f.search.IsEmpty())   { andAdd(wxT("message LIKE ?"));b.strs.push_back(wxT("%") + f.search + wxT("%")); b.kinds.push_back('S'); }
+    if (!f.user_name.IsEmpty()){ andAdd(ibT("user_name = ?")); b.strs.push_back(f.user_name); b.kinds.push_back('S'); }
+    if (!f.session_id.IsEmpty()){ andAdd(ibT("session_id = ?")); b.strs.push_back(f.session_id); b.kinds.push_back('S'); }
+    if (!f.source.IsEmpty())   { andAdd(ibT("source = ?"));    b.strs.push_back(f.source);    b.kinds.push_back('S'); }
+    if (!f.event_type.IsEmpty()){andAdd(ibT("event_type = ?"));b.strs.push_back(f.event_type);b.kinds.push_back('S'); }
+    if (!f.ref_guid.IsEmpty()) { andAdd(ibT("ref_guid = ?"));  b.strs.push_back(f.ref_guid);  b.kinds.push_back('S'); }
+    if (!f.search.IsEmpty())   { andAdd(ibT("message LIKE ?"));b.strs.push_back(ibT("%") + f.search + ibT("%")); b.kinds.push_back('S'); }
 
     b.where = w;
     return b;
@@ -126,26 +125,26 @@ void BindParams(ibPreparedStatement* stmt, const BoundFilter& b)
 
 }   // namespace
 
-ibLoggerReader::ibLoggerReader(const wxString& dir)
+ibLoggerReader::ibLoggerReader(const ibString& dir)
     : m_dir(dir) {}
 
-std::vector<wxString> ibLoggerReader::CollectFiles(const ibLogFilter& filter) const
+std::vector<ibString> ibLoggerReader::CollectFiles(const ibLogFilter& filter) const
 {
-    std::vector<wxString> files;
-    if (m_dir.IsEmpty() || !wxFileName::DirExists(m_dir)) return files;
+    std::vector<ibString> files;
+    if (m_dir.IsEmpty() || !ibDirExists(m_dir)) return files;
 
-    wxDir d(m_dir);
+    ibDir d(m_dir);
     if (!d.IsOpened()) return files;
 
     // Pair (year*100 + month) → fullPath for deterministic newest-first sort.
-    std::vector<std::pair<int, wxString>> tagged;
-    wxString name;
-    bool more = d.GetFirst(&name, wxT("*.olg"), wxDIR_FILES);
+    std::vector<std::pair<int, ibString>> tagged;
+    ibString name;
+    bool more = d.GetFirst(&name, ibT("*.olg"), ibDIR_FILES);
     while (more) {
         int y = 0, m = 0;
         if (ParseLogFileName(name, y, m) && MonthInRange(y, m, filter.from_ms, filter.to_ms)) {
             tagged.emplace_back(y * 100 + m,
-                                m_dir + wxFileName::GetPathSeparator() + name);
+                                m_dir + ibFILE_SEP_PATH + name);
         }
         more = d.GetNext(&name);
     }
@@ -163,16 +162,16 @@ std::vector<ibLogRow> ibLoggerReader::Query(const ibLogFilter& filter)
     if (files.empty()) return rows;
 
     BoundFilter bf = BuildWhere(filter);
-    wxString sql = wxT("SELECT ts_ms, level, session_id, user_name, host,"
+    ibString sql = ibT("SELECT ts_ms, level, session_id, user_name, host,"
                        " source, event_type, message, ref_guid, ref_meta_id, details"
                        " FROM log_entry");
-    if (!bf.where.IsEmpty()) sql += wxT(" WHERE ") + bf.where;
-    sql += wxT(" ORDER BY ts_ms DESC, id DESC");
+    if (!bf.where.IsEmpty()) sql += ibT(" WHERE ") + bf.where;
+    sql += ibT(" ORDER BY ts_ms DESC, id DESC");
     // LIMIT bound per-file (after offset within file order). Whole-result
     // pagination needs cross-file sort then cut; for MVP we cap per-file
     // at limit + offset so we always have enough to fulfil the final cut.
     if (filter.limit != 0) {
-        sql += wxString::Format(wxT(" LIMIT %zu"), filter.limit + filter.offset);
+        sql += ibString::Format(ibT(" LIMIT %zu"), filter.limit + filter.offset);
     }
 
     const std::size_t cap = filter.limit == 0
@@ -180,11 +179,11 @@ std::vector<ibLogRow> ibLoggerReader::Query(const ibLogFilter& filter)
         : filter.limit;
     std::size_t skipped = 0;
 
-    for (const wxString& path : files) {
+    for (const ibString& path : files) {
         ibDatabaseLayerSQLite db;
         if (!db.Open(path)) continue;
         try {
-            ibPreparedStatement* raw = db.PrepareStatement(wxT("%s"), sql);   // a statement is data, not a format
+            ibPreparedStatement* raw = db.PrepareStatement(ibT("%s"), sql);   // a statement is data, not a format
             if (raw == nullptr) { db.Close(); continue; }
             ibStatementGuard stmt(&db, raw);
             BindParams(raw, bf);
@@ -198,7 +197,7 @@ std::vector<ibLogRow> ibLoggerReader::Query(const ibLogFilter& filter)
                     continue;
                 }
                 ibLogRow r;
-                r.ts_ms       = static_cast<wxLongLong_t>(rs->GetResultDouble(1));
+                r.ts_ms       = static_cast<long long>(rs->GetResultDouble(1));
                 r.level       = rs->GetResultInt(2);
                 r.session_id  = rs->GetResultString(3);
                 r.user_name   = rs->GetResultString(4);
@@ -234,15 +233,15 @@ std::size_t ibLoggerReader::Count(const ibLogFilter& filter)
     if (files.empty()) return 0;
 
     BoundFilter bf = BuildWhere(filter);
-    wxString sql = wxT("SELECT COUNT(*) FROM log_entry");
-    if (!bf.where.IsEmpty()) sql += wxT(" WHERE ") + bf.where;
+    ibString sql = ibT("SELECT COUNT(*) FROM log_entry");
+    if (!bf.where.IsEmpty()) sql += ibT(" WHERE ") + bf.where;
 
     std::size_t total = 0;
-    for (const wxString& path : files) {
+    for (const ibString& path : files) {
         ibDatabaseLayerSQLite db;
         if (!db.Open(path)) continue;
         try {
-            ibPreparedStatement* raw = db.PrepareStatement(wxT("%s"), sql);   // a statement is data, not a format
+            ibPreparedStatement* raw = db.PrepareStatement(ibT("%s"), sql);   // a statement is data, not a format
             if (raw == nullptr) { db.Close(); continue; }
             ibStatementGuard stmt(&db, raw);
             BindParams(raw, bf);

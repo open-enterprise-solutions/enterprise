@@ -31,17 +31,17 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_features.m_grouping      = true;   // …and GROUPING(expr) with it: PG has had both since 9.5
 		d.m_features.m_multiRowValues = true;  // INSERT … VALUES (…), (…)
 		// type map
-		d.m_typeBoolean       = wxT("BOOLEAN");
-		d.m_typeDate          = wxT("TIMESTAMP");
-		d.m_typeBlob          = wxT("BYTEA");
-		d.m_typeBinaryPattern = wxT("BYTEA");     // PG has no fixed-width binary; BYTEA holds the _RRRef blob
-		d.m_typeGuid          = wxT("UUID");
-		d.m_typeNumberPattern = wxT("NUMERIC(%d,%d)");
-		d.m_analyzePrefix     = wxT("ANALYZE");   // ANALYZE <t> — refresh planner stats (temps aren't autovacuumed)
-		d.m_rowIdColumn    = wxT("ctid");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
+		d.m_typeBoolean       = ibT("BOOLEAN");
+		d.m_typeDate          = ibT("TIMESTAMP");
+		d.m_typeBlob          = ibT("BYTEA");
+		d.m_typeBinaryPattern = ibT("BYTEA");     // PG has no fixed-width binary; BYTEA holds the _RRRef blob
+		d.m_typeGuid          = ibT("UUID");
+		d.m_typeNumberPattern = ibT("NUMERIC(%d,%d)");
+		d.m_analyzePrefix     = ibT("ANALYZE");   // ANALYZE <t> — refresh planner stats (temps aren't autovacuumed)
+		d.m_rowIdColumn    = ibT("ctid");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
 		d.m_maxIndexSegments = 32;                // INDEX_MAX_KEYS — a build-time constant, 32 in every stock build
 		d.m_maxParameters    = 65535;             // the protocol counts them in 16 bits (libpq-fe.h PQ_QUERY_PARAM_MAX_LIMIT)
-		d.m_returningClause = wxT("RETURNING");   // PostgreSQL has had it since 8.2
+		d.m_returningClause = ibT("RETURNING");   // PostgreSQL has had it since 8.2
 		// Period truncation. date_trunc names seven of the ten units directly; the other three are
 		// offsets from the start of the enclosing unit:
 		//   TenDays  — the 1st / 11th / 21st. The offset is CAPPED at 2 because a 31-day month
@@ -52,89 +52,89 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		//   Week     — date_trunc('week') is already ISO (Monday), the convention all engines pin to.
 		// (PG's own 'decade' means ten YEARS and is unrelated to TenDays.)
 		d.m_periodTrunc = {
-			{ ibTotalsPeriod::Second,   wxT("date_trunc('second', {expr})")  },
-			{ ibTotalsPeriod::Minute,   wxT("date_trunc('minute', {expr})")  },
-			{ ibTotalsPeriod::Hour,     wxT("date_trunc('hour', {expr})")    },
-			{ ibTotalsPeriod::Day,      wxT("date_trunc('day', {expr})")     },
-			{ ibTotalsPeriod::Week,     wxT("date_trunc('week', {expr})")    },
-			{ ibTotalsPeriod::TenDays,  wxT("(date_trunc('month', {expr}) + (LEAST(FLOOR((EXTRACT(DAY FROM {expr}) - 1) / 10), 2) * INTERVAL '10 days'))") },
-			{ ibTotalsPeriod::Month,    wxT("date_trunc('month', {expr})")   },
-			{ ibTotalsPeriod::Quarter,  wxT("date_trunc('quarter', {expr})") },
-			{ ibTotalsPeriod::HalfYear, wxT("(date_trunc('year', {expr}) + (FLOOR((EXTRACT(MONTH FROM {expr}) - 1) / 6) * INTERVAL '6 months'))") },
-			{ ibTotalsPeriod::Year,     wxT("date_trunc('year', {expr})")    },
+			{ ibTotalsPeriod::Second,   ibT("date_trunc('second', {expr})")  },
+			{ ibTotalsPeriod::Minute,   ibT("date_trunc('minute', {expr})")  },
+			{ ibTotalsPeriod::Hour,     ibT("date_trunc('hour', {expr})")    },
+			{ ibTotalsPeriod::Day,      ibT("date_trunc('day', {expr})")     },
+			{ ibTotalsPeriod::Week,     ibT("date_trunc('week', {expr})")    },
+			{ ibTotalsPeriod::TenDays,  ibT("(date_trunc('month', {expr}) + (LEAST(FLOOR((EXTRACT(DAY FROM {expr}) - 1) / 10), 2) * INTERVAL '10 days'))") },
+			{ ibTotalsPeriod::Month,    ibT("date_trunc('month', {expr})")   },
+			{ ibTotalsPeriod::Quarter,  ibT("date_trunc('quarter', {expr})") },
+			{ ibTotalsPeriod::HalfYear, ibT("(date_trunc('year', {expr}) + (FLOOR((EXTRACT(MONTH FROM {expr}) - 1) / 6) * INTERVAL '6 months'))") },
+			{ ibTotalsPeriod::Year,     ibT("date_trunc('year', {expr})")    },
 		};
 
 		// The end of a period is the start of the next one less a second — the same sentence the
 		// Firebird dictionary and the RAM twin say, so a boundary belongs to its period on every
 		// engine. TenDays is deliberately absent from the moving calls (its buckets are not all the
 		// same length); the lowering refuses that unit before a dialect is asked.
-		auto endOf = [&d](ibTotalsPeriod unit, const wxString& step) {
-			return wxT("(") + d.m_periodTrunc[unit] + wxT(" + INTERVAL '1 ") + step + wxT("' - INTERVAL '1 second')");
+		auto endOf = [&d](ibTotalsPeriod unit, const ibString& step) {
+			return ibT("(") + d.m_periodTrunc[unit] + ibT(" + INTERVAL '1 ") + step + ibT("' - INTERVAL '1 second')");
 		};
 		d.m_periodEnd = {
-			{ ibTotalsPeriod::Second,   endOf(ibTotalsPeriod::Second,   wxT("second")) },
-			{ ibTotalsPeriod::Minute,   endOf(ibTotalsPeriod::Minute,   wxT("minute")) },
-			{ ibTotalsPeriod::Hour,     endOf(ibTotalsPeriod::Hour,     wxT("hour"))   },
-			{ ibTotalsPeriod::Day,      endOf(ibTotalsPeriod::Day,      wxT("day"))    },
-			{ ibTotalsPeriod::Week,     endOf(ibTotalsPeriod::Week,     wxT("week"))   },
-			{ ibTotalsPeriod::Month,    endOf(ibTotalsPeriod::Month,    wxT("month"))  },
-			{ ibTotalsPeriod::Quarter,  endOf(ibTotalsPeriod::Quarter,  wxT("3 months")) },
-			{ ibTotalsPeriod::HalfYear, endOf(ibTotalsPeriod::HalfYear, wxT("6 months")) },
-			{ ibTotalsPeriod::Year,     endOf(ibTotalsPeriod::Year,     wxT("year"))   },
+			{ ibTotalsPeriod::Second,   endOf(ibTotalsPeriod::Second,   ibT("second")) },
+			{ ibTotalsPeriod::Minute,   endOf(ibTotalsPeriod::Minute,   ibT("minute")) },
+			{ ibTotalsPeriod::Hour,     endOf(ibTotalsPeriod::Hour,     ibT("hour"))   },
+			{ ibTotalsPeriod::Day,      endOf(ibTotalsPeriod::Day,      ibT("day"))    },
+			{ ibTotalsPeriod::Week,     endOf(ibTotalsPeriod::Week,     ibT("week"))   },
+			{ ibTotalsPeriod::Month,    endOf(ibTotalsPeriod::Month,    ibT("month"))  },
+			{ ibTotalsPeriod::Quarter,  endOf(ibTotalsPeriod::Quarter,  ibT("3 months")) },
+			{ ibTotalsPeriod::HalfYear, endOf(ibTotalsPeriod::HalfYear, ibT("6 months")) },
+			{ ibTotalsPeriod::Year,     endOf(ibTotalsPeriod::Year,     ibT("year"))   },
 		};
 
-		auto addOf = [](const wxString& step) {
-			return wxT("({expr} + ({count}) * INTERVAL '1 ") + step + wxT("')");
+		auto addOf = [](const ibString& step) {
+			return ibT("({expr} + ({count}) * INTERVAL '1 ") + step + ibT("')");
 		};
 		d.m_dateAdd = {
-			{ ibTotalsPeriod::Second,   addOf(wxT("second")) },
-			{ ibTotalsPeriod::Minute,   addOf(wxT("minute")) },
-			{ ibTotalsPeriod::Hour,     addOf(wxT("hour"))   },
-			{ ibTotalsPeriod::Day,      addOf(wxT("day"))    },
-			{ ibTotalsPeriod::Week,     addOf(wxT("week"))   },
-			{ ibTotalsPeriod::Month,    addOf(wxT("month"))  },
-			{ ibTotalsPeriod::Quarter,  wxT("({expr} + (({count}) * 3) * INTERVAL '1 month')") },
-			{ ibTotalsPeriod::HalfYear, wxT("({expr} + (({count}) * 6) * INTERVAL '1 month')") },
-			{ ibTotalsPeriod::Year,     addOf(wxT("year"))   },
+			{ ibTotalsPeriod::Second,   addOf(ibT("second")) },
+			{ ibTotalsPeriod::Minute,   addOf(ibT("minute")) },
+			{ ibTotalsPeriod::Hour,     addOf(ibT("hour"))   },
+			{ ibTotalsPeriod::Day,      addOf(ibT("day"))    },
+			{ ibTotalsPeriod::Week,     addOf(ibT("week"))   },
+			{ ibTotalsPeriod::Month,    addOf(ibT("month"))  },
+			{ ibTotalsPeriod::Quarter,  ibT("({expr} + (({count}) * 3) * INTERVAL '1 month')") },
+			{ ibTotalsPeriod::HalfYear, ibT("({expr} + (({count}) * 6) * INTERVAL '1 month')") },
+			{ ibTotalsPeriod::Year,     addOf(ibT("year"))   },
 		};
 
 		// ⭐ WHOLE UNITS BETWEEN THE UNITS, not a span divided by a length. Postgres has no DATEDIFF,
 		// so the calendar units are counted off the truncated pair (months since year zero, then
 		// divided) and the fixed-length ones off the epoch difference. Both agree with the RAM twin,
 		// which is the only requirement that matters here.
-		const wxString months = wxT("((EXTRACT(YEAR FROM {to})::int * 12 + EXTRACT(MONTH FROM {to})::int)"
+		const ibString months = ibT("((EXTRACT(YEAR FROM {to})::int * 12 + EXTRACT(MONTH FROM {to})::int)"
 		                            " - (EXTRACT(YEAR FROM {from})::int * 12 + EXTRACT(MONTH FROM {from})::int))");
-		auto secondsOver = [](const wxString& divisor) {
-			return wxT("(FLOOR(EXTRACT(EPOCH FROM (date_trunc('second', {to}) - date_trunc('second', {from}))) / ") + divisor + wxT(")::bigint)");
+		auto secondsOver = [](const ibString& divisor) {
+			return ibT("(FLOOR(EXTRACT(EPOCH FROM (date_trunc('second', {to}) - date_trunc('second', {from}))) / ") + divisor + ibT(")::bigint)");
 		};
 		d.m_dateDiff = {
-			{ ibTotalsPeriod::Second,   secondsOver(wxT("1"))    },
-			{ ibTotalsPeriod::Minute,   secondsOver(wxT("60"))   },
-			{ ibTotalsPeriod::Hour,     secondsOver(wxT("3600")) },
-			{ ibTotalsPeriod::Day,      wxT("(date_trunc('day', {to})::date - date_trunc('day', {from})::date)") },
-			{ ibTotalsPeriod::Week,     wxT("((date_trunc('week', {to})::date - date_trunc('week', {from})::date) / 7)") },
+			{ ibTotalsPeriod::Second,   secondsOver(ibT("1"))    },
+			{ ibTotalsPeriod::Minute,   secondsOver(ibT("60"))   },
+			{ ibTotalsPeriod::Hour,     secondsOver(ibT("3600")) },
+			{ ibTotalsPeriod::Day,      ibT("(date_trunc('day', {to})::date - date_trunc('day', {from})::date)") },
+			{ ibTotalsPeriod::Week,     ibT("((date_trunc('week', {to})::date - date_trunc('week', {from})::date) / 7)") },
 			{ ibTotalsPeriod::Month,    months },
-			{ ibTotalsPeriod::Quarter,  wxT("(") + months + wxT(" / 3)") },
-			{ ibTotalsPeriod::HalfYear, wxT("(") + months + wxT(" / 6)") },
-			{ ibTotalsPeriod::Year,     wxT("(EXTRACT(YEAR FROM {to})::int - EXTRACT(YEAR FROM {from})::int)") },
+			{ ibTotalsPeriod::Quarter,  ibT("(") + months + ibT(" / 3)") },
+			{ ibTotalsPeriod::HalfYear, ibT("(") + months + ibT(" / 6)") },
+			{ ibTotalsPeriod::Year,     ibT("(EXTRACT(YEAR FROM {to})::int - EXTRACT(YEAR FROM {from})::int)") },
 		};
 
 		// ISODOW is Monday = 1 … Sunday = 7, which is exactly the numbering this language pins to —
 		// DOW would be Sunday = 0 and would read differently from every other engine.
 		d.m_datePart = {
-			{ ibDatePart::Year,      wxT("EXTRACT(YEAR FROM {expr})::int")    },
-			{ ibDatePart::Quarter,   wxT("EXTRACT(QUARTER FROM {expr})::int") },
-			{ ibDatePart::Month,     wxT("EXTRACT(MONTH FROM {expr})::int")   },
-			{ ibDatePart::DayOfYear, wxT("EXTRACT(DOY FROM {expr})::int")     },
-			{ ibDatePart::Day,       wxT("EXTRACT(DAY FROM {expr})::int")     },
-			{ ibDatePart::Week,      wxT("EXTRACT(WEEK FROM {expr})::int")    },
-			{ ibDatePart::WeekDay,   wxT("EXTRACT(ISODOW FROM {expr})::int")  },
-			{ ibDatePart::Hour,      wxT("EXTRACT(HOUR FROM {expr})::int")    },
-			{ ibDatePart::Minute,    wxT("EXTRACT(MINUTE FROM {expr})::int")  },
-			{ ibDatePart::Second,    wxT("FLOOR(EXTRACT(SECOND FROM {expr}))::int") },
+			{ ibDatePart::Year,      ibT("EXTRACT(YEAR FROM {expr})::int")    },
+			{ ibDatePart::Quarter,   ibT("EXTRACT(QUARTER FROM {expr})::int") },
+			{ ibDatePart::Month,     ibT("EXTRACT(MONTH FROM {expr})::int")   },
+			{ ibDatePart::DayOfYear, ibT("EXTRACT(DOY FROM {expr})::int")     },
+			{ ibDatePart::Day,       ibT("EXTRACT(DAY FROM {expr})::int")     },
+			{ ibDatePart::Week,      ibT("EXTRACT(WEEK FROM {expr})::int")    },
+			{ ibDatePart::WeekDay,   ibT("EXTRACT(ISODOW FROM {expr})::int")  },
+			{ ibDatePart::Hour,      ibT("EXTRACT(HOUR FROM {expr})::int")    },
+			{ ibDatePart::Minute,    ibT("EXTRACT(MINUTE FROM {expr})::int")  },
+			{ ibDatePart::Second,    ibT("FLOOR(EXTRACT(SECOND FROM {expr}))::int") },
 		};
 
-		d.m_substring = wxT("SUBSTRING({expr} FROM {from} FOR {len})");
+		d.m_substring = ibT("SUBSTRING({expr} FROM {from} FOR {len})");
 		return d;
 	}();
 	return s_dialect;
@@ -154,10 +154,10 @@ const ibTempTableDialect& ibDatabaseLayerPostgres::TempDialect()
 	static const ibTempTableDialect s_temp = [] {
 		ibTempTableDialect t;
 		t.m_strategy      = ibTempTableDialect::Strategy::AdHocCreate;
-		t.m_createPrefix  = wxT("CREATE TEMPORARY TABLE");
-		t.m_onCommitClause = wxEmptyString;     // session-scoped; the manager drops it explicitly
+		t.m_createPrefix  = ibT("CREATE TEMPORARY TABLE");
+		t.m_onCommitClause = ibEmptyString;     // session-scoped; the manager drops it explicitly
 		t.m_autoDrops     = false;              // explicit DROP via the pinning scope (RAII, leak-free)
-		t.m_dropPrefix    = wxT("DROP TABLE");
+		t.m_dropPrefix    = ibT("DROP TABLE");
 		return t;
 	}();
 	return s_temp;
@@ -188,10 +188,10 @@ bool ibDatabaseLayerPostgres::CreateMissingRoutines()
 	// failure by THROWING — that is the only signal worth reading here. (This used to test the return
 	// against DATABASE_LAYER_QUERY_RESULT_ERROR, which is 0, and passed only because this driver
 	// reported a hardcoded 1 for every statement.)
-	RunStatement(wxT("CREATE OR REPLACE FUNCTION max_uuid(uuid, uuid) RETURNS uuid AS $$ BEGIN IF $2 IS NULL OR $1 < $2 THEN RETURN $2; END IF; RETURN $1; END; $$ LANGUAGE plpgsql;"));
-	RunStatement(wxT("CREATE OR REPLACE AGGREGATE max(uuid) (sfunc = max_uuid, stype = uuid, combinefunc = max_uuid, parallel = safe, sortop = operator ( > ));"));
-	RunStatement(wxT("CREATE OR REPLACE FUNCTION min_uuid(uuid, uuid) RETURNS uuid AS $$ BEGIN IF $2 IS NULL OR $1 > $2 THEN RETURN $2; END IF; RETURN $1; END; $$ LANGUAGE plpgsql;"));
-	RunStatement(wxT("CREATE OR REPLACE AGGREGATE min(uuid) (sfunc = min_uuid, stype = uuid, combinefunc = min_uuid, parallel = safe, sortop = operator ( < ));"));
+	RunStatement(ibT("CREATE OR REPLACE FUNCTION max_uuid(uuid, uuid) RETURNS uuid AS $$ BEGIN IF $2 IS NULL OR $1 < $2 THEN RETURN $2; END IF; RETURN $1; END; $$ LANGUAGE plpgsql;"));
+	RunStatement(ibT("CREATE OR REPLACE AGGREGATE max(uuid) (sfunc = max_uuid, stype = uuid, combinefunc = max_uuid, parallel = safe, sortop = operator ( > ));"));
+	RunStatement(ibT("CREATE OR REPLACE FUNCTION min_uuid(uuid, uuid) RETURNS uuid AS $$ BEGIN IF $2 IS NULL OR $1 > $2 THEN RETURN $2; END IF; RETURN $1; END; $$ LANGUAGE plpgsql;"));
+	RunStatement(ibT("CREATE OR REPLACE AGGREGATE min(uuid) (sfunc = min_uuid, stype = uuid, combinefunc = min_uuid, parallel = safe, sortop = operator ( < ));"));
 	return true;
 }
 
@@ -211,39 +211,39 @@ const ibMaterializationDialect& ibDatabaseLayerPostgres::MaterializationDialect(
 		ibMaterializationDialect m;
 		m.m_family = ibTriggerFamily::PerRow;
 		m.m_functionShellTemplate =
-			wxT("CREATE OR REPLACE FUNCTION {name}() RETURNS trigger AS $$ BEGIN {body} RETURN NULL; END; $$ LANGUAGE plpgsql");
+			ibT("CREATE OR REPLACE FUNCTION {name}() RETURNS trigger AS $$ BEGIN {body} RETURN NULL; END; $$ LANGUAGE plpgsql");
 		m.m_triggerShellTemplate =
-			wxT("CREATE TRIGGER {name} {timing} ON {table} FOR EACH ROW EXECUTE FUNCTION {function}()");
-		m.m_dropTriggerTemplate  = wxT("DROP TRIGGER IF EXISTS {name} ON {table}");
-		m.m_dropFunctionTemplate = wxT("DROP FUNCTION IF EXISTS {name}()");
-		m.m_binaryLiteralTemplate = wxT("'\\x{hex}'::bytea");   // X'…' is a BIT string here, not a bytea
+			ibT("CREATE TRIGGER {name} {timing} ON {table} FOR EACH ROW EXECUTE FUNCTION {function}()");
+		m.m_dropTriggerTemplate  = ibT("DROP TRIGGER IF EXISTS {name} ON {table}");
+		m.m_dropFunctionTemplate = ibT("DROP FUNCTION IF EXISTS {name}()");
+		m.m_binaryLiteralTemplate = ibT("'\\x{hex}'::bytea");   // X'…' is a BIT string here, not a bytea
 		m.m_deltaUpsertTemplate =
-			wxT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
-		m.m_deltaTargetAlias  = wxT("{table}");     // ON CONFLICT names the target by table name
-		m.m_deltaSourceAlias  = wxT("excluded");
-		m.m_deltaUpdateItem   = wxT("{col} = COALESCE({target}.{col}, 0) + {source}.{col}");   // NULL-safe — see the default
+			ibT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
+		m.m_deltaTargetAlias  = ibT("{table}");     // ON CONFLICT names the target by table name
+		m.m_deltaSourceAlias  = ibT("excluded");
+		m.m_deltaUpdateItem   = ibT("{col} = COALESCE({target}.{col}, 0) + {source}.{col}");   // NULL-safe — see the default
 		// NULL-safe like the default, though ON CONFLICT never spends it: leaving a plain `=` here
 		// would be a trap for whoever makes this template used (PostgreSQL 15 has MERGE), and the
 		// defect it causes — an empty key column matching nothing and inserting a duplicate — costs
 		// a write, not a warning. See databaseLayer.h.
-		m.m_deltaKeyMatchItem = wxT("{target}.{col} IS NOT DISTINCT FROM {source}.{col}");   // unused by ON CONFLICT — rendered, not spent
+		m.m_deltaKeyMatchItem = ibT("{target}.{col} IS NOT DISTINCT FROM {source}.{col}");   // unused by ON CONFLICT — rendered, not spent
 		// THE KEY HASH. Thirty-two segments is a ceiling few keys reach, so this is the spare tyre
 		// rather than the road — but ON CONFLICT names its target by COLUMN LIST, so if a key ever does
 		// pass the ceiling the conflict target has to become this column and the engine must be able to
 		// compute it. md5() takes text; ::text renders bytea as hex and a timestamp in ISO, both stable.
-		m.m_keyHashItem   = wxT("COALESCE(md5({value}::text), '~')");
-		m.m_keyHashJoin   = wxT(" || '.' || ");
-		m.m_keyHashDigest = wxT("md5({expr})");
-		m.m_totalsTableSuffix = wxT(" WITH (fillfactor = 80)");
-		m.m_connectionIdExpr  = wxT("pg_backend_pid()");   // per-backend id — concurrent writers hash apart
-		m.m_createViewTemplate = wxT("CREATE OR REPLACE VIEW {name} AS {body}");
-		m.m_dropViewTemplate   = wxT("DROP VIEW IF EXISTS {name}");
+		m.m_keyHashItem   = ibT("COALESCE(md5({value}::text), '~')");
+		m.m_keyHashJoin   = ibT(" || '.' || ");
+		m.m_keyHashDigest = ibT("md5({expr})");
+		m.m_totalsTableSuffix = ibT(" WITH (fillfactor = 80)");
+		m.m_connectionIdExpr  = ibT("pg_backend_pid()");   // per-backend id — concurrent writers hash apart
+		m.m_createViewTemplate = ibT("CREATE OR REPLACE VIEW {name} AS {body}");
+		m.m_dropViewTemplate   = ibT("DROP VIEW IF EXISTS {name}");
 		// WHAT IS STANDING, asked of the catalogue — the drops need no guard (IF EXISTS), but "is the bundle
 		// installed?" is answered by these (ibMaterializeSql::IsInstalled), and with none it answered "yes"
 		// for triggers an apply had just dropped. The names were created unquoted, so they are stored folded
 		// to lower case.
-		m.m_viewExistsQuery    = wxT("SELECT 1 FROM pg_class c WHERE c.relkind = 'v' AND c.relname = LOWER('{name}') AND pg_table_is_visible(c.oid)");
-		m.m_triggerExistsQuery = wxT("SELECT 1 FROM pg_trigger t WHERE t.tgname = LOWER('{name}') AND NOT t.tgisinternal");
+		m.m_viewExistsQuery    = ibT("SELECT 1 FROM pg_class c WHERE c.relkind = 'v' AND c.relname = LOWER('{name}') AND pg_table_is_visible(c.oid)");
+		m.m_triggerExistsQuery = ibT("SELECT 1 FROM pg_trigger t WHERE t.tgname = LOWER('{name}') AND NOT t.tgisinternal");
 		return m;
 	}();
 	return s_mat;
@@ -263,19 +263,19 @@ ibDatabaseLayerPostgres::ibDatabaseLayerPostgres()
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading PostgreSQL library"));
+		SetErrorMessage(ibT("Error loading PostgreSQL library"));
 		ThrowDatabaseException();
 		return;
 	}
 #endif
-	m_strServer = wxT("localhost");
-	m_strUser = wxT("postgres");
-	m_strPassword = wxT("");
-	m_strDatabase = wxT("postgres");
-	m_strPort = wxT("5432");
+	m_strServer = ibT("localhost");
+	m_strUser = ibT("postgres");
+	m_strPassword = ibT("");
+	m_strDatabase = ibT("postgres");
+	m_strPort = ibT("5432");
 }
 
-ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const wxString& strDatabase)
+ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const ibString& strDatabase)
 	: ibDatabaseLayer(), m_pDatabase(nullptr)
 {
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
@@ -283,20 +283,20 @@ ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const wxString& strDatabase)
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading PostgreSQL library"));
+		SetErrorMessage(ibT("Error loading PostgreSQL library"));
 		ThrowDatabaseException();
 		return;
 	}
 #endif
-	m_strServer = wxT("localhost");
-	m_strUser = wxT("postgres");
-	m_strPassword = wxT("");
-	m_strPort = wxT("5432");
+	m_strServer = ibT("localhost");
+	m_strUser = ibT("postgres");
+	m_strPassword = ibT("");
+	m_strPort = ibT("5432");
 
 	Open(strDatabase);
 }
 
-ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const wxString& strServer, const wxString& strDatabase)
+ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const ibString& strServer, const ibString& strDatabase)
 	: ibDatabaseLayer(), m_pDatabase(nullptr)
 {
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
@@ -304,20 +304,20 @@ ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const wxString& strServer, cons
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading PostgreSQL library"));
+		SetErrorMessage(ibT("Error loading PostgreSQL library"));
 		ThrowDatabaseException();
 		return;
 	}
 #endif
 	m_strServer = strServer;
-	m_strUser = wxT("postgres");
-	m_strPassword = wxT("");
-	m_strPort = wxT("5432");
+	m_strUser = ibT("postgres");
+	m_strPassword = ibT("");
+	m_strPort = ibT("5432");
 
 	Open(strDatabase);
 }
 
-ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
+ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const ibString& strDatabase, const ibString& strUser, const ibString& strPassword)
 	: ibDatabaseLayer(), m_pDatabase(nullptr)
 {
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
@@ -325,20 +325,20 @@ ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const wxString& strDatabase, co
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading PostgreSQL library"));
+		SetErrorMessage(ibT("Error loading PostgreSQL library"));
 		ThrowDatabaseException();
 		return;
 	}
 #endif
-	m_strServer = wxT("localhost");
+	m_strServer = ibT("localhost");
 	m_strUser = strUser;
 	m_strPassword = strPassword;
-	m_strPort = wxT("5432");
+	m_strPort = ibT("5432");
 
 	Open(strDatabase);
 }
 
-ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
+ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const ibString& strServer, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword)
 	: ibDatabaseLayer(), m_pDatabase(nullptr)
 {
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
@@ -346,7 +346,7 @@ ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const wxString& strServer, cons
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading PostgreSQL library"));
+		SetErrorMessage(ibT("Error loading PostgreSQL library"));
 		ThrowDatabaseException();
 		return;
 	}
@@ -354,12 +354,12 @@ ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const wxString& strServer, cons
 	m_strServer = strServer;
 	m_strUser = strUser;
 	m_strPassword = strPassword;
-	m_strPort = wxT("5432");
+	m_strPort = ibT("5432");
 
 	Open(strDatabase);
 }
 
-ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const wxString& strServer, const wxString& strPort, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
+ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const ibString& strServer, const ibString& strPort, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword)
 	: ibDatabaseLayer()
 {
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
@@ -367,7 +367,7 @@ ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const wxString& strServer, cons
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading PostgreSQL library"));
+		SetErrorMessage(ibT("Error loading PostgreSQL library"));
 		ThrowDatabaseException();
 		return;
 	}
@@ -388,7 +388,7 @@ ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const ibDatabaseLayerPostgres& 
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
-		SetErrorMessage(wxT("Error loading PostgreSQL library"));
+		SetErrorMessage(ibT("Error loading PostgreSQL library"));
 		ThrowDatabaseException();
 		return;
 	}
@@ -406,7 +406,7 @@ ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const ibDatabaseLayerPostgres& 
 ibDatabaseLayerPostgres::~ibDatabaseLayerPostgres()
 {
 	Close();
-	wxDELETE(m_pInterface);
+	delete m_pInterface;
 }
 
 // open database
@@ -417,41 +417,41 @@ bool ibDatabaseLayerPostgres::Open()
 	if (m_pInterface == nullptr)
 		return false;
 
-	wxCharBuffer serverCharBuffer;
+	std::string serverCharBuffer;
 	const char* pHost = nullptr;
-	wxCharBuffer databaseBuffer;
+	std::string databaseBuffer;
 	const char* pDatabase = nullptr;
-	wxCharBuffer userCharBuffer;
+	std::string userCharBuffer;
 	const char* pUser = nullptr;
-	wxCharBuffer passwordCharBuffer;
+	std::string passwordCharBuffer;
 	const char* pPassword = nullptr;
 	const char* pTty = nullptr;
 	const char* pOptions = nullptr;
-	wxCharBuffer portCharBuffer;
+	std::string portCharBuffer;
 	const char* pPort = nullptr;
 
-	if (m_strServer != wxT("localhost") && m_strServer != wxT(""))
+	if (m_strServer != ibT("localhost") && m_strServer != ibT(""))
 	{
 		serverCharBuffer = ConvertToUnicodeStream(m_strServer);
-		pHost = serverCharBuffer;
+		pHost = serverCharBuffer.c_str();
 	}
 
-	if (m_strUser != wxT(""))
+	if (m_strUser != ibT(""))
 	{
 		userCharBuffer = ConvertToUnicodeStream(m_strUser);
-		pUser = userCharBuffer;
+		pUser = userCharBuffer.c_str();
 	}
 
-	if (m_strPassword != wxT(""))
+	if (m_strPassword != ibT(""))
 	{
 		passwordCharBuffer = ConvertToUnicodeStream(m_strPassword);
-		pPassword = passwordCharBuffer;
+		pPassword = passwordCharBuffer.c_str();
 	}
 
-	if (m_strPort != wxT(""))
+	if (m_strPort != ibT(""))
 	{
 		portCharBuffer = ConvertToUnicodeStream(m_strPort);
-		pPort = portCharBuffer;
+		pPort = portCharBuffer.c_str();
 	}
 
 	m_pDatabase = m_pInterface->GetPQsetdbLogin()(pHost, pPort, pOptions, pTty, nullptr, pUser, pPassword);
@@ -470,10 +470,10 @@ bool ibDatabaseLayerPostgres::Open()
 	// The connection above deliberately carries no database name: it lands on the server's
 	// default so that CREATE DATABASE can run. Once the database is there, the connection is
 	// dropped and reopened against it below.
-	if (m_strDatabase != wxT(""))
+	if (m_strDatabase != ibT(""))
 	{
 		databaseBuffer = ConvertToUnicodeStream(m_strDatabase);
-		pDatabase = databaseBuffer;
+		pDatabase = databaseBuffer.c_str();
 
 		if (!DatabaseExists(m_strDatabase))
 		{
@@ -482,12 +482,12 @@ bool ibDatabaseLayerPostgres::Open()
 			// (This used to compare the return against DATABASE_LAYER_QUERY_RESULT_ERROR, which
 			// is 0; it only ever passed because the driver reported a hardcoded 1.)
 			try {
-				DoRunQuery("CREATE DATABASE " + m_strDatabase, false);
+				DoRunQuery(ibT("CREATE DATABASE ") + m_strDatabase, false);
 			}
 			catch (const ibCoreException&) {
 				return false;
 			}
-			DoRunQuery("GRANT ALL PRIVILEGES ON DATABASE " + m_strDatabase + " to " + m_strUser, false);
+			DoRunQuery(ibT("GRANT ALL PRIVILEGES ON DATABASE ") + m_strDatabase + ibT(" to ") + m_strUser, false);
 		}
 	}
 
@@ -525,43 +525,43 @@ bool ibDatabaseLayerPostgres::Open()
 	return true;
 }
 
-bool ibDatabaseLayerPostgres::Open(const wxString& strDatabase)
+bool ibDatabaseLayerPostgres::Open(const ibString& strDatabase)
 {
 	m_strDatabase = strDatabase;
 	return Open();
 }
 
-bool ibDatabaseLayerPostgres::Open(const wxString& strServer, const wxString& strDatabase)
+bool ibDatabaseLayerPostgres::Open(const ibString& strServer, const ibString& strDatabase)
 {
 	m_strServer = strServer;
-	m_strUser = wxT("");
-	m_strPassword = wxT("");
+	m_strUser = ibT("");
+	m_strPassword = ibT("");
 	m_strDatabase = strDatabase;
-	m_strPort = wxT("");
+	m_strPort = ibT("");
 	return Open();
 }
 
-bool ibDatabaseLayerPostgres::Open(const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
+bool ibDatabaseLayerPostgres::Open(const ibString& strDatabase, const ibString& strUser, const ibString& strPassword)
 {
-	m_strServer = wxT("localhost");
+	m_strServer = ibT("localhost");
 	m_strUser = strUser;
 	m_strPassword = strPassword;
 	m_strDatabase = strDatabase;
-	m_strPort = wxT("");
+	m_strPort = ibT("");
 	return Open();
 }
 
-bool ibDatabaseLayerPostgres::Open(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
+bool ibDatabaseLayerPostgres::Open(const ibString& strServer, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword)
 {
 	m_strServer = strServer;
 	m_strUser = strUser;
 	m_strPassword = strPassword;
 	m_strDatabase = strDatabase;
-	m_strPort = wxT("");
+	m_strPort = ibT("");
 	return Open();
 }
 
-bool ibDatabaseLayerPostgres::Open(const wxString& strServer, const wxString& strPort, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
+bool ibDatabaseLayerPostgres::Open(const ibString& strServer, const ibString& strPort, const ibString& strDatabase, const ibString& strUser, const ibString& strPassword)
 {
 	m_strServer = strServer;
 	m_strPort = strPort;
@@ -626,9 +626,9 @@ void ibDatabaseLayerPostgres::DoBeginTransaction(const ibTxOptions& opts)
 	// PG's name for the same guarantee Firebird calls concurrency; it must be asked for on the BEGIN
 	// itself, since the isolation level cannot be changed once a statement has run.
 	DoRunQuery(opts.snapshot
-		? (opts.readOnly ? wxT("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
-		                 : wxT("BEGIN ISOLATION LEVEL REPEATABLE READ"))
-		: wxT("BEGIN"), false);
+		? (opts.readOnly ? ibT("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
+		                 : ibT("BEGIN ISOLATION LEVEL REPEATABLE READ"))
+		: ibT("BEGIN"), false);
 
 	// lock_timeout of 0 means wait forever. A noWait transaction has to fail
 	// the moment a lock is held, on every statement, not only one that spells
@@ -636,7 +636,7 @@ void ibDatabaseLayerPostgres::DoBeginTransaction(const ibTxOptions& opts)
 	// roll it back and let that error out, or the connection stays unusable.
 	if (opts.noWait) {
 		try {
-			DoRunQuery(wxT("SET LOCAL lock_timeout = '1ms'"), false);
+			DoRunQuery(ibT("SET LOCAL lock_timeout = '1ms'"), false);
 		}
 		catch (...) {
 			try { DoRollBack(); }
@@ -648,29 +648,34 @@ void ibDatabaseLayerPostgres::DoBeginTransaction(const ibTxOptions& opts)
 
 void ibDatabaseLayerPostgres::DoCommit()
 {
-	DoRunQuery(wxT("COMMIT"), false);
+	DoRunQuery(ibT("COMMIT"), false);
 }
 
 void ibDatabaseLayerPostgres::DoRollBack()
 {
-	DoRunQuery(wxT("ROLLBACK"), false);
+	DoRunQuery(ibT("ROLLBACK"), false);
 }
 
 // IsActiveTransaction inherits the base-class default (m_txDepth > 0).
 
 // query database
-int ibDatabaseLayerPostgres::DoRunQuery(const wxString& strQuery, bool WXUNUSED(bParseQuery))
+int ibDatabaseLayerPostgres::DoRunQuery(const ibString& strQuery, bool /*bParseQuery*/)
 {
 	// PostgreSQL takes care of parsing the queries itself so bParseQuery is ignored
 
 	ResetErrorCodes();
+	SetLastSqlState(ibString());
 
-	wxCharBuffer sqlBuffer = ConvertToUnicodeStream(strQuery);
-	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer);
+	std::string sqlBuffer = ConvertToUnicodeStream(strQuery);
+	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer.c_str());
 	if ((pResultCode == nullptr) || (m_pInterface->GetPQresultStatus()(pResultCode) != PGRES_COMMAND_OK))
 	{
+		if (pResultCode != nullptr) {
+			const char* state = m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE);
+			SetLastSqlState(state != nullptr ? ibString::FromUTF8(state) : ibString());
+		}
 		SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(m_pInterface->GetPQresultStatus()(pResultCode),
-			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)));
+			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)), ClassifySqlState(m_lastSqlState));
 		SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQerrorMessage()((PGconn*)m_pDatabase)));
 		m_pInterface->GetPQclear()(pResultCode);
 		ThrowDatabaseException();
@@ -683,8 +688,8 @@ int ibDatabaseLayerPostgres::DoRunQuery(const wxString& strQuery, bool WXUNUSED(
 		// truth, not an error. Failure arrives as the exception thrown above.
 		//
 		// Read straight off the libpq buffer: it is an ASCII decimal digit string, so it
-		// needs neither the charset conversion nor a wxString. The old code built that
-		// wxString and then threw it away with the parse commented out — this does less
+		// needs neither the charset conversion nor a string. The old code built that
+		// string and then threw it away with the parse commented out — this does less
 		// work than either version.
 		const char* const cmdTuples = m_pInterface->GetPQcmdTuples()(pResultCode);
 		long rows = 0;
@@ -695,16 +700,21 @@ int ibDatabaseLayerPostgres::DoRunQuery(const wxString& strQuery, bool WXUNUSED(
 	}
 }
 
-ibDatabaseResultSet* ibDatabaseLayerPostgres::DoRunQueryWithResults(const wxString& strQuery)
+ibDatabaseResultSet* ibDatabaseLayerPostgres::DoRunQueryWithResults(const ibString& strQuery)
 {
 	ResetErrorCodes();
+	SetLastSqlState(ibString());
 
-	wxCharBuffer sqlBuffer = ConvertToUnicodeStream(strQuery);
-	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer);
+	std::string sqlBuffer = ConvertToUnicodeStream(strQuery);
+	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer.c_str());
 	if ((pResultCode == nullptr) || (m_pInterface->GetPQresultStatus()(pResultCode) != PGRES_TUPLES_OK))
 	{
+		if (pResultCode != nullptr) {
+			const char* state = m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE);
+			SetLastSqlState(state != nullptr ? ibString::FromUTF8(state) : ibString());
+		}
 		SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(m_pInterface->GetPQstatus()((PGconn*)m_pDatabase),
-			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)));
+			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)), ClassifySqlState(m_lastSqlState));
 		SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQerrorMessage()((PGconn*)m_pDatabase)));
 		m_pInterface->GetPQclear()(pResultCode);
 		ThrowDatabaseException();
@@ -719,7 +729,7 @@ ibDatabaseResultSet* ibDatabaseLayerPostgres::DoRunQueryWithResults(const wxStri
 }
 
 // ibPreparedStatement support
-ibPreparedStatement* ibDatabaseLayerPostgres::DoPrepareStatement(const wxString& strQuery)
+ibPreparedStatement* ibDatabaseLayerPostgres::DoPrepareStatement(const ibString& strQuery)
 {
 	ResetErrorCodes();
 
@@ -728,7 +738,7 @@ ibPreparedStatement* ibDatabaseLayerPostgres::DoPrepareStatement(const wxString&
 	return pStatement;
 }
 
-bool ibDatabaseLayerPostgres::DatabaseExists(const wxString& database)
+bool ibDatabaseLayerPostgres::DatabaseExists(const ibString& database)
 {
 	// Initialize variables
 	bool bReturn = false;
@@ -737,7 +747,7 @@ bool ibDatabaseLayerPostgres::DatabaseExists(const wxString& database)
 	ibPreparedStatement* pStatement = nullptr;
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
-		wxString query = wxT("SELECT COUNT(*) FROM pg_catalog.pg_database WHERE datname=?;");
+		ibString query = ibT("SELECT COUNT(*) FROM pg_catalog.pg_database WHERE datname=?;");
 		pStatement = DoPrepareStatement(query);
 		if (pStatement != nullptr) {
 			pStatement->SetParamString(1, database.Lower());
@@ -780,7 +790,7 @@ bool ibDatabaseLayerPostgres::DatabaseExists(const wxString& database)
 	return bReturn;
 }
 
-bool ibDatabaseLayerPostgres::TableExists(const wxString& table)
+bool ibDatabaseLayerPostgres::TableExists(const ibString& table)
 {
 	// Initialize variables
 	bool bReturn = false;
@@ -789,7 +799,7 @@ bool ibDatabaseLayerPostgres::TableExists(const wxString& table)
 	ibPreparedStatement* pStatement = nullptr;
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
-		wxString query = wxT("SELECT COUNT(*) FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_name=?;");
+		ibString query = ibT("SELECT COUNT(*) FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_name=?;");
 		pStatement = DoPrepareStatement(query);
 		if (pStatement != nullptr) {
 			pStatement->SetParamString(1, table.Lower());
@@ -832,7 +842,7 @@ bool ibDatabaseLayerPostgres::TableExists(const wxString& table)
 	return bReturn;
 }
 
-bool ibDatabaseLayerPostgres::ViewExists(const wxString& view)
+bool ibDatabaseLayerPostgres::ViewExists(const ibString& view)
 {
 	// Initialize variables
 	bool bReturn = false;
@@ -841,7 +851,7 @@ bool ibDatabaseLayerPostgres::ViewExists(const wxString& view)
 	ibPreparedStatement* pStatement = nullptr;
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
-		wxString query = wxT("SELECT COUNT(*) FROM information_schema.tables WHERE table_type='VIEW' AND table_name=?;");
+		ibString query = ibT("SELECT COUNT(*) FROM information_schema.tables WHERE table_type='VIEW' AND table_name=?;");
 		pStatement = DoPrepareStatement(query);
 		if (pStatement) {
 			pStatement->SetParamString(1, view.Lower());
@@ -884,18 +894,18 @@ bool ibDatabaseLayerPostgres::ViewExists(const wxString& view)
 	return bReturn;
 }
 
-wxArrayString ibDatabaseLayerPostgres::GetTables()
+std::vector<ibString> ibDatabaseLayerPostgres::GetTables()
 {
-	wxArrayString returnArray;
+	std::vector<ibString> returnArray;
 
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
-		wxString query = wxT("SELECT table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema='public';");
+		ibString query = ibT("SELECT table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema='public';");
 		pResult = ExecuteQuery(query);
 
 		while (pResult->Next())
 		{
-			returnArray.Add(pResult->GetResultString(1));
+			returnArray.push_back(pResult->GetResultString(1));
 		}
 
 		if (pResult != nullptr)
@@ -917,18 +927,18 @@ wxArrayString ibDatabaseLayerPostgres::GetTables()
 	return returnArray;
 }
 
-wxArrayString ibDatabaseLayerPostgres::GetViews()
+std::vector<ibString> ibDatabaseLayerPostgres::GetViews()
 {
-	wxArrayString returnArray;
+	std::vector<ibString> returnArray;
 
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
-		wxString query = wxT("SELECT table_name FROM information_schema.tables WHERE table_type='VIEW' AND table_schema='public';");
+		ibString query = ibT("SELECT table_name FROM information_schema.tables WHERE table_type='VIEW' AND table_schema='public';");
 		pResult = ExecuteQuery(query);
 
 		while (pResult->Next())
 		{
-			returnArray.Add(pResult->GetResultString(1));
+			returnArray.push_back(pResult->GetResultString(1));
 		}
 
 		if (pResult != nullptr)
@@ -950,17 +960,17 @@ wxArrayString ibDatabaseLayerPostgres::GetViews()
 	return returnArray;
 }
 
-wxArrayString ibDatabaseLayerPostgres::GetColumns(const wxString& table)
+std::vector<ibString> ibDatabaseLayerPostgres::GetColumns(const ibString& table)
 {
 	// Initialize variables
-	wxArrayString returnArray;
+	std::vector<ibString> returnArray;
 
 	// Keep these variables outside of scope so that we can clean them up
 	//  in case of an error
 	ibPreparedStatement* pStatement = nullptr;
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
-		wxString query = wxT("SELECT column_name FROM information_schema.columns WHERE table_name=? ORDER BY ordinal_position;");
+		ibString query = ibT("SELECT column_name FROM information_schema.columns WHERE table_name=? ORDER BY ordinal_position;");
 		pStatement = DoPrepareStatement(query);
 		if (pStatement)
 		{
@@ -970,7 +980,7 @@ wxArrayString ibDatabaseLayerPostgres::GetColumns(const wxString& table)
 			{
 				while (pResult->Next())
 				{
-					returnArray.Add(pResult->GetResultString(1));
+					returnArray.push_back(pResult->GetResultString(1));
 				}
 			}
 		}
@@ -1017,14 +1027,8 @@ int ibDatabaseLayerPostgres::TranslateErrorCode(int nCode, const char* sqlState)
 	//return DATABASE_LAYER_ERROR;
 }
 
-ibBackendDatabaseException::Kind ibDatabaseLayerPostgres::ClassifyDatabaseError(int nativeCode) const
+ibBackendDatabaseException::Kind ibDatabaseLayerPostgres::ClassifySqlState(const ibString& sqlState)
 {
-	// PostgreSQL surfaces both a CONNECTION_* status enum (small int,
-	// connection-level only) and SQLSTATE (5-char alphanumeric — the
-	// real classifier). We prefer SQLSTATE when present; the int code
-	// is only used for connection-level failures where libpq doesn't
-	// produce a SQLSTATE at all.
-	//
 	// SQLSTATE classes:
 	//   08*** — connection exception           → ConnectionLost
 	//   23*** — integrity constraint violation → Constraint
@@ -1032,37 +1036,33 @@ ibBackendDatabaseException::Kind ibDatabaseLayerPostgres::ClassifyDatabaseError(
 	//                                            Timeout (40001 serialization fail)
 	//   42*** — syntax / access rule violation → Syntax
 	//   53*** — insufficient resources         → Timeout
+	//   55P03 — lock_not_available             → Timeout (NOWAIT / lock_timeout)
 	//   57*** — operator intervention          → ConnectionLost (admin shutdown)
 	//
 	// See https://www.postgresql.org/docs/current/errcodes-appendix.html
 	using Kind = ibBackendDatabaseException::Kind;
 
-	if (m_lastSqlState.length() >= 2) {
-		const wxString cls = m_lastSqlState.Left(2);
-		if (cls == wxT("08")) return Kind::ConnectionLost;
-		if (cls == wxT("23")) return Kind::Constraint;
-		if (cls == wxT("42")) return Kind::Syntax;
-		if (cls == wxT("57")) return Kind::ConnectionLost;
-		if (cls == wxT("53")) return Kind::Timeout;
-		if (cls == wxT("40")) {
+	if (sqlState == ibT("55P03"))
+		return Kind::Timeout;
+	if (sqlState.length() >= 2) {
+		const ibString cls = sqlState.Left(2);
+		if (cls == ibT("08")) return Kind::ConnectionLost;
+		if (cls == ibT("23")) return Kind::Constraint;
+		if (cls == ibT("42")) return Kind::Syntax;
+		if (cls == ibT("57")) return Kind::ConnectionLost;
+		if (cls == ibT("53")) return Kind::Timeout;
+		if (cls == ibT("40")) {
 			// 40P01 = deadlock_detected, 40001 = serialization_failure
-			if (m_lastSqlState == wxT("40P01")) return Kind::Deadlock;
+			if (sqlState == ibT("40P01")) return Kind::Deadlock;
 			return Kind::Timeout;
 		}
 	}
-
-	// No SQLSTATE — fall back to the libpq connection-status enum.
-	// CONNECTION_BAD is the only one we surface in error paths today.
-	(void)nativeCode;
 	return Kind::Unknown;
 }
 
 bool ibDatabaseLayerPostgres::IsAvailable()
 {
-	bool bAvailable = false;
-	ibInterfacePostgres* pInterface = new ibInterfacePostgres();
-	bAvailable = pInterface && pInterface->Init();
-	wxDELETE(pInterface);
-	return bAvailable;
+	ibInterfacePostgres library;
+	return library.Init();
 }
 

@@ -7,20 +7,20 @@
 //
 // Format (host-endian; portable LE encoding is a follow-up — see the
 // kAOTFlagPortable bit reserved in the header). Layout is linear, no
-// fs.h chunk wrappers — every collection is `u32 count` + `count`
+// memoryStream.h chunk wrappers — every collection is `std::uint32_t count` + `count`
 // entries laid out back-to-back. Strings are zero-terminated UTF-8
-// via ibWriter::w_stringZ / ibReader::r_stringZ.
+// via ibWriterMemory::w_stringZ / ibReaderMemory::r_stringZ.
 //
 // Header (all little-endian on x86/x64):
-//   u32  magic            = kAOTMagic ('OBC1')
-//   u16  format_version   = kAOTFormatVersion
-//   u16  flags            = 0  (bit 0 reserved for kAOTFlagPortable)
-//   u8[16] m_id           — descriptor identity
-//   u8[16] m_version      — per-compile fingerprint
-//   u64  m_descriptorClsid
-//   s32  m_lStartModule
-//   s32  m_lVarCount
-//   u8   m_bExpressionOnly
+//   std::uint32_t  magic            = kAOTMagic ('OBC1')
+//   std::uint16_t  format_version   = kAOTFormatVersion
+//   std::uint16_t  flags            = 0  (bit 0 reserved for kAOTFlagPortable)
+//   std::uint8_t[16] m_id           — descriptor identity
+//   std::uint8_t[16] m_version      — per-compile fingerprint
+//   std::uint64_t  m_descriptorClsid
+//   std::int32_t  m_lStartModule
+//   std::int32_t  m_lVarCount
+//   std::uint8_t   m_bExpressionOnly
 //   zstr m_strModuleName
 //   <m_listCode>
 //   <m_listConst>
@@ -35,7 +35,7 @@
 
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/byteCodeFormat.h"   // kAOTFormatVersion — also the cache key
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 namespace {
 
@@ -43,7 +43,7 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // v3 (2026-05-09 evening): lambda body model rewritten — no per-lambda
 // ibByteFunction in m_listFunc, so ibByteFunction::m_lFinish (added in
 // v2) was retired. Reading a v2 blob would mis-align subsequent fields
-// because the m_lFinish s32 is gone; strict version check rejects v2
+// because the m_lFinish std::int32_t is gone; strict version check rejects v2
 // as cache miss → safe recompile + repopulate.
 //
 // v4 (2026-05-10): OPER_CALL_LAMBDA now carries the caller's actual arg
@@ -61,7 +61,7 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // would still load but dispatch from stale operands → bump rejects.
 //
 // v6 (2026-05-10 evening pass 2): per-IP scope tracking for CES `{ }`
-// block scopes. Added s32 m_scopeId on ibByteCodeVarInfo + vector
+// block scopes. Added std::int32_t m_scopeId on ibByteCodeVarInfo + vector
 // <ScopeRange> on ibByteFunction / ibByteCode. Reverted in v7.
 //
 // v7 (2026-05-10 evening pass 3): block-scope tracking removed —
@@ -82,12 +82,12 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // control leaves the block.
 //
 // v9 (2026-05-11): scope-depth visibility. Each ibByteCodeVarInfo
-// gets s32 m_scopeDepth — the compile-time nesting depth at decl.
+// gets std::int32_t m_scopeDepth — the compile-time nesting depth at decl.
 // Runtime ibRunContext bumps m_currentScopeDepth on OPER_CTX_BEGIN,
 // drops on CTX_END; SendLocalVariables emits entries where
 // m_scopeDepth <= ctx.m_currentScopeDepth. Replaces v8's per-call
 // body-scan + vector<bool> approach with a single integer compare.
-// v8 readers loading v9 would mis-read the extra s32, mis-aligning
+// v8 readers loading v9 would mis-read the extra std::int32_t, mis-aligning
 // downstream fields. Bump rejects v8 → safe recompile + repopulate.
 //
 // v10 (2026-05-12): OPER_CALL_LINQ added between OPER_CALL_CLOSURE and
@@ -111,7 +111,7 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // v15 (2026-06-22): ibByteFunction shed two redundant fields — m_lCodeParamCount
 // (a pure mirror of m_listParam.size()) and the parallel m_listParamRealName
 // vector (folded into ibByteParam::m_strName). The function record no longer
-// writes the leading param-count s32 nor the separate name block; each param's
+// writes the leading param-count std::int32_t nor the separate name block; each param's
 // name now rides inline in WriteParam/ReadParam. v14 blobs mis-align on the
 // dropped fields → bump rejects them → safe recompile + repopulate.
 // v16 (2026-06-28): ibClassID now carries a KIND in its high byte (clsid.h). Dynamic
@@ -185,7 +185,7 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // v26 (2026-09-08): a Param node of a LAMBDA tree carries the CAPTURE'S ADDRESS — the frame and the
 // cell the compiler had already worked out — beside the name. The fold used to re-derive it at run
 // time by walking every captured frame and comparing every local's name; now it reads the value
-// where the invoked lambda itself would read it. Two s32 after the name, on Param only.
+// where the invoked lambda itself would read it. Two std::int32_t after the name, on Param only.
 // ⚠ Ask this field the question the block above asks: its ABSENCE reads as "no coordinate", which
 // falls back to the name search — correct, only slower — so a stale blob degrades rather than lies.
 // The version still moves, because a v25 blob mis-aligns on the two new numbers.
@@ -328,7 +328,7 @@ bool WriteConstValue(ibWriterMemory& w, const ibValue& v) {
 		// (same bytes that go into Firebird SQL_INT128 columns).
 		// Length-prefixed so the reader doesn't need a chunk
 		// wrapper around it.
-		wxMemoryBuffer buf = v.m_fData.GetBuffer();
+		ibMemoryBuffer buf = v.m_fData.GetBuffer();
 		const uint32_t len = (uint32_t)buf.GetDataLen();
 		w.w_u32(len);
 		if (len > 0) w.w(buf.GetData(), len);
@@ -368,7 +368,7 @@ bool ReadConstValue(const ibReaderMemory& r, ibValue& v) {
 	case ibValueTypes::TYPE_NUMBER: {
 		const uint32_t len = r.r_u32();
 		if (len > kAOTSanityMax) { ok = false; break; }
-		wxMemoryBuffer buf;
+		ibMemoryBuffer buf;
 		if (len > 0) {
 			r.r(buf.GetAppendBuf(len), (int)len);
 			buf.UngetAppendBuf(len);

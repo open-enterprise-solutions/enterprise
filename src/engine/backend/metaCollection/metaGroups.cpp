@@ -2,8 +2,6 @@
 
 #include "backend/metaCollection/metaObject.h"   // the g_meta*CLSID constants
 
-#include <wx/intl.h>
-
 namespace {
 
 // ONE ROW PER GROUP, in the order a configuration is read. The row's POSITION is the order — there
@@ -12,7 +10,7 @@ namespace {
 struct ibMetaGroupRow {
 	ibClassID       m_clsid;
 	// The SOURCE string, marked for extraction and left untranslated here: this table is static
-	// data, built before a locale is loaded (the same rule as backend/fileKind.cpp). Translating at
+	// data, built before a locale is loaded (the same rule as core/fileKind.cpp). Translating at
 	// the point of use is what lets one table answer in whatever language the session runs in.
 	const char*     m_caption;
 	ibMetaGroupBand m_band;
@@ -21,68 +19,68 @@ struct ibMetaGroupRow {
 const ibMetaGroupRow s_groups[] = {
 
 	// ——— what belongs to the configuration as a whole and to no business object ———
-	{ g_metaCommonModuleCLSID,     wxTRANSLATE("Common modules"),     ibMetaGroupBand::Common },
-	{ g_metaCommonFormCLSID,       wxTRANSLATE("Common forms"),       ibMetaGroupBand::Common },
-	{ g_metaCommonCommandCLSID,    wxTRANSLATE("Common commands"),    ibMetaGroupBand::Common },
-	{ g_metaCommandGroupCLSID,     wxTRANSLATE("Command groups"),     ibMetaGroupBand::Common },
-	{ g_metaCommonTemplateCLSID,   wxTRANSLATE("Common templates"),   ibMetaGroupBand::Common },
+	{ g_metaCommonModuleCLSID,     ibTRANSLATE("Common modules"),     ibMetaGroupBand::Common },
+	{ g_metaCommonFormCLSID,       ibTRANSLATE("Common forms"),       ibMetaGroupBand::Common },
+	{ g_metaCommonCommandCLSID,    ibTRANSLATE("Common commands"),    ibMetaGroupBand::Common },
+	{ g_metaCommandGroupCLSID,     ibTRANSLATE("Command groups"),     ibMetaGroupBand::Common },
+	{ g_metaCommonTemplateCLSID,   ibTRANSLATE("Common templates"),   ibMetaGroupBand::Common },
 	// The jobs branch holds the parameterized ones; the predefined sit in a sub-branch of it, so
 	// they are declared right after it.
-	{ g_metaParameterizedJobCLSID, wxTRANSLATE("Scheduled jobs"),     ibMetaGroupBand::Common },
-	{ g_metaScheduledJobCLSID,     wxTRANSLATE("Predefined jobs"),    ibMetaGroupBand::Common },
-	{ g_metaEventHandlerCLSID,     wxTRANSLATE("Event handlers"),     ibMetaGroupBand::Common },
-	{ g_metaSessionParameterCLSID, wxTRANSLATE("Session parameters"), ibMetaGroupBand::Common },
-	{ g_metaFunctionalOptionCLSID, wxTRANSLATE("Functional options"), ibMetaGroupBand::Common },
-	{ g_metaCommonAttributeCLSID,  wxTRANSLATE("Common attributes"),  ibMetaGroupBand::Common },
-	{ g_metaPictureCLSID,          wxTRANSLATE("Pictures"),           ibMetaGroupBand::Common },
-	{ g_metaSectionCLSID,          wxTRANSLATE("Sections"),           ibMetaGroupBand::Common },
-	{ g_metaRoleCLSID,             wxTRANSLATE("Roles"),              ibMetaGroupBand::Common },
-	{ g_metaLanguageCLSID,         wxTRANSLATE("Languages"),          ibMetaGroupBand::Common },
+	{ g_metaParameterizedJobCLSID, ibTRANSLATE("Scheduled jobs"),     ibMetaGroupBand::Common },
+	{ g_metaScheduledJobCLSID,     ibTRANSLATE("Predefined jobs"),    ibMetaGroupBand::Common },
+	{ g_metaEventHandlerCLSID,     ibTRANSLATE("Event handlers"),     ibMetaGroupBand::Common },
+	{ g_metaSessionParameterCLSID, ibTRANSLATE("Session parameters"), ibMetaGroupBand::Common },
+	{ g_metaFunctionalOptionCLSID, ibTRANSLATE("Functional options"), ibMetaGroupBand::Common },
+	{ g_metaCommonAttributeCLSID,  ibTRANSLATE("Common attributes"),  ibMetaGroupBand::Common },
+	{ g_metaPictureCLSID,          ibTRANSLATE("Pictures"),           ibMetaGroupBand::Common },
+	{ g_metaSectionCLSID,          ibTRANSLATE("Sections"),           ibMetaGroupBand::Common },
+	{ g_metaRoleCLSID,             ibTRANSLATE("Roles"),              ibMetaGroupBand::Common },
+	{ g_metaLanguageCLSID,         ibTRANSLATE("Languages"),          ibMetaGroupBand::Common },
 
 	// ——— the business objects a configuration is made of ———
-	{ g_metaConstantCLSID,                   wxTRANSLATE("Constants"),       ibMetaGroupBand::Metadata },
-	{ g_metaCatalogCLSID,                    wxTRANSLATE("Catalogs"),        ibMetaGroupBand::Metadata },
-	{ g_metaDocumentCLSID,                   wxTRANSLATE("Documents"),       ibMetaGroupBand::Metadata },
-	{ g_metaEnumerationCLSID,                wxTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata },
-	{ g_metaDataProcessorCLSID,              wxTRANSLATE("Data processors"), ibMetaGroupBand::Metadata },
-	{ g_metaReportCLSID,                     wxTRANSLATE("Reports"),         ibMetaGroupBand::Metadata },
+	{ g_metaConstantCLSID,                   ibTRANSLATE("Constants"),       ibMetaGroupBand::Metadata },
+	{ g_metaCatalogCLSID,                    ibTRANSLATE("Catalogs"),        ibMetaGroupBand::Metadata },
+	{ g_metaDocumentCLSID,                   ibTRANSLATE("Documents"),       ibMetaGroupBand::Metadata },
+	{ g_metaEnumerationCLSID,                ibTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata },
+	{ g_metaDataProcessorCLSID,              ibTRANSLATE("Data processors"), ibMetaGroupBand::Metadata },
+	{ g_metaReportCLSID,                     ibTRANSLATE("Reports"),         ibMetaGroupBand::Metadata },
 	// ⭐ THE CHARTS BEFORE THE REGISTERS, AND THE REGISTERS LAST — see the header.
-	{ g_metaChartOfCharacteristicTypesCLSID, wxTRANSLATE("Charts of characteristic types"), ibMetaGroupBand::Metadata },
-	{ g_metaChartOfAccountsCLSID,            wxTRANSLATE("Charts of accounts"),             ibMetaGroupBand::Metadata },
-	{ g_metaChartOfCalculationTypesCLSID,    wxTRANSLATE("Charts of calculation types"),    ibMetaGroupBand::Metadata },
-	{ g_metaInformationRegisterCLSID,        wxTRANSLATE("Information registers"),          ibMetaGroupBand::Metadata },
-	{ g_metaAccumulationRegisterCLSID,       wxTRANSLATE("Accumulation registers"),         ibMetaGroupBand::Metadata },
-	{ g_metaAccountingRegisterCLSID,         wxTRANSLATE("Accounting registers"),           ibMetaGroupBand::Metadata },
-	{ g_metaCalculationRegisterCLSID,        wxTRANSLATE("Calculation registers"),          ibMetaGroupBand::Metadata },
+	{ g_metaChartOfCharacteristicTypesCLSID, ibTRANSLATE("Charts of characteristic types"), ibMetaGroupBand::Metadata },
+	{ g_metaChartOfAccountsCLSID,            ibTRANSLATE("Charts of accounts"),             ibMetaGroupBand::Metadata },
+	{ g_metaChartOfCalculationTypesCLSID,    ibTRANSLATE("Charts of calculation types"),    ibMetaGroupBand::Metadata },
+	{ g_metaInformationRegisterCLSID,        ibTRANSLATE("Information registers"),          ibMetaGroupBand::Metadata },
+	{ g_metaAccumulationRegisterCLSID,       ibTRANSLATE("Accumulation registers"),         ibMetaGroupBand::Metadata },
+	{ g_metaAccountingRegisterCLSID,         ibTRANSLATE("Accounting registers"),           ibMetaGroupBand::Metadata },
+	{ g_metaCalculationRegisterCLSID,        ibTRANSLATE("Calculation registers"),          ibMetaGroupBand::Metadata },
 	// …and the sequences last of all: a sequence is about the order the DOCUMENTS above were posted
 	// in, so it is read after everything it is about (sequence-arc.md).
-	{ g_metaSequenceCLSID,                   wxTRANSLATE("Sequences"),                      ibMetaGroupBand::Metadata },
+	{ g_metaSequenceCLSID,                   ibTRANSLATE("Sequences"),                      ibMetaGroupBand::Metadata },
 
 	// ——— the groups INSIDE an object: what it IS, then what is done with it ———
-	{ g_metaAttributeCLSID,                      wxTRANSLATE("Attributes"),  ibMetaGroupBand::Inner },
+	{ g_metaAttributeCLSID,                      ibTRANSLATE("Attributes"),  ibMetaGroupBand::Inner },
 	// A common attribute's copy inside an object compares under the same caption as the declaration:
 	// what a reader wants to see there is "this object carries a common attribute", not a second
 	// kind of thing.
-	{ g_metaCommonAttributeColumnCLSID,          wxTRANSLATE("Common attributes"), ibMetaGroupBand::Inner },
-	{ g_metaDimensionCLSID,                      wxTRANSLATE("Dimensions"),  ibMetaGroupBand::Inner },
-	{ g_metaResourceCLSID,                       wxTRANSLATE("Resources"),   ibMetaGroupBand::Inner },
-	{ g_metaEnumCLSID,                           wxTRANSLATE("Enum values"), ibMetaGroupBand::Inner },
+	{ g_metaCommonAttributeColumnCLSID,          ibTRANSLATE("Common attributes"), ibMetaGroupBand::Inner },
+	{ g_metaDimensionCLSID,                      ibTRANSLATE("Dimensions"),  ibMetaGroupBand::Inner },
+	{ g_metaResourceCLSID,                       ibTRANSLATE("Resources"),   ibMetaGroupBand::Inner },
+	{ g_metaEnumCLSID,                           ibTRANSLATE("Enum values"), ibMetaGroupBand::Inner },
 	// A chart's kinds of accounting stand right after its attributes — where a person looks for
 	// them, and in the order the accounting world reads: what the ACCOUNT is kept in, then what
 	// each of its breakdowns is.
-	{ g_metaAccountingKindCLSID,                 wxTRANSLATE("Accounting kinds"), ibMetaGroupBand::Inner },
-	{ g_metaAccountDimensionAccountingKindCLSID, wxTRANSLATE("Account dimension accounting kinds"), ibMetaGroupBand::Inner },
-	{ g_metaPredefinedAttributeCLSID,            wxTRANSLATE("Predefined attributes"), ibMetaGroupBand::Inner },
-	{ g_metaTableCLSID,                          wxTRANSLATE("Tables"),      ibMetaGroupBand::Inner },
-	{ g_metaTableRefCLSID,                       wxTRANSLATE("Tables"),      ibMetaGroupBand::Inner },
-	{ g_metaAccountDimensionKindsTableCLSID,     wxTRANSLATE("Account dimension kinds tables"), ibMetaGroupBand::Inner },
-	{ g_metaRecalculationCLSID,                  wxTRANSLATE("Recalculations"), ibMetaGroupBand::Inner },
-	{ g_metaFormCLSID,                           wxTRANSLATE("Forms"),       ibMetaGroupBand::Inner },
-	{ g_metaCommandCLSID,                        wxTRANSLATE("Commands"),    ibMetaGroupBand::Inner },
-	{ g_metaTemplateCLSID,                       wxTRANSLATE("Templates"),   ibMetaGroupBand::Inner },
-	{ g_metaComposerCLSID,                       wxTRANSLATE("Composers"),   ibMetaGroupBand::Inner },
-	{ g_metaModuleCLSID,                         wxTRANSLATE("Modules"),     ibMetaGroupBand::Inner },
-	{ g_metaManagerCLSID,                        wxTRANSLATE("Manager modules"), ibMetaGroupBand::Inner },
+	{ g_metaAccountingKindCLSID,                 ibTRANSLATE("Accounting kinds"), ibMetaGroupBand::Inner },
+	{ g_metaAccountDimensionAccountingKindCLSID, ibTRANSLATE("Account dimension accounting kinds"), ibMetaGroupBand::Inner },
+	{ g_metaPredefinedAttributeCLSID,            ibTRANSLATE("Predefined attributes"), ibMetaGroupBand::Inner },
+	{ g_metaTableCLSID,                          ibTRANSLATE("Tables"),      ibMetaGroupBand::Inner },
+	{ g_metaTableRefCLSID,                       ibTRANSLATE("Tables"),      ibMetaGroupBand::Inner },
+	{ g_metaAccountDimensionKindsTableCLSID,     ibTRANSLATE("Account dimension kinds tables"), ibMetaGroupBand::Inner },
+	{ g_metaRecalculationCLSID,                  ibTRANSLATE("Recalculations"), ibMetaGroupBand::Inner },
+	{ g_metaFormCLSID,                           ibTRANSLATE("Forms"),       ibMetaGroupBand::Inner },
+	{ g_metaCommandCLSID,                        ibTRANSLATE("Commands"),    ibMetaGroupBand::Inner },
+	{ g_metaTemplateCLSID,                       ibTRANSLATE("Templates"),   ibMetaGroupBand::Inner },
+	{ g_metaComposerCLSID,                       ibTRANSLATE("Composers"),   ibMetaGroupBand::Inner },
+	{ g_metaModuleCLSID,                         ibTRANSLATE("Modules"),     ibMetaGroupBand::Inner },
+	{ g_metaManagerCLSID,                        ibTRANSLATE("Manager modules"), ibMetaGroupBand::Inner },
 };
 
 const ibMetaGroupRow* RowFor(const ibClassID& clsid)
@@ -96,10 +94,10 @@ const ibMetaGroupRow* RowFor(const ibClassID& clsid)
 
 } // namespace
 
-wxString ibMetaGroupCaption(const ibClassID& clsid)
+ibString ibMetaGroupCaption(const ibClassID& clsid)
 {
 	const ibMetaGroupRow* row = RowFor(clsid);
-	return row != nullptr ? wxGetTranslation(wxString::FromUTF8(row->m_caption)) : wxString();
+	return row != nullptr ? ibGetTranslation(ibString::FromUTF8(row->m_caption)) : ibString();
 }
 
 int ibMetaGroupOrder(const ibClassID& clsid)

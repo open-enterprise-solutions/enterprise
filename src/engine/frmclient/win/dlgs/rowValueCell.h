@@ -26,7 +26,7 @@
 #include <functional>
 #include <utility>
 
-#include "frmclient/win/ctrls/dataview/tabularModelView.h"                       // ibDataViewItem
+#include "core/tabular/tabularModelView.h"                       // ibDataViewItem
 #include "frmclient/backend/metaData.h"                               // ibMetaData — the configuration a type is read against
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"           // ibValueCompositionField — the one value with a picker
 #include "frmclient/backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue — text shaped by the declared type
@@ -131,15 +131,15 @@ public:
 	//
 	// Nothing to read back on the way out: a chosen value was written when it was CHOSEN, and typed
 	// text is written on the keystroke (see OnTyped) rather than at whichever door the editor left by.
-	virtual bool GetValueFromEditorCtrl(wxWindow*, wxVariant&) override { return false; }
+	virtual bool GetValueFromEditorCtrl(wxWindow*, ibVariant&) override { return false; }
 
-	virtual wxWindow* CreateEditorCtrl(wxWindow* dv, wxRect labelRect, const wxVariant& value) override {
+	virtual wxWindow* CreateEditorCtrl(wxWindow* dv, wxRect labelRect, const ibVariant& value) override {
 		m_row = m_item;   // the row this editor belongs to — never the grid's selection
 
 		ibControlTextEditor* editor = new ibControlTextEditor;
 		editor->SetDVCMode(true);
 		editor->Show(false);
-		if (!editor->Create(dv, wxID_ANY, value, labelRect.GetPosition(), labelRect.GetSize()))
+		if (!editor->Create(dv, wxID_ANY, value.GetString().ToWxString(), labelRect.GetPosition(), labelRect.GetSize()))
 			return nullptr;
 
 		editor->ShowSelectButton(true);
@@ -225,7 +225,7 @@ private:
 			FinishSelecting();
 			if (!m_chooser)
 				return;
-			const wxString held = (asField != nullptr) ? asField->GetPath() : wxString();
+			const wxString held = (asField != nullptr) ? asField->GetPath() : ibString();
 			if (ibValueCompositionField* chosen = m_chooser(parent, held)) {
 				m_row = row;
 				SetControlValue(ibValue(chosen));
@@ -249,7 +249,7 @@ private:
 		const ibTypeDescription declared = m_typeOf(m_row);
 		if (declared.GetClsidCount() != 1 || !IsPrimitive(declared.GetByIdx(0)))
 			return;
-		m_set(m_row, ibValueTypeDescription::AdjustValue(declared, ibValue(event.GetString()), GetMetaData()));
+		m_set(m_row, ibValueTypeDescription::AdjustValue(declared, ibValue(ibString(event.GetString())), GetMetaData()));
 	}
 
 	// A CELL IN A DIALOG HAS NO FORM TO REFRESH — the tablebox road (m_tableBoxColumn) is null here,

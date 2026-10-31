@@ -6,21 +6,21 @@
 // (No CreateObject of its own: ibMetaData's asks GetTypeCtor below, which looks here first and then at
 // the configuration — the whole of what a second copy of the factory used to add.)
 
-bool ibMetaDataDataProcessor::IsRegisterCtor(const wxString& className) const
+bool ibMetaDataDataProcessor::IsRegisterCtor(const ibString& className) const
 {
 	if (!ibMetaData::IsRegisterCtor(className))
 		return activeMetaData->IsRegisterCtor(className);
 	return true;
 }
 
-bool ibMetaDataDataProcessor::IsRegisterCtor(const wxString& className, ibCtorObjectType objectType) const
+bool ibMetaDataDataProcessor::IsRegisterCtor(const ibString& className, ibCtorObjectType objectType) const
 {
 	if (!ibMetaData::IsRegisterCtor(className, objectType))
 		return activeMetaData->IsRegisterCtor(className);
 	return true;
 }
 
-bool ibMetaDataDataProcessor::IsRegisterCtor(const wxString& className, ibCtorObjectType objectType, ibCtorObjectMetaType refType) const
+bool ibMetaDataDataProcessor::IsRegisterCtor(const ibString& className, ibCtorObjectType objectType, ibCtorObjectMetaType refType) const
 {
 	if (!ibMetaData::IsRegisterCtor(className, objectType, refType))
 		return activeMetaData->IsRegisterCtor(className, objectType, refType);
@@ -34,7 +34,7 @@ bool ibMetaDataDataProcessor::IsRegisterCtor(const ibClassID& clsid) const
 	return true;
 }
 
-ibClassID ibMetaDataDataProcessor::GetIDObjectFromString(const wxString& className) const
+ibClassID ibMetaDataDataProcessor::GetIDObjectFromString(const ibString& className) const
 {
 	if (const ibCtorMetaValueType* typeCtor = (m_image ? m_image->FindCtor(className) : nullptr))
 		return typeCtor->GetClassType();
@@ -42,7 +42,7 @@ ibClassID ibMetaDataDataProcessor::GetIDObjectFromString(const wxString& classNa
 	return activeMetaData->GetIDObjectFromString(className);
 }
 
-wxString ibMetaDataDataProcessor::GetNameObjectFromID(const ibClassID& clsid, bool upper) const
+ibString ibMetaDataDataProcessor::GetNameObjectFromID(const ibClassID& clsid, bool upper) const
 {
 	if (const ibCtorMetaValueType* typeCtor = (m_image ? m_image->FindCtor(clsid) : nullptr))
 		return upper ? typeCtor->GetClassName().Upper() : typeCtor->GetClassName();
@@ -66,7 +66,7 @@ ibCtorMetaValueType* ibMetaDataDataProcessor::GetTypeCtor(const ibValueMetaObjec
 	return activeMetaData->GetTypeCtor(metaValue, refType);
 }
 
-ibCtorAbstractType* ibMetaDataDataProcessor::GetAvailableCtor(const wxString& className) const
+ibCtorAbstractType* ibMetaDataDataProcessor::GetAvailableCtor(const ibString& className) const
 {
 	if (ibCtorMetaValueType* typeCtor = (m_image ? m_image->FindCtor(className) : nullptr))
 		return typeCtor;

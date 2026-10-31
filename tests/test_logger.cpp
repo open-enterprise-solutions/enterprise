@@ -26,17 +26,18 @@
 
 #include <atomic>
 #include <chrono>
+#include "core/fileSystem.h"   // ibFILE_SEP_PATH
 #include <thread>
 
 namespace {
 
 // Per-test temp directory. Built under wxStandardPaths::GetTempDir so we
 // don't pollute the repo and we get auto-cleanup on most platforms.
-wxString MakeTempLogDir(const wxString& suffix) {
-    wxString base = wxStandardPaths::Get().GetTempDir();
+ibString MakeTempLogDir(const ibString& suffix) {
+    ibString base = wxStandardPaths::Get().GetTempDir();
     if (base.IsEmpty()) base = wxT(".");
-    const wxString dir = base + wxFileName::GetPathSeparator()
-        + wxString::Format(wxT("oes_logtest_%lld_%s"),
+    const ibString dir = base + ibFILE_SEP_PATH
+        + ibString::Format(wxT("oes_logtest_%lld_%s"),
                            wxDateTime::UNow().GetValue().GetValue(),
                            suffix);
     if (wxFileName::DirExists(dir))
@@ -47,16 +48,16 @@ wxString MakeTempLogDir(const wxString& suffix) {
 // Open every .olg in `dir` read-only and sum log_entry counts. Logger
 // must already be destroyed (so the writer has flushed + the WAL has
 // merged) before calling this.
-int CountRows(const wxString& dir) {
+int CountRows(const ibString& dir) {
     if (!wxFileName::DirExists(dir)) return 0;
     int total = 0;
     wxDir d(dir);
     if (!d.IsOpened()) return 0;
-    wxString fname;
+    wxString fname;   // wxDir's own: it writes each name into a wx string
     bool more = d.GetFirst(&fname, wxT("*.olg"), wxDIR_FILES);
     while (more) {
         ibDatabaseLayerSQLite db;
-        if (db.Open(dir + wxFileName::GetPathSeparator() + fname)) {
+        if (db.Open(dir + ibFILE_SEP_PATH + fname)) {
             ibDatabaseResultSet* rs = db.RunQueryWithResults(
                 wxT("SELECT COUNT(*) FROM log_entry"));
             if (rs != nullptr && rs->Next()) {
@@ -70,7 +71,7 @@ int CountRows(const wxString& dir) {
     return total;
 }
 
-void Cleanup(const wxString& dir) {
+void Cleanup(const ibString& dir) {
     if (wxFileName::DirExists(dir))
         wxFileName::Rmdir(dir, wxPATH_RMDIR_RECURSIVE);
 }
@@ -82,7 +83,7 @@ void Cleanup(const wxString& dir) {
 // ---------------------------------------------------------------------------
 
 TEST(Logger, SinglePush_LandsAsRow) {
-    const wxString dir = MakeTempLogDir(wxT("single"));
+    const ibString dir = MakeTempLogDir(wxT("single"));
     {
         ibLogger lg(dir);
         lg.Info(wxT("test"), wxT("smoke"), wxT("hello"));
@@ -92,7 +93,7 @@ TEST(Logger, SinglePush_LandsAsRow) {
 }
 
 TEST(Logger, AuditLevelPersists) {
-    const wxString dir = MakeTempLogDir(wxT("audit"));
+    const ibString dir = MakeTempLogDir(wxT("audit"));
     {
         ibLogger lg(dir);
         lg.Audit(wxT("auth"), wxT("login"), wxT("Иванов"));
@@ -111,9 +112,9 @@ TEST(Logger, AuditLevelPersists) {
 // ---------------------------------------------------------------------------
 
 TEST(LoggerReader, AuditWithRef_RoundTrip) {
-    const wxString dir = MakeTempLogDir(wxT("ref"));
-    const wxString guidA = wxT("11111111-1111-1111-1111-111111111111");
-    const wxString guidB = wxT("22222222-2222-2222-2222-222222222222");
+    const ibString dir = MakeTempLogDir(wxT("ref"));
+    const ibString guidA = wxT("11111111-1111-1111-1111-111111111111");
+    const ibString guidB = wxT("22222222-2222-2222-2222-222222222222");
     {
         ibLogger lg(dir);
         lg.Audit(wxT("record"), wxT("saved"),    wxT("Catalog: ItemA"), guidA, 100);
@@ -148,15 +149,15 @@ TEST(LoggerReader, AuditWithRef_RoundTrip) {
 // ---------------------------------------------------------------------------
 
 TEST(LoggerSweep, RemovesOldFilesOnly) {
-    const wxString dir = MakeTempLogDir(wxT("sweep"));
+    const ibString dir = MakeTempLogDir(wxT("sweep"));
     wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-    const wxString sep = wxFileName::GetPathSeparator();
+    const ibString sep(ibFILE_SEP_PATH);
     // Pretend-history files spanning 6 months back.
-    const wxString fresh = dir + sep + wxString::Format(
+    const ibString fresh = dir + sep + ibString::Format(
         wxT("oes_%04d_%02d.olg"),
         wxDateTime::Now().GetYear(),
         static_cast<int>(wxDateTime::Now().GetMonth()) + 1);
-    const wxString stale = dir + sep + wxT("oes_2020_01.olg");
+    const ibString stale = dir + sep + wxT("oes_2020_01.olg");
     wxFile().Create(fresh);
     wxFile().Create(stale);
 
@@ -169,7 +170,7 @@ TEST(LoggerSweep, RemovesOldFilesOnly) {
 }
 
 TEST(Logger, MultiThread_NoDrops_AtModerateLoad) {
-    const wxString dir = MakeTempLogDir(wxT("multi"));
+    const ibString dir = MakeTempLogDir(wxT("multi"));
     constexpr int kThreads      = 8;
     constexpr int kPerThread    = 1000;
     constexpr int kTotal        = kThreads * kPerThread;
@@ -186,7 +187,7 @@ TEST(Logger, MultiThread_NoDrops_AtModerateLoad) {
                 for (int i = 0; i < kPerThread; ++i) {
                     lg.Info(wxT("stress"),
                             wxT("tick"),
-                            wxString::Format(wxT("t=%d i=%d"), t, i));
+                            ibString::Format(wxT("t=%d i=%d"), t, i));
                 }
             });
         }

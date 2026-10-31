@@ -1,8 +1,8 @@
 #ifndef _FILTER_TREE_MODEL_H__
 #define _FILTER_TREE_MODEL_H__
 
-#include "frmclient/win/ctrls/dataview/tabularModelView.h"
-#include "frmclient/backend/compositionDescription.h"   // ibFilterDescription — the filter IS this
+#include "core/tabular/tabularModelView.h"
+#include "frmclient/backend/backend_composition.h"   // ibFilterDescription — the filter IS this; its literal, restored
 
 #include <map>
 #include <vector>
@@ -158,8 +158,8 @@ public:
 	ibFilterPath GetTargetPath(const ibDataViewItem& item) const;
 
 	// ---- ibDataViewModel ----
-	void GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
-	bool SetValue(const wxVariant& variant, const ibDataViewItem& item, unsigned int col) override;
+	void GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
+	bool SetValue(const ibVariant& variant, const ibDataViewItem& item, unsigned int col) override;
 	ibDataViewItem GetParent(const ibDataViewItem& item) const override;
 	bool IsContainer(const ibDataViewItem& item) const override;
 

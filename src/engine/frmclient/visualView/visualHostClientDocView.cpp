@@ -2,8 +2,6 @@
 
 #include <functional>
 
-#include <wx/filedlg.h>   // wxFileSelector — Save as, where the person keeps the file
-
 #include "frmclient/mainFrame/mainFrame.h"
 
 // ----------------------------------------------------------------------------
@@ -12,34 +10,46 @@
 
 bool ibFormVisualCommandProcessor::Undo()
 {
-	m_document.DoCommand(ibProtocolCommand::Undo);
+	m_document.DoCommand(ibProtocol::ibFrame::ibCommand::Undo);
 	return true;
 }
 
 bool ibFormVisualCommandProcessor::Redo()
 {
-	m_document.DoCommand(ibProtocolCommand::Redo);
+	m_document.DoCommand(ibProtocol::ibFrame::ibCommand::Redo);
 	return true;
 }
 
 bool ibFormVisualCommandProcessor::CanUndo() const
 {
-	return m_document.IsCommandEnabled(ibProtocolCommand::Undo);
+	return m_document.IsCommandEnabled(ibProtocol::ibFrame::ibCommand::Undo);
 }
 
 bool ibFormVisualCommandProcessor::CanRedo() const
 {
-	return m_document.IsCommandEnabled(ibProtocolCommand::Redo);
+	return m_document.IsCommandEnabled(ibProtocol::ibFrame::ibCommand::Redo);
 }
 
 // ----------------------------------------------------------------------------
-// ibFormVisualEditView
+// ibVisualHostView
 // ----------------------------------------------------------------------------
 
-void ibFormVisualEditView::Draw(const ibProtocolNode& view, const ibProtocolNode& patch)
+bool ibVisualHostView::OnCreate(ibFrontendDocument* doc, long flags)
 {
-	if (m_visualHost != nullptr)
-		m_visualHost->Draw(view, patch);
+	WatchFocus(true);
+	// EVERY command passes by: which ids are the active control's is its view's to say.
+	Bind(wxEVT_MENU, &ibVisualHostView::OnActiveControlCommand, this);
+	// …and so does a choice on its toolbar (a sheet's Zoom): the toolbar's controls send wxEVT_CHOICE, not wxEVT_MENU.
+	Bind(wxEVT_CHOICE, &ibVisualHostView::OnActiveControlCommand, this);
+
+	return ibFrontendView::OnCreate(doc, flags);
+}
+
+bool ibVisualHostView::OnClose(bool deleteWindow)
+{
+	// The focus watch comes off before the window is let go.
+	WatchFocus(false);
+	return ibFrontendView::OnClose(deleteWindow);
 }
 
 // What a control prints as — ONE answer for both searches below: the view it holds prints it (a grid box
@@ -51,7 +61,7 @@ static wxPrintout* CreateControlPrintout(const ibValueFrame* control)
 	return view != nullptr ? view->OnCreatePrintout() : nullptr;
 }
 
-wxPrintout* ibFormVisualEditView::OnCreatePrintout()
+wxPrintout* ibVisualHostView::OnCreatePrintout()
 {
 	ibValueForm* const form = m_visualHost != nullptr ? m_visualHost->GetValueForm() : nullptr;
 	if (form == nullptr)
@@ -91,35 +101,11 @@ wxPrintout* ibFormVisualEditView::OnCreatePrintout()
 	return nullptr;
 }
 
-bool ibFormVisualEditView::OnCreate(ibFrontendDocument* doc, long flags)
-{
-	// What the person does in the form goes to the server through the main window — a view that is no form, named by
-	// its tab.
-	m_visualHost = new ibVisualHostClient(*ibFrontendMainFrame::GetFrame(), m_viewFrame, static_cast<ibFormVisualDocument*>(doc)->GetTabId());
-
-	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
-	sizer->Add(m_visualHost, 1, wxEXPAND);
-	m_viewFrame->SetSizer(sizer);
-
-	WatchFocus(true);
-	// EVERY command passes by: which ids are the active control's is its view's to say.
-	Bind(wxEVT_MENU, &ibFormVisualEditView::OnActiveControlCommand, this);
-
-	return ibFrontendView::OnCreate(doc, flags);
-}
-
-bool ibFormVisualEditView::OnClose(bool deleteWindow)
-{
-	// The focus watch comes off before the window is let go.
-	WatchFocus(false);
-	return ibFrontendView::OnClose(deleteWindow);
-}
-
 //********************************************************************************************
 //*                          The facade over the active control                              *
 //********************************************************************************************
 
-ibFrontendView* ibFormVisualEditView::GetActiveControlView() const
+ibFrontendView* ibVisualHostView::GetActiveControlView() const
 {
 	const ibValueForm* const form = m_visualHost != nullptr ? m_visualHost->GetValueForm() : nullptr;
 	const ibValueFrame* const control = form != nullptr ? form->GetActiveControl() : nullptr;
@@ -127,7 +113,7 @@ ibFrontendView* ibFormVisualEditView::GetActiveControlView() const
 }
 
 #if wxUSE_MENUS
-wxMenuBar* ibFormVisualEditView::CreateMenuBar() const
+wxMenuBar* ibVisualHostView::CreateMenuBar() const
 {
 	if (ibFrontendView* view = GetActiveControlView())
 		return view->CreateMenuBar();
@@ -135,40 +121,45 @@ wxMenuBar* ibFormVisualEditView::CreateMenuBar() const
 }
 #endif
 
-void ibFormVisualEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
+void ibVisualHostView::OnCreateToolbar(wxAuiToolBar* toolbar)
 {
 	if (ibFrontendView* view = GetActiveControlView())
 		view->OnCreateToolbar(toolbar);
 }
 
-void ibFormVisualEditView::OnActivateView(bool activate, ibFrontendView* WXUNUSED(activeView), ibFrontendView* deactiveView)
+void ibVisualHostView::OnActivateView(bool activate, ibFrontendView* WXUNUSED(activeView), ibFrontendView* deactiveView)
 {
 	if (ibFrontendView* view = GetActiveControlView())
 		view->OnActivateView(activate, view, deactiveView);
 }
 
-void ibFormVisualEditView::WatchFocus(bool watch)
+void ibVisualHostView::WatchFocus(bool watch)
 {
 	wxWindow* const frame = dynamic_cast<wxWindow*>(GetFrame());
 	if (frame == nullptr)
 		return;
 
 	if (watch)
-		frame->Bind(wxEVT_CHILD_FOCUS, &ibFormVisualEditView::OnChildFocus, this);
+		frame->Bind(wxEVT_CHILD_FOCUS, &ibVisualHostView::OnChildFocus, this);
 	else
-		frame->Unbind(wxEVT_CHILD_FOCUS, &ibFormVisualEditView::OnChildFocus, this);
+		frame->Unbind(wxEVT_CHILD_FOCUS, &ibVisualHostView::OnChildFocus, this);
 }
 
-// ⭐ THE ACTIVE CONTROL IS PUT WHERE THE FOCUS GOES — the first control of this form on the way from the
-// focused window up. A focus outside the form (a menu, a toolbar, the preview) leaves it where it was. The
-// chrome is rebuilt only when the view it comes from changes, and after the focus has settled.
-void ibFormVisualEditView::OnChildFocus(wxChildFocusEvent& event)
+// ⭐ THE ACTIVE CONTROL IS PUT WHERE THE FOCUS GOES — the host it went into is the one the person is in, and in it the
+// first control of its form on the way from the focused window up. A focus outside every host (a menu, a toolbar, the
+// preview, a cell's header) leaves both where they were. The chrome is rebuilt only when the view it comes from
+// changes, and after the focus has settled.
+void ibVisualHostView::OnChildFocus(wxChildFocusEvent& event)
 {
 	event.Skip();   // the focus goes where it was going; this only watches it
 
+	wxWindow* const focus = wxWindow::FindFocus();
+	if (ibVisualHostClient* const host = FindVisualHost(focus))
+		m_visualHost = host;
+
 	if (ibValueForm* const form = m_visualHost != nullptr ? m_visualHost->GetValueForm() : nullptr) {
 		wxWindow* const frame = dynamic_cast<wxWindow*>(GetFrame());
-		for (wxWindow* window = wxWindow::FindFocus(); window != nullptr && window != frame; window = window->GetParent()) {
+		for (wxWindow* window = focus; window != nullptr && window != frame; window = window->GetParent()) {
 			if (ibValueFrame* control = m_visualHost->GetObjectBase(window)) {
 				form->SetActiveControl(control);
 				break;
@@ -198,7 +189,7 @@ void ibFormVisualEditView::OnChildFocus(wxChildFocusEvent& event)
 // Save and Save as are asked of the document behind the control, as the desktop asks them — and here that document is
 // a copy of the server's, which saves itself where it is kept: handed to the server. Then they go on to the form's
 // document, which saves the server's (ibFormVisualDocument::Save) — after it, on the same road.
-void ibFormVisualEditView::OnActiveControlCommand(wxCommandEvent& event)
+void ibVisualHostView::OnActiveControlCommand(wxCommandEvent& event)
 {
 	ibFrontendView* const view = GetActiveControlView();
 	if (view == nullptr) {
@@ -216,12 +207,27 @@ void ibFormVisualEditView::OnActiveControlCommand(wxCommandEvent& event)
 		event.Skip();
 }
 
-void ibFormVisualEditView::OnChangeFilename()
+// ----------------------------------------------------------------------------
+// ibFormVisualEditView
+// ----------------------------------------------------------------------------
+
+bool ibFormVisualEditView::OnCreate(ibFrontendDocument* doc, long flags)
 {
-	wxWindow* const win = GetFrame();
-	ibFrontendDocument* const doc = GetDocument();
-	if (win != nullptr && doc != nullptr)
-		win->SetLabel(doc->GetUserReadableName());
+	// What the person does in the form goes to the server through the main window — a view that is no form, named by
+	// its tab.
+	m_visualHost = new ibVisualHostClient(*ibFrontendMainFrame::GetFrame(), m_viewFrame, static_cast<ibFormVisualDocument*>(doc)->GetTabId());
+
+	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
+	sizer->Add(m_visualHost, 1, wxEXPAND);
+	m_viewFrame->SetSizer(sizer);
+
+	return ibVisualHostView::OnCreate(doc, flags);
+}
+
+void ibFormVisualEditView::Draw(const ibProtocolNode& view, const ibProtocolNode& patch)
+{
+	if (m_visualHost != nullptr)
+		m_visualHost->Draw(view, patch);
 }
 
 // ----------------------------------------------------------------------------
@@ -229,117 +235,14 @@ void ibFormVisualEditView::OnChangeFilename()
 // ----------------------------------------------------------------------------
 
 ibFormVisualDocument::ibFormVisualDocument(long long tabId)
-	: m_tabId(tabId)
+	: ibTabDocument(tabId)
 {
-	// Its data is the server's, kept where the server keeps it: Save goes there, never to a file chosen here.
-	SetDocumentSaved(true);
-	SetCommandProcessor(new ibFormVisualCommandProcessor(*this));
 }
 
-ibFormVisualDocument::~ibFormVisualDocument()
+void ibFormVisualDocument::DrawView(const ibProtocolNode& view, const ibProtocolNode& patch)
 {
-	if (ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame())
-		frame->RemoveDocument(this);
-}
-
-wxString ibFormVisualDocument::GetUniqueIdentifier() const
-{
-	return wxString::Format(wxT("%lld"), m_tabId);
-}
-
-bool ibFormVisualDocument::OnCloseDocument()
-{
-	ibFrontendDocManager* documentManager = GetDocumentManager();
-
-	// When the parent document closes, its children must be closed as well as they can't exist without the parent.
-	ibFrontendDocument const* documentParent = m_documentParent;
-
-	if (documentManager != nullptr && documentParent != nullptr)
-		documentManager->ActivateView(documentParent->GetFirstView());
-
-	return ibFrontendDocument::OnCloseDocument();
-}
-
-bool ibFormVisualDocument::IsCloseOnOwnerClose() const
-{
-	const ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	return frame == nullptr || frame->FindTab(m_tabId).GetId() != m_tabId;
-}
-
-bool ibFormVisualDocument::IsModified() const
-{
-	return IsCommandEnabled(ibProtocolCommand::Save);
-}
-
-bool ibFormVisualDocument::Close()
-{
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (frame != nullptr && frame->FindTab(m_tabId).GetId() == m_tabId) {
-		frame->CloseTab(m_tabId);
-		return false;
-	}
-	return ibFrontendDocument::Close();
-}
-
-bool ibFormVisualDocument::Save()
-{
-	if (GetSaveFilter().IsEmpty()) {
-		DoCommand(ibProtocolCommand::Save);
-		return true;
-	}
-	if (GetFilename().IsEmpty())
-		return SaveAs();
-	return OnSaveDocument(GetFilename());
-}
-
-bool ibFormVisualDocument::SaveAs()
-{
-	const wxString filter = GetSaveFilter();
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (filter.IsEmpty() || frame == nullptr)
-		return false;
-
-	// Named as its tab is, the first time — a modified one's title ends with its «*».
-	wxString name = GetFilename().IsEmpty() ? frame->FindTab(m_tabId).GetString(ibProtocolName::Title) : wxFileNameFromPath(GetFilename());
-	name.Trim();
-	if (name.EndsWith(wxT("*")))
-		name.RemoveLast();
-
-	const wxString path = wxFileSelector(_("Save As"), wxPathOnly(GetFilename()), name, wxEmptyString, filter,
-		wxFD_SAVE | wxFD_OVERWRITE_PROMPT, frame);
-	return !path.IsEmpty() && OnSaveDocument(path);
-}
-
-wxString ibFormVisualDocument::GetSaveFilter() const
-{
-	const ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (frame == nullptr)
-		return wxString();
-
-	wxString filter;
-	for (const ibProtocolNode& format : frame->FindTab(m_tabId).FindChild(ibProtocolName::Formats).Children()) {
-		if (!filter.IsEmpty())
-			filter += wxT("|");
-		filter += format.GetString(ibProtocolName::Title) + wxT("|") + format.GetString(ibProtocolName::Mask);
-	}
-	return filter;
-}
-
-bool ibFormVisualDocument::DoSaveDocument(const wxString& file)
-{
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (frame == nullptr)
-		return false;
-
-	// SAVED BY THE SERVER as a file of this one's name — written as the name says — and taken down from it, the tab's
-	// File: the document is the server's, the file on the disk the person's.
-	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolCommand::SaveAs))
-		.SetValue(ibProtocolName::Name, wxFileNameFromPath(file));
-	if (!frame->Call(ibProtocolMethod::Command, params, answer))
-		return false;
-	const wxString saved = frame->FindTab(m_tabId).GetString(ibProtocolName::File);
-	return !saved.IsEmpty() && frame->DownloadFile(saved, file);
+	if (ibFormVisualEditView* const formView = GetFirstView())
+		formView->Draw(view, patch);
 }
 
 ibFormVisualEditView* ibFormVisualDocument::GetFirstView() const
@@ -356,30 +259,9 @@ wxCommandProcessor* ibFormVisualDocument::GetCommandProcessor() const
 	return ibFrontendDocument::GetCommandProcessor();
 }
 
-bool ibFormVisualDocument::IsCommandEnabled(ibProtocolCommand command) const
+wxCommandProcessor* ibFormVisualDocument::OnCreateCommandProcessor()
 {
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (frame == nullptr)
-		return false;
-
-	for (const ibProtocolNode& taken : frame->FindTab(m_tabId).GetList(ibProtocolName::Commands)) {
-		if (taken.AsInt() == static_cast<long long>(command))
-			return true;
-	}
-	return false;
-}
-
-void ibFormVisualDocument::DoCommand(ibProtocolCommand command) const
-{
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (frame == nullptr)
-		return;
-
-	// Posted, as the person's acts on a tab are: it goes after the tab was made the server's active one, which the
-	// command is done on.
-	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(command));
-	frame->Post(ibProtocolMethod::Command, params);
+	return new ibFormVisualCommandProcessor(*this);
 }
 
 ibFrontendView* ibFormVisualDocument::DoCreateView()

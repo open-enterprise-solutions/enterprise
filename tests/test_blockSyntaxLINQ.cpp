@@ -1,15 +1,17 @@
 // =============================================================================
-// A LINQ block as a thing that can be built — backend/compiler/blockSyntaxLINQ.h.
+// A LINQ block as a thing that can be built — core/compiler/blockSyntaxLINQ.h.
 //
 // Two things are pinned: which query word may follow which (the table the
 // editor's completion offers clauses from, and the constructor writes by), and
 // the block the constructor writes — in the lexer's own words, one clause a
 // line, refused rather than written when the order is not the language's.
+//
+// The blocks are written in the syntax a session starts in (ibCompileState: CES).
 // =============================================================================
 
 #include <gtest/gtest.h>
-#include "backend/compiler/blockSyntaxLINQ.h"
-#include "backend/compiler/codeDef.h"
+#include "core/compiler/blockSyntaxLINQ.h"
+#include "core/compiler/codeDef.h"
 
 #include <algorithm>
 
@@ -21,7 +23,7 @@ bool Offers(int after, int key)
 	return std::find(allowed.begin(), allowed.end(), key) != allowed.end();
 }
 
-ibLinqBlockSource Source(const wxString& alias, const wxString& expression)
+ibLinqBlockSource Source(const ibString& alias, const ibString& expression)
 {
 	ibLinqBlockSource source;
 	source.m_alias = alias;
@@ -59,13 +61,13 @@ TEST(LinqBlock, AfterAClauseTheClausesFollow)
 
 TEST(LinqBlock, ASourceAConditionAndColumns)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("g"), wxT("Data.Catalogs.Goods")));
 	block.m_conditions.push_back(wxT("g.Price > limit"));   // a variable visible here is the parameter
 	block.m_fields.push_back({ wxT("Name"), wxT("g.Description") });
 	block.m_fields.push_back({ wxT("Price"), wxT("g.Price") });
 
-	wxString refusal;
+	ibString refusal;
 	EXPECT_EQ(wxT("From g In Data.Catalogs.Goods\n")
 		wxT("  Where g.Price > limit\n")
 		wxT("  Select { Name = g.Description, Price = g.Price }"),
@@ -75,7 +77,7 @@ TEST(LinqBlock, ASourceAConditionAndColumns)
 
 TEST(LinqBlock, ASecondSourceIsAJoinOrAProduct)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("g"), wxT("Data.Catalogs.Goods")));
 	ibLinqBlockSource prices = Source(wxT("p"), wxT("prices"));
 	prices.m_join = true;
@@ -84,19 +86,19 @@ TEST(LinqBlock, ASecondSourceIsAJoinOrAProduct)
 	block.m_sources.push_back(prices);
 	block.m_sources.push_back(Source(wxT("w"), wxT("Data.Catalogs.Warehouses")));
 
-	wxString refusal;
+	ibString refusal;
 	EXPECT_EQ(wxT("From g In Data.Catalogs.Goods\n")
 		wxT("Join p In prices On g.Ref Equals p.Item\n")
 		wxT("From w In Data.Catalogs.Warehouses\n")
 		wxT("Select g"),
-		block.Render(wxString(), refusal));
+		block.Render(ibString(), refusal));
 }
 
 // The direction is written after the key it belongs to, so every key shares ONE clause - the middle one
 // running the other way included.
 TEST(LinqBlock, OrderKeysShareOneClause_EachWithItsOwnWay)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("g"), wxT("t")));
 	block.m_order.push_back({ wxT("g.Group"), false });
 	block.m_order.push_back({ wxT("g.Price"), true });
@@ -104,20 +106,20 @@ TEST(LinqBlock, OrderKeysShareOneClause_EachWithItsOwnWay)
 	block.m_take = wxT("10");
 	block.m_distinct = true;
 
-	wxString refusal;
+	ibString refusal;
 	EXPECT_EQ(wxT("From g In t\n")
 		wxT("OrderBy g.Group, g.Price Descending, g.Name\n")
 		wxT("Take 10\n")
 		wxT("Select g\n")
 		wxT("Distinct"),
-		block.Render(wxString(), refusal));
+		block.Render(ibString(), refusal));
 }
 
 // ------------------------------- grouping -----------------------------------
 
 namespace {
 
-ibLinqBlockTotal Total(const wxString& name, ibLinqTotal function, const wxString& expression)
+ibLinqBlockTotal Total(const ibString& name, ibLinqTotal function, const ibString& expression)
 {
 	ibLinqBlockTotal total;
 	total.m_name = name;
@@ -131,42 +133,42 @@ ibLinqBlockTotal Total(const wxString& name, ibLinqTotal function, const wxStrin
 // Every key is a column, reached from the group by its name.
 TEST(LinqBlock, AGroupAnswersWithItsKeys)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("o"), wxT("orders")));
 	block.m_groupKeys.push_back({ wxT("Customer"), wxT("o.Customer") });
 	block.m_groupInto = wxT("byCustomer");
 
-	wxString refusal;
+	ibString refusal;
 	EXPECT_EQ(wxT("From o In orders\nGroup o By o.Customer Into byCustomer\nSelect { Customer = byCustomer.Key }"),
-		block.Render(wxString(), refusal));
+		block.Render(ibString(), refusal));
 }
 
 // ⭐ SEVERAL KEYS ARE MADE INTO ONE, which a group compares by its contents; a group keeps the one field its
 // totals read, and a count reads none.
 TEST(LinqBlock, SeveralKeysAreMadeIntoOneAndTotalsReadWhatTheGroupKeeps)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("o"), wxT("orders")));
 	block.m_groupKeys.push_back({ wxT("Customer"), wxT("o.Customer") });
 	block.m_groupKeys.push_back({ wxT("Warehouse"), wxT("o.Warehouse") });
 	block.m_totals.push_back(Total(wxT("Amount"), ibLinqTotal::Sum, wxT("o.Amount")));
 	block.m_totals.push_back(Total(wxT("Largest"), ibLinqTotal::Max, wxT("o.Amount")));
-	block.m_totals.push_back(Total(wxT("Rows"), ibLinqTotal::Count, wxString()));
+	block.m_totals.push_back(Total(wxT("Rows"), ibLinqTotal::Count, ibString()));
 	block.m_groupInto = wxT("grp");
 
-	wxString refusal;
+	ibString refusal;
 	EXPECT_EQ(wxT("From o In orders\n")
 		wxT("Group o.Amount By New Structure(\"Customer, Warehouse\", o.Customer, o.Warehouse) Into grp\n")
 		wxT("Select { Customer = grp.Key.Customer, Warehouse = grp.Key.Warehouse, Amount = grp.Values.Sum(), ")
 		wxT("Largest = grp.Values.Max(), Rows = grp.Values.Count() }"),
-		block.Render(wxString(), refusal)) << refusal.ToStdString();
+		block.Render(ibString(), refusal)) << refusal.ToStdString();
 }
 
 // The rows are filtered before grouping; a condition on groups and the order come after the name, and an
 // order written by a total's name is that total.
 TEST(LinqBlock, AfterTheNameTheQueryReadsTheGroups)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("o"), wxT("orders")));
 	block.m_conditions.push_back(wxT("o.Posted"));
 	block.m_groupKeys.push_back({ wxT("Customer"), wxT("o.Customer") });
@@ -177,7 +179,7 @@ TEST(LinqBlock, AfterTheNameTheQueryReadsTheGroups)
 	block.m_order.push_back({ wxT("o.Customer"), false });
 	block.m_take = wxT("10");
 
-	wxString refusal;
+	ibString refusal;
 	EXPECT_EQ(wxT("From o In orders\n")
 		wxT("Where o.Posted\n")
 		wxT("Group o.Amount By o.Customer Into grp\n")
@@ -185,24 +187,24 @@ TEST(LinqBlock, AfterTheNameTheQueryReadsTheGroups)
 		wxT("OrderBy grp.Values.Sum() Descending, grp.Key\n")
 		wxT("Take 10\n")
 		wxT("Select { Customer = grp.Key, Amount = grp.Values.Sum() }"),
-		block.Render(wxString(), refusal)) << refusal.ToStdString();
+		block.Render(ibString(), refusal)) << refusal.ToStdString();
 }
 
 // Without a name the answer is the groups themselves, and nothing is read after them: the rows are
 // ordered and cut BEFORE the group - the only place the compiler reads an order then.
 TEST(LinqBlock, AGroupWithoutANameIsTheAnswer)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("o"), wxT("orders")));
 	block.m_groupKeys.push_back({ wxT("Customer"), wxT("o.Customer") });
 	block.m_skip = wxT("5");
 
-	wxString refusal;
-	EXPECT_EQ(wxT("From o In orders\nSkip 5\nGroup o By o.Customer"), block.Render(wxString(), refusal));
+	ibString refusal;
+	EXPECT_EQ(wxT("From o In orders\nSkip 5\nGroup o By o.Customer"), block.Render(ibString(), refusal));
 
 	// …so a column cannot be chosen: said, with the way out.
 	block.m_totals.push_back(Total(wxT("Amount"), ibLinqTotal::Sum, wxT("o.Amount")));
-	EXPECT_TRUE(block.Render(wxString(), refusal).IsEmpty());
+	EXPECT_TRUE(block.Render(ibString(), refusal).IsEmpty());
 	EXPECT_FALSE(refusal.IsEmpty());
 }
 
@@ -210,29 +212,29 @@ TEST(LinqBlock, AGroupWithoutANameIsTheAnswer)
 // meet as a name it cannot reach.
 TEST(LinqBlock, AColumnReadingARowIsRefusedOnceTheQueryGroups)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("o"), wxT("orders")));
 	block.m_groupKeys.push_back({ wxT("Customer"), wxT("o.Customer") });
 	block.m_groupInto = wxT("grp");
 	block.m_fields.push_back({ wxT("Date"), wxT("o.Date") });
 
-	wxString refusal;
-	EXPECT_TRUE(block.Render(wxString(), refusal).IsEmpty());
+	ibString refusal;
+	EXPECT_TRUE(block.Render(ibString(), refusal).IsEmpty());
 	EXPECT_NE(wxNOT_FOUND, refusal.Find(wxT("'o'"))) << refusal.ToStdString();
 
 	// Written over the group, it stands.
 	block.m_fields.front().m_expression = wxT("grp.Values");
-	EXPECT_FALSE(block.Render(wxString(), refusal).IsEmpty()) << refusal.ToStdString();
+	EXPECT_FALSE(block.Render(ibString(), refusal).IsEmpty()) << refusal.ToStdString();
 }
 
 TEST(LinqBlock, TotalsWithNothingGroupedAreRefused)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("o"), wxT("orders")));
 	block.m_totals.push_back(Total(wxT("Amount"), ibLinqTotal::Sum, wxT("o.Amount")));
 
-	wxString refusal;
-	EXPECT_TRUE(block.Render(wxString(), refusal).IsEmpty());
+	ibString refusal;
+	EXPECT_TRUE(block.Render(ibString(), refusal).IsEmpty());
 	EXPECT_FALSE(refusal.IsEmpty());
 }
 
@@ -240,17 +242,17 @@ TEST(LinqBlock, TotalsWithNothingGroupedAreRefused)
 
 TEST(LinqBlock, SkipAndTakeTakeANumberOfRows)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("o"), wxT("orders")));
-	wxString refusal;
+	ibString refusal;
 
 	for (const wxChar* count : { wxT("10"), wxT("pageSize"), wxT("pageSize * 2") }) {
 		block.m_take = count;
-		EXPECT_FALSE(block.Render(wxString(), refusal).IsEmpty()) << count;
+		EXPECT_FALSE(block.Render(ibString(), refusal).IsEmpty()) << count;
 	}
 	for (const wxChar* notACount : { wxT("\"10\""), wxT("10.5"), wxT("'x'") }) {
 		block.m_skip = notACount;
-		EXPECT_TRUE(block.Render(wxString(), refusal).IsEmpty()) << notACount;
+		EXPECT_TRUE(block.Render(ibString(), refusal).IsEmpty()) << notACount;
 		EXPECT_NE(wxNOT_FOUND, refusal.Find(wxT("Skip"))) << refusal.ToStdString();
 	}
 }
@@ -260,20 +262,20 @@ TEST(LinqBlock, SkipAndTakeTakeANumberOfRows)
 namespace {
 
 // Written, read, written again: the same text. What the constructor opens is what it would write.
-wxString RoundTrip(const ibLinqBlock& block)
+ibString RoundTrip(const ibLinqBlock& block)
 {
-	wxString refusal;
-	const wxString written = block.Render(wxString(), refusal);
-	ibLinqBlock read;
+	ibString refusal;
+	const ibString written = block.Render(ibString(), refusal);
+	ibLinqBlock read(CODE_CES);
 	EXPECT_TRUE(ibLinqBlock::Parse(written, read, refusal)) << refusal.ToStdString();
-	return read.Render(wxString(), refusal);
+	return read.Render(ibString(), refusal);
 }
 
 } // namespace
 
 TEST(LinqBlock, EveryClauseReadsBackAsItWasWritten)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("g"), wxT("Data.Catalogs.Goods")));
 	ibLinqBlockSource prices = Source(wxT("p"), wxT("prices"));
 	prices.m_join = true;
@@ -290,8 +292,8 @@ TEST(LinqBlock, EveryClauseReadsBackAsItWasWritten)
 	block.m_fields.push_back({ wxT("Price"), wxT("Round(p.Price, 2)") });   // a comma inside brackets is not a column's
 	block.m_distinct = true;
 
-	wxString refusal;
-	EXPECT_EQ(block.Render(wxString(), refusal), RoundTrip(block));
+	ibString refusal;
+	EXPECT_EQ(block.Render(ibString(), refusal), RoundTrip(block));
 }
 
 // ⭐ A GROUPED BLOCK READS BACK AS ITS PARTS, not as columns of text: the keys, the totals, the conditions
@@ -299,25 +301,25 @@ TEST(LinqBlock, EveryClauseReadsBackAsItWasWritten)
 // function spelled in the module's syntax.
 TEST(LinqBlock, AGroupReadsBackWithItsKeysAndTotals)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("o"), wxT("orders")));
 	block.m_conditions.push_back(wxT("o.Posted"));
 	block.m_groupKeys.push_back({ wxT("Customer"), wxT("o.Customer") });
 	block.m_groupKeys.push_back({ wxT("Warehouse"), wxT("o.Warehouse") });
 	block.m_totals.push_back(Total(wxT("Amount"), ibLinqTotal::Sum, wxT("o.Amount")));
 	block.m_totals.push_back(Total(wxT("Quantity"), ibLinqTotal::Average, wxT("o.Quantity")));
-	block.m_totals.push_back(Total(wxT("Rows"), ibLinqTotal::Count, wxString()));
+	block.m_totals.push_back(Total(wxT("Rows"), ibLinqTotal::Count, ibString()));
 	block.m_groupInto = wxT("grp");
 	block.m_groupConditions.push_back(wxT("grp.Values.Count() > 1"));
 	block.m_order.push_back({ wxT("Amount"), true });
 	block.m_fields.push_back({ wxT("Lines"), wxT("grp.Values") });
 
-	wxString refusal;
-	const wxString written = block.Render(wxString(), refusal);
+	ibString refusal;
+	const ibString written = block.Render(ibString(), refusal);
 	ASSERT_FALSE(written.IsEmpty()) << refusal.ToStdString();
 	EXPECT_EQ(written, RoundTrip(block));
 
-	ibLinqBlock read;
+	ibLinqBlock read(CODE_CES);
 	ASSERT_TRUE(ibLinqBlock::Parse(written, read, refusal)) << refusal.ToStdString();
 	ASSERT_EQ(2u, read.m_groupKeys.size());
 	EXPECT_EQ(wxT("o.Warehouse"), read.m_groupKeys[1].m_expression);
@@ -334,8 +336,8 @@ TEST(LinqBlock, AGroupReadsBackWithItsKeysAndTotals)
 // Written by a person: one key and one field kept, the key named by its column.
 TEST(LinqBlock, AGroupWrittenByHandIsRead)
 {
-	ibLinqBlock block;
-	wxString refusal;
+	ibLinqBlock block(CODE_CES);
+	ibString refusal;
 	ASSERT_TRUE(ibLinqBlock::Parse(
 		wxT("From t In transactions\n")
 		wxT("  Group t.Amount By t.Country Into g\n")
@@ -355,8 +357,8 @@ TEST(LinqBlock, AGroupWrittenByHandIsRead)
 // middle included, and a key that names none running ascending.
 TEST(LinqBlock, AnOrderReadsBackKeyByKey)
 {
-	ibLinqBlock block;
-	wxString refusal;
+	ibLinqBlock block(CODE_CES);
+	ibString refusal;
 	ASSERT_TRUE(ibLinqBlock::Parse(
 		wxT("From o In orders\n")
 		wxT("  OrderBy o.Warehouse, o.Date Descending, o.Item Ascending, o.Line\n")
@@ -376,8 +378,8 @@ TEST(LinqBlock, AnOrderReadsBackKeyByKey)
 // Written by a person, not by the constructor: other line breaks, other spacing, one column unnamed.
 TEST(LinqBlock, AQueryWrittenByHandIsRead)
 {
-	ibLinqBlock block;
-	wxString refusal;
+	ibLinqBlock block(CODE_CES);
+	ibString refusal;
 	ASSERT_TRUE(ibLinqBlock::Parse(
 		wxT("  From c In Data.Catalogs.Counterparties\n")
 		wxT("\t\tWhere c.TaxId <> \"\" And c.Phone = phone   // a comment, with a From in it\n")
@@ -395,13 +397,13 @@ TEST(LinqBlock, AQueryWrittenByHandIsRead)
 	EXPECT_EQ(wxT("c.Description"), block.m_fields[0].m_expression);
 
 	// …and written back bare, as it was.
-	EXPECT_NE(wxNOT_FOUND, block.Render(wxString(), refusal).Find(wxT("Select c.Description")));
+	EXPECT_NE(wxNOT_FOUND, block.Render(ibString(), refusal).Find(wxT("Select c.Description")));
 }
 
 TEST(LinqBlock, APartTheBlockDoesNotModelIsRefusedNotDropped)
 {
-	ibLinqBlock block;
-	wxString refusal;
+	ibLinqBlock block(CODE_CES);
+	ibString refusal;
 	EXPECT_FALSE(ibLinqBlock::Parse(wxT("From o In orders Var total = o.Qty * o.Price Select total"), block, refusal));
 	EXPECT_FALSE(refusal.IsEmpty());
 	EXPECT_FALSE(ibLinqBlock::Parse(wxT("x = 1"), block, refusal));
@@ -411,22 +413,22 @@ TEST(LinqBlock, APartTheBlockDoesNotModelIsRefusedNotDropped)
 
 TEST(LinqBlock, NothingToReadIsRefused)
 {
-	wxString refusal;
-	EXPECT_TRUE(ibLinqBlock().Render(wxString(), refusal).IsEmpty());
+	ibString refusal;
+	EXPECT_TRUE(ibLinqBlock(CODE_CES).Render(ibString(), refusal).IsEmpty());
 	EXPECT_FALSE(refusal.IsEmpty());
 }
 
 TEST(LinqBlock, AJoinWithoutItsKeysIsRefused)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("g"), wxT("goods")));
 	ibLinqBlockSource prices = Source(wxT("p"), wxT("prices"));
 	prices.m_join = true;
 	prices.m_leftKey = wxT("g.Ref");
 	block.m_sources.push_back(prices);
 
-	wxString refusal;
-	EXPECT_TRUE(block.Render(wxString(), refusal).IsEmpty());
+	ibString refusal;
+	EXPECT_TRUE(block.Render(ibString(), refusal).IsEmpty());
 	EXPECT_NE(wxNOT_FOUND, refusal.Find(wxT("'p'"))) << refusal.ToStdString();
 }
 
@@ -435,7 +437,7 @@ TEST(LinqBlock, AJoinWithoutItsKeysIsRefused)
 // still shows the block as it stands, so a preview does not go blank at the first wrong cell.
 TEST(LinqBlock, AnUnfinishedFieldIsRefusedAndTheDraftStillShowsIt)
 {
-	ibLinqBlock block;
+	ibLinqBlock block(CODE_CES);
 	block.m_sources.push_back(Source(wxT("g"), wxT("goods")));
 	ibLinqBlockSource prices = Source(wxT("p"), wxT("prices"));
 	prices.m_join = true;
@@ -443,11 +445,11 @@ TEST(LinqBlock, AnUnfinishedFieldIsRefusedAndTheDraftStillShowsIt)
 	prices.m_rightKey = wxT("p.");
 	block.m_sources.push_back(prices);
 
-	wxString refusal;
-	EXPECT_TRUE(block.Render(wxString(), refusal).IsEmpty());
+	ibString refusal;
+	EXPECT_TRUE(block.Render(ibString(), refusal).IsEmpty());
 	EXPECT_NE(wxNOT_FOUND, refusal.Find(wxT("'g.'"))) << refusal.ToStdString();
 
-	const wxString draft = block.RenderDraft(wxString(), refusal);
+	const ibString draft = block.RenderDraft(ibString(), refusal);
 	EXPECT_NE(wxNOT_FOUND, draft.Find(wxT("On g. Equals p."))) << draft.ToStdString();
 	EXPECT_FALSE(refusal.IsEmpty());
 }
@@ -456,15 +458,15 @@ TEST(LinqBlock, AnUnfinishedFieldIsRefusedAndTheDraftStillShowsIt)
 // the query ends with its answer - not where the text handed over does, nor where the compiler stopped.
 TEST(LinqBlock, AQueryLeftHalfWrittenIsReadToItsEnd)
 {
-	const wxString query =
+	const ibString query =
 		wxT("From g In goods\n")
 		wxT("    Join c In counterparties On g. Equals c.\n")
 		wxT("    Where c.DeletionMark = 1\n")
 		wxT("    Group g.Number By g.Ref Into grp\n")
 		wxT("    Select { Ref = grp.Key, Number = grp.Values.Average(), Column1 = 4 }");
 
-	ibLinqBlock block;
-	wxString refusal;
+	ibLinqBlock block(CODE_CES);
+	ibString refusal;
 	size_t consumed = 0;
 	ASSERT_TRUE(ibLinqBlock::Parse(query + wxT("\nMessage(q);\nx = 1;"), block, refusal, &consumed)) << refusal.ToStdString();
 	EXPECT_EQ(query.length(), consumed);
@@ -487,8 +489,8 @@ TEST(LinqBlock, AQueryLeftHalfWrittenIsReadToItsEnd)
 // reading this one as that would change the answer - refused, not reinterpreted.
 TEST(LinqBlock, RowsOrderedBeforeANamedGroupAreRefusedNotMoved)
 {
-	ibLinqBlock block;
-	wxString refusal;
+	ibLinqBlock block(CODE_CES);
+	ibString refusal;
 	EXPECT_FALSE(ibLinqBlock::Parse(
 		wxT("From o In orders OrderBy o.Date Group o By o.Customer Into grp Select { Customer = grp.Key }"), block, refusal));
 	EXPECT_FALSE(refusal.IsEmpty());

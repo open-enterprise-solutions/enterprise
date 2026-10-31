@@ -20,10 +20,10 @@ class ibValueMetaObjectTableDataRef;    // DB-backed tabular section (reference 
 class BACKEND_API ibTabularQueryable : public ibBackendQueryable {
 public:
 	explicit ibTabularQueryable(const ibValueMetaObjectTableDataRef* meta) : m_meta(meta) {}
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column + the owner Ref
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;   // attribute-by-name AS a column + the owner Ref
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;                   // the section's own attributes + Ref
-	virtual wxString GetQueryTableName() const override;
-	virtual wxString GetQueryName() const override;   // the section's user-facing name (change ledger)
+	virtual ibString GetQueryTableName() const override;
+	virtual ibString GetQueryName() const override;   // the section's user-facing name (change ledger)
 	virtual const ibMetaData* GetMetaData() const override;                  // metadata context for column-based value reads
 	virtual const ibUniqueKey& GetQueryTableGuid() const override;    // stated, not derived — see the body (its metaobject is a composite)
 	virtual ibMetaID GetQueryTableId() const override;
@@ -46,8 +46,8 @@ private:
 class BACKEND_API ibTabularSourceDescriptor : public ibQueryableSourceDescriptor {
 public:
 	explicit ibTabularSourceDescriptor(ibValueMetaObjectTableDataRef* meta);
-	wxString GetNamespace() const override;
-	wxString GetName() const override;
+	ibString GetNamespace() const override;
+	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	const ibBackendQueryable* GetQueryable() const { return &m_queryable; }   // the metaobject's GetQueryable() forwards here
 	// WHAT COLUMNS THIS SECTION HAS, asked without reading a row — the query constructor's
@@ -95,8 +95,8 @@ public:
 	virtual ~ibValueMetaObjectTableData();
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -196,11 +196,11 @@ protected:
 
 private:
 
-	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(wxT("Group"), _("Group"));
-	ibPropertyEnum<ibValueEnumItemMode>* m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, wxT("ItemMode"), _("Item mode"),
+	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(ibT("Group"), _("Group"));
+	ibPropertyEnum<ibValueEnumItemMode>* m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, ibT("ItemMode"), _("Item mode"),
 		_("In a catalog with folders: which nodes have this tabular section - items (the default), folders, or both. The other kind's form and record simply do not offer it."),
 		ibItemMode::ibItemMode_Item);
-	ibPropertyContainer<>* m_propertyNumberLine = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryGroup, ibValueMetaObjectCompositeData::CreateNumber(wxT("NumberLine"), _("N"),
+	ibPropertyContainer<>* m_propertyNumberLine = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryGroup, ibValueMetaObjectCompositeData::CreateNumber(ibT("NumberLine"), _("N"),
 		_("The row's number in the tabular section, 1-based, kept by the platform: renumbered when rows are added, deleted or moved, and written with the object. Read-only for code."), 6, 0));
 };
 
@@ -230,10 +230,10 @@ class BACKEND_API ibValueMetaObjectTableDataRef : public ibValueMetaObjectTableD
 	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
 
 	//physical DB table — only the DB variant has one.
-	virtual wxString GetPhysicalTableName() const {
+	virtual ibString GetPhysicalTableName() const {
 		ibValueMetaObject* parentMeta = GetParent();
 		wxASSERT(parentMeta);
-		return wxString::Format(wxT("%s%i_VT%i"),
+		return ibString::Format(ibT("%s%i_VT%i"),
 			parentMeta->GetClassName(),
 			parentMeta->GetMetaID(),
 			GetMetaID()

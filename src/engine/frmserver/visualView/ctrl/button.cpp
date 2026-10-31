@@ -2,7 +2,7 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frmserver/visualView/ctrl/form.h"           // ibValueForm — GetOwnerForm (the command-door gate)
 #include "frmserver/visualView/layers/commandBar.h"   // GatherFormCommands — the icon/caption source the navigator uses
-#include "frmserver/visualView/visualHost.h"          // ibVisualHost::SendPicture — the picture, by its id
+#include "backend/backend_picture.h"                  // ibBackendPicture::SendPicture — the picture, by its id
 
 
 //****************************************************************************
@@ -26,7 +26,7 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// The button's OWN Title / Picture win; where it sets nothing, the bound command provides the DEFAULT look —
 	// pulled straight FROM the command through the command door (ResolveValueByPath), not gathered. So a plain
 	// button shows its own text; a command button left blank shows the command's caption + icon.
-	wxString title = m_propertyTitle->GetValueAsTranslateString();
+	ibString title = m_propertyTitle->GetValueAsTranslateString();
 	ibPictureDescription picture = m_propertyPicture->GetValueAsPictureDesc();
 	const ibCommandDescription& cmdDesc = GetCommandDesc();
 	ibValueForm* const ownerForm = GetOwnerForm();
@@ -34,7 +34,7 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	bool cmdResolved = false;   // the bound command still resolves through the door — a button with no LIVE command hides
 	bool cmdPicAndText = true;  // the bound command's DEFAULT display (a standard action like Close is picture-only)
 	if (cmdDesc.IsOk() && ownerForm != nullptr) {
-		wxString cmdCaption; ibPictureDescription cmdPicture;
+		ibString cmdCaption; ibPictureDescription cmdPicture;
 		// THE one resolve (ResolveCommand on the door): walk + reliable gather fallback -> existence + caption + picture
 		// + modifies + default display, decided in ONE place so the button, the command bar and the inspector cell can't drift.
 		cmdResolved = ResolveCommand(cmdDesc, cmdCaption, cmdPicture, &cmdModifies, nullptr, &cmdPicAndText);
@@ -51,12 +51,11 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		                                      : ibRepresentation::ibRepresentation_PictureAndText;
 
 	// The caption is always written — it names the button even when only the picture is shown; the
-	// representation says which of the two are shown. The picture travels by its id (the host sends it once), and
-	// only when it is shown at all.
-	state.SetValue(wxT("Caption"), title);
-	state.SetValue(wxT("Representation"), static_cast<s32>(rep));
+	// representation says which of the two are shown. The picture travels by its id, and only when it is shown at all.
+	state.SetValue(ibProtocol::ibForm::ibState::Caption, title);
+	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<std::int32_t>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text && !picture.IsEmptyPicture())
-		state.SetValue(wxT("Picture"), host->SendPicture(picture));
+		state.SetValue(ibProtocol::ibForm::ibState::Picture, ibBackendPicture::SendPicture(picture, GetMetaData()));
 
 	// A button carries ONLY a command — with none bound, OR the bound command DELETED (its path no longer resolves
 	// through the door), it has nothing to do, so it is NOT shown. The orphaned control still lives in the object
@@ -64,37 +63,37 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// hides itself on a dead path — same rule whether the binding is empty or points at a gone command.
 	// Both answers below overwrite the window's own (SetField replaces; SetValue would write the key twice).
 	if (!cmdResolved)
-		state.SetField(wxT("Visible"), ibDataValue::Bool(false));
+		state.SetField(ibProtocol::ibForm::ibState::Visible, ibDataValue::Bool(false));
 	// A command button OBEYS the command's "modifies data" flag: a view-only form greys a data-changing command
 	// (controls aren't disabled in view-only, but command projections are — the same rule as the command bar).
 	else if (cmdModifies && ownerForm != nullptr && ownerForm->IsViewOnly())
-		state.SetField(wxT("Enabled"), ibDataValue::Bool(false));
+		state.SetField(ibProtocol::ibForm::ibState::Enabled, ibDataValue::Bool(false));
 
 	// A GROUP command opens its sub-commands (groups nest) — the client draws the submenu from these.
 	std::vector<ibFrontendCommandReceiver::ibCommandSubItem> subs;
 	if (cmdResolved && ResolveSubCommands(cmdDesc, subs)) {
 		std::vector<ibCommandDescription> leaves;
-		WalkGroup(subs, leaves, &state.Child(wxT("Members")), host);
+		WalkGroup(subs, leaves, &state.Child(ibProtocol::ibForm::ibButton::Members));
 	}
 }
 
 void ibValueButton::WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCommandSubItem>& subs,
-	std::vector<ibCommandDescription>& leaves, ibDataNode* node, ibVisualHost* host) const
+	std::vector<ibCommandDescription>& leaves, ibDataNode* node) const
 {
 	for (const ibFrontendCommandReceiver::ibCommandSubItem& sub : subs) {
 		ibDataNode* member = node != nullptr ? &node->AddChild(0, 0) : nullptr;
 		if (member != nullptr) {
-			member->SetValue(wxT("Caption"), sub.caption);
+			member->SetValue(ibProtocol::ibForm::ibButton::Caption, sub.caption);
 			if (!sub.picture.IsEmptyPicture())
-				member->SetValue(wxT("Picture"), host->SendPicture(sub.picture));
+				member->SetValue(ibProtocol::ibForm::ibButton::Picture, ibBackendPicture::SendPicture(sub.picture, GetMetaData()));
 		}
 		std::vector<ibFrontendCommandReceiver::ibCommandSubItem> nested;
 		if (ResolveSubCommands(sub.desc, nested)) {   // a GROUP -> its own submenu
-			WalkGroup(nested, leaves, member, host);
+			WalkGroup(nested, leaves, member);
 			continue;
 		}
 		if (member != nullptr)                        // a LEAF -> a place the press names
-			member->SetValue(wxT("Member"), static_cast<s32>(leaves.size()));
+			member->SetValue(ibProtocol::ibForm::ibButton::Member, static_cast<std::int32_t>(leaves.size()));
 		leaves.push_back(sub.desc);
 	}
 }

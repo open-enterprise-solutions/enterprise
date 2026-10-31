@@ -1,5 +1,5 @@
 #include "propertyCommandSource.h"
-#include "backend/propertyManager/property/variant/variantCommandSource.h"   // ibVariantDataCommandSource (holds the hop path)
+#include "backend/propertyManager/property/variant/variantCommandSource.h"   // ibVariantCommandSource (holds the hop path)
 #include "backend/backend_command.h"          // ibBackendCommandReceiver — the factory the variant casts to (+ dtor anchor)
 #include "core/serialize/dataBuilder.h"   // ibDataValue — node value (Binary blob of the hop path)
 
@@ -9,29 +9,27 @@ ibBackendCommandReceiver::~ibBackendCommandReceiver() {}
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyCommandSource::CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const wxString& display)
+ibVariant ibPropertyCommandSource::CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const ibString& display)
 {
 	// The owning button / bar item IS-A command-source factory (WalkCommand validates the binding) — the variant keeps
-	// it and checks existence SERVER-SIDE (runtime too), exactly as ibVariantDataSource keeps its source factory.
+	// it and checks existence SERVER-SIDE (runtime too), exactly as ibVariantSource keeps its source factory.
 	const ibBackendCommandReceiver* owner = dynamic_cast<const ibBackendCommandReceiver*>(property);
-	return new ibVariantDataCommandSource(owner, desc, display);
+	return ibVariant(new ibVariantCommandSource(owner, desc, display));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibCommandDescription& ibPropertyCommandSource::GetValueAsCommandDesc() const
 {
-	return get_cell_variant<ibVariantDataCommandSource>()->GetCommandDesc();
+	return get_cell_variant<ibVariantCommandSource>()->GetCommandDesc();
 }
 
-wxString ibPropertyCommandSource::GetValueAsString() const
+ibString ibPropertyCommandSource::GetValueAsString() const
 {
-	wxString s;
-	get_cell_variant<ibVariantDataCommandSource>()->Write(s);
-	return s;
+	return m_propValue.GetString();
 }
 
-void ibPropertyCommandSource::SetValue(const ibCommandDescription& desc, const wxString& display)
+void ibPropertyCommandSource::SetValue(const ibCommandDescription& desc, const ibString& display)
 {
 	m_propValue = CreateVariantData(GetPropertyObject(), desc, display);
 }
@@ -40,15 +38,15 @@ void ibPropertyCommandSource::SetValue(const ibCommandDescription& desc, const w
 
 bool ibPropertyCommandSource::IsEmptyProperty() const
 {
-	return get_cell_variant<ibVariantDataCommandSource>()->IsEmptyCommand();
+	return get_cell_variant<ibVariantCommandSource>()->IsEmptyCommand();
 }
 
-bool ibPropertyCommandSource::SetDataValue(const ibValue& WXUNUSED(varPropVal))
+bool ibPropertyCommandSource::SetDataValue(const ibValue& /*varPropVal*/)
 {
 	return false;   // a command source is bound + run by the button, never assigned as a script value
 }
 
-bool ibPropertyCommandSource::GetDataValue(ibValue& WXUNUSED(pvarPropVal)) const
+bool ibPropertyCommandSource::GetDataValue(ibValue& /*pvarPropVal*/) const
 {
 	return false;
 }
@@ -65,4 +63,15 @@ bool ibPropertyCommandSource::ReadNodeValue(const ibDataValue& value)
 bool ibPropertyCommandSource::WriteNodeValue(ibDataValue& value) const
 {
 	return ibCommandDescriptionMemory::WriteNode(value, GetValueAsCommandDesc());
+}
+
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
+
+bool ibPropertyCommandSource::GetProtocolValue(ibDataNode& row, ibReader reader)
+{
+	if (!ibProperty::GetProtocolValue(row, reader))
+		return false;
+	if (const ibBackendCommandReceiver* const receiver = get_cell_variant<ibVariantCommandSource>()->GetOwner())
+		receiver->WriteCommandTree(row.Child(ibProtocol::ibSchema::ibProperties::CommandTree));
+	return true;
 }

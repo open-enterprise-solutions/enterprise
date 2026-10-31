@@ -7,25 +7,29 @@
 #include <wx/wx.h>
 #include <wx/aui/auibar.h>
 
+#include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
 
 class ibAuiToolBar;
 
-// A COMMAND BAR — the State's CommandBar of a form, a table or a spreadsheet, drawn: the desktop's toolbar of a
-// command bar (frontend/visualView/layers/commandBar.cpp, BuildCommandBarToolBar) over the entries the server wrote,
+// A COMMAND BAR — the State's CommandBar of a form, a table or a spreadsheet, drawn: the old desktop's toolbar of a
+// command bar (BuildCommandBarToolBar) over the entries the server wrote,
 // not the commands it resolves. A press goes back as Command {Id[, Member]} to whoever the bar is — its owner's
 // `sendCommand` sends it.
 //
 // The tools take ids of the bar's own, by the entries' places: the server's ids are its numbers, not wx's.
-class ibViewCommandBar {
+class FRMCLIENT_API ibViewCommandBar {
 public:
 
 	// How the bar's owner sends a command pressed — Command {Id[, Member]}, to the control the bar is.
 	using ibSendCommand = std::function<void(const ibProtocolNode& args)>;
 
-	ibViewCommandBar(wxWindow* parent, ibSendCommand sendCommand);
+	// The host it is drawn in says whether it is edited — there it shows its real width (the desktop's SetDesignerMode).
+	ibViewCommandBar(wxWindow* parent, const class ibVisualHostClient& host, ibSendCommand sendCommand);
 
 	wxWindow* GetWindow() const;
+	// The entry drawn at that point of its window — none: no tool there (wx's FindToolByPosition).
+	ibProtocolNode FindEntryByPosition(const wxPoint& point) const;
 
 	// The entries drawn — built anew when they are others, only enabled or not when they are the same; the bar is
 	// hidden while it has none.
@@ -41,7 +45,7 @@ private:
 
 	ibAuiToolBar*       m_bar = nullptr;   // the parent's window
 	const ibSendCommand m_sendCommand;
-	std::string         m_shape;           // the entries as last built, less what is enabled
+	ibString            m_shape;           // the entries as last built, less what is enabled
 	ibProtocolNode      m_entries;         // a copy — a group's commands are read from it when it is pressed
 };
 

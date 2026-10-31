@@ -3,12 +3,12 @@
 
 #include <wx/wx.h>
 
-#ifdef BACKEND_EXPORTS
-#define BACKEND_API WXEXPORT
-#else
-#define BACKEND_API WXIMPORT
-#endif
+#include "core/core.h"   // IB_EXPORT / IB_IMPORT, IB_FORCEINLINE / IB_NOINLINE
 
-#include "core/core.h"   // IB_FORCEINLINE / IB_NOINLINE
+#ifdef BACKEND_EXPORTS
+#define BACKEND_API IB_EXPORT
+#else
+#define BACKEND_API IB_IMPORT
+#endif
 
 #endif

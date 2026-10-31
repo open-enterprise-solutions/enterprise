@@ -141,8 +141,12 @@ protected:
 				// Show() around an Update(); the cycle resets the pane's
 				// geometry to wxDefaultSize so it collapses down to the
 				// tab strip only. Freeze above hides the flicker this used
-				// to produce on the managed frame.
+				// to produce on the managed frame. Since wx 3.3.4 Update()
+				// stores the dock's size in its panes and a dock shown again
+				// takes it back, so the remembered size goes too - else the
+				// pane comes back at its expanded height, empty (2026-10-27).
 				paneInfo.BestSize(wxDefaultSize);
+				paneInfo.dock_size = 0;
 				paneInfo.Show(false);
 				m_frameManager->Update();
 				paneInfo.Show(true);

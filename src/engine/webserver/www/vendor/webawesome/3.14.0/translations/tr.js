@@ -1,0 +1,191 @@
+/*! Copyright 2026 Fonticons, Inc. - https://webawesome.com/license */
+import "../chunks/chunk.DL7HG4WM.js";
+import "../chunks/chunk.D5HA4OFX.js";
+import {
+  registerTranslation
+} from "../chunks/chunk.HOKYDFUG.js";
+import "../chunks/chunk.JHZRD2LV.js";
+
+// src/translations/tr.ts
+var translation = {
+  $code: "tr",
+  $name: "T\xFCrk\xE7e",
+  $dir: "ltr",
+  allTagsRemoved: "T\xFCm etiketler kald\u0131r\u0131ld\u0131",
+  am: "\xD6\xD6",
+  autosizeColumn: "S\xFCtunu otomatik boyutland\u0131r",
+  captions: "Altyaz\u0131lar",
+  carousel: "Atl\u0131kar\u0131nca",
+  chooseDate: "Tarih se\xE7in",
+  chooseDecade: "On y\u0131l se\xE7in",
+  chooseMonth: "Ay se\xE7in",
+  chooseTime: "Saat se\xE7in",
+  chooseYear: "Y\u0131l se\xE7in",
+  clearEntry: "Giri\u015Fi sil",
+  clearFilter: "Filtreyi temizle",
+  clearSort: "S\u0131ralamay\u0131 temizle",
+  close: "Kapat",
+  closeCalendar: "Takvimi kapat",
+  closeTimeInput: "Saat se\xE7iciyi kapat",
+  collapseRow: "Sat\u0131r\u0131 daralt",
+  columnMenu: "S\xFCtun se\xE7enekleri",
+  columnMovedToPosition: (label, position, total) => `${label} ${total} konumdan ${position}. konuma ta\u015F\u0131nd\u0131`,
+  columns: "S\xFCtunlar",
+  compactPageXOfY: (page, total) => `${page} / ${total}`,
+  completed: "Tamamland\u0131",
+  copied: "Kopyaland\u0131",
+  copy: "Kopya",
+  createOption: (value) => `"${value}" olu\u015Ftur`,
+  currentlyPlaying: "\u015Fu an oynat\u0131l\u0131yor",
+  currentValue: "Mevcut de\u011Fer",
+  date: "Tarih",
+  datePickerKeyboardHelp: "De\u011Ferleri de\u011Fi\u015Ftirmek i\xE7in ok tu\u015Flar\u0131n\u0131 kullan\u0131n; takvimi a\xE7mak i\xE7in Alt+A\u015Fa\u011F\u0131 Ok tu\u015Funa bas\u0131n.",
+  day: "G\xFCn",
+  dayPeriod: "\xD6\xD6/\xD6S",
+  decrement: "Azalt",
+  deselectAllRows: "T\xFCm sat\u0131rlar\u0131n se\xE7imini kald\u0131r",
+  disabled: "Devre d\u0131\u015F\u0131",
+  dropFileHere: "Drop file here or click to browse",
+  dropFilesHere: "Drop files here or click to browse",
+  empty: "Bo\u015F",
+  endDate: "Biti\u015F tarihi",
+  enterFullscreen: "Tam ekrana gir",
+  error: "Hata",
+  exitFullscreen: "Tam ekrandan \xE7\u0131k",
+  expandRow: "Sat\u0131r\u0131 geni\u015Flet",
+  filterByColumn: (label) => `${label} s\xFCtununa g\xF6re filtrele`,
+  filterFrom: "Ba\u015Flang\u0131\xE7",
+  filterMax: "En \xE7ok",
+  filterMin: "En az",
+  filterTo: "Biti\u015F",
+  firstPage: "\u0130lk sayfa",
+  goToSlide: (slide, count) => `${count} slayttan ${slide} slayta gidin`,
+  hideColumn: "S\xFCtunu gizle",
+  hidePassword: "\u015Eifreyi sakla",
+  hour: "Saat",
+  incompleteDate: "Ge\xE7erli bir tarih girin.",
+  increment: "Art\u0131r",
+  jumpBackwardX: (count) => `${count} sayfa geri atla`,
+  jumpForwardX: (count) => `${count} sayfa ileri atla`,
+  lastPage: "Son sayfa",
+  loading: "Y\xFCkleme",
+  locked: "Kilitli",
+  minute: "Dakika",
+  month: "Ay",
+  moreOptions: "Daha fazla se\xE7enek",
+  mute: "Sesi kapat",
+  nextDecade: "Sonraki on y\u0131l",
+  nextMonth: "Sonraki ay",
+  nextPage: "Sonraki sayfa",
+  nextSlide: "Sonraki slayt",
+  nextVideo: "Sonraki video",
+  nextYear: "Sonraki y\u0131l",
+  noData: "Veri yok",
+  noOptions: "Se\xE7enek yok",
+  noResults: "E\u015Fle\u015Fen sonu\xE7 yok",
+  notCompleted: "Tamamlanmad\u0131",
+  now: "\u015Eimdi",
+  numCharacters: (num) => {
+    if (num === 1) return "1 karakter";
+    return `${num} karakter`;
+  },
+  numCharactersRemaining: (num) => {
+    if (num === 1) return "1 karakter kald\u0131";
+    return `${num} karakter kald\u0131`;
+  },
+  numOptionsAvailable: (num) => {
+    if (num === 0) return "Kullan\u0131labilir se\xE7enek yok";
+    if (num === 1) return "1 se\xE7enek kullan\u0131labilir";
+    return `${num} se\xE7enek kullan\u0131labilir`;
+  },
+  numOptionsSelected: (num) => {
+    if (num === 0) return "Hi\xE7bir se\xE7enek se\xE7ilmedi";
+    if (num === 1) return "1 se\xE7enek se\xE7ildi";
+    return `${num} se\xE7enek se\xE7ildi`;
+  },
+  numRowsCopied: (num) => num === 1 ? "1 sat\u0131r kopyaland\u0131" : `${num} sat\u0131r kopyaland\u0131`,
+  numRowsSelected: (num) => num === 1 ? "1 sat\u0131r se\xE7ildi" : `${num} sat\u0131r se\xE7ildi`,
+  optionPosition: (label, position, total) => `${label}, ${position} / ${total}`,
+  optionsLoadError: "Se\xE7enekler y\xFCklenemedi",
+  pageXOfY: (page, total) => `Sayfa ${page} / ${total}`,
+  pagination: "Sayfaland\u0131rma",
+  pause: "Duraklat",
+  pauseAnimation: "Animasyonu duraklat",
+  pictureInPicture: "G\xF6r\xFCnt\xFC i\xE7inde g\xF6r\xFCnt\xFC",
+  pinLeft: "Sola sabitle",
+  pinRight: "Sa\u011Fa sabitle",
+  play: "Oynat",
+  playAnimation: "Animasyonu oynat",
+  playbackSpeed: "Oynatma h\u0131z\u0131",
+  playlist: "Oynatma listesi",
+  pm: "\xD6S",
+  previousDecade: "\xD6nceki on y\u0131l",
+  previousMonth: "\xD6nceki ay",
+  previousPage: "\xD6nceki sayfa",
+  previousSlide: "Bir onceki slayt",
+  previousVideo: "\xD6nceki video",
+  previousYear: "\xD6nceki y\u0131l",
+  progress: "\u0130lerleme",
+  rangeTooLong: (max) => {
+    if (max === 1) return "1 g\xFCnden uzun olmayan bir aral\u0131k se\xE7in";
+    return `${max} g\xFCnden uzun olmayan bir aral\u0131k se\xE7in`;
+  },
+  rangeTooShort: (min) => {
+    if (min === 1) return "En az 1 g\xFCn uzunlu\u011Funda bir aral\u0131k se\xE7in";
+    return `En az ${min} g\xFCn uzunlu\u011Funda bir aral\u0131k se\xE7in`;
+  },
+  readonly: "Salt okunur",
+  remove: "Kald\u0131r",
+  resetColumns: "S\xFCtunlar\u0131 s\u0131f\u0131rla",
+  resize: "Yeniden boyutland\u0131r",
+  resizeColumn: "S\xFCtunu yeniden boyutland\u0131r",
+  rowsPerPage: "Sayfa ba\u015F\u0131na sat\u0131r",
+  scrollableRegion: "Kayd\u0131r\u0131labilir alan",
+  scrollToEnd: "Sona kay",
+  scrollToStart: "Ba\u015Fa kay",
+  search: "Ara",
+  second: "Saniye",
+  seek: "Ara",
+  seekProgress: (current, duration) => `${current} / ${duration}`,
+  selectAColorFromTheScreen: "Ekrandan bir renk se\xE7in",
+  selectAllRows: "T\xFCm sat\u0131rlar\u0131 se\xE7",
+  selected: "Se\xE7ildi",
+  selectedDateLabel: (date) => `Se\xE7ilen: ${date}`,
+  selectedRangeLabel: (range) => `Se\xE7ilen aral\u0131k: ${range}`,
+  selectGroup: "Grubu se\xE7",
+  selectionCleared: "Se\xE7im temizlendi",
+  selectRow: "Sat\u0131r\u0131 se\xE7",
+  showingNofMRows: (shown, total) => `${total} sat\u0131rdan ${shown} tanesi g\xF6steriliyor`,
+  showingXtoYofZ: (start, end, total) => `${start}\u2013${end} / ${total}`,
+  showPassword: "\u015Eifreyi g\xF6ster",
+  slideNum: (slide) => `Slayt ${slide}`,
+  sortAscending: "Artan s\u0131rala",
+  sortColumn: "S\xFCtunu s\u0131rala",
+  sortDescending: "Azalan s\u0131rala",
+  startDate: "Ba\u015Flang\u0131\xE7 tarihi",
+  steps: "Ad\u0131mlar",
+  stepXOfY: (step, total) => `Ad\u0131m ${step} / ${total}`,
+  tagAdded: (tag) => `${tag} eklendi`,
+  tagAlreadyAdded: (tag) => `${tag} zaten eklendi`,
+  tagInputKeyboardHelp: "Bu etiketi kald\u0131rmak i\xE7in Backspace veya Delete tu\u015Funa bas\u0131n.",
+  tagRemoved: (tag) => `${tag} kald\u0131r\u0131ld\u0131`,
+  time: "Saat",
+  timeInputKeyboardHelp: "De\u011Ferleri de\u011Fi\u015Ftirmek i\xE7in ok tu\u015Flar\u0131n\u0131 kullan\u0131n; saat se\xE7iciyi a\xE7mak i\xE7in Alt+A\u015Fa\u011F\u0131 Ok tu\u015Funa bas\u0131n.",
+  today: "Bug\xFCn",
+  toggleColorFormat: "Renk bi\xE7imini de\u011Fi\u015Ftir",
+  tooFewTags: (min) => `En az ${min} etiket ekleyin`,
+  tooManyTags: (max) => `En fazla ${max} etiket ekleyin`,
+  unmute: "Sesi a\xE7",
+  unpin: "Sabitlemeyi kald\u0131r",
+  unpinColumn: "S\xFCtunun sabitlemesini kald\u0131r",
+  videoPlayer: "Video oynat\u0131c\u0131",
+  volume: "Ses seviyesi",
+  year: "Y\u0131l",
+  zoomIn: "Yak\u0131nla\u015Ft\u0131r",
+  zoomOut: "Uzakla\u015Ft\u0131r"
+};
+registerTranslation(translation);
+var tr_default = translation;
+export {
+  tr_default as default
+};

@@ -1,0 +1,191 @@
+/*! Copyright 2026 Fonticons, Inc. - https://webawesome.com/license */
+import "../chunks/chunk.DL7HG4WM.js";
+import "../chunks/chunk.D5HA4OFX.js";
+import {
+  registerTranslation
+} from "../chunks/chunk.HOKYDFUG.js";
+import "../chunks/chunk.JHZRD2LV.js";
+
+// src/translations/da.ts
+var translation = {
+  $code: "da",
+  $name: "Dansk",
+  $dir: "ltr",
+  allTagsRemoved: "Alle tags fjernet",
+  am: "AM",
+  autosizeColumn: "Tilpas kolonnebredde automatisk",
+  captions: "Undertekster",
+  carousel: "Karrusel",
+  chooseDate: "V\xE6lg dato",
+  chooseDecade: "V\xE6lg \xE5rti",
+  chooseMonth: "V\xE6lg m\xE5ned",
+  chooseTime: "V\xE6lg klokkesl\xE6t",
+  chooseYear: "V\xE6lg \xE5r",
+  clearEntry: "Ryd indtastning",
+  clearFilter: "Ryd filter",
+  clearSort: "Ryd sortering",
+  close: "Luk",
+  closeCalendar: "Luk kalender",
+  closeTimeInput: "Luk klokkesl\xE6tsv\xE6lger",
+  collapseRow: "Skjul r\xE6kke",
+  columnMenu: "Kolonneindstillinger",
+  columnMovedToPosition: (label, position, total) => `${label} flyttet til position ${position} af ${total}`,
+  columns: "Kolonner",
+  compactPageXOfY: (page, total) => `${page} af ${total}`,
+  completed: "Fuldf\xF8rt",
+  copied: "Kopieret",
+  copy: "Kopier",
+  createOption: (value) => `Opret "${value}"`,
+  currentlyPlaying: "afspilles nu",
+  currentValue: "Nuv\xE6rende v\xE6rdi",
+  date: "Dato",
+  datePickerKeyboardHelp: "Brug piletasterne til at \xE6ndre v\xE6rdier; tryk Alt+Pil ned for at \xE5bne kalenderen.",
+  day: "Dag",
+  dayPeriod: "AM/PM",
+  decrement: "Formindsk",
+  deselectAllRows: "Frav\xE6lg alle r\xE6kker",
+  disabled: "Deaktiveret",
+  dropFileHere: "Drop file here or click to browse",
+  dropFilesHere: "Drop files here or click to browse",
+  empty: "Tom",
+  endDate: "Slutdato",
+  enterFullscreen: "G\xE5 til fuldsk\xE6rm",
+  error: "Fejl",
+  exitFullscreen: "Afslut fuldsk\xE6rm",
+  expandRow: "Udvid r\xE6kke",
+  filterByColumn: (label) => `Filtr\xE9r efter ${label}`,
+  filterFrom: "Fra",
+  filterMax: "Maks.",
+  filterMin: "Min.",
+  filterTo: "Til",
+  firstPage: "F\xF8rste side",
+  goToSlide: (slide, count) => `G\xE5 til dias ${slide} af ${count}`,
+  hideColumn: "Skjul kolonne",
+  hidePassword: "Skjul adgangskode",
+  hour: "Time",
+  incompleteDate: "Indtast en gyldig dato.",
+  increment: "For\xF8g",
+  jumpBackwardX: (count) => `Spring ${count} sider tilbage`,
+  jumpForwardX: (count) => `Spring ${count} sider frem`,
+  lastPage: "Sidste side",
+  loading: "Indl\xE6ser",
+  locked: "L\xE5st",
+  minute: "Minut",
+  month: "M\xE5ned",
+  moreOptions: "Flere muligheder",
+  mute: "Sl\xE5 lyd fra",
+  nextDecade: "N\xE6ste \xE5rti",
+  nextMonth: "N\xE6ste m\xE5ned",
+  nextPage: "N\xE6ste side",
+  nextSlide: "N\xE6ste slide",
+  nextVideo: "N\xE6ste video",
+  nextYear: "N\xE6ste \xE5r",
+  noData: "Ingen data",
+  noOptions: "Ingen muligheder",
+  noResults: "Ingen matchende resultater",
+  notCompleted: "Ikke fuldf\xF8rt",
+  now: "Nu",
+  numCharacters: (num) => {
+    if (num === 1) return "1 tegn";
+    return `${num} tegn`;
+  },
+  numCharactersRemaining: (num) => {
+    if (num === 1) return "1 tegn tilbage";
+    return `${num} tegn tilbage`;
+  },
+  numOptionsAvailable: (num) => {
+    if (num === 0) return "Ingen tilg\xE6ngelige muligheder";
+    if (num === 1) return "1 mulighed tilg\xE6ngelig";
+    return `${num} muligheder tilg\xE6ngelige`;
+  },
+  numOptionsSelected: (num) => {
+    if (num === 0) return "Ingen valgt";
+    if (num === 1) return "1 valgt";
+    return `${num} valgt`;
+  },
+  numRowsCopied: (num) => num === 1 ? "1 r\xE6kke kopieret" : `${num} r\xE6kker kopieret`,
+  numRowsSelected: (num) => num === 1 ? "1 r\xE6kke valgt" : `${num} r\xE6kker valgt`,
+  optionPosition: (label, position, total) => `${label}, ${position} af ${total}`,
+  optionsLoadError: "Mulighederne kunne ikke indl\xE6ses",
+  pageXOfY: (page, total) => `Side ${page} af ${total}`,
+  pagination: "Sidenavigation",
+  pause: "S\xE6t p\xE5 pause",
+  pauseAnimation: "Pause animation",
+  pictureInPicture: "Billede i billede",
+  pinLeft: "Fastg\xF8r til venstre",
+  pinRight: "Fastg\xF8r til h\xF8jre",
+  play: "Afspil",
+  playAnimation: "Afspil animation",
+  playbackSpeed: "Afspilningshastighed",
+  playlist: "Afspilningsliste",
+  pm: "PM",
+  previousDecade: "Forrige \xE5rti",
+  previousMonth: "Forrige m\xE5ned",
+  previousPage: "Forrige side",
+  previousSlide: "Forrige dias",
+  previousVideo: "Forrige video",
+  previousYear: "Forrige \xE5r",
+  progress: "Status",
+  rangeTooLong: (max) => {
+    if (max === 1) return "V\xE6lg et interval p\xE5 h\xF8jst 1 dag";
+    return `V\xE6lg et interval p\xE5 h\xF8jst ${max} dage`;
+  },
+  rangeTooShort: (min) => {
+    if (min === 1) return "V\xE6lg et interval p\xE5 mindst 1 dag";
+    return `V\xE6lg et interval p\xE5 mindst ${min} dage`;
+  },
+  readonly: "Skrivebeskyttet",
+  remove: "Fjern",
+  resetColumns: "Nulstil kolonner",
+  resize: "Tilpas st\xF8rrelse",
+  resizeColumn: "Tilpas kolonnebredde",
+  rowsPerPage: "R\xE6kker pr. side",
+  scrollableRegion: "Rullebar region",
+  scrollToEnd: "Scroll til slut",
+  scrollToStart: "Scroll til start",
+  search: "S\xF8g",
+  second: "Sekund",
+  seek: "S\xF8g",
+  seekProgress: (current, duration) => `${current} af ${duration}`,
+  selectAColorFromTheScreen: "V\xE6lg en farve fra sk\xE6rmen",
+  selectAllRows: "V\xE6lg alle r\xE6kker",
+  selected: "Valgt",
+  selectedDateLabel: (date) => `Valgt: ${date}`,
+  selectedRangeLabel: (range) => `Valgt interval: ${range}`,
+  selectGroup: "V\xE6lg gruppe",
+  selectionCleared: "Valg ryddet",
+  selectRow: "V\xE6lg r\xE6kke",
+  showingNofMRows: (shown, total) => `Viser ${shown} af ${total} r\xE6kker`,
+  showingXtoYofZ: (start, end, total) => `${start}\u2013${end} af ${total}`,
+  showPassword: "Vis adgangskode",
+  slideNum: (slide) => `Slide ${slide}`,
+  sortAscending: "Sort\xE9r stigende",
+  sortColumn: "Sort\xE9r kolonne",
+  sortDescending: "Sort\xE9r faldende",
+  startDate: "Startdato",
+  steps: "Trin",
+  stepXOfY: (step, total) => `Trin ${step} af ${total}`,
+  tagAdded: (tag) => `${tag} tilf\xF8jet`,
+  tagAlreadyAdded: (tag) => `${tag} er allerede tilf\xF8jet`,
+  tagInputKeyboardHelp: "Tryk p\xE5 Backspace eller Delete for at fjerne dette tag.",
+  tagRemoved: (tag) => `${tag} fjernet`,
+  time: "Klokkesl\xE6t",
+  timeInputKeyboardHelp: "Brug piletasterne til at \xE6ndre v\xE6rdier; tryk Alt+Pil ned for at \xE5bne klokkesl\xE6tsv\xE6lgeren.",
+  today: "I dag",
+  toggleColorFormat: "Skift farveformat",
+  tooFewTags: (min) => min === 1 ? "Tilf\xF8j mindst 1 tag" : `Tilf\xF8j mindst ${min} tags`,
+  tooManyTags: (max) => max === 1 ? "Tilf\xF8j h\xF8jst 1 tag" : `Tilf\xF8j h\xF8jst ${max} tags`,
+  unmute: "Sl\xE5 lyd til",
+  unpin: "Frig\xF8r",
+  unpinColumn: "Frig\xF8r kolonne",
+  videoPlayer: "Videoafspiller",
+  volume: "Lydstyrke",
+  year: "\xC5r",
+  zoomIn: "Zoom ind",
+  zoomOut: "Zoom ud"
+};
+registerTranslation(translation);
+var da_default = translation;
+export {
+  da_default as default
+};

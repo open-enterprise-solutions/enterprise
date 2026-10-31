@@ -11,9 +11,10 @@
 #include <map>
 #include "backend/system/value/valueMap.h"
 #include "backend/backend_exception.h"
+#include "backend/propertyManager/property/variant/variantNumber.h"
 
 namespace {
-ibValue Field(const wxChar* k) { return ibValue(wxString(k)); }
+ibValue Field(const wxChar* k) { return ibValue(ibString(k)); }
 }
 
 TEST(ValueStructure, EmptyByDefault) {
@@ -38,7 +39,7 @@ TEST(ValueStructure, PropertyMissReturnsFalse) {
 }
 
 TEST(ValueStructure, ConstructFromStringMap) {
-    std::map<wxString, ibValue> m;
+    std::map<ibString, ibValue> m;
     m[wxT("A")] = ibValue(ibNumber(1));
     m[wxT("B")] = ibValue(ibNumber(2));
     ibValueStructure s(m);
@@ -127,7 +128,7 @@ TEST(ValueStructure, AFieldIsAProperty) {
 TEST(ValueStructure, AFieldIsNamedAndReachedByItsName) {
     ibValueStructure s;
     s.Insert(Field(wxT("Name")), ibValue(ibNumber(7)));
-    EXPECT_EQ(s.GetPropName(0), wxString(wxT("Name")));
+    EXPECT_EQ(s.GetPropName(0), ibString(wxT("Name")));
     EXPECT_EQ(s.FindProp(s.GetPropName(0)), 0);
 }
 
@@ -174,8 +175,8 @@ TEST(ValueStructure, GetAnswersAFieldInAnyCaseOrUndefined) {
 TEST(ValueStructure, FieldsAreFoundTheSameWalkedAndIndexed) {
     ibValueStructure s;
     const int kFields = 20;   // well past the threshold
-    auto name = [](int i) { return ibValue(wxString::Format(wxT("Field%d"), i)); };
-    auto upper = [](int i) { return ibValue(wxString::Format(wxT("FIELD%d"), i)); };
+    auto name = [](int i) { return ibValue(ibString::Format(wxT("Field%d"), i)); };
+    auto upper = [](int i) { return ibValue(ibString::Format(wxT("FIELD%d"), i)); };
 
     for (int i = 0; i < kFields; ++i) {
         s.Insert(name(i), ibValue(ibNumber(i)));
@@ -241,8 +242,8 @@ TEST(ValueClone, APrimitiveIsItsOwnCopy) {
 	const ibValue copy = num.CloneValue();
 	EXPECT_EQ(copy.GetInteger(), 42);
 
-	const ibValue str(wxString(wxT("text")));
-	EXPECT_STREQ(str.CloneValue().GetString().c_str(), wxT("text"));
+	const ibValue str(ibString(wxT("text")));
+	EXPECT_EQ(str.CloneValue().GetString(), ibT("text"));
 
 	const ibValue empty;
 	EXPECT_TRUE(empty.CloneValue().IsEmpty()) << "an empty value copies to an empty one";
@@ -294,4 +295,20 @@ TEST(ValueClone, ATypeMayStateItsOwnCopy) {
 
 	ibValueOwnCopy value;
 	EXPECT_EQ(value.CloneValue().GetInteger(), 7);
+}
+
+// A PROPERTY'S VARIANT IS COPIED AS ITSELF. Copying a TYPE_VALUE object through the base makes a reference to the
+// source, so a variant class without a copy constructor of its own would share its state with the original, silently.
+TEST(PropertyVariantCopy, ACopyIsItsOwnObject) {
+	ibVariantNumber source(ibNumber(5));
+	ibVariantNumber copy(source);
+	EXPECT_EQ(copy.GetType(), ibValueTypes::TYPE_VALUE);
+	source.SetNumber(ibNumber(6));
+	EXPECT_EQ(copy.GetNumber(), ibNumber(5));
+}
+
+// The runtime holds its own values only: a property's variant handed to it is refused aloud, not left empty.
+TEST(PropertyVariantCopy, TheRuntimeRefusesAPropertysVariant) {
+	const ibVariant property(new ibVariantNumber(ibNumber(5)));
+	EXPECT_THROW((void)ibValue(property), ibBackendException);
 }

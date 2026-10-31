@@ -16,7 +16,7 @@
 
 #include "frmclient/frmclient.h"
 #include "frmclient/backend/backend_picture.h"     // …and what the desktop's form.h brought with it: the engine's pictures
-#include "frmclient/backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 #include "frmclient/visualView/ctrl/form.h"
 
 ///////////////////////////////////////////////////////////////////////////////

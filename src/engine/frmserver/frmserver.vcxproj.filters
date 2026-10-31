@@ -10,17 +10,26 @@
     <Filter Include="docView\templates">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4008}</UniqueIdentifier>
     </Filter>
+    <Filter Include="docView\templates\designer">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4020}</UniqueIdentifier>
+    </Filter>
     <Filter Include="mcp">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4003}</UniqueIdentifier>
     </Filter>
     <Filter Include="mcp\tools">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="metaTree">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4012}</UniqueIdentifier>
+    </Filter>
     <Filter Include="schema">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4009}</UniqueIdentifier>
     </Filter>
     <Filter Include="schema\runtime">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="schema\designer">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4011}</UniqueIdentifier>
     </Filter>
     <Filter Include="settings">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4004}</UniqueIdentifier>
@@ -46,16 +55,25 @@
     <Filter Include="win\dlgs\settings\list">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="win\dlgs\settings\composer">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4010}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="frmserver.cpp" />
     <ClCompile Include="client\clientChildFrame.cpp">
       <Filter>client</Filter>
     </ClCompile>
+    <ClCompile Include="client\clientDebugger.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
     <ClCompile Include="client\clientFrame.cpp">
       <Filter>client</Filter>
     </ClCompile>
     <ClCompile Include="client\clientFrameDesigner.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\propertyInspector.cpp">
       <Filter>client</Filter>
     </ClCompile>
     <ClCompile Include="client\clientFrameRuntime.cpp">
@@ -100,6 +118,54 @@
     <ClCompile Include="docView\templates\docViewDataReportFile.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewDataProcessorEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewMetaFile.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewDataReportEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewFormEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewFormEditAttribute.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewFormEditCmd.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewFormEditCommand.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewModuleEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewSpreadsheetEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewAssistant.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewCommonAttributeEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewFunctionalOptionEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewComposerEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\queryConstructorRequest.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewInterfaceEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewRoleEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
     <ClCompile Include="docView\templates\docViewHelp.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
@@ -112,8 +178,20 @@
     <ClCompile Include="docView\templates\docViewText.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolForms.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
     <ClCompile Include="mcp\tools\mcpToolProtocol.cpp">
       <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="metaTree\treeConfiguration.cpp">
+      <Filter>metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="metaTree\treeDataProcessor.cpp">
+      <Filter>metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="metaTree\treeDataReport.cpp">
+      <Filter>metaTree</Filter>
     </ClCompile>
     <ClCompile Include="schema\about.cpp">
       <Filter>schema</Filter>
@@ -121,10 +199,55 @@
     <ClCompile Include="schema\activeUser.cpp">
       <Filter>schema</Filter>
     </ClCompile>
+    <ClCompile Include="schema\auditLog.cpp">
+      <Filter>schema</Filter>
+    </ClCompile>
     <ClCompile Include="schema\clientSchema.cpp">
       <Filter>schema</Filter>
     </ClCompile>
+    <ClCompile Include="schema\languages.cpp">
+      <Filter>schema</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\mcpServer.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\assistant.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\metaData.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\homePage.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\objectText.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\configCompare.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\database.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\debugger.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\predefined.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\properties.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\types.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\userList.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
     <ClCompile Include="schema\runtime\allFunctions.cpp">
+      <Filter>schema\runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\runtime\debugging.cpp">
       <Filter>schema\runtime</Filter>
     </ClCompile>
     <ClCompile Include="schema\runtime\sections.cpp">
@@ -148,17 +271,32 @@
     <ClCompile Include="visualView\visualHostDocView.cpp">
       <Filter>visualView</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\applyChange.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\formEditor.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\formSelector.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\generation.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\selectPredefined.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\settings\settingsRequest.cpp">
       <Filter>win\dlgs\settings</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\settings\list\listSettings.cpp">
       <Filter>win\dlgs\settings\list</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\settings\composer\composerSettings.cpp">
+      <Filter>win\dlgs\settings\composer</Filter>
     </ClCompile>
     <ClCompile Include="visualView\layers\commandBar.cpp">
       <Filter>visualView\layers</Filter>
@@ -197,12 +335,6 @@
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\checkbox_res.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="visualView\ctrl\choice.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="visualView\ctrl\combobox.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\control.cpp">
@@ -296,9 +428,6 @@
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\itemsizer.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="visualView\ctrl\listbox.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\notebook.cpp">
@@ -418,10 +547,16 @@
     <ClInclude Include="client\clientChildFrame.h">
       <Filter>client</Filter>
     </ClInclude>
+    <ClInclude Include="client\clientDebugger.h">
+      <Filter>client</Filter>
+    </ClInclude>
     <ClInclude Include="client\clientFrame.h">
       <Filter>client</Filter>
     </ClInclude>
     <ClInclude Include="client\clientFrameDesigner.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\propertyInspector.h">
       <Filter>client</Filter>
     </ClInclude>
     <ClInclude Include="client\clientFrameRuntime.h">
@@ -469,6 +604,45 @@
     <ClInclude Include="docView\templates\docViewDataReportFile.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewDataProcessorEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewMetaFile.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewDataReportEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewFormEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewModuleEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewSpreadsheetEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewAssistant.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewCommonAttributeEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewFunctionalOptionEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewComposerEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\queryConstructorRequest.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewInterfaceEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewRoleEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
     <ClInclude Include="docView\templates\docViewHelp.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
@@ -481,16 +655,70 @@
     <ClInclude Include="docView\templates\docViewText.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
+    <ClInclude Include="metaTree\treeConfiguration.h">
+      <Filter>metaTree</Filter>
+    </ClInclude>
+    <ClInclude Include="metaTree\treeDataProcessor.h">
+      <Filter>metaTree</Filter>
+    </ClInclude>
+    <ClInclude Include="metaTree\treeDataReport.h">
+      <Filter>metaTree</Filter>
+    </ClInclude>
     <ClInclude Include="schema\about.h">
       <Filter>schema</Filter>
     </ClInclude>
     <ClInclude Include="schema\activeUser.h">
       <Filter>schema</Filter>
     </ClInclude>
+    <ClInclude Include="schema\auditLog.h">
+      <Filter>schema</Filter>
+    </ClInclude>
     <ClInclude Include="schema\clientSchema.h">
       <Filter>schema</Filter>
     </ClInclude>
+    <ClInclude Include="schema\languages.h">
+      <Filter>schema</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\mcpServer.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\assistant.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\metaData.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\homePage.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\objectText.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\configCompare.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\database.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\debugger.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\predefined.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\properties.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\types.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\userList.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
     <ClInclude Include="schema\runtime\allFunctions.h">
+      <Filter>schema\runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\runtime\debugging.h">
       <Filter>schema\runtime</Filter>
     </ClInclude>
     <ClInclude Include="schema\runtime\sections.h">
@@ -517,17 +745,32 @@
     <ClInclude Include="visualView\visualHost.h">
       <Filter>visualView</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\applyChange.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\formEditor.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\formSelector.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\generation.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\selectPredefined.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\settings\savedSettings.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\settingsRequest.h">
       <Filter>win\dlgs\settings</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\settings\list\listSettings.h">
       <Filter>win\dlgs\settings\list</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\composer\composerSettings.h">
+      <Filter>win\dlgs\settings\composer</Filter>
     </ClInclude>
     <ClInclude Include="visualView\layers\commandBar.h">
       <Filter>visualView\layers</Filter>
@@ -585,18 +828,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="res">
-      <UniqueIdentifier>{3a8c43ef-66aa-4a5f-9a8d-dfe454435925}</UniqueIdentifier>
-    </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="res\resource.h">
-      <Filter>res</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="res\frmserver.rc">
-      <Filter>res</Filter>
-    </ResourceCompile>
+    <ResourceCompile Include="frmserver.rc" />
   </ItemGroup>
 </Project>

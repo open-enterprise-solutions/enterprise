@@ -78,10 +78,9 @@ TEST(ClsidTest, SameNameDifferentKindDiffers) {
 
 // --- within ONE kind the known names stay unique (56-bit body) ---
 TEST(ClsidTest, WithinKindUniqueness) {
-    const char* known[] = { "VL_UNDF", "VL_BOOL", "VL_NUMB",
-                            "VL_DATE", "VL_STRI", "VL_NULL" };
-    std::set<ibClassID> ids;
-    for (const char* n : known) ids.insert(primitive_to_clsid(n));
+    const ibClassID known[] = { primitive_to_clsid("VL_UNDF"), primitive_to_clsid("VL_BOOL"), primitive_to_clsid("VL_NUMB"),
+                                primitive_to_clsid("VL_DATE"), primitive_to_clsid("VL_STRI"), primitive_to_clsid("VL_NULL") };
+    const std::set<ibClassID> ids(std::begin(known), std::end(known));
     EXPECT_EQ(ids.size(), std::size(known));
 }
 
@@ -96,6 +95,6 @@ TEST(ClsidTest, NoneKindLeavesTopByteZero) {
 TEST(ClsidTest, ClsidToStringIsHex) {
     const ibClassID id = value_to_clsid("VL_NUMB");
     EXPECT_EQ(clsid_to_string(id),
-              wxString::Format(wxT("0x%016llX"), static_cast<uint64_t>(id)));
+              ibString::Format(wxT("0x%016llX"), static_cast<uint64_t>(id)));
     EXPECT_EQ(clsid_to_string(0), wxEmptyString);
 }

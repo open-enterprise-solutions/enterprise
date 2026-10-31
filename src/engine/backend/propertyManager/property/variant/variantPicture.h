@@ -2,70 +2,61 @@
 #define __PICTURE_VARIANT_H__
 
 #include "backend/backend_core.h"
+#include "core/variant.h"
 #include "backend/propertyManager/propertyObject.h"
 #include "backend/backend_picture.h"
 
-class BACKEND_API ibVariantDataExternalPicture : public wxVariantData {
-	wxString MakeString() const;
+class BACKEND_API ibVariantExternalPicture : public ibVariant {
 public:
 
 	bool IsEmptyPicture() const { return m_pictureExternalFile.IsEmptyPicture(); }
 
-	ibExternalPictureDescription& GetExternalPictureDesc() { return m_pictureExternalFile; }
+	const ibExternalPictureDescription& GetExternalPictureDesc() const { return m_pictureExternalFile; }
+	// ⭐ WHICH PICTURE IT HOLDS — a guid new with each picture it is given and kept by its copies: what a configuration
+	// picture's id carries (ibBackendPicture::SendPicture), so a client asks anew for one changed since. Not written with
+	// the picture: one read is given a new one.
+	const ibGuid& GetPictureVersion() const { return m_version; }
 
-	wxString GetPictureFileName() const;
-	wxBitmap GetPictureBitmap(const wxSize& size = wxSize(16, 16)) const;
+	ibString GetPictureFileName() const;
+	ibPicture GetPicture(const ibSize& size = ibSize(16, 16)) const;
 
-	void SetFromExternalFile(const ibExternalPictureDescription& container) { m_pictureExternalFile = container; }
+	void SetFromExternalFile(const ibExternalPictureDescription& container) {
+		m_pictureExternalFile = container;
+		m_version = wxNewUniqueGuid;
+	}
 
-	ibVariantDataExternalPicture(const ibExternalPictureDescription& container = ibExternalPictureDescription())
-		: m_pictureExternalFile(container)
+	ibVariantExternalPicture(const ibExternalPictureDescription& container = ibExternalPictureDescription())
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_pictureExternalFile(container), m_version(wxNewUniqueGuid)
 	{
 	}
 
-	ibVariantDataExternalPicture(const ibVariantDataExternalPicture& src) :
-		wxVariantData(), m_pictureExternalFile(src.m_pictureExternalFile)
+	ibVariantExternalPicture(const ibVariantExternalPicture& src) :
+		ibVariant(ibValueTypes::TYPE_VALUE), m_pictureExternalFile(src.m_pictureExternalFile), m_version(src.m_version)
 	{
 	}
 
-	virtual ibVariantDataExternalPicture* Clone() const { return new ibVariantDataExternalPicture(*this); }
-
-	virtual bool Eq(wxVariantData& data) const {
-		ibVariantDataExternalPicture* srcData = dynamic_cast<ibVariantDataExternalPicture*>(&data);
+	virtual bool CompareValueEQ(const ibVariant& data) const override {
+		const ibVariantExternalPicture* srcData = dynamic_cast<const ibVariantExternalPicture*>(data.GetRef());
 		if (srcData != nullptr)
 			return m_pictureExternalFile == srcData->m_pictureExternalFile;
 		return false;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const { return wxT("ibVariantDataExternalPicture"); }
+	virtual ibString GetString() const override;
 
 protected:
 
 	ibExternalPictureDescription m_pictureExternalFile;
+	ibGuid m_version;
 };
 
-class BACKEND_API ibVariantDataPicture : public wxVariantData {
-	wxString MakeString() const;
+class BACKEND_API ibVariantPicture : public ibVariant {
 public:
 
 	bool IsEmptyPicture() const { return m_pictureDesc.IsEmptyPicture(); }
 
 	ibPictureDescription& GetPictureDesc() { return m_pictureDesc; }
-	wxBitmap GetPictureBitmap(const wxSize& size = wxSize(16, 16)) const;
-
-	ibVariantDataExternalPicture* CloneExternalPicture() const { return m_externalPicture->Clone(); }
+	ibPicture GetPicture(const ibSize& size = ibSize(16, 16)) const;
 
 	void SetPictureType(ibPictureType type) { m_pictureDesc.m_type = type; }
 
@@ -77,65 +68,57 @@ public:
 	const ibPropertyObject* GetOwner() { return m_ownerProperty; }
 
 	//set picture data 
-	ibVariantDataPicture(const ibPropertyObject* prop, const ibClassID& id) :
-		m_ownerProperty(prop), m_pictureDesc(id)
+	ibVariantPicture(const ibPropertyObject* prop, const ibClassID& id) :
+		ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_pictureDesc(id)
 	{
-		m_externalPicture = new ibVariantDataExternalPicture();
+		m_externalPicture = new ibVariantExternalPicture();
+		m_externalPicture->IncrRef();   // this value's own hold on it
 	}
 
-	ibVariantDataPicture(const ibPropertyObject* prop, const ibMetaID& id) :
-		m_ownerProperty(prop), m_pictureDesc(id)
+	ibVariantPicture(const ibPropertyObject* prop, const ibMetaID& id) :
+		ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_pictureDesc(id)
 	{
-		m_externalPicture = new ibVariantDataExternalPicture();
+		m_externalPicture = new ibVariantExternalPicture();
+		m_externalPicture->IncrRef();   // this value's own hold on it
 	}
 
-	ibVariantDataPicture(const ibPropertyObject* prop, const ibExternalPictureDescription& container) :
-		m_ownerProperty(prop), m_pictureDesc(container)
+	ibVariantPicture(const ibPropertyObject* prop, const ibExternalPictureDescription& container) :
+		ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_pictureDesc(container)
 	{
-		m_externalPicture = new ibVariantDataExternalPicture(container);
+		m_externalPicture = new ibVariantExternalPicture(container);
+		m_externalPicture->IncrRef();   // this value's own hold on it
 	}
 
-	ibVariantDataPicture(const ibPropertyObject* prop, const ibPictureDescription& pictureDesc) :
-		m_ownerProperty(prop), m_pictureDesc(pictureDesc)
+	ibVariantPicture(const ibPropertyObject* prop, const ibPictureDescription& pictureDesc) :
+		ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_pictureDesc(pictureDesc)
 	{
-		m_externalPicture = new ibVariantDataExternalPicture(pictureDesc.m_img_data);
+		m_externalPicture = new ibVariantExternalPicture(pictureDesc.m_img_data);
+		m_externalPicture->IncrRef();   // this value's own hold on it
 	}
 
-	ibVariantDataPicture(const ibVariantDataPicture& src) :
-		wxVariantData(), m_ownerProperty(src.m_ownerProperty), m_pictureDesc(src.m_pictureDesc)
+	ibVariantPicture(const ibVariantPicture& src) :
+		ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(src.m_ownerProperty), m_pictureDesc(src.m_pictureDesc)
 	{
-		m_externalPicture = new ibVariantDataExternalPicture(*src.m_externalPicture);
+		m_externalPicture = new ibVariantExternalPicture(*src.m_externalPicture);
+		m_externalPicture->IncrRef();   // this value's own hold on it
 	}
 
-	virtual ~ibVariantDataPicture() { m_externalPicture->DecRef(); }
-	virtual ibVariantDataPicture* Clone() const { return new ibVariantDataPicture(*this); }
+	virtual ~ibVariantPicture() { m_externalPicture->DecrRef(); }
 
-	virtual bool Eq(wxVariantData& data) const {
-		ibVariantDataPicture* srcData = dynamic_cast<ibVariantDataPicture*>(&data);
+	virtual bool CompareValueEQ(const ibVariant& data) const override {
+		const ibVariantPicture* srcData = dynamic_cast<const ibVariantPicture*>(data.GetRef());
 		if (srcData != nullptr)
-			return m_pictureDesc == srcData->m_pictureDesc && m_externalPicture->Eq(*srcData->m_externalPicture);
+			return m_pictureDesc == srcData->m_pictureDesc && m_externalPicture->CompareValueEQ(*srcData->m_externalPicture);
 		return false;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const { return wxT("ibVariantDataPicture"); }
+	virtual ibString GetString() const override;
 
 protected:
 
 	const ibPropertyObject* m_ownerProperty = nullptr;
 	ibPictureDescription m_pictureDesc;
-	ibVariantDataExternalPicture* m_externalPicture = nullptr;
+	ibVariantExternalPicture* m_externalPicture = nullptr;
 };
 
 #endif

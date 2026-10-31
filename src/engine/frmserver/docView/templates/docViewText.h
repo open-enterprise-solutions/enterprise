@@ -16,9 +16,9 @@ public:
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnDraw(ibDataNode& frame) override;
 
-	virtual ibClientViewKind GetViewKind() const override { return ibClientViewKind::Text; }
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Text; }
 	// The text the person typed on the client, handed over (Change {Text}) — the document's text from then on.
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 protected:
 
@@ -39,16 +39,16 @@ class FRMSERVER_API ibTextDocument : public ibDocument
 {
 public:
 
-	virtual ibServerPicture GetIcon() const {
-		return ibBackendPicture::GetServerPicture(g_metaCommonModuleCLSID);
+	virtual ibPictureDescription GetIcon() const {
+		return ibPictureDescription(g_metaCommonModuleCLSID);
 	}
 
 	ibTextDocument() : ibDocument() {}
 
 	// The text — the document's own: it is what the desktop's editor held.
-	const wxString& GetText() const { return m_text; }
+	const ibString& GetText() const { return m_text; }
 	// …changed: modified, when it is another text.
-	void SetText(const wxString& text) {
+	void SetText(const ibString& text) {
 		if (text == m_text)
 			return;
 		m_text = text;
@@ -57,9 +57,10 @@ public:
 
 protected:
 
-	wxString m_text;
+	ibString m_text;
 
-	wxDECLARE_NO_COPY_CLASS(ibTextDocument);
+	ibTextDocument(const ibTextDocument&) = delete;
+	ibTextDocument& operator=(const ibTextDocument&) = delete;
 	wxDECLARE_ABSTRACT_CLASS(ibTextDocument);
 };
 
@@ -74,10 +75,10 @@ public:
 	ibTextFileDocument() : ibTextDocument() {}
 
 	// THE TEXT FORMAT, said once: the text template is registered with it (the ibDocManager ctor).
-	static wxString FileMask() { return wxT("*.txt;*.text"); }
-	static wxString FileExtensions() { return wxT("txt;text"); }
+	static ibString FileMask() { return ibT("*.txt;*.text"); }
+	static ibString FileExtensions() { return ibT("txt;text"); }
 
-	virtual bool OnCreate(const wxString& path, long flags) override;
+	virtual bool OnCreate(const ibString& path, long flags) override;
 	virtual bool OnNewDocument() override {
 
 		// notice that there is no need to either reset nor even check the
@@ -89,7 +90,7 @@ public:
 
 		SetDocumentSaved(false);
 
-		const wxString name = GetDocumentManager()->MakeNewDocumentName();
+		const ibString name = GetDocumentManager()->MakeNewDocumentName();
 
 		SetTitle(name);
 		SetFilename(name, true);
@@ -100,10 +101,11 @@ public:
 
 protected:
 
-	virtual bool DoSaveDocument(const wxString& filename) override;
-	virtual bool DoOpenDocument(const wxString& filename) override;
+	virtual bool DoSaveDocument(const ibString& filename) override;
+	virtual bool DoOpenDocument(const ibString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibTextFileDocument);
+	ibTextFileDocument(const ibTextFileDocument&) = delete;
+	ibTextFileDocument& operator=(const ibTextFileDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibTextFileDocument);
 };
 

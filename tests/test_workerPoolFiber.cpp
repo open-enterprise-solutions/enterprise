@@ -54,7 +54,7 @@ private:
 	bool                    m_set = false;
 };
 
-std::shared_ptr<ibSession> MakeSession(const wxString& id)
+std::shared_ptr<ibSession> MakeSession(const ibString& id)
 {
 	return std::make_shared<ibSession>(id, ibSessionKind::Designer);
 }
@@ -363,7 +363,7 @@ TEST(WorkerPoolFiber, StopUnwindsParkedFibers)
 	sessions.reserve(n);
 	futures.reserve(n);
 	for (int i = 0; i < n; ++i) {
-		sessions.push_back(MakeSession(wxString::Format(wxT("stop-%d"), i)));
+		sessions.push_back(MakeSession(ibString::Format(wxT("stop-%d"), i)));
 		ibSession* raw = sessions.back().get();
 		futures.push_back(pool.Submit(raw, [raw, &pool, &parked] {
 			pool.Await(raw, [counted = false, &parked]() mutable {
@@ -519,7 +519,7 @@ TEST(WorkerPoolFiber, OpenQuestionsDoNotGrowOsThreads)
 	sessions.reserve(n);
 	futures.reserve(n);
 	for (int i = 0; i < n; ++i) {
-		sessions.push_back(MakeSession(wxString::Format(wxT("open-%d"), i)));
+		sessions.push_back(MakeSession(ibString::Format(wxT("open-%d"), i)));
 		ibSession* raw = sessions.back().get();
 		futures.push_back(pool.Submit(raw, [raw, &pool, &waiting, &go] {
 			pool.Await(raw, [counted = false, &waiting, &go]() mutable {
@@ -613,7 +613,7 @@ TEST(WorkerPoolFiber, MeasuresThreadsAndMemory)
 		sessions.reserve(static_cast<std::size_t>(n));
 		futures.reserve(static_cast<std::size_t>(n));
 		for (int i = 0; i < n; ++i) {
-			sessions.push_back(MakeSession(wxString::Format(wxT("measure-%d-%d"), n, i)));
+			sessions.push_back(MakeSession(ibString::Format(wxT("measure-%d-%d"), n, i)));
 			ibSession* raw = sessions.back().get();
 			futures.push_back(pool.Submit(raw, [raw, &pool, &waiting, &go] {
 				pool.Await(raw, [counted = false, &waiting, &go]() mutable {

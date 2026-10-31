@@ -13,7 +13,9 @@
 #include "backend/session/session.h"            // ibSession — the caller a rented run borrows from
 #include "backend/job/jobManager.h"             // ibJobManager / ibJobTenancy — the rented run a portion reads on
 #include "backend/backend_exception.h"          // ibBackendException — a refusal to rent falls back to inline
-#include "backend/tabularModelView.h"           // ibDataViewModel / ibDataViewItem — the base view types
+#include "backend/appHost.h"                    // ibApplicationInstanceScope — a plain-thread read works for the asker's base
+#include "backend/system/value/valueType.h"     // ibValueTypeDescription (a column's Types), ibBackendTypeConfigFactory (its format)
+#include "core/tabular/tabularModelView.h"      // ibDataViewModel / ibDataViewItem — the base view types
 #include "backend/composition/dataComposer.h"  // ibDataComposer — IsGroupedModel reads GroupCount() off the composer
 #include "backend/uniqueKey.h"                  // ibUniqueKey — GetItemKey return (base default = no key)
 
@@ -60,12 +62,12 @@ ibValueModel::ibComposerNode::ibComposerNode(const std::map<ibMetaID, ibValue>& 
 // LIVE storage rows THROUGH this (m_valueTable set → the storage IS updated + the model refreshes); a DB-list
 // COPY node (m_valueTable null, self-contained) just mirrors into the copy for the inline editor (the grid is
 // read-only — a real edit goes through the object form). No write-back source / backing index any more.
-bool ibValueModel::ibComposerNode::SetValue(const ibMetaID& id, const ibValue& variant, bool notify)
+bool ibValueModel::ibComposerNode::SetValue(unsigned int col, const ibValue& variant, bool notify)
 {
-	auto iterator = m_nodeValues.find(id);
+	auto iterator = m_nodeValues.find(col);
 	if (iterator == m_nodeValues.end())
 		return false;
-	ibValue& cValue = m_nodeValues.at(id);
+	ibValue& cValue = m_nodeValues.at(col);
 
 	// 🛑 THE VALUE FIRST, THE NEWS AFTER IT. The notification went out while the cell still held the OLD
 	// value, and whatever reacts to it — the view recomputing the row, a handler reading the cell — read
@@ -75,7 +77,7 @@ bool ibValueModel::ibComposerNode::SetValue(const ibMetaID& id, const ibValue& v
 	const bool changed = cValue != variant;
 	cValue = variant;
 	if (notify && m_valueTable != nullptr && changed)
-		m_valueTable->RowValueChanged(this, id);
+		m_valueTable->RowValueChanged(this, col);
 	return true;
 }
 
@@ -141,6 +143,40 @@ ibComposerNode* ibValueModelStorage::NewRow() const
 	return row;
 }
 
+long ibValueModelStorage::IndexOf(const ibValue& row) const
+{
+	// A row of another model, or of no model any more, is not among these rows: GetRow answers -1 for it.
+	ibValueModelReturnLine* line = nullptr;
+	return row.ConvertToValue(line) ? GetRow(line->GetLineItem()) : wxNOT_FOUND;
+}
+
+ibValue ibValueModelStorage::TotalOf(const ibString& column) const
+{
+	ibValueModelColumnCollection* const columns = GetColumnCollection();
+	const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
+		columns != nullptr ? columns->GetColumnByName(column) : nullptr;
+	if (colInfo == nullptr)
+		ibBackendCoreException::Error(_("Table column '%s' not found"), column);
+
+	const ibMetaID id = static_cast<ibMetaID>(colInfo->GetColumnID());
+	ibNumber total(0);
+	for (long row = 0; row < GetRowCount(); ++row) {
+		ibComposerNode* const node = m_storage.GetNode(row);
+		if (node == nullptr)
+			continue;
+		const ibValue cell = node->GetTableValue(id);
+		if (cell.GetType() == ibValueTypes::TYPE_NUMBER) {
+			total += cell.GetNumber();
+			continue;
+		}
+		if (cell.IsEmpty())
+			continue;   // nothing there adds nothing
+		ibBackendCoreException::Error(_("Table column '%s' holds a value that is not a number (row %d); a column added without a type holds text - declare it as a Number"),
+			column, static_cast<int>(row + 1));
+	}
+	return ibValue(total);
+}
+
 ibValueModel::~ibValueModel()
 {
 	// A READ MUST NOT OUTLIVE WHAT IT IS READING. The rented run walks this model
@@ -187,6 +223,18 @@ void ibValueModel::CancelFetch()
 //  consumers that needed a {col-id, asc} pair — the keyset anchor + the frontend header arrows — now read
 //  m_composer.GetSortAt + GetColumnIDByName inline, each at the point of use. Max: "ibSortModel is either part
 //  of L5, or removed entirely" — L5 is name-based, so it was removed.)
+
+void ibDataViewModelProvider::SubmitFetchAsync(std::function<void()> work)
+{
+	if (!work)
+		return;
+
+	ibApplicationInstance* const applicationInstance = ibApplicationInstance::Get(false);
+	ibDataViewModel::SubmitFetchAsync([work = std::move(work), applicationInstance]() {
+		ibApplicationInstanceScope working(applicationInstance);
+		work();
+	});
+}
 
 void ibValueModel::SubmitFetchAsync(std::function<void()> work)
 {
@@ -375,20 +423,19 @@ bool ibValueModel::GetCompositionAttrByRow(const ibDataViewItem& row, unsigned i
 	// the setting's rules made ready for the cell asked (a list asks for what fits on its screen, and can afford it),
 	// a field found among the model's columns by its name, a subtree by the composer that feeds this model.
 	const ibDataComposer& composer = GetModelComposer();
-	const std::vector<ibCompositionRule> rules = ibCompositionRulesOf(composer.GetCurrentConditionalAppearanceDesc());
+	const std::vector<ibCompositionRule> rules = ibCompositionRulesOf(composer.GetCurrentConditionalAppearanceDesc(), composer.GetMetaData());
 	std::deque<ibValue> read;   // what the engine is handed stays where it is while the condition is read
-	const ibCompositionValueOf valueOf = [this, node, &read](const wxString& path) -> const ibValue* {
+	const ibCompositionValueOf valueOf = [this, node, &read](const ibString& path) -> const ibValue* {
 		const ibMetaID id = GetColumnIDByName(path);
 		ibValue value;
 		if (id == wxNOT_FOUND || !node->GetValue(id, value))
 			return nullptr;
-		read.push_back(value);
-		return &read.back();
+		return &read.emplace_back(value);
 	};
 	attr = ibCompositionAttr();
 	ibCompositionAttr own;
-	const bool held = ibCompositionSayRules(rules, valueOf, composer.SubtreeOf(), attr,
-		[this, col, &own](const wxString& field, const ibCompositionAttr& said) {
+	const bool held = ibCompositionSayRules(rules, composer.GetMetaData(), valueOf, composer.SubtreeOf(), attr,
+		[this, col, &own](const ibString& field, const ibCompositionAttr& said) {
 			if (GetColumnIDByName(field) == static_cast<ibMetaID>(col))
 				own.Say(said);
 		});
@@ -440,7 +487,7 @@ bool ibValueModel::GetAttrByRow(const ibDataViewItem& row, unsigned int col, ibD
 	return !attr.IsDefault();
 }
 
-void ibValueModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
+void ibValueModel::GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const
 {
 	GetValueByRow(variant, item, col);
 	if (!HasAttrByRow(item))
@@ -452,9 +499,9 @@ void ibValueModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsi
 	ibValue value;
 	if (const ibComposerNode* node = GetViewData<ibComposerNode>(item))
 		node->GetValue(static_cast<ibMetaID>(col), value);
-	wxString text;
+	ibString text;
 	if (drawn.TextOf(value, text))
-		variant = new ibVariantDataValueModel(ibValue(text));
+		variant = ibValue(text);
 }
 
 // RAM-backed models have NO source primary key (RunComposerPage stamps an EMPTY row-key for them) → restore by
@@ -503,7 +550,7 @@ std::shared_ptr<ibValueIteratorState> ibValueModel::CreateIterator()
 	return ibValue::CreateIterator();
 }
 
-#include "backend/picturePredefined.h"   // g_pic*CLSID — the standard command icons
+#include "core/picturePredefined.h"   // g_pic*CLSID — the standard command icons
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
@@ -527,11 +574,11 @@ enum Prop {
 
 void ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(wxT("Name"));
-	helper.AppendProp(wxT("Types"));
-	helper.AppendProp(wxT("Caption"));
-	helper.AppendProp(wxT("Width"));
-	helper.AppendProp(wxT("Indexing"));
+	helper.AppendProp(ibT("Name"));
+	helper.AppendProp(ibT("Types"));
+	helper.AppendProp(ibT("Caption"));
+	helper.AppendProp(ibT("Width"));
+	helper.AppendProp(ibT("Indexing"));
 }
 
 bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
@@ -599,12 +646,12 @@ ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ibValueModel
 	return nullptr;
 }
 
-ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ibValueModel::ibValueModelColumnCollection::GetColumnByName(const wxString& colName) const
+ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ibValueModel::ibValueModelColumnCollection::GetColumnByName(const ibString& colName) const
 {
 	for (unsigned int idx = 0; idx < GetColumnCount(); idx++) {
 		ibValueModelColumnInfo* columnInfo = GetColumnInfo(idx);
 		wxASSERT(columnInfo);
-		if (stringUtils::CompareString(colName, columnInfo->GetColumnName()))
+		if (stringUtils::IsSameAs(colName, columnInfo->GetColumnName()))
 			return columnInfo;
 	}
 

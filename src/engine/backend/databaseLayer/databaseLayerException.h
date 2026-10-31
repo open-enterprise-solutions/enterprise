@@ -80,10 +80,10 @@ public:
 	// for business-level callers that know the category but don't have
 	// a driver error to pass. Driver code should prefer
 	// ibDatabaseLayerException::Throw below.
-	[[noreturn]] static void Throw(Kind kind, const wxString& msg);
+	[[noreturn]] static void Throw(Kind kind, const ibString& msg);
 
 protected:
-	ibBackendDatabaseException(Kind kind, const wxString& msg)
+	ibBackendDatabaseException(Kind kind, const ibString& msg)
 		: ibBackendException(msg), m_kind(kind) {}
 
 private:
@@ -106,21 +106,21 @@ public:
 	// Out-of-line — see IsRetryable comment above for the BACKEND_API
 	// + inline + lambda export issue.
 	int             GetDriverErrorCode() const;
-	const wxString& GetSqlState()         const;
+	const ibString& GetSqlState()         const;
 
 	[[noreturn]] static void Throw(Kind kind, int nativeCode,
-	                                const wxString& sqlState,
-	                                const wxString& msg);
+	                                const ibString& sqlState,
+	                                const ibString& msg);
 
 private:
 	ibDatabaseLayerException(Kind kind, int nativeCode,
-	                          const wxString& sqlState, const wxString& msg)
+	                          const ibString& sqlState, const ibString& msg)
 		: ibBackendDatabaseException(kind, msg)
 		, m_nativeCode(nativeCode)
 		, m_sqlState(sqlState) {}
 
 	int      m_nativeCode = 0;
-	wxString m_sqlState;
+	ibString m_sqlState;
 };
 
 // (The QUERY-layer varieties moved to query/queryException.h — they are raised on L3-L5 and had no

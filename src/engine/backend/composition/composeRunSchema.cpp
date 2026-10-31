@@ -8,7 +8,7 @@
 
 #include "backend/composition/composeEvaluate.h"   // a parameter WORKED OUT where the data is
 
-#include "backend/compositionDescription.h"
+#include "backend/backend_composition.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/composition/dataComposer.h"                 // ibDataDBComposer - the composer this builds
 #include "backend/composition/drivers/tableComposeDriver.h"   // ...and the two readers of its walk
@@ -22,7 +22,7 @@
 #include "backend/system/value/valueType.h"                   // AdjustValue - the declared type wins
 #include "backend/system/value/valueDataComposition.h"        // ibSyncParameters - the text declares its parameters
 #include "backend/backend_exception.h"
-#include "core/stringUtils.h"                              // CompareString - how this tree compares a NAME
+#include "core/stringUtils.h"                              // IsSameAs - how this tree compares a NAME
 
 #include <algorithm>
 #include <memory>
@@ -32,7 +32,7 @@ namespace {
 // The refusals here are read by an ASSISTANT rather than shown in somebody's window, so they are not
 // run through the translation macro - the same choice every MCP description makes, for the same
 // reason: one wording, and it is the wording the caller was written against.
-#define ibComposeText(text) wxString(wxT(text))
+#define ibComposeText(text) ibString(ibT(text))
 
 // ⭐⭐ A FIGURE TRAVELS AS MORE THAN ITS SPELLING. Everything in this family writes values as text,
 // which is right when a person reads them and wrong here: this exists to COMPARE numbers, and a
@@ -46,12 +46,12 @@ namespace {
 ibDataValue ValueEntry(const ibValue& value)
 {
 	std::shared_ptr<ibDataNode> out = std::make_shared<ibDataNode>();
-	out->SetValue(wxT("text"), value.GetString());
+	out->SetValue(ibT("text"), value.GetString());
 	switch (value.GetType()) {
-	case ibValueTypes::TYPE_NUMBER:  out->AddField(wxT("number"), ibDataValue::Number(value.GetNumber())); break;
-	case ibValueTypes::TYPE_BOOLEAN: out->AddField(wxT("bool"),   ibDataValue::Bool(value.GetBoolean())); break;
-	case ibValueTypes::TYPE_DATE:    out->AddField(wxT("date"),   ibDataValue::Date(value.GetDate())); break;
-	case ibValueTypes::TYPE_NULL:    out->SetValue(wxT("null"),   true); break;
+	case ibValueTypes::TYPE_NUMBER:  out->AddField(ibT("number"), ibDataValue::Number(value.GetNumber())); break;
+	case ibValueTypes::TYPE_BOOLEAN: out->AddField(ibT("bool"),   ibDataValue::Bool(value.GetBoolean())); break;
+	case ibValueTypes::TYPE_DATE:    out->AddField(ibT("date"),   ibDataValue::Date(value.GetDate())); break;
+	case ibValueTypes::TYPE_NULL:    out->SetValue(ibT("null"),   true); break;
 	default: break;   // a reference, an enum, a composite - the presentation is what there is
 	}
 	return ibDataValue::Child(out);
@@ -107,22 +107,22 @@ ibValue ValueFrom(const ibDataValue& given)
 ibDataValue NodeEntry(const ibComposedNode& node)
 {
 	std::shared_ptr<ibDataNode> out = std::make_shared<ibDataNode>();
-	out->SetValue(wxT("level"), (s32)node.m_level);
+	out->SetValue(ibT("level"), (std::int32_t)node.m_level);
 	if (node.m_indent != 0)
-		out->SetValue(wxT("indent"), (s32)node.m_indent);
-	out->SetValue(wxT("heading"), node.m_isHeading);
+		out->SetValue(ibT("indent"), (std::int32_t)node.m_indent);
+	out->SetValue(ibT("heading"), node.m_isHeading);
 	// The fold's fact and the output's promise - two questions, and a reader checking whether a
 	// report adds up wants the first; one deciding whether to offer an expander wants the second.
 	if (node.m_hasChildren)
-		out->SetValue(wxT("hasChildren"), node.m_hasChildren);
+		out->SetValue(ibT("hasChildren"), node.m_hasChildren);
 	if (node.m_showsWhatIsUnder)
-		out->SetValue(wxT("showsWhatIsUnder"), node.m_showsWhatIsUnder);
+		out->SetValue(ibT("showsWhatIsUnder"), node.m_showsWhatIsUnder);
 
 	std::vector<ibDataValue> values;
 	values.reserve(node.m_values.size());
 	for (const ibValue& v : node.m_values)
 		values.push_back(ValueEntry(v));
-	out->AddField(wxT("values"), ibDataValue::Array(values));
+	out->AddField(ibT("values"), ibDataValue::Array(values));
 
 	// ⭐⭐ WHERE IT STOOD. Without this a figure is a number nobody can place: the walk emits one node
 	// at a time and carries the position in a cursor of its own, so the address has to travel WITH
@@ -138,7 +138,7 @@ ibDataValue NodeEntry(const ibComposedNode& node)
 				stepValues.push_back(ValueEntry(v));
 			path.push_back(ibDataValue::Array(stepValues));
 		}
-		out->AddField(wxT("path"), ibDataValue::Array(path));
+		out->AddField(ibT("path"), ibDataValue::Array(path));
 	}
 	return ibDataValue::Child(out);
 }
@@ -149,13 +149,13 @@ ibDataValue ColumnEntry(const ibComposedColumn& column)
 	// Three different things, and not interchangeable: the title is what a person reads, the name is
 	// what a script says, the id is what a value is keyed by - and an aggregate or a dot-walk has no
 	// source column at all, so it answers with its alias and no id.
-	out->SetValue(wxT("title"), column.m_title);
+	out->SetValue(ibT("title"), column.m_title);
 	if (!column.m_name.IsEmpty() && column.m_name != column.m_title)
-		out->SetValue(wxT("name"), column.m_name);
+		out->SetValue(ibT("name"), column.m_name);
 	if (!column.m_alias.IsEmpty())
-		out->SetValue(wxT("alias"), column.m_alias);
+		out->SetValue(ibT("alias"), column.m_alias);
 	if (column.m_hasId)
-		out->SetValue(wxT("id"), (s32)column.m_id);
+		out->SetValue(ibT("id"), (std::int32_t)column.m_id);
 	return ibDataValue::Child(out);
 }
 
@@ -165,10 +165,10 @@ void WriteColumns(ibDataNode& into, const ibComposedDriverBase& driver)
 	columns.reserve(driver.Columns().size());
 	for (const ibComposedColumn& c : driver.Columns())
 		columns.push_back(ColumnEntry(c));
-	into.AddField(wxT("columns"), ibDataValue::Array(columns));
+	into.AddField(ibT("columns"), ibDataValue::Array(columns));
 }
 
-void WriteNodes(ibDataNode& into, const wxString& field, const std::vector<ibComposedNode>& nodes)
+void WriteNodes(ibDataNode& into, const ibString& field, const std::vector<ibComposedNode>& nodes)
 {
 	std::vector<ibDataValue> out;
 	out.reserve(nodes.size());
@@ -179,7 +179,7 @@ void WriteNodes(ibDataNode& into, const wxString& field, const std::vector<ibCom
 
 }   // namespace
 
-bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxString& refusal)
+bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, ibString& refusal)
 {
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 		refusal = ibComposeText("This application has no configuration open, so there is nothing to "
@@ -193,15 +193,16 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	//
 	// `activeMetaData` is still needed, and only for the setting's own VALUES: a filter's right-hand
 	// side may be a reference or an enum member, and those live in a configuration's registry rather
-	// than in the node.
-	const ibDataNode* schemaNode = request.FindChild(kComposeSchema);
-	if (schemaNode == nullptr) {
+	// than in the node. The read keeps them packed; the composer restores them against the
+	// configuration it is given below.
+	auto schemaNode = request.FindChild(kComposeSchema);
+	if (!schemaNode) {
 		refusal = ibComposeText("No schema came with the request. Nothing was composed.");
 		return false;
 	}
 
 	ibCompositionDescription description;
-	if (!ibCompositionDescriptionMemory::ReadNode(*schemaNode, description, activeMetaData)) {
+	if (!ibCompositionDescriptionMemory::ReadNode(*schemaNode, description)) {
 		refusal = ibComposeText("The schema that arrived could not be read as a composition.");
 		return false;
 	}
@@ -240,9 +241,9 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	// ⭐ THE SETTINGS SECTION AS IT WAS CHOSEN. The designer folded the author's variant and whoever's
 	// saved setting into one section before sending it, so there is one thing to apply and no order
 	// to get wrong on this side.
-	if (const ibDataNode* settingsNode = request.FindChild(kComposeSettings)) {
+	if (auto settingsNode = request.FindChild(kComposeSettings)) {
 		ibSettingsDescription settings;
-		if (!ibSettingsDescriptionMemory::ReadNode(*settingsNode, settings, activeMetaData)) {
+		if (!ibSettingsDescriptionMemory::ReadNode(*settingsNode, settings)) {
 			refusal = ibComposeText("The settings that arrived could not be read.");
 			return false;
 		}
@@ -265,7 +266,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	// obliged to agree and nothing enforces it. Converging them is a change to the composition
 	// value's own setup and is not made from here.
 	{
-		const ibDataNode* given = request.FindChild(kComposeParameters);
+		auto given = request.FindChild(kComposeParameters);
 
 		for (const ibParameterDescription& parameter : description.m_parameters) {
 			if (parameter.m_name.IsEmpty())
@@ -273,16 +274,16 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 
 			// WHAT THE CALLER SAID ABOUT THIS ONE, asked BY NAME rather than section-wide: somebody
 			// who stated a period said nothing about any other parameter.
-			const ibDataValue* stated     = given != nullptr ? given->FindField(parameter.m_name) : nullptr;
-			const ibDataNode*  statedNode = given != nullptr ? given->FindChild(parameter.m_name) : nullptr;
+			auto stated     = given ? given->FindField(parameter.m_name) : std::nullopt;
+			auto statedNode = given ? given->FindChild(parameter.m_name) : std::nullopt;
 
-			wxString expression = parameter.m_expression;
+			ibString expression = parameter.m_expression;
 			ibValue  value;
 			bool     haveValue = false;
 
-			if (statedNode != nullptr) {
-				const ibDataValue* written = statedNode->FindField(wxT("expression"));
-				if (written != nullptr && written->Kind() == ibDataKind::String) {
+			if (statedNode) {
+				auto written = statedNode->FindField(ibT("expression"));
+				if (written && written->Kind() == ibDataKind::String) {
 					expression = written->AsString();   // …the caller's, over whatever was declared
 				}
 				else {
@@ -292,12 +293,12 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 					// read a schema saw its parameters in exactly this form and can hand one straight
 					// back, which is what makes a REFERENCE or an enum member expressible at all: those
 					// are built by the metadata, and no scalar on a wire can carry one.
-					value     = ibStoredValue(*statedNode, activeMetaData);
+					value     = ibStoredValue(*statedNode, composer.GetMetaData());
 					haveValue = true;
 					expression.Clear();
 				}
 			}
-			else if (stated != nullptr) {
+			else if (stated) {
 				value     = ValueFrom(*stated);
 				haveValue = true;
 				// ⚠⚠ AND THIS IS A DELIBERATE DIVERGENCE FROM THE ENGINE, named rather than left to be
@@ -315,19 +316,19 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 			if (!haveValue && expression.IsEmpty()) {
 				const ibDataNode* stored = &parameter.m_value;
 				for (const ibParameterDescription& theirs : composer.GetUserParameters())
-					// ⚠ stringUtils::CompareString, which is how this tree compares a NAME — folding case
+					// ⚠ stringUtils::IsSameAs, which is how this tree compares a NAME — folding case
 					// is not the same operation in every alphabet, and a configuration's identifiers are
 					// written in the person's own. (valueDataComposition.cpp does this comparison with
 					// wxString::IsSameAs; the two can disagree on a Cyrillic name, and that file is the
 					// one to bring across, not this one to match.)
-					if (stringUtils::CompareString(theirs.m_name, parameter.m_name)) {
+					if (stringUtils::IsSameAs(theirs.m_name, parameter.m_name)) {
 						stored = &theirs.m_value;
 						break;
 					}
 
 				// …and a packed node becomes a live value only NOW, with every metaobject in place —
 				// the only moment a reference can be built truthfully.
-				value     = ibStoredValue(*stored, activeMetaData);
+				value     = ibStoredValue(*stored, composer.GetMetaData());
 				haveValue = true;
 			}
 
@@ -344,13 +345,13 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 					// itself, so a caller was told THAT their expression failed and never WHY:
 					// `Date` misspelt as `DateTime` came back indistinguishable from a name that
 					// does not exist (measured 2026-09-09, and it cost a round trip).
-					wxString said = produced.GetString();
+					ibString said = produced.GetString();
 
-					const wxString reason = ibBackendException::GetLastError();
+					const ibString reason = ibBackendException::GetLastError();
 					if (!reason.IsEmpty())
-						said = said.IsEmpty() ? reason : (said + wxT(" ") + reason);
+						said = said.IsEmpty() ? reason : (said + ibT(" ") + reason);
 
-					refusal = wxString::Format(
+					refusal = ibString::Format(
 						ibComposeText("Parameter '%s' could not be evaluated: %s"),
 						parameter.m_name, said);
 					return false;
@@ -389,7 +390,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 				// honestly make it one — that is the road that ends in a table of every pair.
 				if (target.GetClsidCount() > 0 && haveValue && !value.IsEmpty() &&
 				    !target.ContainType(value.GetClassType())) {
-					refusal = wxString::Format(
+					refusal = ibString::Format(
 						ibComposeText("Parameter '%s' was given a value of a type it does not declare, so "
 							      "it cannot be applied as it stands - and applying it converted "
 							      "would be guessing. Send it in its PACKED form instead (the shape "
@@ -412,29 +413,27 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 		// which reads as a defect in the report rather than a typo in the call.
 		// 🛑 BOTH AREAS OF THE NODE. A scalar is a FIELD, while a packed value and an `expression` are
 		// CHILDREN, which live among the properties — and only the fields were asked, so an undeclared
-		// name sent the second way was neither applied nor refused (2026-09-10).
-		if (given != nullptr) {
-			std::vector<std::pair<wxString, ibDataValue>> stated = given->Fields();
-			stated.insert(stated.end(), given->Properties().begin(), given->Properties().end());
-			for (const std::pair<wxString, ibDataValue>& field : stated) {
+		// name sent the second way was neither applied nor refused (2026-09-10). One set since 2026-10-26.
+		if (given) {
+			for (const std::pair<ibString, ibDataValue>& field : given->Fields()) {
 				const bool declared = std::any_of(
 					description.m_parameters.begin(), description.m_parameters.end(),
-					// ⚠ CompareString, like every other name lookup here. `==` on wxString is
+					// ⚠ IsSameAs, like every other name lookup here. `==` on wxString is
 					// case-SENSITIVE, so `period` against a declared `Period` would have been refused
 					// as an unknown name — a refusal naming the very parameter that is right there in
 					// the list it prints.
 					[&field](const ibParameterDescription& p) {
-						return stringUtils::CompareString(p.m_name, field.first);
+						return field.first.IsSameAs(p.m_name, false);
 					});
 				if (!declared) {
-					wxString names;
+					ibString names;
 					for (const ibParameterDescription& p : description.m_parameters)
-						names += (names.IsEmpty() ? wxString() : wxT(", ")) + p.m_name;
+						names += (names.IsEmpty() ? ibString() : ibString(ibT(", "))) + p.m_name;
 					refusal = names.IsEmpty()
-						? wxString::Format(
+						? ibString::Format(
 							ibComposeText("This schema asks for no parameters, so '%s' sets nothing."),
 							field.first)
-						: wxString::Format(
+						: ibString::Format(
 							ibComposeText("This schema has no parameter '%s'. It asks for: %s."),
 							field.first, names);
 					return false;
@@ -488,7 +487,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	// BOUNDED (five seconds) exactly so a caller gets an answer it can act on rather than patience it
 	// did not ask for - so this catches, and reads on this thread instead.
 	bool     composed = false;
-	wxString failed;
+	ibString failed;
 	auto     work = [&composer, &composed]() { composed = composer.Run(); };
 
 	std::shared_ptr<ibBackgroundRun> rented;
@@ -538,37 +537,37 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 		const std::unique_ptr<ibComposedDriverBase>& driver = drivers[i];
 		std::shared_ptr<ibDataNode> table = std::make_shared<ibDataNode>();
 		if (!driver->Name().IsEmpty())
-			table->SetValue(wxT("name"), driver->Name());
+			table->SetValue(ibT("name"), driver->Name());
 		if (driver->Totals())
-			table->SetValue(wxT("totals"), true);
+			table->SetValue(ibT("totals"), true);
 		// ⭐ WHAT WAS ASKED, beside what came back. The figures alone could not be argued with: a column
 		// of zeros said nothing about whether the author's query, the settings written over it, or the
 		// engine was wrong, and the text that would have said so went only to a journal a Release build
 		// does not keep (the payroll demo, 2026-09-10: a timesheet of zeros taken apart by reasoning).
 		// The same render the read used, so it cannot describe a different query. (A report's FILTER is
 		// ANDed into the parsed query as a condition — dataComposer.h, AndWhere — and is not in the text.)
-		try { table->SetValue(wxT("query"), composer.RenderTextFor(outputs[i])); }
+		try { table->SetValue(ibT("query"), composer.RenderTextFor(outputs[i])); }
 		catch (const ibCoreException&) { /* it rendered for the read; a second refusal says nothing new */ }
 		WriteColumns(*table, *driver);
 
 		if (const ibCrossComposeDriver* cross = dynamic_cast<const ibCrossComposeDriver*>(driver.get())) {
-			table->SetValue(wxT("shape"), wxString(wxT("cross")));
-			WriteNodes(*table, wxT("rows"), cross->Rows());
+			table->SetValue(ibT("shape"), ibString(ibT("cross")));
+			WriteNodes(*table, ibT("rows"), cross->Rows());
 			// ⭐ The axis, in ARRIVAL order - that order IS the axis. The root heading's cells come
 			// first, which is why a printed cross-table carries its total column leftmost.
-			WriteNodes(*table, wxT("axis"), cross->Axis());
+			WriteNodes(*table, ibT("axis"), cross->Axis());
 		}
 		else if (const ibGroupingComposeDriver* grouping =
 				dynamic_cast<const ibGroupingComposeDriver*>(driver.get())) {
-			table->SetValue(wxT("shape"), wxString(wxT("grouping")));
-			WriteNodes(*table, wxT("rows"), grouping->Lines());
+			table->SetValue(ibT("shape"), ibString(ibT("grouping")));
+			WriteNodes(*table, ibT("rows"), grouping->Lines());
 		}
 		tables.push_back(ibDataValue::Child(table));
 	}
-	result.AddField(wxT("outputs"), ibDataValue::Array(tables));
+	result.AddField(ibT("outputs"), ibDataValue::Array(tables));
 
 	if (tables.empty())
-		result.SetValue(wxT("note"),
+		result.SetValue(ibT("note"),
 			ibComposeText("The composer declares no output - nothing was produced. report_output is "
 				      "where one is declared."));
 	return true;

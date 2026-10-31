@@ -1,108 +1,77 @@
 #ifndef FONT_COLOR_SETTINGS_H
 #define FONT_COLOR_SETTINGS_H
 
+/////////////////////////////////////////////////////////////////////////////
+// The font of code, and the colours of each kind of text in it: one font for
+// all, and per kind a fore and back colour with bold and italic over the
+// font. Kept in the options file under "fontcolor", each kind by its number.
+/////////////////////////////////////////////////////////////////////////////
+
 #include <wx/wx.h>
-#include <vector>
 
 #include "frmclient/frmclient.h"
 
-//
-// Forward declarations.
-//
-
+class wxStyledTextCtrl;
 class wxXmlNode;
 
-/**
- * This class stores font and color settings for code display and syntax
- * highlighting.
- */
 class FRMCLIENT_API ibFontColorSettings
 {
-
 public:
 
-    enum DisplayItem
-    {
-        DisplayItem_Default,
-        DisplayItem_Comment,
-        DisplayItem_Preprocessor,
-        DisplayItem_Keyword,
-        DisplayItem_Operator,
-        DisplayItem_String,
-        DisplayItem_Number,
-        DisplayItem_Error,
-        DisplayItem_Warning,
-        DisplayItem_Selection,
-        DisplayItem_Last,
-    };
+	// ⚠ The numbers are saved: a new kind goes before DisplayItem_Last, never between.
+	enum DisplayItem
+	{
+		DisplayItem_Default,
+		DisplayItem_Comment,
+		DisplayItem_Preprocessor,
+		DisplayItem_Keyword,
+		DisplayItem_Operator,
+		DisplayItem_String,
+		DisplayItem_Number,
+		DisplayItem_Error,
+		DisplayItem_Warning,
+		DisplayItem_Selection,
+		DisplayItem_Last,
+	};
 
-    struct Colors
-    {
-        wxColour    foreColor;
-        wxColour    backColor;
-        bool        bold;
-        bool        italic;
-    };
+	struct Colors
+	{
+		wxColour foreColor;
+		wxColour backColor;
+		bool bold = false;
+		bool italic = false;
+	};
 
-    /**
-     * Constructor. Sets the font and colors to the defaults.
-     */
-    ibFontColorSettings();
+	ibFontColorSettings();
 
-    /**
-     * Returns the number of display items the settings store information for.
-     */
-    unsigned int GetNumDisplayItems() const;
+	unsigned int GetNumDisplayItems() const { return DisplayItem_Last; }
 
-    /**
-     * Returns the human-readable name for the ith display item.
-     */
-    const char* GetDisplayItemName(unsigned int i) const;
+	// The kind's name as a person reads it, translated.
+	static wxString GetDisplayItemName(unsigned int i);
 
-    /**
-     * Sets the font used to display all of the styles.
-     */
-    void SetFont(const wxFont& font);
+	// The font of every kind, as chosen.
+	const wxFont& GetFont() const { return m_font; }
+	void SetFont(const wxFont& font) { m_font = font; }
 
-    /**
-     * Gets the font used to display all of the styles.
-     */
-    const wxFont& GetFont() const;
+	// The font with the kind's bold and italic over it.
+	wxFont GetFont(DisplayItem displayItem) const;
 
-    /**
-     * Gets the font used to display a specific item. This includes the bold
-     * and italic modifiers.
-     */
-    wxFont GetFont(DisplayItem displayItem) const;
+	const Colors& GetColors(DisplayItem displayItem) const { return m_colors[displayItem]; }
+	void SetColors(DisplayItem displayItem, const Colors& colors) { m_colors[displayItem] = colors; }
 
-    /**
-     * Returns the colors for the specified display item.
-     */
-    const Colors& GetColors(DisplayItem displayItem) const;
+	// Paints a text control in these: each kind of text the C lexer tells apart in its font and colours, the
+	// selection, the line numbers, and a caret that shows on the paper.
+	void Apply(wxStyledTextCtrl& text) const;
 
-    /**
-     * Sets the colors for the specified display item.
-     */
-    void SetColors(DisplayItem displayItem, const Colors& colors);
-
-    /**
-     * Saves the font and color settings in XML format. The tag is the name that is given
-     * to the root node.
-     */
-    wxXmlNode* Save(const wxString& tag) const;
-
-    /**
-     * Loads the font and color settings from XML format.
-     */
-    void Load(wxXmlNode* root);
+	// The settings as a node named by the tag; Load reads one back, keeping
+	// the default for a kind the node does not name.
+	wxXmlNode* Save(const wxString& tag) const;
+	void Load(wxXmlNode* root);
 
 private:
 
-    static const wxString       s_displayItemName[DisplayItem_Last];
-
-    wxFont                      m_font;
-    Colors                      m_colors[DisplayItem_Last];
-
+	wxFont m_font;
+	Colors m_colors[DisplayItem_Last];
 };
 
 #endif

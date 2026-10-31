@@ -93,6 +93,28 @@ jobs:
   # ---------------------------------------------------------------------------
   # The primary signal: the backend suite (~850 tests), no GUI, no display.
   # ---------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # The browser client (src/engine/webserver/www): the page's own modules in a real browser, the server a fake in
+  # the page (tests/web). Nothing to build, so a change to the page hears within a minute.
+  # ---------------------------------------------------------------------------
+  tests-web:
+    name: Tests (browser client)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install the browser
+        run: |
+          python -m pip install playwright==1.60.0
+          python -m playwright install --with-deps chromium
+      - name: Test
+        run: python -m unittest discover -s tests/web -v
+
   tests-linux:
     name: Tests (Linux, Debug)
     runs-on: ubuntu-22.04
@@ -132,29 +154,39 @@ jobs:
           key: ccache-${{ github.job }}-${{ github.sha }}
           restore-keys: ccache-${{ github.job }}-
 
+      - name: The acceptance fixtures match the oracle
+        run: |
+          python3 tools/oracle/acceptance.py
+          git diff --exit-code -- tests/fixtures/acceptance
+
       - name: Configure
         run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
 
-      # Every non-GUI test target, not just oes_tests: ctest registers them all, so
+      # Every test target, not just oes_tests: ctest registers them all, so
       # building one leaves the others reported as "<name>_NOT_BUILT" failures.
       #
-      # TWO targets have jobs of their own and are therefore EXCLUDED from the run
-      # below rather than built here: the GUI suite (needs Xvfb) and the PostgreSQL
-      # dialect suite (needs a server container). A target that is registered but
+      # ONE target has a job of its own and is therefore EXCLUDED from the run below
+      # rather than built here: the PostgreSQL dialect suite (needs a server
+      # container). A target that is registered but
       # neither built nor excluded fails the whole run without ever executing —
       # which is what the dialect target did the day it was added, on all three
       # general jobs at once.
+      #
+      # `-k 0` keeps compiling past a failed file, so one red run lists EVERY file
+      # that does not compile. Stopping at the first one turned a change that
+      # touched a hundred tests into a hundred runs (2026-10-28, char16_t).
       - name: Build the test targets
         run: >
           cmake --build --preset linux-debug
           --target oes_tests oes_string_tests oes_query_totals_test
           oes_query_parity_test oes_query_join_parity_test
+          -- -k 0
           oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
           oes_protocol_test
 
       - name: Run
         working-directory: build/linux-debug
-        run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
+        run: ctest --output-on-failure --timeout 300 -E "oes_pg_dialect_test"
 
       # ⭐ THE TECHNOLOGY JOURNAL OF THE FAILING RUN. ctest tells you WHICH test failed and what it
       # expected; the journal tells you what the engine was doing while it did — which query it ran,
@@ -171,18 +203,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # The APPLICATIONS, which no test target pulls in: enterprise / designer / appserver /
-      # launcher / codeRunner / simplePlugin. Without this step nothing in CI ever compiled
-      # them, so a break in an .exe's own sources reached a developer's machine first.
-      # It is cheap here — backend and frontend are already built by the steps above, so
-      # this only adds the executables' own translation units and their link.
+      # The APPLICATIONS, which no test target pulls in: the thin runtime and designer, appserver /
+      # webserver / appcluster / launcher / codeRunner / simplePlugin. Without this step nothing in CI
+      # ever compiled them, so a break in an .exe's own sources reached a developer's machine first.
+      # It is cheap here — the libraries are already built by the steps above, so this only adds
+      # the executables' own translation units and their link.
       - name: Build the applications
         run: cmake --build --preset linux-debug
 
-      # A SEGFAULT tells ctest nothing beyond the exit signal, so on failure take one
-      # backtrace here rather than guessing across a 40-minute round trip. Two cases:
-      # the smallest compile test and the smallest runtime one — if the crash is shared
-      # they show the same frames, and if it is not, that is worth knowing too.
+      # A SEGFAULT tells ctest nothing beyond the exit signal, so on failure take a
+      # backtrace here rather than guessing across a 40-minute round trip — of the tests that
+      # failed, as ctest listed them (five at most). The two fixed ones (the smallest compile
+      # test and the smallest runtime one) were run instead until 2026-10-23, when a crash of
+      # another test went without a single frame. No list (the run never got to the tests):
+      # those two, as before.
       # …and only where there is a test binary to run: a job that failed before building (a submodule fetch
       # answered 503) has no build directory, and this step then failed too, on a missing working directory —
       # a second error over the first that pointed nowhere near it (2026-09-17, the macOS job).
@@ -191,7 +225,8 @@ jobs:
         working-directory: build/linux-debug
         run: |
           sudo apt-get install -y gdb
-          for t in CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment; do
+          failed=$(cut -d: -f2- Testing/Temporary/LastTestsFailed.log 2>/dev/null | head -n 5 || true)
+          for t in ${failed:-CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment}; do
             echo "=============== $t ==============="
             gdb -batch -ex run -ex "bt 40" --args ./bin/Debug/oes_tests --gtest_filter=$t || true
           done
@@ -238,8 +273,57 @@ jobs:
           arch: x64
 
       # The runner image has no ccache; Chocolatey does, and puts it on the PATH the launcher above names.
+      #
+      # ⭐ RETRIED, THEN CHECKED — not trusted. `choco install` can exit 0 while the package feed itself
+      # answered a transient 504 (seen 2026-10-16 on #473-#475): the install step stayed green, ccache
+      # never reached the PATH, and the launcher the env block names above pointed CMake at a compiler
+      # that does not exist, which is the error CMakeTestCXXCompiler actually raised. If ccache is still
+      # missing after the attempts, this step fails HERE, with the straightforward reason, instead of as a
+      # confusing "CreateProcess failed" three steps later.
+      #
+      # ⭐ THE PROGRAM ITSELF IS KEPT IN THE ACTIONS CACHE, by its version. Chocolatey only fetched the
+      # release from GitHub, and that download answered 504 three times over on 2026-10-26 — the job went
+      # red on nothing of ours. Kept, it is fetched once per version; a miss fetches it with more patience.
+      - name: The compiler cache's program
+        id: ccache-program
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ccache-program
+          key: ccache-program-windows-4.14.2
+
       - name: Install ccache
-        run: choco install ccache --no-progress -y
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'ccache-program'
+          $exe = Join-Path $dir 'ccache.exe'
+          $url = 'https://github.com/ccache/ccache/releases/download/v4.14.2/ccache-4.14.2-windows-x86_64.zip'
+          for ($i = 1; $i -le 5 -and -not (Test-Path $exe); $i++) {
+            try {
+              $zip = Join-Path $env:RUNNER_TEMP 'ccache.zip'
+              $unpacked = Join-Path $env:RUNNER_TEMP 'ccache-zip'
+              Invoke-WebRequest $url -OutFile $zip
+              Expand-Archive $zip $unpacked -Force
+              New-Item -ItemType Directory -Force $dir | Out-Null
+              Copy-Item (Get-ChildItem $unpacked -Recurse -Filter ccache.exe | Select-Object -First 1).FullName $exe
+            }
+            catch {
+              Write-Host "ccache download, attempt $i/5: $_ - retrying..."
+              Start-Sleep -Seconds (20 * $i)
+            }
+          }
+          if (-not (Test-Path $exe)) {
+            Write-Error "ccache did not install after 5 attempts (GitHub's release download unavailable) - failing here instead of at Configure."
+            exit 1
+          }
+          $dir >> $env:GITHUB_PATH
+          & $exe --version
+
+      - name: Keep the compiler cache's program
+        if: steps.ccache-program.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ccache-program
+          key: ccache-program-windows-4.14.2
 
       - name: Compiler cache
         uses: actions/cache/restore@v4
@@ -274,7 +358,7 @@ jobs:
       - name: Run
         # No -C: every preset here uses Ninja, which is single-config.
         working-directory: build/windows-x64-debug
-        run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
+        run: ctest --output-on-failure --timeout 300 -E "oes_pg_dialect_test"
 
       # See the note in the Linux job — the journal of the run that failed.
       - name: Journal on failure
@@ -451,7 +535,7 @@ jobs:
         run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
 
       - name: Build the test target
-        run: cmake --build --preset linux-debug --target oes_tests
+        run: cmake --build --preset linux-debug --target oes_tests --target oes_protocol_test
 
       - name: Firebird 5 kit
         run: |
@@ -465,6 +549,13 @@ jobs:
           ./bin/Debug/oes_tests --gtest_filter='Firebird*' --gtest_color=no | tee firebird.txt
           if grep -q '\[  SKIPPED \]' firebird.txt; then
             echo "::error::a Firebird test skipped - the kit did not load"
+            exit 1
+          fi
+          # The session-failover cases open a Firebird file base. The general Linux job has no client,
+          # so they skip there; here the kit is beside the binary and a skip is the kit not loading.
+          ./bin/Debug/oes_protocol_test --gtest_color=no | tee protocol.txt
+          if grep -q '\[  SKIPPED \]' protocol.txt; then
+            echo "::error::a protocol test skipped - the Firebird kit did not load"
             exit 1
           fi
 
@@ -570,7 +661,7 @@ jobs:
           # and why nobody frees them. Without it every test process ends red on fontconfig and the
           # GTK singletons, and a run where everything is red says nothing about anything.
           LSAN_OPTIONS: suppressions=${{ github.workspace }}/.github/lsan-suppressions.txt
-        run: ctest --output-on-failure --timeout 600 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
+        run: ctest --output-on-failure --timeout 600 -E "oes_pg_dialect_test"
 
       - name: Journal on failure
         if: failure()
@@ -601,9 +692,14 @@ jobs:
   # every value that crosses a park, or dies inside the sanitizer.
   #
   # The suites are the ones that park, share a session, pool a connection,
-  # take a lock, or run the job manager — not the whole backend. A race in
-  # our code fails the job. Suppressions are third-party only, each with a
-  # reason, in .github/tsan-suppressions.txt.
+  # take a lock, or run the job manager, and every suite that starts threads of
+  # its own: the listeners and client connections, the debugger's queue, a
+  # session's failover, the logger, HTTP and TLS, SQLite's lock race, the
+  # model's fetch, several bases in one process, a string shared across
+  # threads — not the whole backend. A race in our code fails the job, and so
+  # does a lock-order inversion (TSan's deadlock detector; both stacks are
+  # printed). Suppressions are third-party only, each with a reason, in
+  # .github/tsan-suppressions.txt.
   #
   # GCC 13, not the ubuntu-22.04 default. GCC 11's libtsan reports a double
   # lock of an already-destroyed mutex when a fiber locks a mutex that lives
@@ -665,12 +761,20 @@ jobs:
       # The step has its own bound, so a hang costs this step, not the job's 120 minutes.
       - name: Run
         working-directory: build/linux-debug
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
-          TSAN_OPTIONS: halt_on_error=1:suppressions=${{ github.workspace }}/.github/tsan-suppressions.txt
-        run: >
-          ./bin/Debug/oes_tests
-          --gtest_filter=WorkerPool*:Fiber*:SessionHolder.*:SessionDbLayer.*:ConnectionPool.*:SocketLockFix.*:JobManager.*:JobSchedule.*
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/.github/tsan-suppressions.txt
+        run: |
+          suites=(
+            'WorkerPool*' 'Fiber*' 'SessionHolder.*' 'SessionDbLayer.*' 'ConnectionPool.*' 'SocketLockFix.*'
+            'JobManager.*' 'JobSchedule.*'
+            'Listener.*' 'ClientListener.*' 'ClientConnections.*'
+            'DebugCommandQueue.*' 'DebugServerFix.*'
+            'SessionFailover*' 'SubscribedEventsClient.*'
+            'Logger*' 'HttpClient.*' 'HttpValues.*' 'HttpSecure*'
+            'SqliteLockRace.*' 'ModelFetchDoor.*' 'MultiBaseFix.*' 'OneBaseFix.*' 'IbString.SharedAcrossThreads'
+          )
+          ./bin/Debug/oes_tests --gtest_filter="$(IFS=:; echo "${suites[*]}")"
 
       - name: Journal on failure
         if: failure()
@@ -680,182 +784,6 @@ jobs:
           path: build/linux-debug/bin/Debug/journal/
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Compiler cache statistics
-        if: always()
-        run: ccache -s -v || true
-      - name: Save the compiler cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .ccache
-          key: ccache-${{ github.job }}-${{ github.sha }}
-
-  # ---------------------------------------------------------------------------
-  # The GUI harness is a SEPARATE job, and separate on purpose: it links
-  # frontend.dll, needs a live wxApp, and runs headless under Xvfb. Its failure
-  # mode (a hung modal on an assert) is different in kind from a backend test's,
-  # so it gets its own timeout and does not take the primary signal down with it
-  # when the toolkit itself is the problem.
-  # ---------------------------------------------------------------------------
-  tests-gui-linux:
-    name: GUI tests (Linux, Xvfb)
-    runs-on: ubuntu-22.04
-    # 90, matching the sibling job below. These jobs build wxWidgets from scratch every time (see
-    # the note at the top of this file — the obvious build-directory cache LIES with Ninja), so the
-    # wall clock is dominated by a constant that has nothing to do with our tree.
-    #
-    # ⚠ The raise itself was a MISREADING, kept only because the sibling has the same number. The
-    # job was not running out of compile time: the build finishes in ~26 minutes and every test
-    # passes three seconds later — the rest was the run step hanging in cleanup with no bound on it.
-    # Raising 60 to 90 bought the hang thirty more minutes to sit in. The bound now lives on the run
-    # step, where the hang is; THIS number is only the outer envelope.
-    #
-    # The real build-time fix is the COMPILER cache, keyed on preprocessed input rather than
-    # timestamps, so it cannot serve the stale object a directory cache can — wired since
-    # 2026-09-28 (the note at the top of this file).
-    timeout-minutes: 90
-    env:
-      CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_MAXSIZE: 1500M
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: false
-          fetch-depth: 1
-
-      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
-      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
-      # documentation, and it takes itself out with `update = none` - so the script below names no
-      # submodule at all, and needs no editing when one is added to the tree.
-      - run: bash .github/fetch-submodules.sh
-        shell: bash
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake ninja-build ccache pkg-config gdb \
-            libgtk-3-dev libsqlite3-dev uuid-dev xvfb
-
-      - name: Compiler cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .ccache
-          key: ccache-${{ github.job }}-${{ github.sha }}
-          restore-keys: ccache-${{ github.job }}-
-
-      - name: Configure
-        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
-
-      # -k 0 keeps ninja going after a failed compile instead of stopping at the first
-      # one. The frontend is being compiled by GCC for the first time, so errors come in
-      # families; stopping at the first turns one CI round into one fix. With keep-going
-      # a round returns every independent failure at once and they get fixed as a batch.
-      - name: Build the GUI test target
-        run: cmake --build --preset linux-debug --target oes_frontend_runtime_test -- -k 0
-
-      # The harness SKIPs every test when the toolkit cannot come up, so a
-      # display-less runner reports skips, not failures — Xvfb is what turns
-      # those skips back into real assertions.
-      #
-      # ⚠ BOUNDED — and when it is not, it says WHY before it dies.
-      #
-      # This was the one unbounded run in the file. Its siblings go through
-      # `ctest --timeout 300`, which fails the test that hangs; this step exec'd the
-      # binary directly, so a process that never exits ate the entire job. It did,
-      # twice: all 38 tests passed in three seconds, `Global test environment
-      # tear-down` printed, and then nothing for an hour. The red said "timed out",
-      # which reads as "too slow to compile" and is not what happened — the hang is
-      # in wxEntryCleanup, AFTER every assertion has already passed.
-      #
-      # Ten minutes is not a performance budget; three seconds is the honest runtime.
-      # It is the line past which the process is STUCK, and crossing it prints every
-      # thread's stack — the one thing a hang on someone else's machine cannot
-      # otherwise tell us — and then fails the job in minutes instead of ninety.
-      #
-      # ⚠ AND IT MUST BE THE RIGHT PROCESS. The first two bounded runs printed a stack
-      # of ONE frame — `wait4`, in a thread named "xvfb-run" — because the watchdog
-      # found its pid with `pgrep -f '[o]es_frontend_runtime_test' | head -n1`, and
-      # BOTH processes match that: `-f` reads the whole command line, and the wrapper's
-      # command line is `xvfb-run -a ./bin/Debug/oes_frontend_runtime_test`. `head -n1`
-      # then takes the lower pid, which is always the parent — so it picked the wrapper
-      # every single time, deterministically. It also killed the wrapper and left the
-      # real process alive, for the runner to reap as an orphan two lines later.
-      #
-      # The wrapper is gone rather than the match tightened: with Xvfb started here,
-      # `$!` IS the process under test and nothing has to be guessed. `bt full` because
-      # a hang in someone else's teardown is worth its locals.
-      - name: Run under Xvfb
-        working-directory: build/linux-debug
-        run: |
-          set -uo pipefail
-          Xvfb :99 -screen 0 1280x1024x24 &
-          xvfb=$!
-          # Wait for the display SOCKET, not for a guess at how long Xvfb takes: starting
-          # the suite early makes the harness skip every test, and a suite that asserted
-          # nothing must never read as a pass (checked again after the run).
-          for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
-          export DISPLAY=:99
-
-          # One bounded run. $1 = log, $2 = seconds to wait, rest = extra gtest arguments.
-          run_suite() {
-            local log="$1" bound="$2"; shift 2
-            ./bin/Debug/oes_frontend_runtime_test "$@" > "$log" 2>&1 &
-            local runner=$!
-            (
-              sleep "$bound"
-              if kill -0 "$runner" 2>/dev/null; then
-                echo "=== alive after ${bound}s (3s is the honest runtime) — every thread, pid $runner ==="
-                sudo gdb -p "$runner" -batch -ex 'thread apply all bt full' 2>&1 || true
-                sudo kill -9 "$runner" || true
-              fi
-            ) &
-            local watchdog=$!
-            # `|| status=$?`, not `; status=$?`: the step's shell is `bash -e`, so a
-            # non-zero `wait` (137 when the watchdog kills a hung run) aborts the whole
-            # script THERE — which is why the first stack came with no gui.log and no
-            # control run. The bare `$?` never got read.
-            local status=0
-            wait "$runner" || status=$?
-            kill "$watchdog" 2>/dev/null || true
-            cat "$log"
-            return $status
-          }
-
-          status=0
-          run_suite gui.log 600 || status=$?
-
-          # THE CONTROL RUN — and only when there is something to explain.
-          #
-          # A hang that appears after a batch is a question about WHAT the batch added, and
-          # the cheapest instrument that answers it is the same binary with the new sets
-          # taken out. Reading the code first produced two confident theories that both
-          # died on inspection (the job manager's tick thread — stopped by
-          # DestroyAppDataEnv; queued window deletion — wx deletes directly when no event
-          # loop runs, see wx/app.h), which is the argument for measuring rather than a
-          # third theory. The bound is short here: three seconds is the honest runtime,
-          # so anything past three minutes is already stuck and the job has a ceiling.
-          if [ $status -ne 0 ]; then
-            echo "=== control run: the same binary WITHOUT the sets 3e453bf2 added ==="
-            if run_suite gui-control.log 180 \
-                 --gtest_filter=-CodeEditorFix.*:QueryCaseFix.*:QueryConstructorReadOnly.*; then
-              echo "::error::Exits cleanly without CodeEditorFix / QueryCaseFix / QueryConstructorReadOnly — the hang belongs to what those tests build."
-            else
-              echo "::error::Hangs without them too — the cause sits below the new tests; read the stack above."
-            fi
-          fi
-
-          kill "$xvfb" 2>/dev/null || true
-          # A display that never came up SKIPS the whole suite and exits 0. Green with
-          # nothing asserted is the failure mode this job exists to prevent.
-          if grep -q 'GUI wxApp unavailable' gui.log; then
-            echo "::error::Xvfb never came up — the suite skipped instead of running." >&2
-            exit 1
-          fi
-          exit $status
 
       - name: Compiler cache statistics
         if: always()
@@ -880,18 +808,17 @@ jobs:
   #     drove the padding.
   #   * Apple's libc++ instead of libstdc++ — a third standard library that
   #     does not share MSVC's or libstdc++'s transitive includes.
-  #   * wx builds against Cocoa here, not GTK, so the frontend's toolkit
+  #   * wx builds against Cocoa here, not GTK, so the clients' toolkit
   #     assumptions get a second reading. guid.cpp already takes an APPLE
   #     branch (CFUUID via CoreFoundation) that nothing has been compiling.
   #
-  # No GUI job for macOS yet: the harness needs a window server, and the
-  # headless story there is not Xvfb. Backend suite + a full application build
-  # is the signal for now.
+  # No GUI tests here: the suite is the engine's, and a full application build
+  # is the signal for the clients.
   #
   # This is NOT a first compile — a colleague builds the tree on a Mac locally
   # (portability.md § 3 listed macOS as "not in CI" for exactly that reason), and
-  # the CMake files carry worked-out APPLE branches in launcher / enterprise /
-  # designer, not placeholders. So the expectation here is green or close to it,
+  # the CMake files carry worked-out APPLE branches in launcher and the thin
+  # runtime and designer, not placeholders. So the expectation here is green or close to it,
   # and what the job actually buys is the thing a local build cannot give: the
   # platform stops depending on one machine and one person remembering to try it.
   # Anything it does surface is a portability rule for docs/portability.md.
@@ -936,7 +863,7 @@ jobs:
       - name: Configure
         run: cmake --preset macos-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
 
-      # -k 0 for the same reason the GUI job uses it: a first-time toolchain
+      # -k 0: a first-time toolchain
       # returns errors in families, and one round should surface all of them.
       - name: Build the test targets
         run: >
@@ -949,7 +876,7 @@ jobs:
 
       - name: Run
         working-directory: build/macos-debug
-        run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
+        run: ctest --output-on-failure --timeout 300 -E "oes_pg_dialect_test"
 
       # See the note in the Linux job — the journal of the run that failed.
       - name: Journal on failure
@@ -964,14 +891,17 @@ jobs:
       - name: Build the applications
         run: cmake --build --preset macos-debug -- -k 0
 
-      # lldb, not gdb — same intent as the Linux backtrace step, and the same guard: no binary, no backtrace.
+      # lldb, not gdb — same intent as the Linux backtrace step (the tests that failed), and the same guard: no binary,
+      # no backtrace. The stack is asked with -k, not -o: in batch mode lldb runs no -o command after the target
+      # crashes, only the -k ones (2026-10-23: one frame of the crash, and no stack).
       - name: Backtrace on failure
         if: failure() && hashFiles('build/macos-debug/bin/Debug/oes_tests') != ''
         working-directory: build/macos-debug
         run: |
-          for t in CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment; do
+          failed=$(cut -d: -f2- Testing/Temporary/LastTestsFailed.log 2>/dev/null | head -n 5 || true)
+          for t in ${failed:-CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment}; do
             echo "=============== $t ==============="
-            lldb -b -o run -o "bt 40" -- ./bin/Debug/oes_tests --gtest_filter=$t || true
+            lldb -b -o run -k "bt 40" -k quit -- ./bin/Debug/oes_tests --gtest_filter=$t || true
           done
 
       - name: Compiler cache statistics
@@ -999,8 +929,9 @@ jobs:
   # quote these numbers as the platform's performance; measure on real hardware
   # for that.
   #
-  # It never fails the build: `|| true` on the run, and no threshold. A benchmark
-  # that gates CI on a shared runner turns into a flaky test nobody trusts.
+  # It never fails the build on a number: `|| true` on the run, and no threshold. A
+  # benchmark that gates CI on a shared runner turns into a flaky test nobody trusts.
+  # What fails it is a run that did not reach its end (the last step).
   benchmarks-linux:
     name: Benchmarks (Linux, Release) — record only
     runs-on: ubuntu-22.04
@@ -1126,6 +1057,25 @@ jobs:
           name: benchmarks-linux-release
           path: build/linux-release/benchmarks.txt
           if-no-files-found: warn
+
+      # A RUN THAT STOPPED HALF-WAY IS NOT A RECORD.
+      #
+      # `|| true` keeps a slow or noisy figure from failing anything, and it kept a
+      # crash quiet as well: from 2026-10-10 the process aborted at SessionBench (a
+      # fiber slot registered after the first snapshot), and the suites from there
+      # on never ran, under a green job. gtest prints its closing line only when it
+      # gets there, so each of the two runs above must have printed one. Still no
+      # threshold — no number is judged here, only whether the run came to its end.
+      # Last, so the summary and the artifact are already up.
+      - name: Both runs finished
+        working-directory: build/linux-release
+        run: |
+          finished=$(grep -cE '^\[==========\] [0-9]+ tests? from [0-9]+ test suites? ran\.' benchmarks.txt || true)
+          if [ "$finished" -lt 2 ]; then
+            echo "::error::A benchmark process stopped before its end - every row after its last line is missing:"
+            tail -n 5 benchmarks.txt
+            exit 1
+          fi
 
       - name: Compiler cache statistics
         if: always()

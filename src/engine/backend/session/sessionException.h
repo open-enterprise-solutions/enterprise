@@ -39,14 +39,18 @@ public:
 		// never reached; the holder or the pool refused. Kept here so it stops arriving as a DBMS
 		// error with a message about the driver.
 		NoConnection,
+
+		// A login came again too soon (ibAuthThrottle), and its password was not looked at. The person waits as
+		// long as the message says, and is asked again: not a wrong password, not a server that is down.
+		LoginThrottled,
 	};
 
 	Kind GetKind() const { return m_kind; }
 
-	[[noreturn]] static void Throw(Kind kind, const wxString& message);
+	[[noreturn]] static void Throw(Kind kind, const ibString& message);
 
 protected:
-	ibBackendSessionException(Kind kind, const wxString& msg)
+	ibBackendSessionException(Kind kind, const ibString& msg)
 		: ibBackendException(msg), m_kind(kind) {}
 
 private:

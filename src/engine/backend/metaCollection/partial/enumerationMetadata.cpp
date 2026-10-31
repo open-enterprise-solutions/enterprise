@@ -23,8 +23,8 @@ ibValueMetaObjectEnumeration::ibValueMetaObjectEnumeration() : ibValueMetaObject
 {
 	m_propertyQuickChoice->SetValue(true);
 	
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("ChoiceData"), wxT("Parameters"), wxT("StandardProcessing") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("Form"), ibT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("ChoiceData"), ibT("Parameters"), ibT("StandardProcessing") });
 }
 
 ibValueMetaObjectEnumeration::~ibValueMetaObjectEnumeration()
@@ -102,8 +102,8 @@ bool ibValueMetaObjectEnumeration::ReadData(const ibDataNode& node)
 {
 	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormSelect->GetName())));
 
 	return ibValueMetaObjectRecordDataEnumRef::ReadData(node);
 }

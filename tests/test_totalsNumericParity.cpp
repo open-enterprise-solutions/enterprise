@@ -35,7 +35,7 @@
 namespace {
 
 // (period, warehouse) -> (received, spent)
-using Totals = std::map<std::pair<wxString, wxString>, std::pair<double, double>>;
+using Totals = std::map<std::pair<ibString, ibString>, std::pair<double, double>>;
 
 // The register shape: movements keyed by month + warehouse, one resource stored as a
 // received / spent pair, the side chosen by the record type. Mirrors the fixture in
@@ -133,7 +133,7 @@ struct TotalsFix : ::testing::Test
 			"  FROM Reg7_T WHERE qty_in <> 0 OR qty_out <> 0"));
 	}
 
-	Totals Read(const wxString& query)
+	Totals Read(const ibString& query)
 	{
 		Totals out;
 		// The query text goes in as a %s ARGUMENT: it contains '%' (strftime masks), which

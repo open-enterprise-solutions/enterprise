@@ -13,7 +13,7 @@
 
 #include "dataComposerInternal.h"
 
-#include "backend/query/queryParser.h"        // ibQueryParser — text -> AST
+#include "core/query/queryParser.h"        // ibQueryParser — text -> AST
 #include "backend/query/queryable.h"          // ibBackendQueryable / ibBackendQueryColumn
 #include "backend/query/queryableFactory.h"   // the source factory — the column dictionary
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryResult / ibSelectKind
@@ -22,9 +22,9 @@
 #include "backend/metaData.h"                 // ibMetaData::GetSourceFactory
 #include "backend/backend_exception.h"        // ibBackendCoreException
 #include "backend/query/queryReadState.h"     // ibQueryReadState — one build, one state of the data
-#include "backend/query/queryRender.h"        // ibQueryColumnFromPath
-#include "backend/query/queryKeywords.h"      // ibQueryKeywordText
-#include "backend/query/queryLexer.h"         // ibQueryLexer::IsIdentifier
+#include "core/query/queryRender.h"        // ibQueryColumnFromPath
+#include "core/query/queryKeywords.h"         // ibQueryKeywordText
+#include "core/query/queryLexer.h"         // ibQueryLexer::IsIdentifier
 #include "backend/session/session.h"          // ibSession::RunState — the walk hears a cancel
 #include "backend/backend_localization.h"     // a column title written in several languages, read in the reader's
 
@@ -157,8 +157,8 @@ bool ibDataDBComposer::LevelShows(const Output& output, int depth, ibSelectorNod
 		return true;   // …and a level that hides on nothing asks nothing of the row
 
 	// A condition this row cannot answer does not hide it: hiding for a reason nobody can see is worse.
-	return ibCompositionFilterHolds(found->m_settings.m_filter, ibComposerRowValueOf(schema, row), SubtreeOf(),
-		/*whenUnknown*/ true);
+	return ibCompositionFilterHolds(found->m_settings.m_filter, m_metaData, ibComposerRowValueOf(schema, row),
+		SubtreeOf(), /*whenUnknown*/ true);
 }
 
 // (…and the row's conditional appearance — ConditionalAppearanceFor, made ready once per output — is the RAM
@@ -261,7 +261,7 @@ bool ibDataDBComposer::RunOutput(const Output& output, ibCompositionDriver& driv
 	end.Resume();
 	driver.OnOutputEnd(hasTotals);
 	end.Pause();
-	ibJournalInfo(wxT("composer"), wxT("output '%s' done - pass %lld ms, driver end %lld ms"),
+	ibJournalInfo(ibT("composer"), ibT("output '%s' done - pass %lld ms, driver end %lld ms"),
 		output.m_name, pass.Ms(), end.Ms());
 	// …and if this was the last branch of a shared read, the rows are done with — see
 	// ReleaseSharedRead. Here rather than deeper in, because the walk is finished only once the
@@ -314,11 +314,11 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// WHICH SHAPE THIS OUTPUT IS ABOUT TO BE READ IN. Three facts decide everything below — whether a
 	// page was asked for, whether the query folds, and whether the DBMS already did the folding — and
 	// a report that comes out wrong is almost always wrong about one of them.
-	ibJournalInfo(wxT("composer"), wxT("output '%s': %s, totals %s, server-grouped %s, %u columns"),
+	ibJournalInfo(ibT("composer"), ibT("output '%s': %s, totals %s, server-grouped %s, %u columns"),
 		output.m_name,
-		paged ? wxT("paged") : wxT("whole"),
-		hasTotals ? wxT("yes") : wxT("no"),
-		serverGrouped ? wxT("yes") : wxT("no"),
+		paged ? ibT("paged") : ibT("whole"),
+		hasTotals ? ibT("yes") : ibT("no"),
+		serverGrouped ? ibT("yes") : ibT("no"),
 		static_cast<unsigned>(schema.size()));
 
 	// WHAT IS COMING, said before the first row: the output's kind, its own schema and its name.
@@ -328,6 +328,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	info.m_kind   = output.Kind();   // read off its fields — a column grouping is what makes it a cross-table
 	info.m_schema = schema;
 	info.m_name   = output.m_name;
+	info.m_metaData = m_metaData;
 	// …and how many outputs this run draws: the ones Run reads (a driver, and something declared).
 	info.m_outputCount = std::max<size_t>(1, static_cast<size_t>(std::count_if(m_outputs.begin(), m_outputs.end(),
 		[this](const Output& other) { return other.m_driver != nullptr && Declares(other); })));
@@ -357,8 +358,8 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// title out; handing over only the title made every reader that needs the FIELD — the details
 	// parameter of a composed cell, which becomes a grouping and a filter — search it back out of
 	// the resources and the levels by name.
-	info.m_titles.assign(schema.size(), wxString());
-	info.m_paths.assign(schema.size(), wxString());
+	info.m_titles.assign(schema.size(), ibString());
+	info.m_paths.assign(schema.size(), ibString());
 	info.m_appearances.assign(schema.size(), ibAppearanceDescription());
 	{
 		size_t measure = 0;
@@ -426,13 +427,19 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// 2026-08-29). Dimensions and measures are always shown — a heading prints its key, a fold prints
 	// its figure.
 	{
-		const std::vector<wxString> shown = ShownFor(output);
+		const std::vector<ibString> shown = ShownFor(output);
+		// …AND WHERE NOTHING IS CHOSEN AND THE READ IS THE STAR, WHAT IS READ IS WHAT IS SHOWN — asked as
+		// WhenNothingChosen asks it: a list, and a report that folds by nothing (a bare question through
+		// compose_run). Every field of it was read and none was shown. A report that folds answers "nothing chosen"
+		// with its headings alone, and there an empty table — a reader's too — blanks the details as before.
+		const bool readsStar = shown.empty()
+			&& (ReadsEveryField() || ibComposerGroupingFieldsOf(output).empty());
 		info.m_shown.assign(schema.size(), true);
 		for (size_t i = 0; i < schema.size(); ++i) {
 			if (schema[i].m_role != ibQueryLowering::ibColumnRole::Detail)
 				continue;
-			bool shows = false;
-			for (const wxString& name : shown)
+			bool shows = readsStar;
+			for (const ibString& name : shown)
 				if (ibComposerColumnAnswersTo(schema[i], name)) { shows = true; break; }
 			// …and a column of something this base does not use is not shown, whoever chose it — the
 			// columns a star was materialised into included (OutputColumn::m_available).
@@ -447,12 +454,12 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// last. Every reader asks a column by its NAME, so the schema is put in order here, once, together with
 	// what was worked out for each column above.
 	{
-		const std::vector<wxString> chosen = ShownFor(output);
+		const std::vector<ibString> chosen = ShownFor(output);
 		std::vector<size_t> order;
 		std::vector<bool> placed(schema.size(), false);
 		for (size_t i = 0; i < schema.size(); ++i)
 			if (schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension) { order.push_back(i); placed[i] = true; }
-		for (const wxString& name : chosen)
+		for (const ibString& name : chosen)
 			for (size_t i = 0; i < schema.size(); ++i)
 				if (!placed[i] && ibComposerColumnAnswersTo(schema[i], name)) { order.push_back(i); placed[i] = true; break; }
 		for (size_t i = 0; i < schema.size(); ++i)
@@ -462,7 +469,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		// formats went to whichever column stood there afterwards: a report's expense in money, its closing
 		// quantity in its type's format and its value in none (Max, 2026-09-29: "did you set that on purpose?").
 		std::vector<ibQueryLowering::OutputColumn> columns;
-		std::vector<wxString> titles, paths;
+		std::vector<ibString> titles, paths;
 		std::vector<ibAppearanceDescription> appearances;
 		std::vector<bool> shown;
 		for (const size_t i : order) {
@@ -509,15 +516,15 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// ⚠ …AND A FIELD A RULE NAMES THAT THIS READ DOES NOT CARRY, said by name once per output: its rule cannot hold,
 	// and on screen that reads exactly like a condition that is false.
 	if (hasConditionalAppearance) {
-		wxString unread;
-		for (const wxString& path : ibComposerRuleFieldsOf(output, GetCurrentConditionalAppearanceDesc())) {
+		ibString unread;
+		for (const ibString& path : ibComposerRuleFieldsOf(output, GetCurrentConditionalAppearanceDesc())) {
 			const auto carried = std::find_if(schema.begin(), schema.end(),
 				[&path](const ibQueryLowering::OutputColumn& oc) { return ibComposerColumnAnswersTo(oc, path); });
 			if (carried == schema.end())
-				unread += (unread.IsEmpty() ? wxString() : wxString(wxT(", "))) + path;
+				unread += (unread.IsEmpty() ? ibString() : ibString(ibT(", "))) + path;
 		}
 		if (!unread.IsEmpty())
-			ibJournalWarning(wxT("composer"), wxT("output '%s': conditional appearance cannot read %s - its rules do not hold"),
+			ibJournalWarning(ibT("composer"), ibT("output '%s': conditional appearance cannot read %s - its rules do not hold"),
 				output.m_name, unread);
 	}
 	if (serverGrouped) {
@@ -623,7 +630,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		// written. `hiddenAbove` existed to say that in a flat walk, and there is nothing left for it
 		// to say here.
 		// The set the walk starts from: the composition resolved, then this output's table over it.
-		const std::vector<wxString> shownAtOutput = SelectedFor(output);
+		const std::vector<ibString> shownAtOutput = SelectedFor(output);
 		const bool everyField = ReadsEveryField();
 
 		// ⭐⭐ THE SET IN FORCE TRAVELS WITH THE WALK, exactly as the branch does. A node's selected
@@ -660,15 +667,15 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				attrAt.emplace_back();
 			return attrAt[depth];
 		};
-		std::function<void(ibSelector&, const std::vector<wxString>&, size_t)> walk =
-			[&](ibSelector& level, const std::vector<wxString>& shownAbove, size_t depth) {
+		std::function<void(ibSelector&, const std::vector<ibString>&, size_t)> walk =
+			[&](ibSelector& level, const std::vector<ibString>& shownAbove, size_t depth) {
 			// What a node shows depends on nothing but the level it stands on and what stood above it,
 			// and every node of this loop stands under the same `shownAbove` — so it is worked out once per
 			// level met here, not once per node (a vector of names built and freed for each of 40 thousand
 			// employees and their cells, 2026-09-12).
 			const GroupNode* shownFor   = nullptr;
 			bool             shownKnown = false;
-			std::vector<wxString> shownHere;
+			std::vector<ibString> shownHere;
 			const ibCompositionTheme* themeHere = nullptr;   // …and its palette, asked with it
 			while (level.Next()) {
 				hearCancel();
@@ -766,7 +773,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 					// ⚠ ASKED, NOT COMPARED — a path and an output name are spelled differently for
 					// every dot-walk. See ibComposerColumnAnswersTo.
 					bool shows = false;
-					for (const wxString& name : shownHere)
+					for (const ibString& name : shownHere)
 						if (ibComposerColumnAnswersTo(oc, name)) { shows = true; break; }
 					if (!shows)
 						row[i] = ibValue();
@@ -988,16 +995,16 @@ ibDataQueryResult* ibDataDBComposer::SharedReadFor(const Output& output,
 		if (together.empty())
 			return nullptr;   // nobody shares — and nothing is built, so nothing has to be released
 
-		const wxString text = RenderTextFor(together);
+		const ibString text = RenderTextFor(together);
 		// ⭐ AND IT IS PRINTED, like every other query this composer writes. The shared read is the
 		// ONE text in the house that carries `SPLIT`, and it was the one text nobody could see: the
 		// journal's `composer.text` is written in EnsureAst, which is the single-output road (Max,
 		// 2026-08-27, reading the log: not one occurrence of the word). Everything below it is
 		// already lowered — `query.sql` shows SQL, where a fold in memory cannot appear by
 		// construction — so without this line the branch road had no readable form anywhere.
-		ibJournalInfo(wxT("composer.text"), wxT("shared read rendered:\n%s"), text);
+		ibJournalInfo(ibT("composer.text"), ibT("shared read rendered:\n%s"), text);
 		ibQueryPackage package;
-		std::map<wxString, const ibQuerySelect*> named;
+		std::map<ibString, const ibQuerySelect*> named;
 		ibQuerySelectPtr ast = ParseComposed(text, package, named);
 		if (ast == nullptr)
 			ibBackendCoreException::Error(_("Composer: the rendered query of the shared read failed to parse"));
@@ -1030,7 +1037,7 @@ ibDataQueryResult* ibDataDBComposer::SharedReadFor(const Output& output,
 		m_sharedBranches = together;
 		m_branchesServed = 0;
 		// THE PAIR OF NUMBERS THIS IS JUDGED BY: one read, this many outputs out of it.
-		ibJournalInfo(wxT("composer"), wxT("shared read: %u outputs read as branches of one query, %u columns"),
+		ibJournalInfo(ibT("composer"), ibT("shared read: %u outputs read as branches of one query, %u columns"),
 			static_cast<unsigned>(m_sharedBranches.size()), static_cast<unsigned>(m_sharedSchema.size()));
 	}
 
@@ -1059,9 +1066,9 @@ void ibDataDBComposer::ReleaseSharedRead(const Output& output)
 // THE NAME A BRANCH ANSWERS TO. Given, or made from where the output stands — see the declaration.
 // Both sides of the run derive it here: the render writes it into `SPLIT <name> BY …`, the walk asks
 // for it. One function, so they cannot spell it differently.
-wxString ibDataDBComposer::BranchNameFor(const Output& output, size_t at) const
+ibString ibDataDBComposer::BranchNameFor(const Output& output, size_t at) const
 {
-	return output.m_name.IsEmpty() ? wxString::Format(wxT("Output%u"), static_cast<unsigned>(at) + 1)
+	return output.m_name.IsEmpty() ? ibString::Format(ibT("Output%u"), static_cast<unsigned>(at) + 1)
 	                               : output.m_name;
 }
 
@@ -1094,11 +1101,11 @@ std::vector<ibQueryLowering::OutputColumn> ibDataDBComposer::SchemaFor(const Out
 {
 	// What this output names: its levels' fields, the resources (which every output rolls), and
 	// whatever it selected outright.
-	std::vector<wxString> mine;
-	const auto take = [&mine](const wxString& path) {
+	std::vector<ibString> mine;
+	const auto take = [&mine](const ibString& path) {
 		if (path.IsEmpty())
 			return;
-		for (const wxString& have : mine)
+		for (const ibString& have : mine)
 			if (have.IsSameAs(path, false))
 				return;
 		mine.push_back(path);
@@ -1111,13 +1118,13 @@ std::vector<ibQueryLowering::OutputColumn> ibDataDBComposer::SchemaFor(const Out
 		take(resource.m_path);
 		take(resource.m_alias);
 	}
-	for (const wxString& name : ProjectionFor(output))
+	for (const ibString& name : ProjectionFor(output))
 		take(name);
 
 	std::vector<ibQueryLowering::OutputColumn> schema;
 	for (const ibQueryLowering::OutputColumn& column : shared) {
 		bool wanted = false;
-		for (const wxString& path : mine)
+		for (const ibString& path : mine)
 			if (column.m_name.IsSameAs(path, false) || column.m_alias.IsSameAs(path, false)) { wanted = true; break; }
 		if (wanted)
 			schema.push_back(column);
@@ -1135,9 +1142,9 @@ ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
 	if (&output == &Root())
 		return Execute(schema, hasTotals, page, serverGrouped);
 
-	const wxString text = RenderTextFor(output);
+	const ibString text = RenderTextFor(output);
 	ibQueryPackage package;
-	std::map<wxString, const ibQuerySelect*> named;
+	std::map<ibString, const ibQuerySelect*> named;
 	ibQuerySelectPtr ast = ParseComposed(text, package, named);
 	if (ast == nullptr)
 		ibBackendCoreException::Error(_("Composer: the rendered query of an output failed to parse"));
@@ -1180,7 +1187,7 @@ ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
 // with its last condition; a group the author wrote empty is not this function's business, because
 // it did not stop resolving.
 static int ibPruneFilterNodes(std::vector<ibFilterNodeDescription>& nodes,
-	const std::function<bool(const wxString&)>& resolves)
+	const std::function<bool(const ibString&)>& resolves)
 {
 	int dropped = 0;
 	std::vector<ibFilterNodeDescription> kept;
@@ -1215,7 +1222,7 @@ static int ibPruneFilterNodes(std::vector<ibFilterNodeDescription>& nodes,
 }
 
 int ibDataComposer::PruneSettingsDesc(ibSettingsDescription& settings,
-	const std::function<bool(const wxString&)>& resolves)
+	const std::function<bool(const ibString&)>& resolves)
 {
 	int dropped = ibPruneFilterNodes(settings.m_filter.m_nodes, resolves);
 
@@ -1244,7 +1251,7 @@ int ibDataComposer::PruneSettingsDesc(ibSettingsDescription& settings,
 	return dropped;
 }
 
-int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxString&)>& resolves)
+int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const ibString&)>& resolves)
 {
 	if (!resolves)
 		return 0;   // no host answer = no verdict, and no verdict means nothing is dropped
@@ -1255,7 +1262,7 @@ int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxStr
 	// the lines are a LIST the fetch reads in order, and a rebuild keeps that order exact.
 	{
 		std::vector<FilterItem> kept;
-		std::map<wxString, ibValue> keptParams;
+		std::map<ibString, ibValue> keptParams;
 		for (const FilterItem& item : m_scopeConditions) {
 			if (!resolves(item.m_path)) { ++dropped; continue; }
 			const auto param = m_params.find(item.m_param);
@@ -1274,7 +1281,7 @@ int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxStr
 				// Only the AUTO-named ones (AddParam: `__f<n>`) belong to a filter line. A parameter the
 				// caller named itself is theirs, and dropping it here would be this pass reaching outside
 				// what it was asked about.
-				it = (it->first.StartsWith(wxT("__f")) && keptParams.find(it->first) == keptParams.end())
+				it = (it->first.StartsWith(ibT("__f")) && !keptParams.contains(it->first))
 					? m_params.erase(it) : std::next(it);
 			}
 		}

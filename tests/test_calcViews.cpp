@@ -61,7 +61,7 @@ ibCalcViewSpec Spec()
 }
 
 // Day n of the calendar these tests use, as a stored date.
-wxString DateOf(int day)
+ibString DateOf(int day)
 {
 	wxDateTime d(1, wxDateTime::Jan, 2026);
 	d += wxDateSpan::Days(day);
@@ -69,7 +69,7 @@ wxString DateOf(int day)
 }
 
 // By the Julian day: a difference of local times across a daylight-saving change is a day short.
-int DayOf(const wxString& stored)
+int DayOf(const ibString& stored)
 {
 	wxDateTime d;
 	d.ParseFormat(stored.Left(10), wxT("%Y-%m-%d"));
@@ -77,10 +77,10 @@ int DayOf(const wxString& stored)
 }
 
 struct Record {
-	wxString recorder;
+	ibString recorder;
 	int      line = 0;
-	wxString emp = wxT("E");
-	wxString kind;
+	ibString emp = wxT("E");
+	ibString kind;
 	int      reg = 0;           // the registration period, as a day
 	int      month = 0;         // the month-for, as a day
 	int      first = 0, last = 0;
@@ -90,8 +90,8 @@ struct Record {
 };
 
 // A position: what a displacer is in force by. A record: its recorder and line — what the fact's rows are of.
-using Position = std::tuple<wxString, wxString, int, int, int>;   // emp, kind, month, first, last
-using RecordId = std::pair<wxString, int>;
+using Position = std::tuple<ibString, ibString, int, int, int>;   // emp, kind, month, first, last
+using RecordId = std::pair<ibString, int>;
 using Days = std::vector<std::pair<int, int>>;
 using Pieces = std::map<RecordId, Days>;
 
@@ -116,10 +116,10 @@ std::map<Position, Standing> Fold(const std::vector<Record>& records)
 	return out;
 }
 
-Pieces RulesFact(const std::vector<Record>& records, const std::vector<std::pair<wxString, wxString>>& displaces)
+Pieces RulesFact(const std::vector<Record>& records, const std::vector<std::pair<ibString, ibString>>& displaces)
 {
-	std::map<wxString, int> typeIndex;
-	const auto ordinal = [&typeIndex](const wxString& t) {
+	std::map<ibString, int> typeIndex;
+	const auto ordinal = [&typeIndex](const ibString& t) {
 		const auto it = typeIndex.find(t);
 		if (it != typeIndex.end()) return it->second;
 		const int next = static_cast<int>(typeIndex.size());
@@ -130,13 +130,13 @@ Pieces RulesFact(const std::vector<Record>& records, const std::vector<std::pair
 	for (const auto& d : displaces)
 		edges.push_back({ ordinal(d.first), ordinal(d.second) });
 
-	const auto typeOf = [&typeIndex](const wxString& kind) {
+	const auto typeOf = [&typeIndex](const ibString& kind) {
 		const auto it = typeIndex.find(kind);
 		return it != typeIndex.end() ? it->second : -1;
 	};
 
 	// The displacers: the positions in force with days, by employee.
-	std::map<wxString, std::vector<Position>> byEmp;
+	std::map<ibString, std::vector<Position>> byEmp;
 	for (const auto& entry : Fold(records))
 		if (entry.second.count > 0 && std::get<3>(entry.first) <= std::get<4>(entry.first))
 			byEmp[std::get<0>(entry.first)].push_back(entry.first);
@@ -188,14 +188,14 @@ struct CalcViewsFix : ::testing::Test {
 	}
 
 	void Clear() { db->RunQuery(wxT("DELETE FROM Reg")); db->RunQuery(wxT("DELETE FROM Disp")); }
-	void Displaces(const wxString& owner, const wxString& named) {
+	void Displaces(const ibString& owner, const ibString& named) {
 		db->RunQuery(wxT("INSERT INTO Disp (owner, named) VALUES ('%s', '%s')"), owner, named);
 	}
-	void NoLongerDisplaces(const wxString& owner, const wxString& named) {
+	void NoLongerDisplaces(const ibString& owner, const ibString& named) {
 		db->RunQuery(wxT("DELETE FROM Disp WHERE owner = '%s' AND named = '%s'"), owner, named);
 	}
 	void Add(const Record& r) {
-		db->RunStatement(wxString::Format(
+		db->RunStatement(ibString::Format(
 			wxT("INSERT INTO Reg (recorder_, line_, emp, kind, reg_, ap_, aps, ape, storno, active_, result_) ")
 			wxT("VALUES ('%s', %d, '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %d)"),
 			r.recorder, r.line, r.emp, r.kind, DateOf(r.reg), DateOf(r.month), DateOf(r.first), DateOf(r.last),
@@ -203,25 +203,25 @@ struct CalcViewsFix : ::testing::Test {
 	}
 	// A record written again as `r` says now.
 	void Rewrite(const Record& r) {
-		db->RunStatement(wxString::Format(
+		db->RunStatement(ibString::Format(
 			wxT("UPDATE Reg SET emp = '%s', kind = '%s', reg_ = '%s', ap_ = '%s', aps = '%s', ape = '%s', storno = %d, ")
 			wxT("active_ = %d, result_ = %d WHERE recorder_ = '%s' AND line_ = %d"),
 			r.emp, r.kind, DateOf(r.reg), DateOf(r.month), DateOf(r.first), DateOf(r.last), r.storno ? 1 : 0,
 			r.active ? 1 : 0, r.result, r.recorder, r.line));
 	}
 	void Erase(const Record& r) {
-		db->RunStatement(wxString::Format(wxT("DELETE FROM Reg WHERE recorder_ = '%s' AND line_ = %d"), r.recorder, r.line));
+		db->RunStatement(ibString::Format(wxT("DELETE FROM Reg WHERE recorder_ = '%s' AND line_ = %d"), r.recorder, r.line));
 	}
 
-	static ibCalcNarrowing ToEmployee(const wxString& emp) {
+	static ibCalcNarrowing ToEmployee(const ibString& emp) {
 		if (emp.IsEmpty())
 			return nullptr;
-		return [emp](const wxString& alias, bool) { return ibBinOp(ibQueryBinOp::Eq, ibCol(alias, wxT("emp")), ibConst(ibValue(emp))); };
+		return [emp](const ibString& alias, bool) { return ibBinOp(ibQueryBinOp::Eq, ibCol(alias, wxT("emp")), ibConst(ibValue(emp))); };
 	}
 
 	// A record's own field narrows the subject alone — the records the reading produces, never their displacers.
-	static ibCalcNarrowing ToKind(const wxString& kind) {
-		return [kind](const wxString& alias, bool subject) {
+	static ibCalcNarrowing ToKind(const ibString& kind) {
+		return [kind](const ibString& alias, bool subject) {
 			return subject ? ibBinOp(ibQueryBinOp::Eq, ibCol(alias, wxT("kind")), ibConst(ibValue(kind))) : ibQueryExprPtr();
 		};
 	}
@@ -253,7 +253,7 @@ struct CalcViewsFix : ::testing::Test {
 	// The periods registered before `next` — what ComputeRows asks of every table for a moment in the period before
 	// it (ibCalcViewArg).
 	static ibCalcNarrowing Before(const ibDateTime& next) {
-		return [next](const wxString& alias, bool) {
+		return [next](const ibString& alias, bool) {
 			return ibBinOp(ibQueryBinOp::Lt, ibCol(alias, wxT("reg_")), ibConst(ibValue(next)));
 		};
 	}
@@ -474,7 +474,7 @@ TEST_F(CalcViewsFix, AnIntervalChoosesTheSubjectAndNotItsDisplacers)
 	Add(july);
 	Add(absence);
 	const auto from = [](int day) {
-		return [day](const wxString& alias, bool subject) {
+		return [day](const ibString& alias, bool subject) {
 			return subject ? ibBinOp(ibQueryBinOp::Ge, ibCol(alias, wxT("ape")), ibConst(ibValue(DateOf(day)))) : ibQueryExprPtr();
 		};
 	};
@@ -499,14 +499,14 @@ TEST_F(CalcViewsFix, RandomRegistersAgreeWithTheRules)
 		t = (t + ((t ^ (t >> 7)) * (61u | t))) ^ t;
 		return static_cast<int>(((t ^ (t >> 14)) % 1000000u) * static_cast<uint64_t>(n) / 1000000u);
 	};
-	const wxString types[] = { wxT("Salary"), wxT("Absence"), wxT("Vacation"), wxT("Bonus") };
+	const ibString types[] = { wxT("Salary"), wxT("Absence"), wxT("Vacation"), wxT("Bonus") };
 
 	size_t netted = 0, cut = 0, whole = 0, rewritten = 0, erased = 0;
 	for (int round = 0; round < 150; ++round) {
 		Clear();
-		std::vector<std::pair<wxString, wxString>> displaces;
-		for (const wxString& o : types)
-			for (const wxString& d : types)
+		std::vector<std::pair<ibString, ibString>> displaces;
+		for (const ibString& o : types)
+			for (const ibString& d : types)
 				if (o != d && rnd(3) == 0) { displaces.push_back({ o, d }); Displaces(o, d); }
 
 		std::vector<Record> records;
@@ -529,7 +529,7 @@ TEST_F(CalcViewsFix, RandomRegistersAgreeWithTheRules)
 				r.storno = false;
 				r.result = 100 * (1 + rnd(9));
 			}
-			r.recorder = wxString::Format(wxT("R%d"), 1 + rnd(4));
+			r.recorder = ibString::Format(wxT("R%d"), 1 + rnd(4));
 			r.line = i + 1;
 			r.active = rnd(8) != 0;
 			records.push_back(r);
@@ -566,7 +566,7 @@ TEST_F(CalcViewsFix, RandomRegistersAgreeWithTheRules)
 			byId[IdOf(r)] = &r;
 		const Pieces rules = RulesFact(records, displaces), views = Fact();
 		EXPECT_EQ(views.size(), rules.size()) << "round " << round;
-		const wxString kind = types[rnd(4)];
+		const ibString kind = types[rnd(4)];
 		const Pieces ofKind = Fact(ToKind(kind));
 		size_t rulesOfKind = 0;
 		for (const auto& entry : rules) {

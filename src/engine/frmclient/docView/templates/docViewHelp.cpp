@@ -17,8 +17,8 @@ bool ibFrontendHelpEditView::OnCreate(ibFrontendDocument* doc, long flags)
 {
 	m_textEditor = new ibTextEditor(doc, m_viewFrame, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
-	m_textEditor->SetEditorSettings(mainFrame->GetEditorSettings());
-	m_textEditor->SetFontColorSettings(mainFrame->GetFontColorSettings());
+	mainFrame->GetEditorSettings().Apply(*m_textEditor);
+	mainFrame->GetFontColorSettings().Apply(*m_textEditor);
 
 	m_textEditor->SetReadOnly(flags == ibDOC_READONLY);
 
@@ -86,7 +86,7 @@ void ibFrontendHelpEditView::OnFind(wxFindDialogEvent& event)
 	}
 	if (wxSTC_INVALID_POSITION == result)
 	{
-		wxMessageBox(wxString::Format(_("\"%s\" not found!"), event.GetFindString().c_str()), _("Not Found!"), wxICON_ERROR, (wxWindow*)event.GetClientData());
+		wxMessageBox(ibString::Format(_("\"%s\" not found!"), event.GetFindString().c_str()), _("Not Found!"), wxICON_ERROR, (wxWindow*)event.GetClientData());
 	}
 	else
 	{

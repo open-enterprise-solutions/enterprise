@@ -10,3 +10,9 @@
 #   race:<substring of the stack>
 #   deadlock:<substring>
 #   called_from_lib:<library>
+
+# cpp-httplib (vendored, being replaced): on a failed TLS handshake every
+# worker thread of the server's pool stores the error into the one shared
+# SSLServer::last_ssl_error_ field. Hit by the HttpSecure tests, which fail
+# handshakes on purpose; the field is diagnostic and nobody reads it there.
+race:httplib::SSLServer::process_and_close_socket

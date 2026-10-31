@@ -27,11 +27,11 @@ bool ibValueEvent::Dispatch(ibProcUnit* runtime, ibValue** args, long argc, ibVa
 //////////////////////////////////////////////////////////////////////
 
 ibValueEvent::ibValueEvent() :
-	ibValue(ibValueTypes::TYPE_VALUE), m_eventName(wxEmptyString)
+	ibValue(ibValueTypes::TYPE_VALUE), m_eventName(ibEmptyString)
 {
 }
 
-ibValueEvent::ibValueEvent(const wxString& eventName) :
+ibValueEvent::ibValueEvent(const ibString& eventName) :
 	ibValue(ibValueTypes::TYPE_VALUE), m_eventName(eventName)
 {
 }
@@ -49,7 +49,7 @@ ibValueActionEvent::ibValueActionEvent()
 {
 }
 
-ibValueActionEvent::ibValueActionEvent(const wxString& eventName, ibActionID eventId)
+ibValueActionEvent::ibValueActionEvent(const ibString& eventName, ibActionID eventId)
 	: ibValueEvent(eventName), m_eventId(eventId)
 {
 }

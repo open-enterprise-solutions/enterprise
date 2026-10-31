@@ -2,15 +2,19 @@
 #include "core/serialize/dataBuilder.h"   // ibDataValue — readable Number node value
 
 
-//load & save object in control 
+long ibPropertyEnumBase::GetValueAsInteger() const
+{
+	return static_cast<long>(GetNodeValue().AsInt());
+}
+
+void ibPropertyEnumBase::SetValue(const long& i)
+{
+	ibPropertySerializable::ReadNodeValue(ibDataValue::Int(i));
+}
+
+//load & save object in control
 bool ibPropertyEnumBase::ReadNodeValue(const ibDataValue& value)
 {
 	ibPropertyEnumBase::SetValue((long)value.AsInt()); // AsInt validates kind (Empty -> default)
-	return true;
-}
-
-bool ibPropertyEnumBase::WriteNodeValue(ibDataValue& value) const
-{
-	value = ibDataValue::Int(ibPropertyEnumBase::GetValueAsInteger());
 	return true;
 }
