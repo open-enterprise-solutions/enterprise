@@ -253,10 +253,12 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 	}
 
 	bool parked = false;
+	ibSessionQueue* queue = nullptr;
 	{
 		std::unique_lock<std::mutex> lk(m_mtx);
 		auto& slot = m_sessions[session];
 		if (!slot) slot = std::make_unique<ibSessionQueue>();
+		queue = slot.get();
 		// Taken on every submit, not only on the first: a queue outlives the drop that retired it
 		// (the identity comes back, see ThePoolStaysUsableAfterADeferredErase), and what we want is
 		// a hold on the session THIS task belongs to. Empty for a session nobody holds by
@@ -285,7 +287,18 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 	// is busy on a session. A parked question does not count: its fiber is
 	// suspended and the thread is back in this wait, which is idle.
 	if (m_idleWorkers.load(std::memory_order_acquire) == 0) {
-		TrySpawnWorker();
+		// ⚠ THE TASK IS QUEUED, SO THE ANSWER IS THE FUTURE AND NOTHING THROWS PAST IT. No thread to be had (the
+		// address space gone, 300 sessions on x86, 2026-10-31) came out of here: the caller left without waiting, and
+		// its task ran later on the references it had captured to that caller's frame. A worker there is runs it in
+		// its turn, as at the cap; with none, nobody will, and that is the refusal.
+		try {
+			TrySpawnWorker();
+		}
+		catch (const std::exception&) {
+			LogWorkerException(ibT("worker pool: no room for a thread"));
+			if (m_aliveWorkers.load(std::memory_order_acquire) == 0)
+				RefuseQueued(queue, "the session could not start: there is no room for a thread");
+		}
 	}
 
 	return future;

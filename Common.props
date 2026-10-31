@@ -55,6 +55,8 @@
   <ItemDefinitionGroup>
     <Link>
       <StackReserveSize>8388608</StackReserveSize>
+      <!-- ibFiber::kStackCommit (core/fiber/fiber.h) says why; change them together. -->
+      <StackCommitSize>262144</StackCommitSize>
     </Link>
   </ItemDefinitionGroup>
   <PropertyGroup Label="UserMacros" Condition="'$(Platform)'=='Win32'">

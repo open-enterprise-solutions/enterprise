@@ -814,7 +814,20 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 	ibString error;
 	ibJournalStopwatch took;
 	took.Resume();
-	const bool done = Call(method, request.m_params, result, refusal, error, connection, address);
+	// ⚠ A CALL IS ANSWERED, WHATEVER CAME OUT OF IT. What a method does not refuse itself — its session's worker
+	// refused the task (no room for a stack, 2026-10-31) — went past the answer, and the client waited for ever.
+	bool done = false;
+	try {
+		done = Call(method, request.m_params, result, refusal, error, connection, address);
+	}
+	catch (const std::exception& err) {
+		refusal = ibProtocol::ibRefusal::Failed;
+		error = ibString::FromUTF8(err.what());
+	}
+	catch (...) {
+		refusal = ibProtocol::ibRefusal::Failed;
+		error = ibT("the call ended with an exception");
+	}
 	took.Pause();
 
 	// EACH CALL, A LINE — what a client asked, how long it took, why it was refused: the client's side of the work, in
@@ -862,6 +875,15 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 	error.clear();
 	// Why, and its text — said together by every refusal below.
 	const auto refuse = [&refusal, &error](ibProtocol::ibRefusal why, const ibString& text) { refusal = why; error = text; };
+	// THE PROCESS'S MEMORY LIMIT, asked here and not at the work: a refusal takes no fiber. Near it what is new — a client,
+	// a window — is not let in; a little further nothing is done but leaving. Answers whether it refused.
+	const auto refuseIfFull = [&refuse](bool (ibApplicationHost::*question)() const) {
+		const ibApplicationHost* const host = ibApplicationHost::Get();
+		if (host == nullptr || !(host->*question)())
+			return false;
+		refuse(ibProtocol::ibRefusal::NotNow, ibString::Format(ibT("the server is full: it is near its memory limit of %zu MB"), host->GetMemoryLimit()));
+		return true;
+	};
 
 	if (method == ibProtocol::ibMethod::Unknown) {
 		refuse(ibProtocol::ibRefusal::NotFound, ibT("no such method"));
@@ -902,7 +924,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 		if (protocol < 1) {
 			refuse(ibProtocol::ibRefusal::BadParameter, ibString::Format(ibT("no protocol version %d"), protocol));
 		}
-		else if (logIn()) {
+		else if (!refuseIfFull(&ibApplicationHost::IsMemoryLimitNear) && logIn()) {
 			{
 				std::lock_guard<std::mutex> lock(m_mutex);
 				m_clients[id] = client;
@@ -990,6 +1012,9 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			refuse(ibProtocol::ibRefusal::NoSession, ibT("no such client"));
 		else
 			done = Debug(*client, params, result, refusal, error, connection);
+	}
+	else if (method != ibProtocol::ibMethod::Close && refuseIfFull(&ibApplicationHost::IsMemoryFull)) {
+		// Said. Closing a window, as Logout above, is how the memory comes back.
 	}
 	else {
 		const std::shared_ptr<Client> client = FindClient(params.GetValue<ibString>(ibProtocol::ibLogin::Client));
@@ -1083,7 +1108,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				else if (command == nullptr) {
 					refuse(ibProtocol::ibRefusal::NotFound, ibString::Format(ibT("no command with id %d"), metaId));
 				}
-				else {
+				else if (!refuseIfFull(&ibApplicationHost::IsMemoryLimitNear)) {
 					const ibInterfaceCommandType commandType = static_cast<ibInterfaceCommandType>(type);
 					done = Run(*client, [command, commandType](ibClientFrame*) { command->Execute(commandType); }, since,
 						result, refusal, error);
@@ -1311,6 +1336,9 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				if (frame == nullptr || session == nullptr) {
 					refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
 				}
+				else if (refuseIfFull(&ibApplicationHost::IsMemoryLimitNear)) {
+					// Said.
+				}
 				else if (!params.FindField(ibProtocol::ibFile::File)) {
 					// No file: a NEW document, as the desktop's File → New with a template picked — the template that
 					// opens the Extension.
@@ -1489,7 +1517,21 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 		ibClientInstance* const instance = client.instance.get();
 		client.unsettled = session->Submit([instance, work]() { work(instance->GetFrame()); }).share();
 	}
-	Settle(client);
+	try {
+		Settle(client);
+	}
+	catch (const std::exception& err) {
+		client.answering.store(false, std::memory_order_release);
+		refusal = ibProtocol::ibRefusal::Failed;
+		error = ibString::FromUTF8(err.what());
+		return false;
+	}
+	catch (...) {
+		client.answering.store(false, std::memory_order_release);
+		refusal = ibProtocol::ibRefusal::Failed;
+		error = ibT("the client's work ended with an exception");
+		return false;
+	}
 	const std::int64_t settled = NowMs();
 
 	// The frame drawn on the worker — inside the waiting work when it waits for a response (it runs the session's
@@ -1583,18 +1625,18 @@ void ibClientHost::Settle(Client& client)
 		return;
 	for (;;) {
 		if (client.unsettled.wait_for(std::chrono::milliseconds(20)) == std::future_status::ready) {
+			const std::shared_future<void> work = client.unsettled;
+			client.unsettled = std::shared_future<void>();
 			try {
-				client.unsettled.get();
+				work.get();
 			}
-			catch (const std::exception& err) {
-				ibJournalInfo(ibT("client"), ibT("the client's work ended with an exception: %s"), ibString::FromUTF8(err.what()));
-			}
-			catch (...) {
+			catch (const ibCoreException& err) {
 				// A failure of the work reported itself where it happened — to the frame's messages, which the
 				// client receives with the frame.
-				ibJournalInfo(ibT("client"), ibT("the client's work ended with an exception"));
+				ibJournalInfo(ibT("client"), ibT("the client's work ended with an exception: %s"), err.GetErrorDescription());
 			}
-			client.unsettled = std::shared_future<void>();
+			// …and anything else told nobody — the worker refused the task, and it never ran (no room for a stack,
+			// 2026-10-31): it goes to the caller, or the client is answered a frame as if the work were done.
 			return;
 		}
 		ibClientFrame* const frame = client.instance->GetFrame();

@@ -83,8 +83,19 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 ## Fixes
 
 - **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the
-  bytecode cache empty, each compiled the same modules. The first now holds the module's row in the
-  database, the others wait and read what it saved; if it fails, the next one compiles.
+  bytecode cache empty, each compiled the same modules. The first now holds a lock in the database,
+  the others wait and read what it saved; if it fails, the next one compiles.
+
+- **Sessions logging in together no longer bring the web server down.** Each visitor rewrote the MCP
+  server's settings as if it owned the process.
+
+- **The process has a memory limit.** `MemoryLimit` in `backend.conf`, in megabytes; 0 is none but the
+  operating system's. At 80% no new client or window is let in, at 90% nothing is done but closing a
+  window and logging out, and the person is told the server is full. On Windows the system refuses
+  past the limit. On Linux only the refusals stand: set `MemoryMax` on the service.
+
+- **A Firebird connection caches 4 MB of pages, not 32.** Most of the memory of a busy server was this
+  cache, committed at connect and hardly touched.
 
 - **A selection reads a row's standard attributes.** `Catalogs.X.Select()` and the selections of the
   charts published only `Ref` and the attributes a person added, so reading `Code`, `Description`,

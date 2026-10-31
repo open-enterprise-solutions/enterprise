@@ -644,15 +644,17 @@ bool ibDatabaseLayerFirebird::Open()
 			dpbBuffer.push_back((char)((sweepInterval >> 24) & 0xFF));
 		}
 
-		// num_buffers — per-attachment page-cache size in pages. Default
-		// DefaultDbCachePages = 2048 (32 MB at 16K pages) is set in
-		// firebird.conf; we set it via DPB too so the driver owns the
-		// policy and firebird.conf becomes a fallback for engine-level
-		// settings only (ServerMode = Classic for RDP coordination,
-		// which has no DPB equivalent). Encoded as 4-byte little-endian
-		// integer per the dpb_num_buffers convention.
+		// num_buffers — per-attachment page-cache size in pages: 256, 4 MB at
+		// 16K pages, Firebird's own default where no attachment shares a
+		// cache (SuperClassic, firebird.conf). 2048 was 32 MB per attachment,
+		// committed whole at the attach and hardly touched: 1108 of the
+		// 1367 MB a server of 60 people held (2026-10-31). Set via DPB so the
+		// driver owns the policy and firebird.conf becomes a fallback for
+		// engine-level settings only (ServerMode, which has no DPB
+		// equivalent). Encoded as 4-byte little-endian integer per the
+		// dpb_num_buffers convention.
 		{
-			const uint32_t numBuffers = 2048;
+			const uint32_t numBuffers = 256;
 			dpbBuffer.push_back(isc_dpb_num_buffers);
 			dpbBuffer.push_back(4);
 			dpbBuffer.push_back((char)(numBuffers       & 0xFF));

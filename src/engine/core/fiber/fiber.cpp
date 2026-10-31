@@ -347,7 +347,7 @@ ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 		fiber->m_stackSize = reserveBytes;
 		// The commit stays below the reserve: at or above it, Windows rounds the reserve up to a whole
 		// megabyte, and a fiber asked for 64 KB got one.
-		const std::size_t commitBytes = reserveBytes > 64u * 1024u ? 64u * 1024u : reserveBytes / 2;
+		const std::size_t commitBytes = reserveBytes > kStackCommit ? kStackCommit : reserveBytes / 2;
 		void* handle = CreateFiberEx(
 			commitBytes, reserveBytes, FIBER_FLAG_FLOAT_SWITCH, &ibFiber::FiberProc, fiber);
 		if (handle == nullptr)

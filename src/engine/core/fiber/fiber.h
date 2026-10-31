@@ -28,8 +28,8 @@ public:
 	// 64-bit keeps the thread reserve (Common.props, StackReserveSize, 8 MB).
 	// MAX_REC_COUNT is 200 and ibProcUnit::Execute keeps about 9.4 KB per
 	// interpreted level, so that reserve is what lets the count be the
-	// limit a script sees. The pages commit on touch: a parked question
-	// pays for the stack the script used, not for the reserve.
+	// limit a script sees. Past kStackCommit the pages commit on touch: a
+	// parked question pays for the stack the script used, not for the reserve.
 	//
 	// A 32-bit process has about a gigabyte of user address space, and
 	// every lease takes a fiber, so the reserve there is the 2 MB the
@@ -39,6 +39,12 @@ public:
 	// task instead of claiming the same queue again.
 	static constexpr std::size_t kStackReserve =
 		sizeof(void*) >= 8 ? (8u * 1024u * 1024u) : (2u * 1024u * 1024u);
+
+	// Committed ahead of use, on a fiber and on a thread alike (the thread's is the linker's word: Common.props,
+	// StackCommitSize; CMakeLists.txt, /STACK). A stack page refused later is no exception but the end of the process:
+	// at the memory limit (backend.conf) the system has none to give, and an allocation refused there has to fit its
+	// unwinding. Change them together.
+	static constexpr std::size_t kStackCommit = 256u * 1024u;
 
 	// Left below the pointer so the refusal itself still fits. The depth
 	// counters stay the limit a script sees; this fires only when the

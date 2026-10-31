@@ -139,10 +139,11 @@ endif()
 # (<StackReserveSize>, where the measurement is written down: the default 1 MB killed the process at
 # Depth(75), silently, long before the engine's own recursion guard at 200 could speak). The linker
 # decides it, so it is said here for every executable; a CMake-built Windows tree used to run on 1 MB.
-# Linux and macOS give the main thread 8 MB already.
+# Linux and macOS give the main thread 8 MB already. The second number is what a thread has committed
+# ahead: ibFiber::kStackCommit (core/fiber/fiber.h) says why; change them together.
 # ---------------------------------------------------------------------------
 if(MSVC)
-    string(APPEND CMAKE_EXE_LINKER_FLAGS " /STACK:8388608")
+    string(APPEND CMAKE_EXE_LINKER_FLAGS " /STACK:8388608,262144")
 endif()
 
 # ---------------------------------------------------------------------------

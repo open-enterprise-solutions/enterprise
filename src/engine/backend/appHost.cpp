@@ -6,6 +6,19 @@
 #include "core/diagnostics/journal.h"   // a locale this machine cannot grant is said, not refused
 
 #include <algorithm>
+#include <cstdint>
+#include <limits>
+
+#if defined(__IBMSW__)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <psapi.h>     // K32GetProcessMemoryInfo — what the process holds, against MemoryLimit
+#elif defined(__linux__)
+#include <fstream>
+#include <unistd.h>    // sysconf — the page /proc/self/statm counts in
+#endif
 
 #include <wx/fileconf.h>
 #include <wx/filename.h>
@@ -70,6 +83,24 @@ const ibDictionary* DictionaryOfThisThreadsBase()
 	if (base == nullptr)
 		base = t_owner;
 	return base != nullptr ? base->GetDictionary() : nullptr;
+}
+
+// What the process holds: its private bytes on Windows, what it has resident on Linux, where running out is the OOM
+// killer and no refusal. Elsewhere unknown: 0, and the limit is not reached.
+std::size_t HeldMegabytes()
+{
+	std::uint64_t held = 0;
+#if defined(__IBMSW__)
+	PROCESS_MEMORY_COUNTERS_EX counters{};
+	if (::K32GetProcessMemoryInfo(::GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters), sizeof(counters)))
+		held = counters.PrivateUsage;
+#elif defined(__linux__)
+	std::ifstream statm("/proc/self/statm");
+	std::uint64_t size = 0, resident = 0;
+	if (statm >> size >> resident)
+		held = resident * static_cast<std::uint64_t>(::sysconf(_SC_PAGESIZE));
+#endif
+	return static_cast<std::size_t>(held / (1024 * 1024));
 }
 
 } // namespace
@@ -147,6 +178,18 @@ ibApplicationHost* ibApplicationHost::Ensure(ibRunMode runMode)
 std::size_t ibApplicationHost::GetDefaultConnections() const
 {
 	return m_configConnections > 0 ? m_configConnections : kDefaultConnections;
+}
+
+// BELOW THE LIMIT, BOTH, because at the limit it is too late: Firebird does not stand there (a null written in engine13,
+// an abort, 2026-10-31). What is in still grows past the first, by 200 MB of 1000 in a storm, and what stops it is the second.
+bool ibApplicationHost::IsMemoryLimitNear() const
+{
+	return m_configMemoryLimit != 0 && HeldMegabytes() >= m_configMemoryLimit - m_configMemoryLimit / 5;
+}
+
+bool ibApplicationHost::IsMemoryFull() const
+{
+	return m_configMemoryLimit != 0 && HeldMegabytes() >= m_configMemoryLimit - m_configMemoryLimit / 10;
 }
 
 ibString ibApplicationHost::GetJournalContext()
@@ -341,10 +384,11 @@ void ibApplicationHost::ReadBackendConf()
 		wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_GLOBAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
 	m_configLocale = fc.Read(wxT("Locale"), m_configLocale);   // what was there, when the file says nothing
 
-	// HOW MUCH THE PROCESS MAY CONSUME — said by whoever runs it, not compiled in. Workers and Bases are the most there
-	// may be: left out, or 0, no limit.
+	// HOW MUCH THE PROCESS MAY CONSUME — said by whoever runs it, not compiled in. Workers, Bases and MemoryLimit are the
+	// most there may be: left out, or 0, no limit.
 	m_configWorkers = ReadCount(fc, BACKEND_CONF, ibT("Workers"), 1, 0);
 	m_configBases   = ReadCount(fc, BACKEND_CONF, ibT("Bases"), 1, 0);
+	SetMemoryLimit(ReadCount(fc, BACKEND_CONF, ibT("MemoryLimit"), 1, 0));
 	// The application server's client ceiling. Left out, or 0: a thousand — not "no limit", which is what
 	// Workers and Bases mean by 0. Above the most, the most is used. See clientListener.cpp — a connection
 	// holds a thread, and this is how many of those threads the process will make.
@@ -366,6 +410,38 @@ void ibApplicationHost::ReadBackendConf()
 	//  every other saved setting, under their own category. See
 	//  ibMcpServer::LoadSettings. A copy in this file would be a second road,
 	//  and the two would disagree the first time somebody edited the page.)
+}
+
+void ibApplicationHost::SetMemoryLimit(std::size_t megabytes)
+{
+	m_configMemoryLimit = megabytes;
+	if (megabytes == 0)
+		return;
+
+	// THE WALL IS THE SYSTEM'S: past it every allocation in the process fails, whoever makes it — ours is std::bad_alloc,
+	// Firebird's its own refusal. Firebird's are on VirtualAlloc, and no operator new of ours would see them.
+	// On Linux there is no such wall to put on from inside: RLIMIT_AS counts what is reserved, and a thread's stack alone
+	// reserves 8 MB. There only the doors stand (IsMemoryLimitNear, IsMemoryFull); the wall is MemoryMax on the service.
+#if defined(__IBMSW__)
+	// A child stays out of it: firebird.exe has its own memory to hold. The handle is not kept — the job lives as long
+	// as the process in it.
+	JOBOBJECT_EXTENDED_LIMIT_INFORMATION limit{};
+	limit.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_PROCESS_MEMORY | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
+	limit.ProcessMemoryLimit = static_cast<SIZE_T>(std::min<std::uint64_t>(
+		static_cast<std::uint64_t>(megabytes) * 1024 * 1024, std::numeric_limits<SIZE_T>::max()));
+	const HANDLE job = ::CreateJobObjectW(nullptr, nullptr);
+	const bool applied = job != nullptr
+		&& ::SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limit, sizeof(limit))
+		&& ::AssignProcessToJobObject(job, ::GetCurrentProcess());
+	const unsigned long why = applied ? 0 : ::GetLastError();
+	if (job != nullptr)
+		::CloseHandle(job);
+	if (!applied) {
+		ibTechJournal::Print(ibJournalMark::Warning, ibT("engine"),
+			ibT("%s: MemoryLimit = %zu could not be put on the process (error %lu) - only the refusals below it stand"),
+			BACKEND_CONF, megabytes, why);
+	}
+#endif
 }
 
 bool ibApplicationHost::InitLocale(const ibString& locale)

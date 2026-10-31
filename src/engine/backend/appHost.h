@@ -71,6 +71,13 @@ public:
 	static constexpr std::size_t kMostClientConnections    = 10000;
 	std::size_t      GetClientConnections() const { return m_configClientConnections; }
 
+	// The most memory the process may hold, in megabytes — backend.conf (MemoryLimit). Left out, or 0: no limit but the
+	// operating system's. Near it, a fifth below, nothing new is let in; full, a tenth below, nothing is done but leaving
+	// (ibClientHost). On Windows the system itself refuses past it (SetMemoryLimit).
+	std::size_t      GetMemoryLimit() const { return m_configMemoryLimit; }
+	bool             IsMemoryLimitNear() const;
+	bool             IsMemoryFull() const;
+
 	// How long a thin client's session outlives a dropped connection — backend.conf (Resume), seconds.
 	// Left out is 120. 0 is off: the drop ends the session, its locks and its seat, as before this window.
 	// Above 30 minutes — the idle limit a client already dies by — is that limit.
@@ -130,6 +137,7 @@ private:
 	// to the journal.
 	static ibString GetJournalContext();
 
+	void SetMemoryLimit(std::size_t megabytes);
 	void ReadBackendConf();
 
 	// NOT "s_host": winsock2.h defines it as a macro (in_addr::S_un.S_un_b.s_b2) — see pluginHost.cpp.
@@ -139,13 +147,14 @@ private:
 	static std::atomic<std::size_t>                            s_instanceCount;   // its size, read without the lock
 
 	// backend.conf — read once for the process: the locale, how much the process may consume, and the default
-	// a base's own infobase.conf overrides (Workers and Bases: the most there may be, 0 = no limit; Connections 0 =
+	// a base's own infobase.conf overrides (Workers, Bases and MemoryLimit: the most there may be, 0 = no limit; Connections 0 =
 	// the built-in value). ClientConnections is the application server's own ceiling: 0 means
 	// kDefaultClientConnections, and a number above kMostClientConnections is that most. The certificate the
 	// listeners speak TLS over.
 	ibString    m_configLocale;
 	std::size_t m_configWorkers            = 0;
 	std::size_t m_configBases              = 0;
+	std::size_t m_configMemoryLimit        = 0;
 	std::size_t m_configConnections        = 0;
 	std::size_t m_configClientConnections  = kDefaultClientConnections;
 	std::size_t m_configResume             = 120;
