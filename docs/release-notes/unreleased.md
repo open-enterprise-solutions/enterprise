@@ -206,6 +206,15 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   job's manager `LastJob(job)`: the `BackgroundJob` of its last pass here, `Undefined` if none ran. A
   predefined job the base has no settings for reads as declared; it read as switched on, hourly.
 
+## Form windows
+
+- **A radio button can be bound.** `Source` and `ChoiceValue`, the value it stands for, of the source's
+  type — a number, a string, a date, or a member of an enumeration or True / False, chosen by its
+  name. Radio buttons bound to the same field are one switch: each is selected while the field holds
+  its value, a click writes it in, and `OnChange` is raised. An unbound one is as before: its
+  `Selected` decides, and a click selects it among the unbound radio buttons beside it. MCP:
+  `form_bind` for the source, `form_set {property: "ChoiceValue"}` for the value.
+
 ## The browser client
 
 - **A grid sizer's cells are one size, as in the thin client.** Every column takes an equal share of
