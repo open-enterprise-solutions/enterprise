@@ -3531,7 +3531,7 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	} styleRestore{ savedStyle };
 
 	ibCompileCode cc(wxT("caller"), wxT("memory"), false);
-	cc.AddContextVariable(wxT("ThisForm"), form);
+	cc.AddContextVariable(wxT("ThisForm"), static_cast<ibValue*>(form));
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("Procedure Write()\n")
 		wxT("  ThisForm.DataSource.B = ThisForm.DataSource.A;\n")
