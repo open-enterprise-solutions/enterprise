@@ -84,6 +84,12 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## The browser client
 
+- **A dark theme.** Tools → Theme... in both applications: light, dark, or as the machine is set — the person's,
+  kept in the base, so it goes with them from one machine to the next. The browser paints itself with it from the
+  login on, and follows the machine as it changes when the system's is chosen; the thin client keeps the choice now
+  and paints itself dark in a later build. A base with no users keeps one theme for everybody. A colour a form names
+  for itself is kept, and a control's pair with it is the light theme's - so yellow keeps its dark ink in the dark; a
+  cell's fill named with no ink is read with dark ink. A printout is light.
 - **The start**: the thin client's splash, with arrows and the stage of the start under it, is up from the first paint;
   a login asked takes its place, and it stays until the first window has its rows. The window's title has the OES logo
   beside the configuration's name.

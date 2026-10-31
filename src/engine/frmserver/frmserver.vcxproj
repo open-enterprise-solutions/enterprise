@@ -234,6 +234,7 @@
     <ClCompile Include="metaTree\treeDataProcessor.cpp" />
     <ClCompile Include="metaTree\treeDataReport.cpp" />
     <ClCompile Include="schema\about.cpp" />
+    <ClCompile Include="schema\style.cpp" />
     <ClCompile Include="schema\activeUser.cpp" />
     <ClCompile Include="schema\auditLog.cpp" />
     <ClCompile Include="schema\clientSchema.cpp" />
@@ -399,6 +400,7 @@
     <ClInclude Include="metaTree\treeDataProcessor.h" />
     <ClInclude Include="metaTree\treeDataReport.h" />
     <ClInclude Include="schema\about.h" />
+    <ClInclude Include="schema\style.h" />
     <ClInclude Include="schema\activeUser.h" />
     <ClInclude Include="schema\auditLog.h" />
     <ClInclude Include="schema\clientSchema.h" />

@@ -18,6 +18,7 @@
 // …and the shared schemas.
 #include "frmserver/docView/templates/docViewAssistant.h"
 #include "frmserver/schema/about.h"
+#include "frmserver/schema/style.h"
 #include "frmserver/schema/activeUser.h"
 #include "frmserver/schema/assistant.h"
 #include "frmserver/schema/assistantAccess.h"
@@ -331,6 +332,8 @@ ibDocManager::ibDocManager(long /*flags*/, bool initialize)
 	RegisterSchema(ibProtocol::ibSchema::ibKind::About, std::make_unique<ibSchemaAbout>());
 	// The configuration's languages — what a translated text is written in; both applications' translation window.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Languages, std::make_unique<ibSchemaLanguages>());
+	// The person's look - their theme; both applications' Tools offer it.
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Style, std::make_unique<ibSchemaStyle>());
 
 	// The commands every document answers to — and the window's besides, Open, Exit and the edit commands — with the
 	// default keys the desktop's windows gave them (SetDefaultHotKeys) and the pictures its menu showed them with. A

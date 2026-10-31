@@ -76,5 +76,6 @@ void ibClientFrameDesigner::InitializeDefaultMenu()
 
 	ibClientMenu tools;
 	tools.Append(ibProtocol::ibSchema::ibKind::McpServer, _("Options..."));
+	tools.Append(ibProtocol::ibSchema::ibKind::Style, _("Theme..."));
 	m_menu.AppendSubMenu(tools, _("Tools"));
 }

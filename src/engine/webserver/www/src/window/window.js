@@ -11,6 +11,7 @@ import { Questions } from './questions.js';
 import { Sections } from './sections.js';
 import { showFunctions } from './functions.js';
 import { showAbout } from './about.js';
+import { showTheme, styleSchema } from './theme.js';
 
 /** @typedef {import('../protocol/session.js').Session} Session */
 /** @typedef {import('../protocol/pictures.js').Pictures} Pictures */
@@ -242,6 +243,8 @@ export class ClientWindow {
 				await showFunctions(this.session, this.pictures, (error) => this.refused(error));
 			else if (item.Schema === about)
 				await showAbout(this.session);
+			else if (item.Schema === styleSchema)
+				await showTheme(this.session);
 			else if (item.Schema !== undefined)
 				this.say(`${item.Title ?? ''}: not in the browser yet`);
 			else if (item.Command !== undefined)

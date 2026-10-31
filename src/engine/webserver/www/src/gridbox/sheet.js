@@ -5,7 +5,7 @@
 // scrolls, a row group folds away, and a cell's text runs on over the empty cells beside it, as the desktop's grid
 // draws it.
 
-import { applyFont, colour } from '../controls/control.js';
+import { applyFont, colour, onFill } from '../controls/control.js';
 
 /** @typedef {{[name: string]: any}} SheetNode */
 
@@ -115,8 +115,7 @@ function cellOf(cell, row, col, options) {
 	if ((cell.colSpan ?? 1) > 1)
 		element.colSpan = cell.colSpan;
 	applyFont(element, cell.font);
-	element.style.color = colour(cell.textColour);
-	element.style.backgroundColor = colour(cell.background);
+	[element.style.color, element.style.backgroundColor] = onFill(colour(cell.textColour), colour(cell.background));
 	const horizontal = cell.alignHorz ?? 0;
 	element.style.textAlign = (horizontal & alignRight) !== 0 ? 'right'
 		: (horizontal & alignCentreHorizontal) !== 0 ? 'center' : '';

@@ -13602,3 +13602,27 @@ msgstr "Ассистент с доступом к данным"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Отладка"
+
+#: src/engine/frmserver/client/clientFrameRuntime.cpp
+msgid "Theme..."
+msgstr "Тема..."
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "As the system is set"
+msgstr "Как в системе"
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "Light"
+msgstr "Светлая"
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "Dark"
+msgstr "Тёмная"
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "The theme the interface is painted in:"
+msgstr "Тема оформления интерфейса:"
+
+#: src/engine/frmserver/schema/style.cpp
+msgid "The theme could not be kept"
+msgstr "Не удалось сохранить тему"

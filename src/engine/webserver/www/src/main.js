@@ -9,6 +9,7 @@ import { logIn } from './window/login.js';
 import { hideSplash, showSplash } from './window/splash.js';
 import { ClientWindow } from './window/window.js';
 import { moveDialogs } from './window/dialogMove.js';
+import { Theme, applyTheme, readTheme } from './window/theme.js';
 
 const root = /** @type {HTMLElement} */ (document.getElementById('client'));
 const publication = location.pathname.split('/').filter(Boolean)[0] ?? '';
@@ -20,6 +21,8 @@ async function start() {
 		return;
 	}
 	document.title = publication;
+	// Before the login the person is not known: the page is painted as the machine is set, the splash too.
+	applyTheme(Theme.System);
 	moveDialogs();
 	showSplash('Connecting to the base');
 	const connection = Connection.beside(location);
@@ -37,6 +40,8 @@ async function start() {
 	await logIn(root, session, publication);
 	addEventListener('pagehide', () => session.logout());
 	showSplash('Opening the window');
+	// The person's theme, before anything of theirs is drawn.
+	await readTheme(session, session.frame);
 	// The login's answer is the first frame: the session holds it, and the window draws it as it comes up.
 	const clientWindow = new ClientWindow(root, session, pictures);
 	if (session.frame !== null)

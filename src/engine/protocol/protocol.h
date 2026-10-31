@@ -876,6 +876,7 @@ namespace ibProtocol {
 			                     // tab (ibView::ibKind::Assistant). Allowed while the base's assistant access is running
 			ConfigCompare = 18,  // ibConfigCompare — the walk of two configurations; command Merge applies the ops chosen
 			Types        = 19,   // ibTypes
+			Style        = 20,   // ibStyle — both modes': how the person's interface is painted; command Save {Theme}
 		};
 
 		// A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
@@ -883,7 +884,7 @@ namespace ibProtocol {
 		// takes them and Save; Active users, the designer's, Kick, Reload and Release; the users Save and Remove; the
 		// designer's inspector (Properties) Save; its predefined values editor Create, Set and Remove; its texts
 		// (ObjectText) Save, and so the home page (HomePage); the base (Database) Load, Save and Clear; the assistant window
-		// (Assistant) Open; ConfigCompare Merge. The designer's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
+		// (Assistant) Open; ConfigCompare Merge; the style (Style) Save. The designer's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
 		enum class ibCommand : int {
 			Open    = 1,
 			Start   = 2,
@@ -995,6 +996,21 @@ namespace ibProtocol {
 			enum class ibColumn : int {
 				Left  = 1,
 				Right = 2,
+			};
+
+		}
+
+		// Both modes': how the person's interface is painted — Theme, theirs, kept in the base (System when they chose none).
+		// Command Save {Theme} keeps another. A client paints itself with it: the system's follows the machine's own
+		// light or dark.
+		namespace ibStyle {
+
+			inline constexpr const char* Theme = "Theme";   // ibTheme
+
+			enum class ibTheme : int {
+				System = 0,   // as the machine the client runs on is set
+				Light  = 1,
+				Dark   = 2,
 			};
 
 		}

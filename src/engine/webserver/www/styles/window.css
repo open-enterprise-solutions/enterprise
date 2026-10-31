@@ -490,7 +490,7 @@ oes-homepage {
 	height: 12px;
 	border-radius: 50%;
 	background: var(--oes-message-information);
-	color: #fff;
+	color: var(--oes-on-colour);
 	font: 700 9px/12px var(--oes-font-ui);
 	text-align: center;
 	transform: translateY(1px);
@@ -562,7 +562,7 @@ oes-homepage {
 	padding: 0.375rem 1rem;
 	border-radius: 0 0 6px 6px;
 	background: var(--oes-message-warning);
-	color: #fff;
+	color: var(--oes-on-colour);
 	font-weight: 600;
 	z-index: 9;
 }
@@ -574,7 +574,7 @@ oes-homepage {
 	place-content: center;
 	gap: 1rem;
 	padding: 1rem;
-	background: rgb(255 255 255 / 0.9);
+	background: var(--oes-veil);
 	text-align: center;
 	z-index: 10;
 }
@@ -609,7 +609,7 @@ wa-dialog.answered-only::part(close-button) {
 	color: var(--oes-text);
 	border: 1px solid var(--oes-border);
 	border-radius: 6px;
-	box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+	box-shadow: 0 4px 16px var(--oes-shadow-strong);
 	font: 0.875rem var(--oes-font-ui);
 }
 
@@ -681,7 +681,7 @@ wa-dialog.answered-only::part(close-button) {
 	color: var(--oes-text);
 	border: 1px solid var(--oes-border);
 	border-radius: 6px;
-	box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+	box-shadow: 0 4px 16px var(--oes-shadow-strong);
 	font: 0.875rem var(--oes-font-ui);
 }
 
@@ -745,6 +745,13 @@ wa-dialog.answered-only::part(close-button) {
 }
 
 /* About: the platform and its build centred over the blocks, as the thin client's window. */
+/* Tools → Theme...: the three, one under the other. */
+.themes {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
 .about {
 	--width: 30rem;
 }

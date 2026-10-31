@@ -40,6 +40,10 @@ enum class ibSettingsCategory : int {
 	// client of it, so the row has NO user (ReadLocale, backend/appData.cpp). One well-known object
 	// key, as the platform's above.
 	Regional,
+	// ⭐ HOW A PERSON'S INTERFACE IS PAINTED - their theme, kept in the base so it goes with them from one machine to
+	// the next (frmserver/schema/style.cpp). A row per person under one well-known object key, the platform's look.
+	// Appended, as the rule above requires.
+	Style,
 };
 
 // ONE SAVED SETTING as a shelf shows it — the identity, the caption, and when it

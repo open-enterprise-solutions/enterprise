@@ -322,6 +322,9 @@
     <ClCompile Include="schema\about.cpp">
       <Filter>schema</Filter>
     </ClCompile>
+    <ClCompile Include="schema\style.cpp">
+      <Filter>schema</Filter>
+    </ClCompile>
     <ClCompile Include="schema\activeUser.cpp">
       <Filter>schema</Filter>
     </ClCompile>
@@ -809,6 +812,9 @@
       <Filter>metaTree</Filter>
     </ClInclude>
     <ClInclude Include="schema\about.h">
+      <Filter>schema</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\style.h">
       <Filter>schema</Filter>
     </ClInclude>
     <ClInclude Include="schema\activeUser.h">
