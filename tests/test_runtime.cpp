@@ -3494,6 +3494,83 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	EXPECT_EQ(got.GetInteger(), 3);
 }
 
+// A module adds an attribute to its open form — a value table of columns a file decides, a flag — and
+// reaches it as ThisForm.<name> from then on. The form builds it; the script says only a name and a type.
+// It can take away what it added and nothing else: the attribute the form was designed with stays.
+TEST_F(FormRuntime, AFormScriptAddsAndRemovesAnAttribute) {
+	auto session = std::make_shared<FramedSession>(wxT("form-add-attribute"), ibSessionKind::Enterprise);
+	ibSessionHolder holder = ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session);
+	KeyFrame frame(std::move(holder));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	// HELD, unlike the form above: a METHOD call on ThisForm takes a reference and gives it back, and a form
+	// at count zero is deleted by that release - the next ThisForm.<member> would read a freed object.
+	ibMetaDataConfigurationFile cfg;
+	ibValuePtr<ReadableForm> form(new ReadableForm());
+	form->m_module.SetMetaData(&cfg);
+	form->BindContextVariable(wxT("ThisForm"), form);
+	ASSERT_NE(form->AddAttribute(wxT("Designed"), g_valueStructureCLSID, ibValue()), nullptr);
+
+	const short savedStyle = ibCompileCode::GetCodeStyle();
+	ibCompileCode::SetCodeStyle(CODE_VES);
+	struct StyleRestore {
+		short saved;
+		~StyleRestore() { ibCompileCode::SetCodeStyle(saved); }
+	} styleRestore{ savedStyle };
+
+	ibCompileCode cc(wxT("caller"), wxT("memory"), false);
+	cc.AddContextVariable(wxT("ThisForm"), form);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("Function Add()\n")
+		wxT("  Made = ThisForm.AddAttribute(\"Flag\", New TypeDescription(\"Boolean\"));\n")
+		wxT("  ThisForm.Flag = Not Made;\n")
+		wxT("  Return ThisForm.Flag;\n")
+		wxT("EndFunction\n")
+		wxT("Procedure AddAgain(Name)\n")
+		wxT("  ThisForm.AddAttribute(Name, New TypeDescription(\"String\"));\n")
+		wxT("EndProcedure\n")
+		wxT("Procedure AddUntyped()\n")
+		wxT("  ThisForm.AddAttribute(\"Loose\", \"Boolean\");\n")
+		wxT("EndProcedure\n")
+		wxT("Procedure Remove(Name)\n")
+		wxT("  ThisForm.RemoveAttribute(Name);\n")
+		wxT("EndProcedure\n")));
+
+	ibProcUnit pu;
+	ibString err;
+	ASSERT_TRUE(RunBound(cc, pu, err)) << err.ToStdString();
+
+	// A Boolean attribute is born False, and the module wrote its negation through ThisForm.Flag.
+	ibValue ret;
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Add"), ret));
+	EXPECT_EQ(ret.GetType(), ibValueTypes::TYPE_BOOLEAN);
+	EXPECT_TRUE(ret.GetBoolean());
+	ibFormAttributeValue* flag = form->GetAttribute(wxT("Flag"));
+	ASSERT_NE(flag, nullptr);
+	EXPECT_FALSE(flag->IsMain());
+	ibValue held;
+	ASSERT_TRUE(flag->GetValue(held));
+	EXPECT_TRUE(held.GetBoolean());
+
+	// A name the form has already, in any case, a name that is not one, and a type that is not a description.
+	ibValue name(ibT("flag"));
+	EXPECT_THROW(pu.CallAsProc(wxT("AddAgain"), name), ibBackendCoreException);
+	ibValue notAName(ibT("2nd"));
+	EXPECT_THROW(pu.CallAsProc(wxT("AddAgain"), notAName), ibBackendCoreException);
+	EXPECT_THROW(pu.CallAsProc(wxT("AddUntyped")), ibBackendCoreException);
+	EXPECT_EQ(form->GetAttributeCount(), 2u);
+
+	// The designed one stays; the added one goes.
+	ibValue designed(ibT("Designed"));
+	EXPECT_THROW(pu.CallAsProc(wxT("Remove"), designed), ibBackendCoreException);
+	ibValue added(ibT("Flag"));
+	ASSERT_TRUE(pu.CallAsProc(wxT("Remove"), added));
+	EXPECT_EQ(form->GetAttribute(wxT("Flag")), nullptr);
+	EXPECT_NE(form->GetAttribute(wxT("Designed")), nullptr);
+	EXPECT_THROW(pu.CallAsProc(wxT("Remove"), added), ibBackendCoreException);
+}
+
 // A list form's DataSource is a dynamic list. It already knows its source
 // metaobject; the script could not ask, because FillMembers was never bound
 // and named no such method. An empty list (no source) answers empty.

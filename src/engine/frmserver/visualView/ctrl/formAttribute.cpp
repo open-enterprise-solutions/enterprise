@@ -19,6 +19,9 @@
 #include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationBase : ibMetaData (upcast)
 #include "core/clsid.h"
 #include "backend/metaCollection/metaFormObject.h"            // ibValueMetaObjectFormBase::SaveFormData — the live form back into its blob
+#include "backend/backend_exception.h"                       // ibBackendCoreException — a module asked for an attribute it cannot have
+
+#include <algorithm>
 
 //*********************************************************************************************
 //*   ibValueForm attribute store / path resolve (relocated here from form.cpp)              *
@@ -420,6 +423,60 @@ bool ibValueForm::CheckFilling() const
 		filled = false;
 	}
 	return filled;
+}
+
+// A NAME IS ASKED THE WAY A MODULE MEETS IT — case-insensitively: `ThisForm.flag` and `ThisForm.Flag` are one member,
+// so an attribute that differs from another only in case would be one the module could never tell apart.
+static ibFormAttributeValue* AttributeCalled(const std::vector<ibValuePtr<ibFormAttributeValue>>& attributes,
+	const ibString& name)
+{
+	for (const auto& av : attributes)
+		if (av != nullptr && stringUtils::IsSameAs(av->GetName(), name))
+			return av;
+	return nullptr;
+}
+
+ibFormAttributeValue* ibValueForm::AddScriptAttribute(const ibString& name, const ibTypeDescription& typeDesc)
+{
+	if (name.IsEmpty() || stringUtils::CheckCorrectName(name) != wxNOT_FOUND || (name[0] >= ibT('0') && name[0] <= ibT('9'))) {
+		ibBackendCoreException::Error(_("'%s' cannot be the name of a form attribute: it takes letters, digits and "
+			"the symbol \"_\", and does not start with a digit"), name);
+		return nullptr;
+	}
+	if (const ibFormAttributeValue* taken = AttributeCalled(m_attributes, name)) {
+		ibBackendCoreException::Error(_("The form already has an attribute '%s'"), taken->GetName());
+		return nullptr;
+	}
+
+	// Made as every other attribute is — the form builds the entry — then typed with the WHOLE description (a string's
+	// length, a number's digits), not only its first class: the value it materialises follows from that.
+	ibValuePtr<ibFormAttributeValue> holder = MakeAttribute(name);
+	holder->m_attribute->SetDefaultMetaType(typeDesc);
+	holder->Refresh();
+
+	ibFormAttributeValue* entry = AttachAttribute(std::move(holder));
+	if (entry != nullptr)
+		m_scriptAttributes.push_back(entry->GetId());
+	return entry;
+}
+
+void ibValueForm::RemoveScriptAttribute(const ibString& name)
+{
+	ibFormAttributeValue* entry = AttributeCalled(m_attributes, name);
+	if (entry == nullptr) {
+		ibBackendCoreException::Error(_("The form has no attribute '%s'"), name);
+		return;
+	}
+
+	auto added = std::find(m_scriptAttributes.begin(), m_scriptAttributes.end(), entry->GetId());
+	if (added == m_scriptAttributes.end()) {
+		ibBackendCoreException::Error(_("'%s' is an attribute the form was designed with - only one the module "
+			"added with AddAttribute can be removed"), entry->GetName());
+		return;
+	}
+
+	m_scriptAttributes.erase(added);
+	DetachAttribute(entry);
 }
 
 ibFormAttributeValue* ibValueForm::GetMainAttribute() const
