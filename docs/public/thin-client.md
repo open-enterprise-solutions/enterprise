@@ -107,7 +107,8 @@ same process, and wx keeps one class table.
   and a script's printed sheet (`Print`) are the desktop's, copied. The client draws them over what the request
   carries; the server reads, checks and puts on what comes back.
 - **The desktop's controls.** Besides fields, tables, buttons and the rest: notebooks and their pages, radio buttons,
-  sliders, gauges, HTML boxes. A chart box is drawn empty.
+  sliders, gauges, HTML boxes. A chart box is drawn empty. A button drawn as a tile (`Representation = Tile`) stacks its
+  picture, large, over its caption and the `Note` under them, and fills what its sizer gives it.
 - **The focus brings its tab up.** A click into a form whose tab is not selected (the notebook split in two) selects
   it, as the desktop's did.
 

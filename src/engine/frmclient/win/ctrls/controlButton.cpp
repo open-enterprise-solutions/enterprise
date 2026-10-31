@@ -1,11 +1,38 @@
 #include "controlButton.h"
 
+#include <wx/arrstr.h>   // wxSplit, wxArrayString - a tile's caption in lines
 #include <wx/dcbuffer.h>
 #include <wx/renderer.h>
 #include <wx/settings.h>
 
+namespace {
+
+// A label broken into lines no wider than `width` at its spaces - a tile's caption in its tile, not cut at its edge. A
+// word wider than the line stands on a line of its own and is cut there, as a label that does not wrap is.
+wxArrayString WrappedLines(const wxWindow& window, const wxString& label, int width)
+{
+	wxArrayString lines;
+	wxString line;
+	for (const wxString& word : wxSplit(label, wxT(' '), 0)) {
+		const wxString longer = line.empty() ? word : line + wxT(' ') + word;
+		if (!line.empty() && window.GetTextExtent(longer).x > width) {
+			lines.push_back(line);
+			line = word;
+		}
+		else {
+			line = longer;
+		}
+	}
+	if (!line.empty() || lines.empty())
+		lines.push_back(line);
+	return lines;
+}
+
+} // namespace
+
 wxBEGIN_EVENT_TABLE(ibControlButton, wxAnyButtonBase)
 	EVT_PAINT(ibControlButton::OnPaint)
+	EVT_SIZE(ibControlButton::OnSize)
 	EVT_ERASE_BACKGROUND(ibControlButton::OnEraseBackground)
 	EVT_MOTION(ibControlButton::OnMouseMotion)
 	EVT_LEAVE_WINDOW(ibControlButton::OnMouseLeave)
@@ -49,6 +76,16 @@ void ibControlButton::SetLabel(const wxString& label)
 	Refresh();
 }
 
+void ibControlButton::SetNote(const wxString& note)
+{
+	if (m_note == note)
+		return;
+	m_note = note;
+	InvalidateCache();
+	InvalidateBestSize();
+	Refresh();
+}
+
 wxSize ibControlButton::DoGetBestClientSize() const
 {
 	if (m_cachedBestSize.x < 0) {
@@ -67,6 +104,25 @@ wxSize ibControlButton::DoGetBestClientSize() const
 
 		int contentW = tw + bmpW + bmpGap;
 		int contentH = wxMax(th, bmpH);
+		// Stacked - a tile: the bitmap over the label, and the note under them. Once the button has a width, the label
+		// is counted wrapped into it, as it is drawn - a tile narrower than its caption is as tall as its lines.
+		if (m_bitmapPosition == wxTOP || m_bitmapPosition == wxBOTTOM) {
+			const wxString note = (m_bitmapPosition == wxTOP && !HasFlag(wxBU_NOTEXT)) ? m_note : wxString();
+			wxCoord nw = 0, nh = 0;
+			const wxFont noteFont = NoteFont();
+			if (!note.empty())
+				GetTextExtent(note, &nw, &nh, nullptr, nullptr, &noteFont);
+			int labelH = th;
+			const int width = GetClientSize().x;
+			if (m_bitmapPosition == wxTOP && !label.empty() && width > 0) {
+				labelH = th * static_cast<int>(WrappedLines(*this, label, width - 2 * FromDIP(6)).size());
+				contentW = wxMax(wxMax(wxMin(tw, width), bmpW), nw);
+			}
+			else {
+				contentW = wxMax(wxMax(tw, bmpW), nw);
+			}
+			contentH = bmpH + bmpGap + labelH + (note.empty() ? 0 : FromDIP(2) + nh);
+		}
 
 		const int padX = FromDIP(14);
 		const int padY = FromDIP(4);
@@ -214,13 +270,34 @@ void ibControlButton::OnPaint(wxPaintEvent& WXUNUSED(event))
 		}
 	}
 	else {
-		const int contentH = bmpH + gap + th;
+		// Stacked: the note, when there is one, under the label in a smaller face - a tile's second line. With the
+		// bitmap below the label there is no line under the label for it, and with no text drawn, no label to stand under.
+		const wxString note = (m_bitmapPosition == wxTOP && !HasFlag(wxBU_NOTEXT)) ? m_note : wxString();
+		wxCoord nw = 0, nh = 0;
+		const wxFont noteFont = NoteFont();
+		if (!note.empty())
+			dc.GetTextExtent(note, &nw, &nh, nullptr, nullptr, &noteFont);
+		const int noteGap = note.empty() ? 0 : FromDIP(2);
+		// The label over the note wraps into the width it has - a tile is as wide as its cell, not as its caption.
+		const wxArrayString lines = (m_bitmapPosition == wxTOP && !label.empty())
+			? WrappedLines(*this, label, sz.x - 2 * FromDIP(6)) : wxArrayString();
+		const int labelH = lines.empty() ? th : th * static_cast<int>(lines.size());
+		const int contentH = bmpH + gap + labelH + noteGap + nh;
 		int y = (sz.y - contentH) / 2;
 		const int cx = sz.x / 2;
 		if (m_bitmapPosition == wxTOP) {
 			drawBmpAt(cx - bmpW / 2, y);
-			if (!label.empty())
-				dc.DrawText(label, cx - tw / 2 + pressShift, y + bmpH + gap + pressShift);
+			int lineY = y + bmpH + gap;
+			for (const wxString& line : lines) {
+				const int lw = dc.GetTextExtent(line).x;
+				dc.DrawText(line, cx - lw / 2 + pressShift, lineY + pressShift);
+				lineY += th;
+			}
+			if (!note.empty()) {
+				dc.SetFont(noteFont);
+				dc.DrawText(note, cx - nw / 2 + pressShift, y + bmpH + gap + labelH + noteGap + pressShift);
+				dc.SetFont(GetFont());
+			}
 		}
 		else {
 			if (!label.empty())
@@ -236,6 +313,21 @@ void ibControlButton::OnPaint(wxPaintEvent& WXUNUSED(event))
 		focus.Deflate(inset);
 		wxRendererNative::Get().DrawFocusRect(this, dc, focus);
 	}
+}
+
+// A stacked button given another width wraps its label anew: its best height is asked again, and the sizer that holds
+// it reads it at its next layout.
+void ibControlButton::OnSize(wxSizeEvent& event)
+{
+	const int width = GetClientSize().x;
+	if (width != m_wrappedFor) {
+		m_wrappedFor = width;
+		if (m_bitmapPosition == wxTOP || m_bitmapPosition == wxBOTTOM) {
+			InvalidateCache();
+			InvalidateBestSize();
+		}
+	}
+	event.Skip();
 }
 
 // ----------------------------------------------------------------------------

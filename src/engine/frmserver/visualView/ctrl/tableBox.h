@@ -603,7 +603,8 @@ private:
 		_("Whether the group and all its columns are shown. Hidden columns keep their data and can be shown again from code."), true);
 };
 
-class ibValueModelTableBoxColumn : public ibValueControl,
+// Exported: a test builds one by hand (tests/test_buttonTile.cpp - a column given a tile).
+class FRMSERVER_API ibValueModelTableBoxColumn : public ibValueControl,
 	public ibTypeControlFactory {
 	public:
 protected:

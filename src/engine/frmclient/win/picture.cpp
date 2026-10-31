@@ -56,15 +56,32 @@ wxBitmap BitmapOf(const ibMemoryBuffer& png)
 	return image.IsOk() ? wxBitmap(image) : wxBitmap();
 }
 
-// THE ENGINE'S OWN, by its number — the core's master, shown at 16 (tools/pictures/render.js); none: not the engine's.
-wxBitmap EnginePicture(const wxString& id)
+// THE ENGINE'S OWN, by its number — the core's master, four times the size it is shown at (tools/pictures/render.js);
+// none: not the engine's.
+wxImage EngineMaster(const wxString& id)
 {
 	unsigned long long number = 0;
 	if (!id.ToULongLong(&number))
-		return wxBitmap();
+		return wxImage();
 	const ibPicture registered = ibPictureRegistry::GetPicture(static_cast<ibPictureID>(number));
-	const wxImage image = registered.IsOk() ? ibProtocolImage(registered.GetData()) : wxImage();
+	return registered.IsOk() ? ibProtocolImage(registered.GetData()) : wxImage();
+}
+
+// …shown at 16.
+wxBitmap EnginePicture(const wxString& id)
+{
+	const wxImage image = EngineMaster(id);
 	return image.IsOk() ? wxBitmap(image.Scale(16, 16, wxIMAGE_QUALITY_HIGH)) : wxBitmap();
+}
+
+// An image fitted into a square of `pixels`, its proportions kept; none for none.
+wxBitmap FittedInto(const wxImage& image, int pixels)
+{
+	if (!image.IsOk() || pixels <= 0)
+		return wxBitmap();
+	const int longest = wxMax(image.GetWidth(), image.GetHeight());
+	return wxBitmap(image.Scale(wxMax(1, image.GetWidth() * pixels / longest), wxMax(1, image.GetHeight() * pixels / longest),
+		wxIMAGE_QUALITY_HIGH));
 }
 
 void PicturesOf(const ibDataNode& node, std::vector<wxString>& ids);
@@ -96,6 +113,14 @@ void PicturesOf(const ibDataNode& node, std::vector<wxString>& ids)
 		PicturesOf(child, ids);
 }
 
+// A picture fitted into a square once per picture and size: a tile is drawn on every frame that touches it, and a panel
+// is many tiles. Kept by the picture the wire names, the guid before its version, as Pictures() keeps them: one of
+// another version takes its place. Under the same lock.
+std::map<wxString, ibKeptPicture>& FittedPictures()
+{
+	static std::map<wxString, ibKeptPicture>* const s_fitted = new std::map<wxString, ibKeptPicture>();   // never destroyed, as Pictures()
+	return *s_fitted;
+}
 } // namespace
 
 wxBitmap ibProtocolPicture(const ibProtocolNode& node, const char* name)
@@ -109,6 +134,42 @@ wxBitmap ibProtocolPicture(const ibDataNode& node, const char* name)
 {
 	const auto value = node.FindField(name);
 	return value ? ibProtocolPicture(*value) : wxBitmap();
+}
+
+wxBitmap ibProtocolPicture(const ibProtocolNode& node, const char* name, int pixels)
+{
+	const ibDataNode* const read = node.GetBody();
+	const auto value = read != nullptr ? read->FindField(name) : decltype(read->FindField(name))();
+	if (!value)
+		return wxBitmap();
+	if (value->Kind() == ibDataKind::Binary)
+		return FittedInto(ibProtocolImage(value->AsBinary()), pixels);   // a picture with no id: nothing to keep it by
+	if (value->Kind() != ibDataKind::String)
+		return wxBitmap();
+	const wxString id(value->AsString());
+	const wxString key = wxString::Format(wxT("%s@%d"), id.BeforeFirst(wxT('#')), pixels);
+	{
+		std::lock_guard<std::mutex> lock(s_picturesLock);
+		const auto kept = FittedPictures().find(key);
+		if (kept != FittedPictures().end() && kept->second.id == id)
+			return kept->second.bitmap;
+	}
+	// The engine's own from its master, which has the size to spare; any other from what the client keeps of it.
+	const wxImage master = EngineMaster(id);
+	wxBitmap fitted;
+	if (master.IsOk()) {
+		fitted = FittedInto(master, pixels);
+	}
+	else {
+		const wxBitmap kept = ibProtocolPicture(id);
+		if (kept.IsOk())
+			fitted = FittedInto(kept.ConvertToImage(), pixels);
+	}
+	if (fitted.IsOk()) {
+		std::lock_guard<std::mutex> lock(s_picturesLock);
+		FittedPictures()[key] = { id, fitted };
+	}
+	return fitted;
 }
 
 wxBitmap ibProtocolPicture(const ibDataValue& value)

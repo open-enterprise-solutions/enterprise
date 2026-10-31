@@ -15,6 +15,10 @@ namespace {
 // The ids a group's popup gives its commands — each the command's place among the group's, as the press names it.
 constexpr int kFirstMemberId = wxID_HIGHEST + 1;
 
+// A tile's picture, in DIP: twice the 16 of a button's - the engine's masters have four times to give. Handed to wx at
+// this size and at twice it, as a bundle: wx draws the one the window's DPI asks for, scaled no further.
+constexpr int kTilePicture = 32;
+
 } // namespace
 
 void ibValueButton::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
@@ -30,21 +34,30 @@ void ibValueButton::Update(const ibProtocolNode& node)
 	// The server has resolved what is shown — the button's own caption and picture, or its command's — and which of
 	// the two; the caption names the button even when only the picture is shown.
 	const wxString caption = state.GetString(ibProtocol::ibForm::ibState::Caption);
-	const wxBitmap picture = ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture);
 	const ibProtocol::ibForm::ibState::ibRepresentation representation = static_cast<ibProtocol::ibForm::ibState::ibRepresentation>(
 		state.GetInt(ibProtocol::ibForm::ibState::Representation, static_cast<long long>(ibProtocol::ibForm::ibState::ibRepresentation::PictureAndText)));
 
-	if (representation == ibProtocol::ibForm::ibState::ibRepresentation::Picture) {
+	// A tile stacks them - the picture large on top, the caption, the note - and fills what its item gives it. The
+	// bitmap's place is given WITH the bitmap: SetBitmap puts it on the left unless told otherwise.
+	const bool tile = representation == ibProtocol::ibForm::ibState::ibRepresentation::Tile;
+	m_button->SetNote(tile ? wxString(state.GetString(ibProtocol::ibForm::ibState::Note)) : wxString());
+	if (tile) {
+		m_button->SetLabel(caption);
+		const wxBitmap normal = ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture, kTilePicture);
+		const wxBitmap twice = ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture, 2 * kTilePicture);
+		m_button->SetBitmap(normal.IsOk() ? wxBitmapBundle::FromBitmaps(normal, twice) : wxBitmapBundle(), wxTOP);
+	}
+	else if (representation == ibProtocol::ibForm::ibState::ibRepresentation::Picture) {
 		m_button->SetLabel(wxEmptyString);
-		m_button->SetBitmap(picture);
+		m_button->SetBitmap(ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture), wxLEFT);
 	}
 	else if (representation == ibProtocol::ibForm::ibState::ibRepresentation::Text) {
 		m_button->SetLabel(caption);
-		m_button->SetBitmap(wxNullBitmap);
+		m_button->SetBitmap(wxNullBitmap, wxLEFT);
 	}
 	else {
 		m_button->SetLabel(caption);
-		m_button->SetBitmap(picture);
+		m_button->SetBitmap(ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture), wxLEFT);
 	}
 
 	const ibProtocolNode members = state.FindChild(ibProtocol::ibForm::ibButton::Members);

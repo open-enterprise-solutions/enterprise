@@ -6,7 +6,8 @@
 
 #define FORM_ACTION 1
 
-class ibValueWindow : public ibValueControl {
+// Exported, as its base is: a test builds a button by hand, and a button is a window.
+class FRMSERVER_API ibValueWindow : public ibValueControl {
 	public:
 
 	void EnableWindow(bool enable = true) const { m_propertyEnabled->SetValue(enable); }

@@ -82,6 +82,15 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
 
+## Forms
+
+- **A button as a tile.** `Representation = Tile` draws the picture large over the caption and the new `Note`
+  under them - a price, a count, a state - and the button fills what its sizer gives it: a button for a finger,
+  in both clients. Tiles in a grid sizer make a panel of them; the browser's grid now gives every cell the same
+  size, as the thin client's does. A column, a page or a command bar item given Tile shows picture and text. The
+  protocol is 8. A form saved with a tile and opened by an earlier designer shows the representation blank, and
+  saved there it loses its note.
+
 ## The browser client
 
 - **The start**: the thin client's splash, with arrows and the stage of the start under it, is up from the first paint;

@@ -1,7 +1,8 @@
 // THE SIZERS — how a form lays its controls out, as the desktop's sizers do: a box (a row or a column), a wrapping
 // row, a grid, a box with a frame and a caption; and an item, which says how the control it holds takes its place —
-// its share of the free space (Proportion), whether it stretches across (Stretch), the border around it. A box laid
-// as a row folds into a column on a narrow screen (styles/form.css): a form drawn for a desktop still reads on a phone.
+// its share of the free space (Proportion), whether it stretches across (Stretch), the border around it. A grid's cells
+// are all one size, as the desktop's are. A box laid as a row folds into a column on a narrow screen (styles/form.css):
+// a form drawn for a desktop still reads on a phone.
 
 import { Control, defineControl } from './control.js';
 
@@ -51,7 +52,9 @@ class Wrapsizer extends Boxsizer {}
 class Gridsizer extends Control {
 	/** @param {ProtocolNode} node */
 	update(node) {
-		this.style.gridTemplateColumns = `repeat(${Math.max(1, node.Cols ?? 1)}, auto)`;
+		// Every column and every row the same: a column's share, not its widest content; a row the tallest row's height.
+		this.style.gridTemplateColumns = `repeat(${Math.max(1, node.Cols ?? 1)}, minmax(0, 1fr))`;
+		this.style.gridAutoRows = '1fr';
 		return true;
 	}
 

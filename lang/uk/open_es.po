@@ -10127,8 +10127,8 @@ msgid "The text on the button. Can be written per language and changed from code
 msgstr "Текст на кнопці. Можна задати для кожної мови та змінювати з коду, поки форму відкрито."
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:63
-msgid "What the button shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text); picture and text when no command is bound."
-msgstr "Що показує кнопка: текст, картинку або те й інше. Авто: те, чому віддає перевагу прив'язана команда (Закрити - лише картинка, Додати - картинка з текстом); картинка й текст, якщо команду не прив'язано."
+msgid "What the button shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text); picture and text when no command is bound. Tile: the picture large over the text and the Note under them, the button filling what its sizer gives it - a big button for a finger; put tiles in a grid sizer for a panel of them."
+msgstr "Що показує кнопка: текст, картинку або те й інше. Авто: те, чому віддає перевагу прив'язана команда (Закрити - лише картинка, Додати - картинка з текстом); картинка й текст, якщо команду не прив'язано. Плитка: картинка великою над текстом і підпис під ними, кнопка заповнює те, що їй дає сайзер, - велика кнопка під палець; плитки в сітці утворюють панель."
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:66
 msgid "The button's icon, beside or instead of the text (see Representation)."
@@ -13599,3 +13599,15 @@ msgstr "Асистент із доступом до даних"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Налагодження"
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgid "Tile"
+msgstr "Плитка"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Note"
+msgstr "Підпис"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "The line under a tile's title - a price, a count, a state. Shown only when Representation is Tile. Can be written per language and changed from code while the form is open."
+msgstr "Рядок під заголовком плитки - ціна, кількість, стан. Показується лише при поданні «Плитка». Може бути написаний кожною мовою й змінюватися з коду, поки форма відкрита."

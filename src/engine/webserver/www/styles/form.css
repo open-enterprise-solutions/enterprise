@@ -84,6 +84,13 @@ oes-gridsizer {
 	gap: 0.25rem;
 }
 
+/* A column's share, not its widest content - but a row no lower than what it holds: a cell taller than its share grows
+   the row rather than spilling into the next, as the desktop's grid does. */
+oes-gridsizer > oes-sizeritem {
+	min-width: 0;
+	min-height: auto;   /* oes-sizeritem's 0 would let an equal row squeeze it */
+}
+
 oes-staticboxsizer {
 	border: 1px solid var(--oes-border);
 	border-radius: 6px;
@@ -143,6 +150,42 @@ oes-button wa-button img,
 wa-tab img {
 	width: 16px;
 	height: 16px;
+}
+
+/* A TILE - a button for a finger: its picture large over its caption, the note under them, the whole filling its cell. */
+oes-button.tile {
+	display: flex;
+}
+
+oes-button.tile wa-button {
+	flex: 1 1 auto;
+	width: 100%;
+}
+
+oes-button.tile wa-button::part(base) {
+	height: 100%;
+	min-height: calc(var(--oes-touch) * 2);
+	padding: 0.5rem;
+	white-space: normal;
+}
+
+oes-button.tile .tile-face {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.25rem;
+	text-align: center;
+}
+
+oes-button.tile wa-button img {
+	width: var(--oes-tile-picture);
+	height: var(--oes-tile-picture);
+}
+
+oes-button.tile .tile-note {
+	font-size: 0.85em;
+	opacity: 0.75;
 }
 
 .command-bar .separator {

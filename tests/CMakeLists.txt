@@ -212,6 +212,7 @@ add_executable(oes_tests
     test_debugServer.cpp
     test_commonModuleCheck.cpp
     test_lockRace.cpp
+    test_buttonTile.cpp
     test_clientListener.cpp
 )
 

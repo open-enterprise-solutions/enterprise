@@ -38,6 +38,11 @@ public:
 
 	virtual void SetLabel(const wxString& label) override;
 
+	// The line under the label of a button drawn as a tile - its bitmap on top (SetBitmap(bitmap, wxTOP)): a price, a
+	// count. Drawn in that layout alone, and not with wxBU_NOTEXT, which hides the label it stands under.
+	void SetNote(const wxString& note);
+	const wxString& GetNote() const { return m_note; }
+
 	// Mark the button as the default action on its dialog / form — drawn
 	// with a thicker accent border so it reads as the primary choice.
 	void SetDefault(bool isDefault = true) {
@@ -92,6 +97,12 @@ protected:
 private:
 
 	mutable wxSize m_cachedBestSize = wxSize(-1, -1);
+
+	wxString m_note;
+	wxFont   NoteFont() const { return GetFont().Smaller(); }
+	int      m_wrappedFor = -1;   // the width last given: another one counts a stacked label's lines anew
+
+	void OnSize(wxSizeEvent& event);
 
 	bool m_hovered = false;
 	bool m_pressed = false;

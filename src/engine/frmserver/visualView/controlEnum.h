@@ -6,11 +6,15 @@ enum ibTitleLocation {
 	eRight
 };
 
+// What a control shows of its caption and its picture. Tile is a button's: the picture large over the caption and a
+// note under them - a column or a page shows it as picture and text. The numbers are the ones a saved form holds and
+// the client reads (ibProtocol::ibForm::ibState::ibRepresentation).
 enum ibRepresentation {
 	ibRepresentation_Auto,
 	ibRepresentation_Text,
 	ibRepresentation_Picture,
-	ibRepresentation_PictureAndText
+	ibRepresentation_PictureAndText,
+	ibRepresentation_Tile
 };
 
 // Where a notebook's tabs are (its OrientPage) - none: the notebook is a panel, the active page alone. The numbers are
@@ -104,6 +108,7 @@ class FRMSERVER_API ibValueEnumRepresentation :
 		AddEnumeration(ibRepresentation::ibRepresentation_Text, ibT("Text"), _("Text"));
 		AddEnumeration(ibRepresentation::ibRepresentation_Picture, ibT("Picture"), _("Picture"));
 		AddEnumeration(ibRepresentation::ibRepresentation_PictureAndText, ibT("PictureAndText"), _("Picture and text"));
+		AddEnumeration(ibRepresentation::ibRepresentation_Tile, ibT("Tile"), _("Tile"));
 	}
 private:
 };
