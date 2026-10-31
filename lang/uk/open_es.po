@@ -13599,3 +13599,20 @@ msgstr "Асистент із доступом до даних"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Налагодження"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp
+msgid "Document journals"
+msgstr "Журнали документів"
+
+#: src/engine/backend/metaCollection/partial/documentJournal.h
+msgid "Registered documents"
+msgstr "Реєстровані документи"
+
+#: src/engine/backend/metaCollection/partial/documentJournal.h
+msgid "The documents this journal lists. Its rows are theirs: one per written document of each kind listed, with the reference, date, number, posting flag and deletion mark every document has."
+msgstr "Документи, які перелічує журнал. Його рядки - рядки цих документів: по одному на кожен записаний документ кожного виду, з посиланням, датою, номером, ознакою проведення та позначкою вилучення, які має будь-який документ."
+
+#: src/engine/backend/metaCollection/partial/documentJournal.h
+msgid "The form the journal's list opens with. Empty: the list form is generated from the journal's columns."
+msgstr "Форма, з якою відкривається список журналу. Порожньо: форма списку створюється за колонками журналу."

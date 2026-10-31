@@ -40,6 +40,15 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **An assistant's connection comes back by itself.** After a dropped connection its next call opens a
   new one. The call that was under way is not repeated, and the assistant is told to check its result.
 
+## Metadata
+
+- **Document journals.** A `DocumentJournal` lists the documents of several kinds in one list, the
+  documents named in its `RegisteredDocuments`. Its rows are the documents' own, one per written
+  document, with `Ref`, `Date`, `Number`, `Posted` and `DeletionMark`, read on the server as one
+  `UNION ALL` over the documents' tables. A query reads it as `DocumentJournal.<Name>`, its list form
+  opens a row's document, and `DocumentJournals.<Name>.Select(From, To)` gives the references by date.
+  Journal columns that map one attribute per document are not built yet.
+
 ## Script language
 
 - **`Tstr(text)` without a language reads the user's language.** It read the first language

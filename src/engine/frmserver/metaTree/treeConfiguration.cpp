@@ -94,6 +94,7 @@ const ibMetaTreeGroupDef s_groups[] = {
 	{ g_metaAccountingRegisterCLSID,         0, ibMetaRow::Item },
 	{ g_metaCalculationRegisterCLSID,        0, ibMetaRow::Item },
 	{ g_metaSequenceCLSID,                   0, ibMetaRow::Item },
+	{ g_metaDocumentJournalCLSID,            0, ibMetaRow::Item },
 };
 
 // The rows this tree draws, in the order the declaration gives.
@@ -666,6 +667,20 @@ void ibConfigurationTree::AddSequenceItem(ibValueMetaObject* metaObject, ibDataN
 		metaObjectValue->GetTemplateArrayObject());
 }
 
+// A DOCUMENT JOURNAL — what a person opens it through. The documents it lists are a binding, shown
+// in its properties rather than as rows of its own.
+void ibConfigurationTree::AddDocumentJournalItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
+{
+	ibValueMetaObjectGenericData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectGenericData>();
+	wxASSERT(metaObjectValue);
+
+	AppendObjectGroup(hParentID, g_metaFormCLSID, objectFormsName,
+		metaObjectValue->GetFormArrayObject());
+	AppendCommandGroup(hParentID, objectCommandsName, metaObjectValue->GetCommandArrayObject());
+	AppendObjectGroup(hParentID, g_metaTemplateCLSID, objectTemplatesName,
+		metaObjectValue->GetTemplateArrayObject());
+}
+
 // A CALCULATION REGISTER — the same shape.
 void ibConfigurationTree::AddCalculationRegisterItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
@@ -692,6 +707,7 @@ void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, ibDataNode
 	else if (clsid == g_metaAccountingRegisterCLSID)         AddAccumulationRegisterItem(metaItem, item);
 	else if (clsid == g_metaCalculationRegisterCLSID)        AddCalculationRegisterItem(metaItem, item);
 	else if (clsid == g_metaSequenceCLSID)                   AddSequenceItem(metaItem, item);
+	else if (clsid == g_metaDocumentJournalCLSID)           AddDocumentJournalItem(metaItem, item);
 	else if (clsid == g_metaSectionCLSID)                    AddInterfaceItem(metaItem, item);
 
 	// A LANGUAGE SAYS ITS CODE — what a translated text is keyed by: the translation window's boxes are the languages',

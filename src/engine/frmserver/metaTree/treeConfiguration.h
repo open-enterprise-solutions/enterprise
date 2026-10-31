@@ -125,6 +125,7 @@ private:
 	void AddAccumulationRegisterItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddCalculationRegisterItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddSequenceItem(ibValueMetaObject* obj, ibDataNode& item);
+	void AddDocumentJournalItem(ibValueMetaObject* obj, ibDataNode& item);
 
 	// One group of an object, its rows; tables, each a group of its columns; commands, nesting.
 	template <typename TArray>

@@ -210,6 +210,8 @@
     <ClInclude Include="metaCollection\partial\calculationRegister.h" />
     <ClInclude Include="metaCollection\partial\sequence.h" />
     <ClInclude Include="metaCollection\partial\sequenceManager.h" />
+    <ClInclude Include="metaCollection\partial\documentJournal.h" />
+    <ClInclude Include="metaCollection\partial\documentJournalManager.h" />
     <ClInclude Include="metaCollection\partial\calculationRegisterManager.h" />
     <ClInclude Include="metaCollection\partial\chartOfCalculationTypes.h" />
     <ClInclude Include="metaCollection\partial\chartOfCalculationTypesEnum.h" />
@@ -568,7 +570,6 @@
     <ClCompile Include="metaCollection\metaSessionParameterObject.cpp" />
     <ClCompile Include="metaCollection\metaSessionParameterObject_res.cpp" />
     <ClCompile Include="metaCollection\metaFunctionalOptionObject.cpp" />
-    <ClCompile Include="metaCollection\metaDocumentJournalObject.cpp" />
     <ClCompile Include="metaCollection\metaFunctionalOptionObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaFunctionalOptionObject_res.cpp" />
     <ClCompile Include="functionalOption\functionalOptionGate.cpp" />
@@ -643,6 +644,9 @@
     <ClCompile Include="metaCollection\partial\sequenceMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\sequenceObject.cpp" />
     <ClCompile Include="metaCollection\partial\sequenceMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\documentJournalManager.cpp" />
+    <ClCompile Include="metaCollection\partial\documentJournalMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\documentJournalMetaQuery.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterObject.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesAction.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesEnum.cpp" />

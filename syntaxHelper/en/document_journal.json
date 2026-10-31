@@ -8,29 +8,19 @@
       "name_local": "DocumentJournals",
       "name_en": "DocumentJournals",
       "kind": "collection",
-      "category_keys": ["value_types"],
+      "category_keys": [
+        "value_types"
+      ],
       "signature": "DocumentJournals.<Name>",
-      "description": "A named list of document types. Documents returns the names written on the journal. Select returns a reference for each written row of those documents. A query reads the same rows as DocumentJournal.<Name>, with columns Ref, Date and Number.",
+      "description": "One list over the documents of several kinds. Its rows are the documents' own - one per written document of each kind it lists - with the columns every document has: Ref, Date, Number, Posted and DeletionMark. A query reads them as DocumentJournal.<Name>, and the journal's list form shows them.",
       "parameters": "None.",
       "return_descr": "The journal's manager.",
-      "example": "rows = DocumentJournals.Sales.Select();",
+      "example": "refs = DocumentJournals.Sales.Select(BegOfMonth(CurrentDate()));",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["mth.DocumentJournal.Select", "mth.DocumentJournal.Documents"],
-      "reviewed": false
-    },
-    {
-      "id": "mth.DocumentJournal.Documents",
-      "name_local": "Documents",
-      "name_en": "Documents",
-      "kind": "method",
-      "category_keys": ["value_types"],
-      "signature": "Documents()",
-      "description": "The document names written on the journal, one array entry per line. Document.Name and Name are the same name.",
-      "parameters": "None.",
-      "return_descr": "Array of document names.",
-      "example": "names = DocumentJournals.Sales.Documents();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["cls.DocumentJournal"],
+      "see_also": [
+        "mth.DocumentJournal.Select",
+        "mth.DocumentJournal.GetListForm"
+      ],
       "reviewed": false
     },
     {
@@ -38,14 +28,37 @@
       "name_local": "Select",
       "name_en": "Select",
       "kind": "method",
-      "category_keys": ["value_types"],
-      "signature": "Select()",
-      "description": "A reference for each written row of the documents this journal lists. A document the configuration does not have is skipped. With no database open, the array is empty.",
-      "parameters": "None.",
+      "category_keys": [
+        "value_types"
+      ],
+      "signature": "Select(From : date, To : date)",
+      "description": "The references of the documents the journal lists, ordered by date, from both or either bound (inclusive). Each reference is the document it is: an invoice comes back an invoice.",
+      "parameters": "From - the earliest date; To - the latest. Either may be left out.",
       "return_descr": "Array of document references.",
-      "example": "refs = DocumentJournals.Sales.Select();",
+      "example": "refs = DocumentJournals.Sales.Select(From, To);",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["cls.DocumentJournal", "mth.DocumentJournal.Documents"],
+      "see_also": [
+        "cls.DocumentJournal"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "mth.DocumentJournal.GetListForm",
+      "name_local": "GetListForm",
+      "name_en": "GetListForm",
+      "kind": "method",
+      "category_keys": [
+        "value_types"
+      ],
+      "signature": "GetListForm(Name : string, Owner, Key : guid)",
+      "description": "The journal's list form - the default list form when one is named, otherwise one generated from its columns. Opening a row opens its document.",
+      "parameters": "Name - a form of the journal, or empty for the default; Owner - the form that owns it; Key - the form's window key.",
+      "return_descr": "Form.",
+      "example": "DocumentJournals.Sales.GetListForm().Open();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.DocumentJournal"
+      ],
       "reviewed": false
     }
   ]
