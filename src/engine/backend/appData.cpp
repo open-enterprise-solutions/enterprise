@@ -449,12 +449,13 @@ void ibApplicationInstance::WireSessionEvents()
 		// being FIRST: the job manager starts with the base, before anybody logs in, so a scheduled job due at
 		// start made its run-as user what every unbound thread answered with, and a job under a user with
 		// settings of their own re-pointed the running MCP server at that user's token (census, 2026-10-01).
-		// …and a thin client's in a FILE base: there the process IS the thin client (fileserver in its own process) —
-		// on a server the same session is one visitor among many. Asked by the
-		// debugger's Stop when nothing is parked (ibSession::Current on its thread falls back to this session).
+		// …and a thin designer's in a FILE base: a base has one designer, and it has its person's MCP settings.
+		// ⭐ A THIN CLIENT'S NEVER: A FILE BASE IS A SERVER WITH ONE BASE, and its connections a cluster with one server
+		// (2026-10-31). It was taken here for the process's own, true of the one client a desktop process holds —
+		// and under a web server every visitor was: ten at once wrote the one MCP server's settings below, the strings
+		// were freed twice, and the process fell somewhere else entirely.
 		const bool ownSession = IsProcessSessionKind(s->GetKind())
-			|| (m_runMode == ibRunMode::eFILE_MODE
-				&& (s->GetKind() == ibSessionKind::ThinClient || s->GetKind() == ibSessionKind::ThinDesigner));
+			|| (m_runMode == ibRunMode::eFILE_MODE && s->GetKind() == ibSessionKind::ThinDesigner);
 		auto* registry = m_sessionRegistry.get();
 		if (ownSession && registry && registry->GetFallback() == nullptr) {
 			// What an UNBOUND thread resolves to (ibSession::Current — one rule everywhere). On the desktop

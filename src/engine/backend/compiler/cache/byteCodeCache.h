@@ -51,13 +51,11 @@ public:
 	// ⭐ A MODULE NOBODY HAS COMPILED YET IS COMPILED ONCE, WHOEVER ELSE ASKS MEANWHILE. Ten sessions
 	// entering a base whose cache is empty all miss, and without this all ten compile the same module.
 	//
-	// The first to miss holds the module's row: inserted and not committed, on a connection of its own,
-	// so it holds nothing of its session's. The others' inserts stand behind that row in the database
-	// (a primary key waits for the transaction that holds it). Saved, the row is committed, their insert
-	// conflicts, Acquire answers false and they read what was saved. Not saved — the compile failed, the
-	// session died — the row goes back, and the next one in the queue holds it and compiles.
-	//
-	// Nobody reads an empty row: until it is written it is seen by nobody but its holder.
+	// The first to miss holds the module's key in sys_lock_key, the mutex for one key (lockManager.cpp):
+	// an UPDATE of its row, not committed, on a connection of its own, so it holds nothing of its session's.
+	// The others' updates stand behind that row in the database. Saved, the transaction commits with the
+	// cache row in it, the next one gets the key and reads what was saved. Not saved — the compile failed,
+	// the session died — the transaction goes back, and the next one finds no row in the cache and compiles.
 	//
 	// ⚠ HELD ACROSS THE COMPILE ONLY, in the scope of that compile. Its transaction takes the thread's
 	// db_query channel when that is free (ibConnectionPool::SetActiveTxConnection), so what this thread
@@ -66,9 +64,9 @@ public:
 	public:
 		ibRowLock();
 		~ibRowLock();
-		// true — the row is held, compile. false — it was not taken: somebody finished while this waited,
-		// or the database could not be asked. Either way read the cache again; a miss then compiles unheld.
-		bool Acquire(const ibGuid& descId, const ibString& configMd5);
+		// Waits for the key and holds it; if the database could not be asked, holds nothing. Either way
+		// read the cache again: somebody may have finished meanwhile, and a miss then compiles.
+		void Acquire(const ibGuid& descId, const ibString& configMd5);
 		// Writes the row and lets it go. false — nothing is held, or the write failed.
 		bool Save(const ibByteCode& bc);
 	private:

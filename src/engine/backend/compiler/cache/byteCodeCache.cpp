@@ -6,7 +6,6 @@
 #include "byteCodeCache.h"
 
 #include <mutex>
-#include <thread>       // TEMPORARY — thread id in the cache-write probe
 #include <functional>
 
 #include "backend/appData.h"
@@ -147,39 +146,56 @@ struct ibByteCodeCache::ibRowLock::ibHeld {
 ibByteCodeCache::ibRowLock::ibRowLock() = default;
 ibByteCodeCache::ibRowLock::~ibRowLock() = default;
 
-bool ibByteCodeCache::ibRowLock::Acquire(const ibGuid& descId, const ibString& configDigest)
+void ibByteCodeCache::ibRowLock::Acquire(const ibGuid& descId, const ibString& configDigest)
 {
-	if (db_query == nullptr) return false;
+	if (db_query == nullptr) return;
 
-	const ibString descIdStr = descId;
+	const ibString kind = ibT("bytecode");
+	const ibString key = descId;
 	try {
 		std::unique_ptr<ibHeld> held = std::make_unique<ibHeld>();
 		held->m_configMd5 = CacheKey(configDigest);
 		ibDatabaseQueryBuilder& q = held->m_query;
-		if (!q.IsOpen() || !q.TableExists(bytecode_cache_table))
-			return false;   // the same connection asks — see Load
+		if (!q.IsOpen() || !q.TableExists(lock_key_table))
+			return;   // the same connection asks — see Load
 
-		// A WAITING transaction — the waiting is what this is for. What it stands behind is another compile
-		// of this module, on a connection of its own, so it ends with that compile and never with somebody's
-		// business transaction (see Save). The row of an earlier configuration goes first: one row per
-		// descriptor, and it would otherwise read as somebody having finished.
-		q.BeginTransaction();
-		q.Execute(ibDelete(bytecode_cache_table,
-			ibBinOp(ibQueryBinOp::And,
-			        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("descriptor_id")), ibConst(ibValue(descIdStr))),
-			        ibBinOp(ibQueryBinOp::Ne, ibCol(ibT("config_md5")), ibConst(ibValue(held->m_configMd5))))));
-		// Every column is NOT NULL, so the held row carries something in each; nobody reads it, and Save replaces it.
-		const char placeholder = 0;
-		q.Execute(ibInsert(bytecode_cache_table, {
-			{ ibT("descriptor_id"),    ibConst(ibValue(descIdStr)) },
-			{ ibT("bytecode_version"), ibConst(ibValue(descIdStr)) },
-			{ ibT("config_md5"),       ibConst(ibValue(held->m_configMd5)) },
-			{ ibT("bc_blob"),          ibConstBlob(&placeholder, sizeof(placeholder)) },
-		}));
-		m_held = std::move(held);
+		constexpr int kAttempts = 5;
+		for (int attempt = 0; attempt < kAttempts; ++attempt) {
+			// A WAITING transaction — the waiting is what this is for. What it stands behind is another compile
+			// of this module, on a connection of its own, so it ends with that compile and never with somebody's
+			// business transaction (see Save).
+			q.BeginTransaction();
+			if (q.Execute(ibUpdate(lock_key_table,
+					{ { ibT("namespace"), ibConst(ibValue(kind)) } },
+					ibBinOp(ibQueryBinOp::And,
+						ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(kind))),
+						ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(key)))))) >= 1) {
+				m_held = std::move(held);
+				return;
+			}
+			q.RollBack();
+
+			// ⚠ THE MISSING ROW IS MADE APART, NEVER WAITING, AND COMMITTED AT ONCE. Sessions missing together each
+			// inserted it and waited for the others' inserts to end: each stood behind all the rest until the
+			// driver's 30-second lock timeout, once per module (5 operators, 12:35:08 → 12:36:08, 2026-10-31). A
+			// conflict here is somebody else making the row; the next round stands behind it.
+			ibDatabaseLayer::ibTxOptions txOpts;
+			txOpts.noWait = true;
+			q.BeginTransaction(txOpts);
+			try {
+				q.Execute(ibInsert(lock_key_table, {
+					{ ibT("namespace"), ibConst(ibValue(kind)) },
+					{ ibT("keyHash"),   ibConst(ibValue(key)) },
+				}));
+				q.Commit();
+			}
+			catch (const ibDatabaseLayerException&) {
+				if (q.IsActiveTransaction())
+					q.RollBack();
+			}
+		}
 	}
-	catch (...) { return false; }   // the key conflicts: the row is there now, written by whoever held it
-	return true;
+	catch (...) {}   // an expired wait, no database: this compile goes unheld, and the cache is disposable
 }
 
 bool ibByteCodeCache::ibRowLock::Save(const ibByteCode& bc)

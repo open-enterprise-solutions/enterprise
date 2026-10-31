@@ -513,8 +513,10 @@ bool ibRuntimeModuleDataObject::Compile()
 	// the compile below did not get as far as the save, and the next one compiles.
 	ibByteCodeCache::ibRowLock rowLock;
 	bool ready = loadCached();
-	if (!ready && cacheable && !rowLock.Acquire(meta->GetGuid(), configMd5))
+	if (!ready && cacheable) {
+		rowLock.Acquire(meta->GetGuid(), configMd5);
 		ready = loadCached();
+	}
 
 	if (!ready) {
 		if (!m_compileModule->Compile())
