@@ -26,6 +26,7 @@
 #include "backend/system/value/valueMap.h"  // ibValueStructure, g_valueStructureCLSID
 #include "frmserver/visualView/ctrl/form.h"          // a real form, DataSource bound on it
 #include "frmserver/visualView/ctrl/formAttribute.h" // the attribute cell the bind points at
+#include "frmserver/visualView/visualHost.h"         // ibFormVisualDocument — who holds whom (WindowOpeningMode)
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
 #include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
 #include "backend/metadataConfiguration.h"           // the module's file name is asked of its metadata
@@ -3432,6 +3433,76 @@ struct FormRuntime : BuiltInRuntime {
 			ibApplicationInstance::DestroyAppDataEnv();
 	}
 };
+
+// A FORM'S OWN WINDOW — how it opens beside the others, how far its controls are laid out and whether they scroll up
+// and down — is saved with it, as everything a form says of itself is: a form written and read back says the same.
+TEST_F(FormRuntime, FormWindowPropertiesSurviveASave) {
+	auto session = std::make_shared<FramedSession>(wxT("form-window"), ibSessionKind::Enterprise);
+	KeyFrame frame(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	ibValuePtr<ibValueForm> written(new ibValueForm());
+	ASSERT_TRUE(written->GetProperty(wxT("Width"))->SetDataValue(ibValue(640)));
+	ASSERT_TRUE(written->GetProperty(wxT("Height"))->SetDataValue(ibValue(480)));
+	written->SetWindowOpeningMode(ibWindowOpeningMode::ibWindowOpeningMode_LockOwnerWindow);
+	ASSERT_TRUE(written->GetProperty(wxT("VerticalScroll"))->SetNodeValue(ibDataValue::Int(ibVerticalScroll::ibVerticalScroll_DontUse)));
+
+	ibDataNode node;
+	ASSERT_TRUE(written->WriteData(node));
+
+	ibValuePtr<ibValueForm> read(new ibValueForm());
+	EXPECT_EQ(read->GetWindowOpeningMode(), ibWindowOpeningMode::ibWindowOpeningMode_Independent);   // the default
+	ASSERT_TRUE(read->ReadData(node));
+
+	ibValue width, height;
+	ASSERT_TRUE(read->GetProperty(wxT("Width"))->GetDataValue(width));
+	ASSERT_TRUE(read->GetProperty(wxT("Height"))->GetDataValue(height));
+	EXPECT_EQ(width.GetInteger(), 640);
+	EXPECT_EQ(height.GetInteger(), 480);
+	EXPECT_EQ(read->GetWindowOpeningMode(), ibWindowOpeningMode::ibWindowOpeningMode_LockOwnerWindow);
+	EXPECT_EQ(read->GetProperty(wxT("VerticalScroll"))->GetNodeValue().AsInt(), ibVerticalScroll::ibVerticalScroll_DontUse);
+}
+
+// WHO HOLDS WHOM. A form opened over another that locks its owner's window holds that one form and no other; a form
+// that locks the whole interface holds every form but the ones opened from it; an independent form holds nothing, and
+// no form holds itself. Asked of the documents the forms are open in, as the client's are chained (SetDocParent).
+TEST_F(FormRuntime, FormOpeningModeHoldsItsOwnerOrEveryOtherForm) {
+	auto session = std::make_shared<FramedSession>(wxT("form-opening"), ibSessionKind::Enterprise);
+	KeyFrame frame(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	ibValueForm* const owner = new ibValueForm();
+	ibValueForm* const choice = new ibValueForm();
+	ibValueForm* const beside = new ibValueForm();
+	ibValueForm* const whole = new ibValueForm();
+	ibValueForm* const fromWhole = new ibValueForm();
+	choice->SetWindowOpeningMode(ibWindowOpeningMode::ibWindowOpeningMode_LockOwnerWindow);
+	whole->SetWindowOpeningMode(ibWindowOpeningMode::ibWindowOpeningMode_LockWholeInterface);
+
+	ibFormVisualDocument ownerDoc(owner), besideDoc(beside), wholeDoc(whole);
+	ibFormVisualDocument choiceDoc(choice), fromWholeDoc(fromWhole);
+	choiceDoc.SetDocParent(&ownerDoc);
+	fromWholeDoc.SetDocParent(&wholeDoc);
+
+	EXPECT_TRUE(ownerDoc.IsHeldBy(&choiceDoc));
+	EXPECT_FALSE(besideDoc.IsHeldBy(&choiceDoc));
+	EXPECT_FALSE(choiceDoc.IsHeldBy(&ownerDoc));
+	EXPECT_FALSE(choiceDoc.IsHeldBy(&choiceDoc));
+
+	EXPECT_TRUE(ownerDoc.IsHeldBy(&wholeDoc));
+	EXPECT_TRUE(besideDoc.IsHeldBy(&wholeDoc));
+	EXPECT_TRUE(choiceDoc.IsHeldBy(&wholeDoc));
+	EXPECT_FALSE(fromWholeDoc.IsHeldBy(&wholeDoc));
+	EXPECT_FALSE(wholeDoc.IsHeldBy(&wholeDoc));
+
+	EXPECT_FALSE(ownerDoc.IsHeldBy(&besideDoc));
+	EXPECT_FALSE(ownerDoc.IsHeldBy(nullptr));
+
+	choiceDoc.SetDocParent(nullptr);
+	fromWholeDoc.SetDocParent(nullptr);
+}
 
 TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	// UNLISTED, as a harness's session is: a listed one gives itself back to its base's registry as

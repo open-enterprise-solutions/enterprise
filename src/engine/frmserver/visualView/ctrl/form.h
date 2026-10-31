@@ -90,7 +90,16 @@ public:
 	ibColour GetForegroundColour() const { return m_propertyFG->GetValueAsColour(); }
 	ibColour GetBackgroundColour() const { return m_propertyBG->GetValueAsColour(); }
 
-	bool IsFormEnabled() const { return m_propertyEnabled->GetValueAsBoolean(); }
+	// Its own Enabled, and not held by another open form (IsBlocked): a form held shows greyed and takes no events.
+	bool IsFormEnabled() const { return m_propertyEnabled->GetValueAsBoolean() && !IsBlocked(); }
+
+	// How it opens beside the others — on its own, or holding its owner's window or every window while it is open.
+	ibWindowOpeningMode GetWindowOpeningMode() const { return m_propertyWindowOpeningMode->GetValueAsEnum(); }
+	void SetWindowOpeningMode(ibWindowOpeningMode mode) { m_propertyWindowOpeningMode->SetValue(mode); }
+
+	// Held by another open form of this client: one opened over it LockOwnerWindow, or one LockWholeInterface it was
+	// not opened from. Asked of the open forms each time — none holds it once they close (ibFormVisualDocument).
+	bool IsBlocked() const;
 
 	wxOrientation GetOrient() const { return m_propertyOrient->GetValueAsEnum(); }
 
@@ -601,6 +610,16 @@ private:
 	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, ibT("ForegroundColour"), _("Foreground"), _("The form's text colour, inherited by controls that have no colour of their own. Default: the system colour."), ibDefaultStyleFGColour);
 	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, ibT("BackgroundColour"), _("Background"), _("The form's background colour. Default: the system colour, which follows the user's theme."), ibDefaultStyleBGColour);
 	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryFrame, ibT("Enabled"), _("Enabled"), _("Whether the user can interact with the form. Off: every control on it is greyed out and takes no input - a view-only form."), true);
+	ibPropertyEnum<ibValueEnumWindowOpeningMode>* m_propertyWindowOpeningMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumWindowOpeningMode>>(m_categoryFrame, ibT("WindowOpeningMode"), _("Window opening mode"),
+		_("How the form opens beside the others. Independent (the default): every other form stays usable. Lock owner window: the form it was opened from shows greyed and takes no input until this one closes - a choice or a parameters form. Lock whole interface: every other form does, except the ones opened from this one."),
+		ibWindowOpeningMode::ibWindowOpeningMode_Independent);
+	ibPropertyUInteger* m_propertyWidth = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryFrame, ibT("Width"), _("Width"),
+		_("The narrowest the form's controls are laid out, in pixels: a window narrower than it scrolls them sideways. 0 (the default): as narrow as the controls allow."), 0);
+	ibPropertyUInteger* m_propertyHeight = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryFrame, ibT("Height"), _("Height"),
+		_("The lowest the form's controls are laid out, in pixels: a window lower than it scrolls them, as Vertical scroll allows. 0 (the default): as low as the controls allow."), 0);
+	ibPropertyEnum<ibValueEnumVerticalScroll>* m_propertyVerticalScroll = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumVerticalScroll>>(m_categoryFrame, ibT("VerticalScroll"), _("Vertical scroll"),
+		_("Whether the form's controls scroll up and down. Use if necessary (the default): a scroll bar shows when they are taller than the window. Use: it always shows. Don't use: never - what does not fit is cut off at the bottom."),
+		ibVerticalScroll::ibVerticalScroll_UseIfNecessary);
 	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(ibT("Sizer"), _("Sizer"));
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),
 		_("How the form lays out its top-level controls: vertically (the default, one under another) or horizontally (side by side). Groups inside the form have their own orientation."),

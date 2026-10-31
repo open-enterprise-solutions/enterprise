@@ -375,6 +375,21 @@ void ibVisualHostClient::UpdateForm(const ibProtocolNode& form)
 	ReadControl(m_valueForm.get(), form);
 
 	m_content->SetOrientation(static_cast<int>(form.GetInt(ibProtocol::ibForm::ibProperty::Orient, wxVERTICAL)));
+
+	// The narrowest and lowest the controls are laid out — a window smaller scrolls them; 0, as they allow.
+	const int width = static_cast<int>(form.GetInt(ibProtocol::ibForm::ibProperty::Width));
+	const int height = static_cast<int>(form.GetInt(ibProtocol::ibForm::ibProperty::Height));
+	m_content->SetMinSize(wxSize(width > 0 ? width : wxDefaultCoord, height > 0 ? height : wxDefaultCoord));
+
+	// Up and down they scroll as the form says: a bar when needed, always one, or none — then what does not fit is cut
+	// off. Only the window they scroll in: a designer's card scrolls whole, as its own.
+	if (GetBackgroundWindow() == m_contentWindow) {
+		using ibVerticalScroll = ibProtocol::ibForm::ibProperty::ibVerticalScroll;
+		const auto scroll = static_cast<ibVerticalScroll>(form.GetInt(ibProtocol::ibForm::ibProperty::VerticalScroll));
+		m_contentWindow->SetScrollRate(5, scroll == ibVerticalScroll::DontUse ? 0 : 5);
+		m_contentWindow->ShowScrollbars(wxSHOW_SB_DEFAULT, scroll == ibVerticalScroll::Use ? wxSHOW_SB_ALWAYS
+			: scroll == ibVerticalScroll::DontUse ? wxSHOW_SB_NEVER : wxSHOW_SB_DEFAULT);
+	}
 	m_commandBar->Update(form.FindChild(ibProtocol::ibForm::ibState::State).FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar));
 
 	// The form's colours — onto its command bar as well (the desktop's UpdateFormLayers).

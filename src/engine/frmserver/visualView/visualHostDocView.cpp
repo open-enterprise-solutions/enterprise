@@ -112,6 +112,11 @@ bool ibFormVisualDocument::OnCloseDocument()
 	if (m_valueForm != nullptr)
 		m_valueForm->m_formModified = false;
 
+	// What it held is let go now — the forms it held are drawn again, enabled, with the frame this close answers.
+	m_closed = true;
+	if (m_valueForm != nullptr && m_valueForm->GetWindowOpeningMode() != ibWindowOpeningMode::ibWindowOpeningMode_Independent)
+		UpdateOpenForms();
+
 	// The form it was opened over takes the client back — a selection form closing returns to the form that
 	// asked for the choice.
 	ibDocManager* const documentManager = GetDocumentManager();
@@ -277,6 +282,45 @@ bool ibFormVisualDocument::UpdateFormUniqueKey(const ibUniqueKeyPair& formKey)
 		return false;
 	document->GetValueForm()->m_formKey = formKey;
 	return true;
+}
+
+bool ibFormVisualDocument::IsHeldBy(const ibFormVisualDocument* holder) const
+{
+	if (holder == nullptr || holder == this || holder->m_closed || holder->GetValueForm() == nullptr)
+		return false;
+
+	switch (holder->GetValueForm()->GetWindowOpeningMode()) {
+	case ibWindowOpeningMode::ibWindowOpeningMode_LockOwnerWindow:
+		// Its owner's window — the form it was opened over, and that one only.
+		return holder->GetDocParent() == this;
+	case ibWindowOpeningMode::ibWindowOpeningMode_LockWholeInterface:
+		// Every window but the ones opened from it, directly or further down.
+		for (const ibDocument* parent = GetDocParent(); parent != nullptr; parent = parent->GetDocParent()) {
+			if (parent == holder)
+				return false;
+		}
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool ibFormVisualDocument::IsBlocked() const
+{
+	for (const ibFormVisualDocument* document : OpenFormDocuments()) {
+		if (IsHeldBy(document))
+			return true;
+	}
+	return false;
+}
+
+void ibFormVisualDocument::UpdateOpenForms()
+{
+	for (ibFormVisualDocument* document : OpenFormDocuments()) {
+		ibFormVisualEditView* const host = document->GetFirstView();
+		if (host != nullptr && document->GetValueForm() != nullptr)
+			host->UpdateControl(document->GetValueForm());
+	}
 }
 
 //********************************************************************************************
