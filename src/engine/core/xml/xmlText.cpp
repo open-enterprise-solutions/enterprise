@@ -339,6 +339,22 @@ public:
 		return status.parsing;
 	}
 	bool Paused() const { return Parsing() == XML_SUSPENDED; }
+	void SetCdataSectionAsText(bool asText) { BeforeFeed(); m_cdataAsText = asText; }
+	void SetDocumentTypeAsNode(bool asNode)
+	{
+		BeforeFeed();
+		m_doctypeAsNode = asNode;
+		// Where `<!DOCTYPE` begins is no event of expat's: it is where the last thing before it ended. Until the
+		// document type or the root, every token of the prolog passes through OnProlog, which keeps that place.
+		m_inProlog = asNode && m_receiver == nullptr;
+		XML_SetDefaultHandlerExpand(m_parser, m_inProlog ? OnProlog : nullptr);
+	}
+
+	void BeforeFeed() const
+	{
+		if (Parsing() != XML_INITIALIZED)
+			ibCoreException::Error(_("%s: how the text is read is said before it is fed"), m_who);
+	}
 	bool Finished() const { return Parsing() == XML_FINISHED; }
 
 private:
@@ -393,6 +409,36 @@ private:
 		XML_StopParser(m_parser, XML_FALSE);
 	}
 
+	// What `xml:lang` and `xml:space` say, as a chain like the namespaces': a link for each element that says either,
+	// on top of what is said outside it, let go of at that element's end. Its nodes copy the two values.
+	struct ibSaid {
+		ibSaid(std::shared_ptr<ibSaid> outer, int depth) : m_outer(std::move(outer)), m_depth(depth)
+		{
+			if (m_outer != nullptr) {
+				m_language = m_outer->m_language;
+				m_preserveSpace = m_outer->m_preserveSpace;
+			}
+		}
+		~ibSaid()   // the outer links one by one, not recursively: the chain is as deep as the document
+		{
+			std::shared_ptr<ibSaid> outer = std::move(m_outer);
+			while (outer != nullptr && outer.use_count() == 1)
+				outer = std::move(outer->m_outer);
+		}
+		std::shared_ptr<ibSaid> m_outer;
+		int      m_depth;                        // of the element that said it
+		ibString m_language;
+		bool     m_preserveSpace = false;
+	};
+
+	static void Stamp(ibNode& node, const ibSaid* said)
+	{
+		if (said != nullptr) {
+			node.m_language = said->m_language;
+			node.m_preserveSpace = said->m_preserveSpace;
+		}
+	}
+
 	void Begin(ibNode& node, ibXmlNodeType type)
 	{
 		node.m_type = type;
@@ -400,6 +446,7 @@ private:
 		node.m_line = static_cast<unsigned long long>(XML_GetCurrentLineNumber64(m_parser));
 		node.m_column = static_cast<unsigned long long>(XML_GetCurrentColumnNumber64(m_parser)) + 1;
 		node.m_namespaces = m_scope;
+		Stamp(node, m_said.get());
 	}
 
 	// A text or a CDATA section begun: where it began is kept, with no node of its own until it ends.
@@ -409,6 +456,7 @@ private:
 		m_pendingLine = static_cast<unsigned long long>(XML_GetCurrentLineNumber64(m_parser));
 		m_pendingColumn = static_cast<unsigned long long>(XML_GetCurrentColumnNumber64(m_parser)) + 1;
 		m_pendingScope = m_scope;   // a text begun before the next element's declarations keeps the scope it began in
+		m_pendingSaid = m_said;
 		m_pendingOpen = true;
 	}
 
@@ -426,16 +474,22 @@ private:
 				node.m_column = m_pendingColumn;
 				node.m_value = ibString::FromUTF8(m_pending.data(), m_pending.size());
 				node.m_namespaces = std::move(m_pendingScope);
+				Stamp(node, m_pendingSaid.get());
 			});
 		}
 		ForgetPending();
 	}
 
-	// The text gathered so far: Whitespace when it is nothing else, Text otherwise.
+	// The text gathered so far: Whitespace when it is nothing else, Text otherwise - and Text whenever a CDATA
+	// section is part of it: what a section holds is never whitespace to be dropped.
 	void FlushText()
 	{
+		if (m_pendingOpen && m_pending.empty()) {
+			ForgetPending();   // an empty CDATA section read as text: nothing was there
+			return;
+		}
 		if (m_pendingOpen)
-			FlushPending(IsXmlSpace(m_pending) ? ibXmlNodeType_Whitespace : ibXmlNodeType_Text);
+			FlushPending(IsXmlSpace(m_pending) && !m_pendingHasCdata ? ibXmlNodeType_Whitespace : ibXmlNodeType_Text);
 	}
 
 	// A node is made in its place at the end of the queue - not in a local moved in after, which in a checked build
@@ -457,6 +511,8 @@ private:
 	void ForgetPending()
 	{
 		m_pendingScope.reset();
+		m_pendingSaid.reset();
+		m_pendingHasCdata = false;
 		if (m_pending.capacity() > kChunk)
 			std::string().swap(m_pending);   // a huge text is not kept in memory after it is handed over
 		else
@@ -467,12 +523,14 @@ private:
 	static void XMLCALL OnStart(void* self, const XML_Char* name, const XML_Char** atts)
 	{
 		Guard(self, [&](ibExpat& parser) {
+			parser.EndProlog();
 			parser.FlushText();
 			if (parser.m_receiver != nullptr) {
 				parser.m_receiver->Start(name, atts, static_cast<unsigned long long>(XML_GetCurrentLineNumber64(parser.m_parser)));
 				++parser.m_depth;
 				return;
 			}
+			std::shared_ptr<ibSaid> said;   // the element's own xml:lang or xml:space, when it says one
 			parser.Enqueue([&](ibNode& node) {
 				parser.Begin(node, ibXmlNodeType_StartElement);
 				SplitName(name, node.m_uri, node.m_local, node.m_prefix, node.m_name);
@@ -504,9 +562,30 @@ private:
 					attribute.m_value = FromUtf8(at[1]);
 					node.m_attributeArray.push_back(std::move(attribute));
 				}
+				// `xml:lang` - any word, "" too (no language); `xml:space` - "preserve" or "default", the only two
+				// values it has: another says nothing, and what is said outside goes on.
+				// Only the prefix `xml` stands for that namespace - no other may be bound to it - so the prefix says it.
+				for (const ibAttribute& attribute : node.m_attributeArray) {
+					if (attribute.m_prefix != ibT("xml"))
+						continue;
+					const bool language = attribute.m_local == ibT("lang");
+					const bool space = attribute.m_local == ibT("space")
+						&& (attribute.m_value == ibT("preserve") || attribute.m_value == ibT("default"));
+					if (!language && !space)
+						continue;
+					if (said == nullptr)
+						said = std::make_shared<ibSaid>(parser.m_said, parser.m_depth);
+					if (language)
+						said->m_language = attribute.m_value;
+					else
+						said->m_preserveSpace = attribute.m_value == ibT("preserve");
+				}
+				Stamp(node, said.get());
 				parser.m_startLine = node.m_line;
 				parser.m_startColumn = node.m_column;
 			});
+			if (said != nullptr)
+				parser.m_said = std::move(said);
 			parser.m_declaring = 0;
 			++parser.m_depth;
 		});
@@ -544,6 +623,9 @@ private:
 					start.m_emptyElement = true;
 				}
 			});
+			// The end was still in what the element said; past it, what is said outside.
+			if (parser.m_said != nullptr && parser.m_said->m_depth == parser.m_depth)
+				parser.m_said = parser.m_said->m_outer;
 		});
 	}
 
@@ -553,12 +635,22 @@ private:
 			if (!parser.m_pendingOpen)
 				parser.BeginPending();
 			parser.m_pending.append(text, static_cast<size_t>(length));
+			if (parser.m_inCdata)
+				parser.m_pendingHasCdata = true;   // a section that holds something: never Whitespace
 		});
 	}
 
 	static void XMLCALL OnCdataStart(void* self)
 	{
 		Guard(self, [&](ibExpat& parser) {
+			if (parser.m_cdataAsText) {
+				// Part of the text around it: the text so far goes on, and what the section holds is added to it (OnText).
+				// A text that begins with the section begins where the section does.
+				if (!parser.m_pendingOpen)
+					parser.BeginPending();
+				parser.m_inCdata = true;
+				return;
+			}
 			parser.FlushText();
 			parser.BeginPending();
 		});
@@ -567,6 +659,10 @@ private:
 	static void XMLCALL OnCdataEnd(void* self)
 	{
 		Guard(self, [&](ibExpat& parser) {
+			if (parser.m_cdataAsText) {
+				parser.m_inCdata = false;
+				return;   // the text goes on after it
+			}
 			// A section of its own, never merged into the text before or after it - and never Whitespace.
 			parser.FlushPending(ibXmlNodeType_CDATASection);
 		});
@@ -575,8 +671,12 @@ private:
 	static void XMLCALL OnComment(void* self, const XML_Char* data)
 	{
 		Guard(self, [&](ibExpat& parser) {
-			if (parser.m_inDoctype)
-				return;   // the document type is not handed over, nor what stands inside it
+			if (parser.m_inDoctype) {
+				XML_DefaultCurrent(parser.m_parser);   // part of the internal subset, as it is written
+				return;
+			}
+			if (parser.m_inProlog)
+				XML_DefaultCurrent(parser.m_parser);   // where it ends: the document type may follow
 			parser.FlushText();
 			if (parser.m_receiver != nullptr) {
 				parser.m_receiver->Content(ibXmlNodeType_Comment, nullptr, data, std::strlen(data),
@@ -593,8 +693,12 @@ private:
 	static void XMLCALL OnPi(void* self, const XML_Char* target, const XML_Char* data)
 	{
 		Guard(self, [&](ibExpat& parser) {
-			if (parser.m_inDoctype)
+			if (parser.m_inDoctype) {
+				XML_DefaultCurrent(parser.m_parser);
 				return;
+			}
+			if (parser.m_inProlog)
+				XML_DefaultCurrent(parser.m_parser);
 			parser.FlushText();
 			if (parser.m_receiver != nullptr) {
 				parser.m_receiver->Content(ibXmlNodeType_ProcessingInstruction, target, data, std::strlen(data),
@@ -614,9 +718,33 @@ private:
 		Guard(self, [&](ibExpat& parser) {
 			if (version == nullptr)
 				return;   // a text declaration of an entity, not the document's
+			if (parser.m_inProlog)
+				XML_DefaultCurrent(parser.m_parser);
 			parser.m_owner.m_version = FromUtf8(version);
 			parser.m_owner.m_encoding = FromUtf8(encoding);
 			parser.m_owner.m_standalone = standalone == 1;
+			if (parser.m_receiver != nullptr)
+				return;
+			// A node too: its parts as attributes, and as its value in the form they are written in - each in double
+			// quotes, whatever quotes the document used. A part the document leaves out is not there.
+			parser.Enqueue([&](ibNode& node) {
+				parser.Begin(node, ibXmlNodeType_XMLDeclaration);
+				node.m_name = node.m_local = ibT("xml");
+				const auto part = [&](const ibChar* partName, const ibString& value) {
+					ibAttribute attribute;
+					attribute.m_name = attribute.m_local = partName;
+					attribute.m_value = value;
+					if (!node.m_value.IsEmpty())
+						node.m_value += ibT(' ');
+					node.m_value += ibString(partName) + ibString(ibT("=\"")) + value + ibString(ibT("\""));
+					node.m_attributeArray.push_back(std::move(attribute));
+				};
+				part(ibT("version"), parser.m_owner.m_version);
+				if (encoding != nullptr)
+					part(ibT("encoding"), parser.m_owner.m_encoding);
+				if (standalone != -1)
+					part(ibT("standalone"), ibString(standalone == 1 ? ibT("yes") : ibT("no")));
+			});
 		});
 	}
 
@@ -640,14 +768,107 @@ private:
 		});
 	}
 
-	static void XMLCALL OnDoctypeStart(void* self, const XML_Char*, const XML_Char*, const XML_Char*, int)
+	// The document type is handed over whole at its end: its name and identifiers as they start, the internal subset
+	// as written between them. What expat has no handler for inside the subset - each declaration, the space between
+	// them - goes to the default handler, and a comment or an instruction there is sent to it (XML_DefaultCurrent).
+	// The Expand form, so that an entity declared there is still expanded where it is used; the handler is there only
+	// while the subset is read.
+	static void XMLCALL OnDoctypeStart(void* self, const XML_Char* name, const XML_Char* systemId,
+		const XML_Char* publicId, int hasInternalSubset)
 	{
-		static_cast<ibExpat*>(self)->m_inDoctype = true;
+		Guard(self, [&](ibExpat& parser) {
+			parser.m_inDoctype = true;
+			if (parser.m_receiver != nullptr || !parser.m_doctypeAsNode)
+				return;
+			parser.FlushText();
+			ibNode& node = parser.m_doctype;
+			node = ibNode();
+			parser.Begin(node, ibXmlNodeType_DocumentTypeDefinition);
+			node.m_line = parser.m_prologLine;     // expat stands at its `[` or `>` here
+			node.m_column = parser.m_prologColumn;
+			parser.m_inProlog = false;
+			node.m_name = node.m_local = FromUtf8(name);
+			const auto identifier = [&](const ibChar* kind, const XML_Char* value) {
+				if (value == nullptr)
+					return;
+				ibAttribute attribute;
+				attribute.m_name = attribute.m_local = kind;
+				attribute.m_value = FromUtf8(value);
+				node.m_attributeArray.push_back(std::move(attribute));
+			};
+			identifier(ibT("PUBLIC"), publicId);
+			identifier(ibT("SYSTEM"), systemId);
+			parser.m_subset.clear();
+			XML_SetDefaultHandlerExpand(parser.m_parser, hasInternalSubset ? OnSubset : nullptr);
+		});
+	}
+
+	// A token of the prolog - space, the declaration, a comment, an instruction: where it ends is kept, counted as the
+	// parser counts - a character a column, `\r\n` or a lone `\r` one line.
+	static void XMLCALL OnProlog(void* self, const XML_Char* text, int length)
+	{
+		Guard(self, [&](ibExpat& parser) {
+			unsigned long long line = static_cast<unsigned long long>(XML_GetCurrentLineNumber64(parser.m_parser));
+			unsigned long long column = static_cast<unsigned long long>(XML_GetCurrentColumnNumber64(parser.m_parser)) + 1;
+			for (int i = 0; i < length; ++i) {
+				const unsigned char c = static_cast<unsigned char>(text[i]);
+				if (c == '\r' || c == '\n') {
+					if (c == '\r' && i + 1 < length && text[i + 1] == '\n')
+						++i;
+					++line;
+					column = 1;
+				}
+				else if ((c & 0xC0) != 0x80) {
+					++column;   // a character's first byte
+				}
+			}
+			parser.m_prologLine = line;
+			parser.m_prologColumn = column;
+		});
+	}
+
+	// The root has begun: there is no document type to look for.
+	void EndProlog()
+	{
+		if (!m_inProlog)
+			return;
+		m_inProlog = false;
+		XML_SetDefaultHandlerExpand(m_parser, nullptr);
+	}
+
+	static void XMLCALL OnSubset(void* self, const XML_Char* text, int length)
+	{
+		Guard(self, [&](ibExpat& parser) { parser.m_subset.append(text, static_cast<size_t>(length)); });
 	}
 
 	static void XMLCALL OnDoctypeEnd(void* self)
 	{
-		static_cast<ibExpat*>(self)->m_inDoctype = false;
+		Guard(self, [&](ibExpat& parser) {
+			parser.m_inDoctype = false;
+			if (parser.m_receiver != nullptr || !parser.m_doctypeAsNode)
+				return;
+			XML_SetDefaultHandlerExpand(parser.m_parser, nullptr);
+			// Its line ends as everywhere else in a document: the parser hands the subset over as the bytes stood,
+			// where text has its `\r\n` and `\r` made `\n` already.
+			std::string& subset = parser.m_subset;
+			size_t kept = 0;
+			for (size_t i = 0; i < subset.size(); ++i) {
+				if (subset[i] == '\r') {
+					subset[kept++] = '\n';
+					if (i + 1 < subset.size() && subset[i + 1] == '\n')
+						++i;
+				}
+				else {
+					subset[kept++] = subset[i];
+				}
+			}
+			subset.resize(kept);
+			parser.Enqueue([&](ibNode& node) {
+				node = std::move(parser.m_doctype);
+				node.m_value = ibString::FromUTF8(subset.data(), subset.size());
+			});
+			std::string().swap(parser.m_subset);
+		});
 	}
 
 	// An encoding expat does not know by itself (it knows UTF-8, UTF-16, ISO-8859-1 and US-ASCII): the tables above,
@@ -730,6 +951,16 @@ private:
 	int           m_depth = 0;
 	unsigned long long m_startLine = 0, m_startColumn = 0;   // of the last StartElement: an empty one's end is there too
 	bool          m_inDoctype = false;
+	ibNode        m_doctype;                    // the document type's node, until its subset is read
+	std::string   m_subset;                     // ...the internal subset so far, as written (UTF-8)
+	bool          m_cdataAsText = false;        // a CDATA section is part of the text around it
+	bool          m_inCdata = false;            // ...the parser is inside one
+	bool          m_pendingHasCdata = false;    // ...and the text so far holds what one held
+	bool          m_doctypeAsNode = false;      // the document type is gathered into a node
+	bool          m_inProlog = false;           // ...and where it begins is still being looked for
+	unsigned long long m_prologLine = 1, m_prologColumn = 1;   // where the prolog's last token ended
+	std::shared_ptr<ibSaid> m_said;             // xml:lang and xml:space in force; null: nothing said
+	std::shared_ptr<ibSaid> m_pendingSaid;      // ...where the text so far began
 	bool          m_stopped = false;
 	ibString      m_refusal;
 };
@@ -766,6 +997,16 @@ bool ibXmlParser::Finished() const
 	return m_expat->Finished();
 }
 
+void ibXmlParser::SetCdataSectionAsText(bool asText)
+{
+	m_expat->SetCdataSectionAsText(asText);
+}
+
+void ibXmlParser::SetDocumentTypeAsNode(bool asNode)
+{
+	m_expat->SetDocumentTypeAsNode(asNode);
+}
+
 //////////////////////////////////////////////////////////////////////
 // The writer
 //////////////////////////////////////////////////////////////////////
@@ -784,7 +1025,7 @@ void ibXmlWriter::Atomically(F&& write)
 	struct ibMark {
 		size_t declared = 0, attributes = 0, used = 0;
 		int    madePrefixes = 0;
-		bool   hasChildren = false, hasText = false;
+		bool   hasChildren = false, hasText = false, preserveSpace = false;
 	};
 	const size_t length = m_text.Len();
 	const size_t depth = m_frameArray.size();
@@ -792,9 +1033,10 @@ void ibXmlWriter::Atomically(F&& write)
 	if (depth > 0) {
 		const ibFrame& frame = m_frameArray.back();
 		mark = { frame.m_declaredArray.size(), frame.m_attributeArray.size(), frame.m_usedArray.size(),
-			frame.m_madePrefixes, frame.m_hasChildren, frame.m_hasText };
+			frame.m_madePrefixes, frame.m_hasChildren, frame.m_hasText, frame.m_preserveSpace };
 	}
 	const bool written = m_written, tagOpen = m_tagOpen, attributeOpen = m_attributeOpen;
+	const bool elementWritten = m_elementWritten, documentTypeWritten = m_documentTypeWritten;
 	try {
 		write();
 	}
@@ -812,11 +1054,14 @@ void ibXmlWriter::Atomically(F&& write)
 			frame.m_madePrefixes = mark.madePrefixes;
 			frame.m_hasChildren = mark.hasChildren;
 			frame.m_hasText = mark.hasText;
+			frame.m_preserveSpace = mark.preserveSpace;
 		}
 		m_pendingArray.clear();
 		m_written = written;
 		m_tagOpen = tagOpen;
 		m_attributeOpen = attributeOpen;
+		m_elementWritten = elementWritten;
+		m_documentTypeWritten = documentTypeWritten;
 		throw;
 	}
 }
@@ -833,17 +1078,50 @@ void ibXmlWriter::CloseStartTag()
 
 // Before an element, a comment, an instruction, a section: the line and the tabs - not before the very first
 // thing, and not inside an element that holds text.
-void ibXmlWriter::BeforeNode()
+// Not inside an element that holds text, nor inside one that says xml:space="preserve": there the line and the tabs
+// would become part of what it holds. True when the node is laid out - on a line of its own, or first of all.
+bool ibXmlWriter::BeforeNode()
 {
 	CloseStartTag();
-	const bool insideText = !m_frameArray.empty() && m_frameArray.back().m_hasText;
+	const bool laidOut = m_frameArray.empty()
+		|| (!m_frameArray.back().m_hasText && !m_frameArray.back().m_preserveSpace);
 	if (!m_frameArray.empty())
 		m_frameArray.back().m_hasChildren = true;
-	if (m_indent && m_written && !insideText) {
-		m_text += ibT('\n');
-		m_text.Append(ibT('\t'), m_frameArray.size());
-	}
+	if (m_indent && m_written && laidOut)
+		NewLine(m_frameArray.size());
 	m_written = true;
+	return laidOut;
+}
+
+void ibXmlWriter::NewLine(size_t levels)
+{
+	m_text += ibT('\n');
+	for (size_t i = 0; i < levels; ++i)
+		m_text += m_indentString;
+}
+
+// Inside a tag a line break is only space between the attributes: it changes nothing a reader reads.
+// Attributes on lines of their own only for an element on one: one in the middle of a line keeps them there.
+void ibXmlWriter::BeforeAttribute()
+{
+	if (m_indent && m_indentAttributes && m_frameArray.back().m_laidOut)
+		NewLine(m_frameArray.size());
+	else
+		m_text += ibT(' ');
+}
+
+void ibXmlWriter::CheckIndentString(const ibString& who, const ibString& indentString)
+{
+	for (const ibChar c : indentString)
+		if (c != ibT(' ') && c != ibT('\t'))
+			ibCoreException::Error(_("%s: an indentation is spaces and tabs - '%s' would be text between the elements"),
+				who, indentString);
+}
+
+void ibXmlWriter::SetIndentString(const ibString& indentString)
+{
+	CheckIndentString(m_who, indentString);
+	m_indentString = indentString;
 }
 
 // What would break the markup is refused: a name is letters, digits and `_ - .`, with one `:` between a prefix and
@@ -1014,7 +1292,8 @@ void ibXmlWriter::Declare(const ibString& prefix, const ibString& uri)
 				return;   // said already, the same
 			ibCoreException::Error(_("%s: the prefix '%s' is declared on this element already"), m_who, prefix);
 		}
-	m_text += prefix.IsEmpty() ? ibString(ibT(" xmlns=\"")) : ibString(ibT(" xmlns:")) + prefix + ibString(ibT("=\""));
+	BeforeAttribute();
+	m_text += prefix.IsEmpty() ? ibString(ibT("xmlns=\"")) : ibString(ibT("xmlns:")) + prefix + ibString(ibT("=\""));
 	AppendEscaped(uri, kInAttribute);
 	m_text += ibT('"');
 	frame.m_declaredArray.emplace_back(prefix, uri);
@@ -1071,15 +1350,79 @@ void ibXmlWriter::DeclarePending()
 		Declare(declaration.first, declaration.second);
 }
 
-void ibXmlWriter::WriteXmlDeclaration(const ibString& encodingName)
+void ibXmlWriter::WriteXmlDeclaration(const ibString& encodingName, const ibString& standalone)
 {
 	Atomically([&] {
 		if (m_written)
 			ibCoreException::Error(_("%s: the XML declaration is the first thing in a document"), m_who);
+		if (!standalone.IsEmpty() && standalone != ibT("yes") && standalone != ibT("no"))
+			ibCoreException::Error(_("%s: a declaration is standalone \"yes\" or \"no\", not '%s'"), m_who, standalone);
 		m_text += ibT("<?xml version=\"1.0\" encoding=\"");
 		AppendEscaped(encodingName, kInAttribute);
-		m_text += ibT("\"?>");
+		m_text += ibT('"');
+		if (!standalone.IsEmpty()) {
+			m_text += ibT(" standalone=\"");
+			m_text += standalone;
+			m_text += ibT('"');
+		}
+		m_text += ibT("?>");
 		m_written = true;
+	});
+}
+
+void ibXmlWriter::WriteDocumentType(const ibString& name, const ibString& publicId, const ibString& systemId,
+	const ibString& internalSubset)
+{
+	Atomically([&] {
+		if (m_documentTypeWritten)
+			ibCoreException::Error(_("%s: a document has one document type, and it is written already"), m_who);
+		if (m_elementWritten)
+			ibCoreException::Error(_("%s: the document type comes before the first element"), m_who);
+		CheckName(name, _("a document type"));
+		if (!publicId.IsEmpty() && systemId.IsEmpty())
+			ibCoreException::Error(_("%s: a public identifier is written with a system one"), m_who);
+		// What a public identifier may hold - letters, digits, space, line breaks and these: -'()+,./:=?;!*#@$_%
+		const ibString punctuation(ibT("-'()+,./:=?;!*#@$_%"));
+		for (size_t i = 0; i < publicId.Len(); ) {
+			size_t units = 0;
+			const char32_t c = CodePointAt(publicId.c_str(), publicId.Len(), i, units);
+			const bool letter = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+			const bool digit = c >= '0' && c <= '9';
+			const bool mark = c < 0x80 && punctuation.Find(static_cast<ibChar>(c)) >= 0;
+			if (!letter && !digit && c != ' ' && c != '\r' && c != '\n' && !mark)
+				ibCoreException::Error(_("%s: the character U+%04X is not allowed in a public identifier"), m_who,
+					static_cast<unsigned int>(c));
+			i += units;
+		}
+		// A system identifier stands in one kind of quotes: the kind it does not hold.
+		const bool doubleQuote = systemId.Find(ibT('"')) >= 0;
+		if (doubleQuote && systemId.Find(ibT('\'')) >= 0)
+			ibCoreException::Error(_("%s: a system identifier cannot hold both kinds of quotes"), m_who);
+		const ibChar quote = doubleQuote ? ibT('\'') : ibT('"');
+		BeforeNode();
+		m_text += ibT("<!DOCTYPE ");
+		m_text += name;
+		if (!publicId.IsEmpty()) {
+			m_text += ibT(" PUBLIC \"");
+			m_text += publicId;
+			m_text += ibT('"');
+		}
+		else if (!systemId.IsEmpty()) {
+			m_text += ibT(" SYSTEM");
+		}
+		if (!systemId.IsEmpty()) {
+			m_text += ibT(' ');
+			m_text += quote;
+			AppendVerbatim(systemId, _("a system identifier"));
+			m_text += quote;
+		}
+		if (!internalSubset.IsEmpty()) {
+			m_text += ibT(" [");
+			AppendVerbatim(internalSubset, _("the internal subset"));
+			m_text += ibT(']');
+		}
+		m_text += ibT('>');
+		m_documentTypeWritten = true;
 	});
 }
 
@@ -1090,8 +1433,12 @@ void ibXmlWriter::StartElement(const ibString& name, const ibString& uri)
 	const ibString given = colon >= 0 ? name.Left(static_cast<size_t>(colon)) : ibString();
 	if (given == ibT("xmlns") || (given == ibT("xml") && !uri.IsEmpty() && uri != ibString(kXmlUri)))
 		ibCoreException::Error(_("%s: the prefix '%s' is reserved"), m_who, given);
-	BeforeNode();
+	const bool laidOut = BeforeNode();
+	m_elementWritten = true;
+	const bool preserveSpace = !m_frameArray.empty() && m_frameArray.back().m_preserveSpace;
 	m_frameArray.emplace_back();
+	m_frameArray.back().m_laidOut = laidOut;
+	m_frameArray.back().m_preserveSpace = preserveSpace;   // until the element says otherwise
 	const ibString prefix = PrefixFor(name, uri, kInElement);
 	const ibString local = colon >= 0 ? name.Mid(static_cast<size_t>(colon) + 1) : name;
 	const ibString written = prefix.IsEmpty() ? local : prefix + ibString(ibT(":")) + local;
@@ -1134,10 +1481,8 @@ void ibXmlWriter::WriteEndElement()
 		}
 		else {
 			const ibFrame& frame = m_frameArray.back();
-			if (m_indent && frame.m_hasChildren && !frame.m_hasText) {
-				m_text += ibT('\n');
-				m_text.Append(ibT('\t'), m_frameArray.size() - 1);
-			}
+			if (m_indent && frame.m_hasChildren && !frame.m_hasText && !frame.m_preserveSpace)
+				NewLine(m_frameArray.size() - 1);
 			m_text += ibT("</");
 			m_text += frame.m_name;
 			m_text += ibT('>');
@@ -1166,10 +1511,13 @@ void ibXmlWriter::StartAttribute(const ibString& name, const ibString& uri)
 		if (written.first == in && written.second == local)
 			ibCoreException::Error(_("%s: the attribute '%s' is written on this element already"), m_who, name);
 	DeclarePending();
+	m_spaceValue.reset();
+	if (in == ibString(kXmlUri) && local == ibT("space"))
+		m_spaceValue = ibString();   // its value says how the element's whitespace is laid out
 	frame.m_attributeArray.emplace_back(in, local);
 	if (!prefix.IsEmpty())
 		frame.m_usedArray.emplace_back(prefix, in);
-	m_text += ibT(' ');
+	BeforeAttribute();
 	m_text += prefix.IsEmpty() ? local : prefix + ibString(ibT(":")) + local;
 	m_text += ibT("=\"");
 	m_attributeOpen = true;
@@ -1187,6 +1535,8 @@ void ibXmlWriter::WriteEndAttribute()
 			ibCoreException::Error(_("%s: no attribute is open to end"), m_who);
 		m_text += ibT('"');
 		m_attributeOpen = false;
+		if (m_spaceValue)
+			SettleSpace(*m_spaceValue);
 	});
 }
 
@@ -1208,6 +1558,19 @@ void ibXmlWriter::Attribute(const ibString& name, const ibString& uri, const ibS
 	AppendEscaped(value, kInAttribute);
 	m_text += ibT('"');
 	m_attributeOpen = false;
+	if (m_spaceValue)
+		SettleSpace(value);
+}
+
+// xml:space as written on the element whose tag is open: "preserve" keeps the writer's layout out of it, "default"
+// lets it back in, another value says nothing.
+void ibXmlWriter::SettleSpace(const ibString& value)
+{
+	m_spaceValue.reset();
+	if (value == ibT("preserve"))
+		m_frameArray.back().m_preserveSpace = true;
+	else if (value == ibT("default"))
+		m_frameArray.back().m_preserveSpace = false;
 }
 
 void ibXmlWriter::WriteAttribute(const ibString& name, const ibString& uri, const ibString& value)
@@ -1220,6 +1583,8 @@ void ibXmlWriter::WriteText(const ibString& text)
 	Atomically([&] {
 		if (m_attributeOpen) {
 			AppendEscaped(text, kInAttribute);
+			if (m_spaceValue)
+				*m_spaceValue += text;
 			return;
 		}
 		CloseStartTag();

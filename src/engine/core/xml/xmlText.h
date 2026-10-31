@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -54,7 +55,13 @@ private:
 // Queue() - until kQueuePause nodes wait, when the parser PAUSES until they are taken (Resume). A chunk is not a
 // bound on its own: a few hundred bytes of nested internal entities expand into a million elements, all of them
 // events of one chunk. Text is held back until the next event shows it is over, so a text split by a chunk's edge
-// (or an entity, or a pause) is ONE node; a text node is the one thing held whole in memory.
+// (or an entity, or a pause) is ONE node; a text node is the one thing held whole in memory - and the internal subset
+// of a document type, when it is asked for as a node.
+//
+// The XML declaration is a node in the queue too - an XMLDeclaration, its parts as the attributes `version`,
+// `encoding`, `standalone`; whoever does not want it passes it by. The document type is one only when asked for
+// (SetDocumentTypeAsNode): a DocumentTypeDefinition, the root's name, `PUBLIC` and `SYSTEM` as attributes, the internal
+// subset as written for its value.
 //
 // 🛑 NOTHING OUTSIDE THE DOCUMENT IS READ: no external DTD, no parameter entity, no SYSTEM entity - a document that
 // needs one is refused, not read with a hole in it (a document from outside asking the machine for its files).
@@ -88,6 +95,10 @@ public:
 		unsigned long long       m_line = 0, m_column = 0;
 		// The scope at the node - an EndElement still in its element's; null where nothing is declared.
 		std::shared_ptr<const ibScope> m_namespaces;
+		// ...and what `xml:lang` and `xml:space` say there, by the same rule: an element's own attribute counts for
+		// it and for its EndElement. "" - no language said; false - `xml:space="default"`, or not said at all.
+		ibString                 m_language;
+		bool                     m_preserveSpace = false;
 	};
 
 	// ⭐ ...OR STRAIGHT TO A RECEIVER: no node is made of an event and Queue() stays empty - for a reader that builds a
@@ -131,6 +142,13 @@ public:
 	bool Paused() const;
 	bool Finished() const;                               // the final chunk is parsed to its end
 
+	// A CDATA section as text, joined with the text around it into ONE Text node - `x<![CDATA[y]]>z` is "xyz", and
+	// spaces from a section never make the node Whitespace; an empty section is nothing.
+	void SetCdataSectionAsText(bool asText);
+	// The document type as a node, its internal subset gathered as written - not gathered when nobody asks for it.
+	void SetDocumentTypeAsNode(bool asNode);
+	// ...both before the first Feed: what was read before would be read another way than what follows. Refused after.
+
 	std::deque<ibNode>& Queue() { return m_queue; }      // parsed, not yet taken
 
 	// What the declaration said - known once the parser has passed it.
@@ -171,8 +189,23 @@ public:
 	// line and the tabs would become part of that text.
 	void SetIndent(bool indent) { m_indent = indent; }
 	bool Indent() const { return m_indent; }
+	// While indenting: each attribute (a declaration too) on a line of its own, one level deeper than its element.
+	void SetIndentAttributes(bool indentAttributes) { m_indentAttributes = indentAttributes; }
+	bool IndentAttributes() const { return m_indentAttributes; }
+	// One level of indentation - a tab unless told otherwise; spaces and tabs only, anything else would be text.
+	void SetIndentString(const ibString& indentString);
+	const ibString& IndentString() const { return m_indentString; }
+	// What SetIndentString takes - spaces and tabs - or a refusal that `who` begins.
+	static void CheckIndentString(const ibString& who, const ibString& indentString);
 
-	void WriteXmlDeclaration(const ibString& encodingName);    // the first thing written, or refused
+	// The first thing written, or refused. `standalone` "yes" or "no" is written as the declaration's third part; ""
+	// leaves it out.
+	void WriteXmlDeclaration(const ibString& encodingName, const ibString& standalone = ibString());
+	// `<!DOCTYPE name PUBLIC "publicId" "systemId" [internalSubset]>`, the empty parts left out: once, before the
+	// first element. A public identifier needs a system one. ⚠ The internal subset goes as it is, like WriteRaw:
+	// its characters are checked, its markup is not - a `]>` inside it ends the document type there.
+	void WriteDocumentType(const ibString& name, const ibString& publicId, const ibString& systemId,
+		const ibString& internalSubset);
 	// `name` may be `prefix:local`. A namespace URI not bound in scope is declared on this element: under the
 	// name's prefix, or as the default namespace for a name without one. A name without a prefix whose URI is bound
 	// to a prefix takes that prefix; a name without either stays in the default namespace in scope.
@@ -213,12 +246,17 @@ private:
 		std::vector<std::pair<ibString, ibString>> m_attributeArray;  // namespace URI, local name - written already
 		std::vector<std::pair<ibString, ibString>> m_usedArray;       // prefix, URI - what the tag's names stand under
 		int      m_madePrefixes = 0;
+		bool     m_laidOut = false;                             // on a line of its own: its attributes may be too
+		bool     m_preserveSpace = false;                       // xml:space="preserve" here: no layout inside
 	};
 
 	template <typename F> void Atomically(F&& write);          // a refused write is undone (xmlText.cpp)
 
 	void CloseStartTag();
-	void BeforeNode();                                          // the line and the tabs, where they belong
+	bool BeforeNode();                                          // the line and the tabs, where they belong
+	void NewLine(size_t levels);                                // a line, and `levels` indentations on it
+	void BeforeAttribute();                                     // a space - or a line of its own
+	void SettleSpace(const ibString& value);                    // an xml:space written: what it says of the layout
 	ibString PrefixFor(const ibString& name, const ibString& uri, ibPlace place);
 	bool Bound(const ibString& prefix, ibString& uri) const;
 	bool Lookup(const ibString& uri, ibString& prefix, ibPlace place) const;   // an attribute's: never ""
@@ -238,7 +276,12 @@ private:
 	std::vector<ibFrame>   m_frameArray;
 	std::vector<std::pair<ibString, ibString>> m_pendingArray;   // decided by PrefixFor, not written yet
 	bool                   m_indent = true;
+	bool                   m_indentAttributes = false;
+	ibString               m_indentString = ibString(ibT("\t"));
 	bool                   m_written = false;                   // anything at all, Take or not
+	bool                   m_elementWritten = false;            // an element was started: no document type now
+	bool                   m_documentTypeWritten = false;
+	std::optional<ibString> m_spaceValue;                       // the open attribute is xml:space: its value so far
 	bool                   m_tagOpen = false;                   // `<a ...` awaiting its `>`
 	bool                   m_attributeOpen = false;             // inside WriteStartAttribute
 };

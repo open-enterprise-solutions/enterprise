@@ -177,6 +177,13 @@ void ibValueXmlReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	helper.AppendProp(ibT("LineNumber"), true, false, wxNOT_FOUND);
 	helper.AppendProp(ibT("LinePosition"), true, false, wxNOT_FOUND);
 	helper.AppendProp(ibT("NamespaceContext"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("Language"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("Space"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("IgnoreXMLDeclaration"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("IgnoreDocumentType"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("IgnoreComments"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("IgnoreProcessingInstructions"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("CDATASectionAsText"), true, true, wxNOT_FOUND);
 
 	helper.AppendFunc(ibT("OpenFile"), 1, ibT("OpenFile(path : string)"));
 	helper.AppendFunc(ibT("SetString"), 1, ibT("SetString(text : string)"));
@@ -207,6 +214,8 @@ void ibValueXmlReader::SetText(const ibString& text)
 
 	std::string utf8 = text.ToUtf8();   // a lone surrogate is spelled too - and refused by the parser where it stands
 	m_parser = std::make_unique<ibXmlParser>(ibT("XMLReader"), ibXmlParser::kCharacters);
+	m_parser->SetCdataSectionAsText(m_cdataAsText);
+	m_parser->SetDocumentTypeAsNode(!m_ignoreDocumentType);
 	m_text = std::move(utf8);
 	m_textAt = 0;
 	m_open = true;
@@ -221,6 +230,8 @@ void ibValueXmlReader::OpenFile(const ibString& path)
 		ibBackendCoreException::Error(_("XMLReader: cannot open the file '%s' for reading"), path);
 
 	m_parser = std::make_unique<ibXmlParser>(ibT("XMLReader"), ibXmlParser::kBytes);
+	m_parser->SetCdataSectionAsText(m_cdataAsText);
+	m_parser->SetDocumentTypeAsNode(!m_ignoreDocumentType);
 	m_file = std::move(file);
 	m_fileName = path;
 	m_open = true;
@@ -247,7 +258,33 @@ void ibValueXmlReader::Close()
 	m_version.clear();
 	m_encoding.clear();
 	m_standalone = false;
+	m_begun = false;
 	m_open = false;
+}
+
+// A CDATA section read is a node or a part of a text by the time it is read; switching between the two after that
+// would hand some sections over one way and the rest the other.
+void ibValueXmlReader::SetCdataSectionAsText(bool asText)
+{
+	if (asText == m_cdataAsText)
+		return;
+	if (m_begun)
+		ibBackendCoreException::Error(_("XMLReader: CDATASectionAsText is set before the first Read - the reading has begun"));
+	m_cdataAsText = asText;
+	if (m_parser != nullptr)
+		m_parser->SetCdataSectionAsText(asText);
+}
+
+// The parser gathers the internal subset only for a node somebody reads - so it is told before it reads.
+void ibValueXmlReader::SetIgnoreDocumentType(bool ignore)
+{
+	if (ignore == m_ignoreDocumentType)
+		return;
+	if (m_begun)
+		ibBackendCoreException::Error(_("XMLReader: IgnoreDocumentType is set before the first Read - the reading has begun"));
+	m_ignoreDocumentType = ignore;
+	if (m_parser != nullptr)
+		m_parser->SetDocumentTypeAsNode(!ignore);
 }
 
 // One chunk of the input through the parser. A refusal is written down rather than raised here: the nodes the
@@ -258,6 +295,7 @@ bool ibValueXmlReader::Fill()
 	if (m_parser == nullptr)
 		return false;
 
+	m_begun = true;
 	try {
 		if (m_parser->Paused()) {
 			m_parser->Resume(m_fileName);          // what it was given is not parsed to its end yet
@@ -315,10 +353,22 @@ bool ibValueXmlReader::Read()
 		}
 		ibNode node = std::move(m_queue.front());
 		m_queue.pop_front();
-		if (node.m_type == ibXmlNodeType_Whitespace && m_ignoreWhitespace)
+		if (PassedBy(node))
 			continue;
 		m_current = std::move(node);
 		return true;
+	}
+}
+
+// Whitespace inside `xml:space="preserve"` is the document's to keep: IgnoreWhitespace does not drop it there.
+bool ibValueXmlReader::PassedBy(const ibNode& node) const
+{
+	switch (node.m_type) {
+	case ibXmlNodeType_Whitespace:             return m_ignoreWhitespace && !node.m_preserveSpace;
+	case ibXmlNodeType_Comment:                return m_ignoreComments;
+	case ibXmlNodeType_ProcessingInstruction:  return m_ignoreInstructions;
+	case ibXmlNodeType_XMLDeclaration:         return m_ignoreDeclaration;
+	default:                                   return false;
 	}
 }
 
@@ -340,8 +390,9 @@ void ibValueXmlReader::Skip()
 
 ibXmlNodeType ibValueXmlReader::MoveToContent()
 {
-	if (MoveToElement())
-		return m_current.m_type;   // an attribute's content is its element
+	// An attribute's content is its element - the parts of a declaration or a document type are passed by with it.
+	if (MoveToElement() && m_current.m_type == ibXmlNodeType_StartElement)
+		return m_current.m_type;
 	for (;;) {
 		switch (m_current.m_type) {
 		case ibXmlNodeType_None:   // before the first Read - and at the end, where Read says so
@@ -440,6 +491,8 @@ bool ibValueXmlReader::HasValue() const
 	case ibXmlNodeType_CDATASection:
 	case ibXmlNodeType_Comment:
 	case ibXmlNodeType_ProcessingInstruction:
+	case ibXmlNodeType_XMLDeclaration:
+	case ibXmlNodeType_DocumentTypeDefinition:
 		return true;
 	default:
 		return false;
@@ -448,13 +501,21 @@ bool ibValueXmlReader::HasValue() const
 
 bool ibValueXmlReader::HasName() const
 {
-	const ibXmlNodeType type = NodeType();
-	return type == ibXmlNodeType_StartElement || type == ibXmlNodeType_EndElement
-		|| type == ibXmlNodeType_ProcessingInstruction || type == ibXmlNodeType_Attribute;
+	switch (NodeType()) {
+	case ibXmlNodeType_StartElement:
+	case ibXmlNodeType_EndElement:
+	case ibXmlNodeType_ProcessingInstruction:
+	case ibXmlNodeType_Attribute:
+	case ibXmlNodeType_XMLDeclaration:
+	case ibXmlNodeType_DocumentTypeDefinition:
+		return true;
+	default:
+		return false;
+	}
 }
 
-// Whitespace, and Text of nothing but whitespace - here the second never exists: such text (`&#32;` included) is made
-// a Whitespace node when it is read.
+// Whitespace only: text of nothing but whitespace (`&#32;` included) is made a Whitespace node when it is read - except
+// a text that holds what a CDATA section held (CDATASectionAsText), which is the document's and stays Text.
 bool ibValueXmlReader::IsWhitespace() const
 {
 	return NodeType() == ibXmlNodeType_Whitespace;
@@ -490,16 +551,31 @@ bool ibValueXmlReader::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	case enLineNumber:     pvarPropVal = ibNumber(static_cast<unsigned long long>(m_current.m_line)); return true;
 	case enLinePosition:   pvarPropVal = ibNumber(static_cast<unsigned long long>(m_current.m_column)); return true;
 	case enNamespaceContext: pvarPropVal = NamespaceContext(); return true;
+	case enLanguage:       pvarPropVal = Language(); return true;
+	case enSpace:
+		pvarPropVal = ibValue::CreateEnumObject<ibValueEnumXmlSpace>(
+			PreserveSpace() ? ibXmlSpace_Preserve : ibXmlSpace_Default);
+		return true;
+	case enIgnoreXMLDeclaration:          pvarPropVal = m_ignoreDeclaration; return true;
+	case enIgnoreDocumentType:            pvarPropVal = m_ignoreDocumentType; return true;
+	case enIgnoreComments:                pvarPropVal = m_ignoreComments; return true;
+	case enIgnoreProcessingInstructions:  pvarPropVal = m_ignoreInstructions; return true;
+	case enCDATASectionAsText:            pvarPropVal = m_cdataAsText; return true;
 	}
 	return false;
 }
 
 bool ibValueXmlReader::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	if (lPropNum != enIgnoreWhitespace)
-		return false;
-	m_ignoreWhitespace = varPropVal.GetBoolean();
-	return true;
+	switch (lPropNum) {
+	case enIgnoreWhitespace:             m_ignoreWhitespace = varPropVal.GetBoolean(); return true;
+	case enIgnoreXMLDeclaration:         m_ignoreDeclaration = varPropVal.GetBoolean(); return true;
+	case enIgnoreDocumentType:           SetIgnoreDocumentType(varPropVal.GetBoolean()); return true;
+	case enIgnoreComments:               m_ignoreComments = varPropVal.GetBoolean(); return true;
+	case enIgnoreProcessingInstructions: m_ignoreInstructions = varPropVal.GetBoolean(); return true;
+	case enCDATASectionAsText:           SetCdataSectionAsText(varPropVal.GetBoolean()); return true;
+	}
+	return false;
 }
 
 bool ibValueXmlReader::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -607,6 +683,8 @@ void ibValueXmlWriter_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 
 	helper.AppendProp(ibT("Indent"), true, true, wxNOT_FOUND);
 	helper.AppendProp(ibT("NamespaceContext"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("IndentAttributes"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("IndentString"), true, true, wxNOT_FOUND);
 
 	helper.AppendFunc(ibT("OpenFile"), 3, ibT("OpenFile(path : string, encoding : string, writeBOM : boolean)"));
 	helper.AppendFunc(ibT("SetString"), 1, ibT("SetString(encoding : string)"));
@@ -625,6 +703,8 @@ void ibValueXmlWriter_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	helper.AppendFunc(ibT("WriteRaw"), 1, ibT("WriteRaw(text : string)"));
 	helper.AppendFunc(ibT("WriteCurrent"), 1, ibT("WriteCurrent(reader : XMLReader)"));
 	helper.AppendFunc(ibT("LookupPrefix"), 1, ibT("LookupPrefix(namespaceURI : string)"));
+	helper.AppendFunc(ibT("WriteDocumentType"), 4,
+		ibT("WriteDocumentType(name : string, publicId : string, systemId : string, internalSubset : string)"));
 }
 
 ibValueXmlWriter::ibValueXmlWriter() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true) {}
@@ -687,6 +767,8 @@ void ibValueXmlWriter::OpenFile(const ibString& path, const ibString& encoding, 
 	m_file = std::move(file);
 	m_writer = std::make_unique<ibXmlWriter>(ibT("XMLWriter"), page);
 	m_writer->SetIndent(m_indent);
+	m_writer->SetIndentAttributes(m_indentAttributes);
+	m_writer->SetIndentString(m_indentString);
 }
 
 void ibValueXmlWriter::SetText(const ibString& encoding)
@@ -699,6 +781,8 @@ void ibValueXmlWriter::SetText(const ibString& encoding)
 	m_encoding = named.Name();
 	m_writer = std::make_unique<ibXmlWriter>(ibT("XMLWriter"), m_page);
 	m_writer->SetIndent(m_indent);
+	m_writer->SetIndentAttributes(m_indentAttributes);
+	m_writer->SetIndentString(m_indentString);
 }
 
 void ibValueXmlWriter::Flush()
@@ -749,6 +833,19 @@ ibString ibValueXmlWriter::Close()
 	return ibString();
 }
 
+namespace {
+
+// A part of a declaration or a document type - they stand as its attributes - or "" when it has none.
+ibString PartOf(const ibValueXmlReader::ibNode& node, const ibChar* name)
+{
+	for (const ibValueXmlReader::ibAttribute& attribute : node.m_attributeArray)
+		if (attribute.m_name == name)
+			return attribute.m_value;
+	return ibString();
+}
+
+} // namespace
+
 // The reader's CURRENT node, not its subtree: an element's start with its attributes (its declarations among them),
 // an end, a text - so a loop over a reader copies a document, and one that skips a node leaves it out.
 void ibValueXmlWriter::WriteCurrent(const ibValueXmlReader& reader)
@@ -766,6 +863,10 @@ void ibValueXmlWriter::WriteCurrent(const ibValueXmlReader& reader)
 			writer.WriteEndElement();
 		break;
 	case ibXmlNodeType_Attribute:
+		// The parts of a declaration or a document type stand as attributes for reading, and are not an element's.
+		if (node.m_type != ibXmlNodeType_StartElement)
+			ibBackendCoreException::Error(_("XMLWriter: WriteCurrent writes an element's attribute - '%s' is a part of the %s"),
+				reader.Name(), node.m_type == ibXmlNodeType_XMLDeclaration ? _("XML declaration") : _("document type"));
 		writer.WriteAttribute(reader.Name(), reader.NamespaceURI(), reader.Value());
 		break;
 	case ibXmlNodeType_Text:
@@ -780,6 +881,14 @@ void ibValueXmlWriter::WriteCurrent(const ibValueXmlReader& reader)
 		break;
 	case ibXmlNodeType_ProcessingInstruction:
 		writer.WriteProcessingInstruction(node.m_name, node.m_value);
+		break;
+	case ibXmlNodeType_XMLDeclaration:
+		// This writer's encoding, not the one the read text was in - and the document's standalone, which says whether
+		// a document type it has may be read at all.
+		writer.WriteXmlDeclaration(m_encoding, PartOf(node, ibT("standalone")));
+		break;
+	case ibXmlNodeType_DocumentTypeDefinition:
+		writer.WriteDocumentType(node.m_name, PartOf(node, ibT("PUBLIC")), PartOf(node, ibT("SYSTEM")), node.m_value);
 		break;
 	default:
 		break;   // nothing read yet, or the end: nothing to write
@@ -802,18 +911,42 @@ bool ibValueXmlWriter::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 		pvarPropVal = context;
 		return true;
 	}
+	case enIndentAttributes:
+		pvarPropVal = m_indentAttributes;
+		return true;
+	case enIndentString:
+		pvarPropVal = m_indentString;
+		return true;
 	}
 	return false;
 }
 
 bool ibValueXmlWriter::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	if (lPropNum != enIndent)
-		return false;
-	m_indent = varPropVal.GetBoolean();
-	if (m_writer != nullptr)
-		m_writer->SetIndent(m_indent);
-	return true;
+	switch (lPropNum) {
+	case enIndent:
+		m_indent = varPropVal.GetBoolean();
+		if (m_writer != nullptr)
+			m_writer->SetIndent(m_indent);
+		return true;
+	case enIndentAttributes:
+		m_indentAttributes = varPropVal.GetBoolean();
+		if (m_writer != nullptr)
+			m_writer->SetIndentAttributes(m_indentAttributes);
+		return true;
+	case enIndentString: {
+		if (varPropVal.GetType() != ibValueTypes::TYPE_STRING)
+			ibBackendCoreException::Error(_("XMLWriter: IndentString is a string, not a value of the type '%s'"),
+				varPropVal.GetClassName());
+		const ibString indentString = varPropVal.GetString();
+		ibXmlWriter::CheckIndentString(ibT("XMLWriter"), indentString);
+		m_indentString = indentString;
+		if (m_writer != nullptr)
+			m_writer->SetIndentString(indentString);
+		return true;
+	}
+	}
+	return false;
 }
 
 bool ibValueXmlWriter::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -885,6 +1018,12 @@ bool ibValueXmlWriter::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, 
 		WriteCurrent(*reader);
 		break;
 	}
+	case enWriteDocumentType:
+		Target().WriteDocumentType(ibXmlStringParam(paParams, lSizeArray, 0, _("the name")),
+			ibXmlOptionalString(paParams, lSizeArray, 1, _("the public identifier")),
+			ibXmlOptionalString(paParams, lSizeArray, 2, _("the system identifier")),
+			ibXmlOptionalString(paParams, lSizeArray, 3, _("the internal subset")));
+		break;
 	case enLookupPrefix: {
 		const ibString uri = ibXmlStringParam(paParams, lSizeArray, 0, _("the namespace URI"));
 		ibString prefix;

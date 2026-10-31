@@ -48,7 +48,12 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **XML: `XMLReader`, `XMLWriter`, `XMLNamespaceContext`, `XMLNodeType`.** A script reads a document
   node by node and writes one, to a file or to a string, in UTF-8, UTF-16, windows-1251 or cp866.
   The parser is expat, built into the engine; an external entity is refused, not read. A file the
-  writer could not write is raised at `Close`.
+  writer could not write is raised at `Close`. The reader says what `xml:lang` and `xml:space` say
+  (`Language`, `Space`, the enumeration `XMLSpace`) and keeps whitespace under
+  `xml:space="preserve"`; it hands the declaration and the document type over as nodes, passes
+  comments and instructions by, or reads CDATA as text, when told to. The writer puts attributes on
+  lines of their own (`IndentAttributes`), indents by `IndentString`, and writes a document type
+  (`WriteDocumentType`).
 - **`XMLString(value)` and `XMLValue(xml)`: a value as XML and back.** The value is packed the way
   `JSONString` packs it, but the XML keeps each field's kind, so a date or a number comes back
   exactly, as the type the text names. The type is said once, by XML Schema's `xsi:type`, and a

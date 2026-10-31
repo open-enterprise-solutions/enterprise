@@ -60,10 +60,15 @@ private:
 //
 // WHAT IS A NODE: `<a/>` is a PAIR - StartElement and EndElement - and so is
 // `<a></a>` (IsEmptyElement tells them apart - except inside an entity's replacement text, where
-// the parser cannot); a comment and a processing instruction are nodes; CDATA is a node of its own, never merged
-// into the text beside it; the XML declaration is NOT a node, XMLVersion / XMLEncoding / Standalone read it. Text
-// between elements that is only whitespace is dropped while IgnoreWhitespace is True (the default); False hands it
-// over as Whitespace nodes.
+// the parser cannot); a comment and a processing instruction are nodes, passed by while IgnoreComments /
+// IgnoreProcessingInstructions are True; CDATA is a node of its own, never merged into the text beside it - unless
+// CDATASectionAsText, set before the first Read, joins it into that text. The XML declaration and the document type
+// are nodes only when IgnoreXMLDeclaration / IgnoreDocumentType are False (True by default; the second, like
+// CDATASectionAsText, is set before the first Read - the parser gathers the document type or not); XMLVersion /
+// XMLEncoding / Standalone read the declaration either way. Text between elements that is only whitespace is
+// dropped while IgnoreWhitespace is True (the default) - but not inside `xml:space="preserve"`, where the document
+// says it is kept; False hands it over as Whitespace nodes everywhere. Language and Space say what `xml:lang` and
+// `xml:space` say at the node.
 //
 // THE ENCODING of a file is its byte-order mark or its declaration - UTF-8 without either; windows-1251 and cp866
 // are read through the engine's own tables (ibXmlCodePage). A text given with SetString is characters already: an
@@ -102,6 +107,13 @@ class BACKEND_API ibValueXmlReader : public ibValueStaticMembers<&ibValueXmlRead
 		enLineNumber,
 		enLinePosition,
 		enNamespaceContext,
+		enLanguage,
+		enSpace,
+		enIgnoreXMLDeclaration,
+		enIgnoreDocumentType,
+		enIgnoreComments,
+		enIgnoreProcessingInstructions,
+		enCDATASectionAsText,
 	};
 	enum Func {
 		enOpenFile,
@@ -145,6 +157,8 @@ public:
 	void Skip();                                  // an element's content: stops ON its EndElement
 	ibXmlNodeType MoveToContent();                // past whitespace, comments, instructions; the type it stops on
 	void SetIgnoreWhitespace(bool ignore) { m_ignoreWhitespace = ignore; }
+	void SetCdataSectionAsText(bool asText);      // refused once reading has begun
+	void SetIgnoreDocumentType(bool ignore);      // ...this one too: the parser gathers the document type or not
 
 	// The attributes of the current element - still the element's while the cursor stands on one of them.
 	long AttributeCount() const { return static_cast<long>(m_current.m_attributeArray.size()); }
@@ -167,6 +181,9 @@ public:
 	// ⚠ Not the Depth of its NamespaceContext, on purpose: here an element's two nodes agree, there an EndElement
 	// counts one less - see NamespaceContext().
 	int Depth() const { return m_current.m_depth; }
+	// What `xml:lang` and `xml:space` say at the node - the element's, on an attribute and on its end.
+	const ibString& Language() const { return m_current.m_language; }
+	bool PreserveSpace() const { return m_current.m_preserveSpace; }
 	// A snapshot of the current node's scope - the element's, on an attribute; Undefined when nothing is open.
 	ibValue NamespaceContext() const;
 	bool HasValue() const;
@@ -185,6 +202,7 @@ public:
 
 private:
 	bool Fill();                                  // one more chunk into m_queue; false when the input is over
+	bool PassedBy(const ibNode& node) const;      // a node the flags say not to hand over
 	void Release();
 	const ibAttribute& OnAttribute() const { return m_current.m_attributeArray[static_cast<size_t>(m_attribute)]; }
 	const ibValue& TypeValue(ibXmlNodeType type);
@@ -203,6 +221,12 @@ private:
 	ibString                  m_version, m_encoding;
 	bool                      m_standalone = false;
 	bool                      m_ignoreWhitespace = true;
+	bool                      m_ignoreDeclaration = true;
+	bool                      m_ignoreDocumentType = true;
+	bool                      m_ignoreComments = false;
+	bool                      m_ignoreInstructions = false;
+	bool                      m_cdataAsText = false;
+	bool                      m_begun = false;    // the parser was fed: a CDATA section may have been read already
 	bool                      m_open = false;
 
 	// What NodeType answers, made once per kind - a walk IS `while (reader.Read()) { if (reader.NodeType = ...`.
@@ -227,8 +251,9 @@ private:
 //
 // A character the encoding has no byte for is written as a `&#N;` reference in text and in an attribute (legal XML,
 // read back as the character); in a name, a comment, an instruction or a CDATA section it is refused.
-// Indent (True by default) puts an element on a line of its own, a tab a level - not inside an element that holds
-// text, where the line would become part of the text.
+// Indent (True by default) puts an element on a line of its own, IndentString (a tab) a level - not inside an element
+// that holds text, where the line would become part of the text; IndentAttributes puts each attribute on one too.
+// WriteDocumentType writes `<!DOCTYPE ...>` once, before the first element.
 
 void ibValueXmlWriter_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
@@ -236,6 +261,8 @@ class BACKEND_API ibValueXmlWriter : public ibValueStaticMembers<&ibValueXmlWrit
 	enum Prop {
 		enIndent,
 		enNamespaceContext,
+		enIndentAttributes,
+		enIndentString,
 	};
 	enum Func {
 		enOpenFile,
@@ -255,6 +282,7 @@ class BACKEND_API ibValueXmlWriter : public ibValueStaticMembers<&ibValueXmlWrit
 		enWriteRaw,
 		enWriteCurrent,
 		enLookupPrefix,
+		enWriteDocumentType,
 	};
 public:
 
@@ -284,6 +312,8 @@ private:
 	ibString                     m_fileName;
 	std::string                  m_bytes;         // encoded, not in the file yet
 	bool                         m_indent = true;
+	bool                         m_indentAttributes = false;
+	ibString                     m_indentString = ibString(ibT("\t"));
 };
 
 #endif // !__VALUE_XML_H__

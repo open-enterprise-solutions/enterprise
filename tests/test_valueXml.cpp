@@ -1682,3 +1682,522 @@ TEST(XmlReader, ALoneSurrogateInAStringIsRefusedWhereItStands) {
 	const ibString refusal = RefusalOf([&] { while (reader->Read()) {} });
 	EXPECT_NE(refusal.Find(ibT("not well-formed (invalid token) at line 1, column 5")), wxNOT_FOUND) << refusal.ToStdString();
 }
+
+// =============================================================================
+// What xml:lang and xml:space say, the declaration and the document type as nodes, what a reader passes by - and
+// the writer's attribute lines, its indentation and its document type.
+// =============================================================================
+
+namespace {
+
+bool SetFlag(ibValueXmlReader& reader, const ibChar* name, bool value) {
+	return reader.SetPropVal(reader.FindProp(name), ibValue(value));
+}
+
+ibValue PropOf(ibValue& value, const ibChar* name) {
+	ibValue got;
+	EXPECT_TRUE(value.GetPropVal(value.FindProp(name), got)) << ibString(name).ToStdString();
+	return got;
+}
+
+struct ibSaidAt { ibXmlNodeType type; ibString name; ibString language; bool preserve; };
+
+std::vector<ibSaidAt> WalkSaid(const ibString& text) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	reader->SetIgnoreWhitespace(false);
+	reader->SetText(text);
+	std::vector<ibSaidAt> seen;
+	while (reader->Read())
+		seen.push_back({ reader->NodeType(), reader->Name(), reader->Language(), reader->PreserveSpace() });
+	return seen;
+}
+
+} // namespace
+
+// An element's own xml:lang counts for it, for what is inside it and for its end; past the end, what is said outside.
+TEST(XmlReader, LanguageAndSpaceAreWhatTheDocumentSaysAtTheNode) {
+	const std::vector<ibSaidAt> seen = WalkSaid(
+		ibT("<a xml:lang=\"uk\"><b xml:lang=\"en\" xml:space=\"preserve\">x<c xml:space=\"other\"/></b><d xml:lang=\"\"/></a>"));
+	const std::vector<ibSaidAt> want = {
+		{ ibXmlNodeType_StartElement, ibT("a"), ibT("uk"), false },
+		{ ibXmlNodeType_StartElement, ibT("b"), ibT("en"), true },
+		{ ibXmlNodeType_Text,         ibT(""),  ibT("en"), true },
+		{ ibXmlNodeType_StartElement, ibT("c"), ibT("en"), true },    // a value xml:space does not have says nothing
+		{ ibXmlNodeType_EndElement,   ibT("c"), ibT("en"), true },
+		{ ibXmlNodeType_EndElement,   ibT("b"), ibT("en"), true },
+		{ ibXmlNodeType_StartElement, ibT("d"), ibT(""),   false },   // "" - no language, said so
+		{ ibXmlNodeType_EndElement,   ibT("d"), ibT(""),   false },
+		{ ibXmlNodeType_EndElement,   ibT("a"), ibT("uk"), false },
+	};
+	ASSERT_EQ(seen.size(), want.size());
+	for (size_t i = 0; i < want.size(); ++i) {
+		EXPECT_EQ(seen[i].type, want[i].type) << i;
+		EXPECT_EQ(seen[i].name, want[i].name) << i;
+		EXPECT_EQ(seen[i].language, want[i].language) << i;
+		EXPECT_EQ(seen[i].preserve, want[i].preserve) << i;
+	}
+}
+
+// ...and a script reads them as Language and Space - on an attribute, the element's.
+TEST(XmlReader, LanguageAndSpaceAreTheScriptsProperties) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	reader->SetText(ibT("<a xml:lang=\"uk\" xml:space=\"preserve\" n=\"1\"/>"));
+	ASSERT_TRUE(reader->Read());
+	ASSERT_TRUE(reader->FirstAttribute());
+	ibValue& value = *reader;
+	EXPECT_EQ(PropOf(value, ibT("Language")).GetString(), ibString(ibT("uk")));
+	const ibValue space = PropOf(value, ibT("Space"));
+	EXPECT_EQ(space.GetClassName(), ibString(ibT("XMLSpace")));
+	EXPECT_EQ(space.GetInteger(), static_cast<int>(ibXmlSpace_Preserve));
+}
+
+// Whitespace inside xml:space="preserve" is kept though IgnoreWhitespace is True; "default" further in drops it again.
+TEST(XmlReader, WhitespaceInsidePreserveIsKeptThoughIgnored) {
+	ExpectNodes(WalkText(ibT("<a> <b xml:space=\"preserve\"> <c xml:space=\"default\"> </c> </b> </a>")), {
+		{ ibXmlNodeType_StartElement, ibT("a"), ibT("") },
+		{ ibXmlNodeType_StartElement, ibT("b"), ibT("") },
+		{ ibXmlNodeType_Whitespace,   ibT(""),  ibT(" ") },
+		{ ibXmlNodeType_StartElement, ibT("c"), ibT("") },
+		{ ibXmlNodeType_EndElement,   ibT("c"), ibT("") },
+		{ ibXmlNodeType_Whitespace,   ibT(""),  ibT(" ") },
+		{ ibXmlNodeType_EndElement,   ibT("b"), ibT("") },
+		{ ibXmlNodeType_EndElement,   ibT("a"), ibT("") },
+	});
+}
+
+TEST(XmlReader, TheDeclarationIsANodeOnlyWhenAsked) {
+	const ibString text(ibT("<?xml version='1.0' encoding='UTF-8' standalone='yes'?><a/>"));
+	EXPECT_EQ(WalkText(text).front().type, ibXmlNodeType_StartElement);
+
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	ASSERT_TRUE(SetFlag(*reader, ibT("IgnoreXMLDeclaration"), false));
+	reader->SetText(text);
+	ASSERT_TRUE(reader->Read());
+	EXPECT_EQ(reader->NodeType(), ibXmlNodeType_XMLDeclaration);
+	EXPECT_EQ(reader->Name(), ibString(ibT("xml")));
+	EXPECT_EQ(reader->Value(), ibString(ibT("version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"")));
+	EXPECT_TRUE(reader->HasValue());
+	EXPECT_TRUE(reader->HasName());
+	EXPECT_EQ(reader->AttributeValue(ibValue(ibString(ibT("version")))).GetString(), ibString(ibT("1.0")));
+	EXPECT_EQ(reader->AttributeValue(ibValue(ibString(ibT("standalone")))).GetString(), ibString(ibT("yes")));
+	ASSERT_TRUE(reader->Read());
+	EXPECT_EQ(reader->NodeType(), ibXmlNodeType_StartElement);
+
+	// A part the document leaves out is not there.
+	ibValuePtr<ibValueXmlReader> bare(new ibValueXmlReader());
+	SetFlag(*bare, ibT("IgnoreXMLDeclaration"), false);
+	bare->SetText(ibT("<?xml version=\"1.0\"?><a/>"));
+	ASSERT_TRUE(bare->Read());
+	EXPECT_EQ(bare->Value(), ibString(ibT("version=\"1.0\"")));
+	EXPECT_EQ(bare->AttributeCount(), 1);
+}
+
+// The internal subset as written - a comment and an instruction in it too - and its entities still expanded.
+TEST(XmlReader, TheDocumentTypeIsANodeWithItsSubsetAsWritten) {
+	const ibString text(ibT("<!DOCTYPE a [<!-- c --><!ENTITY e \"x\">\n<?pi d?>]><a>&e;</a>"));
+	ExpectNodes(WalkText(text), {
+		{ ibXmlNodeType_StartElement, ibT("a"), ibT("") },
+		{ ibXmlNodeType_Text,         ibT(""),  ibT("x") },
+		{ ibXmlNodeType_EndElement,   ibT("a"), ibT("") },
+	});
+
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	ASSERT_TRUE(SetFlag(*reader, ibT("IgnoreDocumentType"), false));
+	reader->SetText(text);
+	ExpectNodes(Walk(*reader), {
+		{ ibXmlNodeType_DocumentTypeDefinition, ibT("a"), ibT("<!-- c --><!ENTITY e \"x\">\n<?pi d?>") },
+		{ ibXmlNodeType_StartElement, ibT("a"), ibT("") },
+		{ ibXmlNodeType_Text,         ibT(""),  ibT("x") },
+		{ ibXmlNodeType_EndElement,   ibT("a"), ibT("") },
+	});
+}
+
+// A system identifier needs a document that stands alone: the declarations it names are not read.
+TEST(XmlReader, ADocumentTypeWithASystemIdentifierIsReadOnlyStandingAlone) {
+	EXPECT_NE(RefusalOf([&] { WalkText(ibT("<!DOCTYPE a SYSTEM \"a.dtd\"><a/>")); })
+		.Find(ibT("depends on declarations outside itself")), wxNOT_FOUND);
+
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	SetFlag(*reader, ibT("IgnoreDocumentType"), false);
+	reader->SetText(ibT("<?xml version=\"1.0\" standalone=\"yes\"?><!DOCTYPE a PUBLIC \"-//X//EN\" 'a.dtd'><a/>"));
+	ASSERT_TRUE(reader->Read());
+	EXPECT_EQ(reader->NodeType(), ibXmlNodeType_DocumentTypeDefinition);
+	EXPECT_EQ(reader->Value(), ibString());
+	EXPECT_EQ(reader->AttributeValue(ibValue(ibString(ibT("PUBLIC")))).GetString(), ibString(ibT("-//X//EN")));
+	EXPECT_EQ(reader->AttributeValue(ibValue(ibString(ibT("SYSTEM")))).GetString(), ibString(ibT("a.dtd")));
+}
+
+TEST(XmlReader, CommentsAndInstructionsArePassedByWhenAsked) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	ASSERT_TRUE(SetFlag(*reader, ibT("IgnoreComments"), true));
+	ASSERT_TRUE(SetFlag(*reader, ibT("IgnoreProcessingInstructions"), true));
+	reader->SetText(ibT("<!--top--><a><!--c-->x<?pi d?>y</a>"));
+	ExpectNodes(Walk(*reader), {
+		{ ibXmlNodeType_StartElement, ibT("a"), ibT("") },
+		{ ibXmlNodeType_Text,         ibT(""),  ibT("x") },
+		{ ibXmlNodeType_Text,         ibT(""),  ibT("y") },
+		{ ibXmlNodeType_EndElement,   ibT("a"), ibT("") },
+	});
+}
+
+// Joined in the parser, so `Read(); v = Value` reads all of it - and what a section holds is never Whitespace.
+TEST(XmlReader, ACdataSectionAsTextIsOneTextWithTheTextAroundIt) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	ASSERT_TRUE(SetFlag(*reader, ibT("CDATASectionAsText"), true));
+	reader->SetText(ibT("<r><a>x<![CDATA[<y>]]>z</a><b><![CDATA[ ]]></b><c> <![CDATA[w]]> </c></r>"));
+	ExpectNodes(Walk(*reader), {
+		{ ibXmlNodeType_StartElement, ibT("r"), ibT("") },
+		{ ibXmlNodeType_StartElement, ibT("a"), ibT("") },
+		{ ibXmlNodeType_Text,         ibT(""),  ibT("x<y>z") },
+		{ ibXmlNodeType_EndElement,   ibT("a"), ibT("") },
+		{ ibXmlNodeType_StartElement, ibT("b"), ibT("") },
+		{ ibXmlNodeType_Text,         ibT(""),  ibT(" ") },
+		{ ibXmlNodeType_EndElement,   ibT("b"), ibT("") },
+		{ ibXmlNodeType_StartElement, ibT("c"), ibT("") },
+		{ ibXmlNodeType_Text,         ibT(""),  ibT(" w ") },
+		{ ibXmlNodeType_EndElement,   ibT("c"), ibT("") },
+		{ ibXmlNodeType_EndElement,   ibT("r"), ibT("") },
+	});
+}
+
+TEST(XmlReader, CdataSectionAsTextIsRefusedOnceReadingHasBegun) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	reader->SetText(ibT("<a><![CDATA[x]]></a>"));
+	EXPECT_TRUE(SetFlag(*reader, ibT("CDATASectionAsText"), true));    // before the first Read: taken
+	EXPECT_TRUE(SetFlag(*reader, ibT("CDATASectionAsText"), false));
+	ASSERT_TRUE(reader->Read());
+	EXPECT_NE(RefusalOf([&] { reader->SetCdataSectionAsText(true); }).Find(ibT("before the first Read")), wxNOT_FOUND);
+	ASSERT_TRUE(reader->Read());
+	EXPECT_EQ(reader->NodeType(), ibXmlNodeType_CDATASection);   // the reading went on as it began
+
+	reader->Close();
+	reader->SetCdataSectionAsText(true);                           // a new reading: taken again
+	reader->SetText(ibT("<a><![CDATA[x]]></a>"));
+	ASSERT_TRUE(reader->Read());
+	ASSERT_TRUE(reader->Read());
+	EXPECT_EQ(reader->NodeType(), ibXmlNodeType_Text);
+}
+
+TEST(XmlSpace, TheTwoValuesKeepTheirNamesAndNumbers) {
+	ibValueEnumXmlSpace owner;
+	owner.CreateEnumeration();
+	ASSERT_EQ(owner.GetEnumCount(), 2u);
+	EXPECT_EQ(static_cast<int>(owner.GetEnumValue(0)), 1);
+	EXPECT_EQ(owner.GetEnumName(0), ibString(ibT("Default")));
+	EXPECT_EQ(static_cast<int>(owner.GetEnumValue(1)), 2);
+	EXPECT_EQ(owner.GetEnumName(1), ibString(ibT("Preserve")));
+}
+
+namespace {
+
+ibValuePtr<ibValueXmlWriter> StringWriter() {
+	ibValuePtr<ibValueXmlWriter> writer(new ibValueXmlWriter());
+	writer->SetText(ibString());
+	return writer;
+}
+
+bool SetWriterProp(ibValueXmlWriter& writer, const ibChar* name, const ibValue& value) {
+	return writer.SetPropVal(writer.FindProp(name), value);
+}
+
+} // namespace
+
+// Each attribute - a declaration too - on a line of its own, one level deeper than its element.
+TEST(XmlWriter, IndentAttributesPutsEachOnALineOfItsOwn) {
+	ibValuePtr<ibValueXmlWriter> writer(new ibValueXmlWriter());
+	ASSERT_TRUE(SetWriterProp(*writer, ibT("IndentAttributes"), ibValue(true)));
+	writer->SetText(ibString());
+	ibXmlWriter& target = writer->Target();
+	target.WriteStartElement(ibT("a"), ibT("urn:a"));
+	target.WriteAttribute(ibT("x"), ibString(), ibT("1"));
+	target.WriteStartElement(ibT("b"), ibString());
+	target.WriteAttribute(ibT("z"), ibString(), ibT("3"));
+	target.WriteEndElement();
+	target.WriteEndElement();
+	EXPECT_EQ(writer->Close(), ibString(ibT("<a\n\txmlns=\"urn:a\"\n\tx=\"1\">\n\t<b\n\t\tz=\"3\"/>\n</a>")));
+
+	// Without indentation it is what it was: one line.
+	ibValuePtr<ibValueXmlWriter> flat(new ibValueXmlWriter());
+	SetWriterProp(*flat, ibT("IndentAttributes"), ibValue(true));
+	SetWriterProp(*flat, ibT("Indent"), ibValue(false));
+	flat->SetText(ibString());
+	flat->Target().WriteStartElement(ibT("a"), ibString());
+	flat->Target().WriteAttribute(ibT("x"), ibString(), ibT("1"));
+	flat->Target().WriteEndElement();
+	EXPECT_EQ(flat->Close(), ibString(ibT("<a x=\"1\"/>")));
+}
+
+TEST(XmlWriter, IndentStringIsOneLevelAndOnlySpacesAndTabs) {
+	ibValuePtr<ibValueXmlWriter> writer(new ibValueXmlWriter());
+	ASSERT_TRUE(SetWriterProp(*writer, ibT("IndentString"), ibValue(ibString(ibT("  ")))));
+	EXPECT_NE(RefusalOf([&] { SetWriterProp(*writer, ibT("IndentString"), ibValue(ibString(ibT("-")))); })
+		.Find(ibT("spaces and tabs")), wxNOT_FOUND);
+	writer->SetText(ibString());
+	EXPECT_NE(RefusalOf([&] { SetWriterProp(*writer, ibT("IndentString"), ibValue(ibString(ibT(" x")))); })
+		.Find(ibT("spaces and tabs")), wxNOT_FOUND);
+	ibXmlWriter& target = writer->Target();
+	target.WriteStartElement(ibT("a"), ibString());
+	target.WriteStartElement(ibT("b"), ibString());
+	target.WriteStartElement(ibT("c"), ibString());
+	target.WriteEndElement();
+	target.WriteEndElement();
+	target.WriteEndElement();
+	EXPECT_EQ(writer->Close(), ibString(ibT("<a>\n  <b>\n    <c/>\n  </b>\n</a>")));
+	ibValue& value = *writer;
+	EXPECT_EQ(PropOf(value, ibT("IndentString")).GetString(), ibString(ibT("  ")));
+}
+
+TEST(XmlWriter, TheDocumentTypeInEachOfItsForms) {
+	const auto written = [](const ibString& name, const ibString& publicId, const ibString& systemId, const ibString& subset) {
+		ibValuePtr<ibValueXmlWriter> writer = StringWriter();
+		writer->Target().WriteDocumentType(name, publicId, systemId, subset);
+		return writer->Close();
+	};
+	EXPECT_EQ(written(ibT("a"), ibT(""), ibT(""), ibT("")), ibString(ibT("<!DOCTYPE a>")));
+	EXPECT_EQ(written(ibT("a"), ibT(""), ibT("a.dtd"), ibT("")), ibString(ibT("<!DOCTYPE a SYSTEM \"a.dtd\">")));
+	EXPECT_EQ(written(ibT("a"), ibT("-//X//EN"), ibT("a.dtd"), ibT("")),
+		ibString(ibT("<!DOCTYPE a PUBLIC \"-//X//EN\" \"a.dtd\">")));
+	EXPECT_EQ(written(ibT("a"), ibT(""), ibT("say \"x\".dtd"), ibT("")),
+		ibString(ibT("<!DOCTYPE a SYSTEM 'say \"x\".dtd'>")));
+	EXPECT_EQ(written(ibT("a"), ibT(""), ibT(""), ibT("<!ENTITY e \"x\">")),
+		ibString(ibT("<!DOCTYPE a [<!ENTITY e \"x\">]>")));
+}
+
+// Each refusal leaves the writer as it was: the document goes on and comes out whole.
+TEST(XmlWriter, TheDocumentTypeIsRefusedWhereItCannotStand) {
+	ibValuePtr<ibValueXmlWriter> writer = StringWriter();
+	ibXmlWriter& target = writer->Target();
+	target.SetIndent(false);
+	// An element refused is no element begun: the document type may still come.
+	EXPECT_NE(RefusalOf([&] { target.WriteStartElement(ibT("p:a"), ibString()); }).Find(ibT("not bound")), wxNOT_FOUND);
+	EXPECT_NE(RefusalOf([&] { target.WriteDocumentType(ibT("a"), ibT("-//X//EN"), ibString(), ibString()); })
+		.Find(ibT("public identifier is written with a system one")), wxNOT_FOUND);
+	EXPECT_NE(RefusalOf([&] { target.WriteDocumentType(ibT("a"), ibT("x\"y"), ibT("a.dtd"), ibString()); })
+		.Find(ibT("not allowed in a public identifier")), wxNOT_FOUND);
+	EXPECT_NE(RefusalOf([&] { target.WriteDocumentType(ibT("a"), ibString(), ibT("'\""), ibString()); })
+		.Find(ibT("both kinds of quotes")), wxNOT_FOUND);
+	EXPECT_NE(RefusalOf([&] { target.WriteDocumentType(ibT("1a"), ibString(), ibString(), ibString()); })
+		.Find(ibT("not a name")), wxNOT_FOUND);
+	target.WriteDocumentType(ibT("a"), ibString(), ibString(), ibString());
+	EXPECT_NE(RefusalOf([&] { target.WriteDocumentType(ibT("a"), ibString(), ibString(), ibString()); })
+		.Find(ibT("written already")), wxNOT_FOUND);
+	target.WriteStartElement(ibT("a"), ibString());
+	target.WriteEndElement();
+	EXPECT_EQ(writer->Close(), ibString(ibT("<!DOCTYPE a><a/>")));
+
+	ibValuePtr<ibValueXmlWriter> late = StringWriter();
+	late->Target().WriteStartElement(ibT("a"), ibString());
+	EXPECT_NE(RefusalOf([&] { late->Target().WriteDocumentType(ibT("a"), ibString(), ibString(), ibString()); })
+		.Find(ibT("before the first element")), wxNOT_FOUND);
+}
+
+// The writer has no standalone="yes", and a reader reads a SYSTEM document type only in a document that has one: what
+// this writer writes with a system identifier, this reader refuses. Said in the help; held here.
+TEST(XmlWriter, ADocumentTypeWithASystemIdentifierIsOneTheReaderRefuses) {
+	ibValuePtr<ibValueXmlWriter> writer = StringWriter();
+	writer->Target().WriteDocumentType(ibT("a"), ibString(), ibT("a.dtd"), ibString());
+	writer->Target().WriteStartElement(ibT("a"), ibString());
+	writer->Target().WriteEndElement();
+	const ibString text = writer->Close();
+	EXPECT_NE(RefusalOf([&] { WalkText(text); }).Find(ibT("depends on declarations outside itself")), wxNOT_FOUND);
+}
+
+// A copy carries the declaration (this writer's own: its encoding) and the document type with its subset.
+TEST(XmlWriter, WriteCurrentCopiesTheDeclarationAndTheDocumentType) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	SetFlag(*reader, ibT("IgnoreXMLDeclaration"), false);
+	SetFlag(*reader, ibT("IgnoreDocumentType"), false);
+	reader->SetText(ibT("<?xml version=\"1.0\" encoding=\"windows-1251\"?><!DOCTYPE a [<!ENTITY e \"x\">]><a>&e;</a>"));
+	ibValuePtr<ibValueXmlWriter> writer = StringWriter();
+	writer->Target().SetIndent(false);
+	while (reader->Read())
+		writer->WriteCurrent(*reader);
+	EXPECT_EQ(writer->Close(), ibString(ibT("<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE a [<!ENTITY e \"x\">]><a>x</a>")));
+}
+
+// `xml` is bound in every document: xml:lang goes as written, with no declaration of its own - and reads back.
+TEST(XmlWriter, XmlLangIsWrittenWithNoDeclarationAndReadsBack) {
+	ibValuePtr<ibValueXmlWriter> writer = StringWriter();
+	writer->Target().WriteStartElement(ibT("a"), ibString());
+	writer->Target().WriteAttribute(ibT("xml:lang"), ibString(), ibT("uk"));
+	writer->Target().WriteAttribute(ibT("space"), ibT("http://www.w3.org/XML/1998/namespace"), ibT("preserve"));
+	writer->Target().WriteEndElement();
+	const ibString text = writer->Close();
+	EXPECT_EQ(text, ibString(ibT("<a xml:lang=\"uk\" xml:space=\"preserve\"/>")));
+	const std::vector<ibSaidAt> seen = WalkSaid(text);
+	ASSERT_FALSE(seen.empty());
+	EXPECT_EQ(seen.front().language, ibString(ibT("uk")));
+	EXPECT_TRUE(seen.front().preserve);
+}
+
+TEST(XmlReader, IgnoreDocumentTypeIsRefusedOnceReadingHasBegun) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	reader->SetText(ibT("<!DOCTYPE a><a/>"));
+	ASSERT_TRUE(reader->Read());
+	EXPECT_NE(RefusalOf([&] { reader->SetIgnoreDocumentType(false); }).Find(ibT("before the first Read")), wxNOT_FOUND);
+	EXPECT_EQ(reader->NodeType(), ibXmlNodeType_StartElement);
+}
+
+// An empty section holds nothing: no node of its own, and the layout around it is still whitespace.
+TEST(XmlReader, AnEmptyCdataSectionAsTextIsNothing) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	reader->SetCdataSectionAsText(true);
+	reader->SetText(ibT("<r>\n  <![CDATA[]]>\n  <b><![CDATA[]]></b></r>"));
+	ExpectNodes(Walk(*reader), {
+		{ ibXmlNodeType_StartElement, ibT("r"), ibT("") },
+		{ ibXmlNodeType_StartElement, ibT("b"), ibT("") },
+		{ ibXmlNodeType_EndElement,   ibT("b"), ibT("") },
+		{ ibXmlNodeType_EndElement,   ibT("r"), ibT("") },
+	});
+
+	// ...not even an empty Whitespace node where whitespace is handed over.
+	ibValuePtr<ibValueXmlReader> keeping(new ibValueXmlReader());
+	keeping->SetCdataSectionAsText(true);
+	keeping->SetIgnoreWhitespace(false);
+	keeping->SetText(ibT("<b><![CDATA[]]></b>"));
+	ExpectNodes(Walk(*keeping), {
+		{ ibXmlNodeType_StartElement, ibT("b"), ibT("") },
+		{ ibXmlNodeType_EndElement,   ibT("b"), ibT("") },
+	});
+}
+
+// The parser is told how to read before it reads.
+TEST(XmlParserQueue, HowTheTextIsReadIsRefusedOnceItIsFed) {
+	ibXmlParser parser(ibT("test"), ibXmlParser::kCharacters);
+	parser.SetCdataSectionAsText(true);
+	parser.SetDocumentTypeAsNode(true);
+	const std::string text("<a>");
+	parser.Feed(text.data(), text.size(), false, ibString());
+	EXPECT_NE(RefusalOf([&] { parser.SetCdataSectionAsText(false); }).Find(ibT("before it is fed")), wxNOT_FOUND);
+	EXPECT_NE(RefusalOf([&] { parser.SetDocumentTypeAsNode(false); }).Find(ibT("before it is fed")), wxNOT_FOUND);
+}
+
+// A copy keeps standalone="yes" - and with it a SYSTEM document type stays one the reader reads.
+TEST(XmlWriter, ACopyKeepsTheDeclarationsStandalone) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	SetFlag(*reader, ibT("IgnoreXMLDeclaration"), false);
+	SetFlag(*reader, ibT("IgnoreDocumentType"), false);
+	reader->SetText(ibT("<?xml version=\"1.0\" standalone=\"yes\"?><!DOCTYPE a SYSTEM \"a.dtd\"><a/>"));
+	ibValuePtr<ibValueXmlWriter> writer = StringWriter();
+	writer->Target().SetIndent(false);
+	while (reader->Read())
+		writer->WriteCurrent(*reader);
+	const ibString copy = writer->Close();
+	EXPECT_EQ(copy, ibString(ibT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><!DOCTYPE a SYSTEM \"a.dtd\"><a/>")));
+	EXPECT_EQ(WalkText(copy).size(), 2u);   // read back: the element's pair
+
+	ibValuePtr<ibValueXmlWriter> bad = StringWriter();
+	EXPECT_NE(RefusalOf([&] { bad->Target().WriteXmlDeclaration(ibT("UTF-8"), ibT("maybe")); }).Find(ibT("\"yes\" or \"no\"")), wxNOT_FOUND);
+}
+
+// The parts of a declaration stand as attributes for reading - they are not an element's to write.
+TEST(XmlWriter, WriteCurrentRefusesThePartsOfADeclarationAsAttributes) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	SetFlag(*reader, ibT("IgnoreXMLDeclaration"), false);
+	reader->SetText(ibT("<?xml version=\"1.0\"?><a/>"));
+	ASSERT_TRUE(reader->Read());
+	ASSERT_TRUE(reader->FirstAttribute());
+	ibValuePtr<ibValueXmlWriter> writer = StringWriter();
+	writer->Target().WriteStartElement(ibT("x"), ibString());
+	EXPECT_NE(RefusalOf([&] { writer->WriteCurrent(*reader); }).Find(ibT("a part of the XML declaration")), wxNOT_FOUND);
+	writer->Target().WriteEndElement();
+	EXPECT_EQ(writer->Close(), ibString(ibT("<x/>")));
+}
+
+// A document type is where its `<!DOCTYPE` is - after a declaration, a comment with a letter of two bytes, a line
+// break of `\r\n` and spaces - not where expat stands when it reports it.
+TEST(XmlReader, TheDocumentTypeIsWhereItBegins) {
+	const auto at = [](const ibString& text) {
+		ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+		reader->SetIgnoreDocumentType(false);
+		reader->SetText(text);
+		while (reader->Read())
+			if (reader->NodeType() == ibXmlNodeType_DocumentTypeDefinition)
+				return std::make_pair(reader->Current().m_line, reader->Current().m_column);
+		return std::make_pair(0ull, 0ull);
+	};
+	EXPECT_EQ(at(ibT("<!DOCTYPE a [<!ENTITY e \"x\">]><a/>")), std::make_pair(1ull, 1ull));
+	EXPECT_EQ(at(ibT("<!DOCTYPE a><a/>")), std::make_pair(1ull, 1ull));
+	EXPECT_EQ(at(ibString(ibT("<?xml version=\"1.0\"?>\r\n<!--")) + FromCodePoints({ 0x436 }) + ibString(ibT("--><!DOCTYPE a\n [ ]><a/>"))),
+		std::make_pair(2ull, 9ull));   // the comment is the last thing before it: its letter is one column
+	EXPECT_EQ(at(ibT("<?pi x?>\r\n\r\n   <!DOCTYPE a><a/>")), std::make_pair(3ull, 4ull));   // `\r\n` one line
+}
+
+// A text that begins with a section begins where the section does.
+TEST(XmlReader, ACdataSectionAsTextBeginsWhereTheSectionDoes) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	reader->SetCdataSectionAsText(true);
+	reader->SetText(ibT("<a><![CDATA[x]]></a>"));
+	ASSERT_TRUE(reader->Read());
+	ASSERT_TRUE(reader->Read());
+	EXPECT_EQ(reader->NodeType(), ibXmlNodeType_Text);
+	EXPECT_EQ(reader->Current().m_column, 4ull);
+}
+
+// The internal subset's line ends are a document's: `\r\n` and `\r` read as `\n`.
+TEST(XmlReader, TheInternalSubsetsLineEndsAreReadAsEverywhere) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	reader->SetIgnoreDocumentType(false);
+	reader->SetText(ibT("<!DOCTYPE a [\r\n<!ENTITY e \"x\">\r<!ENTITY f \"y\">\n]><a/>"));
+	ASSERT_TRUE(reader->Read());
+	EXPECT_EQ(reader->Value(), ibString(ibT("\n<!ENTITY e \"x\">\n<!ENTITY f \"y\">\n")));
+}
+
+// On the parts of a declaration, MoveToContent passes the declaration by, as it does from the declaration itself.
+TEST(XmlReader, MoveToContentPassesADeclarationFromItsParts) {
+	ibValuePtr<ibValueXmlReader> reader(new ibValueXmlReader());
+	SetFlag(*reader, ibT("IgnoreXMLDeclaration"), false);
+	reader->SetText(ibT("<?xml version=\"1.0\"?><a/>"));
+	ASSERT_TRUE(reader->Read());
+	ASSERT_TRUE(reader->FirstAttribute());
+	EXPECT_EQ(reader->MoveToContent(), ibXmlNodeType_StartElement);
+}
+
+// What an element says with xml:space="preserve" is the document's: no layout is put inside it - so a copy reads back
+// the same - and "default" further in lets the layout back.
+TEST(XmlWriter, IndentStaysOutOfAnElementThatPreservesSpace) {
+	ibValuePtr<ibValueXmlWriter> writer = StringWriter();
+	ibXmlWriter& target = writer->Target();
+	target.WriteStartElement(ibT("r"), ibString());
+	target.WriteStartElement(ibT("p"), ibString());
+	target.WriteAttribute(ibT("xml:space"), ibString(), ibT("preserve"));
+	target.WriteStartElement(ibT("b"), ibString());
+	target.WriteEndElement();
+	target.WriteStartElement(ibT("q"), ibString());
+	target.WriteStartAttribute(ibT("space"), ibT("http://www.w3.org/XML/1998/namespace"));
+	target.WriteText(ibT("def"));
+	target.WriteText(ibT("ault"));
+	target.WriteEndAttribute();
+	target.WriteStartElement(ibT("c"), ibString());
+	target.WriteEndElement();
+	target.WriteEndElement();
+	target.WriteEndElement();
+	target.WriteStartElement(ibT("d"), ibString());
+	target.WriteEndElement();
+	target.WriteEndElement();
+	EXPECT_EQ(writer->Close(), ibString(ibT(
+		"<r>\n\t<p xml:space=\"preserve\"><b/><q xml:space=\"default\">\n\t\t\t<c/>\n\t\t</q></p>\n\t<d/>\n</r>")));
+}
+
+// An element in the middle of a line keeps its attributes on it.
+TEST(XmlWriter, IndentAttributesLeavesAnElementInsideTextOnItsLine) {
+	ibValuePtr<ibValueXmlWriter> writer(new ibValueXmlWriter());
+	SetWriterProp(*writer, ibT("IndentAttributes"), ibValue(true));
+	writer->SetText(ibString());
+	ibXmlWriter& target = writer->Target();
+	target.WriteStartElement(ibT("p"), ibString());
+	target.WriteText(ibT("x"));
+	target.WriteStartElement(ibT("b"), ibString());
+	target.WriteAttribute(ibT("y"), ibString(), ibT("1"));
+	target.WriteEndElement();
+	target.WriteEndElement();
+	EXPECT_EQ(writer->Close(), ibString(ibT("<p>x<b y=\"1\"/></p>")));
+}
+
+// A refusal names the character, not half of it.
+TEST(XmlWriter, APublicIdentifiersRefusalNamesTheCharacter) {
+	ibValuePtr<ibValueXmlWriter> writer = StringWriter();
+	const ibString publicId = ibString(ibT("x")) + FromCodePoints({ 0x1F600 });
+	EXPECT_NE(RefusalOf([&] { writer->Target().WriteDocumentType(ibT("a"), publicId, ibT("a.dtd"), ibString()); })
+		.Find(ibT("U+1F600")), wxNOT_FOUND);
+}
