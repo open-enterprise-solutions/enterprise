@@ -937,8 +937,8 @@ TEST(CompileTree, ALambdaArgumentClosesWithEndFunction) {
 	// `Message` is a GLOBAL, and a host provides it — codeRunner binds the
 	// system functions as a transparent scope and so does this. Rewriting the
 	// source to avoid the name would have hidden the shape the corpus dies on.
-	ibValueSystemFunction valueSystem;
-	compiler.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	compiler.AddContextVariable(wxT("System"), valueSystem, true);
 	const bool bOk = Build(compiler,
 		wxT("var nums\n")
 		wxT("nums = New Array\n")

@@ -2028,8 +2028,8 @@ TEST_F(BuiltInRuntime, ABuiltInGlobalTakesFewerArgumentsThanItDeclares) {
 
 	// The host binds the global API as a transparent scope, exactly as
 	// codeRunner and the corpus do. It must outlive the ProcUnit.
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc, wxT("Message(\"boom\");")));
 
@@ -2055,8 +2055,8 @@ TEST_F(BuiltInRuntime, ABuiltInGlobalTakesFewerArgumentsThanItDeclares) {
 TEST_F(BuiltInRuntime, ABuiltInFunctionSuppliesABuiltInProcedureArgument) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc, wxT("Message(Sqrt(16));")));
 
@@ -2107,8 +2107,8 @@ TEST(RuntimeTest, PostfixIncrementYieldsTheOldValueThenStores) {
 TEST_F(BuiltInRuntime, DISABLED_DumpBuiltInCall) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc, wxT("Message(\"boom\");")));
 
@@ -2158,8 +2158,8 @@ TEST_F(BuiltInRuntime, DISABLED_DumpBuiltInCall) {
 
 TEST_F(BuiltInRuntime, ABuiltInProcedureWithEveryArgumentWritten) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	// TWO messages, both with only the text — the omitted-status shape, twice,
 	// so a state left behind by the first call would show. A literal status
@@ -2174,8 +2174,8 @@ TEST_F(BuiltInRuntime, ABuiltInProcedureWithEveryArgumentWritten) {
 
 TEST_F(BuiltInRuntime, ABuiltInFunctionWithEveryArgumentWritten) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	// Sqrt takes exactly one; if THIS crashes the receiver is at fault, and if
 	// it runs the fault is the omitted-argument path and nothing else.
@@ -2424,8 +2424,8 @@ TEST(RuntimeTest, ASecondJoinedVarAfterAFirstOne) {
 TEST_F(BuiltInRuntime, AModuleVarAfterAPipelineLambda) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var orders = New Array\n")
@@ -2796,8 +2796,8 @@ TEST(RuntimeTest, ACorrelatedJoinPairsEachKeyWithItsOwnRowsMeta) {
 TEST_F(BuiltInRuntime, EvaluateComputesAConstantExpression) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc, wxT("var a public; a = Evaluate(\"2 + 2\");")));
 
@@ -2822,8 +2822,8 @@ TEST_F(BuiltInRuntime, EvaluateComputesAConstantExpression) {
 TEST_F(BuiltInRuntime, EvaluateReadsAVariableOfTheHostModule) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var k public; var a public;\n")
@@ -3036,8 +3036,8 @@ TEST(CachedFunction, ACallThatRaisedIsNotKept) {
 TEST_F(BuiltInRuntime, MaxAndMinTerminateWhateverTheArgumentOrder) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		// NOT named `descending` / `ascending` — those are LINQ keywords
@@ -3082,8 +3082,8 @@ TEST_F(BuiltInRuntime, MaxAndMinTerminateWhateverTheArgumentOrder) {
 TEST_F(BuiltInRuntime, StringCountingFunctionsCountRatherThanLocate) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var occurNone public; var occurOne public; var occurThree public;\n")
@@ -3136,8 +3136,8 @@ TEST_F(BuiltInRuntime, StringCountingFunctionsCountRatherThanLocate) {
 TEST_F(BuiltInRuntime, StringPositionsAsTheyActuallyAre) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var found public; var missing public;\n")
@@ -3188,8 +3188,8 @@ TEST_F(BuiltInRuntime, StringPositionsAsTheyActuallyAre) {
 TEST_F(BuiltInRuntime, DayOfWeekIsIsoAndTheWeekIsSevenDays) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var mon public; var tue public; var wed public; var thu public;\n")
@@ -3232,8 +3232,8 @@ TEST_F(BuiltInRuntime, DayOfWeekIsIsoAndTheWeekIsSevenDays) {
 TEST_F(BuiltInRuntime, ACalendarDateKeepsItsOwnComponents) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var y public; var m public; var d public;\n")
@@ -3262,8 +3262,8 @@ TEST_F(BuiltInRuntime, ACalendarDateKeepsItsOwnComponents) {
 TEST_F(BuiltInRuntime, TheDifferenceOfTwoDatesIsInSeconds) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var day public; var span public; var back public;\n")
@@ -3288,8 +3288,8 @@ TEST_F(BuiltInRuntime, TheDifferenceOfTwoDatesIsInSeconds) {
 TEST_F(BuiltInRuntime, DateArithmeticIgnoresTheClockChange) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var march public; var later public; var year public;\n")
@@ -3337,8 +3337,8 @@ TEST_F(BuiltInRuntime, DateArithmeticIgnoresTheClockChange) {
 TEST_F(BuiltInRuntime, AVariadicBuiltInAcceptsEveryCount) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var one public; var two public; var many public;\n")
@@ -3531,7 +3531,8 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	} styleRestore{ savedStyle };
 
 	ibCompileCode cc(wxT("caller"), wxT("memory"), false);
-	cc.AddContextVariable(wxT("ThisForm"), static_cast<ibValue*>(form));
+	const ibValue thisForm(static_cast<ibValue*>(form));
+	cc.AddContextVariable(wxT("ThisForm"), thisForm);
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("Procedure Write()\n")
 		wxT("  ThisForm.DataSource.B = ThisForm.DataSource.A;\n")
@@ -3565,8 +3566,8 @@ TEST_F(BuiltInRuntime, DynamicList_GetMetadataIsCallable) {
 
 TEST_F(BuiltInRuntime, BegOfHourFloorsToTheHour) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var hour public; var minute public; var second public; var day public;\n")
@@ -3599,8 +3600,8 @@ TEST_F(BuiltInRuntime, BegOfHourFloorsToTheHour) {
 // EndOfHour is BegOfHour's pair, as EndOfDay is BegOfDay's: the same hour at :59:59, the day kept.
 TEST_F(BuiltInRuntime, EndOfHourIsTheHoursLastSecond) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var hour public; var minute public; var second public; var day public;\n")
@@ -3627,8 +3628,8 @@ TEST_F(BuiltInRuntime, EndOfHourIsTheHoursLastSecond) {
 // of them apart are the time between, to the millisecond, and a date's milliseconds are kept.
 TEST_F(BuiltInRuntime, GetMillisecondIsTheDatesOwnCount) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ibValueSystemFunction valueSystem;
-	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var count public; var between public;\n")
