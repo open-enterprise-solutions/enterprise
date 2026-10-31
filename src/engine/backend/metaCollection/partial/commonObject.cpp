@@ -1187,6 +1187,9 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 	// silent because the default keeps working.
 	node.SetProperty(m_propertyHierarchyType->GetName(), m_propertyHierarchyType->GetNodeValue());
 	node.SetProperty(m_propertyDataPresentation->GetName(), m_propertyDataPresentation->GetNodeValue());
+	node.SetProperty(m_propertyCodeType->GetName(), m_propertyCodeType->GetNodeValue());
+	node.SetProperty(m_propertyCodeLength->GetName(), m_propertyCodeLength->GetNodeValue());
+	node.SetProperty(m_propertyDescriptionLength->GetName(), m_propertyDescriptionLength->GetNodeValue());
 
 	return ibValueMetaObjectRecordDataMutableRef::WriteData(node);
 }
@@ -1230,7 +1233,68 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 	// leaves an empty value alone) - Description for a catalog, Code for a chart of accounts.
 	m_propertyDataPresentation->SetNodeValue(node.GetProperty(m_propertyDataPresentation->GetName()));
 
+	// …and the code's shape, absent from a configuration saved before it could be chosen: the defaults
+	// stand, which are the String(8) and String(150) it was saved with. Restated on the attributes at
+	// once, for the reason the hierarchy type is.
+	m_propertyCodeType->SetNodeValue(node.GetProperty(m_propertyCodeType->GetName()));
+	m_propertyCodeLength->SetNodeValue(node.GetProperty(m_propertyCodeLength->GetName()));
+	m_propertyDescriptionLength->SetNodeValue(node.GetProperty(m_propertyDescriptionLength->GetName()));
+	ApplyCodeShape();
+
 	return ibValueMetaObjectRecordDataMutableRef::ReadData(node);
+}
+
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::CheckPredefinedValue(const ibString& name, const ibString& code, const ibString& description, ibString* refusal) const
+{
+	const auto refuse = [refusal](const ibString& text) {
+		if (refusal != nullptr)
+			*refusal = text;
+		return false;
+	};
+
+	const unsigned int codeLength = GetCodeLength();
+	if (GetCodeType() == ibCodeType_Number) {
+		for (size_t i = 0; i < code.length(); ++i) {
+			if (code[i] < ibT('0') || code[i] > ibT('9'))
+				return refuse(ibString::Format(
+					_("%s: the predefined item %s has the code '%s', and the code of %s is a number - digits only"),
+					GetName(), name, code, GetName()));
+		}
+		// Leading zeros are not stored by a number: `000000001` is 1, and that is the code it gets.
+		size_t first = 0;
+		while (first + 1 < code.length() && code[first] == ibT('0'))
+			++first;
+		const size_t digits = code.length() - first;
+		if (!code.IsEmpty() && digits > codeLength)
+			return refuse(ibString::Format(
+				_("%s: the predefined item %s has the code '%s' of %u digits, and the code length is %u - raise CodeLength or shorten the code"),
+				GetName(), name, code, (unsigned)digits, codeLength));
+	}
+	else if (code.length() > codeLength) {
+		return refuse(ibString::Format(
+			_("%s: the predefined item %s has the code '%s' of %u characters, and the code length is %u - raise CodeLength or shorten the code"),
+			GetName(), name, code, (unsigned)code.length(), codeLength));
+	}
+
+	const unsigned int descriptionLength = GetDescriptionLength();
+	if (description.length() > descriptionLength)
+		return refuse(ibString::Format(
+			_("%s: the predefined item %s has a description of %u characters, and the description length is %u - raise DescriptionLength or shorten the description"),
+			GetName(), name, (unsigned)description.length(), descriptionLength));
+
+	return true;
+}
+
+ibValue ibValueMetaObjectRecordDataHierarchyMutableRef::GetPredefinedCodeValue(const ibString& code) const
+{
+	if (GetCodeType() != ibCodeType_Number)
+		return ibValue(code);
+	if (code.IsEmpty())
+		return GetDataCode()->CreateValue();
+	ibNumber number;
+	if (!number.FromString(code))
+		return GetDataCode()->CreateValue();
+	return ibValue(number);
 }
 
 //***********************************************************************

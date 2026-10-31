@@ -17,6 +17,7 @@
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject - the seed's reference cells
 #include "backend/query/columnLayout.h"                           // ibOwnerRefColumn / ibFieldSuffix - the scaffold + field names
 #include "backend/query/schemaSnapshot.h"                         // ibSchemaSnapshot / ibSchemaTable - what a declaration is
+#include "backend/restructureInfo.h"                               // ibRestructureInfo - where a predefined item that does not fit is said
 
 #include <algorithm>   // std::find - an attribute that is itself one of the list order's columns
 
@@ -238,6 +239,28 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	// _RRRef so the data-reference unique index (_REF_UQ) does not see N rows colliding on the NULL default.
 	ibSchemaTable& t = out.Shared(GetMetaID(), GetPhysicalTableName());   // the main table the base just created
 
+	// A PREDEFINED ITEM THE CODE OR THE DESCRIPTION CANNOT HOLD is refused here, before any DDL, naming
+	// the object and the item. Otherwise the seed row reached the engine and came back as "string right
+	// truncation, expected length 8, actual 9" - no object, no item, and the apply rolled back
+	// (open-enterprise-solutions/enterprise#274). predefined_add refuses such an item as it is declared;
+	// this is for the one declared before the length was lowered, or brought in by a loaded configuration.
+	std::vector<ibString> unfit;
+	for (const auto& object : m_predefinedObjectVector) {
+		ibString refusal;
+		if (!CheckPredefinedValue(object->GetPredefinedName(), object->GetPredefinedCode(), object->GetPredefinedDescription(), &refusal))
+			unfit.push_back(refusal);
+	}
+	if (!unfit.empty()) {
+		t.m_beforeChange = [unfit, earlier = t.m_beforeChange](ibRestructureInfo* report) -> bool {
+			if (earlier)
+				earlier(report);
+			if (report != nullptr)
+				for (const ibString& refusal : unfit)
+					report->AppendError(refusal);
+			return false;
+		};
+	}
+
 	// (No rule on retiring Parent / IsFolder any more, 2026-10-05: a hierarchy switched off takes those
 	//  columns the way deleting any attribute takes its own — the list stops declaring them, the differ
 	//  drops them and the apply ledger says "Remove …". The rule that refused it kept its own idea of which
@@ -262,7 +285,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 				ibValuePtr<ibValueReferenceDataObject>(
 					ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid(), ibReferenceLoad::OnDemand)))
 			.Set(m_propertyAttributePredefined->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedName()))
-			.Set(m_propertyAttributeCode->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedCode()))
+			.Set(m_propertyAttributeCode->GetMetaObject()->GetQueryColumn(), GetPredefinedCodeValue(object->GetPredefinedCode()))
 			.Set(m_propertyAttributeDescription->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedDescription()))
 			.Set(m_propertyAttributeIsFolder->GetMetaObject()->GetQueryColumn(), ibValue(object->IsPredefinedFolder()))
 			.Set(m_propertyAttributeDeletionMark->GetMetaObject()->GetQueryColumn(), ibValue(false))

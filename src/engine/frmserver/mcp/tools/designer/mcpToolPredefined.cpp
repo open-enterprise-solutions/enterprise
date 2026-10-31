@@ -61,7 +61,8 @@ const ibArg& ArgDescription()
 const ibArg& ArgCode()
 {
 	static const ibArg s_a(ibT("code"), ibArg::Kind::Text,
-		ibMcpText("The item's code, when the object has a code at all."));
+		ibMcpText("The item's code, when the object has a code at all. It must fit the object's CodeLength "
+		          "and CodeType (digits only for a Number code); empty, it is generated when the item is written."));
 	return s_a;
 }
 
@@ -298,13 +299,17 @@ public:
 			}
 		}
 
-		const ibString description = ArgDescription().Text(params);
+		const ibString code = ArgCode().Text(params);
+		const ibString given = ArgDescription().Text(params);
+		const ibString description = given.IsEmpty() ? name : given;
 
-		owner->AppendPredefinedValue(name,
-			ArgCode().Text(params),
-			description.IsEmpty() ? name : description,
-			ArgFolder().Flag(params),
-			parent);
+		// A CODE THE OBJECT CANNOT HOLD IS REFUSED NOW, naming the item - not by the next apply, where the
+		// engine said "string right truncation" and nothing about which item (#274). The length and the
+		// type are the object's CodeLength / CodeType, set with metadata_set.
+		if (!owner->CheckPredefinedValue(name, code, description, &refusal))
+			return false;
+
+		owner->AppendPredefinedValue(name, code, description, ArgFolder().Flag(params), parent);
 
 		// WHAT HAPPENED, in the caller's own words. Reporting the name back rather
 		// than a bare success means a caller never has to guess whether the item it

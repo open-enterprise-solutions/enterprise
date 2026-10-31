@@ -58,6 +58,25 @@ class ibValueEnumDataPresentation : public ibValueEnumeration<ibDataPresentation
 		AddEnumeration(ibDataPresentation_Code, ibT("Code"), _("Code"));
 	}
 };
+
+// WHAT A CODE IS MADE OF - text, or a number. A number code is numbered and ordered as a number
+// (9 comes before 10) and holds digits only; a string code may carry letters and a prefix. Both are
+// as long as CodeLength says. The default is String, which is what every code was before it could
+// be chosen (open-enterprise-solutions/enterprise#274).
+enum ibCodeType {
+	ibCodeType_String = 1,
+	ibCodeType_Number,
+};
+
+class ibValueEnumCodeType : public ibValueEnumeration<ibCodeType> {
+	public:
+	ibValueEnumCodeType() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibCodeType_String, ibT("String"), _("String"));
+		AddEnumeration(ibCodeType_Number, ibT("Number"), _("Number"));
+	}
+};
 #pragma endregion
 
 #endif

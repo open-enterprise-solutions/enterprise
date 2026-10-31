@@ -281,19 +281,32 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 		// is searched by holds text (a catalog's and a chart's Code and Description), each is asked to
 		// CONTAIN it, joined by OR, and the ceiling below then counts matches, not rows. A kind searched
 		// by something else too (a document by its date) keeps the scan: text cannot be asked of a date.
+		// A NUMBER code (CodeType, #274) is asked to EQUAL the text where the text is a number, and is left
+		// out of the condition where it is not - the description still answers.
 		std::vector<ibValueMetaObjectAttributeBase*> searched = m_metaObject->GetSearchedAttributeObjectArray();
 		const bool textOnly = !searched.empty() && std::all_of(searched.begin(), searched.end(),
 			[](const ibValueMetaObjectAttributeBase* attribute) {
-				return attribute != nullptr && attribute->ContainType(ibValueTypes::TYPE_STRING);
+				return attribute != nullptr && (attribute->ContainType(ibValueTypes::TYPE_STRING)
+					|| attribute->ContainType(ibValueTypes::TYPE_NUMBER));
 			});
 		if (!everything && textOnly) {
+			ibNumber wantedNumber;
+			const bool numeric = wantedNumber.FromString(findData);
 			ibQueryPredicatePtr any;
 			for (const ibValueMetaObjectAttributeBase* attribute : searched) {
-				ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(
-					ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Like, ibValue(ibT("%") + findData + ibT("%")) });
+				ibQueryPredicatePtr leaf;
+				if (attribute->ContainType(ibValueTypes::TYPE_STRING))
+					leaf = ibQueryPredicate::Leaf(
+						ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Like, ibValue(ibT("%") + findData + ibT("%")) });
+				else if (numeric)
+					leaf = ibQueryPredicate::Leaf(
+						ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(wantedNumber) });
+				else
+					continue;
 				any = any ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, any, leaf) : leaf;
 			}
-			q.Where(any);
+			if (any)
+				q.Where(any);
 		}
 
 		ibReadPageRequest page;

@@ -112,6 +112,19 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   to save.
 - **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
 
+## Metadata
+
+- **The code and the description of a catalog or a chart have a length and a type of their own.**
+  `CodeType` (String or Number), `CodeLength` and `DescriptionLength`, under Data, in the designer and
+  through `metadata_set`; until now every code was `String(8)` and every description `String(150)`,
+  which is still the default, so a saved configuration reads back as it was. A number code holds
+  digits only and is numbered and ordered as a number. Changing one is a restructuring: `config_apply`
+  alters the column. Switching the type clears the codes already stored, as any change of type does.
+- **A predefined item whose code or description does not fit is refused naming the item** — by
+  `predefined_add` and the designer's list as it is declared, and by `config_apply` before any table
+  is touched. It used to reach the engine and come back as `string right truncation, expected
+  length 8, actual 9`, with no object and no item (#274).
+
 ## Fixes
 
 - **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the

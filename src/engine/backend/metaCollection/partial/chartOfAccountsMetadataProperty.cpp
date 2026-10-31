@@ -35,7 +35,7 @@ void ibValueMetaObjectChartOfAccounts::OnPropertyCreated(ibProperty* property)
 
 bool ibValueMetaObjectChartOfAccounts::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
-	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanging(property, newValue);
 }
 
 void ibValueMetaObjectChartOfAccounts::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
