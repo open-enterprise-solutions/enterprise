@@ -553,12 +553,32 @@ bool ibJsonProvider::Read(const ibString& text, ibDataNode& root) const
 	return true;
 }
 
+namespace {
+
+// The courtesy is where EmitNode writes it, and nowhere else: a string right after a value's `t` (named so whatever
+// its case, as the emitter matches it; holding a number or a string of digits). Told by its place alone: a lookup is not asked, for a reader's lookup
+// may know no names at all (the thin client's requests are read before a base is known) and answer for none, and
+// asking would count every value as a type it did not know. No value writes a field of that name after its type.
+bool IsTheNameBesideAType(const ibDataNode& node, const ibDataValue& value)
+{
+	if (value.Kind() != ibDataKind::String)
+		return false;
+	const ibDataRange<std::pair<ibString, ibDataValue>> fields = node.Fields();
+	if (fields.empty())
+		return false;
+	const std::pair<ibString, ibDataValue> last = fields.back();
+	return last.first.IsSameAs(kValueFieldClsid, false)
+		&& (last.second.Kind() == ibDataKind::String || last.second.Kind() == ibDataKind::Number);
+}
+
+} // namespace
+
 bool ibJsonProvider::ReadEntry(ibDataNode& node, const ibString& key, ibDataValue value) const
 {
 	// The keys as the engine's strings: a key is told from one by its length first — against a literal each was measured
 	// and walked, every key of every node (ibString::operator==, 2026-10-22).
 	static const ibString kNodeType = ibT("NodeType"), kNodeId = ibT("NodeId"), kNodeRaw = ibT("NodeRaw"),
-		kTypeDesc = ibT("TypeDesc");
+		kTypeDesc = ibT("TypeDesc"), kType = ibT("type");
 
 	// --- the structural keys EmitNode writes (see the emitter for each) ------------
 	if (key == kNodeType) {
@@ -587,6 +607,11 @@ bool ibJsonProvider::ReadEntry(ibDataNode& node, const ibString& key, ibDataValu
 	// SYNTHETIC — injected next to typeId purely so a reader sees "String" beside the
 	// number. There is no node entry behind it; dropped.
 	if (key == kTypeDesc)
+		return true;
+	// SYNTHETIC TOO — the name EmitNode writes right after a value's `t` (THE SAME COURTESY FOR A PACKED VALUE'S TYPE).
+	// Kept as a field, it was written again beside the courtesy the next Write adds, and every round grew the node
+	// by one more `type`. Dropped only there: a field called `type` anywhere else is a field.
+	if (key == kType && IsTheNameBesideAType(node, value))
 		return true;
 
 	// --- ordinary data — a node's one set of fields, as the text has it ----------------
