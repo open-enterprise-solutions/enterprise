@@ -574,6 +574,9 @@
     <ClCompile Include="visualView\ctrl\radiobutton.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\radiobuttonEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\radiobutton_res.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>

@@ -26,6 +26,7 @@
 #include "backend/system/value/valueMap.h"  // ibValueStructure, g_valueStructureCLSID
 #include "frmserver/visualView/ctrl/form.h"          // a real form, DataSource bound on it
 #include "frmserver/visualView/ctrl/formAttribute.h" // the attribute cell the bind points at
+#include "frmserver/visualView/ctrl/widgets.h"     // ibValueRadioButton — a switch over one field
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
 #include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
 #include "backend/metadataConfiguration.h"           // the module's file name is asked of its metadata
@@ -3655,4 +3656,85 @@ TEST_F(BuiltInRuntime, GetMillisecondIsTheDatesOwnCount) {
 	const ibNumber counted = ibValueSystemFunction::GetMillisecond(ibValue(ibDateTime(2024, 3, 15, 14, 40, 7, 250)));
 	ASSERT_EQ(counted.ToInt(withMilliseconds), 0);
 	EXPECT_EQ(withMilliseconds - count, 250);
+}
+
+// RADIO BUTTONS BOUND TO ONE FIELD ARE ONE SWITCH. Each stands for a value of the field (ChoiceValue): it is selected
+// while the field holds that value, and a click writes it in — the one selected before reads the field back as not
+// its own.
+TEST_F(FormRuntime, RadioButtonsBoundToOneFieldAreOneSwitch) {
+	auto session = std::make_shared<FramedSession>(wxT("radio-switch"), ibSessionKind::Enterprise);
+	KeyFrame frame(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	ibValuePtr<ibValueForm> form(new ibValueForm());
+	ibFormAttributeValue* const kind = form->AddAttribute(wxT("Kind"), g_valueNumberCLSID, ibValue());
+	ASSERT_NE(kind, nullptr);
+	kind->SetHeldValue(ibValue(2));
+
+	ibValueRadioButton* const first = dynamic_cast<ibValueRadioButton*>(form->NewObject(wxT("Radiobutton"), static_cast<ibValueForm*>(form)));
+	ibValueRadioButton* const second = dynamic_cast<ibValueRadioButton*>(form->NewObject(wxT("Radiobutton"), static_cast<ibValueForm*>(form)));
+	ASSERT_NE(first, nullptr);
+	ASSERT_NE(second, nullptr);
+	first->SetSource(std::vector<ibSourceId>{ kind->GetId() });
+	second->SetSource(std::vector<ibSourceId>{ kind->GetId() });
+	first->SetChoiceValue(ibValue(1));
+	second->SetChoiceValue(ibValue(2));
+
+	EXPECT_FALSE(first->IsSelected());
+	EXPECT_TRUE(second->IsSelected());
+
+	EXPECT_TRUE(first->OnClientEvent(ibProtocol::ibEvent::ibKind::Toggle, ibDataNode()));
+
+	ibValue held;
+	ASSERT_TRUE(form->GetValueByAttributePath(ibSourceDescription(kind->GetId()), held));
+	EXPECT_EQ(held.GetInteger(), 1);
+	EXPECT_TRUE(first->IsSelected());
+	EXPECT_FALSE(second->IsSelected());
+}
+
+// AN UNBOUND RADIO BUTTON IS THE PLAIN ONE IT ALWAYS WAS: its Selected decides, and a click selects it among the
+// unbound buttons beside it.
+TEST_F(FormRuntime, UnboundRadioButtonIsSelectedAmongItsNeighbours) {
+	auto session = std::make_shared<FramedSession>(wxT("radio-unbound"), ibSessionKind::Enterprise);
+	KeyFrame frame(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	ibValuePtr<ibValueForm> form(new ibValueForm());
+	ibValueRadioButton* const first = dynamic_cast<ibValueRadioButton*>(form->NewObject(wxT("Radiobutton"), static_cast<ibValueForm*>(form)));
+	ibValueRadioButton* const second = dynamic_cast<ibValueRadioButton*>(form->NewObject(wxT("Radiobutton"), static_cast<ibValueForm*>(form)));
+	ASSERT_NE(first, nullptr);
+	ASSERT_NE(second, nullptr);
+	ASSERT_TRUE(first->GetProperty(wxT("Selected"))->SetDataValue(ibValue(true)));
+
+	EXPECT_TRUE(first->IsSelected());
+	EXPECT_FALSE(second->IsSelected());
+
+	EXPECT_TRUE(second->OnClientEvent(ibProtocol::ibEvent::ibKind::Toggle, ibDataNode()));
+	EXPECT_FALSE(first->IsSelected());
+	EXPECT_TRUE(second->IsSelected());
+}
+
+// THE VALUE A RADIO BUTTON STANDS FOR IS SAVED AS THE VALUE IT IS — a number stays a number, a string a string, a date
+// a date — and read back the same.
+TEST_F(FormRuntime, RadioButtonChoiceValueSurvivesASave) {
+	auto session = std::make_shared<FramedSession>(wxT("radio-value"), ibSessionKind::Enterprise);
+	KeyFrame frame(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	const ibValue values[] = { ibValue(42), ibValue(ibString(wxT("Retail"))), ibValue(ibDateTime(2026, 10, 29)), ibValue(true) };
+	for (const ibValue& value : values) {
+		ibValuePtr<ibValueRadioButton> written(new ibValueRadioButton());
+		written->SetChoiceValue(value);
+		ibDataNode node;
+		ASSERT_TRUE(written->WriteData(node));
+
+		ibValuePtr<ibValueRadioButton> read(new ibValueRadioButton());
+		ASSERT_TRUE(read->ReadData(node));
+		const ibValue got = read->GetChoiceValue();
+		EXPECT_EQ(got.GetType(), value.GetType());
+		EXPECT_TRUE(got == value) << got.GetString().ToStdString();
+	}
 }
