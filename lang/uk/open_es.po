@@ -13583,3 +13583,8 @@ msgstr "Значення типу '%s' не підтримує цю операц
 #, c-format
 msgid "A value of type '%s' is not a '%s'"
 msgstr "Значення типу '%s' не є '%s'"
+
+#: src/engine/backend/session/sessionRegistry.cpp
+#, c-format
+msgid "Too many failed logins: try again in %d s."
+msgstr "Забагато невдалих входів: повторіть через %d с."

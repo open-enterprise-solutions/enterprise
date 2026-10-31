@@ -1,5 +1,7 @@
 #include "sessionRegistry.h"
+#include "sessionException.h"
 #include "sessionPolicy.h"
+#include "sessionThrottle.h"
 #include "designerExclusivePolicy.h"
 #include "serviceExclusivePolicy.h"
 
@@ -14,6 +16,7 @@
 #include "workerPool.h"
 #include "workerPoolHeadless.h"
 #include "backend/lock/lockManager.h"
+#include "backend/logger/logger.h"   // Audit — a login told to wait
 #include "backend/temp/tempStorage.h"
 #include "core/diagnostics/crashGuard.h"   // IsStopRequested — a failure once the process was told to stop is the stop
 #include "core/diagnostics/debugTrace.h"   // ibTraceToFile — Die's reason must survive a GUI build
@@ -90,7 +93,8 @@ constexpr int  kSilentSeconds     = static_cast<int>(
 // state, they exist for the duration of appData.
 
 ibSessionRegistry::ibSessionRegistry(ib::AppDataCtorToken owner)
-	: m_applicationInstance(owner.GetApplicationInstance())
+	: m_applicationInstance(owner.GetApplicationInstance()),
+	m_authThrottle(std::make_unique<ibAuthThrottle>())
 {
 	// Its own writes go through its base's pool — reached down the chain once, here, where the pool already
 	// stands (the base builds it first), and never asked of "the current one" from the registry thread.
@@ -1239,7 +1243,29 @@ void ibSessionRegistry::Attach(const std::shared_ptr<ibSession>& session, const 
 	// is written here until ProcessAttach announces it.
 	if (m_applicationInstance != nullptr) {
 		ibSessionScope scope(session.get());
-		req.accepted = m_applicationInstance->Login(user, password, req.info);
+		const ibString& address = session->Identity().m_address;
+		const ibAuthThrottle::Decision decision = m_authThrottle->Begin(user, address, ibAuthThrottle::Clock::now());
+		if (!decision.m_allowed) {
+			try {
+				if (ibLog) ibLog->Audit(ibT("auth"), ibT("login_throttled"),
+				                        ibString::Format(ibT("user=%s address=%s reason=%s retry_after=%d"), user, address,
+				                                         decision.m_reason == ibAuthThrottle::Reason::Address ? ibT("address") : ibT("account"),
+				                                         decision.m_retryAfterSec));
+			} catch (...) {}
+			ibBackendSessionException::Throw(ibBackendSessionException::Kind::LoginThrottled,
+				ibBackendException::Format(_("Too many failed logins: try again in %d s."), decision.m_retryAfterSec));
+		}
+		try {
+			req.accepted = m_applicationInstance->Login(user, password, req.info);
+		}
+		catch (...) {
+			m_authThrottle->Cancel(user, address);
+			throw;
+		}
+		if (req.accepted)
+			m_authThrottle->Succeed(user, address);
+		else
+			m_authThrottle->Fail(user, address, ibAuthThrottle::Clock::now());
 	}
 	Submit(std::move(req), ibPriority::Normal);
 }

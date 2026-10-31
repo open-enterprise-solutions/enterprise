@@ -388,6 +388,26 @@ TEST_F(SessionFailover, WrongTokenIsRefusedAndTheSessionStays)
 	EXPECT_TRUE(still.ok) << still.message;
 }
 
+// The door of every client: a login that comes again too soon is refused as a login is, which asks the person again,
+// and says how long to wait, not that the password is wrong.
+TEST_F(SessionFailover, ALoginThatComesAgainTooSoonIsToldToWait)
+{
+	ibProtocolNode params;
+	params.SetValue(ibProtocol::ibLogin::User, ibString(wxT("nobody")))
+		.SetValue(ibProtocol::ibLogin::Password, ibString(wxT("wrong")))
+		.SetValue(ibProtocol::ibLogin::Protocol, ibProtocol::Version);
+
+	const Rpc wrong = g_base->Call(Request(40, "login", params), nullptr);
+	EXPECT_FALSE(wrong.ok);
+	EXPECT_EQ(wrong.code, 401);
+
+	const Rpc again = g_base->Call(Request(41, "login", params), nullptr);
+	EXPECT_FALSE(again.ok);
+	EXPECT_EQ(again.code, 401);
+	EXPECT_TRUE(again.message.Contains(wxT("try again"))) << again.message;
+	EXPECT_NE(again.message, wrong.message);
+}
+
 TEST_F(SessionFailover, LiveSessionIsNotTakenByToken)
 {
 	int connection = 0;

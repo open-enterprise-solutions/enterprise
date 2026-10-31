@@ -4,6 +4,7 @@
 #include "backend/backend_exception.h"
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/session/session.h"
+#include "backend/session/sessionException.h"
 #include "backend/session/sessionRegistry.h"
 
 #include "frmserver/docView/docView.h"
@@ -68,6 +69,13 @@ bool ibClientInstance::Login(const ibString& user, const ibString& password)
 		session->Submit([&]() {
 			opened = holder->Open(user, password);
 		}).get();
+	}
+	catch (const ibBackendSessionException& err) {
+		// "try again in 2 s" is the person's to read: read as "refused", it calls a right password wrong.
+		if (err.GetKind() == ibBackendSessionException::Kind::LoginThrottled)
+			throw;
+		ibJournalError(ibT("client"), ibT("login of '%s' refused: %s"), user, err.GetErrorDescription());
+		return false;
 	}
 	catch (const ibCoreException& err) {
 		// A configuration that does not start refuses the login too (ibSession::CompileRoot throws). The client can

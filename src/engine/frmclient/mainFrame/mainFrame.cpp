@@ -756,7 +756,7 @@ bool ibFrontendMainFrame::Show(bool show)
 	std::vector<ibString> users;
 	for (bool asked = false; !loggedIn && refusal == ibProtocol::ibRefusal::LoginRefused; asked = true) {
 		if (asked) {
-			wxMessageBox(_("Wrong user or password entered!"), GetTitle(), wxOK | wxICON_ERROR);
+			wxMessageBox(error, GetTitle(), wxOK | wxICON_ERROR);
 		}
 		else {
 			ibProtocol::ibRefusal usersRefusal = ibProtocol::ibRefusal::None;

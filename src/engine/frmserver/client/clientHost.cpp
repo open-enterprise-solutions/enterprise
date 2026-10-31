@@ -23,6 +23,7 @@
 #include "backend/rpc/rpcMessage.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
+#include "backend/session/sessionException.h"
 #include "backend/temp/tempStorage.h"   // the client's files
 #include "backend/userInfo.h"           // users — the names the login window offers
 #include "core/crypto/sessionToken.h"
@@ -914,7 +915,12 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			try {
 				if (client->instance->Login(params.GetValue<ibString>(ibProtocol::ibLogin::User), params.GetValue<ibString>(ibProtocol::ibLogin::Password)))
 					return true;
-				refuse(ibProtocol::ibRefusal::LoginRefused, ibT("the login was refused"));
+				refuse(ibProtocol::ibRefusal::LoginRefused, _("Wrong user or password entered!"));
+			}
+			// Told to wait, the person is still asked: the client's window stays, and says these words.
+			catch (const ibBackendSessionException& err) {
+				refuse(err.GetKind() == ibBackendSessionException::Kind::LoginThrottled ? ibProtocol::ibRefusal::LoginRefused : ibProtocol::ibRefusal::NotNow,
+					err.GetErrorDescription());
 			}
 			catch (const ibCoreException& err) {
 				refuse(ibProtocol::ibRefusal::NotNow, err.GetErrorDescription());

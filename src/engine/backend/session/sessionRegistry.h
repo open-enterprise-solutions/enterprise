@@ -47,6 +47,7 @@
 #include <unordered_set>
 #include <vector>
 
+class ibAuthThrottle;
 class ibSessionSnapshot;
 struct ibQueryExpr;   // InsertedRowIds — the ids as the query builder takes them
 
@@ -300,7 +301,8 @@ public:
 	// Log `user` into an Added session. The credentials are checked HERE, on the caller's thread — the hash
 	// is slow on purpose, and on the registry thread a queue of logins held up its heartbeat until the peers
 	// settled this process's rows as silent. The registry thread is handed the verdict and only writes it
-	// (ProcessAttach). The answer is the session's auth state — wait for it with WaitForAuth.
+	// (ProcessAttach). The answer is the session's auth state — wait for it with WaitForAuth. A login that comes
+	// again too soon is refused before the password is looked at (ibBackendSessionException, LoginThrottled).
 	void Attach(const std::shared_ptr<ibSession>& session, const ibString& user, const ibString& password);
 
 	// ---- Unified entry-point ----
@@ -633,6 +635,9 @@ private:
 
 	// The base this registry belongs to — stamped onto every session it creates.
 	ibApplicationInstance* const                                     m_applicationInstance;
+
+	// How often a login may try a password (Attach): this base's, two bases in one process do not share a wait.
+	std::unique_ptr<ibAuthThrottle>                              m_authThrottle;
 
 	// Policy chain. Built at Start-time, read-only once the thread runs
 	// (no need for extra locking — only ThreadBody touches on Add).

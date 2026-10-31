@@ -13251,3 +13251,8 @@ msgstr ""
 #, c-format
 msgid "A value of type '%s' is not a '%s'"
 msgstr ""
+
+#: src/engine/backend/session/sessionRegistry.cpp
+#, c-format
+msgid "Too many failed logins: try again in %d s."
+msgstr ""

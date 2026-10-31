@@ -101,6 +101,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A Firebird connection caches 4 MB of pages, not 32.** Most of the memory of a busy server was this
   cache, committed at connect and hardly touched.
 
+- **A password can no longer be guessed at full speed.** After a failed login, the next one for that
+  name from that address waits 1 second, then 2, 4, up to a minute; one address may try 30 times, then
+  once a second. The person is told how long to wait, and the audit event is `login_throttled`. Behind
+  a proxy that hides the client's address only the wait per name applies.
+
 - **A value read from JSON no longer gains a `type` field.** The type's name the JSON view writes
   beside a value's type came back as a field, one more on each round.
 
