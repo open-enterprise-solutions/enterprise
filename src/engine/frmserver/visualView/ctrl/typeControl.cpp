@@ -17,6 +17,7 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // the bound attribute holds both
 #include "frmserver/win/dlgs/selectPredefined.h"   // ibShowPredefinedSelector — the designer's declared values
 #include "backend/appData.h"                        // DesignerMode — the two roads part here
+#include "frmserver/visualView/controlEnum.h"        // ibQuickChoiceMode — a field's word over its type's
 
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValueMetaObject* choiceForm)
 {
@@ -67,20 +68,31 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 			return true;
 	}
 
-	if (ibTypeControlFactory::QuickChoice(ownerValue, clsid, metaData))
+	const ibCtorMetaValueType* so = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
+	const bool isReference = so != nullptr && so->GetMetaTypeCtor() == ibCtorObjectMetaType_Reference;
+
+	// ⭐ WHAT NARROWS THIS CHOICE — two things the control supplies and nothing it works out:
+	// the FIELD being filled, and WHERE the values its link names are read. The second is the
+	// control's own answer — the form's source for a control on a form, the row being edited
+	// for a table column — so the list is narrowed by exactly what the person can see beside
+	// the field they are filling. The field's own rows stand over its attribute's (issue #259).
+	ibChoiceCondition condition;
+	if (isReference) {
+		const ibChoiceHolder holder = factory->GetChoiceHolder();
+		const ibValueMetaObjectAttributeBase* field = ibChoiceLinkResolver::FieldOf(holder, factory);
+		const ibChoiceParametersDescription* own = factory->GetOwnChoiceParameters();
+		condition = own != nullptr ? ibChoiceLinkResolver::Resolve(holder, field, *own)
+			: ibChoiceLinkResolver::Resolve(holder, field);
+	}
+
+	// 🛑 A QUICK LIST IS NOT NARROWED — it is every item of the type, up to its ceiling — so a choice that IS
+	// narrowed goes to the list form, which is. Offering the whole drop-down there would put the contracts of
+	// every counterparty in front of somebody filling the contract of one.
+	if (condition.m_parameters.empty() && ibTypeControlFactory::QuickChoice(ownerValue, clsid, metaData))
 		return true;
 
-	const ibCtorMetaValueType* so = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
-	if (so != nullptr && so->GetMetaTypeCtor() == ibCtorObjectMetaType_Reference) {
+	if (isReference) {
 		if (const ibValueMetaObject* metaObject = so->GetMetaObject()) {
-			// ⭐ WHAT NARROWS THIS CHOICE — two things the control supplies and nothing it works out:
-			// the FIELD being filled, and WHERE the values its link names are read. The second is the
-			// control's own answer — the form's source for a control on a form, the row being edited
-			// for a table column — so the list is narrowed by exactly what the person can see beside
-			// the field they are filling.
-			const ibChoiceHolder holder = factory->GetChoiceHolder();
-			const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(holder,
-				ibChoiceLinkResolver::FieldOf(holder, factory));
 
 			// ⭐ WHAT THE FORM IS MADE WITH: which form the author picked, and — as one named part of
 			// it — the choice. The condition goes in WHOLE, empty or not: "nothing narrows this" is a
@@ -202,10 +214,42 @@ ibSelectMode ibTypeControlFactory::GetSelectMode() const
 	// carries Items / Folders / FoldersAndItems. Resolve the bound leaf and, WHEN it is a metadata
 	// attribute, read its mode; a plain column (a dynamic list's queryable column) has none →
 	// default to item selection.
+	// The field's own answer comes first: a form may let folders be picked into a field whose attribute takes items.
+	ibSelectMode own = ibSelectMode::ibSelectMode_Items;
+	if (GetOwnSelectMode(own))
+		return own;
 	const ibValueMetaObjectAttributeBase* attr =
 		ibChoiceLinkResolver::FieldOf(GetChoiceHolder(), this);
 	if (attr != nullptr) return attr->GetSelectMode();
 	return ibSelectMode::ibSelectMode_Items;
+}
+
+bool ibTypeControlFactory::HasQuickChoice(int quickChoiceMode, bool byType, const ibClassID& clsid)
+{
+	if (!::IsReference(clsid))
+		return byType;
+	switch (quickChoiceMode) {
+	case ibQuickChoiceMode::ibQuickChoiceMode_Use: return true;
+	case ibQuickChoiceMode::ibQuickChoiceMode_DontUse: return false;
+	default: return byType;
+	}
+}
+
+void ibTypeControlFactory::ClearOwnLinked(const std::vector<ibTypeControlFactory*>& neighbours) const
+{
+	const ibValueMetaObjectAttributeBase* edited = ibChoiceLinkResolver::FieldOf(GetChoiceHolder(), this);
+	if (edited == nullptr)
+		return;
+
+	for (ibTypeControlFactory* neighbour : neighbours) {
+		const ibChoiceParametersDescription* own = neighbour != nullptr && neighbour != this
+			? neighbour->GetOwnChoiceParameters() : nullptr;
+		if (own == nullptr || !own->IsOk())
+			continue;
+		ibChoiceHolder holder = neighbour->GetChoiceHolder();
+		ibChoiceLinkResolver::ClearLinked(holder, edited->GetMetaID(),
+			ibChoiceLinkResolver::FieldOf(holder, neighbour), *own);
+	}
 }
 
 ibValue ibTypeControlFactory::CreateValue() const

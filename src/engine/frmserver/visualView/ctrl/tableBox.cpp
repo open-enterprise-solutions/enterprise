@@ -150,6 +150,13 @@ static void CollectColumns(const ibValueFrame* parent,
 }
 
 
+std::vector<ibValueModelTableBoxColumn*> ibValueModelTableBox::GetColumns() const
+{
+	std::vector<ibValueModelTableBoxColumn*> columns;
+	CollectColumns(this, columns);
+	return columns;
+}
+
 // A COLUMN THE SOURCE PUT IN A GROUP GOES INTO THAT GROUP. The name comes from the source
 // (ibSourceExplorer::GetSourceGroup) — the columns of one family say the same thing there,
 // and the register's dimension slots are the case this exists for: twelve of them in one
